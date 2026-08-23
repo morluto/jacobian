@@ -242,6 +242,32 @@ class TestGaussianQuadrature:
         with pytest.raises(ValueError, match=r"zeroth moment.*positive"):
             gaussian_quadrature((Fraction(0),), (Fraction(0),))
 
+    def test_oversized_exact_coefficients_are_rejected_before_float_conversion(
+        self,
+    ) -> None:
+        """Exact inputs outside the finite-double domain are a validation error."""
+        with pytest.raises(ValueError, match="finite-float magnitude bound"):
+            gaussian_quadrature((Fraction(10**1000),), (Fraction(1),))
+        with pytest.raises(ValueError, match="finite-float magnitude bound"):
+            gaussian_quadrature((Fraction(0),), (Fraction(10**500), Fraction(1)))
+
+    def test_tiny_subdiagonal_is_rejected_by_the_underflow_bound(self) -> None:
+        alpha = (Fraction(0), Fraction(0))
+        beta = (Fraction(1), Fraction(1, 10**400))
+        with pytest.raises(ValueError, match="underflow bound"):
+            gaussian_quadrature(alpha, beta)
+
+    def test_interior_zero_subdiagonal_is_rejected(self) -> None:
+        """The wire contract requires every used squared-norm ratio to be positive."""
+        with pytest.raises(ValueError, match="must be positive"):
+            gaussian_quadrature((Fraction(0), Fraction(0)), (Fraction(1), Fraction(0)))
+
+    def test_bound_magnitude_boundary_coefficient_is_admitted(self) -> None:
+        """A coefficient at the admitted magnitude converts and returns nodes."""
+        result = gaussian_quadrature((Fraction(10**299),), (Fraction(1),))
+        assert len(result.nodes) == 1
+        assert len(result.weights) == 1
+
 
 # ---------------------------------------------------------------------------
 # Wire adapter tests
@@ -331,8 +357,7 @@ class TestRecurrenceDerivedBudget:
         denominator = 10**1250 + 12345
         rng = random.Random(1)
         weights = [
-            Fraction(rng.randrange(10**1149, 10**1150), denominator)
-            for _ in range(16)
+            Fraction(rng.randrange(10**1149, 10**1150), denominator) for _ in range(16)
         ]
         moments = tuple(
             sum(w * Fraction(n**k) for n, w in enumerate(weights)) for k in range(31)
@@ -344,3 +369,34 @@ class TestRecurrenceDerivedBudget:
         }
         with pytest.raises(ValidationError, match="canonical"):
             RecurrenceCoefficientsRequest.model_validate(request)
+
+
+class TestChristoffelDarbouxDerivedBudget:
+    def _request(self, exponent: int) -> dict:
+        alpha = [{"num": "0", "den": "1"} for _ in range(9)]
+        beta = [{"num": "1", "den": "1"} for _ in range(10)]
+        huge = str(10**exponent)
+        return {
+            "alpha": alpha,
+            "beta": beta,
+            "x": {"num": huge, "den": "1"},
+            "y": {"num": huge, "den": "1"},
+        }
+
+    def test_request_whose_derived_kernel_overflows_is_rejected(self) -> None:
+        """Recurrence amplification past the canonical bound fails at admission.
+
+        Nine zero alphas and unit betas give p_k(x) ~ x^k, so K_9(x, x) has a
+        leading term near 10^(4095*16) ~ 65,521 digits: each input fits the
+        4,096-digit input bound but the kernel exceeds the 32,768-digit result
+        bound, so the request must never reach execution.
+        """
+        with pytest.raises(ValidationError, match="canonical"):
+            ChristoffelDarbouxRequest.model_validate(self._request(4095))
+
+    def test_request_whose_derived_kernel_fits_is_admitted_and_returns(self) -> None:
+        """The same family one magnitude smaller returns its typed kernel."""
+        request = ChristoffelDarbouxRequest.model_validate(self._request(1000))
+        result = compute_christoffel_darboux(request)
+        assert result.kernel.num.startswith("-") is False
+        assert len(result.polynomials_evaluated) == 9

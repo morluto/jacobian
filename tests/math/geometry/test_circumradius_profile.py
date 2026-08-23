@@ -151,3 +151,36 @@ class TestCircumradiusProfileAggregateTransportBound:
                     for i in range(1, 5)
                 )
             )
+
+
+class TestCircumradiusProfileResultSourceAdmission:
+    def test_serialized_result_reapplies_coordinate_height_bounds(self) -> None:
+        """A serialized profile replays through the request's height bound."""
+        request = CircumradiusProfileRequest(
+            points=(
+                _labelled(0, "0", "0"),
+                _labelled(1, "1", "0"),
+                _labelled(2, "2", "5"),
+            )
+        )
+        result = circumradius_profile(request)
+        payload = result.model_dump(mode="json")
+        CircumradiusProfileResult.model_validate(payload)
+        tall = "1" + "0" * 4096
+        payload["points"][0]["point"]["x"]["num"] = tall
+        with pytest.raises(ValidationError, match="64-digit"):
+            CircumradiusProfileResult.model_validate(payload)
+
+    def test_serialized_result_rejects_forged_coordinates(self) -> None:
+        request = CircumradiusProfileRequest(
+            points=(
+                _labelled(0, "0", "0"),
+                _labelled(1, "1", "0"),
+                _labelled(2, "2", "5"),
+            )
+        )
+        result = circumradius_profile(request)
+        payload = result.model_dump(mode="json")
+        payload["points"][1]["point"]["y"]["num"] = "7"
+        with pytest.raises(ValidationError):
+            CircumradiusProfileResult.model_validate(payload)

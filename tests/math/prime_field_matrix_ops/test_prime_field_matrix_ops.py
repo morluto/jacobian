@@ -7,6 +7,7 @@ from jacobian.math.prime_field_matrix_ops._models import (
     NullspaceRequest,
     RankRequest,
     RrefRequest,
+    RrefResult,
 )
 from jacobian.math.prime_field_matrix_ops._operations import (
     compute_nullspace,
@@ -62,24 +63,77 @@ class TestRref:
     def test_basic_rref(self) -> None:
         req = RrefRequest(prime=2, entries=[[1, 1, 0], [0, 1, 1]], columns=3)
         result = compute_rref(req)
-        assert result.rref_rows == ((1, 0, 1), (0, 1, 1))
+        assert result.reduced_matrix.entries == ((1, 0, 1), (0, 1, 1))
+        assert result.reduced_matrix.columns == 3
+        assert result.reduced_matrix.prime == 2
         assert result.pivot_columns == (0, 1)
 
     def test_identity_matrix(self) -> None:
         req = RrefRequest(prime=7, entries=[[1, 0], [0, 1]], columns=2)
         result = compute_rref(req)
-        assert result.rref_rows == ((1, 0), (0, 1))
+        assert result.reduced_matrix.entries == ((1, 0), (0, 1))
         assert result.pivot_columns == (0, 1)
 
     def test_zero_matrix(self) -> None:
         req = RrefRequest(prime=3, entries=[[0, 0], [0, 0]], columns=2)
         result = compute_rref(req)
         assert result.pivot_columns == ()
+        assert result.reduced_matrix.entries == ((0, 0), (0, 0))
+
+    def test_empty_matrix_keeps_its_column_axis(self) -> None:
+        req = RrefRequest(prime=2, entries=[], columns=3)
+        result = compute_rref(req)
+        assert result.reduced_matrix.entries == ()
+        assert result.reduced_matrix.columns == 3
+        assert result.pivot_columns == ()
 
     def test_pivot_column_order(self) -> None:
         req = RrefRequest(prime=5, entries=[[0, 0, 1], [1, 0, 0]], columns=3)
         result = compute_rref(req)
         assert result.pivot_columns == tuple(sorted(result.pivot_columns))
+
+    def test_reduced_matrix_composes_into_consumers_unchanged(self) -> None:
+        """The canonical reduced value feeds rank and nullspace directly."""
+        req = RrefRequest(prime=2, entries=[[1, 1, 0], [0, 1, 1]], columns=3)
+        result = compute_rref(req)
+        chained = compute_rank(
+            RankRequest(
+                prime=result.reduced_matrix.prime,
+                entries=result.reduced_matrix.entries,
+                columns=result.reduced_matrix.columns,
+            )
+        )
+        assert chained.rank == len(result.pivot_columns)
+
+    def test_serialized_result_forging_the_reduced_matrix_is_rejected(self) -> None:
+        req = RrefRequest(prime=5, entries=[[1, 2], [3, 4]], columns=2)
+        result = compute_rref(req)
+        payload = result.model_dump(mode="json")
+        payload["reduced_matrix"]["entries"] = [[1, 2], [3, 4]]
+        with pytest.raises(ValidationError, match="reduced row-echelon form"):
+            RrefResult.model_validate(payload)
+
+    def test_serialized_result_with_a_foreign_field_is_rejected(self) -> None:
+        req = RrefRequest(prime=5, entries=[[1, 2], [3, 4]], columns=2)
+        result = compute_rref(req)
+        payload = result.model_dump(mode="json")
+        payload["reduced_matrix"]["prime"] = 7
+        with pytest.raises(ValidationError, match="prime field"):
+            RrefResult.model_validate(payload)
+
+    def test_noncanonical_reduced_entries_are_rejected(self) -> None:
+        req = RrefRequest(prime=5, entries=[[1, 2], [3, 4]], columns=2)
+        payload = {
+            "prime": 5,
+            "entries": [list(row) for row in req.entries],
+            "columns": 2,
+            "reduced_matrix": {"prime": 5, "entries": [[6, 0], [0, 1]], "columns": 2},
+            "pivot_columns": [0, 1],
+            "complete": True,
+            "method": "EXACT_DOMAIN_MATRIX_RREF",
+        }
+        with pytest.raises(ValidationError):
+            RrefResult.model_validate(payload)
 
 
 class TestNullspace:

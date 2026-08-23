@@ -255,8 +255,69 @@ class IdealSaturationRequest(StrictModel):
         return self
 
 
+_SATURATION_BINDING_ERROR = (
+    "computed saturation must equal the exact saturation "
+    "(I : d^infinity) of the retained source ideal"
+)
+
+
+def _require_saturation_relation(
+    ideal: RationalPolynomialIdeal,
+    saturation_polynomial: RationalPolynomial,
+    saturation: RationalPolynomialIdeal,
+) -> None:
+    """Replay the defining relation J = (I : d^infinity) exactly.
+
+    The Rabinowitsch localization (I, t*d - 1) eliminates to a generating set
+    of the saturation; the claimed ideal must be mutually contained with it.
+    """
+    import sympy
+
+    from jacobian.math.polynomials._conversions import (
+        rational_polynomial_to_sympy,
+        symbols_for_variables,
+    )
+
+    if saturation.variables != ideal.variables:
+        raise ValueError("computed saturation must use the source ideal's ring")
+    witness = sympy.Dummy("jacobian_saturation_witness")
+    ring = symbols_for_variables(ideal.variables)
+    localized = [
+        *(rational_polynomial_to_sympy(g).as_expr() for g in ideal.generators),
+        witness * rational_polynomial_to_sympy(saturation_polynomial).as_expr() - 1,
+    ]
+    basis = sympy.groebner(localized, witness, *ring, order="lex", domain=sympy.QQ)
+    derived = [
+        expression.as_expr()
+        for expression in basis.polys
+        if witness not in expression.as_expr().free_symbols
+    ]
+    claimed = [
+        rational_polynomial_to_sympy(generator).as_expr()
+        for generator in saturation.generators
+    ]
+    # The elimination ideal is zero exactly when the saturation is the zero
+    # ideal; any other pairing detaches the claim from its source.
+    derived_is_zero = not derived
+    claimed_is_zero = all(
+        not generator.polynomial.terms for generator in saturation.generators
+    )
+    if derived_is_zero != claimed_is_zero:
+        raise ValueError(_SATURATION_BINDING_ERROR)
+    if derived_is_zero:
+        return
+    derived_basis = sympy.groebner(derived, *ring, order="grevlex", domain=sympy.QQ)
+    if any(derived_basis.reduce(expression)[1] != 0 for expression in claimed):
+        raise ValueError(_SATURATION_BINDING_ERROR)
+    claimed_basis = sympy.groebner(claimed, *ring, order="grevlex", domain=sympy.QQ)
+    if any(claimed_basis.reduce(expression)[1] != 0 for expression in derived):
+        raise ValueError(_SATURATION_BINDING_ERROR)
+
+
 class IdealSaturationResult(StrictModel):
     outcome: IdealExecutionOutcome
+    ideal: RationalPolynomialIdeal | None = None
+    saturation_polynomial: RationalPolynomial | None = None
     saturation: RationalPolynomialIdeal | None = None
     method: Literal["SINGULAR_SATURATION"] = "SINGULAR_SATURATION"
     backend_version: str | None = None
@@ -265,12 +326,25 @@ class IdealSaturationResult(StrictModel):
     @model_validator(mode="after")
     def require_outcome_shape(self) -> Self:
         if self.outcome == "COMPUTED":
-            if self.saturation is None or self.backend_version is None or self.detail:
+            if (
+                self.saturation is None
+                or self.ideal is None
+                or self.saturation_polynomial is None
+                or self.backend_version is None
+                or self.detail
+            ):
                 raise ValueError(
-                    "computed saturation requires a value and backend version"
+                    "computed saturation requires its retained source values, "
+                    "an exact value, and a backend version"
                 )
-        elif (
+            _require_saturation_relation(
+                self.ideal, self.saturation_polynomial, self.saturation
+            )
+            return self
+        if (
             self.saturation is not None
+            or self.ideal is not None
+            or self.saturation_polynomial is not None
             or self.backend_version is not None
             or not self.detail
         ):

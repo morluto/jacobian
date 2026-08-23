@@ -40,12 +40,16 @@ def compute_rref(request: RrefRequest) -> RrefResult:
         entries=request.entries,
         columns=request.columns,
     )
-    rref_rows, pivot_columns = rref(matrix)
+    reduced_rows, pivot_columns = rref(matrix)
     return RrefResult(
         prime=request.prime,
         entries=request.entries,
         columns=request.columns,
-        rref_rows=rref_rows,
+        reduced_matrix=PrimeFieldMatrix(
+            prime=request.prime,
+            entries=reduced_rows,
+            columns=request.columns,
+        ),
         pivot_columns=pivot_columns,
     )
 

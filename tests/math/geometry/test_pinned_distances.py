@@ -95,6 +95,7 @@ class TestPinnedDistanceAdmissionAndBinding:
                 points=(_point("1", "0"), _point("1", "0")),
             )
 
+
 class TestPinnedDistanceMinimumBinding:
     def test_forged_minimum_source_pairs_are_rejected(self) -> None:
         """The reported minimum must be the complete canonical entry."""
@@ -117,3 +118,54 @@ class TestPinnedDistanceMinimumBinding:
         }
         with pytest.raises(ValidationError, match="selected minimum"):
             PinnedDistanceResult.model_validate(payload)
+
+
+class TestPinnedDistanceResultSourceAdmission:
+    def _collinear_payload(self, count: int) -> dict:
+        points = [
+            {
+                "x": {"num": str(index), "den": "1"},
+                "y": {"num": "0", "den": "1"},
+            }
+            for index in range(count)
+        ]
+        pairs = [
+            [str(first), str(second)]
+            for first in range(count)
+            for second in range(first + 1, count)
+        ]
+        line = {
+            "squared_distance_numerator": "0",
+            "squared_distance_denominator": "1",
+            "source_pairs": pairs,
+        }
+        return {
+            "anchor": {"x": {"num": "0", "den": "1"}, "y": {"num": "1", "den": "1"}},
+            "points": points,
+            "lines": [line],
+            "distinct_line_count": 1,
+            "min_squared_distance": line,
+            "complete": True,
+            "method": "EXACT_PINNED_DISTANCES",
+        }
+
+    def test_serialized_result_reapplies_the_128_point_cap(self) -> None:
+        """A crafted profile cannot replay quadratic work beyond the request cap."""
+        with pytest.raises(ValidationError, match="at most 128"):
+            PinnedDistanceResult.model_validate(self._collinear_payload(129))
+
+    def test_serialized_result_reapplies_coordinate_height_bounds(self) -> None:
+        tall = "1" + "0" * 4096
+        payload = self._collinear_payload(3)
+        for point in (*payload["points"], payload["anchor"]):
+            point["y"]["num"] = tall
+        with pytest.raises(ValidationError, match="32-digit"):
+            PinnedDistanceResult.model_validate(payload)
+
+    def test_retained_sources_at_the_admitted_bound_still_revalidate(self) -> None:
+        request = PinnedDistanceRequest(
+            anchor=_point("0", "1"),
+            points=(_point("0", "0"), _point("2", "0")),
+        )
+        result = compute_pinned_distances(request)
+        PinnedDistanceResult.model_validate(result.model_dump(mode="json"))

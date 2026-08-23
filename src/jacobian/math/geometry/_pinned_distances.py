@@ -124,6 +124,22 @@ def _minimum_entry(
     )
 
 
+def _require_pinned_source_admission(
+    anchor: RationalPoint2D, points: tuple[RationalPoint2D, ...]
+) -> None:
+    """Apply the request's point-count-uniqueness and coordinate-height bounds."""
+    keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in points)
+    if len(keys) != len(set(keys)):
+        raise ValueError("point-set coordinates must be unique")
+    for point in (anchor, *points):
+        if not _pinned_coordinate_height_ok(point):
+            raise ValueError(
+                "pinned-distance coordinates exceed the conservative "
+                f"{MAX_PINNED_COORDINATE_DIGITS}-digit input bound that "
+                "keeps the complete profile inside transport"
+            )
+
+
 class PinnedDistanceRequest(StrictModel):
     """Compute the complete pinned-distance profile from an anchor to all pair-spanned lines."""
 
@@ -132,16 +148,7 @@ class PinnedDistanceRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_unique_points(self) -> Self:
-        keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
-        if len(keys) != len(set(keys)):
-            raise ValueError("point-set coordinates must be unique")
-        for point in (self.anchor, *self.points):
-            if not _pinned_coordinate_height_ok(point):
-                raise ValueError(
-                    "pinned-distance coordinates exceed the conservative "
-                    f"{MAX_PINNED_COORDINATE_DIGITS}-digit input bound that "
-                    "keeps the complete profile inside transport"
-                )
+        _require_pinned_source_admission(self.anchor, self.points)
         return self
 
 
@@ -157,7 +164,7 @@ class PinnedDistanceResult(StrictModel):
     """The complete pinned-distance profile."""
 
     anchor: RationalPoint2D
-    points: tuple[RationalPoint2D, ...]
+    points: tuple[RationalPoint2D, ...] = Field(min_length=2, max_length=128)
     lines: tuple[LineDistanceEntry, ...]
     distinct_line_count: int = Field(ge=0)
     min_squared_distance: LineDistanceEntry | None = None
@@ -166,6 +173,10 @@ class PinnedDistanceResult(StrictModel):
 
     @model_validator(mode="after")
     def require_invariants(self) -> Self:
+        # Retained sources revalidate through the request admission before the
+        # quadratic pair enumeration replays, so a serialized profile can never
+        # carry more points or taller coordinates than a fresh request.
+        _require_pinned_source_admission(self.anchor, self.points)
         if self.distinct_line_count != len(self.lines):
             raise ValueError("distinct_line_count must match the line count")
         expected_entries = _exact_distance_entries(self.anchor, self.points)

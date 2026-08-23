@@ -11,17 +11,13 @@ from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.math.moments_orthogonal.values import (
     MAX_MOMENTS,
+    MAX_QUADRATURE_MAGNITUDE,
     MAX_QUADRATURE_POINTS,
     MAX_RECURRENCE_ORDER,
+    MIN_QUADRATURE_SUBDIAGONAL,
 )
 
 MAX_RATIONAL_DIGITS = 4_096
-
-# Golub-Welsch converts admitted rationals to IEEE doubles; every accepted
-# coefficient must convert to a finite double and every subdiagonal entry must
-# stay far from both overflow and underflow so its square root is exact enough.
-MAX_QUADRATURE_MAGNITUDE = Fraction(10) ** 300
-MIN_QUADRATURE_SUBDIAGONAL = Fraction(1, 10**300)
 
 
 def _to_fractions(
@@ -206,6 +202,26 @@ class ChristoffelDarbouxRequest(StrictModel):
         _validate_alpha_beta(self.alpha, self.beta)
         require_bounded_rational(self.x, max_digits=MAX_RATIONAL_DIGITS, label="x")
         require_bounded_rational(self.y, max_digits=MAX_RATIONAL_DIGITS, label="y")
+        # Derived-kernel budget: recurrence amplification can push the exact
+        # kernel or evaluated polynomials past the canonical digit bound even
+        # when every admitted input fits it; admission rejects those requests
+        # so an accepted request always constructs its typed result.
+        from jacobian.math.moments_orthogonal.operations import christoffel_darboux
+
+        derived = christoffel_darboux(
+            _to_fractions(self.alpha),
+            _to_fractions(self.beta),
+            self.x.as_fraction(),
+            self.y.as_fraction(),
+        )
+        try:
+            CanonicalRational.from_fraction(derived.kernel)
+            _from_fractions(derived.polynomials_evaluated)
+        except ValueError as exc:
+            raise ValueError(
+                "derived Christoffel-Darboux kernel exceeds the canonical "
+                "rational digit bound"
+            ) from exc
         return self
 
 

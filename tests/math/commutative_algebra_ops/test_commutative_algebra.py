@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 from fractions import Fraction
 from itertools import combinations
 
 import pytest
 import sympy
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.commutative_algebra_ops import _singular
@@ -17,6 +19,7 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealRadicalMembershipRequest,
     IdealRadicalRequest,
     IdealSaturationRequest,
+    IdealSaturationResult,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
     compute_ideal_quotient,
@@ -514,3 +517,137 @@ def test_ideal_saturation_keeps_every_generator_of_the_result() -> None:
     assert _equal(
         result.saturation, _ideal(("x", "y", "z"), {(0, 1, 0): 1}, {(0, 0, 1): 1})
     )
+
+
+class TestIdealSaturationResultBinding:
+    def test_detached_computed_saturation_is_rejected(self) -> None:
+        """A COMPUTED result without its retained sources cannot revalidate."""
+        payload = {
+            "outcome": "COMPUTED",
+            "saturation": _ideal(("x", "y"), {(0, 1): 1}),
+            "method": "SINGULAR_SATURATION",
+            "backend_version": "4.4.0",
+            "detail": None,
+        }
+        with pytest.raises(ValidationError, match="retained source values"):
+            IdealSaturationResult.model_validate(payload)
+
+    def test_saturation_of_an_unrelated_source_is_rejected(self) -> None:
+        """<x> is not (<xy> : <x>^infinity); the replay must reject the claim."""
+        with pytest.raises(ValidationError):
+            IdealSaturationResult(
+                outcome="COMPUTED",
+                ideal=_ideal(("x", "y"), {(1, 1): 1}),
+                saturation_polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
+                saturation=_ideal(("x", "y"), {(1, 0): 1}),
+                backend_version="4.4.0",
+            )
+
+    def test_exact_saturation_revalidates_without_a_backend(self) -> None:
+        """(<xy> : <x>^infinity) = <y> passes the defining-relation replay."""
+        result = IdealSaturationResult.model_validate(
+            {
+                "outcome": "COMPUTED",
+                "ideal": {
+                    "variables": ["x", "y"],
+                    "generators": [
+                        {
+                            "polynomial_schema_version": "1",
+                            "domain": "QQ",
+                            "variables": ["x", "y"],
+                            "polynomial": {
+                                "terms": [
+                                    {
+                                        "coefficient": {"num": "1", "den": "1"},
+                                        "exponents": [1, 1],
+                                    }
+                                ]
+                            },
+                        }
+                    ],
+                },
+                "saturation_polynomial": {
+                    "polynomial_schema_version": "1",
+                    "domain": "QQ",
+                    "variables": ["x", "y"],
+                    "polynomial": {
+                        "terms": [
+                            {
+                                "coefficient": {"num": "1", "den": "1"},
+                                "exponents": [1, 0],
+                            }
+                        ]
+                    },
+                },
+                "saturation": {
+                    "variables": ["x", "y"],
+                    "generators": [
+                        {
+                            "polynomial_schema_version": "1",
+                            "domain": "QQ",
+                            "variables": ["x", "y"],
+                            "polynomial": {
+                                "terms": [
+                                    {
+                                        "coefficient": {"num": "1", "den": "1"},
+                                        "exponents": [0, 1],
+                                    }
+                                ]
+                            },
+                        }
+                    ],
+                },
+                "method": "SINGULAR_SATURATION",
+                "backend_version": "4.4.0",
+                "detail": None,
+            }
+        )
+        assert result.saturation is not None
+
+    def test_failed_outcome_cannot_retain_sources(self) -> None:
+        result = IdealSaturationResult(
+            outcome="TIMEOUT",
+            detail="Singular exceeded the declared wall-time limit.",
+        )
+        assert result.ideal is None
+        with pytest.raises(ValidationError, match="safe detail"):
+            IdealSaturationResult(
+                outcome="TIMEOUT",
+                ideal=_ideal(("x", "y"), {(1, 1): 1}),
+                detail="Singular exceeded the declared wall-time limit.",
+            )
+
+
+@requires_singular
+@pytest.mark.requires_backend("singular")
+def test_ideal_saturation_result_round_trips_with_binding() -> None:
+    """A genuine computed saturation retains its sources and revalidates."""
+    request = IdealSaturationRequest(
+        ideal=_ideal(("x", "y"), {(1, 1): 1}),
+        saturation_polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
+    )
+    result = compute_ideal_saturation(request)
+    assert result.outcome == "COMPUTED"
+    assert result.ideal == request.ideal
+    assert result.saturation_polynomial == request.saturation_polynomial
+    payload = json.loads(result.model_dump_json())
+    rebound = IdealSaturationResult.model_validate(payload)
+    assert rebound.saturation == result.saturation
+    forged = dict(payload)
+    forged["saturation"] = {
+        "variables": ["x", "y"],
+        "generators": [
+            {
+                "polynomial_schema_version": "1",
+                "domain": "QQ",
+                "variables": ["x", "y"],
+                "polynomial": {
+                    "terms": [
+                        {"coefficient": {"num": "1", "den": "1"}, "exponents": [1, 0]}
+                    ]
+                },
+            }
+        ],
+    }
+    with pytest.raises(ValidationError):
+        IdealSaturationResult.model_validate(forged)

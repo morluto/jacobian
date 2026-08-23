@@ -470,6 +470,28 @@ def _circumradius_coordinate_height_ok(point: RationalPoint2D) -> bool:
     return True
 
 
+def _require_circumradius_source_admission(
+    points: tuple[LabelledPoint2D, ...],
+) -> None:
+    """Apply the request's label, coordinate, and height bounds to any payload."""
+    labels = tuple(item.label for item in points)
+    if len(labels) != len(set(labels)):
+        raise ValueError("point labels must be unique")
+    keys = tuple(
+        (item.point.x.num, item.point.x.den, item.point.y.num, item.point.y.den)
+        for item in points
+    )
+    if len(keys) != len(set(keys)):
+        raise ValueError("point coordinates must be unique")
+    for entry in points:
+        if not _circumradius_coordinate_height_ok(entry.point):
+            raise ValueError(
+                "circumradius point coordinates exceed the conservative "
+                f"{MAX_CIRCUMRADIUS_COORDINATE_DIGITS}-digit input bound "
+                "that keeps the complete profile inside transport"
+            )
+
+
 class CircumradiusProfileRequest(StrictModel):
     """A bounded labelled rational planar point configuration."""
 
@@ -479,27 +501,7 @@ class CircumradiusProfileRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_unique_labels_and_coordinates(self) -> Self:
-        labels = tuple(item.label for item in self.points)
-        if len(labels) != len(set(labels)):
-            raise ValueError("point labels must be unique")
-        keys = tuple(
-            (
-                item.point.x.num,
-                item.point.x.den,
-                item.point.y.num,
-                item.point.y.den,
-            )
-            for item in self.points
-        )
-        if len(keys) != len(set(keys)):
-            raise ValueError("point coordinates must be unique")
-        for entry in self.points:
-            if not _circumradius_coordinate_height_ok(entry.point):
-                raise ValueError(
-                    "circumradius point coordinates exceed the conservative "
-                    f"{MAX_CIRCUMRADIUS_COORDINATE_DIGITS}-digit input bound "
-                    "that keeps the complete profile inside transport"
-                )
+        _require_circumradius_source_admission(self.points)
         return self
 
 
@@ -544,16 +546,10 @@ class CircumradiusProfileResult(StrictModel):
 
         if self.point_count != len(self.points):
             raise ValueError("point_count must match the retained points")
-        # Validate uniqueness as in request
-        labels = tuple(item.label for item in self.points)
-        if len(labels) != len(set(labels)):
-            raise ValueError("point labels must be unique")
-        keys = tuple(
-            (item.point.x.num, item.point.x.den, item.point.y.num, item.point.y.den)
-            for item in self.points
-        )
-        if len(keys) != len(set(keys)):
-            raise ValueError("point coordinates must be unique")
+        # Retained points revalidate through the request admission before the
+        # exact triple replay, so a serialized profile can never carry taller
+        # coordinates than a fresh request.
+        _require_circumradius_source_admission(self.points)
         expected = tuple(combinations(range(self.point_count), 3))
         if len(self.entries) != len(expected):
             raise ValueError("circumradius profile must be complete")

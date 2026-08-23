@@ -9,8 +9,10 @@ from jacobian.math.moments_orthogonal.values import (
     MAX_HANKEL_DIMENSION,
     MAX_MOMENTS,
     MAX_POLYNOMIAL_COUNT,
+    MAX_QUADRATURE_MAGNITUDE,
     MAX_QUADRATURE_POINTS,
     MAX_RECURRENCE_ORDER,
+    MIN_QUADRATURE_SUBDIAGONAL,
     ChristoffelDarbouxKernel,
     GaussianQuadrature,
     HankelMatrix,
@@ -250,6 +252,35 @@ def christoffel_darboux(
     )
 
 
+def _require_quadrature_double_domain(
+    alpha: Sequence[Fraction], beta: Sequence[Fraction]
+) -> None:
+    """Enforce the finite IEEE-double admission domain before any conversion.
+
+    The wire contract admits only coefficients inside this domain; the native
+    kernel enforces the identical bounds so an exact input either converts
+    deliberately or is rejected as a validation error.
+    """
+    if beta[0] < MIN_QUADRATURE_SUBDIAGONAL:
+        raise ValueError("beta_0 falls below the quadrature underflow bound")
+    if any(abs(value) > MAX_QUADRATURE_MAGNITUDE for value in (*alpha, *beta)):
+        raise ValueError(
+            "quadrature coefficients exceed the finite-float magnitude bound"
+        )
+    for k in range(len(alpha) - 1):
+        if k + 1 >= len(beta):
+            break
+        sub = beta[k + 1]
+        if sub <= 0:
+            raise ValueError(
+                "subdiagonal beta entries must be positive squared-norm ratios"
+            )
+        if sub < MIN_QUADRATURE_SUBDIAGONAL:
+            raise ValueError(
+                "subdiagonal beta entries fall below the quadrature underflow bound"
+            )
+
+
 def gaussian_quadrature(
     alpha: Sequence[Fraction], beta: Sequence[Fraction]
 ) -> GaussianQuadrature:
@@ -272,15 +303,13 @@ def gaussian_quadrature(
         raise ValueError("beta must have length len(alpha) or len(alpha)+1")
     if beta[0] <= 0:
         raise ValueError("beta_0 (the zeroth moment) must be positive")
+    _require_quadrature_double_domain(alpha, beta)
     diagonal = np.array([float(a) for a in alpha], dtype=float)
     off: list[float] = []
     for k in range(n - 1):
         if k + 1 >= len(beta):
             break
-        sub = beta[k + 1]
-        if sub < 0:
-            raise ValueError("subdiagonal beta entries must be nonnegative")
-        off.append(math.sqrt(float(sub)))
+        off.append(math.sqrt(float(beta[k + 1])))
     jacobi = np.diag(diagonal)
     if off:
         off_arr = np.array(off, dtype=float)

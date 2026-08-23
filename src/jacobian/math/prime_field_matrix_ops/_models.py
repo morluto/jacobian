@@ -153,7 +153,9 @@ class RrefRequest(StrictModel):
 
 
 class RrefResult(RrefRequest):
-    rref_rows: tuple[tuple[int, ...], ...]
+    """The exact RREF as a canonical prime-field matrix plus its pivot columns."""
+
+    reduced_matrix: PrimeFieldMatrix
     pivot_columns: tuple[int, ...]
     complete: Literal[True] = True
     method: Literal["EXACT_DOMAIN_MATRIX_RREF"] = "EXACT_DOMAIN_MATRIX_RREF"
@@ -164,16 +166,16 @@ class RrefResult(RrefRequest):
             prime=self.prime, entries=self.entries, columns=self.columns
         )
         expected_rows, expected_pivots = rref(matrix)
-        if self.rref_rows != expected_rows:
-            raise ValueError("rref_rows must be the exact reduced row-echelon form")
+        if self.reduced_matrix.prime != self.prime:
+            raise ValueError("the reduced matrix must share the source prime field")
+        if self.reduced_matrix.columns != self.columns:
+            raise ValueError("the reduced matrix must retain the source column axis")
+        if self.reduced_matrix.entries != expected_rows:
+            raise ValueError(
+                "reduced_matrix must be the exact reduced row-echelon form"
+            )
         if self.pivot_columns != expected_pivots:
             raise ValueError("pivot_columns must be the exact pivot column sequence")
-        if any(
-            type(value) is not int or not 0 <= value < self.prime
-            for row in self.rref_rows
-            for value in row
-        ):
-            raise ValueError("rref entries must be canonical prime-field residues")
         return self
 
 

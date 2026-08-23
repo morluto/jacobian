@@ -7,26 +7,16 @@ from jacobian.catalog.admission import (
     OperationAdmission,
     OperationRegistration,
 )
-from jacobian.math.commutative_algebra_ops._tools import TOOLS
+from jacobian.math.algebraic_number_arithmetic._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
-        "polynomial.ideal.quotient.compute",
+        "algebraic_number.add.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
     OperationAdmission(
-        "polynomial.ideal.radical.compute",
-        AdmissionDecision.KEEP,
-        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
-    ),
-    OperationAdmission(
-        "polynomial.ideal.radical_membership.decide",
-        AdmissionDecision.KEEP,
-        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
-    ),
-    OperationAdmission(
-        "polynomial.ideal.saturation.compute",
+        "algebraic_number.multiply.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),

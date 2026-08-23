@@ -13,7 +13,12 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "group.conjugacy_classes.compute",
         AdmissionDecision.KEEP,
-        "exact conjugacy class computation with typed class representatives for bounded permutation groups",
+        "exact conjugacy-class partition of a permutation group via SymPy, a fundamental group invariant",
+    ),
+    OperationAdmission(
+        "group.stabilizer.compute",
+        AdmissionDecision.KEEP,
+        "exact point-stabilizer generators via SymPy, the orbit-stabilizer complement to group.orbit.compute and group.order.compute",
     ),
     OperationAdmission(
         "group.element_order.compute",
@@ -33,7 +38,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "group.subgroup_lattice.compute",
         AdmissionDecision.KEEP,
-        "exact subgroup lattice enumeration with typed generator records for bounded permutation groups",
+        "exact complete subgroup lattice enumeration via SymPy bounded to groups of order 64",
     ),
 )
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -10,6 +10,32 @@ from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 
 MAX_GROUP_DEGREE = 64
+
+# Conjugacy classes materialize every group element as an array form
+# (``|G|`` permutations of length ``degree``).  The degree cap alone does
+# not bound this enumeration: S12 already has 479M elements.  Use a
+# conservative group-order bound derived before backend expansion via
+# Schreier-Sims (cheap) rather than after enumeration.
+MAX_CONJUGACY_CLASSES_GROUP_ORDER = 5000
+# The subgroup-lattice traversal is exponential in the generated group's
+# order and therefore carries a much tighter enumerated-order cap.
+MAX_SUBGROUP_LATTICE_GROUP_ORDER = 64
+
+
+def _require_bounded_group_order(
+    degree: int,
+    generators: tuple[tuple[int, ...], ...],
+    maximum: int,
+    purpose: str,
+) -> None:
+    from sympy.combinatorics import Permutation, PermutationGroup
+
+    group = PermutationGroup(*(Permutation(list(g)) for g in generators))
+    order = int(group.order())
+    if order > maximum:
+        raise ValueError(
+            f"group order {order} exceeds the bounded maximum {maximum} for {purpose}"
+        )
 
 
 class PermutationGroupRequest(StrictModel):
@@ -59,23 +85,26 @@ class GroupElementOrderResult(StrictModel):
 
 
 class GroupOrbitRequest(StrictModel):
-    """Request the orbit of a point under a permutation group."""
+    """Request the orbit of a point under a permutation group.
 
-    degree: int = Field(ge=1, le=MAX_GROUP_DEGREE)
-    generators: tuple[tuple[int, ...], ...] = Field(
-        min_length=1, max_length=MAX_GROUP_DEGREE
+    The group is the canonical permutation-group value, so a stabilizer
+    result's ``stabilizer`` subgroup feeds the advertised orbit consumer
+    unchanged instead of being unpacked into parallel top-level fields.
+    """
+
+    group: PermutationGroupRequest = Field(
+        description=(
+            "Permutation group acting on {0,...,degree-1} as the canonical "
+            "value; pass a previous stabilizer or order request's group "
+            "value unchanged."
+        )
     )
     point: int = Field(ge=0, le=MAX_GROUP_DEGREE - 1)
 
     @model_validator(mode="after")
-    def require_valid_generators(self) -> Self:
-        if not 0 <= self.point < self.degree:
-            raise ValueError("point must be in 0..degree-1")
-        for perm in self.generators:
-            if len(perm) != self.degree:
-                raise ValueError("each generator must have length equal to degree")
-            if sorted(perm) != list(range(self.degree)):
-                raise ValueError("each generator must be a permutation of 0..n-1")
+    def require_point_in_group(self) -> Self:
+        if not 0 <= self.point < self.group.degree:
+            raise ValueError("point must be in 0..group.degree-1")
         return self
 
 
@@ -86,41 +115,31 @@ class GroupOrbitResult(StrictModel):
     point: int = Field(ge=0, le=MAX_GROUP_DEGREE - 1)
 
 
-# Conjugacy classes serialize each element of the generated group exactly
-# once; the subgroup-lattice traversal is exponential in that order and
-# therefore carries a much tighter enumerated-order cap. Both stay bounded
-# only under explicit caps enforced at this typed boundary.
-MAX_CONJUGACY_CLASSES_GROUP_ORDER = 5000
-MAX_SUBGROUP_LATTICE_GROUP_ORDER = 64
-
-
-def _require_bounded_group_order(
-    degree: int,
-    generators: tuple[tuple[int, ...], ...],
-    maximum: int,
-    purpose: str,
-) -> None:
-    from sympy.combinatorics import Permutation, PermutationGroup
-
-    group = PermutationGroup(*(Permutation(list(g)) for g in generators))
-    order = int(group.order())
-    if order > maximum:
-        raise ValueError(
-            f"group order {order} exceeds the bounded maximum {maximum} for {purpose}"
-        )
-
-
 class GroupConjugacyClassesRequest(StrictModel):
-    """Compute the conjugacy classes of a permutation group.
+    """Request the conjugacy classes of a permutation group.
 
     The generated group must have order at most 5000 (degree up to 64
-    alone does not bound enumeration; e.g., S8 has order 40320). The
-    order is computed via Schreier-Sims before any element enumeration.
+    alone does not bound enumeration; e.g., S8 has order 40320 and S12
+    has order 479M). Validators compute ``|G|`` via Schreier-Sims and
+    reject groups exceeding the 5000-element bound before enumeration.
     """
 
-    degree: int = Field(ge=1, le=MAX_GROUP_DEGREE)
+    degree: int = Field(
+        ge=1,
+        le=MAX_GROUP_DEGREE,
+        description=(
+            "Degree n of the permutation group acting on {0,...,n-1}; "
+            "the generated group must have order at most 5000 (degree 64 alone "
+            "does not bound enumeration)."
+        ),
+    )
     generators: tuple[tuple[int, ...], ...] = Field(
-        min_length=1, max_length=MAX_GROUP_DEGREE
+        min_length=1,
+        max_length=MAX_GROUP_DEGREE,
+        description=(
+            "Generator permutations as array forms of length degree; "
+            "the generated group must have order at most 5000."
+        ),
     )
 
     @model_validator(mode="after")
@@ -130,74 +149,301 @@ class GroupConjugacyClassesRequest(StrictModel):
                 raise ValueError("each generator must have length equal to degree")
             if sorted(perm) != list(range(self.degree)):
                 raise ValueError("each generator must be a permutation of 0..n-1")
-        _require_bounded_group_order(
-            self.degree,
-            self.generators,
-            MAX_CONJUGACY_CLASSES_GROUP_ORDER,
-            "conjugacy classes",
-        )
-        return self
+        # Bound enumeration by the generated group's order before invoking
+        # the SymPy backend which materializes every element.  The degree
+        # cap alone does not bound work: S12 has order 479M and would
+        # exhaust memory; compute |G| cheaply via Schreier-Sims and reject
+        # when it exceeds the conservative limit.
+        from sympy.combinatorics import Permutation, PermutationGroup
 
-
-class ConjugacyClass(StrictModel):
-    """One conjugacy class with representative elements and size."""
-
-    elements: tuple[tuple[int, ...], ...] = Field(
-        min_length=1, max_length=MAX_CONJUGACY_CLASSES_GROUP_ORDER
-    )
-    size: int = Field(ge=1)
-
-    @model_validator(mode="after")
-    def require_size_matches_elements(self) -> Self:
-        if self.size != len(self.elements) or len(set(self.elements)) != len(
-            self.elements
-        ):
+        perms = [Permutation(list(p)) for p in self.generators]
+        group = PermutationGroup(perms)
+        order = int(group.order())
+        if order > MAX_CONJUGACY_CLASSES_GROUP_ORDER:
             raise ValueError(
-                "class size must equal the number of distinct retained elements"
+                f"group order {order} exceeds the bounded maximum "
+                f"{MAX_CONJUGACY_CLASSES_GROUP_ORDER} for conjugacy classes "
+                f"(would materialize |G|={order} elements)"
             )
         return self
+
+
+ConjugacyClassElement = Annotated[
+    tuple[int, ...],
+    Field(min_length=1, max_length=MAX_GROUP_DEGREE),
+]
+
+ConjugacyClass = Annotated[
+    tuple[ConjugacyClassElement, ...],
+    Field(min_length=1, max_length=MAX_CONJUGACY_CLASSES_GROUP_ORDER),
+]
 
 
 class GroupConjugacyClassesResult(StrictModel):
-    """All conjugacy classes of a permutation group, bound to its source."""
+    """The exact conjugacy-class partition of a permutation group.
 
-    degree: int = Field(ge=1, le=MAX_GROUP_DEGREE)
-    generators: tuple[tuple[int, ...], ...] = Field(
-        min_length=1, max_length=MAX_GROUP_DEGREE
-    )
+    ``classes`` is canonically ordered (members lexicographically sorted,
+    classes sorted by smallest member) so equal groups serialize
+    identically. Validation replays the defining invariant: the listed
+    elements must form a group under composition and each class must be
+    exactly its representative's conjugation orbit in that group.
+    """
+
     classes: tuple[ConjugacyClass, ...] = Field(
-        min_length=1, max_length=MAX_CONJUGACY_CLASSES_GROUP_ORDER
+        min_length=1,
+        max_length=MAX_CONJUGACY_CLASSES_GROUP_ORDER,
     )
-    class_count: int = Field(ge=1)
     method: Literal["SYMPY_CONJUGACY_CLASSES"] = "SYMPY_CONJUGACY_CLASSES"
 
     @model_validator(mode="after")
-    def require_consistent_count(self) -> Self:
-        if len(self.classes) != self.class_count:
-            raise ValueError("class_count must match the number of classes")
+    def require_conjugacy_class_partition(self) -> Self:
+        elements = _require_canonical_partition(self.classes)
+
+        from sympy.combinatorics import Permutation, PermutationGroup
+
+        ordered_elements = sorted(elements)
+        backend_group = PermutationGroup(
+            [Permutation(list(p)) for p in ordered_elements]
+        )
+        # A finite subset of a symmetric group is a subgroup iff it is closed
+        # under composition; <S> equals S iff |<S>| == |S|.
+        if int(backend_group.order()) != len(ordered_elements):
+            raise ValueError("the listed elements must form a group under composition")
+
+        generators = _minimal_generator_subset(ordered_elements)
+        inverse_generators = [_invert_permutation(p) for p in generators]
+        for cls in self.classes:
+            orbit = _conjugation_orbit(cls[0], generators, inverse_generators)
+            if orbit != set(cls):
+                raise ValueError(
+                    "each class must equal the conjugation orbit of its "
+                    "representative in the reconstructed group"
+                )
         return self
 
-    @model_validator(mode="after")
-    def bind_classes_to_source_group(self) -> Self:
-        # Replaying through the request model revalidates generator shape and
-        # the bounded group order before the partition is recomputed.
-        GroupConjugacyClassesRequest(degree=self.degree, generators=self.generators)
-        from jacobian.math.group.operations import conjugacy_classes
 
-        expected = tuple(
-            (tuple(sorted(tuple(element) for element in class_elements)), size)
-            for class_elements, size in conjugacy_classes(
-                self.degree, [list(generator) for generator in self.generators]
-            )
+def _require_canonical_partition(
+    classes: tuple[ConjugacyClass, ...],
+) -> set[tuple[int, ...]]:
+    degree = len(classes[0][0])
+    expected_range = list(range(degree))
+    elements: set[tuple[int, ...]] = set()
+    previous_representative: tuple[int, ...] | None = None
+    for cls in classes:
+        previous_member: tuple[int, ...] | None = None
+        for perm in cls:
+            if len(perm) != degree:
+                raise ValueError("all permutations must have one common degree")
+            if sorted(perm) != expected_range:
+                raise ValueError("every element must be a permutation of 0..degree-1")
+            if perm in elements:
+                raise ValueError("conjugacy classes must not repeat an element")
+            elements.add(perm)
+            if previous_member is not None and perm <= previous_member:
+                raise ValueError("class members must be strictly increasing")
+            previous_member = perm
+        representative = cls[0]
+        if (
+            previous_representative is not None
+            and representative <= previous_representative
+        ):
+            raise ValueError("classes must be ordered by canonical representative")
+        previous_representative = representative
+    if len(elements) > MAX_CONJUGACY_CLASSES_GROUP_ORDER:
+        raise ValueError(
+            f"a conjugacy-class partition may contain at most "
+            f"{MAX_CONJUGACY_CLASSES_GROUP_ORDER} elements"
         )
-        actual = tuple(
-            (bound_class.elements, bound_class.size) for bound_class in self.classes
+    return elements
+
+
+def _minimal_generator_subset(
+    elements: list[tuple[int, ...]],
+) -> list[tuple[int, ...]]:
+    from sympy.combinatorics import Permutation, PermutationGroup
+
+    total = len(elements)
+    generators: list[tuple[int, ...]] = []
+    generated_order = 1
+    for element in elements:
+        if generated_order == total:
+            break
+        candidate = [*generators, element]
+        candidate_order = int(
+            PermutationGroup([Permutation(list(p)) for p in candidate]).order()
         )
-        if actual != expected or self.class_count != len(expected):
-            raise ValueError(
-                "classes must be the exact conjugacy partition of the "
-                "retained source group in canonical element and class order"
+        if candidate_order > generated_order:
+            generators = candidate
+            generated_order = candidate_order
+    return generators
+
+
+def _conjugation_orbit(
+    representative: tuple[int, ...],
+    generators: list[tuple[int, ...]],
+    inverse_generators: list[tuple[int, ...]],
+) -> set[tuple[int, ...]]:
+    orbit = {representative}
+    stack = [representative]
+    while stack:
+        current = stack.pop()
+        for generator, inverse in zip(generators, inverse_generators, strict=True):
+            conjugate = _compose_permutation(
+                _compose_permutation(generator, current), inverse
             )
+            if conjugate not in orbit:
+                orbit.add(conjugate)
+                stack.append(conjugate)
+    return orbit
+
+
+def _compose_permutation(
+    first: tuple[int, ...], second: tuple[int, ...]
+) -> tuple[int, ...]:
+    return tuple(first[i] for i in second)
+
+
+def _invert_permutation(permutation: tuple[int, ...]) -> tuple[int, ...]:
+    inverse = [0] * len(permutation)
+    for index, value in enumerate(permutation):
+        inverse[value] = index
+    return tuple(inverse)
+
+
+class GroupStabilizerRequest(StrictModel):
+    """Request the stabilizer of a point in a permutation group.
+
+    The group is the canonical permutation-group value, so a stabilizer chain
+    passes a previous result's ``stabilizer`` subgroup unchanged as ``group``.
+    """
+
+    group: PermutationGroupRequest = Field(
+        description=(
+            "Permutation group acting on {0,...,degree-1} as the canonical "
+            "value; pass a previous stabilizer result's `stabilizer` subgroup "
+            "unchanged to continue a stabilizer chain."
+        )
+    )
+    point: int = Field(ge=0, le=MAX_GROUP_DEGREE - 1)
+
+    @model_validator(mode="after")
+    def require_point_in_group(self) -> Self:
+        if not 0 <= self.point < self.group.degree:
+            raise ValueError("point must be in 0..group.degree-1")
+        return self
+
+
+def _require_permutation(perm: tuple[int, ...], degree: int, label: str) -> None:
+    if len(perm) != degree:
+        raise ValueError(f"each {label} must have length equal to degree")
+    if sorted(perm) != list(range(degree)):
+        raise ValueError(f"each {label} must be a permutation of 0..n-1")
+
+
+def _check_stabilizer_permutations(
+    degree: int,
+    point: int,
+    generators: tuple[tuple[int, ...], ...],
+    source_generators: tuple[tuple[int, ...], ...],
+) -> None:
+    if not 0 <= point < degree:
+        raise ValueError("point must be in 0..degree-1")
+    for perm in source_generators:
+        _require_permutation(perm, degree, "source generator")
+    for perm in generators:
+        _require_permutation(perm, degree, "generator")
+        if perm[point] != point:
+            raise ValueError("stabilizer generators must fix the point")
+
+
+def _check_orbit_stabilizer(
+    degree: int,
+    point: int,
+    generators: tuple[tuple[int, ...], ...],
+    source_generators: tuple[tuple[int, ...], ...],
+) -> None:
+    from sympy.combinatorics import Permutation, PermutationGroup
+
+    source_perms = [Permutation(list(p)) for p in source_generators]
+    source_group = PermutationGroup(source_perms)
+    source_order = int(source_group.order())
+    orbit = source_group.orbit(point)
+    orbit_size = len(orbit) if orbit is not None else 1
+    if generators:
+        stab_perms = [Permutation(list(p)) for p in generators]
+        stab_group = PermutationGroup(stab_perms)
+        stab_order = int(stab_group.order())
+        for perm in generators:
+            if not source_group.contains(Permutation(list(perm))):
+                raise ValueError(
+                    "stabilizer generators must be elements of the source group"
+                )
+        if source_order % stab_order != 0:
+            raise ValueError("stabilizer order must divide source order")
+    else:
+        stab_order = 1
+    if source_order != orbit_size * stab_order:
+        raise ValueError(
+            "orbit size times stabilizer order must equal source order "
+            "(orbit-stabilizer theorem)"
+        )
+
+
+class GroupStabilizerResult(StrictModel):
+    """Point stabilizer as a canonical permutation-group value bound to its source.
+
+    The result retains the source group and the stabilizer subgroup as nested
+    canonical :class:`PermutationGroupRequest` values (``degree`` + ``generators``)
+    so the stabilizer can be passed unchanged to ``group.order.compute`` or any
+    other permutation-group consumer without reshaping. The trivial stabilizer
+    is represented by the identity permutation ``[0,...,degree-1]`` (the
+    consumer requires at least one generator). Validation replays the defining
+    orbit-stabilizer relation ``|G| = |orbit(point)| * |Stab(point)|`` and
+    checks that every stabilizer generator fixes ``point`` and lies in the
+    source group.
+    """
+
+    point: int = Field(
+        ge=0,
+        le=MAX_GROUP_DEGREE - 1,
+        description="Point whose stabilizer is computed; must satisfy 0 <= point < source.degree == stabilizer.degree.",
+    )
+    source: PermutationGroupRequest = Field(
+        description="Source permutation group as the canonical value (degree + generators)."
+    )
+    stabilizer: PermutationGroupRequest = Field(
+        description=(
+            "Stabilizer subgroup as a canonical permutation-group value on the same "
+            "degree; trivial stabilizer is represented by the identity permutation "
+            "[0,...,degree-1] so the value is always consumable by group.order.compute "
+            "without reshaping or synthesizing an identity."
+        )
+    )
+    method: Literal["SYMPY_STABILIZER"] = "SYMPY_STABILIZER"
+
+    @model_validator(mode="after")
+    def require_valid_stabilizer(self) -> Self:
+        if self.source.degree != self.stabilizer.degree:
+            raise ValueError("source and stabilizer must have the same degree")
+        if not 0 <= self.point < self.source.degree:
+            raise ValueError("point must be in 0..degree-1")
+        _check_stabilizer_permutations(
+            self.source.degree,
+            self.point,
+            self.stabilizer.generators,
+            self.source.generators,
+        )
+        try:
+            _check_orbit_stabilizer(
+                self.source.degree,
+                self.point,
+                self.stabilizer.generators,
+                self.source.generators,
+            )
+        except ValueError:
+            raise
+        except Exception as exc:  # pragma: no cover - unexpected backend failure
+            raise ValueError(f"stabilizer validation failed: {exc}") from exc
         return self
 
 
@@ -232,11 +478,7 @@ class GroupSubgroupLatticeRequest(StrictModel):
 class SubgroupEntry(StrictModel):
     """One subgroup with its generators and order."""
 
-    # A group of admitted order <= 64 never needs more than 6 generators
-    # (one per prime factor of 64); the cap keeps a relayed payload from
-    # driving unbounded backend construction before the source-bound
-    # comparison runs.
-    generators: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=64)
+    generators: tuple[tuple[int, ...], ...] = Field(min_length=1)
     order: int = Field(ge=1, le=64)
 
     @model_validator(mode="after")

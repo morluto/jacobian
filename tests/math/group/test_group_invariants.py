@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from jacobian.math.group._models import (
     GroupConjugacyClassesRequest,
     GroupSubgroupLatticeRequest,
+    PermutationGroupRequest,
 )
 from jacobian.math.group._operations import (
     compute_subgroup_lattice,
@@ -53,6 +54,56 @@ class TestSubgroupLattice:
         result = compute_subgroup_lattice(req)
         orders = sorted(sg.order for sg in result.subgroups)
         assert orders == [1, 2, 4]
+
+
+class TestNativeSubgroupLattice:
+    """The exported native lattice composes with canonical group values."""
+
+    @staticmethod
+    def _s3() -> PermutationGroupRequest:
+        return PermutationGroupRequest(degree=3, generators=((1, 0, 2), (0, 2, 1)))
+
+    def test_stabilizer_result_feeds_lattice_unchanged(self):
+        """A ``group_stabilizer`` value passes to the lattice directly."""
+        from jacobian.math.group.operations import (
+            group_order,
+            group_stabilizer,
+            subgroup_lattice,
+        )
+
+        stabilizer = group_stabilizer(self._s3(), 0)
+        entries = subgroup_lattice(stabilizer)
+        # The C2 stabilizer of point 0 in S3 has trivial + itself.
+        assert sorted(entry.order for entry in entries) == [1, 2]
+        for entry in entries:
+            assert group_order(entry.group) == entry.order
+
+    def test_native_lattice_matches_wire_entries(self):
+        """The native result equals the wire result's subgroup entries."""
+        result = compute_subgroup_lattice(
+            GroupSubgroupLatticeRequest(degree=3, generators=((1, 0, 2), (0, 2, 1)))
+        )
+        native = self._s3()
+        from jacobian.math.group.operations import subgroup_lattice
+
+        assert list(subgroup_lattice(native)) == list(result.subgroups)
+
+    def test_enumerated_subgroups_feed_group_order(self):
+        """Every enumerated subgroup passes to ``group_order`` unchanged."""
+        from jacobian.math.group.operations import group_order, subgroup_lattice
+
+        for entry in subgroup_lattice(self._s3()):
+            assert group_order(entry.group) == entry.order
+
+    def test_oversized_source_rejected_before_traversal(self):
+        """The native function enforces its own enumerated-order bound."""
+        from jacobian.math.group.operations import subgroup_lattice
+
+        s5 = PermutationGroupRequest(
+            degree=5, generators=((1, 0, 2, 3, 4), (1, 2, 3, 4, 0))
+        )
+        with pytest.raises(ValueError, match="bounded to groups of order"):
+            subgroup_lattice(s5)
 
 
 class TestBoundedEnumeration:

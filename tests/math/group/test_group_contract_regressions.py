@@ -382,9 +382,11 @@ def test_group_subgroup_lattice_serialization_is_hash_seed_independent() -> None
     import sys
 
     script = (
+        "from jacobian.math.group._models import PermutationGroupRequest;"
         "from jacobian.math.group.operations import subgroup_lattice;"
         "import json;"
-        "print(json.dumps(subgroup_lattice(4, [[1, 2, 3, 0]])))"
+        "print(json.dumps([entry.model_dump(mode='json') for entry in "
+        "subgroup_lattice(PermutationGroupRequest(degree=4, generators=((1, 2, 3, 0),)))]))"
     )
     outputs = set()
     for seed in ("0", "1", "424242"):

@@ -24,7 +24,6 @@ from jacobian.math.group._models import (
     GroupSubgroupLatticeRequest,
     GroupSubgroupLatticeResult,
     PermutationGroupRequest,
-    SubgroupEntry,
 )
 
 
@@ -68,10 +67,11 @@ def compute_subgroup_lattice(
 ) -> GroupSubgroupLatticeResult:
     from jacobian.math.group.operations import SubgroupLatticeBudgetExceededError
 
+    source = PermutationGroupRequest(
+        degree=request.degree, generators=request.generators
+    )
     try:
-        subgroups = subgroup_lattice(
-            request.degree, [list(g) for g in request.generators]
-        )
+        subgroups = subgroup_lattice(source)
     except SubgroupLatticeBudgetExceededError as error:
         return GroupSubgroupLatticeResult(
             outcome="LIMIT_EXCEEDED",
@@ -79,19 +79,9 @@ def compute_subgroup_lattice(
             generators=request.generators,
             detail=str(error),
         )
-    entries = tuple(
-        SubgroupEntry(
-            group=PermutationGroupRequest(
-                degree=request.degree,
-                generators=tuple(tuple(g) for g in sg[0]),
-            ),
-            order=sg[1],
-        )
-        for sg in subgroups
-    )
     return GroupSubgroupLatticeResult(
         degree=request.degree,
         generators=request.generators,
-        subgroups=entries,
-        subgroup_count=len(entries),
+        subgroups=tuple(subgroups),
+        subgroup_count=len(subgroups),
     )

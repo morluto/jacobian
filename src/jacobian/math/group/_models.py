@@ -572,9 +572,9 @@ class GroupSubgroupLatticeResult(StrictModel):
         from jacobian.math.group.operations import subgroup_lattice
 
         expected_lattice = tuple(
-            (tuple(tuple(g) for g in sorted(subgroup_generators)), order)
-            for subgroup_generators, order in subgroup_lattice(
-                self.degree, [list(generator) for generator in self.generators]
+            (entry.group.generators, entry.order)
+            for entry in subgroup_lattice(
+                PermutationGroupRequest(degree=self.degree, generators=self.generators)
             )
         )
         actual_lattice = tuple(

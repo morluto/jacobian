@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from jacobian.math.group._models import PermutationGroupRequest
+from jacobian.math.group._models import PermutationGroupRequest, SubgroupEntry
 
 __all__ = [
     "element_order",
@@ -132,28 +132,17 @@ class SubgroupLatticeBudgetExceededError(ValueError):
 MAX_SUBGROUP_LATTICE_CLOSURES = 200_000
 
 
-def _require_admitted_lattice_source(degree: int, generators: list[list[int]]) -> Any:
-    """Validate the source and return the bounded backend permutation group."""
-    from sympy.combinatorics import Permutation, PermutationGroup
-
+def _require_admitted_lattice_source(group: PermutationGroupRequest) -> Any:
+    """Return the bounded backend permutation group for an admitted source."""
     from jacobian.math.group._models import MAX_SUBGROUP_LATTICE_GROUP_ORDER
 
-    if not 1 <= degree <= 64:
-        raise ValueError("group degree must be between 1 and 64")
-    if not generators:
-        raise ValueError("at least one generator is required")
-    perms = []
-    for perm in generators:
-        if len(perm) != degree or sorted(perm) != list(range(degree)):
-            raise ValueError("each generator must be a permutation of 0..n-1")
-        perms.append(Permutation(list(perm)))
-    group = PermutationGroup(perms)
-    if int(group.order()) > MAX_SUBGROUP_LATTICE_GROUP_ORDER:
+    backend_group = _backend_group(group)
+    if int(backend_group.order()) > MAX_SUBGROUP_LATTICE_GROUP_ORDER:
         raise ValueError(
             "subgroup lattice computation is bounded to groups of order "
             f"at most {MAX_SUBGROUP_LATTICE_GROUP_ORDER}"
         )
-    return group
+    return backend_group
 
 
 def _canonical_form(permutation: Any, degree: int) -> tuple[int, ...]:
@@ -206,21 +195,26 @@ def _extend_by_element(
     return seen, generated
 
 
-def subgroup_lattice(
-    degree: int, generators: list[list[int]]
-) -> list[tuple[list[list[int]], int]]:
-    """Return all subgroups of a permutation group.
+def subgroup_lattice(group: PermutationGroupRequest) -> list[SubgroupEntry]:
+    """Return every subgroup of a permutation group as canonical entries.
 
-    Returns a list of (generators_of_subgroup, subgroup_order) tuples.
-    The traversal is bounded to groups of order at most 64 and counts its
-    closure constructions against ``MAX_SUBGROUP_LATTICE_CLOSURES``, so the
-    search work is derived from the subgroup/search-node count instead of
-    only the admitted group order; exhausting the budget raises
-    :class:`SubgroupLatticeBudgetExceededError`, which the wire operation
-    reports as a typed ``LIMIT_EXCEEDED`` outcome.
+    Each entry retains its subgroup as the canonical permutation-group value
+    plus its exact order, so an enumerated subgroup passes unchanged to
+    ``group_order``, ``group_orbit``, a chained stabilizer request, or any
+    other permutation-group consumer. The trivial subgroup is represented by
+    the identity generator ``[0,...,degree-1]`` so every entry value stays
+    consumable without synthesizing a generator. The lattice is complete and
+    canonically ordered: entries are sorted by order and then by generators,
+    so equal groups serialize identically. The traversal is bounded to groups
+    of order at most 64 and counts its closure constructions against
+    ``MAX_SUBGROUP_LATTICE_CLOSURES``, so the search work is derived from the
+    subgroup/search-node count instead of only the admitted group order;
+    exhausting the budget raises :class:`SubgroupLatticeBudgetExceededError`,
+    which the wire operation reports as a typed ``LIMIT_EXCEEDED`` outcome.
     """
-    group = _require_admitted_lattice_source(degree, generators)
-    elements, mul = _element_table(group, degree)
+    degree = group.degree
+    backend_group = _require_admitted_lattice_source(group)
+    elements, mul = _element_table(backend_group, degree)
     element_count = len(elements)
 
     identity_position = elements.index(tuple(range(degree)))
@@ -229,8 +223,8 @@ def subgroup_lattice(
     # Every discovered subgroup extends its discoverer's chain by one
     # element, and each accepted extension at least doubles the generated
     # subgroup (Lagrange), so chains stay within log2(order) <= 6 links.
-    identity_generators = [list(elements[identity_position])]
-    result: list[tuple[list[list[int]], int]] = [(identity_generators, 1)]
+    identity_generators = (tuple(elements[identity_position]),)
+    lattice: list[tuple[tuple[tuple[int, ...], ...], int]] = [(identity_generators, 1)]
     frontier: list[tuple[int, tuple[int, ...]]] = [(trivial_mask, ())]
     closures = 0
     while frontier:
@@ -252,13 +246,19 @@ def subgroup_lattice(
                 known_masks.add(seen)
                 child_chain = (*chain, candidate)
                 if child_chain:
-                    generators_out = sorted(
-                        list(elements[position]) for position in child_chain
+                    generators_out = tuple(
+                        sorted(elements[position] for position in child_chain)
                     )
                 else:
                     generators_out = identity_generators
-                result.append((generators_out, len(generated)))
+                lattice.append((generators_out, len(generated)))
                 frontier.append((seen, child_chain))
     # Canonical entry order keeps serialized lattices hash-seed independent.
-    result.sort(key=lambda entry: (entry[1], entry[0]))
-    return result
+    lattice.sort(key=lambda entry: (entry[1], entry[0]))
+    return [
+        SubgroupEntry(
+            group=PermutationGroupRequest(degree=degree, generators=generators),
+            order=order,
+        )
+        for generators, order in lattice
+    ]

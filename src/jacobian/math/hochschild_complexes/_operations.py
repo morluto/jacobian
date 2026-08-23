@@ -2,12 +2,7 @@
 
 from __future__ import annotations
 
-from itertools import product as iproduct
-
-from jacobian.math.hochschild_complexes._bar import (
-    StructureConstants,
-    bar_differential_entries,
-)
+from jacobian.math.hochschild_complexes._bar import bar_differential_entries
 from jacobian.math.hochschild_complexes._models import (
     MAX_HOCHSCHILD_TENSOR_ELEMENTS,
     AlgebraStructure,
@@ -64,58 +59,43 @@ def _gaussian_rank(matrix: list[list[int]], prime: int) -> int:
     return rank
 
 
-def _adjacent_boundary_rank(
-    c: StructureConstants,
-    n: int,
-    p: int,
+def _boundary_rank(
+    algebra: AlgebraStructure,
     degree: int,
     element_budget: int = MAX_HOCHSCHILD_TENSOR_ELEMENTS,
 ) -> int:
-    """GF(p)-rank of the adjacent-multiplication boundary C_degree -> C_{degree-1}."""
-    source_dim = n ** degree
-    if source_dim > element_budget:
+    """GF(p)-rank of the Hochschild boundary C_degree -> C_{degree-1}."""
+    n = algebra.dimension
+    if n**degree > element_budget:
         raise ValueError(
             "requested degree exceeds the supported tensor-element budget"
         )
-    target_dim = n ** (degree - 1)
-    matrix = [[0] * source_dim for _ in range(target_dim)]
-    source_basis = list(iproduct(range(n), repeat=degree))
-    target_basis = list(iproduct(range(n), repeat=degree - 1))
-    for j, wedge in enumerate(source_basis):
-        for k_pos in range(degree - 1):
-            product = c[wedge[k_pos]][wedge[k_pos + 1]]
-            remaining = wedge[:k_pos] + wedge[k_pos + 2:]
-            sign = (-1) ** k_pos
-            for coeff_idx, coeff in enumerate(product):
-                if coeff == 0:
-                    continue
-                new_wedge = (*remaining[:k_pos], coeff_idx, *remaining[k_pos:])
-                target_idx = target_basis.index(tuple(new_wedge))
-                entry = (sign * int(coeff)) % p
-                matrix[target_idx][j] = (matrix[target_idx][j] + entry) % p
-    return _gaussian_rank(matrix, p)
+    if degree == 0:
+        return 0
+    matrix = bar_differential_entries(
+        algebra.structure_constants,
+        algebra.prime,
+        degree,
+        algebra.augmentation,
+    )
+    return _gaussian_rank([list(row) for row in matrix], algebra.prime)
 
 
 def compute_hochschild_chain_complex(
     request: HochschildChainComplexRequest,
 ) -> HochschildChainComplexResult:
-    """Compute the reduced bar chain complex with trivial coefficients.
+    """Compute the exact Hochschild chain complex with trivial coefficients.
 
-    The bar differential multiplies adjacent factors:
-    b'(e_{i1} ⊗ ... ⊗ e_{ik}) = Σ_j (-1)^j ...⊗ e_{ij}·e_{ij+1} ⊗...
-    This is the normalized bar differential, which squares to zero for any
-    associative algebra. Its homology is the bar homology with trivial
-    coefficients; it coincides with Hochschild homology HH(A,K) only when the
-    bimodule action of A on K is via the zero augmentation (endpoint terms
-    vanish). For unital augmented algebras, the full Hochschild differential
-    includes augmentation-dependent endpoint faces; this operation exposes the
-    reduced bar complex. No cyclic wraparound term is applied.
+    K = GF(p) carries the trivial A-bimodule structure defined by the retained
+    augmentation epsilon. The differential on C_k = A^tensor-k is the full
+    Hochschild boundary: interior adjacent multiplications plus both
+    augmentation-dependent endpoint faces. It squares to zero because epsilon
+    is an algebra homomorphism and the multiplication is associative.
     """
     alg = request.algebra
     n = alg.dimension
     p = alg.prime
     max_deg = request.max_degree
-    c = alg.structure_constants
 
     group_dims = [1]
     for k in range(1, max_deg + 1):
@@ -128,7 +108,9 @@ def compute_hochschild_chain_complex(
             degree=degree,
             source_dim=n ** degree,
             target_dim=n ** (degree - 1),
-            entries=bar_differential_entries(c, p, degree),
+            entries=bar_differential_entries(
+                alg.structure_constants, p, degree, alg.augmentation
+            ),
         ))
 
     return HochschildChainComplexResult(
@@ -144,24 +126,21 @@ def hochschild_homology_groups(
     algebra: AlgebraStructure,
     max_degree: int,
 ) -> tuple[HochschildHomologyGroup, ...]:
-    """Pure bar-homology core returning the exact groups for one algebra.
+    """Pure Hochschild-homology core returning the exact groups for one algebra.
 
     Kept free of result-model construction so result validation can replay
     the bounded rank computation without recursion.
     """
     n = algebra.dimension
-    p = algebra.prime
-    c = algebra.structure_constants
 
     group_dims = [1]
     for k in range(1, max_degree + 1):
         group_dims.append(n ** k)
 
     ranks = [
-        _adjacent_boundary_rank(c, n, p, degree)
-        for degree in range(1, max_degree + 1)
+        _boundary_rank(algebra, degree)
+        for degree in range(1, max_degree + 2)
     ]
-    ranks.append(_adjacent_boundary_rank(c, n, p, max_degree + 1))
 
     groups = []
     for k in range(max_degree + 1):
@@ -183,7 +162,7 @@ def hochschild_homology_groups(
 def compute_hochschild_homology(
     request: HochschildHomologyRequest,
 ) -> HochschildHomologyResult:
-    """Compute reduced bar (trivial-coefficient Hochschild) homology."""
+    """Compute exact Hochschild homology HH_n(A, K) for trivial coefficients."""
     alg = request.algebra
 
     return HochschildHomologyResult(

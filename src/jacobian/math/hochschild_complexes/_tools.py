@@ -50,6 +50,7 @@ _COMPLEX_EXAMPLE: dict[str, Any] = {
         "prime": 5,
         "dimension": 1,
         "structure_constants": [[[1]]],
+        "augmentation": [1],
     },
     "max_degree": 2,
 }
@@ -60,9 +61,11 @@ HOCHSCHILD_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "hochschild.chain_complex.compute",
         "Compute the Hochschild chain complex with trivial bimodule",
         "Given a finite-dimensional algebra over GF(p) with structure "
-        "constants, compute the Hochschild chain complex C_n = A^⊗n with "
-        "trivial bimodule coefficients. The differential uses the algebra "
-        "multiplication and the standard Hochschild boundary formula.",
+        "constants and an augmentation epsilon (an algebra homomorphism to "
+        "GF(p)), compute the Hochschild chain complex C_n = A^⊗n with "
+        "coefficients in the trivial module K on which A acts through "
+        "epsilon. The differential is the full Hochschild boundary: adjacent "
+        "multiplications plus both augmentation-dependent endpoint faces.",
         HochschildChainComplexRequest,
         HochschildChainComplexResult,
         compute_hochschild_chain_complex,
@@ -81,9 +84,9 @@ HOCHSCHILD_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "hochschild.homology.compute",
         "Compute Hochschild homology with trivial bimodule",
         "Given a finite-dimensional algebra over GF(p) with structure "
-        "constants, compute the exact Hochschild homology groups HH_n(A, K) "
-        "with trivial bimodule coefficients using Gaussian elimination over "
-        "GF(p).",
+        "constants and an augmentation epsilon, compute the exact Hochschild "
+        "homology groups HH_n(A, K) with coefficients in the trivial module "
+        "defined by epsilon, using Gaussian elimination over GF(p).",
         HochschildHomologyRequest,
         HochschildHomologyResult,
         compute_hochschild_homology,

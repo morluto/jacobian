@@ -20,10 +20,13 @@ MAX_HOCHSCHILD_MATRIX_ENTRIES = 131_072
 
 
 class AlgebraStructure(StrictModel):
-    """A finite-dimensional unital associative algebra over GF(p).
+    """A finite-dimensional associative algebra over GF(p) with an augmentation.
 
     The multiplication is specified by structure constants:
-    e_i * e_j = sum_k c_{ij}^k * e_k
+    e_i * e_j = sum_k c_{ij}^k * e_k. The augmentation epsilon maps each basis
+    element to a GF(p) scalar and must be an algebra homomorphism,
+    ``epsilon(e_i e_j) == epsilon(e_i) * epsilon(e_j) mod p``; it defines the
+    trivial coefficient module K on which A acts through epsilon.
     """
 
     prime: int = Field(ge=2, le=10_000)
@@ -31,10 +34,11 @@ class AlgebraStructure(StrictModel):
     structure_constants: tuple[tuple[tuple[int, ...], ...], ...] = Field(
         min_length=1, max_length=MAX_ALGEBRA_DIM
     )
+    augmentation: tuple[int, ...] = Field(min_length=1, max_length=MAX_ALGEBRA_DIM)
 
     def _require_canonical_residues(self) -> None:
-        """Reject noncanonical constants: each must already lie in 0..p-1 to
-        avoid implicit field coercion and unbounded input size."""
+        """Reject noncanonical constants and augmentation values: each must
+        already lie in 0..p-1 to avoid implicit field coercion."""
         prime = self.prime
         dimension = self.dimension
         for i in range(dimension):
@@ -42,6 +46,30 @@ class AlgebraStructure(StrictModel):
                 if any(not 0 <= c < prime for c in self.structure_constants[i][j]):
                     raise ValueError(
                         "structure constants must be canonical residues in 0..p-1"
+                    )
+        if any(not 0 <= value < prime for value in self.augmentation):
+            raise ValueError("augmentation values must be canonical residues in 0..p-1")
+
+    def _require_multiplicative_augmentation(self) -> None:
+        """The trivial module via epsilon is an A-bimodule only when epsilon is
+        multiplicative; this is exactly what makes the Hochschild differential
+        square to zero."""
+        prime = self.prime
+        epsilon = self.augmentation
+        constants = self.structure_constants
+        dimension = self.dimension
+        for i in range(dimension):
+            for j in range(dimension):
+                product_epsilon = sum(
+                    coefficient * epsilon[coefficient_index]
+                    for coefficient_index, coefficient in enumerate(
+                        constants[i][j]
+                    )
+                ) % prime
+                if product_epsilon != (epsilon[i] * epsilon[j]) % prime:
+                    raise ValueError(
+                        "augmentation must be an algebra homomorphism: "
+                        "epsilon(e_i e_j) must equal epsilon(e_i)*epsilon(e_j) mod p"
                     )
 
     @model_validator(mode="after")
@@ -54,12 +82,15 @@ class AlgebraStructure(StrictModel):
             for v in row:
                 if len(v) != self.dimension:
                     raise ValueError("structure_constants must be 3D")
+        if len(self.augmentation) != self.dimension:
+            raise ValueError("augmentation must have one entry per basis element")
         from sympy import isprime
 
         if not isprime(self.prime):
             raise ValueError("prime must be a prime integer")
         self._require_canonical_residues()
         self._require_associative()
+        self._require_multiplicative_augmentation()
         return self
 
     def _require_associative(self) -> None:
@@ -80,18 +111,16 @@ class AlgebraStructure(StrictModel):
 
 
 class HochschildChainComplexRequest(StrictModel):
-    """Compute the reduced bar (Hochschild) chain complex with trivial coefficients.
+    """Compute the Hochschild chain complex with trivial coefficients.
 
-    With trivial bimodule action (K where a·k = 0 for non-unit basis and k·a = 0),
-    the chain groups are C_n = A^⊗n and the differential is the bar differential
-    b'(a1⊗...⊗an) = Σ_{i} (-1)^{i} ...⊗ a_i·a_{i+1} ⊗... (adjacent multiplications only).
-    This is the normalized bar complex, which squares to zero for any associative
-    algebra. For a unital augmented algebra, the usual Hochschild differential
-    includes endpoint terms via the augmentation ε: the full b includes
-    ε(a1)a2⊗... and ...⊗an-1 ε(an). Those terms are zero under the trivial
-    (zero) action used here, so the operation is the bar complex with trivial
-    coefficients. Rename or add an augmentation parameter to obtain the full
-    Hochschild complex with non-zero bimodule actions.
+    The coefficient module is ``K = GF(p)`` on which A acts through the
+    retained augmentation epsilon. The chain groups are C_n = A^tensor-n and
+    the differential is the full Hochschild boundary: interior adjacent
+    multiplications plus the two augmentation-dependent endpoint faces
+    (epsilon(a_1) a_2 ox ... and (-1)^n epsilon(a_n) a_1 ox ...). It squares
+    to zero because epsilon is an algebra homomorphism and the multiplication
+    is associative. The operation computes exact HH(A, K) chains; no cyclic
+    wraparound beyond the Hochschild endpoint face is applied.
     """
 
     algebra: AlgebraStructure
@@ -172,7 +201,10 @@ class HochschildChainComplexResult(StrictModel):
                     "differential exceeds the supported boundary-matrix entry budget"
                 )
             expected_entries = bar_differential_entries(
-                algebra.structure_constants, algebra.prime, degree
+                algebra.structure_constants,
+                algebra.prime,
+                degree,
+                algebra.augmentation,
             )
             if differential.entries != expected_entries:
                 raise ValueError(
@@ -183,7 +215,13 @@ class HochschildChainComplexResult(StrictModel):
 
 
 class HochschildHomologyRequest(StrictModel):
-    """Compute the reduced bar homology (trivial-coefficient Hochschild) of an algebra."""
+    """Compute exact Hochschild homology HH_n(A, K) with trivial coefficients.
+
+    K = GF(p) carries the trivial A-bimodule structure defined by the retained
+    augmentation epsilon; the computation replays the full Hochschild boundary
+    (interior multiplications plus both augmentation endpoint faces) and
+    returns the exact Betti numbers of the retained augmented algebra.
+    """
 
     algebra: AlgebraStructure
     max_degree: int = Field(ge=1, le=MAX_HOCHSCHILD_DEGREE)

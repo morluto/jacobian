@@ -24,6 +24,7 @@ from jacobian.math.moments_orthogonal._models import (
     JacobiMatrixResult,
     RecurrenceCoefficientsRequest,
     RecurrenceCoefficientsResult,
+    RecurrenceCoefficientsValue,
 )
 from jacobian.math.moments_orthogonal._operations import (
     compute_christoffel_darboux,
@@ -197,8 +198,10 @@ class TestChristoffelDarbouxBoundedness:
         zero = _cr(0, 1)
         with pytest.raises(ValidationError, match="canonical"):
             ChristoffelDarbouxRequest(
-                alpha=tuple(coefficient for _ in range(16)),
-                beta=tuple(unit for _ in range(16)),
+                coefficients=RecurrenceCoefficientsValue(
+                    alpha=tuple(coefficient for _ in range(16)),
+                    beta=tuple(unit for _ in range(16)),
+                ),
                 x=zero,
                 y=zero,
             )
@@ -209,8 +212,10 @@ class TestChristoffelDarbouxBoundedness:
         unit = _cr(1, 1)
         with pytest.raises(ValidationError, match="canonical"):
             ChristoffelDarbouxRequest(
-                alpha=small_alpha,
-                beta=tuple(unit for _ in range(16)),
+                coefficients=RecurrenceCoefficientsValue(
+                    alpha=small_alpha,
+                    beta=tuple(unit for _ in range(16)),
+                ),
                 x=big_x,
                 y=big_x,
             )
@@ -220,8 +225,7 @@ class TestChristoffelDarbouxBoundedness:
         beta = tuple(_cr(10**400 - k, 10**399 + k) for k in range(16))
         result = compute_christoffel_darboux(
             ChristoffelDarbouxRequest(
-                alpha=alpha,
-                beta=beta,
+                coefficients=RecurrenceCoefficientsValue(alpha=alpha, beta=beta),
                 x=_cr(0, 1),
                 y=_cr(0, 1),
             )
@@ -232,8 +236,9 @@ class TestChristoffelDarbouxBoundedness:
         big = _cr(10**4090 + 123, 10**4088 + 7)
         result = compute_christoffel_darboux(
             ChristoffelDarbouxRequest(
-                alpha=(big, big),
-                beta=(_cr(1, 1), big),
+                coefficients=RecurrenceCoefficientsValue(
+                    alpha=(big, big), beta=(_cr(1, 1), big)
+                ),
                 x=big,
                 y=big,
             )
@@ -295,19 +300,25 @@ class TestWireAdapters:
         )
         result = compute_recurrence_coefficients(request)
         assert isinstance(result, RecurrenceCoefficientsResult)
-        assert len(result.alpha) == 3
+        assert len(result.coefficients.alpha) == 3
+        RecurrenceCoefficientsResult.model_validate(result.model_dump())
 
     def test_jacobi_wire(self) -> None:
         request = JacobiMatrixRequest(
-            alpha=(_cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            coefficients=RecurrenceCoefficientsValue(
+                alpha=(_cr(1, 2), _cr(1, 2)),
+                beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            ),
         )
         result = compute_jacobi_matrix(request)
         assert isinstance(result, JacobiMatrixResult)
+
     def test_christoffel_darboux_wire(self) -> None:
         request = ChristoffelDarbouxRequest(
-            alpha=(_cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            coefficients=RecurrenceCoefficientsValue(
+                alpha=(_cr(1, 2), _cr(1, 2)),
+                beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            ),
             x=_cr(1, 1),
             y=_cr(1, 1),
         )
@@ -316,8 +327,10 @@ class TestWireAdapters:
 
     def test_gaussian_quadrature_wire(self) -> None:
         request = GaussianQuadratureRequest(
-            alpha=(_cr(1, 2), _cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15), _cr(4, 45)),
+            coefficients=RecurrenceCoefficientsValue(
+                alpha=(_cr(1, 2), _cr(1, 2), _cr(1, 2)),
+                beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15), _cr(4, 45)),
+            ),
         )
         result = compute_gaussian_quadrature(request)
         assert isinstance(result, GaussianQuadratureResult)
@@ -361,3 +374,49 @@ class TestRecurrencePositiveFunctional:
             RecurrenceCoefficientsRequest(
                 moments=(CanonicalRational(num="-1", den="1"),)
             )
+
+
+class TestRecurrenceValueComposition:
+    """The serialized recurrence value must feed every consumer unchanged."""
+
+    def test_result_coefficients_feed_all_consumers_unchanged(self) -> None:
+        request = RecurrenceCoefficientsRequest(
+            moments=tuple(_cr(1, k) for k in range(1, 8))
+        )
+        result = compute_recurrence_coefficients(request)
+        payload = result.model_dump(mode="json")
+        coefficients = payload["coefficients"]
+
+        jacobi = JacobiMatrixRequest.model_validate(
+            {"coefficients": coefficients}
+        )
+        assert len(jacobi.coefficients.alpha) == 3
+
+        christoffel = ChristoffelDarbouxRequest.model_validate(
+            {
+                "coefficients": coefficients,
+                "x": {"num": "1", "den": "1"},
+                "y": {"num": "2", "den": "1"},
+            }
+        )
+        assert compute_christoffel_darboux(christoffel).kernel is not None
+
+        quadrature = GaussianQuadratureRequest.model_validate(
+            {"coefficients": coefficients}
+        )
+        assert compute_gaussian_quadrature(quadrature).nodes is not None
+
+    def test_tampered_coefficients_rejected_by_replay(self) -> None:
+        request = RecurrenceCoefficientsRequest(
+            moments=tuple(_cr(1, k) for k in range(1, 8))
+        )
+        result = compute_recurrence_coefficients(request)
+        payload = result.model_dump()
+        forged = dict(payload["coefficients"])
+        forged["alpha"] = [
+            {"num": "1", "den": str(int(entry["den"]) + 2)}
+            for entry in forged["alpha"]
+        ]
+        payload["coefficients"] = forged
+        with pytest.raises(ValidationError, match="exact recurrence"):
+            RecurrenceCoefficientsResult.model_validate(payload)

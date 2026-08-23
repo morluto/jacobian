@@ -32,6 +32,7 @@ def _coordinatewise_algebra(prime: int, dimension: int) -> AlgebraStructure:
             )
             for i in range(dimension)
         ),
+        augmentation=tuple(1 if i == 0 else 0 for i in range(dimension)),
     )
 
 
@@ -44,6 +45,7 @@ class TestHochschildChainComplex:
             prime=5,
             dimension=1,
             structure_constants=(((1,),),),
+            augmentation=(1,),
         )
         result = compute_hochschild_chain_complex(
             HochschildChainComplexRequest(algebra=alg, max_degree=2)
@@ -59,6 +61,7 @@ class TestHochschildChainComplex:
                 ((1, 0), (0, 1)),
                 ((0, 1), (1, 0)),
             ),
+            augmentation=(1, 1),
         )
         result = compute_hochschild_chain_complex(
             HochschildChainComplexRequest(algebra=alg, max_degree=1)
@@ -75,6 +78,7 @@ class TestHochschildChainComplex:
                 ((1, 0), (0, 1)),
                 ((0, 1), (1, 0)),
             ),
+            augmentation=(1, 5 - 1),
         )
         result = compute_hochschild_chain_complex(
             HochschildChainComplexRequest(algebra=alg, max_degree=2)
@@ -91,6 +95,7 @@ class TestHochschildHomology:
             prime=5,
             dimension=1,
             structure_constants=(((1,),),),
+            augmentation=(1,),
         )
         result = compute_hochschild_homology(
             HochschildHomologyRequest(algebra=alg, max_degree=2)
@@ -106,6 +111,7 @@ class TestHochschildHomology:
                 ((1, 0), (0, 1)),
                 ((0, 1), (1, 0)),
             ),
+            augmentation=(1, 1),
         )
         result = compute_hochschild_homology(
             HochschildHomologyRequest(algebra=alg, max_degree=2)
@@ -118,6 +124,7 @@ class TestHochschildHomology:
             prime=5,
             dimension=1,
             structure_constants=(((0,),),),
+            augmentation=(0,),
         )
         result = compute_hochschild_homology(
             HochschildHomologyRequest(algebra=alg, max_degree=2)
@@ -135,6 +142,7 @@ class TestHochschildAdmissionAndTopDegree:
                 prime=4,
                 dimension=1,
                 structure_constants=(((1,),),),
+                augmentation=(1,),
             )
 
     def test_non_associative_rejected(self):
@@ -144,7 +152,12 @@ class TestHochschildAdmissionAndTopDegree:
             ((1, 0), (0, 0)),
         )
         with pytest.raises(ValidationError, match="associative"):
-            AlgebraStructure(prime=5, dimension=2, structure_constants=c)
+            AlgebraStructure(
+                prime=5,
+                dimension=2,
+                structure_constants=c,
+                augmentation=(0, 0),
+            )
 
     def test_top_degree_uses_extra_differential(self):
         """e*e=e algebra: H_1 must vanish because d_2 is nonzero."""
@@ -152,6 +165,7 @@ class TestHochschildAdmissionAndTopDegree:
             prime=5,
             dimension=1,
             structure_constants=(((1,),),),
+            augmentation=(1,),
         )
         result = compute_hochschild_homology(
             HochschildHomologyRequest(algebra=alg, max_degree=2)
@@ -186,6 +200,7 @@ class TestChainComplexSourceBinding:
             prime=7,
             dimension=2,
             structure_constants=(((1, 0), (0, 1)), ((0, 1), (1, 0))),
+            augmentation=(1, 1),
         )
 
     def test_result_retains_and_replays_source(self):
@@ -251,6 +266,7 @@ class TestHomologySourceBinding:
             prime=5,
             dimension=1,
             structure_constants=(((1,),),),
+            augmentation=(1,),
         )
         genuine = compute_hochschild_homology(
             HochschildHomologyRequest(algebra=alg, max_degree=2)
@@ -267,6 +283,7 @@ class TestHomologySourceBinding:
             prime=5,
             dimension=1,
             structure_constants=(((1,),),),
+            augmentation=(1,),
         )
         genuine = compute_hochschild_homology(
             HochschildHomologyRequest(algebra=alg, max_degree=2)
@@ -275,3 +292,133 @@ class TestHomologySourceBinding:
         payload["prime"] = 7
         with pytest.raises(ValidationError, match="prime"):
             HochschildHomologyResult.model_validate(payload)
+
+
+def _dual_numbers(prime: int) -> AlgebraStructure:
+    """GF(prime)[x]/(x^2) with basis (1, x) and the standard augmentation."""
+    return AlgebraStructure(
+        prime=prime,
+        dimension=2,
+        structure_constants=(
+            ((1, 0), (0, 1)),
+            ((0, 1), (0, 0)),
+        ),
+        augmentation=(1, 0),
+    )
+
+
+class TestAugmentationEndpointFaces:
+    """The trivial module acts through epsilon, so both endpoint faces count."""
+
+    def test_dual_numbers_hh_is_one_in_every_degree(self):
+        """HH_n(GF(p)[x]/(x^2), K) = K for all n; adjacent-only would give H_1 = 0."""
+        result = compute_hochschild_homology(
+            HochschildHomologyRequest(algebra=_dual_numbers(5), max_degree=4)
+        )
+        assert [group.betti for group in result.groups] == [1, 1, 1, 1, 1]
+
+    def test_zero_augmentation_reduces_to_adjacent_faces(self):
+        """epsilon = 0 kills both endpoint faces, leaving interior multiplication."""
+        zeroed = AlgebraStructure(
+            prime=5,
+            dimension=2,
+            structure_constants=(
+                ((1, 0), (0, 1)),
+                ((0, 1), (0, 0)),
+            ),
+            augmentation=(0, 0),
+        )
+        result = compute_hochschild_homology(
+            HochschildHomologyRequest(algebra=zeroed, max_degree=3)
+        )
+        # With no augmentation action the image of d_2 is all of A
+        # (1*1 = 1 spans), so H_1 vanishes - the pre-fix behaviour.
+        bettis = {group.degree: group.betti for group in result.groups}
+        assert bettis[1] == 0
+
+    def test_differential_squares_to_zero(self):
+        """d^2 = 0 for consecutive degrees on two different augmented algebras."""
+        from jacobian.math.hochschild_complexes._bar import (
+            bar_differential_entries,
+        )
+
+        algebras = [
+            _dual_numbers(5),
+            AlgebraStructure(
+                prime=7,
+                dimension=2,
+                structure_constants=(
+                    ((1, 0), (0, 1)),
+                    ((0, 1), (1, 0)),
+                ),
+                augmentation=(1, 6),
+            ),
+        ]
+        for algebra in algebras:
+            for degree in range(1, 5):
+                d_mid = bar_differential_entries(  # C_degree -> C_{degree-1}
+                    algebra.structure_constants,
+                    algebra.prime,
+                    degree,
+                    algebra.augmentation,
+                )
+                d_high = bar_differential_entries(  # C_{degree+1} -> C_degree
+                    algebra.structure_constants,
+                    algebra.prime,
+                    degree + 1,
+                    algebra.augmentation,
+                )
+                composition = [
+                    [
+                        sum(d_mid[i][k] * d_high[k][j] for k in range(len(d_mid[i])))
+                        % algebra.prime
+                        for j in range(len(d_high[0]))
+                    ]
+                    for i in range(len(d_mid))
+                ]
+                assert all(value == 0 for row in composition for value in row)
+
+    def test_non_multiplicative_augmentation_rejected(self):
+        """An augmentation that is not an algebra map must fail admission."""
+        with pytest.raises(ValidationError, match="homomorphism"):
+            AlgebraStructure(
+                prime=5,
+                dimension=2,
+                structure_constants=(
+                    ((1, 0), (0, 1)),
+                    ((0, 1), (0, 0)),
+                ),
+                augmentation=(1, 1),
+            )
+
+    def test_noncanonical_and_mismatched_augmentation_rejected(self):
+        dual = _dual_numbers(5)
+        with pytest.raises(ValidationError, match="canonical residues"):
+            AlgebraStructure(
+                prime=5,
+                dimension=2,
+                structure_constants=dual.structure_constants,
+                augmentation=(1, 5),
+            )
+        with pytest.raises(ValidationError, match="one entry per basis element"):
+            AlgebraStructure(
+                prime=5,
+                dimension=2,
+                structure_constants=dual.structure_constants,
+                augmentation=(1,),
+            )
+
+    def test_result_replays_with_retained_augmentation(self):
+        """Tampering with the retained augmentation invalidates entries."""
+        from jacobian.math.hochschild_complexes._models import (
+            HochschildChainComplexResult,
+        )
+
+        algebra = _dual_numbers(5)
+        result = compute_hochschild_chain_complex(
+            HochschildChainComplexRequest(algebra=algebra, max_degree=2)
+        )
+        payload = result.model_dump()
+        payload["algebra"]["augmentation"] = [0, 0]
+        with pytest.raises(ValidationError):
+            HochschildChainComplexResult.model_validate(payload)

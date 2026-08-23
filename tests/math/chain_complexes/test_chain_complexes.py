@@ -1,5 +1,7 @@
 """Tests for chain complex operations (#1824)."""
 
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
@@ -777,3 +779,191 @@ class TestVerificationVerdictBinding:
         assert result.complex is not None
         revalidated = type(result).model_validate(result.model_dump())
         assert revalidated.is_valid
+
+
+class TestVerificationReplayParentChecks:
+    """A replayed chain-map verdict applies the request model's complete
+    endpoint checks, not the source modulus alone."""
+
+    def _point(self, field: CoefficientField, prime: int | None) -> ChainComplexValue:
+        return ChainComplexValue(
+            coefficient_field=field,
+            prime=prime,
+            degree_min=0,
+            degree_max=0,
+            basis_sizes=(1,),
+            differential_matrices=(),
+        )
+
+    def test_cross_field_endpoints_rejected(self) -> None:
+        from jacobian.math.chain_complexes.values import VerificationResult
+
+        with pytest.raises(ValidationError, match="equal coefficient fields"):
+            VerificationResult(
+                is_valid=True,
+                detail="commutes",
+                source=self._point(CoefficientField.RATIONAL, None),
+                target=self._point(CoefficientField.PRIME_FIELD, 2),
+                map_matrices=((("1",),),),
+            )
+
+    def test_mismatched_primes_rejected(self) -> None:
+        from jacobian.math.chain_complexes.values import VerificationResult
+
+        with pytest.raises(ValidationError, match="equal prime moduli"):
+            VerificationResult(
+                is_valid=True,
+                detail="commutes",
+                source=self._point(CoefficientField.PRIME_FIELD, 2),
+                target=self._point(CoefficientField.PRIME_FIELD, 3),
+                map_matrices=((("1",),),),
+            )
+
+    def test_shifted_degree_intervals_rejected(self) -> None:
+        from jacobian.math.chain_complexes.values import VerificationResult
+
+        shifted = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=-1,
+            degree_max=-1,
+            basis_sizes=(1,),
+            differential_matrices=(),
+        )
+        with pytest.raises(ValidationError, match="same degree interval"):
+            VerificationResult(
+                is_valid=True,
+                detail="commutes",
+                source=_point_complex(),
+                target=shifted,
+                map_matrices=((("1",),),),
+            )
+
+    def test_out_of_range_map_residue_rejected(self) -> None:
+        """GF(3) map entries are replayed under p=3, so '4' cannot pass."""
+        from jacobian.math.chain_complexes.values import VerificationResult
+
+        gf3 = self._point(CoefficientField.PRIME_FIELD, 3)
+        with pytest.raises(ValidationError, match="residue"):
+            VerificationResult(
+                is_valid=True,
+                detail="commutes",
+                source=gf3,
+                target=gf3,
+                map_matrices=((("4",),),),
+            )
+
+    def test_genuine_verdict_round_trips(self) -> None:
+        from jacobian.math.chain_complexes.values import VerificationResult
+
+        point = _point_complex()
+        verdict = VerificationResult(
+            is_valid=True,
+            detail="commutes",
+            source=point,
+            target=point,
+            map_matrices=((("1",),),),
+        )
+        assert type(verdict).model_validate(verdict.model_dump()).is_valid
+
+
+class TestMappingConeSourceBinding:
+    """A cone result replays its defining construction against retained
+    endpoints so detached or forged cones cannot validate."""
+
+    def _circle(self) -> ChainComplexValue:
+        return _circle_complex()
+
+    def _identity(self) -> tuple[tuple[str, ...], ...]:
+        return (("1", "0", "0"), ("0", "1", "0"), ("0", "0", "1"))
+
+    def _cone_payload(self) -> dict[str, Any]:
+        circle = self._circle()
+        identity = self._identity()
+        result = compute_mapping_cone(
+            MappingConeRequest(source=circle, target=circle, map_matrices=(identity,) * 2)
+        )
+        return result.model_dump()
+
+    def test_genuine_cone_round_trips(self) -> None:
+        from jacobian.math.chain_complexes.values import MappingConeResult
+
+        revalidated = MappingConeResult.model_validate(self._cone_payload())
+        assert revalidated.cone_basis_sizes == (3, 6, 3)
+
+    def test_detached_cone_rejected(self) -> None:
+        """Without retained endpoints no cone payload validates at all."""
+        from jacobian.math.chain_complexes.values import MappingConeResult
+
+        with pytest.raises(ValidationError):
+            MappingConeResult.model_validate(
+                {
+                    "cone_basis_sizes": (1, 1, 1),
+                    "cone_differential_matrices": ((("1",),), (("1",),)),
+                    "source_degree_min": 0,
+                    "target_degree_min": 0,
+                }
+            )
+
+    def test_non_chain_complex_endpoints_rejected(self) -> None:
+        """Endpoints violating d^2=0 admit no cone, even if the authored
+        matrices happen to be square-zero themselves."""
+        from jacobian.math.chain_complexes.values import MappingConeResult
+
+        bad = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=2,
+            basis_sizes=(1, 1, 1),
+            differential_matrices=((("1",),), (("1",),)),
+        )
+        one = (("1",),)
+        with pytest.raises(ValidationError):
+            MappingConeResult(
+                cone_basis_sizes=(1, 1, 1),
+                cone_differential_matrices=((("1",),), (("1",),)),
+                source_degree_min=0,
+                target_degree_min=0,
+                source=bad,
+                target=bad,
+                map_matrices=(one, one, one),
+            )
+
+    def test_tampered_cone_differentials_rejected(self) -> None:
+        from jacobian.math.chain_complexes.values import MappingConeResult
+
+        payload = self._cone_payload()
+        payload["cone_differential_matrices"] = (
+            (("1",) * 6,) * 6,
+            (("0",) * 6,) * 6,
+        )
+        with pytest.raises(ValidationError, match="exact mapping cone"):
+            MappingConeResult.model_validate(payload)
+
+    def test_tampered_degree_provenance_rejected(self) -> None:
+        from jacobian.math.chain_complexes.values import MappingConeResult
+
+        payload = self._cone_payload()
+        payload["source_degree_min"] = 5
+        with pytest.raises(ValidationError, match="provenance"):
+            MappingConeResult.model_validate(payload)
+
+    def test_shifted_genuine_cone_round_trips(self) -> None:
+        """Cone provenance follows the declared interval of a shifted pair."""
+        from jacobian.math.chain_complexes.values import MappingConeResult
+
+        shifted = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=-1,
+            degree_max=0,
+            basis_sizes=(3, 3),
+            differential_matrices=(
+                (("-1", "1", "0"), ("0", "-1", "1"), ("0", "0", "0")),
+            ),
+        )
+        identity = self._identity()
+        result = compute_mapping_cone(
+            MappingConeRequest(source=shifted, target=shifted, map_matrices=(identity,) * 2)
+        )
+        revalidated = MappingConeResult.model_validate(result.model_dump())
+        assert revalidated.source_degree_min == -1
+        assert revalidated.cone_basis_sizes == (3, 6, 3)

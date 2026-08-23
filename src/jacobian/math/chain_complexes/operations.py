@@ -434,35 +434,48 @@ def _serialize_entry(value: Fraction, prime: int | None) -> str:
     return f"{value.numerator}/{value.denominator}"
 
 
-def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
-    """Compute the mapping cone of a chain map f: C -> D.
-
-    The mapping cone has groups cone_n = C_{n-1} ⊕ D_n and differential
-    [[ -d_C, 0 ], [ f, d_D ]] as block matrices.
-    """
-    source = request.source
-    target = request.target
+def _require_mapping_cone_parents(
+    source: ChainComplexValue,
+    target: ChainComplexValue,
+) -> None:
+    """A cone is defined only over one coefficient field on one interval."""
     if (
         source.coefficient_field != target.coefficient_field
         or source.prime != target.prime
     ):
         raise ValueError("mapping cone requires same coefficient field and prime")
+    if (source.degree_min, source.degree_max) != (
+        target.degree_min,
+        target.degree_max,
+    ):
+        raise ValueError(
+            "mapping cone requires source and target concentrated on "
+            "the same degree interval"
+        )
+
+
+def _compute_mapping_cone(
+    source: ChainComplexValue,
+    target: ChainComplexValue,
+    map_matrices: tuple[tuple[tuple[str, ...], ...], ...],
+) -> tuple[tuple[int, ...], tuple[tuple[tuple[str, ...], ...], ...]]:
+    """Exact mapping-cone construction shared by the operation and its
+    result validator."""
+    _require_mapping_cone_parents(source, target)
     prime = source.prime
 
     # Verify degree alignment: source and target should have same degree_min for simplicity, else shift
     # Compute cone basis sizes: cone_n = C_{n-1} ⊕ D_n
     max_len = max(len(source.basis_sizes), len(target.basis_sizes))
-    cone_basis_sizes = []
-    for i in range(max_len + 1):
-        # C_{n-1} corresponds to source index n-1 - (source.degree_min offset). For degree_min 0, this simplifies.
-        d_size = target.basis_sizes[i] if i < len(target.basis_sizes) else 0
-        c_size2 = (
+    cone_basis_sizes = tuple(
+        (target.basis_sizes[i] if i < len(target.basis_sizes) else 0)
+        + (
             source.basis_sizes[i - 1]
             if i > 0 and i - 1 < len(source.basis_sizes)
             else 0
         )
-        cone_basis_sizes.append(c_size2 + d_size)
-    cone_basis_sizes = tuple(cone_basis_sizes)
+        for i in range(max_len + 1)
+    )
 
     # Build block differentials for each degree
     # For each cone differential cone_{n} -> cone_{n-1}, we need matrix of size cone_basis_sizes[n-1] x cone_basis_sizes[n]
@@ -481,7 +494,7 @@ def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
     # map matrices: f_i: C_i -> D_i, shape target_basis[i] x source_basis[i]
     map_mats = [
         _matrix_to_fractions(m, target.basis_sizes[i], source.basis_sizes[i], prime)
-        for i, m in enumerate(request.map_matrices)
+        for i, m in enumerate(map_matrices)
     ]
 
     # A mapping cone is a chain complex only when both inputs are chain
@@ -571,11 +584,27 @@ def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
     ]
     _require_square_zero(cone_parsed, prime, label="mapping cone")
 
+    return cone_basis_sizes, tuple(cone_diffs)
+
+
+def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
+    """Compute the mapping cone of a chain map f: C -> D.
+
+    The mapping cone has groups cone_n = C_{n-1} ⊕ D_n and differential
+    [[ -d_C, 0 ], [ f, d_D ]] as block matrices.
+    """
+    cone_basis_sizes, cone_diffs = _compute_mapping_cone(
+        request.source, request.target, request.map_matrices
+    )
+
     return MappingConeResult(
         cone_basis_sizes=cone_basis_sizes,
-        cone_differential_matrices=tuple(cone_diffs),
-        source_degree_min=source.degree_min,
-        target_degree_min=target.degree_min,
+        cone_differential_matrices=cone_diffs,
+        source_degree_min=request.source.degree_min,
+        target_degree_min=request.target.degree_min,
+        source=request.source,
+        target=request.target,
+        map_matrices=request.map_matrices,
     )
 
 

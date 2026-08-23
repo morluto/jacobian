@@ -277,12 +277,43 @@ class HomologyResult(StrictModel):
 
 
 class MappingConeResult(StrictModel):
-    """The mapping cone of a chain map."""
+    """The mapping cone of a retained chain map."""
 
     cone_basis_sizes: tuple[int, ...]
     cone_differential_matrices: tuple[tuple[tuple[str, ...], ...], ...]
     source_degree_min: int
     target_degree_min: int
+    source: ChainComplexValue
+    target: ChainComplexValue
+    map_matrices: tuple[tuple[tuple[str, ...], ...], ...]
+
+    @model_validator(mode="after")
+    def bind_cone_to_source(self) -> Self:
+        """Replay the defining construction so only the exact mapping
+        cone of the retained chain map validates."""
+        from jacobian.math.chain_complexes.operations import (
+            _compute_mapping_cone,
+        )
+
+        if (
+            self.source_degree_min != self.source.degree_min
+            or self.target_degree_min != self.target.degree_min
+        ):
+            raise ValueError(
+                "cone degree provenance must match the retained endpoints"
+            )
+        basis_sizes, differential_matrices = _compute_mapping_cone(
+            self.source, self.target, self.map_matrices
+        )
+        if (
+            self.cone_basis_sizes != basis_sizes
+            or self.cone_differential_matrices != differential_matrices
+        ):
+            raise ValueError(
+                "cone must be the exact mapping cone of the retained "
+                "chain map"
+            )
+        return self
 
 
 class TensorProductResult(StrictModel):
@@ -386,6 +417,20 @@ class VerificationResult(StrictModel):
             and self.target is not None
             and self.map_matrices is not None
         ):
+            from jacobian.math.chain_complexes._models import (
+                _require_chain_map_components,
+            )
+
+            # Replay must apply the request model's complete component
+            # and parent checks: otherwise endpoints with different
+            # coefficient fields, primes, or degree intervals validate
+            # by being interpreted under the source modulus alone.
+            _require_chain_map_components(
+                self.source,
+                self.target,
+                self.map_matrices,
+                label="chain-map verification",
+            )
             prime = self.source.prime
             try:
                 map_mats = [

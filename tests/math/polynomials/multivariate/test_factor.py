@@ -663,8 +663,7 @@ class TestExecutionInterruptionSeparation:
     @staticmethod
     def _fake_completed(**overrides):
         import json as _json
-
-        from jacobian.process import BoundedProcessResult
+        from types import SimpleNamespace
 
         defaults = {
             "returncode": 0,
@@ -683,8 +682,7 @@ class TestExecutionInterruptionSeparation:
             "cancelled": False,
         }
         defaults.update(overrides)
-        result = BoundedProcessResult(**defaults)
-        return result
+        return SimpleNamespace(**defaults)
 
     def test_deadline_hit_returns_interrupted_not_budget_exceeded(self, monkeypatch):
         """A worker stopped by its deadline yields EXECUTION_INTERRUPTED,

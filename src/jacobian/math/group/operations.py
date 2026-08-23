@@ -69,16 +69,19 @@ def conjugacy_classes(
     """Return conjugacy classes of a permutation group.
 
     Returns a list of (class_elements, class_size) tuples where each
-    class_element is a list of permutation lists.
+    class_element is a list of permutation lists. The generated group must
+    have order at most 5000; the order is computed via Schreier-Sims before
+    any element enumeration.
     """
-    from jacobian.math.group._models import MAX_GROUP_ORDER
+    from jacobian.math.group._models import MAX_CONJUGACY_CLASSES_GROUP_ORDER
 
     group = _bounded_permutation_group(degree, generators)
     order = int(group.order())
-    if order > MAX_GROUP_ORDER:
+    if order > MAX_CONJUGACY_CLASSES_GROUP_ORDER:
         raise ValueError(
             f"group order {order} exceeds the bounded maximum "
-            f"{MAX_GROUP_ORDER} for full-element enumeration"
+            f"{MAX_CONJUGACY_CLASSES_GROUP_ORDER} for conjugacy classes "
+            f"(would materialize |G|={order} elements)"
         )
     classes = group.conjugacy_classes()
     result = []
@@ -96,14 +99,18 @@ def subgroup_lattice(
     """Return all subgroups of a permutation group.
 
     Returns a list of (generators_of_subgroup, subgroup_order) tuples.
-    Bounded to groups of order at most 64 to avoid exponential blowup.
+    The traversal is exponential in the generated group's order, so it is
+    bounded to groups of order at most 64.
     """
     from sympy.combinatorics import Permutation
 
+    from jacobian.math.group._models import MAX_SUBGROUP_LATTICE_GROUP_ORDER
+
     group = _bounded_permutation_group(degree, generators)
-    if int(group.order()) > 64:
+    if int(group.order()) > MAX_SUBGROUP_LATTICE_GROUP_ORDER:
         raise ValueError(
-            "subgroup lattice computation is bounded to groups of order at most 64"
+            "subgroup lattice computation is bounded to groups of order "
+            f"at most {MAX_SUBGROUP_LATTICE_GROUP_ORDER}"
         )
     # Traverse distinct subgroups instead of the 2^|G|-element power set:
     # every subgroup is the closure of an existing subgroup extended by one

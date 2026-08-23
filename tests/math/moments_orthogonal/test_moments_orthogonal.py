@@ -23,7 +23,6 @@ from jacobian.math.moments_orthogonal._models import (
     HankelMatrixResult,
     JacobiMatrixRequest,
     JacobiMatrixResult,
-    RecurrenceCoefficients,
     RecurrenceCoefficientsRequest,
     RecurrenceCoefficientsResult,
 )
@@ -35,6 +34,7 @@ from jacobian.math.moments_orthogonal._operations import (
     compute_recurrence_coefficients,
 )
 from jacobian.math.moments_orthogonal._tools import TOOLS
+from jacobian.math.moments_orthogonal.values import RecurrenceCoefficients
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -107,12 +107,12 @@ class TestRecurrenceCoefficients:
         moments = tuple(_frac(1, k) for k in range(1, 8))
         result = recurrence_coefficients(moments)
         # For Legendre polynomials on [0,1], alpha_k = 1/2 for all k
-        assert all(a == _frac(1, 2) for a in result.alpha)
+        assert all(a.as_fraction() == _frac(1, 2) for a in result.alpha)
 
     def test_beta_zero_is_mu0(self) -> None:
         moments = (_frac(2, 1), _frac(1, 1), _frac(2, 3))
         result = recurrence_coefficients(moments)
-        assert result.beta[0] == _frac(2, 1)
+        assert result.beta[0].as_fraction() == _frac(2, 1)
 
     def test_empty_rejected(self) -> None:
         with pytest.raises(ValueError, match="between 1 and 64"):
@@ -134,7 +134,7 @@ class TestRecurrenceCoefficients:
         the matching norm ratio stays undetermined."""
         result = recurrence_coefficients((_frac(1, 1),))
         assert result.alpha == ()
-        assert result.beta == (_frac(1, 1),)
+        assert [b.as_fraction() for b in result.beta] == [_frac(1, 1)]
         with pytest.raises(ValueError, match="odd length"):
             recurrence_coefficients((_frac(1, 1), _frac(1, 2)))
 
@@ -165,27 +165,25 @@ class TestRecurrenceCoefficients:
 
 class TestJacobiMatrix:
     def test_assembly(self) -> None:
-        result = jacobi_matrix(
-            (_frac(1, 2), _frac(1, 2)),
-            (_frac(1, 1), _frac(1, 12), _frac(1, 15)),
-        )
+        result = jacobi_matrix(_legendre_coefficients())
         assert result.diagonal == (_frac(1, 2), _frac(1, 2))
         # beta_0 is the zeroth moment; the subdiagonal carries beta_1 only.
         assert result.off_diagonal == (_frac(1, 12),)
 
     def test_empty_alpha(self) -> None:
-        result = jacobi_matrix((), (_frac(1, 1),))
+        coefficients = RecurrenceCoefficients(alpha=(), beta=(_cr(1, 1),))
+        result = jacobi_matrix(coefficients)
         assert result.diagonal == ()
         assert result.off_diagonal == ()
 
     def test_zero_beta0_rejected(self) -> None:
-        with pytest.raises(ValueError, match="must be positive"):
-            jacobi_matrix((_frac(0, 1),), (_frac(0, 1), _frac(1, 1)))
+        with pytest.raises(ValidationError, match="must be positive"):
+            RecurrenceCoefficients(alpha=(_cr(0, 1),), beta=(_cr(0, 1), _cr(1, 1)))
 
     def test_negative_beta0_rejected(self) -> None:
-        """The native guard matches the wire contract: mu_0 must be positive."""
-        with pytest.raises(ValueError, match="must be positive"):
-            jacobi_matrix(((_frac(0, 1)),), (_frac(-1, 1),))
+        """The canonical value matches the wire contract: mu_0 must be positive."""
+        with pytest.raises(ValidationError, match="must be positive"):
+            RecurrenceCoefficients(alpha=(_cr(0, 1),), beta=(_cr(-1, 1),))
 
 
 # ---------------------------------------------------------------------------
@@ -196,46 +194,43 @@ class TestJacobiMatrix:
 class TestChristoffelDarboux:
     def test_diagonal_kernel(self) -> None:
         """K_n(x,x) = sum_{k=0}^{n-1} p_k(x)^2 / h_k is positive."""
-        alpha = (_frac(1, 2), _frac(1, 2))
-        beta = (_frac(1, 1), _frac(1, 12), _frac(1, 15))
-        result = christoffel_darboux(alpha, beta, _frac(1, 2), _frac(1, 2))
+        result = christoffel_darboux(_legendre_coefficients(), _frac(1, 2), _frac(1, 2))
         assert result.kernel > 0
 
     def test_zero_when_x_neq_y_symmetric(self) -> None:
         """K_n(x,y) is a reproducing kernel: K_n(x,y) = K_n(y,x)."""
-        alpha = (_frac(0, 1), _frac(1, 3))
-        beta = (_frac(2, 1), _frac(1, 9), _frac(4, 45))
-        result_xy = christoffel_darboux(alpha, beta, _frac(1, 4), _frac(3, 4))
-        result_yx = christoffel_darboux(alpha, beta, _frac(3, 4), _frac(1, 4))
+        coefficients = RecurrenceCoefficients(
+            alpha=(_cr(0, 1), _cr(1, 3)),
+            beta=(_cr(2, 1), _cr(1, 9), _cr(4, 45)),
+        )
+        result_xy = christoffel_darboux(coefficients, _frac(1, 4), _frac(3, 4))
+        result_yx = christoffel_darboux(coefficients, _frac(3, 4), _frac(1, 4))
         assert result_xy.kernel == result_yx.kernel
 
     def test_first_polynomial_is_one(self) -> None:
-        alpha = (_frac(0, 1), _frac(1, 3))
-        beta = (_frac(2, 1), _frac(1, 9), _frac(4, 45))
-        result = christoffel_darboux(alpha, beta, _frac(1, 1), _frac(1, 1))
+        coefficients = RecurrenceCoefficients(
+            alpha=(_cr(0, 1), _cr(1, 3)),
+            beta=(_cr(2, 1), _cr(1, 9), _cr(4, 45)),
+        )
+        result = christoffel_darboux(coefficients, _frac(1, 1), _frac(1, 1))
         assert result.polynomials_evaluated[0] == _frac(1, 1)
 
     def test_empty_alpha(self) -> None:
-        beta = (_frac(1, 1),)
-        result = christoffel_darboux((), beta, _frac(1, 1), _frac(1, 1))
+        coefficients = RecurrenceCoefficients(alpha=(), beta=(_cr(1, 1),))
+        result = christoffel_darboux(coefficients, _frac(1, 1), _frac(1, 1))
         assert result.kernel == _frac(0, 1)
         assert result.polynomials_evaluated == (_frac(1, 1),)
 
-    def test_negative_beta_rejected(self) -> None:
-        """Native API matches the wire contract: norm ratios must be positive."""
-        with pytest.raises(ValueError, match="beta_0"):
-            christoffel_darboux(
-                (_frac(0, 1), _frac(0, 1)),
-                (_frac(-1, 1), _frac(1, 2)),
-                _frac(1, 1),
-                _frac(1, 1),
+    def test_nonpositive_beta_rejected_at_the_value_boundary(self) -> None:
+        """The canonical value enforces the wire contract: mu_0 and every
+        norm ratio must be positive before any consumer runs."""
+        with pytest.raises(ValidationError, match="must be positive"):
+            RecurrenceCoefficients(
+                alpha=(_cr(0, 1), _cr(0, 1)), beta=(_cr(-1, 1), _cr(1, 2))
             )
-        with pytest.raises(ValueError, match="kernel"):
-            christoffel_darboux(
-                (_frac(0, 1), _frac(0, 1)),
-                (_frac(1, 1), _frac(-1, 2)),
-                _frac(1, 1),
-                _frac(1, 1),
+        with pytest.raises(ValidationError, match="squared-norm"):
+            RecurrenceCoefficients(
+                alpha=(_cr(0, 1), _cr(0, 1)), beta=(_cr(1, 1), _cr(-1, 2))
             )
 
 
@@ -247,35 +242,43 @@ class TestChristoffelDarboux:
 class TestGaussianQuadrature:
     def test_weights_sum_to_mu0(self) -> None:
         """Sum of weights equals mu_0 (the zeroth moment)."""
-        alpha = (_frac(1, 2), _frac(1, 2), _frac(1, 2))
-        beta = (_frac(1, 1), _frac(1, 12), _frac(1, 15), _frac(4, 45))
-        result = gaussian_quadrature(alpha, beta)
-        mu0 = float(beta[0])
+        coefficients = RecurrenceCoefficients(
+            alpha=(_cr(1, 2), _cr(1, 2), _cr(1, 2)),
+            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15), _cr(4, 45)),
+        )
+        result = gaussian_quadrature(coefficients)
+        mu0 = float(coefficients.beta[0].as_fraction())
         assert abs(sum(result.weights) - mu0) < 1e-10
 
     def test_nodes_count(self) -> None:
-        alpha = (_frac(1, 2), _frac(1, 2), _frac(1, 2))
-        beta = (_frac(1, 1), _frac(1, 12), _frac(1, 15), _frac(4, 45))
-        result = gaussian_quadrature(alpha, beta)
+        coefficients = RecurrenceCoefficients(
+            alpha=(_cr(1, 2), _cr(1, 2), _cr(1, 2)),
+            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15), _cr(4, 45)),
+        )
+        result = gaussian_quadrature(coefficients)
         assert len(result.nodes) == 3
         assert len(result.weights) == 3
 
     def test_single_point(self) -> None:
-        alpha = (_frac(0, 1),)
-        beta = (_frac(1, 1), _frac(1, 3))
-        result = gaussian_quadrature(alpha, beta)
+        coefficients = RecurrenceCoefficients(
+            alpha=(_cr(0, 1),), beta=(_cr(1, 1), _cr(1, 3))
+        )
+        result = gaussian_quadrature(coefficients)
         assert len(result.nodes) == 1
         assert abs(result.nodes[0] - 0.0) < 1e-10
         assert abs(result.weights[0] - 1.0) < 1e-10
 
     def test_alpha_empty_rejected(self) -> None:
+        coefficients = RecurrenceCoefficients(alpha=(), beta=(_cr(1, 1),))
         with pytest.raises(ValueError, match="between 1 and 16"):
-            gaussian_quadrature((), (_frac(1, 1),))
+            gaussian_quadrature(coefficients)
 
-    def test_zero_subdiagonal_rejected(self) -> None:
-        """Native API rejects zero subdiagonals like GaussianQuadratureRequest."""
-        with pytest.raises(ValueError, match="positive"):
-            gaussian_quadrature((_frac(0, 1), _frac(1, 1)), (_frac(1, 1), _frac(0, 1)))
+    def test_zero_subdiagonal_rejected_at_the_value_boundary(self) -> None:
+        """The canonical value rejects zero subdiagonals like the wire contract."""
+        with pytest.raises(ValidationError, match="squared-norm"):
+            RecurrenceCoefficients(
+                alpha=(_cr(0, 1), _cr(1, 1)), beta=(_cr(1, 1), _cr(0, 1))
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -287,9 +290,6 @@ class TestWireAdapters:
     def test_recurrence_trailing_beta_must_be_positive(self) -> None:
         """A partial recurrence (len(alpha) == len(beta) - 1) still validates
         every subdiagonal entry, including the trailing beta."""
-        from jacobian.math.moments_orthogonal._models import RecurrenceCoefficients
-        from pydantic import ValidationError
-
         with pytest.raises(ValidationError, match="squared-norm"):
             RecurrenceCoefficients(alpha=(_cr(0, 1),), beta=(_cr(1, 1), _cr(-1, 1)))
         with pytest.raises(ValidationError, match="squared-norm"):
@@ -412,6 +412,47 @@ class TestRecurrenceTruncationBoundary:
         moments = tuple(Fraction(1, k + 1) for k in range(34))
         with pytest.raises(ValueError, match="at most 33"):
             recurrence_coefficients(moments)
+
+
+class TestNativeRecurrenceValueComposition:
+    """The exported producer's canonical value feeds consumers unchanged."""
+
+    def test_producer_value_feeds_all_consumers_unchanged(self) -> None:
+        coefficients = recurrence_coefficients(
+            tuple(Fraction(1, k) for k in range(1, 8))
+        )
+        assert isinstance(coefficients, RecurrenceCoefficients)
+
+        matrix = jacobi_matrix(coefficients)
+        assert matrix.diagonal == tuple(
+            value.as_fraction() for value in coefficients.alpha
+        )
+        assert (
+            matrix.off_diagonal
+            == (tuple(value.as_fraction() for value in coefficients.beta))[
+                1 : len(coefficients.alpha)
+            ]
+        )
+
+        kernel = christoffel_darboux(coefficients, Fraction(1), Fraction(1))
+        assert kernel.kernel > 0
+
+        rule = gaussian_quadrature(coefficients)
+        assert len(rule.nodes) == len(coefficients.alpha)
+        assert all(weight > 0 for weight in rule.weights)
+
+    def test_forged_value_cannot_bypass_consumer_admission(self) -> None:
+        with pytest.raises(ValidationError, match="must be positive"):
+            jacobi_matrix(
+                RecurrenceCoefficients(alpha=(_cr(0, 1),), beta=(_cr(-1, 1),))
+            )
+
+    def test_producer_and_wire_result_values_agree(self) -> None:
+        native = recurrence_coefficients(tuple(Fraction(1, k) for k in range(1, 8)))
+        result = compute_recurrence_coefficients(
+            RecurrenceCoefficientsRequest(moments=_HARMONIC_MOMENTS)
+        )
+        assert native == result.coefficients
 
 
 class TestCanonicalRecurrenceCoefficientsValue:

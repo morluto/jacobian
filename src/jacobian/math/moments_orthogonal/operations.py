@@ -5,10 +5,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from fractions import Fraction
 
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.math.moments_orthogonal.values import (
     MAX_HANKEL_DIMENSION,
     MAX_MOMENTS,
-    MAX_POLYNOMIAL_COUNT,
     MAX_QUADRATURE_POINTS,
     MAX_RECURRENCE_ORDER,
     ChristoffelDarbouxKernel,
@@ -166,13 +166,14 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
         )
     max_order = (m - 1) // 2
     if max_order < 1:
-        return RecurrenceCoefficients(alpha=(), beta=(moments[0],))
+        return RecurrenceCoefficients(
+            alpha=(), beta=(CanonicalRational.from_fraction(moments[0]),)
+        )
     alpha, beta = _monic_orthogonal_recurrence(moments, max_order)
     # Gram-Schmidt on admitted inputs can still produce coefficients whose
     # reduced numerators/denominators exceed the canonical rational limit;
     # reject them here so an accepted request cannot fail later during
     # canonical conversion.
-    from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
     from jacobian.math._rational_height import RationalHeight
 
     for value in (*alpha, *beta):
@@ -183,10 +184,13 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
                 "recurrence coefficients exceed the canonical rational "
                 "digit limit for these moments"
             )
-    return RecurrenceCoefficients(alpha=tuple(alpha), beta=tuple(beta))
+    return RecurrenceCoefficients(
+        alpha=tuple(CanonicalRational.from_fraction(value) for value in alpha),
+        beta=tuple(CanonicalRational.from_fraction(value) for value in beta),
+    )
 
 
-def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> JacobiMatrix:
+def jacobi_matrix(coefficients: RecurrenceCoefficients) -> JacobiMatrix:
     """Build the symmetric tridiagonal Jacobi matrix from recurrence coefficients.
 
     The diagonal entries are ``alpha_0, ..., alpha_{n-1}`` and the positive
@@ -194,39 +198,22 @@ def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> Jacobi
     square roots may be irrational, the returned matrix stores the rational
     diagonal and the rational squared subdiagonal ``beta`` separately so that the
     full symmetric matrix can be reconstructed by any consumer.
+
+    Accepts the recurrence producer's canonical ``RecurrenceCoefficients``
+    value unchanged.
     """
-    if not 1 <= len(beta) <= MAX_RECURRENCE_ORDER:
-        raise ValueError("beta must contain between 1 and 16 entries")
-    if not 0 <= len(alpha) <= MAX_RECURRENCE_ORDER:
-        raise ValueError("alpha out of range")
-    if len(alpha) != len(beta) and len(alpha) != len(beta) - 1:
-        raise ValueError("alpha must have length len(beta)-1 or len(beta)")
-    if any(type(value) is not Fraction for value in alpha):
-        raise TypeError("alpha must use exact Fractions")
-    if any(type(value) is not Fraction for value in beta):
-        raise TypeError("beta must use exact Fractions")
-    if beta[0] <= 0:
-        raise ValueError(
-            "beta_0 (the zeroth moment of a positive functional) must be positive"
-        )
-    # Subdiagonal beta_1.. are squared-norm ratios and must be positive;
-    # negative entries would document a non-quasi-definite family.
-    for entry in beta[1 : len(alpha)]:
-        if entry <= 0:
-            raise ValueError(
-                "subdiagonal beta entries must be positive squared-norm ratios"
-            )
+    alpha = tuple(value.as_fraction() for value in coefficients.alpha)
+    beta = tuple(value.as_fraction() for value in coefficients.beta)
     return JacobiMatrix(
-        diagonal=tuple(alpha),
+        diagonal=alpha,
         # The squared subdiagonal entries are beta_1, ..., beta_{n-1}; beta_0 is
         # the zeroth moment and never occupies an off-diagonal position.
-        off_diagonal=tuple(beta)[1 : len(alpha)],
+        off_diagonal=beta[1 : len(alpha)],
     )
 
 
 def christoffel_darboux(
-    alpha: Sequence[Fraction],
-    beta: Sequence[Fraction],
+    coefficients: RecurrenceCoefficients,
     x: Fraction,
     y: Fraction,
 ) -> ChristoffelDarbouxKernel:
@@ -242,17 +229,14 @@ def christoffel_darboux(
         K_n(x, y) = sum_{k=0}^{n-1} p_k(x) p_k(y) / h_k
 
     evaluated by forward recurrence of the polynomials at ``x`` and ``y``.
+
+    Accepts the recurrence producer's canonical ``RecurrenceCoefficients``
+    value unchanged.
     """
-    if not 1 <= len(beta) <= MAX_POLYNOMIAL_COUNT:
-        raise ValueError("beta must contain between 1 and 32 entries")
-    if not 0 <= len(alpha) <= MAX_POLYNOMIAL_COUNT:
-        raise ValueError("alpha out of range")
-    if len(alpha) != len(beta) and len(alpha) != len(beta) - 1:
-        raise ValueError("alpha must have length len(beta)-1 or len(beta)")
     if type(x) is not Fraction or type(y) is not Fraction:
         raise TypeError("x and y must use exact Fractions")
-    if beta[0] <= 0:
-        raise ValueError("beta_0 must be positive")
+    alpha = tuple(value.as_fraction() for value in coefficients.alpha)
+    beta = tuple(value.as_fraction() for value in coefficients.beta)
     n = len(alpha)
     if n == 0:
         return ChristoffelDarbouxKernel(
@@ -275,11 +259,6 @@ def christoffel_darboux(
         px_prev, px_curr = px_curr, px_next
         py_prev, py_curr = py_curr, py_next
         # Advancing the squared norm to h_{k+1} uses beta_{k+1} = beta[k + 1].
-        # Each used entry is a squared-norm ratio, so it must be positive.
-        if k + 1 >= len(beta) or beta[k + 1] <= 0:
-            raise ValueError(
-                "recurrence coefficients do not define the requested kernel"
-            )
         next_beta = beta[k + 1]
         h = next_beta * h
         kernel += px_curr * py_curr / h
@@ -320,9 +299,7 @@ def _validate_quadrature_float_domain(
             )
 
 
-def gaussian_quadrature(
-    alpha: Sequence[Fraction], beta: Sequence[Fraction]
-) -> GaussianQuadrature:
+def gaussian_quadrature(coefficients: RecurrenceCoefficients) -> GaussianQuadrature:
     """Compute approximate Gaussian quadrature nodes and weights via the Golub-Welsch algorithm.
 
     The nodes are the eigenvalues of the symmetric tridiagonal Jacobi matrix and
@@ -332,21 +309,19 @@ def gaussian_quadrature(
     (IEEE double) and returned as dyadic rational approximations with an
     explicit ``is_approximate`` / ``FLOAT64`` precision contract. Downstream
     exact arithmetic must not treat these as canonical exact nodes.
+
+    Accepts the recurrence producer's canonical ``RecurrenceCoefficients``
+    value unchanged.
     """
     import math
 
     import numpy as np
 
+    alpha = tuple(value.as_fraction() for value in coefficients.alpha)
+    beta = tuple(value.as_fraction() for value in coefficients.beta)
     n = len(alpha)
     if not 1 <= n <= MAX_QUADRATURE_POINTS:
         raise ValueError("alpha must contain between 1 and 16 entries")
-    if len(beta) != n and len(beta) != n + 1:
-        raise ValueError("beta must have length len(alpha) or len(alpha)+1")
-    # A Gaussian rule requires a positive-definite functional: mu_0 > 0
-    # and nonnegative subdiagonal beta, otherwise the "rule" is not a
-    # measure (negative masses).
-    if beta[0] <= 0:
-        raise ValueError("beta_0 must be positive for a Gaussian quadrature rule")
     _validate_quadrature_float_domain(alpha, beta)
     diagonal = np.array([float(a) for a in alpha], dtype=float)
     off: list[float] = []

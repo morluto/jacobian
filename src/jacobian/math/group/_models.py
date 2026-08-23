@@ -86,28 +86,37 @@ class GroupOrbitResult(StrictModel):
     point: int = Field(ge=0, le=MAX_GROUP_DEGREE - 1)
 
 
-# The conjugacy result serializes every group element and the lattice
-# traverses the subgroup structure; both stay bounded only under an
-# explicit enumerated-order cap enforced at this typed boundary.
-MAX_GROUP_ORDER = 64
+# Conjugacy classes serialize each element of the generated group exactly
+# once; the subgroup-lattice traversal is exponential in that order and
+# therefore carries a much tighter enumerated-order cap. Both stay bounded
+# only under explicit caps enforced at this typed boundary.
+MAX_CONJUGACY_CLASSES_GROUP_ORDER = 5000
+MAX_SUBGROUP_LATTICE_GROUP_ORDER = 64
 
 
 def _require_bounded_group_order(
-    degree: int, generators: tuple[tuple[int, ...], ...]
+    degree: int,
+    generators: tuple[tuple[int, ...], ...],
+    maximum: int,
+    purpose: str,
 ) -> None:
     from sympy.combinatorics import Permutation, PermutationGroup
 
     group = PermutationGroup(*(Permutation(list(g)) for g in generators))
     order = int(group.order())
-    if order > MAX_GROUP_ORDER:
+    if order > maximum:
         raise ValueError(
-            f"group order {order} exceeds the bounded maximum "
-            f"{MAX_GROUP_ORDER} for full-element enumeration"
+            f"group order {order} exceeds the bounded maximum {maximum} for {purpose}"
         )
 
 
 class GroupConjugacyClassesRequest(StrictModel):
-    """Compute the conjugacy classes of a permutation group."""
+    """Compute the conjugacy classes of a permutation group.
+
+    The generated group must have order at most 5000 (degree up to 64
+    alone does not bound enumeration; e.g., S8 has order 40320). The
+    order is computed via Schreier-Sims before any element enumeration.
+    """
 
     degree: int = Field(ge=1, le=MAX_GROUP_DEGREE)
     generators: tuple[tuple[int, ...], ...] = Field(
@@ -121,14 +130,21 @@ class GroupConjugacyClassesRequest(StrictModel):
                 raise ValueError("each generator must have length equal to degree")
             if sorted(perm) != list(range(self.degree)):
                 raise ValueError("each generator must be a permutation of 0..n-1")
-        _require_bounded_group_order(self.degree, self.generators)
+        _require_bounded_group_order(
+            self.degree,
+            self.generators,
+            MAX_CONJUGACY_CLASSES_GROUP_ORDER,
+            "conjugacy classes",
+        )
         return self
 
 
 class ConjugacyClass(StrictModel):
     """One conjugacy class with representative elements and size."""
 
-    elements: tuple[tuple[int, ...], ...] = Field(min_length=1)
+    elements: tuple[tuple[int, ...], ...] = Field(
+        min_length=1, max_length=MAX_CONJUGACY_CLASSES_GROUP_ORDER
+    )
     size: int = Field(ge=1)
 
     @model_validator(mode="after")
@@ -149,7 +165,9 @@ class GroupConjugacyClassesResult(StrictModel):
     generators: tuple[tuple[int, ...], ...] = Field(
         min_length=1, max_length=MAX_GROUP_DEGREE
     )
-    classes: tuple[ConjugacyClass, ...] = Field(min_length=1)
+    classes: tuple[ConjugacyClass, ...] = Field(
+        min_length=1, max_length=MAX_CONJUGACY_CLASSES_GROUP_ORDER
+    )
     class_count: int = Field(ge=1)
     method: Literal["SYMPY_CONJUGACY_CLASSES"] = "SYMPY_CONJUGACY_CLASSES"
 
@@ -184,7 +202,11 @@ class GroupConjugacyClassesResult(StrictModel):
 
 
 class GroupSubgroupLatticeRequest(StrictModel):
-    """Enumerate all subgroups of a bounded permutation group."""
+    """Enumerate all subgroups of a bounded permutation group.
+
+    The subgroup traversal is exponential in the generated group's order,
+    so the lattice is bounded to groups of order at most 64.
+    """
 
     degree: int = Field(ge=1, le=MAX_GROUP_DEGREE)
     generators: tuple[tuple[int, ...], ...] = Field(
@@ -198,7 +220,12 @@ class GroupSubgroupLatticeRequest(StrictModel):
                 raise ValueError("each generator must have length equal to degree")
             if sorted(perm) != list(range(self.degree)):
                 raise ValueError("each generator must be a permutation of 0..n-1")
-        _require_bounded_group_order(self.degree, self.generators)
+        _require_bounded_group_order(
+            self.degree,
+            self.generators,
+            MAX_SUBGROUP_LATTICE_GROUP_ORDER,
+            "subgroup lattice enumeration",
+        )
         return self
 
 

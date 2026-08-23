@@ -4,12 +4,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
+from typing import Self
+
+from pydantic import model_validator
+
+from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._models import StrictModel
 
 MAX_MOMENTS = 64
 MAX_POLYNOMIAL_COUNT = 32
 MAX_HANKEL_DIMENSION = 32
 MAX_RECURRENCE_ORDER = 16
 MAX_QUADRATURE_POINTS = 16
+MAX_RATIONAL_DIGITS = 4_096
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,12 +27,43 @@ class HankelMatrix:
     moments: tuple[Fraction, ...]
 
 
-@dataclass(frozen=True, slots=True)
-class RecurrenceCoefficients:
-    """Three-term recurrence coefficients for a monic orthogonal family."""
+class RecurrenceCoefficients(StrictModel):
+    """Canonical three-term recurrence coefficients of a monic orthogonal family.
 
-    alpha: tuple[Fraction, ...]
-    beta: tuple[Fraction, ...]
+    ``alpha`` carries the shift coefficients and ``beta`` the squared-norm
+    ratios with positive ``beta_0``; the recurrence producer returns this
+    value and the Jacobi-matrix, Christoffel-Darboux, and Gaussian-quadrature
+    consumers accept it unchanged.
+    """
+
+    alpha: tuple[CanonicalRational, ...]
+    beta: tuple[CanonicalRational, ...]
+
+    @model_validator(mode="after")
+    def require_positive_definite(self) -> Self:
+        if not 1 <= len(self.beta) <= MAX_RECURRENCE_ORDER:
+            raise ValueError("beta must contain between 1 and 16 entries")
+        if not 0 <= len(self.alpha) <= MAX_RECURRENCE_ORDER:
+            raise ValueError("alpha out of range")
+        if len(self.alpha) != len(self.beta) and len(self.alpha) != len(self.beta) - 1:
+            raise ValueError("alpha must have length len(beta)-1 or len(beta)")
+        if self.beta[0].as_fraction() <= 0:
+            raise ValueError(
+                "beta_0 (the zeroth moment of a positive functional) must be positive"
+            )
+        # beta_1, ..., are squared-norm ratios of a positive-definite family;
+        # every entry after beta_0 must be positive, including the trailing
+        # entry of a partial recurrence with len(alpha) == len(beta) - 1.
+        for index in range(1, len(self.beta)):
+            if self.beta[index].as_fraction() <= 0:
+                raise ValueError(
+                    "subdiagonal beta entries must be positive squared-norm ratios"
+                )
+        for value in (*self.alpha, *self.beta):
+            require_bounded_rational(
+                value, max_digits=MAX_RATIONAL_DIGITS, label="coefficient"
+            )
+        return self
 
 
 @dataclass(frozen=True, slots=True)

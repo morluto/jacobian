@@ -127,7 +127,8 @@ GROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "Compute conjugacy classes of a permutation group",
         "Compute the exact conjugacy classes and class sizes of a bounded "
         "permutation group via SymPy. Each class is returned with its "
-        "representative elements and size.",
+        "representative elements and size. The generated group must have "
+        "order at most 5000.",
         GroupConjugacyClassesRequest,
         GroupConjugacyClassesResult,
         compute_conjugacy_classes,

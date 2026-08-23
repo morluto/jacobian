@@ -18,11 +18,9 @@ from jacobian.math._rational_height import RationalHeight
 from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.moments_orthogonal.values import (
     MAX_MOMENTS,
-    MAX_QUADRATURE_POINTS,
-    MAX_RECURRENCE_ORDER,
+    MAX_RATIONAL_DIGITS,
+    RecurrenceCoefficients,
 )
-
-MAX_RATIONAL_DIGITS = 4_096
 
 # Golub-Welsch converts admitted rationals to IEEE doubles; every accepted
 # coefficient must convert to a finite double and every subdiagonal entry must
@@ -51,35 +49,6 @@ def _validate_moments(moments: tuple[CanonicalRational, ...]) -> None:
 def _coefficient_height(value: CanonicalRational) -> int:
     height = RationalHeight.from_canonical(value)
     return max(height.numerator_digits, height.denominator_digits)
-
-
-def _validate_alpha_beta(
-    alpha: tuple[CanonicalRational, ...],
-    beta: tuple[CanonicalRational, ...],
-) -> None:
-    if not 1 <= len(beta) <= MAX_RECURRENCE_ORDER:
-        raise ValueError("beta must contain between 1 and 16 entries")
-    if not 0 <= len(alpha) <= MAX_RECURRENCE_ORDER:
-        raise ValueError("alpha out of range")
-    if len(alpha) != len(beta) and len(alpha) != len(beta) - 1:
-        raise ValueError("alpha must have length len(beta)-1 or len(beta)")
-    if beta[0].num == "0" or beta[0].num.startswith("-"):
-        raise ValueError(
-            "beta_0 (the zeroth moment of a positive functional) must be positive"
-        )
-    # beta_1, ..., beta_{n-1} are squared-norm ratios of a positive-definite
-    # sequence and occupy the Jacobi subdiagonal; every entry after beta_0
-    # must be positive, including the trailing entry of a partial recurrence
-    # with len(alpha) == len(beta) - 1.
-    for index in range(1, len(beta)):
-        if beta[index].num.startswith("-") or beta[index].num == "0":
-            raise ValueError(
-                "subdiagonal beta entries must be positive squared-norm ratios"
-            )
-    for value in (*alpha, *beta):
-        require_bounded_rational(
-            value, max_digits=MAX_RATIONAL_DIGITS, label="coefficient"
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -142,24 +111,6 @@ class RecurrenceCoefficientsRequest(StrictModel):
         return self
 
 
-class RecurrenceCoefficients(StrictModel):
-    """Canonical three-term recurrence coefficients of a monic orthogonal family.
-
-    ``alpha`` carries the shift coefficients and ``beta`` the squared-norm
-    ratios with positive ``beta_0``; producers return this value and the
-    Jacobi-matrix, Christoffel-Darboux, and Gaussian-quadrature consumers
-    accept it unchanged.
-    """
-
-    alpha: tuple[CanonicalRational, ...]
-    beta: tuple[CanonicalRational, ...]
-
-    @model_validator(mode="after")
-    def require_positive_definite(self) -> Self:
-        _validate_alpha_beta(self.alpha, self.beta)
-        return self
-
-
 class RecurrenceCoefficientsResult(RecurrenceCoefficientsRequest):
     coefficients: RecurrenceCoefficients
     complete: Literal[True] = True
@@ -172,14 +123,8 @@ class RecurrenceCoefficientsResult(RecurrenceCoefficientsRequest):
         )
 
         result = recurrence_coefficients(_to_fractions(self.moments))
-        if self.coefficients.alpha != _from_fractions(result.alpha):
-            raise ValueError(
-                "coefficients.alpha must be the exact recurrence coefficients"
-            )
-        if self.coefficients.beta != _from_fractions(result.beta):
-            raise ValueError(
-                "coefficients.beta must be the exact recurrence coefficients"
-            )
+        if self.coefficients != result:
+            raise ValueError("coefficients must be the exact recurrence coefficients")
         return self
 
 
@@ -202,10 +147,7 @@ class JacobiMatrixResult(JacobiMatrixRequest):
     def bind_jacobi(self) -> Self:
         from jacobian.math.moments_orthogonal.operations import jacobi_matrix
 
-        result = jacobi_matrix(
-            _to_fractions(self.coefficients.alpha),
-            _to_fractions(self.coefficients.beta),
-        )
+        result = jacobi_matrix(self.coefficients)
         if self.diagonal != _from_fractions(result.diagonal):
             raise ValueError("diagonal must match the exact Jacobi diagonal")
         if self.off_diagonal != _from_fractions(result.off_diagonal):
@@ -271,8 +213,7 @@ class ChristoffelDarbouxResult(ChristoffelDarbouxRequest):
         )
 
         result = christoffel_darboux(
-            _to_fractions(self.coefficients.alpha),
-            _to_fractions(self.coefficients.beta),
+            self.coefficients,
             self.x.as_fraction(),
             self.y.as_fraction(),
         )
@@ -295,38 +236,17 @@ class GaussianQuadratureRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_coefficients(self) -> Self:
-        alpha = self.coefficients.alpha
-        beta = self.coefficients.beta
-        if not 1 <= len(alpha) <= MAX_QUADRATURE_POINTS:
-            raise ValueError("alpha must contain between 1 and 16 entries")
-        if len(beta) != len(alpha) and len(beta) != len(alpha) + 1:
-            raise ValueError("beta must have length len(alpha) or len(alpha)+1")
-        beta_zero = beta[0].as_fraction()
-        # Golub-Welsch converts mu_0 to a float64 weight; values below the
-        # finite-float range would underflow every mass to zero.
-        if abs(beta_zero) < MIN_QUADRATURE_SUBDIAGONAL:
-            raise ValueError("beta_0 falls below the quadrature underflow bound")
-        # Subdiagonal entries feed math.sqrt after float conversion and must
-        # sit safely inside the finite IEEE-double range together with the
-        # diagonal scale and mu_0.
-        for value in (*alpha, *beta):
-            require_bounded_rational(
-                value, max_digits=MAX_RATIONAL_DIGITS, label="coefficient"
-            )
-            if abs(value.as_fraction()) > MAX_QUADRATURE_MAGNITUDE:
-                raise ValueError(
-                    "quadrature coefficients exceed the finite-float magnitude bound"
-                )
         # Individual finite-float bounds do not bound their combination: a
         # diagonal scale far above the subdiagonals numerically disconnects
         # the Jacobi matrix, localized eigenvector first components
         # underflow, and the rule would lose mass. Golub-Welsch on an
-        # admitted request is deterministic and bounded (<= 16 points), so
-        # admission replays it and rejects any recurrence whose weights do
-        # not stay strictly positive.
+        # admitted request is deterministic and bounded (<= 16 points), and
+        # its kernel owns the point-count, underflow, and magnitude bounds,
+        # so admission replays it and rejects any recurrence whose weights
+        # do not stay strictly positive.
         from jacobian.math.moments_orthogonal.operations import gaussian_quadrature
 
-        gaussian_quadrature(_to_fractions(alpha), _to_fractions(beta))
+        gaussian_quadrature(self.coefficients)
         return self
 
 
@@ -345,10 +265,7 @@ class GaussianQuadratureResult(GaussianQuadratureRequest):
             gaussian_quadrature,
         )
 
-        result = gaussian_quadrature(
-            _to_fractions(self.coefficients.alpha),
-            _to_fractions(self.coefficients.beta),
-        )
+        result = gaussian_quadrature(self.coefficients)
         if self.nodes != _from_fractions(result.nodes):
             raise ValueError("nodes must match the Golub-Welsch eigenvalues")
         if self.weights != _from_fractions(result.weights):
@@ -365,7 +282,6 @@ __all__ = [
     "HankelMatrixResult",
     "JacobiMatrixRequest",
     "JacobiMatrixResult",
-    "RecurrenceCoefficients",
     "RecurrenceCoefficientsRequest",
     "RecurrenceCoefficientsResult",
 ]

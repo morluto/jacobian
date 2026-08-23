@@ -103,18 +103,36 @@ class TestBoundedEnumeration:
     """Admission bounds the enumerated order; traversal stays tractable."""
 
     def test_oversized_group_rejected_at_validation(self):
-        """S6 (order 720) is rejected by the request model, not mid-run."""
+        """Each operation rejects groups above its own enumerated-order cap:
+        the lattice at 64, conjugacy classes at 5000."""
+        from pydantic import ValidationError
+
+        s6_generators = ((1, 0, 2, 3, 4, 5), (1, 2, 3, 4, 5, 0))
+        with pytest.raises(ValidationError, match="bounded maximum"):
+            GroupSubgroupLatticeRequest(degree=6, generators=s6_generators)
+        s7_generators = ((1, 0, 2, 3, 4, 5, 6), (1, 2, 3, 4, 5, 6, 0))
+        with pytest.raises(ValidationError, match="bounded maximum"):
+            GroupConjugacyClassesRequest(degree=7, generators=s7_generators)
+
+    def test_s5_conjugacy_classes_keep_the_prior_capability(self):
+        """S5 has order 120: always admissible for conjugacy classes, which
+        serialize each element once, while only the subgroup-lattice
+        traversal carries the tighter order-64 cap."""
+        request = GroupConjugacyClassesRequest(
+            degree=5,
+            generators=((1, 0, 2, 3, 4), (1, 2, 3, 4, 0)),
+        )
+        result = compute_conjugacy_classes(request)
+        assert result.class_count == 7
+        assert sum(cls.size for cls in result.classes) == 120
+
+    def test_lattice_still_rejects_above_64(self):
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError, match="bounded maximum"):
             GroupSubgroupLatticeRequest(
-                degree=6,
-                generators=((1, 0, 2, 3, 4, 5), (1, 2, 3, 4, 5, 0)),
-            )
-        with pytest.raises(ValidationError, match="bounded maximum"):
-            GroupConjugacyClassesRequest(
-                degree=6,
-                generators=((1, 0, 2, 3, 4, 5), (1, 2, 3, 4, 5, 0)),
+                degree=5,
+                generators=((1, 0, 2, 3, 4), (1, 2, 3, 4, 0)),
             )
 
     def test_c32_lattice_is_divisor_chain(self):
@@ -255,3 +273,19 @@ class TestNativeEnumerationGeneratorCap:
             conjugacy_classes(64, oversized)
         with pytest.raises(ValueError, match="at most 64 generators"):
             subgroup_lattice(64, oversized)
+
+
+class TestNativeConjugacyOrderCap:
+    """The exported native kernel mirrors the wire conjugacy-class cap."""
+
+    def test_native_conjugacy_admits_the_prior_order_domain(self) -> None:
+        from jacobian.math.group.operations import conjugacy_classes
+
+        classes = conjugacy_classes(5, [[1, 0, 2, 3, 4], [1, 2, 3, 4, 0]])
+        assert sum(size for _, size in classes) == 120
+
+    def test_native_conjugacy_rejects_order_above_5000(self) -> None:
+        from jacobian.math.group.operations import conjugacy_classes
+
+        with pytest.raises(ValueError, match="exceeds the bounded maximum 5000"):
+            conjugacy_classes(7, [[1, 0, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5, 6, 0]])

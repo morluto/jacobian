@@ -867,7 +867,7 @@ class CycleMulticoverResult(StrictModel):
     is_exact_k_cover: bool
 
     @model_validator(mode="after")
-    def require_consistent_cover(self) -> Self:  # noqa: C901
+    def require_consistent_cover(self) -> Self:
         if len(self.cycle_validity) != len(self.cycles):
             raise ValueError("cycle_validity length must match cycles length")
         # Recompute validity and multiplicity from the retained source.

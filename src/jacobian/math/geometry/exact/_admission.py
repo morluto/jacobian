@@ -11,16 +11,6 @@ from jacobian.math.geometry.exact._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
-        "geometry.points.collinear_triples.find",
-        AdmissionDecision.KEEP,
-        "complete exact bounded witness-producing search for collinear triples with material leverage over per-triple checks",
-    ),
-    OperationAdmission(
-        "geometry.points.concyclic_quadruples.find",
-        AdmissionDecision.KEEP,
-        "complete exact bounded witness-producing search for concyclic quadruples with material leverage over per-quadruple checks",
-    ),
-    OperationAdmission(
         "geometry.points.pinned_line_distance_profile.compute",
         AdmissionDecision.KEEP,
         "complete exact source-bound line ledger and squared-distance partition with material leverage over per-pair projection calls",

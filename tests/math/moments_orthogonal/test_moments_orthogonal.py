@@ -138,6 +138,15 @@ class TestRecurrenceCoefficients:
         with pytest.raises(ValueError, match="odd length"):
             recurrence_coefficients((_frac(1, 1), _frac(999, 1)))
 
+    def test_odd_sequence_returns_the_final_norm_ratio(self) -> None:
+        """Every moment of an admitted odd-length sequence feeds returned
+        recurrence data: (1, 0, 1) and (1, 0, 2) differ in beta_1."""
+        first = recurrence_coefficients((_frac(1, 1), _frac(0, 1), _frac(1, 1)))
+        second = recurrence_coefficients((_frac(1, 1), _frac(0, 1), _frac(2, 1)))
+        assert first.alpha == second.alpha == (_frac(0, 1),)
+        assert first.beta == (_frac(1, 1), _frac(1, 1))
+        assert second.beta == (_frac(1, 1), _frac(2, 1))
+
     def test_request_rejects_even_length_sequences(self) -> None:
         """The wire request applies the odd-length admission too."""
         moments = (_frac(1, 1), _frac(2, 1))
@@ -159,7 +168,7 @@ class TestRecurrenceCoefficients:
         accepted = tuple(_frac(1, k + 1) for k in range(33))
         result = recurrence_coefficients(accepted)
         assert len(result.alpha) == 16
-        assert len(result.beta) == 16
+        assert len(result.beta) == 17
         with pytest.raises(ValueError, match="33 moments"):
             recurrence_coefficients((*accepted, _frac(1, 35)))
 

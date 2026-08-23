@@ -117,8 +117,10 @@ def _monic_orthogonal_recurrence(
             raise ValueError(
                 "moment sequence does not define a positive-definite measure"
             )
-        if k < max_order - 1:
-            beta.append(h_curr / h_prev)
+        # Every admitted odd-length sequence determines its final norm ratio
+        # h_{k+1}/h_k exactly, so it is returned as part of the coefficients
+        # instead of being consumed only by the positivity check.
+        beta.append(h_curr / h_prev)
     return alpha, beta
 
 

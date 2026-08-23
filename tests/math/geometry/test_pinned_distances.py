@@ -21,9 +21,7 @@ def _point(nx: str, ny: str) -> dict:
 
 
 def _request(anchor: dict, points: list[dict]) -> PinnedDistanceRequest:
-    return PinnedDistanceRequest.model_validate(
-        {"anchor": anchor, "points": points}
-    )
+    return PinnedDistanceRequest.model_validate({"anchor": anchor, "points": points})
 
 
 _UNIT_SQUARE_ANCHOR = _point("0", "0")
@@ -43,9 +41,7 @@ class TestPinnedDistancesKnownAnswer:
         assert result.complete is True
         assert result.distinct_line_count == 6
 
-        zero_entries = [
-            e for e in result.lines if e.squared_distance_numerator == "0"
-        ]
+        zero_entries = [e for e in result.lines if e.squared_distance_numerator == "0"]
         assert [e.source_pairs for e in zero_entries] == [
             ((0, 1),),
             ((0, 2),),
@@ -60,7 +56,9 @@ class TestPinnedDistancesKnownAnswer:
         assert len(half_entries) == 1
         assert half_entries[0].source_pairs == ((1, 3),)
         one_entries = [
-            e for e in result.lines if e.squared_distance_numerator == "1"
+            e
+            for e in result.lines
+            if e.squared_distance_numerator == "1"
             and e.squared_distance_denominator == "1"
         ]
         assert {e.source_pairs for e in one_entries} == {((1, 2),), ((2, 3),)}
@@ -71,7 +69,9 @@ class TestPinnedDistancesKnownAnswer:
             int(result.min_squared_distance.squared_distance_numerator),
             int(result.min_squared_distance.squared_distance_denominator),
         ) == min(
-            Fraction(int(e.squared_distance_numerator), int(e.squared_distance_denominator))
+            Fraction(
+                int(e.squared_distance_numerator), int(e.squared_distance_denominator)
+            )
             for e in result.lines
         )
 
@@ -184,8 +184,7 @@ class TestPinnedDistancesBoundaries:
             )
         )
         max_digits = max(
-            len(e.squared_distance_numerator)
-            + len(e.squared_distance_denominator)
+            len(e.squared_distance_numerator) + len(e.squared_distance_denominator)
             for e in result.lines
         )
         assert max_digits > 4300

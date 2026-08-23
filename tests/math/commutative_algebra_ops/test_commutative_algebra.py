@@ -16,11 +16,13 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealQuotientRequest,
     IdealRadicalMembershipRequest,
     IdealRadicalRequest,
+    IdealSaturationRequest,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
     compute_ideal_quotient,
     compute_ideal_radical,
     compute_ideal_radical_membership,
+    compute_ideal_saturation,
 )
 from jacobian.math.commutative_algebra_ops._tools import TOOLS
 from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
@@ -215,6 +217,21 @@ requires_singular = pytest.mark.skipif(
     shutil.which("Singular") is None,
     reason="Singular 4.4 backend is not installed",
 )
+
+
+@requires_singular
+@pytest.mark.requires_backend("singular")
+def test_ideal_saturation_is_not_the_first_colon_ideal() -> None:
+    # I:<d> = <x> for I=<x^2> and d=x, but the saturation I:<d>^inf = <1>.
+    result = compute_ideal_saturation(
+        IdealSaturationRequest(
+            ideal=_ideal(("x",), {(2,): 1}),
+            saturation_polynomial=_polynomial(("x",), {(1,): 1}),
+        )
+    )
+    assert result.outcome == "COMPUTED"
+    assert result.saturation is not None
+    assert _equal(result.saturation, _ideal(("x",), {(0,): 1}))
 
 
 @requires_singular

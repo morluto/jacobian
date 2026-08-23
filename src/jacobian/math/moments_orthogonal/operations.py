@@ -35,10 +35,7 @@ def hankel_matrix(moments: Sequence[Fraction]) -> HankelMatrix:
     n = (len(moments) + 1) // 2
     if n > MAX_HANKEL_DIMENSION:
         raise ValueError("Hankel matrix dimension exceeds the supported bound")
-    matrix = tuple(
-        tuple(moments[i + j] for j in range(n))
-        for i in range(n)
-    )
+    matrix = tuple(tuple(moments[i + j] for j in range(n)) for i in range(n))
     return HankelMatrix(matrix=matrix, moments=tuple(moments))
 
 
@@ -103,8 +100,9 @@ def _monic_orthogonal_recurrence(
         alpha.append(alpha_k)
         beta_k = Fraction(0) if k == 0 else h_curr / h_prev
         x_p = _shift_up(p_curr)
-        p_next = _subtract(_subtract(x_p, _scale(alpha_k, p_curr)),
-                           _scale(beta_k, p_prev))
+        p_next = _subtract(
+            _subtract(x_p, _scale(alpha_k, p_curr)), _scale(beta_k, p_prev)
+        )
         h_prev = h_curr
         p_prev = p_curr
         p_curr = p_next
@@ -135,8 +133,12 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
     coefficients of the symmetric Jacobi matrix.
     """
     m = len(moments)
-    if not 1 <= m <= MAX_MOMENTS:
-        raise ValueError("moment sequence must contain between 1 and 64 moments")
+    if not 1 <= m <= 2 * MAX_RECURRENCE_ORDER:
+        raise ValueError(
+            "moment sequence must contain between 1 and 32 moments; "
+            "larger sequences exceed the domain value bound and would be "
+            "rejected by downstream Jacobi consumers"
+        )
     if any(type(value) is not Fraction for value in moments):
         raise TypeError("moments must use exact Fractions")
     if moments[0] <= 0:
@@ -148,9 +150,7 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
     return RecurrenceCoefficients(alpha=tuple(alpha), beta=tuple(beta))
 
 
-def jacobi_matrix(
-    alpha: Sequence[Fraction], beta: Sequence[Fraction]
-) -> JacobiMatrix:
+def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> JacobiMatrix:
     """Build the symmetric tridiagonal Jacobi matrix from recurrence coefficients.
 
     The diagonal entries are ``alpha_0, ..., alpha_{n-1}`` and the positive
@@ -169,8 +169,8 @@ def jacobi_matrix(
         raise TypeError("alpha must use exact Fractions")
     if any(type(value) is not Fraction for value in beta):
         raise TypeError("beta must use exact Fractions")
-    if beta[0] == 0:
-        raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+    if beta[0] <= 0:
+        raise ValueError("beta_0 (the zeroth moment) must be positive")
     return JacobiMatrix(
         diagonal=tuple(alpha),
         # The squared subdiagonal entries are beta_1, ..., beta_{n-1}; beta_0 is
@@ -206,8 +206,8 @@ def christoffel_darboux(
         raise ValueError("alpha must have length len(beta)-1 or len(beta)")
     if type(x) is not Fraction or type(y) is not Fraction:
         raise TypeError("x and y must use exact Fractions")
-    if beta[0] == 0:
-        raise ValueError("beta_0 must be nonzero")
+    if beta[0] <= 0:
+        raise ValueError("beta_0 must be positive")
     n = len(alpha)
     if n == 0:
         return ChristoffelDarbouxKernel(
@@ -266,8 +266,8 @@ def gaussian_quadrature(
         raise ValueError("alpha must contain between 1 and 16 entries")
     if len(beta) != n and len(beta) != n + 1:
         raise ValueError("beta must have length len(alpha) or len(alpha)+1")
-    if beta[0] == 0:
-        raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+    if beta[0] <= 0:
+        raise ValueError("beta_0 (the zeroth moment) must be positive")
     diagonal = np.array([float(a) for a in alpha], dtype=float)
     off: list[float] = []
     for k in range(n - 1):

@@ -31,9 +31,15 @@ class CircleInversionRequest(StrictModel):
     radius), and point p ≠ c, returns q = c + (s / ||p - c||²) * (p - c).
     """
 
-    center: GeometryPoint = Field(description="Inversion center as a canonical geometry point")
-    power: CanonicalRational = Field(description="Positive rational inversion power (squared radius)")
-    point: GeometryPoint = Field(description="Point to invert as a canonical geometry point")
+    center: GeometryPoint = Field(
+        description="Inversion center as a canonical geometry point"
+    )
+    power: CanonicalRational = Field(
+        description="Positive rational inversion power (squared radius)"
+    )
+    point: GeometryPoint = Field(
+        description="Point to invert as a canonical geometry point"
+    )
 
     @model_validator(mode="after")
     def require_admissible_request(self) -> Self:

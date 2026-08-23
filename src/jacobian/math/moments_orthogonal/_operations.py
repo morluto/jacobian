@@ -1,5 +1,10 @@
 """Wire adapters for exact moments and orthogonal polynomials."""
 
+from __future__ import annotations
+
+from collections.abc import Iterable
+from fractions import Fraction
+
 from jacobian._exact import CanonicalRational
 from jacobian.math.moments_orthogonal._models import (
     ChristoffelDarbouxRequest,
@@ -15,11 +20,11 @@ from jacobian.math.moments_orthogonal._models import (
 )
 
 
-def _to_fractions(values):
+def _to_fractions(values: tuple[CanonicalRational, ...]) -> tuple[Fraction, ...]:
     return tuple(v.as_fraction() for v in values)
 
 
-def _from_fractions(values):
+def _from_fractions(values: Iterable[Fraction]) -> tuple[CanonicalRational, ...]:
     return tuple(CanonicalRational.from_fraction(v) for v in values)
 
 
@@ -55,9 +60,7 @@ def compute_recurrence_coefficients(
 def compute_jacobi_matrix(request: JacobiMatrixRequest) -> JacobiMatrixResult:
     from jacobian.math.moments_orthogonal.operations import jacobi_matrix
 
-    result = jacobi_matrix(
-        _to_fractions(request.alpha), _to_fractions(request.beta)
-    )
+    result = jacobi_matrix(_to_fractions(request.alpha), _to_fractions(request.beta))
     return JacobiMatrixResult(
         alpha=request.alpha,
         beta=request.beta,

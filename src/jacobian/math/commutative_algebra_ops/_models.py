@@ -219,16 +219,16 @@ class IdealSaturationRequest(StrictModel):
 
     ideal: RationalPolynomialIdeal = Field(
         description=(
-            'An ideal in at most 6 variables with at most 16 generators and '
-            '256 aggregate terms; generator total degree is at most 12 and '
-            'coefficient components are at most 128 digits.'
+            "An ideal in at most 6 variables with at most 16 generators and "
+            "256 aggregate terms; generator total degree is at most 12 and "
+            "coefficient components are at most 128 digits."
         )
     )
     saturation_polynomial: RationalPolynomial = Field(
         description=(
-            'A single polynomial d in the ideal ring, with '
-            'at most 256 terms, total degree at most 12, and coefficient '
-            'components at most 128 digits.'
+            "A single polynomial d in the ideal ring, with "
+            "at most 256 terms, total degree at most 12, and coefficient "
+            "components at most 128 digits."
         )
     )
     resource_budget: IdealComputationBudget = Field(
@@ -245,15 +245,88 @@ class IdealSaturationRequest(StrictModel):
             maximum_coefficient_digits=MAX_COEFFICIENT_DIGITS,
             label="saturation polynomial",
         )
-        if self.saturation_polynomial.variables != self.ideal.variables:
+        if any(
+            sum(term.exponents) > MAX_INPUT_EXPONENT
+            for term in self.saturation_polynomial.polynomial.terms
+        ):
             raise ValueError(
-                "saturation polynomial must use the ideal's ordered ring"
+                f"saturation polynomial exceeds total degree {MAX_INPUT_EXPONENT}"
             )
+        if self.saturation_polynomial.variables != self.ideal.variables:
+            raise ValueError("saturation polynomial must use the ideal's ordered ring")
         return self
 
 
+def require_deterministic_saturation_certificate(
+    ideal: RationalPolynomialIdeal,
+    saturation_polynomial: RationalPolynomial,
+    saturation: RationalPolynomialIdeal,
+) -> None:
+    """Deterministic certificate check when backend replay is unavailable.
+
+    Verifies both inclusions that pin the saturation: I ⊆ S, and every
+    saturation generator is annihilated into I by some power of d (bounded
+    multiply-and-reduce search over the admitted input domain).
+    """
+    import sympy
+
+    from jacobian.math.polynomials._conversions import (
+        rational_polynomial_to_sympy,
+    )
+
+    d_expr = rational_polynomial_to_sympy(saturation_polynomial).as_expr()
+    symbols = saturation.variables
+    sat_basis = sympy.groebner(
+        [
+            rational_polynomial_to_sympy(generator).as_expr()
+            for generator in saturation.generators
+        ],
+        *sympy.symbols(symbols),
+        order="grevlex",
+        domain=sympy.QQ,
+    )
+    ideal_basis = sympy.groebner(
+        [
+            rational_polynomial_to_sympy(generator).as_expr()
+            for generator in ideal.generators
+        ],
+        *sympy.symbols(symbols),
+        order="grevlex",
+        domain=sympy.QQ,
+    )
+    for generator in ideal.generators:
+        if sat_basis.reduce(rational_polynomial_to_sympy(generator).as_expr())[1] != 0:
+            raise ValueError(
+                "saturation must equal the exact Singular replay of the "
+                "retained ideal and saturation polynomial"
+            )
+    cur = [
+        rational_polynomial_to_sympy(generator).as_expr()
+        for generator in saturation.generators
+    ]
+    for _ in range(2 * MAX_INPUT_EXPONENT + 1):
+        remaining = []
+        for expr in cur:
+            if ideal_basis.reduce(expr)[1] != 0:
+                remaining.append(expr * d_expr)
+        if not remaining:
+            return
+        cur = remaining
+    raise ValueError(
+        "saturation must equal the exact Singular replay of the retained "
+        "ideal and saturation polynomial"
+    )
+
+
 class IdealSaturationResult(StrictModel):
+    """The exact saturation I : <d>^infinity, bound to its source request."""
+
     outcome: IdealExecutionOutcome
+    ideal: RationalPolynomialIdeal
+    saturation_polynomial: RationalPolynomial
+    resource_budget: IdealComputationBudget = Field(
+        default_factory=IdealComputationBudget
+    )
     saturation: RationalPolynomialIdeal | None = None
     method: Literal["SINGULAR_SATURATION"] = "SINGULAR_SATURATION"
     backend_version: str | None = None
@@ -266,26 +339,43 @@ class IdealSaturationResult(StrictModel):
                 raise ValueError(
                     "computed saturation requires a value and backend version"
                 )
+            # Replay against the retained sources with an amplified wall
+            # budget so a computation near the configured boundary is not
+            # misjudged by second-process jitter; exact equality is required
+            # on every healthy replay.
+            from jacobian.math.commutative_algebra_ops._singular import (
+                run_singular_ideal_operation,
+            )
+            from jacobian.math.polynomials.values import (
+                RationalPolynomialIdeal,
+            )
+
+            divisor = RationalPolynomialIdeal(
+                variables=self.ideal.variables,
+                generators=(self.saturation_polynomial,),
+            )
+            replay_budget = self.resource_budget.model_copy(update={"wall_seconds": 60})
+            replay = run_singular_ideal_operation(
+                "saturation",
+                self.ideal,
+                divisor,
+                replay_budget,
+            )
+            if (
+                replay.outcome != "COMPUTED"
+                or replay.ideal != self.saturation
+                or replay.backend_version != self.backend_version
+            ):
+                raise ValueError(
+                    "saturation must equal the exact Singular replay of the "
+                    "retained ideal and saturation polynomial"
+                )
         elif (
             self.saturation is not None
             or self.backend_version is not None
             or not self.detail
         ):
-            raise ValueError("failed saturation computation requires only a safe detail")
+            raise ValueError(
+                "failed saturation computation requires only a safe detail"
+            )
         return self
-
-
-__all__ = [
-    "MAX_OUTPUT_GENERATORS",
-    "MAX_OUTPUT_TERMS",
-    "IdealComputationBudget",
-    "IdealExecutionOutcome",
-    "IdealQuotientRequest",
-    "IdealQuotientResult",
-    "IdealRadicalMembershipRequest",
-    "IdealRadicalMembershipResult",
-    "IdealRadicalRequest",
-    "IdealRadicalResult",
-    "IdealSaturationRequest",
-    "IdealSaturationResult",
-]

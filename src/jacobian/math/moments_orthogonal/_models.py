@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from fractions import Fraction
 from typing import Literal, Self
 
@@ -25,7 +26,7 @@ MAX_RATIONAL_DIGITS = 4_096
 # coefficient must convert to a finite double and every subdiagonal entry must
 # stay far from both overflow and underflow so its square root is exact enough.
 MAX_QUADRATURE_MAGNITUDE = Fraction(10) ** 300
-MIN_QUADRATURE_SUBDIAGONAL = Fraction(1, 10 ** 300)
+MIN_QUADRATURE_SUBDIAGONAL = Fraction(1, 10**300)
 
 
 def _to_fractions(
@@ -34,7 +35,7 @@ def _to_fractions(
     return tuple(v.as_fraction() for v in values)
 
 
-def _from_fractions(values) -> tuple[CanonicalRational, ...]:
+def _from_fractions(values: Iterable[Fraction]) -> tuple[CanonicalRational, ...]:
     return tuple(CanonicalRational.from_fraction(v) for v in values)
 
 
@@ -42,9 +43,7 @@ def _validate_moments(moments: tuple[CanonicalRational, ...]) -> None:
     if not 1 <= len(moments) <= MAX_MOMENTS:
         raise ValueError("moment sequence must contain between 1 and 64 moments")
     for value in moments:
-        require_bounded_rational(
-            value, max_digits=MAX_RATIONAL_DIGITS, label="moment"
-        )
+        require_bounded_rational(value, max_digits=MAX_RATIONAL_DIGITS, label="moment")
 
 
 def _validate_alpha_beta(
@@ -199,15 +198,11 @@ class JacobiMatrixResult(JacobiMatrixRequest):
     def bind_jacobi(self) -> Self:
         from jacobian.math.moments_orthogonal.operations import jacobi_matrix
 
-        result = jacobi_matrix(
-            _to_fractions(self.alpha), _to_fractions(self.beta)
-        )
+        result = jacobi_matrix(_to_fractions(self.alpha), _to_fractions(self.beta))
         if self.diagonal != _from_fractions(result.diagonal):
             raise ValueError("diagonal must match the exact Jacobi diagonal")
         if self.off_diagonal != _from_fractions(result.off_diagonal):
-            raise ValueError(
-                "off_diagonal must match the exact Jacobi off-diagonal"
-            )
+            raise ValueError("off_diagonal must match the exact Jacobi off-diagonal")
         return self
 
 
@@ -292,8 +287,9 @@ def _require_bounded_kernel_growth(
         h_num += bn[k]
         h_den += bd[k]
         # term_k = p_k(x) p_k(y) / h_k before reduction.
-        term_bounds.append((px_num[k] + py_num[k] + h_den,
-                            px_den[k] + py_den[k] + h_num))
+        term_bounds.append(
+            (px_num[k] + py_num[k] + h_den, px_den[k] + py_den[k] + h_num)
+        )
         total_den += term_bounds[-1][1]
     # Summing over the common denominator multiplies each term numerator by
     # every other term's denominator; reduction only shrinks the result.
@@ -321,12 +317,8 @@ class ChristoffelDarbouxRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_coefficients(self) -> Self:
         _validate_alpha_beta(self.alpha, self.beta)
-        require_bounded_rational(
-            self.x, max_digits=MAX_RATIONAL_DIGITS, label="x"
-        )
-        require_bounded_rational(
-            self.y, max_digits=MAX_RATIONAL_DIGITS, label="y"
-        )
+        require_bounded_rational(self.x, max_digits=MAX_RATIONAL_DIGITS, label="x")
+        require_bounded_rational(self.y, max_digits=MAX_RATIONAL_DIGITS, label="y")
         _require_bounded_kernel_growth(
             tuple(v.as_fraction() for v in self.alpha),
             tuple(v.as_fraction() for v in self.beta),
@@ -355,12 +347,8 @@ class ChristoffelDarbouxResult(ChristoffelDarbouxRequest):
             self.y.as_fraction(),
         )
         if self.kernel != CanonicalRational.from_fraction(result.kernel):
-            raise ValueError(
-                "kernel must be the exact Christoffel-Darboux kernel"
-            )
-        if self.polynomials_evaluated != _from_fractions(
-            result.polynomials_evaluated
-        ):
+            raise ValueError("kernel must be the exact Christoffel-Darboux kernel")
+        if self.polynomials_evaluated != _from_fractions(result.polynomials_evaluated):
             raise ValueError(
                 "polynomials_evaluated must match the evaluated polynomials"
             )
@@ -380,10 +368,7 @@ class GaussianQuadratureRequest(StrictModel):
     def require_valid_coefficients(self) -> Self:
         if not 1 <= len(self.alpha) <= MAX_QUADRATURE_POINTS:
             raise ValueError("alpha must contain between 1 and 16 entries")
-        if (
-            len(self.beta) != len(self.alpha)
-            and len(self.beta) != len(self.alpha) + 1
-        ):
+        if len(self.beta) != len(self.alpha) and len(self.beta) != len(self.alpha) + 1:
             raise ValueError("beta must have length len(alpha) or len(alpha)+1")
         beta_zero = self.beta[0].as_fraction()
         if beta_zero <= 0:
@@ -422,8 +407,12 @@ class GaussianQuadratureResult(GaussianQuadratureRequest):
     nodes: tuple[CanonicalRational, ...]
     weights: tuple[CanonicalRational, ...]
     complete: Literal[True] = True
-    method: Literal["APPROXIMATE_GOLUB_WELSCH_FLOAT64"] = "APPROXIMATE_GOLUB_WELSCH_FLOAT64"
-    approximation: Literal["FLOAT64_ROUNDED_DYADIC_RATIONAL"] = "FLOAT64_ROUNDED_DYADIC_RATIONAL"
+    method: Literal["APPROXIMATE_GOLUB_WELSCH_FLOAT64"] = (
+        "APPROXIMATE_GOLUB_WELSCH_FLOAT64"
+    )
+    approximation: Literal["FLOAT64_ROUNDED_DYADIC_RATIONAL"] = (
+        "FLOAT64_ROUNDED_DYADIC_RATIONAL"
+    )
 
     @model_validator(mode="after")
     def bind_gaussian_quadrature(self) -> Self:

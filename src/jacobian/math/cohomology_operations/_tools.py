@@ -85,11 +85,11 @@ COHOMOLOGY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ),
     cohomology_operation(
         "cohomology.bockstein.compute",
-        "Compute the Bockstein homomorphism for a cocycle over Z/p",
-        "Given a cocycle x of degree n with coefficients in Z/p, compute "
-        "the Bockstein homomorphism beta(x) in H^{n+1}(Z/p). The Bockstein "
-        "is the connecting homomorphism for the short exact sequence "
-        "0 -> Z/p -> Z/p^2 -> Z/p -> 0.",
+        "Compute the Bockstein homomorphism of the trivial cocycle over Z/p",
+        "Given a degree-n cochain over Z/p that is zero modulo p, return the "
+        "exact zero Bockstein beta(x) in H^{n+1}(Z/p). Nontrivial cocycles "
+        "require the ambient simplicial complex and are rejected as "
+        "unsupported by this bounded operation.",
         BocksteinRequest,
         BocksteinResult,
         compute_bockstein,

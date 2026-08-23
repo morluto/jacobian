@@ -38,6 +38,7 @@ from jacobian.math.moments_orthogonal._tools import TOOLS
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _frac(num: int, den: int) -> Fraction:
     return Fraction(num, den)
 
@@ -105,7 +106,7 @@ class TestRecurrenceCoefficients:
         assert result.beta[0] == _frac(2, 1)
 
     def test_empty_rejected(self) -> None:
-        with pytest.raises(ValueError, match="between 1 and 64"):
+        with pytest.raises(ValueError, match="between 1 and 32"):
             recurrence_coefficients(())
 
     def test_zeroth_moment_nonzero(self) -> None:
@@ -123,9 +124,11 @@ class TestRecurrenceCoefficients:
         """Positivity alone does not admit coefficients past the limit."""
         # mu_k = (1/(k+1) if k is even else 0) + 1/(10^70+3+2k): every input
         # component stays small and Gram-Schmidt succeeds, but the final
-        # alpha denominator overflows the canonical limit.
+        # alpha denominator overflows the canonical limit. Use 32 moments
+        # (the wire cap) to reach the canonical overflow without hitting
+        # the 32-moment domain bound first.
         moments = []
-        for k in range(33):
+        for k in range(32):
             base = Fraction(1, k + 1) if k % 2 == 0 else Fraction(0)
             value = base + Fraction(1, 10**70 + 3 + 2 * k)
             moments.append(_cr(value.numerator, value.denominator))
@@ -181,7 +184,7 @@ class TestJacobiMatrix:
         assert result.off_diagonal == ()
 
     def test_zero_beta_rejected(self) -> None:
-        with pytest.raises(ValueError, match="nonzero"):
+        with pytest.raises(ValueError, match="positive"):
             jacobi_matrix((_frac(0, 1),), (_frac(0, 1), _frac(1, 1)))
 
 
@@ -284,9 +287,7 @@ class TestGaussianQuadrature:
 
 class TestWireAdapters:
     def test_hankel_wire(self) -> None:
-        request = HankelMatrixRequest(
-            moments=tuple(_cr(1, k) for k in range(1, 8))
-        )
+        request = HankelMatrixRequest(moments=tuple(_cr(1, k) for k in range(1, 8)))
         result = compute_hankel_matrix(request)
         assert result.dimension == 4
         assert isinstance(result, HankelMatrixResult)
@@ -306,6 +307,7 @@ class TestWireAdapters:
         )
         result = compute_jacobi_matrix(request)
         assert isinstance(result, JacobiMatrixResult)
+
     def test_christoffel_darboux_wire(self) -> None:
         request = ChristoffelDarbouxRequest(
             alpha=(_cr(1, 2), _cr(1, 2)),

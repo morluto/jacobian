@@ -115,7 +115,9 @@ class TestCircumradiusAdmission:
             CircumradiusProfileRequest(
                 points=(
                     self._labelled(
-                        "o", CanonicalRational(num="0", den="1"), CanonicalRational(num="0", den="1")
+                        "o",
+                        CanonicalRational(num="0", den="1"),
+                        CanonicalRational(num="0", den="1"),
                     ),
                     self._labelled(
                         "p",
@@ -133,9 +135,21 @@ class TestCircumradiusAdmission:
     def test_right_triangle_known_answer(self) -> None:
         request = CircumradiusProfileRequest(
             points=(
-                self._labelled("a", CanonicalRational(num="0", den="1"), CanonicalRational(num="0", den="1")),
-                self._labelled("b", CanonicalRational(num="4", den="1"), CanonicalRational(num="0", den="1")),
-                self._labelled("c", CanonicalRational(num="0", den="1"), CanonicalRational(num="3", den="1")),
+                self._labelled(
+                    "a",
+                    CanonicalRational(num="0", den="1"),
+                    CanonicalRational(num="0", den="1"),
+                ),
+                self._labelled(
+                    "b",
+                    CanonicalRational(num="4", den="1"),
+                    CanonicalRational(num="0", den="1"),
+                ),
+                self._labelled(
+                    "c",
+                    CanonicalRational(num="0", den="1"),
+                    CanonicalRational(num="3", den="1"),
+                ),
             )
         )
         result = circumradius_profile(request)

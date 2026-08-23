@@ -195,9 +195,7 @@ def bockstein_fields(
 ) -> tuple[int, tuple[tuple[int, ...], ...], tuple[int, ...], bool]:
     """Pure Bockstein core returning ``(degree, values, coefficients, is_zero)``."""
 
-    if not simplex_coefficients or all(
-        c % prime == 0 for c in simplex_coefficients
-    ):
+    if not simplex_coefficients or all(c % prime == 0 for c in simplex_coefficients):
         return (cochain_degree + 1, (), (), True)
     raise ValueError(
         "non-zero Bockstein requires the ambient simplicial complex and is not supported"

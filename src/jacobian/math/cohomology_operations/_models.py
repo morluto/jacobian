@@ -36,9 +36,7 @@ def _require_cocycle(
     codimension-one faces.
     """
     values_by_face: dict[tuple[int, ...], int] = {}
-    for simplex, coefficient in zip(
-        simplex_values, simplex_coefficients, strict=True
-    ):
+    for simplex, coefficient in zip(simplex_values, simplex_coefficients, strict=True):
         key = tuple(simplex)
         values_by_face[key] = (values_by_face.get(key, 0) + coefficient) % 2
     for sigma in ambient_simplices:
@@ -68,12 +66,8 @@ class SteenrodSquareRequest(StrictModel):
     """
 
     cochain_degree: int = Field(ge=0, le=16)
-    simplex_values: tuple[tuple[int, ...], ...] = Field(
-        min_length=0, max_length=1024
-    )
-    simplex_coefficients: tuple[int, ...] = Field(
-        min_length=0, max_length=1024
-    )
+    simplex_values: tuple[tuple[int, ...], ...] = Field(min_length=0, max_length=1024)
+    simplex_coefficients: tuple[int, ...] = Field(min_length=0, max_length=1024)
     square_degree: int = Field(ge=0, le=16)
     ambient_simplices: tuple[tuple[int, ...], ...] = Field(
         default=(),
@@ -88,7 +82,9 @@ class SteenrodSquareRequest(StrictModel):
     @model_validator(mode="after")
     def require_matching_lengths(self) -> Self:
         if len(self.simplex_values) != len(self.simplex_coefficients):
-            raise ValueError("simplex_values and simplex_coefficients must have the same length")
+            raise ValueError(
+                "simplex_values and simplex_coefficients must have the same length"
+            )
         # Validate simplex dimensions: each simplex must have exactly cochain_degree+1 distinct vertices.
         expected_dim = self.cochain_degree + 1
         for simplex in self.simplex_values:
@@ -176,17 +172,15 @@ class BocksteinRequest(StrictModel):
 
     prime: int = Field(ge=2, le=10_000)
     cochain_degree: int = Field(ge=0, le=16)
-    simplex_values: tuple[tuple[int, ...], ...] = Field(
-        min_length=0, max_length=1024
-    )
-    simplex_coefficients: tuple[int, ...] = Field(
-        min_length=0, max_length=1024
-    )
+    simplex_values: tuple[tuple[int, ...], ...] = Field(min_length=0, max_length=1024)
+    simplex_coefficients: tuple[int, ...] = Field(min_length=0, max_length=1024)
 
     @model_validator(mode="after")
     def require_matching_lengths(self) -> Self:
         if len(self.simplex_values) != len(self.simplex_coefficients):
-            raise ValueError("simplex_values and simplex_coefficients must have the same length")
+            raise ValueError(
+                "simplex_values and simplex_coefficients must have the same length"
+            )
         from sympy import isprime
 
         if not isprime(self.prime):
@@ -202,7 +196,9 @@ class BocksteinRequest(StrictModel):
         # Non-zero coefficients would require computing (1/p) d(lift), which needs
         # the simplicial coboundary and hence the full complex. Reject as unsupported
         # to avoid returning a false exact zero.
-        if self.simplex_coefficients and any(c % self.prime != 0 for c in self.simplex_coefficients):
+        if self.simplex_coefficients and any(
+            c % self.prime != 0 for c in self.simplex_coefficients
+        ):
             raise ValueError(
                 "non-zero Bockstein requires the ambient simplicial complex; unsupported in this bounded operation"
             )

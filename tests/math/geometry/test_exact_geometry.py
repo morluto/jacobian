@@ -1650,6 +1650,7 @@ class TestIncidenceDigitCapFiresBeforeRationalExpansion:
         with pytest.raises(ValidationError):
             CollinearTriplesRequest(configuration=shared)
 
+
 class TestAuthoredComponentBudget:
     def test_forged_rational_components_rejected_before_parsing(self):
         """Multi-megabyte authored coefficients are rejected pre-parse."""

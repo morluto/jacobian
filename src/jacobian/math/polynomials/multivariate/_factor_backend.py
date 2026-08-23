@@ -188,8 +188,21 @@ def run_bounded_factorization(
         payload = json.loads(completed.stdout.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
         payload = None
+    return _worker_outcome(
+        payload, completed, polynomial, wrapped_with_prlimit=prlimit is not None
+    )
+
+
+def _worker_outcome(
+    payload: Any,
+    completed: Any,
+    polynomial: RationalPolynomial,
+    *,
+    wrapped_with_prlimit: bool,
+) -> tuple[Any, list[tuple[Any, int]]]:
+    """Classify one finished worker run and decode its decomposition."""
     if isinstance(payload, dict) and payload.get("ok") is True:
-        _require_worker_memory_limit(payload, wrapped_with_prlimit=prlimit is not None)
+        _require_worker_memory_limit(payload, wrapped_with_prlimit=wrapped_with_prlimit)
         return _sympy_decomposition(payload, polynomial.variables)
     if isinstance(payload, dict) and payload.get("ok") is False:
         if payload.get("exhausted") is True:
@@ -199,12 +212,21 @@ def run_bounded_factorization(
             raise FactorBackendExhaustedError(str(payload.get("error")))
         raise FactorBackendFailureError(str(payload.get("error")))
     if isinstance(completed.returncode, int) and completed.returncode < 0:
-        # Signal death under the declared limits (SIGXCPU, kernel OOM kill)
-        # is how resource enforcement terminates the worker: report it as
-        # the bounded outcome those limits exist to produce.
-        raise FactorBackendExhaustedError(
-            f"the bounded factorization worker was killed by signal "
-            f"{-completed.returncode} under its declared limits"
+        # Only a signal death conclusively attributable to an enforced
+        # limit may authenticate the bounded outcome: SIGXCPU is exactly
+        # how the declared CPU limit terminates the worker.  Any other
+        # signal (SIGSEGV, SIGABRT, external kill) is an execution
+        # failure establishing nothing about output size.
+        import signal
+
+        sigxcpu = getattr(signal, "SIGXCPU", None)
+        if sigxcpu is not None and completed.returncode == -int(sigxcpu):
+            raise FactorBackendExhaustedError(
+                "the bounded factorization worker hit its declared CPU limit"
+            )
+        raise FactorBackendFailureError(
+            f"the bounded factorization worker was killed by unexpected "
+            f"signal {-completed.returncode}"
         )
     # A clean or self-reported abnormal exit without parsable output is a
     # worker crash, not evidence about output size.

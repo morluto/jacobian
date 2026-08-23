@@ -75,8 +75,30 @@ def _emit(payload: dict[str, object]) -> None:
     sys.stdout.buffer.write(json.dumps(payload).encode("utf-8"))
 
 
+def _fail(payload_message: str, *, exhausted: bool) -> int:
+    _emit(
+        {
+            "ok": False,
+            "error": payload_message,
+            "exhausted": exhausted,
+            "as_limit_applied": False,
+        }
+    )
+    return 1
+
+
 def main() -> int:
     as_limit_applied = _apply_address_space_limit()
+    if not as_limit_applied:
+        # Without an enforced address-space cap this process cannot safely
+        # run the potentially explosive factorization at all: abort before
+        # any allocation-heavy work instead of recording the failed limit
+        # and proceeding anyway.
+        return _fail(
+            "no hard address-space limit could be applied to the bounded "
+            "factorization worker",
+            exhausted=False,
+        )
     try:
         payload = json.loads(sys.stdin.buffer.read().decode("utf-8"))
         response = dict(_run(payload))

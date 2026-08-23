@@ -625,6 +625,7 @@ class TestKillableFactorBackend:
         """The bounded worker returns the same exact decomposition as an
         in-process ``factor_list`` on ordinary inputs."""
         import json
+        import os
         import subprocess
         import sys
 
@@ -647,6 +648,10 @@ class TestKillableFactorBackend:
             input=payload,
             capture_output=True,
             timeout=60,
+            env={
+                **os.environ,
+                "JACOBIAN_FACTOR_ADDRESS_SPACE_BYTES": str(4 * 1024 * 1024 * 1024),
+            },
         )
         assert completed.returncode == 0
         response = json.loads(completed.stdout.decode())
@@ -676,24 +681,82 @@ class TestKillableFactorBackend:
             run_bounded_factorization(poly)
         assert not isinstance(exc_info.value, FactorBackendExhaustedError)
 
-    def test_signal_death_under_limits_is_exhaustion(self, monkeypatch):
-        """Signal death under the declared limits reports the bounded
-        outcome those limits exist to produce."""
+    def test_signal_death_under_cpu_limit_is_exhaustion(self, monkeypatch):
+        """Only a limit-attributable death (SIGXCPU from the declared CPU
+        budget) reports the bounded exhaustion outcome."""
+        import signal
+
         from jacobian.math.polynomials.multivariate._factor_backend import (
             FactorBackendExhaustedError,
             run_bounded_factorization,
         )
 
+        sigxcpu = getattr(signal, "SIGXCPU", None)
+        if sigxcpu is None:
+            pytest.skip("POSIX-only signal semantics")
+        monkeypatch.setattr(
+            "jacobian.process.run_bounded_process",
+            lambda *_a, **_k: TestExecutionInterruptionSeparation._fake_completed(
+                returncode=-int(sigxcpu),
+                stdout=b"",
+            ),
+        )
+        poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
+        with pytest.raises(FactorBackendExhaustedError):
+            run_bounded_factorization(poly)
+
+    def test_unknown_signal_death_is_execution_failure(self, monkeypatch):
+        """SIGKILL/SIGSEGV-style deaths are not proof of a capacity limit."""
+        import signal
+
+        from jacobian.math.polynomials.multivariate._factor_backend import (
+            FactorBackendExhaustedError,
+            FactorBackendFailureError,
+            run_bounded_factorization,
+        )
+
+        external_signal = -int(getattr(signal, "SIGSEGV", 11))
+
         def fake_run(*_args, **_kwargs):
             return TestExecutionInterruptionSeparation._fake_completed(
-                returncode=-9,
+                returncode=external_signal,
                 stdout=b"",
             )
 
         monkeypatch.setattr("jacobian.process.run_bounded_process", fake_run)
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
-        with pytest.raises(FactorBackendExhaustedError):
+        with pytest.raises(FactorBackendFailureError) as exc_info:
             run_bounded_factorization(poly)
+        assert not isinstance(exc_info.value, FactorBackendExhaustedError)
+
+    def test_worker_aborts_without_containment_before_factoring(self):
+        """A worker that cannot apply its address-space cap exits before
+        any allocation-heavy factorization work."""
+        import json
+        import os
+        import subprocess
+        import sys
+
+        from jacobian.math.polynomials.multivariate._factor_backend import (
+            _WORKER_PATH,
+        )
+
+        payload = json.dumps({"variables": ["x"], "terms": [[2, 1, 1]]}).encode()
+        environment = dict(os.environ)
+        # No JACOBIAN_FACTOR_ADDRESS_SPACE_BYTES: the worker must refuse.
+        environment.pop("JACOBIAN_FACTOR_ADDRESS_SPACE_BYTES", None)
+        completed = subprocess.run(
+            [sys.executable, str(_WORKER_PATH)],
+            input=payload,
+            capture_output=True,
+            timeout=60,
+            env=environment,
+        )
+        assert completed.returncode == 1
+        response = json.loads(completed.stdout.decode())
+        assert response["ok"] is False
+        assert response["exhausted"] is False
+        assert response["as_limit_applied"] is False
 
     def test_interrupted_budget_claim_replay_rejected(self, monkeypatch):
         """An authored OUTPUT_BUDGET_EXCEEDED claim whose verification

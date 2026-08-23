@@ -13,55 +13,12 @@ from jacobian.math.lie_algebra_homology._models import (
     LieHomologyRequest,
     LieHomologyResult,
 )
-from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
-
-
-def _find_pivot_row(
-    aug: list[list[int]], prime: int, rank: int, col: int
-) -> int | None:
-    """Return the first row index >= rank with a nonzero entry in col."""
-    for r in range(rank, len(aug)):
-        if aug[r][col] % prime != 0:
-            return r
-    return None
-
-
-def _eliminate_column(
-    aug: list[list[int]], prime: int, rank: int, col: int, rows: int, cols: int
-) -> None:
-    """Scale the pivot row to 1 and clear col in every other row."""
-    inv_pivot = pow(aug[rank][col] % prime, prime - 2, prime)
-    for c in range(cols):
-        aug[rank][c] = (aug[rank][c] * inv_pivot) % prime
-    for r in range(rows):
-        if r == rank:
-            continue
-        factor = aug[r][col] % prime
-        if factor != 0:
-            for c in range(cols):
-                aug[r][c] = (aug[r][c] - factor * aug[rank][c]) % prime
-
-
-def _gaussian_rank(matrix: list[list[int]], prime: int) -> int:
-    """Compute rank of a matrix over GF(prime) via Gaussian elimination."""
-    rows = len(matrix)
-    if rows == 0:
-        return 0
-    cols = len(matrix[0])
-    if cols == 0:
-        return 0
-    aug = [row[:] for row in matrix]
-    rank = 0
-    for col in range(cols):
-        pivot = _find_pivot_row(aug, prime, rank, col)
-        if pivot is None:
-            continue
-        aug[rank], aug[pivot] = aug[pivot], aug[rank]
-        _eliminate_column(aug, prime, rank, col, rows, cols)
-        rank += 1
-        if rank >= rows:
-            break
-    return rank
+from jacobian.math.prime_field_linear_algebra import (
+    PrimeFieldMatrix,
+)
+from jacobian.math.prime_field_linear_algebra import (
+    rank as pf_rank,
+)
 
 
 def _wedge_index(indices: tuple[int, ...], dim: int) -> int:
@@ -174,14 +131,12 @@ def lie_homology_groups(lie_algebra: LieAlgebra) -> tuple[LieHomologyGroup, ...]
     the bounded rank computation without recursion.
     """
     n = lie_algebra.dimension
-    p = lie_algebra.prime
 
     group_dims = _chain_group_dimensions(n)
 
-    ranks = [
-        _gaussian_rank([list(row) for row in d.entries], p)
-        for d in _ce_differentials(lie_algebra)
-    ]
+    # The maintained SymPy DomainMatrix backend is the one exact rank kernel;
+    # each CE differential already carries the canonical PrimeFieldMatrix value.
+    ranks = [pf_rank(d.matrix) for d in _ce_differentials(lie_algebra)]
     ranks.append(0)
 
     groups = []
@@ -197,7 +152,7 @@ def lie_homology_groups(lie_algebra: LieAlgebra) -> tuple[LieHomologyGroup, ...]
             LieHomologyGroup(
                 degree=k,
                 betti=betti,
-                dimension=dim,
+                chain_dimension=dim,
             )
         )
     return tuple(groups)

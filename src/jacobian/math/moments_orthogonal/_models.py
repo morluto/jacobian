@@ -131,22 +131,29 @@ class RecurrenceCoefficientsRequest(StrictModel):
         # yields the exact coefficients, so admission can prove the returned
         # result fits the canonical limit before the operation runs.
         from jacobian._exact import CanonicalRational
-        from jacobian.math._rational_height import RationalHeight
         from jacobian.math.moments_orthogonal.operations import (
             recurrence_coefficients,
         )
 
+        # Admission replays the exact kernel and checks every derived
+        # coefficient against the SAME limit the result model enforces
+        # (MAX_RATIONAL_DIGITS), so an admitted request can never fail while
+        # constructing its typed result.
         computed = recurrence_coefficients(_to_fractions(self.moments))
         for value in (*computed.alpha, *computed.beta):
             canonical = CanonicalRational.from_fraction(value)
-            if RationalHeight.from_canonical(canonical).exceeds(
-                MAX_CANONICAL_RATIONAL_DIGITS
-            ):
-                raise ValueError(
-                    "recurrence coefficient growth exceeds the canonical "
-                    f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit result limit; "
-                    "reduce the moment component magnitude"
+            try:
+                require_bounded_rational(
+                    canonical,
+                    max_digits=MAX_RATIONAL_DIGITS,
+                    label="derived recurrence coefficient",
                 )
+            except ValueError as error:
+                raise ValueError(
+                    "recurrence coefficient growth exceeds the "
+                    f"{MAX_RATIONAL_DIGITS}-digit result limit applied by the "
+                    "result model; reduce the moment component magnitude"
+                ) from error
         return self
 
 

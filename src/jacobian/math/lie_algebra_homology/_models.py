@@ -230,11 +230,15 @@ class LieHomologyRequest(StrictModel):
 
 
 class LieHomologyGroup(StrictModel):
-    """One Lie homology group."""
+    """One Lie homology group.
+
+    ``betti`` is dim(H_k); ``chain_dimension`` is the dimension of the
+    chain group C_k feeding it, which the binomial sequence also carries.
+    """
 
     degree: int = Field(ge=0)
     betti: int = Field(ge=0)
-    dimension: int = Field(ge=1)
+    chain_dimension: int = Field(ge=1)
 
 
 class LieHomologyResult(StrictModel):

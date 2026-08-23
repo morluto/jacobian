@@ -142,17 +142,52 @@ class TestRecurrenceCoefficients:
         return tuple(moments)
 
     def test_large_but_admissible_coefficients_pass(self) -> None:
-        """The height check admits coefficients within the canonical limit."""
-        request = RecurrenceCoefficientsRequest(moments=self._overflowing_moments(21))
+        """Large-but-bounded moments stay admissible under the result limit."""
+        moments = []
+        for k in range(21):
+            if k % 2 == 0:
+                num = sum(x**k for x in range(-8, 9))
+                moments.append(CanonicalRational(num=str(num), den="1"))
+            else:
+                moments.append(CanonicalRational(num="1", den=str(10**20 + 2 * k + 1)))
+        request = RecurrenceCoefficientsRequest(moments=tuple(moments))
         assert len(request.moments) == 21
 
     @pytest.mark.exhaustive
     def test_result_growth_rejected_before_execution(self) -> None:
         """Positivity alone does not admit overflowing coefficients."""
         # Every input component stays small, but one exact recurrence
-        # coefficient exceeds the canonical 32,768-digit limit.
-        with pytest.raises((ValueError, ValidationError), match="canonical"):
+        # coefficient exceeds the 4,096-digit limit the result model applies.
+        with pytest.raises((ValueError, ValidationError), match="result limit"):
             RecurrenceCoefficientsRequest(moments=self._overflowing_moments(33))
+
+    def test_admission_matches_the_result_digit_contract(self) -> None:
+        """Admission applies the same digit limit the result model enforces.
+
+        These 33 moments pass the positivity replay and every derived
+        coefficient fits the 32,768-digit canonical bound, yet the largest
+        has ~6,233 digits and the result validator rejects anything beyond
+        4,096; an admitted request therefore used to fail while constructing
+        its typed result.
+        """
+        moments = []
+        for k in range(33):
+            if k % 2 == 0:
+                num = sum(x**k for x in range(-8, 9))
+                moments.append(CanonicalRational(num=str(num), den="1"))
+            else:
+                moments.append(CanonicalRational(num="1", den=str(10**25 + 2 * k + 1)))
+        with pytest.raises((ValueError, ValidationError), match=r"4,?096"):
+            RecurrenceCoefficientsRequest(moments=tuple(moments))
+
+    def test_native_rejects_unverified_moment_tail(self) -> None:
+        """Direct callers cannot smuggle an unverified tail past the cap."""
+        moments = (*(_frac(1, k + 1) for k in range(33)), _frac(0, 1), _frac(-1, 1))
+        with pytest.raises(ValueError, match="consumed by"):
+            recurrence_coefficients(moments)
+        # 33 moments remain admissible: exactly the consumed prefix.
+        result = recurrence_coefficients(tuple(_frac(1, k + 1) for k in range(33)))
+        assert len(result.alpha) == 16
 
     def test_insufficient_moments_for_recurrence(self) -> None:
         """With only 2 moments we can't produce any recurrence coefficient."""
@@ -403,3 +438,42 @@ class TestToolsAndExamples:
         for tool in TOOLS:
             names = [ex.name for ex in tool.examples]
             assert len(names) == len(set(names))
+
+
+class TestCanonicalRecurrenceValueComposition:
+    """The native producer's value composes into every consumer unchanged."""
+
+    def test_producer_value_feeds_jacobi_matrix(self) -> None:
+        coeffs = recurrence_coefficients(tuple(_frac(1, k + 1) for k in range(9)))
+        result = jacobi_matrix(coeffs)
+        assert result.diagonal == tuple(_frac(1, 2) for _ in result.diagonal)
+        assert result.off_diagonal[0] > 0
+
+    def test_producer_value_feeds_christoffel_darboux(self) -> None:
+        coeffs = recurrence_coefficients(tuple(_frac(1, k + 1) for k in range(9)))
+        separate = christoffel_darboux(
+            coeffs.alpha, coeffs.beta, _frac(1, 3), _frac(1, 3)
+        )
+        canonical = christoffel_darboux(coeffs, _frac(1, 3), _frac(1, 3))
+        assert canonical == separate
+
+    def test_producer_value_feeds_gaussian_quadrature(self) -> None:
+        coeffs = recurrence_coefficients(tuple(_frac(1, k + 1) for k in range(9)))
+        separate = gaussian_quadrature(coeffs.alpha, coeffs.beta)
+        assert gaussian_quadrature(coeffs).approximate_weights == (
+            separate.approximate_weights
+        )
+
+    def test_mixed_forms_rejected(self) -> None:
+        coeffs = recurrence_coefficients(tuple(_frac(1, k + 1) for k in range(5)))
+        with pytest.raises(TypeError):
+            jacobi_matrix(coeffs, coeffs.beta)
+        with pytest.raises(TypeError):
+            gaussian_quadrature(coeffs, coeffs.beta)
+        with pytest.raises(TypeError):
+            christoffel_darboux(
+                coeffs,
+                coeffs.beta,
+                _frac(1, 3),
+                _frac(1, 3),
+            )

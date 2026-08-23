@@ -244,6 +244,25 @@ class TestLieHomology:
         result = compute_lie_homology(LieHomologyRequest(lie_algebra=_sl2_gf5()))
         assert tuple(group.betti for group in result.groups) == (1, 0, 0, 1)
 
+    def test_chain_dimension_names_the_chain_group(self):
+        """The chain-group dimension field is explicit about what it counts.
+
+        For sl(2) the degree-1 homology vanishes (betti=0) while the chain
+        group C_1 has dimension 3; the serialized field must not read as
+        dim(H_k).
+        """
+        from pydantic import ValidationError
+
+        from jacobian.math.lie_algebra_homology._models import LieHomologyGroup
+
+        result = compute_lie_homology(LieHomologyRequest(lie_algebra=_sl2_gf5()))
+        assert tuple(group.chain_dimension for group in result.groups) == (1, 3, 3, 1)
+        assert result.groups[1].betti == 0
+        payload = result.model_dump()["groups"][1]
+        assert "chain_dimension" in payload and "dimension" not in payload
+        with pytest.raises(ValidationError):
+            LieHomologyGroup.model_validate(payload | {"dimension": 3})
+
     def test_affine_algebra_gf5(self):
         """Homology of the 2D non-abelian algebra [x, y] = x over GF(5)."""
         g = LieAlgebra(
@@ -408,10 +427,10 @@ class TestHomologySourceBinding:
         genuine = compute_lie_homology(LieHomologyRequest(lie_algebra=_sl2_gf5()))
         payload = genuine.model_dump()
         payload["groups"] = [
-            {"degree": 0, "betti": 0, "dimension": 9},
-            {"degree": 1, "betti": 99, "dimension": 9},
-            {"degree": 2, "betti": 0, "dimension": 9},
-            {"degree": 3, "betti": 1, "dimension": 27},
+            {"degree": 0, "betti": 0, "chain_dimension": 9},
+            {"degree": 1, "betti": 99, "chain_dimension": 9},
+            {"degree": 2, "betti": 0, "chain_dimension": 9},
+            {"degree": 3, "betti": 1, "chain_dimension": 27},
         ]
         with pytest.raises(ValidationError, match="replay"):
             LieHomologyResult.model_validate(payload)

@@ -141,6 +141,15 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
     m = len(moments)
     if not 1 <= m <= MAX_MOMENTS:
         raise ValueError("moment sequence must contain between 1 and 64 moments")
+    # The kernel consumes at most 2 * MAX_RECURRENCE_ORDER + 1 moments; a
+    # longer sequence would carry trailing entries whose positivity is never
+    # verified, so direct callers face the same boundary as the wire request.
+    if m > 2 * MAX_RECURRENCE_ORDER + 1:
+        raise ValueError(
+            f"moment sequence length {m} exceeds the "
+            f"{2 * MAX_RECURRENCE_ORDER + 1} moments consumed by the "
+            "maximum supported recurrence order"
+        )
     if any(type(value) is not Fraction for value in moments):
         raise TypeError("moments must use exact Fractions")
     # beta_0 = mu_0 seeds every squared norm h_k of the recurrence; a
@@ -158,15 +167,38 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
     return RecurrenceCoefficients(alpha=tuple(alpha), beta=tuple(beta))
 
 
-def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> JacobiMatrix:
+def _coefficients_or_sequences(
+    alpha: Sequence[Fraction] | RecurrenceCoefficients,
+    beta: Sequence[Fraction] | None,
+) -> tuple[Sequence[Fraction], Sequence[Fraction]]:
+    """Accept the canonical recurrence value or separate sequences."""
+    if isinstance(alpha, RecurrenceCoefficients):
+        if beta is not None:
+            raise TypeError(
+                "pass either a RecurrenceCoefficients value or separate "
+                "alpha/beta sequences, not both"
+            )
+        return alpha.alpha, alpha.beta
+    if beta is None:
+        raise TypeError("separate alpha and beta sequences require beta")
+    return alpha, beta
+
+
+def jacobi_matrix(
+    alpha: Sequence[Fraction] | RecurrenceCoefficients,
+    beta: Sequence[Fraction] | None = None,
+) -> JacobiMatrix:
     """Build the symmetric tridiagonal Jacobi matrix from recurrence coefficients.
 
-    The diagonal entries are ``alpha_0, ..., alpha_{n-1}`` and the positive
+    Accepts the canonical ``RecurrenceCoefficients`` value returned by
+    ``recurrence_coefficients`` directly, or separate ``alpha``/``beta``
+    sequences. The diagonal entries are ``alpha_0, ..., alpha_{n-1}`` and the positive
     subdiagonal entries are ``sqrt(beta_1), ..., sqrt(beta_n)``. Because the
     square roots may be irrational, the returned matrix stores the rational
     diagonal and the rational squared subdiagonal ``beta`` separately so that the
     full symmetric matrix can be reconstructed by any consumer.
     """
+    alpha, beta = _coefficients_or_sequences(alpha, beta)
     if not 1 <= len(beta) <= MAX_RECURRENCE_ORDER:
         raise ValueError("beta must contain between 1 and 16 entries")
     if not 0 <= len(alpha) <= MAX_RECURRENCE_ORDER:
@@ -228,14 +260,16 @@ def _require_cd_admission(
 
 
 def christoffel_darboux(
-    alpha: Sequence[Fraction],
-    beta: Sequence[Fraction],
-    x: Fraction,
-    y: Fraction,
+    alpha: Sequence[Fraction] | RecurrenceCoefficients,
+    beta: Sequence[Fraction] | None = None,
+    x: Fraction | None = None,
+    y: Fraction | None = None,
 ) -> ChristoffelDarbouxKernel:
     """Compute the Christoffel-Darboux kernel ``K_n(x, y)``.
 
-    For the monic orthogonal polynomial family with three-term recurrence
+    Accepts the canonical ``RecurrenceCoefficients`` value returned by
+    ``recurrence_coefficients`` directly, or separate ``alpha``/``beta``
+    sequences. For the monic orthogonal polynomial family with three-term recurrence
 
         p_{k+1}(x) = (x - alpha_k) p_k(x) - beta_k p_{k-1}(x)
 
@@ -246,6 +280,25 @@ def christoffel_darboux(
 
     evaluated by forward recurrence of the polynomials at ``x`` and ``y``.
     """
+    if isinstance(alpha, RecurrenceCoefficients):
+        # Canonical form: christoffel_darboux(coefficients, x, y); the
+        # positional slots after the value carry the evaluation points.
+        if y is not None or isinstance(beta, Sequence):
+            raise TypeError(
+                "pass either a RecurrenceCoefficients value with (x, y) or "
+                "separate alpha/beta sequences with (x, y), not both forms"
+            )
+        x_arg, y_arg = beta, x
+        if not isinstance(x_arg, Fraction) or not isinstance(y_arg, Fraction):
+            raise TypeError("x and y must use exact Fractions")
+        beta = alpha.beta
+        alpha = alpha.alpha
+        x, y = x_arg, y_arg
+    if beta is None or x is None or y is None:
+        raise TypeError(
+            "christoffel_darboux requires recurrence coefficients and "
+            "evaluation points x and y"
+        )
     _require_cd_admission(alpha, beta, x, y)
     n = len(alpha)
     if n == 0:
@@ -330,11 +383,14 @@ def _require_finite_double_coefficients(
 
 
 def gaussian_quadrature(
-    alpha: Sequence[Fraction], beta: Sequence[Fraction]
+    alpha: Sequence[Fraction] | RecurrenceCoefficients,
+    beta: Sequence[Fraction] | None = None,
 ) -> GaussianQuadrature:
     """Compute *approximate* Gaussian quadrature nodes and weights via Golub-Welsch.
 
-    The nodes are eigenvalues of the symmetric tridiagonal Jacobi matrix
+    Accepts the canonical ``RecurrenceCoefficients`` value returned by
+    ``recurrence_coefficients`` directly, or separate ``alpha``/``beta``
+    sequences. The nodes are eigenvalues of the symmetric tridiagonal Jacobi matrix
     (generally irrational, e.g. ``alpha=(0,0), beta=(1,2)`` has nodes
     ``±sqrt(2)``) and the weights are ``mu_0 * v_{0,i}^2``. The decomposition
     runs in IEEE doubles, so the returned values are **approximations** with
@@ -346,6 +402,7 @@ def gaussian_quadrature(
 
     import numpy as np
 
+    alpha, beta = _coefficients_or_sequences(alpha, beta)
     n = len(alpha)
     if not 1 <= n <= MAX_QUADRATURE_POINTS:
         raise ValueError("alpha must contain between 1 and 16 entries")

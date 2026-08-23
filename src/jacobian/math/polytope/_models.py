@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Self
 
 from pydantic import Field, model_validator
@@ -34,6 +35,100 @@ The volume is a canonical rational whose components cannot exceed the
 global ``CanonicalRational`` limit; requests whose exact volume can
 provably leave that domain are rejected at admission.
 """
+
+
+def _rational_pq(value: object) -> tuple[int, int]:
+    """Return ``(numerator, denominator)`` from a Fraction or SymPy Rational."""
+
+    p = getattr(value, "p", None)
+    if p is not None:
+        return int(p), int(value.q)
+    return int(value.numerator), int(value.denominator)
+
+
+def require_volume_components_within_result_bound(
+    points: Sequence[Sequence[object]],
+    dim: int,
+) -> None:
+    """Reject inputs whose exact summed volume cannot fit the canonical type.
+
+    The kernel sums simplex determinants over a whole triangulation, so
+    admission must account for denominators contributed by *all* simplices,
+    not only ``dim + 1`` vertices.  With ``R_v`` the total denominator-digit
+    count of vertex ``v``'s coordinates, one simplex contributes a common
+    denominator of at most ``sum(R_v)`` digits, its scaled Hadamard
+    determinant numerator at most ``sum(max_k(n_vk + R_v) + 1)`` digits, and
+    the sum over ``T`` simplices multiplies these by ``T`` (common
+    denominator product) plus ``dim!`` and summation carries.  The bound is
+    conservative: it may reject inputs whose concrete volume happens to be
+    short, never accepts one that cannot be represented.
+    """
+
+    from jacobian.canonical import format_canonical_integer
+
+    def digits(point: Sequence[object]) -> list[tuple[int, int]]:
+        row: list[tuple[int, int]] = []
+        for coord in point:
+            p, q = _rational_pq(coord)
+            row.append(
+                (
+                    len(format_canonical_integer(abs(p))),
+                    len(format_canonical_integer(q)),
+                )
+            )
+        return row
+
+    if dim == 1:
+        values = [_rational_pq(point[0]) for point in points]
+        num_digits = max(n for n, _ in values) + max(q for _, q in values) + 2
+        den_digits = max(q for _, q in values) + 2
+        if (
+            num_digits > MAX_RESULT_COMPONENT_DIGITS
+            or den_digits > MAX_RESULT_COMPONENT_DIGITS
+        ):
+            raise ValueError(
+                "coordinate magnitudes can grow the exact volume beyond the "
+                f"{MAX_RESULT_COMPONENT_DIGITS}-digit canonical rational "
+                "result bound"
+            )
+        return
+
+    from jacobian.math.polytope._operations import (
+        _filter_redundant_vertices,
+        _triangulate,
+    )
+
+    pts = [list(point) for point in points]
+    pts = _filter_redundant_vertices(pts, dim)
+    if len(pts) < dim + 1:
+        return
+    triangulation = _triangulate(pts, dim)
+    if not triangulation:
+        return
+    table = [digits(row) for row in pts]
+    numerator_total = 0
+    denominator_total = 0
+    for simplex in triangulation:
+        det_digits = 0
+        for idx in simplex:
+            row = table[idx]
+            row_den = sum(q for _, q in row)
+            row_max = max(n + row_den for n, _ in row)
+            det_digits += row_max + 2
+        numerator_total += det_digits
+        denominator_total += sum(
+            q for idx in simplex for _, q in table[idx]
+        )
+    carry = dim + len(str(len(triangulation))) + 4
+    if (
+        numerator_total + carry > MAX_RESULT_COMPONENT_DIGITS
+        or denominator_total + carry > MAX_RESULT_COMPONENT_DIGITS
+    ):
+        raise ValueError(
+            "coordinate magnitudes can grow the exact volume beyond the "
+            f"{MAX_RESULT_COMPONENT_DIGITS}-digit canonical rational "
+            "result bound"
+        )
 
 
 def _require_volume_within_result_bound(
@@ -152,17 +247,17 @@ def _validate_vertices(vertices: tuple[Vertex, ...], dimension_bound: int) -> No
     for vertex in vertices:
         if len(vertex.coordinates) != dim:
             raise ValueError("all vertices must share one dimension")
-    _require_volume_within_result_bound(
-        numerator_digits, denominator_digits, dim
-    )
-    # Combinatorial admission: C(n, d) d-subsets for hull enumeration.
-    # The operation's brute-force hull needs to consider each d-subset;
-    # reject here so the request never reaches the host exception at
-    # execution time.  This admits the 5-cube (C(32,5)=201376) test
-    # threshold but rejects larger hulls.
+    # Combinatorial admission first: C(n, d) d-subsets for hull
+    # enumeration.  The operation's brute-force hull needs to consider each
+    # d-subset; reject here so neither execution nor the triangulation-aware
+    # growth bound below ever enumerates beyond this budget.  This admits
+    # the 5-cube (C(32,5)=201376) test threshold but rejects larger hulls.
     import math
 
-    from jacobian.math.polytope._operations import MAX_HULL_SUBFACETS
+    from jacobian.math.polytope._operations import (
+        MAX_HULL_SUBFACETS,
+        _vertices_from_v_representation,
+    )
 
     try:
         subfacets = math.comb(len(vertices), dim)
@@ -173,6 +268,10 @@ def _validate_vertices(vertices: tuple[Vertex, ...], dimension_bound: int) -> No
             "polytope hull enumeration exceeds the combinatorial bound "
             f"({subfacets} > {MAX_HULL_SUBFACETS} d-subsets)"
         )
+    # Exact-volume growth is bounded over the whole triangulation, so the
+    # same admission runs on the rational points themselves.
+    points, resolved_dim = _vertices_from_v_representation(vertices)
+    require_volume_components_within_result_bound(points, resolved_dim)
 
 
 def _validate_halfspaces(  # noqa: C901
@@ -237,26 +336,10 @@ def _validate_halfspaces(  # noqa: C901
             "polytope hull enumeration exceeds the combinatorial bound "
             f"({subfacets} > {MAX_HULL_SUBFACETS} d-subsets)"
         )
-    # Derived vertices also drive the exact-volume growth bound: measure the
-    # solved vertex coordinates themselves, since Cramer-rule solutions can
-    # carry more digits than the declaring half-space coefficients.
-    from jacobian.canonical import format_canonical_integer
-
-    numerator_digits = 0
-    denominator_digits = 0
-    for point in verts:
-        for c in point:
-            p = int(c.p)
-            q = int(c.q)
-            numerator_digits = max(
-                numerator_digits, len(format_canonical_integer(abs(p)))
-            )
-            denominator_digits = max(
-                denominator_digits, len(format_canonical_integer(q))
-            )
-    _require_volume_within_result_bound(
-        numerator_digits, denominator_digits, dim
-    )
+    # Derived vertices also drive the exact-volume growth bound over the
+    # whole triangulation; solved vertices can carry more digits than the
+    # declaring half-space coefficients, so measure them directly.
+    require_volume_components_within_result_bound(verts, dim)
 
 
 class PolytopeVolumeResult(StrictModel):

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
+
 import pytest
 
 from jacobian._exact import CanonicalRational
@@ -418,3 +420,81 @@ class TestNativeApi:
             )
         )
         assert degenerate == CanonicalRational(num="2", den="1")
+
+
+class TestTriangulationWideDenominatorBound:
+    def test_eight_prime_polygon_denominator_sum_rejected(self):
+        """An eight-vertex convex polygon on distinct ~5000-digit prime
+        denominators passes any per-vertex estimate but its shoelace sum
+        accumulates a common denominator far beyond the canonical bound;
+        the triangulation-aware admission rejects it (review
+        counterexample shape)."""
+
+        def prime_like(k: int) -> str:
+            # Deterministic large denominators (primality not required: the
+            # bound is digit-based, and near-coprime denominators realize
+            # the same growth).  Built as a string to stay under CPython's
+            # int-to-str conversion limit.
+            return "1" + "0" * 4980 + str(100001 + 2 * k)
+
+        vertices = []
+        rays = ((2, 0), (1, 1), (0, 2), (-1, 1), (-2, 0), (-1, -1), (0, -2), (1, -1))
+        for i, (a, b) in enumerate(rays):
+            def coord(value: int, den: str) -> CanonicalRational:
+                if value == 0:
+                    return CanonicalRational(num="0", den="1")
+                return CanonicalRational(
+                    num=format_canonical_integer(value), den=den
+                )
+
+            vertices.append(
+                Vertex(
+                    coordinates=(
+                        coord(a, prime_like(2 * i)),
+                        coord(b, prime_like(2 * i + 1)),
+                    )
+                )
+            )
+        with pytest.raises(ValueError, match="result bound"):
+            PolytopeVolumeRequest(vertices=tuple(vertices))
+
+
+class TestNativeApiAdmission:
+    def test_native_rejects_dimension_and_vertex_excess(self):
+        """A 7-dimensional simplex exceeds the 6-dimension native bound."""
+        from jacobian.math.polytope import convex_hull_volume
+
+        origin = tuple(Fraction(0) for _ in range(7))
+        axes = tuple(
+            tuple(Fraction(int(i == j)) for j in range(7)) for i in range(7)
+        )
+        with pytest.raises(ValueError, match="dimension"):
+            convex_hull_volume((origin, *axes))
+
+    def test_native_rejects_unrepresentable_result_growth(self):
+        """The native call on a 40,000-digit triangle must be rejected at
+        admission instead of leaking a canonical-validation exception."""
+        from jacobian.math.polytope import convex_hull_volume
+
+        huge = Fraction(10) ** 20000
+        with pytest.raises(ValueError, match="result bound"):
+            convex_hull_volume(
+                (
+                    (Fraction(0), Fraction(0)),
+                    (huge, Fraction(0)),
+                    (Fraction(0), huge),
+                )
+            )
+
+    def test_native_still_returns_representable_volumes(self):
+        from jacobian.math.polytope import convex_hull_volume
+
+        big = Fraction(10) ** 10000
+        area = convex_hull_volume(
+            (
+                (Fraction(0), Fraction(0)),
+                (big, Fraction(0)),
+                (Fraction(0), big),
+            )
+        )
+        assert len(area.num) == 20_000

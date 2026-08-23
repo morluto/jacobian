@@ -9,6 +9,7 @@ from typing import Any, cast
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.geometry._models import (
+    CircleInversionRequest,
     CircumcircleRequest,
     CircumradiusProfileRequest,
     CircumradiusProfileResult,
@@ -426,6 +427,29 @@ def convex_hull_points(request: PointSetRequest) -> GeometryConvexHullResult:
     else:
         points = tuple(cast(Polygon, hull).vertices)
     return GeometryConvexHullResult(points=_canonical_points(points))
+
+
+def circle_inversion(request: CircleInversionRequest) -> GeometryPointResult:
+    """Invert one rational planar point in a circle.
+
+    Returns ``I_{c,s}(p) = c + (s / ||p - c||^2) * (p - c)`` exactly over the
+    rationals, where ``c`` is the center and ``s`` is the positive squared
+    inversion radius.  The request ``p == c`` is rejected before division.
+    """
+    center = request.center
+    point = request.point
+    power = request.power.as_fraction()
+    dx = point.x.as_fraction() - center.x.as_fraction()
+    dy = point.y.as_fraction() - center.y.as_fraction()
+    norm_squared = dx * dx + dy * dy
+    if norm_squared == 0:
+        raise ValueError("the point to invert must differ from the center")
+    scale = power / norm_squared
+    inverted = RationalPoint2D(
+        x=CanonicalRational.from_fraction(center.x.as_fraction() + scale * dx),
+        y=CanonicalRational.from_fraction(center.y.as_fraction() + scale * dy),
+    )
+    return GeometryPointResult(point=inverted)
 
 
 # ---------------------------------------------------------------------------

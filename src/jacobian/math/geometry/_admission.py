@@ -11,6 +11,11 @@ from jacobian.math.geometry._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "geometry.points.compute.circle_inversion",
+        AdmissionDecision.KEEP,
+        "one exact rational planar point transform with material leverage over bespoke coordinate algebra",
+    ),
+    OperationAdmission(
         "geometry.line.compute.projection",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",

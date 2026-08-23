@@ -77,6 +77,27 @@ value mathematically valid. Then name the smallest set of tests that establishes
 that invariant and rejects plausible results that satisfy only a weaker
 mathematical claim.
 
+Classify each fixture by the evidence it contributes:
+
+| Fixture role | What it establishes |
+| --- | --- |
+| Defining-invariant | Replays the reconstruction equation, preservation law, or certificate relation owned by the result. |
+| Convention/known-answer | Fixes terminology, normalization, indexing, signs, or another convention-sensitive value. |
+| Adversarial weaker-semantics | Rejects a tempting result that has the right shape or satisfies only a weaker claim. |
+| Metamorphic or equivalence | Checks invariance under a meaning-preserving transformation or compares noncanonical outputs by mathematical equivalence. |
+| Producer-consumer | Supplies one operation's serialized result unchanged to a downstream operation and checks the composed meaning. |
+| Scale/stress | Exercises a source-backed size or representation regime near a justified admission boundary. |
+
+A fixture may fill more than one role, but the evidence plan should name those
+roles rather than treating fixture count as coverage. A large certificate
+should normally yield a small discriminating CI fixture, with the full
+source-scale case retained only as an optional stress or benchmark fixture when
+it remains reproducible and useful. Agreement on a scalar summary is
+insufficient when correctness concerns a set, partition, or family of canonical
+representatives: compare the exact objects or their declared equivalence class.
+For example, two tree generators can return the same count while duplicating
+one representative and omitting another.
+
 Use a source-backed reference fixture when a standard example helps fix
 terminology, normalization, or another convention-sensitive output. Cite the
 specific theorem or example and record the convention the fixture depends on.

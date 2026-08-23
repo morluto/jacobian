@@ -52,6 +52,51 @@ Examples:
 Algorithmic complexity is not the test. A sophisticated algorithm may implement
 one atomic operation, while a tiny helper may still be an implementation detail.
 
+### Locate the reusable boundary inside a proof
+
+A specialized proof often contains useful mathematics at several scales. The
+right operation is neither automatically the smallest line of code nor the
+whole theorem workflow.
+
+| Proof fragment | Disposition | Boundary lesson |
+| --- | --- | --- |
+| One floating nullspace step | Too low-level | It exposes an algorithmic move without the preservation and error guarantee callers need. |
+| Hard-constraint rounding | Atomic candidate | Preserving specified linear equations while making bounded progress on fractional coordinates is a stable postcondition; the entire allocation proof remains caller reasoning. |
+| Total variation of materialized finite tables | Atomic candidate | The source and linear comparison work are explicit. Accepting succinct product distributions is a materially broader contract because their support expansion can be exponential and the compact problem can have different complexity. |
+| Weak-design construction | Atomic candidate | A bounded design with stated overlap parameters is reusable; extractor reconstruction and the entropy contradiction are the global proof lift. |
+| Factorial insertion for an arbitrary callback | Reasoning | The identity belongs in a theorem or caller derivation rather than an operation whose behavior is defined by executable caller code. |
+
+State the source representation as part of this boundary. Materialized,
+succinct, generated, and oracle-backed inputs can denote related objects while
+requiring different admission proofs, algorithms, and result bounds.
+
+### Techniques, functions, and operations
+
+An established technique is evidence for executable vocabulary, not an
+automatic public operation. Classify the mathematical result it establishes
+before deciding how Jacobian should expose it:
+
+| Technique role | Jacobian disposition |
+| --- | --- |
+| Computes an independently useful bounded result | Public-operation candidate |
+| Useful exact helper without sufficient catalog leverage | Native-only function |
+| Alternative algorithm for an existing result | Private kernel |
+| Defines or reconstructs an operation's result | Invariant and fixture |
+| Organizes several moves into a proof | Caller reasoning |
+
+Make established terminology searchable through the relevant public operation,
+even when the technique remains its private kernel. Admit a separate operation
+only when the technique returns a distinct reusable result, witness,
+decomposition, or certificate. Multiple algorithms for the same mathematical
+input, output, and defining relation belong behind one canonical operation.
+
+For example, suppose `ramanujan_sum.compute(q, n)` is admitted to return the
+exact integer $c_q(n)$. “Divisor–Möbius formula” should be searchable
+terminology for that operation. A general Möbius transform may be separately
+runnable because it has a different postcondition. A duplicate
+`ramanujan_sum_via_mobius.compute` should not exist when it merely returns the
+same scalar through another algorithm.
+
 ## Discover vocabulary gaps from mathematical work
 
 Grow the vocabulary from observed composition failures rather than from a

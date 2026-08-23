@@ -32,66 +32,6 @@ _MAX_OUTPUT_TERMS = 1_024
 _MAX_INTERMEDIATE_TERMS = 4_096
 _MAX_REDUCTION_STEPS = 200_000
 
-_COMPLETE_KERNEL_TIMEOUT_SECONDS = 10.0
-"""Wall clock for one killable complete-kernel attempt in a subprocess."""
-
-_COMPLETE_KERNEL_STDOUT_LIMIT = 128_000_000
-"""Bound on the serialized complete basis a worker may stream back."""
-
-_WORKER_PROGRAM = """\
-import json
-import sys
-
-from pydantic import ValidationError
-from sympy import Poly, QQ, Symbol, groebner
-
-from jacobian.math.polynomials._conversions import rational_polynomial_from_sympy
-
-
-def main() -> None:
-    payload = json.loads(sys.stdin.buffer.read().decode("utf-8"))
-    variables = tuple(payload["variables"])
-    symbols = tuple(Symbol(name) for name in variables)
-    try:
-        generators = []
-        for terms in payload["generators"]:
-            poly = Poly.from_dict(
-                {
-                    tuple(term["exponents"]): QQ(int(term["num"]), int(term["den"]))
-                    for term in terms
-                },
-                *symbols,
-                domain=QQ,
-            )
-            generators.append(poly.as_expr())
-        basis = groebner(
-            generators,
-            *symbols,
-            order=payload["monomial_order"],
-            domain=QQ,
-        )
-        polys = [Poly(expr, *symbols, domain=QQ) for expr in basis.exprs]
-        if sum(len(poly.terms()) for poly in polys) > 1024:
-            print(json.dumps({"status": "exceeded"}))
-            return
-        elements = [
-            rational_polynomial_from_sympy(poly, variables) for poly in polys
-        ]
-    except ValidationError:
-        print(json.dumps({"status": "exceeded"}))
-        return
-    except Exception:
-        print(json.dumps({"status": "failed"}))
-        return
-    print(json.dumps({
-        "status": "ok",
-        "basis": [element.model_dump() for element in elements],
-    }))
-
-
-main()
-"""
-
 
 def _component_exceeds_limit(numerator: int, denominator: int) -> bool:
     """Check one integer pair against the canonical rational digit limit."""
@@ -233,76 +173,6 @@ def _finalize_strategy_basis(
         return "FAILED", None
 
 
-def _complete_basis_in_worker(
-    ideal: RationalPolynomialIdeal,
-    monomial_order: str,
-) -> tuple[tuple[RationalPolynomial, ...] | None, bool]:
-    """Run one unguarded kernel call over the complete generating set.
-
-    Both guarded orders can abort while a single-shot call still finishes
-    quickly: Buchberger sees every ideal-collapsing pair from the start,
-    so it need never materialize the exploding intermediate bases of any
-    prefix.  The kernel cannot bound itself, so this strategy runs
-    killably in a subprocess with a wall clock; a timeout, kill, or
-    failure yields no conclusion.
-    """
-
-    import json
-    import sys
-
-    from jacobian.math.polynomials.values import RationalPolynomial
-    from jacobian.process import run_bounded_process, worker_environment
-
-    payload = {
-        "variables": list(ideal.variables),
-        "monomial_order": monomial_order,
-        "generators": [
-            [
-                {
-                    "exponents": list(term.exponents),
-                    "num": term.coefficient.num,
-                    "den": term.coefficient.den,
-                }
-                for term in generator.polynomial.terms
-            ]
-            for generator in ideal.generators
-        ],
-    }
-    try:
-        completed = run_bounded_process(
-            [sys.executable, "-c", _WORKER_PROGRAM],
-            input_bytes=json.dumps(payload).encode("utf-8"),
-            timeout_seconds=_COMPLETE_KERNEL_TIMEOUT_SECONDS,
-            environment=worker_environment(),
-            stdout_limit=_COMPLETE_KERNEL_STDOUT_LIMIT,
-            stderr_limit=4096,
-        )
-    except Exception:
-        return None, False
-    if completed.timed_out or completed.cancelled or completed.returncode != 0:
-        return None, False
-    try:
-        report = json.loads(completed.stdout.decode("utf-8"))
-    except Exception:
-        return None, False
-    status = report.get("status")
-    if status == "exceeded":
-        # The worker decided the complete reduced basis against the same
-        # output budgets: sound evidence for the typed budget outcome.
-        return None, True
-    if status != "ok":
-        return None, False
-    try:
-        basis = tuple(
-            RationalPolynomial.model_validate(element) for element in report["basis"]
-        )
-    except Exception:
-        # A declared basis outside the canonical contract is evidence for
-        # no conclusion.
-        return None, False
-    return basis, False
-
-
 def incremental_source_groebner(
     ideal: RationalPolynomialIdeal,
     monomial_order: str,
@@ -359,7 +229,9 @@ def incremental_source_groebner(
             return wire_basis, False
         if concluded == "EXCEEDED":
             return None, True
-    return _complete_basis_in_worker(ideal, monomial_order)
+    from jacobian.math.polynomials._groebner_worker import complete_basis_in_worker
+
+    return complete_basis_in_worker(ideal, monomial_order)
 
 
 def _coefficient_exceeds_canonical_limit(value: Any) -> bool:

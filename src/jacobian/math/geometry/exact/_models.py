@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Self
+from typing import Annotated, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, StringConstraints, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
@@ -143,6 +143,88 @@ __all__ = [
 
 MAX_PINNED_PROFILE_RESULT_BYTES = 10 * 1024 * 1024
 """Aggregate canonical-output budget for one complete pinned-line profile."""
+
+
+PinnedBoundedInteger = Annotated[
+    str,
+    StringConstraints(
+        pattern=rf"^(?:0|-?[1-9][0-9]{{0,{COORDINATE_DIGITS - 1}}})$",
+        strict=True,
+        max_length=COORDINATE_DIGITS + 1,
+    ),
+]
+"""Canonical signed integer whose magnitude carries at most ``COORDINATE_DIGITS`` digits.
+
+The bound is published as a standard JSON Schema ``pattern``/``maxLength`` so
+schema-driven clients can pre-validate the pinned-line wire domain."""
+
+PinnedPositiveInteger = Annotated[
+    str,
+    StringConstraints(
+        pattern=rf"^[1-9][0-9]{{0,{COORDINATE_DIGITS - 1}}}$",
+        strict=True,
+        max_length=COORDINATE_DIGITS,
+    ),
+]
+"""Canonical positive integer whose magnitude carries at most ``COORDINATE_DIGITS`` digits."""
+
+
+class PinnedBoundedRational(CanonicalRational):
+    """A canonical rational bounded to the pinned-line coordinate digit cap.
+
+    The shared ``CanonicalRational`` keeps its global 32,768-digit limit;
+    this operation-local type publishes the pinned-line cap as enforceable
+    JSON Schema constraints on both components without narrowing the shared
+    value type.  ``from_attributes`` lets callers supply existing canonical
+    values unchanged; over-cap values are rejected while parsing.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    num: PinnedBoundedInteger = Field(
+        description=(
+            "Canonical decimal numerator; at most "
+            f"{COORDINATE_DIGITS} digits for pinned-line admission."
+        ),
+        examples=["1"],
+    )
+    den: PinnedPositiveInteger = Field(
+        description=(
+            "Positive canonical decimal denominator, reduced, integers use "
+            f"den='1'; at most {COORDINATE_DIGITS} digits."
+        ),
+        examples=["2"],
+    )
+
+
+class PinnedLinePoint(LabelledRationalPoint):
+    """A labelled point whose coordinates carry the pinned-line digit cap.
+
+    Operation-local view of the shared ``LabelledRationalPoint``: the
+    shared type stays at the canonical limit for distance-profile and
+    distance-graph callers, while this subclass publishes the 256-digit
+    component cap in the pinned-line schema.  ``from_attributes`` lets
+    callers supply existing shared-type values unchanged.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    coordinates: tuple[PinnedBoundedRational, ...] = Field(min_length=1)
+
+
+class PinnedLineConfiguration(PointConfiguration):
+    """A configuration whose points carry the pinned-line coordinate cap.
+
+    Operation-local view of the shared ``PointConfiguration`` with identical
+    wire shape; over-cap coordinates are rejected by standard JSON Schema
+    constraints before any mathematical work.  ``from_attributes`` lets
+    callers supply an existing shared configuration unchanged.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    points: tuple[PinnedLinePoint, ...] = Field(min_length=2, max_length=MAX_POINTS)
+
 
 _PINNED_ENTRY_SLACK_BYTES = 16
 """Per-entry slack over the exact skeleton, coefficient, and pair bounds."""
@@ -326,7 +408,7 @@ class PinnedLineDistanceRequest(StrictModel):
     representable as ``CanonicalRational`` (canonical limit 32,768 digits).
     """
 
-    configuration: PointConfiguration = Field(
+    configuration: PinnedLineConfiguration = Field(
         description=(
             "Planar point configuration (dimension 2) with distinct coordinates; "
             "all points must have distinct locations and at most 64 points, "
@@ -340,7 +422,7 @@ class PinnedLineDistanceRequest(StrictModel):
             "aggregate_result_budget_bytes": MAX_PINNED_PROFILE_RESULT_BYTES,
         },
     )
-    anchor: tuple[CanonicalRational, ...] = Field(
+    anchor: tuple[PinnedBoundedRational, ...] = Field(
         min_length=2,
         max_length=2,
         description=(
@@ -416,13 +498,14 @@ class PinnedLineDistanceResult(StrictModel):
     retained anchor is verified.
     """
 
-    configuration: PointConfiguration = Field(
+    configuration: PinnedLineConfiguration = Field(
         description=(
             "Source planar point configuration with distinct coordinates; "
             "retained for result binding and replay."
-        )
+        ),
+        json_schema_extra={"coordinate_digit_bound": COORDINATE_DIGITS},
     )
-    anchor: tuple[CanonicalRational, ...] = Field(
+    anchor: tuple[PinnedBoundedRational, ...] = Field(
         min_length=2,
         max_length=2,
         description=(

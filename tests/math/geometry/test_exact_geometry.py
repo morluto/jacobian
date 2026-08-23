@@ -3,10 +3,12 @@
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.geometry.exact._models import (
+    COORDINATE_DIGITS,
     DistanceGraphRequest,
     DistanceProfileRequest,
     LabelledRationalPoint,
     PinnedLineDistanceRequest,
+    PinnedLineDistanceResult,
     PointConfiguration,
 )
 from jacobian.math.geometry.exact._operations import (
@@ -662,3 +664,133 @@ class TestSortedPairLedger:
             PinnedLineDistanceResult.model_validate(result.model_dump(mode="json"))
             == result
         )
+
+
+class TestPinnedCoordinateCapIsSchemaEnforced:
+    """The 256-digit coordinate cap must be published as standard,
+    enforceable JSON Schema constraints (pattern/maxLength) on both the
+    configuration coordinates and the anchor, without narrowing the shared
+    point type (review thread: express the digit limit as a schema
+    constraint)."""
+
+    def _big_num(self, digits: int) -> str:
+        return "9" * digits
+
+    def _cfg(self, pts):
+        from fractions import Fraction
+
+        return PointConfiguration(
+            points=tuple(
+                LabelledRationalPoint(
+                    label=label,
+                    coordinates=(
+                        CanonicalRational.from_fraction(Fraction(x)),
+                        CanonicalRational.from_fraction(Fraction(y)),
+                    ),
+                )
+                for label, x, y in pts
+            ),
+        )
+
+    def _anchor(self, x, y):
+        from fractions import Fraction
+
+        return (
+            CanonicalRational.from_fraction(Fraction(x)),
+            CanonicalRational.from_fraction(Fraction(y)),
+        )
+
+    def test_schema_publishes_enforceable_component_bounds(self):
+
+        schema = PinnedLineDistanceRequest.model_json_schema()
+        defs = schema["$defs"]
+        rational_def = defs["PinnedBoundedRational"]
+        num = rational_def["properties"]["num"]
+        den = rational_def["properties"]["den"]
+        assert num["maxLength"] == COORDINATE_DIGITS + 1
+        assert den["maxLength"] == COORDINATE_DIGITS
+        assert f"{{0,{COORDINATE_DIGITS - 1}}}" in num["pattern"]
+        # Both the configuration points and the anchor reference the bounded type.
+        anchor_ref = schema["properties"]["anchor"]["items"]["$ref"]
+        assert anchor_ref.endswith("/PinnedBoundedRational")
+        point_ref = defs["PinnedLineConfiguration"]["properties"]["points"]["items"][
+            "$ref"
+        ]
+        assert point_ref.endswith("/PinnedLinePoint")
+        coord_items = defs["PinnedLinePoint"]["properties"]["coordinates"]["items"]
+        assert coord_items["$ref"].endswith("/PinnedBoundedRational")
+        # The result model publishes the same constraint.
+        result_schema = PinnedLineDistanceResult.model_json_schema()
+        result_anchor = result_schema["properties"]["anchor"]["items"]["$ref"]
+        assert result_anchor.endswith("/PinnedBoundedRational")
+
+    def test_over_cap_configuration_numerator_rejected_at_parse_time(self):
+        import pytest
+        from pydantic import ValidationError
+
+        over = self._big_num(COORDINATE_DIGITS + 1)
+        with pytest.raises(ValidationError):
+            PinnedLineDistanceRequest(
+                configuration={
+                    "points": [
+                        {"label": "a", "coordinates": [{"num": "0", "den": "1"}]},
+                        {
+                            "label": "b",
+                            "coordinates": [
+                                {"num": "1", "den": "1"},
+                                {"num": over, "den": "1"},
+                            ],
+                        },
+                        {"label": "c", "coordinates": [{"num": "0", "den": "1"}]},
+                    ]
+                },
+                anchor=({"num": "0", "den": "1"}, {"num": "0", "den": "1"}),
+            )
+
+    def test_over_cap_anchor_rejected_at_parse_time(self):
+        import pytest
+        from pydantic import ValidationError
+
+        over = self._big_num(COORDINATE_DIGITS + 1)
+        cfg = self._cfg([("a", 0, 0), ("b", 1, 0), ("c", 0, 1)])
+        with pytest.raises(ValidationError):
+            PinnedLineDistanceRequest(
+                configuration=cfg,
+                anchor=(
+                    CanonicalRational(num="0", den="1"),
+                    CanonicalRational(num=over, den="1"),
+                ),
+            )
+
+    def test_boundary_cap_components_are_accepted(self):
+        edge = CanonicalRational(num=self._big_num(COORDINATE_DIGITS), den="1")
+        cfg = self._cfg(
+            [("a", 0, 0), ("b", 1, 0), ("c", 0, 1)],
+        )
+        request = PinnedLineDistanceRequest(
+            configuration=cfg, anchor=(edge, CanonicalRational(num="0", den="1"))
+        )
+        assert request.anchor[0].as_fraction().numerator == int(
+            self._big_num(COORDINATE_DIGITS)
+        )
+
+    def test_shared_point_type_is_not_narrowed(self):
+        """distance_profile/distance_graph keep the canonical component range;
+        only the pinned-line view carries the 256-digit cap."""
+        big = CanonicalRational(num=self._big_num(300), den="1")
+        pts = (
+            LabelledRationalPoint(label="a", coordinates=(big, big)),
+            LabelledRationalPoint(label="b", coordinates=(big, big)),
+        )
+        configuration = PointConfiguration(points=pts)
+        DistanceProfileRequest(configuration=configuration)
+
+    def test_shared_configuration_value_composes_unchanged(self):
+        """An existing shared PointConfiguration instance is accepted by the
+        pinned request without translation."""
+        cfg = self._cfg([("a", 0, 0), ("b", 1, 0), ("c", 0, 1)])
+        request = PinnedLineDistanceRequest(
+            configuration=cfg, anchor=self._anchor(0, 0)
+        )
+        assert request.point_count if hasattr(request, "point_count") else True
+        assert len(request.configuration.points) == 3

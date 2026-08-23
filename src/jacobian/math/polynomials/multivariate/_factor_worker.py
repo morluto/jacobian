@@ -11,9 +11,10 @@ from __future__ import annotations
 
 import json
 import sys
+from typing import Any
 
 
-def _run(payload: dict[str, object]) -> dict[str, object]:
+def _run(payload: dict[str, Any]) -> dict[str, Any]:
     from sympy import QQ, Poly, Rational
 
     variables = payload["variables"]
@@ -44,16 +45,66 @@ def _run(payload: dict[str, object]) -> dict[str, object]:
     }
 
 
+def _apply_address_space_limit() -> bool:
+    """Self-apply the declared address-space cap before any SymPy import.
+
+    Portable POSIX containment: when the coordinator could not wrap the
+    launch in ``prlimit``, the worker still bounds its own allocations
+    before the factorization kernel runs.  Returns whether the hard limit
+    is active so the coordinator can fail closed when no mechanism exists.
+    """
+
+    import os
+
+    raw = os.environ.get("JACOBIAN_FACTOR_ADDRESS_SPACE_BYTES")
+    if not raw:
+        return False
+    try:
+        import resource
+
+        cap = int(raw)
+        if cap <= 0:
+            return False
+        resource.setrlimit(resource.RLIMIT_AS, (cap, cap))
+        return True
+    except (ImportError, OSError, ValueError):
+        return False
+
+
+def _emit(payload: dict[str, object]) -> None:
+    sys.stdout.buffer.write(json.dumps(payload).encode("utf-8"))
+
+
 def main() -> int:
+    as_limit_applied = _apply_address_space_limit()
     try:
         payload = json.loads(sys.stdin.buffer.read().decode("utf-8"))
-        response = json.dumps(_run(payload)).encode("utf-8")
-    except Exception as exc:
-        sys.stdout.buffer.write(
-            json.dumps({"ok": False, "error": repr(exc)}).encode("utf-8")
+        response = dict(_run(payload))
+    except MemoryError as exc:
+        # Allocation failure under the address-space budget is resource
+        # exhaustion, not a kernel bug: report it distinctly so the
+        # coordinator returns its typed bounded outcome.
+        _emit(
+            {
+                "ok": False,
+                "error": repr(exc),
+                "exhausted": True,
+                "as_limit_applied": as_limit_applied,
+            }
         )
         return 1
-    sys.stdout.buffer.write(response)
+    except Exception as exc:
+        _emit(
+            {
+                "ok": False,
+                "error": repr(exc),
+                "as_limit_applied": as_limit_applied,
+            }
+        )
+        return 1
+    response["ok"] = True
+    response["as_limit_applied"] = as_limit_applied
+    sys.stdout.buffer.write(json.dumps(response).encode("utf-8"))
     return 0
 
 

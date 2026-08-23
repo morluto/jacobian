@@ -13,6 +13,7 @@ work-budget exhaustion as a typed, replayable outcome instead.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sys
 from fractions import Fraction
@@ -26,6 +27,7 @@ __all__ = [
     "FACTOR_WORK_WALL_SECONDS",
     "FactorBackendExhaustedError",
     "FactorBackendFailureError",
+    "FactorBackendInterruptedError",
     "run_bounded_factorization",
 ]
 
@@ -47,11 +49,20 @@ FACTOR_VERIFY_WALL_SECONDS = 60.0
 
 
 class FactorBackendExhaustedError(Exception):
-    """The worker was killed before producing the exact factorization."""
+    """The exact factorization exceeded a declared resource or output bound."""
 
 
 class FactorBackendFailureError(Exception):
     """The worker reported that it could not perform the exact computation."""
+
+
+class FactorBackendInterruptedError(Exception):
+    """The worker was stopped by its deadline or cancellation.
+
+    No factorization was obtained and nothing was established about the
+    size of the exact output; this is a retryable execution condition,
+    not a mathematical conclusion.
+    """
 
 
 def _serialized_request(polynomial: RationalPolynomial) -> bytes:
@@ -97,9 +108,13 @@ def run_bounded_factorization(
 ) -> tuple[Any, list[tuple[Any, int]]]:
     """Run ``factor_list`` killably and return its raw SymPy decomposition.
 
-    Raises :class:`FactorBackendExhaustedError` when the declared work budget is
-    exhausted (timeout, resource-limit kill, or oversized transport output)
-    and :class:`FactorBackendFailureError` when the worker reports a genuine
+    Raises :class:`FactorBackendInterruptedError` when the worker was
+    stopped by its deadline or cancellation (a retryable execution
+    condition establishing nothing about output size),
+    :class:`FactorBackendExhaustedError` when a declared resource or
+    output bound was hit (timeout-independent memory kill, oversized
+    transport output, worker-reported allocation failure), and
+    :class:`FactorBackendFailureError` when the worker reports a genuine
     computation failure.  The returned decomposition has the same shape as
     ``Poly.factor_list()`` so callers can reuse the monic-decomposition
     kernel unchanged.
@@ -116,11 +131,28 @@ def run_bounded_factorization(
         FACTOR_WORK_WALL_SECONDS if wall_seconds is None else wall_seconds
     )
     prlimit = shutil.which("prlimit")
+    # The address-space cap is the containment that keeps an admitted
+    # sparse-completing input from exhausting host memory.  When util-linux
+    # prlimit can wrap the launch, it installs every limit before exec; the
+    # worker additionally self-applies the same cap portably on POSIX so
+    # the bound survives platforms without the prlimit binary.  A platform
+    # offering neither mechanism cannot run this kernel safely, so fail
+    # closed instead of launching an unbounded child.
+    if prlimit is None and os.name == "nt":
+        raise FactorBackendFailureError(
+            "no portable hard memory limit is available for the bounded "
+            "factorization worker on this platform"
+        )
     completed = run_bounded_process(
         [sys.executable, str(_WORKER_PATH)],
         input_bytes=_serialized_request(polynomial),
         timeout_seconds=resolved_wall,
-        environment=worker_environment(locale="C.UTF-8"),
+        environment=worker_environment(
+            locale="C.UTF-8",
+            overrides={
+                "JACOBIAN_FACTOR_ADDRESS_SPACE_BYTES": str(_FACTOR_ADDRESS_SPACE_BYTES)
+            },
+        ),
         stdout_limit=_FACTOR_STDOUT_LIMIT,
         stderr_limit=_FACTOR_STDERR_LIMIT,
         resource_limits=ProcessResourceLimits(
@@ -133,18 +165,28 @@ def run_bounded_factorization(
             prlimit_executable=str(Path(prlimit).resolve()) if prlimit else None
         ),
     )
-    if completed.timed_out or completed.cancelled or completed.stdout_exceeded:
+    if completed.timed_out or completed.cancelled:
+        raise FactorBackendInterruptedError(
+            "the bounded factorization worker was stopped by its deadline "
+            "or cancellation before producing a factorization"
+        )
+    if completed.stdout_exceeded:
         raise FactorBackendExhaustedError(
-            "the bounded factorization worker was stopped by its declared "
-            "work budget"
+            "the exact factorization output exceeds the declared transport bound"
         )
     try:
         payload = json.loads(completed.stdout.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
         payload = None
     if isinstance(payload, dict) and payload.get("ok") is True:
+        _require_worker_memory_limit(payload, wrapped_with_prlimit=prlimit is not None)
         return _sympy_decomposition(payload, polynomial.variables)
     if isinstance(payload, dict) and payload.get("ok") is False:
+        if payload.get("exhausted") is True:
+            # Allocation failure under the declared memory budget is
+            # resource exhaustion: a typed bounded outcome, not a host
+            # exception.
+            raise FactorBackendExhaustedError(str(payload.get("error")))
         raise FactorBackendFailureError(str(payload.get("error")))
     # No parsable response with a clean exit status means the resource
     # limits killed the worker mid-computation.
@@ -152,6 +194,22 @@ def run_bounded_factorization(
         f"the bounded factorization worker terminated with exit code "
         f"{completed.returncode} before producing a result"
     )
+
+
+def _require_worker_memory_limit(
+    payload: dict[str, Any],
+    *,
+    wrapped_with_prlimit: bool,
+) -> None:
+    """Require proof that the hard address-space cap was active."""
+
+    if wrapped_with_prlimit:
+        return
+    if payload.get("as_limit_applied") is not True:
+        raise FactorBackendFailureError(
+            "the bounded factorization worker could not activate a hard "
+            "memory limit on this platform"
+        )
 
 
 def primitive_content_fraction(polynomial: RationalPolynomial) -> Fraction:

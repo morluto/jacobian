@@ -302,14 +302,20 @@ class MultivariateFactorResult(StrictModel):
     decomposition.  ``OUTPUT_BUDGET_EXCEEDED`` reports, as a typed bounded
     outcome, that the exact factorization is beyond this operation's
     declared bounds: either an irreducible factor exceeds the public
-    output-term budget or the killable factorization worker could not
-    produce the exact factorization within its declared work budget.
-    ``reconstructed`` then restates the requested polynomial unchanged,
+    output-term budget or a declared resource or output bound was hit.
+    ``EXECUTION_INTERRUPTED`` is not a mathematical conclusion: the worker
+    was stopped by its deadline or cancellation before any factorization
+    was obtained, and callers may retry.  For both non-FACTORIZED statuses
+    ``reconstructed`` restates the requested polynomial unchanged,
     ``coefficient`` carries the exact rational content of that polynomial,
     and ``factors`` is empty.
     """
 
-    status: Literal["FACTORIZED", "OUTPUT_BUDGET_EXCEEDED"] = "FACTORIZED"
+    status: Literal[
+        "FACTORIZED",
+        "OUTPUT_BUDGET_EXCEEDED",
+        "EXECUTION_INTERRUPTED",
+    ] = "FACTORIZED"
     coefficient: CanonicalRational
     factors: tuple[MultivariateIrreducibleFactor, ...] = Field(max_length=128)
     reconstructed: RationalPolynomial
@@ -328,20 +334,34 @@ class MultivariateFactorResult(StrictModel):
             maximum_exponent=_MAX_MULTIVARIATE_EXPONENT,
             maximum_coefficient_digits=_MAX_MULTIVARIATE_COEFFICIENT_DIGITS,
         )
-        if self.status == "OUTPUT_BUDGET_EXCEEDED":
+        if self.status != "FACTORIZED":
+            from jacobian.math.polynomials.multivariate import _factor_backend
+
             if self.factors:
-                raise ValueError(
-                    "budget-exceeded outcomes carry no irreducible factors"
-                )
+                raise ValueError("non-FACTORIZED outcomes carry no irreducible factors")
             if (
                 self.normalization is not None
                 or self.product_reconstruction is not None
             ):
                 raise ValueError(
-                    "budget-exceeded outcomes declare no normalization or "
+                    "non-FACTORIZED outcomes declare no normalization or "
                     "product reconstruction"
                 )
-            _verify_output_budget_exceeded_claim(self.coefficient, self.reconstructed)
+            if _factor_backend.primitive_content_fraction(self.reconstructed) != (
+                self.coefficient.as_fraction()
+            ):
+                raise ValueError(
+                    "outcome coefficient does not match the exact content "
+                    "of the restated polynomial"
+                )
+            if self.status == "OUTPUT_BUDGET_EXCEEDED":
+                # A capacity claim IS a mathematical claim about the exact
+                # output, so replay it; an interruption claim establishes
+                # nothing to reproduce and must not rerun the kernel under
+                # a different deadline than the producing call.
+                _verify_output_budget_exceeded_claim(
+                    self.coefficient, self.reconstructed
+                )
             return self
         if (
             self.normalization != "CONTENT_AND_MONIC_IRREDUCIBLES"
@@ -437,6 +457,7 @@ def _verify_output_budget_exceeded_claim(
     from jacobian.math.polynomials.multivariate import _factor_backend
     from jacobian.math.polynomials.multivariate._factor_backend import (
         FactorBackendExhaustedError,
+        FactorBackendInterruptedError,
     )
 
     if _factor_backend.primitive_content_fraction(reconstructed) != (
@@ -451,7 +472,12 @@ def _verify_output_budget_exceeded_claim(
             reconstructed,
             wall_seconds=_factor_backend.FACTOR_VERIFY_WALL_SECONDS,
         )
-    except FactorBackendExhaustedError:
+    except (FactorBackendExhaustedError, FactorBackendInterruptedError):
+        # The replay hit the same declared bounds (or was itself stopped by
+        # the wider verification deadline): either way the claimed
+        # beyond-bounds behavior of this exact source is reproduced.  No
+        # deadline asymmetry can invalidate the claim because timeouts no
+        # longer produce OUTPUT_BUDGET_EXCEEDED outcomes at all.
         return
     from jacobian.math.polynomials._conversions import (
         rational_polynomial_from_sympy,
@@ -588,6 +614,7 @@ def _verify_exact_reconstruction(
     from jacobian.math.polynomials.multivariate import _factor_backend
     from jacobian.math.polynomials.multivariate._factor_backend import (
         FactorBackendExhaustedError,
+        FactorBackendInterruptedError,
     )
 
     try:
@@ -618,7 +645,7 @@ def _verify_exact_reconstruction(
             )
     except ValueError:
         raise
-    except FactorBackendExhaustedError as exc:
+    except (FactorBackendExhaustedError, FactorBackendInterruptedError) as exc:
         raise ValueError(
             "factorization verification could not reproduce the exact "
             "factorization within the declared work budget"

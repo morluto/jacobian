@@ -12,6 +12,7 @@ from jacobian.math.polynomials._conversions import (
 from jacobian.math.polynomials.multivariate import _factor_backend
 from jacobian.math.polynomials.multivariate._factor_backend import (
     FactorBackendExhaustedError,
+    FactorBackendInterruptedError,
 )
 from jacobian.math.polynomials.multivariate._models import (
     _MAX_FACTOR_OUTPUT_TERMS as _MAX_OUTPUT_TERMS,
@@ -185,10 +186,12 @@ def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFacto
 
     The factorization kernel runs in a bounded, killable worker process.
     When the exact factorization contains an irreducible factor beyond the
-    public output-term budget, or cannot be produced within the declared
-    work budget at all, returns the typed ``OUTPUT_BUDGET_EXCEEDED`` outcome
-    instead of a host exception; ``coefficient`` then carries the exact
-    rational content of the restated source polynomial.
+    public output-term budget, or hits a declared resource or output bound,
+    returns the typed ``OUTPUT_BUDGET_EXCEEDED`` outcome instead of a host
+    exception; ``coefficient`` then carries the exact rational content of
+    the restated source polynomial.  A worker stopped by its deadline or
+    cancellation establishes nothing about output size, so it returns the
+    distinct non-mathematical ``EXECUTION_INTERRUPTED`` outcome instead.
     """
 
     from jacobian._exact import CanonicalRational
@@ -196,6 +199,17 @@ def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFacto
     try:
         coefficient, raw_factors, reconstructed = _sympy_factorization(
             request.polynomial
+        )
+    except FactorBackendInterruptedError:
+        return MultivariateFactorResult(
+            status="EXECUTION_INTERRUPTED",
+            coefficient=CanonicalRational.from_fraction(
+                _factor_backend.primitive_content_fraction(request.polynomial)
+            ),
+            factors=(),
+            reconstructed=request.polynomial,
+            normalization=None,
+            product_reconstruction=None,
         )
     except FactorBackendExhaustedError:
         return MultivariateFactorResult(

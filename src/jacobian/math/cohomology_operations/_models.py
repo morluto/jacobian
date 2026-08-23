@@ -17,11 +17,60 @@ Supported cochain degrees stop at 16, so top-square targets carry at most
 headroom over every simplex dimension these operations can target.
 """
 
+MAX_VERTEX_LABEL_DIGITS = 6
+"""Bound on decimal digits per vertex label (abs value < 10**6).
+
+With at most 4096 ambient simplices each carrying up to 64 vertices and
+up to 1024 support simplices, the worst-case JSON payload for labels stays
+under ~2 MB when each label is at most 6 digits, keeping transport,
+hashing/sorting, retained-source serialization, and exact result size
+bounded. A single label such as ``10**N`` for arbitrary ``N`` would
+otherwise inflate modular reduction, hashing, and retained integers without
+a declared envelope and can fail during JSON encoding.
+"""
+
+MAX_COEFFICIENT_DIGITS = 6
+"""Bound on decimal digits per coefficient before modular reduction.
+
+Coefficients are reduced modulo 2 (Steenrod) or prime (Bockstein), but the
+retained source stores the original integers for result replay. Bounding
+each coefficient to 6 digits keeps retained-source size, hashing, and
+sorting bounded while still admitting every residue class via bounded
+representatives (``-999999..999999`` covers all residues for the admitted
+primes).
+"""
+
+
+def _require_bounded_vertex_labels(
+    entries: tuple[tuple[int, ...], ...],
+    label: str,
+) -> None:
+    for simplex in entries:
+        for vertex in simplex:
+            if len(str(abs(vertex))) > MAX_VERTEX_LABEL_DIGITS:
+                raise ValueError(
+                    f"{label} vertex label {vertex} exceeds the "
+                    f"{MAX_VERTEX_LABEL_DIGITS}-digit bound"
+                )
+
+
+def _require_bounded_coefficients(
+    coefficients: tuple[int, ...],
+    label: str,
+) -> None:
+    for coefficient in coefficients:
+        if len(str(abs(coefficient))) > MAX_COEFFICIENT_DIGITS:
+            raise ValueError(
+                f"{label} coefficient {coefficient} exceeds the "
+                f"{MAX_COEFFICIENT_DIGITS}-digit bound"
+            )
+
 
 def _validate_simplex_entries(
     entries: tuple[tuple[int, ...], ...],
     label: str,
 ) -> None:
+    _require_bounded_vertex_labels(entries, label)
     for simplex in entries:
         if not simplex:
             raise ValueError(f"{label} must have at least one vertex")
@@ -184,22 +233,24 @@ class SteenrodSquareRequest(StrictModel):
 
     The input is a simplicial cochain over GF(2): a list of simplex
     vertices with coefficients modulo 2.  Only three families are
-    supported: ``Sq^0`` is the (co)chain-level identity, ``Sq^{deg} =
-    cup product`` (the top square) requires the ambient simplicial complex
-    to locate its ``(2*deg)``-simplex targets, and ``Sq^k = 0`` for
-    ``k > deg`` (instability).  Intermediate squares ``0 < k < deg``
-    require cup-``i`` structure and are rejected as unsupported.
+    supported: ``Sq^0`` is the identity, ``Sq^{deg} = cup product``
+    (the top square) requires the ambient simplicial complex to locate
+    its ``(2*deg)``-simplex targets, and ``Sq^k = 0`` for ``k > deg``
+    (instability).  Intermediate squares ``0 < k < deg`` require
+    cup-``i`` structure and are rejected as unsupported.
 
-    When ``ambient_simplices`` or ``ambient_complex`` is supplied the
-    cochain is verified to be a cocycle (``d x = 0``) and the result is
-    an exact cohomology operation; without an ambient complex the
-    ``k=0`` and ``k>deg`` branches are computed at the cochain level
-    and do not claim to represent a cohomology class.  ``ambient_complex``
+    Nonzero cochains require ``ambient_simplices`` or ``ambient_complex``
+    for cocycle verification (``d x = 0``) and the result is then an
+    exact cohomology operation; only the zero cochain is admissible
+    without an ambient complex, where ``Sq^0`` and ``k>deg`` are computed
+    at the chain level without a cohomology claim. Top squares always
+    require an ambient complex to locate their targets. ``ambient_complex``
     accepts the canonical value produced by
     ``topology.simplicial_complex.canonicalize`` (``FiniteSimplicialComplex``)
     and is materialized deterministically to integer simplices via the
     sorted vertex order, so ``topology`` outputs can be composed without
-    relabeling.
+    relabeling. Each vertex label and coefficient is bounded to 6 decimal
+    digits.
     """
 
     cochain_degree: int = Field(ge=0, le=16)
@@ -244,6 +295,11 @@ class SteenrodSquareRequest(StrictModel):
                     f"each simplex must have exactly cochain_degree+1={expected_dim} vertices"
                 )
             _validate_simplex_entries((simplex,), "simplex")
+        _require_bounded_coefficients(self.simplex_coefficients, "simplex_coefficient")
+        # Also bound ambient vertex labels digit-wise before any hashing or
+        # retained-source work; the count limits alone do not bound transport.
+        if self.ambient_simplices:
+            _require_bounded_vertex_labels(self.ambient_simplices, "ambient simplex")
         # Intermediate squares 0<k<deg are not implemented; reject to avoid false zero.
         if 0 < self.square_degree < self.cochain_degree:
             raise ValueError(
@@ -371,6 +427,9 @@ class BocksteinRequest(StrictModel):
                     f"each simplex must have exactly cochain_degree+1={expected_dim} vertices"
                 )
             _validate_simplex_entries((simplex,), "simplex")
+        _require_bounded_coefficients(self.simplex_coefficients, "simplex_coefficient")
+        if self.ambient_simplices:
+            _require_bounded_vertex_labels(self.ambient_simplices, "ambient simplex")
         has_nonzero = not _is_zero_mod_prime_cochain(
             self.simplex_values, self.simplex_coefficients, self.prime
         )

@@ -65,12 +65,13 @@ COHOMOLOGY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     cohomology_operation(
         "cohomology.steenrod_square.compute",
         "Compute Sq^0, Sq^n (cup) and Sq^k=0 for k>n over GF(2) for cocycles",
-        "Given a cocycle x of degree n over GF(2) compute Sq^k(x). "
-        "Supported: Sq^0(x)=x (identity, chain-level without ambient), "
-        "Sq^n(x)=x cup x (top, requires ambient for (2n)-simplices), "
-        "Sq^k=0 for k>n (instability). Intermediate 0<k<n need cup-i "
-        "and are rejected as unsupported. With ambient_simplices or "
-        "ambient_complex the cochain is verified as cocycle.",
+        "Given a cochain x of degree n over GF(2) compute Sq^k(x). "
+        "Supported: Sq^0(x)=x (identity), Sq^n(x)=x cup x (top, targets "
+        "2n-simplices), Sq^k=0 for k>n (instability); intermediate 0<k<n "
+        "need cup-i and are rejected. Nonzero cochains require "
+        "ambient_simplices or ambient_complex for cocycle verification; only "
+        "the zero cochain is admissible without ambient. Top squares require "
+        "ambient to locate targets.",
         SteenrodSquareRequest,
         SteenrodSquareResult,
         compute_steenrod_square,
@@ -80,7 +81,7 @@ COHOMOLOGY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "sq0_identity",
-                "Compute Sq^0(x) which is the identity on a 1-cocycle d(vertex 0) in the triangle.",
+                "Compute Sq^0(x)=x for the 1-cocycle d(vertex 0) on the triangle; nonzero cochains require ambient for cocycle verification.",
                 _SQ_EXAMPLE,
             ),
         ),

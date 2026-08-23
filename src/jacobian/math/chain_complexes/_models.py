@@ -16,20 +16,36 @@ from jacobian.math.chain_complexes.values import (
 
 
 class ConstructChainComplexRequest(StrictModel):
-    """Construct a chain complex from differential matrices."""
+    """Construct a chain complex from differential matrices.
+
+    A valid request contains exactly one fewer differential matrix than
+    basis sizes; matrix ``i`` has shape ``basis_sizes[i] x
+    basis_sizes[i+1]``, and adjacent matrices must compose to zero so the
+    constructed value satisfies d^2 = 0.
+    """
 
     coefficient_field: CoefficientField = CoefficientField.RATIONAL
     prime: int | None = Field(default=None, ge=2)
-    basis_sizes: tuple[int, ...] = Field(min_length=1)
+    basis_sizes: tuple[int, ...] = Field(
+        min_length=1,
+        description=(
+            "One dimension per chain group ordered by increasing degree; "
+            "there must be exactly one more basis size than differential "
+            "matrices."
+        ),
+    )
     differential_matrices: tuple[tuple[tuple[str, ...], ...], ...] = Field(
         description=(
-            "Dense row-major differential matrices; entry i maps chain group "
-            "i+1 into chain group i. Each entry is one canonical "
-            "coefficient string: an integer with no leading zeros and no "
-            "negative zero ('0', '5', '-3'), or for QQ a fully reduced "
-            "fraction with denominator >= 2 ('-1/2'); for GF(p) only "
-            "integer residues in [0, p) are accepted. Parsing is plain "
-            "integer/fraction string parsing and never evaluates input."
+            "Exactly one fewer dense row-major differential matrix than "
+            "basis sizes. Matrix i maps chain group i+1 into chain group i "
+            "and must have shape basis_sizes[i] x basis_sizes[i+1]; "
+            "adjacent matrices must compose to zero (d^2 = 0). Each entry "
+            "is one canonical coefficient string: an integer with no "
+            "leading zeros and no negative zero ('0', '5', '-3'), or for "
+            "QQ a fully reduced fraction with denominator >= 2 ('-1/2'); "
+            "for GF(p) only integer residues in [0, p) are accepted. "
+            "Parsing is plain integer/fraction string parsing and never "
+            "evaluates input."
         )
     )
 

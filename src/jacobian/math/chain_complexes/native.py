@@ -110,8 +110,16 @@ def tensor_product_complex(
 
     (C ⊗ D)_n = ⊕_{i+j=n} C_i ⊗ D_j with differential d_C ⊗ id + (-1)^i id ⊗ d_D.
     """
+    # Native callers bypass the MCP request model, so the shared tensor
+    # work admission must run here too: otherwise canonical inputs whose
+    # derived group dimensions exceed the budgets reach the dense kernel
+    # expansion before any bound rejects them.
+    from jacobian.math.chain_complexes._models import (
+        _require_admissible_tensor_work,
+    )
     from jacobian.math.chain_complexes.operations import _compute_tensor_product
 
+    _require_admissible_tensor_work(left, right)
     tensor_basis_sizes, tensor_diffs = _compute_tensor_product(left, right)
     # Tensor degrees are pairwise sums: the derived complex concentrates
     # on [deg_min, deg_min + group_count - 1].

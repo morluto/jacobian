@@ -53,7 +53,11 @@ TOOLS: MathTools = (
         examples=(
             example(
                 "circle_chain_complex",
-                "Construct the chain complex of a circle (3 edges, 3 vertices).",
+                "Construct the chain complex of a circle (3 edges, 3 "
+                "vertices). Supply exactly one fewer differential matrix "
+                "than basis sizes; matrix i must have shape basis_sizes[i] "
+                "x basis_sizes[i+1], and adjacent matrices must compose to "
+                "zero (d^2 = 0).",
                 {
                     "coefficient_field": "QQ",
                     "basis_sizes": [3, 3],

@@ -632,6 +632,24 @@ class TestNativeSurface:
         product = tensor_product_complex(_point_complex(), _point_complex())
         assert product.tensor_basis_sizes == (1,)
 
+    def test_native_tensor_applies_work_admission_before_expansion(self) -> None:
+        """Native callers cannot reach the dense kernel with canonical
+        inputs whose derived group dimensions exceed the work bounds."""
+        from jacobian.math.chain_complexes import tensor_product_complex
+
+        factor = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            prime=None,
+            degree_min=0,
+            degree_max=1,
+            basis_sizes=(64, 64),
+            differential_matrices=([["0"] * 64 for _ in range(64)],),
+        )
+        # The derived tensor group sizes would be (4096, 8192, 4096); the
+        # admission bound must reject before any dense expansion allocates.
+        with pytest.raises(ValueError, match="work bound"):
+            tensor_product_complex(factor, factor)
+
     def test_native_surface_excludes_wire_envelope_handlers(self) -> None:
         """The authoritative package __all__ advertises only value-based
         functions; request handlers stay private to operations/_tools."""

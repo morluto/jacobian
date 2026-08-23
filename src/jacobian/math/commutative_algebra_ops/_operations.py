@@ -88,7 +88,6 @@ def _groebner_signature(variables, expressions) -> tuple:
     so a replayed relation can be compared against any claimed
     presentation without depending on generator ordering.
     """
-    from fractions import Fraction
 
     if not expressions:
         return ()

@@ -10,6 +10,8 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.graphs.multigraph._models import (
+    MAX_GROUP_CARDINALITY,
+    MAX_GROUP_MODULUS,
     CycleMulticoverRequest,
     CycleRecord,
     EulerianCyclesRequest,
@@ -933,7 +935,9 @@ class TestLeafWorkBoundedBySearchBudget:
 
 class TestReplayTerminationReasonBinding:
     def test_found_reason_relabeled_special_case_rejected(self) -> None:
-        result = _flow_find(TRIANGLE, Z3, resource_budget={"require_nowhere_zero": True})
+        result = _flow_find(
+            TRIANGLE, Z3, resource_budget={"require_nowhere_zero": True}
+        )
         assert result.status == "FOUND"
         payload = result.model_dump()
         payload["termination_reason"] = "SPECIAL_CASE"
@@ -994,3 +998,65 @@ class TestEulerianSubsetParityContractPublished:
             # The old overstated precondition must not come back.
             assert "must be even" not in text
             assert "covers_all=False" in text
+
+
+class TestGroupModulusBoundsAreSchemaVisible:
+    def test_schema_exposes_per_item_modulus_bounds(self) -> None:
+        """Each modulus bound must be encoded in the field schema items."""
+        schema = FiniteAbelianGroup.model_json_schema()
+        items = schema["properties"]["moduli"]["items"]
+        assert items["minimum"] == 2
+        assert items["maximum"] == MAX_GROUP_MODULUS
+
+    def test_schema_publishes_cardinality_product_bound(self) -> None:
+        """The product (cardinality) constraint must be published in the
+        field description so callers can choose an admitted group."""
+        schema = FiniteAbelianGroup.model_json_schema()
+        description = schema["properties"]["moduli"]["description"]
+        assert f"2..{MAX_GROUP_MODULUS}" in description
+        assert str(MAX_GROUP_CARDINALITY) in description
+
+    def test_maximum_modulus_accepted(self) -> None:
+        """Boundary: the largest admitted modulus is accepted."""
+        group = FiniteAbelianGroup(moduli=(MAX_GROUP_MODULUS,))
+        assert group.cardinality == MAX_GROUP_MODULUS
+
+    def test_modulus_above_bound_rejected_before_validator(self) -> None:
+        """Adversarial: a schema-conforming-looking modulus of 5000 is
+        rejected by the per-item field bounds themselves."""
+        with pytest.raises(ValidationError):
+            FiniteAbelianGroup.model_validate({"moduli": [5000]})
+
+    def test_in_range_moduli_with_oversized_product_rejected(self) -> None:
+        """Each factor within 2..4096 yet product 65*65 > 4096 is rejected."""
+        with pytest.raises(ValidationError, match="cardinality"):
+            FiniteAbelianGroup(moduli=(65, 65))
+
+
+class TestFlowCheckAssignmentContractPublished:
+    def test_edge_values_schema_states_complete_assignment(self) -> None:
+        """The complete-assignment rule must be schema-visible, not only in
+        the hidden validator."""
+        schema = MultigraphFlowCheckRequest.model_json_schema()
+        description = schema["properties"]["edge_values"]["description"]
+        assert "exactly one record per" in description
+        assert "no repeats" in description
+        assert "group's rank" in description
+
+    def test_value_schema_states_group_compatibility(self) -> None:
+        """Per-record value guidance must publish rank and residue rules."""
+        schema = MultigraphFlowCheckRequest.model_json_schema()
+        value = schema["$defs"]["FlowEdgeAssignment"]["properties"]["value"]
+        assert "rank" in value["description"]
+        assert "modulus" in value["description"]
+
+    def test_duplicate_assignment_record_rejected(self) -> None:
+        """A complete set of IDs with a repeated record is not an assignment."""
+        flow = (
+            FlowEdgeAssignment(edge_id="e0", orientation="left_to_right", value=(1,)),
+            FlowEdgeAssignment(edge_id="e1", orientation="left_to_right", value=(1,)),
+            FlowEdgeAssignment(edge_id="e0", orientation="left_to_right", value=(1,)),
+            FlowEdgeAssignment(edge_id="e2", orientation="left_to_right", value=(1,)),
+        )
+        with pytest.raises(ValidationError, match="repeat"):
+            MultigraphFlowCheckRequest(graph=TRIANGLE, group=Z3, edge_values=flow)

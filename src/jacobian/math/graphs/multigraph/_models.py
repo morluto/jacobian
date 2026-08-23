@@ -8,7 +8,7 @@ bounded positive moduli and canonical residue coordinates.
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, StrictStr, model_validator
 
@@ -115,17 +115,32 @@ class LooplessMultigraph(StrictModel):
 # Finite Abelian group (product of cyclic groups)
 # ---------------------------------------------------------------------------
 
+GroupModulus = Annotated[
+    StrictInt,
+    Field(ge=2, le=MAX_GROUP_MODULUS),
+]
+
 
 class FiniteAbelianGroup(StrictModel):
     """A finite Abelian group represented as a product of cyclic groups.
 
     The group is ``(Z/n1Z) x ... x (Z/nrZ)`` with bounded positive moduli.
+    Each modulus is an integer in ``2..MAX_GROUP_MODULUS`` and their product
+    (the group cardinality) must not exceed ``MAX_GROUP_CARDINALITY``.
     Elements are canonical residue tuples ``(0 <= x_i < n_i)``.  Addition and
     negation are componentwise modulo the respective moduli.  The zero element
     is ``(0, ..., 0)``.
     """
 
-    moduli: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_GROUP_RANK)
+    moduli: tuple[GroupModulus, ...] = Field(
+        min_length=1,
+        max_length=MAX_GROUP_RANK,
+        description=(
+            f"Moduli of the cyclic factors, each an integer in "
+            f"2..{MAX_GROUP_MODULUS}; their product (the group cardinality) "
+            f"must not exceed {MAX_GROUP_CARDINALITY}."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_valid_moduli(self) -> Self:
@@ -216,7 +231,15 @@ class FlowEdgeAssignment(StrictModel):
 
     edge_id: StrictStr = Field(min_length=1, max_length=64)
     orientation: Literal["left_to_right", "right_to_left"]
-    value: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_GROUP_RANK)
+    value: tuple[StrictInt, ...] = Field(
+        min_length=1,
+        max_length=MAX_GROUP_RANK,
+        description=(
+            "Group element assigned at the tail, one canonical residue per "
+            "cyclic factor; the rank must equal the selected group's rank "
+            "and each coordinate must satisfy 0 <= coordinate < modulus."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_non_negative_value(self) -> Self:
@@ -241,11 +264,24 @@ class VertexDivergence(StrictModel):
 
 
 class MultigraphFlowCheckRequest(StrictModel):
-    """Request to check a finite-Abelian flow on a loopless multigraph."""
+    """Request to check a finite-Abelian flow on a loopless multigraph.
+
+    ``edge_values`` must be a complete assignment: exactly one record per
+    graph edge ID, with no repeats and no omissions, and every value must
+    be compatible with ``group`` (rank and residue ranges).
+    """
 
     graph: LooplessMultigraph
     group: FiniteAbelianGroup
-    edge_values: tuple[FlowEdgeAssignment, ...] = Field(max_length=MAX_EDGES)
+    edge_values: tuple[FlowEdgeAssignment, ...] = Field(
+        max_length=MAX_EDGES,
+        description=(
+            "Complete oriented flow assignment: exactly one record per "
+            "graph edge ID (no repeats, none missing). Each record's value "
+            "must have the selected group's rank with coordinates in "
+            "0..modulus-1."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_complete_assignment(self) -> Self:
@@ -524,15 +560,11 @@ def _require_single_assignment_per_edge(
     """Require exactly one assignment record per graph edge."""
 
     if len(flow) != len(graph_ids):
-        raise ValueError(
-            "FOUND flow must assign exactly one value to every graph edge"
-        )
+        raise ValueError("FOUND flow must assign exactly one value to every graph edge")
     assigned: set[str] = set()
     for a in flow:
         if a.edge_id in assigned:
-            raise ValueError(
-                f"FOUND flow assigns edge {a.edge_id} more than once"
-            )
+            raise ValueError(f"FOUND flow assigns edge {a.edge_id} more than once")
         assigned.add(a.edge_id)
     if graph_ids != assigned:
         raise ValueError("FOUND flow must assign every graph edge")

@@ -193,9 +193,7 @@ def _build_edge_choices(
     return choices
 
 
-def _incremental_balances_hold(
-    net: list[list[int]], moduli: tuple[int, ...]
-) -> bool:
+def _incremental_balances_hold(net: list[list[int]], moduli: tuple[int, ...]) -> bool:
     """Return True when every signed component imbalance is zero in the group."""
     return all(
         component % moduli[k] == 0

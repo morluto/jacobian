@@ -476,7 +476,7 @@ class TestSaturationResultSourceBinding:
 
         return IdealSaturationRequest(
             ideal=_ideal(("x", "y"), {(1, 1): 1}),
-            saturation_polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
+            denominator=_polynomial(("x", "y"), {(1, 0): 1}),
         )
 
     def test_computed_result_retains_source_and_revalidates(self) -> None:
@@ -519,7 +519,7 @@ class TestSaturationZeroIdeal:
 
         request = IdealSaturationRequest(
             ideal=_ideal(("x", "y"), {(0, 0): 0}),
-            saturation_polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
+            denominator=_polynomial(("x", "y"), {(1, 0): 1}),
         )
         result = compute_ideal_saturation(request)
         if result.outcome != "COMPUTED":

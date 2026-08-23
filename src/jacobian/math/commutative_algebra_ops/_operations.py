@@ -120,7 +120,7 @@ def replay_saturation(request: IdealSaturationRequest) -> tuple:
             rational_polynomial_to_sympy(generator).as_expr()
             for generator in request.ideal.generators
         ],
-        t * rational_polynomial_to_sympy(request.saturation_polynomial).as_expr() - 1,
+        t * rational_polynomial_to_sympy(request.denominator).as_expr() - 1,
     ]
     elimination = sympy.groebner(polys, t, *variables, order="lex")
     # Basis elements free of t generate the elimination ideal I : <d>^infinity.

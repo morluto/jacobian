@@ -414,13 +414,35 @@ class MultigraphFlowFindRequest(StrictModel):
     )
 
 
+class _FlowSearchOutcome(StrictModel):
+    """Private unbound search outcome used inside the bounded search kernel.
+
+    Carries no retained search domain so source-binding validators can
+    replay it without recursion; the public result type adds the required
+    ``graph``/``group``/``resource_budget`` binding.
+    """
+
+    result_schema_version: Literal["1"] = "1"
+    status: Literal["FOUND", "EXHAUSTED", "UNKNOWN"]
+    flow: tuple[FlowEdgeAssignment, ...] | None = Field(
+        default=None, max_length=MAX_EDGES
+    )
+    states_explored: StrictInt = Field(ge=0)
+    termination_reason: Literal[
+        "WITNESS_FOUND",
+        "SEARCH_EXHAUSTED",
+        "STATE_BUDGET_EXCEEDED",
+        "SPECIAL_CASE",
+    ]
+
+
 class MultigraphFlowFindResult(StrictModel):
     """Outcome of a bounded finite-Abelian flow search, bound to its source request."""
 
     result_schema_version: Literal["1"] = "1"
-    graph: LooplessMultigraph | None = None
-    group: FiniteAbelianGroup | None = None
-    resource_budget: MultigraphFlowSearchBudget | None = None
+    graph: LooplessMultigraph
+    group: FiniteAbelianGroup
+    resource_budget: MultigraphFlowSearchBudget
     status: Literal["FOUND", "EXHAUSTED", "UNKNOWN"]
     flow: tuple[FlowEdgeAssignment, ...] | None = Field(
         default=None, max_length=MAX_EDGES
@@ -436,43 +458,32 @@ class MultigraphFlowFindResult(StrictModel):
     @model_validator(mode="after")
     def require_consistent_status(self) -> Self:
         _require_status_shape(self.status, self.flow, self.termination_reason)
-        # If source is bound, validate budget and witness
-        if (
-            self.graph is not None
-            and self.group is not None
-            and self.resource_budget is not None
-        ):
-            if self.states_explored > self.resource_budget.max_states:
-                raise ValueError("states_explored exceeds resource budget")
-            # Every outcome is replayed against the retained search domain
-            # and budget: the deterministic bounded search must reproduce the
-            # same status, state count, and (for FOUND) the same witness.
-            from jacobian.math.graphs.multigraph._operations import (
-                _search_flow_unbound,
-            )
+        if self.states_explored > self.resource_budget.max_states:
+            raise ValueError("states_explored exceeds resource budget")
+        # Every outcome is replayed against the retained search domain and
+        # budget: the deterministic bounded search must reproduce the same
+        # status, state count, and (for FOUND) the same witness.
+        from jacobian.math.graphs.multigraph._operations import (
+            _search_flow_unbound,
+        )
 
-            replay = _search_flow_unbound(
-                self.graph, self.group, self.resource_budget
+        replay = _search_flow_unbound(self.graph, self.group, self.resource_budget)
+        if replay.status != self.status or replay.states_explored != self.states_explored:
+            raise ValueError(
+                f"{self.status} outcome does not match the deterministic "
+                f"search replay over the retained domain "
+                f"(replay reported {replay.status} after "
+                f"{replay.states_explored} states)"
             )
-            if (
-                replay.status != self.status
-                or replay.states_explored != self.states_explored
-            ):
+        if self.status == "FOUND" and self.flow is not None:
+            _verify_found_witness(
+                self.graph, self.group, self.resource_budget, self.flow
+            )
+            if replay.flow != self.flow:
                 raise ValueError(
-                    f"{self.status} outcome does not match the deterministic "
-                    f"search replay over the retained domain "
-                    f"(replay reported {replay.status} after "
-                    f"{replay.states_explored} states)"
+                    "FOUND witness does not match the deterministic "
+                    "search replay over the retained domain"
                 )
-            if self.status == "FOUND" and self.flow is not None:
-                _verify_found_witness(
-                    self.graph, self.group, self.resource_budget, self.flow
-                )
-                if replay.flow != self.flow:
-                    raise ValueError(
-                        "FOUND witness does not match the deterministic "
-                        "search replay over the retained domain"
-                    )
         return self
 
 
@@ -631,8 +642,12 @@ class EulerianCyclesResult(StrictModel):
 
     @model_validator(mode="after")
     def require_bound_eulerian(self) -> Self:
-        # Determine requested edge IDs
+        # Determine requested edge IDs; apply the request's uniqueness check
+        # before any set conversion so duplicates cannot silently change the
+        # purported multiset's multiplicity.
         if self.edge_subset is not None:
+            if len(set(self.edge_subset)) != len(self.edge_subset):
+                raise ValueError("edge_subset must not repeat edge IDs")
             requested = set(self.edge_subset)
             if not requested.issubset(self.graph.edge_id_set):
                 raise ValueError("edge_subset contains unknown edge IDs")

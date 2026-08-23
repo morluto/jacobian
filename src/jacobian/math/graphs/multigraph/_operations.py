@@ -27,6 +27,7 @@ from jacobian.math.graphs.multigraph._models import (
     MultigraphFlowFindResult,
     MultigraphFlowSearchBudget,
     VertexDivergence,
+    _FlowSearchOutcome,
 )
 
 __all__ = [
@@ -198,8 +199,8 @@ def _search_dfs(
         list[tuple[Literal["left_to_right", "right_to_left"], tuple[int, ...]]]
     ],
     max_states: int,
-) -> MultigraphFlowFindResult:
-    """Run the bounded DFS search and return the result."""
+) -> _FlowSearchOutcome:
+    """Run the bounded DFS search and return the unbound outcome."""
     num_edges = len(graph.edges)
     edges = graph.edges
     states_explored = 0
@@ -216,7 +217,7 @@ def _search_dfs(
             # Complete assignment was already counted when the final edge
             # was pushed. Evaluate conservation within the remaining budget.
             if _check_flow_conservation(graph, group, assignments):
-                return MultigraphFlowFindResult(
+                return _FlowSearchOutcome(
                     status="FOUND",
                     flow=tuple(assignments),
                     states_explored=states_explored,
@@ -245,7 +246,7 @@ def _search_dfs(
         # Charge the budget for the new partial state before materialising it.
         states_explored += 1
         if states_explored > max_states:
-            return MultigraphFlowFindResult(
+            return _FlowSearchOutcome(
                 status="UNKNOWN",
                 flow=None,
                 states_explored=states_explored - 1,
@@ -262,7 +263,7 @@ def _search_dfs(
         assignments.append(new_assign)
         next_index.append(0)
 
-    return MultigraphFlowFindResult(
+    return _FlowSearchOutcome(
         status="EXHAUSTED",
         flow=None,
         states_explored=states_explored,
@@ -274,7 +275,7 @@ def _search_flow_unbound(
     graph: LooplessMultigraph,
     group: FiniteAbelianGroup,
     resource_budget: MultigraphFlowSearchBudget,
-) -> MultigraphFlowFindResult:
+) -> _FlowSearchOutcome:
     """Run one bounded flow search and return it without a bound source.
 
     The returned result carries no ``graph``/``group``/``resource_budget``
@@ -285,7 +286,7 @@ def _search_flow_unbound(
 
     # Special case: a graph with no edges trivially has the empty flow.
     if not graph.edges:
-        return MultigraphFlowFindResult(
+        return _FlowSearchOutcome(
             status="FOUND",
             flow=(),
             states_explored=0,
@@ -295,7 +296,7 @@ def _search_flow_unbound(
     # Per-edge candidate values: all group elements (or nonzero if required).
     choices = _build_edge_choices(group, require_nz)
     if not choices:
-        return MultigraphFlowFindResult(
+        return _FlowSearchOutcome(
             status="EXHAUSTED",
             flow=None,
             states_explored=0,

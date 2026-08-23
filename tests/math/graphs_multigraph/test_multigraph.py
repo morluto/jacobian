@@ -707,15 +707,19 @@ class TestSourceBindingReplay:
         with pytest.raises(ValidationError, match="search replay"):
             MultigraphFlowFindResult.model_validate(payload)
 
-    def test_unbound_results_skip_replay(self):
-        """Internal unbound results (no retained source) validate on shape alone."""
-        result = MultigraphFlowFindResult(
-            status="EXHAUSTED",
-            flow=None,
-            states_explored=0,
-            termination_reason="SEARCH_EXHAUSTED",
-        )
-        assert result.graph is None
+    def test_unbound_results_are_rejected(self):
+        """Public results must retain their search domain: a payload without
+        graph/group/budget cannot assert any outcome."""
+        with pytest.raises(ValidationError):
+            MultigraphFlowFindResult(
+                graph=None,
+                group=None,
+                resource_budget=None,
+                status="EXHAUSTED",
+                flow=None,
+                states_explored=0,
+                termination_reason="SEARCH_EXHAUSTED",
+            )
 
     def test_forged_found_within_tiny_budget_rejected(self):
         """A triangle over Z/3 with max_states=1 cannot reach any complete
@@ -809,3 +813,19 @@ class TestEulerianSourceRequired:
         result = compute_eulerian_cycles(request)
         rebuilt = EulerianCyclesResult.model_validate(result.model_dump())
         assert rebuilt == result
+
+
+class TestEulerianSubsetDuplicates:
+    def test_duplicate_ids_in_result_subset_rejected(self):
+        """Duplicate edge IDs must be rejected before set conversion so the
+        retained multiset cannot differ from the admitted request subset."""
+        request = EulerianCyclesRequest(graph=TRIANGLE)
+        result = compute_eulerian_cycles(request)
+        payload = result.model_dump()
+        payload["edge_subset"] = ["e0", "e0", "e1", "e2"]
+        with pytest.raises(ValidationError, match="must not repeat"):
+            EulerianCyclesResult.model_validate(payload)
+
+    def test_request_still_rejects_duplicate_ids(self):
+        with pytest.raises(ValidationError, match="must not repeat"):
+            EulerianCyclesRequest(graph=TRIANGLE, edge_subset=("e0", "e0"))

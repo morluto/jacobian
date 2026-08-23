@@ -43,13 +43,23 @@ class LinearMatroid(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_bounded_declared_prime(cls, data: Any) -> Any:
+        # Running a before validator moves field validation into Python
+        # mode, where decoded JSON arrays no longer coerce to the declared
+        # tuple shapes; normalize entry rows to tuples on a copied path so
+        # JSON invocation keeps working while stored values stay canonical.
         if isinstance(data, dict):
             raw = data.get("matrix")
-            prime = (
-                raw.get("prime")
-                if isinstance(raw, dict)
-                else getattr(raw, "prime", None)
-            )
+            if isinstance(raw, dict):
+                prime = raw.get("prime")
+                entries = raw.get("entries")
+                if isinstance(entries, list):
+                    matrix = dict(raw)
+                    matrix["entries"] = tuple(
+                        tuple(row) if isinstance(row, list) else row for row in entries
+                    )
+                    data = {**data, "matrix": matrix}
+            else:
+                prime = getattr(raw, "prime", None)
             if isinstance(prime, int) and not 2 <= prime <= MAX_PRIME:
                 raise ValueError(
                     f"field prime must lie in [2, {MAX_PRIME}] so validation "

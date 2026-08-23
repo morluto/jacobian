@@ -316,12 +316,61 @@ def test_system_rejects_foreign_indices_and_non_strict_integer_indices() -> None
         FiniteAttributeImplicationSystem(attributes=("\ud800",))
 
 
-def test_attribute_and_implication_count_boundaries() -> None:
-    attributes = tuple(f"a{i}" for i in range(MAX_ATTRIBUTES))
-    FiniteAttributeImplicationSystem(attributes=attributes)
-    with pytest.raises(ValidationError):
-        FiniteAttributeImplicationSystem(attributes=(*attributes, "too-many"))
+def test_zero_work_carrier_beyond_the_formal_context_cap_is_admitted() -> None:
+    attributes = tuple(f"a{i}" for i in range(200))
+    system = FiniteAttributeImplicationSystem(attributes=attributes, implications=())
 
+    result = implication_closure(system, frozenset())
+
+    assert system.attributes == attributes
+    assert result.closure == ()
+    assert result.added == ()
+    assert result.lineage == ()
+    assert result.work.productive_rounds == 0
+    assert result.work.canonical_replay_work == 0
+    assert ImplicationClosureRequest(system=system).seed == ()
+
+
+def test_large_carrier_chain_closes_exactly_within_the_work_budget() -> None:
+    attributes = tuple(f"a{i}" for i in range(100))
+    system = FiniteAttributeImplicationSystem(
+        attributes=attributes,
+        implications=tuple(
+            AttributeImplication(premise=(i,), conclusion=(i + 1,)) for i in range(99)
+        ),
+    )
+
+    result = implication_closure(system, frozenset({0}))
+
+    assert result.closure == tuple(range(100))
+    assert result.added == tuple(range(1, 100))
+    assert [
+        (step.attribute, step.implication_index, step.activation_round)
+        for step in result.lineage
+    ] == [(i, i - 1, i) for i in range(1, 100)]
+    assert result.work.productive_rounds == 99
+
+
+def test_genuine_work_overload_is_rejected_by_the_work_budget() -> None:
+    attributes = tuple(f"a{i}" for i in range(300))
+    rules = tuple(
+        AttributeImplication(premise=premise, conclusion=())
+        for premise in islice(combinations(range(300), 4), MAX_IMPLICATIONS)
+    )
+    assert sum(len(rule.premise) for rule in rules) <= MAX_IMPLICATION_MEMBERSHIPS
+
+    with pytest.raises(ValidationError, match="forward-chaining work"):
+        FiniteAttributeImplicationSystem(attributes=attributes, implications=rules)
+
+
+def test_wide_long_label_carrier_is_rejected_by_the_result_budget() -> None:
+    attributes = tuple(f"{index:03d}" + "x" * 22 for index in range(700))
+
+    with pytest.raises(ValidationError, match="serialized-result"):
+        FiniteAttributeImplicationSystem(attributes=attributes)
+
+
+def test_implication_count_boundary() -> None:
     small_attributes = tuple(f"a{i}" for i in range(9))
     rules = tuple(
         AttributeImplication(

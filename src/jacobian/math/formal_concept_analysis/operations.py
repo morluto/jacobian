@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from .values import (
-    MAX_ATTRIBUTES,
     FiniteAttributeImplicationSystem,
     FormalContext,
     ImplicationClosureResult,
@@ -32,10 +31,6 @@ def _require_implication_seed(
     system: FiniteAttributeImplicationSystem,
     seed: frozenset[int],
 ) -> None:
-    if len(seed) > MAX_ATTRIBUTES:
-        raise ValueError(
-            f"implication seed supports at most {MAX_ATTRIBUTES} attributes"
-        )
     for attribute in seed:
         if type(attribute) is not int:
             raise TypeError("implication seed attributes must be integers")

@@ -13,13 +13,23 @@ MAX_OBJECTS = 64
 MAX_ATTRIBUTES = 64
 MAX_IMPLICATIONS = 256
 MAX_IMPLICATION_MEMBERSHIPS = 4_096
-MAX_CANONICAL_REPLAY_WORK = (MAX_ATTRIBUTES + 1) * (
-    MAX_IMPLICATIONS + MAX_IMPLICATION_MEMBERSHIPS
-)
-MAX_FORWARD_CHAIN_WORK = 2 * MAX_CANONICAL_REPLAY_WORK
+
+# One synchronous forward-chaining round rescans the whole canonical family,
+# and the closing satisfaction scan does so once more; every productive round
+# adds at least one carrier attribute, so exact replay work is at most
+# ``(carrier_size + 1) * (rows + memberships)``.  Admission below bounds
+# exactly that product, so the accepted implication-system carrier axis is
+# limited by predicted work and serialized-result size rather than by a fixed
+# attribute count.  This budget admits a full-budget family (256 rows and
+# 4,096 memberships) over a 64-attribute carrier and proportionally smaller
+# families over larger carriers.
+MAX_FORWARD_CHAIN_WORK = 2 * 65 * (MAX_IMPLICATIONS + MAX_IMPLICATION_MEMBERSHIPS)
+MAX_CANONICAL_REPLAY_WORK = MAX_FORWARD_CHAIN_WORK // 2
 MAX_IMPLICATION_CLOSURE_RESULT_BYTES = 128 * 1_024
 
-_AttributeIndex = Annotated[StrictInt, Field(ge=0, le=MAX_ATTRIBUTES - 1)]
+# Attribute indices are carrier members: each owning model validator below
+# checks them against the declared attribute axis instead of a fixed ceiling.
+_AttributeIndex = Annotated[StrictInt, Field(ge=0)]
 
 
 class AttributeImplication(StrictModel):
@@ -32,7 +42,6 @@ class AttributeImplication(StrictModel):
 
     premise: tuple[_AttributeIndex, ...] = Field(
         default=(),
-        max_length=MAX_ATTRIBUTES,
         description=(
             "Attribute indices in the implication premise; order is immaterial "
             "and duplicate indices are invalid."
@@ -40,7 +49,6 @@ class AttributeImplication(StrictModel):
     )
     conclusion: tuple[_AttributeIndex, ...] = Field(
         default=(),
-        max_length=MAX_ATTRIBUTES,
         description=(
             "Attribute indices concluded by the premise; premise members are "
             "removed and order is immaterial."
@@ -64,14 +72,17 @@ class FiniteAttributeImplicationSystem(StrictModel):
     """A bounded finite attribute carrier with a canonical implication family.
 
     The normalized family has at most 256 duplicate-free rows and at most 4,096
-    premise-plus-conclusion memberships in aggregate.
+    premise-plus-conclusion memberships in aggregate.  The carrier axis has no
+    fixed count: admission derives its envelope from predicted forward-chaining
+    work and serialized-result size.
     """
 
     attributes: tuple[OpaqueLabel, ...] = Field(
-        max_length=MAX_ATTRIBUTES,
         description=(
             "Ordered unique attribute labels. Implication and subset indices "
-            "refer to this axis."
+            "refer to this axis. The accepted carrier size is bounded by the "
+            "predicted work and serialized-result budgets enforced below, not "
+            "by a fixed attribute count."
         ),
     )
     implications: tuple[AttributeImplication, ...] = Field(
@@ -127,10 +138,10 @@ class FiniteAttributeImplicationSystem(StrictModel):
             )
 
         # Conservative strict-JSON envelope: four UTF-8 bytes per label code
-        # point, row framing plus two-digit carrier indices for the retained
-        # system, and enough per-attribute space for seed/closure/added indices
-        # and a complete three-field lineage row.  The fixed allowance covers
-        # result keys and the largest admitted work counters.
+        # point, row framing plus carrier indices for the retained system, and
+        # enough per-attribute space for seed/closure/added indices and a
+        # complete three-field lineage row.  The fixed allowance covers result
+        # keys and the largest admitted work counters.
         predicted_result_bytes = (
             4_096
             + sum(4 * len(label) for label in self.attributes)
@@ -162,7 +173,9 @@ class ImplicationDerivation(StrictModel):
 
     attribute: _AttributeIndex
     implication_index: StrictInt = Field(ge=0, lt=MAX_IMPLICATIONS)
-    activation_round: StrictInt = Field(ge=1, le=MAX_ATTRIBUTES)
+    # Each productive round adds at least one carrier attribute, so the
+    # lineage replay below rejects any round count the carrier cannot justify.
+    activation_round: StrictInt = Field(ge=1)
 
 
 class ImplicationClosureWork(StrictModel):
@@ -172,7 +185,7 @@ class ImplicationClosureWork(StrictModel):
     of whether the private closure kernel uses repeated scans or counters.
     """
 
-    productive_rounds: StrictInt = Field(ge=0, le=MAX_ATTRIBUTES)
+    productive_rounds: StrictInt = Field(ge=0)
     canonical_implication_checks: StrictInt = Field(
         ge=0,
         le=MAX_CANONICAL_REPLAY_WORK,
@@ -285,10 +298,10 @@ class ImplicationClosureResult(StrictModel):
     """The least source-bound closure of a seed under finite implications."""
 
     system: FiniteAttributeImplicationSystem
-    seed: tuple[_AttributeIndex, ...] = Field(max_length=MAX_ATTRIBUTES)
-    closure: tuple[_AttributeIndex, ...] = Field(max_length=MAX_ATTRIBUTES)
-    added: tuple[_AttributeIndex, ...] = Field(max_length=MAX_ATTRIBUTES)
-    lineage: tuple[ImplicationDerivation, ...] = Field(max_length=MAX_ATTRIBUTES)
+    seed: tuple[_AttributeIndex, ...]
+    closure: tuple[_AttributeIndex, ...]
+    added: tuple[_AttributeIndex, ...]
+    lineage: tuple[ImplicationDerivation, ...]
     work: ImplicationClosureWork
 
     @model_validator(mode="after")

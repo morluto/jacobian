@@ -7,7 +7,8 @@ kernel must not run in the engine process: a schema-valid request could
 exhaust memory or hang before any typed outcome is reachable.  This module
 runs one ``factor_list`` invocation in a resource-limited, killable child
 process — the same isolation the Singular ideal backend uses — and reports
-work-budget exhaustion as a typed, replayable outcome instead.
+deadline stops, cancellations, and enforcement kills as typed execution
+conditions instead of host exceptions.
 """
 
 from __future__ import annotations
@@ -49,7 +50,7 @@ FACTOR_VERIFY_WALL_SECONDS = 60.0
 
 
 class FactorBackendExhaustedError(Exception):
-    """The exact factorization exceeded a declared resource or output bound."""
+    """The exact factorization exceeded a declared output bound."""
 
 
 class FactorBackendFailureError(Exception):
@@ -57,7 +58,8 @@ class FactorBackendFailureError(Exception):
 
 
 class FactorBackendInterruptedError(Exception):
-    """The worker was stopped by its deadline or cancellation.
+    """The worker was stopped by its deadline, cancellation, or an
+    enforced resource cap such as the CPU or address-space budget.
 
     No factorization was obtained and nothing was established about the
     size of the exact output; this is a retryable execution condition,
@@ -109,11 +111,11 @@ def run_bounded_factorization(
     """Run ``factor_list`` killably and return its raw SymPy decomposition.
 
     Raises :class:`FactorBackendInterruptedError` when the worker was
-    stopped by its deadline or cancellation (a retryable execution
+    stopped by its deadline, cancellation, or an enforced resource cap
+    such as the CPU or address-space budget (a retryable execution
     condition establishing nothing about output size),
-    :class:`FactorBackendExhaustedError` when a declared resource or
-    output bound was hit (timeout-independent memory kill, oversized
-    transport output, worker-reported allocation failure), and
+    :class:`FactorBackendExhaustedError` when the serialized exact
+    factorization exceeded the declared transport output bound, and
     :class:`FactorBackendFailureError` when the worker reports a genuine
     computation failure.  The returned decomposition has the same shape as
     ``Poly.factor_list()`` so callers can reuse the monic-decomposition
@@ -214,10 +216,16 @@ def _worker_outcome(
             ) from exc
     if isinstance(payload, dict) and payload.get("ok") is False:
         if payload.get("exhausted") is True:
-            # Allocation failure under the declared memory budget is
-            # resource exhaustion: a typed bounded outcome, not a host
-            # exception.
-            raise FactorBackendExhaustedError(str(payload.get("error")))
+            # Allocation failure under the enforced address-space cap is
+            # an enforcement stop exactly like SIGXCPU or a deadline: it
+            # proves only that this run's work envelope was too small,
+            # never that the exact factors exceed any public bound, so
+            # it stays a retryable execution condition.
+            raise FactorBackendInterruptedError(
+                "the bounded factorization worker exhausted its declared "
+                "address-space budget before producing a factorization: "
+                f"{payload.get('error')}"
+            )
         raise FactorBackendFailureError(str(payload.get("error")))
     if isinstance(completed.returncode, int) and completed.returncode < 0:
         # Only a signal death conclusively attributable to an enforced

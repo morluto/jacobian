@@ -301,11 +301,13 @@ class MultivariateFactorResult(StrictModel):
     ``FACTORIZED`` carries the full content-and-monic-irreducibles
     decomposition.  ``OUTPUT_BUDGET_EXCEEDED`` reports, as a typed bounded
     outcome, that the exact factorization is beyond this operation's
-    declared bounds: either an irreducible factor exceeds the public
-    output-term budget or a declared resource or output bound was hit.
-    ``EXECUTION_FAILED`` is not a mathematical conclusion: the worker was
-    stopped by its deadline or cancellation, crashed, or could not be
-    contained, so no factorization was obtained and callers may retry.
+    public output bounds: either an irreducible factor exceeds the public
+    output-term budget or the serialized exact decomposition exceeded the
+    declared transport bound.  ``EXECUTION_FAILED`` is not a mathematical
+    conclusion: the worker was stopped by its deadline or cancellation,
+    killed by an enforced resource cap such as its CPU or address-space
+    budget, crashed, or could not be contained, so no factorization was
+    obtained and callers may retry.
     For both non-FACTORIZED statuses ``reconstructed`` restates the
     requested polynomial unchanged, ``coefficient`` carries the exact
     positive rational content of that polynomial, and ``factors`` is empty.
@@ -450,8 +452,11 @@ def _verify_output_budget_exceeded_claim(
     incompleteness is bound to the restated polynomial instead of being an
     authorable label: the exact rational content is recomputed cheaply and
     compared, and the claim is reproduced only when a replayed factor
-    conversion exceeds the output-term budget or the killable worker cannot
-    produce the exact factorization within its declared work budget at all.
+    conversion exceeds the output-term budget or the replayed run again
+    exceeds the declared transport bound on the serialized decomposition.
+    An interrupted replay — deadline, cancellation, or resource-cap kill
+    such as worker memory exhaustion — establishes nothing about output
+    size and fails closed instead of authenticating the claim.
     """
 
     from jacobian.math.polynomials.multivariate import _factor_backend
@@ -473,9 +478,11 @@ def _verify_output_budget_exceeded_claim(
             wall_seconds=_factor_backend.FACTOR_VERIFY_WALL_SECONDS,
         )
     except FactorBackendExhaustedError:
-        # The replay hit the same declared bounds: the claimed
-        # beyond-bounds behavior of this exact source is reproduced.  An
-        # interrupted replay proves nothing and must not validate the
+        # The replay hit the same declared transport bound on the
+        # serialized decomposition: the claimed beyond-bounds behavior of
+        # this exact source is reproduced.  An interrupted replay —
+        # deadline, cancellation, or a resource-cap kill such as worker
+        # memory exhaustion — proves nothing and must not validate the
         # claim, so only exhaustion returns here.
         return
     except FactorBackendInterruptedError as exc:

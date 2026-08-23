@@ -105,7 +105,9 @@ def main() -> int:
     except MemoryError as exc:
         # Allocation failure under the address-space budget is resource
         # exhaustion, not a kernel bug: report it distinctly so the
-        # coordinator returns its typed bounded outcome.
+        # coordinator can classify it as an enforcement stop (an
+        # execution condition) rather than a kernel defect or a
+        # mathematical capacity conclusion.
         _emit(
             {
                 "ok": False,

@@ -187,13 +187,15 @@ def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFacto
 
     The factorization kernel runs in a bounded, killable worker process.
     When the exact factorization contains an irreducible factor beyond the
-    public output-term budget, or hits a declared resource or output bound,
-    returns the typed ``OUTPUT_BUDGET_EXCEEDED`` outcome instead of a host
-    exception; ``coefficient`` then carries the exact positive rational
-    content of the restated source polynomial.  A worker stopped by its
-    deadline or cancellation, a worker crash, or unavailable containment
-    establishes nothing about output size, so it returns the distinct
-    non-mathematical ``EXECUTION_FAILED`` outcome instead.
+    public output-term budget, or its serialized form exceeds the declared
+    transport output bound, returns the typed ``OUTPUT_BUDGET_EXCEEDED``
+    outcome instead of a host exception; ``coefficient`` then carries the
+    exact positive rational content of the restated source polynomial.  A
+    worker stopped by its deadline or cancellation, killed by an enforced
+    resource cap such as its CPU or address-space budget, crashed, or
+    running without containment establishes nothing about output size, so
+    it returns the distinct non-mathematical ``EXECUTION_FAILED`` outcome
+    instead.
     """
 
     from jacobian._exact import CanonicalRational

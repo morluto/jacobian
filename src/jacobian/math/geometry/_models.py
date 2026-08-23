@@ -615,6 +615,47 @@ def _maximum_profile_wire_bytes(configuration: PointConfiguration) -> int:
     return total
 
 
+def _require_admissible_circumradius_configuration(
+    configuration: PointConfiguration,
+) -> None:
+    """Apply the operation's complete admission to one retained configuration.
+
+    Shared by the request boundary and the result replay validator so an
+    authored or deserialized result can never retain a configuration outside
+    ``CircumradiusProfileRequest``'s domain: at least three points, exactly
+    two coordinates per point, unique coordinates, every component within the
+    published digit bound, and a complete profile within the aggregate
+    result budget.
+    """
+
+    points = configuration.points
+    if len(points) < 3:
+        raise ValueError("circumradius profile requires at least three points")
+    if any(len(item.coordinates) != 2 for item in points):
+        raise ValueError(
+            "circumradius profile requires a planar configuration "
+            "(exactly two coordinates per point)"
+        )
+    keys = tuple(
+        tuple((component.num, component.den) for component in item.coordinates)
+        for item in points
+    )
+    if len(keys) != len(set(keys)):
+        raise ValueError("point coordinates must be unique")
+    for index, item in enumerate(points):
+        for axis, component in enumerate(item.coordinates):
+            _bounded_circumradius_coordinate(
+                component, f"point {index} coordinate {axis}"
+            )
+    estimated_bytes = _maximum_profile_wire_bytes(configuration)
+    if estimated_bytes > MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES:
+        raise ValueError(
+            "the complete circumradius profile would exceed the "
+            f"{MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES}-byte aggregate "
+            "result budget; reduce the point count or coordinate heights"
+        )
+
+
 class CircumradiusProfileRequest(StrictModel):
     """A bounded labelled rational planar point configuration.
 
@@ -647,34 +688,7 @@ class CircumradiusProfileRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_admissible_configuration(self) -> Self:
-        points = self.configuration.points
-        if len(points) < 3:
-            raise ValueError("circumradius profile requires at least three points")
-        if any(len(item.coordinates) != 2 for item in points):
-            raise ValueError(
-                "circumradius profile requires a planar configuration "
-                "(exactly two coordinates per point)"
-            )
-        keys = tuple(
-            tuple(
-                (component.num, component.den) for component in item.coordinates
-            )
-            for item in points
-        )
-        if len(keys) != len(set(keys)):
-            raise ValueError("point coordinates must be unique")
-        for index, item in enumerate(points):
-            for axis, component in enumerate(item.coordinates):
-                _bounded_circumradius_coordinate(
-                    component, f"point {index} coordinate {axis}"
-                )
-        estimated_bytes = _maximum_profile_wire_bytes(self.configuration)
-        if estimated_bytes > MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES:
-            raise ValueError(
-                "the complete circumradius profile would exceed the "
-                f"{MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES}-byte aggregate "
-                "result budget; reduce the point count or coordinate heights"
-            )
+        _require_admissible_circumradius_configuration(self.configuration)
         return self
 
 
@@ -739,11 +753,9 @@ class CircumradiusProfileResult(StrictModel):
             raise ValueError("circumradius profile must be complete")
         if self.triple_count != expected_count:
             raise ValueError("triple_count must equal C(point_count, 3)")
-        if any(len(item.coordinates) != 2 for item in points):
-            raise ValueError(
-                "circumradius profile results require a planar retained "
-                "configuration (exactly two coordinates per point)"
-            )
+        # The retained configuration must satisfy the same operation-specific
+        # admission as a fresh request before any replay work.
+        _require_admissible_circumradius_configuration(self.configuration)
         coords: list[tuple[Fraction, Fraction]] = [
             (item.coordinates[0].as_fraction(), item.coordinates[1].as_fraction())
             for item in points

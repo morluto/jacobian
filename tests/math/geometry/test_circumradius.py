@@ -2,6 +2,7 @@
 
 import math
 from fractions import Fraction
+from itertools import combinations
 
 import pytest
 from pydantic import ValidationError
@@ -610,4 +611,114 @@ class TestNonplanarResultReplayRejection:
         payload = self._honest_payload()
         result = CircumradiusProfileResult.model_validate(payload)
         assert result.entries[0].squared_circumradius is not None
+        assert result.entries[0].squared_circumradius.as_fraction() == Fraction(2)
+
+
+class TestRetainedConfigurationAdmission:
+    """A retained configuration must satisfy request admission before replay."""
+
+    def test_duplicate_coordinates_in_retained_configuration_are_rejected(self):
+        # Every entry replays honestly against this source, but the source
+        # lies outside CircumradiusProfileRequest's domain because two
+        # points share coordinates.
+        points = (
+            _lp("a", "0", "1", "0", "1"),
+            _lp("b", "0", "1", "0", "1"),
+            _lp("c", "1", "1", "0", "1"),
+        )
+        with pytest.raises(ValidationError, match="unique"):
+            CircumradiusProfileResult(
+                configuration={"points": points},
+                point_count=3,
+                triple_count=1,
+                entries=(
+                    CircumradiusTripleEntry(
+                        labels=("a", "b", "c"),
+                        indices=(0, 1, 2),
+                        collinear=True,
+                    ),
+                ),
+                degenerate_triple_count=1,
+                nondegenerate_triple_count=0,
+            )
+
+    def test_oversized_coordinate_heights_in_retained_configuration_are_rejected(self):
+        big = 10**70 + 3
+        points = (
+            _lp("a", "0", "1", "0", "1"),
+            _lp("b", str(big), str(10**69 + 3), "0", "1"),
+            _lp("c", "0", "1", "1", "1"),
+        )
+        ax, ay = Fraction(0), Fraction(0)
+        bx, by = Fraction(big, 10**69 + 3), Fraction(0)
+        cx, cy = Fraction(0), Fraction(1)
+        dab = (ax - bx) ** 2 + (ay - by) ** 2
+        dbc = (bx - cx) ** 2 + (by - cy) ** 2
+        dac = (ax - cx) ** 2 + (ay - cy) ** 2
+        cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+        radius = dab * dbc * dac / (4 * cross * cross)
+        with pytest.raises(
+            ValidationError,
+            match=f"exceeds the {CIRCUMRADIUS_INPUT_HEIGHT}-digit bound",
+        ):
+            CircumradiusProfileResult(
+                configuration={"points": points},
+                point_count=3,
+                triple_count=1,
+                entries=(
+                    CircumradiusTripleEntry(
+                        labels=("a", "b", "c"),
+                        indices=(0, 1, 2),
+                        collinear=False,
+                        squared_circumradius=CanonicalRational.from_fraction(radius),
+                    ),
+                ),
+                radius_multiplicities=((CanonicalRational.from_fraction(radius), 1),),
+                degenerate_triple_count=0,
+                nondegenerate_triple_count=1,
+            )
+
+    def test_budget_violating_retained_configuration_is_rejected_before_replay(self):
+        # All-collinear huge-height points with maximal UTF-8 labels: every
+        # entry would replay cleanly, so admission must reject the complete
+        # profile's aggregate budget before any replay work.
+        height = 10**62
+        base = "\U0001f600" * 62
+        count = 27
+        points = tuple(
+            {
+                "label": f"{base}{index:02d}",
+                "coordinates": [
+                    {"num": str(height + index), "den": str(height + index + 1)},
+                    {"num": "0", "den": "1"},
+                ],
+            }
+            for index in range(count)
+        )
+        entries = tuple(
+            CircumradiusTripleEntry(
+                labels=tuple(points[triple_index]["label"] for triple_index in triple),
+                indices=triple,
+                collinear=True,
+            )
+            for triple in combinations(range(count), 3)
+        )
+        with pytest.raises(ValidationError, match="aggregate result budget"):
+            CircumradiusProfileResult(
+                configuration={"points": points},
+                point_count=count,
+                triple_count=len(entries),
+                entries=entries,
+                degenerate_triple_count=len(entries),
+                nondegenerate_triple_count=0,
+            )
+
+    def test_honest_retained_configuration_round_trips_through_admission(self):
+        pts = (
+            _lp("a", "0", "1", "0", "1"),
+            _lp("b", "2", "1", "0", "1"),
+            _lp("c", "0", "1", "2", "1"),
+        )
+        payload = circumradius_profile(_request(pts)).model_dump(mode="json")
+        result = CircumradiusProfileResult.model_validate(payload)
         assert result.entries[0].squared_circumradius.as_fraction() == Fraction(2)

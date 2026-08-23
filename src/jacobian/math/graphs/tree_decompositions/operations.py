@@ -225,7 +225,7 @@ def _prune_redundant_leaves(
                     changed = True
 
 
-def restrict(td: TreeDecomposition, subset: frozenset[str]) -> dict[str, object]:  # noqa: C901
+def restrict(td: TreeDecomposition, subset: frozenset[str]) -> dict[str, object]:
     """Return the decomposition obtained by replacing every bag B_t with
     B_t ∩ S, then applying the documented deterministic cleanup of empty/
     redundant tree nodes. Bind the result to the induced source graph G[S]."""

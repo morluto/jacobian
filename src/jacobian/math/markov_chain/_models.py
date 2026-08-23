@@ -212,7 +212,7 @@ class CommunicatingClassesResult(StrictModel):
     """Class index of each state (0-indexed)."""
 
     @model_validator(mode="after")
-    def require_partition_validity(self) -> Self:  # noqa: C901
+    def require_partition_validity(self) -> Self:
         dimension = len(self.transition_matrix)
         if any(len(row) != dimension for row in self.transition_matrix):
             raise ValueError("transition matrix must be square")
@@ -238,7 +238,7 @@ class CommunicatingClassesResult(StrictModel):
         return self
 
     @model_validator(mode="after")
-    def bind_decomposition(self) -> Self:  # noqa: C901
+    def bind_decomposition(self) -> Self:
         import networkx as nx
 
         matrix = self.transition_matrix

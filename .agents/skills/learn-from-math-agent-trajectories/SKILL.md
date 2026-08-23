@@ -127,6 +127,27 @@ searches or websites. Verify precise hypotheses and dates against primary
 sources. Mark discussion-thread claims, preprints, peer-reviewed results, and
 agent conjectures distinctly.
 
+When a trajectory embeds useful mathematics inside a specialized proof,
+record the method boundary before classifying it:
+
+```text
+mathematical goal:
+local exact move:
+global proof lift:
+source representation:
+stable reusable postcondition:
+literature identity:
+Jacobian disposition:
+```
+
+This record prevents opposite errors: promoting the whole proof workflow into
+one operation, or dismissing a stable operation because its implementation
+appears inside a theorem-specific script. For example, one nullspace update is
+usually too low-level and an entire allocation theorem is too high-level;
+exact rounding that preserves named rows and bounds the monitored-column error
+can be the reusable boundary. Base every field on observable artifacts and
+primary sources rather than inferred hidden reasoning.
+
 ## Attribute the lesson
 
 Classify each important event as one of:

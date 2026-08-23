@@ -489,6 +489,157 @@ class PinnedLineEntry(StrictModel):
         return self
 
 
+def _pinned_profile_source(
+    configuration: PinnedLineConfiguration,
+    anchor: tuple[PinnedBoundedRational, ...],
+    point_count: int,
+) -> tuple[list[tuple[Fraction, ...]], tuple[Fraction, ...]]:
+    _require_bounded_point_configuration(configuration, anchor)
+    if any(len(pt.coordinates) != 2 for pt in configuration.points):
+        raise ValueError(
+            "retained configuration must be a planar configuration "
+            "(exactly two coordinates per point)"
+        )
+    if (
+        _maximum_pinned_profile_wire_bytes(configuration, anchor)
+        > MAX_PINNED_PROFILE_RESULT_BYTES
+    ):
+        raise ValueError(
+            "the complete pinned line-distance profile would exceed the "
+            f"{MAX_PINNED_PROFILE_RESULT_BYTES}-byte aggregate result "
+            "budget; reduce the point count or coordinate heights"
+        )
+    if len(configuration.points) != point_count:
+        raise ValueError("point_count must match the retained configuration")
+    coords = {
+        tuple(c.as_fraction() for c in pt.coordinates) for pt in configuration.points
+    }
+    if len(coords) != len(configuration.points):
+        raise ValueError("retained configuration points must have distinct coordinates")
+    if point_count > MAX_POINTS:
+        raise ValueError("point_count exceeds the configuration bound")
+    points = [
+        tuple(c.as_fraction() for c in pt.coordinates) for pt in configuration.points
+    ]
+    return points, tuple(c.as_fraction() for c in anchor)
+
+
+def _gcd3(a: Fraction, b: Fraction, c: Fraction) -> Fraction:
+    from math import gcd
+
+    if a == 0 and b == 0 and c == 0:
+        return Fraction(0)
+    nums = [a.numerator, b.numerator, c.numerator]
+    dens = [a.denominator, b.denominator, c.denominator]
+    common_den = 1
+    for denominator in dens:
+        common_den = common_den * denominator // gcd(common_den, denominator)
+    scaled = [n * (common_den // d) for n, d in zip(nums, dens, strict=True)]
+    common_num = 0
+    for value in scaled:
+        common_num = gcd(common_num, abs(value))
+    if common_num == 0:
+        return Fraction(0)
+    return Fraction(common_num, common_den)
+
+
+def _canonical_line_coefficients(
+    p: tuple[Fraction, ...], q: tuple[Fraction, ...]
+) -> tuple[Fraction, Fraction, Fraction]:
+    dx = q[0] - p[0]
+    dy = q[1] - p[1]
+    a, b = dy, -dx
+    c = -(a * p[0] + b * p[1])
+    common = _gcd3(a, b, c)
+    if common != 0:
+        a, b, c = a / common, b / common, c / common
+    for coeff in (a, b, c):
+        if coeff != 0:
+            if coeff < 0:
+                a, b, c = -a, -b, -c
+            break
+    return a, b, c
+
+
+def _squared_point_line_distance(
+    anchor: tuple[Fraction, ...],
+    p: tuple[Fraction, ...],
+    q: tuple[Fraction, ...],
+) -> Fraction:
+    dx = q[0] - p[0]
+    dy = q[1] - p[1]
+    cross = dx * (anchor[1] - p[1]) - dy * (anchor[0] - p[0])
+    return (cross * cross) / (dx * dx + dy * dy)
+
+
+def _expected_pinned_profile_geometry(
+    points: list[tuple[Fraction, ...]],
+    anchor: tuple[Fraction, ...],
+    point_count: int,
+) -> tuple[
+    dict[tuple[Fraction, Fraction, Fraction], list[tuple[int, int]]],
+    dict[tuple[Fraction, Fraction, Fraction], Fraction],
+]:
+    from itertools import combinations
+
+    expected_lines: dict[
+        tuple[Fraction, Fraction, Fraction], list[tuple[int, int]]
+    ] = {}
+    expected_distances: dict[tuple[Fraction, Fraction, Fraction], Fraction] = {}
+    for i, j in combinations(range(point_count), 2):
+        coeffs = _canonical_line_coefficients(points[i], points[j])
+        expected_lines.setdefault(coeffs, []).append((i, j))
+        if coeffs not in expected_distances:
+            expected_distances[coeffs] = _squared_point_line_distance(
+                anchor, points[i], points[j]
+            )
+    return expected_lines, expected_distances
+
+
+def _validate_pinned_profile_entries(
+    lines: tuple[PinnedLineEntry, ...],
+    point_count: int,
+    expected_lines: dict[tuple[Fraction, Fraction, Fraction], list[tuple[int, int]]],
+    expected_distances: dict[tuple[Fraction, Fraction, Fraction], Fraction],
+) -> tuple[list[tuple[int, int]], dict[Fraction, int]]:
+    seen_pairs: list[tuple[int, int]] = []
+    seen_lines: set[tuple[Fraction, ...]] = set()
+    multiplicities: dict[Fraction, int] = {}
+    for entry in lines:
+        entry_coeffs = tuple(c.as_fraction() for c in entry.line_coefficients)
+        if entry_coeffs in seen_lines:
+            raise ValueError("duplicate lines must be collapsed into one entry")
+        seen_lines.add(entry_coeffs)
+        if entry_coeffs not in expected_lines:
+            raise ValueError("line coefficients do not match any source pair line")
+        if tuple(sorted(entry.pairs)) != tuple(sorted(expected_lines[entry_coeffs])):
+            raise ValueError("source pairs do not match the line's geometry")
+        if entry.squared_distance.as_fraction() != expected_distances[entry_coeffs]:
+            raise ValueError("squared distance does not match the source geometry")
+        for i, j in entry.pairs:
+            if not 0 <= i < j < point_count:
+                raise ValueError("source pairs must reference valid point indices")
+            seen_pairs.append((i, j))
+        distance = entry.squared_distance.as_fraction()
+        multiplicities[distance] = multiplicities.get(distance, 0) + 1
+    return seen_pairs, multiplicities
+
+
+def _validate_pinned_profile_order(
+    lines: tuple[PinnedLineEntry, ...],
+    expected_lines: dict[tuple[Fraction, Fraction, Fraction], list[tuple[int, int]]],
+    expected_distances: dict[tuple[Fraction, Fraction, Fraction], Fraction],
+) -> None:
+    ordered_coeffs = sorted(
+        expected_lines, key=lambda coeffs: (expected_distances[coeffs], coeffs)
+    )
+    actual_coeffs = [
+        tuple(c.as_fraction() for c in entry.line_coefficients) for entry in lines
+    ]
+    if actual_coeffs != ordered_coeffs:
+        raise ValueError("lines must be sorted by (squared_distance, coefficients)")
+
+
 class PinnedLineDistanceResult(StrictModel):
     """Complete pinned line-distance profile for a point configuration.
 
@@ -557,164 +708,33 @@ class PinnedLineDistanceResult(StrictModel):
         return data
 
     @model_validator(mode="after")
-    def require_consistent_profile(self) -> Self:  # noqa: C901
+    def require_consistent_profile(self) -> Self:
         from itertools import combinations
-        from math import gcd
 
-        _require_bounded_point_configuration(self.configuration, self.anchor)
-
-        # Bind the profile to planar source geometry before any pair accounting;
-        # replay indexes only (x, y) and would otherwise raise on 1D points or
-        # silently accept 3D points whose third components it cannot see.
-        if any(len(pt.coordinates) != 2 for pt in self.configuration.points):
-            raise ValueError(
-                "retained configuration must be a planar configuration "
-                "(exactly two coordinates per point)"
-            )
-
-        # Apply the aggregate source-derived output budget to retained
-        # results as well: a deserialized profile must remain canonically
-        # serializable even when its geometry replays exactly.
-        if (
-            _maximum_pinned_profile_wire_bytes(self.configuration, self.anchor)
-            > MAX_PINNED_PROFILE_RESULT_BYTES
-        ):
-            raise ValueError(
-                "the complete pinned line-distance profile would exceed the "
-                f"{MAX_PINNED_PROFILE_RESULT_BYTES}-byte aggregate result "
-                "budget; reduce the point count or coordinate heights"
-            )
-        if len(self.configuration.points) != self.point_count:
-            raise ValueError("point_count must match the retained configuration")
-        coords = {
-            tuple(c.as_fraction() for c in pt.coordinates)
-            for pt in self.configuration.points
-        }
-        if len(coords) != len(self.configuration.points):
-            raise ValueError(
-                "retained configuration points must have distinct coordinates"
-            )
-
-        # Cap point_count before enumerating expected pairs (schema-visible too).
-        if self.point_count > MAX_POINTS:
-            raise ValueError("point_count exceeds the configuration bound")
-
-        # Recompute the exact geometry from the retained source.
-        points = [
-            tuple(c.as_fraction() for c in pt.coordinates)
-            for pt in self.configuration.points
-        ]
-        anchor = tuple(c.as_fraction() for c in self.anchor)
-
-        def _gcd3(a: Fraction, b: Fraction, c: Fraction) -> Fraction:
-            if a == 0 and b == 0 and c == 0:
-                return Fraction(0)
-            nums = [a.numerator, b.numerator, c.numerator]
-            dens = [a.denominator, b.denominator, c.denominator]
-            common_den = 1
-            for d in dens:
-                common_den = common_den * d // gcd(common_den, d)
-            scaled = [n * (common_den // d) for n, d in zip(nums, dens, strict=True)]
-            g = 0
-            for v in scaled:
-                g = gcd(g, abs(v))
-            if g == 0:
-                return Fraction(0)
-            return Fraction(g, common_den)
-
-        def _canonical_line_coefficients(
-            p: tuple[Fraction, ...], q: tuple[Fraction, ...]
-        ) -> tuple[Fraction, Fraction, Fraction]:
-            dx = q[0] - p[0]
-            dy = q[1] - p[1]
-            a = dy
-            b = -dx
-            c = -(a * p[0] + b * p[1])
-            g = _gcd3(a, b, c)
-            if g != 0:
-                a, b, c = a / g, b / g, c / g
-            for coeff in (a, b, c):
-                if coeff != 0:
-                    if coeff < 0:
-                        a, b, c = -a, -b, -c
-                    break
-            return a, b, c
-
-        def _squared_point_line_distance(
-            anc: tuple[Fraction, ...],
-            p: tuple[Fraction, ...],
-            q: tuple[Fraction, ...],
-        ) -> Fraction:
-            dx = q[0] - p[0]
-            dy = q[1] - p[1]
-            cross = dx * (anc[1] - p[1]) - dy * (anc[0] - p[0])
-            norm_sq = dx * dx + dy * dy
-            return (cross * cross) / norm_sq
-
-        expected_lines: dict[
-            tuple[Fraction, Fraction, Fraction], list[tuple[int, int]]
-        ] = {}
-        expected_distances: dict[tuple[Fraction, Fraction, Fraction], Fraction] = {}
-        for i, j in combinations(range(self.point_count), 2):
-            coeffs = _canonical_line_coefficients(points[i], points[j])
-            expected_lines.setdefault(coeffs, []).append((i, j))
-            if coeffs not in expected_distances:
-                expected_distances[coeffs] = _squared_point_line_distance(
-                    anchor, points[i], points[j]
-                )
-
+        points, anchor = _pinned_profile_source(
+            self.configuration, self.anchor, self.point_count
+        )
+        expected_lines, expected_distances = _expected_pinned_profile_geometry(
+            points, anchor, self.point_count
+        )
         expected_pairs = sorted(combinations(range(self.point_count), 2))
-        seen_pairs: list[tuple[int, int]] = []
-        seen_lines: set[tuple[Fraction, ...]] = set()
-        mult: dict[Fraction, int] = {}
-        # Map expected coeffs for quick lookup of exact distance/pairs.
-        for entry in self.lines:
-            entry_coeffs = tuple(c.as_fraction() for c in entry.line_coefficients)
-            if entry_coeffs in seen_lines:
-                raise ValueError("duplicate lines must be collapsed into one entry")
-            seen_lines.add(entry_coeffs)
-            # Must be a genuine pair-spanned line from the source.
-            if entry_coeffs not in expected_lines:
-                raise ValueError("line coefficients do not match any source pair line")
-            # Pairs must exactly match the source pairs that generate this line.
-            if tuple(sorted(entry.pairs)) != tuple(
-                sorted(expected_lines[entry_coeffs])
-            ):
-                raise ValueError("source pairs do not match the line's geometry")
-            # Squared distance must match the exact anchor-to-line distance.
-            expected_d = expected_distances[entry_coeffs]
-            if entry.squared_distance.as_fraction() != expected_d:
-                raise ValueError("squared distance does not match the source geometry")
-            for i, j in entry.pairs:
-                if not 0 <= i < j < self.point_count:
-                    raise ValueError("source pairs must reference valid point indices")
-                seen_pairs.append((i, j))
-            d = entry.squared_distance.as_fraction()
-            mult[d] = mult.get(d, 0) + 1
-
+        seen_pairs, multiplicities = _validate_pinned_profile_entries(
+            self.lines, self.point_count, expected_lines, expected_distances
+        )
         if sorted(seen_pairs) != expected_pairs or len(seen_pairs) != len(
             set(seen_pairs)
         ):
             raise ValueError("lines must cover exactly the set of source pairs once")
         if len(self.lines) != len(expected_lines):
             raise ValueError("lines must correspond to distinct geometric lines")
-
-        # Enforce deterministic ordering: sorted by (squared_distance, coefficients).
-        ordered_coeffs = sorted(
-            expected_lines.keys(), key=lambda c: (expected_distances[c], c)
-        )
-        actual_coeffs = [
-            tuple(c.as_fraction() for c in e.line_coefficients) for e in self.lines
-        ]
-        if actual_coeffs != ordered_coeffs:
-            raise ValueError("lines must be sorted by (squared_distance, coefficients)")
+        _validate_pinned_profile_order(self.lines, expected_lines, expected_distances)
 
         reconstructed = tuple(
             (
                 CanonicalRational.from_fraction(d),
                 count,
             )
-            for d, count in sorted(mult.items())
+            for d, count in sorted(multiplicities.items())
         )
         if reconstructed != self.distance_multiplicities:
             raise ValueError(

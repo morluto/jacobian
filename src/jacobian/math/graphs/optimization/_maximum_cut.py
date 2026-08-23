@@ -225,7 +225,6 @@ def _projected_result_bytes(graph: SimpleUndirectedGraph) -> int:
     worst_case = {
         "result_schema_version": "1",
         "graph": graph_value,
-        "status": "EXACT",
         # A valid partition contains every source vertex exactly once across
         # both sides. Putting every vertex on one side maximizes list separators
         # and is therefore a conservative exact bound for the partition fields.
@@ -235,7 +234,6 @@ def _projected_result_bytes(graph: SimpleUndirectedGraph) -> int:
         "cut_value": len(graph.edges),
         "lower_bound": len(graph.edges),
         "upper_bound": len(graph.edges),
-        "completion": "COMPLETE",
     }
     return len(
         encode_strict_json(
@@ -304,14 +302,12 @@ class GraphMaximumCutResult(StrictModel):
 
     result_schema_version: Literal["1"] = "1"
     graph: SimpleUndirectedGraph
-    status: Literal["EXACT"] = "EXACT"
     left_vertices: tuple[str, ...] = Field(max_length=256)
     right_vertices: tuple[str, ...] = Field(max_length=256)
     crossing_edges: tuple[tuple[str, str], ...] = Field(max_length=32_640)
     cut_value: StrictInt = Field(ge=0, le=32_640)
     lower_bound: StrictInt = Field(ge=0, le=32_640)
     upper_bound: StrictInt = Field(ge=0, le=32_640)
-    completion: Literal["COMPLETE"] = "COMPLETE"
 
     @model_validator(mode="after")
     def bind_cut_to_source_and_replay_optimality(self) -> Self:
@@ -502,42 +498,58 @@ def _solve_analysis(
     return _combine_component_solutions(analysis, tuple(solutions))
 
 
+def _partition_from_class_sides(
+    graph: SimpleUndirectedGraph,
+    analysis: _MaximumCutAnalysis,
+    class_sides: tuple[bool, ...],
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[tuple[str, str], ...]]:
+    vertex_sides = tuple(class_sides[class_id] for class_id in analysis.class_of_vertex)
+    left_vertices = tuple(
+        vertex
+        for vertex, side in zip(graph.vertices, vertex_sides, strict=True)
+        if not side
+    )
+    right_vertices = tuple(
+        vertex
+        for vertex, side in zip(graph.vertices, vertex_sides, strict=True)
+        if side
+    )
+    right = set(right_vertices)
+    crossing_edges = tuple(
+        edge for edge in graph.edges if (edge[0] in right) != (edge[1] in right)
+    )
+    return left_vertices, right_vertices, crossing_edges
+
+
 def compute_maximum_cut(request: GraphMaximumCutRequest) -> GraphMaximumCutResult:
     """Compute one deterministic exact maximum cut and source-edge ledger."""
 
     analysis = _analyze_graph(request.graph)
     cut_value, class_sides = _solve_analysis(analysis)
-    vertex_sides = tuple(class_sides[class_id] for class_id in analysis.class_of_vertex)
-    left_vertices = tuple(
-        vertex
-        for vertex, side in zip(request.graph.vertices, vertex_sides, strict=True)
-        if not side
-    )
-    right_vertices = tuple(
-        vertex
-        for vertex, side in zip(request.graph.vertices, vertex_sides, strict=True)
-        if side
-    )
-    right = set(right_vertices)
-    crossing_edges = tuple(
-        edge for edge in request.graph.edges if (edge[0] in right) != (edge[1] in right)
+    left_vertices, right_vertices, crossing_edges = _partition_from_class_sides(
+        request.graph,
+        analysis,
+        class_sides,
     )
     if len(crossing_edges) != cut_value:
-        raise RuntimeError("maximum-cut backend returned an inconsistent objective")
+        cut_value, class_sides = _solve_analysis_by_enumeration(analysis)
+        left_vertices, right_vertices, crossing_edges = _partition_from_class_sides(
+            request.graph,
+            analysis,
+            class_sides,
+        )
 
     # The producer already has coincident exact backend bounds. Avoid paying a
     # second complete search inside this call; independently supplied or
     # deserialized results always execute the exhaustive source-bound replay.
     return GraphMaximumCutResult.model_construct(
         graph=request.graph,
-        status="EXACT",
         left_vertices=left_vertices,
         right_vertices=right_vertices,
         crossing_edges=crossing_edges,
         cut_value=cut_value,
         lower_bound=cut_value,
         upper_bound=cut_value,
-        completion="COMPLETE",
     )
 
 

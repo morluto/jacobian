@@ -346,15 +346,15 @@ def test_result_size_boundary_accepts_the_largest_fit_and_rejects_the_next() -> 
 def test_public_contract_explains_bounds_without_private_kernel_details() -> None:
     graph_schema = GraphMaximumCutRequest.model_json_schema()["properties"]["graph"]
     description = graph_schema["description"]
+    result_properties = GraphMaximumCutResult.model_json_schema()["properties"]
 
     assert str(MAXIMUM_CUT_CANDIDATE_PARTITIONS) in description
     assert "exact-only" in description
     assert "false-twin" not in description
     assert "quotient" not in description
-    assert (
-        "optimality_certificate"
-        not in GraphMaximumCutResult.model_json_schema()["properties"]
-    )
+    assert "optimality_certificate" not in result_properties
+    assert "status" not in result_properties
+    assert "completion" not in result_properties
     assert "z3" not in _maximum_cut.MAXIMUM_CUT_OPERATION.tags
     assert "quotient" not in _maximum_cut.MAXIMUM_CUT_OPERATION.description
     assert all(
@@ -371,6 +371,23 @@ def test_bounded_exhaustive_fallback_preserves_an_exact_result(
     result = _validated_result(_complete(7))
 
     assert result.cut_value == 12
+
+
+def test_inconsistent_private_objective_falls_back_to_exhaustive_search(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    graph = _cycle(5)
+
+    monkeypatch.setattr(
+        _maximum_cut,
+        "_solve_analysis",
+        lambda analysis: (1, tuple(False for _ in analysis.twin_classes)),
+    )
+
+    result = compute_maximum_cut(GraphMaximumCutRequest(graph=graph))
+
+    assert result.cut_value == 4
+    _assert_cut_invariant(result)
 
 
 def test_operation_is_deterministic_on_a_nonunique_optimum() -> None:

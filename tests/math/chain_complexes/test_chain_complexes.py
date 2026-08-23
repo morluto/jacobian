@@ -822,9 +822,7 @@ class TestTensorProductFactorBinding:
 
         circle = _circle_complex()
         point = _point_complex()
-        result = compute_tensor_product(
-            TensorProductRequest(left=circle, right=point)
-        )
+        result = compute_tensor_product(TensorProductRequest(left=circle, right=point))
         revalidated = TensorProductResult.model_validate(result.model_dump())
         assert revalidated.value.basis_sizes == (3, 3)
 
@@ -914,6 +912,73 @@ class TestTensorPrimeFieldResidues:
         assert all(not entry.startswith("-") for entry in entries)
         assert all(entry in {"0", "1", "2"} for entry in entries)
 
+    def test_signed_tensor_coefficient_exact_residue(self) -> None:
+        """The reviewer's counterexample returns exactly the residue 2,
+        both as the serialized projection and the retained complex."""
+        left = ChainComplexValue(
+            coefficient_field=CoefficientField.PRIME_FIELD,
+            prime=3,
+            degree_min=1,
+            degree_max=1,
+            basis_sizes=(1,),
+            differential_matrices=(),
+        )
+        right = ChainComplexValue(
+            coefficient_field=CoefficientField.PRIME_FIELD,
+            prime=3,
+            degree_min=0,
+            degree_max=1,
+            basis_sizes=(1, 1),
+            differential_matrices=((("1",),),),
+        )
+        result = compute_tensor_product(TensorProductRequest(left=left, right=right))
+        assert result.tensor_differential_matrices == ((("2",),),)
+        assert result.value.differential_matrices == ((("2",),),)
+        assert verify_differential(
+            VerifyDifferentialRequest(complex=result.value)
+        ).is_valid
+
+    def test_koszul_sign_boundary_mod_two(self) -> None:
+        """The p = 2 boundary: the Koszul sign -1 is the residue 1."""
+        left = ChainComplexValue(
+            coefficient_field=CoefficientField.PRIME_FIELD,
+            prime=2,
+            degree_min=1,
+            degree_max=1,
+            basis_sizes=(1,),
+            differential_matrices=(),
+        )
+        right = ChainComplexValue(
+            coefficient_field=CoefficientField.PRIME_FIELD,
+            prime=2,
+            degree_min=0,
+            degree_max=1,
+            basis_sizes=(1, 1),
+            differential_matrices=((("1",),),),
+        )
+        result = compute_tensor_product(TensorProductRequest(left=left, right=right))
+        assert result.tensor_differential_matrices == ((("1",),),)
+
+    def test_rational_tensor_keeps_signed_spelling(self) -> None:
+        """QQ tensor products keep their exact signed coefficients, so the
+        reduction is specific to prime-field serialization."""
+        left = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=-1,
+            degree_max=-1,
+            basis_sizes=(1,),
+            differential_matrices=(),
+        )
+        right = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=1,
+            basis_sizes=(1, 1),
+            differential_matrices=((("1",),),),
+        )
+        result = compute_tensor_product(TensorProductRequest(left=left, right=right))
+        assert result.tensor_differential_matrices == ((("-1",),),)
+
     def test_out_of_range_chain_map_entry_rejected(self) -> None:
         """GF(p) chain maps enforce canonical residues like complexes do."""
         source = ChainComplexValue(
@@ -930,6 +995,129 @@ class TestTensorPrimeFieldResidues:
                 target=source,
                 map_matrices=((("4",),), (("4",),)),
             )
+
+    def _gf_point(self, prime: int) -> ChainComplexValue:
+        return ChainComplexValue(
+            coefficient_field=CoefficientField.PRIME_FIELD,
+            prime=prime,
+            degree_min=0,
+            degree_max=0,
+            basis_sizes=(1,),
+            differential_matrices=(),
+        )
+
+    def test_map_entry_modulus_boundaries(self) -> None:
+        """Every spelling outside [0, p) fails admission for both chain-map
+        requests; an in-range residue still verifies."""
+        point = self._gf_point(3)
+        for bad in ("3", "4", "-1"):
+            with pytest.raises(ValueError, match="residue"):
+                VerifyChainMapRequest(
+                    source=point, target=point, map_matrices=(((bad,),),)
+                )
+            with pytest.raises(ValueError, match="residue"):
+                MappingConeRequest(
+                    source=point, target=point, map_matrices=(((bad,),),)
+                )
+        from jacobian.math.chain_complexes.operations import verify_chain_map
+
+        request = VerifyChainMapRequest(
+            source=point, target=point, map_matrices=((("2",),),)
+        )
+        assert verify_chain_map(request).is_valid
+
+    def test_rational_map_entries_keep_integer_grammar(self) -> None:
+        """The modulus check applies only to prime-field components: "4"
+        remains admissible over QQ."""
+        rational_point = _point_complex()
+        request = VerifyChainMapRequest(
+            source=rational_point,
+            target=rational_point,
+            map_matrices=((("4",),),),
+        )
+        assert request.map_matrices == ((("4",),),)
+
+
+class TestPrimeFieldDerivedSerialization:
+    def test_mapping_cone_serializes_prime_field_residues(self) -> None:
+        """The cone's -d_C block becomes the canonical GF(p) residue and
+        the decomposition composes as a square-zero chain complex."""
+        gf3_two_term = ChainComplexValue(
+            coefficient_field=CoefficientField.PRIME_FIELD,
+            prime=3,
+            degree_min=0,
+            degree_max=1,
+            basis_sizes=(1, 1),
+            differential_matrices=((("1",),),),
+        )
+        one = (("1",),)
+        result = compute_mapping_cone(
+            MappingConeRequest(
+                source=gf3_two_term, target=gf3_two_term, map_matrices=(one, one)
+            )
+        )
+        assert result.cone_differential_matrices == (
+            (("1", "1"),),
+            (("2",), ("1",)),
+        )
+        cone = ChainComplexValue(
+            coefficient_field=CoefficientField.PRIME_FIELD,
+            prime=3,
+            degree_min=0,
+            degree_max=2,
+            basis_sizes=result.cone_basis_sizes,
+            differential_matrices=result.cone_differential_matrices,
+        )
+        assert verify_differential(VerifyDifferentialRequest(complex=cone)).is_valid
+
+
+class TestNativeHomologyFieldBinding:
+    """The native homology wrapper returns the source-bound result, so
+    homology over different coefficient fields stays distinct."""
+
+    @staticmethod
+    def _native(complex_value: ChainComplexValue):
+        from jacobian.math.chain_complexes import (
+            homology_groups as native_homology_groups,
+        )
+
+        return native_homology_groups(complex_value)
+
+    def _gf_point(self, prime: int) -> ChainComplexValue:
+        return ChainComplexValue(
+            coefficient_field=CoefficientField.PRIME_FIELD,
+            prime=prime,
+            degree_min=0,
+            degree_max=0,
+            basis_sizes=(1,),
+            differential_matrices=(),
+        )
+
+    def test_result_carries_coefficient_field(self) -> None:
+        from jacobian.math.chain_complexes.values import HomologyResult
+
+        point = self._gf_point(2)
+        result = self._native(point)
+        assert isinstance(result, HomologyResult)
+        assert result.coefficient_field == CoefficientField.PRIME_FIELD
+        assert result.prime == 2
+        assert result.complex == point
+
+    def test_different_fields_yield_distinct_results(self) -> None:
+        over_two = self._native(self._gf_point(2))
+        over_three = self._native(self._gf_point(3))
+        assert over_two.prime == 2
+        assert over_three.prime == 3
+        assert over_two != over_three
+
+    def test_matches_wire_operation(self) -> None:
+        from jacobian.math.chain_complexes._models import ComputeHomologyRequest
+        from jacobian.math.chain_complexes.operations import compute_homology
+
+        point = self._gf_point(3)
+        native_result = self._native(point)
+        wire_result = compute_homology(ComputeHomologyRequest(complex=point))
+        assert native_result == wire_result
 
 
 class TestZeroWidthGroupComposition:
@@ -1103,7 +1291,9 @@ class TestMappingConeSourceBinding:
         circle = self._circle()
         identity = self._identity()
         result = compute_mapping_cone(
-            MappingConeRequest(source=circle, target=circle, map_matrices=(identity,) * 2)
+            MappingConeRequest(
+                source=circle, target=circle, map_matrices=(identity,) * 2
+            )
         )
         return result.model_dump()
 
@@ -1185,7 +1375,9 @@ class TestMappingConeSourceBinding:
         )
         identity = self._identity()
         result = compute_mapping_cone(
-            MappingConeRequest(source=shifted, target=shifted, map_matrices=(identity,) * 2)
+            MappingConeRequest(
+                source=shifted, target=shifted, map_matrices=(identity,) * 2
+            )
         )
         revalidated = MappingConeResult.model_validate(result.model_dump())
         assert revalidated.source_degree_min == -1

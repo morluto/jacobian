@@ -182,9 +182,7 @@ def _require_rational_entry_grammar(
 
     if "/" in entry:
         if coefficient_field == CoefficientField.PRIME_FIELD:
-            raise ValueError(
-                f"prime-field entry '{entry}' must be an integer residue"
-            )
+            raise ValueError(f"prime-field entry '{entry}' must be an integer residue")
         _require_canonical_fraction_entry(entry)
         return
     value = _require_canonical_integer_spelling(entry, entry)
@@ -311,9 +309,7 @@ class MappingConeResult(StrictModel):
             self.source_degree_min != self.source.degree_min
             or self.target_degree_min != self.target.degree_min
         ):
-            raise ValueError(
-                "cone degree provenance must match the retained endpoints"
-            )
+            raise ValueError("cone degree provenance must match the retained endpoints")
         basis_sizes, differential_matrices = _compute_mapping_cone(
             self.source, self.target, self.map_matrices
         )
@@ -322,8 +318,7 @@ class MappingConeResult(StrictModel):
             or self.cone_differential_matrices != differential_matrices
         ):
             raise ValueError(
-                "cone must be the exact mapping cone of the retained "
-                "chain map"
+                "cone must be the exact mapping cone of the retained chain map"
             )
         return self
 
@@ -363,9 +358,7 @@ class TensorProductResult(StrictModel):
         if self.left.prime != self.right.prime or (
             self.left.coefficient_field != self.right.coefficient_field
         ):
-            raise ValueError(
-                "tensor product requires same coefficient field and prime"
-            )
+            raise ValueError("tensor product requires same coefficient field and prime")
         # Bound the replay work before expanding any derived intermediate.
         _require_admissible_tensor_work(self.left, self.right)
         if self.coefficient_field != self.value.coefficient_field:
@@ -447,11 +440,11 @@ class VerificationResult(StrictModel):
             _require_chain_map_relation,
             _require_square_zero,
         )
+
         if self.complex is not None:
             if self.source or self.target or self.map_matrices:
                 raise ValueError(
-                    "a differential verification result must not carry "
-                    "chain-map inputs"
+                    "a differential verification result must not carry chain-map inputs"
                 )
             try:
                 _require_square_zero(
@@ -537,8 +530,7 @@ class VerificationResult(StrictModel):
             )
         if holds != self.is_valid:
             raise ValueError(
-                "verification verdict must be the exact replay of the "
-                "retained relation"
+                "verification verdict must be the exact replay of the retained relation"
             )
         return self
 

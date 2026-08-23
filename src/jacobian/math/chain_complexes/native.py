@@ -25,6 +25,8 @@ __all__ = [
     "tensor_product_complex",
 ]
 
+MapMatrices = tuple[tuple[tuple[str, ...], ...], ...]
+
 
 def homology_groups(
     complex_value: ChainComplexValue,
@@ -52,7 +54,9 @@ def differential_squares_to_zero(
 
 
 def chain_map_commutes(
-    source: ChainComplexValue, target: ChainComplexValue, map_matrices
+    source: ChainComplexValue,
+    target: ChainComplexValue,
+    map_matrices: MapMatrices,
 ) -> VerificationResult:
     """Verify that a component-wise chain map commutes with differentials."""
     from jacobian.math.chain_complexes.operations import verify_chain_map
@@ -63,7 +67,7 @@ def chain_map_commutes(
 
 
 def mapping_cone(
-    source: ChainComplexValue, target: ChainComplexValue, map_matrices
+    source: ChainComplexValue, target: ChainComplexValue, map_matrices: MapMatrices
 ) -> MappingConeResult:
     """Compute the mapping cone of a chain-map value."""
     from jacobian.math.chain_complexes.operations import compute_mapping_cone

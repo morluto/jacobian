@@ -50,7 +50,12 @@ class VerifyDifferentialRequest(StrictModel):
     complex: ChainComplexValue
 
 
-def _require_component_entry_grammar(coefficient_field, matrix, *, prime=None):
+def _require_component_entry_grammar(
+    coefficient_field: CoefficientField,
+    matrix: tuple[tuple[str, ...], ...],
+    *,
+    prime: int | None = None,
+) -> tuple[int, int]:
     """Validate one component's entries; return its (cells, characters)."""
     from jacobian.math.chain_complexes.values import (
         _require_rational_entry_grammar,
@@ -61,9 +66,7 @@ def _require_component_entry_grammar(coefficient_field, matrix, *, prime=None):
             # Shape alone does not make an entry parseable: the exact
             # kernels parse entries with Fraction/int and would turn an
             # accepted request into a host exception.
-            _require_rational_entry_grammar(
-                coefficient_field, entry, prime=prime
-            )
+            _require_rational_entry_grammar(coefficient_field, entry, prime=prime)
     return (
         sum(len(row) for row in matrix),
         sum(len(entry) for row in matrix for entry in row),
@@ -255,7 +258,7 @@ class MappingConeRequest(StrictModel):
         return self
 
 
-def _require_serializable_entries(*complex_values) -> None:
+def _require_serializable_entries(*complex_values: ChainComplexValue) -> None:
     """Tensor inputs stay within the serialization envelope: printed
     entries are products/sums of two coefficients, so each component is
     capped at 512 digits."""
@@ -263,7 +266,7 @@ def _require_serializable_entries(*complex_values) -> None:
         for matrix in complex_value.differential_matrices:
             for row in matrix:
                 for entry in row:
-                    numerator, slash, denominator = entry.partition("/")
+                    numerator, _, denominator = entry.partition("/")
                     if (
                         len(numerator.lstrip("-")) > 512
                         or len(denominator.lstrip("-")) > 512

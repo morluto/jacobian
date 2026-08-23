@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.chain_complexes._models import (
     ComputeHomologyRequest,
     ConstructChainComplexRequest,
@@ -51,66 +52,69 @@ def _matrix_to_fractions(
     return result
 
 
+def _rank_over_prime_field(mat: list[list[Fraction]], prime: int) -> int:
+    """Gauss-Jordan elimination inside GF(p) using modular inverses."""
+    rows = len(mat)
+    cols = len(mat[0])
+    work = [[int(v) % prime for v in row] for row in mat]
+    rank = 0
+    for col in range(cols):
+        pivot = next(
+            (row for row in range(rank, rows) if work[row][col] % prime != 0),
+            None,
+        )
+        if pivot is None:
+            continue
+        work[rank], work[pivot] = work[pivot], work[rank]
+        inverse = pow(work[rank][col], -1, prime)
+        for j in range(cols):
+            work[rank][j] = (work[rank][j] * inverse) % prime
+        for row in range(rows):
+            if row == rank:
+                continue
+            factor = work[row][col] % prime
+            if factor != 0:
+                for j in range(cols):
+                    work[row][j] = (work[row][j] - factor * work[rank][j]) % prime
+        rank += 1
+        if rank == rows:
+            break
+    return rank
+
+
+def _rank_over_rationals(mat: list[list[Fraction]]) -> int:
+    """Gauss-Jordan elimination over QQ."""
+    rows = len(mat)
+    cols = len(mat[0])
+    work = [row[:] for row in mat]
+    rank = 0
+    for col in range(cols):
+        pivot = next(
+            (row for row in range(rank, rows) if work[row][col] != 0),
+            None,
+        )
+        if pivot is None:
+            continue
+        work[rank], work[pivot] = work[pivot], work[rank]
+        for row in range(rows):
+            if row == rank or work[row][col] == 0:
+                continue
+            factor = work[row][col] / work[rank][col]
+            for j in range(cols):
+                work[row][j] -= factor * work[rank][j]
+        rank += 1
+        if rank == rows:
+            break
+    return rank
+
+
 def _matrix_rank(matrix: list[list[Fraction]], prime: int | None = None) -> int:
     """Compute rank of a matrix over QQ or GF(p)."""
     if not matrix or not matrix[0]:
         return 0
-    rows = len(matrix)
-    cols = len(matrix[0])
     if prime is not None:
-        # Perform elimination inside GF(p) using modular inverses
-        # Convert Fractions to ints modulo p (they are already residues)
-        mat = [[int(v) % prime for v in row] for row in matrix]
-        rank = 0
-        for col in range(cols):
-            # Find pivot with non-zero residue
-            pivot = None
-            for row in range(rank, rows):
-                if mat[row][col] % prime != 0:
-                    pivot = row
-                    break
-            if pivot is None:
-                continue
-            mat[rank], mat[pivot] = mat[pivot], mat[rank]
-            inv = pow(int(mat[rank][col]), -1, prime)  # modular inverse
-            # Normalize pivot row
-            for j in range(cols):
-                mat[rank][j] = (mat[rank][j] * inv) % prime
-            # Eliminate other rows
-            for row in range(rows):
-                if row == rank:
-                    continue
-                factor = mat[row][col] % prime
-                if factor != 0:
-                    for j in range(cols):
-                        mat[row][j] = (mat[row][j] - factor * mat[rank][j]) % prime
-            rank += 1
-            if rank == rows:
-                break
-        return rank
-    else:
-        mat = [row[:] for row in matrix]
-        rank = 0
-        for col in range(cols):
-            pivot = None
-            for row in range(rank, rows):
-                if mat[row][col] != 0:
-                    pivot = row
-                    break
-            if pivot is None:
-                continue
-            mat[rank], mat[pivot] = mat[pivot], mat[rank]
-            for row in range(rows):
-                if row == rank:
-                    continue
-                if mat[row][col] != 0:
-                    factor = mat[row][col] / mat[rank][col]
-                    for j in range(cols):
-                        mat[row][j] -= factor * mat[rank][j]
-            rank += 1
-            if rank == rows:
-                break
-        return rank
+        return _rank_over_prime_field(matrix, prime)
+    return _rank_over_rationals(matrix)
 
 
 def _matrix_multiply(
@@ -174,7 +178,7 @@ def _require_square_zero(
     prime: int | None = None,
     *,
     label: str,
-    group_columns=None,
+    group_columns: list[int] | None = None,
     degree_min: int = 0,
 ) -> None:
     """Require d^2 = 0 for a parsed differential sequence.
@@ -185,7 +189,9 @@ def _require_square_zero(
     """
     for i in range(len(diffs) - 1):
         result_columns = group_columns[i + 2] if group_columns is not None else None
-        left_declared_columns = group_columns[i + 1] if group_columns is not None else None
+        left_declared_columns = (
+            group_columns[i + 1] if group_columns is not None else None
+        )
         product = _matrix_multiply(
             diffs[i],
             diffs[i + 1],
@@ -204,8 +210,8 @@ def _require_chain_map_relation(
     target_diffs: list[list[list[Fraction]]],
     map_mats: list[list[list[Fraction]]],
     prime: int | None = None,
-    source_group_columns=None,
-    target_group_columns=None,
+    source_group_columns: list[int] | None = None,
+    target_group_columns: list[int] | None = None,
 ) -> None:
     """Require d_target * f_{i+1} == f_i * d_source at every differential.
 
@@ -463,14 +469,30 @@ def compute_homology(request: ComputeHomologyRequest) -> HomologyResult:
 
 
 def _serialize_entry(value: Fraction, prime: int | None) -> str:
-    """One canonical matrix-entry spelling; GF(p) entries are residues."""
+    """One canonical matrix-entry spelling; GF(p) entries are residues.
+
+    Prime-field coefficients reduce modulo the modulus so an accepted
+    GF(p) request serializes canonical residues in ``[0, p)`` instead of
+    signed representatives that downstream values would reject.
+    """
+    if value.denominator != 1:
+        if prime is not None:
+            raise ValueError("prime-field coefficients must be integers")
+        return (
+            f"{format_canonical_integer(value.numerator)}/"
+            f"{format_canonical_integer(value.denominator)}"
+        )
+    coefficient = int(value)
     if prime is not None:
-        # Canonical GF(p) residues in [0, p): signed contributions must not
-        # serialize as negative integers.
-        return str(int(value) % prime)
-    if value.denominator == 1:
-        return str(int(value))
-    return f"{value.numerator}/{value.denominator}"
+        return format_canonical_integer(coefficient % prime)
+    return format_canonical_integer(coefficient)
+
+
+def _serialized_matrix(
+    mat: list[list[Fraction]], prime: int | None
+) -> tuple[tuple[str, ...], ...]:
+    """Canonical string form of one exact derived matrix."""
+    return tuple(tuple(_serialize_entry(v, prime) for v in row) for row in mat)
 
 
 def _require_mapping_cone_parents(
@@ -493,6 +515,120 @@ def _require_mapping_cone_parents(
         )
 
 
+def _cone_group_sizes(
+    source: ChainComplexValue, target: ChainComplexValue
+) -> tuple[int, ...]:
+    """Cone groups are cone_n = C_{n-1} ⊕ D_n."""
+    max_len = max(len(source.basis_sizes), len(target.basis_sizes))
+    sizes = []
+    for i in range(max_len + 1):
+        d_size = target.basis_sizes[i] if i < len(target.basis_sizes) else 0
+        c_size2 = (
+            source.basis_sizes[i - 1]
+            if i > 0 and i - 1 < len(source.basis_sizes)
+            else 0
+        )
+        sizes.append(c_size2 + d_size)
+    return tuple(sizes)
+
+
+def _cone_block_dimensions(
+    n: int,
+    source_sizes: tuple[int, ...],
+    target_sizes: tuple[int, ...],
+) -> tuple[int, int, int, int]:
+    """Sizes (c_{n-2}, c_{n-1}, d_{n-1}, d_n) around cone degree n."""
+    c_n_minus2 = source_sizes[n - 2] if n - 2 >= 0 and n - 2 < len(source_sizes) else 0
+    c_n_minus1 = source_sizes[n - 1] if 0 <= n - 1 < len(source_sizes) else 0
+    d_n = target_sizes[n] if n < len(target_sizes) else 0
+    d_n_minus1 = target_sizes[n - 1] if n - 1 < len(target_sizes) else 0
+    return c_n_minus2, c_n_minus1, d_n_minus1, d_n
+
+
+def _fill_source_block(
+    block: list[list[Fraction]],
+    source_diffs: list[list[list[Fraction]]],
+    n: int,
+    c_n_minus2: int,
+    c_n_minus1: int,
+) -> None:
+    """Top-left block carries -d_C^{n-1}: C_{n-1} -> C_{n-2}."""
+    if not (c_n_minus2 and c_n_minus1 and n - 2 < len(source_diffs)):
+        return
+    d_c = source_diffs[n - 2]
+    for i in range(c_n_minus2):
+        for j in range(c_n_minus1):
+            block[i][j] = -d_c[i][j]
+
+
+def _fill_target_block(
+    block: list[list[Fraction]],
+    target_diffs: list[list[list[Fraction]]],
+    n: int,
+    c_n_minus2: int,
+    c_n_minus1: int,
+    d_n_minus1: int,
+    d_n: int,
+) -> None:
+    """Bottom-right block carries d_D^{n}: D_n -> D_{n-1}."""
+    if not (d_n_minus1 and d_n and n - 1 < len(target_diffs)):
+        return
+    d_d = target_diffs[n - 1]
+    for i in range(d_n_minus1):
+        for j in range(d_n):
+            block[c_n_minus2 + i][c_n_minus1 + j] = d_d[i][j]
+
+
+def _fill_map_block(
+    block: list[list[Fraction]],
+    map_mats: list[list[list[Fraction]]],
+    n: int,
+    c_n_minus2: int,
+    c_n_minus1: int,
+    d_n_minus1: int,
+) -> None:
+    """Bottom-left block carries f_{n-1}: C_{n-1} -> D_{n-1}."""
+    if not (d_n_minus1 and c_n_minus1 and n - 1 < len(map_mats)):
+        return
+    f = map_mats[n - 1]
+    for i in range(d_n_minus1):
+        for j in range(c_n_minus1):
+            if i < len(f) and j < len(f[0]):
+                block[c_n_minus2 + i][j] = f[i][j]
+
+
+def _cone_differential_for_degree(
+    n: int,
+    cone_basis_sizes: tuple[int, ...],
+    source_basis_sizes: tuple[int, ...],
+    target_basis_sizes: tuple[int, ...],
+    source_diffs: list[list[list[Fraction]]],
+    target_diffs: list[list[list[Fraction]]],
+    map_mats: list[list[list[Fraction]]],
+    prime: int | None,
+) -> tuple[tuple[str, ...], ...]:
+    """One cone differential cone_n -> cone_{n-1} as canonical strings.
+
+    Blocks: top-left = -d_C^{n-1}, top-right = 0, bottom-left = f_{n-1},
+    bottom-right = d_D^{n}.
+    """
+    rows = cone_basis_sizes[n - 1]
+    cols = cone_basis_sizes[n]
+    if rows == 0 or cols == 0:
+        # Zero-cell differentials keep their declared row count so the
+        # outer matrix shape stays reconstructible.
+        return tuple(() for _ in range(rows))
+    block = [[Fraction(0) for _ in range(cols)] for _ in range(rows)]
+    c_n_minus2, c_n_minus1, d_n_minus1, d_n = _cone_block_dimensions(
+        n, source_basis_sizes, target_basis_sizes
+    )
+
+    _fill_source_block(block, source_diffs, n, c_n_minus2, c_n_minus1)
+    _fill_target_block(block, target_diffs, n, c_n_minus2, c_n_minus1, d_n_minus1, d_n)
+    _fill_map_block(block, map_mats, n, c_n_minus2, c_n_minus1, d_n_minus1)
+    return _serialized_matrix(block, prime)
+
+
 def _compute_mapping_cone(
     source: ChainComplexValue,
     target: ChainComplexValue,
@@ -503,25 +639,11 @@ def _compute_mapping_cone(
     _require_mapping_cone_parents(source, target)
     prime = source.prime
 
-    # Verify degree alignment: source and target should have same degree_min for simplicity, else shift
-    # Compute cone basis sizes: cone_n = C_{n-1} ⊕ D_n
-    max_len = max(len(source.basis_sizes), len(target.basis_sizes))
-    cone_basis_sizes = tuple(
-        (target.basis_sizes[i] if i < len(target.basis_sizes) else 0)
-        + (
-            source.basis_sizes[i - 1]
-            if i > 0 and i - 1 < len(source.basis_sizes)
-            else 0
-        )
-        for i in range(max_len + 1)
-    )
+    # Compute cone basis sizes: cone_n = C_{n-1} ⊕ D_n.
+    cone_basis_sizes = _cone_group_sizes(source, target)
 
-    # Build block differentials for each degree
-    # For each cone differential cone_{n} -> cone_{n-1}, we need matrix of size cone_basis_sizes[n-1] x cone_basis_sizes[n]
-    # Blocks: top-left = -d_C^{n-1}, top-right = 0, bottom-left = f_{n-1}, bottom-right = d_D^{n}
-    # For simplicity, we construct string matrices with entries as fractions strings.
-    # Need to parse source and target diffs and maps.
-
+    # Parse source and target differentials plus the map components.
+    # map matrices: f_i: C_i -> D_i, shape target_basis[i] x source_basis[i].
     source_diffs = [
         _matrix_to_fractions(m, source.basis_sizes[i], source.basis_sizes[i + 1], prime)
         for i, m in enumerate(source.differential_matrices)
@@ -530,7 +652,6 @@ def _compute_mapping_cone(
         _matrix_to_fractions(m, target.basis_sizes[i], target.basis_sizes[i + 1], prime)
         for i, m in enumerate(target.differential_matrices)
     ]
-    # map matrices: f_i: C_i -> D_i, shape target_basis[i] x source_basis[i]
     map_mats = [
         _matrix_to_fractions(m, target.basis_sizes[i], source.basis_sizes[i], prime)
         for i, m in enumerate(map_matrices)
@@ -562,57 +683,19 @@ def _compute_mapping_cone(
         target_group_columns=list(target.basis_sizes),
     )
 
-    def _to_str_matrix(mat: list[list[Fraction]]) -> tuple[tuple[str, ...], ...]:
-        return tuple(
-            tuple(_serialize_entry(v, prime) for v in row) for row in mat
+    cone_diffs = tuple(
+        _cone_differential_for_degree(
+            n,
+            cone_basis_sizes,
+            source.basis_sizes,
+            target.basis_sizes,
+            source_diffs,
+            target_diffs,
+            map_mats,
+            prime,
         )
-
-    cone_diffs: list[tuple[tuple[str, ...], ...]] = []
-    for n in range(1, len(cone_basis_sizes)):
-        rows = cone_basis_sizes[n - 1]
-        cols = cone_basis_sizes[n]
-        if rows == 0 or cols == 0:
-            # Zero-cell differentials keep their declared row count so the
-            # outer matrix shape stays reconstructible.
-            cone_diffs.append(tuple(() for _ in range(rows)))
-            continue
-        # Build zero matrix
-        block = [[Fraction(0) for _ in range(cols)] for _ in range(rows)]
-        # Sizes for decomposition: cone_{n} = C_{n-1} ⊕ D_n, cone_{n-1}= C_{n-2} ⊕ D_{n-1}
-        c_n_minus1 = (
-            source.basis_sizes[n - 1] if 0 <= n - 1 < len(source.basis_sizes) else 0
-        )
-        d_n = target.basis_sizes[n] if n < len(target.basis_sizes) else 0
-        c_n_minus2 = (
-            source.basis_sizes[n - 2]
-            if n - 2 >= 0 and n - 2 < len(source.basis_sizes)
-            else 0
-        )
-        d_n_minus1 = target.basis_sizes[n - 1] if n - 1 < len(target.basis_sizes) else 0
-
-        # Fill blocks
-        # Top-left: -d_C^{n-1} : size c_{n-2} x c_{n-1}
-        if c_n_minus2 and c_n_minus1 and n - 2 < len(source_diffs):
-            d_c = source_diffs[n - 2]  # C_{n-1} -> C_{n-2}
-            for i in range(c_n_minus2):
-                for j in range(c_n_minus1):
-                    block[i][j] = -d_c[i][j]
-        # Bottom-right: d_D^{n}: size d_{n-1} x d_n
-        if d_n_minus1 and d_n and n - 1 < len(target_diffs):
-            d_d = target_diffs[n - 1]
-            for i in range(d_n_minus1):
-                for j in range(d_n):
-                    block[c_n_minus2 + i][c_n_minus1 + j] = d_d[i][j]
-        # Bottom-left: f_{n-1}: size d_{n-1} x c_{n-1}
-        if d_n_minus1 and c_n_minus1 and n - 1 < len(map_mats):
-            f = map_mats[n - 1]
-            for i in range(d_n_minus1):
-                for j in range(c_n_minus1):
-                    # f is target x source, so need to map correctly
-                    if i < len(f) and j < len(f[0]):
-                        block[c_n_minus2 + i][j] = f[i][j]
-
-        cone_diffs.append(_to_str_matrix(block))
+        for n in range(1, len(cone_basis_sizes))
+    )
 
     # Defining invariant of the returned decomposition: the cone
     # differentials must themselves be square-zero. Declared cone group
@@ -631,7 +714,7 @@ def _compute_mapping_cone(
         degree_min=source.degree_min,
     )
 
-    return cone_basis_sizes, tuple(cone_diffs)
+    return cone_basis_sizes, cone_diffs
 
 
 def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
@@ -655,6 +738,138 @@ def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
     )
 
 
+def _tensor_group_sizes(
+    left: ChainComplexValue, right: ChainComplexValue
+) -> tuple[int, ...]:
+    """Tensor groups are the graded sums (C⊗D)_n = ⊕_{i+j=n} C_i ⊗ D_j."""
+    group_count = len(left.basis_sizes) + len(right.basis_sizes) - 1
+    sizes = []
+    for degree in range(group_count):
+        size = 0
+        for i in range(min(degree + 1, len(left.basis_sizes))):
+            j = degree - i
+            if j < len(right.basis_sizes):
+                size += left.basis_sizes[i] * right.basis_sizes[j]
+        sizes.append(size)
+    return tuple(sizes)
+
+
+def _tensor_group_offsets(
+    degree: int,
+    left_sizes: tuple[int, ...],
+    right_sizes: tuple[int, ...],
+) -> dict[tuple[int, int], int]:
+    """Column offsets of every (i, j) summand contributing to one degree."""
+    offsets: dict[tuple[int, int], int] = {}
+    off = 0
+    for i in range(min(degree + 1, len(left_sizes))):
+        j = degree - i
+        if j < len(right_sizes) and j >= 0:
+            offsets[(i, j)] = off
+            off += left_sizes[i] * right_sizes[j]
+    return offsets
+
+
+def _apply_left_factor_differential(
+    block: list[list[Fraction]],
+    *,
+    i: int,
+    col_off: int,
+    row_off: int,
+    left: ChainComplexValue,
+    left_diffs: list[list[list[Fraction]]],
+    d_j_size: int,
+) -> None:
+    """d_C ⊗ id_D contribution from C_i ⊗ D_j down to C_{i-1} ⊗ D_j."""
+    d_left = left_diffs[i - 1]
+    for a in range(left.basis_sizes[i - 1]):
+        for b in range(left.basis_sizes[i]):
+            coeff = d_left[a][b]
+            if coeff == 0:
+                continue
+            for c in range(d_j_size):
+                row = row_off + a * d_j_size + c
+                col = col_off + b * d_j_size + c
+                block[row][col] += coeff
+
+
+def _apply_right_factor_differential(
+    block: list[list[Fraction]],
+    *,
+    i: int,
+    j: int,
+    col_off: int,
+    row_off: int,
+    left: ChainComplexValue,
+    right: ChainComplexValue,
+    right_diffs: list[list[list[Fraction]]],
+) -> None:
+    """(-1)^i id_C ⊗ d_D contribution from C_i ⊗ D_j down to C_i ⊗ D_{j-1}.
+
+    The sign uses ``i`` as the actual chain degree of the left factor,
+    not its tuple index.
+    """
+    d_right = right_diffs[j - 1]
+    sign = -1 if (left.degree_min + i) % 2 == 1 else 1
+    for a in range(left.basis_sizes[i]):
+        for c2 in range(right.basis_sizes[j - 1]):
+            for d in range(right.basis_sizes[j]):
+                coeff = d_right[c2][d] * sign
+                if coeff == 0:
+                    continue
+                row = row_off + a * right.basis_sizes[j - 1] + c2
+                col = col_off + a * right.basis_sizes[j] + d
+                block[row][col] += coeff
+
+
+def _tensor_differential_for_degree(
+    deg: int,
+    group_sizes: tuple[int, ...],
+    left: ChainComplexValue,
+    right: ChainComplexValue,
+    left_diffs: list[list[list[Fraction]]],
+    right_diffs: list[list[list[Fraction]]],
+    prime: int | None,
+) -> tuple[tuple[str, ...], ...]:
+    """One tensor differential (C⊗D)_deg -> (C⊗D)_{deg-1} as strings.
+
+    Each summand C_i ⊗ D_j contributes via d_C down to C_{i-1} ⊗ D_j and
+    via the Koszul-signed id ⊗ d_D down to C_i ⊗ D_{j-1}.
+    """
+    rows = group_sizes[deg - 1]
+    cols = group_sizes[deg]
+    if rows == 0 or cols == 0:
+        # Zero-cell differentials keep their declared row count so the
+        # outer matrix shape stays reconstructible.
+        return tuple(() for _ in range(rows))
+    block = [[Fraction(0) for _ in range(cols)] for _ in range(rows)]
+    offsets_deg = _tensor_group_offsets(deg, left.basis_sizes, right.basis_sizes)
+    offsets_prev = _tensor_group_offsets(deg - 1, left.basis_sizes, right.basis_sizes)
+    for (i, j), col_off in offsets_deg.items():
+        if i > 0 and (i - 1, j) in offsets_prev:
+            _apply_left_factor_differential(
+                block,
+                i=i,
+                col_off=col_off,
+                row_off=offsets_prev[(i - 1, j)],
+                left=left,
+                left_diffs=left_diffs,
+                d_j_size=right.basis_sizes[j],
+            )
+        if j > 0 and (i, j - 1) in offsets_prev:
+            _apply_right_factor_differential(
+                block,
+                i=i,
+                j=j,
+                col_off=col_off,
+                row_off=offsets_prev[(i, j - 1)],
+                left=left,
+                right=right,
+                right_diffs=right_diffs,
+            )
+    return _serialized_matrix(block, prime)
+
+
 def _compute_tensor_product(
     left: ChainComplexValue,
     right: ChainComplexValue,
@@ -665,23 +880,7 @@ def _compute_tensor_product(
         raise ValueError("tensor product requires same coefficient field and prime")
     prime = left.prime
 
-    n = len(left.basis_sizes) + len(right.basis_sizes) - 1
-
-    # Basis sizes for the tensor product
-    group_sizes: list[int] = []
-    for degree in range(n):
-        size = 0
-        for i in range(min(degree + 1, len(left.basis_sizes))):
-            j = degree - i
-            if j < len(right.basis_sizes):
-                size += left.basis_sizes[i] * right.basis_sizes[j]
-        group_sizes.append(size)
-    tensor_basis_sizes = tuple(group_sizes)
-
-    # Build signed differentials for each degree.
-    # For each n, differential d_n: (C⊗D)_n -> (C⊗D)_{n-1} is block matrix with
-    # contributions from d^C and d^D with signs.
-    # We construct rational matrices as Fractions and convert to strings.
+    tensor_basis_sizes = _tensor_group_sizes(left, right)
 
     left_diffs = [
         _matrix_to_fractions(m, left.basis_sizes[i], left.basis_sizes[i + 1], prime)
@@ -709,77 +908,14 @@ def _compute_tensor_product(
         degree_min=right.degree_min,
     )
 
-    def _to_str_matrix(mat: list[list[Fraction]]) -> tuple[tuple[str, ...], ...]:
-        return tuple(
-            tuple(_serialize_entry(v, prime) for v in row) for row in mat
+    tensor_diffs = tuple(
+        _tensor_differential_for_degree(
+            deg, tensor_basis_sizes, left, right, left_diffs, right_diffs, prime
         )
+        for deg in range(1, len(tensor_basis_sizes))
+    )
 
-    tensor_diffs: list[tuple[tuple[str, ...], ...]] = []
-    for deg in range(1, n):
-        rows = tensor_basis_sizes[deg - 1]
-        cols = tensor_basis_sizes[deg]
-        if rows == 0 or cols == 0:
-            # Zero-cell differentials keep their declared row count so the
-            # outer matrix shape stays reconstructible.
-            tensor_diffs.append(tuple(() for _ in range(rows)))
-            continue
-        block = [[Fraction(0) for _ in range(cols)] for _ in range(rows)]
-        # We need to map block structure: (C⊗D)_deg = ⊕_{i+j=deg} C_i⊗D_j
-        # Similarly for deg-1 = ⊕_{p+q=deg-1} C_p⊗D_q
-        # For each i,j contributing to deg, its differential contributes to two possible targets:
-        # - via d_C: C_i⊗D_j -> C_{i-1}⊗D_j (if i>0)
-        # - via d_D: C_i⊗D_j -> C_i⊗D_{j-1} with sign (-1)^i
-        # We need to compute offset positions for each summand.
-        # First compute offsets for deg and deg-1
-        offsets_deg = {}
-        off = 0
-        for i in range(min(deg + 1, len(left.basis_sizes))):
-            j = deg - i
-            if j < len(right.basis_sizes):
-                offsets_deg[(i, j)] = off
-                off += left.basis_sizes[i] * right.basis_sizes[j]
-        offsets_deg_minus1 = {}
-        off = 0
-        for p in range(min(deg, len(left.basis_sizes))):
-            q = deg - 1 - p
-            if q < len(right.basis_sizes) and q >= 0:
-                offsets_deg_minus1[(p, q)] = off
-                off += left.basis_sizes[p] * right.basis_sizes[q]
-
-        for (i, j), col_off in offsets_deg.items():
-            # d_C contribution
-            if i > 0 and (i - 1, j) in offsets_deg_minus1:
-                d_left = left_diffs[i - 1]  # shape left_basis[i-1] x left_basis[i]
-                row_off = offsets_deg_minus1[(i - 1, j)]
-                # Tensor product with identity on D_j
-                for a in range(left.basis_sizes[i - 1]):
-                    for b in range(left.basis_sizes[i]):
-                        coeff = d_left[a][b]
-                        if coeff == 0:
-                            continue
-                        for c in range(right.basis_sizes[j]):
-                            row = row_off + a * right.basis_sizes[j] + c
-                            col = col_off + b * right.basis_sizes[j] + c
-                            block[row][col] += coeff
-            # d_D contribution with sign (-1)^i where i is the actual chain
-            # degree of the left factor, not its tuple index.
-            if j > 0 and (i, j - 1) in offsets_deg_minus1:
-                d_right = right_diffs[j - 1]
-                left_degree = left.degree_min + i
-                sign = -1 if left_degree % 2 == 1 else 1
-                row_off = offsets_deg_minus1[(i, j - 1)]
-                for a in range(left.basis_sizes[i]):
-                    for c2 in range(right.basis_sizes[j - 1]):
-                        for d in range(right.basis_sizes[j]):
-                            coeff = d_right[c2][d] * sign
-                            if coeff == 0:
-                                continue
-                            row = row_off + a * right.basis_sizes[j - 1] + c2
-                            col = col_off + a * right.basis_sizes[j] + d
-                            block[row][col] += coeff
-        tensor_diffs.append(_to_str_matrix(block))
-
-    return tensor_basis_sizes, tuple(tensor_diffs)
+    return tensor_basis_sizes, tensor_diffs
 
 
 def compute_tensor_product(request: TensorProductRequest) -> TensorProductResult:

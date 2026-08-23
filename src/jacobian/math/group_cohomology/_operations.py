@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from itertools import product as iproduct
 
+from jacobian.math.group._models import PermutationGroupRequest
 from jacobian.math.group_cohomology._models import (
     CohomologyGroup,
     GroupCohomologyRequest,
     GroupCohomologyResult,
-    PermutationGroup,
 )
 
 
-def _enumerate_group_elements(group: PermutationGroup) -> list[tuple[int, ...]]:
+def _enumerate_group_elements(group: PermutationGroupRequest) -> list[tuple[int, ...]]:
     """Enumerate all elements of a permutation group."""
     from sympy.combinatorics import Permutation, PermutationGroup
 

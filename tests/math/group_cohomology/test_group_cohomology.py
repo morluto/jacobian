@@ -121,11 +121,29 @@ class TestExactBarComplex:
             )
 
     def test_oversized_enumerated_order_rejected(self):
+        # The canonical permutation-group value allows degree up to 64 and
+        # does not bound order itself; the cohomology outer request owns the
+        # 64-element order budget.
         with pytest.raises(ValidationError, match="bounded maximum"):
-            PermutationGroup(
-                degree=6,
-                generators=((1, 0, 2, 3, 4, 5), (1, 2, 3, 4, 5, 0)),
+            GroupCohomologyRequest(
+                group=PermutationGroup(
+                    degree=6,
+                    generators=((1, 0, 2, 3, 4, 5), (1, 2, 3, 4, 5, 0)),
+                ),
+                prime=2,
+                max_degree=1,
             )
+
+    def test_degree_above_sixteen_with_bounded_order_admitted(self):
+        """The duplicate degree-16 cap is gone: a degree-20 action whose
+        enumerated order stays bounded is admitted."""
+        GroupCohomologyRequest(
+            group=PermutationGroup(
+                degree=20, generators=(tuple(range(20)),)
+            ),
+            prime=2,
+            max_degree=0,
+        )
 
     def test_cochain_budget_rejected(self):
         """C4 x max_degree 4 would need 4^5 cochain elements; cap admits it,
@@ -161,6 +179,24 @@ class TestExactBarComplex:
             prime=3,
             max_degree=3,
         )
+
+    def test_reuses_canonical_permutation_group_value(self):
+        """GroupCohomologyRequest reuses PermutationGroupRequest so native
+        composition such as GroupCohomologyRequest(group=result.stabilizer)
+        and result.request.group -> group consumer works unchanged."""
+        from jacobian.math.group._models import PermutationGroupRequest as CanonicalGroup
+        from jacobian.math.group.operations import group_order, group_stabilizer
+
+        canonical = CanonicalGroup(degree=3, generators=((1, 0, 2), (0, 2, 1)))
+        req = GroupCohomologyRequest(group=canonical, prime=2, max_degree=1)
+        result = compute_group_cohomology(req)
+        # result.request.group must be consumable by group consumers unchanged
+        assert group_order(result.request.group) == 6
+
+        # stabilizer result's stabilizer subgroup feeds cohomology unchanged
+        source = CanonicalGroup(degree=4, generators=((1, 0, 2, 3), (1, 2, 3, 0)))
+        stab = group_stabilizer(source, 0)
+        GroupCohomologyRequest(group=stab, prime=2, max_degree=1)
 
 
 class TestDeclarationContract:

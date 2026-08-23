@@ -41,6 +41,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
     OperationAdmission(
+        "probability.graph_reliability.all_terminal.compute",
+        AdmissionDecision.KEEP,
+        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+    ),
+    OperationAdmission(
         "probability.graph_reliability.connection_probability.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",

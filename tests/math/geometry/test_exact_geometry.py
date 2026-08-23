@@ -356,9 +356,7 @@ class TestIncidenceDistinctCoordinatesAndCap:
         with pytest.raises(ValidationError, match="distinct coordinates"):
             CollinearTriplesRequest(configuration=PointConfiguration(points=points))
         with pytest.raises(ValidationError, match="distinct coordinates"):
-            ConcyclicQuadruplesRequest(
-                configuration=PointConfiguration(points=points)
-            )
+            ConcyclicQuadruplesRequest(configuration=PointConfiguration(points=points))
 
     def test_result_rejects_retained_configuration_over_coordinate_cap(self):
         """A deserialized result whose retained configuration carries
@@ -390,4 +388,86 @@ class TestIncidenceDistinctCoordinatesAndCap:
                 holds=False,
                 witnesses=(),
                 kind="COLLINEAR_TRIPLE",
+            )
+
+
+class TestConcyclicWorkBound:
+    @staticmethod
+    def _height_config(n: int, digits: int) -> PointConfiguration:
+        """n planar points whose coordinate height is exactly `digits`."""
+
+        def cr(offset: int):
+            return CanonicalRational(num=str(10 ** (digits - 1) + offset), den="1")
+
+        return PointConfiguration(
+            points=tuple(
+                LabelledRationalPoint(
+                    label=f"p{i}",
+                    coordinates=(cr(i), cr(i + n)),
+                )
+                for i in range(n)
+            )
+        )
+
+    def test_request_rejects_joint_budget_violation(self):
+        """C(18,4)*22 = 67320 > 65536: within the point cap and the
+        per-coordinate digit cap, but jointly too much enumeration work."""
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import ConcyclicQuadruplesRequest
+
+        with pytest.raises(ValidationError, match="joint work budget"):
+            ConcyclicQuadruplesRequest(configuration=self._height_config(18, 22))
+
+    def test_request_rejects_former_24_point_bound(self):
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import (
+            MAX_QUADRUPLE_SEARCH_POINTS,
+            ConcyclicQuadruplesRequest,
+        )
+
+        assert MAX_QUADRUPLE_SEARCH_POINTS == 18
+        with pytest.raises(ValidationError, match="enumeration bound"):
+            ConcyclicQuadruplesRequest(configuration=self._height_config(19, 2))
+
+    def test_request_admits_budget_boundary_configuration(self):
+        from jacobian.math.geometry.exact._models import ConcyclicQuadruplesRequest
+
+        request = ConcyclicQuadruplesRequest(configuration=self._height_config(18, 21))
+        assert len(request.configuration.points) == 18
+
+    def test_result_rejects_work_bound_before_replay(self):
+        """A forged result must not pull budget-bypassing replay work; the
+        joint bound fires before witness conversion or search replay."""
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import (
+            IncidenceSearchResult,
+            LabelledRationalPoint,
+            PointConfiguration,
+        )
+
+        base = 10**63
+        points = tuple(
+            LabelledRationalPoint(
+                label=f"p{i}",
+                coordinates=(
+                    CanonicalRational(num=str(base + i), den="1"),
+                    CanonicalRational(num=str(base + i + 64), den="1"),
+                ),
+            )
+            for i in range(18)
+        )
+        with pytest.raises(ValidationError, match="joint work budget"):
+            IncidenceSearchResult(
+                configuration=PointConfiguration(points=points),
+                dimension=2,
+                point_count=18,
+                holds=False,
+                witnesses=(),
+                kind="CONCYCLIC_QUADRUPLE",
             )

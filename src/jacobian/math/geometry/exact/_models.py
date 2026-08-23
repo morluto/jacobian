@@ -11,12 +11,23 @@ from jacobian._models import StrictModel
 
 MAX_POINTS = 64
 MAX_DIMENSION = 20
-MAX_QUADRUPLE_SEARCH_POINTS = 24
-"""Cap on configuration size for C(n,4) quadruple enumeration (10626 subsets)."""
+MAX_QUADRUPLE_SEARCH_POINTS = 18
+"""Cap on configuration size for C(n,4) quadruple enumeration (3060 subsets)."""
 
 INCIDENCE_COORDINATE_DIGITS = 256
 """Conservative per-coordinate digit bound; keeps 10k-quadruple Fractions bounded."""
 _INCIDENCE_INPUT_HEIGHT = INCIDENCE_COORDINATE_DIGITS // 4
+
+CONCYCLIC_WORK_BUDGET = 65536
+"""Joint admission budget C(n,4)*h for concyclic search.
+
+h is the largest decimal digit length over all coordinate numerators and
+denominators.  Measured accepted-call cost (enumeration plus the mandatory
+completeness replay in IncidenceSearchResult) is near-linear in C(n,4)*h;
+the budget admits 64-digit coordinates up to 14 points, 36-digit
+coordinates at 16 points, and 21-digit coordinates at the 18-point cap,
+holding every admitted call to roughly two seconds.
+"""
 
 
 def _bounded_incidence_coordinate(value: CanonicalRational, label: str) -> None:
@@ -29,6 +40,32 @@ def _bounded_incidence_coordinate(value: CanonicalRational, label: str) -> None:
     )
 
 
+def _coordinate_height(value: CanonicalRational) -> int:
+    return max(len(value.num.lstrip("-")), len(value.den.lstrip("-")))
+
+
+def _require_concyclic_work_bound(points: Any) -> None:
+    """Reject configurations whose joint enumeration work exceeds budget.
+
+    The concyclic search performs several exact determinant checks per
+    C(n,4) quadruple over h-digit rationals, and result validation replays
+    the same complete search; neither per-coordinate nor point-count caps
+    alone bound their product.
+    """
+
+    from math import comb
+
+    height = max(_coordinate_height(c) for point in points for c in point.coordinates)
+    subsets = comb(len(points), 4)
+    if subsets * height > CONCYCLIC_WORK_BUDGET:
+        raise ValueError(
+            "concyclic-quadruple search exceeds the joint work budget "
+            f"C({len(points)},4)*{height} = {subsets * height} > "
+            f"{CONCYCLIC_WORK_BUDGET}; reduce the point count or the "
+            "coordinate digit length"
+        )
+
+
 def _require_distinct_incidence_coordinates(points: Any) -> None:
     """Reject coordinate-coincident labelled entries.
 
@@ -38,9 +75,7 @@ def _require_distinct_incidence_coordinates(points: Any) -> None:
     false negative.  Labels alone do not establish distinct points.
     """
 
-    coords = {
-        tuple(c.as_fraction() for c in point.coordinates) for point in points
-    }
+    coords = {tuple(c.as_fraction() for c in point.coordinates) for point in points}
     if len(coords) != len(points):
         raise ValueError(
             "incidence configurations require pairwise distinct coordinates; "
@@ -134,10 +169,11 @@ class DistanceGraphResult(StrictModel):
 class CollinearTriplesRequest(StrictModel):
     """Search a planar configuration for collinear triples.
 
-    The configuration must be planar with 3..64 points (3..24 for concyclic
-    searches) and each coordinate must stay within the 64-digit
-    operation-specific bound so that enumeration with huge Fractions stays
-    bounded; see the validator for the precise bound.
+    The configuration must be planar with 3..64 points (the sibling
+    concyclic search admits 4..18 points under a joint work budget) and
+    each coordinate must stay within the 64-digit operation-specific bound
+    so that enumeration with huge Fractions stays bounded; see the
+    validator for the precise bound.
     """
 
     model_config = ConfigDict(
@@ -153,7 +189,7 @@ class CollinearTriplesRequest(StrictModel):
 
     configuration: PointConfiguration = Field(
         description=(
-            "Planar point configuration with 3..64 points; 4..24 points "
+            "Planar point configuration with 3..64 points; 4..18 points "
             "for the sibling concyclic search. Each coordinate is bounded "
             "to 64 digits so that all exact determinants stay representable."
         )
@@ -180,35 +216,38 @@ class CollinearTriplesRequest(StrictModel):
 class ConcyclicQuadruplesRequest(StrictModel):
     """Search a planar configuration for concyclic quadruples.
 
-    Requires a planar configuration with 4..24 points (C(n,4) capped at
-    10626 subsets) and each coordinate within the 64-digit operation-specific
-    bound.
+    Requires a planar configuration with 4..18 points whose coordinates
+    each stay within the 64-digit operation-specific bound and whose joint
+    work measure stays within budget: with h the largest decimal digit
+    length over all coordinate numerators and denominators, C(n,4)*h must
+    not exceed 65536.
     """
 
     model_config = ConfigDict(
         json_schema_extra={
             "description": (
                 "Search a planar configuration for concyclic quadruples. "
-                "Requires a planar configuration with 4..24 points "
-                "(C(24,4)=10626); configurations with 25..64 points are "
-                "rejected. Each coordinate must stay within the 64-digit "
-                "operation-specific bound."
+                "Requires a planar configuration with 4..18 points "
+                "(C(18,4)=3060); configurations with 19..64 points are "
+                "rejected. Each coordinate is bounded to 64 digits, and "
+                "the joint work budget C(n,4)*h <= 65536 (h = largest "
+                "coordinate digit length) must hold so exact enumeration "
+                "stays bounded."
             )
         }
     )
 
     configuration: PointConfiguration = Field(
         description=(
-            "Planar point configuration with 4..24 points; the enumeration "
+            "Planar point configuration with 4..18 points; the enumeration "
             "covers every unordered quadruple. Each coordinate is bounded "
-            "to 64 digits so that all exact determinants stay representable."
+            "to 64 digits, and C(n,4)*h <= 65536 (h = largest coordinate "
+            "digit length) so exact enumeration stays bounded."
         )
     )
 
     @model_validator(mode="after")
     def require_planar(self) -> Self:
-        from jacobian.math.geometry.exact._models import MAX_QUADRUPLE_SEARCH_POINTS
-
         if not self.configuration.points:
             return self
         if len(self.configuration.points[0].coordinates) != 2:
@@ -226,6 +265,7 @@ class ConcyclicQuadruplesRequest(StrictModel):
             for dim, coord in enumerate(point.coordinates):
                 _bounded_incidence_coordinate(coord, f"point {idx} coordinate {dim}")
         _require_distinct_incidence_coordinates(self.configuration.points)
+        _require_concyclic_work_bound(self.configuration.points)
         return self
 
 
@@ -267,7 +307,8 @@ class IncidenceSearchResult(StrictModel):
             and self.point_count > MAX_QUADRUPLE_SEARCH_POINTS
         ):
             raise ValueError(
-                "concyclic result point_count exceeds the 24-point enumeration bound"
+                "concyclic result point_count exceeds the "
+                f"{MAX_QUADRUPLE_SEARCH_POINTS}-point enumeration bound"
             )
         if self.holds and not self.witnesses:
             raise ValueError("a holds=True result must list at least one witness")
@@ -282,6 +323,8 @@ class IncidenceSearchResult(StrictModel):
             for dim, coord in enumerate(point.coordinates):
                 _bounded_incidence_coordinate(coord, f"point {idx} coordinate {dim}")
         _require_distinct_incidence_coordinates(self.configuration.points)
+        if self.kind == "CONCYCLIC_QUADRUPLE":
+            _require_concyclic_work_bound(self.configuration.points)
 
         expected_size = 3 if self.kind == "COLLINEAR_TRIPLE" else 4
         pts = [

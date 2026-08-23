@@ -403,11 +403,14 @@ def test_unsubstantiated_budget_outcome_without_basis_rejected() -> None:
         )
 
 
-def test_basis_growth_beyond_representability_reports_typed_outcome() -> None:
+def test_basis_growth_beyond_representability_reports_non_conclusion() -> None:
     # The eight-variable lex chain <x1-C*x2^12, ..., x7-C*x8^12> with
     # C = 10**127 has a reduced basis element whose coefficient would carry
-    # hundreds of millions of digits.  The incremental bounded kernel must
-    # report the typed budget outcome before constructing it.
+    # hundreds of millions of digits.  No prefix may decide that outcome
+    # (later generators can shrink an ideal), and every complete strategy
+    # exceeds its work bound here, so the operations report the typed
+    # non-conclusion outcome instead of asserting an overflow they cannot
+    # establish.
     variables = tuple(f"x{i}" for i in range(1, 9))
     coefficient = 10**127
 
@@ -431,8 +434,48 @@ def test_basis_growth_beyond_representability_reports_typed_outcome() -> None:
         polynomial=_poly(variables, {(1,) + (0,) * 7: 1}),
         monomial_order="lex",
     )
-    result = polynomial_ideal_membership(request)
-    assert result.status == "BUDGET_EXCEEDED"
+    result = polynomial_ideal_normal_form(request)
+    assert result.status == "UNKNOWN"
+    assert result.groebner_basis is None and result.remainder is None
+    membership = polynomial_ideal_membership(request)
+    assert membership.status == "UNKNOWN"
+    IdealNormalFormResult.model_validate(
+        {
+            "ideal": result.ideal,
+            "polynomial": result.polynomial,
+            "monomial_order": result.monomial_order,
+            "status": "UNKNOWN",
+            "groebner_basis": None,
+            "remainder": None,
+        }
+    )
+
+
+def test_unknown_result_must_not_carry_partial_artifacts() -> None:
+    req = IdealMembershipRequest(
+        ideal=_ideal1(),
+        polynomial=_poly(("x",), {(3,): 1}),
+    )
+    computed = polynomial_ideal_normal_form(req)
+    assert computed.groebner_basis is not None and computed.remainder is not None
+    with pytest.raises(ValidationError, match="UNKNOWN must not carry"):
+        IdealNormalFormResult(
+            ideal=req.ideal,
+            polynomial=req.polynomial,
+            monomial_order="grevlex",
+            status="UNKNOWN",
+            groebner_basis=computed.groebner_basis,
+            remainder=None,
+        )
+    with pytest.raises(ValidationError, match="UNKNOWN must not carry"):
+        IdealMembershipResult(
+            ideal=req.ideal,
+            polynomial=req.polynomial,
+            monomial_order="grevlex",
+            status="UNKNOWN",
+            groebner_basis=None,
+            normal_form=_poly(("x",), {}),
+        )
 
 
 def test_request_schema_publishes_polynomial_admission_limits() -> None:
@@ -564,6 +607,93 @@ def test_nonconstant_late_generator_collapse_not_reported_as_overflow() -> None:
     assert result.remainder is not None and len(result.remainder.polynomial.terms) == 0
     membership = polynomial_ideal_membership(request)
     assert membership.status == "IN_IDEAL"
+
+
+def test_prefix_exponent_overflow_not_reported_for_late_unit_collapse() -> None:
+    # Reviewer counterexample: <x1^11, x1-x2^11, ..., x4-x5^11, 1+x1^12>
+    # under lex.  The five degree-11 generators come first in the canonical
+    # order and their prefix basis contains x5^161051, whose exponent
+    # leaves the shared representation limit; the trailing generator is
+    # coprime to x1^11, so the complete ideal is the unit ideal with basis
+    # (1) and x5 has normal form zero.  No prefix property may decide a
+    # budget outcome that later generators invalidate.
+    variables = tuple(f"x{i}" for i in range(1, 6))
+
+    def chain_generator(shift: int) -> RationalPolynomial:
+        return _poly(
+            variables,
+            {
+                tuple(1 if index == shift else 0 for index in range(5)): 1,
+                tuple(11 if index == shift + 1 else 0 for index in range(5)): -1,
+            },
+        )
+
+    ideal = RationalPolynomialIdeal(
+        variables=variables,
+        generators=(
+            _poly(variables, {(11, 0, 0, 0, 0): 1}),
+            *(chain_generator(shift) for shift in range(4)),
+            _poly(variables, {(12, 0, 0, 0, 0): 1, (0, 0, 0, 0, 0): 1}),
+        ),
+    )
+    request = IdealMembershipRequest(
+        ideal=ideal,
+        polynomial=_poly(variables, {(0, 0, 0, 0, 1): 1}),
+        monomial_order="lex",
+    )
+    result = polynomial_ideal_normal_form(request)
+    assert result.status == "COMPUTED"
+    assert result.groebner_basis is not None
+    assert len(result.groebner_basis) == 1
+    assert result.groebner_basis[0].polynomial.terms[0].exponents == (0,) * 5
+    assert result.remainder is not None
+    assert len(result.remainder.polynomial.terms) == 0
+    membership = polynomial_ideal_membership(request)
+    assert membership.status == "IN_IDEAL"
+
+
+def test_complete_basis_exponent_overflow_reports_typed_outcome() -> None:
+    # The same chain without the trailing coprime generator: no later
+    # generator shrinks this ideal, and its complete reduced basis contains
+    # x5^161051, whose exponent genuinely leaves the representability limit.
+    variables = tuple(f"x{i}" for i in range(1, 6))
+
+    def chain_generator(shift: int) -> RationalPolynomial:
+        return _poly(
+            variables,
+            {
+                tuple(1 if index == shift else 0 for index in range(5)): 1,
+                tuple(11 if index == shift + 1 else 0 for index in range(5)): -1,
+            },
+        )
+
+    ideal = RationalPolynomialIdeal(
+        variables=variables,
+        generators=(
+            _poly(variables, {(11, 0, 0, 0, 0): 1}),
+            *(chain_generator(shift) for shift in range(4)),
+        ),
+    )
+    request = IdealMembershipRequest(
+        ideal=ideal,
+        polynomial=_poly(variables, {(0, 0, 0, 0, 1): 1}),
+        monomial_order="lex",
+    )
+    result = polynomial_ideal_normal_form(request)
+    assert result.status == "BUDGET_EXCEEDED"
+    assert result.groebner_basis is None and result.remainder is None
+    membership = polynomial_ideal_membership(request)
+    assert membership.status == "BUDGET_EXCEEDED"
+    IdealNormalFormResult.model_validate(
+        {
+            "ideal": result.ideal,
+            "polynomial": result.polynomial,
+            "monomial_order": result.monomial_order,
+            "status": "BUDGET_EXCEEDED",
+            "groebner_basis": None,
+            "remainder": None,
+        }
+    )
 
 
 def test_budget_outcome_is_independent_of_generator_presentation_order() -> None:

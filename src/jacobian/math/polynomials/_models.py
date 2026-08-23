@@ -514,13 +514,15 @@ class IdealNormalFormResult(StrictModel):
     validation replays the defining reduction relation exactly.  When the
     exact remainder exceeds the 1,024-term output boundary the status reports
     ``BUDGET_EXCEEDED`` instead of a mathematical conclusion; no partial
-    remainder is returned.
+    remainder is returned.  ``UNKNOWN`` reports that the bounded kernel could
+    not complete any strategy within its work bounds and asserts neither a
+    reduction nor a budget overflow; it carries no partial artifact.
     """
 
     ideal: RationalPolynomialIdeal
     polynomial: RationalPolynomial
     monomial_order: Literal["lex", "grlex", "grevlex"]
-    status: Literal["COMPUTED", "BUDGET_EXCEEDED"]
+    status: Literal["COMPUTED", "BUDGET_EXCEEDED", "UNKNOWN"]
     groebner_basis: tuple[RationalPolynomial, ...] | None
     remainder: RationalPolynomial | None
 
@@ -528,6 +530,10 @@ class IdealNormalFormResult(StrictModel):
     def require_replayable_reduction(self) -> Self:
         _validate_membership_source(self.ideal, self.polynomial)
         _validate_retained_basis(self.groebner_basis, self.ideal.variables)
+        if self.status == "UNKNOWN":
+            if self.groebner_basis is not None or self.remainder is not None:
+                raise ValueError("UNKNOWN must not carry a partial artifact")
+            return self
         if self.status == "BUDGET_EXCEEDED":
             if self.remainder is not None:
                 raise ValueError("BUDGET_EXCEEDED must not carry a remainder")
@@ -568,13 +574,16 @@ class IdealMembershipResult(StrictModel):
     relation (source ideal, source polynomial, monomial order, computed
     Gröbner basis) so validation can replay the reduction.  When the exact
     normal form exceeds the output boundary the status reports
-    ``BUDGET_EXCEEDED`` and asserts no membership conclusion.
+    ``BUDGET_EXCEEDED`` and asserts no membership conclusion.  ``UNKNOWN``
+    reports that the bounded kernel could not complete any strategy within
+    its work bounds and asserts neither membership nor a budget overflow;
+    it carries no partial artifact.
     """
 
     ideal: RationalPolynomialIdeal
     polynomial: RationalPolynomial
     monomial_order: Literal["lex", "grlex", "grevlex"]
-    status: Literal["IN_IDEAL", "NOT_IN_IDEAL", "BUDGET_EXCEEDED"]
+    status: Literal["IN_IDEAL", "NOT_IN_IDEAL", "BUDGET_EXCEEDED", "UNKNOWN"]
     groebner_basis: tuple[RationalPolynomial, ...] | None
     normal_form: RationalPolynomial | None
 
@@ -582,6 +591,10 @@ class IdealMembershipResult(StrictModel):
     def require_replayable_membership(self) -> Self:
         _validate_membership_source(self.ideal, self.polynomial)
         _validate_retained_basis(self.groebner_basis, self.ideal.variables)
+        if self.status == "UNKNOWN":
+            if self.groebner_basis is not None or self.normal_form is not None:
+                raise ValueError("UNKNOWN must not carry a partial artifact")
+            return self
         if self.status == "BUDGET_EXCEEDED":
             if self.normal_form is not None:
                 raise ValueError("BUDGET_EXCEEDED must not carry a normal form")

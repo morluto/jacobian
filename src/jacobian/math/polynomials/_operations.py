@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 import sympy
 
@@ -238,60 +238,33 @@ def polynomial_groebner_basis(
 
 def _compute_membership_context(
     request: IdealMembershipRequest,
-) -> tuple[tuple[RationalPolynomial, ...] | None, Any]:
-    """Compute the Gröbner basis and return its wire form with the SymPy basis.
+) -> tuple[tuple[RationalPolynomial, ...] | None, bool]:
+    """Compute the source Gröbner basis and report the bounded outcome.
 
-    The wire basis is ``None`` when the computation exceeds a work or
-    representability boundary — decided only on the complete source
-    basis, never on an intermediate prefix — so the caller reports the
-    typed budget outcome instead of expanding an unrepresentable exact
-    artifact.
+    The basis is wire-form when some bounded strategy concluded within
+    every output budget.  ``None`` with ``exceeded`` reports evidenced
+    complete-basis overflow for the typed budget outcome; ``None``
+    without it reports that no strategy concluded, for the typed
+    non-conclusion outcome.
     """
 
-    variables = request.ideal.variables
-    symbols = symbols_for_variables(variables)
     from jacobian.math.polynomials._replay import incremental_source_groebner
 
-    source_basis, exceeded = incremental_source_groebner(
-        request.ideal, request.monomial_order
-    )
-    if source_basis is None or exceeded:
-        return None, None
-    basis = source_basis
-    from pydantic import ValidationError
-
-    try:
-        wire_basis = tuple(
-            _result_polynomial(
-                sympy.Poly(expr.as_expr(), *symbols, domain=sympy.QQ), variables
-            )
-            for expr in basis.exprs
-        )
-    except (PolynomialOutputBudgetError, Exception) as exc:
-        # _result_polynomial already maps ValidationError/exponent overflows to
-        # PolynomialOutputBudgetError; any other validation failure during
-        # retained-basis materialization is also a budget overflow.
-        if isinstance(exc, (PolynomialOutputBudgetError, ValidationError)):
-            return None, basis
-        if "exponent" in str(exc).lower() or "representation limit" in str(exc).lower():
-            return None, basis
-        raise
-    if sum(len(element.polynomial.terms) for element in wire_basis) > 1024:
-        return None, basis
-    return wire_basis, basis
+    return incremental_source_groebner(request.ideal, request.monomial_order)
 
 
-def _budget_exceeded_normal_form(
+def _incomplete_normal_form(
     request: IdealMembershipRequest,
+    status: Literal["BUDGET_EXCEEDED", "UNKNOWN"],
     groebner_basis: tuple[RationalPolynomial, ...] | None,
 ) -> IdealNormalFormResult:
-    """Report the typed budget outcome without a partial exact artifact."""
+    """Report a non-computed outcome without a partial exact artifact."""
 
     return IdealNormalFormResult(
         ideal=request.ideal,
         polynomial=request.polynomial,
         monomial_order=request.monomial_order,
-        status="BUDGET_EXCEEDED",
+        status=status,
         groebner_basis=groebner_basis,
         remainder=None,
     )
@@ -304,9 +277,12 @@ def polynomial_ideal_normal_form(
 
     variables = request.ideal.variables
     symbols = symbols_for_variables(variables)
-    wire_basis, _source_basis = _compute_membership_context(request)
+    wire_basis, exceeded = _compute_membership_context(request)
     if wire_basis is None:
-        return _budget_exceeded_normal_form(request, None)
+        status: Literal["BUDGET_EXCEEDED", "UNKNOWN"] = (
+            "BUDGET_EXCEEDED" if exceeded else "UNKNOWN"
+        )
+        return _incomplete_normal_form(request, status, None)
     # Reduce with a bounded sparse-ring division so an admitted request can
     # never expand an unbounded intermediate remainder before the 1,024-term
     # output boundary is noticed; overflow becomes the typed budget outcome.
@@ -315,7 +291,7 @@ def polynomial_ideal_normal_form(
     dividend = _ring_element(ring_context, request.polynomial)
     replayed = budgeted_reduce(ring_context, dividend, divisors)
     if replayed is None:
-        return _budget_exceeded_normal_form(request, wire_basis)
+        return _incomplete_normal_form(request, "BUDGET_EXCEEDED", wire_basis)
     try:
         remainder = _result_polynomial(
             sympy.Poly.from_dict(
@@ -339,7 +315,7 @@ def polynomial_ideal_normal_form(
             or "exponent" in str(exc).lower()
             or "representation limit" in str(exc).lower()
         ):
-            return _budget_exceeded_normal_form(request, wire_basis)
+            return _incomplete_normal_form(request, "BUDGET_EXCEEDED", wire_basis)
         raise
     return IdealNormalFormResult(
         ideal=request.ideal,
@@ -357,6 +333,15 @@ def polynomial_ideal_membership(
     """Decide whether a polynomial lies in an ideal."""
 
     normal_form = polynomial_ideal_normal_form(request)
+    if normal_form.status == "UNKNOWN":
+        return IdealMembershipResult(
+            ideal=normal_form.ideal,
+            polynomial=normal_form.polynomial,
+            monomial_order=normal_form.monomial_order,
+            groebner_basis=None,
+            status="UNKNOWN",
+            normal_form=None,
+        )
     if normal_form.status == "BUDGET_EXCEEDED":
         return IdealMembershipResult(
             ideal=normal_form.ideal,

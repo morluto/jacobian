@@ -25,11 +25,12 @@ __all__ = [
 
 # Bounded-reduction budget: intermediate reduction work is capped so a
 # pathological request cannot expand an unbounded remainder before the
-# 1,024-term output boundary is noticed. The intermediate work cap is a
-# conservative multiple of the output term budget; the step cap bounds
+# 1,024-term output boundary is noticed. The intermediate caps are
+# conservative multiples of the output term budget; the step cap bounds
 # the division loop itself.
 _MAX_OUTPUT_TERMS = 1_024
 _MAX_INTERMEDIATE_TERMS = 4_096
+_MAX_INTERMEDIATE_BASIS_TERMS = 4_096
 _MAX_REDUCTION_STEPS = 200_000
 
 
@@ -42,10 +43,18 @@ def _component_exceeds_limit(numerator: int, denominator: int) -> bool:
     return abs(numerator) >= bound or abs(denominator) >= bound
 
 
-def _basis_exceeds_output_budget(basis: Any, symbols: tuple[Any, ...]) -> bool:
-    """Check one computed Gröbner basis against the retained-output budget."""
+def _basis_exceeds_output_budget(
+    basis: Any, symbols: tuple[Any, ...], maximum_terms: int = _MAX_OUTPUT_TERMS
+) -> bool:
+    """Check one computed Gröbner basis against an aggregate term budget.
 
-    from sympy import Poly, QQ
+    Exponent and canonical-coefficient representability limits apply at
+    every scale: a basis element that could not be materialized as a
+    canonical value is outside every work envelope, not only the output
+    boundary.
+    """
+
+    from sympy import QQ, Poly
 
     from jacobian.math.polynomials.values import MAX_POLYNOMIAL_EXPONENT
 
@@ -54,7 +63,7 @@ def _basis_exceeds_output_budget(basis: Any, symbols: tuple[Any, ...]) -> bool:
         poly = Poly(expr, *symbols, domain=QQ)
         terms = poly.terms()
         aggregate_terms += len(terms)
-        if aggregate_terms > _MAX_OUTPUT_TERMS:
+        if aggregate_terms > maximum_terms:
             return True
         for monom, coefficient in terms:
             if any(exp > MAX_POLYNOMIAL_EXPONENT for exp in monom):
@@ -64,28 +73,63 @@ def _basis_exceeds_output_budget(basis: Any, symbols: tuple[Any, ...]) -> bool:
     return False
 
 
+def _canonical_generator_order(ideal: RationalPolynomialIdeal) -> tuple[int, ...]:
+    """Order generator indices by mathematical content alone.
+
+    The key (ascending maximum total degree, then term count, then full
+    term fingerprint) is a deterministic function of the ideal value, so
+    the bounded kernel's behavior never depends on the presentation order
+    of an equivalent generating set.  Simpler generators first also lets
+    collapsing elements — most simply nonzero constants, of degree zero —
+    shrink every later prefix instead of arriving after one has grown.
+    """
+
+    def sort_key(
+        index: int,
+    ) -> tuple[int, int, tuple[tuple[tuple[int, ...], str, str], ...]]:
+        terms = ideal.generators[index].polynomial.terms
+        return (
+            max((sum(term.exponents) for term in terms), default=0),
+            len(terms),
+            tuple(
+                sorted(
+                    (term.exponents, term.coefficient.num, term.coefficient.den)
+                    for term in terms
+                )
+            ),
+        )
+
+    return tuple(sorted(range(len(ideal.generators)), key=sort_key))
+
+
 def incremental_source_groebner(
     ideal: RationalPolynomialIdeal,
     monomial_order: str,
 ) -> tuple[Any | None, bool]:
     """Compute the source reduced Gröbner basis with bounded basis growth.
 
-    The kernel runs incrementally, one generator at a time, and every
-    intermediate basis is checked against the output budget (aggregate
-    1,024-term, exponent, and canonical-coefficient limits).  Because a
-    later generator can collapse an oversized intermediate ideal — most
-    simply a nonzero constant generator, which makes any ideal the unit
-    ideal regardless of presentation order — constant generators are
-    detected up front and short-circuit to their own in-budget basis
-    instead of letting an oversized prefix decide the outcome.  Adding
-    generators and re-reducing converges to the unique reduced basis, so
-    the final result equals a single-shot computation whenever that stays
-    within budget.
+    The kernel runs incrementally, one generator at a time, in the
+    canonical content-derived order of ``_canonical_generator_order``, so
+    its outcome is a function of the ideal value rather than of the
+    presentation order of an equivalent generating set.
+
+    Budgets are two-tier.  Every intermediate prefix basis is checked
+    against a work envelope of ``_MAX_INTERMEDIATE_BASIS_TERMS`` aggregate
+    terms (plus exponent and canonical-coefficient representability): a
+    prefix beyond that envelope cannot be processed further without
+    unbounded kernel expansion, so it reports the typed budget outcome.
+    The public 1,024-term output boundary is decided only on the complete
+    final basis: an intermediate prefix may legitimately exceed it and
+    still shrink once later generators are incorporated (adding a
+    generator grows the ideal but can shrink its reduced basis), so a
+    prefix must never decide the output outcome.  Adding generators and
+    re-reducing converges to the unique reduced basis, so the final result
+    equals a single-shot computation whenever that stays within budget.
 
     Returns ``(basis, exceeded)``: ``basis`` is ``None`` when the kernel
-    failed or an intermediate left the budget; ``exceeded`` distinguishes
-    a genuine budget overflow (evidence for a typed budget outcome) from
-    an opaque kernel failure.
+    failed or left a budget; ``exceeded`` distinguishes a genuine budget
+    overflow (evidence for a typed budget outcome) from an opaque kernel
+    failure.
     """
 
     from sympy import QQ, groebner
@@ -101,28 +145,22 @@ def incremental_source_groebner(
         exprs = [rational_polynomial_to_sympy(gen).as_expr() for gen in ideal.generators]
     except Exception:
         return None, False
-    # A nonzero constant generator collapses the ideal to the unit ideal no
-    # matter how an oversized prefix basis looks; presentation order must
-    # not turn that collapse into a false budget overflow.
-    for expr in exprs:
-        if getattr(expr, "is_Number", False) and expr != 0:
-            try:
-                basis = groebner(
-                    [expr], *symbols, order=monomial_order, domain=QQ
-                )
-            except Exception:
-                return None, False
-            return basis, False
+    ordered = [exprs[index] for index in _canonical_generator_order(ideal)]
     current: list[Any] = []
     basis = None
-    for expr in exprs:
+    for position, expr in enumerate(ordered):
         current.append(expr)
         try:
             basis = groebner(current, *symbols, order=monomial_order, domain=QQ)
         except Exception:
             return None, False
         try:
-            exceeded = _basis_exceeds_output_budget(basis, symbols)
+            if position == len(ordered) - 1:
+                exceeded = _basis_exceeds_output_budget(basis, symbols)
+            else:
+                exceeded = _basis_exceeds_output_budget(
+                    basis, symbols, maximum_terms=_MAX_INTERMEDIATE_BASIS_TERMS
+                )
         except Exception:
             return None, False
         if exceeded:
@@ -301,13 +339,13 @@ def retained_source_basis_exceeds_budget(
     ideal: RationalPolynomialIdeal,
     monomial_order: str,
 ) -> bool:
-    """Recompute the source Gröbner basis and check it leaves the output budget.
+    """Recompute the source Gröbner basis and check it leaves the budgets.
 
     This substantiates a ``BUDGET_EXCEEDED`` result that retains no basis:
-    such an outcome is accepted only when the recomputed source basis
-    genuinely violates the aggregate 1,024-term, exponent, or canonical
-    coefficient output boundary.  Any kernel failure is not evidence and
-    returns ``False`` so authored results stay rejected.
+    such an outcome is accepted only when the recomputation genuinely
+    violates the aggregate 1,024-term output boundary, a representability
+    limit, or the intermediate work envelope.  Any kernel failure is not
+    evidence and returns ``False`` so authored results stay rejected.
     """
 
     _basis, exceeded = incremental_source_groebner(ideal, monomial_order)

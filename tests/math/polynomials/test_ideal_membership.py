@@ -499,3 +499,100 @@ def test_later_generator_collapse_not_reported_as_budget_overflow() -> None:
     basis_terms = result.groebner_basis[0].polynomial.terms
     assert len(basis_terms) == 1
     assert basis_terms[0].coefficient.as_fraction() == 1
+
+
+def _collapse_ideal_generators() -> tuple[RationalPolynomial, ...]:
+    # Generators <x+f, x^12, x> where f is the sum of all monomials of
+    # degree at most 4 in y,z.  The two-generator prefix <x+f, x^12> has
+    # an oversized reduced basis containing f^12 (1,225 terms), while the
+    # complete ideal is <x, f> with a 16-term reduced basis.
+    from itertools import product
+
+    variables = ("x", "y", "z")
+
+    def term(exponents: tuple[int, ...]) -> RationalPolynomialTerm:
+        return RationalPolynomialTerm(
+            coefficient=CanonicalRational.from_fraction(Fraction(1)),
+            exponents=exponents,
+        )
+
+    def poly(terms: tuple[tuple[int, ...], ...]):
+        return RationalPolynomial(
+            variables=variables,
+            polynomial=SparseRationalPolynomial(
+                terms=tuple(sorted((term(e) for e in terms), key=lambda t: t.exponents, reverse=True))
+            ),
+        )
+
+    combos = [c for c in product(range(5), repeat=2) if sum(c) <= 4]
+    assert len(combos) == 15
+    return (
+        poly(((1, 0, 0), *((0, cy, cz) for cy, cz in combos))),
+        poly(((12, 0, 0),)),
+        poly(((1, 0, 0),)),
+    )
+
+
+def test_nonconstant_late_generator_collapse_not_reported_as_overflow() -> None:
+    # An oversized prefix basis must never decide the outcome: processing
+    # the trailing generator x collapses <x+f, x^12> to the small ideal
+    # <x, f>, so x^12 has normal form zero and no budget overflow exists.
+    request = IdealMembershipRequest(
+        ideal=RationalPolynomialIdeal(
+            variables=("x", "y", "z"),
+            generators=_collapse_ideal_generators(),
+        ),
+        polynomial=_poly(("x", "y", "z"), {(12, 0, 0): 1}),
+        monomial_order="lex",
+    )
+    result = polynomial_ideal_normal_form(request)
+    assert result.status == "COMPUTED"
+    assert result.remainder is not None and len(result.remainder.polynomial.terms) == 0
+    membership = polynomial_ideal_membership(request)
+    assert membership.status == "IN_IDEAL"
+
+
+def test_budget_outcome_is_independent_of_generator_presentation_order() -> None:
+    # The bounded kernel must be a function of the ideal value, not of the
+    # presentation order of an equivalent generating set.
+    from itertools import permutations
+
+    generators = _collapse_ideal_generators()
+    polynomial = _poly(("x", "y", "z"), {(12, 0, 0): 1})
+    statuses = set()
+    for permutation in permutations(generators):
+        membership = polynomial_ideal_membership(
+            IdealMembershipRequest(
+                ideal=RationalPolynomialIdeal(
+                    variables=("x", "y", "z"), generators=permutation
+                ),
+                polynomial=polynomial,
+                monomial_order="lex",
+            )
+        )
+        statuses.add(membership.status)
+    assert statuses == {"IN_IDEAL"}
+
+
+def test_complete_basis_output_overflow_reports_typed_outcome() -> None:
+    # <x-(1+y+z)^4, x^12>: no later generator shrinks this ideal, and its
+    # complete reduced basis contains (1+y+z)^48 (1,225 aggregate terms),
+    # genuinely beyond the 1,024-term output boundary.
+    expanded = _expanded_ideal()
+    padded = RationalPolynomialIdeal(
+        variables=expanded.ideal.variables,
+        generators=(
+            *expanded.ideal.generators,
+            _poly(expanded.ideal.variables, {(12, 0, 0): 1}),
+        ),
+    )
+    request = IdealMembershipRequest(
+        ideal=padded,
+        polynomial=expanded.polynomial,
+        monomial_order="lex",
+    )
+    result = polynomial_ideal_normal_form(request)
+    assert result.status == "BUDGET_EXCEEDED"
+    assert result.groebner_basis is None and result.remainder is None
+    membership = polynomial_ideal_membership(request)
+    assert membership.status == "BUDGET_EXCEEDED"

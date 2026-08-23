@@ -6,6 +6,8 @@ from jacobian.canonical import format_canonical_integer
 from jacobian.math.algebraic_combinatorics import (
     conjugate_partition,
     hook_lengths,
+    inverse_row_insertion_rsk,
+    row_insertion_rsk,
     standard_young_tableaux_count,
 )
 from jacobian.math.algebraic_combinatorics._models import (
@@ -13,11 +15,16 @@ from jacobian.math.algebraic_combinatorics._models import (
     ConjugatePartitionResult,
     HookLengthRequest,
     HookLengthResult,
+    RSKInverseWordRequest,
+    RSKInverseWordResult,
     RSKPermutationRequest,
     RSKResult,
+    RSKWordRequest,
     StandardYoungTableauCountRequest,
     StandardYoungTableauCountResult,
 )
+from jacobian.math.algebraic_combinatorics._rsk import _row_insert
+from jacobian.math.algebraic_combinatorics.values import RSKTableauPair
 
 
 def compute_hook_lengths(request: HookLengthRequest) -> HookLengthResult:
@@ -59,55 +66,7 @@ def compute_rsk_permutation(request: RSKPermutationRequest) -> RSKResult:
     """
     perm = request.permutation
 
-    if not perm:
-        return RSKResult(
-            p_tableau=(),
-            q_tableau=(),
-            shape=(),
-            lis_length=0,
-            lds_length=0,
-        )
-
-    # P and Q tableaux as lists of lists
-    p: list[list[int]] = []
-    q: list[list[int]] = []
-
-    for idx, value in enumerate(perm):
-        # Row insertion of value into tableau
-        current = value
-        row_idx = 0
-
-        while row_idx < len(p):
-            row = p[row_idx]
-            # Find first element >= current in this row
-            insert_pos = len(row)
-            for i, v in enumerate(row):
-                if v >= current:
-                    insert_pos = i
-                    break
-            if insert_pos < len(row):
-                # Bump
-                bumped = row[insert_pos]
-                row[insert_pos] = current
-                current = bumped
-                row_idx += 1
-            else:
-                # Append to end of row
-                row.append(current)
-                # Record in Q
-                if row_idx >= len(q):
-                    q.append([])
-                q[row_idx].append(idx + 1)
-                row_idx = -1  # Signal we inserted
-                break
-
-        if row_idx != -1 and row_idx >= len(p):
-            # New row
-            p.append([current])
-            if row_idx >= len(q):
-                q.append([])
-            q[row_idx].append(idx + 1)
-
+    p, q = _row_insert(perm)
     shape = tuple(len(row) for row in p)
 
     # LIS length = length of first row
@@ -116,9 +75,21 @@ def compute_rsk_permutation(request: RSKPermutationRequest) -> RSKResult:
     lds_length = len(p)
 
     return RSKResult(
-        p_tableau=tuple(tuple(row) for row in p),
-        q_tableau=tuple(tuple(row) for row in q),
+        p_tableau=p,
+        q_tableau=q,
         shape=shape,
         lis_length=lis_length,
         lds_length=lds_length,
     )
+
+
+def compute_rsk_word(request: RSKWordRequest) -> RSKTableauPair:
+    """Compute and inverse-replay the compact ordinary-word RSK pair."""
+    return row_insertion_rsk(request.word)
+
+
+def compute_inverse_rsk_word(
+    request: RSKInverseWordRequest,
+) -> RSKInverseWordResult:
+    """Reverse-insert and forward-replay one ordinary-word RSK pair."""
+    return RSKInverseWordResult(word=inverse_row_insertion_rsk(request.pair))

@@ -9,11 +9,32 @@ from __future__ import annotations
 
 from math import factorial
 
+from jacobian.math.algebraic_combinatorics._rsk import (
+    inverse_row_insertion_rsk as _inverse_row_insertion_rsk,
+)
+from jacobian.math.algebraic_combinatorics._rsk import (
+    row_insertion_rsk as _row_insertion_rsk,
+)
+from jacobian.math.algebraic_combinatorics.values import RSKTableauPair
+from jacobian.math.words.values import FiniteWord
+
 __all__ = [
     "conjugate_partition",
     "hook_lengths",
+    "inverse_row_insertion_rsk",
+    "row_insertion_rsk",
     "standard_young_tableaux_count",
 ]
+
+
+def row_insertion_rsk(word: FiniteWord) -> RSKTableauPair:
+    """Compute ordinary row-insertion RSK for a word of at most 50 letters."""
+    return _row_insertion_rsk(word)
+
+
+def inverse_row_insertion_rsk(pair: RSKTableauPair) -> FiniteWord:
+    """Reconstruct the unique word represented by a pair of at most 50 cells."""
+    return _inverse_row_insertion_rsk(pair)
 
 
 def conjugate_partition(parts: list[int]) -> list[int]:

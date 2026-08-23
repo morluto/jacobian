@@ -1,0 +1,300 @@
+"""Exact forward and inverse RSK contracts for finite ordered words."""
+
+from __future__ import annotations
+
+import itertools
+from collections import Counter
+
+import pytest
+from pydantic import ValidationError
+
+from jacobian.catalog.admission import AdmissionDecision
+from jacobian.math.algebraic_combinatorics import (
+    inverse_row_insertion_rsk,
+    row_insertion_rsk,
+)
+from jacobian.math.algebraic_combinatorics._admission import ADMISSIONS
+from jacobian.math.algebraic_combinatorics._models import (
+    RSKInverseWordRequest,
+    RSKPermutationRequest,
+    RSKWordRequest,
+)
+from jacobian.math.algebraic_combinatorics._operations import (
+    compute_inverse_rsk_word,
+    compute_rsk_permutation,
+    compute_rsk_word,
+)
+from jacobian.math.algebraic_combinatorics._tools import TOOLS
+from jacobian.math.algebraic_combinatorics.values import RSKTableauPair
+from jacobian.math.symmetric_functions import (
+    IntegerPartition,
+    SemistandardYoungTableau,
+    StandardYoungTableau,
+)
+from jacobian.math.symmetric_functions._models import PartitionRequest
+from jacobian.math.words import FiniteWord
+
+
+def _word(
+    letters: tuple[str, ...], alphabet: tuple[str, ...] = ("a", "b", "c", "d")
+) -> FiniteWord:
+    return FiniteWord(alphabet=alphabet, letters=letters)
+
+
+def _pair(word: FiniteWord) -> RSKTableauPair:
+    return compute_rsk_word(RSKWordRequest(word=word))
+
+
+@pytest.mark.parametrize(
+    ("word", "p_rows", "q_rows", "shape"),
+    [
+        (_word((), ("a",)), (), (), ()),
+        (_word(("a",), ("a",)), ((1,),), ((1,),), (1,)),
+        (
+            _word(("a", "b", "c"), ("a", "b", "c")),
+            ((1, 2, 3),),
+            ((1, 2, 3),),
+            (3,),
+        ),
+        (
+            _word(("c", "b", "a"), ("a", "b", "c")),
+            ((1,), (2,), (3,)),
+            ((1,), (2,), (3,)),
+            (1, 1, 1),
+        ),
+        (
+            _word(("a", "a", "a"), ("a",)),
+            ((1, 1, 1),),
+            ((1, 2, 3),),
+            (3,),
+        ),
+        (
+            _word(("c", "c", "b", "d", "a")),
+            ((1, 3, 4), (2,), (3,)),
+            ((1, 2, 4), (3,), (5,)),
+            (3, 1, 1),
+        ),
+    ],
+)
+def test_row_insertion_known_values(
+    word: FiniteWord,
+    p_rows: tuple[tuple[int, ...], ...],
+    q_rows: tuple[tuple[int, ...], ...],
+    shape: tuple[int, ...],
+) -> None:
+    pair = _pair(word)
+    assert pair.insertion_tableau.rows == p_rows
+    assert pair.recording_tableau.rows == q_rows
+    assert pair.shape.parts == shape
+    assert pair.convention == "ROW_INSERTION_RSK_V1"
+    assert pair.source_kind == "WORD"
+    assert inverse_row_insertion_rsk(pair) == word
+
+
+def test_first_strictly_greater_rule_preserves_repeated_letters_in_a_row() -> None:
+    pair = _pair(_word(("b", "b", "a"), ("a", "b")))
+    assert pair.insertion_tableau.rows == ((1, 2), (2,))
+    assert pair.recording_tableau.rows == ((1, 2), (3,))
+
+
+def test_pair_content_and_recording_labels_reconstruct_the_source() -> None:
+    word = _word(("c", "a", "c", "b", "a"))
+    pair = _pair(word)
+    rank = {letter: index for index, letter in enumerate(word.alphabet, start=1)}
+    assert Counter(entry for row in pair.insertion_tableau.rows for entry in row) == (
+        Counter(rank[letter] for letter in word.letters)
+    )
+    assert sorted(
+        entry for row in pair.recording_tableau.rows for entry in row
+    ) == list(range(1, len(word.letters) + 1))
+    assert inverse_row_insertion_rsk(pair) == word
+
+
+def test_explicit_alphabet_order_is_interpretation_critical() -> None:
+    increasing = _pair(_word(("a", "b"), ("a", "b")))
+    decreasing = _pair(_word(("a", "b"), ("b", "a")))
+    assert increasing.shape.parts == (2,)
+    assert decreasing.shape.parts == (1, 1)
+
+
+def test_order_preserving_relabelling_transports_only_the_alphabet() -> None:
+    first = _pair(_word(("b", "a", "c", "b"), ("a", "b", "c")))
+    relabelled = _pair(_word(("y", "x", "z", "y"), ("x", "y", "z")))
+    assert first.insertion_tableau == relabelled.insertion_tableau
+    assert first.recording_tableau == relabelled.recording_tableau
+    assert first.shape == relabelled.shape
+    assert first.alphabet != relabelled.alphabet
+
+
+def test_forward_output_feeds_inverse_without_representation_repair() -> None:
+    source = _word(("c", "c", "b", "d", "a"))
+    produced = compute_rsk_word(RSKWordRequest(word=source))
+    consumed = RSKInverseWordRequest.model_validate({"pair": produced.model_dump()})
+    result = compute_inverse_rsk_word(consumed)
+    assert result.word == source
+    assert row_insertion_rsk(result.word) == produced
+
+    partition_request = PartitionRequest.model_validate(
+        {"partition": produced.shape.model_dump()}
+    )
+    assert partition_request.partition == produced.shape
+
+
+def test_all_short_ternary_words_round_trip_both_directions() -> None:
+    alphabet = ("a", "b", "c")
+    for length in range(7):
+        for letters in itertools.product(alphabet, repeat=length):
+            word = FiniteWord(alphabet=alphabet, letters=letters)
+            pair = row_insertion_rsk(word)
+            reconstructed = inverse_row_insertion_rsk(pair)
+            assert reconstructed == word
+            assert row_insertion_rsk(reconstructed) == pair
+
+
+def test_permutation_operation_agrees_with_word_specialization() -> None:
+    permutation = (3, 1, 4, 2)
+    old_result = compute_rsk_permutation(RSKPermutationRequest(permutation=permutation))
+    word_pair = _pair(
+        FiniteWord(
+            alphabet=("1", "2", "3", "4"),
+            letters=tuple(str(entry) for entry in permutation),
+        )
+    )
+    assert old_result.p_tableau == word_pair.insertion_tableau.rows
+    assert old_result.q_tableau == word_pair.recording_tableau.rows
+    assert old_result.shape == word_pair.shape.parts
+
+
+def test_permutation_inversion_swaps_the_tableaux() -> None:
+    alphabet = ("1", "2", "3", "4")
+    for permutation in itertools.permutations(range(1, 5)):
+        inverse = [0] * len(permutation)
+        for position, value in enumerate(permutation, start=1):
+            inverse[value - 1] = position
+        pair = _pair(
+            FiniteWord(
+                alphabet=alphabet,
+                letters=tuple(str(entry) for entry in permutation),
+            )
+        )
+        inverse_pair = _pair(
+            FiniteWord(
+                alphabet=alphabet,
+                letters=tuple(str(entry) for entry in inverse),
+            )
+        )
+        assert pair.insertion_tableau.rows == inverse_pair.recording_tableau.rows
+        assert pair.recording_tableau.rows == inverse_pair.insertion_tableau.rows
+
+
+def test_structurally_incompatible_pairs_fail_before_reverse_insertion() -> None:
+    with pytest.raises(ValidationError, match="common shape"):
+        RSKTableauPair(
+            alphabet=("a", "b"),
+            insertion_tableau=SemistandardYoungTableau(rows=((1, 2),)),
+            recording_tableau=StandardYoungTableau(rows=((1, 2),)),
+            shape=IntegerPartition(parts=(1, 1)),
+        )
+
+    with pytest.raises(ValidationError, match="outside the ordered alphabet"):
+        RSKTableauPair(
+            alphabet=("a",),
+            insertion_tableau=SemistandardYoungTableau(rows=((2,),)),
+            recording_tableau=StandardYoungTableau(rows=((1,),)),
+            shape=IntegerPartition(parts=(1,)),
+        )
+
+    with pytest.raises(ValidationError, match="exactly 1 through n"):
+        RSKTableauPair.model_validate(
+            {
+                "alphabet": ["a"],
+                "insertion_tableau": {"rows": [[1, 1]]},
+                "recording_tableau": {"rows": [[1, 3]]},
+                "shape": {"parts": [2]},
+            }
+        )
+
+
+def _wide_unicode_symbols(count: int) -> tuple[str, ...]:
+    return tuple("\U0001f600" * 63 + chr(0x1F600 + index) for index in range(count))
+
+
+def test_word_length_and_utf8_payload_bounds_are_closed() -> None:
+    length_boundary = FiniteWord(alphabet=("a",), letters=("a",) * 50)
+    assert sum(_pair(length_boundary).shape.parts) == 50
+
+    too_long = FiniteWord(alphabet=("a",), letters=("a",) * 51)
+    with pytest.raises(ValidationError, match="length must not exceed 50"):
+        RSKWordRequest(word=too_long)
+    with pytest.raises(ValueError, match="length must not exceed 50"):
+        row_insertion_rsk(too_long)
+
+    ordered_symbols = tuple(f"s{index:02d}" for index in range(50))
+    deepest_shape = _pair(
+        FiniteWord(alphabet=ordered_symbols, letters=tuple(reversed(ordered_symbols)))
+    )
+    assert deepest_shape.shape.parts == (1,) * 50
+
+    with pytest.raises(ValidationError):
+        FiniteWord(
+            alphabet=tuple(f"s{index:02d}" for index in range(51)),
+            letters=(),
+        )
+
+    boundary_symbols = _wide_unicode_symbols(50)
+    byte_boundary = FiniteWord(
+        alphabet=boundary_symbols,
+        letters=(boundary_symbols[0],) * 50,
+    )
+    assert RSKWordRequest(word=byte_boundary).word == byte_boundary
+
+    assert (
+        sum(len(symbol.encode("utf-8")) for symbol in boundary_symbols)
+        + sum(len(letter.encode("utf-8")) for letter in byte_boundary.letters)
+        == 25_600
+    )
+
+
+def test_inverse_size_bound_is_checked_before_reverse_insertion() -> None:
+    with pytest.raises(ValidationError, match="pair size must not exceed 50"):
+        RSKTableauPair(
+            alphabet=("a",),
+            insertion_tableau=SemistandardYoungTableau(rows=((1,) * 51,)),
+            recording_tableau=StandardYoungTableau(rows=(tuple(range(1, 52)),)),
+            shape=IntegerPartition(parts=(51,)),
+        )
+
+
+def test_rsk_request_schema_publishes_convention_and_work_envelope() -> None:
+    schema = RSKWordRequest.model_json_schema()
+    assert schema["properties"]["convention"]["const"] == "ROW_INSERTION_RSK_V1"
+    description = schema["properties"]["word"]["description"]
+    assert "unique strings" in description
+    assert "every positioned letter" in description
+    assert "at most 50 letters" in description
+    assert "25600 UTF-8 bytes" in description
+    assert "2N" in schema["description"]
+
+    inverse_schema = RSKInverseWordRequest.model_json_schema()
+    pair_schema = inverse_schema["$defs"]["RSKTableauPair"]
+    assert "at most 50 cells" in pair_schema["description"]
+    assert "at most 50 cells" in pair_schema["properties"]["shape"]["description"]
+
+
+def test_public_operations_are_admitted_and_examples_execute() -> None:
+    public_ids = {
+        "tableau.rsk.word.compute",
+        "tableau.rsk.inverse_word.compute",
+    }
+    tools = {tool.operation_id: tool for tool in TOOLS}
+    decisions = {admission.operation_id: admission.decision for admission in ADMISSIONS}
+    assert public_ids <= tools.keys()
+    assert all(
+        decisions[operation_id] is AdmissionDecision.KEEP for operation_id in public_ids
+    )
+
+    for operation_id in public_ids:
+        tool = tools[operation_id]
+        for operation_example in tool.examples:
+            request = tool.request_type.model_validate(operation_example.input)
+            tool.result_type.model_validate(tool.run(request))

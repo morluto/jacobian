@@ -8,6 +8,14 @@ from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
+from jacobian.math.algebraic_combinatorics._rsk import require_rsk_word_budget
+from jacobian.math.algebraic_combinatorics.values import (
+    MAX_RSK_WORD_BYTES,
+    MAX_RSK_WORD_LENGTH,
+    RSKConvention,
+    RSKTableauPair,
+)
+from jacobian.math.words.values import FiniteWord
 
 MAX_PARTITION_SIZE = 50
 MAX_PARTS = 50
@@ -114,14 +122,60 @@ class RSKResult(StrictModel):
     method: Literal["ROW_INSERTION"] = "ROW_INSERTION"
 
 
+class RSKWordRequest(StrictModel):
+    """One bounded word under the ordinary row-insertion convention.
+
+    Forward and replayed reverse insertion each inspect at most
+    ``N(N-1)/2`` row entries for ``N <= 50``.  The compact result contains
+    exactly ``2N`` tableau cells; no insertion ledger is materialized.
+    """
+
+    word: FiniteWord = Field(
+        description=(
+            "A finite word over an explicit ordered tuple of unique strings; "
+            "every positioned letter must be one of those exact symbols. The "
+            f"word has at most {MAX_RSK_WORD_LENGTH} letters and the alphabet "
+            "plus positioned letters carry at most "
+            f"{MAX_RSK_WORD_BYTES} UTF-8 bytes."
+        )
+    )
+    convention: RSKConvention = "ROW_INSERTION_RSK_V1"
+
+    @model_validator(mode="after")
+    def require_complete_budget(self) -> Self:
+        require_rsk_word_budget(self.word)
+        return self
+
+
+class RSKInverseWordRequest(StrictModel):
+    """One compatible compact word-RSK pair of at most 50 cells to invert.
+
+    Reverse insertion and its forward replay each inspect at most
+    ``N(N-1)/2`` row entries.
+    """
+
+    pair: RSKTableauPair
+    convention: RSKConvention = "ROW_INSERTION_RSK_V1"
+
+
+class RSKInverseWordResult(StrictModel):
+    """The exact word reconstructed from an ordinary word-RSK pair."""
+
+    word: FiniteWord
+    convention: RSKConvention = "ROW_INSERTION_RSK_V1"
+
+
 __all__ = [
     "ConjugatePartitionRequest",
     "ConjugatePartitionResult",
     "HookLengthRequest",
     "HookLengthResult",
     "Partition",
+    "RSKInverseWordRequest",
+    "RSKInverseWordResult",
     "RSKPermutationRequest",
     "RSKResult",
+    "RSKWordRequest",
     "StandardYoungTableauCountRequest",
     "StandardYoungTableauCountResult",
 ]

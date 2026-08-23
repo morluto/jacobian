@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Self
+from typing import Self
 
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix, multiply
 
-MAX_CHAIN_GROUP_DIMENSION = 512
-"""Conservative per-group dimension bound derived from the dense work budget.
+MAX_CHAIN_GROUP_DIMENSION = 256
+"""Per-group dimension bound inherited from the shared prime-field kernel.
 
-The exact kernels build dense GF(p) matrices over the declared group
-dimensions and run Gaussian elimination whose work is O(d^3) in the largest
-group dimension; d = 512 keeps any accepted request's elimination inside a
-bounded elementary-operation envelope instead of allowing an admitted
-request to declare billion-wide groups.
+Differentials are canonical ``PrimeFieldMatrix`` values, so every matrix a
+request or derived cone carries is bounded by the kernel's own 256-dimension
+cap; admitting larger groups would create a second, wider encoding of the
+same public value. Rank and composition work stay inside one bounded
+envelope instead of allowing an admitted request to declare billion-wide
+groups.
 """
 
 
@@ -29,58 +31,121 @@ concentrated at degree 11 would otherwise derive degree 12, and disjoint
 endpoints can derive a 22-group span that no ChainComplex can represent.
 """
 
+MIN_DEGREE = -10
+MAX_DEGREE = 11
 
-MAX_MATRIX_ENTRIES = MAX_CHAIN_GROUP_DIMENSION * MAX_CHAIN_GROUP_DIMENSION
-"""Schema-visible cap on one matrix's entry list.
+# Aggregate boundedness proof (AGENTS.md "Mathematical boundedness is a proof
+# obligation").
+#
+# MAX_AGGREGATE_CELLS bounds one request's total parsed matrix cells: every
+# differential of both complexes, every chain-map matrix, and (for mapping-
+# cone requests) the predicted cone differentials this operation will emit.
+# Parsing plus canonical-residue validation are linear in cells, so admission
+# stays linear before any backend expansion.
+#
+# The work constants bound the field operations behind those cells. For
+# matrices with row, inner, column counts <= MAX_CHAIN_GROUP_DIMENSION:
+#   composition work  rows * inner * cols
+#                     <= MAX_CHAIN_GROUP_DIMENSION * (rows * inner
+#                      + inner * cols) / 2 <= 128 * adjacent cells,
+#   elimination work  rows * cols * min(rows, cols) <= 256 * cells.
+# Summed over a request (adjacent-cell pairs share each cell at most twice),
+# both are provably <= MAX_CHAIN_GROUP_DIMENSION * MAX_AGGREGATE_CELLS; the
+# constants below adopt half that maximum as conservative named envelopes.
+# Every product and rank runs on the maintained SymPy/FLINT DomainMatrix
+# kernel, so at the worst admitted envelope the backend performs at most
+# ~3.4e7 field operations. Wall time remains only an execution safety net;
+# these named quantities are the mathematical work bound. Adversarial
+# envelopes that previously passed per-matrix checks (20 full all-ones
+# differentials composing through ~2.55e9 Python inner-loop updates) now fail
+# the aggregate cell budget before any product runs.
 
-A sparse matrix over groups bounded by MAX_CHAIN_GROUP_DIMENSION has at most
-MAX_CHAIN_GROUP_DIMENSION**2 distinct coordinates, so no admissible matrix
-ever needs a longer list; the cap keeps validation and dense conversion from
-traversing unbounded repeated input even before dimensions are checked.
-"""
+MAX_AGGREGATE_CELLS = 262_144
+MAX_AGGREGATE_MULTIPLICATION_WORK = (
+    MAX_AGGREGATE_CELLS * MAX_CHAIN_GROUP_DIMENSION // 2
+)
+MAX_AGGREGATE_ELIMINATION_WORK = MAX_AGGREGATE_CELLS * MAX_CHAIN_GROUP_DIMENSION // 2
 
 
-class MatrixEntry(StrictModel):
-    """One entry of a sparse differential matrix."""
-
-    row: int = Field(ge=0)
-    col: int = Field(ge=0)
-    value: str = Field(min_length=1, max_length=256)
-
-    @model_validator(mode="after")
-    def require_canonical_integer(self) -> Self:
-        import re
-
-        if not re.match(r"^-?(0|[1-9][0-9]*)$", self.value):
-            raise ValueError("matrix value must be a canonical integer string")
-        # Reject non-canonical "-0"
-        if self.value == "-0":
-            raise ValueError("matrix value must be a canonical integer string")
-        return self
+def _matrix_cells(matrix: PrimeFieldMatrix) -> int:
+    return len(matrix.entries) * matrix.columns
 
 
-def _require_distinct_bounded_entries(
-    entries: tuple[MatrixEntry, ...], rows: int, cols: int
+def _composition_work(left: PrimeFieldMatrix, right: PrimeFieldMatrix) -> int:
+    """Predicted field multiplications for ``multiply(left, right)``."""
+
+    return len(left.entries) * left.columns * right.columns
+
+
+def _elimination_work(matrix: PrimeFieldMatrix) -> int:
+    """Predicted field work for ``rank(matrix)`` elimination."""
+
+    rows = len(matrix.entries)
+    return rows * matrix.columns * min(rows, matrix.columns)
+
+
+def _is_zero(matrix: PrimeFieldMatrix) -> bool:
+    return all(value == 0 for row in matrix.entries for value in row)
+
+
+def _zero_block(rows: int, columns: int, prime: int) -> PrimeFieldMatrix:
+    return PrimeFieldMatrix(
+        prime=prime,
+        entries=tuple((0,) * columns for _ in range(rows)),
+        columns=columns,
+    )
+
+
+def _require_aggregate_budget(
+    matrices: tuple[PrimeFieldMatrix, ...],
+    predicted_cells: int,
+    predicted_work: int,
 ) -> None:
-    """Reject duplicate coordinates and lists longer than the matrix cells.
+    """Gate aggregate parse cells and predicted multiplication work."""
 
-    Duplicate coordinates silently overwrite each other during dense
-    conversion, so they would make validation see a different matrix than the
-    caller sent; and a list longer than ``rows * cols`` cannot consist of
-    distinct in-range coordinates at all.
-    """
-    if len(entries) > rows * cols:
+    total_cells = sum(_matrix_cells(matrix) for matrix in matrices) + predicted_cells
+    if total_cells > MAX_AGGREGATE_CELLS:
         raise ValueError(
-            "matrix carries more entries than its rows x columns cells allow"
+            "request carries "
+            f"{total_cells} matrix cells across all differentials and chain "
+            f"maps; admission bounds one request at {MAX_AGGREGATE_CELLS} so "
+            "validation work stays bounded before any backend expansion"
         )
-    seen: set[tuple[int, int]] = set()
-    for entry in entries:
-        coordinate = (entry.row, entry.col)
-        if coordinate in seen:
+    if predicted_work > MAX_AGGREGATE_MULTIPLICATION_WORK:
+        raise ValueError(
+            "request predicts "
+            f"{predicted_work} field multiplications for differential "
+            "composition and chain-map equations; admission bounds one "
+            f"request at {MAX_AGGREGATE_MULTIPLICATION_WORK}"
+        )
+
+
+def _d_squared_work(differentials: tuple[PrimeFieldMatrix, ...]) -> int:
+    """Predicted composition work for the d^2 = 0 check."""
+
+    return sum(
+        _composition_work(differentials[i], differentials[i + 1])
+        for i in range(len(differentials) - 1)
+    )
+
+
+def _check_d_squared(differentials: tuple[PrimeFieldMatrix, ...]) -> None:
+    """Verify d_i . d_{i+1} == 0 within the aggregate work budget.
+
+    Each differential is stored as its (target x source) matrix, so the
+    composition acting on C_{i+1} is the product M_i . M_{i+1}.
+    """
+
+    if not differentials:
+        return
+    prime = differentials[0].prime
+    for i in range(len(differentials) - 1):
+        square = multiply(differentials[i], differentials[i + 1])
+        if not _is_zero(square):
             raise ValueError(
-                f"duplicate matrix entry at row {entry.row}, col {entry.col}"
+                "differentials must satisfy d^2 = 0 "
+                f"(gap {i} failed over GF({prime}))"
             )
-        seen.add(coordinate)
 
 
 def _require_admissible_dimensions(dimensions: tuple[int, ...]) -> None:
@@ -94,91 +159,21 @@ def _require_admissible_dimensions(dimensions: tuple[int, ...]) -> None:
         )
 
 
-def _require_differential_bounds(
-    differentials: tuple[tuple[MatrixEntry, ...], ...],
-    dimensions: tuple[int, ...],
-) -> None:
-    """Keep every differential entry inside its source and target group."""
-    for i, diff in enumerate(differentials):
-        # Homological convention d_{min+i+1}: C_{min+i+1} -> C_{min+i}
-        # So differential i has source = dimensions[i+1], target = dimensions[i]
-        source_dim = dimensions[i + 1]
-        target_dim = dimensions[i]
-        for entry in diff:
-            if entry.row >= target_dim:
-                raise ValueError("differential entry row exceeds target dimension")
-            if entry.col >= source_dim:
-                raise ValueError("differential entry col exceeds source dimension")
-        _require_distinct_bounded_entries(diff, target_dim, source_dim)
-
-
-def _dense_gfprime(
-    entries: tuple[MatrixEntry, ...], rows: int, cols: int, prime: int
-) -> list[list[int]]:
-    mat = [[0] * cols for _ in range(rows)]
-    for e in entries:
-        mat[e.row][e.col] = int(e.value) % prime
-    return mat
-
-
-def _gfprime_mat_mul(
-    a: list[list[int]], b: list[list[int]], prime: int
-) -> list[list[int]]:
-    if not a or not b or not a[0] or not b[0]:
-        # Either factor is empty: the product is the zero matrix of shape
-        # len(a) x len(b[0]) (or empty when either dimension is zero).
-        n_cols = len(b[0]) if b and b[0] else 0
-        return [[0] * n_cols for _ in range(len(a))]
-    n_rows = len(a)
-    n_cols = len(b[0])
-    n_inner = len(b)
-    result = [[0] * n_cols for _ in range(n_rows)]
-    for r in range(n_rows):
-        for k in range(n_inner):
-            if a[r][k] == 0:
-                continue
-            for c in range(n_cols):
-                result[r][c] = (result[r][c] + a[r][k] * b[k][c]) % prime
-    return result
-
-
-def _require_differential_squared_zero(
-    differentials: tuple[tuple[MatrixEntry, ...], ...],
-    dimensions: tuple[int, ...],
-    prime: int,
-) -> None:
-    """Verify d^2 = 0 by dense GF(prime) composition of adjacent differentials."""
-    for i in range(len(differentials) - 1):
-        # d_{i+1}: C_{i+1} -> C_i, dims[i] x dims[i+1]
-        # d_{i+2}: C_{i+2} -> C_{i+1}, dims[i+1] x dims[i+2]
-        # Composition d_{i+1} * d_{i+2}: dims[i] x dims[i+2] should be zero
-        a = _dense_gfprime(differentials[i], dimensions[i], dimensions[i + 1], prime)
-        b = _dense_gfprime(
-            differentials[i + 1],
-            dimensions[i + 1],
-            dimensions[i + 2],
-            prime,
-        )
-        prod = _gfprime_mat_mul(a, b, prime)
-        if any(any(v % prime != 0 for v in row) for row in prod):
-            raise ValueError("differentials must satisfy d^2 = 0")
-
-
 class ChainComplex(StrictModel):
     """A bounded homological chain complex over a prime field GF(p).
 
     The complex has groups C_{n_min}, ..., C_{n_max} with differentials
     d_n : C_n -> C_{n-1}. Each group has a finite basis (dimension).
+    ``differentials[i]`` is the boundary map d_{min_degree + i + 1}, stored
+    as its canonical (target x source) matrix with ``dimensions[i]`` rows and
+    ``dimensions[i + 1]`` columns.
     """
 
     prime: int = Field(ge=2, le=10_000)
-    min_degree: int = Field(ge=-10, le=11)
-    max_degree: int = Field(ge=-10, le=11)
+    min_degree: int = Field(ge=-10, le=MAX_DEGREE)
+    max_degree: int = Field(ge=MIN_DEGREE, le=MAX_DEGREE)
     dimensions: tuple[int, ...] = Field(min_length=1, max_length=MAX_CHAIN_DEGREES)
-    differentials: tuple[
-        Annotated[tuple[MatrixEntry, ...], Field(max_length=MAX_MATRIX_ENTRIES)],
-        ...,
-    ] = Field(min_length=0, max_length=MAX_CHAIN_DEGREES)
+    differentials: tuple[PrimeFieldMatrix, ...]
 
     @model_validator(mode="after")
     def require_valid_complex(self) -> Self:
@@ -195,11 +190,26 @@ class ChainComplex(StrictModel):
         if self.differentials:
             if len(self.differentials) != expected_length - 1:
                 raise ValueError("differentials must cover the degree gaps")
-            _require_differential_bounds(self.differentials, self.dimensions)
-            # Enforce d_{n-1} * d_n = 0 for all n (d^2 = 0) over GF(prime).
-            _require_differential_squared_zero(
-                self.differentials, self.dimensions, self.prime
+            for i, diff in enumerate(self.differentials):
+                if diff.prime != self.prime:
+                    raise ValueError(
+                        "differential prime must match the complex prime"
+                    )
+                if len(diff.entries) != self.dimensions[i]:
+                    raise ValueError(
+                        f"differential {i} must have {self.dimensions[i]} rows"
+                    )
+                if diff.columns != self.dimensions[i + 1]:
+                    raise ValueError(
+                        f"differential {i} must have "
+                        f"{self.dimensions[i + 1]} columns"
+                    )
+            # Gate the aggregate budget before any composition expands, then
+            # enforce d^2 = 0 through the shared kernel.
+            _require_aggregate_budget(
+                self.differentials, 0, _d_squared_work(self.differentials)
             )
+            _check_d_squared(self.differentials)
         return self
 
 
@@ -207,6 +217,18 @@ class HomologyRequest(StrictModel):
     """Compute the homology of a chain complex."""
 
     complex: ChainComplex
+
+    @model_validator(mode="after")
+    def require_bounded_elimination(self) -> Self:
+        work = sum(_elimination_work(diff) for diff in self.complex.differentials)
+        if work > MAX_AGGREGATE_ELIMINATION_WORK:
+            raise ValueError(
+                "request predicts "
+                f"{work} elimination operations for the rank profile; "
+                "admission bounds one request at "
+                f"{MAX_AGGREGATE_ELIMINATION_WORK}"
+            )
+        return self
 
 
 class HomologyGroup(StrictModel):
@@ -230,8 +252,8 @@ class HomologyResult(StrictModel):
     complex: ChainComplex
     groups: tuple[HomologyGroup, ...] = Field(min_length=1)
     prime: int = Field(ge=2, le=10_000)
-    min_degree: int = Field(ge=-10, le=11)
-    max_degree: int = Field(ge=-10, le=11)
+    min_degree: int = Field(ge=MIN_DEGREE, le=MAX_DEGREE)
+    max_degree: int = Field(ge=MIN_DEGREE, le=MAX_DEGREE)
 
     @model_validator(mode="after")
     def require_consistent_groups(self) -> Self:
@@ -266,114 +288,146 @@ def _chain_map_degree(complex_: ChainComplex, deg: int) -> int:
     return 0
 
 
-def _dense_matrix(
-    entries: tuple[MatrixEntry, ...], rows: int, cols: int, prime: int
-) -> list[list[int]]:
-    """A dense rows x cols matrix; zero-filled when no entries exist."""
-    mat = [[0] * cols for _ in range(rows)]
-    for ent in entries:
-        mat[ent.row][ent.col] = int(ent.value) % prime
-    return mat
+def _boundary_matrix(complex_: ChainComplex, deg: int) -> PrimeFieldMatrix:
+    """d_deg : C_deg -> C_{deg-1}; the shaped zero map when undefined.
+
+    A boundary leaving a degree above the complex has an empty domain
+    (columns), one arriving below the complex has an empty codomain (rows);
+    inside the range a declared-but-missing differential is the all-zero map.
+    """
+
+    prime = complex_.prime
+    if deg <= complex_.min_degree:
+        return _zero_block(0, _chain_map_degree(complex_, deg), prime)
+    if deg > complex_.max_degree:
+        return _zero_block(_chain_map_degree(complex_, deg - 1), 0, prime)
+    idx = deg - complex_.min_degree - 1
+    if idx >= len(complex_.differentials):
+        return _zero_block(
+            _chain_map_degree(complex_, deg - 1),
+            _chain_map_degree(complex_, deg),
+            prime,
+        )
+    return complex_.differentials[idx]
 
 
-def _dense_product(
-    a: list[list[int]],
-    b: list[list[int]],
-    inner: int,
-    cols: int,
-    prime: int,
-) -> list[list[int]]:
-    """Dense product of an len(a) x inner by inner x cols matrix."""
-    res = [[0] * cols for _ in range(len(a))]
-    for r in range(len(a)):
-        for k in range(inner):
-            if a[r][k] == 0:
-                continue
-            for c in range(cols):
-                res[r][c] = (res[r][c] + a[r][k] * b[k][c]) % prime
-    return res
+def _chain_map_matrix(
+    chain_map: tuple[PrimeFieldMatrix, ...],
+    source: ChainComplex,
+    target: ChainComplex,
+    degree: int,
+) -> PrimeFieldMatrix:
+    """f_degree : C_degree -> D_degree; the shaped zero map when undefined."""
+
+    if degree < source.min_degree or degree > source.max_degree:
+        # The source group is absent, so the map lands in an empty codomain.
+        return _zero_block(_chain_map_target_dim(target, degree), 0, source.prime)
+    idx = degree - source.min_degree
+    return chain_map[idx]
+
+
+def _validate_chain_map_shapes(
+    source: ChainComplex,
+    target: ChainComplex,
+    chain_map: tuple[PrimeFieldMatrix, ...],
+) -> None:
+    """Each f_n must carry exactly the (target x source) shape at degree n."""
+
+    if len(chain_map) != len(source.dimensions):
+        raise ValueError("chain_map must have one entry per source degree")
+    for i, map_matrix in enumerate(chain_map):
+        degree = source.min_degree + i
+        s_dim = source.dimensions[i]
+        t_dim = _chain_map_target_dim(target, degree)
+        if map_matrix.prime != source.prime:
+            raise ValueError("chain-map prime must match the complex prime")
+        if len(map_matrix.entries) != t_dim:
+            raise ValueError(
+                f"chain_map[{i}] must have {t_dim} rows at degree {degree}"
+            )
+        if map_matrix.columns != s_dim:
+            raise ValueError(
+                f"chain_map[{i}] must have {s_dim} columns at degree {degree}"
+            )
+
+
+def _chain_map_commutativity_work(
+    source: ChainComplex,
+    target: ChainComplex,
+    chain_map: tuple[PrimeFieldMatrix, ...],
+) -> int:
+    """Predicted multiplication work of the commutativity equations."""
+
+    work = 0
+    bottom = source.min_degree
+    work += _composition_work(_boundary_matrix(target, bottom), chain_map[0])
+    for n in range(bottom + 1, source.max_degree + 1):
+        i = n - bottom
+        d_c = _boundary_matrix(source, n)
+        d_d = _boundary_matrix(target, n)
+        work += _composition_work(d_d, chain_map[i])
+        work += _composition_work(chain_map[i - 1], d_c)
+    return work
 
 
 def _require_chain_map_commutativity(
     source: ChainComplex,
     target: ChainComplex,
-    chain_map: tuple[tuple[MatrixEntry, ...], ...],
+    chain_map: tuple[PrimeFieldMatrix, ...],
 ) -> None:
-    """Verify d^D_n * f_n = f_{n-1} * d^C_n at every source degree.
+    """Verify d^D_n . f_n = f_{n-1} . d^C_n at every source degree.
 
     Groups outside a complex's degree range are zero-dimensional, so the
     equation is still checked where one side's differential or map is the
     shaped zero matrix - in particular at the target's boundary degrees.
     """
-    prime = source.prime
     s_min = source.min_degree
 
-    def dim(complex_: ChainComplex, deg: int) -> int:
-        return _chain_map_degree(complex_, deg)
-
-    def diff(entries: tuple[MatrixEntry, ...], rows: int, cols: int) -> list[list[int]]:
-        return _dense_matrix(entries, rows, cols, prime)
-
     # At the source's bottom degree the source differential leaves the
-    # retained range, so commutativity requires d^D_{s_min} * f_{s_min} = 0
+    # retained range, so commutativity requires d^D_{s_min} . f_{s_min} = 0
     # exactly; skipping it would accept maps that already fail at s_min.
-    bottom = diff(
-        (
-            target.differentials[s_min - target.min_degree - 1]
-            if target.min_degree < s_min <= target.max_degree
-            and s_min - target.min_degree - 1 < len(target.differentials)
-            else ()
-        ),
-        dim(target, s_min - 1),
-        dim(target, s_min),
-    )
-    f_bottom = diff(chain_map[0], dim(target, s_min), dim(source, s_min))
-    left = _dense_product(
-        bottom, f_bottom, dim(target, s_min), dim(source, s_min), prime
-    )
-    if any(any(v % prime != 0 for v in row) for row in left):
+    bottom_product = multiply(_boundary_matrix(target, s_min), chain_map[0])
+    if not _is_zero(bottom_product):
         raise ValueError(f"chain map does not commute at degree {s_min}")
 
     for n in range(s_min + 1, source.max_degree + 1):
         i = n - s_min
-        # d^C_n: C_n -> C_{n-1}, always inside the source range.
-        d_c = diff(
-            (source.differentials[i - 1] if i - 1 < len(source.differentials) else ()),
-            dim(source, n - 1),
-            dim(source, n),
+        left = multiply(
+            _boundary_matrix(target, n),
+            chain_map[i],
         )
-        # d^D_n: D_n -> D_{n-1}; zero-dimensional when n leaves the target.
-        d_d = diff(
-            (
-                target.differentials[n - target.min_degree - 1]
-                if target.min_degree < n <= target.max_degree
-                and n - target.min_degree - 1 < len(target.differentials)
-                else ()
-            ),
-            dim(target, n - 1),
-            dim(target, n),
+        right = multiply(
+            chain_map[i - 1],
+            _boundary_matrix(source, n),
         )
-        f_n = diff(chain_map[i], dim(target, n), dim(source, n))
-        f_prev = diff(chain_map[i - 1], dim(target, n - 1), dim(source, n - 1))
-        left = _dense_product(d_d, f_n, dim(target, n), dim(source, n), prime)
-        right = _dense_product(f_prev, d_c, dim(source, n - 1), dim(source, n), prime)
         if left != right:
             raise ValueError(f"chain map does not commute at degree {n}")
 
 
-def _require_cone_within_domain(source: ChainComplex, target: ChainComplex) -> None:
-    """The derived cone must stay inside ChainComplex's representable domain."""
+def _cone_span(source: ChainComplex, target: ChainComplex) -> tuple[int, int]:
     cone_min = min(source.min_degree + 1, target.min_degree)
     cone_max = max(source.max_degree + 1, target.max_degree)
+    return cone_min, cone_max
 
-    def group_dim(complex_: ChainComplex, deg: int) -> int:
-        return _chain_map_degree(complex_, deg)
 
-    if cone_min < -10 or cone_max > 11:
+def _cone_dimension_at(
+    source: ChainComplex, target: ChainComplex, deg: int
+) -> int:
+    """Dimension of Cone(f)_deg = C_{deg-1} (+) D_deg."""
+
+    return _chain_map_degree(source, deg - 1) + _chain_map_degree(target, deg)
+
+
+def _require_cone_within_domain(source: ChainComplex, target: ChainComplex) -> None:
+    """The derived cone must stay inside ChainComplex's representable domain."""
+    cone_min, cone_max = _cone_span(source, target)
+
+    if cone_min < MIN_DEGREE or cone_max > MAX_DEGREE:
         raise ValueError(
             "mapping cone degrees must stay within the supported "
-            f"[-10, 11] range; this request derives [{cone_min}, "
-            f"{cone_max}] because the shifted source extends past it"
+            f"[{MIN_DEGREE}, {MAX_DEGREE}] range; this request derives "
+            f"[{cone_min}, {cone_max}] because the shifted source extends "
+            "past it"
         )
     span = cone_max - cone_min + 1
     if span > MAX_CHAIN_DEGREES:
@@ -385,7 +439,7 @@ def _require_cone_within_domain(source: ChainComplex, target: ChainComplex) -> N
             "failing construction on an accepted request"
         )
     for deg in range(cone_min, cone_max + 1):
-        cone_group = group_dim(source, deg - 1) + group_dim(target, deg)
+        cone_group = _cone_dimension_at(source, target, deg)
         if cone_group > MAX_CHAIN_GROUP_DIMENSION:
             raise ValueError(
                 "mapping cone group dimension exceeds the dense-work "
@@ -394,36 +448,50 @@ def _require_cone_within_domain(source: ChainComplex, target: ChainComplex) -> N
             )
 
 
+def _cone_work_predictions(
+    source: ChainComplex, target: ChainComplex
+) -> tuple[int, int]:
+    """Predicted aggregate cells and composition work of the cone differentials."""
+
+    cone_min, cone_max = _cone_span(source, target)
+    dims = [
+        _cone_dimension_at(source, target, deg) for deg in range(cone_min, cone_max + 1)
+    ]
+    predicted_cells = sum(dims[g] * dims[g + 1] for g in range(len(dims) - 1))
+    predicted_work = sum(
+        dims[g] * dims[g + 1] * dims[g + 2] for g in range(len(dims) - 2)
+    )
+    return predicted_cells, predicted_work
+
+
 class MappingConeRequest(StrictModel):
     """Compute the mapping cone of a chain map f: C -> D."""
 
     source: ChainComplex
     target: ChainComplex
-    chain_map: tuple[
-        Annotated[tuple[MatrixEntry, ...], Field(max_length=MAX_MATRIX_ENTRIES)],
-        ...,
-    ] = Field(min_length=0, max_length=MAX_CHAIN_DEGREES)
+    chain_map: tuple[PrimeFieldMatrix, ...]
 
     @model_validator(mode="after")
     def require_valid_chain_map(self) -> Self:
         if self.source.prime != self.target.prime:
             raise ValueError("source and target must have same prime")
-        if len(self.chain_map) != len(self.source.dimensions):
-            raise ValueError("chain_map must have one entry per source degree")
-        # Each chain map entry f_n: C_n -> D_n must respect dimensions.
-        # Target groups are indexed by mathematical degree, not tuple
-        # position: a source group at degree n maps into the target group at
-        # the same degree, and zero when that degree is outside the target.
-        for i, entries in enumerate(self.chain_map):
-            degree = self.source.min_degree + i
-            s_dim = self.source.dimensions[i]
-            t_dim = _chain_map_target_dim(self.target, degree)
-            for e in entries:
-                if e.row >= t_dim:
-                    raise ValueError("chain_map entry row exceeds target dimension")
-                if e.col >= s_dim:
-                    raise ValueError("chain_map entry col exceeds source dimension")
-            _require_distinct_bounded_entries(entries, t_dim, s_dim)
+        _validate_chain_map_shapes(self.source, self.target, self.chain_map)
+        predicted_cone_cells, predicted_cone_work = _cone_work_predictions(
+            self.source, self.target
+        )
+        law_work = _chain_map_commutativity_work(
+            self.source, self.target, self.chain_map
+        )
+        # Gate everything (both complexes, the chain map, and the predicted
+        # cone differentials execution will emit) before any product runs.
+        _require_aggregate_budget(
+            (*self.source.differentials, *self.target.differentials, *self.chain_map),
+            predicted_cone_cells,
+            _d_squared_work(self.source.differentials)
+            + _d_squared_work(self.target.differentials)
+            + law_work
+            + predicted_cone_work,
+        )
         _require_chain_map_commutativity(self.source, self.target, self.chain_map)
         # The cone complex Cone(f)_n = C_{n-1} + D_n must itself stay inside
         # the representable degree range and per-group dimension budget, so
@@ -458,11 +526,15 @@ class MappingConeResult(StrictModel):
 
 
 __all__ = [
+    "MAX_AGGREGATE_CELLS",
+    "MAX_AGGREGATE_ELIMINATION_WORK",
+    "MAX_AGGREGATE_MULTIPLICATION_WORK",
+    "MAX_CHAIN_DEGREES",
+    "MAX_CHAIN_GROUP_DIMENSION",
     "ChainComplex",
     "HomologyGroup",
     "HomologyRequest",
     "HomologyResult",
     "MappingConeRequest",
     "MappingConeResult",
-    "MatrixEntry",
 ]

@@ -13,7 +13,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "homological_algebra.chain_complex.homology.compute",
         AdmissionDecision.KEEP,
-        "exact chain complex homology via Gaussian elimination over a prime field",
+        "exact chain complex homology via the shared prime-field rank kernel",
     ),
     OperationAdmission(
         "homological_algebra.chain_complex.mapping_cone.compute",

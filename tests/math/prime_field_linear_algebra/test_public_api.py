@@ -6,6 +6,7 @@ from jacobian.math import prime_field_linear_algebra
 from jacobian.math.prime_field_linear_algebra import (
     PrimeFieldMatrix,
     column_basis,
+    multiply,
     nullspace,
     quotient_basis,
     rank,
@@ -23,6 +24,41 @@ def test_rank_rref_and_nullspace_bind_the_prime() -> None:
     assert rank(matrix) == 2
     assert rref(matrix) == (((1, 0, 1), (0, 1, 1)), (0, 1))
     assert nullspace(matrix) == ((1, 1, 1),)
+
+
+def test_multiply_composes_over_the_prime_field() -> None:
+    left = PrimeFieldMatrix(prime=5, entries=((1, 2), (3, 4)), columns=2)
+    right = PrimeFieldMatrix(prime=5, entries=((0, 1), (1, 1)), columns=2)
+
+    assert multiply(left, right) == PrimeFieldMatrix(
+        prime=5,
+        entries=((2, 3), (4, 2)),
+        columns=2,
+    )
+
+
+def test_multiply_rejects_mismatched_primes_and_shapes() -> None:
+    left = PrimeFieldMatrix(prime=5, entries=((1,),), columns=1)
+    right = PrimeFieldMatrix(prime=7, entries=((1,),), columns=1)
+    with pytest.raises(ValueError, match="primes must match"):
+        multiply(left, right)
+
+    wide = PrimeFieldMatrix(prime=5, entries=((1, 0),), columns=2)
+    single = PrimeFieldMatrix(prime=5, entries=((1,),), columns=1)
+    with pytest.raises(ValueError, match="multiplicable"):
+        multiply(wide, single)
+
+
+def test_multiply_keeps_empty_shapes_explicit() -> None:
+    zero_by_two = PrimeFieldMatrix(prime=3, entries=(), columns=2)
+    two_by_zero = PrimeFieldMatrix(prime=3, entries=((), ()), columns=0)
+
+    assert multiply(zero_by_two, two_by_zero) == PrimeFieldMatrix(
+        prime=3, entries=(), columns=0
+    )
+    assert multiply(two_by_zero, zero_by_two) == PrimeFieldMatrix(
+        prime=3, entries=((0, 0), (0, 0)), columns=2
+    )
 
 
 def test_column_and_quotient_bases_are_source_ordered() -> None:
@@ -101,6 +137,7 @@ def test_exact_public_api_symbols() -> None:
     expected = (
         "PrimeFieldMatrix",
         "column_basis",
+        "multiply",
         "nullspace",
         "quotient_basis",
         "rank",

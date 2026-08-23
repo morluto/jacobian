@@ -52,13 +52,8 @@ _HOMOLOGY_EXAMPLE: dict[str, Any] = {
         "max_degree": 2,
         "dimensions": [1, 2, 2],
         "differentials": [
-            [{"row": 0, "col": 0, "value": "1"}, {"row": 0, "col": 1, "value": "1"}],
-            [
-                {"row": 0, "col": 0, "value": "1"},
-                {"row": 0, "col": 1, "value": "1"},
-                {"row": 1, "col": 0, "value": "1"},
-                {"row": 1, "col": 1, "value": "1"},
-            ],
+            {"prime": 2, "entries": [[1, 1]], "columns": 2},
+            {"prime": 2, "entries": [[1, 1], [1, 1]], "columns": 2},
         ],
     },
 }
@@ -79,7 +74,7 @@ _MAPPING_CONE_EXAMPLE: dict[str, Any] = {
         "dimensions": [1],
         "differentials": [],
     },
-    "chain_map": [[{"row": 0, "col": 0, "value": "1"}]],
+    "chain_map": [{"prime": 2, "entries": [[1]], "columns": 1}],
 }
 
 
@@ -88,9 +83,11 @@ CHAIN_COMPLEX_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "homological_algebra.chain_complex.homology.compute",
         "Compute homology of a chain complex over a prime field",
         "Given a bounded based chain complex over GF(p), compute the exact "
-        "homology groups H_n = ker(d_n) / im(d_{n+1}) for every degree. Uses "
-        "Gaussian elimination to compute the rank of each differential, "
-        "then derives Betti numbers as dim(C_n) - rank(d_n) - rank(d_{n+1}).",
+        "homology groups H_n = ker(d_n) / im(d_{n+1}) for every degree. Each "
+        "differential is a canonical prime-field matrix (boundary map "
+        "C_n -> C_{n-1}) whose rank comes from the shared exact prime-field "
+        "linear-algebra kernel, giving Betti numbers dim(C_n) - rank(d_n) - "
+        "rank(d_{n+1}). Consecutive differentials must compose to zero.",
         HomologyRequest,
         HomologyResult,
         compute_homology,
@@ -110,10 +107,11 @@ CHAIN_COMPLEX_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "homological_algebra.chain_complex.mapping_cone.compute",
         "Compute the mapping cone of a chain map",
         "Given chain complexes C (source) and D (target) and a chain map "
-        "f: C -> D, compute the mapping cone complex Cone(f) with groups "
-        "Cone(f)_n = C_{n-1} + D_n. The mapping cone is the fundamental "
-        "construction in homological algebra for computing long exact "
-        "sequences in homology.",
+        "f: C -> D given as one canonical prime-field matrix per source "
+        "degree satisfying the chain-map law, compute the mapping cone "
+        "complex Cone(f) with groups Cone(f)_n = C_{n-1} + D_n. The mapping "
+        "cone is the fundamental construction in homological algebra for "
+        "computing long exact sequences in homology.",
         MappingConeRequest,
         MappingConeResult,
         compute_mapping_cone,

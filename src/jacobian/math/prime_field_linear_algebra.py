@@ -13,6 +13,7 @@ _MAX_DIMENSION = 256
 __all__ = [
     "PrimeFieldMatrix",
     "column_basis",
+    "multiply",
     "nullspace",
     "quotient_basis",
     "rank",
@@ -89,6 +90,31 @@ def rank(matrix: PrimeFieldMatrix) -> int:
     if not matrix.entries or matrix.columns == 0:
         return 0
     return int(_domain_matrix(matrix).rank())
+
+
+def multiply(left: PrimeFieldMatrix, right: PrimeFieldMatrix) -> PrimeFieldMatrix:
+    """Return the matrix product ``left @ right`` over the bound prime field."""
+
+    if left.prime != right.prime:
+        raise ValueError("matrix primes must match")
+    if left.columns != len(right.entries):
+        raise ValueError("matrix shapes are not multiplicable")
+    product_rows = len(left.entries)
+    product_columns = right.columns
+    if product_rows == 0 or product_columns == 0 or left.columns == 0:
+        return PrimeFieldMatrix(
+            prime=left.prime,
+            entries=tuple((0,) * product_columns for _ in range(product_rows)),
+            columns=product_columns,
+        )
+    product = _domain_matrix(left) * _domain_matrix(right)
+    return PrimeFieldMatrix(
+        prime=left.prime,
+        entries=tuple(
+            tuple(int(value) % left.prime for value in row) for row in product.to_list()
+        ),
+        columns=product_columns,
+    )
 
 
 def nullspace(matrix: PrimeFieldMatrix) -> tuple[tuple[int, ...], ...]:

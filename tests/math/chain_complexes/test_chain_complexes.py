@@ -6,17 +6,28 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.chain_complexes._models import (
+    MAX_AGGREGATE_CELLS,
+    MAX_AGGREGATE_ELIMINATION_WORK,
+    MAX_AGGREGATE_MULTIPLICATION_WORK,
     ChainComplex,
     HomologyRequest,
     HomologyResult,
     MappingConeRequest,
-    MatrixEntry,
+    MappingConeResult,
 )
 from jacobian.math.chain_complexes._operations import (
     compute_homology,
     compute_mapping_cone,
 )
 from jacobian.math.chain_complexes._tools import TOOLS
+
+
+def mat(prime: int, rows: list[list[int]]) -> dict:
+    return {"prime": prime, "entries": rows, "columns": len(rows[0]) if rows else 0}
+
+
+def zeros_dict(prime: int, rows: int, cols: int) -> dict:
+    return mat(prime, [[0] * cols for _ in range(rows)])
 
 
 class TestHomology:
@@ -43,12 +54,7 @@ class TestHomology:
             min_degree=0,
             max_degree=1,
             dimensions=(1, 2),
-            differentials=(
-                (
-                    MatrixEntry(row=0, col=0, value="1"),
-                    MatrixEntry(row=0, col=1, value="1"),
-                ),
-            ),
+            differentials=({"prime": 2, "entries": [[1, 1]], "columns": 2},),
         )
         result = compute_homology(HomologyRequest(complex=cx))
         assert result.groups[0].betti == 0
@@ -65,14 +71,8 @@ class TestHomology:
             max_degree=2,
             dimensions=(1, 2, 1),
             differentials=(
-                (
-                    MatrixEntry(row=0, col=0, value="1"),
-                    MatrixEntry(row=0, col=1, value="1"),
-                ),
-                (
-                    MatrixEntry(row=0, col=0, value="1"),
-                    MatrixEntry(row=1, col=0, value="1"),
-                ),
+                {"prime": 2, "entries": [[1, 1]], "columns": 2},
+                {"prime": 2, "entries": [[1], [1]], "columns": 1},
             ),
         )
         result = compute_homology(HomologyRequest(complex=cx))
@@ -105,6 +105,31 @@ class TestHomology:
         result = compute_homology(HomologyRequest(complex=cx))
         assert result.groups[0].betti == 2
         assert result.groups[1].betti == 2
+
+    def test_ranks_come_from_the_shared_kernel(self):
+        """Nonunit residues over an odd prime rank exactly like the kernel."""
+
+        from jacobian.math.prime_field_linear_algebra import (
+            PrimeFieldMatrix,
+            rank,
+        )
+
+        cx = ChainComplex(
+            prime=7,
+            min_degree=0,
+            max_degree=1,
+            dimensions=(2, 1),
+            differentials=({"prime": 7, "entries": [[3], [5]], "columns": 1},),
+        )
+        result = compute_homology(HomologyRequest(complex=cx))
+        kernel_rank = rank(
+            PrimeFieldMatrix(prime=7, entries=((3,), (5,)), columns=1)
+        )
+        assert kernel_rank == 1
+        # d_1: C_1 -> C_0 arrives at degree 0 with the kernel's exact rank.
+        assert result.groups[0].boundary_rank == kernel_rank
+        assert result.groups[0].betti == 1
+        assert result.groups[1].cycle_rank == 0
 
 
 class TestPublishedExample:
@@ -145,7 +170,18 @@ class TestAdmissionRegressions:
                 min_degree=0,
                 max_degree=1,
                 dimensions=(10**9, 10**9),
-                differentials=((),),
+                differentials=(),
+            )
+
+    def test_group_dimensions_beyond_the_kernel_cap_rejected(self):
+        """Differentials are canonical kernel values, capped at 256."""
+        with pytest.raises(ValidationError, match="dense-work bound"):
+            ChainComplex(
+                prime=2,
+                min_degree=0,
+                max_degree=1,
+                dimensions=(300, 300),
+                differentials=(),
             )
 
     def test_degree_eleven_homology_roundtrips(self):
@@ -171,11 +207,11 @@ class TestAdmissionRegressions:
         target = ChainComplex(
             prime=2, min_degree=1, max_degree=1, dimensions=(1,), differentials=()
         )
-        with pytest.raises(ValidationError, match="exceeds target dimension"):
+        with pytest.raises(ValidationError, match="must have 0 rows"):
             MappingConeRequest(
                 source=source,
                 target=target,
-                chain_map=((MatrixEntry(row=0, col=0, value="1"),),),
+                chain_map=({"prime": 2, "entries": [[1]], "columns": 1},),
             )
 
     def test_chain_map_to_matching_degree_accepted(self):
@@ -188,7 +224,7 @@ class TestAdmissionRegressions:
         request = MappingConeRequest(
             source=source,
             target=target,
-            chain_map=((MatrixEntry(row=0, col=0, value="1"),),),
+            chain_map=({"prime": 2, "entries": [[1]], "columns": 1},),
         )
         cone = compute_mapping_cone(request)
         assert cone.cone.dimensions == (1, 1)
@@ -199,8 +235,7 @@ class TestMappingConeValidationRegression:
 
     def test_zero_differential_identity_chain_map_accepted(self):
         # Both complexes use the admitted differentials=() zero-map shape with
-        # an identity chain map: the commutator products are shaped zero
-        # matrices that must compare equal instead of [] vs [[]].
+        # an identity chain map: the commutator products compare equal.
         source = ChainComplex(
             prime=2, min_degree=0, max_degree=1, dimensions=(1, 1), differentials=()
         )
@@ -211,8 +246,8 @@ class TestMappingConeValidationRegression:
             source=source,
             target=target,
             chain_map=(
-                (MatrixEntry(row=0, col=0, value="1"),),
-                (MatrixEntry(row=0, col=0, value="1"),),
+                {"prime": 2, "entries": [[1]], "columns": 1},
+                {"prime": 2, "entries": [[1]], "columns": 1},
             ),
         )
         cone = compute_mapping_cone(request)
@@ -227,7 +262,7 @@ class TestMappingConeValidationRegression:
             min_degree=0,
             max_degree=1,
             dimensions=(1, 1),
-            differentials=((MatrixEntry(row=0, col=0, value="1"),),),
+            differentials=({"prime": 2, "entries": [[1]], "columns": 1},),
         )
         target = ChainComplex(
             prime=2, min_degree=0, max_degree=0, dimensions=(1,), differentials=()
@@ -237,22 +272,29 @@ class TestMappingConeValidationRegression:
                 source=source,
                 target=target,
                 chain_map=(
-                    (MatrixEntry(row=0, col=0, value="1"),),
-                    (),
+                    {"prime": 2, "entries": [[1]], "columns": 1},
+                    {"prime": 2, "entries": [], "columns": 1},
                 ),
             )
 
     def test_overlapping_cone_group_dimension_rejected(self):
-        # Two independently admissible 512-dimensional groups overlap in the
-        # cone: Cone_1 = C_0 + D_1 has dimension 1024 and cannot be built.
+        # Two independently admissible 200-dimensional groups overlap in the
+        # cone: Cone_1 = C_0 + D_1 has dimension 400 and cannot be built as
+        # canonical prime-field matrices.
         source = ChainComplex(
-            prime=2, min_degree=0, max_degree=0, dimensions=(512,), differentials=()
+            prime=2, min_degree=0, max_degree=0, dimensions=(200,), differentials=()
         )
         target = ChainComplex(
-            prime=2, min_degree=1, max_degree=1, dimensions=(512,), differentials=()
+            prime=2, min_degree=1, max_degree=1, dimensions=(200,), differentials=()
         )
         with pytest.raises(ValidationError, match="dense-work"):
-            MappingConeRequest(source=source, target=target, chain_map=((),))
+            MappingConeRequest(
+                source=source,
+                target=target,
+                # f_0 lands in the absent group D_0: a zero-row matrix over
+                # all 200 source basis vectors.
+                chain_map=({"prime": 2, "entries": [], "columns": 200},),
+            )
 
     def test_shifted_source_top_degree_without_cone_degree_rejected(self):
         # A source concentrated at the top supported degree shifts the cone to
@@ -267,7 +309,7 @@ class TestMappingConeValidationRegression:
             MappingConeRequest(
                 source=source,
                 target=target,
-                chain_map=((MatrixEntry(row=0, col=0, value="1"),),),
+                chain_map=({"prime": 2, "entries": [[1]], "columns": 1},),
             )
 
 
@@ -286,13 +328,13 @@ class TestTriageRegressions:
             min_degree=0,
             max_degree=1,
             dimensions=(1, 1),
-            differentials=((MatrixEntry(row=0, col=0, value="1"),),),
+            differentials=({"prime": 2, "entries": [[1]], "columns": 1},),
         )
         with pytest.raises(ValidationError, match="commute at degree 1"):
             MappingConeRequest(
                 source=source,
                 target=target,
-                chain_map=((MatrixEntry(row=0, col=0, value="1"),),),
+                chain_map=({"prime": 2, "entries": [[1]], "columns": 1},),
             )
 
     def test_homology_result_rejects_forged_groups(self):
@@ -301,12 +343,7 @@ class TestTriageRegressions:
             min_degree=0,
             max_degree=1,
             dimensions=(1, 2),
-            differentials=(
-                (
-                    MatrixEntry(row=0, col=0, value="1"),
-                    MatrixEntry(row=0, col=1, value="1"),
-                ),
-            ),
+            differentials=({"prime": 2, "entries": [[1, 1]], "columns": 2},),
         )
         result = compute_homology(HomologyRequest(complex=cx))
         forged = result.model_copy(
@@ -327,51 +364,194 @@ class TestTriageRegressions:
             HomologyResult.model_validate(forged.model_dump())
 
 
-class TestReviewRegressions:
-    def test_duplicate_differential_coordinates_rejected(self):
-        with pytest.raises(ValidationError, match="duplicate matrix entry"):
+class TestCanonicalMatrixValues:
+    """Differentials and chain maps are the one canonical matrix value."""
+
+    def test_noncanonical_residue_rejected_before_execution(self):
+        with pytest.raises(ValidationError, match="canonical"):
+            ChainComplex(
+                prime=2,
+                min_degree=0,
+                max_degree=1,
+                dimensions=(1, 1),
+                differentials=({"prime": 2, "entries": [[3]], "columns": 1},),
+            )
+
+    def test_multiple_encodings_of_one_entry_are_impossible(self):
+        """The sparse encodings '1' vs '3' mod 2 cannot both represent 1."""
+        canonical = ChainComplex(
+            prime=2,
+            min_degree=0,
+            max_degree=1,
+            dimensions=(1, 1),
+            differentials=({"prime": 2, "entries": [[1]], "columns": 1},),
+        ).differentials[0]
+        assert canonical.entries == ((1,),)
+
+    def test_differential_prime_mismatch_rejected(self):
+        with pytest.raises(ValidationError, match="match the complex prime"):
+            ChainComplex(
+                prime=3,
+                min_degree=0,
+                max_degree=1,
+                dimensions=(1, 1),
+                differentials=({"prime": 2, "entries": [[1]], "columns": 1},),
+            )
+
+    def test_wrong_differential_shape_rejected(self):
+        with pytest.raises(ValidationError, match="must have 2 rows"):
             ChainComplex(
                 prime=2,
                 min_degree=0,
                 max_degree=1,
                 dimensions=(2, 2),
+                differentials=({"prime": 2, "entries": [[1, 0]], "columns": 2},),
+            )
+
+    def test_nonzero_composition_rejected(self):
+        """d^2 != 0 is not a chain complex and must fail admission."""
+        with pytest.raises(ValidationError, match="must satisfy d"):
+            ChainComplex(
+                prime=2,
+                min_degree=0,
+                max_degree=2,
+                dimensions=(1, 1, 1),
                 differentials=(
-                    (
-                        MatrixEntry(row=0, col=0, value="1"),
-                        MatrixEntry(row=0, col=0, value="1"),
-                    ),
+                    {"prime": 2, "entries": [[1]], "columns": 1},
+                    {"prime": 2, "entries": [[1]], "columns": 1},
                 ),
             )
 
-    def test_entry_list_longer_than_cells_rejected(self):
-        source = ChainComplex(
-            prime=2, min_degree=0, max_degree=0, dimensions=(1,), differentials=()
+    def test_all_ones_over_gf2_composes_to_zero(self):
+        """The review's all-ones example is admitted and exact over GF(2)."""
+        cx = ChainComplex(
+            prime=2,
+            min_degree=0,
+            max_degree=2,
+            dimensions=(1, 2, 1),
+            differentials=(
+                {"prime": 2, "entries": [[1, 1]], "columns": 2},
+                {"prime": 2, "entries": [[1], [1]], "columns": 1},
+            ),
         )
-        target = ChainComplex(
-            prime=2, min_degree=0, max_degree=0, dimensions=(1,), differentials=()
+        result = compute_homology(HomologyRequest(complex=cx))
+        assert all(group.betti == 0 for group in result.groups)
+
+
+class TestAggregateBudgets:
+    """Aggregate budgets bound one request's total validation work."""
+
+    def test_admits_useful_request_near_the_boundary(self):
+        size = 220
+        cx = ChainComplex(
+            prime=2,
+            min_degree=0,
+            max_degree=3,
+            dimensions=(size, size, size, size),
+            differentials=tuple(zeros_dict(2, size, size) for _ in range(3)),
         )
-        # chain_map component for a 1x1 map admits one cell; three entries
-        # cannot carry distinct in-range coordinates.
-        with pytest.raises(ValidationError, match="rows x columns cells"):
-            MappingConeRequest(
-                source=source,
-                target=target,
-                chain_map=(
-                    (
-                        MatrixEntry(row=0, col=0, value="1"),
-                        MatrixEntry(row=0, col=0, value="1"),
-                        MatrixEntry(row=0, col=0, value="1"),
-                    ),
-                ),
+        cells = 3 * size * size
+        work = 2 * size**3
+        assert cells <= MAX_AGGREGATE_CELLS
+        assert work <= MAX_AGGREGATE_MULTIPLICATION_WORK
+        assert work <= MAX_AGGREGATE_ELIMINATION_WORK
+        result = compute_homology(HomologyRequest(complex=cx))
+        assert all(group.betti == size for group in result.groups)
+
+    def test_accepts_requests_exactly_at_both_work_boundaries(self):
+        size = 256
+        cx = ChainComplex(
+            prime=2,
+            min_degree=0,
+            max_degree=2,
+            dimensions=(size, size, size),
+            differentials=(zeros_dict(2, size, size), zeros_dict(2, size, size)),
+        )
+        assert 2 * size**3 == MAX_AGGREGATE_MULTIPLICATION_WORK
+        assert 2 * size**3 == MAX_AGGREGATE_ELIMINATION_WORK
+        result = compute_homology(HomologyRequest(complex=cx))
+        assert all(group.betti == size for group in result.groups)
+
+    def test_cell_budget_rejects_many_full_differentials(self):
+        """Many admissible matrices together exceed the aggregate cell budget."""
+        size = 210
+        count = 6
+        assert count * size * size > MAX_AGGREGATE_CELLS
+        with pytest.raises(ValidationError, match="matrix cells"):
+            ChainComplex(
+                prime=2,
+                min_degree=0,
+                max_degree=count,
+                dimensions=(size,) * (count + 1),
+                differentials=tuple(zeros_dict(2, size, size) for _ in range(count)),
             )
+
+    def test_multiplication_budget_rejects_dense_composition(self):
+        """Cells stay under budget while predicted composition work does not."""
+        size = 256
+        count = 4
+        assert count * size * size <= MAX_AGGREGATE_CELLS
+        assert (count - 1) * size**3 > MAX_AGGREGATE_MULTIPLICATION_WORK
+        with pytest.raises(ValidationError, match="field multiplications"):
+            ChainComplex(
+                prime=2,
+                min_degree=0,
+                max_degree=count,
+                dimensions=(size,) * (count + 1),
+                differentials=tuple(zeros_dict(2, size, size) for _ in range(count)),
+            )
+
+    def test_elimination_budget_rejects_dense_rank_profile(self):
+        """Composition stays under budget while predicted rank work does not."""
+        size = 200
+        count = 5
+        assert count * size * size <= MAX_AGGREGATE_CELLS
+        assert (count - 1) * size**3 <= MAX_AGGREGATE_MULTIPLICATION_WORK
+        assert count * size**3 > MAX_AGGREGATE_ELIMINATION_WORK
+        cx = ChainComplex(
+            prime=2,
+            min_degree=0,
+            max_degree=count,
+            dimensions=(size,) * (count + 1),
+            differentials=tuple(zeros_dict(2, size, size) for _ in range(count)),
+        )
+        with pytest.raises(ValidationError, match="elimination operations"):
+            HomologyRequest(complex=cx)
+
+    def test_mapping_cone_budget_counts_both_complexes_and_predicted_cone(self):
+        """The gate includes source, target, chain map, and the derived cone."""
+        size = 80
+        degrees = 11
+        base = {
+            "prime": 2,
+            "min_degree": 0,
+            "max_degree": degrees - 1,
+            "dimensions": [size] * degrees,
+            "differentials": [
+                zeros_dict(2, size, size) for _ in range(degrees - 1)
+            ],
+        }
+        payload = {
+            "source": base,
+            "target": base,
+            "chain_map": [zeros_dict(2, size, size) for _ in range(degrees)],
+        }
+        input_cells = 2 * (degrees - 1) * size * size + degrees * size * size
+        assert input_cells <= MAX_AGGREGATE_CELLS
+        with pytest.raises(ValidationError, match="matrix cells"):
+            MappingConeRequest.model_validate(payload)
+
+
+class TestResultReplay:
+    """Results retain their inputs and replay against the exact kernels."""
 
     def test_mapping_cone_result_replays_retained_source_map(self):
-        from pydantic import ValidationError
-
-        from jacobian.math.chain_complexes._models import MappingConeResult
-
         source = ChainComplex(
-            prime=5, min_degree=0, max_degree=1, dimensions=(1, 1), differentials=((),)
+            prime=5,
+            min_degree=0,
+            max_degree=1,
+            dimensions=(1, 1),
+            differentials=({"prime": 5, "entries": [[0]], "columns": 1},),
         )
         target = ChainComplex(
             prime=5, min_degree=0, max_degree=0, dimensions=(1,), differentials=()
@@ -379,12 +559,17 @@ class TestReviewRegressions:
         request = MappingConeRequest(
             source=source,
             target=target,
-            chain_map=((MatrixEntry(row=0, col=0, value="1"),), ()),
+            chain_map=(
+                {"prime": 5, "entries": [[1]], "columns": 1},
+                {"prime": 5, "entries": [], "columns": 1},
+            ),
         )
         result = compute_mapping_cone(request)
         assert MappingConeResult.model_validate(result.model_dump()) == result
+        # A relayed payload whose retained request differs cannot revalidate:
+        # the replayed cone no longer matches the attached one.
         relayed = result.model_dump()
-        relayed["cone"]["dimensions"] = (2, 9, 9)
+        relayed["request"]["chain_map"][0]["entries"] = [[0]]
         with pytest.raises(ValidationError, match="exact mapping cone"):
             MappingConeResult.model_validate(relayed)
 
@@ -399,27 +584,40 @@ class TestReviewRegressions:
             prime=2, min_degree=-10, max_degree=-10, dimensions=(1,), differentials=()
         )
         with pytest.raises(ValidationError, match="22 consecutive degrees"):
-            MappingConeRequest(source=source, target=target, chain_map=((),))
+            MappingConeRequest(
+                source=source,
+                target=target,
+                # D_10 does not exist: f_10 is the zero-row shaped zero map.
+                chain_map=({"prime": 2, "entries": [], "columns": 1},),
+            )
 
     def test_full_span_21_group_cone_accepted_and_roundtrips(self):
         # A derived cone of exactly 21 groups stays representable: source
         # degrees [-10, 9] shifted to [-9, 10] plus a target group at -10
         # spans [-10, 10], so execution must return a typed result.
-        from jacobian.math.chain_complexes._models import MappingConeResult
-
         source = ChainComplex(
             prime=3,
             min_degree=-10,
             max_degree=9,
             dimensions=tuple(1 for _ in range(20)),
-            differentials=tuple(() for _ in range(19)),
+            differentials=(),
         )
         target = ChainComplex(
             prime=3, min_degree=-10, max_degree=-10, dimensions=(1,), differentials=()
         )
-        request = MappingConeRequest(source=source, target=target, chain_map=((),) * 20)
+        request = MappingConeRequest(
+            source=source,
+            target=target,
+            chain_map=tuple(
+                # f_deg is the shaped zero map: 1x1 into D_-10 at degree -10,
+                # zero-row elsewhere because the target has no group there.
+                zeros_dict(3, 1, 1) if deg == -10 else {"prime": 3, "entries": [], "columns": 1}
+                for deg in range(-10, 10)
+            ),
+        )
         result = compute_mapping_cone(request)
         assert len(result.cone.dimensions) == 21
         assert result.cone.min_degree == -10
         assert result.cone.max_degree == 10
         assert MappingConeResult.model_validate(result.model_dump()) == result
+

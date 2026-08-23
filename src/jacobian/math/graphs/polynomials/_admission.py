@@ -23,7 +23,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "graph.polynomial.independence.compute",
         AdmissionDecision.KEEP,
-        "exact independent-set cardinality generating function of a bounded tree, source-bound and returned as the canonical polynomial value for unchanged downstream composition",
+        "exact independent-set cardinality generating function of a bounded tree, source-bound with its dense coefficients and canonical polynomial for unchanged downstream composition",
     ),
     OperationAdmission(
         "graph.polynomial.matching.compute",

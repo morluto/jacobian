@@ -8,6 +8,7 @@ import networkx as nx
 import sympy
 from sympy import Poly, Symbol, expand
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.graphs.polynomials._models import (
     GraphPolynomialRequest,
     GraphPolynomialResult,
@@ -18,7 +19,10 @@ from jacobian.math.graphs.polynomials._models import (
     TreeIndependencePolynomialRequest,
     TreeIndependencePolynomialResult,
 )
-from jacobian.math.graphs.polynomials.operations import independence_polynomial
+from jacobian.math.graphs.polynomials.operations import (
+    _polynomial_from_coefficients,
+    independence_polynomial_coefficients,
+)
 
 
 def _build_graph(
@@ -143,9 +147,15 @@ def compute_independence_polynomial(
 ) -> TreeIndependencePolynomialResult:
     """Compute the exact independence polynomial of an admitted finite tree."""
 
+    coefficients = independence_polynomial_coefficients(request.graph)
     return TreeIndependencePolynomialResult(
         graph=request.graph,
-        polynomial=independence_polynomial(request.graph),
+        coefficients=tuple(
+            format_canonical_integer(coefficient) for coefficient in coefficients
+        ),
+        polynomial=_polynomial_from_coefficients(coefficients),
+        independence_number=len(coefficients) - 1,
+        independent_set_count=format_canonical_integer(sum(coefficients)),
     )
 
 

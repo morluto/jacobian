@@ -139,8 +139,8 @@ def independence_polynomial_coefficients(
 ) -> tuple[int, ...]:
     """Return ``i_0, ..., i_alpha`` for one admitted finite tree.
 
-    This dense coefficient view is a native-only projection.  The catalog
-    operation returns the canonical sparse ``RationalPolynomial`` instead.
+    This native projection matches the dense coefficients returned alongside
+    the canonical sparse ``RationalPolynomial`` by the catalog operation.
     """
 
     profile = _admitted_tree_profile(graph)

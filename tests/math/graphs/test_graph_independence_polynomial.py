@@ -97,6 +97,15 @@ def test_known_independence_polynomials(
     assert independence_polynomial_coefficients(graph) == expected
     assert _dense_coefficients(independence_polynomial(graph)) == expected
 
+    result = compute_independence_polynomial(
+        TreeIndependencePolynomialRequest(graph=graph)
+    )
+    assert result.coefficients == tuple(
+        format_canonical_integer(coefficient) for coefficient in expected
+    )
+    assert result.independence_number == len(expected) - 1
+    assert result.independent_set_count == format_canonical_integer(sum(expected))
+
 
 def test_all_free_trees_through_order_eight_match_subset_enumeration() -> None:
     trees = [explicit_graph(("v",), ())]
@@ -164,9 +173,7 @@ def test_serialized_polynomial_feeds_exact_evaluation_unchanged(
 
     evaluation = rational_polynomial_evaluate(evaluation_request)
 
-    assert evaluation.value.num == format_canonical_integer(
-        sum(independence_polynomial_coefficients(graph))
-    )
+    assert evaluation.value.num == result.independent_set_count
     assert evaluation.value.den == "1"
 
 
@@ -194,6 +201,11 @@ def test_result_sensitive_degree_boundary_accepts_p254_and_rejects_p255() -> Non
 
     result = compute_independence_polynomial(request)
 
+    assert len(result.coefficients) == 128
+    assert result.independence_number == 127
+    assert result.independent_set_count == format_canonical_integer(
+        sum(independence_polynomial_coefficients(accepted))
+    )
     assert len(result.polynomial.polynomial.terms) == 128
     assert result.polynomial.polynomial.terms[0].exponents == (127,)
     with pytest.raises(ValidationError, match="degree at most 127"):
@@ -252,6 +264,28 @@ def test_result_rejects_a_weaker_polynomial_and_a_changed_source() -> None:
         TreeIndependencePolynomialResult.model_validate(changed_source)
 
 
+@pytest.mark.parametrize(
+    ("field", "replacement", "message"),
+    [
+        ("coefficients", ["1", "4", "2"], "coefficients do not match"),
+        ("independence_number", 1, "independence number does not match"),
+        ("independent_set_count", "7", "independent-set count does not match"),
+    ],
+)
+def test_result_rejects_mutated_derived_values(
+    field: str,
+    replacement: object,
+    message: str,
+) -> None:
+    valid = compute_independence_polynomial(
+        TreeIndependencePolynomialRequest(graph=_path(4))
+    ).model_dump(mode="json")
+    valid[field] = replacement
+
+    with pytest.raises(ValidationError, match=message):
+        TreeIndependencePolynomialResult.model_validate(valid)
+
+
 def test_result_rejects_a_polynomial_outside_qq_x() -> None:
     valid = compute_independence_polynomial(
         TreeIndependencePolynomialRequest(graph=_path(4))
@@ -270,12 +304,42 @@ def test_result_rejects_overbudget_coefficients_before_replay(
     ).model_dump(mode="json")
     valid["polynomial"]["polynomial"]["terms"][0]["coefficient"]["num"] = "9" * 78
 
-    def fail_replay(_graph: SimpleUndirectedGraph) -> RationalPolynomial:
+    def fail_replay(_graph: SimpleUndirectedGraph) -> tuple[int, ...]:
         raise AssertionError("overbudget polynomial must fail before replay")
 
     monkeypatch.setattr(
         polynomial_operations,
-        "independence_polynomial",
+        "independence_polynomial_coefficients",
+        fail_replay,
+    )
+
+    with pytest.raises(ValidationError, match="77-digit bound"):
+        TreeIndependencePolynomialResult.model_validate(valid)
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    [
+        ("coefficients", ["9" * 78, "1", "3"]),
+        ("independent_set_count", "9" * 78),
+    ],
+)
+def test_result_rejects_overbudget_derived_values_before_replay(
+    field: str,
+    replacement: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    valid = compute_independence_polynomial(
+        TreeIndependencePolynomialRequest(graph=_path(4))
+    ).model_dump(mode="json")
+    valid[field] = replacement
+
+    def fail_replay(_graph: SimpleUndirectedGraph) -> tuple[int, ...]:
+        raise AssertionError("overbudget derived value must fail before replay")
+
+    monkeypatch.setattr(
+        polynomial_operations,
+        "independence_polynomial_coefficients",
         fail_replay,
     )
 

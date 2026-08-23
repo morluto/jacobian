@@ -5,7 +5,7 @@ from jacobian.catalog.models import OperationDiscoveryRequest
 from jacobian.dispatch import invoke_operation
 
 
-def test_catalog_example_executes_as_a_source_bound_canonical_polynomial() -> None:
+def test_catalog_example_executes_as_a_source_bound_polynomial_profile() -> None:
     catalog = Catalog.open()
     operation = catalog.operation("graph.polynomial.independence.compute")
     assert operation is not None
@@ -16,6 +16,9 @@ def test_catalog_example_executes_as_a_source_bound_canonical_polynomial() -> No
 
     assert example.name == "path_tree_p4"
     assert result.output["graph"] == example.input["graph"]
+    assert result.output["coefficients"] == ["1", "4", "3"]
+    assert result.output["independence_number"] == 2
+    assert result.output["independent_set_count"] == "8"
     assert result.output["polynomial"]["variables"] == ["x"]
     assert result.output["polynomial"]["polynomial"]["terms"] == [
         {

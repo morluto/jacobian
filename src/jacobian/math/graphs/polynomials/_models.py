@@ -4,10 +4,15 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, StrictInt, model_validator
 
+from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    format_canonical_integer,
+)
 from jacobian.math.graphs.polynomials.operations import (
     MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS,
     MAX_INDEPENDENCE_POLYNOMIAL_DEGREE,
@@ -105,11 +110,12 @@ def _maximum_independence_result_bytes(
     graph: SimpleUndirectedGraph,
     degree: int,
 ) -> int:
-    """Bound the echoed graph plus a maximum-size canonical polynomial."""
+    """Bound the complete source-bound result at one admitted degree."""
 
     maximum_coefficient = "9" * MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS
     payload = {
         "graph": graph.model_dump(mode="json"),
+        "coefficients": [maximum_coefficient] * (degree + 1),
         "polynomial": {
             "polynomial_schema_version": "1",
             "domain": "QQ",
@@ -127,6 +133,8 @@ def _maximum_independence_result_bytes(
                 ]
             },
         },
+        "independence_number": degree,
+        "independent_set_count": maximum_coefficient,
     }
     output_limit = CanonicalLimits().max_output_bytes
     measurement_limits = CanonicalLimits(max_output_bytes=2 * output_limit)
@@ -183,13 +191,29 @@ class TreeIndependencePolynomialRequest(StrictModel):
 
 
 class TreeIndependencePolynomialResult(StrictModel):
-    """One source-bound exact independence polynomial in ``QQ[x]``."""
+    """One source-bound exact independence polynomial and its defining values."""
 
     graph: SimpleUndirectedGraph
+    coefficients: tuple[CanonicalInteger, ...] = Field(
+        min_length=2,
+        max_length=MAX_INDEPENDENCE_POLYNOMIAL_TERMS,
+        description=(
+            "Dense coefficients i_0, ..., i_alpha as canonical decimal "
+            "nonnegative integers."
+        ),
+    )
     polynomial: RationalPolynomial
+    independence_number: StrictInt = Field(
+        ge=1,
+        le=MAX_INDEPENDENCE_POLYNOMIAL_DEGREE,
+        description="The tree independence number alpha(T).",
+    )
+    independent_set_count: CanonicalInteger = Field(
+        description="The total I_T(1) as a canonical decimal integer."
+    )
 
     @model_validator(mode="after")
-    def require_polynomial_bound_to_source(self) -> Self:
+    def require_values_bound_to_source(self) -> Self:
         if self.polynomial.variables != ("x",):
             raise ValueError("independence polynomial must belong to QQ[x]")
         require_polynomial_budget(
@@ -199,14 +223,45 @@ class TreeIndependencePolynomialResult(StrictModel):
             maximum_coefficient_digits=MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS,
             label="independence polynomial",
         )
+        if any(
+            len(coefficient.lstrip("-"))
+            > MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS
+            for coefficient in self.coefficients
+        ):
+            raise ValueError(
+                "independence coefficient exceeds the "
+                f"{MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS}-digit bound"
+            )
+        if (
+            len(self.independent_set_count.lstrip("-"))
+            > MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS
+        ):
+            raise ValueError(
+                "independent-set count exceeds the "
+                f"{MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS}-digit bound"
+            )
         TreeIndependencePolynomialRequest(graph=self.graph)
 
         from jacobian.math.graphs.polynomials.operations import (
-            independence_polynomial,
+            _polynomial_from_coefficients,
+            independence_polynomial_coefficients,
         )
 
-        if self.polynomial != independence_polynomial(self.graph):
+        expected_coefficients = independence_polynomial_coefficients(self.graph)
+        expected_wire_coefficients = tuple(
+            format_canonical_integer(coefficient)
+            for coefficient in expected_coefficients
+        )
+        if self.polynomial != _polynomial_from_coefficients(expected_coefficients):
             raise ValueError("independence polynomial does not match the source tree")
+        if self.coefficients != expected_wire_coefficients:
+            raise ValueError("independence coefficients do not match the source tree")
+        if self.independence_number != len(expected_coefficients) - 1:
+            raise ValueError("independence number does not match the source tree")
+        if self.independent_set_count != format_canonical_integer(
+            sum(expected_coefficients)
+        ):
+            raise ValueError("independent-set count does not match the source tree")
         return self
 
 

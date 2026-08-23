@@ -148,8 +148,10 @@ GRAPH_POLYNOMIAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "Compute a tree independence polynomial",
         "Compute the exact independence polynomial whose degree-k coefficient "
         "counts independent vertex sets of cardinality k in one nonempty "
-        "finite tree. Return a source-bound canonical sparse RationalPolynomial "
-        "in QQ[x] after a scalar preflight bounds degree and convolution work.",
+        "finite tree. Return its source-bound dense coefficients, independence "
+        "number, total independent-set count, and canonical sparse "
+        "RationalPolynomial in QQ[x] after a scalar preflight bounds degree "
+        "and convolution work.",
         TreeIndependencePolynomialRequest,
         TreeIndependencePolynomialResult,
         compute_independence_polynomial,

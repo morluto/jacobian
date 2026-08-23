@@ -11,6 +11,11 @@ from jacobian.math.recurrence_solving._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "sequence.recurrence.prime_field.find",
+        AdmissionDecision.KEEP,
+        "exact minimal LFSR over an explicit prime field via Berlekamp-Massey with material leverage over bespoke recurrence fitting",
+    ),
+    OperationAdmission(
         "sequence.recurrence.closed_form.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",

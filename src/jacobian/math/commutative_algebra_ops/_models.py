@@ -129,6 +129,51 @@ class IdealRadicalMembershipRequest(StrictModel):
         return self
 
 
+class IdealSaturationRequest(StrictModel):
+    """Compute ``I : <d>^infinity`` for a bounded ideal and one polynomial."""
+
+    ideal: RationalPolynomialIdeal = Field(
+        description=(
+            "An ideal in at most 6 variables with at most 16 generators and "
+            "256 aggregate terms; generator total degree is at most 12 and "
+            "coefficient components are at most 128 digits."
+        )
+    )
+    denominator: RationalPolynomial = Field(
+        description=(
+            "A single nonzero polynomial d in the dividend's exact ordered "
+            "ring, with at most 256 terms, total degree at most 12, and "
+            "coefficient components at most 128 digits."
+        )
+    )
+    resource_budget: IdealComputationBudget = Field(
+        default_factory=IdealComputationBudget
+    )
+
+    @model_validator(mode="after")
+    def require_backend_domain(self) -> Self:
+        _require_ideal_budget(self.ideal, label="ideal")
+        if self.denominator.variables != self.ideal.variables:
+            raise ValueError("saturation operands must use the same ordered ring")
+        if not self.denominator.polynomial.terms:
+            raise ValueError("saturation denominator must be nonzero")
+        require_polynomial_budget(
+            self.denominator,
+            maximum_terms=MAX_INPUT_TERMS,
+            maximum_exponent=MAX_INPUT_EXPONENT,
+            maximum_coefficient_digits=MAX_COEFFICIENT_DIGITS,
+            label="saturation denominator",
+        )
+        if any(
+            sum(term.exponents) > MAX_INPUT_EXPONENT
+            for term in self.denominator.polynomial.terms
+        ):
+            raise ValueError(
+                f"saturation denominator exceeds total degree {MAX_INPUT_EXPONENT}"
+            )
+        return self
+
+
 class IdealQuotientRequest(StrictModel):
     """Compute ``(I : J)`` for bounded ideals in one ``QQ`` ring."""
 
@@ -214,6 +259,31 @@ class IdealQuotientResult(StrictModel):
         return self
 
 
+class IdealSaturationResult(StrictModel):
+    outcome: IdealExecutionOutcome
+    saturation: RationalPolynomialIdeal | None = None
+    method: Literal["SINGULAR_SATURATION"] = "SINGULAR_SATURATION"
+    backend_version: str | None = None
+    detail: str | None = None
+
+    @model_validator(mode="after")
+    def require_outcome_shape(self) -> Self:
+        if self.outcome == "COMPUTED":
+            if self.saturation is None or self.backend_version is None or self.detail:
+                raise ValueError(
+                    "computed saturation requires a value and backend version"
+                )
+        elif (
+            self.saturation is not None
+            or self.backend_version is not None
+            or not self.detail
+        ):
+            raise ValueError(
+                "failed saturation computation requires only a safe detail"
+            )
+        return self
+
+
 __all__ = [
     "MAX_OUTPUT_GENERATORS",
     "MAX_OUTPUT_TERMS",
@@ -225,4 +295,6 @@ __all__ = [
     "IdealRadicalMembershipResult",
     "IdealRadicalRequest",
     "IdealRadicalResult",
+    "IdealSaturationRequest",
+    "IdealSaturationResult",
 ]

@@ -95,6 +95,16 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.DROP,
         "elementary exact formula without material leverage over direct Python",
     ),
+    OperationAdmission(
+        "geometry.points.general_position.search",
+        AdmissionDecision.KEEP,
+        "distinct exact or explicitly bounded search outcome with material computational leverage",
+    ),
+    OperationAdmission(
+        "geometry.points.circumradius_profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

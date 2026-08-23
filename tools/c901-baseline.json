@@ -9,6 +9,11 @@
     },
     {
       "path": "src/jacobian/math/geometry/exact/_models.py",
+      "symbol": "require_consistent_profile",
+      "complexity": 30
+    },
+    {
+      "path": "src/jacobian/math/geometry/exact/_models.py",
       "symbol": "require_consistent_witnesses",
       "complexity": 34
     },

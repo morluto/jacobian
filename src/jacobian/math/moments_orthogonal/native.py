@@ -7,7 +7,6 @@ from jacobian.math.moments_orthogonal._models import (
     GaussianQuadratureRequest,
     HankelRequest,
     JacobiMatrixRequest,
-    OrthogonalPolynomialRequest,
     RecurrenceRequest,
     ShiftedHankelRequest,
 )
@@ -16,9 +15,9 @@ from jacobian.math.moments_orthogonal.operations import (
     compute_gaussian_quadrature,
     compute_hankel_matrix,
     compute_jacobi_matrix,
-    compute_orthogonal_polynomials,
     compute_recurrence,
     compute_shifted_hankel,
+    orthogonal_polynomials_from_moments,
 )
 from jacobian.math.moments_orthogonal.values import (
     ChristoffelDarbouxKernel,
@@ -56,10 +55,14 @@ def shifted_hankel_matrix(
 def orthogonal_polynomials(
     prefix: MomentFunctionalPrefix, max_degree: int
 ) -> OrthogonalPolynomialFamily:
-    """Exact monic orthogonal polynomial family p_0,...,p_max_degree."""
-    return compute_orthogonal_polynomials(
-        OrthogonalPolynomialRequest(prefix=prefix, max_degree=max_degree)
-    )
+    """Exact monic orthogonal polynomial family p_0,...,p_max_degree.
+
+    Calls the shared Gram-Schmidt kernel directly — no wire envelope, so
+    the exact projection runs once per call.
+    """
+
+    moments = [_m.as_fraction() for _m in prefix.moments]
+    return orthogonal_polynomials_from_moments(moments, max_degree, prefix.variable)
 
 
 def recurrence_coefficients(family: OrthogonalPolynomialFamily) -> ThreeTermRecurrence:

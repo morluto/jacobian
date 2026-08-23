@@ -250,17 +250,14 @@ def _construct_monic_orthogonal_polynomial(
     return p_degree
 
 
-def compute_orthogonal_polynomials(
-    request: OrthogonalPolynomialRequest,
+def orthogonal_polynomials_from_moments(
+    moments: list[Fraction], max_deg: int, var: str
 ) -> OrthogonalPolynomialFamily:
-    """Compute monic orthogonal polynomials via exact Gram-Schmidt.
+    """Pure Gram-Schmidt kernel over one bounded moment sequence.
 
-    Uses the moment functional L(f) = sum_k mu_k * (coefficient of x^k in f)
-    to compute inner products <f,g> = L(f*g).
+    Shared by the MCP handler, the request admission replay, and the native
+    API so no caller performs the exact projection twice.
     """
-    moments = [_to_fraction(m) for m in request.prefix.moments]
-    max_deg = request.max_degree
-    var = request.prefix.variable
 
     def inner(coeffs_a: list[Fraction], coeffs_b: list[Fraction]) -> Fraction:
         """Compute L(a*b) where a,b are polynomials (coeffs lowest degree first)."""
@@ -320,6 +317,16 @@ def compute_orthogonal_polynomials(
         variable=var,
         is_quasi_definite=is_quasi_definite,
         is_positive_definite=is_positive_definite,
+    )
+
+
+def compute_orthogonal_polynomials(
+    request: OrthogonalPolynomialRequest,
+) -> OrthogonalPolynomialFamily:
+    """MCP adapter: validate the wire request, then run the shared kernel."""
+    moments = [_to_fraction(m) for m in request.prefix.moments]
+    return orthogonal_polynomials_from_moments(
+        moments, request.max_degree, request.prefix.variable
     )
 
 

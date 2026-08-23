@@ -139,10 +139,14 @@ class OrthogonalPolynomialRequest(StrictModel):
         """
         _require_gram_schmidt_heights_admissible(self.prefix.moments, self.max_degree)
         from jacobian.math.moments_orthogonal.operations import (
-            compute_orthogonal_polynomials,
+            orthogonal_polynomials_from_moments,
         )
 
-        compute_orthogonal_polynomials(self)
+        orthogonal_polynomials_from_moments(
+            [_m.as_fraction() for _m in self.prefix.moments],
+            self.max_degree,
+            self.prefix.variable,
+        )
         return self
 
 
@@ -154,7 +158,11 @@ class RecurrenceRequest(StrictModel):
     @model_validator(mode="after")
     def require_quasi_definite_family(self) -> Self:
         """The kernel divides by squared norms; a non-quasi-definite family
-        would leak ZeroDivisionError instead of a typed result."""
+        would leak ZeroDivisionError instead of a typed result. Admission
+        then replays the exact derivation so every emitted ratio is
+        height-checked here — a family such as h_0 = 10^-20000 with
+        h_1 = 10^20000 (beta_1 = 10^40000) fails parsing, not execution.
+        """
         if not self.family.is_quasi_definite or any(
             term.squared_norm.as_fraction() == 0 for term in self.family.polynomials
         ):
@@ -162,6 +170,9 @@ class RecurrenceRequest(StrictModel):
                 "recurrence coefficients require a quasi-definite family "
                 "with nonzero squared norms"
             )
+        from jacobian.math.moments_orthogonal.operations import compute_recurrence
+
+        compute_recurrence(self)
         return self
 
 
@@ -184,6 +195,10 @@ class ChristoffelDarbouxRequest(StrictModel):
     def require_nonzero_norms_through_degree(self) -> Self:
         """The defining sum divides each p_k(x) p_k(y) term by h_k; only
         norms through the requested degree are consumed and gate admission.
+        Admission then replays the bounded coefficient construction so an
+        over-tall kernel (e.g. p_1 = x + 10^17000 with unit norms at
+        degree 1, whose constant coefficient reaches 10^34000 + 1) fails
+        parsing instead of raising during execution.
         """
         for term in self.family.polynomials[: self.degree + 1]:
             if term.squared_norm.as_fraction() == 0:
@@ -192,6 +207,11 @@ class ChristoffelDarbouxRequest(StrictModel):
                     f"requires nonzero squared norms through degree "
                     f"{self.degree}, but p_{term.degree} has a vanishing norm"
                 )
+        from jacobian.math.moments_orthogonal.operations import (
+            compute_christoffel_darboux,
+        )
+
+        compute_christoffel_darboux(self)
         return self
 
 
@@ -275,6 +295,11 @@ class GaussianQuadratureRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_sufficient_moments(self) -> Self:
+        # The conservative Gram-Schmidt height gate runs BEFORE any exact
+        # projection: without it, a single schema-valid payload such as
+        # mu_0 = 10^-32767 with mu_1 = 10^32767 forces enormous exact
+        # backend work during parsing before the derived-node check fires.
+        _require_gram_schmidt_heights_admissible(self.prefix.moments, self.order)
         # Building p_order projects only onto earlier polynomials, so the
         # Gram-Schmidt kernel and the Vandermonde weight solve consume
         # moments through mu_(2n-1) exactly; execution verifies exactness

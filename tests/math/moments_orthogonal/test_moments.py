@@ -11,6 +11,7 @@ from jacobian.math.moments_orthogonal._models import (
     GaussianQuadratureRequest,
     HankelRequest,
     JacobiMatrixRequest,
+    OrthogonalPolynomialFamily,
     OrthogonalPolynomialRequest,
     RecurrenceRequest,
     ShiftedHankelRequest,
@@ -1035,29 +1036,29 @@ class TestFiniteSupportQuadratureAdmission:
 
 class TestDerivedQuadratureHeightAdmission:
     def test_over_tall_derived_node_rejected_with_typed_error(self) -> None:
-        """mu_1/mu_0 exceeds the canonical component bound even though every
-        input moment is canonical; admission must reject the derived rule
-        instead of letting execution fail inside canonical conversion."""
+        """mu_1/mu_0 far outside the conservative Gram-Schmidt height bound
+        is rejected at the typed boundary before any exact projection or
+        SymPy factorization runs."""
         moments = (
             CanonicalRational.from_fraction(Fraction(1, 10**16400)),
             CanonicalRational.from_fraction(Fraction(10) ** 16400),
             CanonicalRational(num="0", den="1"),
         )
-        with pytest.raises(ValidationError, match="canonical rational digit limit"):
+        with pytest.raises(ValidationError, match="moment heights exceed the conservative"):
             GaussianQuadratureRequest(prefix=_prefix(moments), order=1)
 
     def test_representable_large_node_admitted_and_round_trips(self) -> None:
-        """A 4,501-digit rational node stays inside the canonical contract;
+        """A 2,000-digit rational node stays inside the conservative bound;
         exact numeric ordering must not stringify roots, which would trip
         CPython's integer-string conversion limit during admission."""
         moments = (
             CanonicalRational(num="1", den="1"),
-            CanonicalRational.from_fraction(Fraction(10) ** 4500),
+            CanonicalRational.from_fraction(Fraction(10) ** 2000),
             CanonicalRational(num="0", den="1"),
         )
         request = GaussianQuadratureRequest(prefix=_prefix(moments), order=1)
         result = compute_gaussian_quadrature(request)
-        assert result.nodes[0].node.as_fraction() == Fraction(10) ** 4500
+        assert result.nodes[0].node.as_fraction() == Fraction(10) ** 2000
         assert result.nodes[0].weight == CanonicalRational(num="1", den="1")
         assert GaussianQuadratureRule.model_validate(result.model_dump()) == result
 
@@ -1140,3 +1141,67 @@ class TestCoefficientTupleSchemaBound:
                 coefficients=tuple(one for _ in range(34)),
                 squared_norm=one,
             )
+
+
+class TestAdmissionReplaysExecution:
+    """Over-height derived values fail parsing, never execution."""
+
+    def test_over_height_recurrence_ratio_rejected_at_admission(self) -> None:
+        """p_0=1, p_1=x with h_0=10^-30000 and h_1=10^30000 derives
+        beta_1 = 10^60000 (past the 32,768-digit canonical limit);
+        RecurrenceRequest parsing must reject it instead of letting
+        math.run leak the execution-time ValueError."""
+        family = OrthogonalPolynomialFamily.model_validate(
+            {
+                "polynomials": [
+                    {
+                        "degree": 0,
+                        "coefficients": [{"num": "1", "den": "1"}],
+                        "squared_norm": {"num": "1", "den": "1" + "0" * 30000},
+                    },
+                    {
+                        "degree": 1,
+                        "coefficients": [
+                            {"num": "0", "den": "1"},
+                            {"num": "1", "den": "1"},
+                        ],
+                        "squared_norm": {"num": "1" + "0" * 30000, "den": "1"},
+                    },
+                ],
+                "variable": "x",
+                "is_quasi_definite": True,
+                "is_positive_definite": True,
+            }
+        )
+        # h_1/h_0 = 10^20000 exceeds canonical; swap so a ratio overflows.
+        with pytest.raises(ValidationError):
+            RecurrenceRequest(family=family)
+
+    def test_kernel_coefficient_overflow_rejected_at_admission(self) -> None:
+        """p_1 = x + 10^17000 with unit norms: the degree-1 CD kernel's
+        constant coefficient reaches ~10^34000 and must fail parsing."""
+        big = "1" + "0" * 17000
+        family = OrthogonalPolynomialFamily.model_validate(
+            {
+                "polynomials": [
+                    {
+                        "degree": 0,
+                        "coefficients": [{"num": "1", "den": "1"}],
+                        "squared_norm": {"num": "1", "den": "1"},
+                    },
+                    {
+                        "degree": 1,
+                        "coefficients": [
+                            {"num": big, "den": "1"},
+                            {"num": "1", "den": "1"},
+                        ],
+                        "squared_norm": {"num": "1", "den": "1"},
+                    },
+                ],
+                "variable": "x",
+                "is_quasi_definite": True,
+                "is_positive_definite": True,
+            }
+        )
+        with pytest.raises(ValidationError):
+            ChristoffelDarbouxRequest(family=family, degree=1)

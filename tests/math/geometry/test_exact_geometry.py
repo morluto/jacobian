@@ -520,7 +520,9 @@ class TestPinnedLineDistance:
         schema = PinnedLineDistanceRequest.model_json_schema()
         metadata = schema["properties"]["configuration"]
         assert metadata["coordinate_digit_bound"] == COORDINATE_DIGITS
-        assert metadata["aggregate_result_budget_bytes"] == MAX_PINNED_PROFILE_RESULT_BYTES
+        assert (
+            metadata["aggregate_result_budget_bytes"] == MAX_PINNED_PROFILE_RESULT_BYTES
+        )
 
 
 def _cr(x):
@@ -602,9 +604,10 @@ class TestAggregatePairLedgerBound:
         )
         total_pairs = sum(len(line.pairs) for line in result.lines)
         assert total_pairs <= 2016
-        assert PinnedLineDistanceResult.model_validate(
-            result.model_dump(mode="json")
-        ) == result
+        assert (
+            PinnedLineDistanceResult.model_validate(result.model_dump(mode="json"))
+            == result
+        )
 
 
 class TestSortedPairLedger:
@@ -642,7 +645,10 @@ class TestSortedPairLedger:
 
         result = self._collinear_profile()
         payload = result.model_dump(mode="json")
-        collinear_entry = max(range(len(payload["lines"])), key=lambda i: len(payload["lines"][i]["pairs"]))
+        collinear_entry = max(
+            range(len(payload["lines"])),
+            key=lambda i: len(payload["lines"][i]["pairs"]),
+        )
         assert len(payload["lines"][collinear_entry]["pairs"]) >= 3
         payload["lines"][collinear_entry]["pairs"] = [[1, 2], [0, 1], [0, 2]]
         with pytest.raises(ValidationError, match="must be sorted"):

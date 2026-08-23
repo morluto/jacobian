@@ -262,7 +262,9 @@ def _maximum_pinned_profile_wire_bytes(
         )
     )
     multiplicity_entry_skeleton = len(
-        encode_strict_json({"pair_count": 0, "squared_distance": {"num": "", "den": ""}})
+        encode_strict_json(
+            {"pair_count": 0, "squared_distance": {"num": "", "den": ""}}
+        )
     )
     echo_exact = len(
         encode_strict_json(
@@ -486,9 +488,10 @@ class PinnedLineDistanceResult(StrictModel):
         # Apply the aggregate source-derived output budget to retained
         # results as well: a deserialized profile must remain canonically
         # serializable even when its geometry replays exactly.
-        if _maximum_pinned_profile_wire_bytes(
-            self.configuration, self.anchor
-        ) > MAX_PINNED_PROFILE_RESULT_BYTES:
+        if (
+            _maximum_pinned_profile_wire_bytes(self.configuration, self.anchor)
+            > MAX_PINNED_PROFILE_RESULT_BYTES
+        ):
             raise ValueError(
                 "the complete pinned line-distance profile would exceed the "
                 f"{MAX_PINNED_PROFILE_RESULT_BYTES}-byte aggregate result "

@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.math.approximation_theory._models import (
     LagrangeBasisRequest,
+    LagrangeBasisResult,
     LagrangeInterpolationRequest,
     RationalNodeSet,
 )
@@ -141,3 +142,52 @@ class TestLagrangeInterpolation:
                 nodes=nodes,
                 values=(_node("1"), _node("2"), _node("3")),
             )
+
+
+class TestLagrangeBasisSourceBinding:
+    def _nodes(self, *values):
+        return RationalNodeSet(nodes=tuple(CanonicalRational.model_validate(_node(v)) for v in values))
+
+    def test_genuine_result_round_trips(self):
+        request = LagrangeBasisRequest(nodes=self._nodes("0", "1", "2"))
+        result = compute_lagrange_basis(request)
+        assert result.nodes.nodes == request.nodes.nodes
+        LagrangeBasisResult.model_validate(result.model_dump(mode="json"))
+
+    def test_duplicate_index_rejected(self):
+        request = LagrangeBasisRequest(nodes=self._nodes("0", "1"))
+        genuine = compute_lagrange_basis(request)
+        payload = genuine.model_dump()
+        payload["basis"][1]["index"] = 0
+        with pytest.raises(ValidationError, match=r"exactly 0\.\.node_count-1"):
+            LagrangeBasisResult.model_validate(payload)
+
+    def test_missing_node_set_rejected(self):
+        """A result without the retained nodes cannot revalidate."""
+        request = LagrangeBasisRequest(nodes=self._nodes("0", "1"))
+        genuine = compute_lagrange_basis(request)
+        payload = genuine.model_dump()
+        del payload["nodes"]
+        with pytest.raises(ValidationError):
+            LagrangeBasisResult.model_validate(payload)
+
+    def test_swapped_nodes_rejected_by_delta_replay(self):
+        """A basis computed on other nodes fails l_k(x_j) = delta_kj."""
+        basis_a = compute_lagrange_basis(LagrangeBasisRequest(nodes=self._nodes("0", "1")))
+        payload = basis_a.model_dump()
+        payload["nodes"] = {
+            "nodes": [
+                {"num": "2", "den": "1"},
+                {"num": "5", "den": "1"},
+            ]
+        }
+        with pytest.raises(ValidationError):
+            LagrangeBasisResult.model_validate(payload)
+
+    def test_tampered_weight_rejected(self):
+        request = LagrangeBasisRequest(nodes=self._nodes("0", "1", "2"))
+        genuine = compute_lagrange_basis(request)
+        payload = genuine.model_dump()
+        payload["basis"][1]["barycentric_weight"] = {"num": "7", "den": "3"}
+        with pytest.raises(ValidationError, match="barycentric weight"):
+            LagrangeBasisResult.model_validate(payload)

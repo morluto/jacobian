@@ -8,16 +8,9 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.math.geometry._models import RationalPoint2D
 
 MAX_INVERSION_COMPONENT_DIGITS = 4_096
-
-def _component_digits(value: CanonicalRational) -> int:
-    return max(len(value.num.lstrip("-")), len(value.den))
-
-
-class RationalPoint2D(StrictModel):
-    x: CanonicalRational
-    y: CanonicalRational
 
 
 class CircleInversionRequest(StrictModel):
@@ -80,8 +73,13 @@ class CircleInversionRequest(StrictModel):
 
 
 class CircleInversionResult(CircleInversionRequest):
-    inverted_x: CanonicalRational
-    inverted_y: CanonicalRational
+    """The inverted point in the canonical geometry point type.
+
+    Consumers such as ``geometry.point`` pair operations accept the retained
+    ``point`` value unchanged; no parallel coordinate payload is needed.
+    """
+
+    point: RationalPoint2D
     complete: Literal[True] = True
     method: Literal["EXACT_RATIONAL_INVERSION"] = "EXACT_RATIONAL_INVERSION"
 
@@ -94,17 +92,18 @@ class CircleInversionResult(CircleInversionRequest):
         px, py = self.point_x.as_fraction(), self.point_y.as_fraction()
 
         result = invert_point(cx, cy, s, px, py)
-        expected_x = CanonicalRational.from_fraction(result[0])
-        expected_y = CanonicalRational.from_fraction(result[1])
-        if self.inverted_x != expected_x:
-            raise ValueError("inverted_x must be the exact inversion result")
-        if self.inverted_y != expected_y:
-            raise ValueError("inverted_y must be the exact inversion result")
+        expected = RationalPoint2D(
+            x=CanonicalRational.from_fraction(result[0]),
+            y=CanonicalRational.from_fraction(result[1]),
+        )
+        if self.point != expected:
+            raise ValueError(
+                "point must be the exact inversion result of the retained request"
+            )
         return self
 
 
 __all__ = [
     "CircleInversionRequest",
     "CircleInversionResult",
-    "RationalPoint2D",
 ]

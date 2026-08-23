@@ -15,10 +15,15 @@ from jacobian.math.prime_field_linear_algebra import (
 )
 
 MAX_DIMENSION = 256
+# Explicit safe-number work bound: the field characteristic and every residue
+# stay inside the strict interoperable JSON safe-integer range, so number-based
+# JSON clients cannot silently round a request into a different matrix, and
+# modular elimination work is bounded by machine-word-sized operands.
+MAX_PRIME = 2**53 - 1
 
 
 class PrimeFieldMatrixRequest(StrictModel):
-    prime: int = Field(ge=2)
+    prime: int = Field(ge=2, le=MAX_PRIME)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 
@@ -48,7 +53,7 @@ class _PrimeFieldMatrixValidator:
 
 
 class RankRequest(StrictModel):
-    prime: int = Field(ge=2)
+    prime: int = Field(ge=2, le=MAX_PRIME)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 
@@ -84,7 +89,7 @@ class RankResult(RankRequest):
 
 
 class RrefRequest(StrictModel):
-    prime: int = Field(ge=2)
+    prime: int = Field(ge=2, le=MAX_PRIME)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 
@@ -130,7 +135,7 @@ class RrefResult(RrefRequest):
 
 
 class NullspaceRequest(StrictModel):
-    prime: int = Field(ge=2)
+    prime: int = Field(ge=2, le=MAX_PRIME)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 

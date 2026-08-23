@@ -3,6 +3,7 @@
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.geometry._models import RationalPoint2D
 from jacobian.math.geometry.inversion._models import (
     CircleInversionRequest,
     CircleInversionResult,
@@ -18,15 +19,17 @@ def compute_circle_inversion(request: CircleInversionRequest) -> CircleInversion
     px = request.point_x.as_fraction()
     py = request.point_y.as_fraction()
 
-    result = invert_point(cx, cy, s, px, py)
+    qx, qy = invert_point(cx, cy, s, px, py)
     return CircleInversionResult(
         center_x=request.center_x,
         center_y=request.center_y,
         power=request.power,
         point_x=request.point_x,
         point_y=request.point_y,
-        inverted_x=CanonicalRational.from_fraction(result[0]),
-        inverted_y=CanonicalRational.from_fraction(result[1]),
+        point=RationalPoint2D(
+            x=CanonicalRational.from_fraction(qx),
+            y=CanonicalRational.from_fraction(qy),
+        ),
     )
 
 

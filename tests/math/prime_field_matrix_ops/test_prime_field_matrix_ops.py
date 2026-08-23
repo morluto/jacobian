@@ -162,3 +162,21 @@ class TestToolsAndExamples:
             request = tool.request_type.model_validate(ex.input)
             result = tool.run(request)
             assert result is not None
+
+
+class TestSafePrimeBound:
+    def test_prime_beyond_safe_integer_range_rejected(self) -> None:
+        """2^61-1 cannot survive number-based JSON clients unrounded."""
+        with pytest.raises(ValidationError):
+            RankRequest(prime=2**61 - 1, entries=[[1]], columns=1)
+        with pytest.raises(ValidationError):
+            RrefRequest(prime=2**61 - 1, entries=[[1]], columns=1)
+        with pytest.raises(ValidationError):
+            NullspaceRequest(prime=2**61 - 1, entries=[[1]], columns=1)
+
+    def test_largest_admissible_prime_accepted(self) -> None:
+        largest_prime_below_2_53 = 9007199254740881
+        req = RankRequest(
+            prime=largest_prime_below_2_53, entries=[[1], [1]], columns=1
+        )
+        assert compute_rank(req).rank == 1

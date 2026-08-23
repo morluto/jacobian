@@ -114,6 +114,7 @@ def compute_lagrange_basis(request: LagrangeBasisRequest) -> LagrangeBasisResult
         )
 
     return LagrangeBasisResult(
+        nodes=request.nodes,
         node_count=n,
         basis=tuple(basis_polys),
     )

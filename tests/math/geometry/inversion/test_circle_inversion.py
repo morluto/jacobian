@@ -95,10 +95,11 @@ class TestWireAdapter:
             point_y={"num": "0", "den": "1"},
         )
         result = compute_circle_inversion(request)
-        assert result.inverted_x.num == "1"
-        assert result.inverted_x.den == "4"
-        assert result.inverted_y.num == "0"
-        assert result.inverted_y.den == "1"
+        assert result.point.x.num == "1"
+        assert result.point.x.den == "4"
+        assert result.point.y.num == "0"
+        assert result.point.y.den == "1"
+        CircleInversionResult.model_validate(result.model_dump(mode="json"))
 
     def test_non_origin_center(self) -> None:
         request = CircleInversionRequest(
@@ -126,3 +127,38 @@ class TestToolsAndExamples:
             request = tool.request_type.model_validate(ex.input)
             result = tool.run(request)
             assert result is not None
+
+
+class TestCanonicalPointComposition:
+    def test_serialized_point_feeds_pair_operations_unchanged(self) -> None:
+        """The retained point is the canonical geometry point value."""
+        from jacobian.math.geometry._models import PointPairRequest
+
+        request = CircleInversionRequest(
+            center_x={"num": "0", "den": "1"},
+            center_y={"num": "0", "den": "1"},
+            power={"num": "4", "den": "1"},
+            point_x={"num": "2", "den": "1"},
+            point_y={"num": "0", "den": "1"},
+        )
+        result = compute_circle_inversion(request)
+        payload = result.model_dump(mode="json")
+        pair = PointPairRequest.model_validate(
+            {"first": payload["point"], "second": {"x": {"num": "1", "den": "1"}, "y": {"num": "1", "den": "1"}}}
+        )
+        assert pair.first.x.num == "2"
+        assert pair.first.y.num == "0"
+
+    def test_tampered_point_rejected_by_replay(self) -> None:
+        request = CircleInversionRequest(
+            center_x={"num": "0", "den": "1"},
+            center_y={"num": "0", "den": "1"},
+            power={"num": "1", "den": "1"},
+            point_x={"num": "4", "den": "1"},
+            point_y={"num": "0", "den": "1"},
+        )
+        result = compute_circle_inversion(request)
+        payload = result.model_dump()
+        payload["point"]["x"]["num"] = "9"
+        with pytest.raises(ValidationError):
+            CircleInversionResult.model_validate(payload)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Self
 
 from pydantic import Field, model_validator
@@ -78,19 +79,63 @@ class LagrangeBasisPolynomial(StrictModel):
         return tuple(coeffs)
 
 
-class LagrangeBasisResult(StrictModel):
-    """Lagrange basis polynomials and barycentric weights."""
+def _evaluate_single_variable(
+    polynomial: RationalPolynomial,
+    point: Fraction,
+) -> Fraction:
+    """Exact evaluation of one canonical single-variable polynomial."""
+    value = Fraction(0)
+    for term in polynomial.polynomial.terms:
+        value += term.coefficient.as_fraction() * point ** term.exponents[0]
+    return value
 
+
+class LagrangeBasisResult(StrictModel):
+    """Lagrange basis polynomials bound to their retained node set.
+
+    Indices cover 0..node_count-1 exactly once, every barycentric weight
+    equals the exact product 1/prod_{i!=k}(x_k - x_i), and each basis
+    polynomial satisfies l_k(x_j) = delta_kj on the retained nodes, so a
+    revalidated result can only describe this node set's genuine basis.
+    """
+
+    nodes: RationalNodeSet
     node_count: int = Field(ge=1, le=32)
     basis: tuple[LagrangeBasisPolynomial, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def require_consistent_count(self) -> Self:
-        if self.node_count != len(self.basis):
+    def require_bound_to_nodes(self) -> Self:
+        from fractions import Fraction
+
+        nodes = [n.as_fraction() for n in self.nodes.nodes]
+        if self.node_count != len(nodes):
+            raise ValueError("node_count must match the retained node set")
+        if len(self.basis) != self.node_count:
             raise ValueError("node_count must match basis length")
+        indices = sorted(entry.index for entry in self.basis)
+        if indices != list(range(self.node_count)):
+            raise ValueError(
+                "basis indices must be exactly 0..node_count-1 with no repeats"
+            )
         for entry in self.basis:
-            if entry.index >= self.node_count:
-                raise ValueError("basis index exceeds node count")
+            k = entry.index
+            expected_weight = Fraction(1)
+            for i, x_i in enumerate(nodes):
+                if i != k:
+                    expected_weight /= nodes[k] - x_i
+            if entry.barycentric_weight.as_fraction() != expected_weight:
+                raise ValueError(
+                    "barycentric weight must equal "
+                    "1/prod_{i!=k}(x_k - x_i) on the retained nodes"
+                )
+            for j, x_j in enumerate(nodes):
+                evaluated = _evaluate_single_variable(entry.polynomial, x_j)
+                expected_value = Fraction(1) if j == k else Fraction(0)
+                if evaluated != expected_value:
+                    raise ValueError(
+                        "basis polynomial must satisfy l_k(x_j) = delta_kj "
+                        "on the retained nodes"
+                    )
         return self
 
 

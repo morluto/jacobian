@@ -67,6 +67,34 @@ directly. `smt.solve` accepts one bounded QF SMT-LIB query. `lean.check` accepts
 one bounded source snippet and returns elaboration diagnostics after a one-shot
 process invocation.
 
+## Implementation selection
+
+Choose the smallest operational surface that can establish the admitted
+mathematical postcondition within its public bounds. Assess implementation
+options in this order:
+
+1. Use a maintained in-process Python backend when it supports the complete
+   bounded claim.
+2. Use a thin native binding when its build, packaging, platform, and runtime
+   costs are proportionate to the admitted domain.
+3. Use a Jacobian-owned bounded implementation when no lightweight maintained
+   backend fits, the admitted bounds make a simpler published algorithm
+   practical, the result has a complete reconstruction or defining invariant,
+   and ordinary repository tests can establish correctness independently. A
+   mature external implementation may provide additional differential evidence.
+4. Use a child process only for a concrete isolation, killability, or fixed
+   toolchain reason, with the complete process-boundary obligations described in
+   the [mathematical backend contract](mathematical-backends.md).
+5. Narrow or reject the operation when none of these options can support its
+   public claim and work bounds.
+
+Preferring maintained backends does not require importing an entire
+cross-language ecosystem when its build, ABI, installation, runtime, or failure
+surface is disproportionate to the bounded mathematical kernel Jacobian needs.
+The issue or pull request must record why the selected implementation class is
+proportionate; backend convenience alone does not justify a broader public
+contract.
+
 ## Operation preflight
 
 First diagnose the gap: a missing operation is only one of several possible
@@ -83,12 +111,19 @@ applicable` with a reason; it must not be omitted.
 
 ### Public operation contract
 
-- Mathematical input domain:
+- Semantic mathematical domain and postcondition:
 - Canonical public value type:
+- Source representation: materialized, succinct, generated, or oracle-backed:
+- Expansion performed by the kernel and its pre-execution bound:
+- Representation-sensitive complexity, including any compact representation
+  that changes the algorithmic problem:
+- Admitted request envelope and its controlling quantities:
 - Producer/consumer closure, or why not applicable:
 - Degenerate inputs:
 - Parent/ring/field identity:
 - Deterministic work bound:
+- Maximum intermediate growth:
+- Exact result-size bound:
 - Backend and supported version:
 - Backend input domain:
 - Conversion/coercion behavior:
@@ -253,24 +288,133 @@ those semantic claims as source-text or private-helper lint rules.
 Jacobian's operations are reusable mathematical instruments for agents doing
 high-level mathematics and investigating conjectures. Treat boundedness as
 part of the mathematical contract, not as a property of the transport or a
-final serializer. For each operation, write down three
-different obligations:
+final serializer. Separate four obligations:
 
-1. **Input domain:** which mathematical objects and degenerate cases are
-   accepted, and which are excluded as inapplicable?
-2. **Computation:** what bounds the algorithm's work and intermediate values
+1. **Semantic domain:** what stable mathematical map, predicate, invariant, or
+   construction does the operation represent, independently of one release's
+   execution limits?
+2. **Admitted execution envelope:** which representations, mathematical
+   objects, and degenerate cases may one request contain, and which controlling
+   quantities bound that finite region?
+3. **Computation:** what bounds the algorithm's work and intermediate values
    before the backend expands, enumerates, or solves anything?
-3. **Output:** what bounds the exact returned value, witness, residual, or
-   certificate, and how is that bound related to the accepted input domain?
+4. **Output:** what bounds the exact returned value, witness, residual, or
+   certificate, and how is that bound related to the admitted request?
 
-The request contract must enforce the first obligation and the preconditions
-needed for the second and third. A backend or result conversion may still
-validate an invariant, but it must not be the first place an accepted request
-discovers that its exact answer is too large. If a bound is conservative, name
-the quantity it bounds, state why it is safe for the algorithm, and test both
-the rejected adversarial case and a useful case near the boundary. Do not use a
-post-hoc output-term cap, truncation, sentinel, or host exception as a hidden
-computational budget.
+The operation identifier and result semantics own the first obligation. The
+request contract enforces the second and the preconditions needed for the
+third and fourth. Tightening or widening a safe execution envelope must not
+silently change the mathematical meaning of the operation.
+
+A backend or result conversion may still validate an invariant, but it must
+not be the first place an accepted request discovers that its exact answer is
+too large. If a bound is conservative, name the quantity it bounds, state why
+it is safe for the algorithm, and test both the rejected adversarial case and a
+useful case near the boundary. Do not use a post-hoc output-term cap,
+truncation, sentinel, or host exception as a hidden computational budget.
+
+### Representation-sensitive expansion
+
+Representation is part of the execution envelope, even when two encodings
+denote the same kind of mathematical object. Complete the following review
+before selecting the kernel or request bounds:
+
+- Is the input materialized, succinct, generated, or oracle-backed?
+- What expansion does the kernel perform?
+- Can admission bound that expansion before execution?
+- Does an apparently equivalent compact representation change the complexity
+  class or output obligation?
+
+Name the accepted representation in the public contract and derive every
+expansion budget from its canonical fields. Do not admit a compact value and
+discover only inside the backend that it expands into too many states, terms,
+assignments, or support points. Generated and oracle-backed inputs need the
+same finite, deterministic source and work contract as materialized inputs; if
+that contract cannot be stated and validated before execution, narrow or
+reject the representation.
+
+For example, exact total variation between two materialized finite tables is a
+linear pass over their aligned support. Accepting succinct product
+distributions is not merely a wire-format convenience: expanding their joint
+support can be exponential, and computing the same invariant from the compact
+representation can be a materially harder problem. Those representations
+therefore need separate admission evidence and may require different
+operations or result semantics even though the mathematical formula is the
+same.
+
+### Choose the controlling quantity
+
+Use the quantity that actually controls work or output. A fixed ceiling on a
+convenient field is appropriate only when its derivation conservatively bounds
+the relevant computation and result. Prefer result-sensitive or
+algorithm-sensitive admission when it preserves substantially more of the
+useful mathematical domain.
+
+For example, exact `binomial(n, k)` is output-sensitive: a middle binomial
+coefficient may have an enormous decimal expansion, while `binomial(n, 0)` and
+`binomial(n, 1)` remain compact for large `n`. A predicted result-digit bound
+is more faithful than a uniform small ceiling on `n` when the kernel can avoid
+constructing an over-budget result.
+
+By contrast, factorial or binomial valuations have logarithmic digitwise
+formulas and compact results even for very large arguments. Their useful
+envelope should be derived from canonical input digit length, division or
+base-digit steps, intermediate growth, and result digits—not inherited from
+the much smaller region where materializing the factorial or binomial is
+practical. If a desired value is a cheap composition of existing operations,
+prefer widening the controlling primitive over publishing a near-duplicate
+operation solely to escape an arbitrary cap.
+
+Use measurements on representative and adversarial boundary fixtures to
+choose the largest useful conservative envelope supported by the maintained
+kernel. Measurements show usefulness; the mathematical work and growth
+analysis remains the safety proof. Name each enforced budget in code and make
+rejections identify the controlling quantity that was exceeded.
+
+### Finite enumeration budgets
+
+Large finite enumeration is compatible with a bounded exact operation. Admit it
+using the mathematical quantities that actually control the computation rather
+than treating small inputs as a goal in themselves. Record independent bounds
+for:
+
+- the number of candidate objects inspected in the worst case;
+- the maximum intermediate height, degree, term count, or other value growth
+  within one candidate computation; and
+- the maximum number and canonical serialized size of returned values or
+  witnesses.
+
+Do not compress these into a convenient input product unless a documented
+derivation proves that the product conservatively bounds every relevant
+quantity. For example, a planar search over triples and quadruples has
+
+```text
+candidate_count = C(n, 3) + C(n, 4)
+```
+
+while coordinate height controls determinant intermediates and the result
+shape controls witness serialization. `n * coordinate_digits` does not by
+itself state any of those obligations.
+
+A decision or first-witness operation must admit the full negative-case work,
+but may have constant-size output. An all-witness operation or complete profile
+must additionally admit its worst-case witness count and serialized result.
+Prefer retaining the source value once and referring to indexed components over
+repeating labels, parents, or other source context in every output entry.
+
+Use measurements on representative and adversarial boundary fixtures to choose
+useful conservative ceilings, but do not present timing measurements as the
+boundedness proof. The proof is the finite candidate count and intermediate and
+output growth; measurements establish whether the admitted region is useful on
+the supported implementation.
+
+When the complete search exceeds a single-call ceiling, deterministic
+partitioning is acceptable only when the partition is a stable mathematical
+subdomain and the result identifies exactly what was searched. The caller may
+compose disjoint partitions, but no partition may claim global absence or
+completeness. A timeout, node limit, or truncated witness list is not such a
+claim. Keep the transport envelope separate from the mathematical output bound:
+the latter must imply that the canonical serialized result fits the former.
 
 When an operation has a genuine incomplete or unknown outcome, expose that
 state in its domain result with the evidence and bounds needed to interpret it.

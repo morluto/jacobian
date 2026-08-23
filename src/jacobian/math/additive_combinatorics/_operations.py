@@ -12,8 +12,7 @@ from jacobian.math.additive_combinatorics._models import (
     DirectSumPredicateRequest,
     DirectSumPredicateResult,
     FiniteIntegerSet,
-    IntegerVector,
-    OrderedDifferenceClass,
+    OrderedDifferenceEntry,
     OrderedDifferencePair,
     OrderedDifferenceProfileRequest,
     OrderedDifferenceProfileResult,
@@ -22,6 +21,7 @@ from jacobian.math.additive_combinatorics._models import (
     RepresentationProfileResult,
     SumsetCardinalityRequest,
     SumsetCardinalityResult,
+    _vector_from_ints,
 )
 
 
@@ -163,61 +163,63 @@ __all__ = [
 def compute_ordered_difference_profile(
     request: OrderedDifferenceProfileRequest,
 ) -> OrderedDifferenceProfileResult:
-    """Compute the complete ordered-difference profile ``r_{A-A}`` of one set.
+    """Compute r_{A-A}(v) for every nonzero difference vector v.
 
-    For a finite set ``A`` of integer vectors, returns every nonzero ordered
-    difference ``x - y`` (``x != y``) grouped by difference vector, retaining
-    every ordered source pair ``(x, y)`` in each class.  The result also reports
-    the total ordered-pair count ``|A|(|A|-1)``, the support size, the maximum
-    multiplicity, and a first repeated-difference witness when one exists.
+    For a finite set A in Z^d, the ordered-difference profile counts,
+    for every nonzero difference v, the number of ordered pairs (x, y)
+    in A^2 with x != y and x - y = v. Each entry includes the source
+    pairs so collision classes are directly inspectable.
     """
-    vectors = request.vectors
-    n = len(vectors.vectors)
-    dim = len(vectors.vectors[0].coordinates)
-    points = [
-        tuple(parse_canonical_integer(c) for c in vec.coordinates)
-        for vec in vectors.vectors
-    ]
+    vectors = [vec.as_int_tuple() for vec in request.vectors.vectors]
+    n = len(vectors)
+    dimension = len(vectors[0])
 
-    classes: dict[tuple[int, ...], list[OrderedDifferencePair]] = {}
+    difference_map: dict[tuple[int, ...], list[tuple[int, int]]] = {}
     for i in range(n):
         for j in range(n):
             if i == j:
                 continue
-            diff = tuple(points[i][k] - points[j][k] for k in range(dim))
-            classes.setdefault(diff, []).append(
-                OrderedDifferencePair(minuend_index=i, subtrahend_index=j),
-            )
+            diff = tuple(vectors[i][k] - vectors[j][k] for k in range(dimension))
+            if diff == tuple(0 for _ in range(dimension)):
+                continue
+            difference_map.setdefault(diff, []).append((i, j))
 
-    # Sort classes by difference vector (lexicographic on numeric values).
-    sorted_diffs = sorted(classes.keys())
-    has_repeated = any(len(classes[d]) > 1 for d in sorted_diffs)
-    first_repeated: tuple[str, ...] | None = None
+    entries: list[OrderedDifferenceEntry] = []
+    total_pairs = 0
+    max_mult = 0
+    first_collision = None
+
+    for diff in sorted(difference_map):
+        pairs = difference_map[diff]
+        multiplicity = len(pairs)
+        total_pairs += multiplicity
+        max_mult = max(max_mult, multiplicity)
+        pair_models = tuple(
+            OrderedDifferencePair(left_index=i, right_index=j) for i, j in pairs
+        )
+        entries.append(
+            OrderedDifferenceEntry(
+                difference=_vector_from_ints(diff),
+                multiplicity=multiplicity,
+                pairs=pair_models,
+            )
+        )
+
+    has_repeated = max_mult > 1
     if has_repeated:
-        for d in sorted_diffs:
-            if len(classes[d]) > 1:
-                first_repeated = tuple(format_canonical_integer(c) for c in d)
+        for entry in entries:
+            if entry.multiplicity > 1:
+                first_collision = entry.pairs[0]
                 break
 
-    result_classes = tuple(
-        OrderedDifferenceClass(
-            difference=IntegerVector(
-                coordinates=tuple(format_canonical_integer(c) for c in d)
-            ),
-            pairs=tuple(classes[d]),
-        )
-        for d in sorted_diffs
-    )
-    total_pairs = sum(len(cls.pairs) for cls in result_classes)
-    max_mult = max((len(cls.pairs) for cls in result_classes), default=0)
     return OrderedDifferenceProfileResult(
-        vectors=vectors,
-        dimension=dim,
+        vectors=request.vectors,
+        dimension=dimension,
         set_size=n,
-        classes=result_classes,
-        ordered_pair_count=total_pairs,
-        support_size=len(result_classes),
+        total_ordered_pairs=total_pairs,
+        support_size=len(entries),
         max_multiplicity=max_mult,
+        entries=tuple(entries),
         has_repeated_difference=has_repeated,
-        first_repeated_difference=first_repeated,
+        first_collision=first_collision,
     )

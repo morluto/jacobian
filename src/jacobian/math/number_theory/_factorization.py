@@ -8,32 +8,41 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory._factorization_kernels import (
+    compute_pratt_certificate,
     compute_radical,
     decide_powerful,
     decide_squarefree,
     enumerate_divisors,
     enumerate_proper_divisors,
+    factorize_certified,
     factorize_primes,
-    factorize_with_budget,
 )
 from jacobian.math.number_theory._models import (
     ArithmeticFunctionRequest,
     BooleanResult,
-    BudgetedFactorizationRequest,
-    BudgetedFactorizationResult,
+    CertifiedFactorizationRequest,
+    CertifiedFactorizationResult,
     DivisorListResult,
     IntegerValueResult,
     NonzeroFactorizationRequest,
     PowerfulNumberRequest,
     PowerfulNumberResult,
+    PrimalityCertificateRequest,
+    PrimalityCertificateResult,
     PrimeFactorizationResult,
 )
 
 
-def _compute_budgeted_factorization(
-    request: BudgetedFactorizationRequest,
-) -> BudgetedFactorizationResult:
-    return factorize_with_budget(request)
+def _compute_certified_factorization(
+    request: CertifiedFactorizationRequest,
+) -> CertifiedFactorizationResult:
+    return factorize_certified(request)
+
+
+def _compute_pratt_certificate(
+    request: PrimalityCertificateRequest,
+) -> PrimalityCertificateResult:
+    return compute_pratt_certificate(request)
 
 
 def _compute_divisors(
@@ -100,20 +109,40 @@ def _operation[RequestT: StrictModel, ResultT: StrictModel](
 FACTORIZATION_OPERATIONS = (
     _operation(
         operation_id="integer.factor.certified_compute",
-        title="Compute a budgeted integer factorization",
-        description="Factor one bounded 15-digit integer with an explicit search limit, returning certified prime factors and any explicitly unfactored composite cofactor.",
-        request_model=BudgetedFactorizationRequest,
-        result_model=BudgetedFactorizationResult,
-        implementation=_compute_budgeted_factorization,
-        tags=("number-theory", "factorization", "bounded", "partial", "prime"),
+        title="Compute a certified integer factorization",
+        description="Factor one bounded 30-digit integer (~100 bits) using subexponential methods (Pollard rho, Pollard p-1, ECM via sympy.ntheory.factorint), returning the complete prime-power factorization with per-factor Pratt primality certificates.",
+        request_model=CertifiedFactorizationRequest,
+        result_model=CertifiedFactorizationResult,
+        implementation=_compute_certified_factorization,
+        tags=("number-theory", "factorization", "bounded", "prime", "certificate"),
         examples=(
             example(
                 "semiprime_10403",
-                "Factor 10403 within a declared search limit; unfactored composite cofactors remain explicit.",
-                {"value": "10403", "factor_limit": 1000},
+                "Factor 10403 with subexponential methods and per-factor Pratt "
+                "certificates. The input must be a canonical integer of at "
+                "least 2 and at most 30 digits.",
+                {"value": "10403"},
             ),
         ),
-        version="3",
+        version="4",
+    ),
+    _operation(
+        operation_id="integer.primality.certificate.compute",
+        title="Compute a Pratt primality certificate",
+        description="Produce a Pratt primality certificate for one declared prime, or report COMPOSITE when the candidate is not prime.",
+        request_model=PrimalityCertificateRequest,
+        result_model=PrimalityCertificateResult,
+        implementation=_compute_pratt_certificate,
+        tags=("number-theory", "primality", "certificate"),
+        examples=(
+            example(
+                "pratt_101",
+                "Produce a Pratt certificate for the prime 101. The input must "
+                "be a canonical integer of at least 2 and at most 30 digits.",
+                {"value": "101"},
+            ),
+        ),
+        version="2",
     ),
     _operation(
         operation_id="integer.compute.divisors",

@@ -9,6 +9,7 @@ from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math._rational_height import RationalHeight
 
 
 class RationalPoint2D(StrictModel):
@@ -446,10 +447,35 @@ class LabelledPoint2D(StrictModel):
     point: RationalPoint2D
 
 
+# Conservative worst-case propagation for the complete circumradius profile
+# transport. Coordinates are rationals whose numerator and denominator have at
+# most H digits; each coordinate difference reaches 2H+1 digits over 2H, each
+# squared side 4H+3 over 4H, the area cross product 4H+3 over 4H, its square
+# 8H+6 over 8H, and the reduced squared circumradius therefore stays within
+# 12H+9 digits per component. The bound must cover the AGGREGATE profile:
+# C(32,3) = 4960 triple entries of at most ~(302 + 24*64) bytes each (labels,
+# indices, and both exact components) plus the retained configuration must fit
+# inside the canonical 10 MiB output limit:
+# 4960 * 1838 + 13000 ~= 9.1 MB < 10 MiB, so n = 32 points at H = 64 digits.
+MAX_CIRCUMRADIUS_POINT_COUNT = 32
+MAX_CIRCUMRADIUS_COORDINATE_DIGITS = 64
+
+
+def _circumradius_coordinate_height_ok(point: RationalPoint2D) -> bool:
+    for value in (point.x, point.y):
+        if RationalHeight.from_canonical(value).exceeds(
+            MAX_CIRCUMRADIUS_COORDINATE_DIGITS
+        ):
+            return False
+    return True
+
+
 class CircumradiusProfileRequest(StrictModel):
     """A bounded labelled rational planar point configuration."""
 
-    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=64)
+    points: tuple[LabelledPoint2D, ...] = Field(
+        min_length=3, max_length=MAX_CIRCUMRADIUS_POINT_COUNT
+    )
 
     @model_validator(mode="after")
     def require_unique_labels_and_coordinates(self) -> Self:
@@ -468,9 +494,12 @@ class CircumradiusProfileRequest(StrictModel):
         if len(keys) != len(set(keys)):
             raise ValueError("point coordinates must be unique")
         for entry in self.points:
-            for coord in (entry.point.x, entry.point.y):
-                if max(len(coord.num.lstrip("-")), len(coord.den)) > 256:
-                    raise ValueError("circumradius point coordinate exceeds digit bound")
+            if not _circumradius_coordinate_height_ok(entry.point):
+                raise ValueError(
+                    "circumradius point coordinates exceed the conservative "
+                    f"{MAX_CIRCUMRADIUS_COORDINATE_DIGITS}-digit input bound "
+                    "that keeps the complete profile inside transport"
+                )
         return self
 
 
@@ -497,15 +526,18 @@ class CircumradiusTripleEntry(StrictModel):
 
 
 class CircumradiusProfileResult(StrictModel):
-    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=64)
-    point_count: StrictInt = Field(ge=3, le=64)
-    triple_count: StrictInt = Field(ge=1, le=41664)
+    points: tuple[LabelledPoint2D, ...] = Field(
+        min_length=3, max_length=MAX_CIRCUMRADIUS_POINT_COUNT
+    )
+    point_count: StrictInt = Field(ge=3, le=MAX_CIRCUMRADIUS_POINT_COUNT)
+    triple_count: StrictInt = Field(
+        ge=1, le=MAX_CIRCUMRADIUS_POINT_COUNT * (MAX_CIRCUMRADIUS_POINT_COUNT - 1) * (MAX_CIRCUMRADIUS_POINT_COUNT - 2) // 6
+    )
     entries: tuple[CircumradiusTripleEntry, ...] = Field(min_length=1)
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
     @model_validator(mode="after")
     def require_complete_profile(self) -> Self:
-        from fractions import Fraction
         from itertools import combinations
 
         if self.point_count != len(self.points):
@@ -536,26 +568,38 @@ class CircumradiusProfileResult(StrictModel):
         coords: list[tuple[Fraction, Fraction]] = [
             (item.point.x.as_fraction(), item.point.y.as_fraction()) for item in self.points
         ]
-        for entry, (i, j, k) in zip(self.entries, expected):
-            (ax, ay), (bx, by), (cx, cy) = coords[i], coords[j], coords[k]
-            if entry.labels != (self.points[i].label, self.points[j].label, self.points[k].label):
-                raise ValueError("entry labels must match the source points")
-            if entry.indices != (i, j, k):
-                raise ValueError("entry indices must match the canonical triple")
-            cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
-            if cross == 0:
-                if not entry.collinear or entry.squared_circumradius is not None:
-                    raise ValueError("collinear triple must have no circumradius")
-            else:
-                if entry.collinear or entry.squared_circumradius is None:
-                    raise ValueError("noncollinear triple must carry a circumradius")
-                dab = (ax - bx) ** 2 + (ay - by) ** 2
-                dbc = (bx - cx) ** 2 + (by - cy) ** 2
-                dac = (ax - cx) ** 2 + (ay - cy) ** 2
-                expected_radius = (dab * dbc * dac) / (4 * cross * cross)
-                if entry.squared_circumradius.as_fraction() != expected_radius:
-                    raise ValueError("squared circumradius must match the exact formula")
+        for entry, (i, j, k) in zip(self.entries, expected, strict=True):
+            _require_entry_replay(entry, coords, self.points, i, j, k)
         return self
+
+
+def _require_entry_replay(
+    entry: CircumradiusTripleEntry,
+    coords: list[tuple[Fraction, Fraction]],
+    points: tuple[LabelledPoint2D, ...],
+    i: int,
+    j: int,
+    k: int,
+) -> None:
+    """One triple entry must replay its labels and exact squared circumradius."""
+    (ax, ay), (bx, by), (cx, cy) = coords[i], coords[j], coords[k]
+    if entry.labels != (points[i].label, points[j].label, points[k].label):
+        raise ValueError("entry labels must match the source points")
+    if entry.indices != (i, j, k):
+        raise ValueError("entry indices must match the canonical triple")
+    cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+    if cross == 0:
+        if not entry.collinear or entry.squared_circumradius is not None:
+            raise ValueError("collinear triple must have no circumradius")
+        return
+    if entry.collinear or entry.squared_circumradius is None:
+        raise ValueError("noncollinear triple must carry a circumradius")
+    dab = (ax - bx) ** 2 + (ay - by) ** 2
+    dbc = (bx - cx) ** 2 + (by - cy) ** 2
+    dac = (ax - cx) ** 2 + (ay - cy) ** 2
+    expected_radius = (dab * dbc * dac) / (4 * cross * cross)
+    if entry.squared_circumradius.as_fraction() != expected_radius:
+        raise ValueError("squared circumradius must match the exact formula")
 
 
 class ForbiddenLabelledPoint(StrictModel):

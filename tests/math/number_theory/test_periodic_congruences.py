@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from jacobian.math.number_theory._periodic_kernel import (
     MAX_INTERSECTION_STATES,
+    MAX_SPARSE_LIFTED_ROWS,
 )
 from jacobian.math.number_theory._periodic_models import (
     MAX_MATERIALIZED_RESIDUES,
@@ -258,6 +259,82 @@ def test_compressed_measure_and_sparse_materialization_agree() -> None:
     )
     assert measure.occupied_count == profile.occupied_count == "6"
     assert measure.density == profile.density
+
+
+def test_sparse_lift_admits_large_period_with_small_exact_union() -> None:
+    primes = (2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59)
+    period = math.prod(primes)
+    payload = {
+        "subsets": [
+            {"modulus": str(period // prime), "residues": ["0"]} for prime in primes
+        ],
+        "complement": False,
+    }
+    expected = tuple(
+        sorted(
+            {
+                residue
+                for prime in primes
+                for residue in range(0, period, period // prime)
+            }
+        )
+    )
+
+    measure = _measure(payload)
+    profile = _profile(payload)
+
+    assert sum(primes) == 440
+    assert len(expected) == 424
+    assert measure.common_period == profile.common_period == str(period)
+    assert measure.occupied_count == profile.occupied_count == "424"
+    assert profile.occupied_residues == tuple(map(str, expected))
+    assert measure.density == profile.density
+
+
+def test_sparse_lift_admits_many_classes_in_one_large_modulus() -> None:
+    modulus = "9" * MAX_PERIODIC_INTEGER_DIGITS
+    residues = [str(value) for value in range(448)]
+    payload = {
+        "subsets": [{"modulus": modulus, "residues": residues}],
+        "complement": False,
+    }
+
+    measure = _measure(payload)
+    profile = _profile(payload)
+
+    assert measure.common_period == profile.common_period == modulus
+    assert measure.occupied_count == profile.occupied_count == "448"
+    assert profile.occupied_residues == tuple(residues)
+    assert measure.density.as_fraction() == Fraction(448, int(modulus))
+
+
+def test_sparse_lift_work_boundary_is_exact() -> None:
+    primes = (2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59)
+    base_period = math.prod(primes)
+    prime_sum = sum(primes)
+    admitted_scale = MAX_SPARSE_LIFTED_ROWS // prime_sum
+    rejected_scale = admitted_scale + 1
+
+    def payload(scale: int) -> dict[str, object]:
+        period = base_period * scale
+        return {
+            "subsets": [
+                {
+                    "modulus": str(base_period // prime),
+                    "residues": ["0"],
+                }
+                for prime in primes
+            ]
+            + [{"modulus": str(period), "residues": []}],
+            "complement": False,
+        }
+
+    admitted = _profile(payload(admitted_scale))
+    assert prime_sum * admitted_scale <= MAX_SPARSE_LIFTED_ROWS
+    assert len(admitted.occupied_residues) == 424 * admitted_scale
+
+    with pytest.raises(ValidationError, match="sparse lifting requires"):
+        PeriodicCongruenceUnionRequest.model_validate(payload(rejected_scale))
 
 
 def test_small_profiles_match_exhaustive_membership_replay() -> None:
@@ -512,5 +589,5 @@ def test_compressed_intersection_work_boundary_rejects_before_backend() -> None:
 
     rejected_payload = copy.deepcopy(boundary_payload)
     rejected_payload["subsets"].append({"modulus": str(primes[-1]), "residues": ["0"]})
-    with pytest.raises(ValidationError, match="both exact execution regimes"):
+    with pytest.raises(ValidationError, match="all exact execution regimes"):
         PeriodicCongruenceUnionRequest.model_validate(rejected_payload)

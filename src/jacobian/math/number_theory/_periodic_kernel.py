@@ -20,6 +20,10 @@ from jacobian.math.number_theory._periodic_models import (
 
 MAX_PERIOD_SCAN = 1_000_000
 MAX_PERIOD_LIFT_WORK = 2_000_000
+# Sparse lifting performs one bounded integer-set insertion per lifted source
+# row and retains no more states than rows visited.  This conservative cap is
+# independent of the common-period size and keeps both quantities bounded.
+MAX_SPARSE_LIFTED_ROWS = 65_536
 # Operations perform one kernel pass and their authoritative result validators
 # replay the same bounded invariant once.  These are per-pass caps, so a full
 # accepted call performs at most twice the admitted scan/lift or merge work.
@@ -31,7 +35,7 @@ _PROFILE_RESULT_ENVELOPE_BYTES = 4_096
 
 @dataclass(frozen=True, slots=True)
 class _ExecutionPlan:
-    method: Literal["FULL_UNION", "PERIOD_LIFT", "INCLUSION_EXCLUSION"]
+    method: Literal["FULL_UNION", "PERIOD_LIFT", "SPARSE_LIFT", "INCLUSION_EXCLUSION"]
     common_period: int
     lift_work: int
 
@@ -107,6 +111,12 @@ def require_admitted_periodic_source(
             common_period=period,
             lift_work=lift_work,
         )
+    if lift_work <= MAX_SPARSE_LIFTED_ROWS:
+        return _ExecutionPlan(
+            method="SPARSE_LIFT",
+            common_period=period,
+            lift_work=lift_work,
+        )
     states, merges = _intersection_bounds(source)
     if states <= MAX_INTERSECTION_STATES and merges <= MAX_INTERSECTION_MERGES:
         return _ExecutionPlan(
@@ -115,9 +125,11 @@ def require_admitted_periodic_source(
             lift_work=lift_work,
         )
     raise ValueError(
-        "periodic union exceeds both exact execution regimes: one-period lift "
+        "periodic union exceeds all exact execution regimes: one-period lift "
         f"requires period+lift work {period + lift_work} "
-        f"(limit {MAX_PERIOD_LIFT_WORK}), while compressed inclusion-exclusion "
+        f"(limit {MAX_PERIOD_LIFT_WORK}), sparse lifting requires {lift_work} "
+        f"lifted rows/states (limit {MAX_SPARSE_LIFTED_ROWS}), while compressed "
+        "inclusion-exclusion "
         f"requires at most {states} states/{merges} merges "
         f"(limits {MAX_INTERSECTION_STATES}/{MAX_INTERSECTION_MERGES})"
     )
@@ -183,6 +195,18 @@ def _union_mask(source: PeriodicCongruenceUnionSource, period: int) -> bytearray
     return mask
 
 
+def _sparse_union(source: PeriodicCongruenceUnionSource, period: int) -> set[int]:
+    """Lift the declared classes into one exact set of period representatives."""
+
+    occupied: set[int] = set()
+    for subset in source.subsets:
+        modulus = parse_canonical_integer(subset.modulus)
+        for residue_text in subset.residues:
+            residue = parse_canonical_integer(residue_text)
+            occupied.update(range(residue, period, modulus))
+    return occupied
+
+
 def _merge_congruences(
     left: tuple[int, int], right: tuple[int, int]
 ) -> tuple[int, int] | None:
@@ -246,6 +270,8 @@ def measure_periodic_union(source: PeriodicCongruenceUnionSource) -> int:
         union_count = plan.common_period
     elif plan.method == "PERIOD_LIFT":
         union_count = sum(_union_mask(source, plan.common_period))
+    elif plan.method == "SPARSE_LIFT":
+        union_count = len(_sparse_union(source, plan.common_period))
     else:
         union_count = _measure_by_inclusion_exclusion(source, plan.common_period)
     return plan.common_period - union_count if source.complement else union_count
@@ -259,12 +285,7 @@ def materialize_periodic_union(
     plan = require_materializable_periodic_source(source)
     if plan.method == "FULL_UNION":
         return () if source.complement else tuple(range(plan.common_period))
-    occupied: set[int] = set()
-    for subset in source.subsets:
-        modulus = parse_canonical_integer(subset.modulus)
-        for residue_text in subset.residues:
-            residue = parse_canonical_integer(residue_text)
-            occupied.update(range(residue, plan.common_period, modulus))
+    occupied = _sparse_union(source, plan.common_period)
     if source.complement:
         return tuple(
             residue for residue in range(plan.common_period) if residue not in occupied
@@ -278,6 +299,7 @@ __all__ = [
     "MAX_PERIODIC_RESULT_BYTES",
     "MAX_PERIOD_LIFT_WORK",
     "MAX_PERIOD_SCAN",
+    "MAX_SPARSE_LIFTED_ROWS",
     "common_period",
     "materialize_periodic_union",
     "measure_periodic_union",

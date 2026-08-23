@@ -605,6 +605,95 @@ class TestZeroWidthProducts:
         assert result.is_valid
 
 
+class TestEmptyRowWidthChainMaps:
+    """A zero-row differential or component keeps its declared inner
+    width in the chain-map equation instead of raising an
+    inner-dimension error on an admitted request."""
+
+    def _source(self) -> ChainComplexValue:
+        return ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=1,
+            basis_sizes=(1, 1),
+            differential_matrices=((("0",),),),
+        )
+
+    def _target(self) -> ChainComplexValue:
+        return ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=1,
+            basis_sizes=(0, 1),
+            differential_matrices=((),),
+        )
+
+    def _map(self) -> tuple[tuple[str, ...], ...]:
+        return ((), (("1",),))
+
+    def test_zero_row_target_differential_verifies(self) -> None:
+        from jacobian.math.chain_complexes.operations import verify_chain_map
+
+        request = VerifyChainMapRequest(
+            source=self._source(),
+            target=self._target(),
+            map_matrices=self._map(),
+        )
+        result = verify_chain_map(request)
+        assert result.is_valid
+        assert type(result).model_validate(result.model_dump()).is_valid
+
+    def test_corresponding_cone_is_admitted_and_returned(self) -> None:
+        from jacobian.math.chain_complexes.operations import compute_mapping_cone
+
+        request = MappingConeRequest(
+            source=self._source(),
+            target=self._target(),
+            map_matrices=self._map(),
+        )
+        result = compute_mapping_cone(request)
+        # cone_n = target_n + source_{n-1}: (0, 1+1, 0+1).
+        assert result.cone_basis_sizes == (0, 2, 1)
+
+    def test_zero_row_homology_request_returns_typed_result(self) -> None:
+        """The homology kernel's square-zero replay keeps declared widths
+        for a complex whose first group is empty."""
+        from jacobian.math.chain_complexes.operations import compute_homology
+
+        shifted = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=2,
+            basis_sizes=(0, 1, 1),
+            differential_matrices=((), (("1",),)),
+        )
+        result = compute_homology(ComputeHomologyRequest(complex=shifted))
+        assert [group.betti_number for group in result.homology_groups] == [0, 0, 0]
+
+    def test_empty_middle_cone_group_round_trips(self) -> None:
+        """A cone whose zeroth group is empty keeps its widths through
+        construction and validation."""
+        from jacobian.math.chain_complexes.operations import compute_mapping_cone
+        from jacobian.math.chain_complexes.values import MappingConeResult
+
+        endpoint = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=1,
+            basis_sizes=(0, 1),
+            differential_matrices=((),),
+        )
+        result = compute_mapping_cone(
+            MappingConeRequest(
+                source=endpoint,
+                target=endpoint,
+                map_matrices=((), (("1",),)),
+            )
+        )
+        revalidated = MappingConeResult.model_validate(result.model_dump())
+        assert revalidated.cone_basis_sizes == (0, 1, 1)
+
+
 class TestTensorContextAndShapes:
     def test_tensor_carries_canonical_context(self) -> None:
         result = compute_tensor_product(
@@ -674,6 +763,99 @@ class TestTensorValueComposition:
         assert isinstance(result.value, ChainComplexValue)
         assert result.value.basis_sizes == (1,)
         homology_groups(result.value)
+
+
+class TestTensorProductFactorBinding:
+    """A tensor result replays its defining construction against retained
+    factors so detached or forged products cannot validate."""
+
+    def test_forged_unrelated_value_rejected(self) -> None:
+        """Matching duplicate projections do not make an authored value
+        an exact tensor product."""
+        from jacobian.math.chain_complexes.values import TensorProductResult
+
+        unrelated = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=0,
+            basis_sizes=(7,),
+            differential_matrices=(),
+        )
+        with pytest.raises(ValidationError, match="canonical"):
+            TensorProductResult(
+                tensor_basis_sizes=(7,),
+                tensor_differential_matrices=(),
+                coefficient_field=CoefficientField.RATIONAL,
+                degree_min=0,
+                degree_max=0,
+                left=_point_complex(),
+                right=_point_complex(),
+                value=unrelated,
+            )
+
+    def test_non_square_zero_factor_rejected_by_replay(self) -> None:
+        """A retained factor violating d^2=0 fails the construction
+        replay instead of surviving under the tensor-product claim."""
+        from jacobian.math.chain_complexes.values import TensorProductResult
+
+        bad = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=2,
+            basis_sizes=(1, 1, 1),
+            differential_matrices=((("1",),), (("1",),)),
+        )
+        with pytest.raises(ValidationError, match="d\\^2"):
+            TensorProductResult(
+                tensor_basis_sizes=(1, 1, 1),
+                tensor_differential_matrices=((("1",),), (("1",),)),
+                coefficient_field=CoefficientField.RATIONAL,
+                degree_min=0,
+                degree_max=2,
+                left=bad,
+                right=_point_complex(),
+                value=bad,
+            )
+
+    def test_genuine_result_round_trips(self) -> None:
+        from jacobian.math.chain_complexes.values import TensorProductResult
+
+        circle = _circle_complex()
+        point = _point_complex()
+        result = compute_tensor_product(
+            TensorProductRequest(left=circle, right=point)
+        )
+        revalidated = TensorProductResult.model_validate(result.model_dump())
+        assert revalidated.value.basis_sizes == (3, 3)
+
+    def test_tampered_factor_rejected(self) -> None:
+        from jacobian.math.chain_complexes.values import TensorProductResult
+
+        result = compute_tensor_product(
+            TensorProductRequest(left=_point_complex(), right=_point_complex())
+        )
+        payload = result.model_dump()
+        payload["right"] = payload["right"] | {"basis_sizes": (2,)}
+        with pytest.raises(ValidationError, match="canonical"):
+            TensorProductResult.model_validate(payload)
+
+    def test_tampered_degree_provenance_rejected(self) -> None:
+        from jacobian.math.chain_complexes.values import TensorProductResult
+
+        shifted = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=-1,
+            degree_max=-1,
+            basis_sizes=(1,),
+            differential_matrices=(),
+        )
+        result = compute_tensor_product(
+            TensorProductRequest(left=shifted, right=_point_complex())
+        )
+        payload = result.model_dump()
+        payload["degree_min"] = 0
+        with pytest.raises(ValidationError, match="degree interval"):
+            TensorProductResult.model_validate(payload)
 
 
 def homology_groups(complex_value):

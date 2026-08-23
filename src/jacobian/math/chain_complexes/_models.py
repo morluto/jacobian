@@ -250,6 +250,7 @@ class MappingConeRequest(StrictModel):
             map_mats,
             prime,
             list(self.source.basis_sizes),
+            list(self.target.basis_sizes),
         )
         return self
 
@@ -273,6 +274,76 @@ def _require_serializable_entries(*complex_values) -> None:
                         )
 
 
+def _require_admissible_tensor_work(
+    left: ChainComplexValue, right: ChainComplexValue
+) -> None:
+    """Bound the derived tensor work before any allocation.
+
+    Shared by the request model and the result validator's construction
+    replay: each tensor-product group dimension, the total group cells,
+    and the dense differential cells actually allocated between
+    consecutive groups stay within conservative budgets derived from the
+    input bounds.
+    """
+    if left.coefficient_field != right.coefficient_field or left.prime != right.prime:
+        raise ValueError("tensor product requires same coefficient field and prime")
+    group_count = len(left.basis_sizes) + len(right.basis_sizes) - 1
+    group_sizes: list[int] = []
+    for degree in range(group_count):
+        size = 0
+        for i in range(min(degree + 1, len(left.basis_sizes))):
+            j = degree - i
+            if j < len(right.basis_sizes):
+                size += left.basis_sizes[i] * right.basis_sizes[j]
+        if size > MAX_TENSOR_GROUP_DIMENSION:
+            raise ValueError(
+                f"tensor product group dimension {size} exceeds the "
+                f"{MAX_TENSOR_GROUP_DIMENSION}-dimension work bound"
+            )
+        group_sizes.append(size)
+    total = sum(group_sizes)
+    allocated_cells = sum(
+        group_sizes[degree - 1] * group_sizes[degree]
+        for degree in range(1, group_count)
+    )
+    if total > MAX_TENSOR_TOTAL_CELLS or allocated_cells > MAX_TENSOR_TOTAL_CELLS:
+        raise ValueError(
+            f"tensor product allocates {max(total, allocated_cells)} "
+            f"cells, exceeding the {MAX_TENSOR_TOTAL_CELLS}-cell work bound"
+        )
+    _require_serializable_entries(left, right)
+    _require_square_zero_at_admission(left, label="tensor product left")
+    _require_square_zero_at_admission(right, label="tensor product right")
+    # Admission guarantees the derived complex value is canonical: the
+    # degree interval must fit the shared chain-degree bounds, so
+    # constructing it here fails at the boundary rather than inside
+    # execution when the result is exposed as a ChainComplexValue.
+    from jacobian.math.chain_complexes.values import ChainComplexValue
+
+    tensor_degree_min = left.degree_min + right.degree_min
+    # Shape-correct zero placeholders: differential deg has
+    # group_sizes[deg] rows and group_sizes[deg+1] columns.
+    placeholder_diffs = tuple(
+        tuple(("0",) * group_sizes[deg + 1] for _ in range(group_sizes[deg]))
+        for deg in range(max(0, group_count - 1))
+    )
+    ChainComplexValue(
+        coefficient_field=left.coefficient_field,
+        prime=left.prime,
+        degree_min=tensor_degree_min,
+        degree_max=tensor_degree_min + group_count - 1,
+        basis_sizes=tuple(group_sizes),
+        differential_matrices=placeholder_diffs,
+    )
+    max_entry_chars = 2 * 512 + 8
+    if max(allocated_cells, 1) * max_entry_chars > MAX_TENSOR_SERIALIZED_CHARS:
+        raise ValueError(
+            "tensor product serialization exceeds the canonical output "
+            f"ceiling ({allocated_cells} cells x ~{max_entry_chars} "
+            "characters); supply smaller coefficients"
+        )
+
+
 class TensorProductRequest(StrictModel):
     """Compute the tensor product of two chain complexes."""
 
@@ -281,71 +352,7 @@ class TensorProductRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_admissible_tensor_work(self) -> Self:
-        if (
-            self.left.coefficient_field != self.right.coefficient_field
-            or self.left.prime != self.right.prime
-        ):
-            raise ValueError("tensor product requires same coefficient field and prime")
-        # Bound the derived tensor work before any allocation: each
-        # tensor-product group dimension, the total group cells, and the
-        # dense differential cells actually allocated between consecutive
-        # groups all stay within conservative budgets derived from the
-        # input bounds.
-        group_count = len(self.left.basis_sizes) + len(self.right.basis_sizes) - 1
-        group_sizes: list[int] = []
-        for degree in range(group_count):
-            size = 0
-            for i in range(min(degree + 1, len(self.left.basis_sizes))):
-                j = degree - i
-                if j < len(self.right.basis_sizes):
-                    size += self.left.basis_sizes[i] * self.right.basis_sizes[j]
-            if size > MAX_TENSOR_GROUP_DIMENSION:
-                raise ValueError(
-                    f"tensor product group dimension {size} exceeds the "
-                    f"{MAX_TENSOR_GROUP_DIMENSION}-dimension work bound"
-                )
-            group_sizes.append(size)
-        total = sum(group_sizes)
-        allocated_cells = sum(
-            group_sizes[degree - 1] * group_sizes[degree]
-            for degree in range(1, group_count)
-        )
-        if total > MAX_TENSOR_TOTAL_CELLS or allocated_cells > MAX_TENSOR_TOTAL_CELLS:
-            raise ValueError(
-                f"tensor product allocates {max(total, allocated_cells)} "
-                f"cells, exceeding the {MAX_TENSOR_TOTAL_CELLS}-cell work bound"
-            )
-        _require_serializable_entries(self.left, self.right)
-        _require_square_zero_at_admission(self.left, label="tensor product left")
-        _require_square_zero_at_admission(self.right, label="tensor product right")
-        # Admission guarantees the derived complex value is canonical: the
-        # degree interval must fit the shared chain-degree bounds, so
-        # constructing it here fails at the boundary rather than inside
-        # execution when the result is exposed as a ChainComplexValue.
-        from jacobian.math.chain_complexes.values import ChainComplexValue
-
-        tensor_degree_min = self.left.degree_min + self.right.degree_min
-        # Shape-correct zero placeholders: differential deg has
-        # group_sizes[deg] rows and group_sizes[deg+1] columns.
-        placeholder_diffs = tuple(
-            tuple(("0",) * group_sizes[deg + 1] for _ in range(group_sizes[deg]))
-            for deg in range(max(0, group_count - 1))
-        )
-        ChainComplexValue(
-            coefficient_field=self.left.coefficient_field,
-            prime=self.left.prime,
-            degree_min=tensor_degree_min,
-            degree_max=tensor_degree_min + group_count - 1,
-            basis_sizes=group_sizes,
-            differential_matrices=placeholder_diffs,
-        )
-        max_entry_chars = 2 * 512 + 8
-        if max(allocated_cells, 1) * max_entry_chars > MAX_TENSOR_SERIALIZED_CHARS:
-            raise ValueError(
-                "tensor product serialization exceeds the canonical output "
-                f"ceiling ({allocated_cells} cells x ~{max_entry_chars} "
-                "characters); supply smaller coefficients"
-            )
+        _require_admissible_tensor_work(self.left, self.right)
         return self
 
 

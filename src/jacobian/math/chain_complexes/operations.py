@@ -205,14 +205,39 @@ def _require_chain_map_relation(
     map_mats: list[list[list[Fraction]]],
     prime: int | None = None,
     source_group_columns=None,
+    target_group_columns=None,
 ) -> None:
-    """Require d_target * f_{i+1} == f_i * d_source at every differential."""
+    """Require d_target * f_{i+1} == f_i * d_source at every differential.
+
+    Declared group widths keep empty operands' inner dimensions intact:
+    ``target_diffs[i]`` spans ``target_group_columns[i + 1]`` columns and
+    ``map_mats[i]`` spans ``source_group_columns[i]``, so a zero-row
+    differential or component still carries its mathematical width.
+    """
     for i in range(len(source_diffs)):
         result_columns = (
             source_group_columns[i + 1] if source_group_columns is not None else None
         )
-        left = _matrix_multiply(target_diffs[i], map_mats[i + 1], prime, result_columns)
-        right = _matrix_multiply(map_mats[i], source_diffs[i], prime, result_columns)
+        left_declared_columns = (
+            target_group_columns[i + 1] if target_group_columns is not None else None
+        )
+        right_declared_columns = (
+            source_group_columns[i] if source_group_columns is not None else None
+        )
+        left = _matrix_multiply(
+            target_diffs[i],
+            map_mats[i + 1],
+            prime,
+            result_columns,
+            left_declared_columns=left_declared_columns,
+        )
+        right = _matrix_multiply(
+            map_mats[i],
+            source_diffs[i],
+            prime,
+            result_columns,
+            left_declared_columns=right_declared_columns,
+        )
         if left != right:
             raise ValueError(
                 f"chain map does not commute with differentials at degree index {i}"
@@ -326,11 +351,24 @@ def verify_chain_map(request: VerifyChainMapRequest) -> VerificationResult:
 
     # f_i: C_i -> D_i has shape target_basis[i] x source_basis[i], so the
     # chain-map equation at every differential is
-    # d_target_i * f_{i+1} == f_i * d_source_i.
+    # d_target_i * f_{i+1} == f_i * d_source_i. Declared widths keep
+    # empty-row differentials and components shape-faithful.
     for i in range(len(source_diffs)):
         result_columns = source.basis_sizes[i + 1]
-        left = _matrix_multiply(target_diffs[i], map_mats[i + 1], prime, result_columns)
-        right = _matrix_multiply(map_mats[i], source_diffs[i], prime, result_columns)
+        left = _matrix_multiply(
+            target_diffs[i],
+            map_mats[i + 1],
+            prime,
+            result_columns,
+            left_declared_columns=target.basis_sizes[i + 1],
+        )
+        right = _matrix_multiply(
+            map_mats[i],
+            source_diffs[i],
+            prime,
+            result_columns,
+            left_declared_columns=source.basis_sizes[i],
+        )
         if left != right:
             return VerificationResult(
                 is_valid=False,
@@ -362,14 +400,15 @@ def _compute_homology_groups(
         for i, m in enumerate(cx.differential_matrices)
     ]
 
-    # Require square-zero before computing homology
-    for i in range(len(diffs) - 1):
-        prod = _matrix_multiply(diffs[i], diffs[i + 1], prime, cx.basis_sizes[i + 2])
-        if any(any(v != 0 for v in row) for row in prod):
-            raise ValueError(
-                f"chain complex does not satisfy d^2=0 at chain degree "
-                f"{cx.degree_min + i}: product non-zero"
-            )
+    # Require square-zero before computing homology; declared group
+    # widths keep zero-row differentials shape-faithful.
+    _require_square_zero(
+        diffs,
+        prime,
+        label="chain complex",
+        group_columns=list(cx.basis_sizes),
+        degree_min=cx.degree_min,
+    )
 
     groups = []
     for idx in range(n):
@@ -520,6 +559,7 @@ def _compute_mapping_cone(
         map_mats,
         prime,
         source_group_columns=list(source.basis_sizes),
+        target_group_columns=list(target.basis_sizes),
     )
 
     def _to_str_matrix(mat: list[list[Fraction]]) -> tuple[tuple[str, ...], ...]:
@@ -575,14 +615,21 @@ def _compute_mapping_cone(
         cone_diffs.append(_to_str_matrix(block))
 
     # Defining invariant of the returned decomposition: the cone
-    # differentials must themselves be square-zero.
+    # differentials must themselves be square-zero. Declared cone group
+    # widths keep zero-cell groups shape-faithful.
     cone_parsed = [
         _matrix_to_fractions(
             cone_diffs[i], cone_basis_sizes[i], cone_basis_sizes[i + 1], prime
         )
         for i in range(len(cone_diffs))
     ]
-    _require_square_zero(cone_parsed, prime, label="mapping cone")
+    _require_square_zero(
+        cone_parsed,
+        prime,
+        label="mapping cone",
+        group_columns=list(cone_basis_sizes),
+        degree_min=source.degree_min,
+    )
 
     return cone_basis_sizes, tuple(cone_diffs)
 
@@ -608,13 +655,12 @@ def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
     )
 
 
-def compute_tensor_product(request: TensorProductRequest) -> TensorProductResult:
-    """Compute the tensor product of two chain complexes.
-
-    (C ⊗ D)_n = ⊕_{i+j=n} C_i ⊗ D_j with differential d_C ⊗ id + (-1)^i id ⊗ d_D.
-    """
-    left = request.left
-    right = request.right
+def _compute_tensor_product(
+    left: ChainComplexValue,
+    right: ChainComplexValue,
+) -> tuple[tuple[int, ...], tuple[tuple[tuple[str, ...], ...], ...]]:
+    """Exact tensor-product construction shared by the operation and its
+    result validator."""
     if left.coefficient_field != right.coefficient_field or left.prime != right.prime:
         raise ValueError("tensor product requires same coefficient field and prime")
     prime = left.prime
@@ -622,15 +668,15 @@ def compute_tensor_product(request: TensorProductRequest) -> TensorProductResult
     n = len(left.basis_sizes) + len(right.basis_sizes) - 1
 
     # Basis sizes for the tensor product
-    tensor_basis_sizes = []
+    group_sizes: list[int] = []
     for degree in range(n):
         size = 0
         for i in range(min(degree + 1, len(left.basis_sizes))):
             j = degree - i
             if j < len(right.basis_sizes):
                 size += left.basis_sizes[i] * right.basis_sizes[j]
-        tensor_basis_sizes.append(size)
-    tensor_basis_sizes = tuple(tensor_basis_sizes)
+        group_sizes.append(size)
+    tensor_basis_sizes = tuple(group_sizes)
 
     # Build signed differentials for each degree.
     # For each n, differential d_n: (C⊗D)_n -> (C⊗D)_{n-1} is block matrix with
@@ -733,25 +779,39 @@ def compute_tensor_product(request: TensorProductRequest) -> TensorProductResult
                             block[row][col] += coeff
         tensor_diffs.append(_to_str_matrix(block))
 
+    return tensor_basis_sizes, tuple(tensor_diffs)
+
+
+def compute_tensor_product(request: TensorProductRequest) -> TensorProductResult:
+    """Compute the tensor product of two chain complexes.
+
+    (C ⊗ D)_n = ⊕_{i+j=n} C_i ⊗ D_j with differential d_C ⊗ id + (-1)^i id ⊗ d_D.
+    """
+    left = request.left
+    right = request.right
+    tensor_basis_sizes, tensor_diffs = _compute_tensor_product(left, right)
+
     # Tensor degrees are pairwise sums: the derived complex concentrates
     # on [deg_min, deg_min + group_count - 1].
-    group_count = len(left.basis_sizes) + len(right.basis_sizes) - 1
+    group_count = len(tensor_basis_sizes)
     degree_min = left.degree_min + right.degree_min
-    from jacobian.math.chain_complexes.values import ChainComplexValue
+    degree_max = degree_min + group_count - 1
 
     return TensorProductResult(
         tensor_basis_sizes=tensor_basis_sizes,
-        tensor_differential_matrices=tuple(tensor_diffs),
+        tensor_differential_matrices=tensor_diffs,
         coefficient_field=left.coefficient_field,
-        prime=prime,
+        prime=left.prime,
         degree_min=degree_min,
-        degree_max=degree_min + group_count - 1,
+        degree_max=degree_max,
+        left=left,
+        right=right,
         value=ChainComplexValue(
             coefficient_field=left.coefficient_field,
-            prime=prime,
+            prime=left.prime,
             degree_min=degree_min,
-            degree_max=degree_min + group_count - 1,
+            degree_max=degree_max,
             basis_sizes=tensor_basis_sizes,
-            differential_matrices=tuple(tensor_diffs),
+            differential_matrices=tensor_diffs,
         ),
     )

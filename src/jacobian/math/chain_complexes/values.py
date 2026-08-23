@@ -329,11 +329,12 @@ class MappingConeResult(StrictModel):
 
 
 class TensorProductResult(StrictModel):
-    """The tensor product of two chain complexes.
+    """The tensor product of two retained chain complexes.
 
     The derived complex retains its coefficient field, prime, and degree
     interval so it composes into downstream consumers as a first-class
-    chain-complex value.
+    chain-complex value, and both factors are retained so validation can
+    replay the defining construction.
     """
 
     tensor_basis_sizes: tuple[int, ...]
@@ -342,28 +343,67 @@ class TensorProductResult(StrictModel):
     prime: int | None = Field(default=None, ge=2)
     degree_min: int
     degree_max: int
+    left: ChainComplexValue
+    right: ChainComplexValue
     value: ChainComplexValue
 
     @model_validator(mode="after")
     def require_consistent_context(self) -> Self:
         # One canonical tensor-product value carries the mathematical
-        # result; every duplicated projection must agree with it so a
-        # revalidated result cannot hold two contradictory products.
-        if (
-            self.tensor_basis_sizes != self.value.basis_sizes
-            or self.tensor_differential_matrices
-            != self.value.differential_matrices
+        # result; it must be the exact tensor product of the retained
+        # factors, so a revalidated result cannot hold a forged or merely
+        # shape-compatible product.
+        from jacobian.math.chain_complexes._models import (
+            _require_admissible_tensor_work,
+        )
+        from jacobian.math.chain_complexes.operations import (
+            _compute_tensor_product,
+        )
+
+        if self.left.prime != self.right.prime or (
+            self.left.coefficient_field != self.right.coefficient_field
         ):
             raise ValueError(
-                "tensor projections must equal the retained canonical "
-                "tensor-product complex"
+                "tensor product requires same coefficient field and prime"
             )
+        # Bound the replay work before expanding any derived intermediate.
+        _require_admissible_tensor_work(self.left, self.right)
         if self.coefficient_field != self.value.coefficient_field:
             raise ValueError("coefficient field must match the retained value")
         if self.prime != self.value.prime:
             raise ValueError("prime must match the retained value")
-        if self.degree_min != self.value.degree_min or self.degree_max != self.value.degree_max:
-            raise ValueError("degree interval must match the retained value")
+        expected_sizes, expected_diffs = _compute_tensor_product(self.left, self.right)
+        group_count = len(expected_sizes)
+        derived_min = self.left.degree_min + self.right.degree_min
+        derived_max = derived_min + group_count - 1
+        if (self.degree_min, self.degree_max) != (derived_min, derived_max):
+            raise ValueError(
+                "degree interval must equal the pairwise-sum interval of "
+                "the retained factors"
+            )
+        expected_value = ChainComplexValue(
+            coefficient_field=self.left.coefficient_field,
+            prime=self.left.prime,
+            degree_min=derived_min,
+            degree_max=derived_max,
+            basis_sizes=expected_sizes,
+            differential_matrices=expected_diffs,
+        )
+        if self.value != expected_value:
+            raise ValueError(
+                "tensor projections must equal the retained canonical "
+                "tensor-product complex"
+            )
+        if self.tensor_basis_sizes != self.value.basis_sizes:
+            raise ValueError(
+                "tensor projections must equal the retained canonical "
+                "tensor-product complex"
+            )
+        if self.tensor_differential_matrices != self.value.differential_matrices:
+            raise ValueError(
+                "tensor projections must equal the retained canonical "
+                "tensor-product complex"
+            )
         if (
             self.coefficient_field is CoefficientField.PRIME_FIELD
             and self.prime is None
@@ -485,6 +525,7 @@ class VerificationResult(StrictModel):
                     map_mats,
                     prime,
                     source_group_columns=list(self.source.basis_sizes),
+                    target_group_columns=list(self.target.basis_sizes),
                 )
                 holds = True
             except (ValueError, IndexError):

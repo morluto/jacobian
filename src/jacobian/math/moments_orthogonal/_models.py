@@ -314,6 +314,24 @@ class ChristoffelDarbouxResult(ChristoffelDarbouxRequest):
 # ---------------------------------------------------------------------------
 
 
+def _require_admissible_quadrature_entry(value: CanonicalRational) -> None:
+    """Bound one recurrence entry to values that survive float64 conversion."""
+    require_bounded_rational(value, max_digits=MAX_RATIONAL_DIGITS, label="coefficient")
+    magnitude = abs(value.as_fraction())
+    if magnitude > MAX_QUADRATURE_MAGNITUDE:
+        raise ValueError(
+            "quadrature coefficients exceed the finite-float magnitude bound"
+        )
+    # A semantically nonzero coefficient that converts to 0.0 would
+    # silently collapse a node or weight to zero; every admitted
+    # nonzero entry must survive double conversion as itself.
+    if 0 < magnitude < MIN_QUADRATURE_SUBDIAGONAL:
+        raise ValueError(
+            "quadrature coefficients below the underflow bound would "
+            "convert to zero doubles"
+        )
+
+
 class GaussianQuadratureRequest(StrictModel):
     coefficients: RecurrenceCoefficientsValue
 
@@ -348,22 +366,7 @@ class GaussianQuadratureRequest(StrictModel):
                     "subdiagonal beta entries fall below the quadrature underflow bound"
                 )
         for value in (*alpha, *beta):
-            require_bounded_rational(
-                value, max_digits=MAX_RATIONAL_DIGITS, label="coefficient"
-            )
-            magnitude = abs(value.as_fraction())
-            if magnitude > MAX_QUADRATURE_MAGNITUDE:
-                raise ValueError(
-                    "quadrature coefficients exceed the finite-float magnitude bound"
-                )
-            # A semantically nonzero coefficient that converts to 0.0 would
-            # silently collapse a node or weight to zero; every admitted
-            # nonzero entry must survive double conversion as itself.
-            if 0 < magnitude < MIN_QUADRATURE_SUBDIAGONAL:
-                raise ValueError(
-                    "quadrature coefficients below the underflow bound would "
-                    "convert to zero doubles"
-                )
+            _require_admissible_quadrature_entry(value)
         return self
 
 

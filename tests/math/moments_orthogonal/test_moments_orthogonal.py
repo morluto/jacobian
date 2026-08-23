@@ -350,7 +350,9 @@ class TestWireAdapters:
                 beta=(_cr(1, 1),),
             ),
         )
-        assert isinstance(compute_gaussian_quadrature(request), GaussianQuadratureResult)
+        assert isinstance(
+            compute_gaussian_quadrature(request), GaussianQuadratureResult
+        )
 
     def test_hankel_validation_error(self) -> None:
         with pytest.raises(ValidationError):

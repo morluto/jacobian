@@ -10,9 +10,11 @@ import networkx as nx
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import encode_strict_json
 from jacobian.math.graphs.optimization import _maximum_cut
 from jacobian.math.graphs.optimization._maximum_cut import (
     MAXIMUM_CUT_CANDIDATE_PARTITIONS,
+    MAXIMUM_CUT_RESULT_BYTES,
     GraphMaximumCutRequest,
     GraphMaximumCutResult,
     compute_maximum_cut,
@@ -108,7 +110,6 @@ def test_empty_graph_retains_its_source_and_exact_zero_cut() -> None:
     assert result.right_vertices == ()
     assert result.crossing_edges == ()
     assert result.cut_value == 0
-    assert result.optimality_certificate.source_component_count == 0
 
 
 def test_bipartite_graph_cuts_every_edge_and_preserves_source_axes() -> None:
@@ -147,18 +148,14 @@ def test_known_exact_maximum_cut_values(
     _assert_cut_invariant(result)
 
 
-def test_false_twin_reduction_admits_the_atlas_scale_blow_up() -> None:
+def test_exact_envelope_admits_the_atlas_scale_blow_up() -> None:
     graph = _c5_blow_up((5, 5, 5, 5, 5))
 
     result = _validated_result(graph)
 
     assert len(graph.vertices) == 25
     assert len(graph.edges) == 125
-    assert result.optimality_certificate.reduced_vertex_count == 5
-    assert result.optimality_certificate.candidate_partitions == 16
-    assert result.optimality_certificate.candidate_partitions < (
-        MAXIMUM_CUT_CANDIDATE_PARTITIONS
-    )
+    assert result.cut_value == 100
 
 
 def test_maximum_cut_is_additive_over_connected_components() -> None:
@@ -170,7 +167,6 @@ def test_maximum_cut_is_additive_over_connected_components() -> None:
     result = _validated_result(graph)
 
     assert result.cut_value == 4 + 4
-    assert result.optimality_certificate.source_component_count == 2
     _assert_cut_invariant(result)
 
 
@@ -231,16 +227,9 @@ def test_complementary_side_orientation_revalidates() -> None:
             ),
             "exact bounds",
         ),
-        (
-            lambda payload: payload["optimality_certificate"].__setitem__(
-                "candidate_partitions",
-                payload["optimality_certificate"]["candidate_partitions"] + 1,
-            ),
-            "certificate",
-        ),
     ],
 )
-def test_result_rejects_forged_ledger_values_bounds_and_certificate(
+def test_result_rejects_forged_ledger_values_and_bounds(
     mutate: Callable[[dict[str, Any]], object], message: str
 ) -> None:
     payload = _validated_result(_cycle(5)).model_dump(mode="json")
@@ -279,12 +268,22 @@ def test_approximate_upper_bound_and_lower_valued_cut_cannot_claim_exactness() -
         GraphMaximumCutResult.model_validate(honest)
 
 
+def test_feasible_suboptimal_cut_with_forged_exact_bounds_fails_replay() -> None:
+    forged = _validated_result(_cycle(5)).model_dump(mode="json")
+    forged["left_vertices"] = ["00"]
+    forged["right_vertices"] = ["01", "02", "03", "04"]
+    forged["crossing_edges"] = [["00", "01"], ["00", "04"]]
+    forged["cut_value"] = 2
+    forged["lower_bound"] = 2
+    forged["upper_bound"] = 2
+
+    with pytest.raises(ValidationError, match="feasible but not maximum"):
+        GraphMaximumCutResult.model_validate(forged)
+
+
 def test_candidate_boundary_accepts_c21_and_rejects_c23_before_backend() -> None:
     accepted = _validated_result(_cycle(21))
-    assert (
-        accepted.optimality_certificate.candidate_partitions
-        == MAXIMUM_CUT_CANDIDATE_PARTITIONS
-    )
+    assert accepted.cut_value == 20
 
     with pytest.raises(ValidationError, match="candidate partitions"):
         GraphMaximumCutRequest(graph=_cycle(23))
@@ -293,7 +292,7 @@ def test_candidate_boundary_accepts_c21_and_rejects_c23_before_backend() -> None
 def test_edge_update_boundary_accepts_k19_and_rejects_k20_before_backend() -> None:
     GraphMaximumCutRequest(graph=_complete(19))
 
-    with pytest.raises(ValidationError, match="weighted edge updates"):
+    with pytest.raises(ValidationError, match="weighted edge contributions"):
         GraphMaximumCutRequest(graph=_complete(20))
 
 
@@ -307,7 +306,6 @@ def test_large_bipartite_graph_is_not_rejected_by_a_coarse_order_cap() -> None:
     result = _validated_result(graph)
 
     assert result.cut_value == 255
-    assert result.optimality_certificate.candidate_partitions == 0
 
 
 def test_projected_result_bytes_are_rejected_before_search() -> None:
@@ -319,12 +317,50 @@ def test_projected_result_bytes_are_rejected_before_search() -> None:
         GraphMaximumCutRequest(graph=graph)
 
 
-def test_schema_explains_the_non_schema_representable_work_bounds() -> None:
-    graph_schema = GraphMaximumCutRequest.model_json_schema()["properties"]["graph"]
+def test_result_size_boundary_accepts_the_largest_fit_and_rejects_the_next() -> None:
+    probe = _validated_result(_graph(("a", "b"), ()))
+    fixed_result_bytes = len(encode_strict_json(probe.model_dump(mode="json"))) - 4
+    accepted_label_length = (MAXIMUM_CUT_RESULT_BYTES - fixed_result_bytes) // 4
+    accepted_graph = _graph(
+        ("a" * accepted_label_length, "b" * accepted_label_length),
+        (),
+    )
 
-    assert "false-twin quotient" in graph_schema["description"]
-    assert str(MAXIMUM_CUT_CANDIDATE_PARTITIONS) in graph_schema["description"]
-    assert "exact-only" in graph_schema["description"]
+    accepted = _validated_result(accepted_graph)
+    accepted_bytes = len(encode_strict_json(accepted.model_dump(mode="json")))
+
+    assert accepted_bytes > MAXIMUM_CUT_RESULT_BYTES - 4
+    assert accepted_bytes <= MAXIMUM_CUT_RESULT_BYTES
+    with pytest.raises(ValidationError, match="projected exact result"):
+        GraphMaximumCutRequest(
+            graph=_graph(
+                (
+                    "a" * (accepted_label_length + 1),
+                    "b" * (accepted_label_length + 1),
+                ),
+                (),
+            )
+        )
+
+
+def test_public_contract_explains_bounds_without_private_kernel_details() -> None:
+    graph_schema = GraphMaximumCutRequest.model_json_schema()["properties"]["graph"]
+    description = graph_schema["description"]
+
+    assert str(MAXIMUM_CUT_CANDIDATE_PARTITIONS) in description
+    assert "exact-only" in description
+    assert "false-twin" not in description
+    assert "quotient" not in description
+    assert (
+        "optimality_certificate"
+        not in GraphMaximumCutResult.model_json_schema()["properties"]
+    )
+    assert "z3" not in _maximum_cut.MAXIMUM_CUT_OPERATION.tags
+    assert "quotient" not in _maximum_cut.MAXIMUM_CUT_OPERATION.description
+    assert all(
+        "quotient" not in invocation.description
+        for invocation in _maximum_cut.MAXIMUM_CUT_OPERATION.examples
+    )
 
 
 def test_bounded_exhaustive_fallback_preserves_an_exact_result(

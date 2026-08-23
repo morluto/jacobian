@@ -49,7 +49,6 @@ class _MaximumCutAnalysis:
     twin_classes: tuple[tuple[int, ...], ...]
     class_of_vertex: tuple[int, ...]
     components: tuple[_ReducedComponent, ...]
-    source_component_count: int
     candidate_partitions: int
     edge_updates: int
 
@@ -58,22 +57,6 @@ class _MaximumCutAnalysis:
 class _ComponentSolution:
     value: int
     sides: tuple[bool, ...]
-
-
-def _component_count(adjacency: tuple[tuple[int, ...], ...]) -> int:
-    unseen = set(range(len(adjacency)))
-    count = 0
-    while unseen:
-        count += 1
-        stack = [min(unseen)]
-        unseen.remove(stack[0])
-        while stack:
-            vertex = stack.pop()
-            for neighbor in adjacency[vertex]:
-                if neighbor in unseen:
-                    unseen.remove(neighbor)
-                    stack.append(neighbor)
-    return count
 
 
 def _connected_components(
@@ -136,7 +119,6 @@ def _analyze_graph(graph: SimpleUndirectedGraph) -> _MaximumCutAnalysis:
     source_adjacency_value = tuple(
         tuple(sorted(neighbors)) for neighbors in source_adjacency
     )
-    source_component_count = _component_count(source_adjacency_value)
 
     classes_by_neighborhood: dict[tuple[int, ...], list[int]] = {}
     for vertex, neighbors in enumerate(source_adjacency_value):
@@ -231,16 +213,12 @@ def _analyze_graph(graph: SimpleUndirectedGraph) -> _MaximumCutAnalysis:
         twin_classes=twin_classes,
         class_of_vertex=tuple(class_of_vertex),
         components=tuple(components),
-        source_component_count=source_component_count,
         candidate_partitions=candidate_partitions,
         edge_updates=edge_updates,
     )
 
 
-def _projected_result_bytes(
-    graph: SimpleUndirectedGraph,
-    analysis: _MaximumCutAnalysis,
-) -> int:
+def _projected_result_bytes(graph: SimpleUndirectedGraph) -> int:
     """Return a conservative exact-result JSON size before search."""
 
     graph_value = graph.model_dump(mode="json")
@@ -248,28 +226,15 @@ def _projected_result_bytes(
         "result_schema_version": "1",
         "graph": graph_value,
         "status": "EXACT",
-        # A valid partition contains every source vertex once. Repeating every
-        # vertex on both sides keeps this a simple conservative upper bound.
+        # A valid partition contains every source vertex exactly once across
+        # both sides. Putting every vertex on one side maximizes list separators
+        # and is therefore a conservative exact bound for the partition fields.
         "left_vertices": list(graph.vertices),
-        "right_vertices": list(graph.vertices),
+        "right_vertices": [],
         "crossing_edges": [list(edge) for edge in graph.edges],
         "cut_value": len(graph.edges),
         "lower_bound": len(graph.edges),
         "upper_bound": len(graph.edges),
-        "optimality_certificate": {
-            "certificate_schema_version": "1",
-            "method": "EXACT_FALSE_TWIN_QUOTIENT_SEARCH",
-            "source_component_count": analysis.source_component_count,
-            "reduced_vertex_count": len(analysis.twin_classes),
-            "candidate_partitions": analysis.candidate_partitions,
-            "edge_updates": analysis.edge_updates,
-            "required_checks": [
-                "SOURCE_PARTITION",
-                "CROSSING_EDGE_LEDGER",
-                "CUT_VALUE",
-                "COMPLETE_OPTIMALITY_REPLAY",
-            ],
-        },
         "completion": "COMPLETE",
     }
     return len(
@@ -284,17 +249,17 @@ def _require_graph_envelope(graph: SimpleUndirectedGraph) -> _MaximumCutAnalysis
     analysis = _analyze_graph(graph)
     if analysis.candidate_partitions > MAXIMUM_CUT_CANDIDATE_PARTITIONS:
         raise ValueError(
-            "maximum-cut false-twin quotient requires "
+            "maximum-cut exact preflight requires "
             f"{analysis.candidate_partitions} candidate partitions; at most "
             f"{MAXIMUM_CUT_CANDIDATE_PARTITIONS} are admitted"
         )
     if analysis.edge_updates > MAXIMUM_CUT_EDGE_UPDATES:
         raise ValueError(
-            "maximum-cut complete replay requires "
-            f"{analysis.edge_updates} weighted edge updates; at most "
+            "maximum-cut exact preflight requires "
+            f"{analysis.edge_updates} incremental weighted edge contributions; at most "
             f"{MAXIMUM_CUT_EDGE_UPDATES} are admitted"
         )
-    projected_bytes = _projected_result_bytes(graph, analysis)
+    projected_bytes = _projected_result_bytes(graph)
     if projected_bytes > MAXIMUM_CUT_RESULT_BYTES:
         raise ValueError(
             "maximum-cut projected exact result requires at most "
@@ -308,11 +273,11 @@ def _maximum_cut_graph_schema() -> JsonSchemaValue:
     schema = SimpleUndirectedGraph.model_json_schema()
     schema["description"] = (
         "Canonical materialized SimpleUndirectedGraph for an exact-only maximum-cut "
-        "request. Admission uses connected components and the exact false-twin quotient, "
-        f"then permits at most {MAXIMUM_CUT_CANDIDATE_PARTITIONS} candidate partitions, "
-        f"{MAXIMUM_CUT_EDGE_UPDATES} weighted replay edge updates, and a projected exact "
-        f"result of at most {MAXIMUM_CUT_RESULT_BYTES} bytes. Bipartite reduced components "
-        "use a complete linear two-coloring check and do not consume candidate partitions."
+        "request. Admission preflights a complete exact proof with at most "
+        f"{MAXIMUM_CUT_CANDIDATE_PARTITIONS} internally derived candidate partitions, "
+        f"{MAXIMUM_CUT_EDGE_UPDATES} incremental weighted edge contributions, and a "
+        f"projected exact result of at most {MAXIMUM_CUT_RESULT_BYTES} bytes. Requests "
+        "outside any bound are rejected before search."
     )
     return schema
 
@@ -334,47 +299,6 @@ class GraphMaximumCutRequest(StrictModel):
         return self
 
 
-class GraphMaximumCutOptimalityCertificate(StrictModel):
-    """Replay metadata for one source-bound exact maximum-cut claim."""
-
-    certificate_schema_version: Literal["1"] = "1"
-    method: Literal["EXACT_FALSE_TWIN_QUOTIENT_SEARCH"] = (
-        "EXACT_FALSE_TWIN_QUOTIENT_SEARCH"
-    )
-    source_component_count: StrictInt = Field(ge=0, le=256)
-    reduced_vertex_count: StrictInt = Field(ge=0, le=256)
-    candidate_partitions: StrictInt = Field(
-        ge=0,
-        le=MAXIMUM_CUT_CANDIDATE_PARTITIONS,
-    )
-    edge_updates: StrictInt = Field(ge=0, le=MAXIMUM_CUT_EDGE_UPDATES)
-    required_checks: tuple[
-        Literal[
-            "SOURCE_PARTITION",
-            "CROSSING_EDGE_LEDGER",
-            "CUT_VALUE",
-            "COMPLETE_OPTIMALITY_REPLAY",
-        ],
-        ...,
-    ] = (
-        "SOURCE_PARTITION",
-        "CROSSING_EDGE_LEDGER",
-        "CUT_VALUE",
-        "COMPLETE_OPTIMALITY_REPLAY",
-    )
-
-
-def _expected_certificate(
-    analysis: _MaximumCutAnalysis,
-) -> GraphMaximumCutOptimalityCertificate:
-    return GraphMaximumCutOptimalityCertificate(
-        source_component_count=analysis.source_component_count,
-        reduced_vertex_count=len(analysis.twin_classes),
-        candidate_partitions=analysis.candidate_partitions,
-        edge_updates=analysis.edge_updates,
-    )
-
-
 class GraphMaximumCutResult(StrictModel):
     """An exact maximum cut bound to its complete canonical source graph."""
 
@@ -387,7 +311,6 @@ class GraphMaximumCutResult(StrictModel):
     cut_value: StrictInt = Field(ge=0, le=32_640)
     lower_bound: StrictInt = Field(ge=0, le=32_640)
     upper_bound: StrictInt = Field(ge=0, le=32_640)
-    optimality_certificate: GraphMaximumCutOptimalityCertificate
     completion: Literal["COMPLETE"] = "COMPLETE"
 
     @model_validator(mode="after")
@@ -425,10 +348,6 @@ class GraphMaximumCutResult(StrictModel):
             )
         if self.lower_bound != self.cut_value or self.upper_bound != self.cut_value:
             raise ValueError("an exact result requires exact bounds equal to cut value")
-        if self.optimality_certificate != _expected_certificate(analysis):
-            raise ValueError(
-                "optimality certificate does not match the retained source graph"
-            )
 
         replayed_value, _sides = _solve_analysis_by_enumeration(analysis)
         if self.cut_value != replayed_value:
@@ -618,7 +537,6 @@ def compute_maximum_cut(request: GraphMaximumCutRequest) -> GraphMaximumCutResul
         cut_value=cut_value,
         lower_bound=cut_value,
         upper_bound=cut_value,
-        optimality_certificate=_expected_certificate(analysis),
         completion="COMPLETE",
     )
 
@@ -633,9 +551,8 @@ MAXIMUM_CUT_OPERATION: MathTool[
     description=(
         "Compute one exact maximum-cardinality bipartition cut of a bounded "
         "canonical simple undirected graph. Return both partition sides, the source-"
-        "ordered crossing-edge ledger, coincident lower and upper bounds, and bounded "
-        "optimality-replay metadata; requests outside the complete exact envelope are "
-        "rejected before search."
+        "ordered crossing-edge ledger, and coincident lower and upper bounds; requests "
+        "outside the complete exact envelope are rejected before search."
     ),
     request_type=GraphMaximumCutRequest,
     result_type=GraphMaximumCutResult,
@@ -647,15 +564,13 @@ MAXIMUM_CUT_OPERATION: MathTool[
         "maximum-bipartition",
         "exact",
         "bounded",
-        "z3",
     ),
     examples=(
         example(
             "cycle_five",
             (
                 "Compute an exact maximum cut of the five-cycle; the materialized "
-                "simple graph must satisfy the published quotient-search and result "
-                "bounds."
+                "simple graph must satisfy the published exact work and result bounds."
             ),
             {
                 "graph": {
@@ -679,7 +594,6 @@ __all__ = [
     "MAXIMUM_CUT_EDGE_UPDATES",
     "MAXIMUM_CUT_OPERATION",
     "MAXIMUM_CUT_RESULT_BYTES",
-    "GraphMaximumCutOptimalityCertificate",
     "GraphMaximumCutRequest",
     "GraphMaximumCutResult",
     "compute_maximum_cut",

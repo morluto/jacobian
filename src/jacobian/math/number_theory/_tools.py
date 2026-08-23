@@ -8,6 +8,7 @@ from jacobian.math.number_theory._finite_abelian_groups import (
 )
 from jacobian.math.number_theory._modular import MODULAR_OPERATIONS
 from jacobian.math.number_theory._modular_identity import MODULAR_IDENTITY_OPERATIONS
+from jacobian.math.number_theory._periodic_union import PERIODIC_UNION_OPERATION
 from jacobian.math.number_theory._primes import PRIME_OPERATIONS
 
 __all__ = ["TOOLS"]
@@ -17,6 +18,7 @@ TOOLS: MathTools = (
     *PRIME_OPERATIONS,
     *MODULAR_OPERATIONS,
     *MODULAR_IDENTITY_OPERATIONS,
+    PERIODIC_UNION_OPERATION,
     *DERIVED_NUMBER_THEORY_OPERATIONS,
     FINITE_ABELIAN_GROUP_FACTORIZATION_OPERATION,
 )

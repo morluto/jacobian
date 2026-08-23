@@ -11,6 +11,11 @@ from jacobian.math.number_theory._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "congruence.periodic_union.profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct complete exact finite-period union profile with composable count, density, and residues",
+    ),
+    OperationAdmission(
         "integer.factor.certified_compute",
         AdmissionDecision.KEEP,
         "distinct bounded subexponential factorization with per-factor Pratt primality certificates",

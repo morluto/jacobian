@@ -18,7 +18,6 @@ from pydantic import (
     model_validator,
 )
 from pydantic.json_schema import JsonSchemaValue
-from pydantic_core import CoreSchema
 
 from jacobian._digest import Sha256Digest
 from jacobian._exact import CanonicalInteger
@@ -526,7 +525,7 @@ class SimplicialComplexRequest(StrictModel):
     @classmethod
     def __get_pydantic_json_schema__(
         cls,
-        core_schema: CoreSchema,
+        core_schema: Any,
         handler: Any,
     ) -> JsonSchemaValue:
         """Advertise both accepted input shapes in the published schema.

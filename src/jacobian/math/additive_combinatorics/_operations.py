@@ -213,7 +213,7 @@ def compute_ordered_difference_profile(
                 break
 
     return OrderedDifferenceProfileResult(
-        vectors=request.vectors.vectors,
+        vectors=request.vectors,
         dimension=dimension,
         set_size=n,
         total_ordered_pairs=total_pairs,

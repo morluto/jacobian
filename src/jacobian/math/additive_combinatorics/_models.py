@@ -124,26 +124,6 @@ class IntegerVectorSet(StrictModel):
         return self
 
 
-def _check_vector_family(vectors: tuple[IntegerVector, ...], dimension: int) -> None:
-    if not vectors:
-        return
-    dim = len(vectors[0].coordinates)
-    if dim != dimension:
-        raise ValueError("dimension must match vectors")
-    if not 1 <= dim <= _MAX_DIMENSION:
-        raise ValueError(f"vector dimension must be between 1 and {_MAX_DIMENSION}")
-    seen: set[tuple[int, ...]] = set()
-    for vec in vectors:
-        for coordinate in vec.coordinates:
-            _require_bounded_coordinate(coordinate, "vector coordinate")
-        values = vec.as_int_tuple()
-        if len(values) != dimension:
-            raise ValueError("all vectors must have the same dimension")
-        if values in seen:
-            raise ValueError("vectors must be unique")
-        seen.add(values)
-
-
 def _check_totals(
     entries: tuple[OrderedDifferenceEntry, ...],
     total_ordered_pairs: int,
@@ -493,11 +473,9 @@ class OrderedDifferenceEntry(StrictModel):
 class OrderedDifferenceProfileResult(StrictModel):
     """Complete ordered-difference profile for a finite set in Z^d."""
 
-    vectors: tuple[IntegerVector, ...] = Field(
-        default=(), max_length=_MAX_VECTOR_SET_SIZE
-    )
+    vectors: IntegerVectorSet
     dimension: int = Field(ge=1, le=_MAX_DIMENSION)
-    set_size: int = Field(ge=0, le=_MAX_VECTOR_SET_SIZE)
+    set_size: int = Field(ge=1, le=_MAX_VECTOR_SET_SIZE)
     total_ordered_pairs: int = Field(ge=0, le=_MAX_TOTAL_ORDERED_PAIRS)
     support_size: int = Field(ge=0, le=_MAX_TOTAL_ORDERED_PAIRS)
     max_multiplicity: int = Field(ge=0, le=_MAX_TOTAL_ORDERED_PAIRS)
@@ -507,14 +485,13 @@ class OrderedDifferenceProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_vectors(self) -> Self:
-        if len(self.vectors) != self.set_size:
+        # The canonical vector-set value enforces distinctness, uniform
+        # bounded dimension, and nonemptiness; replay binds the remaining
+        # derived fields to it.
+        if len(self.vectors.vectors) != self.set_size:
             raise ValueError("vectors length must equal set_size")
-        if self.set_size > 0:
-            if not self.vectors:
-                raise ValueError("vectors must be non-empty")
-            _check_vector_family(self.vectors, self.dimension)
-        elif self.vectors:
-            raise ValueError("vectors must be empty when set_size is 0")
+        if len(self.vectors.vectors[0].coordinates) != self.dimension:
+            raise ValueError("dimension must match vectors")
         return self
 
     @model_validator(mode="after")
@@ -539,7 +516,7 @@ class OrderedDifferenceProfileResult(StrictModel):
         if self.entries:
             _check_entries_sorted(self.entries)
             _check_entry_pairs(
-                self.entries, self.dimension, self.vectors, self.set_size
+                self.entries, self.dimension, self.vectors.vectors, self.set_size
             )
             _check_all_pairs_exactly_once(self.entries, self.set_size)
             _check_first_collision(

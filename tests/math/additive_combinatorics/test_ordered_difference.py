@@ -111,13 +111,37 @@ class TestOrderedDifferenceProfile:
     def test_result_retains_canonical_source(self):
         req = _request((0, 0), (1, 0), (0, 1))
         result = compute_ordered_difference_profile(req)
-        assert result.vectors == req.vectors.vectors
+        assert result.vectors == req.vectors
+
+    def test_retained_source_feeds_requests_unchanged(self):
+        """The canonical IntegerVectorSet result value composes: it can be
+        supplied unchanged as the source of another vector-set request."""
+        result = compute_ordered_difference_profile(_request((0, 0), (1, 0), (0, 1)))
+        recomputed = compute_ordered_difference_profile(
+            OrderedDifferenceProfileRequest(vectors=result.vectors)
+        )
+        assert recomputed == result
+
+    def test_result_rejects_empty_source(self):
+        """The kernel never emits a profile without a valid nonempty source,
+        so an empty serialized result cannot pass the trust boundary."""
+        with pytest.raises(ValidationError):
+            OrderedDifferenceProfileResult.model_validate(
+                {
+                    "vectors": {"vectors": []},
+                    "dimension": 1,
+                    "set_size": 0,
+                    "total_ordered_pairs": 0,
+                    "support_size": 0,
+                    "max_multiplicity": 0,
+                }
+            )
 
     def test_result_replays_every_difference_from_source(self):
         req = _request((0, 0), (1, 0), (1, 1), (0, 1))
         result = compute_ordered_difference_profile(req)
         seen = set()
-        source = [v.as_int_tuple() for v in result.vectors]
+        source = [v.as_int_tuple() for v in result.vectors.vectors]
         for entry in result.entries:
             difference = entry.difference.as_int_tuple()
             for pair in entry.pairs:
@@ -142,7 +166,10 @@ class TestOrderedDifferenceProfile:
         req = _request((0, 0), (1, 0), (1, 1), (0, 1))
         result = compute_ordered_difference_profile(req)
         payload = result.model_dump()
-        payload["vectors"] = [{"coordinates": ["9", "9"]}, *payload["vectors"][1:]]
+        payload["vectors"]["vectors"] = (
+            {"coordinates": ["9", "9"]},
+            *payload["vectors"]["vectors"][1:],
+        )
         with pytest.raises(ValidationError, match="pair difference must match vectors"):
             OrderedDifferenceProfileResult.model_validate(payload)
 

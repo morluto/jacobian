@@ -115,7 +115,8 @@ class FixedLengthCycleResult(SearchOutcome):
     """Whether a simple k-cycle exists, with an explicit witness.
 
     Carries its source graph so the witness replays against the exact edge
-    relation instead of trusting vertex bookkeeping.
+    relation instead of trusting vertex bookkeeping. ``exists`` is ``None``
+    exactly for the undecided SEARCH_BUDGET_EXCEEDED outcome.
     """
 
     graph: UndirectedGraph

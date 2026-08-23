@@ -8,6 +8,9 @@ from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.hochschild_complexes._bar import bar_differential_entries
+from jacobian.math.prime_field_linear_algebra import (
+    PrimeFieldMatrix,
+)
 
 MAX_ALGEBRA_DIM = 8
 MAX_MODULE_DIM = 8
@@ -146,12 +149,24 @@ class HochschildChainComplexRequest(StrictModel):
 
 
 class HochschildDifferential(StrictModel):
-    """One Hochschild differential matrix."""
+    """One Hochschild differential as the canonical prime-field matrix value.
+
+    ``matrix`` is the domain-owned ``PrimeFieldMatrix`` carrying its source
+    prime, entries, and declared column axis, so a serialized boundary feeds
+    the GF(p) rank/RREF/nullspace consumers unchanged; ``degree`` stays
+    separate chain-complex metadata.
+    """
 
     degree: int = Field(ge=1)
-    source_dim: int = Field(ge=1)
-    target_dim: int = Field(ge=1)
-    entries: tuple[tuple[int, ...], ...] = Field(min_length=1)
+    matrix: PrimeFieldMatrix
+
+    @property
+    def source_dim(self) -> int:
+        return self.matrix.columns
+
+    @property
+    def target_dim(self) -> int:
+        return len(self.matrix.entries)
 
 
 class HochschildChainComplexResult(StrictModel):
@@ -207,7 +222,7 @@ class HochschildChainComplexResult(StrictModel):
                 degree,
                 algebra.augmentation,
             )
-            if differential.entries != expected_entries:
+            if differential.matrix.entries != tuple(expected_entries):
                 raise ValueError(
                     "differential entries must be the exact bar differential "
                     "of the retained algebra"

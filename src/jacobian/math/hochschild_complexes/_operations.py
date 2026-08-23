@@ -13,6 +13,9 @@ from jacobian.math.hochschild_complexes._models import (
     HochschildHomologyRequest,
     HochschildHomologyResult,
 )
+from jacobian.math.prime_field_linear_algebra import (
+    PrimeFieldMatrix,
+)
 
 
 def _pivot_row(
@@ -107,10 +110,14 @@ def compute_hochschild_chain_complex(
         differentials.append(
             HochschildDifferential(
                 degree=degree,
-                source_dim=n**degree,
-                target_dim=n ** (degree - 1),
-                entries=bar_differential_entries(
-                    alg.structure_constants, p, degree, alg.augmentation
+                matrix=PrimeFieldMatrix(
+                    prime=p,
+                    entries=tuple(
+                        bar_differential_entries(
+                            alg.structure_constants, p, degree, alg.augmentation
+                        )
+                    ),
+                    columns=n**degree,
                 ),
             )
         )

@@ -18,6 +18,9 @@ from jacobian.math.hochschild_complexes._operations import (
     compute_hochschild_chain_complex,
     compute_hochschild_homology,
 )
+from jacobian.math.prime_field_linear_algebra import (
+    PrimeFieldMatrix,
+)
 
 
 def _coordinatewise_algebra(prime: int, dimension: int) -> AlgebraStructure:
@@ -220,7 +223,8 @@ class TestChainComplexSourceBinding:
                 group_dimensions=(1, 2),
                 differentials=(
                     HochschildDifferential(
-                        degree=1, source_dim=2, target_dim=1, entries=((0, 0),)
+                        degree=1,
+                        matrix=PrimeFieldMatrix(prime=5, entries=((0, 0),), columns=2),
                     ),
                 ),
                 prime=5,
@@ -232,8 +236,8 @@ class TestChainComplexSourceBinding:
             HochschildChainComplexRequest(algebra=algebra, max_degree=2)
         )
         payload = result.model_dump(mode="json")
-        original = payload["differentials"][1]["entries"][0][0]
-        payload["differentials"][1]["entries"][0][0] = (original + 1) % 7
+        original = payload["differentials"][1]["matrix"]["entries"][0][0]
+        payload["differentials"][1]["matrix"]["entries"][0][0] = (original + 1) % 7
         with pytest.raises(ValidationError, match="exact bar differential"):
             HochschildChainComplexResult.model_validate(payload)
 

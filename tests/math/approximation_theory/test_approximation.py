@@ -178,9 +178,7 @@ class TestLagrangeInterpolationAxisBinding:
     def test_produced_result_uses_x_axis(self):
         nodes = RationalNodeSet(nodes=(_node("0"), _node("1")))
         result = compute_lagrange_interpolation(
-            LagrangeInterpolationRequest(
-                nodes=nodes, values=(_node("1"), _node("2"))
-            )
+            LagrangeInterpolationRequest(nodes=nodes, values=(_node("1"), _node("2")))
         )
         assert result.polynomial.variables == ("x",)
         LagrangeInterpolationResult.model_validate(result.model_dump())

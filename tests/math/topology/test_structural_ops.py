@@ -15,9 +15,13 @@ from jacobian.math.topology._models import (
     ShellingCheckResult,
     SkeletonRequest,
     StarRequest,
+    StarResult,
     VertexDeletionRequest,
+    VertexDeletionResult,
 )
 from jacobian.math.topology._operations import (
+    _CANONICAL_CIRCLE,
+    _canonical_complex,
     compute_barycentric_subdivision,
     compute_elementary_collapse,
     compute_join,
@@ -41,6 +45,7 @@ class TestStar:
         result = compute_star(StarRequest(complex=TRIANGLE, simplex=["v0"]))
         assert not result.star_is_empty
         assert result.star_facets == (("v0", "v1", "v2"),)
+        assert result.star_complex is not None
 
     def test_star_of_edge_in_triangle(self) -> None:
         result = compute_star(StarRequest(complex=TRIANGLE, simplex=["v0", "v1"]))
@@ -53,6 +58,35 @@ class TestStar:
     def test_star_not_a_face(self) -> None:
         with pytest.raises(ValidationError, match="must be in the complex"):
             StarRequest(complex=TRIANGLE, simplex=["v0", "v1", "v2", "v3"])
+
+    def test_result_binds_to_source_complex_roundtrip(self) -> None:
+        request = StarRequest(complex=CIRCLE, simplex=["a"])
+        result = compute_star(request)
+        assert result.complex == request.complex
+        assert StarResult.model_validate(result.model_dump()) == result
+
+    def test_forged_simplex_outside_source_rejected(self) -> None:
+        """The reviewer counterexample: a star for ('z',) presented on the
+        edge {a, b} cannot validate because 'z' is not a face of the source."""
+        with pytest.raises(ValidationError, match="face of the retained complex"):
+            StarResult(
+                complex=EDGE,
+                simplex=("z",),
+                star_facets=(("a", "b"),),
+                star_is_empty=False,
+                star_complex=_canonical_complex(("a", "b"), (("a", "b"),)),
+            )
+
+    def test_truncated_star_facets_rejected(self) -> None:
+        """Dropping one containing facet must fail the source replay."""
+        with pytest.raises(ValidationError, match="star_facets"):
+            StarResult(
+                complex=CIRCLE,
+                simplex=("a",),
+                star_facets=(("a", "b"),),
+                star_is_empty=False,
+                star_complex=_canonical_complex(("a", "b"), (("a", "b"),)),
+            )
 
 
 class TestVertexDeletion:
@@ -73,6 +107,35 @@ class TestVertexDeletion:
     def test_delete_unknown_vertex(self) -> None:
         with pytest.raises(ValidationError, match="must be in the complex"):
             VertexDeletionRequest(complex=TRIANGLE, vertices_to_delete=["v9"])
+
+    def test_delete_all_vertices_rejected(self) -> None:
+        """A deletion whose induced subcomplex is empty is out of contract;
+        the canonical complex value cannot represent the empty complex."""
+        with pytest.raises(ValidationError, match="leave at least one simplex"):
+            VertexDeletionRequest(
+                complex={"vertices": ["a"], "facets": [["a"]]},
+                vertices_to_delete=["a"],
+            )
+
+    def test_delete_leaving_single_vertex_admitted(self) -> None:
+        result = compute_vertex_deletion(
+            VertexDeletionRequest(
+                complex={"vertices": ["a", "b"], "facets": [["a"], ["b"]]},
+                vertices_to_delete=["b"],
+            )
+        )
+        assert result.remaining_vertices == ("a",)
+        assert result.remaining_facets == (("a",),)
+        assert result.remaining_complex is not None
+        assert result.remaining_complex.maximal_simplices == (("a",),)
+
+    def test_result_requires_canonical_complex(self) -> None:
+        with pytest.raises(ValidationError):
+            VertexDeletionResult(
+                deleted_vertices=("v2",),
+                remaining_vertices=("v0", "v1"),
+                remaining_facets=(("v0", "v1"),),
+            )
 
 
 class TestSkeleton:
@@ -140,9 +203,9 @@ class TestBarycentricSubdivision:
         request = BarycentricSubdivisionRequest(complex=CIRCLE)
         result = compute_barycentric_subdivision(request)
         assert result.complex == request.complex
-        assert BarycentricSubdivisionResult.model_validate(
-            result.model_dump()
-        ) == result
+        assert (
+            BarycentricSubdivisionResult.model_validate(result.model_dump()) == result
+        )
 
     def test_vertex_face_map_is_canonical_bijection(self) -> None:
         from jacobian.math.topology._models import _all_faces
@@ -190,7 +253,9 @@ class TestCanonicalComplexFeeding:
             BarycentricSubdivisionRequest(complex=EDGE)
         )
         star = compute_star(
-            StarRequest(complex=subdivided.subdivision_complex.model_dump(), simplex=["bv0"])
+            StarRequest(
+                complex=subdivided.subdivision_complex.model_dump(), simplex=["bv0"]
+            )
         )
         assert not star.star_is_empty
 
@@ -212,6 +277,28 @@ class TestCanonicalComplexFeeding:
                     "vertices": ["a", "b"],
                     "maximal_simplices": [["a", "b"]],
                     "surprise": 1,
+                },
+                k=0,
+            )
+
+    def test_tampered_canonical_dump_rejected(self) -> None:
+        """Changing maximal_simplices while retaining the original digest
+        must not be accepted as a different request complex."""
+        tampered = {
+            **_CANONICAL_CIRCLE,
+            "maximal_simplices": [["a", "b"], ["a", "c"]],
+        }
+        with pytest.raises(ValidationError, match="FiniteSimplicialComplex"):
+            SkeletonRequest(complex=tampered, k=0)
+
+    def test_incomplete_canonical_dump_rejected(self) -> None:
+        """A canonical-shape dump missing derived fields cannot bypass
+        validation of the owning canonical type."""
+        with pytest.raises(ValidationError, match="FiniteSimplicialComplex"):
+            SkeletonRequest(
+                complex={
+                    "vertices": ["a", "b"],
+                    "maximal_simplices": [["a", "b"]],
                 },
                 k=0,
             )
@@ -302,6 +389,23 @@ class TestPseudomanifold:
                 dimension=0,
                 num_facets=1,
                 obstruction="dimension must be at least 1",
+            )
+
+    def test_forged_negative_obstruction_must_match_replay(self) -> None:
+        """A purity failure cannot be revalidated with a foreign non-null
+        obstruction: negative conclusions replay their exact description."""
+        nonpure = {
+            "vertices": ["a", "b", "c", "d", "e"],
+            "facets": [["a", "b", "c"], ["d", "e"]],
+        }
+        with pytest.raises(ValidationError, match="obstruction"):
+            PseudomanifoldResult(
+                complex=nonpure,
+                is_pseudomanifold=False,
+                is_closed=False,
+                dimension=2,
+                num_facets=2,
+                obstruction="codim-1 face [] is in 3 facets",
             )
 
 

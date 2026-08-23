@@ -805,6 +805,7 @@ def compute_star(request: StarRequest) -> StarResult:
         star_vertices = tuple(sorted({v for facet in ordered_facets for v in facet}))
         star_complex = _canonical_complex(star_vertices, ordered_facets)
     return StarResult(
+        complex=request.complex,
         simplex=request.simplex,
         star_facets=ordered_facets,
         star_is_empty=is_empty,
@@ -826,19 +827,12 @@ def compute_vertex_deletion(request: VertexDeletionRequest) -> VertexDeletionRes
             maximal_list.append(face)
             seen.add(face_set)
     remaining_facets = tuple(maximal_list)
-    if remaining_facets:
-        remaining_vertices = tuple(
-            sorted({v for facet in remaining_facets for v in facet})
-        )
-        remaining_complex = _canonical_complex(remaining_vertices, remaining_facets)
-    else:
-        remaining_vertices = ()
-        remaining_complex = None
+    remaining_vertices = tuple(sorted({v for facet in remaining_facets for v in facet}))
     return VertexDeletionResult(
         deleted_vertices=tuple(sorted(to_delete)),
         remaining_vertices=remaining_vertices,
         remaining_facets=remaining_facets,
-        remaining_complex=remaining_complex,
+        remaining_complex=_canonical_complex(remaining_vertices, remaining_facets),
     )
 
 

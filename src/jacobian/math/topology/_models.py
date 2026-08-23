@@ -12,6 +12,7 @@ from pydantic import (
     Field,
     StrictInt,
     StringConstraints,
+    ValidationError,
     ValidationInfo,
     field_validator,
     model_validator,
@@ -350,9 +351,7 @@ def _require_subdivision_replay(
         tuple(subdivision_facets) != expected
         or original_vertices != source_complex.vertices
     ):
-        raise ValueError(
-            "subdivision facets do not match the retained source complex"
-        )
+        raise ValueError("subdivision facets do not match the retained source complex")
 
 
 def _codim1_incidence(
@@ -477,19 +476,23 @@ class SimplicialComplexRequest(StrictModel):
                 "value, not both"
             )
         if "maximal_simplices" not in data:
-            if set(data) - {"vertices", "facets"}:
-                return data
             return data
         unknown = sorted(set(data) - _CANONICAL_COMPLEX_DUMP_KEYS)
         if unknown:
-            raise ValueError(
-                f"unknown fields alongside maximal_simplices: {unknown}"
-            )
+            raise ValueError(f"unknown fields alongside maximal_simplices: {unknown}")
         if "vertices" not in data:
             raise ValueError("canonical complex value must carry vertices")
+        try:
+            canonical = FiniteSimplicialComplex.model_validate(data)
+        except ValidationError as error:
+            raise ValueError(
+                "canonical complex value must be a valid "
+                f"FiniteSimplicialComplex dump: {error.error_count()} "
+                "check(s) failed"
+            ) from error
         return {
-            "vertices": data["vertices"],
-            "facets": data["maximal_simplices"],
+            "vertices": list(canonical.vertices),
+            "facets": [list(facet) for facet in canonical.maximal_simplices],
         }
 
     @model_validator(mode="after")
@@ -1218,20 +1221,41 @@ class StarRequest(StrictModel):
 
 
 class StarResult(TopologyExactResult):
-    """The closed star of a simplex: all facets containing sigma."""
+    """The closed star of a simplex, bound to its source complex."""
 
+    complex: SimplicialComplexRequest
     simplex: tuple[str, ...]
     star_facets: tuple[tuple[str, ...], ...]
     star_is_empty: bool
     star_complex: FiniteSimplicialComplex | None = None
 
     @model_validator(mode="after")
-    def require_star_canonical(self) -> Self:
+    def require_star_binding(self) -> Self:
+        target = frozenset(self.simplex)
+        if len(target) != len(self.simplex):
+            raise ValueError("star simplex vertices must be distinct")
+        # Replay the star relation over the retained source so an authored
+        # simplex or facet list cannot validate independently of it.
+        if not any(target.issubset(frozenset(facet)) for facet in self.complex.facets):
+            raise ValueError("simplex must be a face of the retained complex")
+        expected_facets = tuple(
+            tuple(sorted(facet))
+            for facet in sorted(
+                (
+                    frozenset(facet)
+                    for facet in self.complex.facets
+                    if target.issubset(facet)
+                ),
+                key=lambda value: (-len(value), sorted(value)),
+            )
+        )
+        if self.star_is_empty != (not expected_facets):
+            raise ValueError("star_is_empty does not match the source replay")
+        if tuple(self.star_facets) != expected_facets:
+            raise ValueError("star_facets do not match the source-complex replay")
         if self.star_is_empty:
             if self.star_complex is not None:
                 raise ValueError("empty star must have no complex")
-            if self.star_facets:
-                raise ValueError("empty star must have no facets")
         else:
             if self.star_complex is None:
                 raise ValueError("non-empty star requires star_complex")
@@ -1264,39 +1288,36 @@ class VertexDeletionRequest(StrictModel):
             raise ValueError("vertices_to_delete must be distinct")
         if not vtd.issubset(set(self.complex.vertices)):
             raise ValueError("vertices_to_delete must be in the complex")
+        # The canonical complex value cannot represent the empty complex, so
+        # a deletion whose induced subcomplex would be empty is out of
+        # contract and must be rejected at the boundary.
+        if all(frozenset(facet).issubset(vtd) for facet in self.complex.facets):
+            raise ValueError(
+                "deletion must leave at least one simplex on the remaining vertices"
+            )
         return self
 
 
 class VertexDeletionResult(TopologyExactResult):
-    """The complex after deleting a vertex subset."""
+    """The induced subcomplex after deleting a vertex subset."""
 
     deleted_vertices: tuple[str, ...]
     remaining_vertices: tuple[str, ...]
     remaining_facets: tuple[tuple[str, ...], ...]
-    remaining_complex: FiniteSimplicialComplex | None = None
+    remaining_complex: FiniteSimplicialComplex
 
     @model_validator(mode="after")
     def require_deletion_canonical(self) -> Self:
-        if not self.remaining_facets:
-            if self.remaining_complex is not None:
-                raise ValueError("empty deletion must have no remaining_complex")
-            if self.remaining_vertices:
-                raise ValueError("empty deletion must have no remaining_vertices")
-        else:
-            if self.remaining_complex is None:
-                raise ValueError("non-empty deletion requires remaining_complex")
-            if tuple(sorted(self.remaining_complex.maximal_simplices)) != tuple(
-                sorted(tuple(sorted(f)) for f in self.remaining_facets)
-            ):
-                raise ValueError(
-                    "remaining_complex maximal simplices must match remaining_facets"
-                )
-            if tuple(sorted(self.remaining_complex.vertices)) != tuple(
-                sorted(self.remaining_vertices)
-            ):
-                raise ValueError(
-                    "remaining_complex vertices must match remaining_vertices"
-                )
+        if tuple(sorted(self.remaining_complex.maximal_simplices)) != tuple(
+            sorted(tuple(sorted(f)) for f in self.remaining_facets)
+        ):
+            raise ValueError(
+                "remaining_complex maximal simplices must match remaining_facets"
+            )
+        if tuple(sorted(self.remaining_complex.vertices)) != tuple(
+            sorted(self.remaining_vertices)
+        ):
+            raise ValueError("remaining_complex vertices must match remaining_vertices")
         return self
 
 
@@ -1502,8 +1523,11 @@ class PseudomanifoldResult(TopologyExactResult):
         if not expected.is_pseudomanifold:
             if self.is_closed:
                 raise ValueError("non-pseudomanifold cannot be closed")
-            if self.obstruction is None:
-                raise ValueError("non-pseudomanifold must have obstruction")
+            if self.obstruction != expected.obstruction:
+                raise ValueError(
+                    f"obstruction {self.obstruction!r} does not match replayed "
+                    f"{expected.obstruction!r}"
+                )
             return self
         if self.is_closed != expected.is_closed:
             raise ValueError("is_closed must match codim-1 incidence")

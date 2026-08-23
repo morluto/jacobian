@@ -131,8 +131,9 @@ _vertex_deletion_tool = MathTool(
     version="1",
     title="Compute the deletion of a vertex subset",
     description=(
-        "Delete a vertex subset from a finite simplicial complex: remove all "
-        "facets containing any deleted vertex and return the remaining facets."
+        "Delete a vertex subset from a finite simplicial complex and return "
+        "the induced subcomplex on the remaining vertices: every face "
+        "disjoint from the deleted set, given by its maximal facets."
     ),
     request_type=VertexDeletionRequest,
     result_type=VertexDeletionResult,

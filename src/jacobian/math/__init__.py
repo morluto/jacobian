@@ -2,6 +2,7 @@
 
 from jacobian.math import (
     algebraic_combinatorics,
+    approximation_theory,
     arithmetic,
     arithmetic_dynamics,
     combinatorial_maps,
@@ -35,6 +36,7 @@ from jacobian.math import (
 
 __all__ = [
     "algebraic_combinatorics",
+    "approximation_theory",
     "arithmetic",
     "arithmetic_dynamics",
     "combinatorial_maps",

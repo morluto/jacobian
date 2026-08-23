@@ -27,6 +27,7 @@ from jacobian.math.code_linear._models import (
     ShortenResult,
     SyndromeRequest,
     SyndromeResult,
+    _threshold_matches_distance,
 )
 
 
@@ -37,25 +38,6 @@ class _ReceivedWordProfileData(NamedTuple):
     maximum_agreement: int
     threshold_match_count: int | None
     witnesses: tuple[ReceivedWordWitness, ...]
-
-
-def _matches_received_word_threshold(
-    request: ReceivedWordProfileRequest,
-    *,
-    distance: int,
-    agreement: int,
-) -> bool:
-    threshold = request.threshold
-    if threshold is None:
-        return False
-    observed = distance if threshold.metric == "DISTANCE" else agreement
-    if threshold.comparison == "LT":
-        return observed < threshold.value
-    if threshold.comparison == "LE":
-        return observed <= threshold.value
-    if threshold.comparison == "GT":
-        return observed > threshold.value
-    return observed >= threshold.value
 
 
 def _received_word_profile_data(
@@ -85,10 +67,10 @@ def _received_word_profile_data(
         agreement = length - distance
         histogram[distance] += 1
 
-        if not _matches_received_word_threshold(
-            request,
+        if request.threshold is None or not _threshold_matches_distance(
+            request.threshold,
             distance=distance,
-            agreement=agreement,
+            length=length,
         ):
             continue
 

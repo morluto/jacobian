@@ -258,6 +258,34 @@ def test_all_witness_output_has_a_separate_preflight_bound() -> None:
         )
 
 
+def test_all_witness_bound_uses_the_threshold_hamming_ball() -> None:
+    dimension = 12
+    length = 20
+    generator = tuple(
+        tuple(int(row == column) for column in range(length))
+        for row in range(dimension)
+    )
+    request = ReceivedWordProfileRequest(
+        encoder=_encoder(generator),
+        received_word=(0,) * length,
+        threshold={"metric": "DISTANCE", "comparison": "LE", "value": 0},
+        witness_mode="ALL",
+    )
+
+    assert request.maximum_witness_cells == dimension + length + 2
+    result = compute_received_word_profile(request)
+    assert result.threshold_match_count == 1
+    assert tuple(witness.message for witness in result.witnesses) == ((0,) * dimension,)
+
+    impossible = ReceivedWordProfileRequest(
+        encoder=request.encoder,
+        received_word=request.received_word,
+        threshold={"metric": "DISTANCE", "comparison": "LT", "value": 0},
+        witness_mode="ALL",
+    )
+    assert impossible.maximum_witness_cells == 0
+
+
 def test_public_value_api_is_explicit() -> None:
     assert tuple(code_linear.__all__) == ("PrimeFieldLinearEncoder",)
     assert code_linear.PrimeFieldLinearEncoder is PrimeFieldLinearEncoder

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from math import comb
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -32,6 +33,22 @@ class ReceivedWordThreshold(StrictModel):
     metric: Literal["DISTANCE", "AGREEMENT"]
     comparison: Literal["LT", "LE", "GT", "GE"]
     value: StrictInt = Field(ge=0, le=MAX_LINEAR_CODE_LENGTH)
+
+
+def _threshold_matches_distance(
+    threshold: ReceivedWordThreshold,
+    *,
+    distance: int,
+    length: int,
+) -> bool:
+    observed = distance if threshold.metric == "DISTANCE" else length - distance
+    if threshold.comparison == "LT":
+        return observed < threshold.value
+    if threshold.comparison == "LE":
+        return observed <= threshold.value
+    if threshold.comparison == "GT":
+        return observed > threshold.value
+    return observed >= threshold.value
 
 
 class ReceivedWordProfileRequest(StrictModel):
@@ -99,10 +116,24 @@ class ReceivedWordProfileRequest(StrictModel):
     def maximum_witness_cells(self) -> int:
         """Return the worst-case integer cells in a complete witness result."""
 
+        threshold = self.threshold
+        if threshold is None:
+            return 0
         row_width = (
             len(self.encoder.message_axis) + len(self.encoder.coordinate_axis) + 2
         )
-        return self.encoder.codeword_count * row_width
+        length = len(self.encoder.coordinate_axis)
+        field_order = int(self.encoder.field_order)
+        ambient_match_count: int = sum(
+            comb(length, distance) * (field_order - 1) ** distance
+            for distance in range(length + 1)
+            if _threshold_matches_distance(
+                threshold,
+                distance=distance,
+                length=length,
+            )
+        )
+        return min(self.encoder.codeword_count, ambient_match_count) * row_width
 
     @property
     def profile_replay_work(self) -> int:

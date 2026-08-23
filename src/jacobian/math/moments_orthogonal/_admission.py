@@ -11,29 +11,39 @@ from jacobian.math.moments_orthogonal._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
-        "moments.hankel_matrix.compute",
+        "moment_functional.hankel.compute",
         AdmissionDecision.KEEP,
-        "exact Hankel matrix assembled from a bounded rational moment sequence",
+        "exact Hankel matrix from a bounded rational moment prefix",
     ),
     OperationAdmission(
-        "moments.recurrence_coefficients.compute",
+        "moment_functional.shifted_hankel.compute",
         AdmissionDecision.KEEP,
-        "exact monic three-term recurrence coefficients from Gram-Schmidt orthogonalization",
+        "exact shifted Hankel matrix from a bounded rational moment prefix",
     ),
     OperationAdmission(
-        "moments.jacobi_matrix.compute",
+        "moment_functional.orthogonal_polynomials.compute",
         AdmissionDecision.KEEP,
-        "exact symmetric tridiagonal Jacobi matrix from recurrence coefficients",
+        "exact monic orthogonal polynomial family from moments via Gram-Schmidt",
     ),
     OperationAdmission(
-        "moments.christoffel_darboux.compute",
+        "orthogonal_polynomial.recurrence.compute",
         AdmissionDecision.KEEP,
-        "exact Christoffel-Darboux kernel by forward polynomial recurrence",
+        "exact three-term recurrence coefficients from an orthogonal family",
     ),
     OperationAdmission(
-        "moments.gaussian_quadrature.compute",
+        "orthogonal_polynomial.christoffel_darboux.compute",
         AdmissionDecision.KEEP,
-        "Gaussian quadrature nodes and weights from Golub-Welsch eigenvalue decomposition",
+        "exact Christoffel-Darboux kernel from an orthogonal family",
+    ),
+    OperationAdmission(
+        "orthogonal_polynomial.jacobi_matrix.compute",
+        AdmissionDecision.KEEP,
+        "exact finite Jacobi matrix from an orthogonal family",
+    ),
+    OperationAdmission(
+        "moment_functional.gaussian_quadrature.compute",
+        AdmissionDecision.KEEP,
+        "exact Gaussian quadrature rule with exactness through degree 2n-1",
     ),
 )
 

@@ -112,12 +112,24 @@ def main() -> None:
             return converted.model_dump(mode="json")
 
         if mode == "groebner":
+            maximum_terms = payload["maximum_terms"]
             basis = sympy.groebner(
                 exprs, *symbols, order=payload["order"], domain=sympy.QQ
             )
-            generators = [
-                dump(expr, variables, payload["maximum_terms"]) for expr in basis
-            ]
+            generators = []
+            aggregate_terms = 0
+            for expr in basis:
+                converted = dump(expr, variables, maximum_terms)
+                aggregate_terms += len(converted["polynomial"]["terms"])
+                # The exact-result budget bounds the whole basis, not each
+                # polynomial separately, so classify a basis-wide crossing
+                # as LIMIT_EXCEEDED before any oversized payload is emitted.
+                if aggregate_terms > maximum_terms:
+                    raise ValueError(
+                        "the reduced Groebner basis exceeds the "
+                        f"{maximum_terms}-term aggregate operation budget"
+                    )
+                generators.append(converted)
             _emit({"status": "ok", "generators": generators})
         elif mode == "normal_form":
             target = RationalPolynomial.model_validate(payload["polynomial"])
@@ -224,7 +236,13 @@ def main() -> None:
                         )
                         return
             polys = [sympy.Poly(e, *symbols, domain=sympy.QQ) for e in nonzero]
-            lead_exps = [poly.monoms()[0] for poly in polys]
+            # Poly.monoms() ranks monomials lexicographically unless given
+            # an explicit order object, so replay must resolve the declared
+            # order; lex-default leading exponents would fabricate
+            # S-polynomials that validate non-Groebner lists under
+            # grlex/grevlex.
+            monomial_order = getattr(sympy.polys.orderings, order)
+            lead_exps = [poly.monoms(order=monomial_order)[0] for poly in polys]
 
             def monomial(exps: tuple) -> object:
                 product = sympy.Integer(1)
@@ -464,10 +482,7 @@ __all__ = [
 
 def compute_groebner_basis(request: GroebnerBasisRequest) -> GroebnerBasisResult:
     """Compute a reduced Gröbner basis for a bounded ideal over QQ using SymPy."""
-    from jacobian.math.commutative_algebra_ops._models import (
-        MAX_OUTPUT_TERMS,
-        GroebnerBasisResult,
-    )
+    from jacobian.math.commutative_algebra_ops._models import GroebnerBasisResult
     from jacobian.math.polynomials.values import (
         RationalPolynomial,
         RationalPolynomialIdeal,
@@ -480,7 +495,7 @@ def compute_groebner_basis(request: GroebnerBasisRequest) -> GroebnerBasisResult
         "mode": "groebner",
         "variables": list(variables),
         "order": order,
-        "maximum_terms": MAX_OUTPUT_TERMS,
+        "maximum_terms": request.resource_budget.maximum_output_terms,
         "generators": [
             generator.model_dump(mode="json") for generator in request.ideal.generators
         ],

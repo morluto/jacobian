@@ -374,6 +374,59 @@ class TestBoundedResultValidation:
                 for term in generator.polynomial.terms:
                     assert all(e <= 32768 for e in term.exponents)
 
+    def test_grevlex_replay_uses_order_specific_leading_monomials(self):
+        """The claimed list (x + y^2, xy) is not a reduced Groebner basis
+        under grevlex: its true S-polynomial is x^2, which does not reduce.
+        A lex-default replay fabricates y^3 instead and wrongly accepts it.
+        """
+        g1 = _poly(("x", "y"), (1, 1, (1, 0)), (1, 1, (0, 2)))
+        g2 = _poly(("x", "y"), (1, 1, (1, 1)))
+        request = GroebnerBasisRequest(
+            ideal=_ideal(("x", "y"), (g1, g2)), monomial_order="grevlex"
+        )
+        forged = RationalPolynomialIdeal(variables=("x", "y"), generators=(g1, g2))
+        with pytest.raises(ValidationError):
+            GroebnerBasisResult(
+                request=request,
+                outcome="COMPUTED",
+                basis=forged,
+                generator_count=2,
+                monomial_order="grevlex",
+            )
+
+    def test_aggregate_basis_terms_enforce_result_budget(self):
+        """Every reduced-basis polynomial stays under the per-polynomial
+        term limit while their sum crosses the declared exact-result
+        budget; the operation reports LIMIT_EXCEEDED instead of COMPUTED.
+        """
+        from math import comb
+
+        names = ("w", "z", "y", "x", "a", "b")
+
+        def exps(**spec: int) -> tuple[int, ...]:
+            base = [0] * len(names)
+            for name, power in spec.items():
+                base[names.index(name)] = power
+            return tuple(base)
+
+        cascade = _poly(
+            names,
+            (1, 1, exps(x=1)),
+            *[(-comb(11, k), 1, exps(a=11 - k, b=k)) for k in range(12)],
+        )
+        gens = (
+            cascade,
+            _poly(names, (1, 1, exps(y=1)), (-1, 1, exps(x=11))),
+            _poly(names, (1, 1, exps(z=1)), (-1, 1, exps(y=5))),
+            _poly(names, (1, 1, exps(w=1)), (-1, 1, exps(y=6))),
+        )
+        result = compute_groebner_basis(
+            GroebnerBasisRequest(ideal=_ideal(names, gens), monomial_order="lex")
+        )
+        assert result.outcome == "LIMIT_EXCEEDED"
+        assert result.basis is None
+        assert result.detail is not None
+
     def test_stdout_limited_worker_returns_typed_limit(self, monkeypatch):
         """A killed worker whose output exceeded the transport cap yields
         LIMIT_EXCEEDED, not ERROR."""

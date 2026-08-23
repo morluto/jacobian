@@ -36,6 +36,9 @@ SingularOperation = Literal["radical", "quotient", "saturation"]
 SingularOutcome = Literal[
     "COMPUTED", "UNAVAILABLE", "TIMEOUT", "LIMIT_EXCEEDED", "ERROR"
 ]
+SaturationVerificationVerdict = Literal[
+    "VERIFIED", "REFUTED", "UNAVAILABLE", "TIMEOUT", "ERROR"
+]
 
 
 class _ResultLimitExceededError(ValueError):
@@ -112,13 +115,9 @@ def _script(
         if right is None:
             raise ValueError("saturation requires a saturation polynomial ideal")
         declarations.append(_singular_ideal("jacobian_right", right))
-        # Singular's sat() returns a LIST (saturated ideal, saturated
-        # quotient); assigning it to an ideal fails at execution, so store
-        # the list and extract its first element, as the verification script
-        # in this module does.
         operation_line = (
-            "list jacobian_saturation=sat(jacobian_left,jacobian_right[1]);\n"
-            "ideal jacobian_result=jacobian_saturation[1];"
+            "list jacobian_sat=sat(jacobian_left,jacobian_right[1]);"
+            "ideal jacobian_result=jacobian_sat[1];"
         )
     else:
         if right is None:
@@ -384,7 +383,7 @@ def _verification_script(
         *declarations,
         # The defining equality I : d^inf == J, decided by mutual exact
         # reduction of Groebner bases computed inside this bounded process.
-        "list jacobian_sat=sat(jacobian_source,jacobian_saturator);",
+        "list jacobian_sat=sat(jacobian_source,jacobian_saturator[1]);",
         "ideal jacobian_true=std(jacobian_sat[1]);",
         "ideal jacobian_std_claimed=std(jacobian_claimed);",
         "int jacobian_equal=1;",
@@ -411,7 +410,7 @@ def _verification_script(
     return "\n".join(source_lines).encode("ascii")
 
 
-def _parse_verification_verdict(output: bytes) -> str:
+def _parse_verification_verdict(output: bytes) -> SaturationVerificationVerdict:
     """Decode the bounded process output into a verification verdict."""
     try:
         text = output.decode("ascii")
@@ -440,7 +439,7 @@ def run_singular_saturation_verification(
     saturator: RationalPolynomialIdeal,
     claimed: RationalPolynomialIdeal,
     budget: IdealComputationBudget,
-) -> str:
+) -> SaturationVerificationVerdict:
     """Decide the saturation's defining equality in a bounded subprocess.
 
     Returns ``"VERIFIED"``, ``"REFUTED"``, or an execution outcome

@@ -39,6 +39,7 @@ from jacobian.math.moments_orthogonal._tools import TOOLS
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _frac(num: int, den: int) -> Fraction:
     return Fraction(num, den)
 
@@ -405,6 +406,17 @@ class TestToolsAndExamples:
         for tool in TOOLS:
             names = [ex.name for ex in tool.examples]
             assert len(names) == len(set(names))
+
+    def test_gaussian_quadrature_discovery_discloses_float64_scope(self) -> None:
+        """Discovery must reveal the Float64/dyadic approximation scope
+        before execution, not only through result fields afterwards."""
+        (tool,) = (
+            t for t in TOOLS if t.operation_id == "moments.gaussian_quadrature.compute"
+        )
+        description = tool.description
+        assert "Float64" in description
+        assert "dyadic" in description
+        assert "approximat" in description.lower()
 
 
 class TestRecurrenceOutputBound:

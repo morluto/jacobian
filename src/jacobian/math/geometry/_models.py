@@ -469,6 +469,13 @@ class LabelledPoint2D(StrictModel):
     point: RationalPoint2D
 
 
+# The complete profile must serialize under the 10 MiB transport limit with
+# margin, so admission budgets the aggregate at 9 MiB; every entry costs its
+# exact numerator and denominator digits plus labels, indices, and syntax.
+_MAX_CIRCUMRADIUS_PROFILE_BYTES = 9 * 1024 * 1024
+_CIRCUMRADIUS_ENTRY_OVERHEAD_BYTES = 512
+
+
 def _circumradius_squared_height(
     xs: tuple[RationalHeight, ...],
     ys: tuple[RationalHeight, ...],
@@ -533,14 +540,29 @@ class CircumradiusProfileRequest(StrictModel):
     def require_bounded_circumradius_growth(self) -> Self:
         xs = tuple(RationalHeight.from_canonical(item.point.x) for item in self.points)
         ys = tuple(RationalHeight.from_canonical(item.point.y) for item in self.points)
+        estimated_bytes = 0
         for triple in combinations(range(len(self.points)), 3):
-            if _circumradius_squared_height(xs, ys, triple).exceeds(
-                MAX_CANONICAL_RATIONAL_DIGITS
-            ):
+            height = _circumradius_squared_height(xs, ys, triple)
+            if height.exceeds(MAX_CANONICAL_RATIONAL_DIGITS):
                 raise ValueError(
                     f"triple {triple} has a squared-circumradius height "
                     f"exceeding the canonical {MAX_CANONICAL_RATIONAL_DIGITS}-digit limit"
                 )
+            # Each individually bounded entry still contributes its exact
+            # digits to the complete profile; a 64-point configuration can
+            # hold 41,664 triples whose combined serialization exceeds the
+            # 10 MiB transport limit even when no single entry does.
+            estimated_bytes += (
+                _CIRCUMRADIUS_ENTRY_OVERHEAD_BYTES
+                + height.numerator_digits
+                + height.denominator_digits
+            )
+        if estimated_bytes > _MAX_CIRCUMRADIUS_PROFILE_BYTES:
+            raise ValueError(
+                "point configuration would produce a circumradius profile "
+                f"exceeding the {_MAX_CIRCUMRADIUS_PROFILE_BYTES}-byte "
+                "aggregate transport budget"
+            )
         return self
 
 

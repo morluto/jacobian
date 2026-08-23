@@ -168,6 +168,7 @@ def compute_groebner_basis(request: GroebnerBasisRequest) -> GroebnerBasisResult
         )
     except _BudgetExceededError:
         return GroebnerBasisResult(
+            request=request,
             outcome="TIMEOUT",
             monomial_order=request.monomial_order,
             detail=(
@@ -209,6 +210,7 @@ def compute_groebner_basis(request: GroebnerBasisRequest) -> GroebnerBasisResult
     )
 
     return GroebnerBasisResult(
+        request=request,
         basis=ideal,
         generator_count=len(basis_generators),
         monomial_order=request.monomial_order,
@@ -259,6 +261,7 @@ def compute_ideal_normal_form(request: IdealNormalFormRequest) -> IdealNormalFor
         # An admitted request must observe a typed mathematical outcome rather
         # than a host exception, so budget expiry is part of the result contract.
         return IdealNormalFormResult(
+            request=request,
             outcome="TIMEOUT",
             detail=("the Gröbner reduction exceeded the enforced 10s wall-time bound"),
         )
@@ -275,6 +278,7 @@ def compute_ideal_normal_form(request: IdealNormalFormRequest) -> IdealNormalFor
     in_ideal = len(remainder_poly.polynomial.terms) == 0
 
     return IdealNormalFormResult(
+        request=request,
         remainder=remainder_poly,
         in_ideal=in_ideal,
     )
@@ -326,6 +330,7 @@ def compute_elimination_ideal(
         # An admitted request must observe a typed mathematical outcome rather
         # than a host exception, so budget expiry is part of the result contract.
         return EliminationIdealResult(
+            request=request,
             outcome="TIMEOUT",
             eliminated_variables=tuple(request.eliminated_variables),
             detail=(
@@ -391,6 +396,7 @@ def compute_elimination_ideal(
     )
 
     return EliminationIdealResult(
+        request=request,
         elimination_ideal=ideal,
         eliminated_variables=tuple(request.eliminated_variables),
     )

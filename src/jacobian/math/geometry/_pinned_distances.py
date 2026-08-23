@@ -3,16 +3,26 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from itertools import combinations
 from math import gcd
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
+from jacobian._exact import require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog._examples import example
+from jacobian.math._rational_height import RationalHeight, sum_heights
 from jacobian.math.geometry._models import RationalPoint2D
 from jacobian.math.geometry._support import geometry_operation
+
+# The complete ledger must serialize under the 10 MiB transport limit with
+# margin; every entry carries its exact distance components and every source
+# pair reference costs a bounded number of syntax bytes.
+_MAX_PINNED_LEDGER_BYTES = 9 * 1024 * 1024
+_PINNED_ENTRY_OVERHEAD_BYTES = 256
+_PINNED_PAIR_OVERHEAD_BYTES = 8
 
 
 class PinnedDistanceRequest(StrictModel):
@@ -22,10 +32,54 @@ class PinnedDistanceRequest(StrictModel):
     points: tuple[RationalPoint2D, ...] = Field(min_length=2, max_length=128)
 
     @model_validator(mode="after")
-    def require_unique_points(self) -> Self:
+    def require_unique_points(self):
         keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")
+        for rational in (self.anchor.x, self.anchor.y, *(
+            component for point in self.points for component in (point.x, point.y)
+        )):
+            require_bounded_rational(rational, max_digits=4096, label="coordinate")
+        # Strict convexity makes every pair span a distinct line, so the
+        # ledger holds one entry per pair whose exact distance components can
+        # each carry thousands of digits.  Propagate rational heights through
+        # d^2 = cross(D, P-A)^2 / |D|^2 for every pair and budget the whole
+        # serialized ledger under the transport limit with margin.
+        anchor_heights = (
+            RationalHeight.from_canonical(self.anchor.x),
+            RationalHeight.from_canonical(self.anchor.y),
+        )
+        point_heights = [
+            (
+                RationalHeight.from_canonical(point.x),
+                RationalHeight.from_canonical(point.y),
+            )
+            for point in self.points
+        ]
+        estimated_bytes = len(self.points) * _PINNED_ENTRY_OVERHEAD_BYTES
+        for i, j in combinations(range(len(point_heights)), 2):
+            dx = sum_heights((point_heights[j][0], point_heights[i][0]))
+            dy = sum_heights((point_heights[j][1], point_heights[i][1]))
+            cross = sum_heights(
+                (
+                    dx.product(anchor_heights[1]),
+                    dy.product(anchor_heights[0]),
+                )
+            )
+            norm_sq = sum_heights((dx.product(dx), dy.product(dy)))
+            distance = cross.product(cross).quotient(norm_sq)
+            estimated_bytes += (
+                _PINNED_ENTRY_OVERHEAD_BYTES
+                + distance.numerator_digits
+                + distance.denominator_digits
+                + _PINNED_PAIR_OVERHEAD_BYTES
+            )
+        if estimated_bytes > _MAX_PINNED_LEDGER_BYTES:
+            raise ValueError(
+                "pinned-distance configuration would produce a ledger "
+                f"exceeding the {_MAX_PINNED_LEDGER_BYTES}-byte aggregate "
+                "transport budget"
+            )
         return self
 
 

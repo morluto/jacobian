@@ -192,11 +192,23 @@ class TestTypedTimeoutOutcomes:
     def test_timed_out_normal_form_cannot_carry_a_remainder(self):
         remainder = _poly(("x", "y"), (1, 1, (2, 0)))
         with pytest.raises(ValidationError, match="timed-out"):
-            IdealNormalFormResult(outcome="TIMEOUT", remainder=remainder)
+            IdealNormalFormResult(
+                request=IdealNormalFormRequest(
+                    ideal=_ideal(("x", "y"), (_poly(("x", "y"), (1, 1, (2, 0))),)),
+                    polynomial=_poly(("x", "y"), (1, 1, (0, 1))),
+                ),
+                outcome="TIMEOUT",
+                remainder=remainder,
+            )
 
     def test_computed_normal_form_requires_a_remainder(self):
         with pytest.raises(ValidationError, match="requires a remainder"):
-            IdealNormalFormResult()
+            IdealNormalFormResult(
+                request=IdealNormalFormRequest(
+                    ideal=_ideal(("x",), (_poly(("x",), (1, 1, (1,))),)),
+                    polynomial=_poly(("x",), (1, 1, (2,))),
+                )
+            )
 
     def test_timed_out_elimination_cannot_carry_an_ideal(self):
         elimination_ideal = _ideal(
@@ -205,6 +217,12 @@ class TestTypedTimeoutOutcomes:
         )
         with pytest.raises(ValidationError, match="timed-out"):
             EliminationIdealResult(
+                request=EliminationIdealRequest(
+                    ideal=_ideal(
+                        ("x", "y"), (_poly(("x", "y"), (1, 1, (2, 0))),)
+                    ),
+                    eliminated_variables=("x",),
+                ),
                 outcome="TIMEOUT",
                 elimination_ideal=elimination_ideal,
                 eliminated_variables=("x",),
@@ -213,4 +231,12 @@ class TestTypedTimeoutOutcomes:
 
     def test_computed_elimination_requires_an_ideal(self):
         with pytest.raises(ValidationError, match="requires an ideal"):
-            EliminationIdealResult(eliminated_variables=("x",))
+            EliminationIdealResult(
+                request=EliminationIdealRequest(
+                    ideal=_ideal(
+                        ("x", "y"), (_poly(("x", "y"), (1, 1, (2, 0))),)
+                    ),
+                    eliminated_variables=("x",),
+                ),
+                eliminated_variables=("x",),
+            )

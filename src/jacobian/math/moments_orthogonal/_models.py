@@ -181,8 +181,14 @@ class ChristoffelDarbouxRequest(StrictModel):
         alpha_height = max(
             (_coefficient_height(v) for v in self.coefficients.alpha), default=1
         )
+        # The forward recurrence consumes only beta[:len(alpha)]; a trailing
+        # mu_n entry never enters the kernel, so it must not drive admission.
         beta_height = max(
-            (_coefficient_height(v) for v in self.coefficients.beta), default=1
+            (
+                _coefficient_height(v)
+                for v in self.coefficients.beta[: len(self.coefficients.alpha)]
+            ),
+            default=1,
         )
         step = point_height + alpha_height + beta_height + 2
         kernel_bound = sum(

@@ -280,6 +280,17 @@ class TestGaussianQuadrature:
                 alpha=(_cr(0, 1), _cr(1, 1)), beta=(_cr(1, 1), _cr(0, 1))
             )
 
+    def test_unused_trailing_beta_is_outside_quadrature_admission(self) -> None:
+        """One-point quadrature never consumes beta[1]; an out-of-range
+        trailing entry must not reject the canonical partial recurrence."""
+        coefficients = RecurrenceCoefficients(
+            alpha=(_cr(0, 1),),
+            beta=(_cr(1, 1), CanonicalRational(num="1" + "0" * 301, den="1")),
+        )
+        result = gaussian_quadrature(coefficients)
+        assert len(result.weights) == 1
+        assert result.weights[0] > 0
+
 
 # ---------------------------------------------------------------------------
 # Wire adapter tests

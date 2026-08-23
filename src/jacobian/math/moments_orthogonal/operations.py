@@ -284,7 +284,11 @@ def _validate_quadrature_float_domain(
 
     if beta[0] < MIN_QUADRATURE_SUBDIAGONAL:
         raise ValueError("beta_0 falls below the quadrature underflow bound")
-    for value in (*alpha, *beta):
+    # The n-point Golub-Welsch matrix consumes only beta[:len(alpha)]; a
+    # trailing mu_n entry is not part of the derived rule, so admission
+    # must not reject an otherwise usable partial-recurrence value over it.
+    consumed_beta = beta[: len(alpha)]
+    for value in (*alpha, *consumed_beta):
         if abs(value) > MAX_QUADRATURE_MAGNITUDE:
             raise ValueError(
                 "quadrature coefficients exceed the finite-float magnitude bound"

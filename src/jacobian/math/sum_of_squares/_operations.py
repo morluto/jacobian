@@ -70,8 +70,36 @@ def _check_gram_invariants(
     p_sympy = rational_polynomial_to_sympy(polynomial).as_expr()
     reconstructs = sympy.expand(reconstructed - p_sympy) == 0
     eigen_matrix = matrix if is_symmetric else (matrix + matrix.T) / 2
-    is_psd = all(val >= 0 for val in eigen_matrix.eigenvals())
+    is_psd = _exact_psd(eigen_matrix)
     return is_symmetric, reconstructs, is_psd
+
+
+def _exact_psd(matrix: sympy.Matrix) -> bool:
+    """Total exact PSD test for a symmetric rational matrix.
+
+    Symmetric Gaussian elimination (Lagrange): a symmetric matrix over QQ
+    is positive semidefinite iff every pivot is nonnegative and a zero
+    pivot forces the whole remaining row and column to vanish. Unlike an
+    eigenvalue computation this terminates on every input — irreducible
+    characteristic polynomials raise no backend exception.
+    """
+    n = matrix.rows
+    work = [[sympy.Rational(matrix[i, j]) for j in range(n)] for i in range(n)]
+    for k in range(n):
+        pivot = work[k][k]
+        if pivot < 0:
+            return False
+        if pivot == 0:
+            if any(work[k][j] != 0 for j in range(k + 1, n)) or any(
+                work[j][k] != 0 for j in range(k + 1, n)
+            ):
+                return False
+            continue
+        for i in range(k + 1, n):
+            factor = work[i][k] / pivot
+            for j in range(k + 1, n):
+                work[i][j] -= factor * work[k][j]
+    return True
 
 
 def check_gram_certificate(

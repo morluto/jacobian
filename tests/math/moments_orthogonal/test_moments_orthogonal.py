@@ -463,3 +463,17 @@ class TestRecurrenceFullConsumption:
     def test_odd_length_indefinite_trailing_hankel_rejected(self) -> None:
         with pytest.raises(ValueError, match="positive-definite"):
             recurrence_coefficients((_frac(1, 1), _frac(0, 1), _frac(-1, 1)))
+
+
+class TestQuadratureExactCoefficients:
+    """The native quadrature kernel requires exact Fraction inputs."""
+
+    def test_float_coefficients_rejected(self) -> None:
+        with pytest.raises(TypeError, match="exact Fractions"):
+            gaussian_quadrature((0.0,), (1.0,))
+
+    def test_non_finite_floats_rejected(self) -> None:
+        import math
+
+        with pytest.raises(TypeError, match="exact Fractions"):
+            gaussian_quadrature((math.inf,), (1.0,))

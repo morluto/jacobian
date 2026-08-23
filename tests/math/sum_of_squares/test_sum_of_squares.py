@@ -264,3 +264,59 @@ class TestSOSResultRingAdmission:
         )
         with pytest.raises(ValidationError, match="same ring as the polynomial"):
             SOSDecompositionCheckResult.model_validate(payload)
+
+
+class TestExactPsdCriterion:
+    """The Gram PSD test is total: no backend exception on any input."""
+
+    def _request(self, gram_entries):
+        p = _poly(("x",), (1, 1, (2,)), (1, 1, (0,)))
+        basis = (_poly(("x",), (1, 1, (1,))), _poly(("x",), (1, 1, (0,))))
+        return GramCertificateRequest(
+            polynomial=p,
+            monomial_basis=basis,
+            gram_matrix=gram_entries,
+        )
+
+    def test_irreducible_characteristic_polynomial_is_decided(self) -> None:
+        """A 5x5 PD tridiagonal matrix whose characteristic quintic is
+        irreducible over QQ: eigenvals() raises MatrixError, the exact
+        symmetric-elimination criterion must still decide PSD."""
+
+        def entry(value: int) -> dict:
+            return {"num": str(value), "den": "1"}
+
+        rows = [
+            [10, 1, 0, 0, 0],
+            [1, 12, 1, 0, 0],
+            [0, 1, 15, 1, 0],
+            [0, 0, 1, 19, 1],
+            [0, 0, 0, 1, 24],
+        ]
+        gram = tuple(tuple(entry(v) for v in row) for row in rows)
+        result = check_gram_certificate(
+            GramCertificateRequest(
+                polynomial=_poly(
+                    ("x",),
+                    (1, 1, (2,)),
+                    (1, 1, (0,)),
+                ),
+                monomial_basis=tuple(_poly(("x",), (1, 1, (k,))) for k in range(5)),
+                gram_matrix=gram,
+            )
+        )
+        assert result.is_psd is True
+
+    def test_indefinite_matrix_is_decided_not_psd(self) -> None:
+        def entry(num: str) -> dict:
+            return {"num": num, "den": "1"}
+
+        gram = ((entry("-1"),),)
+        result = check_gram_certificate(
+            GramCertificateRequest(
+                polynomial=_poly(("x",), (-1, 1, (2,))),
+                monomial_basis=(_poly(("x",), (1, 1, (1,))),),
+                gram_matrix=gram,
+            )
+        )
+        assert result.is_psd is False

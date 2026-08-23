@@ -333,6 +333,12 @@ def gaussian_quadrature(
         raise ValueError("alpha must contain between 1 and 16 entries")
     if len(beta) != n and len(beta) != n + 1:
         raise ValueError("beta must have length len(alpha) or len(alpha)+1")
+    # The recurrence-coefficient contract is exact: inexact floats silently
+    # masquerade as exact recurrence data, and non-finite floats bypass the
+    # magnitude comparisons before reaching NumPy or rational conversion.
+    for value in (*alpha, *beta):
+        if type(value) is not Fraction:
+            raise TypeError("quadrature coefficients must use exact Fractions")
     if beta[0] <= 0:
         raise ValueError("beta_0 (the zeroth moment) must be positive")
     _require_quadrature_double_domain(alpha, beta)

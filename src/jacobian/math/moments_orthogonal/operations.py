@@ -19,6 +19,7 @@ from jacobian.math.moments_orthogonal.values import (
     GaussianQuadratureRule,
     HankelMomentMatrix,
     JacobiMatrix,
+    MomentFunctionalPrefix,
     OrthogonalPolynomialFamily,
     OrthogonalPolynomialTerm,
     QuadratureNode,
@@ -393,10 +394,9 @@ def compute_jacobi_matrix(request: JacobiMatrixRequest) -> JacobiMatrix:
             alpha_k = residual[k] if k < len(residual) else Fraction(0)
             alphas.append(alpha_k)
 
-            if squared_norm_prev != 0:
-                betas.append(squared_norm_k / squared_norm_prev)
-            else:
-                betas.append(Fraction(0))
+            # Admission guarantees every norm feeding an emitted ratio is
+            # nonzero.
+            betas.append(squared_norm_k / squared_norm_prev)
 
     matrix_size = n - 1
     matrix = [[Fraction(0)] * matrix_size for _ in range(matrix_size)]
@@ -422,7 +422,7 @@ def compute_jacobi_matrix(request: JacobiMatrixRequest) -> JacobiMatrix:
 
 def _construct_quadrature_rule(
     p_n: list[Fraction], moments: list[Fraction], n: int
-) -> tuple[list[Fraction], list[Fraction]]:
+) -> tuple[list[Fraction], list[Fraction] | None]:
     """Exact nodes and weights shared by execution and admission replay.
 
     Nodes are the rational roots of p_n; weights solve the moment
@@ -452,7 +452,9 @@ def _construct_quadrature_rule(
     return nodes_frac, weights
 
 
-def _build_quadrature_rule(prefix, order: int) -> tuple[list[Fraction], list[Fraction]]:
+def _build_quadrature_rule(
+    prefix: MomentFunctionalPrefix, order: int
+) -> tuple[list[Fraction], list[Fraction]]:
     """Pure nodes+weights construction shared by execution and validation."""
     from jacobian.math.moments_orthogonal._models import OrthogonalPolynomialRequest
 
@@ -461,7 +463,10 @@ def _build_quadrature_rule(prefix, order: int) -> tuple[list[Fraction], list[Fra
         OrthogonalPolynomialRequest(prefix=prefix, max_degree=order)
     )
     p_n = [_to_fraction(c) for c in family.polynomials[order].coefficients]
-    return _construct_quadrature_rule(p_n, moments, order)
+    nodes, weights = _construct_quadrature_rule(p_n, moments, order)
+    if weights is None:
+        raise ValueError("Vandermonde system is singular")
+    return nodes, weights
 
 
 def compute_gaussian_quadrature(

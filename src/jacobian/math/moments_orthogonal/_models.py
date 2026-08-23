@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
 )
 from jacobian._models import StrictModel
 from jacobian.math._rational_height import RationalHeight
@@ -19,7 +20,9 @@ from jacobian.math.moments_orthogonal.values import (
 )
 
 
-def _require_determinant_representable(moments, order: int) -> None:
+def _require_determinant_representable(
+    moments: tuple[CanonicalRational, ...], order: int
+) -> None:
     """Bound entry heights so the exact determinant stays canonical.
 
     The determinant of an (order+1)-square rational matrix carries at most
@@ -27,8 +30,9 @@ def _require_determinant_representable(moments, order: int) -> None:
     moment's height keeps it inside MAX_CANONICAL_RATIONAL_DIGITS.
     """
     per_entry = MAX_CANONICAL_RATIONAL_DIGITS // ((order + 1) ** 2)
-    # An order-r Hankel matrix reads only the first 2r+1 moments; extra
-    # canonical moments must not prevent composition.
+    # A determinant reads 2r+1 consecutive moments; the shifted variant
+    # consumes mu_1..mu_(2r+1). Unconsumed moments must not prevent
+    # composition.
     for value in moments[: 2 * order + 1]:
         if RationalHeight.from_canonical(value).exceeds(max(per_entry - 2, 8)):
             raise ValueError(
@@ -67,7 +71,9 @@ class ShiftedHankelRequest(StrictModel):
             raise ValueError(
                 f"need at least {needed} moments for shifted order {self.order}, got {len(self.prefix.moments)}"
             )
-        _require_determinant_representable(self.prefix.moments, self.order)
+        # The shifted determinant consumes mu_1..mu_(2r+1); bound exactly
+        # that slice so det H_r^(1) stays canonical.
+        _require_determinant_representable(self.prefix.moments[1:], self.order)
         return self
 
 
@@ -109,8 +115,7 @@ class RecurrenceRequest(StrictModel):
         """The kernel divides by squared norms; a non-quasi-definite family
         would leak ZeroDivisionError instead of a typed result."""
         if not self.family.is_quasi_definite or any(
-            term.squared_norm.as_fraction() == 0
-            for term in self.family.polynomials
+            term.squared_norm.as_fraction() == 0 for term in self.family.polynomials
         ):
             raise ValueError(
                 "recurrence coefficients require a quasi-definite family "
@@ -134,6 +139,20 @@ class ChristoffelDarbouxRequest(StrictModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def require_nonzero_norms_through_degree(self) -> Self:
+        """The defining sum divides each p_k(x) p_k(y) term by h_k; only
+        norms through the requested degree are consumed and gate admission.
+        """
+        for term in self.family.polynomials[: self.degree + 1]:
+            if term.squared_norm.as_fraction() == 0:
+                raise ValueError(
+                    f"Christoffel-Darboux kernel degree {self.degree} "
+                    f"requires nonzero squared norms through degree "
+                    f"{self.degree}, but p_{term.degree} has a vanishing norm"
+                )
+        return self
+
 
 class JacobiMatrixRequest(StrictModel):
     """Compute the finite Jacobi matrix."""
@@ -146,9 +165,10 @@ class JacobiMatrixRequest(StrictModel):
 
         Every derived alpha is a difference of admitted family
         coefficients, but each derived beta is an adjacent-norm ratio
-        h_k / h_{k-1}, whose height can exceed the canonical result type
-        even when both norms fit. Reject such families here so every
-        accepted request can return its declared result.
+        h_k / h_{k-1}: a vanishing norm makes the ratio undefined and a
+        representable pair can still exceed the canonical result height.
+        Reject such families here so every accepted request can return
+        its declared result.
         """
         polys = self.family.polynomials
         # A canonical rational carries at most MAX_CANONICAL_RATIONAL_DIGITS
@@ -161,6 +181,12 @@ class JacobiMatrixRequest(StrictModel):
         for k in range(1, len(polys) - 1):
             h_k = polys[k].squared_norm.as_fraction()
             h_prev = polys[k - 1].squared_norm.as_fraction()
+            if h_prev == 0 or h_k == 0:
+                raise ValueError(
+                    f"adjacent-norm ratio beta_{k} is undefined because "
+                    f"squared norm h_{k - 1 if h_prev == 0 else k} vanishes; "
+                    "supply a family with nonzero norms for every emitted ratio"
+                )
             ratio = h_k / h_prev
             if abs(ratio.numerator) >= digit_limit or ratio.denominator >= digit_limit:
                 raise ValueError(
@@ -239,6 +265,8 @@ class GaussianQuadratureRequest(StrictModel):
             [Fraction(*v.as_integer_ratio()) for v in self.prefix.moments],
             self.order,
         )
+        if weights is None:
+            raise ValueError("Vandermonde system is singular")
         if any(weight <= 0 for weight in weights):
             raise ValueError(
                 "quadrature admission requires strictly positive weights; "

@@ -106,7 +106,7 @@ def _decompose_residual_in_basis(
             continue
         if j >= k + 1:
             raise ValueError(
-                f"residual x*p_{k} - p_{k+1} leaves the span of the retained family"
+                f"residual x*p_{k} - p_{k + 1} leaves the span of the retained family"
             )
         basis = [c.as_fraction() for c in polynomials[j].coefficients]
         components[j] = remainder[j]
@@ -119,7 +119,7 @@ def _decompose_residual_in_basis(
     return components
 
 
-def _require_three_term_consistency(family) -> None:
+def _require_three_term_consistency(family: OrthogonalPolynomialFamily) -> None:
     """R_k must lie in span{p_{k-1}, p_k} with beta_k = h_k / h_{k-1}."""
     polynomials = family.polynomials
     for k in range(len(polynomials) - 1):
@@ -300,6 +300,8 @@ class GaussianQuadratureRule(StrictModel):
         ]
         moments = [_to_fraction(m) for m in self.prefix.moments]
         nodes_frac, weights = _construct_quadrature_rule(p_n, moments, self.order)
+        if weights is None:
+            raise ValueError("Vandermonde system is singular")
         if tuple(self.nodes) != tuple(
             QuadratureNode(
                 node=CanonicalRational.from_fraction(node),
@@ -313,7 +315,7 @@ class GaussianQuadratureRule(StrictModel):
         return self
 
 
-def _family_p_n(prefix, order: int):
+def _family_p_n(prefix: MomentFunctionalPrefix, order: int) -> OrthogonalPolynomialTerm:
     from jacobian.math.moments_orthogonal._models import OrthogonalPolynomialRequest
     from jacobian.math.moments_orthogonal.operations import (
         compute_orthogonal_polynomials,
@@ -325,7 +327,9 @@ def _family_p_n(prefix, order: int):
     return family.polynomials[order]
 
 
-def _construct_quadrature_rule(p_n, moments, order):
+def _construct_quadrature_rule(
+    p_n: list[Fraction], moments: list[Fraction], order: int
+) -> tuple[list[Fraction], list[Fraction] | None]:
     from jacobian.math.moments_orthogonal.operations import (
         _construct_quadrature_rule as _kernel,
     )
@@ -372,7 +376,7 @@ class JacobiMatrix(StrictModel):
                 "betas must carry one entry per alpha: an unused zero "
                 "placeholder followed by one norm ratio per recurrence step"
             )
-        if self.betas[0].as_fraction() != 0:
+        if self.betas and self.betas[0].as_fraction() != 0:
             raise ValueError("betas[0] is the unused placeholder and must be zero")
         if len(self.matrix) != size or any(len(row) != size for row in self.matrix):
             raise ValueError("matrix must be a square size x size array")
@@ -384,4 +388,17 @@ class JacobiMatrix(StrictModel):
                     raise ValueError("the monic subdiagonal must be exactly 1")
                 if self.betas[i + 1] != self.matrix[i][i + 1]:
                     raise ValueError("matrix superdiagonal must carry beta_{i+1}")
+        return self
+
+    @model_validator(mode="after")
+    def require_tridiagonal_band(self) -> Self:
+        """Every entry outside the tridiagonal band must vanish; otherwise
+        the value would claim a tridiagonal operator it does not carry."""
+        if any(
+            entry.as_fraction() != 0
+            for i, row in enumerate(self.matrix)
+            for j, entry in enumerate(row)
+            if abs(i - j) > 1
+        ):
+            raise ValueError("entries outside the tridiagonal band must be zero")
         return self

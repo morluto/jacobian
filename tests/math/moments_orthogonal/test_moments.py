@@ -81,6 +81,29 @@ class TestShiftedHankel:
         )
         assert result.order == 2
 
+    def test_consumed_moment_heights_bound_admission(self) -> None:
+        """The shifted determinant consumes mu_1..mu_(2r+1); an extreme
+        moment inside that slice must be rejected at admission instead of
+        failing when the canonical determinant is constructed."""
+        moments = (
+            CanonicalRational(num="1", den="1"),
+            CanonicalRational.from_fraction(Fraction(10) ** 8000),
+            CanonicalRational(num="0", den="1"),
+            CanonicalRational.from_fraction(Fraction(10) ** 32767),
+        )
+        with pytest.raises(ValidationError, match="8190-digit"):
+            ShiftedHankelRequest(prefix=_prefix(moments), order=1)
+
+    def test_unconsumed_moments_do_not_gate_admission(self) -> None:
+        """Moments beyond mu_(2r+1) are not read by the shifted determinant
+        and must not prevent composition."""
+        moments = (
+            *_moments_uniform(4),
+            CanonicalRational.from_fraction(Fraction(10) ** 32000),
+        )
+        request = ShiftedHankelRequest(prefix=_prefix(moments), order=1)
+        assert compute_shifted_hankel(request).order == 1
+
 
 class TestOrthogonalPolynomials:
     def test_uniform_gives_legendre(self) -> None:
@@ -237,6 +260,62 @@ class TestChristoffelDarboux:
             19, 2
         )
 
+    def test_zero_norm_rejected_at_request_boundary(self) -> None:
+        """A singleton family with a vanishing norm is authorable; the
+        kernel request must reject it instead of raising mid-execution."""
+        from jacobian.math.moments_orthogonal.values import (
+            OrthogonalPolynomialFamily,
+            OrthogonalPolynomialTerm,
+        )
+
+        family = OrthogonalPolynomialFamily(
+            polynomials=(
+                OrthogonalPolynomialTerm(
+                    degree=0,
+                    coefficients=(CanonicalRational(num="1", den="1"),),
+                    squared_norm=CanonicalRational(num="0", den="1"),
+                ),
+            ),
+            variable="x",
+            is_quasi_definite=False,
+            is_positive_definite=False,
+        )
+        with pytest.raises(ValidationError, match="vanishing norm"):
+            ChristoffelDarbouxRequest(family=family, degree=0)
+
+    def test_zero_norm_beyond_degree_does_not_gate(self) -> None:
+        """Only norms through the requested degree divide in the defining
+        sum; a degenerate later term must not reject the smaller kernel."""
+        from jacobian.math.moments_orthogonal.values import (
+            OrthogonalPolynomialFamily,
+            OrthogonalPolynomialTerm,
+        )
+
+        family = OrthogonalPolynomialFamily(
+            polynomials=(
+                OrthogonalPolynomialTerm(
+                    degree=0,
+                    coefficients=(CanonicalRational(num="1", den="1"),),
+                    squared_norm=CanonicalRational(num="2", den="1"),
+                ),
+                OrthogonalPolynomialTerm(
+                    degree=1,
+                    coefficients=(
+                        CanonicalRational(num="0", den="1"),
+                        CanonicalRational(num="1", den="1"),
+                    ),
+                    squared_norm=CanonicalRational(num="0", den="1"),
+                ),
+            ),
+            variable="x",
+            is_quasi_definite=False,
+            is_positive_definite=False,
+        )
+        result = compute_christoffel_darboux(
+            ChristoffelDarbouxRequest(family=family, degree=0)
+        )
+        assert result.coefficients == ((CanonicalRational(num="1", den="2"),),)
+
 
 class TestJacobiMatrix:
     def test_jacobi_matrix(self) -> None:
@@ -268,6 +347,32 @@ class TestJacobiMatrix:
         assert result.matrix[2][1] == one
         assert result.matrix[0][1] == third
         assert result.matrix[1][2] == four_fifteenths
+
+    def test_singleton_family_yields_empty_jacobi_matrix(self) -> None:
+        """A family holding only p_0 admits the empty multiplication
+        operator; the value validates without indexing a placeholder beta."""
+        from jacobian.math.moments_orthogonal.values import (
+            OrthogonalPolynomialFamily,
+            OrthogonalPolynomialTerm,
+        )
+
+        family = OrthogonalPolynomialFamily(
+            polynomials=(
+                OrthogonalPolynomialTerm(
+                    degree=0,
+                    coefficients=(CanonicalRational(num="1", den="1"),),
+                    squared_norm=CanonicalRational(num="2", den="1"),
+                ),
+            ),
+            variable="x",
+            is_quasi_definite=True,
+            is_positive_definite=True,
+        )
+        result = compute_jacobi_matrix(JacobiMatrixRequest(family=family))
+        assert result.alphas == ()
+        assert result.betas == ()
+        assert result.matrix == ()
+        assert result.variable == "x"
 
 
 class TestGaussianQuadrature:
@@ -360,15 +465,37 @@ class TestQuadratureSourceBinding:
 
 class TestJacobiCrossField:
     def test_contradictory_jacobi_rejected(self) -> None:
-        from jacobian.math.moments_orthogonal.values import JacobiMatrix as JM
+        from jacobian.math.moments_orthogonal.values import JacobiMatrix
 
         with pytest.raises(ValidationError, match="diagonal must carry"):
-            JM(
+            JacobiMatrix(
                 alphas=(CanonicalRational(num="0", den="1"),),
                 betas=(CanonicalRational(num="0", den="1"),),
                 matrix=((CanonicalRational(num="1", den="1"),),),
                 variable="x",
             )
+
+    def test_off_band_entry_rejected(self) -> None:
+        """A nonzero entry outside the tridiagonal band cannot revalidate
+        as a Jacobi matrix, even with every diagonal and off-diagonal
+        entry consistent."""
+        from jacobian.math.moments_orthogonal.values import JacobiMatrix
+
+        family = compute_orthogonal_polynomials(
+            OrthogonalPolynomialRequest(
+                prefix=_prefix(_moments_uniform(7)), max_degree=3
+            )
+        )
+        result = compute_jacobi_matrix(JacobiMatrixRequest(family=family))
+        rows = [list(row) for row in result.matrix]
+        assert len(rows) == 3
+        rows[0][2] = CanonicalRational(num="7", den="5")
+        payload = result.model_dump()
+        payload["matrix"] = [
+            [{"num": c.num, "den": c.den} for c in row] for row in rows
+        ]
+        with pytest.raises(ValidationError, match="tridiagonal band"):
+            JacobiMatrix.model_validate(payload)
 
 
 class TestFamilyResidualBasisCheck:
@@ -482,6 +609,68 @@ class TestJacobiNormRatioAdmission:
         result = compute_jacobi_matrix(request)
         assert [a.as_fraction() for a in result.alphas] == [Fraction(0)]
 
+    def test_zero_norm_ratio_rejected_at_request_boundary(self) -> None:
+        """p_0=1, p_1=x, p_2=x^2 with all-zero norms is authorable; parsing
+        the Jacobi request must reject the undefined ratio instead of
+        leaking ZeroDivisionError."""
+        from jacobian.math.moments_orthogonal.values import (
+            OrthogonalPolynomialFamily,
+            OrthogonalPolynomialTerm,
+        )
+
+        zero = CanonicalRational(num="0", den="1")
+        one = CanonicalRational(num="1", den="1")
+        family = OrthogonalPolynomialFamily(
+            polynomials=(
+                OrthogonalPolynomialTerm(
+                    degree=0, coefficients=(one,), squared_norm=zero
+                ),
+                OrthogonalPolynomialTerm(
+                    degree=1, coefficients=(zero, one), squared_norm=zero
+                ),
+                OrthogonalPolynomialTerm(
+                    degree=2, coefficients=(zero, zero, one), squared_norm=zero
+                ),
+            ),
+            variable="x",
+            is_quasi_definite=False,
+            is_positive_definite=False,
+        )
+        with pytest.raises(ValidationError, match="vanishes"):
+            JacobiMatrixRequest(family=family)
+
+    def test_emitted_ratio_free_family_admits_zero_terminal_norm(self) -> None:
+        """A two-polynomial family emits no norm ratio; a vanishing
+        terminal norm must not gate admission of [[alpha_0]]."""
+        from jacobian.math.moments_orthogonal.values import (
+            OrthogonalPolynomialFamily,
+            OrthogonalPolynomialTerm,
+        )
+
+        family = OrthogonalPolynomialFamily(
+            polynomials=(
+                OrthogonalPolynomialTerm(
+                    degree=0,
+                    coefficients=(CanonicalRational(num="1", den="1"),),
+                    squared_norm=CanonicalRational(num="1", den="1"),
+                ),
+                OrthogonalPolynomialTerm(
+                    degree=1,
+                    coefficients=(
+                        CanonicalRational(num="0", den="1"),
+                        CanonicalRational(num="1", den="1"),
+                    ),
+                    squared_norm=CanonicalRational(num="0", den="1"),
+                ),
+            ),
+            variable="x",
+            is_quasi_definite=False,
+            is_positive_definite=False,
+        )
+        result = compute_jacobi_matrix(JacobiMatrixRequest(family=family))
+        assert [a.as_fraction() for a in result.alphas] == [Fraction(0)]
+        assert [b.as_fraction() for b in result.betas] == [Fraction(0)]
+
 
 class TestFamilyDefinitenessFlags:
     def test_flags_derived_from_norms(self) -> None:
@@ -540,7 +729,9 @@ class TestKernelFamilyBinding:
         from jacobian.math.moments_orthogonal.values import ChristoffelDarbouxKernel
 
         family = compute_orthogonal_polynomials(
-            OrthogonalPolynomialRequest(prefix=_prefix(_moments_uniform(3)), max_degree=1)
+            OrthogonalPolynomialRequest(
+                prefix=_prefix(_moments_uniform(3)), max_degree=1
+            )
         )
         payload = {
             "degree": 1,

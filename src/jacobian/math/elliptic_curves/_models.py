@@ -69,8 +69,9 @@ class EllipticCurveRequest(StrictModel):
 
 
 class CurveDiscriminantResult(StrictModel):
-    """The discriminant Δ = -16(4A^3 + 27B^2)."""
+    """The discriminant Δ = -16(4A^3 + 27B^2) of its retained source curve."""
 
+    request: EllipticCurveRequest
     discriminant: CanonicalRational
     is_nonsingular: bool
 
@@ -78,6 +79,17 @@ class CurveDiscriminantResult(StrictModel):
     def require_consistent_nonsingularity(self) -> Self:
         if self.is_nonsingular is (self.discriminant.as_fraction() == 0):
             raise ValueError("nonsingularity must match a nonzero discriminant")
+        # The value must be derived from the retained curve: replay the
+        # exact formula so a valid-looking payload cannot detach from any
+        # computation.
+        a = self.request.curve.coefficient_a.as_fraction()
+        b = self.request.curve.coefficient_b.as_fraction()
+        expected = -16 * (4 * a**3 + 27 * b**2)
+        if self.discriminant.as_fraction() != expected:
+            raise ValueError(
+                "discriminant must be the exact discriminant of the "
+                "retained source curve"
+            )
         return self
 
 
@@ -96,9 +108,24 @@ class CurvePointRequest(StrictModel):
 
 
 class PointOnCurveResult(StrictModel):
-    """Whether a point lies on the curve."""
+    """Whether a point lies on its retained source curve."""
 
+    request: CurvePointRequest
     on_curve: bool
+
+    @model_validator(mode="after")
+    def require_derived_predicate(self) -> Self:
+        # Replay y² = x³ + Ax + B from the retained sources so positive or
+        # negative conclusions are checkable and cannot be forged.
+        x = self.request.point.x.as_fraction()
+        y = self.request.point.y.as_fraction()
+        a = self.request.curve.coefficient_a.as_fraction()
+        b = self.request.curve.coefficient_b.as_fraction()
+        if self.on_curve is not (y * y == x**3 + a * x + b):
+            raise ValueError(
+                "on_curve must match the exact curve equation of the retained source"
+            )
+        return self
 
 
 def _require_group_law(
@@ -249,8 +276,15 @@ class EllipticCurvePointAdditionRequest(StrictModel):
 
 
 class EllipticCurvePointResult(StrictModel):
-    """The result of an elliptic curve point operation."""
+    """The result of an elliptic curve point operation on its parent curve.
 
+    The parent curve defines the group the result lives in: without it,
+    identical coordinate pairs on different curves serialize to the same
+    value and callers cannot feed the point back into another group-law
+    operation.
+    """
+
+    curve: ShortWeierstrassCurve
     point: RationalAffinePoint | None = None
     at_infinity: bool = False
     is_infinity: bool = False
@@ -261,6 +295,13 @@ class EllipticCurvePointResult(StrictModel):
             raise ValueError("a finite point and infinity are mutually exclusive")
         if self.point is None and not (self.at_infinity or self.is_infinity):
             raise ValueError("must carry a finite point or indicate infinity")
+        if self.point is not None:
+            x = self.point.x.as_fraction()
+            y = self.point.y.as_fraction()
+            a = self.curve.coefficient_a.as_fraction()
+            b = self.curve.coefficient_b.as_fraction()
+            if y * y != x**3 + a * x + b:
+                raise ValueError("result point must lie on the retained curve")
         return self
 
 

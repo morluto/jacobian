@@ -7,7 +7,9 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian.math.elliptic_curves._models import (
+    CurveDiscriminantResult,
     CurvePointRequest,
     EllipticCurvePointAdditionRequest,
     EllipticCurveRequest,
@@ -192,3 +194,83 @@ class TestPrimeFieldModulusBound:
 
         with pytest.raises(ValidationError):
             RankRequest(prime=2**200, entries=((1,),), columns=1)
+
+
+class TestResultSourceBinding:
+    """Authoritative elliptic results are bound to their source curves."""
+
+    def _curve(self, a: str = "1", b: str = "0"):
+        return ShortWeierstrassCurve(
+            coefficient_a=CanonicalRational(num=a, den="1"),
+            coefficient_b=CanonicalRational(num=b, den="1"),
+        )
+
+    def test_discriminant_result_replays_the_retained_curve(self) -> None:
+        request = EllipticCurveRequest(curve=self._curve())
+        result = compute_discriminant(request)
+        assert result.request == request
+        reparsed = CurveDiscriminantResult.model_validate(
+            result.model_dump(mode="json")
+        )
+        assert reparsed == result
+
+        forged = dict(result.model_dump(mode="json"))
+        # The thread's forgery: discriminant=1 for a curve whose exact
+        # discriminant is -64.
+        forged["discriminant"] = {"num": "1", "den": "1"}
+        with pytest.raises(ValidationError, match="retained source curve"):
+            CurveDiscriminantResult.model_validate(forged)
+
+    def test_point_on_curve_result_replays_the_predicate(self) -> None:
+        from jacobian.math.elliptic_curves._models import (
+            PointOnCurveResult as Result,
+        )
+
+        request = CurvePointRequest(
+            curve=self._curve(),
+            point=RationalAffinePoint(
+                x=CanonicalRational(num="0", den="1"),
+                y=CanonicalRational(num="0", den="1"),
+            ),
+        )
+        result = check_point_on_curve(request)
+        assert result.on_curve is True
+        payload = result.model_dump(mode="json")
+        assert Result.model_validate(payload).on_curve is True
+
+        forged = dict(payload)
+        forged["on_curve"] = False
+        with pytest.raises(ValidationError, match="exact curve equation"):
+            Result.model_validate(forged)
+
+    def test_point_addition_result_retains_its_parent_curve(self) -> None:
+        """Doubling (0,0) on y²=x³+x and on y²=x³-x must serialize
+        differently: each result carries its parent curve."""
+        first = add_points(
+            EllipticCurvePointAdditionRequest(
+                curve=self._curve("1", "0"),
+                first=RationalAffinePoint(
+                    x=CanonicalRational(num="0", den="1"),
+                    y=CanonicalRational(num="0", den="1"),
+                ),
+                second=RationalAffinePoint(
+                    x=CanonicalRational(num="0", den="1"),
+                    y=CanonicalRational(num="0", den="1"),
+                ),
+            )
+        )
+        second = add_points(
+            EllipticCurvePointAdditionRequest(
+                curve=self._curve("-1", "0"),
+                first=RationalAffinePoint(
+                    x=CanonicalRational(num="0", den="1"),
+                    y=CanonicalRational(num="0", den="1"),
+                ),
+                second=RationalAffinePoint(
+                    x=CanonicalRational(num="0", den="1"),
+                    y=CanonicalRational(num="0", den="1"),
+                ),
+            )
+        )
+        assert first.at_infinity and second.at_infinity
+        assert first.curve != second.curve

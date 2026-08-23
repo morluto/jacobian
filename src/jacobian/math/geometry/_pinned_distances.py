@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from math import gcd
-from typing import Literal
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -63,7 +63,7 @@ class PinnedDistanceRequest(StrictModel):
     points: tuple[RationalPoint2D, ...] = Field(min_length=2, max_length=32)
 
     @model_validator(mode="after")
-    def require_unique_bounded_points(self):
+    def require_unique_bounded_points(self) -> Self:
         _require_bounded_unique_points(self.anchor, self.points)
         return self
 
@@ -121,7 +121,7 @@ def _distance_ledger(
     ay = anchor.y.as_fraction()
     pts = [(p.x.as_fraction(), p.y.as_fraction()) for p in points]
 
-    line_map: dict[tuple[str, str, str], tuple[list[tuple[int, int]], str, str]] = {}
+    line_map: dict[tuple[str, str, str], tuple[list[tuple[int, int]], Fraction]] = {}
     for i in range(len(pts)):
         for j in range(i + 1, len(pts)):
             xi, yi = pts[i]
@@ -163,7 +163,7 @@ class PinnedDistanceResult(StrictModel):
     method: Literal["EXACT_PINNED_DISTANCES"] = "EXACT_PINNED_DISTANCES"
 
     @model_validator(mode="after")
-    def require_invariants(self):
+    def require_invariants(self) -> Self:
         if self.distinct_line_count != len(self.lines):
             raise ValueError("distinct_line_count must match the line count")
         # Retained sources satisfy the same admission bound as a request, so

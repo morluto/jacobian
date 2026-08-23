@@ -196,6 +196,21 @@ def test_singular_script_uses_internal_identifiers_not_caller_names() -> None:
     assert "jv1" in source
 
 
+def test_saturation_script_extracts_sat_result_before_standardizing() -> None:
+    """The compute script stores sat()'s return value and extracts its first
+    element before standardizing, mirroring the verification script, so the
+    result never depends on Singular's implicit list/ideal assignment
+    conversion."""
+    source = _singular._script(
+        "saturation",
+        _ideal(("x", "y"), {(1, 0): 1}),
+        _ideal(("x", "y"), {(0, 1): 1}),
+    ).decode("ascii")
+    assert "list jacobian_sat=sat(jacobian_left,jacobian_right[1]);" in source
+    assert "ideal jacobian_result=jacobian_sat[1];" in source
+    assert "ideal jacobian_result=sat(" not in source
+
+
 def test_radical_membership_uses_canonical_polynomials() -> None:
     source = _ideal(("x", "y"), {(2, 0): 1}, {(1, 1): 1})
     assert compute_ideal_radical_membership(
@@ -479,10 +494,55 @@ class TestSaturationSourceBinding:
             )
 
 
+@requires_singular
+@pytest.mark.requires_backend("singular")
+def test_ideal_saturation_counterexample_is_exact() -> None:
+    from jacobian.math.commutative_algebra_ops._models import (
+        IdealSaturationRequest,
+    )
+    from jacobian.math.commutative_algebra_ops._operations import (
+        compute_ideal_saturation,
+    )
+
+    variables = ("x", "y")
+    request = IdealSaturationRequest(
+        ideal=_ideal(variables, {(2, 1): 1}),  # <x^2*y>
+        saturation_polynomial=_polynomial(variables, {(0, 1): 1}),  # y
+    )
+    result = compute_ideal_saturation(request)
+
+    assert result.outcome == "COMPUTED"
+    assert result.backend_version is not None
+    assert result.saturation is not None
+    assert _equal(result.saturation, _ideal(variables, {(2, 0): 1}))
+
+
+@requires_singular
+@pytest.mark.requires_backend("singular")
+def test_ideal_saturation_by_unit_generator_returns_source() -> None:
+    from jacobian.math.commutative_algebra_ops._models import (
+        IdealSaturationRequest,
+    )
+    from jacobian.math.commutative_algebra_ops._operations import (
+        compute_ideal_saturation,
+    )
+
+    variables = ("x", "y")
+    source = _ideal(variables, {(3, 2): 1}, {(1, 0): -1})
+    request = IdealSaturationRequest(
+        ideal=source,
+        saturation_polynomial=_polynomial(variables, {(0, 0): 1}),  # 1
+    )
+    result = compute_ideal_saturation(request)
+
+    assert result.outcome == "COMPUTED"
+    assert result.saturation is not None
+    assert _equal(result.saturation, source)
+
+
 class TestSaturationContainment:
-    def test_bogus_result_rejected_in_bounded_flow(self, monkeypatch) -> None:
-        """A COMPUTED backend claim violating the defining equality fails
-        verification inside the operation's bounded Singular flow."""
+    @staticmethod
+    def _bogus_computed_request(monkeypatch) -> None:
         from jacobian.math.commutative_algebra_ops import _operations as ops
         from jacobian.math.commutative_algebra_ops._models import (
             IdealSaturationRequest,
@@ -505,10 +565,47 @@ class TestSaturationContainment:
             "run_singular_ideal_operation",
             lambda *args, **kwargs: _FakeBackend(),
         )
-        request = IdealSaturationRequest(
-            ideal=_ideal(("x", "y"), {(1, 0): 1}),
-            saturation_polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
+        return (
+            ops,
+            IdealSaturationRequest(
+                ideal=_ideal(("x", "y"), {(1, 0): 1}),
+                saturation_polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
+            ),
         )
+
+    def test_bogus_result_rejected_in_bounded_flow(self, monkeypatch) -> None:
+        """A COMPUTED backend claim violating the defining equality fails
+        verification inside the operation's bounded Singular flow."""
+        ops, request = self._bogus_computed_request(monkeypatch)
+
+        def refute(*args, **kwargs) -> str:
+            return "REFUTED"
+
+        monkeypatch.setattr(ops, "run_singular_saturation_verification", refute)
+        with pytest.raises(ValueError, match="differs"):
+            ops.compute_ideal_saturation(request)
+
+    def test_undecided_backend_claim_is_not_reported_as_saturation(
+        self, monkeypatch
+    ) -> None:
+        """When the bounded verifier cannot decide (backend unavailable),
+        the operation returns its typed execution outcome without claiming
+        a saturation value."""
+        monkeypatch.setattr(_singular.shutil, "which", lambda _name: None)
+        ops, request = self._bogus_computed_request(monkeypatch)
+
+        result = ops.compute_ideal_saturation(request)
+
+        assert result.outcome == "UNAVAILABLE"
+        assert result.saturation is None
+
+    @requires_singular
+    @pytest.mark.requires_backend("singular")
+    def test_real_refuted_claim_raises_inside_bounded_flow(self, monkeypatch) -> None:
+        """With the real backend, a bogus COMPUTED claim is decided REFUTED
+        by the bounded verification subprocess."""
+        ops, request = self._bogus_computed_request(monkeypatch)
+
         with pytest.raises(ValueError, match="differs"):
             ops.compute_ideal_saturation(request)
 
@@ -566,7 +663,9 @@ class TestSaturationWallBudget:
         assert result.outcome == "COMPUTED"
         assert captured["wall_seconds"] == 9
 
-    def test_spent_budget_returns_timeout_without_verification(self, monkeypatch) -> None:
+    def test_spent_budget_returns_timeout_without_verification(
+        self, monkeypatch
+    ) -> None:
         """A first computation that consumed the declared budget yields a
         typed TIMEOUT and never launches the verification stage."""
         import time as time_module

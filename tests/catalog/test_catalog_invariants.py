@@ -19,6 +19,28 @@ def test_catalog_rejects_duplicate_tool_ids() -> None:
         Catalog((operation, operation))
 
 
+def test_prime_field_matrix_capability_has_one_discovery_family() -> None:
+    """Rank, RREF, and nullspace are discovered once, under prime_field.matrix.
+
+    A duplicate underscored family with competing request contracts would let
+    callers reach different accepted domains for the same capability merely by
+    selecting a different operation ID spelling.
+    """
+    catalog = Catalog.open()
+    operation_ids = [
+        descriptor.operation_id for descriptor in catalog.snapshot().operations
+    ]
+    underscored_family = [
+        operation_id
+        for operation_id in operation_ids
+        if operation_id.startswith("prime_field_matrix.")
+    ]
+    assert not underscored_family
+    for capability in ("rank", "rref", "nullspace"):
+        established = f"prime_field.matrix.{capability}.compute"
+        assert operation_ids.count(established) == 1
+
+
 def test_each_tool_contract_and_function_have_one_math_owner() -> None:
     for operation in BUILTIN_TOOLS:
         modules = {

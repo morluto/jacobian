@@ -10,11 +10,15 @@ from jacobian.math.graphs.cycle_pattern._models import (
     SubgraphEmbedding,
     SubgraphPatternRequest,
     SubgraphPatternResult,
+    _decided_negative_cycle_result,
+    _decided_negative_embedding_result,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 # Backtracking recursion nodes across one request; a schema-valid request
-# cannot occupy the inline path beyond this deterministic work bound.
+# cannot occupy the inline path beyond this deterministic work bound, and
+# the bound covers the whole request: producing searches carry their own
+# exhaustion so validation never replays a negative from a second budget.
 MAX_SEARCH_NODES = 2_000_000
 
 
@@ -88,6 +92,10 @@ def decide_fixed_length_cycle(
     A backtracking DFS rooted at each vertex finds the lexicographically
     smallest cycle of the requested length, if one exists.  To avoid
     duplicates, only cycles whose minimum vertex is the root are returned.
+    The declared node budget covers the whole request: a decided negative
+    reuses the producing search's exhaustion instead of paying a second
+    replay, while independently supplied results still validate through
+    full replay.
     """
     g = _build_graph(request.graph)
     k = request.length
@@ -125,11 +133,7 @@ def decide_fixed_length_cycle(
                 ),
             )
 
-    return FixedLengthCycleResult(
-        graph=request.graph,
-        length=k,
-        exists=False,
-    )
+    return _decided_negative_cycle_result(request.graph, k)
 
 
 class _NodeBudget:
@@ -256,7 +260,9 @@ def find_subgraph_pattern(
 
     Backtracking search assigns pattern vertices to distinct host vertices,
     checking edge preservation at each step.  Returns the lexicographically
-    smallest embedding, if one exists.
+    smallest embedding, if one exists.  As with the cycle decision, the
+    declared node budget covers the whole request: decided negatives reuse
+    the producing search instead of a second replay.
     """
     host_g = _build_graph(request.host)
     pattern_g = _build_graph(request.pattern)
@@ -311,11 +317,7 @@ def find_subgraph_pattern(
             embedding=emb,
         )
 
-    return SubgraphPatternResult(
-        host_graph=request.host,
-        pattern_graph=request.pattern,
-        exists=False,
-    )
+    return _decided_negative_embedding_result(request.host, request.pattern)
 
 
 class _BudgetExceededError(Exception):

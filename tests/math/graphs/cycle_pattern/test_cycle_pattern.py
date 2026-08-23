@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.graphs.cycle_pattern._models import (
+    MAX_CYCLE_GRAPH_ORDER,
     FixedLengthCycleRequest,
     FixedLengthCycleResult,
     SubgraphEmbedding,
@@ -161,6 +162,31 @@ class TestDenseAndLongAdmission:
 
 class TestSubgraphPattern:
     """Tests for ``graph.subgraph.pattern.find``."""
+
+    def test_empty_pattern_returns_unique_empty_embedding(self):
+        """The empty pattern embeds uniquely as the empty mapping."""
+        host = _graph(["a"], [])
+        pattern = _graph([], [])
+        result = find_subgraph_pattern(
+            SubgraphPatternRequest(host=host, pattern=pattern)
+        )
+        assert result.exists
+        assert result.embedding is not None
+        assert result.embedding.mapping == ()
+        revalidated = SubgraphPatternResult.model_validate(result.model_dump())
+        assert revalidated.embedding == result.embedding
+
+    def test_empty_embedding_cannot_cover_nonempty_pattern(self):
+        """Coverage replay keeps the empty mapping exclusive to empty patterns."""
+        host = _graph(["a", "b"], [])
+        pattern = _graph(["u"], [])
+        with pytest.raises(ValidationError, match="cover every pattern vertex"):
+            SubgraphPatternResult(
+                host_graph=host,
+                pattern_graph=pattern,
+                exists=True,
+                embedding=SubgraphEmbedding(mapping=()),
+            )
 
     def test_path_in_pentagon(self):
         host = _graph(
@@ -325,6 +351,155 @@ class TestBoundedSearchAndWitnessBinding:
         )
         with pytest.raises(ValidationError, match="contradicts"):
             FixedLengthCycleResult(graph=square, length=4, exists=False)
+
+    def test_decided_negative_charges_one_budget_across_the_request(self, monkeypatch):
+        """Decision plus validation share MAX_SEARCH_NODES across one request.
+
+        A hard negative must not double the node cost by replaying the
+        producing search from a fresh budget.
+        """
+        from jacobian.math.graphs.cycle_pattern import _operations as ops
+
+        left = [f"L{i}" for i in range(12)]
+        right = [f"R{i}" for i in range(12)]
+        graph = _graph(left + right, sorted((lf, rg) for lf in left for rg in right))
+
+        ticks = {"count": 0}
+        budgets = {"built": 0}
+        original_tick = ops._NodeBudget.tick
+        original_init = ops._NodeBudget.__init__
+
+        def counting_tick(self):
+            ticks["count"] += 1
+            original_tick(self)
+
+        def counting_init(self, limit=None):
+            budgets["built"] += 1
+            original_init(self, limit)
+
+        monkeypatch.setattr(ops._NodeBudget, "tick", counting_tick)
+        monkeypatch.setattr(ops._NodeBudget, "__init__", counting_init)
+
+        request = FixedLengthCycleRequest(graph=graph, length=3)
+        result = ops.decide_fixed_length_cycle(request)
+        assert result.exists is False
+        assert budgets["built"] == 1
+        assert ticks["count"] <= ops.MAX_SEARCH_NODES
+
+    def test_negative_embedding_shares_one_budget_across_the_request(self, monkeypatch):
+        """The embedding decision likewise never replays from a second budget."""
+        from jacobian.math.graphs.cycle_pattern import _operations as ops
+
+        host = _graph(
+            ["a", "b", "c", "d", "e", "f"],
+            [
+                ("a", "b"),
+                ("b", "c"),
+                ("c", "d"),
+                ("d", "e"),
+                ("e", "f"),
+                ("a", "f"),
+            ],
+        )
+        pattern = _graph(["u", "v", "w"], [("u", "v"), ("v", "w"), ("u", "w")])
+
+        ticks = {"count": 0}
+        budgets = {"built": 0}
+        original_tick = ops._NodeBudget.tick
+        original_init = ops._NodeBudget.__init__
+
+        def counting_tick(self):
+            ticks["count"] += 1
+            original_tick(self)
+
+        def counting_init(self, limit=None):
+            budgets["built"] += 1
+            original_init(self, limit)
+
+        monkeypatch.setattr(ops._NodeBudget, "tick", counting_tick)
+        monkeypatch.setattr(ops._NodeBudget, "__init__", counting_init)
+
+        request = SubgraphPatternRequest(host=host, pattern=pattern)
+        result = ops.find_subgraph_pattern(request)
+        assert result.exists is False
+        assert budgets["built"] == 1
+        assert ticks["count"] <= ops.MAX_SEARCH_NODES
+
+    def test_forged_result_respects_graph_order_envelope(self):
+        """Independently decoded results satisfy the 64-vertex request bound."""
+        from jacobian.math.graphs.cycle_pattern._models import MAX_CYCLE_GRAPH_ORDER
+
+        names = [f"v{i:03d}" for i in range(MAX_CYCLE_GRAPH_ORDER + 1)]
+        oversized = _graph(names, [])
+        with pytest.raises(ValidationError, match="64 vertices"):
+            FixedLengthCycleResult(graph=oversized, length=3, exists=False)
+        with pytest.raises(ValidationError, match="64 vertices"):
+            FixedLengthCycleResult(
+                graph=oversized,
+                length=3,
+                outcome="SEARCH_BUDGET_EXCEEDED",
+                detail="unresolved",
+            )
+
+
+class TestResultTransportReservation:
+    """Admission reserves predicted result bytes against the transport ceiling."""
+
+    @staticmethod
+    def _wide_labels(count: int, width: int) -> SimpleUndirectedGraph:
+        return SimpleUndirectedGraph.model_validate(
+            {
+                "vertices": [f"t{i:03d}".ljust(width, "x") for i in range(count)],
+                "edges": [],
+            }
+        )
+
+    def test_oversized_label_cycle_request_rejected_at_admission(self):
+        """The request fits the input ceiling but cannot fit its own result.
+
+        Rejection must happen in admission with a typed message instead of
+        leaking a host exception from output canonicalization after math.run
+        accepted the request.
+        """
+        from jacobian.canonical import CanonicalLimits, encode_strict_json
+
+        graph = self._wide_labels(MAX_CYCLE_GRAPH_ORDER, 150_000)
+        payload_bytes = len(
+            encode_strict_json({"graph": graph.model_dump(mode="json"), "length": 3})
+        )
+        assert payload_bytes <= CanonicalLimits().max_input_bytes
+        with pytest.raises(ValidationError, match="result budget"):
+            FixedLengthCycleRequest(graph=graph, length=3)
+
+    def test_oversized_label_pattern_request_rejected_at_admission(self):
+        """The two-graph request reserves its retained-graph echo as well."""
+        host = self._wide_labels(MAX_CYCLE_GRAPH_ORDER, 150_000)
+        pattern = _graph(["u"], [])
+        with pytest.raises(ValidationError, match="result budget"):
+            SubgraphPatternRequest(host=host, pattern=pattern)
+
+    def test_ordinary_wide_labels_stay_admitted(self):
+        """The reservation rejects only results that cannot fit transport."""
+        graph = self._wide_labels(64, 10_000)
+        request = FixedLengthCycleRequest(graph=graph, length=3)
+        assert decide_fixed_length_cycle(request).exists is False
+
+    def test_reservation_bounds_every_outcome_encoding(self):
+        """The estimator covers positive outcomes: witness labels repeat."""
+        from jacobian.canonical import encode_strict_json
+        from jacobian.math.graphs.cycle_pattern._models import (
+            MAX_CYCLE_PATTERN_RESULT_BYTES,
+        )
+
+        names = [name * 40 for name in "abcdefgh"]
+        edges = [
+            tuple(sorted((names[i], names[(i + 1) % len(names)])))
+            for i in range(len(names))
+        ]
+        g = _graph(names, edges)
+        result = decide_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=4))
+        encoded = len(encode_strict_json(result.model_dump(mode="json")))
+        assert encoded <= MAX_CYCLE_PATTERN_RESULT_BYTES
 
 
 class TestEmbeddingFunctionContract:

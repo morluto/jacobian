@@ -7,14 +7,25 @@ integer indexing stays private to the bounded search kernel.
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.canonical import encode_strict_json
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_CYCLE_GRAPH_ORDER = 64
+
+# Aggregate predicted-result transport reservation for one accepted request.
+# Results retain their full source graph(s) and repeat labels in witnesses,
+# so admission must reserve the whole predicted result size against the
+# transport envelope instead of only bounding the request's vertex count.
+MAX_CYCLE_PATTERN_RESULT_BYTES = 9 * 1024 * 1024
+
+# Fixed outcome fields, operation-authored detail text, and the transport
+# wrapper around one result; charged once per predicted result.
+_RESULT_SLACK_BYTES = 4096
 
 
 def _require_admissible_order(graph: SimpleUndirectedGraph) -> None:
@@ -23,6 +34,74 @@ def _require_admissible_order(graph: SimpleUndirectedGraph) -> None:
             "graphs are bounded to at most "
             f"{MAX_CYCLE_GRAPH_ORDER} vertices so the exhaustive searches "
             "keep a declared work and result bound"
+        )
+
+
+def _wire_bytes(value: Any) -> int:
+    """Exact canonical wire size of one value inside a result payload."""
+    return len(encode_strict_json(value))
+
+
+def _graph_echo_wire_bytes(graph: SimpleUndirectedGraph) -> int:
+    """Exact canonical wire size of the retained graph echo in a result."""
+    return _wire_bytes(graph.model_dump(mode="json"))
+
+
+def _largest_label_wire_bytes(graph: SimpleUndirectedGraph, count: int) -> int:
+    """Wire cost of the ``count`` most expensive labels, each used once.
+
+    A positive cycle witness repeats exactly ``length`` distinct vertex
+    labels; charging the ``count`` largest per-label canonical costs bounds
+    every possible witness without inflating ordinary requests.
+    """
+    costs = sorted((_wire_bytes(name) for name in graph.vertices), reverse=True)
+    return sum(costs[:count])
+
+
+def _require_cycle_result_reservation(
+    graph: SimpleUndirectedGraph, length: int
+) -> None:
+    """Admit only requests whose complete result fits its transport budget."""
+    predicted = (
+        _graph_echo_wire_bytes(graph)
+        + _largest_label_wire_bytes(graph, length)
+        + _RESULT_SLACK_BYTES
+    )
+    if predicted > MAX_CYCLE_PATTERN_RESULT_BYTES:
+        raise ValueError(
+            "the retained graph and repeated witness labels can serialize up "
+            f"to {predicted} bytes, above the "
+            f"{MAX_CYCLE_PATTERN_RESULT_BYTES}-byte aggregate result budget; "
+            "shorten vertex labels"
+        )
+
+
+def _require_pattern_result_reservation(
+    host: SimpleUndirectedGraph, pattern: SimpleUndirectedGraph
+) -> None:
+    """Admit only two-graph requests whose result fits its transport budget.
+
+    The embedding mapping pairs each of the ``|pattern|`` pattern labels
+    with a distinct host label, so charging the ``|pattern|`` largest costs
+    from each side independently bounds every injective mapping.
+    """
+    host_costs = sorted((_wire_bytes(name) for name in host.vertices), reverse=True)
+    pattern_costs = sorted(
+        (_wire_bytes(name) for name in pattern.vertices), reverse=True
+    )
+    predicted = (
+        _graph_echo_wire_bytes(host)
+        + _graph_echo_wire_bytes(pattern)
+        + sum(host_costs[: len(pattern_costs)])
+        + sum(pattern_costs)
+        + _RESULT_SLACK_BYTES
+    )
+    if predicted > MAX_CYCLE_PATTERN_RESULT_BYTES:
+        raise ValueError(
+            "the retained graphs and embedding mapping can serialize up to "
+            f"{predicted} bytes, above the "
+            f"{MAX_CYCLE_PATTERN_RESULT_BYTES}-byte aggregate result budget; "
+            "shorten vertex labels"
         )
 
 
@@ -37,6 +116,7 @@ class FixedLengthCycleRequest(StrictModel):
         _require_admissible_order(self.graph)
         if self.length > len(self.graph.vertices):
             raise ValueError("cycle length cannot exceed vertex count")
+        _require_cycle_result_reservation(self.graph, self.length)
         return self
 
 
@@ -92,6 +172,49 @@ def _require_negative_cycle_replay(graph: SimpleUndirectedGraph, length: int) ->
         )
 
 
+def _decided_negative_cycle_result(
+    graph: SimpleUndirectedGraph,
+    length: int,
+) -> FixedLengthCycleResult:
+    """Build a decided-negative cycle result from one explicit bounded search.
+
+    Direct construction from the producing exhaustive search skips replay so
+    one declared node budget covers all search work in the request;
+    independently supplied results always validate through
+    ``_require_negative_cycle_replay``.
+    """
+
+    return FixedLengthCycleResult.model_construct(
+        graph=graph,
+        length=length,
+        outcome="DECIDED",
+        detail=None,
+        exists=False,
+        cycle=None,
+    )
+
+
+def _decided_negative_embedding_result(
+    host_graph: SimpleUndirectedGraph,
+    pattern_graph: SimpleUndirectedGraph,
+) -> SubgraphPatternResult:
+    """Build a decided-negative embedding result from one bounded search.
+
+    As with ``_decided_negative_cycle_result``, the producing search's own
+    exhaustion is carried unclaimed instead of paying a second replay from
+    the same request budget.
+    """
+
+    return SubgraphPatternResult.model_construct(
+        host_graph=host_graph,
+        pattern_graph=pattern_graph,
+        outcome="DECIDED",
+        detail=None,
+        exists=False,
+        embedding=None,
+    )
+
+
 class SearchOutcome(StrictModel):
     """Shared outcome discriminator for bounded exhaustive searches."""
 
@@ -123,6 +246,9 @@ class FixedLengthCycleResult(SearchOutcome):
 
     @model_validator(mode="after")
     def bind_witness(self) -> Self:
+        # Independently decoded results satisfy the same admissible envelope
+        # as requests, before any outcome handling or replay work runs.
+        _require_admissible_order(self.graph)
         if self.length > len(self.graph.vertices):
             raise ValueError("cycle length cannot exceed vertex count")
         if self.outcome != "DECIDED":
@@ -151,18 +277,24 @@ class SubgraphPatternRequest(StrictModel):
         _require_admissible_order(self.pattern)
         if len(self.pattern.vertices) > len(self.host.vertices):
             raise ValueError("pattern vertex count cannot exceed host vertex count")
+        _require_pattern_result_reservation(self.host, self.pattern)
         return self
 
 
 class SubgraphEmbedding(StrictModel):
-    """One injective embedding of a pattern graph into a host graph."""
+    """One injective embedding of a pattern graph into a host graph.
+
+    The empty mapping is the unique embedding of the empty pattern; witness
+    replay against the carried graphs enforces domain coverage, so an empty
+    mapping is only admissible for an empty pattern.
+    """
 
     mapping: tuple[tuple[str, str], ...]
 
     @model_validator(mode="after")
     def require_valid_mapping(self) -> Self:
         if not self.mapping:
-            raise ValueError("embedding mapping must be nonempty")
+            return self
         domain = tuple(src for src, _ in self.mapping)
         codomain = tuple(dst for _, dst in self.mapping)
         if domain != tuple(sorted(domain)):
@@ -260,6 +392,7 @@ def _require_negative_embedding_replay(
 
 __all__ = [
     "MAX_CYCLE_GRAPH_ORDER",
+    "MAX_CYCLE_PATTERN_RESULT_BYTES",
     "FixedLengthCycleRequest",
     "FixedLengthCycleResult",
     "SubgraphEmbedding",

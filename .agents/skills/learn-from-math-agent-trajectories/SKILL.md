@@ -153,6 +153,14 @@ postcondition with typed inputs and an exact, incomplete, or unknown result. It
 must not encode the motivating conjecture, prescribe a proof strategy, or
 claim an asymptotic theorem that still requires model reasoning.
 
+When an existing operation has the required postcondition but rejects a large
+input through a coarse cap, attribute the lesson to admission or scale/backend
+rather than inventing a second operation. Check whether the result and derived
+work are compact, whether an exact sparse, factored, modular, symbolic, or
+implicit representation avoids expansion, and whether a maintained backend or
+different algorithm regime would widen the envelope. A timeout alone neither
+proves that the cap is necessary nor establishes a mathematical negative.
+
 Separate gap diagnosis from public-operation admission. First decide whether
 the trajectory establishes a reusable missing mathematical postcondition on
 the inspected surface. Recording that gap does not assert that the result

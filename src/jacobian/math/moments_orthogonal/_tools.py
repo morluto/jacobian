@@ -1,4 +1,4 @@
-"""Moments and orthogonal polynomials operation declarations."""
+"""Moment-functional operation declarations."""
 
 from collections.abc import Callable
 from typing import Any
@@ -8,22 +8,29 @@ from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.moments_orthogonal._models import (
     ChristoffelDarbouxRequest,
-    ChristoffelDarbouxResult,
     GaussianQuadratureRequest,
-    GaussianQuadratureResult,
-    HankelMatrixRequest,
-    HankelMatrixResult,
+    HankelRequest,
     JacobiMatrixRequest,
-    JacobiMatrixResult,
-    RecurrenceCoefficientsRequest,
-    RecurrenceCoefficientsResult,
+    OrthogonalPolynomialRequest,
+    RecurrenceRequest,
+    ShiftedHankelRequest,
 )
-from jacobian.math.moments_orthogonal._operations import (
+from jacobian.math.moments_orthogonal.operations import (
     compute_christoffel_darboux,
     compute_gaussian_quadrature,
     compute_hankel_matrix,
     compute_jacobi_matrix,
-    compute_recurrence_coefficients,
+    compute_orthogonal_polynomials,
+    compute_recurrence,
+    compute_shifted_hankel,
+)
+from jacobian.math.moments_orthogonal.values import (
+    ChristoffelDarbouxKernel,
+    GaussianQuadratureRule,
+    HankelMomentMatrix,
+    JacobiMatrix,
+    OrthogonalPolynomialFamily,
+    ThreeTermRecurrence,
 )
 
 
@@ -54,152 +61,261 @@ def _op[
 
 
 _MOMENTS = [
+    {"num": "2", "den": "1"},
+    {"num": "0", "den": "1"},
+    {"num": "2", "den": "3"},
+    {"num": "0", "den": "1"},
+    {"num": "2", "den": "5"},
+    {"num": "0", "den": "1"},
+    {"num": "2", "den": "7"},
+    {"num": "0", "den": "1"},
+    {"num": "2", "den": "9"},
+]
+
+_TOY_MOMENTS = [
     {"num": "1", "den": "1"},
-    {"num": "1", "den": "2"},
+    {"num": "0", "den": "1"},
     {"num": "1", "den": "3"},
-    {"num": "1", "den": "4"},
+    {"num": "0", "den": "1"},
     {"num": "1", "den": "5"},
-    {"num": "1", "den": "6"},
+    {"num": "0", "den": "1"},
     {"num": "1", "den": "7"},
 ]
 
-_ALPHA = [
-    {"num": "0", "den": "1"},
-    {"num": "1", "den": "3"},
-]
-
-_BETA = [
-    {"num": "2", "den": "1"},
-    {"num": "1", "den": "9"},
-    {"num": "4", "den": "45"},
-]
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
-        "moments.hankel_matrix.compute",
-        "Compute the Hankel matrix from a moment sequence",
-        "Build the exact Hankel matrix H[i][j] = mu_{i+j} from a bounded "
-        "sequence of exact rational moments.",
-        HankelMatrixRequest,
-        HankelMatrixResult,
+        "moment_functional.hankel.compute",
+        "Compute Hankel moment matrix",
+        "Compute the exact Hankel matrix H_r[i,j] = mu_(i+j) from a bounded "
+        "rational moment prefix, with determinant and rank.",
+        HankelRequest,
+        HankelMomentMatrix,
         compute_hankel_matrix,
-        "linear-algebra",
         "moments",
         "hankel",
         "exact",
         examples=(
             example(
-                "harmonic_moments",
-                "Build the 4x4 Hankel matrix from the first 7 harmonic "
-                "moments mu_k = 1/(k+1).",
-                {"moments": _MOMENTS},
+                "uniform_hankel",
+                "Hankel matrix for the uniform measure on [-1,1]: "
+                "mu_k = 2/(k+1) for even k and mu_k = 0 for odd k. The "
+                "prefix must hold at least 2*order+1 moments scaled so the "
+                "exact determinant stays canonical.",
+                {"prefix": {"moments": _MOMENTS[:5], "variable": "x"}, "order": 2},
             ),
         ),
     ),
     _op(
-        "moments.recurrence_coefficients.compute",
-        "Compute monic orthogonal polynomial recurrence coefficients",
-        "Compute exact three-term recurrence coefficients (alpha, beta) for "
-        "the monic orthogonal polynomial family defined by a moment sequence, "
-        "via exact Gram-Schmidt orthogonalization. Requires at most 32 "
-        "moments, positive mu_0, a positive-definite functional, and derived "
-        "coefficients inside the canonical result domain.",
-        RecurrenceCoefficientsRequest,
-        RecurrenceCoefficientsResult,
-        compute_recurrence_coefficients,
+        "moment_functional.shifted_hankel.compute",
+        "Compute shifted Hankel moment matrix",
+        "Compute the exact shifted Hankel matrix H_r^(1)[i,j] = mu_(i+j+1).",
+        ShiftedHankelRequest,
+        HankelMomentMatrix,
+        compute_shifted_hankel,
+        "moments",
+        "hankel",
+        "exact",
+        examples=(
+            example(
+                "shifted_hankel_uniform",
+                "Shifted Hankel matrix for the uniform measure on [-1,1]: "
+                "odd moments vanish, so H^(1) reads mu_1..mu_(2*order+1). "
+                "The prefix must hold at least 2*order+2 moments within the "
+                "determinant height bound.",
+                {"prefix": {"moments": _MOMENTS[:6], "variable": "x"}, "order": 2},
+            ),
+        ),
+    ),
+    _op(
+        "moment_functional.orthogonal_polynomials.compute",
+        "Compute monic orthogonal polynomials from moments",
+        "Compute the exact monic orthogonal polynomial family p_0,...,p_n "
+        "from a bounded rational moment prefix using exact Gram-Schmidt.",
+        OrthogonalPolynomialRequest,
+        OrthogonalPolynomialFamily,
+        compute_orthogonal_polynomials,
+        "moments",
         "orthogonal-polynomials",
+        "exact",
+        examples=(
+            example(
+                "legendre_from_uniform",
+                "Monic Legendre-like polynomials from the uniform moments "
+                "on [-1,1] (odd moments vanish). The prefix needs at least "
+                "2*max_degree+1 moments that stay quasi-definite through "
+                "max_degree and meet the Gram-Schmidt height bound.",
+                {"prefix": {"moments": _MOMENTS[:7], "variable": "x"}, "max_degree": 3},
+            ),
+        ),
+    ),
+    _op(
+        "orthogonal_polynomial.recurrence.compute",
+        "Compute three-term recurrence coefficients",
+        "Compute the exact three-term recurrence alpha_k, beta_k from an "
+        "orthogonal polynomial family.",
+        RecurrenceRequest,
+        ThreeTermRecurrence,
+        compute_recurrence,
         "moments",
         "recurrence",
         "exact",
         examples=(
             example(
-                "harmonic_recurrence",
-                "Compute recurrence coefficients from the first 7 harmonic "
-                "moments mu_k = 1/(k+1).",
-                {"moments": _MOMENTS},
-            ),
-        ),
-    ),
-    _op(
-        "moments.jacobi_matrix.compute",
-        "Assemble the Jacobi matrix from recurrence coefficients",
-        "Assemble the symmetric tridiagonal Jacobi matrix from monic "
-        "three-term recurrence coefficients, returning the rational diagonal "
-        "and the rational squared subdiagonal entries.",
-        JacobiMatrixRequest,
-        JacobiMatrixResult,
-        compute_jacobi_matrix,
-        "linear-algebra",
-        "orthogonal-polynomials",
-        "jacobi-matrix",
-        "exact",
-        examples=(
-            example(
-                "three_point_jacobi",
-                "Assemble the Jacobi matrix from three recurrence coefficients.",
-                {"coefficients": {"alpha": _ALPHA, "beta": _BETA}},
-            ),
-        ),
-    ),
-    _op(
-        "moments.christoffel_darboux.compute",
-        "Compute the Christoffel-Darboux kernel",
-        "Evaluate the Christoffel-Darboux kernel K_n(x, y) by forward "
-        "recurrence of the monic orthogonal polynomials at the exact rational "
-        "points x and y.",
-        ChristoffelDarbouxRequest,
-        ChristoffelDarbouxResult,
-        compute_christoffel_darboux,
-        "orthogonal-polynomials",
-        "christoffel-darboux",
-        "exact",
-        examples=(
-            example(
-                "cd_at_1_1",
-                "Evaluate the Christoffel-Darboux kernel at x=y=1.",
+                "recurrence_from_legendre",
+                "Recurrence of a monic Legendre-like family. The family "
+                "must be quasi-definite with a nonzero squared norm for "
+                "every supplied polynomial.",
                 {
-                    "coefficients": {"alpha": _ALPHA, "beta": _BETA},
-                    "x": {"num": "1", "den": "1"},
-                    "y": {"num": "1", "den": "1"},
+                    "family": {
+                        "polynomials": [
+                            {
+                                "degree": 0,
+                                "coefficients": [{"num": "1", "den": "1"}],
+                                "squared_norm": {"num": "2", "den": "1"},
+                            },
+                            {
+                                "degree": 1,
+                                "coefficients": [
+                                    {"num": "0", "den": "1"},
+                                    {"num": "1", "den": "1"},
+                                ],
+                                "squared_norm": {"num": "2", "den": "3"},
+                            },
+                        ],
+                        "variable": "x",
+                        "is_quasi_definite": True,
+                        "is_positive_definite": True,
+                    },
                 },
             ),
         ),
     ),
     _op(
-        "moments.gaussian_quadrature.compute",
-        "Compute Gaussian quadrature nodes and weights",
-        "Golub-Welsch quadrature from the tridiagonal Jacobi matrix. "
-        "APPROXIMATE: inputs convert to float64; nodes/weights are dyadic "
-        "images of doubles, with no error bound — not exact rationals. "
-        "Admission also demands well-scaled matrices: magnitudes in "
-        "[10^-300, 10^300], spread at most 10^6, and a determinant floor "
-        "proving every eigenvalue resolves in float64.",
-        GaussianQuadratureRequest,
-        GaussianQuadratureResult,
-        compute_gaussian_quadrature,
-        "numerical-integration",
-        "gaussian-quadrature",
-        "golub-welsch",
+        "orthogonal_polynomial.christoffel_darboux.compute",
+        "Compute Christoffel-Darboux kernel",
+        "Compute the exact Christoffel-Darboux kernel K_m(x,y) from an "
+        "orthogonal polynomial family.",
+        ChristoffelDarbouxRequest,
+        ChristoffelDarbouxKernel,
+        compute_christoffel_darboux,
+        "moments",
+        "christoffel-darboux",
+        "exact",
         examples=(
             example(
-                "two_point_gauss",
-                "Compute 2-point Gaussian quadrature from 2 recurrence coefficients.",
+                "cd_kernel_degree_0",
+                "Christoffel-Darboux kernel of degree 0. The requested "
+                "degree must stay below the family size, and every squared "
+                "norm through that degree must be nonzero.",
                 {
-                    "coefficients": {
-                        "alpha": [
-                            {"num": "0", "den": "1"},
-                            {"num": "0", "den": "1"},
+                    "family": {
+                        "polynomials": [
+                            {
+                                "degree": 0,
+                                "coefficients": [{"num": "1", "den": "1"}],
+                                "squared_norm": {"num": "2", "den": "1"},
+                            },
+                            {
+                                "degree": 1,
+                                "coefficients": [
+                                    {"num": "0", "den": "1"},
+                                    {"num": "1", "den": "1"},
+                                ],
+                                "squared_norm": {"num": "2", "den": "3"},
+                            },
                         ],
-                        "beta": [
-                            {"num": "2", "den": "1"},
-                            {"num": "1", "den": "3"},
-                            {"num": "4", "den": "45"},
+                        "variable": "x",
+                        "is_quasi_definite": True,
+                        "is_positive_definite": True,
+                    },
+                    "degree": 0,
+                },
+            ),
+        ),
+    ),
+    _op(
+        "orthogonal_polynomial.jacobi_matrix.compute",
+        "Compute the finite Jacobi matrix",
+        "Compute the exact finite tridiagonal Jacobi matrix from an "
+        "orthogonal polynomial family.",
+        JacobiMatrixRequest,
+        JacobiMatrix,
+        compute_jacobi_matrix,
+        "moments",
+        "jacobi-matrix",
+        "exact",
+        examples=(
+            example(
+                "jacobi_matrix_legendre",
+                "Jacobi matrix of a monic Legendre-like family. Adjacent "
+                "squared norms feeding an emitted ratio must be nonzero, "
+                "and derived recurrence entries must stay canonical.",
+                {
+                    "family": {
+                        "polynomials": [
+                            {
+                                "degree": 0,
+                                "coefficients": [{"num": "1", "den": "1"}],
+                                "squared_norm": {"num": "2", "den": "1"},
+                            },
+                            {
+                                "degree": 1,
+                                "coefficients": [
+                                    {"num": "0", "den": "1"},
+                                    {"num": "1", "den": "1"},
+                                ],
+                                "squared_norm": {"num": "2", "den": "3"},
+                            },
                         ],
-                    }
+                        "variable": "x",
+                        "is_quasi_definite": True,
+                        "is_positive_definite": True,
+                    },
+                },
+            ),
+        ),
+    ),
+    _op(
+        "moment_functional.gaussian_quadrature.compute",
+        "Compute exact Gaussian quadrature rule",
+        "Compute an exact Gaussian quadrature rule from a bounded moment "
+        "prefix whose degree-n orthogonal polynomial splits over QQ: 2n "
+        "moments, n distinct rational nodes, positive weights, exactness "
+        "through degree 2n-1.",
+        GaussianQuadratureRequest,
+        GaussianQuadratureRule,
+        compute_gaussian_quadrature,
+        "moments",
+        "gaussian-quadrature",
+        "exact",
+        examples=(
+            example(
+                "gaussian_quadrature_rational_nodes",
+                (
+                    "Gaussian quadrature for weight 7 at +-1 and 5 at +-2: "
+                    "nodes +-3/2, weight 12. The prefix needs at least "
+                    "2*order canonical moments whose degree-order "
+                    "orthogonal polynomial splits over QQ into distinct "
+                    "factors with positive weights."
+                ),
+                {
+                    "prefix": {
+                        "moments": [
+                            {"num": "24", "den": "1"},
+                            {"num": "0", "den": "1"},
+                            {"num": "54", "den": "1"},
+                            {"num": "0", "den": "1"},
+                            {"num": "174", "den": "1"},
+                        ],
+                        "variable": "x",
+                    },
+                    "order": 2,
                 },
             ),
         ),
     ),
 )
+
 
 __all__ = ["TOOLS"]

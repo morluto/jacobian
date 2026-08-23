@@ -18,7 +18,6 @@ classifiers = [
 dependencies = [
     "mcp==2.0.0",
     "networkx==3.6.1",
-    "numpy==2.5.1",
     "pydantic>=2.12,<3",
     "python-flint==0.9.0",
     "rfc8785==0.1.4",
@@ -187,7 +186,7 @@ known_first_party = ["jacobian"]
 # exactly pinned MCP transport; deploy/ is not part of the Python wheel.
 # The Harbor manifest writer is repository tooling and uses the direct dev-only
 # tomli-w dependency; it is intentionally absent from the runtime wheel.
-per_rule_ignores = { "DEP001" = ["harbor"], "DEP002" = ["python-flint"], "DEP003" = ["httpx2", "numpy"], "DEP004" = ["jsonschema", "tomli_w"] }
+per_rule_ignores = { "DEP001" = ["harbor"], "DEP002" = ["python-flint"], "DEP003" = ["httpx2"], "DEP004" = ["jsonschema", "tomli_w"] }
 
 [tool.importlinter]
 root_package = "jacobian"

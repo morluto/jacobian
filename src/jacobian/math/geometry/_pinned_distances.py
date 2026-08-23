@@ -70,6 +70,29 @@ class LineDistanceEntry(StrictModel):
         )
 
 
+def _require_admitted_pinned_points(
+    anchor: RationalPoint2D,
+    points: tuple[RationalPoint2D, ...],
+) -> None:
+    """Admission checks shared by requests and directly validated results."""
+    if len(points) > MAX_PINNED_POINTS:
+        raise ValueError("point set exceeds the pinned-distance enumeration budget")
+    keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in points)
+    if len(keys) != len(set(keys)):
+        raise ValueError("point-set coordinates must be unique")
+    for pt in (anchor, *points):
+        if (
+            len(pt.x.num.lstrip("-")) > MAX_PINNED_COORDINATE_DIGITS
+            or len(pt.x.den) > MAX_PINNED_COORDINATE_DIGITS
+            or len(pt.y.num.lstrip("-")) > MAX_PINNED_COORDINATE_DIGITS
+            or len(pt.y.den) > MAX_PINNED_COORDINATE_DIGITS
+        ):
+            raise ValueError(
+                f"coordinate exceeds the {MAX_PINNED_COORDINATE_DIGITS}-digit "
+                "pinned-distance bound"
+            )
+
+
 class PinnedDistanceResult(StrictModel):
     """The complete pinned-distance profile."""
 
@@ -83,6 +106,7 @@ class PinnedDistanceResult(StrictModel):
 
     @model_validator(mode="after")
     def require_source_bound_ledger(self) -> Self:
+        _require_admitted_pinned_points(self.anchor, self.points)
         expected = _distance_ledger(self.anchor, self.points)
         if tuple(self.lines) != expected:
             raise ValueError(

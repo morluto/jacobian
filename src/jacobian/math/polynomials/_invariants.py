@@ -264,7 +264,11 @@ POLYNOMIAL_INVARIANT_OPERATIONS = (
         examples=(
             example(
                 "membership_x_squared",
-                "Decide if x lies in <x^2> in Q[x].",
+                "Decide if x lies in <x^2> in Q[x]; the ideal and "
+                "polynomial must share one identical ordered QQ ring, with "
+                "at most 16 generators of per-term total degree at most 12, "
+                "at most 1,024 queried polynomial terms, and coefficient "
+                "components of at most 128 digits.",
                 {
                     "ideal": {
                         "variables": ["x"],
@@ -315,7 +319,11 @@ POLYNOMIAL_INVARIANT_OPERATIONS = (
         examples=(
             example(
                 "normal_form_x_mod_x_squared",
-                "Reduce x modulo <x^2> in Q[x]; the remainder is x.",
+                "Reduce x modulo <x^2> in Q[x]; the ideal and polynomial "
+                "must share one identical ordered QQ ring, with at most 16 "
+                "generators of per-term total degree at most 12, at most "
+                "1,024 queried polynomial terms, and coefficient components "
+                "of at most 128 digits.",
                 {
                     "ideal": {
                         "variables": ["x"],

@@ -50,6 +50,14 @@ from jacobian.math.lattice_polytopes._models import (
 
 __all__ = ["count_lattice_points", "enumerate_lattice_points"]
 
+AdmittedGeometry = tuple[
+    list[tuple[tuple[int, ...], int]],
+    list[int],
+    list[int],
+    int,
+]
+"""The integer facet inequalities, bounding box, and ambient dimension."""
+
 
 class LatticePointBudgetError(ValueError):
     """Raised when the enumeration would exceed a fail-closed budget bound."""
@@ -288,7 +296,7 @@ def _to_integer_facet(
 
 def _facets_and_box(  # noqa: C901
     request: LatticePolytopeRequest,
-) -> tuple[list[tuple[tuple[int, ...], int]], list[int], list[int], int]:
+) -> AdmittedGeometry:
     """Build the integer facet inequalities and the integer bounding box.
 
     Raises ``LatticePointBudgetError`` when the bounding box spans more
@@ -439,12 +447,14 @@ def enumeration_output_admission(
 
     Runs the exact count pass (bounded by the admitted scan budget) and
     checks both the materialization cap and the conservative canonical
-    JSON size estimate.  Raises ``ValueError`` so the enumerate-specific
-    request boundary turns oversize artifacts into invalid requests
-    instead of internal operation failures.
+    JSON size estimate.  Reuses the geometry computed once during request
+    validation instead of repeating the facet enumeration.  Raises
+    ``ValueError`` so the enumerate-specific request boundary turns
+    oversize artifacts into invalid requests instead of internal
+    operation failures.
     """
 
-    facets, lo, hi, d = _facets_and_box(request)
+    facets, lo, hi, d = request.admitted_geometry()
     _, count = _scan_box(facets, lo, hi, d, collect=False)
     if count > MAX_LATTICE_POINTS:
         raise ValueError(
@@ -476,14 +486,14 @@ def enumerate_lattice_points(
 ) -> EnumerateLatticePointsResult:
     """Enumerate every lattice point inside a bounded rational polytope.
 
-    The enumerate-specific request boundary has already run the exact
-    count pass for artifact admission, so execution performs only the
-    collecting scan.
+    The admitted geometry (exact facet inequalities and integer bounding
+    box) was computed once during request validation and is reused here,
+    so execution performs only the collecting scan.
     """
     representation: Literal["vertices", "halfspaces"] = (
         "vertices" if request.vertices is not None else "halfspaces"
     )
-    facets, lo, hi, d = _facets_and_box(request)
+    facets, lo, hi, d = request.admitted_geometry()
     points, _count = _scan_box(facets, lo, hi, d, collect=True)
     return EnumerateLatticePointsResult(
         dimension=d,
@@ -500,7 +510,7 @@ def count_lattice_points(
     representation: Literal["vertices", "halfspaces"] = (
         "vertices" if request.vertices is not None else "halfspaces"
     )
-    facets, lo, hi, d = _facets_and_box(request)
+    facets, lo, hi, d = request.admitted_geometry()
     _points, count = _scan_box(facets, lo, hi, d, collect=False)
     return CountLatticePointsResult(
         dimension=d,

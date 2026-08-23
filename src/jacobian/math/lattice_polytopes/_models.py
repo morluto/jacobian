@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
-from typing import Literal, Self
+from typing import TYPE_CHECKING, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, PrivateAttr, model_validator
 
 from jacobian._exact import (
     CanonicalInteger,
@@ -13,6 +12,9 @@ from jacobian._exact import (
     require_bounded_rational,
 )
 from jacobian._models import StrictModel
+
+if TYPE_CHECKING:
+    from jacobian.math.lattice_polytopes._operations import AdmittedGeometry
 
 MAX_DIMENSION = 4
 """Absolute upper bound on the ambient dimension of a polytope.
@@ -59,47 +61,20 @@ the work.  Requests whose deduplicated facet count times their integer
 bounding-box scan exceeds this budget are rejected at validation.
 """
 
+MAX_TOTAL_SCAN = 10_000_000
+"""Absolute upper bound on candidate points tested by one admitted scan.
+
+Every accepted request's integer bounding box stays within this many
+integer candidates, so neither operation can ever observe more lattice
+points than this; the count result is constrained to the same maximum.
+"""
+
 COORDINATE_DIGITS = 32_768
 """Per-component digit bound forwarded to the canonical rational validator."""
 
+
 RepresentationName = Literal["vertices", "halfspaces"]
 """The exactly-one representation tag carried by requests and results."""
-
-
-def _reject_out_of_budget_scan(
-    lo: list[int],
-    hi: list[int],
-    dim: int,
-) -> int:
-    """Reject an integer bounding box outside the admitted scan budgets.
-
-    Each axis may span at most ``MAX_BOUND_SPAN`` integer points and the
-    product of the spans (the candidate points tested by the scan) must
-    stay within the 10M-point scan budget.  Returns the total scan so
-    callers can bound derived work against it.
-    """
-    total_scan = 1
-    for k in range(dim):
-        span = hi[k] - lo[k] + 1
-        if span > MAX_BOUND_SPAN:
-            raise ValueError(
-                "the integer bounding box exceeds the "
-                f"{MAX_BOUND_SPAN}-point per-axis span bound"
-            )
-        total_scan *= span
-        if total_scan > 10_000_000:
-            raise ValueError(
-                "integer bounding box total scan exceeds the 10M-point budget"
-            )
-    return total_scan
-
-
-def _floor_frac(value: Fraction) -> int:
-    return value.numerator // value.denominator
-
-
-def _ceil_frac(value: Fraction) -> int:
-    return -((-value.numerator) // value.denominator)
 
 
 class Vertex(StrictModel):
@@ -129,6 +104,8 @@ class Halfspace(StrictModel):
 
 class LatticePolytopeRequest(StrictModel):
     """A bounded rational polytope in exactly one representation."""
+
+    _geometry: AdmittedGeometry | None = PrivateAttr(default=None)
 
     vertices: tuple[Vertex, ...] | None = Field(
         default=None,
@@ -197,74 +174,45 @@ class LatticePolytopeRequest(StrictModel):
     def _validate_vertex_geometry(self) -> None:
         """Admit the vertex geometry before any enumeration work.
 
-        Enforces the facet-combination budget, full dimensionality, and
-        the bounding-box scan budgets so that both operations fail closed
-        as ``ValidationError`` instead of expanding unbounded work.
+        The admitted integer geometry is computed exactly once (the
+        facet-combination budget, full dimensionality, and bounding-box
+        scan budgets fail closed inside it) and memoized for admission
+        and execution, so one accepted request never repeats the bounded
+        facet-enumeration work.
         """
-        assert self.vertices is not None  # for type checkers
-        verts_frac = [[c.as_fraction() for c in v.coordinates] for v in self.vertices]
-        dim = len(verts_frac[0])
-        # Facet-combination budget: C(n,d) subsets define candidate hyperplanes.
-        if dim > 1:
-            from math import comb
-
-            from sympy import Matrix
-
-            try:
-                facet_combinations = comb(len(self.vertices), dim)
-            except ValueError:
-                facet_combinations = 10**18
-            if facet_combinations > 700_000:
-                raise ValueError(
-                    "vertex facet enumeration exceeds the 700k-combination budget"
-                )
-            # Full-dimensionality admission: the exact facet enumeration assumes
-            # the vertices affinely span the ambient dimension.  Reject
-            # lower-dimensional V-representations here, regardless of vertex
-            # count, so both operations fail closed as ValidationError instead
-            # of scanning an unrelated bounding box.
-            diffs = Matrix(
-                [
-                    [verts_frac[i][k] - verts_frac[0][k] for k in range(dim)]
-                    for i in range(1, len(verts_frac))
-                ]
-            )
-            if diffs.rank() < dim:
-                raise ValueError(
-                    "V-representation is not full-dimensional; "
-                    "lower-dimensional hulls require exact handling"
-                )
-            # Membership work: every scanned candidate is tested against
-            # every facet generated from the vertices, so the exact facet
-            # count multiplies the bounding-box scan exactly as for
-            # H-representations.
-            from sympy import Rational as SympyRational
-
-            from jacobian.math.lattice_polytopes._operations import (
-                _facets_from_points,
-            )
-
-            facet_count = len(
-                _facets_from_points(
-                    [[SympyRational(c) for c in row] for row in verts_frac],
-                    dim,
-                )
-            )
-        else:
-            facet_count = 1
-        # Inclusive integer bounds of the vertex bounding box.
-        lo = [min(v[k] for v in verts_frac) for k in range(dim)]
-        hi = [max(v[k] for v in verts_frac) for k in range(dim)]
-        lo_int = [_floor_frac(lo[k]) for k in range(dim)]
-        hi_int = [_ceil_frac(hi[k]) for k in range(dim)]
-        total_scan = _reject_out_of_budget_scan(lo_int, hi_int, dim)
-        if total_scan * facet_count > MAX_FACET_TESTS:
+        if self._membership_work() > MAX_FACET_TESTS:
             raise ValueError(
                 "the vertex-hull scan evaluates up to total-scan times "
                 "facet-count inequalities and exceeds the "
                 f"{MAX_FACET_TESTS}-test budget; reduce point count or "
                 "bounding-box size"
             )
+
+    def admitted_geometry(self) -> AdmittedGeometry:
+        """Return the admitted integer geometry, computing it once per request.
+
+        Validation, artifact admission, and execution all need the exact
+        facet inequalities and the integer bounding box; the first call
+        computes them once and memoizes them on this request instance so
+        no accepted request repeats the bounded facet-enumeration work.
+        """
+        geometry = self._geometry
+        if geometry is None:
+            from jacobian.math.lattice_polytopes._operations import (
+                _facets_and_box,
+            )
+
+            geometry = _facets_and_box(self)
+            self._geometry = geometry
+        return geometry
+
+    def _membership_work(self) -> int:
+        """Return the admitted scan-times-facet-count membership bound."""
+        facets, lo, hi, _dim = self.admitted_geometry()
+        total_scan = 1
+        for k in range(len(lo)):
+            total_scan *= hi[k] - lo[k] + 1
+        return total_scan * len(facets)
 
     def _validate_halfspaces(self) -> None:
         assert self.halfspaces is not None  # for type checkers
@@ -299,46 +247,13 @@ class LatticePolytopeRequest(StrictModel):
     def _validate_halfspace_geometry(self) -> None:
         """Admit the half-space geometry before any enumeration work.
 
-        Bounded-ness and non-emptiness are decided exactly here, and the
-        vertex bounding box must satisfy the shared scan budgets, so an
-        accepted request always describes a bounded, non-empty polytope
-        whose scan stays inside the admitted membership-work budget.
+        Bounded-ness and non-emptiness are decided exactly inside the
+        shared geometry computation, and membership work is bounded by
+        distinct-facet count times bounding-box scan, so an accepted
+        request always describes a bounded, non-empty polytope whose
+        scan stays inside the admitted work budget.
         """
-        assert self.halfspaces is not None  # for type checkers
-        from jacobian.math.lattice_polytopes._operations import (
-            _bounding_box,
-            _dedupe_normalized_halfspaces,
-            _is_bounded_h,
-            _vertices_from_h_representation,
-        )
-
-        dim = len(self.halfspaces[0].coefficients)
-        halfspaces_list: list[tuple[list[Fraction], Fraction]] = [
-            (
-                [c.as_fraction() for c in hs.coefficients],
-                hs.offset.as_fraction(),
-            )
-            for hs in self.halfspaces
-        ]
-        # ``Fraction`` values are accepted by the sympy-based helpers
-        # via implicit conversion.
-        if not _is_bounded_h(halfspaces_list, dim):
-            raise ValueError(
-                "the H-representation is unbounded; lattice-point enumeration "
-                "requires a bounded polytope"
-            )
-        verts, _ = _vertices_from_h_representation(halfspaces_list)
-        if not verts:
-            raise ValueError("the H-representation defines an empty polytope")
-        # verts are list of SymPy Rationals
-        box_dim = len(verts[0])
-        lo_h, hi_h = _bounding_box(verts, box_dim)
-        total_scan_h = _reject_out_of_budget_scan(lo_h, hi_h, box_dim)
-        # Membership work: every candidate is tested against every distinct
-        # facet inequality.  Normalization merges repeated inequalities so
-        # duplicates cannot multiply the admitted work.
-        unique_facets = len(_dedupe_normalized_halfspaces(halfspaces_list))
-        if total_scan_h * unique_facets > MAX_FACET_TESTS:
+        if self._membership_work() > MAX_FACET_TESTS:
             raise ValueError(
                 "the scan evaluates up to total-scan times facet-count "
                 f"inequalities and exceeds the {MAX_FACET_TESTS}-test budget"
@@ -399,7 +314,7 @@ class CountLatticePointsResult(StrictModel):
     """The number of lattice points inside a bounded rational polytope."""
 
     dimension: int = Field(ge=1, le=MAX_DIMENSION)
-    point_count: int = Field(ge=0)
+    point_count: int = Field(ge=0, le=MAX_TOTAL_SCAN)
     representation: RepresentationName
 
 
@@ -428,6 +343,7 @@ __all__ = [
     "MAX_FACET_TESTS",
     "MAX_HALFSPACES",
     "MAX_LATTICE_POINTS",
+    "MAX_TOTAL_SCAN",
     "MAX_VERTICES",
     "CountLatticePointsResult",
     "EnumerateLatticePointsRequest",

@@ -647,3 +647,82 @@ class TestOneDimensionalSingletonException:
             LatticePolytopeRequest(vertices=(_v(("3", "1")),))
         )
         assert result.point_count == 1
+
+
+class TestFacetGeometryComputedOnce:
+    """The C(n,d) subset enumeration runs once per request, not per phase."""
+
+    SQUARE_WITH_EDGE_MIDPOINTS = (
+        _v(("0", "1"), ("0", "1")),
+        _v(("1", "1"), ("0", "1")),
+        _v(("2", "1"), ("0", "1")),
+        _v(("2", "1"), ("1", "1")),
+        _v(("2", "1"), ("2", "1")),
+        _v(("1", "1"), ("2", "1")),
+        _v(("0", "1"), ("2", "1")),
+        _v(("0", "1"), ("1", "1")),
+    )
+
+    def _count_facet_passes(self, monkeypatch: pytest.MonkeyPatch) -> list[int]:
+        from jacobian.math.lattice_polytopes import _operations
+
+        passes = []
+
+        original = _operations._facets_from_points
+
+        def counting(verts, d):
+            passes.append(d)
+            return original(verts, d)
+
+        monkeypatch.setattr(_operations, "_facets_from_points", counting)
+        return passes
+
+    def test_enumerate_request_and_execution_share_one_facet_pass(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Validation, artifact admission, and execution must reuse the
+        computed facet geometry instead of repeating the bounded
+        C(n,d)-subset enumeration for each phase."""
+        passes = self._count_facet_passes(monkeypatch)
+        request = EnumerateLatticePointsRequest(
+            vertices=self.SQUARE_WITH_EDGE_MIDPOINTS
+        )
+        assert len(passes) == 1
+        result = enumerate_lattice_points(request)
+        assert result.point_count == 9
+        assert len(passes) == 1
+
+    def test_count_execution_reuses_validation_geometry(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        passes = self._count_facet_passes(monkeypatch)
+        request = LatticePolytopeRequest(vertices=self.SQUARE_WITH_EDGE_MIDPOINTS)
+        assert count_lattice_points(request).point_count == 9
+        assert len(passes) == 1
+
+
+class TestCountResultScanCap:
+    def test_count_point_count_is_capped_at_the_scan_maximum(self) -> None:
+        from jacobian.math.lattice_polytopes._models import (
+            MAX_TOTAL_SCAN,
+            CountLatticePointsResult,
+        )
+
+        at_limit = CountLatticePointsResult(
+            dimension=1,
+            point_count=MAX_TOTAL_SCAN,
+            representation="vertices",
+        )
+        assert at_limit.point_count == MAX_TOTAL_SCAN
+        with pytest.raises(ValidationError):
+            CountLatticePointsResult(
+                dimension=1,
+                point_count=MAX_TOTAL_SCAN + 1,
+                representation="vertices",
+            )
+
+    def test_admitted_count_results_satisfy_the_cap(self) -> None:
+        from jacobian.math.lattice_polytopes._models import MAX_TOTAL_SCAN
+
+        result = count_lattice_points(LatticePolytopeRequest(vertices=UNIT_SQUARE_V))
+        assert 0 <= result.point_count <= MAX_TOTAL_SCAN

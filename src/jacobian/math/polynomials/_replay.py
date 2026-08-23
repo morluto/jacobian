@@ -42,159 +42,29 @@ def _component_exceeds_limit(numerator: int, denominator: int) -> bool:
     return abs(numerator) >= bound or abs(denominator) >= bound
 
 
-def _basis_exceeds_output_budget(
-    basis: Any,
-    symbols: tuple[Any, ...],
-    maximum_terms: int = _MAX_OUTPUT_TERMS,
-) -> bool:
-    """Check one computed Gröbner basis against the output budgets.
-
-    The aggregate 1,024-term boundary and the representability limits
-    (32,768 exponents, canonical coefficient digits) apply only to a
-    complete basis: the reduced Gröbner basis of the full generating set
-    is unique, so its budget status is a function of the ideal value.
-    """
-
-    from sympy import QQ, Poly
-
-    from jacobian.math.polynomials.values import MAX_POLYNOMIAL_EXPONENT
-
-    aggregate_terms = 0
-    for expr in basis.exprs:
-        poly = Poly(expr, *symbols, domain=QQ)
-        terms = poly.terms()
-        aggregate_terms += len(terms)
-        if aggregate_terms > maximum_terms:
-            return True
-        for monom, coefficient in terms:
-            if any(exp > MAX_POLYNOMIAL_EXPONENT for exp in monom):
-                return True
-            if _component_exceeds_limit(int(coefficient.p), int(coefficient.q)):
-                return True
-    return False
-
-
-def _canonical_generator_order(ideal: RationalPolynomialIdeal) -> tuple[int, ...]:
-    """Order generator indices by mathematical content alone.
-
-    The key (ascending maximum total degree, then term count, then full
-    term fingerprint) is a deterministic function of the ideal value, so
-    the bounded kernel's behavior never depends on the presentation order
-    of an equivalent generating set.  Simpler generators first also lets
-    collapsing elements — most simply nonzero constants, of degree zero —
-    shrink every later prefix instead of arriving after one has grown.
-    """
-
-    def sort_key(
-        index: int,
-    ) -> tuple[int, int, tuple[tuple[tuple[int, ...], str, str], ...]]:
-        terms = ideal.generators[index].polynomial.terms
-        return (
-            max((sum(term.exponents) for term in terms), default=0),
-            len(terms),
-            tuple(
-                sorted(
-                    (term.exponents, term.coefficient.num, term.coefficient.den)
-                    for term in terms
-                )
-            ),
-        )
-
-    return tuple(sorted(range(len(ideal.generators)), key=sort_key))
-
-
-def _guarded_incremental(
-    exprs: list[Any],
-    symbols: tuple[Any, ...],
-    monomial_order: str,
-) -> tuple[str, Any]:
-    """Run the kernel over one generator order under a work bound.
-
-    Returns ``("OK", basis)`` when every prefix stayed representable,
-    ``("EXCEEDED", None)`` when the complete generating set's basis leaves
-    an output budget, ``("ABORTED", None)`` when a mid-sequence prefix
-    left a budget — a work bound, not a conclusion, because later
-    generators can still shrink the ideal — and ``("FAILED", None)`` when
-    the kernel itself failed, which is likewise no evidence.
-    """
-
-    from sympy import QQ, groebner
-
-    current: list[Any] = []
-    basis = None
-    for position, expr in enumerate(exprs):
-        current.append(expr)
-        try:
-            basis = groebner(current, *symbols, order=monomial_order, domain=QQ)
-        except Exception:
-            return "FAILED", None
-        try:
-            exceeded = _basis_exceeds_output_budget(basis, symbols)
-        except Exception:
-            return "FAILED", None
-        if exceeded:
-            if position == len(exprs) - 1:
-                return "EXCEEDED", None
-            return "ABORTED", None
-    if basis is None:
-        return "FAILED", None
-    return "OK", basis
-
-
-def _finalize_strategy_basis(
-    basis: Any,
-    symbols: tuple[Any, ...],
-    variables: tuple[str, ...],
-) -> tuple[str, tuple[RationalPolynomial, ...] | None]:
-    """Convert one completed sympy basis to wire form, deciding the budgets.
-
-    Representability failures (canonical term limits, exponent or digit
-    bounds) are complete-basis overflow evidence; other failures carry no
-    conclusion.
-    """
-
-    from pydantic import ValidationError
-    from sympy import QQ, Poly
-
-    from jacobian.math.polynomials._conversions import (
-        rational_polynomial_from_sympy,
-    )
-
-    try:
-        polys = [Poly(expr.as_expr(), *symbols, domain=QQ) for expr in basis.exprs]
-        if sum(len(poly.terms()) for poly in polys) > _MAX_OUTPUT_TERMS:
-            return "EXCEEDED", None
-        return "OK", tuple(
-            rational_polynomial_from_sympy(poly, variables) for poly in polys
-        )
-    except ValidationError:
-        return "EXCEEDED", None
-    except Exception:
-        return "FAILED", None
-
-
 def incremental_source_groebner(
     ideal: RationalPolynomialIdeal,
     monomial_order: str,
 ) -> tuple[tuple[RationalPolynomial, ...] | None, bool]:
     """Compute the source reduced Gröbner basis in wire form.
 
-    No output-budget decision is ever taken from an intermediate prefix:
-    adding a generator grows the ideal but can shrink its reduced basis
-    (one trailing coprime generator collapses the ideal to the unit
-    ideal), so every prefix property — aggregate term count, exponent,
-    coefficient digits — is presentation-dependent evidence that later
-    generators may invalidate.  Only the basis of the complete generating
-    set, whose reduced form is unique, decides an overflow.
+    No Gröbner attempt ever runs in the service process: an admitted hard
+    system can consume unbounded kernel time or memory before any output
+    boundary is noticed.  Every attempt instead runs killably in a
+    subprocess under a wall clock and hard resource limits (see
+    ``_groebner_worker``), and no attempt ever decides an output budget
+    from an intermediate prefix — adding a generator grows the ideal but
+    can shrink its reduced basis, so only the basis of the complete
+    generating set, whose reduced form is unique, decides an overflow.
 
-    Each guarded strategy runs the kernel incrementally in a
-    content-derived order and aborts at its first mid-sequence budget
-    trip purely as a work bound: strategy one uses the canonical
-    ascending order, strategy two its reverse.  When both abort or fail,
-    a third strategy runs the kernel once over the complete generating
-    set inside a killable subprocess with a wall clock, where collapsing
-    pairs are visible from the start.  A strategy that cannot conclude
-    yields no evidence either way.
+    Strategy one and two run the guarded incremental construction over
+    content-derived ascending and descending generator orders; a
+    mid-sequence budget trip there aborts that strategy as a pure work
+    bound.  When both abort or fail, strategy three submits the whole
+    generating set to one unguarded kernel call, where Buchberger sees
+    every ideal-collapsing pair from the start and need never materialize
+    any exploding prefix.  An attempt that cannot conclude yields no
+    evidence either way.
 
     Returns ``(basis, exceeded)``: ``basis`` is the complete reduced
     Gröbner basis when some bounded strategy concluded within budget;
@@ -202,36 +72,23 @@ def incremental_source_groebner(
     outcome, and ``(None, False)`` reports that no conclusion exists.
     """
 
-    from jacobian.math.polynomials._conversions import (
-        rational_polynomial_to_sympy,
-        symbols_for_variables,
+    from jacobian.math.polynomials._groebner_worker import (
+        complete_basis_in_worker,
     )
 
-    variables = ideal.variables
-    symbols = symbols_for_variables(variables)
-    try:
-        exprs = [
-            rational_polynomial_to_sympy(gen).as_expr() for gen in ideal.generators
-        ]
-    except Exception:
-        return None, False
-    canonical = _canonical_generator_order(ideal)
-    for ordered in (canonical, tuple(reversed(canonical))):
-        outcome, basis = _guarded_incremental(
-            [exprs[index] for index in ordered], symbols, monomial_order
-        )
-        if outcome == "EXCEEDED":
+    for strategy in ("ascending", "descending"):
+        status, basis = complete_basis_in_worker(ideal, monomial_order, strategy)
+        if status == "ok":
+            return basis, False
+        if status == "exceeded":
             return None, True
-        if outcome != "OK":
-            continue
-        concluded, wire_basis = _finalize_strategy_basis(basis, symbols, variables)
-        if concluded == "OK":
-            return wire_basis, False
-        if concluded == "EXCEEDED":
-            return None, True
-    from jacobian.math.polynomials._groebner_worker import complete_basis_in_worker
-
-    return complete_basis_in_worker(ideal, monomial_order)
+        # Aborted or failed attempts decide nothing; retry.
+    status, basis = complete_basis_in_worker(ideal, monomial_order, "complete")
+    if status == "ok":
+        return basis, False
+    if status == "exceeded":
+        return None, True
+    return None, False
 
 
 def _coefficient_exceeds_canonical_limit(value: Any) -> bool:

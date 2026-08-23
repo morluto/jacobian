@@ -5,6 +5,7 @@ from __future__ import annotations
 import networkx as nx
 
 from jacobian.math.graphs.cycle_pattern._models import (
+    _FIRST_PASS_BUDGET_CONTEXT_KEY,
     FixedLengthCycleRequest,
     FixedLengthCycleResult,
     SubgraphEmbedding,
@@ -125,10 +126,12 @@ def decide_fixed_length_cycle(
                 ),
             )
 
-    return FixedLengthCycleResult(
-        graph=request.graph,
-        length=k,
-        exists=False,
+    # The first pass above exhausted the admitted search and decided the
+    # negative here; attaching its budget as evidence keeps validation from
+    # charging a second identical pass to this request.
+    return FixedLengthCycleResult.model_validate(
+        {"graph": request.graph, "length": k, "exists": False},
+        context={_FIRST_PASS_BUDGET_CONTEXT_KEY: budget},
     )
 
 
@@ -311,10 +314,16 @@ def find_subgraph_pattern(
             embedding=emb,
         )
 
-    return SubgraphPatternResult(
-        host_graph=request.host,
-        pattern_graph=request.pattern,
-        exists=False,
+    # The first pass above exhausted the admitted search and decided the
+    # negative here; attaching its budget as evidence keeps validation from
+    # charging a second identical pass to this request.
+    return SubgraphPatternResult.model_validate(
+        {
+            "host_graph": request.host,
+            "pattern_graph": request.pattern,
+            "exists": False,
+        },
+        context={_FIRST_PASS_BUDGET_CONTEXT_KEY: budget},
     )
 
 

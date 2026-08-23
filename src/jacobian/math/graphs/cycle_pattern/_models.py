@@ -9,12 +9,27 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationInfo, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.canonical import canonicalize_json
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_CYCLE_GRAPH_ORDER = 64
+
+# Serialized canonical results stay under Jacobian's 10 MiB transport
+# ceiling with room for the OperationResult envelope around them; a
+# schema-valid request must never produce an output the host cannot
+# canonicalize.
+MAX_CYCLE_PATTERN_RESULT_BYTES = 9 * 1024 * 1024
+_RESULT_ENVELOPE_SLACK_BYTES = 1_024
+
+# Validation-context key carrying one executed search's budget. The
+# operation attaches the very budget whose completion decided a negative
+# result, so validation reuses that first-pass evidence instead of paying
+# a second exhaustive pass per request. Payloads decoded without this
+# programmatic context always replay the full bounded search.
+_FIRST_PASS_BUDGET_CONTEXT_KEY = "cycle_pattern_first_pass_budget"
 
 
 def _require_admissible_order(graph: SimpleUndirectedGraph) -> None:
@@ -23,6 +38,63 @@ def _require_admissible_order(graph: SimpleUndirectedGraph) -> None:
             "graphs are bounded to at most "
             f"{MAX_CYCLE_GRAPH_ORDER} vertices so the exhaustive searches "
             "keep a declared work and result bound"
+        )
+
+
+def _encoded_graph_bytes(graph: SimpleUndirectedGraph) -> int:
+    """Serialized size of one retained graph value."""
+    return len(canonicalize_json(graph.model_dump(mode="json")))
+
+
+def _longest_label_bytes(graph: SimpleUndirectedGraph) -> int:
+    return max((len(vertex.encode("utf-8")) for vertex in graph.vertices), default=0)
+
+
+def _require_admissible_cycle_result_bytes(
+    graph: SimpleUndirectedGraph, length: int
+) -> None:
+    """Reserve transport space for the complete cycle result.
+
+    The result retains the source graph and a positive witness repeats up
+    to ``length`` vertex labels, so admission predicts the canonical
+    encoding of everything the result carries and rejects requests that
+    cannot fit the output budget.
+    """
+    witness_bytes = min(length, len(graph.vertices)) * (_longest_label_bytes(graph) + 3)
+    predicted = (
+        _encoded_graph_bytes(graph) + witness_bytes + _RESULT_ENVELOPE_SLACK_BYTES
+    )
+    if predicted > MAX_CYCLE_PATTERN_RESULT_BYTES:
+        raise ValueError(
+            "cycle request result would exceed the "
+            f"{MAX_CYCLE_PATTERN_RESULT_BYTES}-byte canonical result budget"
+        )
+
+
+def _require_admissible_pattern_result_bytes(
+    host: SimpleUndirectedGraph, pattern: SimpleUndirectedGraph
+) -> None:
+    """Reserve transport space for the complete subgraph-pattern result.
+
+    The result retains both graphs plus one mapping entry per pattern
+    vertex; admission predicts that aggregate encoding against the output
+    budget before any search runs.
+    """
+    pattern_label_bytes = sum(
+        len(vertex.encode("utf-8")) for vertex in pattern.vertices
+    )
+    mapping_bytes = len(pattern.vertices) * (_longest_label_bytes(host) + 5)
+    predicted = (
+        _encoded_graph_bytes(host)
+        + _encoded_graph_bytes(pattern)
+        + pattern_label_bytes
+        + mapping_bytes
+        + _RESULT_ENVELOPE_SLACK_BYTES
+    )
+    if predicted > MAX_CYCLE_PATTERN_RESULT_BYTES:
+        raise ValueError(
+            "subgraph pattern request result would exceed the "
+            f"{MAX_CYCLE_PATTERN_RESULT_BYTES}-byte canonical result budget"
         )
 
 
@@ -37,6 +109,7 @@ class FixedLengthCycleRequest(StrictModel):
         _require_admissible_order(self.graph)
         if self.length > len(self.graph.vertices):
             raise ValueError("cycle length cannot exceed vertex count")
+        _require_admissible_cycle_result_bytes(self.graph, self.length)
         return self
 
 
@@ -108,6 +181,22 @@ class SearchOutcome(StrictModel):
         return self
 
 
+def _first_pass_evidence_attached(info: ValidationInfo | None) -> bool:
+    """Whether the executing operation attached its own completed search.
+
+    Presence of the executed budget under ``_FIRST_PASS_BUDGET_CONTEXT_KEY``
+    is programmatic evidence that this exact payload was produced by a
+    first pass that already exhausted the admitted search, so validation
+    reuses it rather than paying a second exhaustive pass. Any decode
+    without that context replays the search in full.
+    """
+    return (
+        info is not None
+        and info.context is not None
+        and _FIRST_PASS_BUDGET_CONTEXT_KEY in info.context
+    )
+
+
 class FixedLengthCycleResult(SearchOutcome):
     """Whether a simple k-cycle exists, with an explicit witness.
 
@@ -122,7 +211,8 @@ class FixedLengthCycleResult(SearchOutcome):
     cycle: tuple[str, ...] | None = None
 
     @model_validator(mode="after")
-    def bind_witness(self) -> Self:
+    def bind_witness(self, info: ValidationInfo) -> Self:
+        _require_admissible_order(self.graph)
         if self.length > len(self.graph.vertices):
             raise ValueError("cycle length cannot exceed vertex count")
         if self.outcome != "DECIDED":
@@ -134,7 +224,7 @@ class FixedLengthCycleResult(SearchOutcome):
         _require_decided_witness_pair(self.exists, self.cycle)
         if self.cycle is not None:
             _require_cycle_witness_replay(self.graph, self.length, self.cycle)
-        else:
+        elif not _first_pass_evidence_attached(info):
             _require_negative_cycle_replay(self.graph, self.length)
         return self
 
@@ -151,18 +241,20 @@ class SubgraphPatternRequest(StrictModel):
         _require_admissible_order(self.pattern)
         if len(self.pattern.vertices) > len(self.host.vertices):
             raise ValueError("pattern vertex count cannot exceed host vertex count")
+        _require_admissible_pattern_result_bytes(self.host, self.pattern)
         return self
 
 
 class SubgraphEmbedding(StrictModel):
-    """One injective embedding of a pattern graph into a host graph."""
+    """One injective embedding of a pattern graph into a host graph.
+
+    The empty mapping is the unique embedding of the empty pattern.
+    """
 
     mapping: tuple[tuple[str, str], ...]
 
     @model_validator(mode="after")
     def require_valid_mapping(self) -> Self:
-        if not self.mapping:
-            raise ValueError("embedding mapping must be nonempty")
         domain = tuple(src for src, _ in self.mapping)
         codomain = tuple(dst for _, dst in self.mapping)
         if domain != tuple(sorted(domain)):
@@ -189,7 +281,7 @@ class SubgraphPatternResult(SearchOutcome):
     embedding: SubgraphEmbedding | None = None
 
     @model_validator(mode="after")
-    def bind_witness(self) -> Self:
+    def bind_witness(self, info: ValidationInfo) -> Self:
         _require_admissible_order(self.host_graph)
         _require_admissible_order(self.pattern_graph)
         if len(self.pattern_graph.vertices) > len(self.host_graph.vertices):
@@ -205,7 +297,7 @@ class SubgraphPatternResult(SearchOutcome):
             _require_embedding_witness_replay(
                 self.host_graph, self.pattern_graph, self.embedding
             )
-        else:
+        elif not _first_pass_evidence_attached(info):
             _require_negative_embedding_replay(self.host_graph, self.pattern_graph)
         return self
 
@@ -260,6 +352,7 @@ def _require_negative_embedding_replay(
 
 __all__ = [
     "MAX_CYCLE_GRAPH_ORDER",
+    "MAX_CYCLE_PATTERN_RESULT_BYTES",
     "FixedLengthCycleRequest",
     "FixedLengthCycleResult",
     "SubgraphEmbedding",

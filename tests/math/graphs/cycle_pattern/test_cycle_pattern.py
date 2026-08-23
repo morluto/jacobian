@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.graphs.cycle_pattern._models import (
+    MAX_CYCLE_GRAPH_ORDER,
     FixedLengthCycleRequest,
     FixedLengthCycleResult,
     SubgraphEmbedding,
@@ -234,6 +235,24 @@ class TestSubgraphPattern:
         )
         assert not result.exists
 
+    def test_empty_pattern_embeds_with_the_empty_mapping(self):
+        """The empty pattern has the unique empty embedding into any host."""
+        host = _graph(["a", "b"], [("a", "b")])
+        result = find_subgraph_pattern(
+            SubgraphPatternRequest(host=host, pattern=_graph([], []))
+        )
+        assert result.exists is True
+        assert result.embedding == SubgraphEmbedding(mapping=())
+        revalidated = type(result).model_validate(result.model_dump())
+        assert revalidated.embedding.mapping == ()
+
+    def test_empty_host_and_empty_pattern_decide_affirmatively(self):
+        result = find_subgraph_pattern(
+            SubgraphPatternRequest(host=_graph([], []), pattern=_graph([], []))
+        )
+        assert result.exists is True
+        assert result.embedding.mapping == ()
+
 
 class TestBoundedSearchAndWitnessBinding:
     """Searches carry a deterministic work bound; witnesses replay sources."""
@@ -325,6 +344,136 @@ class TestBoundedSearchAndWitnessBinding:
         )
         with pytest.raises(ValidationError, match="contradicts"):
             FixedLengthCycleResult(graph=square, length=4, exists=False)
+
+    def test_result_reapplies_graph_order_admission(self):
+        """Decoded results reapply the 64-vertex bound before any outcome."""
+        names = [f"v{i:03d}" for i in range(MAX_CYCLE_GRAPH_ORDER + 1)]
+        oversized = SimpleUndirectedGraph.model_validate(
+            {"vertices": names, "edges": []}
+        )
+        assert len(oversized.vertices) == 65
+        with pytest.raises(ValidationError, match="64 vertices"):
+            FixedLengthCycleResult(graph=oversized, length=3, exists=False)
+        with pytest.raises(ValidationError, match="64 vertices"):
+            FixedLengthCycleResult(
+                graph=oversized,
+                length=3,
+                outcome="SEARCH_BUDGET_EXCEEDED",
+                detail="exhausted without deciding",
+            )
+
+
+class TestPerRequestSearchBudget:
+    """One accepted request charges at most one bounded search pass."""
+
+    @staticmethod
+    def _run_counted(monkeypatch, run):
+        import jacobian.math.graphs.cycle_pattern._operations as ops
+
+        ticks = {"count": 0}
+        real_budget = ops._NodeBudget
+
+        class Counting(real_budget):
+            def tick(self):
+                ticks["count"] += 1
+                super().tick()
+
+        monkeypatch.setattr(ops, "_NodeBudget", Counting)
+        return run(), ticks["count"]
+
+    def test_negative_cycle_decision_charges_a_single_pass(self, monkeypatch):
+        """Validation reuses first-pass evidence instead of replaying."""
+        import jacobian.math.graphs.cycle_pattern._operations as ops
+
+        left = [f"L{i:02d}" for i in range(14)]
+        right = [f"R{i:02d}" for i in range(14)]
+        graph = _graph(left + right, [(lf, rg) for lf in left for rg in right])
+        assert ops._decide_cycle_bounded(graph, 3) is False
+
+        _, single_pass = self._run_counted(
+            monkeypatch, lambda: ops._decide_cycle_bounded(graph, 3)
+        )
+        assert single_pass > 0
+        # A per-request bound just above one exhaustive pass leaves no
+        # room for a second identical pass.
+        monkeypatch.setattr(
+            ops, "MAX_SEARCH_NODES", single_pass + max(1, single_pass // 2)
+        )
+        request = FixedLengthCycleRequest(graph=graph, length=3)
+        result, total = self._run_counted(
+            monkeypatch, lambda: ops.decide_fixed_length_cycle(request)
+        )
+        assert result.exists is False
+        assert result.outcome == "DECIDED"
+        assert total <= ops.MAX_SEARCH_NODES
+
+    def test_negative_embedding_decision_charges_a_single_pass(self, monkeypatch):
+        """Validation reuses first-pass evidence instead of replaying."""
+        import jacobian.math.graphs.cycle_pattern._operations as ops
+
+        left = [f"L{i:02d}" for i in range(10)]
+        right = [f"R{i:02d}" for i in range(10)]
+        host = _graph(left + right, [(lf, rg) for lf in left for rg in right])
+        # An odd cycle cannot embed into a bipartite host, but every vertex
+        # degree matches, so the rejection costs real backtracking work.
+        cycle_names = [f"c{i}" for i in range(5)]
+        pattern = _graph(
+            cycle_names,
+            [
+                (cycle_names[i], cycle_names[(i + 1) % 5]) if i < 4 else ("c0", "c4")
+                for i in range(5)
+            ],
+        )
+        assert ops._decide_embedding_bounded(host, pattern) is False
+
+        _, single_pass = self._run_counted(
+            monkeypatch, lambda: ops._decide_embedding_bounded(host, pattern)
+        )
+        assert single_pass > 0
+        monkeypatch.setattr(
+            ops, "MAX_SEARCH_NODES", single_pass + max(1, single_pass // 2)
+        )
+        request = SubgraphPatternRequest(host=host, pattern=pattern)
+        result, total = self._run_counted(
+            monkeypatch, lambda: ops.find_subgraph_pattern(request)
+        )
+        assert result.exists is False
+        assert result.outcome == "DECIDED"
+        assert total <= ops.MAX_SEARCH_NODES
+
+
+class TestResultTransportAdmission:
+    """Admission reserves space for the complete retained-graph result."""
+
+    def test_long_labels_rejected_by_cycle_result_budget(self):
+        label_prefix = "x" * 160_000
+        names = [f"{i:03d}{label_prefix}" for i in range(MAX_CYCLE_GRAPH_ORDER)]
+        with pytest.raises(ValidationError, match="result budget"):
+            FixedLengthCycleRequest(graph=_graph(names, []), length=3)
+
+    def test_moderate_labels_stay_admitted_for_cycles(self):
+        label_prefix = "x" * 100_000
+        names = [f"{i:03d}{label_prefix}" for i in range(MAX_CYCLE_GRAPH_ORDER)]
+        request = FixedLengthCycleRequest(graph=_graph(names, []), length=3)
+        assert len(request.graph.vertices) == MAX_CYCLE_GRAPH_ORDER
+
+    def test_two_graph_request_rejected_by_result_budget(self):
+        host_label = "h" * 90_000
+        pattern_label = "p" * 50_000
+        host = _graph(
+            [f"{i:03d}{host_label}" for i in range(MAX_CYCLE_GRAPH_ORDER)], []
+        )
+        pattern = _graph(
+            [f"{i:03d}{pattern_label}" for i in range(MAX_CYCLE_GRAPH_ORDER - 4)], []
+        )
+        with pytest.raises(ValidationError, match="result budget"):
+            SubgraphPatternRequest(host=host, pattern=pattern)
+
+    def test_small_two_graph_request_stays_admitted(self):
+        host = _graph(["a", "b"], [("a", "b")])
+        pattern = _graph(["u"], [])
+        request = SubgraphPatternRequest(host=host, pattern=pattern)
+        assert len(request.pattern.vertices) == 1
 
 
 class TestEmbeddingFunctionContract:

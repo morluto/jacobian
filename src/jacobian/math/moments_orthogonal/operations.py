@@ -312,15 +312,6 @@ def _validate_quadrature_float_domain(
             raise ValueError(
                 "quadrature coefficients exceed the finite-float magnitude bound"
             )
-
-
-    if beta[0] < MIN_QUADRATURE_SUBDIAGONAL:
-        raise ValueError("beta_0 falls below the quadrature underflow bound")
-    for value in (*alpha, *beta):
-        if abs(value) > MAX_QUADRATURE_MAGNITUDE:
-            raise ValueError(
-                "quadrature coefficients exceed the finite-float magnitude bound"
-            )
     for index in range(1, min(len(alpha), len(beta))):
         sub = beta[index]
         if sub <= 0:
@@ -382,6 +373,11 @@ def gaussian_quadrature(
 
 
 __all__ = [
+    "ChristoffelDarbouxKernel",
+    "GaussianQuadrature",
+    "HankelMatrix",
+    "JacobiMatrix",
+    "RecurrenceCoefficients",
     "christoffel_darboux",
     "gaussian_quadrature",
     "hankel_matrix",

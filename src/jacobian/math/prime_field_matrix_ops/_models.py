@@ -16,6 +16,7 @@ from jacobian.math.prime_field_linear_algebra import (
 MAX_DIMENSION = 256
 MAX_PRIME = 1000003  # conservative prime modulus bound
 
+
 def _is_prime(n: int) -> bool:
     if n < 2:
         return False
@@ -31,7 +32,9 @@ def _is_prime(n: int) -> bool:
 
 def _require_bounded_prime(prime: int) -> None:
     if prime > MAX_PRIME:
-        raise ValueError(f"prime {prime} exceeds the bounded modulus {MAX_PRIME} for field arithmetic")
+        raise ValueError(
+            f"prime {prime} exceeds the bounded modulus {MAX_PRIME} for field arithmetic"
+        )
     if not _is_prime(prime):
         raise ValueError(f"prime {prime} is not prime")
 
@@ -56,14 +59,21 @@ class PrimeFieldMatrixRequest(StrictModel):
             raise ValueError("entries must be canonical prime-field residues")
         if not self.entries and self.columns == 0:
             return self
-        _PrimeFieldMatrixValidator(prime=self.prime, entries=self.entries, columns=self.columns)
+        _PrimeFieldMatrixValidator(
+            prime=self.prime, entries=self.entries, columns=self.columns
+        )
         return self
 
 
 class _PrimeFieldMatrixValidator:
     """Trigger PrimeFieldMatrix validation."""
 
-    def __init__(self, prime, entries, columns):
+    def __init__(
+        self,
+        prime: int,
+        entries: tuple[tuple[int, ...], ...],
+        columns: int,
+    ) -> None:
         PrimeFieldMatrix(prime=prime, entries=entries, columns=columns)
 
 
@@ -106,14 +116,23 @@ class RankResult(StrictModel):
             raise ValueError("matrix exceeds the supported dimension bound")
         if any(len(row) != self.columns for row in self.entries):
             raise ValueError("every row must match the declared column count")
-        if any(type(v) is not int or not 0 <= v < self.prime for row in self.entries for v in row):
+        if any(
+            type(v) is not int or not 0 <= v < self.prime
+            for row in self.entries
+            for v in row
+        ):
             raise ValueError("entries must be canonical prime-field residues")
         from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix, rref
-        mat = PrimeFieldMatrix(prime=self.prime, entries=self.entries, columns=self.columns)
+
+        mat = PrimeFieldMatrix(
+            prime=self.prime, entries=self.entries, columns=self.columns
+        )
         _, pivots = rref(mat)
         expected = len(pivots)
         if self.rank != expected:
-            raise ValueError(f"rank {self.rank} does not match recomputed rank {expected}")
+            raise ValueError(
+                f"rank {self.rank} does not match recomputed rank {expected}"
+            )
         return self
 
 
@@ -151,9 +170,7 @@ class RrefResult(RrefRequest):
             self.rref_matrix.prime != self.prime
             or self.rref_matrix.columns != self.columns
         ):
-            raise ValueError(
-                "rref_matrix must carry the source prime and column count"
-            )
+            raise ValueError("rref_matrix must carry the source prime and column count")
         matrix = PrimeFieldMatrix(
             prime=self.prime, entries=self.entries, columns=self.columns
         )

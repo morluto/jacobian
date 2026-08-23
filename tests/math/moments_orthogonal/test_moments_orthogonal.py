@@ -435,3 +435,21 @@ class TestCanonicalCoefficientsComposition:
             GaussianQuadratureRequest(coefficients=value)
         )
         assert isinstance(quadrature, GaussianQuadratureResult)
+
+
+class TestRecurrenceAdmissionBoundConsistency:
+    """Every admitted sequence length must produce a constructible value."""
+
+    def test_thirty_three_moments_rejected_at_admission(self) -> None:
+        with pytest.raises(ValidationError, match="consumed by the maximum"):
+            RecurrenceCoefficientsRequest(
+                moments=tuple(_cr(1, k + 1) for k in range(33))
+            )
+
+    def test_thirty_two_moments_construct_the_result(self) -> None:
+        request = RecurrenceCoefficientsRequest(
+            moments=tuple(_cr(1, k + 1) for k in range(32))
+        )
+        result = compute_recurrence_coefficients(request)
+        assert len(result.coefficients.alpha) == 16
+        assert len(result.coefficients.beta) == 16

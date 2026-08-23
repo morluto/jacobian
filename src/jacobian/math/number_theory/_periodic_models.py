@@ -202,7 +202,7 @@ class PeriodicCongruenceUnionRequest(StrictModel):
 
     The family may be empty and may repeat moduli or residue representatives.
     Validation normalizes representatives modulo their positive modulus, merges
-    repeated moduli, and admits either a bounded one-period lift or a bounded
+    repeated moduli, and admits a bounded period lift, sparse lift, or
     generalized-CRT inclusion-exclusion computation.
     """
 

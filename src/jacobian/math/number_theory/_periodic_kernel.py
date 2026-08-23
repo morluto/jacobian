@@ -25,8 +25,8 @@ from jacobian.math.number_theory._periodic_models import (
 )
 
 # Operations perform one kernel pass and their authoritative result validators
-# replay that operation's defining invariant once. These are per-pass caps, so a full
-# accepted call performs at most twice the admitted scan/lift or merge work.
+# replay that operation's defining invariant once. These are per-pass caps, so
+# a full accepted call performs at most twice the admitted scan/lift or merge work.
 
 
 @dataclass(frozen=True, slots=True)

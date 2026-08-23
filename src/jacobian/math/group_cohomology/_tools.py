@@ -71,7 +71,8 @@ GROUP_COHOMOLOGY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "z2_over_gf2",
-                "Compute cohomology of Z/2 with trivial coefficients over GF(2).",
+                "Cohomology of Z/2 over GF(2); order^k stays inside the "
+                "4096-element cochain and 65536-cell matrix budgets.",
                 _COHOMOLOGY_EXAMPLE,
             ),
         ),

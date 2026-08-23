@@ -231,10 +231,7 @@ class JacobiMatrixResult(JacobiMatrixRequest):
     def bind_jacobi(self) -> Self:
         from jacobian.math.moments_orthogonal.operations import jacobi_matrix
 
-        result = jacobi_matrix(
-            _to_fractions(self.coefficients.alpha),
-            _to_fractions(self.coefficients.beta),
-        )
+        result = jacobi_matrix(self.coefficients)
         if self.diagonal != _from_fractions(result.diagonal):
             raise ValueError("diagonal must match the exact Jacobi diagonal")
         if self.off_diagonal != _from_fractions(result.off_diagonal):
@@ -268,8 +265,7 @@ class ChristoffelDarbouxRequest(StrictModel):
         )
 
         result = christoffel_darboux(
-            _to_fractions(alpha),
-            _to_fractions(beta),
+            RecurrenceCoefficientsValue(alpha=alpha, beta=beta),
             self.x.as_fraction(),
             self.y.as_fraction(),
         )
@@ -299,8 +295,7 @@ class ChristoffelDarbouxResult(ChristoffelDarbouxRequest):
         )
 
         result = christoffel_darboux(
-            _to_fractions(self.coefficients.alpha),
-            _to_fractions(self.coefficients.beta),
+            self.coefficients,
             self.x.as_fraction(),
             self.y.as_fraction(),
         )
@@ -479,10 +474,7 @@ class GaussianQuadratureResult(GaussianQuadratureRequest):
             gaussian_quadrature,
         )
 
-        result = gaussian_quadrature(
-            _to_fractions(self.coefficients.alpha),
-            _to_fractions(self.coefficients.beta),
-        )
+        result = gaussian_quadrature(self.coefficients)
         if self.nodes != _from_fractions(result.nodes):
             raise ValueError("nodes must match the Golub-Welsch eigenvalues")
         if self.weights != _from_fractions(result.weights):

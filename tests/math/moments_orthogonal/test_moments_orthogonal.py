@@ -34,7 +34,10 @@ from jacobian.math.moments_orthogonal._operations import (
     compute_recurrence_coefficients,
 )
 from jacobian.math.moments_orthogonal._tools import TOOLS
-from jacobian.math.moments_orthogonal.values import MAX_RECURRENCE_ORDER
+from jacobian.math.moments_orthogonal.values import (
+    MAX_RECURRENCE_ORDER,
+    RecurrenceCoefficients,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -154,24 +157,34 @@ class TestRecurrenceCoefficients:
 # ---------------------------------------------------------------------------
 
 
+def _coeffs(alpha, beta):
+    """Build the domain-owned recurrence value from exact Fractions."""
+    from jacobian._exact import CanonicalRational
+
+    return RecurrenceCoefficients(
+        alpha=tuple(CanonicalRational.from_fraction(a) for a in alpha),
+        beta=tuple(CanonicalRational.from_fraction(b) for b in beta),
+    )
+
+
 class TestJacobiMatrix:
     def test_assembly(self) -> None:
         alpha = (_frac(1, 2), _frac(1, 2))
         beta = (_frac(1, 1), _frac(1, 12), _frac(1, 15))
-        result = jacobi_matrix(alpha, beta)
+        result = jacobi_matrix(_coeffs(alpha, beta))
         assert result.diagonal == (_frac(1, 2), _frac(1, 2))
         # beta_0 is the zeroth moment; the subdiagonal carries beta_1 only.
         assert result.off_diagonal == (_frac(1, 12),)
 
     def test_empty_alpha(self) -> None:
         beta = (_frac(1, 1),)
-        result = jacobi_matrix((), beta)
+        result = jacobi_matrix(_coeffs((), beta))
         assert result.diagonal == ()
         assert result.off_diagonal == ()
 
     def test_zero_beta_rejected(self) -> None:
         with pytest.raises(ValueError, match="positive"):
-            jacobi_matrix((_frac(0, 1),), (_frac(0, 1), _frac(1, 1)))
+            jacobi_matrix(_coeffs((_frac(0, 1),), (_frac(0, 1), _frac(1, 1))))
 
 
 # ---------------------------------------------------------------------------
@@ -184,26 +197,26 @@ class TestChristoffelDarboux:
         """K_n(x,x) = sum_{k=0}^{n-1} p_k(x)^2 / h_k is positive."""
         alpha = (_frac(1, 2), _frac(1, 2))
         beta = (_frac(1, 1), _frac(1, 12), _frac(1, 15))
-        result = christoffel_darboux(alpha, beta, _frac(1, 2), _frac(1, 2))
+        result = christoffel_darboux(_coeffs(alpha, beta), _frac(1, 2), _frac(1, 2))
         assert result.kernel > 0
 
     def test_zero_when_x_neq_y_symmetric(self) -> None:
         """K_n(x,y) is a reproducing kernel: K_n(x,y) = K_n(y,x)."""
         alpha = (_frac(0, 1), _frac(1, 3))
         beta = (_frac(2, 1), _frac(1, 9), _frac(4, 45))
-        result_xy = christoffel_darboux(alpha, beta, _frac(1, 4), _frac(3, 4))
-        result_yx = christoffel_darboux(alpha, beta, _frac(3, 4), _frac(1, 4))
+        result_xy = christoffel_darboux(_coeffs(alpha, beta), _frac(1, 4), _frac(3, 4))
+        result_yx = christoffel_darboux(_coeffs(alpha, beta), _frac(3, 4), _frac(1, 4))
         assert result_xy.kernel == result_yx.kernel
 
     def test_first_polynomial_is_one(self) -> None:
         alpha = (_frac(0, 1), _frac(1, 3))
         beta = (_frac(2, 1), _frac(1, 9), _frac(4, 45))
-        result = christoffel_darboux(alpha, beta, _frac(1, 1), _frac(1, 1))
+        result = christoffel_darboux(_coeffs(alpha, beta), _frac(1, 1), _frac(1, 1))
         assert result.polynomials_evaluated[0] == _frac(1, 1)
 
     def test_empty_alpha(self) -> None:
         beta = (_frac(1, 1),)
-        result = christoffel_darboux((), beta, _frac(1, 1), _frac(1, 1))
+        result = christoffel_darboux(_coeffs((), beta), _frac(1, 1), _frac(1, 1))
         assert result.kernel == _frac(0, 1)
         assert result.polynomials_evaluated == (_frac(1, 1),)
 
@@ -275,28 +288,28 @@ class TestGaussianQuadrature:
         """Sum of weights equals mu_0 (the zeroth moment)."""
         alpha = (_frac(1, 2), _frac(1, 2), _frac(1, 2))
         beta = (_frac(1, 1), _frac(1, 12), _frac(1, 15), _frac(4, 45))
-        result = gaussian_quadrature(alpha, beta)
+        result = gaussian_quadrature(_coeffs(alpha, beta))
         mu0 = float(beta[0])
         assert abs(sum(result.weights) - mu0) < 1e-10
 
     def test_nodes_count(self) -> None:
         alpha = (_frac(1, 2), _frac(1, 2), _frac(1, 2))
         beta = (_frac(1, 1), _frac(1, 12), _frac(1, 15), _frac(4, 45))
-        result = gaussian_quadrature(alpha, beta)
+        result = gaussian_quadrature(_coeffs(alpha, beta))
         assert len(result.nodes) == 3
         assert len(result.weights) == 3
 
     def test_single_point(self) -> None:
         alpha = (_frac(0, 1),)
         beta = (_frac(1, 1), _frac(1, 3))
-        result = gaussian_quadrature(alpha, beta)
+        result = gaussian_quadrature(_coeffs(alpha, beta))
         assert len(result.nodes) == 1
         assert abs(result.nodes[0] - 0.0) < 1e-10
         assert abs(result.weights[0] - 1.0) < 1e-10
 
     def test_alpha_empty_rejected(self) -> None:
         with pytest.raises(ValueError, match="between 1 and 16"):
-            gaussian_quadrature((), (_frac(1, 1),))
+            gaussian_quadrature(_coeffs((), (_frac(1, 1),)))
 
 
 # ---------------------------------------------------------------------------

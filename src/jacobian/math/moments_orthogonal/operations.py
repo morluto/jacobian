@@ -171,7 +171,7 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
     )
 
 
-def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> JacobiMatrix:
+def jacobi_matrix(coefficients: RecurrenceCoefficients) -> JacobiMatrix:
     """Build the symmetric tridiagonal Jacobi matrix from recurrence coefficients.
 
     The diagonal entries are ``alpha_0, ..., alpha_{n-1}`` and the positive
@@ -180,16 +180,14 @@ def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> Jacobi
     diagonal and the rational squared subdiagonal ``beta`` separately so that the
     full symmetric matrix can be reconstructed by any consumer.
     """
+    alpha = [value.as_fraction() for value in coefficients.alpha]
+    beta = [value.as_fraction() for value in coefficients.beta]
     if not 1 <= len(beta) <= MAX_RECURRENCE_ORDER:
         raise ValueError("beta must contain between 1 and 16 entries")
     if not 0 <= len(alpha) <= MAX_RECURRENCE_ORDER:
         raise ValueError("alpha out of range")
     if len(alpha) != len(beta) and len(alpha) != len(beta) - 1:
         raise ValueError("alpha must have length len(beta)-1 or len(beta)")
-    if any(type(value) is not Fraction for value in alpha):
-        raise TypeError("alpha must use exact Fractions")
-    if any(type(value) is not Fraction for value in beta):
-        raise TypeError("beta must use exact Fractions")
     if beta[0] <= 0:
         raise ValueError("beta_0 (the zeroth moment) must be positive")
     return JacobiMatrix(
@@ -201,8 +199,7 @@ def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> Jacobi
 
 
 def christoffel_darboux(
-    alpha: Sequence[Fraction],
-    beta: Sequence[Fraction],
+    coefficients: RecurrenceCoefficients,
     x: Fraction,
     y: Fraction,
 ) -> ChristoffelDarbouxKernel:
@@ -219,6 +216,8 @@ def christoffel_darboux(
 
     evaluated by forward recurrence of the polynomials at ``x`` and ``y``.
     """
+    alpha = [value.as_fraction() for value in coefficients.alpha]
+    beta = [value.as_fraction() for value in coefficients.beta]
     if not 1 <= len(beta) <= MAX_POLYNOMIAL_COUNT:
         raise ValueError("beta must contain between 1 and 32 entries")
     if not 0 <= len(alpha) <= MAX_POLYNOMIAL_COUNT:
@@ -264,9 +263,7 @@ def christoffel_darboux(
     )
 
 
-def gaussian_quadrature(
-    alpha: Sequence[Fraction], beta: Sequence[Fraction]
-) -> GaussianQuadrature:
+def gaussian_quadrature(coefficients: RecurrenceCoefficients) -> GaussianQuadrature:
     """Compute Gaussian quadrature nodes and weights via the Golub-Welsch algorithm.
 
     The nodes are the eigenvalues of the symmetric tridiagonal Jacobi matrix and
@@ -282,6 +279,8 @@ def gaussian_quadrature(
 
     import numpy as np
 
+    alpha = [value.as_fraction() for value in coefficients.alpha]
+    beta = [value.as_fraction() for value in coefficients.beta]
     n = len(alpha)
     if not 1 <= n <= MAX_QUADRATURE_POINTS:
         raise ValueError("alpha must contain between 1 and 16 entries")

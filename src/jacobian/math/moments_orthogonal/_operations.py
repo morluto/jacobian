@@ -59,10 +59,7 @@ def compute_recurrence_coefficients(
 def compute_jacobi_matrix(request: JacobiMatrixRequest) -> JacobiMatrixResult:
     from jacobian.math.moments_orthogonal.operations import jacobi_matrix
 
-    result = jacobi_matrix(
-        _to_fractions(request.coefficients.alpha),
-        _to_fractions(request.coefficients.beta),
-    )
+    result = jacobi_matrix(request.coefficients)
     return JacobiMatrixResult(
         coefficients=request.coefficients,
         diagonal=_from_fractions(result.diagonal),
@@ -76,8 +73,7 @@ def compute_christoffel_darboux(
     from jacobian.math.moments_orthogonal.operations import christoffel_darboux
 
     result = christoffel_darboux(
-        _to_fractions(request.coefficients.alpha),
-        _to_fractions(request.coefficients.beta),
+        request.coefficients,
         request.x.as_fraction(),
         request.y.as_fraction(),
     )
@@ -95,10 +91,7 @@ def compute_gaussian_quadrature(
 ) -> GaussianQuadratureResult:
     from jacobian.math.moments_orthogonal.operations import gaussian_quadrature
 
-    result = gaussian_quadrature(
-        _to_fractions(request.coefficients.alpha),
-        _to_fractions(request.coefficients.beta),
-    )
+    result = gaussian_quadrature(request.coefficients)
     return GaussianQuadratureResult(
         coefficients=request.coefficients,
         nodes=_from_fractions(result.nodes),

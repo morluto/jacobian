@@ -563,6 +563,24 @@ class TestElementaryCollapse:
         assert set(result.remaining_vertices) == {"a", "b", "c"}
         assert ElementaryCollapseResult.model_validate(result.model_dump()) == result
 
+    def test_non_free_result_with_noncanonical_source_facets(self) -> None:
+        """A noncanonical facet presentation must not make the operation
+        reject its own typed negative decision (review counterexample:
+        facets [["b","a"],["c","a"]] with free_face ["a"])."""
+        request = ElementaryCollapseRequest(
+            complex={
+                "vertices": ["c", "b", "a"],
+                "facets": [["b", "a"], ["c", "a"]],
+            },
+            free_face=["a"],
+            coface=["a", "b"],
+        )
+        result = compute_elementary_collapse(request)
+        assert not result.is_free_face
+        assert result.remaining_facets == (("a", "b"), ("a", "c"))
+        assert result.remaining_vertices == ("a", "b", "c")
+        assert ElementaryCollapseResult.model_validate(result.model_dump()) == result
+
 
 class TestJoinBounds:
     def test_join_of_two_4_simplices_rejected(self) -> None:

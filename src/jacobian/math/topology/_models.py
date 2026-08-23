@@ -1856,8 +1856,17 @@ class ElementaryCollapseResult(TopologyExactResult):
                 raise ValueError(
                     "is_free_face does not match the retained source complex"
                 )
-            expected_facets = self.complex.facets
-            expected_vertices = self.complex.vertices
+            # The kernel echoes a rejected collapse in canonical vertex order
+            # (each facet sorted, vertices from the facet union), so the
+            # expected artifacts must be canonicalized the same way before
+            # comparison; raw source order would make the operation reject
+            # its own typed result for a noncanonical presentation.
+            expected_facets = tuple(
+                tuple(sorted(facet)) for facet in self.complex.facets
+            )
+            expected_vertices = tuple(
+                sorted({vertex for facet in self.complex.facets for vertex in facet})
+            )
         else:
             if not self.is_free_face:
                 raise ValueError(

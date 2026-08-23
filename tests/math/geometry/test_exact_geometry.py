@@ -531,3 +531,70 @@ class TestResultCardinalityMirrorsRequest:
             ).lower()
             assert "distinct" in model_description, request_type.__name__
             assert "distinct" in field_description, request_type.__name__
+
+
+class TestIncidenceWitnessCanonicalOrder:
+    def _collinear_result(self):
+        from jacobian.math.geometry.exact._models import (
+            CollinearTriplesRequest,
+            PointConfiguration,
+        )
+        from jacobian.math.geometry.exact._operations import compute_collinear_triples
+
+        def cr(value):
+            return CanonicalRational.from_fraction(
+                __import__("fractions").Fraction(value)
+            )
+
+        configuration = PointConfiguration(
+            points=tuple(
+                LabelledRationalPoint(label=label, coordinates=(cr(x), cr(y)))
+                for label, x, y in (("a", 0, 0), ("b", 1, 0), ("c", 2, 0), ("d", 3, 0))
+            )
+        )
+        return compute_collinear_triples(
+            CollinearTriplesRequest(configuration=configuration)
+        )
+
+    def test_operation_emits_canonical_order(self):
+        result = self._collinear_result()
+        assert result.witnesses == tuple(sorted(result.witnesses))
+
+    def test_reversed_complete_witness_list_rejected(self):
+        """Reversing the four witnesses of four collinear points is the
+        same exact result; the second serialization must not revalidate."""
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import IncidenceSearchResult
+
+        result = self._collinear_result()
+        with pytest.raises(ValidationError, match="canonically ordered"):
+            IncidenceSearchResult(
+                configuration=result.configuration,
+                dimension=2,
+                point_count=4,
+                holds=True,
+                witnesses=tuple(reversed(result.witnesses)),
+                kind="COLLINEAR_TRIPLE",
+            )
+
+    def test_swapped_witness_permutation_rejected(self):
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import IncidenceSearchResult
+
+        result = self._collinear_result()
+        permuted = list(result.witnesses)
+        permuted[0], permuted[1] = permuted[1], permuted[0]
+        assert tuple(permuted) != tuple(sorted(permuted))
+        with pytest.raises(ValidationError, match="canonically ordered"):
+            IncidenceSearchResult(
+                configuration=result.configuration,
+                dimension=2,
+                point_count=4,
+                holds=True,
+                witnesses=tuple(permuted),
+                kind="COLLINEAR_TRIPLE",
+            )

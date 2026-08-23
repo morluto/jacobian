@@ -329,6 +329,13 @@ class IncidenceSearchResult(StrictModel):
             raise ValueError("a holds=True result must list at least one witness")
         if not self.holds and self.witnesses:
             raise ValueError("a holds=False result must list no witnesses")
+        # Canonical serialization: the search enumerates combinations in
+        # lexicographic order, so any permutation of the complete witness
+        # set is a second representation of the same exact result.
+        if self.witnesses != tuple(sorted(self.witnesses)):
+            raise ValueError(
+                "witnesses must be canonically ordered lexicographically ascending"
+            )
 
         # Apply the operation's arithmetic admission to the retained
         # configuration before converting and replaying it: a deserialized

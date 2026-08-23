@@ -237,11 +237,11 @@ EXACT_GEOMETRY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "unit_circle_concyclic",
                 (
-                    "Four points on the unit circle (1,0),(0,1),(-1,0),(0,-1) "
-                    "are concyclic. The configuration must be planar with "
-                    "4..18 points, pairwise distinct coordinates, each "
-                    "coordinate at most 64 digits, and joint work budget "
-                    "C(n,4)*h <= 65536 (h = largest coordinate digit length)."
+                    "Points (1,0),(0,1),(-1,0),(0,-1) on the unit circle "
+                    "are concyclic. Requires a planar configuration of "
+                    "4..18 points with pairwise distinct coordinates, "
+                    "each coordinate at most 64 digits, within the joint "
+                    "work budget C(n,4)*h <= 65536."
                 ),
                 HAS_CONCYCLIC_QUADRUPLE,
             ),

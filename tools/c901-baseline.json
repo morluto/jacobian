@@ -10,7 +10,7 @@
     {
       "path": "src/jacobian/math/geometry/exact/_models.py",
       "symbol": "require_consistent_witnesses",
-      "complexity": 33
+      "complexity": 34
     },
     {
       "path": "src/jacobian/math/graphs/decomposition/_operations.py",

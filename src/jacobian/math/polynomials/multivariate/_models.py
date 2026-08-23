@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from math import comb
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -27,6 +28,14 @@ _MAX_RESULTANT_TERMS = 1_024
 # operation converter uses this same bound; keeping it here lets the result
 # validator reproduce the kernel's exact exceedance decision.
 _MAX_FACTOR_OUTPUT_TERMS = 1_024
+# Reconstruction replay divides the restated polynomial by each irreducible
+# power instead of expanding their product, so no intermediate ever carries
+# more terms than these named caps.  The densest legitimate cofactors come
+# from paired geometric sums over the admitted exponent envelope (64 x 64 =
+# 4,096 terms); the caps keep one safety octave above that envelope and bound
+# the cumulative divisor-term work spent replaying one result.
+_MAX_RECONSTRUCTION_COFACTOR_TERMS = 8_192
+_MAX_RECONSTRUCTION_WORK_TERMS = 1_048_576
 
 MonomialOrder = Literal["lex", "grlex", "grevlex"]
 """Declared monomial order for multivariate polynomial division."""
@@ -297,7 +306,7 @@ class MultivariateFactorResult(StrictModel):
                     "budget-exceeded outcomes declare no normalization or "
                     "product reconstruction"
                 )
-            _verify_output_budget_exceeded_claim(self.reconstructed)
+            _verify_output_budget_exceeded_claim(self.coefficient, self.reconstructed)
             return self
         if not self.reconstructed.polynomial.terms:
             raise ValueError("reconstructed polynomial must be nonzero")
@@ -356,12 +365,24 @@ def _require_aggregate_degree_consistent(
             )
 
 
-def _verify_output_budget_exceeded_claim(reconstructed: RationalPolynomial) -> None:
+def _monic_content_fraction(content: Any) -> Fraction:
+    """Extract the exact rational content returned by ``_monic_decomposition``."""
+
+    leading = getattr(content, "LC", None)
+    value = leading() if callable(leading) else content
+    return Fraction(int(value.p), int(value.q))
+
+
+def _verify_output_budget_exceeded_claim(
+    coefficient: CanonicalRational,
+    reconstructed: RationalPolynomial,
+) -> None:
     """Re-derive a claimed ``OUTPUT_BUDGET_EXCEEDED`` status from its source.
 
     Replays the kernel's own factorization and conversion so the reported
     incompleteness is bound to the restated polynomial instead of being an
-    authorable label.
+    authorable label; the exact rational content is recomputed and compared
+    so every carried field is bound to that same source.
     """
 
     from jacobian.math.polynomials._conversions import (
@@ -371,11 +392,16 @@ def _verify_output_budget_exceeded_claim(reconstructed: RationalPolynomial) -> N
     from jacobian.math.polynomials._sympy import _monic_decomposition
 
     source = rational_polynomial_to_sympy(reconstructed)
-    _, raw_factors, _ = _monic_decomposition(
+    content, raw_factors, _ = _monic_decomposition(
         source,
         source.factor_list(),
         label="multivariate factorization",
     )
+    if _monic_content_fraction(content) != coefficient.as_fraction():
+        raise ValueError(
+            "budget-exceeded outcome coefficient does not match the exact "
+            "content of the restated polynomial"
+        )
     for factor, _multiplicity in raw_factors:
         try:
             rational_polynomial_from_sympy(
@@ -397,14 +423,18 @@ def _check_factor_records(
     factors: tuple[MultivariateIrreducibleFactor, ...],
     variables: tuple[str, ...],
 ) -> None:
-    """Enforce the reconstruction-safe envelope before any SymPy expansion."""
+    """Enforce the reconstruction-safe envelope before any SymPy expansion.
+
+    Factor records are kernel outputs, so their term budget is the output
+    conversion budget rather than the request envelope.
+    """
 
     for record in factors:
         if record.factor.variables != variables:
             raise ValueError("irreducible factors must use the source ring")
         require_polynomial_budget(
             record.factor,
-            maximum_terms=_MAX_MULTIVARIATE_TERMS,
+            maximum_terms=_MAX_FACTOR_OUTPUT_TERMS,
             maximum_exponent=_MAX_MULTIVARIATE_EXPONENT,
             maximum_coefficient_digits=_MAX_MULTIVARIATE_COEFFICIENT_DIGITS,
         )
@@ -464,7 +494,16 @@ def _verify_exact_reconstruction(
     factors: tuple[MultivariateIrreducibleFactor, ...],
     reconstructed: RationalPolynomial,
 ) -> None:
-    """Check coefficient * ∏ factor**multiplicity == reconstructed exactly."""
+    """Check coefficient * ∏ factor**multiplicity == reconstructed exactly.
+
+    The replay divides the restated polynomial by each monic irreducible
+    power instead of expanding their product: every division must be exact,
+    so invalid payloads fail on the first inexact step without ever
+    materializing a dense intermediate product.  Largest-degree factors are
+    divided off first, which keeps legitimate cofactors sparse, and every
+    intermediate quotient and the cumulative divisor-term work stay inside
+    the named replay caps.
+    """
 
     from sympy import QQ, Poly
     from sympy import Rational as SymRational
@@ -475,25 +514,36 @@ def _verify_exact_reconstruction(
     )
 
     try:
-        reconstructed_poly = rational_polynomial_to_sympy(reconstructed)
-        coeff_frac = coefficient.as_fraction()
-        symbols = symbols_for_variables(reconstructed.variables)
-        product = Poly(
-            SymRational(coeff_frac.numerator, coeff_frac.denominator),
-            *symbols,
-            domain=QQ,
+        inverse = Fraction(1) / coefficient.as_fraction()
+        quotient = rational_polynomial_to_sympy(reconstructed) * SymRational(
+            inverse.numerator, inverse.denominator
         )
-        target_degree = _reconstructed_total_degree(reconstructed)
-        for record in factors:
-            factor_poly = rational_polynomial_to_sympy(record.factor)
+        work = 0
+        for record in sorted(
+            factors,
+            key=lambda item: (-_factor_total_degree(item), -item.multiplicity),
+        ):
+            divisor = rational_polynomial_to_sympy(record.factor)
+            divisor_terms = max(len(divisor.terms()), 1)
             for _ in range(record.multiplicity):
-                product = product * factor_poly
-                if product.total_degree() > target_degree:
+                quotient, remainder = quotient.div(divisor)
+                if not remainder.is_zero:
                     raise ValueError(
-                        "factorization product degree exceeds the "
-                        "reconstructed total degree"
+                        "factorization product does not equal reconstructed polynomial"
                     )
-        if product != reconstructed_poly:
+                cofactor_terms = len(quotient.terms())
+                if cofactor_terms > _MAX_RECONSTRUCTION_COFACTOR_TERMS:
+                    raise ValueError(
+                        "reconstruction replay cofactor exceeds its "
+                        "bounded support envelope"
+                    )
+                work += cofactor_terms * divisor_terms
+                if work > _MAX_RECONSTRUCTION_WORK_TERMS:
+                    raise ValueError(
+                        "reconstruction replay exceeds its bounded work envelope"
+                    )
+        unit = Poly(1, *symbols_for_variables(reconstructed.variables), domain=QQ)
+        if quotient != unit:
             raise ValueError(
                 "factorization product does not equal reconstructed polynomial"
             )

@@ -24,6 +24,7 @@ from jacobian.math.polynomials.multivariate._models import (
     MultivariateResultantRequest,
     MultivariateResultantResult,
     MultivariateScalarValue,
+    _monic_content_fraction,
 )
 
 
@@ -172,22 +173,13 @@ def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFacto
     ``OUTPUT_BUDGET_EXCEEDED`` outcome instead of a host exception.
     """
 
-    from fractions import Fraction
-
     from jacobian._exact import CanonicalRational
 
     source = rational_polynomial_to_sympy(request.polynomial)
     coefficient, raw_factors, reconstructed = _sympy_factorization(source)
-
-    if hasattr(coefficient, "LC"):
-        coeff_rational = coefficient.LC()
-        coeff_fraction = Fraction(int(coeff_rational.p), int(coeff_rational.q))
-    else:
-        from sympy import Rational as SymPyRational
-
-        coeff_value = SymPyRational(coefficient)
-        coeff_fraction = Fraction(int(coeff_value.p), int(coeff_value.q))
-    coefficient_value = CanonicalRational.from_fraction(coeff_fraction)
+    coefficient_value = CanonicalRational.from_fraction(
+        _monic_content_fraction(coefficient)
+    )
 
     factors_list = []
     try:

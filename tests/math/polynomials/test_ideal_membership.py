@@ -867,3 +867,95 @@ def test_forged_budget_exceeded_for_work_limited_reduction_rejected() -> None:
                 "remainder": None,
             }
         )
+
+
+class TestWorkerFailurePreservation:
+    """Transport faults stay typed failures instead of becoming UNKNOWN."""
+
+    def test_launch_failure_raises_typed_error(self, monkeypatch):
+        from jacobian.math.polynomials._groebner_worker import (
+            GroebnerWorkerLaunchError,
+            complete_basis_in_worker,
+        )
+
+        def refuse_launch(*args, **kwargs):
+            raise OSError("cannot spawn worker: missing interpreter")
+
+        monkeypatch.setattr(
+            "jacobian.math.polynomials._groebner_worker.run_bounded_process",
+            refuse_launch,
+        )
+        with pytest.raises(GroebnerWorkerLaunchError, match="missing interpreter"):
+            complete_basis_in_worker(_ideal1(), "grevlex", "ascending")
+
+    def test_cancelled_worker_raises_typed_error(self, monkeypatch):
+        from collections import namedtuple
+
+        from jacobian.math.polynomials._groebner_worker import (
+            GroebnerWorkerCancelledError,
+            complete_basis_in_worker,
+        )
+
+        fake = namedtuple("Result", "timed_out cancelled returncode stdout")(
+            timed_out=False, cancelled=True, returncode=-15, stdout=b""
+        )
+        monkeypatch.setattr(
+            "jacobian.math.polynomials._groebner_worker.run_bounded_process",
+            lambda *args, **kwargs: fake,
+        )
+        with pytest.raises(GroebnerWorkerCancelledError):
+            complete_basis_in_worker(_ideal1(), "grevlex", "ascending")
+
+    def test_nonzero_exit_without_timeout_raises_execution_error(self, monkeypatch):
+        from collections import namedtuple
+
+        from jacobian.math.polynomials._groebner_worker import (
+            GroebnerWorkerExecutionError,
+            complete_basis_in_worker,
+        )
+
+        fake = namedtuple("Result", "timed_out cancelled returncode stdout")(
+            timed_out=False, cancelled=False, returncode=3, stdout=b""
+        )
+        monkeypatch.setattr(
+            "jacobian.math.polynomials._groebner_worker.run_bounded_process",
+            lambda *args, **kwargs: fake,
+        )
+        with pytest.raises(GroebnerWorkerExecutionError, match="returncode 3"):
+            complete_basis_in_worker(_ideal1(), "grevlex", "ascending")
+
+    def test_hard_timeout_remains_a_non_conclusion(self, monkeypatch):
+        from collections import namedtuple
+
+        from jacobian.math.polynomials._replay import incremental_source_groebner
+
+        fake = namedtuple("Result", "timed_out cancelled returncode stdout")(
+            timed_out=True, cancelled=False, returncode=-9, stdout=b""
+        )
+        monkeypatch.setattr(
+            "jacobian.math.polynomials._groebner_worker.run_bounded_process",
+            lambda *args, **kwargs: fake,
+        )
+        basis, exceeded = incremental_source_groebner(_ideal1(), "grevlex")
+        assert basis is None and exceeded is False
+
+    def test_public_operations_surface_transport_faults(self, monkeypatch):
+        """A broken worker installation is not a mathematical UNKNOWN."""
+        from jacobian.math.polynomials._groebner_worker import (
+            GroebnerWorkerLaunchError,
+        )
+
+        def refuse_launch(*args, **kwargs):
+            raise OSError("broken worker installation")
+
+        monkeypatch.setattr(
+            "jacobian.math.polynomials._groebner_worker.run_bounded_process",
+            refuse_launch,
+        )
+        request = IdealMembershipRequest(
+            ideal=_ideal1(),
+            polynomial=_poly(("x",), {(5,): 1}),
+            monomial_order="grevlex",
+        )
+        with pytest.raises(GroebnerWorkerLaunchError):
+            polynomial_ideal_normal_form(request)

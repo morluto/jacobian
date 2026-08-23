@@ -155,6 +155,27 @@ main()
 WorkerStatus = Literal["ok", "exceeded", "aborted", "failed", "unavailable"]
 
 
+class GroebnerWorkerError(RuntimeError):
+    """Base class for worker transport failures.
+
+    These are execution/deployment faults, not mathematical conclusions: a
+    caller cannot treat them as evidence about the ideal, so they surface as
+    typed failures instead of being projected into a domain status.
+    """
+
+
+class GroebnerWorkerLaunchError(GroebnerWorkerError):
+    """The worker process could not be launched (deployment failure)."""
+
+
+class GroebnerWorkerCancelledError(GroebnerWorkerError):
+    """The worker was cancelled before it could report any outcome."""
+
+
+class GroebnerWorkerExecutionError(GroebnerWorkerError):
+    """The worker ran but exited without a parseable, well-formed report."""
+
+
 def complete_basis_in_worker(
     ideal: RationalPolynomialIdeal,
     monomial_order: str,
@@ -168,8 +189,13 @@ def complete_basis_in_worker(
     one unguarded call where Buchberger sees every collapsing pair from
     the start.  Returns ``("ok", basis)`` when the attempt concluded
     within every output budget, ``("exceeded", None)`` for evidenced
-    complete-basis overflow, and ``("aborted"|"failed"|"unavailable",
-    None)`` when the attempt yields no mathematical conclusion.
+    complete-basis overflow, ``("aborted"|"failed", None)`` when the attempt
+    self-reports no conclusion, and ``("unavailable", None)`` when the hard
+    wall-clock safety net expires on a runaway attempt. Launch failures,
+    cancellation, and malformed worker exits are execution/deployment faults,
+    not mathematical conclusions: they raise their typed
+    ``GroebnerWorkerError`` subclasses instead of collapsing into a domain
+    status.
     """
 
     from pydantic import ValidationError
@@ -208,28 +234,47 @@ def complete_basis_in_worker(
             ),
             platform_tools=ProcessPlatformTools(prlimit_executable=prlimit),
         )
-    except Exception:
+    except OSError as error:
+        raise GroebnerWorkerLaunchError(str(error)) from None
+    if completed.cancelled:
+        raise GroebnerWorkerCancelledError(
+            "groebner worker was cancelled before reporting"
+        )
+    if completed.timed_out:
+        # The hard wall-clock safety net expired on a runaway attempt: the
+        # worker produced no report, so there is no conclusion either way
+        # about the ideal (a mathematically hard request).
         return "unavailable", None
-    if completed.timed_out or completed.cancelled or completed.returncode != 0:
-        return "unavailable", None
+    if completed.returncode != 0:
+        raise GroebnerWorkerExecutionError(
+            f"groebner worker exited with returncode "
+            f"{completed.returncode} without a report"
+        )
     try:
         report = json.loads(completed.stdout.decode("utf-8"))
-    except Exception:
-        return "unavailable", None
+    except Exception as error:
+        raise GroebnerWorkerExecutionError(str(error)) from None
     status = report.get("status")
     if status in ("exceeded", "aborted", "failed"):
         return status, None
     if status != "ok":
-        return "unavailable", None
+        raise GroebnerWorkerExecutionError(f"unknown worker status {status!r}")
     try:
         basis = tuple(
             RationalPolynomial.model_validate(element) for element in report["basis"]
         )
-    except (ValidationError, TypeError, KeyError, ValueError):
-        # A declared basis outside the canonical contract is evidence for
-        # no conclusion.
-        return "unavailable", None
+    except (ValidationError, TypeError, KeyError, ValueError) as error:
+        # A declared basis outside the canonical contract is a worker fault,
+        # not evidence about the ideal.
+        raise GroebnerWorkerExecutionError(str(error)) from None
     return "ok", basis
 
 
-__all__ = ["WorkerStatus", "complete_basis_in_worker"]
+__all__ = [
+    "GroebnerWorkerCancelledError",
+    "GroebnerWorkerError",
+    "GroebnerWorkerExecutionError",
+    "GroebnerWorkerLaunchError",
+    "WorkerStatus",
+    "complete_basis_in_worker",
+]

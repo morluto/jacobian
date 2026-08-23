@@ -809,10 +809,8 @@ def _work_limited_request() -> IdealMembershipRequest:
     """
     from itertools import product
 
-    variables = ("x",) + tuple(f"y{i}" for i in range(1, 8))
-    f_terms = {
-        (0,) + exponents: 1 for exponents in product((0, 1), repeat=7)
-    }
+    variables = ("x", *tuple(f"y{i}" for i in range(1, 8)))
+    f_terms = {(0, *exponents): 1 for exponents in product((0, 1), repeat=7)}
     assert len(f_terms) == 128
     generators = (
         _poly(variables, {(1,) + (0,) * 7: 1, **f_terms}),
@@ -869,4 +867,3 @@ def test_forged_budget_exceeded_for_work_limited_reduction_rejected() -> None:
                 "remainder": None,
             }
         )
-

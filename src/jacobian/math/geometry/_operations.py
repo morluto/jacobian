@@ -15,6 +15,9 @@ from jacobian.math.geometry._models import (
     CircumradiusProfileResult,
     CircumradiusTripleEntry,
     ClosedSegment2D,
+    ForbiddenLabelledPoint,
+    ForbiddenPatternsRequest,
+    ForbiddenPatternsResult,
     GeometryBooleanResult,
     GeometryCircleResult,
     GeometryConvexHullResult,
@@ -22,6 +25,7 @@ from jacobian.math.geometry._models import (
     GeometryOrientationResult,
     GeometryPointResult,
     GeometryRationalResult,
+    LabelledPoint2D,
     LinePairRequest,
     LineRequest,
     PointLineRequest,
@@ -450,7 +454,9 @@ def circumradius_profile(
     )
 
 
-def _compute_circumradius_entries(points):
+def _compute_circumradius_entries(
+    points: tuple[LabelledPoint2D, ...],
+) -> tuple[CircumradiusTripleEntry, ...]:
     """Pure circumradius enumeration shared by the operation and the result
     validator, so both replay identical bounded work."""
 
@@ -500,7 +506,7 @@ def _compute_circumradius_entries(points):
 
 
 def _screen_configuration(
-    pts,
+    pts: tuple[ForbiddenLabelledPoint, ...],
 ) -> tuple[
     bool, bool, tuple[int, int, int] | None, tuple[int, int, int, int] | None, int, int
 ]:
@@ -543,11 +549,12 @@ def _screen_configuration(
         sk = xk * xk + yk * yk
         sl = xl * xl + yl * yl
         # 4x4 determinant of [x^2+y^2, x, y, 1]
-        m = [
-            [si, xi, yi, 1],
-            [sj, xj, yj, 1],
-            [sk, xk, yk, 1],
-            [sl, xl, yl, 1],
+        one = Fraction(1)
+        m: list[list[Fraction]] = [
+            [si, xi, yi, one],
+            [sj, xj, yj, one],
+            [sk, xk, yk, one],
+            [sl, xl, yl, one],
         ]
         # Laplace expansion of the 4x4 determinant along row 0:
         # each cofactor deletes row 0 and its own column, keeping rows 1-3.
@@ -564,7 +571,7 @@ def _screen_configuration(
             # concyclicity.
             # Check whether all four points are collinear: if every triple
             # among the four is collinear, the quadruple is degenerate.
-            def _tri_collinear(a, b, c):
+            def _tri_collinear(a: int, b: int, c: int) -> bool:
                 xa, ya = xy[a]
                 xb, yb = xy[b]
                 xc, yc = xy[c]
@@ -592,7 +599,7 @@ def _screen_configuration(
     )
 
 
-def forbidden_patterns(request):
+def forbidden_patterns(request: ForbiddenPatternsRequest) -> ForbiddenPatternsResult:
     """Find a collinear triple or concyclic quadruple, or establish neither exists.
 
     Three points are collinear when the 2x2 cross-product determinant
@@ -606,7 +613,6 @@ def forbidden_patterns(request):
     from jacobian.math.geometry._models import (
         CollinearTriple,
         ConcyclicQuadruple,
-        ForbiddenPatternsResult,
     )
 
     pts = request.configuration.points
@@ -648,7 +654,15 @@ def forbidden_patterns(request):
     )
 
 
-def _minor3(m, r0, r1, r2, c0, c1, c2):
+def _minor3(
+    m: list[list[Fraction]],
+    r0: int,
+    r1: int,
+    r2: int,
+    c0: int,
+    c1: int,
+    c2: int,
+) -> Fraction:
     """3x3 determinant of selected rows and columns."""
     return (
         m[r0][c0] * (m[r1][c1] * m[r2][c2] - m[r1][c2] * m[r2][c1])

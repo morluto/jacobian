@@ -138,6 +138,25 @@ class TestRecurrenceCoefficients:
         with pytest.raises(ValueError, match="odd length"):
             recurrence_coefficients((_frac(1, 1), _frac(1, 2)))
 
+    def test_even_prefix_final_moment_is_never_ignored(self) -> None:
+        """Every shorter even prefix is rejected rather than returning the
+        same result as its odd truncation: (1, 0) and (1, 1) determine
+        different alpha_0 values (0 vs 1), so neither may be reported as
+        complete=True with alpha=(), beta=(1,)."""
+        for moments in (
+            (_frac(1, 1), _frac(0, 1)),
+            (_frac(1, 1), _frac(1, 1)),
+            (_frac(2, 1), _frac(1, 1), _frac(2, 3), _frac(1, 2)),
+        ):
+            with pytest.raises(ValueError, match="odd length"):
+                recurrence_coefficients(moments)
+
+    def test_wire_request_rejects_even_length_moments(self) -> None:
+        """The wire request replays the native kernel's odd-length rule so
+        an accepted request cannot fail during execution."""
+        with pytest.raises(ValidationError, match="odd length"):
+            RecurrenceCoefficientsRequest(moments=(_cr(1, 1), _cr(0, 1)))
+
 
 # ---------------------------------------------------------------------------
 # Jacobi matrix

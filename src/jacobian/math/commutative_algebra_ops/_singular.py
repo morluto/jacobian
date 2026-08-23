@@ -36,6 +36,9 @@ SingularOperation = Literal["radical", "quotient", "saturation"]
 SingularOutcome = Literal[
     "COMPUTED", "UNAVAILABLE", "TIMEOUT", "LIMIT_EXCEEDED", "ERROR"
 ]
+SingularVerificationVerdict = Literal[
+    "VERIFIED", "REFUTED", "UNAVAILABLE", "TIMEOUT", "ERROR"
+]
 
 
 class _ResultLimitExceededError(ValueError):
@@ -411,7 +414,7 @@ def _verification_script(
     return "\n".join(source_lines).encode("ascii")
 
 
-def _parse_verification_verdict(output: bytes) -> str:
+def _parse_verification_verdict(output: bytes) -> SingularVerificationVerdict:
     """Decode the bounded process output into a verification verdict."""
     try:
         text = output.decode("ascii")
@@ -440,7 +443,7 @@ def run_singular_saturation_verification(
     saturator: RationalPolynomialIdeal,
     claimed: RationalPolynomialIdeal,
     budget: IdealComputationBudget,
-) -> str:
+) -> SingularVerificationVerdict:
     """Decide the saturation's defining equality in a bounded subprocess.
 
     Returns ``"VERIFIED"``, ``"REFUTED"``, or an execution outcome

@@ -99,7 +99,10 @@ class TestRejection:
             CircleInversionRequest(
                 center={"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
                 power={"num": "1", "den": "1"},
-                point={"x": {"num": "1", "den": str(a)}, "y": {"num": "1", "den": str(3**7500)}},
+                point={
+                    "x": {"num": "1", "den": str(a)},
+                    "y": {"num": "1", "den": str(3**7500)},
+                },
             )
 
     def test_image_of_admitted_point_is_admitted(self) -> None:
@@ -113,8 +116,10 @@ class TestRejection:
         refed = CircleInversionRequest(
             center=request.center,
             power=request.power,
-            point={"x": {"num": image.x.num, "den": image.x.den},
-                   "y": {"num": image.y.num, "den": image.y.den}},
+            point={
+                "x": {"num": image.x.num, "den": image.x.den},
+                "y": {"num": image.y.num, "den": image.y.den},
+            },
         )
         # Admission accepts the exact image, and inverting it returns the
         # original point (involution).

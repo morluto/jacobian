@@ -68,7 +68,7 @@ class PrimeFieldMatrixRequest(StrictModel):
 class _PrimeFieldMatrixValidator:
     """Trigger PrimeFieldMatrix validation."""
 
-    def __init__(self, prime, entries, columns):
+    def __init__(self, prime: int, entries: tuple[tuple[int, ...], ...], columns: int):
         PrimeFieldMatrix(prime=prime, entries=entries, columns=columns)
 
 
@@ -234,8 +234,7 @@ class NullspaceResult(NullspaceRequest):
             or self.basis_matrix.columns != self.columns
         ):
             raise ValueError(
-                "basis_matrix must be the exact nullspace basis over the "
-                "same prime"
+                "basis_matrix must be the exact nullspace basis over the same prime"
             )
         if any(
             type(value) is not int or not 0 <= value < self.prime

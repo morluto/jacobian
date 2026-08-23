@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from jacobian.math.coalgebras._models import (
     GROUP_LIKE_ENUMERATION_BUDGET,
+    MAX_TENSOR_ENTRIES,
     Coalgebra,
     ComultiplicationRequest,
     ComultiplicationResult,
@@ -319,3 +320,90 @@ class TestCanonicalResidues:
                 comultiplication=(((1,),),),
                 counit=(5,),
             )
+
+
+def _direct_sum_group_like_coalgebra(n: int, prime: int = 2) -> Coalgebra:
+    """The n-fold direct sum of trivial coalgebras: Delta(c_i) = c_i (x) c_i.
+
+    Every basis element is group-like with counit 1, so the tensor carries
+    exactly n^3 structure constants and the element space has prime**n
+    candidates.
+    """
+    return Coalgebra(
+        prime=prime,
+        dimension=n,
+        comultiplication=tuple(
+            tuple(tuple(1 if j == i == k else 0 for k in range(n)) for j in range(n))
+            for i in range(n)
+        ),
+        counit=(1,) * n,
+    )
+
+
+class TestDerivedDimensionAdmission:
+    """Dimension admission derives from tensor size and enumeration work."""
+
+    def test_nine_dim_gf2_direct_sum_admitted(self):
+        """729 tensor entries and 512 group-like candidates fit both budgets."""
+        ca = _direct_sum_group_like_coalgebra(9, prime=2)
+        assert ca.dimension**3 == 729
+        assert ca.prime**ca.dimension == 512
+
+        result = find_group_like_elements(GroupLikeElementsRequest(coalgebra=ca))
+        assert result.count == 9
+        assert {tuple(e.coefficients) for e in result.elements} == {
+            tuple(1 if i == j else 0 for i in range(9)) for j in range(9)
+        }
+
+        comult = compute_comultiplication(
+            ComultiplicationRequest(coalgebra=ca, element_index=8)
+        )
+        assert comult.matrix.entries[8][8] == 1
+
+        counit = compute_counit(CounitRequest(coalgebra=ca, element_index=8))
+        assert counit.value == 1
+
+    def test_boundary_dimension_sixteen_admitted(self):
+        """16^3 = 4096 entries sits exactly on the derived tensor budget."""
+        ca = _direct_sum_group_like_coalgebra(16)
+        assert ca.dimension**3 == MAX_TENSOR_ENTRIES
+        result = compute_comultiplication(
+            ComultiplicationRequest(coalgebra=ca, element_index=15)
+        )
+        assert result.matrix.entries[15][15] == 1
+
+    def test_above_tensor_budget_rejected(self):
+        """A 17-dim tensor would carry 4913 structure constants and is rejected."""
+        with pytest.raises(ValidationError, match="structure constants"):
+            _direct_sum_group_like_coalgebra(17)
+
+    def test_large_prime_nine_dim_rejected_by_enumeration_budget(self):
+        """A 9-dim GF(13) coalgebra fits the tensor budget but its 13^9
+        candidate space exceeds the enumeration budget."""
+        ca = _direct_sum_group_like_coalgebra(9, prime=13)
+        assert ca.dimension**3 == 729 <= MAX_TENSOR_ENTRIES
+        with pytest.raises(ValidationError, match="enumeration requires"):
+            GroupLikeElementsRequest(coalgebra=ca)
+
+
+class TestCounitOperationRemovalFromCatalog:
+    """epsilon(c_i) is a deterministic projection of retained data, so it
+    stays native-only and out of the declared public operations."""
+
+    def test_counit_operation_is_not_declared(self):
+        from jacobian.math.coalgebras._tools import COALGEBRA_OPERATIONS
+
+        assert {tool.operation_id for tool in COALGEBRA_OPERATIONS} == {
+            "coalgebra.comultiplication.compute",
+            "coalgebra.group_like_elements.compute",
+        }
+
+    def test_native_counit_kernel_remains_available(self):
+        ca = Coalgebra(
+            prime=5,
+            dimension=1,
+            comultiplication=(((1,),),),
+            counit=(1,),
+        )
+        result = compute_counit(CounitRequest(coalgebra=ca, element_index=0))
+        assert result.value == 1

@@ -9,30 +9,86 @@ from pydantic import Field, model_validator
 from jacobian._models import StrictModel
 from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
 
-MAX_DIM = 8
-
 #: Group-like enumeration scans every element of GF(p)^dimension, so the
 #: admitted request space is bounded by this many candidate vectors.
 GROUP_LIKE_ENUMERATION_BUDGET = 65_536
+
+#: Maximum number of structure-constant entries in an admitted comultiplication
+#: tensor. Admission is derived from explicit work and size bounds instead of a
+#: coarse dimension ceiling:
+#:   - the input tensor and each per-request projection are bounded by exactly
+#:     dimension**3 <= MAX_TENSOR_ENTRIES entries;
+#:   - coassociativity validation performs at most dimension**5 modular
+#:     multiply-adds (16**5 ~ 10**6 at this envelope);
+#:   - group-like scans remain separately bounded by GROUP_LIKE_ENUMERATION_BUDGET
+#:     candidate vectors, so their worst-case work is candidates x per-candidate
+#:     reconstruction (Theta(dimension**2) entries each).
+#: For example the 9-dimensional GF(2) direct-sum coalgebra needs 729 entries
+#: and 512 group-like candidates, well inside both budgets.
+MAX_TENSOR_ENTRIES = 4096
 
 
 class Coalgebra(StrictModel):
     """A finite-dimensional coalgebra over a prime field GF(p).
 
     The comultiplication is specified by structure constants:
-    Delta(c_i) = sum_{j,k} d_{i}^{jk} * c_j �otimes c_k
+    Delta(c_i) = sum_{j,k} d_{i}^{jk} * c_j ⊗ c_k
     The counit is epsilon(c_i) = e_i.
+
+    Admission is derived from named work budgets rather than a dimension
+    ceiling: the tensor carries at most MAX_TENSOR_ENTRIES structure
+    constants, and group-like enumeration additionally requires
+    prime**dimension <= GROUP_LIKE_ENUMERATION_BUDGET candidate vectors.
     """
 
-    prime: int = Field(ge=2, le=10_000)
-    dimension: int = Field(ge=1, le=MAX_DIM)
-    comultiplication: tuple[tuple[tuple[int, ...], ...], ...] = Field(
-        min_length=1, max_length=MAX_DIM
+    prime: int = Field(
+        ge=2,
+        le=10_000,
+        description=(
+            "characteristic p of the prime field GF(p). Every "
+            "comultiplication and counit entry must already be a canonical "
+            "residue in 0..p-1; noncanonical representatives are rejected"
+        ),
     )
-    counit: tuple[int, ...] = Field(min_length=1, max_length=MAX_DIM)
+    dimension: int = Field(
+        ge=1,
+        description=(
+            "dimension n of the coalgebra. Fixes the exact shapes: the "
+            "comultiplication must be n x n x n and the counit length n; "
+            "admission additionally bounds the tensor at n^3 structure "
+            "constants"
+        ),
+    )
+    comultiplication: tuple[tuple[tuple[int, ...], ...], ...] = Field(
+        min_length=1,
+        description=(
+            "structure-constant tensor of exact shape n x n x n where n is "
+            "the declared dimension: entry [i][j][k] is the coefficient of "
+            "c_j ⊗ c_k in Delta(c_i), a canonical residue in 0..p-1. The "
+            "slices must satisfy coassociativity, (Delta x id) o Delta = "
+            "(id x Delta) o Delta modulo p"
+        ),
+    )
+    counit: tuple[int, ...] = Field(
+        min_length=1,
+        description=(
+            "counit vector of exact length n where n is the declared "
+            "dimension: entry i is epsilon(c_i), a canonical residue in "
+            "0..p-1. Must satisfy both counit identities, (epsilon x id) o "
+            "Delta = id and (id x epsilon) o Delta = id, modulo p"
+        ),
+    )
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
+        # Fail fast on the derived size budget before any O(n^3) scan: it
+        # bounds every later validation pass.
+        if self.dimension**3 > MAX_TENSOR_ENTRIES:
+            raise ValueError(
+                f"coalgebra admission allows at most {MAX_TENSOR_ENTRIES} "
+                f"structure constants; dimension {self.dimension} would "
+                f"carry {self.dimension**3}"
+            )
         if len(self.comultiplication) != self.dimension:
             raise ValueError("comultiplication must have dimension entries")
         for row in self.comultiplication:

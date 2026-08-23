@@ -16,11 +16,6 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "exact comultiplication Delta(c_i) computation over a prime field",
     ),
     OperationAdmission(
-        "coalgebra.counit.compute",
-        AdmissionDecision.KEEP,
-        "exact counit epsilon(c_i) computation over a prime field",
-    ),
-    OperationAdmission(
         "coalgebra.group_like_elements.compute",
         AdmissionDecision.KEEP,
         "exact group-like element search in a coalgebra over a prime field",

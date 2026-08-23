@@ -9,14 +9,11 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.coalgebras._models import (
     ComultiplicationRequest,
     ComultiplicationResult,
-    CounitRequest,
-    CounitResult,
     GroupLikeElementsRequest,
     GroupLikeElementsResult,
 )
 from jacobian.math.coalgebras._operations import (
     compute_comultiplication,
-    compute_counit,
     find_group_like_elements,
 )
 
@@ -67,11 +64,6 @@ _COMULTIPLICATION_EXAMPLE: dict[str, Any] = {
     "element_index": 0,
 }
 
-_COUNIT_EXAMPLE: dict[str, Any] = {
-    "coalgebra": _EXAMPLE_COALGEBRA,
-    "element_index": 0,
-}
-
 _GROUP_LIKE_EXAMPLE: dict[str, Any] = {
     "coalgebra": _EXAMPLE_COALGEBRA,
 }
@@ -96,25 +88,6 @@ COALGEBRA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "two_dim_comultiplication",
                 "Compute Delta(c_0) for a 2D coalgebra over GF(5).",
                 _COMULTIPLICATION_EXAMPLE,
-            ),
-        ),
-    ),
-    coalgebra_operation(
-        "coalgebra.counit.compute",
-        "Compute counit epsilon(c_i) for a coalgebra basis element",
-        "Given a finite-dimensional coalgebra over GF(p) and a basis element "
-        "index, compute the counit value epsilon(c_i) over GF(p).",
-        CounitRequest,
-        CounitResult,
-        compute_counit,
-        "coalgebra",
-        "counit",
-        "exact",
-        examples=(
-            example(
-                "two_dim_counit",
-                "Compute epsilon(c_0) for a 2D coalgebra over GF(5).",
-                _COUNIT_EXAMPLE,
             ),
         ),
     ),

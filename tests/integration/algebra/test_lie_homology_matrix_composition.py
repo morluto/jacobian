@@ -2,7 +2,8 @@
 
 An MCP caller holding ``DifferentialMatrix.model_dump()["matrix"]`` — the
 canonical {prime, entries, columns} value — must be able to pass it unchanged
-to every ``prime_field.matrix`` consumer without reshaping it.
+as every ``prime_field.matrix`` consumer's ``matrix`` value without
+reshaping its contents.
 """
 
 from __future__ import annotations
@@ -41,20 +42,25 @@ def test_serialized_differential_drives_every_public_matrix_consumer() -> None:
         "columns": 3,
     }
     catalog = Catalog.open()
+    payload = {"matrix": serialized}
 
     rank_output = invoke_operation(
-        "prime_field.matrix.rank.compute", serialized, catalog
+        "prime_field.matrix.rank.compute", payload, catalog
     ).output
     assert rank_output["rank"] == 3
 
     rref_output = invoke_operation(
-        "prime_field.matrix.rref.compute", serialized, catalog
+        "prime_field.matrix.rref.compute", payload, catalog
     ).output
-    assert rref_output["rref"] == [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+    assert rref_output["rref_matrix"]["entries"] == [
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1],
+    ]
     assert rref_output["pivot_columns"] == [0, 1, 2]
 
     nullspace_output = invoke_operation(
-        "prime_field.matrix.nullspace.compute", serialized, catalog
+        "prime_field.matrix.nullspace.compute", payload, catalog
     ).output
     assert nullspace_output["nullity"] == 0
 

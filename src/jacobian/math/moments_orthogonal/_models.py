@@ -19,6 +19,9 @@ from jacobian.math.moments_orthogonal.values import (
     MAX_QUADRATURE_POINTS,
     MAX_RECURRENCE_ORDER,
 )
+from jacobian.math.moments_orthogonal.values import (
+    RecurrenceCoefficients as NativeRecurrenceCoefficients,
+)
 
 MAX_RATIONAL_DIGITS = 4_096
 
@@ -33,6 +36,16 @@ def _from_fractions(
     values: tuple[Fraction, ...],
 ) -> tuple[CanonicalRational, ...]:
     return tuple(CanonicalRational.from_fraction(v) for v in values)
+
+
+def _native_coefficients(
+    coefficients: RecurrenceCoefficients,
+) -> NativeRecurrenceCoefficients:
+    """Project the wire coefficient value onto the native kernel value."""
+    return NativeRecurrenceCoefficients(
+        alpha=_to_fractions(coefficients.alpha),
+        beta=_to_fractions(coefficients.beta),
+    )
 
 
 def _validate_moments(moments: tuple[CanonicalRational, ...]) -> None:
@@ -214,10 +227,7 @@ class JacobiMatrixResult(JacobiMatrixRequest):
     def bind_jacobi(self) -> Self:
         from jacobian.math.moments_orthogonal.operations import jacobi_matrix
 
-        result = jacobi_matrix(
-            _to_fractions(self.coefficients.alpha),
-            _to_fractions(self.coefficients.beta),
-        )
+        result = jacobi_matrix(_native_coefficients(self.coefficients))
         if self.diagonal != _from_fractions(result.diagonal):
             raise ValueError("diagonal must match the exact Jacobi diagonal")
         if self.off_diagonal != _from_fractions(result.off_diagonal):
@@ -359,8 +369,7 @@ class ChristoffelDarbouxResult(ChristoffelDarbouxRequest):
         )
 
         result = christoffel_darboux(
-            _to_fractions(self.coefficients.alpha),
-            _to_fractions(self.coefficients.beta),
+            _native_coefficients(self.coefficients),
             self.x.as_fraction(),
             self.y.as_fraction(),
         )
@@ -439,10 +448,7 @@ class GaussianQuadratureResult(GaussianQuadratureRequest):
             gaussian_quadrature,
         )
 
-        result = gaussian_quadrature(
-            _to_fractions(self.coefficients.alpha),
-            _to_fractions(self.coefficients.beta),
-        )
+        result = gaussian_quadrature(_native_coefficients(self.coefficients))
         if self.approximate_nodes != _from_fractions(result.approximate_nodes):
             raise ValueError(
                 "approximate_nodes must match the Golub-Welsch eigenvalues"

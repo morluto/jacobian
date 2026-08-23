@@ -110,10 +110,28 @@ class TestRank:
         with pytest.raises(ValidationError):
             pfm(prime=2, entries=((2, 0), (0, 1)))
 
-    def test_empty_matrix_rejected(self):
-        """Empty entries should raise."""
-        with pytest.raises(ValidationError):
-            pfm(prime=2, entries=())
+    def test_zero_row_matrix_accepted_and_composes(self):
+        """A zero-row canonical matrix is admitted and executes exactly.
+
+        The empty nullspace basis of a full-column-rank source is exactly
+        such a value; it must re-enter rank, RREF, and nullspace unchanged
+        while keeping its ambient column axis.
+        """
+        from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
+
+        empty_basis = PrimeFieldMatrix(prime=2, entries=(), columns=3)
+        request = PrimeFieldMatrixRequest(matrix=empty_basis)
+        assert compute_rank(request).rank == 0
+        rref_result = compute_rref(request)
+        assert rref_result.rref_matrix.entries == ()
+        assert rref_result.rref_matrix.columns == 3
+        assert rref_result.pivot_columns == ()
+        ns_result = compute_nullspace(request)
+        # A matrix with no rows imposes no constraints: the nullspace is the
+        # whole ambient space GF(2)^3, carried with its column axis intact.
+        assert ns_result.nullity == 3
+        assert ns_result.nullspace_matrix.entries == ((1, 0, 0), (0, 1, 0), (0, 0, 1))
+        assert ns_result.nullspace_matrix.columns == 3
 
     def test_prime_2147483647(self):
         """Large prime from the issue example."""

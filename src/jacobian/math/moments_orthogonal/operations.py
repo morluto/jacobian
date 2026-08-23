@@ -167,38 +167,27 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
     return RecurrenceCoefficients(alpha=tuple(alpha), beta=tuple(beta))
 
 
-def _coefficients_or_sequences(
-    alpha: Sequence[Fraction] | RecurrenceCoefficients,
-    beta: Sequence[Fraction] | None,
-) -> tuple[Sequence[Fraction], Sequence[Fraction]]:
-    """Accept the canonical recurrence value or separate sequences."""
-    if isinstance(alpha, RecurrenceCoefficients):
-        if beta is not None:
-            raise TypeError(
-                "pass either a RecurrenceCoefficients value or separate "
-                "alpha/beta sequences, not both"
-            )
-        return alpha.alpha, alpha.beta
-    if beta is None:
-        raise TypeError("separate alpha and beta sequences require beta")
-    return alpha, beta
+def _coefficients(
+    value: RecurrenceCoefficients,
+) -> tuple[tuple[Fraction, ...], tuple[Fraction, ...]]:
+    """Unpack the domain-owned recurrence value for exact kernel arithmetic."""
+    if not isinstance(value, RecurrenceCoefficients):
+        raise TypeError("coefficients must be a RecurrenceCoefficients value")
+    return value.alpha, value.beta
 
 
-def jacobi_matrix(
-    alpha: Sequence[Fraction] | RecurrenceCoefficients,
-    beta: Sequence[Fraction] | None = None,
-) -> JacobiMatrix:
+def jacobi_matrix(coefficients: RecurrenceCoefficients) -> JacobiMatrix:
     """Build the symmetric tridiagonal Jacobi matrix from recurrence coefficients.
 
     Accepts the canonical ``RecurrenceCoefficients`` value returned by
-    ``recurrence_coefficients`` directly, or separate ``alpha``/``beta``
-    sequences. The diagonal entries are ``alpha_0, ..., alpha_{n-1}`` and the positive
-    subdiagonal entries are ``sqrt(beta_1), ..., sqrt(beta_n)``. Because the
-    square roots may be irrational, the returned matrix stores the rational
-    diagonal and the rational squared subdiagonal ``beta`` separately so that the
-    full symmetric matrix can be reconstructed by any consumer.
+    ``recurrence_coefficients`` unchanged. The diagonal entries are
+    ``alpha_0, ..., alpha_{n-1}`` and the positive subdiagonal entries are
+    ``sqrt(beta_1), ..., sqrt(beta_n)``. Because the square roots may be
+    irrational, the returned matrix stores the rational diagonal and the
+    rational squared subdiagonal ``beta`` separately so that the full
+    symmetric matrix can be reconstructed by any consumer.
     """
-    alpha, beta = _coefficients_or_sequences(alpha, beta)
+    alpha, beta = _coefficients(coefficients)
     if not 1 <= len(beta) <= MAX_RECURRENCE_ORDER:
         raise ValueError("beta must contain between 1 and 16 entries")
     if not 0 <= len(alpha) <= MAX_RECURRENCE_ORDER:
@@ -260,16 +249,16 @@ def _require_cd_admission(
 
 
 def christoffel_darboux(
-    alpha: Sequence[Fraction] | RecurrenceCoefficients,
-    beta: Sequence[Fraction] | None = None,
-    x: Fraction | None = None,
-    y: Fraction | None = None,
+    coefficients: RecurrenceCoefficients,
+    x: Fraction,
+    y: Fraction,
 ) -> ChristoffelDarbouxKernel:
     """Compute the Christoffel-Darboux kernel ``K_n(x, y)``.
 
     Accepts the canonical ``RecurrenceCoefficients`` value returned by
-    ``recurrence_coefficients`` directly, or separate ``alpha``/``beta``
-    sequences. For the monic orthogonal polynomial family with three-term recurrence
+    ``recurrence_coefficients`` unchanged, positionally or by keyword, plus
+    the exact evaluation points. For the monic orthogonal polynomial family
+    with three-term recurrence
 
         p_{k+1}(x) = (x - alpha_k) p_k(x) - beta_k p_{k-1}(x)
 
@@ -280,25 +269,9 @@ def christoffel_darboux(
 
     evaluated by forward recurrence of the polynomials at ``x`` and ``y``.
     """
-    if isinstance(alpha, RecurrenceCoefficients):
-        # Canonical form: christoffel_darboux(coefficients, x, y); the
-        # positional slots after the value carry the evaluation points.
-        if y is not None or isinstance(beta, Sequence):
-            raise TypeError(
-                "pass either a RecurrenceCoefficients value with (x, y) or "
-                "separate alpha/beta sequences with (x, y), not both forms"
-            )
-        x_arg, y_arg = beta, x
-        if not isinstance(x_arg, Fraction) or not isinstance(y_arg, Fraction):
-            raise TypeError("x and y must use exact Fractions")
-        beta = alpha.beta
-        alpha = alpha.alpha
-        x, y = x_arg, y_arg
-    if beta is None or x is None or y is None:
-        raise TypeError(
-            "christoffel_darboux requires recurrence coefficients and "
-            "evaluation points x and y"
-        )
+    alpha, beta = _coefficients(coefficients)
+    if not isinstance(x, Fraction) or not isinstance(y, Fraction):
+        raise TypeError("x and y must use exact Fractions")
     _require_cd_admission(alpha, beta, x, y)
     n = len(alpha)
     if n == 0:
@@ -382,27 +355,23 @@ def _require_finite_double_coefficients(
             raise ValueError("quadrature coefficient underflows IEEE double to zero")
 
 
-def gaussian_quadrature(
-    alpha: Sequence[Fraction] | RecurrenceCoefficients,
-    beta: Sequence[Fraction] | None = None,
-) -> GaussianQuadrature:
+def gaussian_quadrature(coefficients: RecurrenceCoefficients) -> GaussianQuadrature:
     """Compute *approximate* Gaussian quadrature nodes and weights via Golub-Welsch.
 
     Accepts the canonical ``RecurrenceCoefficients`` value returned by
-    ``recurrence_coefficients`` directly, or separate ``alpha``/``beta``
-    sequences. The nodes are eigenvalues of the symmetric tridiagonal Jacobi matrix
-    (generally irrational, e.g. ``alpha=(0,0), beta=(1,2)`` has nodes
-    ``±sqrt(2)``) and the weights are ``mu_0 * v_{0,i}^2``. The decomposition
-    runs in IEEE doubles, so the returned values are **approximations** with
-    double precision, not exact algebraic numbers. Each entry is carried as the
-    exact dyadic rational image of the computed double for canonical JSON
-    transport.
+    ``recurrence_coefficients`` unchanged. The nodes are eigenvalues of the
+    symmetric tridiagonal Jacobi matrix (generally irrational, e.g.
+    ``alpha=(0,0), beta=(1,2)`` has nodes ``±sqrt(2)``) and the weights are
+    ``mu_0 * v_{0,i}^2``. The decomposition runs in IEEE doubles, so the
+    returned values are **approximations** with double precision, not exact
+    algebraic numbers. Each entry is carried as the exact dyadic rational
+    image of the computed double for canonical JSON transport.
     """
     import math
 
     import numpy as np
 
-    alpha, beta = _coefficients_or_sequences(alpha, beta)
+    alpha, beta = _coefficients(coefficients)
     n = len(alpha)
     if not 1 <= n <= MAX_QUADRATURE_POINTS:
         raise ValueError("alpha must contain between 1 and 16 entries")

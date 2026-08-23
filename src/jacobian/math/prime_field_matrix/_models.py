@@ -20,11 +20,12 @@ class PrimeFieldMatrixRequest(StrictModel):
 
     The matrix is carried as the domain-owned ``PrimeFieldMatrix`` canonical
     value so it composes unchanged with the other GF(p) producers and
-    consumers. Shape rules (schema-visible): at least one row, 1..256 columns
-    per row, rectangular rows, and every entry a canonical residue in
-    ``[0, prime)``. The characteristic is bounded to ``MAX_PRIME`` by a
-    pre-construction validator so no accepted request can reach unbounded
-    primality or modular work.
+    consumers, including degenerate shapes such as the empty nullspace basis
+    a full-column-rank source produces. Shape rules (schema-visible): zero
+    or more rows, 1..256 columns per row, rectangular rows, and every entry
+    a canonical residue in ``[0, prime)``. The characteristic is bounded to
+    ``MAX_PRIME`` by a pre-construction validator so no accepted request can
+    reach unbounded primality or modular work.
     """
 
     model_config = ConfigDict(
@@ -32,10 +33,10 @@ class PrimeFieldMatrixRequest(StrictModel):
             "description": (
                 "A bounded integer matrix over an explicit prime field GF(p), "
                 "as the canonical `PrimeFieldMatrix` value: `prime` must be a "
-                "prime integer in [2, 2147483647], `entries` must have at "
-                "least one row, each row 1..256 columns, all rows the same "
-                "length matching the declared `columns`, and every entry a "
-                "canonical residue in [0, prime)."
+                "prime integer in [2, 2147483647], `columns` must lie in "
+                "[1, 256], there may be up to 256 rows (possibly none), all "
+                "rows the same length matching the declared `columns`, and "
+                "every entry a canonical residue in [0, prime)."
             )
         }
     )
@@ -52,13 +53,21 @@ class PrimeFieldMatrixRequest(StrictModel):
             raw = data.get("matrix")
             if isinstance(raw, dict):
                 prime = raw.get("prime")
-            else:
-                prime = getattr(raw, "prime", None)
-            if isinstance(prime, int) and not 2 <= prime <= MAX_PRIME:
-                raise ValueError(
-                    "field prime must lie in [2, "
-                    f"{MAX_PRIME}] so validation work stays bounded"
-                )
+                if isinstance(prime, int) and not 2 <= prime <= MAX_PRIME:
+                    raise ValueError(
+                        "field prime must lie in [2, "
+                        f"{MAX_PRIME}] so validation work stays bounded"
+                    )
+                entries = raw.get("entries")
+                if isinstance(entries, list):
+                    # A before-validator re-enters field validation in Python
+                    # mode, where strict tuples reject JSON arrays; restore
+                    # the canonical tuple shape before the value is built.
+                    copied = dict(raw)
+                    copied["entries"] = tuple(
+                        tuple(row) if isinstance(row, list) else row for row in entries
+                    )
+                    data = {**data, "matrix": copied}
         return data
 
     @model_validator(mode="after")
@@ -67,8 +76,6 @@ class PrimeFieldMatrixRequest(StrictModel):
             raise ValueError(f"matrix has at most {MAX_ROWS} rows")
         if not 1 <= self.matrix.columns <= MAX_COLUMNS:
             raise ValueError(f"matrix has at most {MAX_COLUMNS} columns")
-        if len(self.matrix.entries) == 0:
-            raise ValueError("entries must be non-empty")
         return self
 
 

@@ -48,6 +48,13 @@ def _cr(num: int, den: int) -> CanonicalRational:
     return CanonicalRational.from_integer_ratio(num, den)
 
 
+def _rc(alpha: tuple[Fraction, ...], beta: tuple[Fraction, ...]):
+    """Build the domain-owned recurrence value the consumers accept."""
+    from jacobian.math.moments_orthogonal.values import RecurrenceCoefficients
+
+    return RecurrenceCoefficients(alpha=alpha, beta=beta)
+
+
 _HARMONIC_MOMENTS = tuple(_cr(1, k) for k in range(1, 8))
 
 
@@ -206,24 +213,24 @@ class TestJacobiMatrix:
     def test_assembly(self) -> None:
         alpha = (_frac(1, 2), _frac(1, 2))
         beta = (_frac(1, 1), _frac(1, 12), _frac(1, 15))
-        result = jacobi_matrix(alpha, beta)
+        result = jacobi_matrix(_rc(alpha, beta))
         assert result.diagonal == (_frac(1, 2), _frac(1, 2))
         # beta_0 is the zeroth moment; the subdiagonal carries beta_1 only.
         assert result.off_diagonal == (_frac(1, 12),)
 
     def test_empty_alpha(self) -> None:
         beta = (_frac(1, 1),)
-        result = jacobi_matrix((), beta)
+        result = jacobi_matrix(_rc((), beta))
         assert result.diagonal == ()
         assert result.off_diagonal == ()
 
     def test_zero_beta_rejected(self) -> None:
         with pytest.raises(ValueError, match="positive"):
-            jacobi_matrix((_frac(0, 1),), (_frac(0, 1), _frac(1, 1)))
+            jacobi_matrix(_rc((_frac(0, 1),), (_frac(0, 1), _frac(1, 1))))
 
     def test_negative_beta_zero_rejected(self) -> None:
         with pytest.raises(ValueError, match="positive"):
-            jacobi_matrix((_frac(0, 1),), (_frac(-2, 1), _frac(1, 1)))
+            jacobi_matrix(_rc((_frac(0, 1),), (_frac(-2, 1), _frac(1, 1))))
 
 
 # ---------------------------------------------------------------------------
@@ -236,26 +243,30 @@ class TestChristoffelDarboux:
         """K_n(x,x) = sum_{k=0}^{n-1} p_k(x)^2 / h_k is positive."""
         alpha = (_frac(1, 2), _frac(1, 2))
         beta = (_frac(1, 1), _frac(1, 12), _frac(1, 15))
-        result = christoffel_darboux(alpha, beta, _frac(1, 2), _frac(1, 2))
+        result = christoffel_darboux(_rc(alpha, beta), _frac(1, 2), _frac(1, 2))
         assert result.kernel > 0
 
     def test_zero_when_x_neq_y_symmetric(self) -> None:
         """K_n(x,y) is a reproducing kernel: K_n(x,y) = K_n(y,x)."""
         alpha = (_frac(0, 1), _frac(1, 3))
         beta = (_frac(2, 1), _frac(1, 9), _frac(4, 45))
-        result_xy = christoffel_darboux(alpha, beta, _frac(1, 4), _frac(3, 4))
-        result_yx = christoffel_darboux(alpha, beta, _frac(3, 4), _frac(1, 4))
+        result_xy = christoffel_darboux(_rc(alpha, beta), _frac(1, 4), _frac(3, 4))
+        result_yx = christoffel_darboux(_rc(alpha, beta), _frac(3, 4), _frac(1, 4))
         assert result_xy.kernel == result_yx.kernel
 
     def test_first_polynomial_is_one(self) -> None:
         alpha = (_frac(0, 1), _frac(1, 3))
         beta = (_frac(2, 1), _frac(1, 9), _frac(4, 45))
-        result = christoffel_darboux(alpha, beta, _frac(1, 1), _frac(1, 1))
+        result = christoffel_darboux(
+            _rc(alpha, beta),
+            x=_frac(1, 1),
+            y=_frac(1, 1),
+        )
         assert result.polynomials_evaluated[0] == _frac(1, 1)
 
     def test_empty_alpha(self) -> None:
         beta = (_frac(1, 1),)
-        result = christoffel_darboux((), beta, _frac(1, 1), _frac(1, 1))
+        result = christoffel_darboux(_rc((), beta), _frac(1, 1), _frac(1, 1))
         assert result.kernel == _frac(0, 1)
         assert result.polynomials_evaluated == (_frac(1, 1),)
 
@@ -270,35 +281,35 @@ class TestGaussianQuadrature:
         """Sum of approximate weights equals mu_0 (the zeroth moment)."""
         alpha = (_frac(1, 2), _frac(1, 2), _frac(1, 2))
         beta = (_frac(1, 1), _frac(1, 12), _frac(1, 15), _frac(4, 45))
-        result = gaussian_quadrature(alpha, beta)
+        result = gaussian_quadrature(_rc(alpha, beta))
         mu0 = float(beta[0])
         assert abs(sum(result.approximate_weights) - mu0) < 1e-10
 
     def test_nodes_count(self) -> None:
         alpha = (_frac(1, 2), _frac(1, 2), _frac(1, 2))
         beta = (_frac(1, 1), _frac(1, 12), _frac(1, 15), _frac(4, 45))
-        result = gaussian_quadrature(alpha, beta)
+        result = gaussian_quadrature(_rc(alpha, beta))
         assert len(result.approximate_nodes) == 3
         assert len(result.approximate_weights) == 3
 
     def test_single_point(self) -> None:
         alpha = (_frac(0, 1),)
         beta = (_frac(1, 1), _frac(1, 3))
-        result = gaussian_quadrature(alpha, beta)
+        result = gaussian_quadrature(_rc(alpha, beta))
         assert len(result.approximate_nodes) == 1
         assert abs(result.approximate_nodes[0] - 0.0) < 1e-10
         assert abs(result.approximate_weights[0] - 1.0) < 1e-10
 
     def test_alpha_empty_rejected(self) -> None:
         with pytest.raises(ValueError, match="between 1 and 16"):
-            gaussian_quadrature((), (_frac(1, 1),))
+            gaussian_quadrature(_rc((), (_frac(1, 1),)))
 
     def test_approximate_irrational_nodes(self) -> None:
         """Nodes ±sqrt(2) are irrational and returned as IEEE-double approximations."""
         # alpha=(0,0), beta=(1,2) gives a Jacobi matrix with exact ±sqrt(2)
         alpha = (_frac(0, 1), _frac(0, 1))
         beta = (_frac(1, 1), _frac(2, 1))
-        result = gaussian_quadrature(alpha, beta)
+        result = gaussian_quadrature(_rc(alpha, beta))
         # approximate nodes must be close to ±sqrt(2) within double precision
         import math
 
@@ -311,20 +322,22 @@ class TestGaussianQuadrature:
     def test_native_kernel_rejects_underflowed_beta_zero(self) -> None:
         """beta_0 below the underflow bound cannot silently lose the mass."""
         with pytest.raises(ValueError, match="underflow bound"):
-            gaussian_quadrature((_frac(0, 1),), (_frac(1, 10**400),))
+            gaussian_quadrature(_rc((_frac(0, 1),), (_frac(1, 10**400),)))
 
     def test_native_kernel_rejects_underflowed_subdiagonal(self) -> None:
         # A two-point Jacobi matrix uses beta[1] as its subdiagonal; below the
         # underflow bound its square root would not survive double conversion.
         with pytest.raises(ValueError, match="underflow bound"):
             gaussian_quadrature(
-                (_frac(0, 1), _frac(0, 1)),
-                (_frac(1, 1), _frac(1, 10**400)),
+                _rc(
+                    (_frac(0, 1), _frac(0, 1)),
+                    (_frac(1, 1), _frac(1, 10**400)),
+                )
             )
 
     def test_native_kernel_rejects_magnitude_overflow(self) -> None:
         with pytest.raises(ValueError, match="finite-float magnitude"):
-            gaussian_quadrature((_frac(0, 1),), (_frac(10**400, 1),))
+            gaussian_quadrature(_rc((_frac(0, 1),), (_frac(10**400, 1),)))
 
     def test_native_kernel_matches_request_model_float_domain(self) -> None:
         """The wire request rejects the same payloads as the native kernel."""
@@ -337,7 +350,7 @@ class TestGaussianQuadrature:
         # With one node the unused trailing entry still cannot underflow to
         # zero silently; kernel and model reject it through the same bound.
         with pytest.raises(ValueError, match="underflow"):
-            gaussian_quadrature((_frac(0, 1),), (_frac(1, 1), _frac(1, 10**400)))
+            gaussian_quadrature(_rc((_frac(0, 1),), (_frac(1, 1), _frac(1, 10**400))))
 
 
 # ---------------------------------------------------------------------------
@@ -451,29 +464,40 @@ class TestCanonicalRecurrenceValueComposition:
 
     def test_producer_value_feeds_christoffel_darboux(self) -> None:
         coeffs = recurrence_coefficients(tuple(_frac(1, k + 1) for k in range(9)))
-        separate = christoffel_darboux(
-            coeffs.alpha, coeffs.beta, _frac(1, 3), _frac(1, 3)
-        )
         canonical = christoffel_darboux(coeffs, _frac(1, 3), _frac(1, 3))
-        assert canonical == separate
+        assert canonical == christoffel_darboux(coeffs, x=_frac(1, 3), y=_frac(1, 3))
+        assert canonical.kernel > 0
 
     def test_producer_value_feeds_gaussian_quadrature(self) -> None:
         coeffs = recurrence_coefficients(tuple(_frac(1, k + 1) for k in range(9)))
-        separate = gaussian_quadrature(coeffs.alpha, coeffs.beta)
-        assert gaussian_quadrature(coeffs).approximate_weights == (
-            separate.approximate_weights
+        result = gaussian_quadrature(coeffs)
+        mu0 = float(coeffs.beta[0])
+        assert abs(sum(result.approximate_weights) - mu0) < 1e-10
+
+    def test_keyword_evaluation_points_accepted(self) -> None:
+        """The ordinary keyword form of the CD kernel matches the positional one.
+
+        Reviewer evidence: the canonical producer value passed with named
+        evaluation points must not be treated as a mixed calling form.
+        """
+        coeffs = recurrence_coefficients(tuple(_frac(1, k + 1) for k in range(9)))
+        positional = christoffel_darboux(coeffs, _frac(1, 4), _frac(3, 4))
+        keyword = christoffel_darboux(coefficients=coeffs, x=_frac(1, 4), y=_frac(3, 4))
+        assert positional == keyword
+        assert positional.kernel == keyword.kernel
+        assert jacobi_matrix(coefficients=coeffs).diagonal == (
+            tuple(_frac(1, 2) for _ in coeffs.alpha)
         )
 
-    def test_mixed_forms_rejected(self) -> None:
+    def test_noncanonical_coefficient_type_rejected(self) -> None:
         coeffs = recurrence_coefficients(tuple(_frac(1, k + 1) for k in range(5)))
-        with pytest.raises(TypeError):
-            jacobi_matrix(coeffs, coeffs.beta)
-        with pytest.raises(TypeError):
-            gaussian_quadrature(coeffs, coeffs.beta)
-        with pytest.raises(TypeError):
+        with pytest.raises(TypeError, match="RecurrenceCoefficients"):
+            jacobi_matrix(coeffs.alpha)  # type: ignore[arg-type]
+        with pytest.raises(TypeError, match="RecurrenceCoefficients"):
+            gaussian_quadrature((coeffs.alpha, coeffs.beta))  # type: ignore[arg-type]
+        with pytest.raises(TypeError, match="RecurrenceCoefficients"):
             christoffel_darboux(
-                coeffs,
-                coeffs.beta,
+                (coeffs.alpha, coeffs.beta),  # type: ignore[arg-type]
                 _frac(1, 3),
                 _frac(1, 3),
             )

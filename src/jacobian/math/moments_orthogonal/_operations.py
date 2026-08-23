@@ -16,6 +16,9 @@ from jacobian.math.moments_orthogonal._models import (
     RecurrenceCoefficientsRequest,
     RecurrenceCoefficientsResult,
 )
+from jacobian.math.moments_orthogonal.values import (
+    RecurrenceCoefficients as NativeRecurrenceCoefficients,
+)
 
 
 def _to_fractions(
@@ -28,6 +31,16 @@ def _from_fractions(
     values: tuple[Fraction, ...],
 ) -> tuple[CanonicalRational, ...]:
     return tuple(CanonicalRational.from_fraction(v) for v in values)
+
+
+def _native_coefficients(
+    coefficients: RecurrenceCoefficients,
+) -> NativeRecurrenceCoefficients:
+    """Project the wire coefficient value onto the native kernel value."""
+    return NativeRecurrenceCoefficients(
+        alpha=_to_fractions(coefficients.alpha),
+        beta=_to_fractions(coefficients.beta),
+    )
 
 
 def compute_hankel_matrix(request: HankelMatrixRequest) -> HankelMatrixResult:
@@ -67,10 +80,7 @@ def compute_recurrence_coefficients(
 def compute_jacobi_matrix(request: JacobiMatrixRequest) -> JacobiMatrixResult:
     from jacobian.math.moments_orthogonal.operations import jacobi_matrix
 
-    result = jacobi_matrix(
-        _to_fractions(request.coefficients.alpha),
-        _to_fractions(request.coefficients.beta),
-    )
+    result = jacobi_matrix(_native_coefficients(request.coefficients))
     return JacobiMatrixResult(
         coefficients=request.coefficients,
         diagonal=_from_fractions(result.diagonal),
@@ -84,8 +94,7 @@ def compute_christoffel_darboux(
     from jacobian.math.moments_orthogonal.operations import christoffel_darboux
 
     result = christoffel_darboux(
-        _to_fractions(request.coefficients.alpha),
-        _to_fractions(request.coefficients.beta),
+        _native_coefficients(request.coefficients),
         request.x.as_fraction(),
         request.y.as_fraction(),
     )
@@ -103,10 +112,7 @@ def compute_gaussian_quadrature(
 ) -> GaussianQuadratureResult:
     from jacobian.math.moments_orthogonal.operations import gaussian_quadrature
 
-    result = gaussian_quadrature(
-        _to_fractions(request.coefficients.alpha),
-        _to_fractions(request.coefficients.beta),
-    )
+    result = gaussian_quadrature(_native_coefficients(request.coefficients))
     return GaussianQuadratureResult(
         coefficients=request.coefficients,
         approximate_nodes=_from_fractions(result.approximate_nodes),

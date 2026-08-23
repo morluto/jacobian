@@ -18,70 +18,65 @@ from jacobian.math.prime_field_linear_algebra import (
 )
 
 
-def _pivot_row(
-    aug: list[list[int]], col: int, start: int, rows: int, prime: int
-) -> int | None:
-    """First row at or below ``start`` with a nonzero entry in ``col``."""
-    for r in range(start, rows):
-        if aug[r][col] % prime != 0:
-            return r
-    return None
-
-
-def _scale_and_clear(
-    aug: list[list[int]], rank: int, col: int, cols: int, rows: int, prime: int
-) -> None:
-    """Scale the pivot row to a unit leading entry and clear its column."""
-    inv_pivot = pow(aug[rank][col] % prime, prime - 2, prime)
-    for c in range(cols):
-        aug[rank][c] = (aug[rank][c] * inv_pivot) % prime
-    for r, row in enumerate(aug):
-        factor = row[col] % prime
-        if r != rank and factor != 0:
-            for c in range(cols):
-                row[c] = (row[c] - factor * aug[rank][c]) % prime
-
-
-def _gaussian_rank(matrix: list[list[int]], prime: int) -> int:
-    """Compute rank of a matrix over GF(prime)."""
-    rows = len(matrix)
-    if rows == 0:
-        return 0
-    cols = len(matrix[0])
-    if cols == 0:
-        return 0
-    aug = [row[:] for row in matrix]
-    rank = 0
-    for col in range(cols):
-        pivot = _pivot_row(aug, col, rank, rows, prime)
-        if pivot is None:
-            continue
-        aug[rank], aug[pivot] = aug[pivot], aug[rank]
-        _scale_and_clear(aug, rank, col, cols, rows, prime)
-        rank += 1
-        if rank >= rows:
-            break
-    return rank
-
-
 def _boundary_rank(
     algebra: AlgebraStructure,
     degree: int,
     element_budget: int = MAX_HOCHSCHILD_TENSOR_ELEMENTS,
 ) -> int:
-    """GF(p)-rank of the Hochschild boundary C_degree -> C_{degree-1}."""
+    """GF(p)-rank of the Hochschild boundary C_degree -> C_{degree-1}.
+
+    Uses the maintained prime-field rank backend (python-flint ``nmod_mat``)
+    via a thin adapter so the operation does not duplicate the kernel that
+    ``finite_fields._flint.matrix_rank`` already owns for ``PrimeFieldMatrix``.
+    """
     n = algebra.dimension
     if n**degree > element_budget:
         raise ValueError("requested degree exceeds the supported tensor-element budget")
     if degree == 0:
         return 0
-    matrix = bar_differential_entries(
+    entries = bar_differential_entries(
         algebra.structure_constants,
         algebra.prime,
         degree,
         algebra.augmentation,
     )
-    return _gaussian_rank([list(row) for row in matrix], algebra.prime)
+    if not entries or not entries[0]:
+        return 0
+    # Prefer the maintained FLINT backend; it handles the largest admitted
+    # homology boundary (125x625) without Python-level modular updates and
+    # without reimplementing the kernel. For matrices within the canonical
+    # PrimeFieldMatrix dimension bound we reuse the existing adapter, otherwise
+    # we call nmod_mat directly so homology can still be decided without
+    # storing a PrimeFieldMatrix.
+    try:
+        from jacobian.math.finite_fields._flint import matrix_rank
+
+        # Fast path when the boundary fits the canonical PrimeFieldMatrix
+        # representation that chain-complex differentials use.
+        if len(entries) <= 256 and len(entries[0]) <= 256:
+            matrix = PrimeFieldMatrix(
+                prime=algebra.prime,
+                entries=entries,
+                columns=n**degree,
+            )
+            return matrix_rank(matrix)
+        from flint import nmod_mat
+
+        backend = nmod_mat([list(row) for row in entries], algebra.prime)
+        return int(backend.rank())
+    except ImportError:
+        # Fallback when python-flint is unavailable: compute rank via
+        # SymPy's DomainMatrix without the PrimeFieldMatrix dimension check
+        # so the largest admitted homology boundary (125x625) is still decided.
+        import sympy
+        from sympy.polys.matrices import DomainMatrix
+
+        domain_matrix = DomainMatrix(
+            [list(row) for row in entries],
+            (len(entries), len(entries[0])),
+            sympy.GF(algebra.prime),
+        )
+        return int(domain_matrix.rank())
 
 
 def compute_hochschild_chain_complex(

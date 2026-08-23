@@ -10,6 +10,7 @@ from jacobian._models import StrictModel
 from jacobian.math.hochschild_complexes._bar import bar_differential_entries
 from jacobian.math.prime_field_linear_algebra import (
     PrimeFieldMatrix,
+    _MAX_DIMENSION as PRIME_FIELD_MAX_DIM,
 )
 
 MAX_ALGEBRA_DIM = 8
@@ -144,6 +145,20 @@ class HochschildChainComplexRequest(StrictModel):
                 "requested max_degree exceeds the supported boundary-matrix "
                 f"entry budget (dimension^(2*max_degree-1) = {densest_entries} "
                 f"> {MAX_HOCHSCHILD_MATRIX_ENTRIES})"
+            )
+        # The emitted differential is carried as the canonical PrimeFieldMatrix
+        # (rows = n^{k-1}, cols = n^{k}); it must fit the matrix dimension
+        # bound so an admitted request never fails at construction. Check the
+        # densest axis n**max_degree (and n**(max_degree-1) for the row side).
+        if dimension**self.max_degree > PRIME_FIELD_MAX_DIM:
+            raise ValueError(
+                "requested max_degree exceeds the supported matrix dimension bound "
+                f"(dimension^max_degree = {dimension ** self.max_degree} > {PRIME_FIELD_MAX_DIM})"
+            )
+        if self.max_degree >= 1 and dimension ** (self.max_degree - 1) > PRIME_FIELD_MAX_DIM:
+            raise ValueError(
+                "requested max_degree exceeds the supported matrix dimension bound "
+                f"(dimension^max_degree-1 = {dimension ** (self.max_degree - 1)} > {PRIME_FIELD_MAX_DIM})"
             )
         return self
 

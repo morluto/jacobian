@@ -107,7 +107,7 @@ def check_gram_certificate(
 ) -> GramCertificateResult:
     """Check that p = z^T Q z with Q symmetric PSD over QQ."""
     is_symmetric, reconstructs, is_psd = _check_gram_invariants(
-        request.polynomial, request.monomial_basis, request.gram_matrix
+        request.polynomial, request.monomial_basis, request.gram_matrix.entries
     )
     is_valid = is_symmetric and reconstructs and is_psd
 

@@ -115,10 +115,14 @@ _GRAM_CHECK_EXAMPLE: dict[str, Any] = {
             },
         },
     ],
-    "gram_matrix": [
-        [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
-        [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
-    ],
+    "gram_matrix": {
+        "matrix_schema_version": "1",
+        "domain": "QQ",
+        "entries": [
+            [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
+            [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
+        ],
+    },
 }
 
 

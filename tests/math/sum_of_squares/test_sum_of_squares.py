@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from jacobian.math.polynomials.values import RationalPolynomial
 from jacobian.math.sum_of_squares._models import (
+    MAX_SOS_SUMMAND_TERMS,
     GramCertificateRequest,
     GramCertificateResult,
     SOSDecompositionCheckRequest,
@@ -96,6 +97,74 @@ class TestSOSDecompositionCheck:
         assert result.is_valid
 
 
+def _expand_poly(expr, variables) -> RationalPolynomial:
+    """Exact sympy expansion into the domain's canonical polynomial."""
+    import sympy
+
+    from jacobian.math.polynomials._conversions import (
+        rational_polynomial_from_sympy,
+    )
+
+    poly = sympy.Poly(expr, *sympy.symbols(list(variables)), domain=sympy.QQ)
+    return rational_polynomial_from_sympy(poly, variables)
+
+
+def _sos_poly(*polys: RationalPolynomial) -> RationalPolynomial:
+    """Exact q_1^2 + ... + q_r^2 for canonical polynomials."""
+    from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
+
+    expr = sum(
+        (rational_polynomial_to_sympy(q).as_expr() ** 2 for q in polys),
+        start=0,
+    )
+    return _expand_poly(expr, polys[0].variables)
+
+
+class TestSOSTermBudgets:
+    """Target polynomials take the wider budget; squared summands stay narrow."""
+
+    def test_wide_target_polynomial_is_admitted(self):
+        """q1 = x1^3+...+x4^3 + x1+...+x8 + 1 squares to 91 distinct terms;
+        q2 = x1^4+...+x8^4 squares to 36 more. The 127-term target sits
+        above the 64-term summand budget but inside the 256-term target
+        budget while both summands stay individually bounded."""
+        names = tuple(f"x{k}" for k in range(1, 9))
+        monomials = [tuple(3 if i == j else 0 for j in range(8)) for i in range(4)]
+        monomials += [tuple(1 if i == j else 0 for j in range(8)) for i in range(8)]
+        monomials.append(tuple(0 for _ in names))
+        q1 = _poly(names, *[(1, 1, e) for e in sorted(monomials, reverse=True)])
+        fourths = [tuple(4 if i == j else 0 for j in range(8)) for i in range(8)]
+        q2 = _poly(names, *[(1, 1, e) for e in sorted(fourths, reverse=True)])
+        assert len(q1.polynomial.terms) == 13
+        wide_target = _sos_poly(q1, q2)
+        assert len(wide_target.polynomial.terms) > MAX_SOS_SUMMAND_TERMS
+        expanded = check_sos_decomposition(
+            SOSDecompositionCheckRequest(polynomial=wide_target, summands=(q1, q2))
+        )
+        assert expanded.is_valid
+
+    def test_wide_summand_still_rejected_by_narrow_budget(self):
+        """A single 65-term summand fails the 64-term summand budget even
+        though its predicted square stays inside the product cap."""
+        wide = _poly(("x",), *[(1, 1, (k,)) for k in range(64, -1, -1)])
+        p = _poly(("x",), (1, 1, (2,)), (1, 1, (0,)))
+        with pytest.raises(ValidationError, match=r"summand\[0\] exceeds the 64"):
+            SOSDecompositionCheckRequest(polynomial=p, summands=(wide,))
+
+    def test_target_above_256_terms_rejected(self):
+        """The target budget is 256: a 257-term polynomial is rejected."""
+        triples = [
+            (a, b, c)
+            for a in range(12, -1, -1)
+            for b in range(12 - a, -1, -1)
+            for c in range(12 - a - b, -1, -1)
+        ]
+        p = _poly(("x", "y", "z"), *[(1, 1, t) for t in triples[:257]])
+        q = _poly(("x", "y", "z"), (1, 1, (0, 0, 0)))
+        with pytest.raises(ValidationError, match="polynomial exceeds the 256"):
+            SOSDecompositionCheckRequest(polynomial=p, summands=(q,))
+
+
 class TestGramCertificateAdmission:
     """Gram certificates bound every matrix coefficient before PSD work."""
 
@@ -105,7 +174,11 @@ class TestGramCertificateAdmission:
         return GramCertificateRequest(
             polynomial=p,
             monomial_basis=basis,
-            gram_matrix=gram_entries,
+            gram_matrix={
+                "matrix_schema_version": "1",
+                "domain": "QQ",
+                "entries": gram_entries,
+            },
         )
 
     @staticmethod
@@ -126,10 +199,47 @@ class TestGramCertificateAdmission:
         assert result.reconstructs_polynomial
         assert result.is_psd
 
+    def test_produced_rational_matrix_is_accepted_unchanged(self):
+        """A serialized producer {matrix_schema_version, domain, entries}
+        value validates directly and its returned form enters a matrices
+        rank consumer unchanged."""
+        from jacobian.math.matrices._operation_models import MatrixRankRequest
+
+        payload = {
+            "matrix_schema_version": "1",
+            "domain": "QQ",
+            "entries": (
+                (self._entry("1"), self._entry("0")),
+                (self._entry("0"), self._entry("1")),
+            ),
+        }
+        request = GramCertificateRequest.model_validate(
+            {
+                "polynomial": _poly(("x",), (1, 1, (2,)), (1, 1, (0,))).model_dump(
+                    mode="json"
+                ),
+                "monomial_basis": [
+                    _poly(("x",), (1, 1, (1,))).model_dump(mode="json"),
+                    _poly(("x",), (1, 1, (0,))).model_dump(mode="json"),
+                ],
+                "gram_matrix": payload,
+            }
+        )
+        assert request.gram_matrix.entries[0][0].num == "1"
+        # The returned value is a canonical RationalMatrix that downstream
+        # matrix consumers accept unchanged.
+        MatrixRankRequest.model_validate(
+            {"matrix": request.gram_matrix.model_dump(mode="json")}
+        )
+
+    def test_non_square_side_vs_basis_rejected(self):
+        with pytest.raises(ValueError, match="square"):
+            self._request(((self._entry("1"),),))
+
     def test_oversized_matrix_coefficient_rejected_before_eigenvalues(self):
         huge = "9" * 129
         with pytest.raises(
-            ValueError, match="gram_matrix coefficient exceeds digit bound"
+            ValidationError, match="gram_matrix scalars are limited to 128"
         ):
             self._request(
                 (
@@ -146,7 +256,7 @@ class TestGramCertificateAdmission:
                 (self._entry("0"), self._entry("1")),
             )
         )
-        assert request.gram_matrix[0][0].num == edge
+        assert request.gram_matrix.entries[0][0].num == edge
 
 
 class TestGramCertificateResultAdmission:
@@ -159,10 +269,14 @@ class TestGramCertificateResultAdmission:
             GramCertificateRequest(
                 polynomial=p,
                 monomial_basis=basis,
-                gram_matrix=(
-                    ({"num": "1", "den": "1"}, {"num": "0", "den": "1"}),
-                    ({"num": "0", "den": "1"}, {"num": "1", "den": "1"}),
-                ),
+                gram_matrix={
+                    "matrix_schema_version": "1",
+                    "domain": "QQ",
+                    "entries": (
+                        ({"num": "1", "den": "1"}, {"num": "0", "den": "1"}),
+                        ({"num": "0", "den": "1"}, {"num": "1", "den": "1"}),
+                    ),
+                },
             )
         )
         return request.model_dump(mode="json")
@@ -170,10 +284,39 @@ class TestGramCertificateResultAdmission:
     def test_oversized_result_matrix_is_rejected_before_replay(self):
         payload = self._valid_result()
         huge = "9" * 129
-        payload["gram_matrix"][0][0] = {"num": huge, "den": "1"}
+        payload["gram_matrix"]["entries"][0][0] = {"num": huge, "den": "1"}
         with pytest.raises(
-            ValidationError, match="gram_matrix coefficient exceeds digit bound"
+            ValidationError, match="gram_matrix scalars are limited to 128"
         ):
+            GramCertificateResult.model_validate(payload)
+
+    def test_oversized_result_dimension_is_rejected_at_field_validation(self):
+        """A 40x40 result matrix fails the parse-time dimension bound before
+        any invariant replay traverses its entries."""
+        payload = self._valid_result()
+        payload["monomial_basis"] = [
+            _poly(("x",), (1, 1, (k,))).model_dump(mode="json") for k in range(40)
+        ]
+        payload["polynomial"] = _poly(
+            ("x",), *[(1, 1, (2 * k,)) for k in range(39, -1, -1)]
+        ).model_dump(mode="json")
+        zero_row = tuple({"num": "0", "den": "1"} for _ in range(40))
+        payload["gram_matrix"] = {
+            "matrix_schema_version": "1",
+            "domain": "QQ",
+            "entries": [zero_row for _ in range(40)],
+        }
+        with pytest.raises(ValidationError, match="at most 32"):
+            GramCertificateResult.model_validate(payload)
+
+    def test_oversized_result_basis_is_rejected_at_field_validation(self):
+        """A basis longer than the Gram dimension bound is rejected at the
+        field level, before admission scans any coefficient."""
+        payload = self._valid_result()
+        payload["monomial_basis"] = [
+            _poly(("x",), (1, 1, (k,))).model_dump(mode="json") for k in range(33)
+        ]
+        with pytest.raises(ValidationError, match="at most 32"):
             GramCertificateResult.model_validate(payload)
 
     def test_non_monomial_basis_entry_is_rejected(self):
@@ -207,7 +350,7 @@ class TestGramMonomialBasisAdmission:
                 GramCertificateRequest(
                     polynomial=p,
                     monomial_basis=(_poly(("x",), (1, 1, (1,)), (1, 1, (0,))),),
-                    gram_matrix=(({"num": "1", "den": "1"},),),
+                    gram_matrix={"entries": (({"num": "1", "den": "1"},),)},
                 )
             )
 
@@ -221,10 +364,12 @@ class TestGramMonomialBasisAdmission:
                         _poly(("x",), (1, 1, (1,))),
                         _poly(("x",), (1, 1, (1,))),
                     ),
-                    gram_matrix=(
-                        ({"num": "2", "den": "1"}, {"num": "0", "den": "1"}),
-                        ({"num": "0", "den": "1"}, {"num": "1", "den": "1"}),
-                    ),
+                    gram_matrix={
+                        "entries": (
+                            ({"num": "2", "den": "1"}, {"num": "0", "den": "1"}),
+                            ({"num": "0", "den": "1"}, {"num": "1", "den": "1"}),
+                        )
+                    },
                 )
             )
 
@@ -275,7 +420,7 @@ class TestExactPsdCriterion:
         return GramCertificateRequest(
             polynomial=p,
             monomial_basis=basis,
-            gram_matrix=gram_entries,
+            gram_matrix={"entries": gram_entries},
         )
 
     def test_irreducible_characteristic_polynomial_is_decided(self) -> None:
@@ -302,7 +447,7 @@ class TestExactPsdCriterion:
                     (1, 1, (0,)),
                 ),
                 monomial_basis=tuple(_poly(("x",), (1, 1, (k,))) for k in range(5)),
-                gram_matrix=gram,
+                gram_matrix={"entries": gram},
             )
         )
         assert result.is_psd is True
@@ -316,7 +461,7 @@ class TestExactPsdCriterion:
             GramCertificateRequest(
                 polynomial=_poly(("x",), (-1, 1, (2,))),
                 monomial_basis=(_poly(("x",), (1, 1, (1,))),),
-                gram_matrix=gram,
+                gram_matrix={"entries": gram},
             )
         )
         assert result.is_psd is False

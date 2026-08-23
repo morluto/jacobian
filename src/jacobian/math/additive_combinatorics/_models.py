@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable
-from typing import Self
+from typing import Annotated, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StringConstraints, model_validator
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -16,6 +17,36 @@ _MAX_RESULT_SIZE = _MAX_SET_SIZE * _MAX_SET_SIZE
 _MAX_DIMENSION = 8
 _MAX_COORDINATE_DIGITS = 6
 
+# One serialized ordered-difference entry carries an eight-coordinate signed
+# difference, a multiplicity, and one index pair, which stays under 256
+# canonical JSON bytes even at the widest admitted coordinates, and a complete
+# profile holds n*(n-1) entries. Admitting only set sizes whose worst-case
+# entry array fits the 4 MiB result budget keeps the full exact result safely
+# inside Jacobian's 10 MiB canonical output limit once the retained sources,
+# scalar header, and operation envelope are included.
+_MAX_ENTRY_WIRE_BYTES = 256
+_MAX_PROFILE_RESULT_BUDGET_BYTES = 4 * 1024 * 1024
+_MAX_VECTOR_SET_SIZE = (
+    math.isqrt(4 * (_MAX_PROFILE_RESULT_BUDGET_BYTES // _MAX_ENTRY_WIRE_BYTES) + 1) + 1
+) // 2
+_MAX_TOTAL_ORDERED_PAIRS = _MAX_VECTOR_SET_SIZE * (_MAX_VECTOR_SET_SIZE - 1)
+
+# A request coordinate carries at most six digits plus an optional sign; an
+# exact difference of two such coordinates grows by at most one digit, so any
+# vector coordinate string carries at most seven digits plus an optional sign.
+# The schema-level character ceiling keeps every later integer conversion
+# bounded before any bigint is constructed.
+_MAX_VECTOR_COORDINATE_LENGTH = _MAX_COORDINATE_DIGITS + 2
+
+CanonicalVectorCoordinate = Annotated[
+    str,
+    StringConstraints(
+        pattern=r"^(?:0|-?[1-9][0-9]*)$",
+        max_length=_MAX_VECTOR_COORDINATE_LENGTH,
+        strict=True,
+    ),
+]
+
 
 def _sorted_canonical_integers(
     values: Iterable[str],
@@ -24,8 +55,9 @@ def _sorted_canonical_integers(
     return tuple(sorted(set(values), key=parse_canonical_integer))
 
 
-def _require_bounded_coordinate(value: int, label: str) -> None:
-    if len(str(abs(value))) > _MAX_COORDINATE_DIGITS:
+def _require_bounded_coordinate(value: str, label: str) -> None:
+    digits = len(value.lstrip("-"))
+    if digits > _MAX_COORDINATE_DIGITS:
         raise ValueError(
             f"{label} exceeds the {_MAX_COORDINATE_DIGITS}-digit coordinate bound"
         )
@@ -36,15 +68,18 @@ class IntegerVector(StrictModel):
 
     This is the domain's canonical vector value: request sources, retained
     sources, and difference entries all carry it so exact vectors compose
-    downstream without reconstruction.
+    downstream without reconstruction. Each coordinate carries at most seven
+    digits plus an optional sign, enforced at the string level so oversized
+    values are rejected before any integer conversion.
     """
 
-    coordinates: tuple[CanonicalInteger, ...] = Field(
+    coordinates: tuple[CanonicalVectorCoordinate, ...] = Field(
         min_length=1,
         max_length=_MAX_DIMENSION,
         description=(
             "Canonical integer coordinates sharing one dimension in "
-            f"[1, {_MAX_DIMENSION}]."
+            f"[1, {_MAX_DIMENSION}], each carrying at most "
+            f"{_MAX_VECTOR_COORDINATE_LENGTH - 1} digits plus an optional sign."
         ),
         examples=[("0", "1")],
     )
@@ -66,7 +101,7 @@ class IntegerVectorSet(StrictModel):
 
     vectors: tuple[IntegerVector, ...] = Field(
         min_length=1,
-        max_length=_MAX_SET_SIZE,
+        max_length=_MAX_VECTOR_SET_SIZE,
     )
 
     @model_validator(mode="after")
@@ -74,6 +109,8 @@ class IntegerVectorSet(StrictModel):
         dimension = len(self.vectors[0].coordinates)
         seen: set[tuple[int, ...]] = set()
         for vec in self.vectors:
+            for coordinate in vec.coordinates:
+                _require_bounded_coordinate(coordinate, "vector coordinate")
             values = vec.as_int_tuple()
             if len(values) != dimension:
                 raise ValueError("all vectors must share the same dimension")
@@ -81,8 +118,6 @@ class IntegerVectorSet(StrictModel):
                 raise ValueError(
                     f"vector dimension must be between 1 and {_MAX_DIMENSION}"
                 )
-            for coord in values:
-                _require_bounded_coordinate(coord, "vector coordinate")
             if values in seen:
                 raise ValueError("vectors must be unique")
             seen.add(values)
@@ -99,11 +134,11 @@ def _check_vector_family(vectors: tuple[IntegerVector, ...], dimension: int) -> 
         raise ValueError(f"vector dimension must be between 1 and {_MAX_DIMENSION}")
     seen: set[tuple[int, ...]] = set()
     for vec in vectors:
+        for coordinate in vec.coordinates:
+            _require_bounded_coordinate(coordinate, "vector coordinate")
         values = vec.as_int_tuple()
         if len(values) != dimension:
             raise ValueError("all vectors must have the same dimension")
-        for coord in values:
-            _require_bounded_coordinate(coord, "vector coordinate")
         if values in seen:
             raise ValueError("vectors must be unique")
         seen.add(values)
@@ -167,7 +202,14 @@ def _check_entry_pairs(
             raise ValueError("entry difference dimension must match result dimension")
         if difference == zero:
             raise ValueError("entry difference must be nonzero")
+        previous: tuple[int, int] | None = None
         for pair in entry.pairs:
+            key = (pair.left_index, pair.right_index)
+            if previous is not None and key <= previous:
+                raise ValueError(
+                    "entry pairs must be sorted and unique in lexicographic order"
+                )
+            previous = key
             if pair.left_index >= set_size or pair.right_index >= set_size:
                 raise ValueError("pair indices must be less than set_size")
             if vectors:
@@ -209,9 +251,10 @@ def _check_first_collision(
     first_collision: OrderedDifferencePair | None,
 ) -> None:
     if entries and has_repeated_difference:
-        # The kernel designates pairs[0] of the first sorted entry with
-        # multiplicity 2+; a later repeated entry or a non-designated pair
-        # must not authenticate the witness.
+        # Pair order is canonically lexicographic (checked in
+        # _check_entry_pairs), so pairs[0] of an entry is independently
+        # determined as its minimum pair; the witness must be exactly that
+        # designated pair of the first sorted repeated-difference entry.
         expected_entry = next((e for e in entries if e.multiplicity > 1), None)
         if expected_entry is None:
             raise ValueError(
@@ -402,7 +445,9 @@ class OrderedDifferenceProfileRequest(StrictModel):
     """Compute the ordered-difference profile r_{A-A}(v) for a finite set in Z^d.
 
     Vectors must be distinct, share a common dimension 1..8, and each coordinate
-    is bounded to 6 digits in magnitude. The set size is bounded to 256.
+    is bounded to 6 digits in magnitude. The set size is derived from the
+    worst-case serialized result so the complete profile always fits within
+    Jacobian's canonical output budget.
     """
 
     vectors: IntegerVectorSet = Field(
@@ -410,7 +455,7 @@ class OrderedDifferenceProfileRequest(StrictModel):
             "Finite set of distinct integer vectors in Z^d with 1<=d<=8, each "
             "coordinate bounded to at most 6 digits in magnitude (abs value "
             f"<10^{_MAX_COORDINATE_DIGITS}), all vectors share the same dimension, "
-            "and vector entries are unique; set size at most 256."
+            f"and vector entries are unique; set size at most {_MAX_VECTOR_SET_SIZE}."
         ),
     )
 
@@ -448,12 +493,14 @@ class OrderedDifferenceEntry(StrictModel):
 class OrderedDifferenceProfileResult(StrictModel):
     """Complete ordered-difference profile for a finite set in Z^d."""
 
-    vectors: tuple[IntegerVector, ...] = Field(default=(), max_length=_MAX_SET_SIZE)
+    vectors: tuple[IntegerVector, ...] = Field(
+        default=(), max_length=_MAX_VECTOR_SET_SIZE
+    )
     dimension: int = Field(ge=1, le=_MAX_DIMENSION)
-    set_size: int = Field(ge=0, le=_MAX_SET_SIZE)
-    total_ordered_pairs: int = Field(ge=0, le=_MAX_RESULT_SIZE)
-    support_size: int = Field(ge=0, le=_MAX_RESULT_SIZE)
-    max_multiplicity: int = Field(ge=0, le=_MAX_RESULT_SIZE)
+    set_size: int = Field(ge=0, le=_MAX_VECTOR_SET_SIZE)
+    total_ordered_pairs: int = Field(ge=0, le=_MAX_TOTAL_ORDERED_PAIRS)
+    support_size: int = Field(ge=0, le=_MAX_TOTAL_ORDERED_PAIRS)
+    max_multiplicity: int = Field(ge=0, le=_MAX_TOTAL_ORDERED_PAIRS)
     entries: tuple[OrderedDifferenceEntry, ...] = Field(default=())
     has_repeated_difference: bool = False
     first_collision: OrderedDifferencePair | None = None

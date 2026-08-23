@@ -7,6 +7,7 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.additive_combinatorics._models import (
+    _MAX_VECTOR_SET_SIZE,
     AdditiveEnergyRequest,
     AdditiveEnergyResult,
     DirectSumPredicateRequest,
@@ -190,10 +191,10 @@ ADDITIVE_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "Compute the ordered-difference profile of a set in Z^d",
         "Given a finite set A in Z^d, return r_{A-A}(v) = |{(x,y) in A^2 : "
         "x != y, x - y = v}| for every nonzero difference v, preserving every "
-        "ordered source pair.  Inputs are bounded: 1<=d<=8, each coordinate "
-        "at most 6 digits in magnitude, vectors distinct and equal-length, set "
-        "size at most 256.  A Sidon decision, additive energy, or collision "
-        "count is a cheap projection of this complete profile.",
+        f"ordered source pair.  Inputs are bounded: 1<=d<=8, each coordinate "
+        f"at most 6 digits in magnitude, vectors distinct and equal-length, set "
+        f"size at most {_MAX_VECTOR_SET_SIZE}.  A Sidon decision, additive "
+        "energy, or collision count is a cheap projection of this complete profile.",
         OrderedDifferenceProfileRequest,
         OrderedDifferenceProfileResult,
         compute_ordered_difference_profile,
@@ -205,7 +206,8 @@ ADDITIVE_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "three_vectors",
                 "Compute the ordered-difference profile for {(0,0), (1,0), (0,1)}; "
                 "vectors must be non-empty, distinct, share the same dimension "
-                "1..8, and each coordinate is at most 6 digits in magnitude.",
+                "1..8, each coordinate is at most 6 digits in magnitude, and at "
+                f"most {_MAX_VECTOR_SET_SIZE} vectors are accepted.",
                 {
                     "vectors": {
                         "vectors": [

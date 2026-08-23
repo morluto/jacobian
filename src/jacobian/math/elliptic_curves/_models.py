@@ -9,6 +9,7 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math._rational_height import RationalHeight, sum_heights
 
 
@@ -25,42 +26,26 @@ class ShortWeierstrassCurve(StrictModel):
         return -16 * (4 * a**3 + 27 * b**2)
 
 
-def _discriminant_height(curve: ShortWeierstrassCurve) -> RationalHeight:
-    """Conservative height of Δ = -16(4A³ + 27B²) before reduction.
-
-    Cubing A triples each component's digit count, squaring B doubles them,
-    the integer multipliers add their own digits to the numerator only, and
-    summing over a product common denominator adds the denominator bounds.
-    """
-    a = RationalHeight.from_canonical(curve.coefficient_a)
-    b = RationalHeight.from_canonical(curve.coefficient_b)
-    four_a_cubed = RationalHeight(3 * a.numerator_digits + 1, 3 * a.denominator_digits)
-    twenty_seven_b_squared = RationalHeight(
-        2 * b.numerator_digits + 2, 2 * b.denominator_digits
-    )
-    total_den = (
-        four_a_cubed.denominator_digits + twenty_seven_b_squared.denominator_digits
-    )
-    total_num = (
-        max(
-            four_a_cubed.numerator_digits + twenty_seven_b_squared.denominator_digits,
-            twenty_seven_b_squared.numerator_digits + four_a_cubed.denominator_digits,
-        )
-        + 1
-        + 2
-    )
-    return RationalHeight(total_num, total_den)
-
-
 class EllipticCurveRequest(StrictModel):
     """Compute the discriminant of a short Weierstrass curve."""
 
     curve: ShortWeierstrassCurve
 
     @model_validator(mode="after")
-    def require_discriminant_result_height(self) -> Self:
-        height = _discriminant_height(self.curve)
-        if height.exceeds(MAX_CANONICAL_RATIONAL_DIGITS):
+    def require_discriminant_result_bound(self) -> Self:
+        # A cancellation-blind height estimate over-rejects curves whose
+        # large terms cancel exactly (A = -3t^2, B = 2t^3 gives
+        # 4A^3 + 27B^2 = 0 exactly).  Compute the reduced exact
+        # discriminant instead — three multiplications at the canonical
+        # digit limits, bounded work — and admit on its actual magnitude.
+        # Zero is admissible: the result reports singularity itself.
+        discriminant = self.curve.discriminant()
+        numerator_digits = len(format_canonical_integer(abs(discriminant.numerator)))
+        denominator_digits = len(format_canonical_integer(discriminant.denominator))
+        if (
+            numerator_digits > MAX_CANONICAL_RATIONAL_DIGITS
+            or denominator_digits > MAX_CANONICAL_RATIONAL_DIGITS
+        ):
             raise ValueError(
                 "curve coefficients would produce a discriminant exceeding the "
                 f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit canonical result bound"
@@ -150,11 +135,11 @@ def _require_group_law(
 
 def _generic_lambda_height_from_heights(
     first: tuple[RationalHeight, RationalHeight],
-    second: RationalAffinePoint,
+    second: tuple[RationalHeight, RationalHeight],
 ) -> RationalHeight:
-    """Height bound of lambda = (y2 - y1) / (x2 - x1) with a symbolic first operand."""
-    dy = sum_heights((RationalHeight.from_canonical(second.y), first[1]))
-    dx = sum_heights((RationalHeight.from_canonical(second.x), first[0]))
+    """Height bound of lambda = (y2 - y1) / (x2 - x1) with symbolic operands."""
+    dy = sum_heights((second[1], first[1]))
+    dx = sum_heights((second[0], first[0]))
     return dy.quotient(dx)
 
 
@@ -296,16 +281,23 @@ class EllipticCurvePointAdditionRequest(StrictModel):
     def require_group_law(self) -> Self:
         first_point = self.first.point
         second_point = self.second.point
-        # An identity operand contributes nothing and adds no height.
+        # An identity operand contributes nothing and adds no height, but
+        # the group law itself still requires a nonsingular curve.
         if first_point is None or second_point is None:
+            _require_group_law(self.curve, ())
             return self
         _require_group_law(self.curve, (first_point, second_point))
         if first_point == second_point:
-            result = _chord_step_heights(
-                _doubling_lambda_height(self.curve, first_point),
-                _point_heights(first_point),
-                _point_heights(first_point),
-            )
+            if first_point.y.as_fraction() == 0:
+                # A point of order two doubles to the identity: no tangent
+                # slope exists and no coordinate height can grow.
+                result = None
+            else:
+                result = _chord_step_heights(
+                    _doubling_lambda_height(self.curve, first_point),
+                    _point_heights(first_point),
+                    _point_heights(first_point),
+                )
         elif first_point.x == second_point.x:
             result = None
         else:
@@ -342,30 +334,57 @@ class ScalarMultiplicationRequest(StrictModel):
     @model_validator(mode="after")
     def require_group_law(self) -> Self:
         operand = self.point.point
+        # An identity operand contributes nothing, but the group law itself
+        # still requires a nonsingular curve.
         if self.point.at_infinity or operand is None:
+            _require_group_law(self.curve, ())
             return self
         _require_group_law(self.curve, (operand,))
         # Propagate coordinate heights through the same double-and-add scan
-        # the kernel performs: each bit doubles the accumulator and adds P on
-        # a set bit, and every step's chord-and-tangent output is bounded by
-        # rational-height propagation.  The naive n^2 digit heuristic both
-        # over-rejects and admits doublings whose exact coordinates exceed
-        # the canonical limit, so derive the budget from the recurrence.
-        current = _point_heights(operand)
-        for bit in bin(self.scalar)[3:]:
-            lam_double = _doubling_lambda_height_from_heights(self.curve, current)
-            doubled = _chord_step_heights(lam_double, current, current)
-            if bit == "1":
-                lam_add = _generic_lambda_height_from_heights(current, operand)
-                current = _chord_step_heights(lam_add, doubled, _point_heights(operand))
-            else:
-                current = doubled
-            if any(height.exceeds(MAX_CANONICAL_RATIONAL_DIGITS) for height in current):
-                raise ValueError(
-                    "scalar multiplication would exceed the canonical result "
-                    f"height ({MAX_CANONICAL_RATIONAL_DIGITS} digits); reduce "
-                    "the scalar or use smaller coordinates"
-                )
+        # the kernel performs: each bit doubles the addend and adds it to the
+        # accumulator on a set bit, and every step's chord-and-tangent output
+        # is bounded by rational-height propagation.  The naive n^2 digit
+        # heuristic both over-rejects and admits doublings whose exact
+        # coordinates exceed the canonical limit, so derive the budget from
+        # the recurrence.
+        #
+        # Each slot carries the finite/infinity state the group law actually
+        # produces.  An order-two point's first doubling lands on the identity
+        # (its y vanishes), the identity absorbs every later doubling, and no
+        # slope height is propagated through an infinity slot.  Intermediates
+        # whose state is not decidable from the request stay conservatively
+        # finite, which can only overestimate heights.
+        result: tuple[RationalHeight, RationalHeight] | None = None
+        addend: tuple[RationalHeight, RationalHeight] | None = _point_heights(operand)
+        addend_is_operand = True
+        operand_y_is_zero = operand.y.as_fraction() == 0
+        n = self.scalar
+        while n > 0:
+            if n & 1 and addend is not None:
+                if result is None:
+                    result = addend
+                else:
+                    lam = _generic_lambda_height_from_heights(result, addend)
+                    result = _chord_step_heights(lam, result, addend)
+            if addend is not None:
+                if addend_is_operand and operand_y_is_zero:
+                    # 2P = O for a point of order two; the identity absorbs
+                    # every later doubling of this addend.
+                    addend = None
+                else:
+                    lam = _doubling_lambda_height_from_heights(self.curve, addend)
+                    addend = _chord_step_heights(lam, addend, addend)
+                addend_is_operand = False
+            for slot in (result, addend):
+                if slot is not None and any(
+                    height.exceeds(MAX_CANONICAL_RATIONAL_DIGITS) for height in slot
+                ):
+                    raise ValueError(
+                        "scalar multiplication would exceed the canonical result "
+                        f"height ({MAX_CANONICAL_RATIONAL_DIGITS} digits); reduce "
+                        "the scalar or use smaller coordinates"
+                    )
+            n >>= 1
         return self
 
 

@@ -8,6 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.elliptic_curves._models import (
     CurveDiscriminantResult,
     CurvePointRequest,
@@ -49,8 +50,9 @@ class TestDiscriminant:
         assert result.discriminant.as_fraction() == 512
         assert result.is_nonsingular
 
-    def test_coefficients_exceeding_result_height_rejected(self):
-        """-16(4A^3) for A=10^19999 has ~60k digits, past the canonical limit."""
+    def test_coefficients_exceeding_result_bound_rejected(self):
+        """Exact Δ = -64·10^59997 for A=10^19999 has ~60k digits, past the
+        canonical limit."""
         curve = ShortWeierstrassCurve(
             coefficient_a=_pt("1" + "0" * 19999), coefficient_b=_pt("0")
         )
@@ -58,21 +60,50 @@ class TestDiscriminant:
             EllipticCurveRequest(curve=curve)
 
     def test_boundary_coefficients_accepted_and_returned(self):
-        """A=10^10920 would overflow; A=10^10919 stays within the bound."""
+        """The exact reduced Δ = -64A^3 for A=10^N has 3N+2 digits: N=10923
+        exceeds the canonical bound and N=10921 stays within it."""
         rejected = ShortWeierstrassCurve(
-            coefficient_a=_pt("1" + "0" * 10920), coefficient_b=_pt("0")
+            coefficient_a=_pt("1" + "0" * 10923), coefficient_b=_pt("0")
         )
         with pytest.raises(ValidationError, match="canonical result bound"):
             EllipticCurveRequest(curve=rejected)
         accepted = EllipticCurveRequest(
             curve=ShortWeierstrassCurve(
-                coefficient_a=_pt("1" + "0" * 10919), coefficient_b=_pt("0")
+                coefficient_a=_pt("1" + "0" * 10921), coefficient_b=_pt("0")
             )
         )
         result = compute_discriminant(accepted)
         assert result.is_nonsingular
         digits = max(len(result.discriminant.num), len(result.discriminant.den))
         assert digits <= 32_768
+
+    def test_exact_discriminant_cancellation_admitted(self):
+        """A=-3t², B=2t³ makes 4A³+27B² vanish exactly despite ~20k- and
+        ~30k-digit terms; the reduced exact discriminant admits the request
+        and reports singularity."""
+        t = 10**10000
+        curve = ShortWeierstrassCurve(
+            coefficient_a=_pt(format_canonical_integer(-3 * t * t)),
+            coefficient_b=_pt(format_canonical_integer(2 * t**3)),
+        )
+        result = compute_discriminant(EllipticCurveRequest(curve=curve))
+        assert result.discriminant.as_fraction() == 0
+        assert not result.is_nonsingular
+
+    def test_near_cancellation_admitted_with_exact_value(self):
+        """Large terms cancelling almost exactly stay admitted: with
+        A=-3t², B=2t³+t the exact Δ = 108t⁴ + 27t² fits the bound."""
+        t = 10**8000
+        curve = ShortWeierstrassCurve(
+            coefficient_a=_pt(format_canonical_integer(-3 * t * t)),
+            coefficient_b=_pt(format_canonical_integer(2 * t**3 + t)),
+        )
+        result = compute_discriminant(EllipticCurveRequest(curve=curve))
+        expected = -16 * (
+            4 * Fraction(-3 * t * t) ** 3 + 27 * Fraction(2 * t**3 + t) ** 2
+        )
+        assert result.discriminant.as_fraction() == expected
+        assert result.is_nonsingular
 
 
 class TestPointOnCurve:
@@ -204,6 +235,59 @@ class TestGroupLawAdmission:
         p = RationalAffinePoint(x=_pt("1"), y=_pt("1"))
         with pytest.raises(ValidationError, match="nonsingular"):
             ScalarMultiplicationRequest(curve=curve, point=_operand(curve, p), scalar=2)
+
+    def test_singular_curve_with_identity_operands_rejected(self):
+        """The identity shortcut must not bypass nonsingularity: a singular
+        curve is rejected even when every operand is the point at infinity."""
+        curve = ShortWeierstrassCurve(coefficient_a=_pt("0"), coefficient_b=_pt("0"))
+        identity = EllipticCurvePointResult(curve=curve, at_infinity=True)
+        with pytest.raises(ValidationError, match="nonsingular"):
+            EllipticCurvePointAdditionRequest(
+                curve=curve, first=identity, second=identity
+            )
+        with pytest.raises(ValidationError, match="nonsingular"):
+            ScalarMultiplicationRequest(curve=curve, point=identity, scalar=7)
+        with pytest.raises(ValidationError, match="nonsingular"):
+            ScalarMultiplicationRequest(curve=curve, point=identity, scalar=0)
+
+    def test_double_order_two_point_huge_denominator_admitted(self):
+        """Doubling P=(1/q, 0) on y²=x³+x+B is O: admission must not
+        propagate a fictional tangent slope through a y=0 doubling."""
+        q = 10**4000 + 1
+        curve = ShortWeierstrassCurve(
+            coefficient_a=_pt("1"),
+            # B = -(x³ + A·x) with x = 1/q, so P lies on the curve.
+            coefficient_b={
+                "num": format_canonical_integer(-(q * q + 1)),
+                "den": format_canonical_integer(q**3),
+            },
+        )
+        p = RationalAffinePoint(x=_pt("1", str(q)), y=_pt("0"))
+        result = add_points(
+            EllipticCurvePointAdditionRequest(
+                curve=curve, first=_operand(curve, p), second=_operand(curve, p)
+            )
+        )
+        assert result.at_infinity
+        doubled = scalar_multiply(
+            ScalarMultiplicationRequest(curve=curve, point=_operand(curve, p), scalar=2)
+        )
+        assert doubled.at_infinity
+
+    def test_order_two_point_odd_scalar_admitted(self):
+        """11P=P for order-two P=(0,0) on y²=x³+x; the height budget must
+        track the infinity state instead of fabricating slope growth past
+        the identity."""
+        curve = ShortWeierstrassCurve(coefficient_a=_pt("1"), coefficient_b=_pt("0"))
+        p = RationalAffinePoint(x=_pt("0"), y=_pt("0"))
+        result = scalar_multiply(
+            ScalarMultiplicationRequest(
+                curve=curve, point=_operand(curve, p), scalar=11
+            )
+        )
+        assert result.point is not None
+        assert result.point.x.as_fraction() == 0
+        assert result.point.y.as_fraction() == 0
 
 
 class TestResultSourceBinding:

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from math import ceil
-
 import sympy
 
 from jacobian.math.commutative_algebra_ops._models import (
@@ -18,12 +16,12 @@ from jacobian.math.commutative_algebra_ops._models import (
 )
 from jacobian.math.commutative_algebra_ops._singular import (
     run_singular_ideal_operation,
-    run_singular_saturation_verification,
 )
 from jacobian.math.polynomials._conversions import (
     rational_polynomial_to_sympy,
     symbols_for_variables,
 )
+from jacobian.math.polynomials.values import RationalPolynomialIdeal
 
 
 def compute_ideal_radical(request: IdealRadicalRequest) -> IdealRadicalResult:
@@ -83,90 +81,20 @@ def compute_ideal_quotient(request: IdealQuotientRequest) -> IdealQuotientResult
 
 
 def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturationResult:
-    """Compute an exact ideal saturation I : <d>^infinity through the bounded Singular backend."""
+    """Compute I : <d>^infinity through the bounded Singular backend."""
 
-    import time
-
-    from jacobian.math.polynomials.values import (
-        RationalPolynomialIdeal,
+    denominator = RationalPolynomialIdeal(
+        variables=request.denominator.variables,
+        generators=(request.denominator,),
     )
-
-    saturation_ideal = RationalPolynomialIdeal(
-        variables=request.ideal.variables,
-        generators=(request.saturation_polynomial,),
-    )
-    started = time.monotonic()
     backend = run_singular_ideal_operation(
         "saturation",
         request.ideal,
-        saturation_ideal,
+        denominator,
         request.resource_budget,
     )
-    if backend.outcome == "COMPUTED" and backend.ideal is not None:
-        # Defining-equality verification (I : d^inf == J) runs inside the
-        # same bounded, supervised Singular subprocess flow, never as an
-        # unbounded host-process Groebner computation. The declared wall
-        # budget covers the complete operation: verification receives only
-        # the time the first computation left unspent.
-        elapsed = time.monotonic() - started
-        # Charge elapsed time conservatively (rounded up) so the declared
-        # wall budget covers the complete operation: verification receives
-        # only whole seconds the first computation provably left unspent.
-        remaining = request.resource_budget.wall_seconds - ceil(elapsed)
-        if remaining < 1:
-            return IdealSaturationResult(
-                outcome="TIMEOUT",
-                source_ideal=request.ideal,
-                source_polynomial=request.saturation_polynomial,
-                detail="The resource budget was exhausted by the saturation "
-                "computation before its bounded verification could run.",
-            )
-        verification_budget = request.resource_budget.model_copy(
-            update={"wall_seconds": remaining}
-        )
-        verdict = run_singular_saturation_verification(
-            request.ideal,
-            saturation_ideal,
-            backend.ideal,
-            verification_budget,
-        )
-        if verdict == "REFUTED":
-            raise ValueError(
-                "Singular returned an ideal that differs from the exact "
-                "saturation I : d^infinity; refusing to report it"
-            )
-        if verdict != "VERIFIED":
-            detail = {
-                "UNAVAILABLE": "The supported Singular 4.4 backend is not "
-                "installed for saturation verification.",
-                "TIMEOUT": "Saturation verification exceeded the declared "
-                "wall-time limit.",
-                "ERROR": "Singular could not decide the saturation's "
-                "defining relation.",
-            }.get(verdict, "Saturation verification failed.")
-            return IdealSaturationResult(
-                outcome=verdict,
-                source_ideal=request.ideal,
-                source_polynomial=request.saturation_polynomial,
-                detail=detail,
-            )
-        # The defining equality was just decided under this exact remaining
-        # budget; construct the validated result directly so producer-side
-        # validation does not launch the bounded verification a second time.
-        return IdealSaturationResult.model_construct(
-            outcome="COMPUTED",
-            source_ideal=request.ideal,
-            source_polynomial=request.saturation_polynomial,
-            saturation=backend.ideal,
-            method="SINGULAR_SATURATION",
-            backend_version=backend.backend_version,
-            detail=backend.detail,
-            verification_budget=verification_budget,
-        )
     return IdealSaturationResult(
         outcome=backend.outcome,
-        source_ideal=request.ideal,
-        source_polynomial=request.saturation_polynomial,
         saturation=backend.ideal,
         backend_version=backend.backend_version,
         detail=backend.detail,

@@ -3,6 +3,7 @@
 from jacobian.math.recurrence_solving._models import (
     ClosedFormRequest,
     RecurrenceFindRequest,
+    RecurrenceFindResult,
 )
 from jacobian.math.recurrence_solving._operations import (
     compute_closed_form,
@@ -21,6 +22,14 @@ def test_find_recurrence_accepts_exact_rational_sequence() -> None:
     assert result.status == "FOUND"
     assert result.order == 1
     assert result.coefficients[0].as_integer_ratio() == (1, 2)
+
+
+def test_find_recurrence_accepts_no_fitting_when_no_nonvacuous_order_exists() -> None:
+    result = compute_find_recurrence(RecurrenceFindRequest(sequence=(_q(0), _q(1))))
+    assert result.status == "NO_FITTING_RECURRENCE"
+    assert result.order == 0
+    assert result.coefficients == ()
+    RecurrenceFindResult.model_validate(result.model_dump())
 
 
 def test_closed_form_accepts_exact_rational_data() -> None:

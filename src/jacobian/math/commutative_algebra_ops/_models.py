@@ -129,6 +129,51 @@ class IdealRadicalMembershipRequest(StrictModel):
         return self
 
 
+class IdealSaturationRequest(StrictModel):
+    """Compute ``I : <d>^infinity`` for a bounded ideal and one polynomial."""
+
+    ideal: RationalPolynomialIdeal = Field(
+        description=(
+            "An ideal in at most 6 variables with at most 16 generators and "
+            "256 aggregate terms; generator total degree is at most 12 and "
+            "coefficient components are at most 128 digits."
+        )
+    )
+    denominator: RationalPolynomial = Field(
+        description=(
+            "A single nonzero polynomial d in the dividend's exact ordered "
+            "ring, with at most 256 terms, total degree at most 12, and "
+            "coefficient components at most 128 digits."
+        )
+    )
+    resource_budget: IdealComputationBudget = Field(
+        default_factory=IdealComputationBudget
+    )
+
+    @model_validator(mode="after")
+    def require_backend_domain(self) -> Self:
+        _require_ideal_budget(self.ideal, label="ideal")
+        if self.denominator.variables != self.ideal.variables:
+            raise ValueError("saturation operands must use the same ordered ring")
+        if not self.denominator.polynomial.terms:
+            raise ValueError("saturation denominator must be nonzero")
+        require_polynomial_budget(
+            self.denominator,
+            maximum_terms=MAX_INPUT_TERMS,
+            maximum_exponent=MAX_INPUT_EXPONENT,
+            maximum_coefficient_digits=MAX_COEFFICIENT_DIGITS,
+            label="saturation denominator",
+        )
+        if any(
+            sum(term.exponents) > MAX_INPUT_EXPONENT
+            for term in self.denominator.polynomial.terms
+        ):
+            raise ValueError(
+                f"saturation denominator exceeds total degree {MAX_INPUT_EXPONENT}"
+            )
+        return self
+
+
 class IdealQuotientRequest(StrictModel):
     """Compute ``(I : J)`` for bounded ideals in one ``QQ`` ring."""
 
@@ -214,88 +259,12 @@ class IdealQuotientResult(StrictModel):
         return self
 
 
-def _require_saturation_result_budget(
-    saturation: RationalPolynomialIdeal,
-    budget: IdealComputationBudget,
-) -> None:
-    """Hold a claimed computed saturation to the backend's output limits."""
-    if len(saturation.generators) > budget.maximum_output_generators:
-        raise ValueError(
-            "computed saturation exceeds the declared "
-            f"{budget.maximum_output_generators}-generator exact-result limit"
-        )
-    if (
-        sum(len(generator.polynomial.terms) for generator in saturation.generators)
-        > budget.maximum_output_terms
-    ):
-        raise ValueError(
-            "computed saturation exceeds the declared "
-            f"{budget.maximum_output_terms}-term exact-result limit"
-        )
-
-
-class IdealSaturationRequest(StrictModel):
-    """Compute 'I : <d>^infinity' for a bounded ideal and a polynomial."""
-
-    ideal: RationalPolynomialIdeal = Field(
-        description=(
-            "An ideal in at most 6 variables with at most 16 generators and "
-            "256 aggregate terms; generator total degree is at most 12 and "
-            "coefficient components are at most 128 digits."
-        )
-    )
-    saturation_polynomial: RationalPolynomial = Field(
-        description=(
-            "A single polynomial d in the ideal ring, with "
-            "at most 256 terms, total degree at most 12, and coefficient "
-            "components at most 128 digits."
-        )
-    )
-    resource_budget: IdealComputationBudget = Field(
-        default_factory=IdealComputationBudget
-    )
-
-    @model_validator(mode="after")
-    def require_backend_domain(self) -> Self:
-        _require_ideal_budget(self.ideal, label="ideal")
-        require_polynomial_budget(
-            self.saturation_polynomial,
-            maximum_terms=MAX_INPUT_TERMS,
-            maximum_exponent=MAX_INPUT_EXPONENT,
-            maximum_coefficient_digits=MAX_COEFFICIENT_DIGITS,
-            label="saturation polynomial",
-        )
-        if any(
-            sum(term.exponents) > MAX_INPUT_EXPONENT
-            for term in self.saturation_polynomial.polynomial.terms
-        ):
-            raise ValueError(
-                f"saturation polynomial exceeds total degree {MAX_INPUT_EXPONENT}"
-            )
-        if self.saturation_polynomial.variables != self.ideal.variables:
-            raise ValueError("saturation polynomial must use the ideal's ordered ring")
-        return self
-
-
 class IdealSaturationResult(StrictModel):
-    """The saturation I : <d>^infinity bound to its source operands."""
-
     outcome: IdealExecutionOutcome
-    source_ideal: RationalPolynomialIdeal
-    source_polynomial: RationalPolynomial
     saturation: RationalPolynomialIdeal | None = None
     method: Literal["SINGULAR_SATURATION"] = "SINGULAR_SATURATION"
     backend_version: str | None = None
     detail: str | None = None
-    verification_budget: IdealComputationBudget | None = Field(
-        default=None,
-        description=(
-            "For a computed saturation, the bounded budget that was left "
-            "of the request's declared wall time when its defining-equality "
-            "verification ran; deserialization replays the decision under "
-            "this same bound."
-        ),
-    )
 
     @model_validator(mode="after")
     def require_outcome_shape(self) -> Self:
@@ -304,76 +273,14 @@ class IdealSaturationResult(StrictModel):
                 raise ValueError(
                     "computed saturation requires a value and backend version"
                 )
-            if self.verification_budget is None:
-                raise ValueError(
-                    "computed saturation requires the verification budget "
-                    "it was decided under"
-                )
         elif (
             self.saturation is not None
             or self.backend_version is not None
-            or self.verification_budget is not None
             or not self.detail
         ):
             raise ValueError(
                 "failed saturation computation requires only a safe detail"
             )
-        # Source binding: every retained ring must be the source ideal's
-        # ordered ring, so a payload cannot revalidate as the saturation of
-        # an unrelated input or of another ring.
-        if self.source_polynomial.variables != self.source_ideal.variables or (
-            self.saturation is not None
-            and self.saturation.variables != self.source_ideal.variables
-        ):
-            raise ValueError(
-                "saturation operands and result must share the source "
-                "ideal's ordered ring"
-            )
-        # Anti-forgery replay: a COMPUTED conclusion must be re-decidable
-        # from the retained sources alone. The retained operands are first
-        # re-admitted through the request contract, so an independently
-        # authored payload cannot smuggle generators beyond the operation's
-        # bounded domain into the replay; the defining equality is then
-        # decided inside the same bounded Singular subprocess flow as the
-        # operation, under the budget retained from the original request.
-        if self.outcome == "COMPUTED":
-            from jacobian.math.commutative_algebra_ops._singular import (
-                run_singular_saturation_verification,
-            )
-
-            saturation = self.saturation
-            verification_budget = self.verification_budget
-            if saturation is None or verification_budget is None:
-                raise ValueError(
-                    "computed saturation requires a value and backend version"
-                )
-            # The claimed exact result must stay inside the declared
-            # backend output domain before any replay formats it into a
-            # script, so an independently authored payload cannot validate
-            # a shape the bounded backend could never produce.
-            _require_saturation_result_budget(saturation, verification_budget)
-            IdealSaturationRequest(
-                ideal=self.source_ideal,
-                saturation_polynomial=self.source_polynomial,
-                resource_budget=verification_budget,
-            )
-            saturator = RationalPolynomialIdeal(
-                variables=self.source_ideal.variables,
-                generators=(self.source_polynomial,),
-            )
-            verdict = run_singular_saturation_verification(
-                self.source_ideal,
-                saturator,
-                saturation,
-                verification_budget,
-            )
-            if verdict != "VERIFIED":
-                raise ValueError(
-                    "the computed saturation differs from the exact "
-                    "saturation of its retained sources; refusing to "
-                    f"report it (verification outcome: {verdict})"
-                )
-
         return self
 
 

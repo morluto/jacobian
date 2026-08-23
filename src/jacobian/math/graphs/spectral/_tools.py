@@ -7,11 +7,14 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.spectral._models import (
+    GraphCharacteristicPolynomialResult,
     GraphSpectrumRequest,
     GraphSpectrumResult,
 )
 from jacobian.math.graphs.spectral._operations import (
+    compute_adjacency_characteristic_polynomial,
     compute_adjacency_spectrum,
+    compute_laplacian_characteristic_polynomial,
     compute_laplacian_spectrum,
 )
 
@@ -42,6 +45,8 @@ def graph_spectral_operation[
         examples=examples,
     )
 
+
+PATH_P3 = {"graph": {"vertex_count": 3, "edges": [[0, 1], [1, 2]]}}
 
 GRAPH_SPECTRAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     graph_spectral_operation(
@@ -91,6 +96,58 @@ GRAPH_SPECTRAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                         "edges": [[0, 1], [1, 2]],
                     }
                 },
+            ),
+        ),
+    ),
+    graph_spectral_operation(
+        "graph.spectrum.adjacency.characteristic_polynomial.compute",
+        "Compute exact adjacency characteristic polynomial",
+        "Compute the exact monic characteristic polynomial det(xI - A) of the "
+        "adjacency matrix of a simple undirected graph over QQ, returned as "
+        "the canonical sparse RationalPolynomial in x with nonzero terms "
+        "serialized in descending exponent order, using SymPy.",
+        GraphSpectrumRequest,
+        GraphCharacteristicPolynomialResult,
+        compute_adjacency_characteristic_polynomial,
+        "graph",
+        "spectrum",
+        "adjacency",
+        "characteristic-polynomial",
+        "exact",
+        examples=(
+            example(
+                "path_adjacency_charpoly",
+                (
+                    "Characteristic polynomial of the adjacency matrix of P3; "
+                    "the graph must be simple with at most 32 vertices."
+                ),
+                PATH_P3,
+            ),
+        ),
+    ),
+    graph_spectral_operation(
+        "graph.spectrum.laplacian.characteristic_polynomial.compute",
+        "Compute exact Laplacian characteristic polynomial",
+        "Compute the exact monic characteristic polynomial det(xI - L) of the "
+        "Laplacian matrix of a simple undirected graph over QQ, returned as "
+        "the canonical sparse RationalPolynomial in x with nonzero terms "
+        "serialized in descending exponent order, using SymPy.",
+        GraphSpectrumRequest,
+        GraphCharacteristicPolynomialResult,
+        compute_laplacian_characteristic_polynomial,
+        "graph",
+        "spectrum",
+        "laplacian",
+        "characteristic-polynomial",
+        "exact",
+        examples=(
+            example(
+                "path_laplacian_charpoly",
+                (
+                    "Characteristic polynomial of the Laplacian matrix of P3; "
+                    "the graph must be simple with at most 32 vertices."
+                ),
+                PATH_P3,
             ),
         ),
     ),

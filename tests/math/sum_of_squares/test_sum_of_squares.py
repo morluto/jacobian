@@ -191,7 +191,10 @@ class TestGramCertificateResultAdmission:
                 },
             }
         )
-        payload["monomial_basis"] = [shifted.model_dump(mode="json"), payload["monomial_basis"][1]]
+        payload["monomial_basis"] = [
+            shifted.model_dump(mode="json"),
+            payload["monomial_basis"][1],
+        ]
         with pytest.raises(ValidationError, match="single-term monomial"):
             GramCertificateResult.model_validate(payload)
 
@@ -241,5 +244,7 @@ class TestSOSResultAdmission:
         payload = result.model_dump(mode="json")
         payload["summands"] = [wide.model_dump(mode="json")] * 64
         payload["is_valid"] = False
-        with pytest.raises(ValidationError, match="predicted SOS expansion exceeds term bound"):
+        with pytest.raises(
+            ValidationError, match="predicted SOS expansion exceeds term bound"
+        ):
             SOSDecompositionCheckResult.model_validate(payload)

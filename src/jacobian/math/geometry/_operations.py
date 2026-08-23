@@ -450,6 +450,8 @@ def circle_inversion(request: CircleInversionRequest) -> GeometryPointResult:
         y=CanonicalRational.from_fraction(center.y.as_fraction() + scale * dy),
     )
     return GeometryPointResult(point=inverted)
+
+
 # ---------------------------------------------------------------------------
 # Configuration-level operations (issues #2107, #2106)
 # ---------------------------------------------------------------------------

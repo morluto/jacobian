@@ -249,8 +249,7 @@ class TestCircleInversion:
         assert "INVERSION_ADMISSION_DIGITS" not in description
         assert f"{INVERSION_ADMISSION_DIGITS} decimal digits" in description
         assert (
-            schema.get("inversion_admission_digit_bound")
-            == INVERSION_ADMISSION_DIGITS
+            schema.get("inversion_admission_digit_bound") == INVERSION_ADMISSION_DIGITS
         )
         for field in ("center", "power", "point"):
             field_description = schema["properties"][field]["description"]

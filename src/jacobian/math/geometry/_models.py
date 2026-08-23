@@ -448,9 +448,7 @@ def _inverted_components_within_bound(
     )
 
 
-def _require_inversion_admission_bound(
-    value: CanonicalRational, label: str
-) -> None:
+def _require_inversion_admission_bound(value: CanonicalRational, label: str) -> None:
     if (
         len(value.num.lstrip("-")) > INVERSION_ADMISSION_DIGITS
         or len(value.den.lstrip("-")) > INVERSION_ADMISSION_DIGITS

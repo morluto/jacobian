@@ -140,7 +140,92 @@ def compute_weak_majorization_check(
     )
 
 
-def compute_t_transform_sequence(  # noqa: C901
+def _majorizes_values(x_vals: Sequence[Fraction], y_vals: Sequence[Fraction]) -> bool:
+    n = len(x_vals)
+    x_prefix = _prefix_sums(_sorted_desc(x_vals))
+    y_prefix = _prefix_sums(_sorted_desc(y_vals))
+    if x_prefix[n] != y_prefix[n]:
+        return False
+    return all(x_prefix[k] >= y_prefix[k] for k in range(1, n))
+
+
+def _compute_t_transform_steps(
+    x_vals: list[Fraction], target: list[Fraction]
+) -> tuple[list[Fraction], list[tuple[int, int, Fraction]]]:
+    n = len(x_vals)
+    current = list(x_vals)
+    steps: list[tuple[int, int, Fraction]] = []
+    for _ in range(5 * n):
+        if all(current[k] == target[k] for k in range(n)):
+            break
+        i_idx = next((idx for idx in range(n) if current[idx] > target[idx]), None)
+        j_idx = next((idx for idx in range(n) if current[idx] < target[idx]), None)
+        if i_idx is None or j_idx is None:
+            break
+        ci = current[i_idx]
+        cj = current[j_idx]
+        denom = ci - cj
+        if denom == 0:
+            break
+        deficit_j = target[j_idx] - cj
+        excess_i = ci - target[i_idx]
+        delta = min(deficit_j, excess_i)
+        lam = Fraction(1) - delta / denom
+        if lam < 0 or lam > 1 or lam == 1:
+            break
+        current[i_idx] = lam * ci + (Fraction(1) - lam) * cj
+        current[j_idx] = (Fraction(1) - lam) * ci + lam * cj
+        steps.append((i_idx, j_idx, lam))
+    return current, steps
+
+
+def _target_permutation(
+    current: list[Fraction], target: list[Fraction]
+) -> tuple[list[int], bool, list[Fraction]]:
+    n = len(current)
+    final_perm = list(range(n))
+    if current == target or sorted(current) != sorted(target):
+        return final_perm, False, current
+    used = [False] * n
+    perm = [0] * n
+    for idx in range(n):
+        found = next(
+            (j for j in range(n) if not used[j] and current[j] == target[idx]), None
+        )
+        if found is None:
+            return final_perm, False, current
+        perm[idx] = found
+        used[found] = True
+    if not all(used):
+        return final_perm, False, current
+    reordered = [current[perm[i]] for i in range(n)]
+    if reordered != target:
+        return final_perm, False, current
+    return perm, True, reordered
+
+
+def _intermediate_vectors(
+    x_vals: list[Fraction],
+    steps: list[tuple[int, int, Fraction]],
+    final_perm: list[int],
+    needs_perm: bool,
+) -> list[tuple[str, ...]]:
+    intermediate: list[tuple[str, ...]] = []
+    current = list(x_vals)
+    intermediate.append(tuple(_format_rational(v) for v in current))
+    for i, j, lam in steps:
+        ci_val = current[i]
+        cj_val = current[j]
+        current[i] = lam * ci_val + (Fraction(1) - lam) * cj_val
+        current[j] = (Fraction(1) - lam) * ci_val + lam * cj_val
+        intermediate.append(tuple(_format_rational(v) for v in current))
+    if needs_perm:
+        current = [current[final_perm[i]] for i in range(len(current))]
+        intermediate.append(tuple(_format_rational(v) for v in current))
+    return intermediate
+
+
+def compute_t_transform_sequence(
     request: TTransformSequenceRequest,
 ) -> TTransformSequenceResult:
     """Compute an exact T-transform sequence from x to y.
@@ -154,21 +239,7 @@ def compute_t_transform_sequence(  # noqa: C901
     labels = list(request.x.labels)
     n = len(x_vals)
 
-    # First check majorization
-    x_sorted = _sorted_desc(x_vals)
-    y_sorted = _sorted_desc(y_vals)
-    x_prefix = _prefix_sums(x_sorted)
-    y_prefix = _prefix_sums(y_sorted)
-
-    total_sum_match = x_prefix[n] == y_prefix[n]
-    all_ok = True
-    for k in range(1, n):
-        if x_prefix[k] - y_prefix[k] < 0:
-            all_ok = False
-            break
-    majorizes = all_ok and total_sum_match
-
-    if not majorizes:
+    if not _majorizes_values(x_vals, y_vals):
         return TTransformSequenceResult(
             majorizes=False,
             steps=(),
@@ -178,99 +249,16 @@ def compute_t_transform_sequence(  # noqa: C901
             target_match=False,
         )
 
-    # Compute T-transform sequence using order-independent donor pairing.
-    # At each step find an excess index i (current > target) and deficit j
-    # (current < target), then mix them so at least one hits the target.
-    current = list(x_vals)
     target = list(y_vals)
-    steps: list[tuple[int, int, Fraction]] = []
-
-    max_steps = 5 * n  # conservative bound; majorizes guarantees ≤ n-1 T-transforms
-    for _ in range(max_steps):
-        if all(current[k] == target[k] for k in range(n)):
-            break
-        i_idx = None
-        j_idx = None
-        for idx in range(n):
-            if current[idx] > target[idx]:
-                i_idx = idx
-                break
-        for idx in range(n):
-            if current[idx] < target[idx]:
-                j_idx = idx
-                break
-        if i_idx is None or j_idx is None:
-            break
-        ci = current[i_idx]
-        cj = current[j_idx]
-        denom = ci - cj
-        if denom == 0:
-            break
-        # Amount that can be transferred to satisfy either i or j
-        deficit_j = target[j_idx] - cj  # >0
-        excess_i = ci - target[i_idx]  # >0
-        delta = deficit_j if deficit_j < excess_i else excess_i
-        lam = Fraction(1) - delta / denom
-        if lam < 0 or lam > 1:
-            break
-        if lam == 1:
-            break
-        new_i = lam * ci + (Fraction(1) - lam) * cj
-        new_j = (Fraction(1) - lam) * ci + lam * cj
-        current[i_idx] = new_i
-        current[j_idx] = new_j
-        steps.append((i_idx, j_idx, lam))
-    else:
-        # Hit iteration bound without convergence - report non-match
-        pass
-
-    # Permutation handling: if current is a permutation of target, record it.
-    final_perm: list[int] = list(range(n))
-    needs_perm = False
-    if current != target and sorted(current) == sorted(target):
-        # Find permutation mapping current -> target via stable matching
-        used = [False] * n
-        perm = [0] * n
-        # Build bipartite mapping from current positions to target positions
-        # using greedy for equal values
-        for idx in range(n):
-            found = None
-            for j in range(n):
-                if not used[j] and current[j] == target[idx]:
-                    found = j
-                    break
-            if found is None:
-                # fallback: find any unused with same value
-                break
-            perm[idx] = found
-            used[found] = True
-        if all(used):
-            # perm maps target index -> current index; need final_perm that
-            # reorders current to target: new_current[i] = current[perm[i]]
-            test = [current[perm[i]] for i in range(n)]
-            if test == target:
-                final_perm = perm
-                needs_perm = True
-                current = test
+    current, steps = _compute_t_transform_steps(x_vals, target)
+    final_perm, needs_perm, current = _target_permutation(current, target)
 
     target_match = current == target
 
     # Build the composed doubly stochastic matrix
     composed = _build_composed_matrix(steps, final_perm if needs_perm else None, n)
 
-    # Build intermediate vectors
-    intermediate: list[tuple[str, ...]] = []
-    cur_vec = list(request.x.as_fractions())
-    intermediate.append(tuple(_format_rational(v) for v in cur_vec))
-    for i, j, lam in steps:
-        ci_val = cur_vec[i]
-        cj_val = cur_vec[j]
-        cur_vec[i] = lam * ci_val + (Fraction(1) - lam) * cj_val
-        cur_vec[j] = (Fraction(1) - lam) * ci_val + lam * cj_val
-        intermediate.append(tuple(_format_rational(v) for v in cur_vec))
-    if needs_perm:
-        cur_vec = [cur_vec[final_perm[i]] for i in range(n)]
-        intermediate.append(tuple(_format_rational(v) for v in cur_vec))
+    intermediate = _intermediate_vectors(x_vals, steps, final_perm, needs_perm)
 
     step_objs = tuple(
         TTransformStep(
@@ -361,7 +349,7 @@ def compute_doubly_stochastic_check(
     )
 
 
-def compute_birkhoff_decomposition(  # noqa: C901
+def compute_birkhoff_decomposition(
     request: BirkhoffDecompositionRequest,
 ) -> BirkhoffDecompositionResult:
     """Compute a Birkhoff-von Neumann decomposition of a doubly stochastic matrix.

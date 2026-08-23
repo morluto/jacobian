@@ -486,6 +486,25 @@ def test_request_schema_publishes_polynomial_admission_limits() -> None:
     assert "1,024" in description
 
 
+def test_budget_exceeded_semantics_cover_both_bounded_artifacts() -> None:
+    # BUDGET_EXCEEDED fires when either separately bounded artifact leaves
+    # its 1,024-term boundary: an oversized Gröbner-basis certificate
+    # (basis stripped) or an oversized reduction (computed basis retained).
+    # The published result schemas must document both so callers can tell
+    # them apart.
+    normal_form_description = " ".join(
+        IdealNormalFormResult.model_json_schema()["description"].split()
+    )
+    assert "Gröbner-basis certificate" in normal_form_description
+    assert "canonical remainder" in normal_form_description
+    assert "basis is stripped" in normal_form_description
+    membership_description = " ".join(
+        IdealMembershipResult.model_json_schema()["description"].split()
+    )
+    assert "Gröbner-basis certificate" in membership_description
+    assert "normal-form remainder" in membership_description
+
+
 def test_queried_polynomial_total_degree_budget_enforced() -> None:
     # x^12*y^12 keeps every exponent at 12 while its total degree is 24;
     # the advertised work domain bounds total degree, so it is rejected.

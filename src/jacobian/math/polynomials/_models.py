@@ -511,12 +511,15 @@ class IdealNormalFormResult(StrictModel):
     """The canonical remainder of one polynomial modulo an ideal.
 
     The result retains its complete source and the computed Gröbner basis so
-    validation replays the defining reduction relation exactly.  When the
-    exact remainder exceeds the 1,024-term output boundary the status reports
-    ``BUDGET_EXCEEDED`` instead of a mathematical conclusion; no partial
-    remainder is returned.  ``UNKNOWN`` reports that the bounded kernel could
-    not complete any strategy within its work bounds and asserts neither a
-    reduction nor a budget overflow; it carries no partial artifact.
+    validation replays the defining reduction relation exactly.  The status
+    reports ``BUDGET_EXCEEDED`` instead of a mathematical conclusion when
+    either of the two separately bounded exact artifacts leaves its own
+    1,024-term boundary: an oversized Gröbner-basis certificate (the basis
+    is stripped) or an oversized canonical remainder (a computed basis is
+    retained, but no partial remainder).  ``UNKNOWN`` reports that the
+    bounded kernel could not complete any strategy within its work bounds
+    and asserts neither a reduction nor a budget overflow; it carries no
+    partial artifact.
     """
 
     ideal: RationalPolynomialIdeal
@@ -572,9 +575,12 @@ class IdealMembershipResult(StrictModel):
     ``IN_IDEAL`` is defined exactly as the normal form being zero and
     ``NOT_IN_IDEAL`` as it being nonzero; both carry the full defining
     relation (source ideal, source polynomial, monomial order, computed
-    Gröbner basis) so validation can replay the reduction.  When the exact
-    normal form exceeds the output boundary the status reports
-    ``BUDGET_EXCEEDED`` and asserts no membership conclusion.  ``UNKNOWN``
+    Gröbner basis) so validation can replay the reduction.  The status
+    reports ``BUDGET_EXCEEDED`` and asserts no membership conclusion when
+    either of the two separately bounded exact artifacts leaves its own
+    output boundary: an oversized Gröbner-basis certificate (the basis is
+    stripped) or an oversized normal-form remainder (a computed basis is
+    retained, but no partial remainder).  ``UNKNOWN``
     reports that the bounded kernel could not complete any strategy within
     its work bounds and asserts neither membership nor a budget overflow;
     it carries no partial artifact.

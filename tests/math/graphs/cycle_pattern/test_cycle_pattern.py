@@ -20,9 +20,7 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
 def _graph(names: list[str], edges: list[tuple[str, str]]) -> SimpleUndirectedGraph:
-    return SimpleUndirectedGraph.model_validate(
-        {"vertices": names, "edges": edges}
-    )
+    return SimpleUndirectedGraph.model_validate({"vertices": names, "edges": edges})
 
 
 class TestFixedLengthCycle:
@@ -30,25 +28,21 @@ class TestFixedLengthCycle:
 
     def test_triangle(self):
         g = _graph(["a", "b", "c"], [("a", "b"), ("b", "c"), ("a", "c")])
-        result = decide_fixed_length_cycle(
-            FixedLengthCycleRequest(graph=g, length=3)
-        )
+        result = decide_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
         assert result.exists
         assert result.cycle == ("a", "b", "c")
 
     def test_four_cycle(self):
-        g = _graph(["a", "b", "c", "d"], [("a", "b"), ("b", "c"), ("c", "d"), ("a", "d")])
-        result = decide_fixed_length_cycle(
-            FixedLengthCycleRequest(graph=g, length=4)
+        g = _graph(
+            ["a", "b", "c", "d"], [("a", "b"), ("b", "c"), ("c", "d"), ("a", "d")]
         )
+        result = decide_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=4))
         assert result.exists
         assert result.cycle == ("a", "b", "c", "d")
 
     def test_no_cycle_in_path(self):
         g = _graph(["a", "b", "c", "d"], [("a", "b"), ("b", "c"), ("c", "d")])
-        result = decide_fixed_length_cycle(
-            FixedLengthCycleRequest(graph=g, length=4)
-        )
+        result = decide_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=4))
         assert not result.exists
 
     def test_no_cycle_in_tree(self):
@@ -56,9 +50,7 @@ class TestFixedLengthCycle:
             ["a", "b", "c", "d", "e"],
             [("a", "b"), ("b", "c"), ("b", "d"), ("d", "e")],
         )
-        result = decide_fixed_length_cycle(
-            FixedLengthCycleRequest(graph=g, length=3)
-        )
+        result = decide_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
         assert not result.exists
 
     def test_cycle_with_chord(self):
@@ -66,9 +58,7 @@ class TestFixedLengthCycle:
             ["a", "b", "c", "d", "e"],
             [("a", "b"), ("b", "c"), ("c", "d"), ("d", "e"), ("a", "e"), ("a", "c")],
         )
-        result = decide_fixed_length_cycle(
-            FixedLengthCycleRequest(graph=g, length=4)
-        )
+        result = decide_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=4))
         assert result.exists
         assert len(result.cycle) == 4
 
@@ -77,9 +67,7 @@ class TestFixedLengthCycle:
             ["a", "b", "c", "d", "e"],
             [("a", "b"), ("b", "c"), ("c", "d"), ("d", "e"), ("a", "e")],
         )
-        result = decide_fixed_length_cycle(
-            FixedLengthCycleRequest(graph=g, length=5)
-        )
+        result = decide_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=5))
         assert result.exists
         assert result.cycle == ("a", "b", "c", "d", "e")
 
@@ -88,16 +76,12 @@ class TestFixedLengthCycle:
             ["a", "b", "c", "d", "e"],
             [("a", "b"), ("b", "c"), ("c", "d"), ("d", "e"), ("a", "e")],
         )
-        result = decide_fixed_length_cycle(
-            FixedLengthCycleRequest(graph=g, length=3)
-        )
+        result = decide_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
         assert not result.exists
 
     def test_isolated_vertex(self):
         g = _graph(["a", "b", "c", "z"], [("a", "b"), ("b", "c"), ("a", "c")])
-        result = decide_fixed_length_cycle(
-            FixedLengthCycleRequest(graph=g, length=3)
-        )
+        result = decide_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
         assert result.exists
         assert result.cycle == ("a", "b", "c")
 
@@ -156,11 +140,7 @@ class TestDenseAndLongAdmission:
         """The complete graph on 33 vertices has 528 edges (> 512) and its
         triangle witness appears within the first few recursion nodes."""
         names = [f"k{i:02d}" for i in range(33)]
-        edges = [
-            (names[i], names[j])
-            for i in range(33)
-            for j in range(i + 1, 33)
-        ]
+        edges = [(names[i], names[j]) for i in range(33) for j in range(i + 1, 33)]
         host = _graph(names, edges)
         assert len(host.edges) == 528
         result = decide_fixed_length_cycle(
@@ -172,13 +152,9 @@ class TestDenseAndLongAdmission:
     def test_cycle_longer_than_twenty_admitted(self):
         """A 21-cycle request runs within the node budget and finds it."""
         names = [f"w{i:02d}" for i in range(21)]
-        edges = [
-            tuple(sorted((names[i], names[(i + 1) % 21]))) for i in range(21)
-        ]
+        edges = [tuple(sorted((names[i], names[(i + 1) % 21]))) for i in range(21)]
         g = _graph(names, edges)
-        result = decide_fixed_length_cycle(
-            FixedLengthCycleRequest(graph=g, length=21)
-        )
+        result = decide_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=21))
         assert result.exists
         assert len(result.cycle) == 21
 
@@ -263,7 +239,9 @@ class TestBoundedSearchAndWitnessBinding:
     """Searches carry a deterministic work bound; witnesses replay sources."""
 
     def test_cycle_witness_replays_against_source_edges(self):
-        g = _graph(["a", "b", "c", "d"], [("a", "b"), ("b", "c"), ("c", "d"), ("a", "d")])
+        g = _graph(
+            ["a", "b", "c", "d"], [("a", "b"), ("b", "c"), ("c", "d"), ("a", "d")]
+        )
         request = FixedLengthCycleRequest(graph=g, length=4)
         result = decide_fixed_length_cycle(request)
         assert result.exists and result.cycle is not None
@@ -291,7 +269,9 @@ class TestBoundedSearchAndWitnessBinding:
                 host_graph=host,
                 pattern_graph=pattern,
                 exists=True,
-                embedding=SubgraphEmbedding(mapping=(("u", "a"), ("v", "b"), ("w", "d"))),
+                embedding=SubgraphEmbedding(
+                    mapping=(("u", "a"), ("v", "b"), ("w", "d"))
+                ),
             )
 
     def test_budget_exceeded_is_typed_not_hang(self, monkeypatch):
@@ -390,9 +370,7 @@ class TestCanonicalValueComposition:
     def test_producer_output_feeds_other_graph_consumers(self):
         """The retained graph value enters another canonical consumer unchanged."""
         g = _graph(["a", "b", "c"], [("a", "b"), ("b", "c"), ("a", "c")])
-        result = decide_fixed_length_cycle(
-            FixedLengthCycleRequest(graph=g, length=3)
-        )
+        result = decide_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
         # The same canonical value object round-trips through the cycle
         # operation and remains valid as a SimpleUndirectedGraph elsewhere.
         assert result.graph == g

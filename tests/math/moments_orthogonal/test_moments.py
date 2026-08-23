@@ -1265,13 +1265,14 @@ class TestNativeAdmission:
             is_quasi_definite=False,
             is_positive_definite=False,
         )
-        with pytest.raises(ValueError, match="quasi-definite"):
+        with pytest.raises(ValueError, match="non-terminal"):
             native.recurrence_coefficients(family)
 
-    def test_native_recurrence_rejects_terminal_zero_norm(self) -> None:
-        """Even a terminal vanishing norm leaves the admitted domain: the
-        wire contract already rejects it, so the native surface must not
-        admit a broader family than RecurrenceRequest."""
+    def test_native_recurrence_admits_terminal_zero_norm(self) -> None:
+        """The reviewer's follow-up: with h_0 = 2, h_1 = 0 the recurrence
+        stays exactly defined (alpha_0 from p_0,p_1; beta_1 = h_1/h_0 = 0;
+        nothing divides by the terminal norm), so the native surface must
+        return the typed value instead of rejecting a valid computation."""
         from jacobian.math.moments_orthogonal import native
         from jacobian.math.moments_orthogonal.values import (
             OrthogonalPolynomialFamily,
@@ -1298,8 +1299,11 @@ class TestNativeAdmission:
             is_quasi_definite=False,
             is_positive_definite=False,
         )
-        with pytest.raises(ValueError, match="quasi-definite"):
-            native.recurrence_coefficients(family)
+        result = native.recurrence_coefficients(family)
+        assert [a.as_fraction() for a in result.alpha] == [Fraction(0)]
+        assert [b.as_fraction() for b in result.beta] == [Fraction(0), Fraction(0)]
+        wire = compute_recurrence(RecurrenceRequest(family=family))
+        assert wire == result
 
     def test_native_recurrence_matches_wire_result(self) -> None:
         """For an admitted quasi-definite family the direct native call and

@@ -358,20 +358,21 @@ def compute_orthogonal_polynomials(
 
 
 def _require_quasi_definite_family(family: OrthogonalPolynomialFamily) -> None:
-    """Recurrence ratios divide by every adjacent squared norm, so a family
-    with any vanishing norm is outside the kernel's admitted domain.
+    """Recurrence ratios divide by every squared norm except the terminal
+    one: ``beta_k = h_k / h_{k-1}`` for k >= 1 uses p_0..p_{n-2} as
+    denominators, and ``alpha`` reads adjacent polynomial coefficients. A
+    vanishing terminal norm therefore leaves the recurrence exactly defined,
+    while any interior zero norm would leak a division failure from execution.
 
     Degenerate canonical families remain authorable values for composition;
     each consuming operation rejects them at admission. This guard keeps the
-    native path on the same admitted domain as ``RecurrenceRequest`` instead
-    of leaking a division failure from execution.
+    native path on the same admitted domain as ``RecurrenceRequest``.
     """
-    if not family.is_quasi_definite or any(
-        term.squared_norm.as_fraction() == 0 for term in family.polynomials
-    ):
+    polynomials = family.polynomials[:-1]
+    if any(term.squared_norm.as_fraction() == 0 for term in polynomials):
         raise ValueError(
-            "recurrence coefficients require a quasi-definite family "
-            "with nonzero squared norms"
+            "recurrence coefficients require every non-terminal squared "
+            "norm to be nonzero"
         )
 
 

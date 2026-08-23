@@ -1,9 +1,12 @@
 """Source-binding tests for circumradius profiles and pinned distances."""
 
+from fractions import Fraction
+
 import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math.geometry._models import (
     CircumradiusProfileRequest,
     CircumradiusProfileResult,
@@ -12,6 +15,7 @@ from jacobian.math.geometry._models import (
 )
 from jacobian.math.geometry._operations import circumradius_profile
 from jacobian.math.geometry._pinned_distances import (
+    MAX_PINNED_DISTANCE_COORDINATE_DIGITS,
     PinnedDistanceRequest,
     PinnedDistanceResult,
     compute_pinned_distances,
@@ -41,9 +45,7 @@ class TestCircumradiusProfile:
         assert result.point_count == 4
         assert result.triple_count == 4
         half = CanonicalRational.from_fraction(__import__("fractions").Fraction(1, 2))
-        assert all(
-            entry.squared_circumradius == half for entry in result.entries
-        )
+        assert all(entry.squared_circumradius == half for entry in result.entries)
 
     def test_serialized_result_revalidates(self) -> None:
         result = circumradius_profile(
@@ -63,15 +65,9 @@ class TestCircumradiusProfile:
         )
         tampered = list(result.entries)
         tampered[0] = tampered[0].model_copy(
-            update={
-                "squared_circumradius": CanonicalRational(
-                    num="12345679", den="1"
-                )
-            }
+            update={"squared_circumradius": CanonicalRational(num="12345679", den="1")}
         )
-        with pytest.raises(
-            ValidationError, match="squared circumradius must follow"
-        ):
+        with pytest.raises(ValidationError, match="squared circumradius must follow"):
             CircumradiusProfileResult(
                 point_count=result.point_count,
                 points=result.points,
@@ -105,9 +101,7 @@ class TestCircumradiusProfile:
                     entry.model_copy(
                         update={
                             "collinear": False,
-                            "squared_circumradius": CanonicalRational(
-                                num="1", den="1"
-                            ),
+                            "squared_circumradius": CanonicalRational(num="1", den="1"),
                         }
                     )
                 )
@@ -130,9 +124,7 @@ class TestCircumradiusProfile:
         entries = list(result.entries)
         first = entries[0]
         other_label = next(
-            label
-            for label in ("A", "B", "C", "D")
-            if label not in first.labels
+            label for label in ("A", "B", "C", "D") if label not in first.labels
         )
         entries[0] = first.model_copy(
             update={"labels": (other_label, *first.labels[1:])}
@@ -182,7 +174,10 @@ class TestPinnedDistances:
         result = compute_pinned_distances(request)
         assert result.distinct_line_count == 6
         assert result.min_squared_distance is not None
-        assert result.min_squared_distance.squared_distance_numerator == "0"
+        assert isinstance(
+            result.min_squared_distance.squared_distance, CanonicalRational
+        )
+        assert result.min_squared_distance.squared_distance.as_fraction() == 0
         total_pairs = sum(len(line.source_pairs) for line in result.lines)
         assert total_pairs == 6
 
@@ -201,23 +196,19 @@ class TestPinnedDistances:
     def test_fabricated_distance_rejected(self) -> None:
         anchor = _pt("0", "1", "0", "1")
         points = (_pt("-1", "1", "1", "1"), _pt("1", "1", "-1", "1"))
-        with pytest.raises(
-            ValidationError, match="lines must be the exact profile"
-        ):
+        with pytest.raises(ValidationError, match="lines must be the exact profile"):
             PinnedDistanceResult(
                 anchor=anchor,
                 points=points,
                 lines=(
                     {
-                        "squared_distance_numerator": "123",
-                        "squared_distance_denominator": "1",
+                        "squared_distance": {"num": "123", "den": "1"},
                         "source_pairs": ((0, 1),),
                     },
                 ),
                 distinct_line_count=1,
                 min_squared_distance={
-                    "squared_distance_numerator": "123",
-                    "squared_distance_denominator": "1",
+                    "squared_distance": {"num": "123", "den": "1"},
                     "source_pairs": ((0, 1),),
                 },
             )
@@ -230,9 +221,7 @@ class TestPinnedDistances:
         )
         lines = list(real.lines)
         lines[0] = lines[0].model_copy(update={"source_pairs": ((0, 7),)})
-        with pytest.raises(
-            ValidationError, match="lines must be the exact profile"
-        ):
+        with pytest.raises(ValidationError, match="lines must be the exact profile"):
             PinnedDistanceResult(
                 anchor=anchor,
                 points=points,
@@ -256,13 +245,9 @@ class TestPinnedDistances:
         lines = []
         for line in real.lines:
             if len(line.source_pairs) > 1:
-                line = line.model_copy(
-                    update={"source_pairs": line.source_pairs[:1]}
-                )
+                line = line.model_copy(update={"source_pairs": line.source_pairs[:1]})
             lines.append(line)
-        with pytest.raises(
-            ValidationError, match="lines must be the exact profile"
-        ):
+        with pytest.raises(ValidationError, match="lines must be the exact profile"):
             PinnedDistanceResult(
                 anchor=anchor,
                 points=points,
@@ -281,10 +266,13 @@ class TestPinnedDistances:
         real = compute_pinned_distances(
             PinnedDistanceRequest(anchor=anchor, points=points)
         )
-        not_min = max(real.lines, key=lambda line: (
-            int(line.squared_distance_numerator),
-            -int(line.squared_distance_denominator),
-        ))
+        not_min = max(
+            real.lines,
+            key=lambda line: (
+                line.squared_distance.as_fraction().numerator,
+                -line.squared_distance.as_fraction().denominator,
+            ),
+        )
         with pytest.raises(
             ValidationError, match="min_squared_distance must be the minimum"
         ):
@@ -295,3 +283,53 @@ class TestPinnedDistances:
                 distinct_line_count=real.distinct_line_count,
                 min_squared_distance=not_min,
             )
+
+    def test_oversized_coordinates_rejected(self) -> None:
+        """Unrelated 20001-digit coordinate denominators compound to a
+        squared distance beyond the canonical rational limit; admission must
+        reject the request before execution."""
+        tall = "1" + "0" * 20000
+        with pytest.raises(ValidationError):
+            PinnedDistanceRequest(
+                anchor=_pt("1", "1", "0", "1"),
+                points=(
+                    _pt("0", "1", "0", "1"),
+                    _pt("1", tall, "1", "1"),
+                ),
+            )
+
+    def test_coordinates_at_the_admission_cap_accepted(self) -> None:
+        cap = MAX_PINNED_DISTANCE_COORDINATE_DIGITS
+        den = "1" + "0" * (cap - 1)
+        request = PinnedDistanceRequest(
+            anchor=_pt("0", "1", "0", "1"),
+            points=(
+                _pt("1", den, "0", "1"),
+                _pt("1", den, "1", "1"),
+            ),
+        )
+        result = compute_pinned_distances(request)
+        assert isinstance(result.lines[0].squared_distance, CanonicalRational)
+        expected_den = parse_canonical_integer(den) ** 2
+        assert result.lines[0].squared_distance.as_fraction() == Fraction(
+            1, expected_den
+        )
+
+    def test_compounding_denominators_stay_representable(self) -> None:
+        """Six unrelated near-cap coordinate denominators multiply into the
+        distance, yet every admitted result remains an exact consumable
+        canonical rational."""
+        q = [str(10**2729 + 2 * i + 1) for i in range(6)]
+        request = PinnedDistanceRequest(
+            anchor=_pt("1", q[4], "1", q[5]),
+            points=(
+                _pt("1", q[0], "1", q[1]),
+                _pt("1", q[2], "1", q[3]),
+            ),
+        )
+        result = compute_pinned_distances(request)
+        assert result.distinct_line_count >= 1
+        for line in result.lines:
+            # Constructing the entry already enforced the canonical
+            # 32,768-digit component limit on both distance components.
+            assert line.squared_distance.as_fraction() > 0

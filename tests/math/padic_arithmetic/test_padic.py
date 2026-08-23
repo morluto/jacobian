@@ -9,7 +9,9 @@ from jacobian.math.padic_arithmetic._models import (
     HenselRootRequest,
     HenselRootResult,
     IntegerPolynomial,
+    PAdicRootEntry,
     PAdicRootsRequest,
+    PAdicRootsResult,
 )
 from jacobian.math.padic_arithmetic._operations import (
     find_padic_roots,
@@ -24,9 +26,7 @@ class TestHenselRootLifting:
         """Lift root 2 of x^2+1 mod 5 to mod 5^3."""
         poly = IntegerPolynomial(coefficients=(1, 0, 1))
         result = hensel_lift_root(
-            HenselRootRequest(
-                polynomial=poly, prime=5, root_mod_p=2, precision=3
-            )
+            HenselRootRequest(polynomial=poly, prime=5, root_mod_p=2, precision=3)
         )
         assert result.is_simple_root
         assert (result.lifted_root**2 + 1) % 125 == 0
@@ -35,9 +35,7 @@ class TestHenselRootLifting:
         """Lift root to mod p^2."""
         poly = IntegerPolynomial(coefficients=(-1, 0, 0, 1))  # x^3 - 1
         result = hensel_lift_root(
-            HenselRootRequest(
-                polynomial=poly, prime=5, root_mod_p=1, precision=2
-            )
+            HenselRootRequest(polynomial=poly, prime=5, root_mod_p=1, precision=2)
         )
         assert result.is_simple_root
         assert (result.lifted_root**3 - 1) % 25 == 0
@@ -47,18 +45,14 @@ class TestHenselRootLifting:
         poly = IntegerPolynomial(coefficients=(1, 0, 1))  # x^2 + 1
         with pytest.raises(ValidationError, match=r"f\(root_mod_p\) = 0"):
             hensel_lift_root(
-                HenselRootRequest(
-                    polynomial=poly, prime=5, root_mod_p=1, precision=2
-                )
+                HenselRootRequest(polynomial=poly, prime=5, root_mod_p=1, precision=2)
             )
 
     def test_root_in_range(self):
         """Lifted root should be in [0, p^k - 1]."""
         poly = IntegerPolynomial(coefficients=(3, 0, 1))  # x^2 + 3
         result = hensel_lift_root(
-            HenselRootRequest(
-                polynomial=poly, prime=7, root_mod_p=2, precision=4
-            )
+            HenselRootRequest(polynomial=poly, prime=7, root_mod_p=2, precision=4)
         )
         assert 0 <= result.lifted_root < 7**4
         assert (result.lifted_root**2 + 3) % (7**4) == 0
@@ -98,8 +92,18 @@ class TestPAdicRoots:
         """Composite moduli are rejected at the typed boundary."""
         poly = IntegerPolynomial(coefficients=(-1, 0, 1))
         with pytest.raises(ValidationError, match="prime modulus"):
-            HenselRootRequest(
-                polynomial=poly, prime=4, root_mod_p=1, precision=2
+            HenselRootRequest(polynomial=poly, prime=4, root_mod_p=1, precision=2)
+
+    def test_result_rejects_composite_modulus(self):
+        """A serialized root set cannot validate against a composite modulus
+        even when its completeness and derivative replay would succeed."""
+        with pytest.raises(ValidationError, match="prime modulus"):
+            PAdicRootsResult(
+                polynomial=IntegerPolynomial(coefficients=(-1, 1)),
+                roots=(PAdicRootEntry(root=1),),
+                prime=4,
+                precision=2,
+                root_count=1,
             )
 
     def test_result_binds_to_source_polynomial(self):
@@ -109,9 +113,7 @@ class TestPAdicRoots:
         rejected at validation."""
         poly = IntegerPolynomial(coefficients=(1, 0, 1))  # x^2 + 1
         result = hensel_lift_root(
-            HenselRootRequest(
-                polynomial=poly, prime=5, root_mod_p=2, precision=4
-            )
+            HenselRootRequest(polynomial=poly, prime=5, root_mod_p=2, precision=4)
         )
         assert result.polynomial == poly
         assert result.root_mod_p == 2
@@ -146,9 +148,7 @@ class TestPAdicRoots:
         """f=x^2+5, p=5: r=0 is a multiple root; lifting is refused."""
         poly = IntegerPolynomial(coefficients=(5, 0, 1))
         with pytest.raises(ValidationError, match="simple root"):
-            HenselRootRequest(
-                polynomial=poly, prime=5, root_mod_p=0, precision=2
-            )
+            HenselRootRequest(polynomial=poly, prime=5, root_mod_p=0, precision=2)
 
     def test_all_roots_are_valid(self):
         """All returned roots should satisfy f(root) ≡ 0 (mod p^k)."""

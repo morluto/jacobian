@@ -17,8 +17,7 @@ class IntegerPolynomial(StrictModel):
     @model_validator(mode="after")
     def require_valid_coefficients(self) -> Self:
         if any(
-            type(c) is not int or c < -(2**31) or c >= 2**31
-            for c in self.coefficients
+            type(c) is not int or c < -(2**31) or c >= 2**31 for c in self.coefficients
         ):
             raise ValueError("coefficients must be bounded integers")
         return self
@@ -33,8 +32,10 @@ MAX_PRIME = 10_000
 
 def _require_prime(value: int) -> None:
     """Reject composite moduli: the field is documented and used as GF(p)."""
-    if value < 2 or value > MAX_PRIME or any(
-        value % divisor == 0 for divisor in range(2, int(value**0.5) + 1)
+    if (
+        value < 2
+        or value > MAX_PRIME
+        or any(value % divisor == 0 for divisor in range(2, int(value**0.5) + 1))
     ):
         raise ValueError("prime must be a prime modulus")
 
@@ -185,9 +186,7 @@ def _eval_poly_mod(coefficients: tuple[int, ...], x: int, modulus: int) -> int:
     return result
 
 
-def _eval_poly_deriv_mod(
-    coefficients: tuple[int, ...], x: int, modulus: int
-) -> int:
+def _eval_poly_deriv_mod(coefficients: tuple[int, ...], x: int, modulus: int) -> int:
     result = 0
     for index in range(len(coefficients) - 1, 0, -1):
         result = (result * x + index * coefficients[index]) % modulus
@@ -224,6 +223,9 @@ class PAdicRootsResult(StrictModel):
     def require_source_bound_roots(self) -> Self:
         p = self.prime
         k = self.precision
+        # The advertised semantics are p-adic: validate the prime modulus
+        # before replaying the root set against it.
+        _require_prime(p)
         modulus = p**k
         coefficients = self.polynomial.coefficients
         roots = tuple(entry.root for entry in self.roots)

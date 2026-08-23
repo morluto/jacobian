@@ -38,6 +38,7 @@ from jacobian.math.moments_orthogonal._tools import TOOLS
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _frac(num: int, den: int) -> Fraction:
     return Fraction(num, den)
 
@@ -145,6 +146,28 @@ class TestJacobiMatrix:
         with pytest.raises(ValueError, match="nonzero"):
             jacobi_matrix((_frac(0, 1),), (_frac(0, 1), _frac(1, 1)))
 
+    def test_negative_subdiagonal_beta_rejected(self) -> None:
+        """A negative used beta would need sqrt(-1) on the Jacobi
+        subdiagonal; the native boundary rejects it like the wire request."""
+        with pytest.raises(ValueError, match="subdiagonal beta entries"):
+            jacobi_matrix(
+                (_frac(0, 1), _frac(0, 1)),
+                (_frac(1, 1), _frac(-1, 1)),
+            )
+
+    def test_zero_subdiagonal_beta_rejected(self) -> None:
+        with pytest.raises(ValueError, match="subdiagonal beta entries"):
+            jacobi_matrix(
+                (_frac(0, 1), _frac(0, 1)),
+                (_frac(1, 1), _frac(0, 1)),
+            )
+
+    def test_unused_negative_beta_allowed(self) -> None:
+        """beta entries beyond the assembled subdiagonal are not used and so
+        are not constrained."""
+        result = jacobi_matrix((_frac(0, 1),), (_frac(1, 1), _frac(-1, 1)))
+        assert result.off_diagonal == ()
+
 
 # ---------------------------------------------------------------------------
 # Christoffel-Darboux kernel
@@ -221,9 +244,7 @@ class TestGaussianQuadrature:
 
 class TestWireAdapters:
     def test_hankel_wire(self) -> None:
-        request = HankelMatrixRequest(
-            moments=tuple(_cr(1, k) for k in range(1, 8))
-        )
+        request = HankelMatrixRequest(moments=tuple(_cr(1, k) for k in range(1, 8)))
         result = compute_hankel_matrix(request)
         assert result.dimension == 4
         assert isinstance(result, HankelMatrixResult)
@@ -243,6 +264,7 @@ class TestWireAdapters:
         )
         result = compute_jacobi_matrix(request)
         assert isinstance(result, JacobiMatrixResult)
+
     def test_christoffel_darboux_wire(self) -> None:
         request = ChristoffelDarbouxRequest(
             alpha=(_cr(1, 2), _cr(1, 2)),

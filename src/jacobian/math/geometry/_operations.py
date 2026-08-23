@@ -500,10 +500,7 @@ def forbidden_patterns(request: ForbiddenPatternsRequest) -> ForbiddenPatternsRe
 
     pts = request.configuration.points
     n = len(pts)
-    xy = [
-        (entry.point.x.as_fraction(), entry.point.y.as_fraction())
-        for entry in pts
-    ]
+    xy = [(entry.point.x.as_fraction(), entry.point.y.as_fraction()) for entry in pts]
 
     collinear_triple = None
     has_collinear = False

@@ -497,9 +497,7 @@ class CircumradiusTripleEntry(StrictModel):
     @model_validator(mode="after")
     def bind_collinear_to_value(self) -> Self:
         if self.collinear is (self.squared_circumradius is not None):
-            raise ValueError(
-                "exactly a collinear triple has no squared circumradius"
-            )
+            raise ValueError("exactly a collinear triple has no squared circumradius")
         if (
             self.squared_circumradius is not None
             and self.squared_circumradius.as_fraction() <= 0
@@ -522,9 +520,7 @@ def _require_replayed_circumradius_entries(
         (ax, ay), (bx, by), (cx, cy) = coords[i], coords[j], coords[k]
         cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
         if entry.collinear is (cross != 0):
-            raise ValueError(
-                "collinearity must equal the source-point determinant"
-            )
+            raise ValueError("collinearity must equal the source-point determinant")
         if entry.collinear:
             continue
         dab = (ax - bx) ** 2 + (ay - by) ** 2
@@ -534,9 +530,7 @@ def _require_replayed_circumradius_entries(
             (dab * dbc * dac) / (4 * cross * cross)
         )
         if replayed != entry.squared_circumradius:
-            raise ValueError(
-                "squared circumradius must follow from the source points"
-            )
+            raise ValueError("squared circumradius must follow from the source points")
 
 
 def _require_circumradius_entry_coverage(
@@ -559,9 +553,7 @@ def _require_circumradius_entry_coverage(
     if tuple(entries) != tuple(sorted(entries, key=lambda e: e.indices)):
         raise ValueError("circumradius entries must be in lexicographic order")
     if len(seen) != expected_triples:
-        raise ValueError(
-            "circumradius profile must cover every unordered triple"
-        )
+        raise ValueError("circumradius profile must cover every unordered triple")
 
 
 def _require_bounded_circumradius_points(

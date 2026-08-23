@@ -35,10 +35,7 @@ def hankel_matrix(moments: Sequence[Fraction]) -> HankelMatrix:
     n = (len(moments) + 1) // 2
     if n > MAX_HANKEL_DIMENSION:
         raise ValueError("Hankel matrix dimension exceeds the supported bound")
-    matrix = tuple(
-        tuple(moments[i + j] for j in range(n))
-        for i in range(n)
-    )
+    matrix = tuple(tuple(moments[i + j] for j in range(n)) for i in range(n))
     return HankelMatrix(matrix=matrix, moments=tuple(moments))
 
 
@@ -100,10 +97,13 @@ def _monic_orthogonal_recurrence(
     for k in range(max_order):
         alpha_k = _inner_product(moments, _shift_up(p_curr), p_curr) / h_curr
         alpha.append(alpha_k)
-        beta_k = Fraction(0) if k == 0 else (h_curr / h_prev if h_prev != 0 else Fraction(0))
+        beta_k = (
+            Fraction(0) if k == 0 else (h_curr / h_prev if h_prev != 0 else Fraction(0))
+        )
         x_p = _shift_up(p_curr)
-        p_next = _subtract(_subtract(x_p, _scale(alpha_k, p_curr)),
-                           _scale(beta_k, p_prev))
+        p_next = _subtract(
+            _subtract(x_p, _scale(alpha_k, p_curr)), _scale(beta_k, p_prev)
+        )
         h_prev = h_curr
         p_prev = p_curr
         p_curr = p_next
@@ -150,9 +150,7 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
     return RecurrenceCoefficients(alpha=tuple(alpha), beta=tuple(beta))
 
 
-def jacobi_matrix(
-    alpha: Sequence[Fraction], beta: Sequence[Fraction]
-) -> JacobiMatrix:
+def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> JacobiMatrix:
     """Build the symmetric tridiagonal Jacobi matrix from recurrence coefficients.
 
     The diagonal entries are ``alpha_0, ..., alpha_{n-1}`` and the positive
@@ -173,6 +171,14 @@ def jacobi_matrix(
         raise TypeError("beta must use exact Fractions")
     if beta[0] <= 0:
         raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+    # beta_1..beta_{n-1} are squared-norm ratios occupying the symmetric
+    # Jacobi subdiagonal as sqrt(beta_k); each used entry must be positive
+    # so the documented real symmetric matrix exists.
+    for index in range(1, len(alpha)):
+        if beta[index] <= 0:
+            raise ValueError(
+                "subdiagonal beta entries must be positive squared-norm ratios"
+            )
     return JacobiMatrix(
         diagonal=tuple(alpha),
         # The squared subdiagonal entries are beta_1, ..., beta_{n-1}; beta_0 is
@@ -261,7 +267,9 @@ def _require_quadrature_coefficients(
             len(str(abs(value.numerator))) > MAX_RATIONAL_DIGITS
             or len(str(value.denominator)) > MAX_RATIONAL_DIGITS
         ):
-            raise ValueError(f"coefficient exceeds the {MAX_RATIONAL_DIGITS}-digit bound")
+            raise ValueError(
+                f"coefficient exceeds the {MAX_RATIONAL_DIGITS}-digit bound"
+            )
         if abs(value) > MAX_QUADRATURE_MAGNITUDE:
             raise ValueError(
                 "quadrature coefficients exceed the finite-float magnitude bound"

@@ -18,7 +18,11 @@ MAX_PRIME = 1000000
 
 
 def _require_prime(value: int) -> None:
-    if value < 2 or value > MAX_PRIME or any(value % d == 0 for d in range(2, int(value**0.5) + 1)):
+    if (
+        value < 2
+        or value > MAX_PRIME
+        or any(value % d == 0 for d in range(2, int(value**0.5) + 1))
+    ):
         raise ValueError("prime must be a prime modulus within the bounded domain")
 
 
@@ -41,15 +45,8 @@ class PrimeFieldMatrixRequest(StrictModel):
             raise ValueError("entries must be canonical prime-field residues")
         if not self.entries and self.columns == 0:
             return self
-        _PrimeFieldMatrixValidator(prime=self.prime, entries=self.entries, columns=self.columns)
+        PrimeFieldMatrix(prime=self.prime, entries=self.entries, columns=self.columns)
         return self
-
-
-class _PrimeFieldMatrixValidator:
-    """Trigger PrimeFieldMatrix validation."""
-
-    def __init__(self, prime, entries, columns):
-        PrimeFieldMatrix(prime=prime, entries=entries, columns=columns)
 
 
 class RankRequest(StrictModel):
@@ -84,7 +81,9 @@ class RankResult(RankRequest):
             raise ValueError("rank exceeds the supported dimension bound")
         from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix, rref
 
-        matrix = PrimeFieldMatrix(prime=self.prime, entries=self.entries, columns=self.columns)
+        matrix = PrimeFieldMatrix(
+            prime=self.prime, entries=self.entries, columns=self.columns
+        )
         _, expected_pivots = rref(matrix)
         expected = len(expected_pivots)
         if self.rank != expected:

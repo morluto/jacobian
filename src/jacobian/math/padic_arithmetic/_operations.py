@@ -113,8 +113,12 @@ def hensel_lift_factors(request: HenselFactorLiftRequest) -> HenselFactorLiftRes
         g_mod = [c % modulus for c in g]
         h_mod = [c % modulus for c in h]
         product = _poly_mul_mod(tuple(g_mod), tuple(h_mod), modulus)
-        diff = [(f_mod[i] - product[i]) % modulus if i < len(product) else f_mod[i] % modulus
-                for i in range(len(f_mod))]
+        diff = [
+            (f_mod[i] - product[i]) % modulus
+            if i < len(product)
+            else f_mod[i] % modulus
+            for i in range(len(f_mod))
+        ]
         for i, d in enumerate(diff):
             if i < len(g):
                 g[i] = g[i] + d

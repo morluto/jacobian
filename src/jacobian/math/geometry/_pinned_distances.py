@@ -8,11 +8,38 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.math.geometry._models import RationalPoint2D
 from jacobian.math.geometry._support import geometry_operation
+
+# With every coordinate numerator and denominator bounded by d digits, each
+# coordinate difference is below 10^(2d+1) over 10^(2d), so the squared
+# distance from the anchor to a pair-spanned line,
+#   d^2 = cross^2 / |direction|^2,
+# has a numerator below 10^(12d+6) (the cross numerator squares into it) and
+# a denominator below 10^(12d+3).  Requiring both components under the
+# canonical 32,768-digit limit gives 12d + 6 <= 32768, i.e. d <= 2730.
+MAX_PINNED_DISTANCE_COORDINATE_DIGITS = 2730
+
+
+def _require_bounded_pinned_coordinates(
+    anchor: RationalPoint2D,
+    points: tuple[RationalPoint2D, ...],
+) -> None:
+    for point in (anchor, *points):
+        require_bounded_rational(
+            point.x,
+            max_digits=MAX_PINNED_DISTANCE_COORDINATE_DIGITS,
+            label="anchor or point x",
+        )
+        require_bounded_rational(
+            point.y,
+            max_digits=MAX_PINNED_DISTANCE_COORDINATE_DIGITS,
+            label="anchor or point y",
+        )
 
 
 class PinnedDistanceRequest(StrictModel):
@@ -23,20 +50,20 @@ class PinnedDistanceRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_unique_points(self) -> Self:
-        keys = tuple(
-            (p.x.num, p.x.den, p.y.num, p.y.den)
-            for p in self.points
-        )
+        keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")
+        # Bound coordinates so every derived squared distance stays within
+        # the canonical result limit: growth multiplies unrelated coordinate
+        # components, so an aggregate per-component cap is derived above.
+        _require_bounded_pinned_coordinates(self.anchor, self.points)
         return self
 
 
 class LineDistanceEntry(StrictModel):
     """One distinct line with its exact squared distance and source pairs."""
 
-    squared_distance_numerator: str
-    squared_distance_denominator: str
+    squared_distance: CanonicalRational
     source_pairs: tuple[tuple[int, int], ...]
 
 
@@ -53,12 +80,10 @@ class PinnedDistanceResult(StrictModel):
 
     @model_validator(mode="after")
     def require_invariants(self) -> Self:
-        keys = tuple(
-            (p.x.num, p.x.den, p.y.num, p.y.den)
-            for p in self.points
-        )
+        keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")
+        _require_bounded_pinned_coordinates(self.anchor, self.points)
         # Replay the whole ledger from the retained anchor and points so a
         # serialized result cannot detach distances or pair classes from
         # their source pairs.
@@ -79,10 +104,7 @@ class PinnedDistanceResult(StrictModel):
 
 
 def _entry_distance(entry: LineDistanceEntry) -> Fraction:
-    return Fraction(
-        parse_canonical_integer(entry.squared_distance_numerator),
-        parse_canonical_integer(entry.squared_distance_denominator),
-    )
+    return entry.squared_distance.as_fraction()
 
 
 def _canonical_line_key(
@@ -129,9 +151,7 @@ def _profile_entries(
     # d^2 = cross(D, P-A)^2 / |D|^2
     # Entries are keyed by the canonical integer line equation a*x + b*y = c so
     # that distinct lines are never merged; the distance is entry data.
-    line_map: dict[
-        tuple[str, str, str], tuple[list[tuple[int, int]], str, str]
-    ] = {}
+    line_map: dict[tuple[str, str, str], tuple[list[tuple[int, int]], Fraction]] = {}
 
     for i in range(len(pts)):
         for j in range(i + 1, len(pts)):
@@ -147,19 +167,14 @@ def _profile_entries(
             sq_dist = Fraction(cross * cross, norm_sq)
             key = _canonical_line_key(xi, yi, xj, yj)
             if key not in line_map:
-                line_map[key] = (
-                    [],
-                    format_canonical_integer(sq_dist.numerator),
-                    format_canonical_integer(sq_dist.denominator),
-                )
+                line_map[key] = ([], sq_dist)
             line_map[key][0].append((i, j))
 
     entries = []
     for key in sorted(line_map.keys()):
-        pairs, num, den = line_map[key]
+        pairs, dist = line_map[key]
         entry = LineDistanceEntry(
-            squared_distance_numerator=num,
-            squared_distance_denominator=den,
+            squared_distance=CanonicalRational.from_fraction(dist),
             source_pairs=tuple(pairs),
         )
         entries.append(entry)

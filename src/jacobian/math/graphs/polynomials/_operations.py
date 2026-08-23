@@ -15,7 +15,10 @@ from jacobian.math.graphs.polynomials._models import (
     MultivariatePolynomialTerm,
     PolynomialTerm,
     SparseMultivariatePolynomial,
+    TreeIndependencePolynomialRequest,
+    TreeIndependencePolynomialResult,
 )
+from jacobian.math.graphs.polynomials.operations import independence_polynomial
 
 
 def _build_graph(
@@ -135,9 +138,21 @@ def compute_matching_polynomial(
     return GraphPolynomialResult(terms=terms)
 
 
+def compute_independence_polynomial(
+    request: TreeIndependencePolynomialRequest,
+) -> TreeIndependencePolynomialResult:
+    """Compute the exact independence polynomial of an admitted finite tree."""
+
+    return TreeIndependencePolynomialResult(
+        graph=request.graph,
+        polynomial=independence_polynomial(request.graph),
+    )
+
+
 __all__ = [
     "compute_chromatic_polynomial",
     "compute_flow_polynomial",
+    "compute_independence_polynomial",
     "compute_matching_polynomial",
     "compute_tutte_polynomial",
 ]

@@ -4,9 +4,22 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.math.graphs.polynomials.operations import (
+    MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS,
+    MAX_INDEPENDENCE_POLYNOMIAL_DEGREE,
+    MAX_INDEPENDENCE_POLYNOMIAL_TERMS,
+    MAX_INDEPENDENCE_POLYNOMIAL_VERTICES,
+    _admitted_tree_profile,
+)
+from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    require_polynomial_budget,
+)
 
 
 class GraphEdge(StrictModel):
@@ -88,6 +101,115 @@ class MatchingPolynomialRequest(StrictModel):
         return self
 
 
+def _maximum_independence_result_bytes(
+    graph: SimpleUndirectedGraph,
+    degree: int,
+) -> int:
+    """Bound the echoed graph plus a maximum-size canonical polynomial."""
+
+    maximum_coefficient = "9" * MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS
+    payload = {
+        "graph": graph.model_dump(mode="json"),
+        "polynomial": {
+            "polynomial_schema_version": "1",
+            "domain": "QQ",
+            "variables": ["x"],
+            "polynomial": {
+                "terms": [
+                    {
+                        "coefficient": {
+                            "num": maximum_coefficient,
+                            "den": "1",
+                        },
+                        "exponents": [exponent],
+                    }
+                    for exponent in range(degree, -1, -1)
+                ]
+            },
+        },
+    }
+    output_limit = CanonicalLimits().max_output_bytes
+    measurement_limits = CanonicalLimits(max_output_bytes=2 * output_limit)
+    return len(encode_strict_json(payload, limits=measurement_limits))
+
+
+class TreeIndependencePolynomialRequest(StrictModel):
+    """Request the exact independence polynomial of one admitted tree.
+
+    The materialized canonical graph must be nonempty, connected, and acyclic.
+    A scalar tree dynamic program admits only results of degree at most 127
+    before the coefficient recurrence expands; this keeps the returned value
+    inside the current exact univariate-polynomial consumer envelope.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Compute the exact independence polynomial of one materialized "
+                "canonical tree. The graph must be nonempty, connected, and "
+                "acyclic; its independence number, hence polynomial degree, "
+                "must be at most 127. Admission bounds rooted convolution work "
+                "and reserves canonical-output space for the echoed source."
+            )
+        }
+    )
+
+    graph: SimpleUndirectedGraph = Field(
+        description=(
+            "Canonical finite simple undirected graph. It may contain at most "
+            f"{MAX_INDEPENDENCE_POLYNOMIAL_VERTICES} vertices and must be a "
+            "nonempty tree whose independence polynomial has degree at most "
+            f"{MAX_INDEPENDENCE_POLYNOMIAL_DEGREE}."
+        )
+    )
+
+    @model_validator(mode="after")
+    def require_admitted_tree_and_output(self) -> Self:
+        profile = _admitted_tree_profile(self.graph)
+        output_limit = CanonicalLimits().max_output_bytes
+        if (
+            _maximum_independence_result_bytes(
+                self.graph,
+                profile.independence_degree,
+            )
+            > output_limit
+        ):
+            raise ValueError(
+                "tree independence polynomial would exceed the "
+                f"{output_limit}-byte canonical output limit after retaining "
+                "its source; shorten vertex labels"
+            )
+        return self
+
+
+class TreeIndependencePolynomialResult(StrictModel):
+    """One source-bound exact independence polynomial in ``QQ[x]``."""
+
+    graph: SimpleUndirectedGraph
+    polynomial: RationalPolynomial
+
+    @model_validator(mode="after")
+    def require_polynomial_bound_to_source(self) -> Self:
+        if self.polynomial.variables != ("x",):
+            raise ValueError("independence polynomial must belong to QQ[x]")
+        require_polynomial_budget(
+            self.polynomial,
+            maximum_terms=MAX_INDEPENDENCE_POLYNOMIAL_TERMS,
+            maximum_exponent=MAX_INDEPENDENCE_POLYNOMIAL_DEGREE,
+            maximum_coefficient_digits=MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS,
+            label="independence polynomial",
+        )
+        TreeIndependencePolynomialRequest(graph=self.graph)
+
+        from jacobian.math.graphs.polynomials.operations import (
+            independence_polynomial,
+        )
+
+        if self.polynomial != independence_polynomial(self.graph):
+            raise ValueError("independence polynomial does not match the source tree")
+        return self
+
+
 class PolynomialTerm(StrictModel):
     """One monomial term: coefficient times x^degree."""
 
@@ -152,4 +274,6 @@ __all__ = [
     "MultivariatePolynomialTerm",
     "PolynomialTerm",
     "SparseMultivariatePolynomial",
+    "TreeIndependencePolynomialRequest",
+    "TreeIndependencePolynomialResult",
 ]

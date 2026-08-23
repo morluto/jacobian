@@ -21,6 +21,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
     OperationAdmission(
+        "graph.polynomial.independence.compute",
+        AdmissionDecision.KEEP,
+        "exact independent-set cardinality generating function of a bounded tree, source-bound and returned as the canonical polynomial value for unchanged downstream composition",
+    ),
+    OperationAdmission(
         "graph.polynomial.matching.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",

@@ -30,7 +30,6 @@ __all__ = [
 # the division loop itself.
 _MAX_OUTPUT_TERMS = 1_024
 _MAX_INTERMEDIATE_TERMS = 4_096
-_MAX_INTERMEDIATE_BASIS_TERMS = 4_096
 _MAX_REDUCTION_STEPS = 200_000
 
 
@@ -44,14 +43,20 @@ def _component_exceeds_limit(numerator: int, denominator: int) -> bool:
 
 
 def _basis_exceeds_output_budget(
-    basis: Any, symbols: tuple[Any, ...], maximum_terms: int = _MAX_OUTPUT_TERMS
+    basis: Any,
+    symbols: tuple[Any, ...],
+    maximum_terms: int = _MAX_OUTPUT_TERMS,
+    enforce_aggregate_terms: bool = True,
 ) -> bool:
     """Check one computed Gröbner basis against an aggregate term budget.
 
     Exponent and canonical-coefficient representability limits apply at
     every scale: a basis element that could not be materialized as a
     canonical value is outside every work envelope, not only the output
-    boundary.
+    boundary.  The aggregate term count, by contrast, is enforced only
+    when ``enforce_aggregate_terms`` is set — callers replaying prefixes
+    must not charge it there because adding a generator can shrink the
+    reduced basis.
     """
 
     from sympy import QQ, Poly
@@ -62,9 +67,10 @@ def _basis_exceeds_output_budget(
     for expr in basis.exprs:
         poly = Poly(expr, *symbols, domain=QQ)
         terms = poly.terms()
-        aggregate_terms += len(terms)
-        if aggregate_terms > maximum_terms:
-            return True
+        if enforce_aggregate_terms:
+            aggregate_terms += len(terms)
+            if aggregate_terms > maximum_terms:
+                return True
         for monom, coefficient in terms:
             if any(exp > MAX_POLYNOMIAL_EXPONENT for exp in monom):
                 return True
@@ -113,18 +119,18 @@ def incremental_source_groebner(
     its outcome is a function of the ideal value rather than of the
     presentation order of an equivalent generating set.
 
-    Budgets are two-tier.  Every intermediate prefix basis is checked
-    against a work envelope of ``_MAX_INTERMEDIATE_BASIS_TERMS`` aggregate
-    terms (plus exponent and canonical-coefficient representability): a
-    prefix beyond that envelope cannot be processed further without
-    unbounded kernel expansion, so it reports the typed budget outcome.
-    The public 1,024-term output boundary is decided only on the complete
-    final basis: an intermediate prefix may legitimately exceed it and
-    still shrink once later generators are incorporated (adding a
-    generator grows the ideal but can shrink its reduced basis), so a
-    prefix must never decide the output outcome.  Adding generators and
-    re-reducing converges to the unique reduced basis, so the final result
-    equals a single-shot computation whenever that stays within budget.
+    Budgets are two-tier.  Canonical representability (exponent and
+    coefficient-digit limits) applies at every prefix: a basis element
+    that cannot be materialized as a canonical value stops the kernel
+    immediately, since no later stage could construct the exact artifact.
+    The aggregate 1,024-term output boundary, by contrast, is decided
+    only on the complete final basis and never on an intermediate
+    prefix: adding a generator grows the ideal but can shrink its
+    reduced basis, so a prefix's term count is presentation-dependent
+    evidence that must not decide the outcome.  Adding generators and
+    re-reducing converges to the unique reduced basis, so the final
+    result equals a single-shot computation whenever that stays within
+    budget.
 
     Returns ``(basis, exceeded)``: ``basis`` is ``None`` when the kernel
     failed or left a budget; ``exceeded`` distinguishes a genuine budget
@@ -148,23 +154,27 @@ def incremental_source_groebner(
     ordered = [exprs[index] for index in _canonical_generator_order(ideal)]
     current: list[Any] = []
     basis = None
-    for position, expr in enumerate(ordered):
+    for expr in ordered:
         current.append(expr)
         try:
             basis = groebner(current, *symbols, order=monomial_order, domain=QQ)
         except Exception:
             return None, False
         try:
-            if position == len(ordered) - 1:
-                exceeded = _basis_exceeds_output_budget(basis, symbols)
-            else:
-                exceeded = _basis_exceeds_output_budget(
-                    basis, symbols, maximum_terms=_MAX_INTERMEDIATE_BASIS_TERMS
-                )
+            if _basis_exceeds_output_budget(
+                basis, symbols, enforce_aggregate_terms=False
+            ):
+                # Representability is scale-free: this exact artifact can
+                # never be materialized as canonical values.
+                return None, True
         except Exception:
             return None, False
-        if exceeded:
-            return None, True
+    try:
+        exceeded = _basis_exceeds_output_budget(basis, symbols)
+    except Exception:
+        return None, False
+    if exceeded:
+        return None, True
     return basis, False
 
 
@@ -343,8 +353,8 @@ def retained_source_basis_exceeds_budget(
 
     This substantiates a ``BUDGET_EXCEEDED`` result that retains no basis:
     such an outcome is accepted only when the recomputation genuinely
-    violates the aggregate 1,024-term output boundary, a representability
-    limit, or the intermediate work envelope.  Any kernel failure is not
+    violates the aggregate 1,024-term output boundary or a
+    representability limit.  Any kernel failure is not
     evidence and returns ``False`` so authored results stay rejected.
     """
 

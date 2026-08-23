@@ -596,3 +596,38 @@ def test_complete_basis_output_overflow_reports_typed_outcome() -> None:
     assert result.groebner_basis is None and result.remainder is None
     membership = polynomial_ideal_membership(request)
     assert membership.status == "BUDGET_EXCEEDED"
+
+
+def test_prefix_cap_does_not_decide_outcome_for_late_collapse() -> None:
+    # Reviewer counterexample (bounded instance): f is the sum of all
+    # monomials of degree at most 8 in y,z (45 terms), so the canonical
+    # prefix <x+f, x^12> has a reduced basis containing f^12 with 4,753
+    # aggregate terms — beyond the retired 4,096-term intermediate work
+    # envelope.  The complete ideal is instead <x, f> with a small basis,
+    # and x has normal form zero, so the aggregate term count of a prefix
+    # must never decide the outcome; only representability limits apply
+    # before the complete source basis exists.
+    from itertools import product
+
+    variables = ("x", "y", "z")
+    f_terms = {
+        (0, a, b): 1 for a, b in product(range(9), repeat=2) if a + b <= 8
+    }
+    assert len(f_terms) == 45
+    ideal = RationalPolynomialIdeal(
+        variables=variables,
+        generators=(
+            _poly(variables, {(1, 0, 0): 1, **f_terms}),
+            _poly(variables, {(12, 0, 0): 1}),
+            _poly(variables, {(1, 0, 0): 1, (12, 0, 0): 1}),
+        ),
+    )
+    request = IdealMembershipRequest(
+        ideal=ideal,
+        polynomial=_poly(variables, {(12, 0, 0): 1}),
+        monomial_order="lex",
+    )
+    result = polynomial_ideal_normal_form(request)
+    assert result.status == "COMPUTED"
+    assert result.remainder is not None
+    assert len(result.remainder.polynomial.terms) == 0

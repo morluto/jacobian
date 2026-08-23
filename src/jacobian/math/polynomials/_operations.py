@@ -242,10 +242,10 @@ def _compute_membership_context(
     """Compute the Gröbner basis and return its wire form with the SymPy basis.
 
     The wire basis is ``None`` when the computation exceeds a work or
-    representability boundary — including intermediate basis growth,
-    which the incremental bounded kernel checks after every generator —
-    so the caller reports the typed budget outcome instead of expanding
-    an unrepresentable exact artifact.
+    representability boundary — decided only on the complete source
+    basis, never on an intermediate prefix — so the caller reports the
+    typed budget outcome instead of expanding an unrepresentable exact
+    artifact.
     """
 
     variables = request.ideal.variables

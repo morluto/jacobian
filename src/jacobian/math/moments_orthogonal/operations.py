@@ -155,6 +155,16 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
         raise TypeError("moments must use exact Fractions")
     if moments[0] <= 0:
         raise ValueError("the zeroth moment must be nonzero")
+    # The maximum supported recurrence order consumes exactly
+    # 2 * MAX_RECURRENCE_ORDER moments: an odd-length prefix's final moment
+    # determines its trailing beta, and a longer prefix would overflow the
+    # canonical value's beta capacity, breaking the producer-consumer chain.
+    # This mirrors RecurrenceCoefficientsRequest's wire admission exactly.
+    if m > 2 * MAX_RECURRENCE_ORDER:
+        raise ValueError(
+            f"moment sequence length {m} exceeds the {2 * MAX_RECURRENCE_ORDER} "
+            "moments consumed by the maximum supported recurrence order"
+        )
     max_order = min(MAX_RECURRENCE_ORDER, m // 2)
     if max_order < 1:
         return RecurrenceCoefficients(alpha=(), beta=(moments[0],))

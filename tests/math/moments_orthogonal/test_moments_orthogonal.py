@@ -131,6 +131,26 @@ class TestRecurrenceCoefficients:
         assert result.alpha == (_frac(1, 1), _frac(3, 1))
         assert result.beta == (_frac(1, 1), _frac(1, 1))
 
+    def test_prefix_beyond_recurrence_capacity_rejected(self) -> None:
+        """The native producer enforces the same capacity the wire request
+        does: a prefix longer than 2*MAX_RECURRENCE_ORDER moments would
+        emit more betas than the canonical value carries, so feeding the
+        returned value to jacobi_matrix would raise downstream."""
+        moments = tuple(_frac(1, k) for k in range(1, 34))
+        with pytest.raises(ValueError, match="maximum supported recurrence order"):
+            recurrence_coefficients(moments)
+
+    def test_full_capacity_prefix_composes_with_consumers(self) -> None:
+        """A maximum-length odd prefix produces a canonical value every
+        consumer accepts unchanged: beta stays within the shared order
+        bound while its trailing coefficient is still consumed."""
+        moments = tuple(_frac(1, k) for k in range(1, 33))
+        result = recurrence_coefficients(moments)
+        assert len(result.alpha) == 16
+        assert len(result.beta) == 16
+        jacobi = jacobi_matrix(result.alpha, result.beta)
+        assert len(jacobi.diagonal) == 16
+
 
 # ---------------------------------------------------------------------------
 # Jacobi matrix

@@ -9,6 +9,7 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.moments_orthogonal.values import (
     MAX_MOMENTS,
     MAX_QUADRATURE_MAGNITUDE,
@@ -79,7 +80,14 @@ class HankelMatrixRequest(StrictModel):
 
 
 class HankelMatrixResult(HankelMatrixRequest):
-    matrix: tuple[tuple[CanonicalRational, ...], ...]
+    """The exact Hankel matrix as the matrices domain's canonical value.
+
+    Carrying a RationalMatrix (instead of a raw tuple grid) lets a computed
+    Hankel matrix feed the rational-matrix rank, RREF, and characteristic-
+    polynomial operations unchanged.
+    """
+
+    matrix: RationalMatrix
     dimension: int = Field(ge=1)
     complete: Literal[True] = True
     method: Literal["EXACT_HANKEL_ASSEMBLY"] = "EXACT_HANKEL_ASSEMBLY"
@@ -91,11 +99,11 @@ class HankelMatrixResult(HankelMatrixRequest):
         result = hankel_matrix(_to_fractions(self.moments))
         if self.dimension != len(result.matrix):
             raise ValueError("dimension must match the Hankel matrix size")
-        expected_matrix = tuple(
+        expected_entries = tuple(
             tuple(CanonicalRational.from_fraction(v) for v in row)
             for row in result.matrix
         )
-        if self.matrix != expected_matrix:
+        if self.matrix.entries != expected_entries:
             raise ValueError("matrix must be the exact Hankel matrix")
         return self
 

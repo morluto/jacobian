@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.moments_orthogonal._models import (
     ChristoffelDarbouxRequest,
     ChristoffelDarbouxResult,
@@ -32,9 +33,11 @@ def compute_hankel_matrix(request: HankelMatrixRequest) -> HankelMatrixResult:
     result = hankel_matrix(_to_fractions(request.moments))
     return HankelMatrixResult(
         moments=request.moments,
-        matrix=tuple(
-            tuple(CanonicalRational.from_fraction(v) for v in row)
-            for row in result.matrix
+        matrix=RationalMatrix(
+            entries=tuple(
+                tuple(CanonicalRational.from_fraction(v) for v in row)
+                for row in result.matrix
+            )
         ),
         dimension=len(result.matrix),
     )

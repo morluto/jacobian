@@ -45,9 +45,7 @@ def convex_hull_volume(
             f"ambient dimension {dim} exceeds the {MAX_DIMENSION}-dimension bound"
         )
     if len(vertices) > MAX_VERTICES:
-        raise ValueError(
-            f"`vertices` exceeds the {MAX_VERTICES}-vertex bound"
-        )
+        raise ValueError(f"`vertices` exceeds the {MAX_VERTICES}-vertex bound")
     normalized = tuple(tuple(Fraction(c) for c in vertex) for vertex in vertices)
     for vertex in normalized:
         for coord in vertex:
@@ -55,8 +53,7 @@ def convex_hull_volume(
             den_digits = len(format_canonical_integer(coord.denominator))
             if max(num_digits, den_digits) > COORDINATE_DIGITS:
                 raise ValueError(
-                    "vertex coordinate exceeds the "
-                    f"{COORDINATE_DIGITS}-digit bound"
+                    f"vertex coordinate exceeds the {COORDINATE_DIGITS}-digit bound"
                 )
     require_volume_components_within_result_bound(normalized, dim)
 

@@ -121,12 +121,10 @@ def _is_bounded_h(halfspaces: tuple[Halfspace, ...]) -> bool:
     dim = len(halfspaces[0].coefficients)
     if dim == 1:
         positive = any(
-            Rational(*hs.coefficients[0].as_integer_ratio()) > 0
-            for hs in halfspaces
+            Rational(*hs.coefficients[0].as_integer_ratio()) > 0 for hs in halfspaces
         )
         negative = any(
-            Rational(*hs.coefficients[0].as_integer_ratio()) < 0
-            for hs in halfspaces
+            Rational(*hs.coefficients[0].as_integer_ratio()) < 0 for hs in halfspaces
         )
         return positive and negative
     normals: list[list[Rational]] = [
@@ -136,7 +134,10 @@ def _is_bounded_h(halfspaces: tuple[Halfspace, ...]) -> bool:
     # dimensional; otherwise the polyhedron is unbounded.
     if len(normals) < dim + 1:
         return False
-    diff_rows = [[normals[i][k] - normals[0][k] for k in range(dim)] for i in range(1, len(normals))]
+    diff_rows = [
+        [normals[i][k] - normals[0][k] for k in range(dim)]
+        for i in range(1, len(normals))
+    ]
     try:
         if Matrix(diff_rows).rank() < dim:
             return False

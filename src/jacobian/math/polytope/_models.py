@@ -181,7 +181,13 @@ def require_volume_components_within_result_bound(
     """
 
     if dim == 1:
-        _require_interval_volume_within_result_bound(points)
+        # Mirror the kernel's one-dimensional pipeline: deduplicate
+        # exactly, and a hull with fewer than two distinct coordinates is
+        # degenerate with exact volume zero, which is always representable.
+        unique = _deduplicate_exact_points(points)
+        if len(unique) < 2:
+            return
+        _require_interval_volume_within_result_bound(unique)
         return
 
     from jacobian.math.polytope._operations import (

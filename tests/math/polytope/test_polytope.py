@@ -435,6 +435,62 @@ class TestDimensionOne:
         assert result.dimension == 1
         assert len(result.volume.den) == 20_001
 
+    def test_degenerate_singleton_at_the_coordinate_bound_is_admitted(self):
+        """A single vertex at ``1/10^32767`` satisfies the coordinate
+        bound; fewer than two distinct coordinates is a degenerate hull of
+        exact volume zero, so admission must deduplicate and return before
+        applying the interval growth estimate (review counterexample)."""
+        result = compute_polytope_volume(
+            PolytopeVolumeRequest(
+                vertices=(
+                    Vertex(
+                        coordinates=(CanonicalRational(num="1", den="1" + "0" * 32767),)
+                    ),
+                )
+            )
+        )
+        assert result.volume == CanonicalRational(num="0", den="1")
+        assert result.dimension == 1
+
+    def test_duplicated_singleton_interval_is_admitted_with_zero_volume(self):
+        """Two identical huge-denominator endpoints still describe one
+        distinct coordinate; the kernel returns exact zero."""
+        point = Vertex(coordinates=(CanonicalRational(num="1", den="1" + "0" * 32767),))
+        result = compute_polytope_volume(PolytopeVolumeRequest(vertices=(point, point)))
+        assert result.volume == CanonicalRational(num="0", den="1")
+
+    def test_bounded_halfspace_singleton_is_admitted_with_zero_volume(self):
+        """``x <= c`` with ``-x <= -c`` derives the single vertex ``c``
+        whose hull volume is exact zero even at the coordinate bound."""
+        den = "1" + "0" * 32767
+        c = CanonicalRational(num="1", den=den)
+        result = _volume_via_halfspaces(
+            (
+                Halfspace(
+                    coefficients=(CanonicalRational(num="1", den="1"),), offset=c
+                ),
+                Halfspace(
+                    coefficients=(CanonicalRational(num="-1", den="1"),),
+                    offset=CanonicalRational(num="-1", den=den),
+                ),
+            )
+        )
+        assert result.volume == CanonicalRational(num="0", den="1")
+        assert result.dimension == 1
+
+    def test_two_distinct_endpoints_beyond_the_bound_still_rejected(self):
+        """Deduplication must not over-admit: endpoints at
+        ``+/- (10^32768 - 1)`` are two distinct coordinates whose reduced
+        difference has a 32,769-digit numerator, so the interval growth
+        estimate still rejects the request."""
+
+        def endpoint(num: str) -> Vertex:
+            return Vertex(coordinates=(CanonicalRational(num=num, den="1"),))
+
+        huge = format_canonical_integer(10**32768 - 1)
+        with pytest.raises(ValueError, match="result bound"):
+            PolytopeVolumeRequest(vertices=(endpoint(huge), endpoint("-" + huge)))
+
 
 class TestDenominatorGrowth:
     def test_denominator_products_beyond_the_result_bound_rejected(self):
@@ -650,6 +706,19 @@ class TestNativeApiAdmission:
 
         value = convex_hull_volume(tuple((Fraction(0),) * 6 for _ in range(64)))
         assert value == CanonicalRational(num="0", den="1")
+
+    def test_native_admits_degenerate_singleton_at_the_coordinate_bound(self):
+        """A single ``1/10^32767`` coordinate is a degenerate one-point
+        hull of exact zero volume; admission must not apply the interval
+        growth estimate before deduplication (review counterexample)."""
+        from jacobian.math.polytope import convex_hull_volume
+
+        value = convex_hull_volume(((Fraction(1, 10**32767),),))
+        assert value == CanonicalRational(num="0", den="1")
+        duplicated = convex_hull_volume(
+            ((Fraction(1, 10**32767),), (Fraction(1, 10**32767),))
+        )
+        assert duplicated == CanonicalRational(num="0", den="1")
 
 
 class TestNonsimpleFaceExtremality:

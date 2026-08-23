@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.graphs.coloring._models import (
+    EdgeKColorabilityResult,
     MaximalIndependentSetRequest,
     MaximalIndependentSetResult,
 )
@@ -357,3 +358,108 @@ class TestEdgeColoringCheck:
         )
         with pytest.raises(ValidationError, match="one color per edge"):
             EdgeColoringCheckRequest(graph=g, colors=2, coloring=(0, 1))
+
+
+def _petersen_graph():
+    from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+    return SimpleUndirectedGraph(
+        vertices=("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"),
+        edges=(
+            ("0", "1"),
+            ("1", "2"),
+            ("2", "3"),
+            ("3", "4"),
+            ("0", "4"),
+            ("5", "7"),
+            ("7", "9"),
+            ("6", "9"),
+            ("6", "8"),
+            ("5", "8"),
+            ("0", "5"),
+            ("1", "6"),
+            ("2", "7"),
+            ("3", "8"),
+            ("4", "9"),
+        ),
+    )
+
+
+class TestSolverConflictBudget:
+    def test_budget_exceeded_returns_typed_unknown_outcome(self):
+        """A conflict budget of 1 cannot decide the Petersen graph; the
+        operation must report SOLVER_BUDGET_EXCEEDED with no colorability
+        claim instead of an unbounded wait or a false negative."""
+        from jacobian.math.graphs.coloring._models import (
+            EdgeKColorabilityRequest,
+            EdgeKColorabilityResult,
+        )
+        from jacobian.math.graphs.coloring._operations import (
+            compute_edge_k_colorability,
+        )
+
+        request = EdgeKColorabilityRequest(
+            graph=_petersen_graph(), colors=3, solver_conflicts=1
+        )
+        result = compute_edge_k_colorability(request)
+        assert result.status == "SOLVER_BUDGET_EXCEEDED"
+        assert result.colorable is None
+        assert result.coloring is None
+        assert EdgeKColorabilityResult.model_validate(result.model_dump()) == result
+
+    def test_forged_budget_exceeded_rejected_when_decidable(self):
+        """An authored budget-exceeded label on a trivially decidable graph
+        must not validate."""
+        from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+        with pytest.raises(ValidationError, match="not reproduced"):
+            EdgeKColorabilityResult(
+                graph=SimpleUndirectedGraph(vertices=("a", "b"), edges=(("a", "b"),)),
+                colors=2,
+                solver_conflicts=1000,
+                status="SOLVER_BUDGET_EXCEEDED",
+                colorable=None,
+                coloring=None,
+                edge_count=1,
+            )
+
+    def test_budget_exceeded_cannot_claim_colorable(self):
+        petersen = _petersen_graph()
+        with pytest.raises(ValidationError, match="no colorability claim"):
+            EdgeKColorabilityResult(
+                graph=petersen,
+                colors=3,
+                solver_conflicts=100000,
+                status="SOLVER_BUDGET_EXCEEDED",
+                colorable=False,
+                coloring=None,
+                edge_count=len(petersen.edges),
+            )
+
+    def test_negative_claim_requires_explicit_unsat_within_budget(self):
+        """A non-colorable claim replayed under a too-small budget (which
+        returns unknown) must not validate: negatives need explicit unsat."""
+        petersen = _petersen_graph()
+        payload = {
+            "graph": petersen.model_dump(),
+            "colors": 3,
+            "solver_conflicts": 1,
+            "status": "DECIDED",
+            "colorable": False,
+            "coloring": None,
+            "edge_count": len(petersen.edges),
+        }
+        with pytest.raises(ValidationError, match="undecided but result claims"):
+            EdgeKColorabilityResult.model_validate(payload)
+
+    def test_default_budget_still_decides_petersen_negative(self):
+        from jacobian.math.graphs.coloring._models import EdgeKColorabilityRequest
+        from jacobian.math.graphs.coloring._operations import (
+            compute_edge_k_colorability,
+        )
+
+        result = compute_edge_k_colorability(
+            EdgeKColorabilityRequest(graph=_petersen_graph(), colors=3)
+        )
+        assert result.status == "DECIDED"
+        assert result.colorable is False

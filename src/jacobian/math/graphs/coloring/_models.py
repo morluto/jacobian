@@ -14,6 +14,41 @@ MAX_EDGE_COLORING_VERTICES = 20
 MAX_EDGE_COLORING_EDGES = (
     MAX_EDGE_COLORING_VERTICES * (MAX_EDGE_COLORING_VERTICES - 1) // 2
 )
+DEFAULT_SOLVER_CONFLICT_BUDGET = 100_000
+"""Default request-visible SAT conflict budget for one colorability decision."""
+
+MAX_SOLVER_CONFLICT_BUDGET = 1_000_000
+"""Upper bound on the accepted SAT conflict budget."""
+
+
+def _run_edge_coloring_solver(
+    graph: SimpleUndirectedGraph,
+    colors: int,
+    solver_conflicts: int,
+) -> tuple[str, tuple[int, ...] | None]:
+    """Run one bounded exact edge-coloring SAT check.
+
+    Returns ``("sat", coloring)``, ``("unsat", None)``, or
+    ``("unknown", None)``.  Non-colorability is only ever claimed on an
+    explicit ``unsat``; an exhausted budget reports ``unknown`` so the
+    caller returns the typed incomplete outcome.
+    """
+
+    import z3  # type: ignore[import-untyped]
+
+    solver = z3.Solver()
+    solver.set("max_conflicts", solver_conflicts)
+    edge_colors = [z3.Int(f"c_{i}") for i in range(len(graph.edges))]
+    solver.add(*(z3.And(c >= 0, c < colors) for c in edge_colors))
+    for a, b in _incident_edge_index_pairs_for_canonical_graph(graph):
+        solver.add(edge_colors[a] != edge_colors[b])
+    result = solver.check()
+    if result == z3.sat:
+        model = solver.model()
+        return "sat", tuple(model.eval(c).as_long() for c in edge_colors)
+    if result == z3.unsat:
+        return "unsat", None
+    return "unknown", None
 
 
 def _edge_coloring_graph_schema() -> JsonSchemaValue:
@@ -195,11 +230,70 @@ class MaximalIndependentSetResult(StrictModel):
 # ---------------------------------------------------------------------------
 
 
+def _require_budget_exceeded_shape(result: EdgeKColorabilityResult) -> None:
+    """A budget-exceeded outcome carries no claim and must replay unknown."""
+
+    if result.colorable is not None or result.coloring is not None:
+        raise ValueError("a budget-exceeded outcome carries no colorability claim")
+    if not result.graph.edges:
+        raise ValueError("empty graph is decided colorable without any search")
+    if (
+        _run_edge_coloring_solver(result.graph, result.colors, result.solver_conflicts)[
+            0
+        ]
+        != "unknown"
+    ):
+        raise ValueError(
+            "claimed solver-budget exceedance is not reproduced by the bounded replay"
+        )
+
+
+def _require_negative_replay(result: EdgeKColorabilityResult) -> None:
+    """Replay non-colorability; only an explicit unsat may support it."""
+
+    if result.coloring is not None:
+        raise ValueError("a non-colorable result must not carry a coloring")
+    if not result.graph.edges:
+        raise ValueError(
+            "empty graph is k-edge-colorable but result claims not colorable"
+        )
+    if (
+        _run_edge_coloring_solver(result.graph, result.colors, result.solver_conflicts)[
+            0
+        ]
+        != "unsat"
+    ):
+        raise ValueError(
+            "graph is k-edge-colorable or undecided but result claims not colorable"
+        )
+
+
+def _require_positive_witness(result: EdgeKColorabilityResult) -> None:
+    """A colorable claim must carry a proper witness."""
+
+    if result.coloring is None:
+        raise ValueError("a colorable result must carry a coloring witness")
+    _require_coloring_sequence(result.graph, result.coloring, result.colors)
+    if not _is_proper_edge_coloring(result.graph, result.coloring):
+        raise ValueError("coloring witness must be a proper edge coloring")
+
+
 class EdgeKColorabilityRequest(StrictModel):
     """Decide whether a simple graph admits a proper ``k``-edge-coloring."""
 
     graph: EdgeColoringGraph
     colors: StrictInt = Field(ge=1, le=20)
+    solver_conflicts: StrictInt = Field(
+        default=DEFAULT_SOLVER_CONFLICT_BUDGET,
+        ge=1,
+        le=MAX_SOLVER_CONFLICT_BUDGET,
+        description=(
+            "Request-visible SAT work budget: the exact solver is cut off "
+            "after this many conflict clauses; an exhausted budget yields "
+            "the typed SOLVER_BUDGET_EXCEEDED outcome instead of an "
+            "unbounded wait or a negative conclusion."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_bounded_graph(self) -> Self:
@@ -212,7 +306,13 @@ class EdgeKColorabilityResult(StrictModel):
 
     graph: SimpleUndirectedGraph
     colors: StrictInt = Field(ge=1, le=20)
-    colorable: bool
+    solver_conflicts: StrictInt = Field(
+        default=DEFAULT_SOLVER_CONFLICT_BUDGET,
+        ge=1,
+        le=MAX_SOLVER_CONFLICT_BUDGET,
+    )
+    status: Literal["DECIDED", "SOLVER_BUDGET_EXCEEDED"] = "DECIDED"
+    colorable: bool | None = None
     coloring: tuple[StrictInt, ...] | None = Field(
         default=None,
         max_length=MAX_EDGE_COLORING_EDGES,
@@ -228,33 +328,15 @@ class EdgeKColorabilityResult(StrictModel):
         _require_edge_coloring_graph_bound(self.graph)
         if self.edge_count != len(self.graph.edges):
             raise ValueError("edge_count must equal the number of graph edges")
+        if self.status == "SOLVER_BUDGET_EXCEEDED":
+            _require_budget_exceeded_shape(self)
+            return self
+        if self.colorable is None:
+            raise ValueError("a decided result must claim colorable true or false")
         if self.colorable:
-            if self.coloring is None:
-                raise ValueError("a colorable result must carry a coloring witness")
-            _require_coloring_sequence(self.graph, self.coloring, self.colors)
-            if not _is_proper_edge_coloring(self.graph, self.coloring):
-                raise ValueError("coloring witness must be a proper edge coloring")
+            _require_positive_witness(self)
         else:
-            if self.coloring is not None:
-                raise ValueError("a non-colorable result must not carry a coloring")
-            # Replay the bounded decision to prevent forged non-colorability.
-            # The graph + colors are retained, so we can re-execute the exact
-            # SAT check. Empty edge set is trivially colorable for any k>=1.
-            if not self.graph.edges:
-                raise ValueError(
-                    "empty graph is k-edge-colorable but result claims not colorable"
-                )
-            import z3  # type: ignore[import-untyped]
-
-            solver = z3.Solver()
-            edge_colors = [z3.Int(f"c_{i}") for i in range(len(self.graph.edges))]
-            solver.add(*(z3.And(c >= 0, c < self.colors) for c in edge_colors))
-            for a, b in _incident_edge_index_pairs_for_canonical_graph(self.graph):
-                solver.add(edge_colors[a] != edge_colors[b])
-            if solver.check() == z3.sat:
-                raise ValueError(
-                    "graph is k-edge-colorable but result claims not colorable"
-                )
+            _require_negative_replay(self)
         return self
 
 

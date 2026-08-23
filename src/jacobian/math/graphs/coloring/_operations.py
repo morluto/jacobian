@@ -70,39 +70,54 @@ def compute_edge_k_colorability(
     """Decide whether a simple graph admits a proper ``k``-edge-coloring.
 
     A proper edge coloring assigns each edge a color in ``0..k-1`` such that
-    incident edges receive distinct colors.  Uses a bounded Z3 SAT search and
-    returns one coloring witness when one exists.
+    incident edges receive distinct colors.  Uses a Z3 SAT search bounded by
+    the request-visible ``solver_conflicts`` budget and returns one coloring
+    witness when one exists.  Non-colorability is claimed only on an
+    explicit unsatisfiable outcome; an exhausted budget yields the typed
+    ``SOLVER_BUDGET_EXCEEDED`` outcome instead of an unbounded wait.
     """
-    import z3
+    from jacobian.math.graphs.coloring._models import _run_edge_coloring_solver
 
     edges = request.graph.edges
     if not edges:
         return EdgeKColorabilityResult(
             graph=request.graph,
             colors=request.colors,
+            solver_conflicts=request.solver_conflicts,
+            status="DECIDED",
             colorable=True,
             coloring=(),
             edge_count=0,
         )
-    solver = z3.Solver()
-    edge_colors = [z3.Int(f"c_{i}") for i in range(len(edges))]
-    solver.add(*(z3.And(c >= 0, c < request.colors) for c in edge_colors))
-    for a, b in _incident_edge_index_pairs_for_canonical_graph(request.graph):
-        solver.add(edge_colors[a] != edge_colors[b])
-    if solver.check() == z3.sat:
-        model = solver.model()
-        coloring = tuple(model.eval(c).as_long() for c in edge_colors)
+    outcome, coloring = _run_edge_coloring_solver(
+        request.graph, request.colors, request.solver_conflicts
+    )
+    if outcome == "sat":
         return EdgeKColorabilityResult(
             graph=request.graph,
             colors=request.colors,
+            solver_conflicts=request.solver_conflicts,
+            status="DECIDED",
             colorable=True,
             coloring=coloring,
+            edge_count=len(edges),
+        )
+    if outcome == "unsat":
+        return EdgeKColorabilityResult(
+            graph=request.graph,
+            colors=request.colors,
+            solver_conflicts=request.solver_conflicts,
+            status="DECIDED",
+            colorable=False,
+            coloring=None,
             edge_count=len(edges),
         )
     return EdgeKColorabilityResult(
         graph=request.graph,
         colors=request.colors,
-        colorable=False,
+        solver_conflicts=request.solver_conflicts,
+        status="SOLVER_BUDGET_EXCEEDED",
+        colorable=None,
         coloring=None,
         edge_count=len(edges),
     )

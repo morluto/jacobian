@@ -131,6 +131,10 @@ GRAPH_COLORING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "Given a bounded simple graph and an integer k, decide whether the "
         "graph admits a proper k-edge-coloring (incident edges receive distinct "
         "colors), returning one edge-coloring witness when one exists. "
+        "The exact solver runs under the request-visible solver_conflicts "
+        "budget: non-colorability is returned only on an explicit "
+        "unsatisfiable outcome, and an exhausted budget yields the typed "
+        "SOLVER_BUDGET_EXCEEDED status with no colorability claim. "
         "Distinct from vertex k-colorability; the chromatic index is the "
         "smallest such k.",
         EdgeKColorabilityRequest,

@@ -39,9 +39,7 @@ def _require_nonzero_support(value: PolynomialSupport) -> None:
     """A claimed nonzero support carries nonzero coefficients and extrema."""
     # An exponent with a zero coefficient is not part of a support.
     if any(coefficient.as_fraction() == 0 for coefficient in value.coefficients):
-        raise ValueError(
-            "support coefficients must be nonzero; zero terms are omitted"
-        )
+        raise ValueError("support coefficients must be nonzero; zero terms are omitted")
 
 
 def _require_shape_consistency(value: PolynomialSupport, width: int) -> None:
@@ -185,8 +183,7 @@ class NewtonPolytope(StrictModel):
         # empty support.
         if self.is_zero and self.affine_dimension != 0:
             raise ValueError(
-                "the zero polynomial's empty Newton polytope has "
-                "affine dimension zero"
+                "the zero polynomial's empty Newton polytope has affine dimension zero"
             )
         if not self.is_zero:
             support = set(self.all_support_exponents)

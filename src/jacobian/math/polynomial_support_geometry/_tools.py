@@ -52,7 +52,11 @@ TOOLS: MathTools = (
         examples=(
             example(
                 "xy_squared_support",
-                "Compute support of x^2 + xy + y^2.",
+                (
+                    "Compute support of x^2 + xy + y^2; the polynomial must be a "
+                    "canonical RationalPolynomial with ordered variables and unique "
+                    "nonnegative exponents (the zero polynomial is allowed and yields an empty support)."
+                ),
                 {"polynomial": dict(_TOY_POLYNOMIAL)},
             ),
         ),
@@ -73,7 +77,11 @@ TOOLS: MathTools = (
         examples=(
             example(
                 "xy_squared_newton",
-                "Compute Newton polytope of x^2 + xy + y^2.",
+                (
+                    "Compute Newton polytope of x^2 + xy + y^2; the polynomial must be a "
+                    "canonical RationalPolynomial with at most 96 terms so the per-point "
+                    "exact extremality test stays bounded."
+                ),
                 {"polynomial": dict(_TOY_POLYNOMIAL)},
             ),
         ),
@@ -93,7 +101,12 @@ TOOLS: MathTools = (
         examples=(
             example(
                 "weight_profile_xy",
-                "Weight profile of x^2 + xy + y^2 under w=(1,1).",
+                (
+                    "Weight profile of x^2 + xy + y^2 under w=(1,1); the polynomial must be "
+                    "nonzero with at most 1024 terms and coefficient components at most "
+                    "512 digits, and the weight length must match the variable count with "
+                    "each component bounded by 2^31."
+                ),
                 {
                     "polynomial": dict(_TOY_POLYNOMIAL),
                     "weight": [1, 1],
@@ -118,7 +131,9 @@ TOOLS: MathTools = (
                 "initial_form_xy",
                 (
                     "Initial form of x^2 + xy + y^2 under w=(1,2): weights are "
-                    "2, 3, and 4, so the initial form is x^2."
+                    "2,3,4 so initial form is x^2; source must be nonzero with "
+                    "at most 1024 terms and 512-digit coefficients, weight length "
+                    "must match variable count (each bounded by 2^31)."
                 ),
                 {
                     "polynomial": dict(_TOY_POLYNOMIAL),

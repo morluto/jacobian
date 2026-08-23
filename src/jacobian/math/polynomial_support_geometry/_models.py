@@ -11,7 +11,10 @@ from jacobian.math.polynomial_support_geometry.values import (
     MAX_NEWTON_TERMS,
     MAX_WEIGHT_COMPONENTS,
 )
-from jacobian.math.polynomials.values import RationalPolynomial
+from jacobian.math.polynomials.values import (
+    PolynomialVariable,
+    RationalPolynomial,
+)
 
 
 class SupportRequest(StrictModel):
@@ -55,7 +58,9 @@ class NewtonPolytopeRequest(StrictModel):
 MAX_WEIGHT_COMPONENT_MAGNITUDE = 2**31
 
 
-def _require_transportable_weight(weight, variables) -> None:
+def _require_transportable_weight(
+    weight: tuple[int, ...], variables: tuple[PolynomialVariable, ...]
+) -> None:
     if len(weight) != len(variables):
         raise ValueError("weight vector length must match variable count")
     for component in weight:

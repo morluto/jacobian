@@ -59,10 +59,7 @@ def _require_weighted_polynomial_domain(
     """
     if len(weight) != len(polynomial.variables):
         raise ValueError("weight vector length must match variable count")
-    if all(
-        term.coefficient.as_fraction() == 0
-        for term in polynomial.polynomial.terms
-    ):
+    if all(term.coefficient.as_fraction() == 0 for term in polynomial.polynomial.terms):
         raise ValueError(
             "the zero polynomial has no weight profile; supply a nonzero polynomial"
         )
@@ -201,18 +198,18 @@ def _bland_leaving_row(
     entering: int,
 ) -> int | None:
     """Minimum-ratio row; ties broken by lowest leaving index (Bland)."""
-    leaving_row = None
-    leaving_ratio = None
+    leaving_row: int | None = None
+    leaving_ratio: Fraction | None = None
     for i, row in enumerate(tableau):
         if row[entering] > 0:
             ratio = row[-1] / row[entering]
-            if (
-                leaving_ratio is None
-                or ratio < leaving_ratio
-                or (ratio == leaving_ratio and basis[i] < basis[leaving_row])
-            ):
+            if leaving_ratio is None or ratio < leaving_ratio:
                 leaving_row = i
                 leaving_ratio = ratio
+            elif ratio == leaving_ratio and leaving_row is not None:
+                if basis[i] < basis[leaving_row]:
+                    leaving_row = i
+                    leaving_ratio = ratio
     return leaving_row
 
 

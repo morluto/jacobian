@@ -138,9 +138,7 @@ class TestExactBarComplex:
         """The duplicate degree-16 cap is gone: a degree-20 action whose
         enumerated order stays bounded is admitted."""
         GroupCohomologyRequest(
-            group=PermutationGroup(
-                degree=20, generators=(tuple(range(20)),)
-            ),
+            group=PermutationGroup(degree=20, generators=(tuple(range(20)),)),
             prime=2,
             max_degree=0,
         )
@@ -184,7 +182,9 @@ class TestExactBarComplex:
         """GroupCohomologyRequest reuses PermutationGroupRequest so native
         composition such as GroupCohomologyRequest(group=result.stabilizer)
         and result.request.group -> group consumer works unchanged."""
-        from jacobian.math.group._models import PermutationGroupRequest as CanonicalGroup
+        from jacobian.math.group._models import (
+            PermutationGroupRequest as CanonicalGroup,
+        )
         from jacobian.math.group.operations import group_order, group_stabilizer
 
         canonical = CanonicalGroup(degree=3, generators=((1, 0, 2), (0, 2, 1)))

@@ -2,14 +2,180 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.code_linear.values import (
+    MAX_LINEAR_CODE_DIMENSION,
+    MAX_LINEAR_CODE_LENGTH,
+    PrimeFieldLinearEncoder,
+)
 
 MAX_CODEWORDS = 4096
-MAX_LENGTH = 32
+MAX_LENGTH = MAX_LINEAR_CODE_LENGTH
+MAX_RECEIVED_PROFILE_CODEWORDS = 4_096
+MAX_RECEIVED_PROFILE_REPLAY_WORK = 3_000_000
+MAX_RECEIVED_PROFILE_WITNESS_CELLS = 65_536
+
+_FieldElement = Annotated[StrictInt, Field(ge=0, le=250)]
+_HistogramCount = Annotated[
+    StrictInt,
+    Field(ge=0, le=MAX_RECEIVED_PROFILE_CODEWORDS),
+]
+
+
+class ReceivedWordThreshold(StrictModel):
+    """One exact integer threshold on distance or coordinate agreement."""
+
+    metric: Literal["DISTANCE", "AGREEMENT"]
+    comparison: Literal["LT", "LE", "GT", "GE"]
+    value: StrictInt = Field(ge=0, le=MAX_LINEAR_CODE_LENGTH)
+
+
+class ReceivedWordProfileRequest(StrictModel):
+    """Profile one received word against every word of a linear encoder."""
+
+    encoder: PrimeFieldLinearEncoder
+    received_word: tuple[_FieldElement, ...] = Field(
+        min_length=1,
+        max_length=MAX_LINEAR_CODE_LENGTH,
+        description=(
+            "Canonical GF(p) residues on the encoder's ordered coordinate axis."
+        ),
+    )
+    threshold: ReceivedWordThreshold | None = Field(
+        default=None,
+        description=(
+            "Optional exact distance/agreement threshold. Omit it only with "
+            "witness_mode NONE; COUNT, FIRST, and ALL require it."
+        ),
+    )
+    witness_mode: Literal["NONE", "COUNT", "FIRST", "ALL"] = Field(
+        default="NONE",
+        description=(
+            "Threshold evidence to return: NONE without a threshold, COUNT "
+            "only, FIRST in lexicographic message order, or every match."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_aligned_bounded_profile(self) -> Self:
+        if len(self.received_word) != len(self.encoder.coordinate_axis):
+            raise ValueError("received word must match the encoder coordinate axis")
+        if any(value >= self.encoder.field_order for value in self.received_word):
+            raise ValueError("received-word entries must be canonical field residues")
+        if self.encoder.codeword_count > MAX_RECEIVED_PROFILE_CODEWORDS:
+            raise ValueError(
+                "encoder codeword count exceeds the exact profile bound of "
+                f"{MAX_RECEIVED_PROFILE_CODEWORDS}"
+            )
+        if self.profile_replay_work > MAX_RECEIVED_PROFILE_REPLAY_WORK:
+            raise ValueError(
+                "received-word profile replay work exceeds the bound of "
+                f"{MAX_RECEIVED_PROFILE_REPLAY_WORK}"
+            )
+
+        if self.threshold is None and self.witness_mode != "NONE":
+            raise ValueError("a witness mode requires an exact threshold")
+        if self.threshold is not None:
+            if self.witness_mode == "NONE":
+                raise ValueError("a threshold requires COUNT, FIRST, or ALL mode")
+            if self.threshold.value > len(self.encoder.coordinate_axis):
+                raise ValueError("threshold value cannot exceed the code length")
+
+        if (
+            self.witness_mode == "ALL"
+            and self.maximum_witness_cells > MAX_RECEIVED_PROFILE_WITNESS_CELLS
+        ):
+            raise ValueError(
+                "all-witness result exceeds the aggregate witness-cell bound of "
+                f"{MAX_RECEIVED_PROFILE_WITNESS_CELLS}"
+            )
+        return self
+
+    @property
+    def maximum_witness_cells(self) -> int:
+        """Return the worst-case integer cells in a complete witness result."""
+
+        row_width = (
+            len(self.encoder.message_axis) + len(self.encoder.coordinate_axis) + 2
+        )
+        return self.encoder.codeword_count * row_width
+
+    @property
+    def profile_replay_work(self) -> int:
+        """Bound kernel construction, comparison, and result-validation replay."""
+
+        dimension = len(self.encoder.message_axis)
+        length = len(self.encoder.coordinate_axis)
+        return 2 * self.encoder.codeword_count * length * (dimension + 1)
+
+
+class ReceivedWordWitness(StrictModel):
+    """One source-replayable message, codeword, and Hamming relation."""
+
+    message: tuple[_FieldElement, ...] = Field(max_length=MAX_LINEAR_CODE_DIMENSION)
+    codeword: tuple[_FieldElement, ...] = Field(
+        min_length=1,
+        max_length=MAX_LINEAR_CODE_LENGTH,
+    )
+    distance: StrictInt = Field(ge=0, le=MAX_LINEAR_CODE_LENGTH)
+    agreement: StrictInt = Field(ge=0, le=MAX_LINEAR_CODE_LENGTH)
+
+
+class ReceivedWordProfileResult(StrictModel):
+    """Complete coset weight distribution, bound to its encoder and word."""
+
+    source: ReceivedWordProfileRequest
+    distance_histogram: tuple[_HistogramCount, ...] = Field(
+        min_length=2,
+        max_length=MAX_LINEAR_CODE_LENGTH + 1,
+        description=(
+            "Dense histogram indexed by Hamming distance; agreement a is the "
+            "entry at distance code_length - a."
+        ),
+    )
+    codeword_count: StrictInt = Field(ge=1, le=MAX_RECEIVED_PROFILE_CODEWORDS)
+    minimum_distance: StrictInt = Field(
+        ge=0,
+        le=MAX_LINEAR_CODE_LENGTH,
+        description="Minimum Hamming distance from the received word to the code.",
+    )
+    maximum_agreement: StrictInt = Field(
+        ge=0,
+        le=MAX_LINEAR_CODE_LENGTH,
+        description="Maximum coordinate agreement with the received word.",
+    )
+    threshold_match_count: StrictInt | None = Field(
+        default=None,
+        ge=0,
+        le=MAX_RECEIVED_PROFILE_CODEWORDS,
+    )
+    witnesses: tuple[ReceivedWordWitness, ...] = Field(
+        default=(),
+        max_length=MAX_RECEIVED_PROFILE_CODEWORDS,
+    )
+
+    @model_validator(mode="after")
+    def bind_exact_profile_to_source(self) -> Self:
+        from jacobian.math.code_linear._operations import _received_word_profile_data
+
+        expected = _received_word_profile_data(self.source)
+        if self.distance_histogram != expected.distance_histogram:
+            raise ValueError("distance histogram does not match the source relation")
+        if self.codeword_count != expected.codeword_count:
+            raise ValueError("codeword count does not match the source encoder")
+        if self.minimum_distance != expected.minimum_distance:
+            raise ValueError("minimum distance does not match the source relation")
+        if self.maximum_agreement != expected.maximum_agreement:
+            raise ValueError("maximum agreement does not match the source relation")
+        if self.threshold_match_count != expected.threshold_match_count:
+            raise ValueError("threshold count does not match the source threshold")
+        if self.witnesses != expected.witnesses:
+            raise ValueError("threshold witnesses do not replay against the source")
+        return self
 
 
 def _validate_prime_matrix(

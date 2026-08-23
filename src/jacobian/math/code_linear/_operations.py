@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from itertools import product
+from typing import NamedTuple
+
 from jacobian.math.code_linear._models import (
     CodeEqualRequest,
     CodeEqualResult,
@@ -17,11 +20,117 @@ from jacobian.math.code_linear._models import (
     ParityCheckResult,
     PunctureRequest,
     PunctureResult,
+    ReceivedWordProfileRequest,
+    ReceivedWordProfileResult,
+    ReceivedWordWitness,
     ShortenRequest,
     ShortenResult,
     SyndromeRequest,
     SyndromeResult,
 )
+
+
+class _ReceivedWordProfileData(NamedTuple):
+    distance_histogram: tuple[int, ...]
+    codeword_count: int
+    minimum_distance: int
+    maximum_agreement: int
+    threshold_match_count: int | None
+    witnesses: tuple[ReceivedWordWitness, ...]
+
+
+def _matches_received_word_threshold(
+    request: ReceivedWordProfileRequest,
+    *,
+    distance: int,
+    agreement: int,
+) -> bool:
+    threshold = request.threshold
+    if threshold is None:
+        return False
+    observed = distance if threshold.metric == "DISTANCE" else agreement
+    if threshold.comparison == "LT":
+        return observed < threshold.value
+    if threshold.comparison == "LE":
+        return observed <= threshold.value
+    if threshold.comparison == "GT":
+        return observed > threshold.value
+    return observed >= threshold.value
+
+
+def _received_word_profile_data(
+    request: ReceivedWordProfileRequest,
+) -> _ReceivedWordProfileData:
+    encoder = request.encoder
+    field_order = encoder.field_order
+    dimension = len(encoder.message_axis)
+    length = len(encoder.coordinate_axis)
+    histogram = [0] * (length + 1)
+    threshold_match_count = 0
+    witnesses: list[ReceivedWordWitness] = []
+
+    for message in product(range(field_order), repeat=dimension):
+        codeword = tuple(
+            sum(
+                message[row] * encoder.generator_matrix[row][column]
+                for row in range(dimension)
+            )
+            % field_order
+            for column in range(length)
+        )
+        distance = sum(
+            left != right
+            for left, right in zip(codeword, request.received_word, strict=True)
+        )
+        agreement = length - distance
+        histogram[distance] += 1
+
+        if not _matches_received_word_threshold(
+            request,
+            distance=distance,
+            agreement=agreement,
+        ):
+            continue
+
+        threshold_match_count += 1
+        if request.witness_mode == "ALL" or (
+            request.witness_mode == "FIRST" and not witnesses
+        ):
+            witnesses.append(
+                ReceivedWordWitness(
+                    message=message,
+                    codeword=codeword,
+                    distance=distance,
+                    agreement=agreement,
+                )
+            )
+
+    minimum_distance = next(index for index, count in enumerate(histogram) if count)
+    return _ReceivedWordProfileData(
+        distance_histogram=tuple(histogram),
+        codeword_count=sum(histogram),
+        minimum_distance=minimum_distance,
+        maximum_agreement=length - minimum_distance,
+        threshold_match_count=(
+            threshold_match_count if request.threshold is not None else None
+        ),
+        witnesses=tuple(witnesses),
+    )
+
+
+def compute_received_word_profile(
+    request: ReceivedWordProfileRequest,
+) -> ReceivedWordProfileResult:
+    data = _received_word_profile_data(request)
+    return ReceivedWordProfileResult(
+        source=request,
+        distance_histogram=data.distance_histogram,
+        codeword_count=data.codeword_count,
+        minimum_distance=data.minimum_distance,
+        maximum_agreement=data.maximum_agreement,
+        threshold_match_count=data.threshold_match_count,
+        witnesses=data.witnesses,
+    )
 
 
 def _rref(matrix: list[list[int]], field_order: int) -> tuple[list[list[int]], int]:

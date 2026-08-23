@@ -29,6 +29,7 @@ from jacobian.math.code_linear._tools import TOOLS
 
 def test_catalog_contains_only_audited_operations() -> None:
     expected = {
+        "code.linear.received_word_profile.compute",
         "code.linear.codeword.check",
         "code.linear.dual.compute",
         "code.linear.equal.decide",

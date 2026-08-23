@@ -20,6 +20,8 @@ from jacobian.math.code_linear._models import (
     ParityCheckResult,
     PunctureRequest,
     PunctureResult,
+    ReceivedWordProfileRequest,
+    ReceivedWordProfileResult,
     ShortenRequest,
     ShortenResult,
     SyndromeRequest,
@@ -33,6 +35,7 @@ from jacobian.math.code_linear._operations import (
     compute_macwilliams_transform,
     compute_parity_check,
     compute_puncture,
+    compute_received_word_profile,
     compute_shorten,
     compute_syndrome,
 )
@@ -63,6 +66,62 @@ def _op[RequestT: StrictModel, ResultT: StrictModel](
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    _op(
+        "code.linear.received_word_profile.compute",
+        "Compute a linear code's received-word distance profile",
+        "Enumerate every word of a bounded full-rank prime-field linear "
+        "encoder and return its complete Hamming-distance histogram from one "
+        "received word. The dense histogram is the coset weight distribution; "
+        "optional exact integer thresholds can count, return the first, or "
+        "return every replayable message/codeword witness. Message and codeword "
+        "coordinates follow the encoder's explicit ordered axes.",
+        ReceivedWordProfileRequest,
+        ReceivedWordProfileResult,
+        compute_received_word_profile,
+        "code",
+        "linear",
+        "coset-weight-distribution",
+        "hamming-distance",
+        "exact",
+        examples=(
+            example(
+                "outside_binary_repetition_code",
+                "Profile received word 10 against the length-two binary "
+                "repetition code; generator rows must be full rank and every "
+                "word entry must be a canonical GF(2) residue.",
+                {
+                    "encoder": {
+                        "field_order": 2,
+                        "message_axis": ["m0"],
+                        "coordinate_axis": ["x0", "x1"],
+                        "generator_matrix": [[1, 1]],
+                    },
+                    "received_word": [1, 0],
+                },
+            ),
+            example(
+                "first_strict_agreement_witness",
+                "Return the first codeword agreeing in more than zero "
+                "coordinates with 10; FIRST requires an exact threshold and "
+                "messages are ordered lexicographically on message_axis.",
+                {
+                    "encoder": {
+                        "field_order": 2,
+                        "message_axis": ["m0"],
+                        "coordinate_axis": ["x0", "x1"],
+                        "generator_matrix": [[1, 1]],
+                    },
+                    "received_word": [1, 0],
+                    "threshold": {
+                        "metric": "AGREEMENT",
+                        "comparison": "GT",
+                        "value": 0,
+                    },
+                    "witness_mode": "FIRST",
+                },
+            ),
+        ),
+    ),
     _op(
         "code.linear.from_generator.compute",
         "Canonicalize a linear code from a generator matrix",

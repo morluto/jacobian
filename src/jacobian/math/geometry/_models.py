@@ -16,12 +16,15 @@ MAX_COORDINATE_DIGITS = 256
 # Serialized-output budget for the circumradius profile, kept below the 10 MiB
 # transport envelope to leave room for request and JSON overhead.
 _MAX_PROFILE_OUTPUT_CHARS = 8_000_000
-# Joint work bound for the exhaustive general-position search: determinant
-# count grows like n^4 while every Fraction operation grows quadratically in
-# digit count, so n * max_digits <= 1024 keeps both the search and its
-# source-binding replay within the bounded-work envelope at any shape
-# (e.g. 32 points x 32 digits, or 4 points x 256 digits).
-_MAX_GENERAL_POSITION_N_TIMES_DIGITS = 1024
+# Joint work bound for the exhaustive general-position search.  The sweep
+# performs one exact 4x4 determinant per point quadruple, so the determinant
+# count grows as C(n,4) while every Fraction multiplication grows
+# quadratically in coordinate digit count; the admitted work proxy is
+# ``C(n,4) * max_digits**2`` (measured reference: 32 points x 32 digits
+# costs about 36M proxy units and roughly 16s, so a 1M-unit budget keeps an
+# accepted request well under a second for both the search and its
+# source-binding replay).
+_MAX_GENERAL_POSITION_DETERMINANT_WORK = 1_000_000
 
 
 def _require_bounded_point(point: RationalPoint2D) -> None:
@@ -57,13 +60,15 @@ def _require_general_position_work_bound(
     if n == 0:
         return
     max_digits = _max_coordinate_digits(points)
-    if n * max_digits > _MAX_GENERAL_POSITION_N_TIMES_DIGITS:
+    quadruples = n * (n - 1) * (n - 2) * (n - 3) // 24
+    work = quadruples * max_digits * max_digits
+    if work > _MAX_GENERAL_POSITION_DETERMINANT_WORK:
         raise ValueError(
             f"general-position search with {n} points and {max_digits}-digit "
             f"coordinates exceeds the exhaustive work bound "
-            f"(n*digits={n * max_digits} > "
-            f"{_MAX_GENERAL_POSITION_N_TIMES_DIGITS}); reduce point count or "
-            "coordinate size"
+            f"(C(n,4)*digits^2={work} > "
+            f"{_MAX_GENERAL_POSITION_DETERMINANT_WORK}); reduce point count "
+            "or coordinate size"
         )
 
 
@@ -711,8 +716,9 @@ class GeneralPositionRequest(StrictModel):
 
     Each rational coordinate is bounded to at most 256 digits in numerator and
     denominator (operation-specific, stricter than the global 32,768-digit
-    CanonicalRational limit). The exhaustive determinant work is coupled to the
-    point count: ``n * max_digits <= 1024`` keeps both the search and its
+    CanonicalRational limit). The exhaustive determinant work is coupled to
+    both the combinatorial point count and rational complexity:
+    ``C(n,4) * max_digits**2 <= 1,000,000`` keeps both the search and its
     source-binding replay within the bounded-work envelope.
     """
 
@@ -723,8 +729,8 @@ class GeneralPositionRequest(StrictModel):
             "Bounded point configuration with 3..32 points; each rational coordinate "
             f"(numerator/denominator) is bounded to at most {MAX_COORDINATE_DIGITS} digits "
             "(operation-specific limit, stricter than CanonicalRational's 32768-digit "
-            "global limit); additionally n*max_digits <= 1024 bounds the exhaustive "
-            "determinant work"
+            "global limit); additionally C(n,4)*max_digits^2 <= 1000000 bounds the "
+            "exhaustive determinant work"
         ),
     )
 

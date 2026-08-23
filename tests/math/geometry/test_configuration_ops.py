@@ -152,14 +152,29 @@ class TestAdmissionBounds:
         assert len(result.entries) == 220
 
     def test_general_position_rejects_work_bound_violation(self):
-        """32 points x 255-digit coordinates exceed n*max_digits <= 1024."""
+        """32 points x 255-digit coordinates exceed the exhaustive work bound."""
         big = 10**254 + 1
         points = tuple(_point(str(big + i), str(big + 2 * i)) for i in range(32))
         with pytest.raises(ValueError, match="work bound"):
             GeneralPositionRequest(points=points)
 
+    def test_general_position_rejects_quartic_point_growth(self):
+        """32 points x 32 digits pass n*digits=1024 but C(32,4)*digits^2 is
+        about 36M; the combinatorial count must gate admission instead."""
+        points = tuple(_point(str(10**31 + i), str(10**31 + 2 * i)) for i in range(32))
+        with pytest.raises(ValueError, match="work bound"):
+            GeneralPositionRequest(points=points)
+
+    def test_general_position_accepts_moderate_configurations(self):
+        """Shapes within the C(n,4)*digits^2 budget still run end to end."""
+        points = tuple(
+            _point(str(i), str(i * i + 1)) for i in range(16)
+        )
+        result = general_position_search(GeneralPositionRequest(points=points))
+        assert result.num_points == 16
+
     def test_general_position_accepts_small_high_digit_config(self):
-        """Few points may still carry large coordinates (4 x 256 = 1024)."""
+        """Few points may still carry large coordinates (1 * 256^2 units)."""
         big = 10**254 + 1
         points = (
             _point("0", "0"),

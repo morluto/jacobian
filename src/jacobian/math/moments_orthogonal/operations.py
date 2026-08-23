@@ -87,8 +87,11 @@ def _monic_orthogonal_recurrence(
     ``p_{k+1}(x) = (x - alpha_k) p_k(x) - beta_k p_{k-1}(x)``
     with ``p_{-1} = 0``, ``p_0 = 1``, ``beta_0 = mu_0``.
 
-    ``max_order`` recurrence coefficients ``alpha`` are produced, requiring
-    at least ``2 * max_order + 1`` moments.
+    ``max_order`` recurrence coefficients ``alpha`` are produced, consuming
+    at most moments up to index ``2 * max_order - 1``; when the retained
+    prefix also carries the odd moment ``mu_{2*max_order}``, the final
+    squared norm and its trailing ``beta`` coefficient are derived from it,
+    so every retained moment is consumed.
     """
     alpha: list[Fraction] = []
     beta: list[Fraction] = [moments[0]]
@@ -109,17 +112,26 @@ def _monic_orthogonal_recurrence(
         h_prev = h_curr
         p_prev = p_curr
         p_curr = p_next
+        if k == max_order - 1:
+            break
         h_curr = _inner_product(moments, p_curr, p_curr)
         if h_curr <= 0:
-            if h_curr == 0:
-                raise ValueError(
-                    "moment sequence does not define a positive-definite measure"
-                )
             raise ValueError(
                 "moment sequence does not define a positive-definite measure"
             )
-        if k < max_order - 1:
-            beta.append(h_curr / h_prev)
+        beta.append(h_curr / h_prev)
+    if len(moments) > 2 * max_order:
+        # An odd-length prefix retains mu_{2*max_order}, which determines the
+        # final squared norm h_n = <p_n, p_n> and therefore the trailing
+        # beta_n = h_n / h_{n-1}. Consuming it keeps the result a complete
+        # function of every retained moment; an indefinite trailing Hankel
+        # form is rejected instead of silently ignored.
+        h_final = _inner_product(moments, p_curr, p_curr)
+        if h_final <= 0:
+            raise ValueError(
+                "moment sequence does not define a positive-definite measure"
+            )
+        beta.append(h_final / h_curr)
     return alpha, beta
 
 
@@ -139,13 +151,17 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
     coefficients of the symmetric Jacobi matrix.
     """
     m = len(moments)
-    if not 1 <= m <= MAX_MOMENTS:
-        raise ValueError("moment sequence must contain between 1 and 64 moments")
+    if not 1 <= m <= 2 * MAX_RECURRENCE_ORDER:
+        raise ValueError(
+            "moment sequence must contain between 1 and "
+            f"{2 * MAX_RECURRENCE_ORDER} moments; longer sequences exceed "
+            "the order the canonical coefficient values support"
+        )
     if any(type(value) is not Fraction for value in moments):
         raise TypeError("moments must use exact Fractions")
     if moments[0] <= 0:
         raise ValueError("the zeroth moment must be positive and nonzero")
-    max_order = min(MAX_RECURRENCE_ORDER, (m - 1) // 2)
+    max_order = min(MAX_RECURRENCE_ORDER, m // 2)
     if max_order < 1:
         return RecurrenceCoefficients(alpha=(), beta=(moments[0],))
     alpha, beta = _monic_orthogonal_recurrence(moments, max_order)

@@ -231,11 +231,8 @@ class TestGramMonomialBasisAdmission:
 
 class TestSOSResultAdmission:
     def test_oversized_result_summands_are_rejected_before_expansion(self):
-        variables = tuple(f"x{i}" for i in range(8))
-        exponent_rows = [
-            tuple(1 if j == k else 0 for j in range(8)) for k in range(8)
-        ] + [tuple([0] * 8)]
-        wide = _poly(variables, *[(1, 1, row) for row in exponent_rows])
+        exponent_rows = [(k,) for k in range(8, 0, -1)] + [(0,)]
+        wide = _poly(("x",), *[(1, 1, row) for row in exponent_rows])
         p = _poly(("x",), (1, 1, (2,)), (1, 1, (0,)))
         summands = tuple(_poly(("x",), (1, 1, (0,))) for _ in range(64))
         result = check_sos_decomposition(
@@ -247,4 +244,23 @@ class TestSOSResultAdmission:
         with pytest.raises(
             ValidationError, match="predicted SOS expansion exceeds term bound"
         ):
+            SOSDecompositionCheckResult.model_validate(payload)
+
+
+class TestSOSResultRingAdmission:
+    def test_result_replay_rejects_mismatched_summand_ring(self):
+        """A serialized result whose summand uses another ring is rejected at
+        the typed boundary instead of leaking a SymPy coercion exception."""
+        p = _poly(("x",), (1, 1, (2,)), (1, 1, (0,)))
+        summands = (_poly(("x",), (1, 1, (0,))),)
+        result = check_sos_decomposition(
+            SOSDecompositionCheckRequest(polynomial=p, summands=summands)
+        )
+        payload = result.model_dump(mode="json")
+        payload["summands"] = [_poly(("y",), (1, 1, (0,))).model_dump(mode="json")]
+        payload["is_valid"] = False
+        payload["computed_sum"] = _poly(("x",), (1, 1, (2,)), (1, 1, (0,))).model_dump(
+            mode="json"
+        )
+        with pytest.raises(ValidationError, match="same ring as the polynomial"):
             SOSDecompositionCheckResult.model_validate(payload)

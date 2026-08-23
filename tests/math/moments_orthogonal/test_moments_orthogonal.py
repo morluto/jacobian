@@ -106,7 +106,7 @@ class TestRecurrenceCoefficients:
         assert result.beta[0] == _frac(2, 1)
 
     def test_empty_rejected(self) -> None:
-        with pytest.raises(ValueError, match="between 1 and 64"):
+        with pytest.raises(ValueError, match="between 1 and 32"):
             recurrence_coefficients(())
 
     def test_zeroth_moment_nonzero(self) -> None:
@@ -114,11 +114,11 @@ class TestRecurrenceCoefficients:
         with pytest.raises(ValueError, match="nonzero"):
             recurrence_coefficients(moments)
 
-    def test_insufficient_moments_for_recurrence(self) -> None:
-        """With only 2 moments we can't produce any recurrence coefficient."""
+    def test_two_moments_determine_one_pair(self) -> None:
+        """Two moments fully determine alpha_0 and beta_0."""
         moments = (_frac(1, 1), _frac(1, 2))
         result = recurrence_coefficients(moments)
-        assert result.alpha == ()
+        assert result.alpha == (_frac(1, 2),)
         assert result.beta == (_frac(1, 1),)
 
 
@@ -419,9 +419,47 @@ class TestRecurrenceOrderAdmissionBound:
         with pytest.raises(ValidationError, match="maximum supported recurrence order"):
             RecurrenceCoefficientsRequest.model_validate(request)
 
-    def test_boundary_sequence_of_thirty_three_moments_is_admitted(self) -> None:
+    def test_boundary_sequence_of_thirty_two_moments_is_fully_consumed(self) -> None:
         request = RecurrenceCoefficientsRequest(
-            moments=tuple(_cr(1, k + 1) for k in range(33))
+            moments=tuple(_cr(1, k + 1) for k in range(32))
         )
         result = compute_recurrence_coefficients(request)
-        assert len(result.alpha) == 16  # MAX_RECURRENCE_ORDER levels from 33 moments
+        assert len(result.alpha) == 16
+        assert len(result.beta) == 16
+
+    def test_sequence_longer_than_the_maximum_consumed_is_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="consumed by the maximum"):
+            RecurrenceCoefficientsRequest(
+                moments=tuple(_cr(1, k + 1) for k in range(33))
+            )
+
+
+class TestRecurrenceFullConsumption:
+    """Every retained moment must determine the returned coefficients."""
+
+    def test_even_length_fourth_moment_determines_alpha_one(self) -> None:
+        """(1,0,1,0) and (1,0,1,10) share the first three moments but their
+        fourth moment determines alpha_1; neither may be ignored."""
+        first = recurrence_coefficients(
+            (_frac(1, 1), _frac(0, 1), _frac(1, 1), _frac(0, 1))
+        )
+        second = recurrence_coefficients(
+            (_frac(1, 1), _frac(0, 1), _frac(1, 1), _frac(10, 1))
+        )
+        assert first.alpha == (_frac(0, 1), _frac(0, 1))
+        assert second.alpha == (_frac(0, 1), _frac(10, 1))
+        assert first.beta == (_frac(1, 1), _frac(1, 1))
+        assert second.beta == (_frac(1, 1), _frac(1, 1))
+
+    def test_odd_length_trailing_moment_determines_final_beta(self) -> None:
+        """mu_2 distinguishes (1,0,1) from (1,0,2) through beta_1."""
+        first = recurrence_coefficients((_frac(1, 1), _frac(0, 1), _frac(1, 1)))
+        second = recurrence_coefficients((_frac(1, 1), _frac(0, 1), _frac(2, 1)))
+        assert first.alpha == (_frac(0, 1),)
+        assert second.alpha == (_frac(0, 1),)
+        assert first.beta == (_frac(1, 1), _frac(1, 1))
+        assert second.beta == (_frac(1, 1), _frac(2, 1))
+
+    def test_odd_length_indefinite_trailing_hankel_rejected(self) -> None:
+        with pytest.raises(ValueError, match="positive-definite"):
+            recurrence_coefficients((_frac(1, 1), _frac(0, 1), _frac(-1, 1)))

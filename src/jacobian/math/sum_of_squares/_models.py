@@ -55,6 +55,8 @@ def _require_bounded_sos_work(
     _require_bounded_polynomial(polynomial, "polynomial")
     for idx, summand in enumerate(summands):
         _require_bounded_polynomial(summand, f"summand[{idx}]")
+        if summand.variables != polynomial.variables:
+            raise ValueError("all summands must use the same ring as the polynomial")
     predicted = sum(len(s.polynomial.terms) ** 2 for s in summands)
     if predicted > MAX_SOS_PREDICTED_TERMS:
         raise ValueError("predicted SOS expansion exceeds term bound")

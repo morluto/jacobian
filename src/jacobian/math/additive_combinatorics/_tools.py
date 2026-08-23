@@ -206,7 +206,15 @@ ADDITIVE_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "Compute the ordered-difference profile for {(0,0), (1,0), (0,1)}; "
                 "vectors must be non-empty, distinct, share the same dimension "
                 "1..8, and each coordinate is at most 6 digits in magnitude.",
-                {"vectors": [[0, 0], [1, 0], [0, 1]]},
+                {
+                    "vectors": {
+                        "vectors": [
+                            {"coordinates": ["0", "0"]},
+                            {"coordinates": ["1", "0"]},
+                            {"coordinates": ["0", "1"]},
+                        ]
+                    }
+                },
             ),
         ),
     ),

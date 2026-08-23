@@ -21,6 +21,7 @@ from jacobian.math.additive_combinatorics._models import (
     RepresentationProfileResult,
     SumsetCardinalityRequest,
     SumsetCardinalityResult,
+    _vector_from_ints,
 )
 
 
@@ -169,7 +170,7 @@ def compute_ordered_difference_profile(
     in A^2 with x != y and x - y = v. Each entry includes the source
     pairs so collision classes are directly inspectable.
     """
-    vectors = request.vectors
+    vectors = [vec.as_int_tuple() for vec in request.vectors.vectors]
     n = len(vectors)
     dimension = len(vectors[0])
 
@@ -198,7 +199,7 @@ def compute_ordered_difference_profile(
         )
         entries.append(
             OrderedDifferenceEntry(
-                difference=diff,
+                difference=_vector_from_ints(diff),
                 multiplicity=multiplicity,
                 pairs=pair_models,
             )
@@ -212,7 +213,7 @@ def compute_ordered_difference_profile(
                 break
 
     return OrderedDifferenceProfileResult(
-        vectors=tuple(tuple(int(coord) for coord in vec) for vec in vectors),
+        vectors=request.vectors.vectors,
         dimension=dimension,
         set_size=n,
         total_ordered_pairs=total_pairs,

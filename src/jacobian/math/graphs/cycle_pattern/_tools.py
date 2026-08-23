@@ -99,9 +99,11 @@ CYCLE_PATTERN_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "Given a bounded simple undirected graph G and an integer k, decide "
         "whether G contains a simple cycle of exactly length k. Returns an "
         "explicit ordered cycle witness when one exists, or a complete "
-        "DOES_NOT_EXIST result after exhaustive bounded search. This is "
-        "distinct from girth (shortest cycle), Hamiltonian cycle (spanning), "
-        "and induced-cycle detection (the requested cycle may have chords).",
+        "DOES_NOT_EXIST result after exhaustive bounded search. If the "
+        "two-million-node alternating-path search budget is exhausted "
+        "first, the result is instead the undecided SEARCH_BUDGET_EXCEEDED. "
+        "Distinct from girth, Hamiltonian cycles, and induced cycles: the "
+        "requested cycle may have chords.",
         FixedLengthCycleRequest,
         FixedLengthCycleResult,
         decide_fixed_length_cycle,

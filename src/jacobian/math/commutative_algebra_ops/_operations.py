@@ -142,13 +142,14 @@ def _saturation_generators(
     ``QQ[variables][t] / <1 - t*d>`` is the localization at ``d``, so the
     contraction of ``<t*i for i in I> + <1 - t*d>`` to ``QQ[variables]``
     equals ``I : <d>^infinity`` exactly; a lexicographic basis with the
-    eliminator last exposes its generators as the eliminator-free elements.
+    eliminator first (the greatest lex variable) exposes its generators as
+    the eliminator-free elements by the elimination theorem.
     """
     eliminator = sympy.Dummy("jacobian_saturation")
     basis = sympy.groebner(
         [eliminator * expr for expr in ideal_gens] + [1 - eliminator * d_expr],
-        *symbols,
         eliminator,
+        *symbols,
         order="lex",
         domain=sympy.QQ,
     )

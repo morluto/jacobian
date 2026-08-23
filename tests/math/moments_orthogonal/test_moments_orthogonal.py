@@ -320,6 +320,35 @@ class TestWireAdapters:
         with pytest.raises(ValidationError, match="must be positive"):
             RecurrenceCoefficientsRequest(moments=(_cr(-1, 1), _cr(-1, 2)))
 
+    def test_output_beyond_canonical_limit_rejected_at_admission(self) -> None:
+        """Positive-definite moments whose Gram-Schmidt alpha overflows.
+
+        mu_k = 1/(k+1) + 1/(10^300+2k+1) for k = 0..16 is positive definite
+        with every component near the admitted input height, but the final
+        exact alpha coefficient has ~34,000 digits. Admission must reject it
+        instead of letting construction of RecurrenceCoefficientsResult fail
+        after the request was accepted.
+        """
+        big = 10**300
+        moments = tuple(
+            _cr((big + 2 * k + 1) + (k + 1), (k + 1) * (big + 2 * k + 1))
+            for k in range(17)
+        )
+        with pytest.raises(ValidationError, match="canonical"):
+            RecurrenceCoefficientsRequest(moments=moments)
+
+    def test_moment_heights_at_admitted_bound_succeed(self) -> None:
+        """A small positive-definite sequence inside every bound computes."""
+        from jacobian.math.moments_orthogonal._operations import (
+            compute_recurrence_coefficients,
+        )
+
+        request = RecurrenceCoefficientsRequest(
+            moments=(_cr(1, 1), _cr(1, 2), _cr(1, 3), _cr(1, 4))
+        )
+        result = compute_recurrence_coefficients(request)
+        assert len(result.alpha) == 1
+
 
 # ---------------------------------------------------------------------------
 # Tools and examples

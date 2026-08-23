@@ -13,6 +13,7 @@ from jacobian._exact import (
     require_bounded_rational,
 )
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.moments_orthogonal.values import (
     MAX_MOMENTS,
     MAX_QUADRATURE_POINTS,
@@ -135,7 +136,23 @@ class RecurrenceCoefficientsRequest(StrictModel):
             recurrence_coefficients,
         )
 
-        recurrence_coefficients(_to_fractions(self.moments))
+        result = recurrence_coefficients(_to_fractions(self.moments))
+        # Coefficient growth under exact Gram-Schmidt is unbounded in the
+        # input height, so admission must also check the size of every exact
+        # output component; otherwise an accepted request could pass here and
+        # then fail while constructing RecurrenceCoefficientsResult.
+        for value in (*result.alpha, *result.beta):
+            if (
+                len(format_canonical_integer(value.numerator))
+                > MAX_CANONICAL_RATIONAL_DIGITS
+                or len(format_canonical_integer(value.denominator))
+                > MAX_CANONICAL_RATIONAL_DIGITS
+            ):
+                raise ValueError(
+                    "moment sequence yields recurrence coefficients beyond "
+                    f"the canonical {MAX_CANONICAL_RATIONAL_DIGITS}-digit "
+                    "component limit"
+                )
         return self
 
 

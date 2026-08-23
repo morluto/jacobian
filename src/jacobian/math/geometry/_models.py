@@ -448,15 +448,20 @@ class LabelledPoint2D(StrictModel):
 
 
 def _circumradius_input_height_ok(point: RationalPoint2D) -> bool:
-    # Conservative worst-case propagation for
-    # R^2 = (|a-b|^2 |b-c|^2 |c-a|^2) / (4 * cross^2).
-    # A coordinate difference of two H-digit rationals has numerator at most
-    # 2H+1 digits and denominator at most 2H; each squared side reaches
-    # ~4H+3 over 4H, the cross product ~4H+5 over 4H, so the reduced R^2
-    # stays within roughly (12H+9) + (8H+10) + small slack = 20H + 25
-    # digits. Requiring 20*1024 + 25 <= 32768 admits H = 1024; independent
-    # denominators cannot exceed the canonical limit at execution.
-    max_input = 1024
+    # Conservative worst-case propagation for the complete profile transport:
+    # R^2 = (|a-b|^2 |b-c|^2 |c-a|^2) / (4 * cross^2). A coordinate difference
+    # of two H-digit rationals has numerator at most 2H+1 digits and
+    # denominator at most 2H; each squared side reaches ~4H+3 over 4H, and the
+    # cross product ~4H+5 over 4H, so every reduced R^2 component stays within
+    # roughly (12H+9) + (8H+10) + small slack = 20H + 25 digits. The bound
+    # must hold for the AGGREGATE profile, not one entry: C(24,3) = 2024
+    # entries of two such components plus per-entry JSON overhead (~350 bytes,
+    # including three <=64-char labels) must fit inside the canonical 10 MiB
+    # output limit together with the retained configuration:
+    # 2024 * (2*(20*100+25) + 350) ~= 8.87 MB < 10 MiB. H = 1024 would allow
+    # a single admitted profile to exceed transport after computation, so the
+    # per-coordinate input height is capped at 100 digits.
+    max_input = 100
     for v in (point.x, point.y):
         if RationalHeight.from_canonical(v).exceeds(max_input):
             return False
@@ -490,7 +495,8 @@ def _require_admitted_circumradius_configuration(
     for item in points:
         if not _circumradius_input_height_ok(item.point):
             raise ValueError(
-                "circumradius coordinates exceed the conservative 1024-digit input bound for exact output"
+                "circumradius coordinates exceed the conservative 100-digit "
+                "input bound that keeps the complete profile inside transport"
             )
 
 

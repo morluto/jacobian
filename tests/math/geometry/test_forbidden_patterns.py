@@ -86,6 +86,28 @@ class TestForbiddenPatternsScreening:
             result.concyclic_quadruple.fourth,
         ) == (0, 1, 2, 3)
 
+    def test_quadruple_with_collinear_triple_is_not_concyclic(self) -> None:
+        """No finite circle contains three collinear points.
+
+        (0,0), (1,0), (2,0), (0,1): the 4x4 concyclicity determinant vanishes
+        because the first three points are collinear, but the quadruple is
+        degenerate and must not carry a concyclic claim.
+        """
+        request = ForbiddenPatternsRequest(
+            configuration=_configuration((0, 0), (1, 0), (2, 0), (0, 1))
+        )
+        result = forbidden_patterns(request)
+        assert result.has_concyclic_quadruple is False
+        assert result.concyclic_quadruple is None
+
+    def test_fully_collinear_quadruple_is_not_concyclic(self) -> None:
+        request = ForbiddenPatternsRequest(
+            configuration=_configuration((0, 0), (1, 0), (2, 0), (3, 0))
+        )
+        result = forbidden_patterns(request)
+        assert result.has_collinear_triple is True
+        assert result.has_concyclic_quadruple is False
+
     def test_collinear_triple_witness(self) -> None:
         request = ForbiddenPatternsRequest(
             configuration=_configuration((0, 0), (1, 1), (2, 2), (0, 1), (1, 0))

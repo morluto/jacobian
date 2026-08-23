@@ -77,9 +77,9 @@ class TestCircumradiusProfileKnownAnswer:
 
 
 class TestCircumradiusAdmissionAndBinding:
-    def test_coordinates_beyond_1024_digits_are_rejected(self) -> None:
-        huge = "1" + "0" * 1025
-        with pytest.raises(ValidationError, match="1024-digit"):
+    def test_coordinates_beyond_100_digits_are_rejected(self) -> None:
+        huge = "1" + "0" * 101
+        with pytest.raises(ValidationError, match="100-digit"):
             CircumradiusProfileRequest(
                 points=(
                     _labelled("A", huge, "0"),
@@ -87,6 +87,42 @@ class TestCircumradiusAdmissionAndBinding:
                     _labelled("C", "0", "1"),
                 )
             )
+
+    def test_profile_exceeding_aggregate_transport_is_rejected(self) -> None:
+        """24 near-collinear 302-digit points would emit ~10.9 MB of radii.
+
+        Each coordinate pair (i, 1/(10^300+i)) is individually canonical, but
+        the complete C(24,3)-entry profile cannot fit the canonical output
+        limit, so admission must reject the configuration before any
+        computation rather than fail during serialization.
+        """
+        big = 10**300
+        points = tuple(
+            LabelledPoint2D(
+                label=f"P{i}",
+                point=RationalPoint2D(
+                    x={"num": str(i), "den": "1"},
+                    y={"num": "1", "den": str(big + 2 * i + 1)},
+                ),
+            )
+            for i in range(1, 25)
+        )
+        with pytest.raises(ValidationError, match="100-digit"):
+            CircumradiusProfileRequest(points=points)
+
+    def test_largest_admitted_coordinates_round_trip(self) -> None:
+        """A 100-digit configuration computes and revalidates its profile."""
+        tall = str(10**99 - 7)
+        request = CircumradiusProfileRequest(
+            points=(
+                _labelled("A", "0", "0"),
+                _labelled("B", "1", "0"),
+                _labelled("C", tall, "1"),
+            )
+        )
+        result = circumradius_profile(request)
+        assert result.entries[0].squared_circumradius is not None
+        CircumradiusProfileResult.model_validate(result.model_dump(mode="json"))
 
     def test_forged_radius_is_rejected_by_source_replay(self) -> None:
         result = circumradius_profile(_unit_right_triangle())

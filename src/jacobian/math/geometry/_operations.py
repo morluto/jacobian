@@ -553,22 +553,23 @@ def _screen_configuration(
             - m[0][3] * _minor3(m, 1, 2, 3, 0, 1, 2)
         )
         if det == 0:
-            # Determinant zero also holds for a fully collinear quadruple,
-            # but no finite circle contains three collinear points, so the
-            # quadruple must not be degenerate to carry the concyclic claim.
+            # Determinant zero also holds whenever some triple is collinear,
+            # but no finite circle contains three collinear points, so any
+            # quadruple containing a collinear triple is degenerate and must
+            # not carry the concyclic claim.
             def _tri_collinear(a: int, b: int, c: int) -> bool:
                 xa, ya = xy[a]
                 xb, yb = xy[b]
                 xc, yc = xy[c]
                 return (xb - xa) * (yc - ya) - (yb - ya) * (xc - xa) == 0
 
-            all_collinear = (
+            has_degenerate_triple = (
                 _tri_collinear(i, j, k)
-                and _tri_collinear(i, j, ell)
-                and _tri_collinear(i, k, ell)
-                and _tri_collinear(j, k, ell)
+                or _tri_collinear(i, j, ell)
+                or _tri_collinear(i, k, ell)
+                or _tri_collinear(j, k, ell)
             )
-            if all_collinear:
+            if has_degenerate_triple:
                 continue
             has_concyclic = True
             concyclic_indices = (i, j, k, ell)

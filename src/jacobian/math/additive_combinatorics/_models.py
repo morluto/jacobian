@@ -205,30 +205,26 @@ ResultCoordinate = Annotated[
     ),
 ]
 
+# Source coordinates are admitted one digit narrower than the canonical
+# vector type: differences of two admitted sources then always remain
+# representable as canonical result coordinates.
+MAX_SOURCE_COORDINATE_DIGITS = 64
+
 
 class IntegerVector(StrictModel):
-    """One integer vector of bounded canonical decimal coordinates."""
+    """One integer vector of bounded canonical decimal coordinates.
 
-    coordinates: tuple[BoundedCoordinate, ...] = Field(
-        min_length=1,
-        max_length=MAX_VECTOR_DIMENSION,
-        description="Canonical integer coordinates, at most 64 decimal digits each.",
-    )
-
-    def as_ints(self) -> tuple[int, ...]:
-        return tuple(parse_canonical_integer(value) for value in self.coordinates)
-
-
-class DifferenceVector(StrictModel):
-    """One exact difference vector of bounded canonical decimal coordinates."""
+    The canonical vector type admits both admitted source coordinates (at
+    most 64 decimal digits) and derived difference coordinates (at most 65
+    decimal digits), so a returned difference can be carried unchanged by
+    any consumer accepting the canonical type; operations that consume
+    vectors as sources enforce their narrower admission in the request.
+    """
 
     coordinates: tuple[ResultCoordinate, ...] = Field(
         min_length=1,
         max_length=MAX_VECTOR_DIMENSION,
-        description=(
-            "Canonical integer coordinates of an exact difference of two "
-            "admitted vectors, at most 65 decimal digits each."
-        ),
+        description="Canonical integer coordinates, at most 65 decimal digits each.",
     )
 
     def as_ints(self) -> tuple[int, ...]:
@@ -255,11 +251,23 @@ class IntegerVectorSet(StrictModel):
 class OrderedDifferenceProfileRequest(StrictModel):
     """Compute the complete ordered-difference profile r_{A-A}(v).
 
-    Every coordinate is a canonical integer of at most 64 decimal digits;
-    differences are returned as exact canonical integers.
+    Source vectors are admitted only with the narrower 64-digit coordinates:
+    differences of admitted sources then always fit the canonical 65-digit
+    vector type, so every accepted request returns its typed result.
     """
 
     vectors: IntegerVectorSet
+
+    @model_validator(mode="after")
+    def require_source_coordinates(self) -> Self:
+        for vector in self.vectors.vectors:
+            for value in vector.coordinates:
+                if len(value.lstrip("-")) > MAX_SOURCE_COORDINATE_DIGITS:
+                    raise ValueError(
+                        "source vector coordinates must carry at most "
+                        f"{MAX_SOURCE_COORDINATE_DIGITS} decimal digits"
+                    )
+        return self
 
 
 class OrderedDifferencePair(StrictModel):
@@ -272,7 +280,7 @@ class OrderedDifferencePair(StrictModel):
 class OrderedDifferenceClass(StrictModel):
     """One nonzero difference vector and its ordered source pairs."""
 
-    difference: DifferenceVector
+    difference: IntegerVector
     pairs: tuple[OrderedDifferencePair, ...] = Field(min_length=1)
 
 
@@ -287,6 +295,12 @@ def _require_pair_replay(
         raise ValueError("ordered_pair_count must equal set_size * (set_size - 1)")
     if result.support_size != len(result.classes):
         raise ValueError("support_size must match the class count")
+    # One canonically ordered class per distinct replayed difference: a
+    # difference split across several classes would inflate both the class
+    # count and the support size while aggregate replay still passed.
+    differences = [cls.difference.as_ints() for cls in result.classes]
+    if len(set(differences)) != len(differences):
+        raise ValueError("each distinct difference must appear in exactly one class")
     class_total = sum(len(cls.pairs) for cls in result.classes)
     if class_total != expected_total:
         raise ValueError("pair counts must sum to ordered_pair_count")
@@ -408,7 +422,6 @@ class OrderedDifferenceProfileResult(StrictModel):
 __all__ = [
     "AdditiveEnergyRequest",
     "AdditiveEnergyResult",
-    "DifferenceVector",
     "DirectSumPredicateRequest",
     "DirectSumPredicateResult",
     "FiniteCyclicGroup",

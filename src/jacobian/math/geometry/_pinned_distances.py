@@ -189,13 +189,10 @@ class PinnedDistanceResult(StrictModel):
             raise ValueError("pinned-distance profile must contain at least one line")
         if self.min_squared_distance is None:
             raise ValueError("min_squared_distance is required when lines exist")
-        if (
-            self.min_squared_distance.squared_distance_numerator
-            != minimum.squared_distance_numerator
-            or self.min_squared_distance.squared_distance_denominator
-            != minimum.squared_distance_denominator
-        ):
-            raise ValueError("min_squared_distance must be the minimum entry")
+        # The reported minimum must be the complete canonical entry selected
+        # from the replayed lines, including the source pairs that generate it.
+        if self.min_squared_distance != minimum:
+            raise ValueError("min_squared_distance must be the selected minimum entry")
         return self
 
 

@@ -183,6 +183,22 @@ class TestChristoffelDarboux:
         assert result.kernel == _frac(0, 1)
         assert result.polynomials_evaluated == (_frac(1, 1),)
 
+    def test_nonpositive_beta_zero_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match="beta_0"):
+            christoffel_darboux((), (_frac(-2, 1),), _frac(2, 1), _frac(2, 1))
+        with pytest.raises(ValueError, match="beta_0"):
+            christoffel_darboux((), (_frac(0, 1),), _frac(2, 1), _frac(2, 1))
+
+    def test_nonpositive_subdiagonal_beta_is_rejected(self) -> None:
+        """A kernel from a positive-definite functional needs positive h_k."""
+        with pytest.raises(ValueError, match="squared-norm ratios must be positive"):
+            christoffel_darboux(
+                (_frac(0, 1), _frac(1, 3)),
+                (_frac(2, 1), _frac(-1, 9)),
+                _frac(1, 4),
+                _frac(1, 4),
+            )
+
 
 # ---------------------------------------------------------------------------
 # Gaussian quadrature
@@ -303,3 +319,28 @@ class TestToolsAndExamples:
         for tool in TOOLS:
             names = [ex.name for ex in tool.examples]
             assert len(names) == len(set(names))
+
+
+class TestRecurrenceDerivedBudget:
+    @pytest.mark.exhaustive
+    def test_request_whose_derived_coefficients_overflow_is_rejected(self) -> None:
+        """Admission rejects positive sequences whose Gram-Schmidt output
+        cannot be carried by the canonical rational result type."""
+        import random
+
+        denominator = 10**1250 + 12345
+        rng = random.Random(1)
+        weights = [
+            Fraction(rng.randrange(10**1149, 10**1150), denominator)
+            for _ in range(16)
+        ]
+        moments = tuple(
+            sum(w * Fraction(n**k) for n, w in enumerate(weights)) for k in range(31)
+        )
+        request = {
+            "moments": [
+                CanonicalRational.from_fraction(m).model_dump() for m in moments
+            ]
+        }
+        with pytest.raises(ValidationError, match="canonical"):
+            RecurrenceCoefficientsRequest.model_validate(request)

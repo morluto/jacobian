@@ -6,7 +6,6 @@ from pydantic import ValidationError
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.additive_combinatorics._models import (
     AdditiveEnergyRequest,
-    DifferenceVector,
     DirectSumPredicateRequest,
     FiniteIntegerSet,
     IntegerVector,
@@ -309,13 +308,13 @@ class TestOrderedDifferenceProfile:
                 set_size=2,
                 classes=(
                     OrderedDifferenceClass(
-                        difference=DifferenceVector(coordinates=("-999",)),
+                        difference=IntegerVector(coordinates=("-999",)),
                         pairs=(
                             OrderedDifferencePair(minuend_index=0, subtrahend_index=1),
                         ),
                     ),
                     OrderedDifferenceClass(
-                        difference=DifferenceVector(coordinates=("999",)),
+                        difference=IntegerVector(coordinates=("999",)),
                         pairs=(
                             OrderedDifferencePair(minuend_index=1, subtrahend_index=0),
                         ),
@@ -366,14 +365,34 @@ class TestOrderedDifferenceProfile:
     def test_request_schema_publishes_coordinate_digit_bound(self):
         schema = OrderedDifferenceProfileRequest.model_json_schema()
         vector = schema["$defs"]["IntegerVector"]["properties"]["coordinates"]
-        assert "64 decimal digits" in vector["description"]
-        assert vector["items"]["pattern"] == r"^(?:0|-?[1-9][0-9]{0,63})$"
-        assert vector["items"]["maxLength"] == 65
-        assert "64 decimal digits" in schema["description"]
+        assert "65 decimal digits" in vector["description"]
+        assert vector["items"]["pattern"] == r"^(?:0|-?[1-9][0-9]{0,64})$"
+        assert vector["items"]["maxLength"] == 66
+        assert "64-digit" in schema["description"]
 
-    def test_rejects_65_digit_coordinate(self):
-        with pytest.raises(ValidationError):
-            IntegerVector(coordinates=("1" * 65,))
+    def test_rejects_65_digit_source_coordinate(self):
+        with pytest.raises(ValidationError, match="64 decimal digits"):
+            OrderedDifferenceProfileRequest(
+                vectors=IntegerVectorSet(vectors=(IntegerVector(coordinates=("1" * 65,)),))
+            )
+
+    def test_accepts_65_digit_derived_difference(self):
+        """A returned 65-digit difference is a valid canonical IntegerVector."""
+        difference = IntegerVector(coordinates=("-" + "1" + "0" * 64,))
+        assert difference.coordinates == ("-" + "1" + "0" * 64,)
+        vectors = IntegerVectorSet(
+            vectors=(
+                IntegerVector(coordinates=("-" + "9" * 64,)),
+                IntegerVector(coordinates=("1",)),
+            ),
+        )
+        result = compute_ordered_difference_profile(
+            OrderedDifferenceProfileRequest(vectors=vectors)
+        )
+        encoded = {
+            coordinate for cls in result.classes for coordinate in cls.difference.coordinates
+        }
+        assert "-" + "1" + "0" * 64 in encoded
 
     def test_accepts_64_digit_coordinate(self):
         vector = IntegerVector(coordinates=("-" + "1" * 64,))
@@ -407,8 +426,10 @@ class TestOrderedDifferenceProfileTransportBound:
         OrderedDifferenceProfileResult.model_validate(result.model_dump(mode="json"))
 
     def test_coordinate_bound_is_enforced(self):
-        with pytest.raises(ValidationError):
-            IntegerVector(coordinates=("1" * 65,))
+        with pytest.raises(ValidationError, match="64 decimal digits"):
+            OrderedDifferenceProfileRequest(
+                vectors=IntegerVectorSet(vectors=(IntegerVector(coordinates=("1" * 65,)),))
+            )
 
     def test_singleton_set_returns_empty_profile(self):
         result = compute_ordered_difference_profile(
@@ -450,3 +471,41 @@ class TestOrderedDifferenceProfileTransportBound:
         for coordinate in encoded:
             assert len(coordinate.lstrip("-")) == 65
         OrderedDifferenceProfileResult.model_validate(result.model_dump(mode="json"))
+
+
+class TestOrderedDifferenceClassUniqueness:
+    def test_split_difference_class_is_rejected(self) -> None:
+        """One difference split across two classes inflates support_size."""
+        vectors = IntegerVectorSet(
+            vectors=(
+                IntegerVector(coordinates=("0",)),
+                IntegerVector(coordinates=("1",)),
+                IntegerVector(coordinates=("3",)),
+                IntegerVector(coordinates=("4",)),
+            ),
+        )
+        result = compute_ordered_difference_profile(
+            OrderedDifferenceProfileRequest(vectors=vectors)
+        )
+        assert result.has_repeated_difference
+        payload = result.model_dump()
+        classes = list(payload["classes"])
+        repeated_idx = next(
+            i for i, cls in enumerate(classes) if len(cls["pairs"]) > 1
+        )
+        repeated = classes.pop(repeated_idx)
+        half = len(repeated["pairs"]) // 2
+        split = [
+            {
+                "difference": repeated["difference"],
+                "pairs": repeated["pairs"][:half],
+            },
+            {
+                "difference": repeated["difference"],
+                "pairs": repeated["pairs"][half:],
+            },
+        ]
+        payload["classes"] = (*classes, *split)
+        payload["support_size"] = len(payload["classes"])
+        with pytest.raises(ValidationError, match="exactly one class"):
+            OrderedDifferenceProfileResult.model_validate(payload)

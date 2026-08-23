@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.math.polynomials.values import RationalPolynomial
 from jacobian.math.sum_of_squares._models import (
     GramCertificateRequest,
+    GramCertificateResult,
     SOSDecompositionCheckRequest,
+    SOSDecompositionCheckResult,
 )
 from jacobian.math.sum_of_squares._operations import (
     check_gram_certificate,
@@ -144,3 +147,99 @@ class TestGramCertificateAdmission:
             )
         )
         assert request.gram_matrix[0][0].num == edge
+
+
+class TestGramCertificateResultAdmission:
+    """Deserialized Gram results replay through the bounded request contract."""
+
+    def _valid_result(self):
+        p = _poly(("x",), (1, 1, (2,)), (1, 1, (0,)))
+        basis = (_poly(("x",), (1, 1, (1,))), _poly(("x",), (1, 1, (0,))))
+        request = check_gram_certificate(
+            GramCertificateRequest(
+                polynomial=p,
+                monomial_basis=basis,
+                gram_matrix=(
+                    ({"num": "1", "den": "1"}, {"num": "0", "den": "1"}),
+                    ({"num": "0", "den": "1"}, {"num": "1", "den": "1"}),
+                ),
+            )
+        )
+        return request.model_dump(mode="json")
+
+    def test_oversized_result_matrix_is_rejected_before_replay(self):
+        payload = self._valid_result()
+        huge = "9" * 129
+        payload["gram_matrix"][0][0] = {"num": huge, "den": "1"}
+        with pytest.raises(
+            ValidationError, match="gram_matrix coefficient exceeds digit bound"
+        ):
+            GramCertificateResult.model_validate(payload)
+
+    def test_non_monomial_basis_entry_is_rejected(self):
+        payload = self._valid_result()
+        shifted = RationalPolynomial.model_validate(
+            {
+                "polynomial_schema_version": "1",
+                "domain": "QQ",
+                "variables": ["x"],
+                "polynomial": {
+                    "terms": [
+                        {"coefficient": {"num": "1", "den": "1"}, "exponents": [1]},
+                        {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]},
+                    ]
+                },
+            }
+        )
+        payload["monomial_basis"] = [shifted.model_dump(mode="json"), payload["monomial_basis"][1]]
+        with pytest.raises(ValidationError, match="single-term monomial"):
+            GramCertificateResult.model_validate(payload)
+
+
+class TestGramMonomialBasisAdmission:
+    def test_request_with_polynomial_basis_entry_is_rejected(self):
+        p = _poly(("x",), (1, 1, (2,)), (2, 1, (1,)), (1, 1, (0,)))
+        with pytest.raises(ValidationError, match="single-term monomial"):
+            check_gram_certificate(
+                GramCertificateRequest(
+                    polynomial=p,
+                    monomial_basis=(_poly(("x",), (1, 1, (1,)), (1, 1, (0,))),),
+                    gram_matrix=(({"num": "1", "den": "1"},),),
+                )
+            )
+
+    def test_duplicate_monomials_are_rejected(self):
+        p = _poly(("x",), (2, 1, (2,)), (1, 1, (0,)))
+        with pytest.raises(ValidationError, match="distinct"):
+            check_gram_certificate(
+                GramCertificateRequest(
+                    polynomial=p,
+                    monomial_basis=(
+                        _poly(("x",), (1, 1, (1,))),
+                        _poly(("x",), (1, 1, (1,))),
+                    ),
+                    gram_matrix=(
+                        ({"num": "2", "den": "1"}, {"num": "0", "den": "1"}),
+                        ({"num": "0", "den": "1"}, {"num": "1", "den": "1"}),
+                    ),
+                )
+            )
+
+
+class TestSOSResultAdmission:
+    def test_oversized_result_summands_are_rejected_before_expansion(self):
+        variables = tuple(f"x{i}" for i in range(8))
+        exponent_rows = [
+            tuple(1 if j == k else 0 for j in range(8)) for k in range(8)
+        ] + [tuple([0] * 8)]
+        wide = _poly(variables, *[(1, 1, row) for row in exponent_rows])
+        p = _poly(("x",), (1, 1, (2,)), (1, 1, (0,)))
+        summands = tuple(_poly(("x",), (1, 1, (0,))) for _ in range(64))
+        result = check_sos_decomposition(
+            SOSDecompositionCheckRequest(polynomial=p, summands=summands)
+        )
+        payload = result.model_dump(mode="json")
+        payload["summands"] = [wide.model_dump(mode="json")] * 64
+        payload["is_valid"] = False
+        with pytest.raises(ValidationError, match="predicted SOS expansion exceeds term bound"):
+            SOSDecompositionCheckResult.model_validate(payload)

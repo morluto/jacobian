@@ -33,6 +33,33 @@ def _require_bounded_polynomial(poly: RationalPolynomial, label: str) -> None:
 MAX_GRAM_DIMENSION = 32
 
 
+def _require_monomial_basis(basis: tuple[RationalPolynomial, ...]) -> None:
+    """Require distinct unit-coefficient single-term monomials."""
+    seen: set[tuple[int, ...]] = set()
+    for idx, entry in enumerate(basis):
+        terms = entry.polynomial.terms
+        if len(terms) != 1:
+            raise ValueError(f"basis[{idx}] must be a single-term monomial")
+        if terms[0].coefficient.as_fraction() != 1:
+            raise ValueError(f"basis[{idx}] must have unit coefficient")
+        if terms[0].exponents in seen:
+            raise ValueError("monomial basis entries must be distinct")
+        seen.add(terms[0].exponents)
+
+
+def _require_bounded_sos_work(
+    polynomial: RationalPolynomial,
+    summands: tuple[RationalPolynomial, ...],
+) -> None:
+    """Apply the request admission contract to a retained SOS source."""
+    _require_bounded_polynomial(polynomial, "polynomial")
+    for idx, summand in enumerate(summands):
+        _require_bounded_polynomial(summand, f"summand[{idx}]")
+    predicted = sum(len(s.polynomial.terms) ** 2 for s in summands)
+    if predicted > MAX_SOS_PREDICTED_TERMS:
+        raise ValueError("predicted SOS expansion exceeds term bound")
+
+
 def _require_bounded_gram_work(
     dimension: int,
     gram_matrix: tuple[tuple[CanonicalRational, ...], ...],
@@ -70,13 +97,7 @@ class SOSDecompositionCheckRequest(StrictModel):
                     "all summands must use the same ring as the polynomial"
                 )
         # Bound polynomial expansion before squaring.
-        _require_bounded_polynomial(self.polynomial, "polynomial")
-        for idx, summand in enumerate(self.summands):
-            _require_bounded_polynomial(summand, f"summand[{idx}]")
-        # Predicted expansion budget: sum of squares can produce up to terms^2 per summand
-        predicted = sum(len(s.polynomial.terms) ** 2 for s in self.summands)
-        if predicted > MAX_SOS_PREDICTED_TERMS:
-            raise ValueError("predicted SOS expansion exceeds term bound")
+        _require_bounded_sos_work(self.polynomial, self.summands)
         return self
 
 
@@ -93,12 +114,40 @@ class SOSDecompositionCheckResult(StrictModel):
     def bind_sos(self) -> Self:
         from jacobian.math.sum_of_squares._operations import _check_sos_invariants
 
+        _require_bounded_sos_work(self.polynomial, self.summands)
         is_valid, computed = _check_sos_invariants(self.polynomial, self.summands)
         if self.is_valid != is_valid:
             raise ValueError("is_valid must match the exact coefficient identity")
         if self.computed_sum != computed:
             raise ValueError("computed_sum must be the exact sum of squares")
         return self
+
+
+def _require_bounded_gram_admission(
+    polynomial: RationalPolynomial,
+    monomial_basis: tuple[RationalPolynomial, ...],
+    gram_matrix: tuple[tuple[CanonicalRational, ...], ...],
+) -> None:
+    """Apply the full bounded Gram-certificate contract to any payload."""
+    n = len(monomial_basis)
+    if len(gram_matrix) != n:
+        raise ValueError(
+            "gram_matrix must be square with side equal to monomial_basis length"
+        )
+    for row in gram_matrix:
+        if len(row) != n:
+            raise ValueError("gram_matrix must be square")
+    for summand in monomial_basis:
+        if summand.variables != polynomial.variables:
+            raise ValueError("monomial basis must use the polynomial ring")
+    # The public contract is a monomial-basis Gram certificate: z must be
+    # a vector of distinct unit-coefficient single-term monomials.
+    _require_monomial_basis(monomial_basis)
+    # Bound reconstruction work: each polynomial and basis element must be bounded
+    _require_bounded_polynomial(polynomial, "polynomial")
+    for idx, basis in enumerate(monomial_basis):
+        _require_bounded_polynomial(basis, f"basis[{idx}]")
+    _require_bounded_gram_work(n, gram_matrix, monomial_basis)
 
 
 class GramCertificateRequest(StrictModel):
@@ -112,22 +161,9 @@ class GramCertificateRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_square_matrix(self) -> Self:
-        n = len(self.monomial_basis)
-        if len(self.gram_matrix) != n:
-            raise ValueError(
-                "gram_matrix must be square with side equal to monomial_basis length"
-            )
-        for row in self.gram_matrix:
-            if len(row) != n:
-                raise ValueError("gram_matrix must be square")
-        for summand in self.monomial_basis:
-            if summand.variables != self.polynomial.variables:
-                raise ValueError("monomial basis must use the polynomial ring")
-        # Bound reconstruction work: each polynomial and basis element must be bounded
-        _require_bounded_polynomial(self.polynomial, "polynomial")
-        for idx, basis in enumerate(self.monomial_basis):
-            _require_bounded_polynomial(basis, f"basis[{idx}]")
-        _require_bounded_gram_work(n, self.gram_matrix, self.monomial_basis)
+        _require_bounded_gram_admission(
+            self.polynomial, self.monomial_basis, self.gram_matrix
+        )
         return self
 
 
@@ -147,6 +183,11 @@ class GramCertificateResult(StrictModel):
     def bind_invariants(self) -> Self:
         from jacobian.math.sum_of_squares._operations import _check_gram_invariants
 
+        # Deserialized results replay through the same bounded admission as
+        # the request: no unbounded exact reconstruction or eigenvalue work.
+        _require_bounded_gram_admission(
+            self.polynomial, self.monomial_basis, self.gram_matrix
+        )
         is_sym, recon, psd = _check_gram_invariants(
             self.polynomial, self.monomial_basis, self.gram_matrix
         )

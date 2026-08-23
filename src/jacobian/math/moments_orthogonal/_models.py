@@ -122,7 +122,18 @@ class RecurrenceCoefficientsRequest(StrictModel):
             recurrence_coefficients,
         )
 
-        recurrence_coefficients(_to_fractions(self.moments))
+        derived = recurrence_coefficients(_to_fractions(self.moments))
+        # Derived-coefficient budget: the typed result carries alpha and beta
+        # as canonical rationals, so admission must reject sequences whose
+        # exact Gram-Schmidt output exceeds the canonical digit bound.
+        try:
+            _from_fractions(derived.alpha)
+            _from_fractions(derived.beta)
+        except ValueError as exc:
+            raise ValueError(
+                "derived recurrence coefficients exceed the canonical "
+                "rational digit bound"
+            ) from exc
         return self
 
 

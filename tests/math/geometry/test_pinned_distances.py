@@ -94,3 +94,26 @@ class TestPinnedDistanceAdmissionAndBinding:
                 anchor=_point("0", "0"),
                 points=(_point("1", "0"), _point("1", "0")),
             )
+
+class TestPinnedDistanceMinimumBinding:
+    def test_forged_minimum_source_pairs_are_rejected(self) -> None:
+        """The reported minimum must be the complete canonical entry."""
+        request = PinnedDistanceRequest(
+            anchor=_point("0", "1"),
+            points=(_point("0", "0"), _point("2", "0")),
+        )
+        result = compute_pinned_distances(request)
+        payload = result.model_dump()
+        minimum = min(
+            range(len(payload["lines"])),
+            key=lambda i: (
+                int(payload["lines"][i]["squared_distance_numerator"]),
+                int(payload["lines"][i]["squared_distance_denominator"]),
+            ),
+        )
+        payload["min_squared_distance"] = {
+            **payload["lines"][minimum],
+            "source_pairs": (),
+        }
+        with pytest.raises(ValidationError, match="selected minimum"):
+            PinnedDistanceResult.model_validate(payload)

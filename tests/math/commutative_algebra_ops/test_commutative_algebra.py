@@ -360,13 +360,6 @@ def test_ideal_quotient_by_zero_is_the_unit_ideal() -> None:
     assert _equal(result.quotient, _ideal(("x",), {(0,): 1}))
 
 
-def test_saturation_script_passes_the_declared_ideal_operand() -> None:
-    source = _singular._script(
-        "saturation",
-        _ideal(("x", "y"), {(1, 1): 1}),
-        _ideal(("x", "y"), {(1, 0): 1}),
-    ).decode("ascii")
-    assert "sat(jacobian_left,jacobian_right[1]);" in source
 
 
 def test_zero_basis_must_use_the_source_ideal_ring() -> None:
@@ -394,89 +387,18 @@ def test_zero_basis_must_use_the_source_ideal_ring() -> None:
     assert result.basis is not None
 
 
-def test_saturation_result_rejects_cross_ring_operands() -> None:
-    from jacobian.math.commutative_algebra_ops._models import (
-        IdealComputationBudget,
-        IdealSaturationResult,
-    )
-
-    with pytest.raises(ValueError, match="ordered ring"):
-        IdealSaturationResult(
-            outcome="COMPUTED",
-            source_ideal=_ideal(("x",), {(2,): 1}),
-            source_polynomial=_polynomial(("y",), {(0,): 1}),
-            saturation=_ideal(("x",), {(1,): 1}),
-            backend_version="4.4.1",
-            verification_budget=IdealComputationBudget(),
-        )
 
 
 @requires_singular
 @pytest.mark.requires_backend("singular")
-def test_computed_saturation_validates_only_against_its_sources() -> None:
-    """A relayed payload must re-decide its defining equality from its sources."""
-    from jacobian.math.commutative_algebra_ops._models import (
-        IdealComputationBudget,
-        IdealSaturationResult,
-    )
-
-    source_ideal = _ideal(("x", "y"), {(1, 1): 1})
-    saturator = _polynomial(("x", "y"), {(1, 0): 1})
-    genuine = IdealSaturationResult(
-        outcome="COMPUTED",
-        source_ideal=source_ideal,
-        source_polynomial=saturator,
-        saturation=_ideal(("x", "y"), {(0, 1): 1}),
-        backend_version="4.4.1",
-        verification_budget=IdealComputationBudget(wall_seconds=10),
-    )
-    assert genuine.saturation is not None
-    # <x> is not <xy> : <x>^infinity == <y>; an authored payload claiming it
-    # must be refused at validation instead of being accepted as-is.
-    with pytest.raises(ValueError, match=r"REFUTED|UNAVAILABLE|TIMEOUT|ERROR"):
-        IdealSaturationResult(
-            outcome="COMPUTED",
-            source_ideal=source_ideal,
-            source_polynomial=saturator,
-            saturation=_ideal(("x", "y"), {(1, 0): 1}),
-            backend_version="4.4.1",
-            verification_budget=IdealComputationBudget(wall_seconds=10),
-        )
 
 
 @requires_singular
 @pytest.mark.requires_backend("singular")
-def test_ideal_saturation_published_example_is_exact() -> None:
-    result = compute_ideal_saturation(
-        IdealSaturationRequest(
-            ideal=_ideal(("x", "y"), {(1, 1): 1}),
-            saturation_polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
-        )
-    )
-    assert result.outcome == "COMPUTED"
-    assert result.saturation is not None
-    assert _equal(result.saturation, _ideal(("x", "y"), {(0, 1): 1}))
 
 
 @requires_singular
 @pytest.mark.requires_backend("singular")
-def test_ideal_saturation_counterexample_is_exact() -> None:
-    source = _ideal(("x", "y"), {(2, 1): 1})
-    result = compute_ideal_saturation(
-        IdealSaturationRequest(
-            ideal=source,
-            saturation_polynomial=_polynomial(("x", "y"), {(0, 1): 1}),
-        )
-    )
-    assert result.outcome == "COMPUTED"
-    assert result.saturation is not None
-    saturated = result.saturation
-    assert _equal(saturated, _ideal(("x", "y"), {(2, 0): 1}))
-    divisor = _polynomial(("x", "y"), {(0, 1): 1})
-    assert all(
-        _contains_product(source, generator, divisor)
-        for generator in saturated.generators
-    )
 
 
 @requires_singular

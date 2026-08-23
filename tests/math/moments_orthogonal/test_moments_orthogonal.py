@@ -126,11 +126,11 @@ class TestRecurrenceCoefficients:
         with pytest.raises(ValueError, match="must be positive"):
             recurrence_coefficients((_frac(-1, 1), _frac(-1, 2)))
 
-    def test_insufficient_moments_for_recurrence(self) -> None:
-        """With only 2 moments we can't produce any recurrence coefficient."""
+    def test_even_length_returns_final_determined_alpha(self) -> None:
+        """Two moments determine alpha_0 = mu_1/mu_0; nothing is discarded."""
         moments = (_frac(1, 1), _frac(1, 2))
         result = recurrence_coefficients(moments)
-        assert result.alpha == ()
+        assert result.alpha == (_frac(1, 2),)
         assert result.beta == (_frac(1, 1),)
 
 
@@ -434,7 +434,9 @@ class TestWireAdapters:
             moments=(_cr(1, 1), _cr(1, 2), _cr(1, 3), _cr(1, 4))
         )
         result = compute_recurrence_coefficients(request)
-        assert len(result.alpha) == 1
+        # Four moments determine two alphas and beta_1 under the m // 2 order.
+        assert len(result.alpha) == 2
+        assert len(result.beta) == 2
 
 
 # ---------------------------------------------------------------------------
@@ -461,3 +463,39 @@ class TestToolsAndExamples:
         for tool in TOOLS:
             names = [ex.name for ex in tool.examples]
             assert len(names) == len(set(names))
+
+
+class TestAdmissionGrowthEnvelope:
+    def test_envelope_rejects_near_limit_heights_before_expansion(self):
+        """Near-limit moment heights are rejected without Gram-Schmidt."""
+        from jacobian._exact import CanonicalRational
+
+        def exceed_kernel(moments):
+            raise AssertionError("kernel must not run for enveloped requests")
+
+        moments = tuple(
+            CanonicalRational.from_fraction(
+                _frac(1, k + 1) + _frac(1, 10**300 + 2 * k + 1)
+            )
+            for k in range(17)
+        )
+        from jacobian.math.moments_orthogonal import operations as ops
+
+        original = ops.recurrence_coefficients
+        ops.recurrence_coefficients = exceed_kernel
+        try:
+            with pytest.raises((ValueError, ValidationError), match="component limit"):
+                RecurrenceCoefficientsRequest(moments=moments)
+        finally:
+            ops.recurrence_coefficients = original
+
+    def test_even_length_returns_final_determined_alpha(self):
+        """Two moments determine alpha_0 = mu_1/mu_0; nothing is discarded."""
+        result = recurrence_coefficients((_frac(1, 1), _frac(1, 2)))
+        assert result.alpha == (_frac(1, 2),)
+        assert result.beta == (_frac(1, 1),)
+
+    def test_33_moments_still_yield_the_full_order(self):
+        result = recurrence_coefficients(tuple(_frac(1, k + 1) for k in range(33)))
+        assert len(result.alpha) == 16
+        assert len(result.beta) == 16

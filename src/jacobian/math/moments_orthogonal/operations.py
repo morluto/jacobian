@@ -95,11 +95,20 @@ def _monic_orthogonal_recurrence(
     p_curr: Poly = (Fraction(1),)
     h_curr = moments[0]
     for k in range(max_order):
+        # alpha_k needs moments only through mu_{2k+1}, so an even-length
+        # sequence determines its final available alpha without the next norm.
         alpha_k = _inner_product(moments, _shift_up(p_curr), p_curr) / h_curr
         alpha.append(alpha_k)
         beta_k = (
             Fraction(0) if k == 0 else (h_curr / h_prev if h_prev != 0 else Fraction(0))
         )
+        if k > 0:
+            beta.append(beta_k)
+        if k == max_order - 1:
+            # The next polynomial's squared norm would need mu_{2k+2}, which
+            # even-length sequences do not supply; stop after the coefficient
+            # it does determine instead of discarding it.
+            break
         x_p = _shift_up(p_curr)
         p_next = _subtract(
             _subtract(x_p, _scale(alpha_k, p_curr)), _scale(beta_k, p_prev)
@@ -109,15 +118,9 @@ def _monic_orthogonal_recurrence(
         p_curr = p_next
         h_curr = _inner_product(moments, p_curr, p_curr)
         if h_curr <= 0:
-            if h_curr == 0:
-                raise ValueError(
-                    "moment sequence does not define a positive-definite measure"
-                )
             raise ValueError(
                 "moment sequence does not define a positive-definite measure"
             )
-        if k < max_order - 1:
-            beta.append(h_curr / h_prev)
     return alpha, beta
 
 
@@ -145,7 +148,10 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
         raise ValueError(
             "beta_0 (the zeroth moment of a positive functional) must be positive"
         )
-    max_order = min(MAX_RECURRENCE_ORDER, (m - 1) // 2)
+    # m // 2 coefficients are exactly what the supplied moments determine:
+    # beta[n-1] needs moments only through mu_{2n-2} and alpha[n-1] through
+    # mu_{2n-1}, so even lengths yield their last determined coefficient.
+    max_order = min(MAX_RECURRENCE_ORDER, m // 2)
     if max_order < 1:
         return RecurrenceCoefficients(alpha=(), beta=(moments[0],))
     alpha, beta = _monic_orthogonal_recurrence(moments, max_order)

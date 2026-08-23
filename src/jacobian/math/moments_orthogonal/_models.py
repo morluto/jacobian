@@ -130,6 +130,28 @@ class RecurrenceCoefficientsRequest(StrictModel):
             raise ValueError(
                 "beta_0 (the zeroth moment of a positive functional) must be positive"
             )
+        # Reject requests whose provable growth envelope exceeds the canonical
+        # component limit BEFORE running exact Gram-Schmidt: every emitted
+        # coefficient is a ratio of Hankel determinants over at most
+        # order + 2 of the supplied moments, so clearing denominators with the
+        # product of the denominators and applying Hadamard's bound bounds each
+        # component by (order + 2) * (A + m * B) digits (+ fixed slack), with
+        # A/B the largest numerator/denominator digit counts. Near-limit inputs
+        # are therefore rejected without any expansion work.
+        order = min(MAX_RECURRENCE_ORDER, len(self.moments) // 2)
+        numerator_digits = max(len(v.num.lstrip("-")) for v in self.moments)
+        denominator_digits = max(len(v.den) for v in self.moments)
+        growth_envelope = (order + 2) * (
+            numerator_digits + len(self.moments) * denominator_digits
+        ) + 64
+        if growth_envelope > MAX_CANONICAL_RATIONAL_DIGITS:
+            raise ValueError(
+                "moment heights of "
+                f"{numerator_digits}/{denominator_digits} digits over "
+                f"{len(self.moments)} moments imply recurrence coefficients "
+                f"beyond the canonical {MAX_CANONICAL_RATIONAL_DIGITS}-digit "
+                "component limit; reduce the moment component magnitude"
+            )
         # The Gram-Schmidt kernel requires a positive-definite moment
         # functional; admit exactly the sequences it accepts so an accepted
         # request cannot fail inside execution.

@@ -23,7 +23,7 @@ def _rational_from_frac(value: Fraction) -> CanonicalRational:
     return CanonicalRational.from_integer_ratio(value.numerator, value.denominator)
 
 
-def _frac_from_rational(value) -> Fraction:
+def _frac_from_rational(value: CanonicalRational) -> Fraction:
     """Convert a CanonicalRational to a Python Fraction."""
     return value.as_fraction()
 
@@ -131,12 +131,9 @@ def scalar_multiply(
                 result = addend
             else:
                 added = _point_add(a, b, result, addend)
-                if added is None:
-                    # The accumulated sum cancelled to infinity, but higher bits
-                    # remain; continue scanning rather than discarding them.
-                    result = None
-                else:
-                    result = added
+                # The accumulated sum may cancel to infinity while higher
+                # bits remain; keep scanning instead of discarding them.
+                result = None if added is None else added
         if addend is not None:
             addend = _point_add(a, b, addend, addend)
         n >>= 1

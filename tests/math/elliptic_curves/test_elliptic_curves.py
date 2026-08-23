@@ -175,9 +175,7 @@ class TestGroupLawAdmission:
         p = RationalAffinePoint(x=_pt("1"), y=_pt("1"))
         with pytest.raises(ValidationError, match="lie on the curve"):
             add_points(
-                EllipticCurvePointAdditionRequest(
-                    curve=curve, first=p, second=p
-                )
+                EllipticCurvePointAdditionRequest(curve=curve, first=p, second=p)
             )
 
     def test_singular_curve_rejected(self):

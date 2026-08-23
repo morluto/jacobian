@@ -14,6 +14,8 @@ from jacobian.math.geometry._models import (
     CircumradiusProfileResult,
     CircumradiusTripleEntry,
     ClosedSegment2D,
+    ForbiddenPatternsRequest,
+    ForbiddenPatternsResult,
     GeometryBooleanResult,
     GeometryCircleResult,
     GeometryConvexHullResult,
@@ -477,7 +479,7 @@ def circumradius_profile(
     )
 
 
-def forbidden_patterns(request):
+def forbidden_patterns(request: ForbiddenPatternsRequest) -> ForbiddenPatternsResult:
     """Find a collinear triple or concyclic quadruple, or establish neither exists.
 
     Three points are collinear when the 2x2 cross-product determinant
@@ -498,10 +500,7 @@ def forbidden_patterns(request):
 
     pts = request.configuration.points
     n = len(pts)
-    xy = [
-        (entry.point.x.as_fraction(), entry.point.y.as_fraction())
-        for entry in pts
-    ]
+    xy = [(entry.point.x.as_fraction(), entry.point.y.as_fraction()) for entry in pts]
 
     collinear_triple = None
     has_collinear = False
@@ -531,11 +530,11 @@ def forbidden_patterns(request):
         sk = xk * xk + yk * yk
         sl = xl * xl + yl * yl
         # 4x4 determinant of [x^2+y^2, x, y, 1]
-        m = [
-            [si, xi, yi, 1],
-            [sj, xj, yj, 1],
-            [sk, xk, yk, 1],
-            [sl, xl, yl, 1],
+        m: list[list[Fraction]] = [
+            [si, xi, yi, Fraction(1)],
+            [sj, xj, yj, Fraction(1)],
+            [sk, xk, yk, Fraction(1)],
+            [sl, xl, yl, Fraction(1)],
         ]
         # Laplace expansion of the 4x4 determinant along row 0:
         # each cofactor deletes row 0 and its own column, keeping rows 1-3.
@@ -582,7 +581,15 @@ def forbidden_patterns(request):
     )
 
 
-def _minor3(m, r0, r1, r2, c0, c1, c2):
+def _minor3(
+    m: list[list[Fraction]],
+    r0: int,
+    r1: int,
+    r2: int,
+    c0: int,
+    c1: int,
+    c2: int,
+) -> Fraction:
     """3x3 determinant of selected rows and columns."""
     return (
         m[r0][c0] * (m[r1][c1] * m[r2][c2] - m[r1][c2] * m[r2][c1])

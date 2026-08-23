@@ -126,12 +126,8 @@ def _generic_lambda_height_from_heights(
     second: RationalAffinePoint,
 ) -> RationalHeight:
     """Height bound of lambda = (y2 - y1) / (x2 - x1) with a symbolic first operand."""
-    dy = sum_heights(
-        (RationalHeight.from_canonical(second.y), first[1])
-    )
-    dx = sum_heights(
-        (RationalHeight.from_canonical(second.x), first[0])
-    )
+    dy = sum_heights((RationalHeight.from_canonical(second.y), first[1]))
+    dx = sum_heights((RationalHeight.from_canonical(second.x), first[0]))
     return dy.quotient(dx)
 
 
@@ -140,11 +136,15 @@ def _doubling_lambda_height_from_heights(
 ) -> RationalHeight:
     """Height bound of lambda = (3x^2 + A) / (2y) for symbolic coordinates."""
     x, y = point
-    three_x_squared = RationalHeight(2 * x.numerator_digits + 1, 2 * x.denominator_digits)
+    three_x_squared = RationalHeight(
+        2 * x.numerator_digits + 1, 2 * x.denominator_digits
+    )
     numerator = sum_heights(
         (three_x_squared, RationalHeight.from_canonical(curve.coefficient_a))
     )
-    return numerator.quotient(RationalHeight(y.numerator_digits + 1, y.denominator_digits))
+    return numerator.quotient(
+        RationalHeight(y.numerator_digits + 1, y.denominator_digits)
+    )
 
 
 def _generic_lambda_height(
@@ -152,10 +152,16 @@ def _generic_lambda_height(
 ) -> RationalHeight:
     """Height bound of lambda = (y2 - y1) / (x2 - x1)."""
     dy = sum_heights(
-        (RationalHeight.from_canonical(second.y), RationalHeight.from_canonical(first.y))
+        (
+            RationalHeight.from_canonical(second.y),
+            RationalHeight.from_canonical(first.y),
+        )
     )
     dx = sum_heights(
-        (RationalHeight.from_canonical(second.x), RationalHeight.from_canonical(first.x))
+        (
+            RationalHeight.from_canonical(second.x),
+            RationalHeight.from_canonical(first.x),
+        )
     )
     return dy.quotient(dx)
 
@@ -165,12 +171,16 @@ def _doubling_lambda_height(
 ) -> RationalHeight:
     """Height bound of lambda = (3x^2 + A) / (2y)."""
     x = RationalHeight.from_canonical(point.x)
-    three_x_squared = RationalHeight(2 * x.numerator_digits + 1, 2 * x.denominator_digits)
+    three_x_squared = RationalHeight(
+        2 * x.numerator_digits + 1, 2 * x.denominator_digits
+    )
     numerator = sum_heights(
         (three_x_squared, RationalHeight.from_canonical(curve.coefficient_a))
     )
     y = RationalHeight.from_canonical(point.y)
-    return numerator.quotient(RationalHeight(y.numerator_digits + 1, y.denominator_digits))
+    return numerator.quotient(
+        RationalHeight(y.numerator_digits + 1, y.denominator_digits)
+    )
 
 
 def _chord_step_heights(
@@ -276,7 +286,9 @@ class ScalarMultiplicationRequest(StrictModel):
             doubled = _chord_step_heights(lam_double, current, current)
             if bit == "1":
                 lam_add = _generic_lambda_height_from_heights(current, self.point)
-                current = _chord_step_heights(lam_add, doubled, _point_heights(self.point))
+                current = _chord_step_heights(
+                    lam_add, doubled, _point_heights(self.point)
+                )
             else:
                 current = doubled
             if any(height.exceeds(MAX_CANONICAL_RATIONAL_DIGITS) for height in current):

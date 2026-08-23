@@ -13,6 +13,7 @@ from jacobian._exact import (
     require_bounded_rational,
 )
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.moments_orthogonal.values import (
     MAX_MOMENTS,
     MAX_QUADRATURE_POINTS,
@@ -25,7 +26,7 @@ MAX_RATIONAL_DIGITS = 4_096
 # coefficient must convert to a finite double and every subdiagonal entry must
 # stay far from both overflow and underflow so its square root is exact enough.
 MAX_QUADRATURE_MAGNITUDE = Fraction(10) ** 300
-MIN_QUADRATURE_SUBDIAGONAL = Fraction(1, 10 ** 300)
+MIN_QUADRATURE_SUBDIAGONAL = Fraction(1, 10**300)
 
 
 def _to_fractions(
@@ -34,7 +35,7 @@ def _to_fractions(
     return tuple(v.as_fraction() for v in values)
 
 
-def _from_fractions(values) -> tuple[CanonicalRational, ...]:
+def _from_fractions(values: tuple[Fraction, ...]) -> tuple[CanonicalRational, ...]:
     return tuple(CanonicalRational.from_fraction(v) for v in values)
 
 
@@ -42,9 +43,7 @@ def _validate_moments(moments: tuple[CanonicalRational, ...]) -> None:
     if not 1 <= len(moments) <= MAX_MOMENTS:
         raise ValueError("moment sequence must contain between 1 and 64 moments")
     for value in moments:
-        require_bounded_rational(
-            value, max_digits=MAX_RATIONAL_DIGITS, label="moment"
-        )
+        require_bounded_rational(value, max_digits=MAX_RATIONAL_DIGITS, label="moment")
 
 
 def _validate_alpha_beta(
@@ -183,21 +182,29 @@ class JacobiMatrixResult(JacobiMatrixRequest):
     def bind_jacobi(self) -> Self:
         from jacobian.math.moments_orthogonal.operations import jacobi_matrix
 
-        result = jacobi_matrix(
-            _to_fractions(self.alpha), _to_fractions(self.beta)
-        )
+        result = jacobi_matrix(_to_fractions(self.alpha), _to_fractions(self.beta))
         if self.diagonal != _from_fractions(result.diagonal):
             raise ValueError("diagonal must match the exact Jacobi diagonal")
         if self.off_diagonal != _from_fractions(result.off_diagonal):
-            raise ValueError(
-                "off_diagonal must match the exact Jacobi off-diagonal"
-            )
+            raise ValueError("off_diagonal must match the exact Jacobi off-diagonal")
         return self
 
 
 # ---------------------------------------------------------------------------
 # Christoffel-Darboux kernel
 # ---------------------------------------------------------------------------
+
+
+def _canonical_digit_count(value: int) -> int:
+    return len(format_canonical_integer(value))
+
+
+def _exceeds_canonical_limit(value: Fraction) -> bool:
+    """Whether one exact rational component would overflow serialization."""
+    return (
+        _canonical_digit_count(value.numerator) > MAX_CANONICAL_RATIONAL_DIGITS
+        or _canonical_digit_count(value.denominator) > MAX_CANONICAL_RATIONAL_DIGITS
+    )
 
 
 class ChristoffelDarbouxRequest(StrictModel):
@@ -215,38 +222,27 @@ class ChristoffelDarbouxRequest(StrictModel):
         # 4095-digit x gives 122k-digit denominators.  Cap at 1024 to keep
         # worst-case outputs within the 32768-digit canonical limit.
         max_cd_digits = 1024
-        require_bounded_rational(
-            self.x, max_digits=max_cd_digits, label="x"
-        )
-        require_bounded_rational(
-            self.y, max_digits=max_cd_digits, label="y"
-        )
+        require_bounded_rational(self.x, max_digits=max_cd_digits, label="x")
+        require_bounded_rational(self.y, max_digits=max_cd_digits, label="y")
+        # Admit exactly the requests whose complete kernel recurrence stays
+        # serializable: replay the exact recurrence the execution runs,
+        # propagating alpha, beta, norm, and polynomial heights per step, and
+        # reject when any returned component exceeds the canonical limit.
+        from jacobian.math.moments_orthogonal.operations import christoffel_darboux
 
-        def component_digits(value: CanonicalRational) -> int:
-            return max(len(value.num.lstrip("-")), len(value.den.lstrip("-")))
-
-        # Each recurrence step multiplies the running polynomial value by
-        # (t - alpha_k) at both evaluation points and the kernel divides by
-        # products of beta, so numerator and denominator digits grow
-        # additively by d(x) + d(y) + 2*d(coefficient) per step.  Count both
-        # components of every coefficient; numerators alone treat a large
-        # admitted denominator as a one-digit input.
-        coefficient_digits = max(
-            (
-                component_digits(value)
-                for value in (*self.alpha, *self.beta)
-            ),
-            default=0,
+        result = christoffel_darboux(
+            _to_fractions(self.alpha),
+            _to_fractions(self.beta),
+            self.x.as_fraction(),
+            self.y.as_fraction(),
         )
-        n = max(len(self.alpha), len(self.beta))
-        growth_per_step = (
-            component_digits(self.x)
-            + component_digits(self.y)
-            + 2 * coefficient_digits
-            + 8
-        )
-        if n * growth_per_step > MAX_CANONICAL_RATIONAL_DIGITS:
-            raise ValueError("Christoffel-Darboux inputs would exceed the result digit bound")
+        if any(
+            _exceeds_canonical_limit(value)
+            for value in (result.kernel, *result.polynomials_evaluated)
+        ):
+            raise ValueError(
+                "Christoffel-Darboux inputs would exceed the result digit bound"
+            )
         return self
 
 
@@ -269,12 +265,8 @@ class ChristoffelDarbouxResult(ChristoffelDarbouxRequest):
             self.y.as_fraction(),
         )
         if self.kernel != CanonicalRational.from_fraction(result.kernel):
-            raise ValueError(
-                "kernel must be the exact Christoffel-Darboux kernel"
-            )
-        if self.polynomials_evaluated != _from_fractions(
-            result.polynomials_evaluated
-        ):
+            raise ValueError("kernel must be the exact Christoffel-Darboux kernel")
+        if self.polynomials_evaluated != _from_fractions(result.polynomials_evaluated):
             raise ValueError(
                 "polynomials_evaluated must match the evaluated polynomials"
             )
@@ -294,10 +286,7 @@ class GaussianQuadratureRequest(StrictModel):
     def require_valid_coefficients(self) -> Self:
         if not 1 <= len(self.alpha) <= MAX_QUADRATURE_POINTS:
             raise ValueError("alpha must contain between 1 and 16 entries")
-        if (
-            len(self.beta) != len(self.alpha)
-            and len(self.beta) != len(self.alpha) + 1
-        ):
+        if len(self.beta) != len(self.alpha) and len(self.beta) != len(self.alpha) + 1:
             raise ValueError("beta must have length len(alpha) or len(alpha)+1")
         beta_zero = self.beta[0].as_fraction()
         if beta_zero <= 0:

@@ -85,7 +85,11 @@ class TestCircumradiusHeightAdmission:
         denominator = 10 ** (MAX_CANONICAL_RATIONAL_DIGITS - 28_673) + 1
         assert len(str(denominator)) == 4096
         points = tuple(
-            _point(chr(65 + i), _rational(1, denominator + i), _rational(1, denominator - i))
+            _point(
+                chr(65 + i),
+                _rational(1, denominator + i),
+                _rational(1, denominator - i),
+            )
             for i in range(3)
         )
         with pytest.raises(ValidationError, match="canonical result bound"):

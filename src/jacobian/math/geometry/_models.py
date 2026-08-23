@@ -530,9 +530,7 @@ class CircumradiusTripleEntry(StrictModel):
     @model_validator(mode="after")
     def bind_collinear_to_value(self) -> Self:
         if self.collinear is (self.squared_circumradius is not None):
-            raise ValueError(
-                "exactly a collinear triple has no squared circumradius"
-            )
+            raise ValueError("exactly a collinear triple has no squared circumradius")
         if (
             self.squared_circumradius is not None
             and self.squared_circumradius.as_fraction() <= 0
@@ -701,7 +699,12 @@ class ConcyclicQuadruple(StrictModel):
 def _cleared_configuration_points(
     points: tuple[ForbiddenLabelledPoint, ...],
 ) -> tuple[tuple[int, int, int], ...]:
-    """Clear denominators: exact zero tests are unchanged by row scaling."""
+    """Exact homogeneous rows ``(X, Y, D)`` for each point ``(X/D, Y/D)``.
+
+    Distinct points may carry distinct row scales, so every predicate replayed
+    from these rows must use the full ``(X, Y, D)`` determinant rather than an
+    affine shortcut on the first two columns.
+    """
     cleared = []
     for item in points:
         fx = item.point.x.as_fraction()
@@ -717,8 +720,12 @@ def _cleared_configuration_points(
     return tuple(cleared)
 
 
-def _int_collinear(a: tuple[int, int], b: tuple[int, int], c: tuple[int, int]) -> bool:
-    return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]) == 0
+def _int_collinear(
+    a: tuple[int, int, int],
+    b: tuple[int, int, int],
+    c: tuple[int, int, int],
+) -> bool:
+    return _int_det3([list(a), list(b), list(c)]) == 0
 
 
 def _int_det3(m: list[list[int]]) -> int:
@@ -739,35 +746,34 @@ def _int_det4(m: list[list[int]]) -> int:
 
 
 def _scan_collinear_triple(
-    xy: list[tuple[int, int]],
+    rows: tuple[tuple[int, int, int], ...],
 ) -> tuple[CollinearTriple | None, int]:
     """Mirror the operation's ascending triple scan; report work performed."""
     from itertools import combinations
 
     examined = 0
-    for i, j, k in combinations(range(len(xy)), 3):
+    for i, j, k in combinations(range(len(rows)), 3):
         examined += 1
-        if _int_collinear(xy[i], xy[j], xy[k]):
+        if _int_collinear(rows[i], rows[j], rows[k]):
             return CollinearTriple(first=i, second=j, third=k), examined
     return None, examined
 
 
 def _scan_concyclic_quadruple(
-    cleared: tuple[tuple[int, int, int], ...],
-    xy: list[tuple[int, int]],
+    rows: tuple[tuple[int, int, int], ...],
 ) -> tuple[ConcyclicQuadruple | None, int]:
     """Mirror the operation's ascending quadruple scan of nondegenerate circles."""
     from itertools import combinations
 
     examined = 0
-    for i, j, k, ell in combinations(range(len(xy)), 4):
+    for i, j, k, ell in combinations(range(len(rows)), 4):
         examined += 1
-        rows = [
+        circle_rows = [
             [x * x + y * y, x * d, y * d, d * d]
-            for x, y, d in (cleared[index] for index in (i, j, k, ell))
+            for x, y, d in (rows[index] for index in (i, j, k, ell))
         ]
-        if _int_det4(rows) == 0 and not any(
-            _int_collinear(xy[a], xy[b], xy[c])
+        if _int_det4(circle_rows) == 0 and not any(
+            _int_collinear(rows[a], rows[b], rows[c])
             for a, b, c in combinations((i, j, k, ell), 3)
         ):
             return ConcyclicQuadruple(first=i, second=j, third=k, fourth=ell), examined
@@ -811,8 +817,7 @@ class ForbiddenPatternsResult(StrictModel):
         # quadruple, each witness must be geometrically true, and the checked
         # counts must match the exact scan prefix that produced them.
         cleared = _cleared_configuration_points(self.configuration.points)
-        xy = [(x, y) for x, y, _ in cleared]
-        first_collinear, examined_triples = _scan_collinear_triple(xy)
+        first_collinear, examined_triples = _scan_collinear_triple(cleared)
         if self.has_collinear_triple != (first_collinear is not None):
             raise ValueError(
                 "collinear decision does not match the retained configuration"
@@ -826,7 +831,7 @@ class ForbiddenPatternsResult(StrictModel):
             raise ValueError(
                 "collinear witness must be the first collinear triple in enumeration order"
             )
-        first_concyclic, examined_quadruples = _scan_concyclic_quadruple(cleared, xy)
+        first_concyclic, examined_quadruples = _scan_concyclic_quadruple(cleared)
         if self.has_concyclic_quadruple != (first_concyclic is not None):
             raise ValueError(
                 "concyclic decision does not match the retained configuration"

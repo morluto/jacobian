@@ -38,6 +38,7 @@ from jacobian.math.moments_orthogonal._tools import TOOLS
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _frac(num: int, den: int) -> Fraction:
     return Fraction(num, den)
 
@@ -180,6 +181,41 @@ class TestChristoffelDarboux:
         assert result.polynomials_evaluated == (_frac(1, 1),)
 
 
+class TestChristoffelDarbouxHeightAdmission:
+    @staticmethod
+    def _request(q: int, copies: int):
+        alpha = tuple(CanonicalRational.from_integer_ratio(1, q) for _ in range(copies))
+        beta = tuple(CanonicalRational.from_integer_ratio(q, 1) for _ in range(copies))
+        return ChristoffelDarbouxRequest(
+            alpha=alpha, beta=beta, x=_cr(0, 1), y=_cr(0, 1)
+        )
+
+    def test_alpha_and_beta_growth_is_rejected(self) -> None:
+        """16 near-limit alphas with 16 large betas drive the exact kernel
+        past 32,768 digits even though a flat per-step estimate accepts."""
+        q = 10**800 + 7
+        with pytest.raises(ValidationError, match="digit bound"):
+            self._request(q, 16)
+
+    def test_moderate_recurrence_is_accepted_and_executes(self) -> None:
+        request = self._request(10**40 + 7, 16)
+        result = compute_christoffel_darboux(request)
+        digits = max(len(result.kernel.num), len(result.kernel.den))
+        from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
+
+        assert digits <= MAX_CANONICAL_RATIONAL_DIGITS
+
+    def test_single_step_admits_large_evaluation_points(self) -> None:
+        request = ChristoffelDarbouxRequest(
+            alpha=(_cr(1, 2),),
+            beta=(CanonicalRational.from_integer_ratio(10**900 + 3, 1),),
+            x=_cr(1, 2),
+            y=_cr(1, 2),
+        )
+        result = compute_christoffel_darboux(request)
+        assert result.kernel.as_fraction() > 0
+
+
 # ---------------------------------------------------------------------------
 # Gaussian quadrature
 # ---------------------------------------------------------------------------
@@ -221,9 +257,7 @@ class TestGaussianQuadrature:
 
 class TestWireAdapters:
     def test_hankel_wire(self) -> None:
-        request = HankelMatrixRequest(
-            moments=tuple(_cr(1, k) for k in range(1, 8))
-        )
+        request = HankelMatrixRequest(moments=tuple(_cr(1, k) for k in range(1, 8)))
         result = compute_hankel_matrix(request)
         assert result.dimension == 4
         assert isinstance(result, HankelMatrixResult)
@@ -243,6 +277,7 @@ class TestWireAdapters:
         )
         result = compute_jacobi_matrix(request)
         assert isinstance(result, JacobiMatrixResult)
+
     def test_christoffel_darboux_wire(self) -> None:
         request = ChristoffelDarbouxRequest(
             alpha=(_cr(1, 2), _cr(1, 2)),

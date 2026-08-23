@@ -219,16 +219,16 @@ class IdealSaturationRequest(StrictModel):
 
     ideal: RationalPolynomialIdeal = Field(
         description=(
-            'An ideal in at most 6 variables with at most 16 generators and '
-            '256 aggregate terms; generator total degree is at most 12 and '
-            'coefficient components are at most 128 digits.'
+            "An ideal in at most 6 variables with at most 16 generators and "
+            "256 aggregate terms; generator total degree is at most 12 and "
+            "coefficient components are at most 128 digits."
         )
     )
     saturation_polynomial: RationalPolynomial = Field(
         description=(
-            'A single polynomial d in the ideal ring, with '
-            'at most 256 terms, total degree at most 12, and coefficient '
-            'components at most 128 digits.'
+            "A single polynomial d in the ideal ring, with "
+            "at most 256 terms, total degree at most 12, and coefficient "
+            "components at most 128 digits."
         )
     )
     resource_budget: IdealComputationBudget = Field(
@@ -246,9 +246,7 @@ class IdealSaturationRequest(StrictModel):
             label="saturation polynomial",
         )
         if self.saturation_polynomial.variables != self.ideal.variables:
-            raise ValueError(
-                "saturation polynomial must use the ideal's ordered ring"
-            )
+            raise ValueError("saturation polynomial must use the ideal's ordered ring")
         if any(
             sum(term.exponents) > MAX_INPUT_EXPONENT
             for term in self.saturation_polynomial.polynomial.terms
@@ -278,7 +276,9 @@ class IdealSaturationResult(StrictModel):
             or self.backend_version is not None
             or not self.detail
         ):
-            raise ValueError("failed saturation computation requires only a safe detail")
+            raise ValueError(
+                "failed saturation computation requires only a safe detail"
+            )
         return self
 
 

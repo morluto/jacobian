@@ -218,8 +218,15 @@ def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> Jacobi
     diagonal and the rational squared subdiagonal ``beta`` separately so that the
     full symmetric matrix can be reconstructed by any consumer.
     """
-    if not 1 <= len(beta) <= MAX_RECURRENCE_ORDER:
-        raise ValueError("beta must contain between 1 and 16 entries")
+    # The final odd-prefix norm adds one trailing beta at full order.
+    maximum_beta = MAX_RECURRENCE_ORDER + (
+        1 if len(alpha) == MAX_RECURRENCE_ORDER else 0
+    )
+    if not 1 <= len(beta) <= maximum_beta:
+        raise ValueError(
+            f"beta must contain between 1 and {maximum_beta} entries for "
+            f"{len(alpha)} alphas"
+        )
     if not 0 <= len(alpha) <= MAX_RECURRENCE_ORDER:
         raise ValueError("alpha out of range")
     if len(alpha) != len(beta) and len(alpha) != len(beta) - 1:
@@ -378,8 +385,7 @@ def _derive_quadrature_floats(
     weight_values = tuple(float(value) for value in weights)
     if not all(math.isfinite(value) for value in node_values):
         raise ValueError(
-            "the derived nodes leave the finite float64 range for these "
-            "recurrence data"
+            "the derived nodes leave the finite float64 range for these recurrence data"
         )
     if any(not math.isfinite(value) or value <= 0.0 for value in weight_values):
         raise ValueError(

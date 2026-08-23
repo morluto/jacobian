@@ -15,8 +15,42 @@ from jacobian.math.prime_field_linear_algebra import (
 
 MAX_DIMENSION = 256
 
+MAX_PRIME = 2_147_483_647
+"""Schema-visible conservative bound on the field characteristic.
 
-class RankRequest(StrictModel):
+The canonical matrix value runs ``sympy.isprime`` at construction, so the
+bound is enforced by a pre-construction validator on every request and
+source-bound result: no accepted payload can spend unbounded primality or
+modular work on an oversized modulus.
+"""
+
+
+def _require_bounded_declared_prime(data: object) -> object:
+    """Reject oversized moduli before any nested value is constructed."""
+    if not isinstance(data, dict):
+        return data
+    for key in ("matrix", "rref", "rref_matrix", "nullspace_matrix", "nullspace"):
+        value = data.get(key)
+        prime = (
+            value.get("prime")
+            if isinstance(value, dict)
+            else getattr(value, "prime", None)
+        )
+        if type(prime) is int and prime > MAX_PRIME:
+            raise ValueError(f"field prime exceeds the bounded modulus {MAX_PRIME}")
+    return data
+
+
+class _BoundedPrimeModel(StrictModel):
+    """Shared pre-construction modulus bound for canonical matrix payloads."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_bounded_prime(cls, data: object) -> object:
+        return _require_bounded_declared_prime(data)
+
+
+class RankRequest(_BoundedPrimeModel):
     """Rank of one bounded matrix over an explicit prime field.
 
     The matrix is the domain-owned canonical ``PrimeFieldMatrix`` value, so a
@@ -26,7 +60,7 @@ class RankRequest(StrictModel):
     matrix: PrimeFieldMatrix
 
 
-class RankResult(StrictModel):
+class RankResult(_BoundedPrimeModel):
     """The exact rank bound to the retained source matrix."""
 
     matrix: PrimeFieldMatrix
@@ -51,7 +85,7 @@ class RankResult(StrictModel):
         return self
 
 
-class RrefRequest(StrictModel):
+class RrefRequest(_BoundedPrimeModel):
     """Reduced row-echelon form of one bounded matrix over a prime field.
 
     Accepts the domain-owned canonical ``PrimeFieldMatrix`` value so the
@@ -61,7 +95,7 @@ class RrefRequest(StrictModel):
     matrix: PrimeFieldMatrix
 
 
-class RrefResult(StrictModel):
+class RrefResult(_BoundedPrimeModel):
     """The exact RREF as a canonical prime-field matrix value.
 
     ``rref`` is the domain-owned matrix value, so downstream rank and
@@ -81,8 +115,7 @@ class RrefResult(StrictModel):
             self.rref.columns != self.matrix.columns
         ):
             raise ValueError(
-                "rref must be a matrix value over the source ring with the "
-                "source shape"
+                "rref must be a matrix value over the source ring with the source shape"
             )
         expected_rows, expected_pivots = rref(self.matrix)
         if self.rref.entries != expected_rows:
@@ -92,7 +125,7 @@ class RrefResult(StrictModel):
         return self
 
 
-class NullspaceRequest(StrictModel):
+class NullspaceRequest(_BoundedPrimeModel):
     """Right nullspace basis of one bounded matrix over a prime field.
 
     Accepts the domain-owned canonical ``PrimeFieldMatrix`` value, including
@@ -102,7 +135,7 @@ class NullspaceRequest(StrictModel):
     matrix: PrimeFieldMatrix
 
 
-class NullspaceResult(StrictModel):
+class NullspaceResult(_BoundedPrimeModel):
     """The deterministic nullspace basis bound to the retained source matrix."""
 
     matrix: PrimeFieldMatrix

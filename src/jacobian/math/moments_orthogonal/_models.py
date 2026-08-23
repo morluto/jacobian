@@ -237,11 +237,12 @@ class GaussianQuadratureRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_sufficient_moments(self) -> Self:
-        # Constructing p_order via Gram-Schmidt also computes its squared
-        # norm h_order = <p_n, p_n>, which consumes mu_{2n}; the public
-        # boundary therefore requires 2n+1 moments exactly like the nested
-        # orthogonal-polynomial request.
-        needed = 2 * self.order + 1
+        # Building p_order projects only onto earlier polynomials, so the
+        # Gram-Schmidt kernel and the Vandermonde weight solve consume
+        # moments through mu_(2n-1) exactly; execution verifies exactness
+        # through degree 2n-1, so 2n moments are both sufficient and
+        # required.
+        needed = 2 * self.order
         if len(self.prefix.moments) < needed:
             raise ValueError(
                 f"need at least {needed} moments for quadrature order {self.order}, got {len(self.prefix.moments)}"

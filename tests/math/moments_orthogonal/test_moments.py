@@ -406,14 +406,42 @@ class TestGaussianQuadrature:
             assert (int(node.weight.num), int(node.weight.den)) == (12, 1)
         assert result.exactness_degree == 3
 
-    def test_requires_two_n_plus_one_moments(self) -> None:
-        """The nested orthogonal-polynomial request needs h_n, so the public
-        boundary requires 2n+1 moments, not the published minimum of 2n."""
+    def test_requires_two_n_moments(self) -> None:
+        """Construction consumes moments through mu_(2n-1) exactly: 2n
+        moments suffice for an exact order-n rule and 2n-1 do not."""
 
-        with pytest.raises(ValueError, match="need at least 5"):
+        GaussianQuadratureRequest(
+            prefix=_prefix(self._moments_rational_nodes()[:4]), order=2
+        )
+        with pytest.raises(ValueError, match="need at least 4"):
             GaussianQuadratureRequest(
-                prefix=_prefix(self._moments_rational_nodes()[:4]), order=2
+                prefix=_prefix(self._moments_rational_nodes()[:3]), order=2
             )
+
+    def test_order_one_prefix_needs_only_two_moments(self) -> None:
+        """An order-1 prefix (mu_0, mu_1) = (1, 2) determines the exact
+        rule with node 2, weight 1, and exactness through degree 1; the
+        unused mu_2 must not be required."""
+        from jacobian.math.moments_orthogonal.operations import (
+            compute_gaussian_quadrature,
+        )
+
+        result = compute_gaussian_quadrature(
+            GaussianQuadratureRequest(
+                prefix=_prefix(
+                    (
+                        CanonicalRational(num="1", den="1"),
+                        CanonicalRational(num="2", den="1"),
+                    )
+                ),
+                order=1,
+            )
+        )
+        assert result.order == 1
+        assert len(result.nodes) == 1
+        assert (int(result.nodes[0].node.num), int(result.nodes[0].node.den)) == (2, 1)
+        assert (int(result.nodes[0].weight.num), int(result.nodes[0].weight.den)) == (1, 1)
+        assert result.exactness_degree == 1
 
     def test_algebraic_nodes_rejected_at_admission(self) -> None:
         """Uniform [0,1] moments give p_2 = x^2 - x + 1/6 with irrational

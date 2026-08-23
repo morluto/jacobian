@@ -489,25 +489,35 @@ class PinnedLineEntry(StrictModel):
         return self
 
 
+def _rational_component_bytes(value: object) -> int:
+    """Raw numerator/denominator character count of one authored rational."""
+    if isinstance(value, CanonicalRational):
+        return len(value.num) + len(value.den)
+    if isinstance(value, dict):
+        return sum(len(str(value.get(key, ""))) for key in ("num", "den"))
+    return 0
+
+
 def _count_line_ledger(line: object) -> tuple[int, int]:
-    """One entry's source-pair count plus its authored rational bytes."""
+    """One entry's source-pair count plus its authored rational bytes.
+
+    The byte count covers EVERY authored rational on the entry: the three
+    line coefficients and the squared distance, so no field can carry
+    globally permitted oversized components past the pre-parse bound.
+    """
     if isinstance(line, PinnedLineEntry):
-        return (
-            len(line.pairs),
-            len(line.squared_distance.num) + len(line.squared_distance.den),
-        )
+        rational_bytes = _rational_component_bytes(line.squared_distance)
+        for coefficient in line.line_coefficients:
+            rational_bytes += _rational_component_bytes(coefficient)
+        return len(line.pairs), rational_bytes
     if isinstance(line, dict):
         pairs = line.get("pairs")
         pair_count = len(pairs) if isinstance(pairs, (list, tuple)) else 0
-        squared_distance = line.get("squared_distance")
-        if isinstance(squared_distance, dict):
-            rational_bytes = sum(
-                len(str(squared_distance.get(key, ""))) for key in ("num", "den")
-            )
-        elif isinstance(squared_distance, CanonicalRational):
-            rational_bytes = len(squared_distance.num) + len(squared_distance.den)
-        else:
-            rational_bytes = 0
+        rational_bytes = _rational_component_bytes(line.get("squared_distance"))
+        coefficients = line.get("line_coefficients")
+        if isinstance(coefficients, (list, tuple)):
+            for coefficient in coefficients:
+                rational_bytes += _rational_component_bytes(coefficient)
         return pair_count, rational_bytes
     return 0, 0
 
@@ -575,6 +585,13 @@ class PinnedLineDistanceResult(StrictModel):
                     "the aggregate source-pair ledger exceeds the "
                     f"{MAX_PAIRS}-pair profile bound"
                 )
+        # Distance multiplicities carry authored rationals too; count them
+        # so no field can bypass the pre-parse aggregate bound.
+        multiplicities = data.get("distance_multiplicities")
+        if isinstance(multiplicities, (list, tuple)):
+            for entry in multiplicities:
+                if isinstance(entry, (list, tuple)) and entry:
+                    authored_rational_bytes += _rational_component_bytes(entry[0])
         # Authored rational components are bounded by the same aggregate
         # result budget as the parsed profile: every valid entry needs at
         # least two characters per canonical rational, so any payload whose

@@ -23,9 +23,10 @@ _MAX_RESULT_DIGITS = 256
 def _fits(frac: Fraction) -> bool:
     """Check one exact rational against the result digit bound."""
 
-    if len(str(abs(frac.numerator))) > _MAX_RESULT_DIGITS or len(
-        str(frac.denominator)
-    ) > _MAX_RESULT_DIGITS:
+    if (
+        len(str(abs(frac.numerator))) > _MAX_RESULT_DIGITS
+        or len(str(frac.denominator)) > _MAX_RESULT_DIGITS
+    ):
         return False
     try:
         CanonicalRational.from_fraction(frac)

@@ -223,7 +223,10 @@ def test_operation_declarations_expose_operand_preconditions() -> None:
     """Both declarations state the shared-radicand and result-growth rules."""
 
     tools = {tool.operation_id: tool for tool in TOOLS}
-    for operation_id in ("algebraic_number.add.compute", "algebraic_number.multiply.compute"):
+    for operation_id in (
+        "algebraic_number.add.compute",
+        "algebraic_number.multiply.compute",
+    ):
         tool = tools[operation_id]
         description = tool.description.lower()
         assert "same square-free radicand" in description

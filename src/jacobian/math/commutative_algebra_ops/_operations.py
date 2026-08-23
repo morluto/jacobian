@@ -126,9 +126,15 @@ def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturation
             verification_budget,
         )
         if verdict == "REFUTED":
-            raise ValueError(
-                "Singular returned an ideal that differs from the exact "
-                "saturation I : d^infinity; refusing to report it"
+            # A refuted verification means the backend's value cannot be
+            # reported; the accepted request still deserves a typed outcome
+            # rather than a host exception at the transport boundary.
+            return IdealSaturationResult(
+                outcome="ERROR",
+                source_ideal=request.ideal,
+                source_polynomial=request.saturation_polynomial,
+                detail="Singular returned an ideal that differs from the exact "
+                "saturation I : d^infinity; the computed value was discarded.",
             )
         if verdict != "VERIFIED":
             detail = {

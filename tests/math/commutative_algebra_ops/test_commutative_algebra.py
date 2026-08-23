@@ -524,8 +524,10 @@ class TestSaturationRelationVerification:
             ideal=_ideal(("x", "y"), {(1, 0): 1}),  # (x)
             saturation_polynomial=_polynomial(("x", "y"), {(0, 1): 1}),  # y
         )
-        with pytest.raises(ValueError, match="differs"):
-            ops.compute_ideal_saturation(request)
+        result = ops.compute_ideal_saturation(request)
+        assert result.outcome == "ERROR"
+        assert result.saturation is None
+        assert "differs" in (result.detail or "")
 
     def test_intermediate_ideal_forgery_is_not_equality(
         self, monkeypatch: pytest.MonkeyPatch
@@ -547,8 +549,10 @@ class TestSaturationRelationVerification:
             ideal=intermediate,
             saturation_polynomial=_polynomial(("x", "y"), {(1, 0): 1}),  # x
         )
-        with pytest.raises(ValueError, match="differs"):
-            ops.compute_ideal_saturation(request)
+        result = ops.compute_ideal_saturation(request)
+        assert result.outcome == "ERROR"
+        assert result.saturation is None
+        assert "differs" in (result.detail or "")
 
     def test_bogus_backend_result_rejected_by_relation_check(
         self, monkeypatch: pytest.MonkeyPatch
@@ -571,8 +575,10 @@ class TestSaturationRelationVerification:
             ideal=_ideal(("x", "y"), {(1, 0): 1}),  # (x)
             saturation_polynomial=_polynomial(("x", "y"), {(1, 0): 1}),  # x
         )
-        with pytest.raises(ValueError, match="differs"):
-            ops.compute_ideal_saturation(request)
+        result = ops.compute_ideal_saturation(request)
+        assert result.outcome == "ERROR"
+        assert result.saturation is None
+        assert "differs" in (result.detail or "")
 
     def test_verified_claim_is_reported(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A COMPUTED claim that survives the defining-equality check is
@@ -667,10 +673,12 @@ class TestSaturationRelationVerification:
         from jacobian.math.commutative_algebra_ops import _operations as ops
 
         self._computed_backend(monkeypatch, _ideal(("x", "y"), {(1, 1): 1}))
-        with pytest.raises(ValueError, match="differs"):
-            ops.compute_ideal_saturation(
-                IdealSaturationRequest(
-                    ideal=_ideal(("x", "y"), {(1, 1): 1}),  # <xy>
-                    saturation_polynomial=_polynomial(("x", "y"), {(1, 0): 1}),  # x
-                )
+        result = ops.compute_ideal_saturation(
+            IdealSaturationRequest(
+                ideal=_ideal(("x", "y"), {(1, 1): 1}),  # <xy>
+                saturation_polynomial=_polynomial(("x", "y"), {(1, 0): 1}),  # x
             )
+        )
+        assert result.outcome == "ERROR"
+        assert result.saturation is None
+        assert "differs" in (result.detail or "")

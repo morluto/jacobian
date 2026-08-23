@@ -294,6 +294,20 @@ class IdealSaturationResult(StrictModel):
                 "saturation operands and result must share the source "
                 "ideal's ordered ring"
             )
+        # Revalidate the retained sources against the operation's bounded
+        # public domain: the shared polynomial types admit larger ideals than
+        # this operation accepts, so a relayed result must not carry operands
+        # that no accepted request could have supplied.
+        try:
+            IdealSaturationRequest(
+                ideal=self.source_ideal,
+                saturation_polynomial=self.source_polynomial,
+            )
+        except ValueError as error:
+            raise ValueError(
+                "retained saturation sources must satisfy the operation's "
+                f"public admission domain: {error}"
+            ) from None
 
         return self
 

@@ -166,10 +166,13 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     ),
     _op(
         "moments.gaussian_quadrature.compute",
-        "Compute Gaussian quadrature nodes and weights",
-        "Compute Gaussian quadrature nodes and weights from the symmetric "
-        "tridiagonal Jacobi matrix via the Golub-Welsch algorithm "
-        "(eigenvalue decomposition).",
+        "Compute approximate Gaussian quadrature nodes and weights (Float64)",
+        "Approximate Gaussian quadrature nodes and weights from the symmetric "
+        "tridiagonal Jacobi matrix via the Golub-Welsch IEEE-double eigenvalue "
+        "decomposition. The kernel runs in Float64, so every returned node and "
+        "weight is a dyadic rational image of one computed double — an "
+        "approximation with double precision, not an exact algebraic node or "
+        "exact weight; use exact algebraic methods when exactness is required.",
         GaussianQuadratureRequest,
         GaussianQuadratureResult,
         compute_gaussian_quadrature,

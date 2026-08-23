@@ -449,3 +449,14 @@ class TestRecurrenceComposition:
             {**payload, "x": {"num": "1", "den": "1"}, "y": {"num": "1", "den": "1"}}
         )
         assert len(cd.beta) == len(result.beta)
+
+
+class TestDiscoveryApproximationDisclosure:
+    def test_quadrature_discovery_discloses_float64_scope(self):
+        """math.find must reveal the Float64 approximation before selection."""
+        tool = next(
+            t for t in TOOLS if t.operation_id == "moments.gaussian_quadrature.compute"
+        )
+        combined = f"{tool.title} {tool.description}".lower()
+        assert "float64" in combined or "double" in combined
+        assert "approximate" in combined

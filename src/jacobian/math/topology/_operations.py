@@ -60,7 +60,11 @@ from jacobian.math.topology._models import (
     StarResult,
     VertexDeletionRequest,
     VertexDeletionResult,
+    _all_faces,
+    _cover_relations,
     _evaluate_shelling,
+    _maximal_chains_from_covers,
+    _minimal_face_indices,
     face_closure,
     simplicial_complex_digest,
 )
@@ -783,17 +787,6 @@ def compute_link(request: LinkRequest) -> LinkResult:
 # ---------------------------------------------------------------------------
 
 
-def _all_faces(facets: tuple[tuple[str, ...], ...]) -> set[tuple[str, ...]]:
-    """Return the complete set of nonempty faces for a facet list."""
-    faces: set[tuple[str, ...]] = set()
-    for facet in facets:
-        n = len(facet)
-        for r in range(1, n + 1):
-            for subset in combinations(facet, r):
-                faces.add(tuple(sorted(subset)))
-    return faces
-
-
 def compute_star(request: StarRequest) -> StarResult:
     """Compute the closed star of a simplex."""
     target = frozenset(request.simplex)
@@ -907,65 +900,6 @@ def compute_join(request: JoinRequest) -> JoinResult:
     )
 
 
-def _cover_relations(face_frozens: list[frozenset[str]]) -> list[list[int]]:
-    """Compute the cover relation of the face lattice: i covers j when
-    ``face_frozens[i] < face_frozens[j]`` with no strict intermediate."""
-
-    n = len(face_frozens)
-    covers: list[list[int]] = [[] for _ in range(n)]
-    for i in range(n):
-        for j in range(n):
-            if face_frozens[i] < face_frozens[j]:
-                has_intermediate = any(
-                    face_frozens[i] < face_frozens[k] < face_frozens[j]
-                    for k in range(n)
-                )
-                if not has_intermediate:
-                    covers[i].append(j)
-    return covers
-
-
-def _minimal_face_indices(face_frozens: list[frozenset[str]]) -> list[int]:
-    is_minimal = [True] * len(face_frozens)
-    for i in range(len(face_frozens)):
-        for j in range(len(face_frozens)):
-            if face_frozens[j] < face_frozens[i]:
-                is_minimal[i] = False
-                break
-    return [i for i, minimal in enumerate(is_minimal) if minimal]
-
-
-def _maximal_chains_from_covers(
-    covers: list[list[int]],
-    minimal_indices: list[int],
-    n: int,
-    sorted_faces: list[tuple[str, ...]],
-    face_frozens: list[frozenset[str]],
-) -> list[list[int]]:
-    maximal_chains: list[list[int]] = []
-
-    def dfs(chain: list[int]) -> None:
-        last = chain[-1]
-        if not covers[last]:
-            maximal_chains.append(list(chain))
-            return
-        for nxt in covers[last]:
-            chain.append(nxt)
-            dfs(chain)
-            chain.pop()
-
-    for start in minimal_indices:
-        dfs([start])
-    # If no minimal (should not happen) fallback to each face as chain
-    if not maximal_chains and sorted_faces:
-        # Single-face complex
-        for i in range(n):
-            if not any(face_frozens[i] < face_frozens[j] for j in range(n)):
-                # maximal element
-                maximal_chains.append([i])
-    return maximal_chains
-
-
 def compute_barycentric_subdivision(
     request: BarycentricSubdivisionRequest,
 ) -> BarycentricSubdivisionResult:
@@ -1007,6 +941,7 @@ def compute_barycentric_subdivision(
         subdivision_vertices=tuple(new_vertices),
         subdivision_facets=tuple(maximal),
         num_new_vertices=len(new_vertices),
+        complex=request.complex,
         subdivision_complex=subdivision_complex,
         subdivision_vertex_faces=subdivision_vertex_faces,
     )

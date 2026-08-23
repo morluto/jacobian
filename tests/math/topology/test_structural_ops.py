@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from jacobian.math.topology._models import (
     BarycentricSubdivisionRequest,
+    BarycentricSubdivisionResult,
     ElementaryCollapseRequest,
     ElementaryCollapseResult,
     JoinRequest,
@@ -134,6 +135,103 @@ class TestBarycentricSubdivision:
         assert result.num_new_vertices == 7
         # Subdivision of a triangle has 6 maximal simplices (each is a chain)
         assert len(result.subdivision_facets) == 6
+
+    def test_result_retains_source_and_roundtrips(self) -> None:
+        request = BarycentricSubdivisionRequest(complex=CIRCLE)
+        result = compute_barycentric_subdivision(request)
+        assert result.complex == request.complex
+        assert BarycentricSubdivisionResult.model_validate(
+            result.model_dump()
+        ) == result
+
+    def test_vertex_face_map_is_canonical_bijection(self) -> None:
+        from jacobian.math.topology._models import _all_faces
+
+        result = compute_barycentric_subdivision(
+            BarycentricSubdivisionRequest(complex=EDGE)
+        )
+        faces = sorted(_all_faces(EDGE["facets"]), key=lambda f: (len(f), f))
+        assert list(result.subdivision_vertex_faces) == faces
+        assert list(result.subdivision_vertices) == [
+            f"bv{i}" for i in range(len(faces))
+        ]
+
+    def test_swapped_vertex_face_map_rejected(self) -> None:
+        """Swapping entries of the indexed vertex-to-face map must not
+        validate while the subdivision complex stays unchanged."""
+        result = compute_barycentric_subdivision(
+            BarycentricSubdivisionRequest(complex=CIRCLE)
+        )
+        payload = result.model_dump(mode="json")
+        faces = payload["subdivision_vertex_faces"]
+        faces[0], faces[2] = faces[2], faces[0]
+        with pytest.raises(ValidationError, match="bijection"):
+            BarycentricSubdivisionResult.model_validate(payload)
+
+
+class TestCanonicalComplexFeeding:
+    """A canonical ``FiniteSimplicialComplex`` value must feed structural
+    requests unchanged (review thread: deletion result -> skeleton)."""
+
+    def test_deletion_result_feeds_skeleton_request(self) -> None:
+        deleted = compute_vertex_deletion(
+            VertexDeletionRequest(complex=TRIANGLE, vertices_to_delete=["v0"])
+        )
+        assert deleted.remaining_complex is not None
+        skeleton = compute_skeleton(
+            SkeletonRequest(
+                complex=deleted.remaining_complex.model_dump(mode="json"), k=0
+            )
+        )
+        assert skeleton.skeleton_facets == (("v1",), ("v2",))
+
+    def test_subdivision_complex_feeds_star_request(self) -> None:
+        subdivided = compute_barycentric_subdivision(
+            BarycentricSubdivisionRequest(complex=EDGE)
+        )
+        star = compute_star(
+            StarRequest(complex=subdivided.subdivision_complex.model_dump(), simplex=["bv0"])
+        )
+        assert not star.star_is_empty
+
+    def test_mixed_presentations_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="not both"):
+            SkeletonRequest(
+                complex={
+                    "vertices": ["a", "b"],
+                    "facets": [["a", "b"]],
+                    "maximal_simplices": [["a", "b"]],
+                },
+                k=0,
+            )
+
+    def test_unknown_fields_in_canonical_shape_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="unknown fields"):
+            SkeletonRequest(
+                complex={
+                    "vertices": ["a", "b"],
+                    "maximal_simplices": [["a", "b"]],
+                    "surprise": 1,
+                },
+                k=0,
+            )
+
+
+class TestCollapseCandidateBounds:
+    def test_oversized_candidate_labels_rejected(self) -> None:
+        labels = [f"x{i}" for i in range(9)]
+        with pytest.raises(ValidationError):
+            ElementaryCollapseRequest(
+                complex=EDGE, free_face=labels, coface=[*labels, "extra"]
+            )
+
+    def test_coface_cap_matches_dimension_bound(self) -> None:
+        with pytest.raises(ValidationError):
+            ElementaryCollapseRequest(
+                complex=EDGE,
+                free_face=["a"],
+                coface=["a", "b", "c", "d", "e", "f", "g", "h", "i"],
+            )
 
 
 class TestPseudomanifold:

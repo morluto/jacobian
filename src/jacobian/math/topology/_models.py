@@ -227,6 +227,134 @@ class _PseudomanifoldExpectation(NamedTuple):
     obstruction: str | None
 
 
+def _all_faces(facets: tuple[Simplex, ...]) -> set[tuple[str, ...]]:
+    """Return the complete set of nonempty faces for a facet list."""
+    faces: set[tuple[str, ...]] = set()
+    for facet in facets:
+        n = len(facet)
+        for r in range(1, n + 1):
+            for subset in combinations(facet, r):
+                faces.add(tuple(sorted(subset)))
+    return faces
+
+
+def _cover_relations(face_frozens: list[frozenset[str]]) -> list[list[int]]:
+    """Compute the cover relation of the face lattice: i covers j when
+    ``face_frozens[i] < face_frozens[j]`` with no strict intermediate."""
+
+    n = len(face_frozens)
+    covers: list[list[int]] = [[] for _ in range(n)]
+    for i in range(n):
+        for j in range(n):
+            if face_frozens[i] < face_frozens[j]:
+                has_intermediate = any(
+                    face_frozens[i] < face_frozens[k] < face_frozens[j]
+                    for k in range(n)
+                )
+                if not has_intermediate:
+                    covers[i].append(j)
+    return covers
+
+
+def _minimal_face_indices(face_frozens: list[frozenset[str]]) -> list[int]:
+    is_minimal = [True] * len(face_frozens)
+    for i in range(len(face_frozens)):
+        for j in range(len(face_frozens)):
+            if face_frozens[j] < face_frozens[i]:
+                is_minimal[i] = False
+                break
+    return [i for i, minimal in enumerate(is_minimal) if minimal]
+
+
+def _maximal_chains_from_covers(
+    covers: list[list[int]],
+    minimal_indices: list[int],
+    n: int,
+    sorted_faces: list[tuple[str, ...]],
+    face_frozens: list[frozenset[str]],
+) -> list[list[int]]:
+    maximal_chains: list[list[int]] = []
+
+    def dfs(chain: list[int]) -> None:
+        last = chain[-1]
+        if not covers[last]:
+            maximal_chains.append(list(chain))
+            return
+        for nxt in covers[last]:
+            chain.append(nxt)
+            dfs(chain)
+            chain.pop()
+
+    for start in minimal_indices:
+        dfs([start])
+    # If no minimal (should not happen) fallback to each face as chain
+    if not maximal_chains and sorted_faces:
+        # Single-face complex
+        for i in range(n):
+            if not any(face_frozens[i] < face_frozens[j] for j in range(n)):
+                # maximal element
+                maximal_chains.append([i])
+    return maximal_chains
+
+
+def _replayed_barycentric_subdivision(
+    facets: tuple[Simplex, ...],
+    faces: list[tuple[str, ...]],
+) -> tuple[tuple[str, ...], ...]:
+    """Recompute the barycentric-subdivision facets for ``bv{i}`` labels
+    assigned to ``faces`` in the given canonical order."""
+
+    face_frozens = [frozenset(face) for face in faces]
+    covers = _cover_relations(face_frozens)
+    minimal_indices = _minimal_face_indices(face_frozens)
+    maximal_chains = _maximal_chains_from_covers(
+        covers, minimal_indices, len(faces), faces, face_frozens
+    )
+    vertex_map = {face: f"bv{idx}" for idx, face in enumerate(faces)}
+    subdivision_facets = [
+        tuple(sorted(vertex_map[faces[idx]] for idx in chain))
+        for chain in maximal_chains
+    ]
+    return tuple(sorted(set(subdivision_facets), key=lambda f: (-len(f), f)))
+
+
+def _require_subdivision_replay(
+    *,
+    source_complex: SimplicialComplexRequest,
+    original_vertices: tuple[str, ...],
+    subdivision_vertices: tuple[str, ...],
+    subdivision_vertex_faces: tuple[tuple[str, ...], ...],
+    num_new_vertices: int,
+    subdivision_facets: tuple[tuple[str, ...], ...],
+) -> None:
+    """Replay the deterministic subdivision against the retained source so
+    every derived field — including the indexed vertex-to-face map — must
+    equal what the kernel produces for this exact labeling.  In particular,
+    swapping entries of ``subdivision_vertex_faces`` while keeping the
+    subdivision complex unchanged cannot validate."""
+
+    faces = sorted(_all_faces(source_complex.facets), key=lambda f: (len(f), f))
+    expected_labels = [f"bv{i}" for i in range(len(faces))]
+    if (
+        list(subdivision_vertices) != expected_labels
+        or list(subdivision_vertex_faces) != faces
+        or num_new_vertices != len(faces)
+    ):
+        raise ValueError(
+            "subdivision_vertices and subdivision_vertex_faces must be "
+            "the canonical indexed bijection onto the source complex's "
+            "non-empty faces"
+        )
+    expected = _replayed_barycentric_subdivision(source_complex.facets, faces)
+    if (
+        tuple(subdivision_facets) != expected
+        or original_vertices != source_complex.vertices
+    ):
+        raise ValueError(
+            "subdivision facets do not match the retained source complex"
+        )
+
+
 def _codim1_incidence(
     facets: list[frozenset[str]],
 ) -> dict[frozenset[str], int]:
@@ -299,8 +427,30 @@ def _require_request_complex(
     return tuple(sorted(canonical))
 
 
+_CANONICAL_COMPLEX_DUMP_KEYS = frozenset(
+    {
+        "complex_format",
+        "vertices",
+        "maximal_simplices",
+        "faces_by_dimension",
+        "dimension",
+        "f_vector",
+        "closure_size",
+        "orientation_convention",
+        "empty_simplex_stored",
+        "complex_digest",
+    }
+)
+
+
 class SimplicialComplexRequest(StrictModel):
-    """A bounded facet presentation for canonicalization."""
+    """A bounded facet presentation for canonicalization.
+
+    Accepts either the facet presentation (``vertices`` + ``facets``) or an
+    unchanged canonical :class:`FiniteSimplicialComplex` value, so results
+    such as ``VertexDeletionResult.remaining_complex`` can feed structural
+    requests directly.
+    """
 
     vertices: tuple[VertexLabel, ...] = Field(
         min_length=1,
@@ -310,6 +460,37 @@ class SimplicialComplexRequest(StrictModel):
         min_length=1,
         max_length=MAX_TOPOLOGY_FACETS,
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_canonical_complex_value(cls, data: object) -> object:
+        if isinstance(data, FiniteSimplicialComplex):
+            return {
+                "vertices": list(data.vertices),
+                "facets": [list(facet) for facet in data.maximal_simplices],
+            }
+        if not isinstance(data, dict):
+            return data
+        if "facets" in data and "maximal_simplices" in data:
+            raise ValueError(
+                "pass either facets or a canonical FiniteSimplicialComplex "
+                "value, not both"
+            )
+        if "maximal_simplices" not in data:
+            if set(data) - {"vertices", "facets"}:
+                return data
+            return data
+        unknown = sorted(set(data) - _CANONICAL_COMPLEX_DUMP_KEYS)
+        if unknown:
+            raise ValueError(
+                f"unknown fields alongside maximal_simplices: {unknown}"
+            )
+        if "vertices" not in data:
+            raise ValueError("canonical complex value must carry vertices")
+        return {
+            "vertices": data["vertices"],
+            "facets": data["maximal_simplices"],
+        }
 
     @model_validator(mode="after")
     def require_bounded_maximal_facets(self) -> Self:
@@ -987,7 +1168,10 @@ class LinkRequest(StrictModel):
     """Request the link of a simplex in a simplicial complex."""
 
     complex: SimplicialComplexRequest
-    simplex: tuple[VertexLabel, ...] = Field(min_length=1)
+    simplex: tuple[VertexLabel, ...] = Field(
+        min_length=1,
+        max_length=MAX_TOPOLOGY_DIMENSION + 1,
+    )
 
     @model_validator(mode="after")
     def require_valid_simplex(self) -> Self:
@@ -1016,7 +1200,10 @@ class StarRequest(StrictModel):
     """Request the closed star of a simplex in a simplicial complex."""
 
     complex: SimplicialComplexRequest
-    simplex: tuple[VertexLabel, ...] = Field(min_length=1)
+    simplex: tuple[VertexLabel, ...] = Field(
+        min_length=1,
+        max_length=MAX_TOPOLOGY_DIMENSION + 1,
+    )
 
     @model_validator(mode="after")
     def require_valid_star_simplex(self) -> Self:
@@ -1065,7 +1252,10 @@ class VertexDeletionRequest(StrictModel):
     """Delete a vertex subset from a simplicial complex."""
 
     complex: SimplicialComplexRequest
-    vertices_to_delete: tuple[VertexLabel, ...] = Field(min_length=1)
+    vertices_to_delete: tuple[VertexLabel, ...] = Field(
+        min_length=1,
+        max_length=MAX_TOPOLOGY_VERTICES,
+    )
 
     @model_validator(mode="after")
     def require_valid_deletion(self) -> Self:
@@ -1240,6 +1430,7 @@ class BarycentricSubdivisionResult(TopologyExactResult):
     subdivision_vertices: tuple[str, ...]
     subdivision_facets: tuple[tuple[str, ...], ...]
     num_new_vertices: int
+    complex: SimplicialComplexRequest
     subdivision_complex: FiniteSimplicialComplex | None = None
     subdivision_vertex_faces: tuple[tuple[str, ...], ...] = Field(default=())
 
@@ -1263,16 +1454,20 @@ class BarycentricSubdivisionResult(TopologyExactResult):
                 raise ValueError(
                     "subdivision_complex vertices must match subdivision_vertices"
                 )
-            if len(self.subdivision_vertex_faces) != len(self.subdivision_vertices):
-                raise ValueError(
-                    "subdivision_vertex_faces must align with subdivision_vertices"
-                )
             # Validate vertex labels are bounded and injective
             if len(set(self.subdivision_vertices)) != len(self.subdivision_vertices):
                 raise ValueError("subdivision vertices must be unique")
             for label in self.subdivision_vertices:
                 if len(label) > 32 or not label[0].isalnum():
                     raise ValueError(f"invalid subdivision vertex label: {label}")
+        _require_subdivision_replay(
+            source_complex=self.complex,
+            original_vertices=self.original_vertices,
+            subdivision_vertices=self.subdivision_vertices,
+            subdivision_vertex_faces=self.subdivision_vertex_faces,
+            num_new_vertices=self.num_new_vertices,
+            subdivision_facets=self.subdivision_facets,
+        )
         return self
 
 
@@ -1324,7 +1519,10 @@ class ShellingCheckRequest(StrictModel):
     """Check a submitted shelling order of a pure complex."""
 
     complex: SimplicialComplexRequest
-    facet_order: tuple[int, ...] = Field(min_length=1)
+    facet_order: tuple[int, ...] = Field(
+        min_length=1,
+        max_length=MAX_TOPOLOGY_FACETS,
+    )
 
     @model_validator(mode="after")
     def require_valid_order(self) -> Self:
@@ -1337,7 +1535,10 @@ class ShellingCheckResult(TopologyExactResult):
     """Result of checking a shelling order, bound to its checked source."""
 
     complex: SimplicialComplexRequest
-    facet_order: tuple[int, ...] = Field(min_length=1)
+    facet_order: tuple[int, ...] = Field(
+        min_length=1,
+        max_length=MAX_TOPOLOGY_FACETS,
+    )
     is_shelling: bool
     failed_at: int | None = None
     failure_reason: str | None = None
@@ -1376,8 +1577,17 @@ class ElementaryCollapseRequest(StrictModel):
     """Check and perform one elementary collapse step (free face must be codimension-one)."""
 
     complex: SimplicialComplexRequest
-    free_face: tuple[VertexLabel, ...] = Field(min_length=1)
-    coface: tuple[VertexLabel, ...] = Field(min_length=2)
+    # A coface is a facet, so it carries at most MAX_TOPOLOGY_DIMENSION + 1
+    # vertices; capping the candidate tuples keeps accepted request work tied
+    # to the complex's bounds even when labels are not vertices at all.
+    free_face: tuple[VertexLabel, ...] = Field(
+        min_length=1,
+        max_length=MAX_TOPOLOGY_DIMENSION,
+    )
+    coface: tuple[VertexLabel, ...] = Field(
+        min_length=2,
+        max_length=MAX_TOPOLOGY_DIMENSION + 1,
+    )
 
     @model_validator(mode="after")
     def require_valid_collapse(self) -> Self:
@@ -1452,8 +1662,8 @@ class ElementaryCollapseResult(TopologyExactResult):
 
     complex: SimplicialComplexRequest
     is_free_face: bool
-    free_face: tuple[str, ...]
-    coface: tuple[str, ...]
+    free_face: tuple[str, ...] = Field(max_length=MAX_TOPOLOGY_DIMENSION)
+    coface: tuple[str, ...] = Field(max_length=MAX_TOPOLOGY_DIMENSION + 1)
     remaining_facets: tuple[tuple[str, ...], ...]
     remaining_vertices: tuple[str, ...]
     remaining_complex: FiniteSimplicialComplex | None = None

@@ -62,7 +62,10 @@ class ShiftedHankelRequest(StrictModel):
     """Compute the shifted Hankel matrix H_r^(1)[i,j] = mu_(i+j+1)."""
 
     prefix: MomentFunctionalPrefix
-    order: int = Field(ge=0, le=MAX_HANKEL_ORDER)
+    # A shifted matrix of order r consumes mu_1..mu_(2r+1); the canonical
+    # prefix holds at most 65 moments, so r = 32 could never validate and
+    # must not be advertised as supported.
+    order: int = Field(ge=0, le=MAX_HANKEL_ORDER - 1)
 
     @model_validator(mode="after")
     def require_sufficient_moments(self) -> Self:
@@ -164,16 +167,45 @@ class JacobiMatrixRequest(StrictModel):
         """Pre-computation height bound on the derived recurrence entries.
 
         Every derived alpha is a difference of admitted family
-        coefficients, but each derived beta is an adjacent-norm ratio
-        h_k / h_{k-1}: a vanishing norm makes the ratio undefined and a
-        representable pair can still exceed the canonical result height.
-        Reject such families here so every accepted request can return
-        its declared result.
+        coefficients, but representable coefficients do not imply a
+        representable difference; each derived beta is an adjacent-norm
+        ratio h_k / h_{k-1}: a vanishing norm makes the ratio undefined
+        and a representable pair can still exceed the canonical result
+        height. Reject such families here so every accepted request can
+        return its declared result.
         """
+        from fractions import Fraction
+
         polys = self.family.polynomials
         # A canonical rational carries at most MAX_CANONICAL_RATIONAL_DIGITS
         # digits, i.e. its absolute value stays below 10**that limit.
         digit_limit = 10**MAX_CANONICAL_RATIONAL_DIGITS
+        # Derived alphas: alpha_0 = -p_1's constant term; for k >= 1 the
+        # residual x*p_k - p_{k+1} carries alpha_k on p_k. Each emitted
+        # entry must stay canonical before the operation converts it.
+        for k in range(len(polys) - 1):
+            p_k = [c.as_fraction() for c in polys[k].coefficients]
+            p_next = [c.as_fraction() for c in polys[k + 1].coefficients]
+            if k == 0:
+                alpha_k = -p_next[0]
+            else:
+                x_pk = [Fraction(0)] * (len(p_k) + 1)
+                for i, coefficient in enumerate(p_k):
+                    x_pk[i + 1] = coefficient
+                residual = [
+                    (x_pk[i] - p_next[i]) if i < len(p_next) else x_pk[i]
+                    for i in range(len(x_pk))
+                ]
+                alpha_k = residual[k] if k < len(residual) else Fraction(0)
+            if (
+                abs(alpha_k.numerator) >= digit_limit
+                or alpha_k.denominator >= digit_limit
+            ):
+                raise ValueError(
+                    f"derived recurrence entry alpha_{k} exceeds the "
+                    "canonical rational digit limit; supply a family whose "
+                    "coefficient differences stay representable"
+                )
         # The operation derives norm ratios h_k/h_{k-1} only for the
         # interior steps that actually appear in the (n-1)-dimensional
         # matrix; terminal ratios are never emitted and must not gate
@@ -223,23 +255,24 @@ class GaussianQuadratureRequest(StrictModel):
 
         The exact-node contract carries canonical rationals; algebraic
         nodes such as +-sqrt(1/3) cannot be represented, so such prefixes
-        are rejected here instead of failing during execution.
+        are rejected here instead of failing during execution. Gaussian
+        construction divides by norms only through p_{n-1}, so a vanishing
+        terminal norm (a measure supported on exactly n points) stays
+        admissible.
         """
+        from fractions import Fraction
+
         import sympy
 
         from jacobian.math.moments_orthogonal.operations import (
-            compute_orthogonal_polynomials,
+            _build_quadrature_rule,
+            _construct_monic_orthogonal_polynomial,
         )
 
-        family = compute_orthogonal_polynomials(
-            OrthogonalPolynomialRequest(prefix=self.prefix, max_degree=self.order)
-        )
-        coefficients = family.polynomials[self.order].coefficients
+        moments = [Fraction(*v.as_integer_ratio()) for v in self.prefix.moments]
+        coefficients = _construct_monic_orthogonal_polynomial(moments, self.order)
         x = sympy.Symbol(self.prefix.variable)
-        poly = sum(
-            sympy.Rational(*c.as_integer_ratio()) * x**i
-            for i, c in enumerate(coefficients)
-        )
+        poly = sum(coefficient * x**i for i, coefficient in enumerate(coefficients))
         _, factors = sympy.factor_list(poly)
         if any(
             sympy.degree(factor, x) != 1 or multiplicity != 1
@@ -254,19 +287,7 @@ class GaussianQuadratureRequest(StrictModel):
         # Positive weights are part of the declared contract; replay the
         # exact construction so a nonpositive weight is rejected here
         # instead of raising during execution.
-        from fractions import Fraction
-
-        from jacobian.math.moments_orthogonal.operations import (
-            _construct_quadrature_rule,
-        )
-
-        _nodes, weights = _construct_quadrature_rule(
-            [Fraction(*c.as_integer_ratio()) for c in coefficients],
-            [Fraction(*v.as_integer_ratio()) for v in self.prefix.moments],
-            self.order,
-        )
-        if weights is None:
-            raise ValueError("Vandermonde system is singular")
+        _nodes, weights = _build_quadrature_rule(self.prefix, self.order)
         if any(weight <= 0 for weight in weights):
             raise ValueError(
                 "quadrature admission requires strictly positive weights; "

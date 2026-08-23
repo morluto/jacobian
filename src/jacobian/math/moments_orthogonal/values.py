@@ -75,8 +75,13 @@ class HankelMomentMatrix(StrictModel):
 class OrthogonalPolynomialTerm(StrictModel):
     """One monic orthogonal polynomial p_k(x) with its squared norm."""
 
-    degree: int = Field(ge=0)
-    coefficients: tuple[CanonicalRational, ...] = Field(min_length=1)
+    degree: int = Field(ge=0, le=MAX_POLYNOMIAL_DEGREE)
+    # Schema-visible cap matching the family's degree bound: a degree-k
+    # monic term carries exactly k+1 coefficients, so no admitted term can
+    # exceed MAX_POLYNOMIAL_DEGREE + 1 entries.
+    coefficients: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_POLYNOMIAL_DEGREE + 1
+    )
     squared_norm: CanonicalRational
 
 
@@ -295,9 +300,7 @@ class GaussianQuadratureRule(StrictModel):
             _to_fraction,
         )
 
-        p_n = [
-            _to_fraction(c) for c in _family_p_n(self.prefix, self.order).coefficients
-        ]
+        p_n = _family_p_n_coefficients(self.prefix, self.order)
         moments = [_to_fraction(m) for m in self.prefix.moments]
         nodes_frac, weights = _construct_quadrature_rule(p_n, moments, self.order)
         if weights is None:
@@ -315,16 +318,22 @@ class GaussianQuadratureRule(StrictModel):
         return self
 
 
-def _family_p_n(prefix: MomentFunctionalPrefix, order: int) -> OrthogonalPolynomialTerm:
-    from jacobian.math.moments_orthogonal._models import OrthogonalPolynomialRequest
+def _family_p_n_coefficients(
+    prefix: MomentFunctionalPrefix, order: int
+) -> list[Fraction]:
+    """The monic p_order of the retained prefix, as exact fractions.
+
+    Gaussian construction divides by norms only through p_{order-1}, so a
+    vanishing terminal norm (finite-support measure) stays admissible;
+    only the polynomial's coefficients are needed for the node replay.
+    """
     from jacobian.math.moments_orthogonal.operations import (
-        compute_orthogonal_polynomials,
+        _construct_monic_orthogonal_polynomial,
     )
 
-    family = compute_orthogonal_polynomials(
-        OrthogonalPolynomialRequest(prefix=prefix, max_degree=order)
+    return _construct_monic_orthogonal_polynomial(
+        [m.as_fraction() for m in prefix.moments], order
     )
-    return family.polynomials[order]
 
 
 def _construct_quadrature_rule(

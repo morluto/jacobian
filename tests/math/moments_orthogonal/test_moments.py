@@ -746,3 +746,116 @@ class TestKernelFamilyBinding:
         )
         with pytest.raises(ValidationError, match="exact Christoffel-Darboux"):
             ChristoffelDarbouxKernel.model_validate(payload)
+
+
+class TestDerivedAlphaHeightAdmission:
+    def test_nonrepresentable_derived_alpha_rejected_at_admission(self) -> None:
+        """Two canonical coefficients can differ by a non-canonical rational;
+        the emitted alpha must be bounded before the operation converts it,
+        so an accepted request cannot die mid-execution."""
+        from jacobian.math.moments_orthogonal.values import (
+            OrthogonalPolynomialFamily,
+            OrthogonalPolynomialTerm,
+        )
+
+        big = 10**32768 - 1
+        zero = CanonicalRational(num="0", den="1")
+        one = CanonicalRational(num="1", den="1")
+        family = OrthogonalPolynomialFamily(
+            polynomials=(
+                OrthogonalPolynomialTerm(
+                    degree=0, coefficients=(one,), squared_norm=one
+                ),
+                # p_1 = x + (10**32768 - 1) with a vanishing norm, which
+                # disables the beta ratio checks without constraining the
+                # derived alpha difference below.
+                OrthogonalPolynomialTerm(
+                    degree=1,
+                    coefficients=(
+                        CanonicalRational.from_fraction(Fraction(big)),
+                        one,
+                    ),
+                    squared_norm=zero,
+                ),
+                OrthogonalPolynomialTerm(
+                    degree=2,
+                    coefficients=(
+                        zero,
+                        CanonicalRational.from_fraction(Fraction(-big)),
+                        one,
+                    ),
+                    squared_norm=one,
+                ),
+            ),
+            variable="x",
+            is_quasi_definite=False,
+            is_positive_definite=False,
+        )
+        with pytest.raises(ValidationError, match="canonical rational digit limit"):
+            JacobiMatrixRequest(family=family)
+
+
+class TestFiniteSupportQuadratureAdmission:
+    def test_finite_support_rule_admitted(self) -> None:
+        """A measure supported on exactly n points has a vanishing terminal
+        norm h_n; Gaussian construction divides only through p_{n-1}, so the
+        exact rule on the retained prefix must stay admitted."""
+        moments = tuple(
+            CanonicalRational(num=v, den="1") for v in ("2", "0", "2", "0", "2")
+        )
+        request = GaussianQuadratureRequest(prefix=_prefix(moments), order=2)
+        result = compute_gaussian_quadrature(request)
+        nodes = {(int(n.node.num), int(n.node.den)) for n in result.nodes}
+        assert nodes == {(-1, 1), (1, 1)}
+        for node in result.nodes:
+            assert (int(node.weight.num), int(node.weight.den)) == (1, 1)
+        assert result.exactness_degree == 3
+
+    def test_result_round_trips_through_model_validate(self) -> None:
+        """The deserialized finite-support rule replays against its prefix
+        without requiring a quasi-definite terminal norm."""
+        moments = tuple(
+            CanonicalRational(num=v, den="1") for v in ("2", "0", "2", "0", "2")
+        )
+        result = compute_gaussian_quadrature(
+            GaussianQuadratureRequest(prefix=_prefix(moments), order=2)
+        )
+        revalidated = GaussianQuadratureRule.model_validate(result.model_dump())
+        assert revalidated == result
+
+
+class TestShiftedHankelOrderCap:
+    def test_order_32_is_not_schema_advertised(self) -> None:
+        """A shifted matrix of order 32 would need mu_1..mu_66 but the
+        canonical prefix holds at most 65 moments, so order 32 must not be
+        advertised as supported."""
+        full_prefix = _prefix(
+            tuple(CanonicalRational(num="1", den="1") for _ in range(65))
+        )
+        with pytest.raises(ValidationError):
+            ShiftedHankelRequest(prefix=full_prefix, order=32)
+        assert ShiftedHankelRequest(prefix=full_prefix, order=31)
+
+
+class TestCoefficientTupleSchemaBound:
+    def test_term_coefficients_cannot_exceed_degree_bound(self) -> None:
+        """The schema cap on each term's coefficient tuple matches the
+        family's degree bound, so no admitted request can carry an
+        unbounded coefficient array inside a low-degree term."""
+        from jacobian.math.moments_orthogonal.values import (
+            OrthogonalPolynomialTerm,
+        )
+
+        one = CanonicalRational(num="1", den="1")
+        accepted = OrthogonalPolynomialTerm(
+            degree=0,
+            coefficients=tuple(one for _ in range(1)),
+            squared_norm=one,
+        )
+        assert len(accepted.coefficients) == 1
+        with pytest.raises(ValidationError):
+            OrthogonalPolynomialTerm(
+                degree=0,
+                coefficients=tuple(one for _ in range(34)),
+                squared_norm=one,
+            )

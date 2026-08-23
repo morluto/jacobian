@@ -166,6 +166,65 @@ def _require_nonzero_norm(norm: Fraction, degree: int) -> None:
         )
 
 
+def _moment_inner(
+    moments: list[Fraction],
+    coeffs_a: list[Fraction],
+    coeffs_b: list[Fraction],
+) -> Fraction:
+    """L(a*b) for polynomials given lowest-degree-first over the prefix."""
+    product = [Fraction(0)] * (len(coeffs_a) + len(coeffs_b) - 1)
+    for i, a in enumerate(coeffs_a):
+        for j, b in enumerate(coeffs_b):
+            product[i + j] += a * b
+    result = Fraction(0)
+    for k, coeff in enumerate(product):
+        if k < len(moments):
+            result += coeff * moments[k]
+    return result
+
+
+def _project_out(
+    moments: list[Fraction],
+    target: list[Fraction],
+    basis_polynomial: list[Fraction],
+    basis_norm: Fraction,
+) -> None:
+    """Subtract target's projection onto one basis polynomial."""
+    projection = _moment_inner(moments, target, basis_polynomial) / basis_norm
+    for i, coefficient in enumerate(basis_polynomial):
+        target[i] -= projection * coefficient
+
+
+def _construct_monic_orthogonal_polynomial(
+    moments: list[Fraction], degree: int
+) -> list[Fraction]:
+    """Exact monic ``p_degree`` via Gram-Schmidt over the moment functional.
+
+    Gaussian construction divides by squared norms only through
+    ``p_{degree - 1}``: building ``p_n`` projects onto earlier polynomials,
+    and a vanishing terminal norm ``h_degree`` is admissible (it is exactly
+    the finite-support case where the measure sits on ``degree`` points).
+    The terminal norm is therefore not computed here.
+    """
+    polynomials: list[list[Fraction]] = []
+    squared_norms: list[Fraction] = []
+    for n in range(degree):
+        p_n = [Fraction(0)] * (n + 1)
+        p_n[n] = Fraction(1)
+        for k in range(n):
+            _project_out(moments, p_n, polynomials[k], squared_norms[k])
+        norm = _moment_inner(moments, p_n, p_n)
+        _require_nonzero_norm(norm, n)
+        polynomials.append(p_n)
+        squared_norms.append(norm)
+
+    p_degree = [Fraction(0)] * (degree + 1)
+    p_degree[degree] = Fraction(1)
+    for k in range(degree):
+        _project_out(moments, p_degree, polynomials[k], squared_norms[k])
+    return p_degree
+
+
 def compute_orthogonal_polynomials(
     request: OrthogonalPolynomialRequest,
 ) -> OrthogonalPolynomialFamily:
@@ -456,13 +515,8 @@ def _build_quadrature_rule(
     prefix: MomentFunctionalPrefix, order: int
 ) -> tuple[list[Fraction], list[Fraction]]:
     """Pure nodes+weights construction shared by execution and validation."""
-    from jacobian.math.moments_orthogonal._models import OrthogonalPolynomialRequest
-
     moments = [_to_fraction(m) for m in prefix.moments]
-    family = compute_orthogonal_polynomials(
-        OrthogonalPolynomialRequest(prefix=prefix, max_degree=order)
-    )
-    p_n = [_to_fraction(c) for c in family.polynomials[order].coefficients]
+    p_n = _construct_monic_orthogonal_polynomial(moments, order)
     nodes, weights = _construct_quadrature_rule(p_n, moments, order)
     if weights is None:
         raise ValueError("Vandermonde system is singular")

@@ -9,8 +9,10 @@ from jacobian.math.moments_orthogonal.values import (
     MAX_HANKEL_DIMENSION,
     MAX_MOMENTS,
     MAX_POLYNOMIAL_COUNT,
+    MAX_QUADRATURE_MAGNITUDE,
     MAX_QUADRATURE_POINTS,
     MAX_RECURRENCE_ORDER,
+    MIN_QUADRATURE_SUBDIAGONAL,
     ChristoffelDarbouxKernel,
     GaussianQuadrature,
     HankelMatrix,
@@ -229,6 +231,14 @@ def christoffel_darboux(
         return ChristoffelDarbouxKernel(
             kernel=Fraction(0), polynomials_evaluated=(Fraction(1),)
         )
+    # Every subdiagonal ratio the recurrence consumes is a squared-norm ratio
+    # of a positive-definite family; admitting nonpositive values would let
+    # the documented sum of squared polynomial values turn negative.
+    for index in range(1, min(n, len(beta))):
+        if beta[index] <= 0:
+            raise ValueError(
+                "subdiagonal beta entries must be positive squared-norm ratios"
+            )
     px_prev = Fraction(0)
     px_curr = Fraction(1)
     py_prev = Fraction(0)
@@ -245,11 +255,8 @@ def christoffel_darboux(
         py_next = (y - alpha_k) * py_curr - rec_beta * py_prev
         px_prev, px_curr = px_curr, px_next
         py_prev, py_curr = py_curr, py_next
-        # Advancing the squared norm to h_{k+1} uses beta_{k+1} = beta[k + 1].
-        if k + 1 >= len(beta) or beta[k + 1] == 0:
-            raise ValueError(
-                "recurrence coefficients do not define the requested kernel"
-            )
+        # Advancing the squared norm to h_{k+1} uses beta_{k+1} = beta[k + 1];
+        # positivity of every consumed ratio was admitted above.
         next_beta = beta[k + 1]
         h = next_beta * h
         kernel += px_curr * py_curr / h
@@ -257,6 +264,43 @@ def christoffel_darboux(
     return ChristoffelDarbouxKernel(
         kernel=kernel, polynomials_evaluated=tuple(evaluated)
     )
+
+
+def _require_quadrature_double_domain(
+    alpha: Sequence[Fraction], beta: Sequence[Fraction]
+) -> None:
+    """Admit exactly the coefficients Golub-Welsch can convert safely.
+
+    The kernel runs in IEEE doubles, so every coefficient must convert to a
+    finite double and every subdiagonal entry must stay far from underflow
+    before any conversion happens.
+    """
+
+    n = len(alpha)
+    if not 1 <= n <= MAX_QUADRATURE_POINTS:
+        raise ValueError("alpha must contain between 1 and 16 entries")
+    if len(beta) != n and len(beta) != n + 1:
+        raise ValueError("beta must have length len(alpha) or len(alpha)+1")
+    if beta[0] <= 0:
+        raise ValueError("beta_0 (the zeroth moment) must be positive")
+    if beta[0] < MIN_QUADRATURE_SUBDIAGONAL:
+        raise ValueError(
+            "beta_0 falls below the quadrature underflow bound and would give zero weight"
+        )
+    for index in range(1, min(n, len(beta))):
+        if beta[index] <= 0:
+            raise ValueError(
+                "subdiagonal beta entries must be positive squared-norm ratios"
+            )
+        if beta[index] < MIN_QUADRATURE_SUBDIAGONAL:
+            raise ValueError(
+                "subdiagonal beta entries fall below the quadrature underflow bound"
+            )
+    for value in (*alpha, *beta):
+        if abs(value) > MAX_QUADRATURE_MAGNITUDE:
+            raise ValueError(
+                "quadrature coefficients exceed the finite-float magnitude bound"
+            )
 
 
 def gaussian_quadrature(
@@ -277,22 +321,12 @@ def gaussian_quadrature(
 
     import numpy as np
 
+    _require_quadrature_double_domain(alpha, beta)
     n = len(alpha)
-    if not 1 <= n <= MAX_QUADRATURE_POINTS:
-        raise ValueError("alpha must contain between 1 and 16 entries")
-    if len(beta) != n and len(beta) != n + 1:
-        raise ValueError("beta must have length len(alpha) or len(alpha)+1")
-    if beta[0] <= 0:
-        raise ValueError("beta_0 (the zeroth moment) must be positive")
     diagonal = np.array([float(a) for a in alpha], dtype=float)
     off: list[float] = []
     for k in range(n - 1):
-        if k + 1 >= len(beta):
-            break
-        sub = beta[k + 1]
-        if sub < 0:
-            raise ValueError("subdiagonal beta entries must be nonnegative")
-        off.append(math.sqrt(float(sub)))
+        off.append(math.sqrt(float(beta[k + 1])))
     jacobi = np.diag(diagonal)
     if off:
         off_arr = np.array(off, dtype=float)

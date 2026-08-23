@@ -188,6 +188,27 @@ class TestChristoffelDarboux:
         assert result.kernel == _frac(0, 1)
         assert result.polynomials_evaluated == (_frac(1, 1),)
 
+    def test_negative_subdiagonal_rejected(self) -> None:
+        """The reviewer's counterexample: a negative norm ratio is not a
+        squared norm, so the native kernel must reject it before recurrence
+        instead of returning an unsigned diagonal kernel."""
+        with pytest.raises(ValueError, match="positive squared-norm ratios"):
+            christoffel_darboux(
+                (Fraction(0), Fraction(0)),
+                (Fraction(1), Fraction(-1)),
+                Fraction(2),
+                Fraction(2),
+            )
+
+    def test_zero_subdiagonal_rejected(self) -> None:
+        with pytest.raises(ValueError, match="positive squared-norm ratios"):
+            christoffel_darboux(
+                (_frac(0, 1), _frac(0, 1)),
+                (_frac(1, 1), _frac(0, 1)),
+                _frac(1, 1),
+                _frac(1, 1),
+            )
+
 
 class TestChristoffelDarbouxBoundedness:
     """Admission must bound coefficient growth as a function of order."""
@@ -278,6 +299,26 @@ class TestGaussianQuadrature:
     def test_alpha_empty_rejected(self) -> None:
         with pytest.raises(ValueError, match="between 1 and 16"):
             gaussian_quadrature((), (_frac(1, 1),))
+
+    def test_oversized_coefficient_rejected_before_float_conversion(self) -> None:
+        """A huge diagonal must be rejected by admission, not overflow."""
+        with pytest.raises(ValueError, match="magnitude bound"):
+            gaussian_quadrature((Fraction(10**400),), (_frac(1, 1),))
+
+    def test_magnitude_boundary_admitted(self) -> None:
+        result = gaussian_quadrature((Fraction(10**300),), (_frac(1, 1), _frac(1, 3)))
+        assert len(result.nodes) == 1
+
+    def test_underflow_subdiagonal_rejected(self) -> None:
+        with pytest.raises(ValueError, match="underflow"):
+            gaussian_quadrature(
+                (_frac(0, 1), _frac(0, 1)),
+                (_frac(1, 1), Fraction(1, 10**400)),
+            )
+
+    def test_negative_subdiagonal_rejected(self) -> None:
+        with pytest.raises(ValueError, match="positive squared-norm ratios"):
+            gaussian_quadrature((_frac(0, 1), _frac(0, 1)), (_frac(1, 1), _frac(-1, 3)))
 
 
 # ---------------------------------------------------------------------------

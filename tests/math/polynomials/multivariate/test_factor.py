@@ -480,3 +480,61 @@ class TestUniqueFactorizationReplay:
                 factors=tuple(records),
                 reconstructed=result.reconstructed,
             )
+
+
+def _prime_denominator_poly(prime_count):
+    """Distinct 256-digit prime reciprocals over distinct bivariate monomials."""
+    from sympy import nextprime
+
+    primes = []
+    candidate = 10**255 + 12345
+    for _ in range(prime_count):
+        candidate = nextprime(candidate)
+        primes.append(candidate)
+    monomials = [
+        (exponent_x, exponent_y)
+        for exponent_x in range(63, -1, -1)
+        for exponent_y in range(63, -1, -1)
+    ][:prime_count]
+    return _poly(
+        ("x", "y"),
+        tuple((1, primes[index], monomials[index]) for index in range(prime_count)),
+    )
+
+
+class TestAggregateContentAdmission:
+    """Requests must admit only representable derived values (#2226).
+
+    Per-term digit budgets do not bound the aggregate content: clearing
+    denominators to their least common multiple inflates both the rational
+    content every result carries as one canonical rational and the primitive
+    integer coefficients published as the reconstructed polynomial.
+    """
+
+    def test_many_prime_denominators_rejected_before_backend(self):
+        """129 distinct 256-digit prime denominators pass every per-term
+        budget yet their least common multiple exceeds the canonical
+        32,768-digit rational limit, so the operation could never return its
+        declared typed result; admission rejects before invoking SymPy."""
+        with pytest.raises(ValidationError, match="aggregate rational content"):
+            MultivariateFactorRequest(polynomial=_prime_denominator_poly(129))
+
+    def test_content_within_limit_but_primitive_coefficients_rejected(self):
+        """Even with the least common multiple inside the canonical limit,
+        clearing denominators can push every primitive coefficient past the
+        operation's own 256-digit coefficient budget."""
+        with pytest.raises(ValidationError, match="primitive integer coefficients"):
+            MultivariateFactorRequest(polynomial=_prime_denominator_poly(127))
+
+    def test_small_shared_denominators_still_admitted(self):
+        """Ordinary rational coefficients clear to small primitive values
+        and remain serviceable end to end."""
+        request = MultivariateFactorRequest(
+            polynomial=_poly(
+                ("x", "y"),
+                ((1, 6, (2, 1)), (-1, 10, (1, 0))),
+            )
+        )
+        result = multivariate_factor(request)
+        assert result.status == "FACTORIZED"
+        assert MultivariateFactorResult.model_validate(result.model_dump()) == result

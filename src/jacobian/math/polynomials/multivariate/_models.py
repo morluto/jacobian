@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from math import comb
+from functools import reduce
+from math import comb, gcd, lcm
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.polynomials.values import (
     PolynomialVariable,
@@ -248,7 +249,45 @@ class MultivariateFactorRequest(StrictModel):
             maximum_exponent=_MAX_MULTIVARIATE_EXPONENT,
             maximum_coefficient_digits=_MAX_MULTIVARIATE_COEFFICIENT_DIGITS,
         )
+        _require_representable_content(self.polynomial)
         return self
+
+
+def _require_representable_content(polynomial: RationalPolynomial) -> None:
+    """Bound the aggregate rational content before any backend expansion.
+
+    Clearing denominators to the least common multiple of all term
+    denominators produces the primitive integer representative, so per-term
+    digit budgets bound neither the rational content every result carries as
+    one canonical rational nor the primitive coefficients the reconstructed
+    polynomial and its monic factors must publish.  Wire terms are reduced,
+    so the cleared content is already reduced, and both derived envelopes
+    are checked here with exact integer arithmetic on the admitted terms.
+    """
+
+    fractions = [term.coefficient.as_fraction() for term in polynomial.polynomial.terms]
+    common_denominator = reduce(lcm, (value.denominator for value in fractions), 1)
+    scaled = [
+        value.numerator * (common_denominator // value.denominator)
+        for value in fractions
+    ]
+    content_numerator = gcd(*scaled)
+    canonical_bound = 10**MAX_CANONICAL_RATIONAL_DIGITS
+    if (
+        abs(content_numerator) >= canonical_bound
+        or common_denominator >= canonical_bound
+    ):
+        raise ValueError(
+            "aggregate rational content exceeds the "
+            f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit representable bound"
+        )
+    primitive_bound = 10**_MAX_MULTIVARIATE_COEFFICIENT_DIGITS
+    for value in scaled:
+        if abs(value // content_numerator) >= primitive_bound:
+            raise ValueError(
+                "primitive integer coefficients exceed the "
+                f"{_MAX_MULTIVARIATE_COEFFICIENT_DIGITS}-digit operation budget"
+            )
 
 
 class MultivariateIrreducibleFactor(StrictModel):

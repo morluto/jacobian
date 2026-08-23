@@ -141,9 +141,12 @@ class TestJacobiMatrix:
         assert result.diagonal == ()
         assert result.off_diagonal == ()
 
-    def test_zero_beta_rejected(self) -> None:
-        with pytest.raises(ValueError, match="nonzero"):
+    def test_nonpositive_beta_rejected(self) -> None:
+        """beta_0 is the zeroth moment of a positive functional."""
+        with pytest.raises(ValueError, match=r"zeroth moment.*positive"):
             jacobi_matrix((_frac(0, 1),), (_frac(0, 1), _frac(1, 1)))
+        with pytest.raises(ValueError, match=r"zeroth moment.*positive"):
+            jacobi_matrix((_frac(0, 1),), (_frac(-2, 1), _frac(1, 1)))
 
 
 # ---------------------------------------------------------------------------
@@ -212,6 +215,15 @@ class TestGaussianQuadrature:
     def test_alpha_empty_rejected(self) -> None:
         with pytest.raises(ValueError, match="between 1 and 16"):
             gaussian_quadrature((), (_frac(1, 1),))
+
+    def test_negative_mass_rejected(self) -> None:
+        """beta_0 is the zeroth moment; a negative mass admits no quadrature rule."""
+        with pytest.raises(ValueError, match=r"zeroth moment.*positive"):
+            gaussian_quadrature((Fraction(0),), (Fraction(-1),))
+
+    def test_zero_mass_rejected(self) -> None:
+        with pytest.raises(ValueError, match=r"zeroth moment.*positive"):
+            gaussian_quadrature((Fraction(0),), (Fraction(0),))
 
 
 # ---------------------------------------------------------------------------

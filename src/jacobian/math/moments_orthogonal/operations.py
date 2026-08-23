@@ -269,8 +269,8 @@ def gaussian_quadrature(
         raise ValueError("alpha must contain between 1 and 16 entries")
     if len(beta) != n and len(beta) != n + 1:
         raise ValueError("beta must have length len(alpha) or len(alpha)+1")
-    if beta[0] == 0:
-        raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+    if beta[0] <= 0:
+        raise ValueError("beta_0 (the zeroth moment) must be positive")
     diagonal = np.array([float(a) for a in alpha], dtype=float)
     off: list[float] = []
     for k in range(n - 1):

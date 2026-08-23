@@ -30,6 +30,7 @@ def test_logic_bundle_exposes_only_atomic_inline_operations() -> None:
         "sat.solve",
         "smt.solve",
         "lean.check",
+        "smt.unsat_core",
     )
 
 

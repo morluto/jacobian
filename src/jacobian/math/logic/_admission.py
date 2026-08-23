@@ -35,6 +35,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "distinct exact or explicitly bounded search outcome with material computational leverage",
     ),
+    OperationAdmission(
+        "smt.unsat_core",
+        AdmissionDecision.KEEP,
+        "replayable source-bound contradiction certificate with distinct proof-extraction leverage",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

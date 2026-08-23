@@ -331,6 +331,20 @@ class TestWireAdapters:
         assert result.dimension == 4
         assert isinstance(result, HankelMatrixResult)
 
+    def test_hankel_matrix_composes_with_canonical_matrix_consumers(self) -> None:
+        """The producer field must feed canonical matrix consumers unchanged."""
+        from jacobian.math.matrices._operation_models import (
+            MatrixRankRequest,
+            RationalMatrixRequest,
+        )
+
+        request = HankelMatrixRequest(moments=tuple(_cr(1, k) for k in range(1, 8)))
+        result = compute_hankel_matrix(request)
+        rank_request = MatrixRankRequest(matrix=result.matrix)
+        assert rank_request.matrix.entries == result.matrix.entries
+        rref_request = RationalMatrixRequest(matrix=result.matrix)
+        assert rref_request.matrix.domain == "QQ"
+
     def test_recurrence_wire(self) -> None:
         request = RecurrenceCoefficientsRequest(
             moments=tuple(_cr(1, k) for k in range(1, 8))

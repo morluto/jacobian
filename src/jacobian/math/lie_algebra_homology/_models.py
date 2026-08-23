@@ -133,6 +133,14 @@ class DifferentialMatrix(StrictModel):
     The differential is retained as the canonical prime-field matrix value so
     it serializes with the result and composes unchanged with the GF(p)
     matrix operations; the legacy flat fields are derivations of it.
+
+    Exterior-basis axes: with ``n`` the retained Lie-algebra dimension and
+    ``p`` the differential's ``degree``, row ``i`` is the lexicographically
+    ``i``-th element of ``combinations(range(n), p - 1)`` (target wedge basis
+    of Lambda^{p-1}) and column ``j`` is the lexicographically ``j``-th
+    element of ``combinations(range(n), p)`` (source wedge basis of
+    Lambda^p). Both axes are therefore reconstructible from the retained
+    algebra dimension and this degree.
     """
 
     degree: int = Field(ge=0)

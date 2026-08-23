@@ -79,7 +79,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "moments.hankel_matrix.compute",
         "Compute the Hankel matrix from a moment sequence",
         "Build the exact Hankel matrix H[i][j] = mu_{i+j} from a bounded "
-        "sequence of exact rational moments.",
+        "sequence of exact rational moments. The matrix is returned as the "
+        "canonical RationalMatrix value, so it composes unchanged with "
+        "matrix.rank.compute, matrix.normal_form.rref.compute, and the "
+        "other canonical-matrix operations.",
         HankelMatrixRequest,
         HankelMatrixResult,
         compute_hankel_matrix,

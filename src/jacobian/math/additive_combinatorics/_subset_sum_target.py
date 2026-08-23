@@ -193,26 +193,41 @@ class SubsetSumTargetResult(StrictModel):
 
         if not isinstance(value, Mapping):
             return value
-        item_count = _raw_source_item_count(value.get("source"))
-        raw_target = value.get("target")
+        prepared: dict[str, object] = dict(value)
+        raw_source = prepared.get("source")
+        if isinstance(raw_source, Mapping):
+            source = dict(raw_source)
+            raw_values = source.get("values")
+            if isinstance(raw_values, list):
+                source["values"] = tuple(raw_values)
+            prepared["source"] = source
+        raw_witness = prepared.get("witness")
+        if isinstance(raw_witness, Mapping):
+            witness = dict(raw_witness)
+            raw_indices = witness.get("indices")
+            if isinstance(raw_indices, list):
+                witness["indices"] = tuple(raw_indices)
+            prepared["witness"] = witness
+        item_count = _raw_source_item_count(prepared.get("source"))
+        raw_target = prepared.get("target")
         if isinstance(raw_target, str):
             _require_integer_digits(raw_target, "target")
-        raw_sum = value.get("reconstructed_sum")
+        raw_sum = prepared.get("reconstructed_sum")
         if isinstance(raw_sum, str) and (
             len(raw_sum) - raw_sum.startswith("-") > MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS
         ):
             raise ValueError("reconstructed_sum exceeds the 262-digit result bound")
 
-        raw_witness = value.get("witness")
+        raw_witness = prepared.get("witness")
         if isinstance(raw_witness, IndexSubset):
             indices: list[object] | tuple[object, ...] = raw_witness.indices
         elif isinstance(raw_witness, Mapping):
             raw_indices = raw_witness.get("indices")
             if not isinstance(raw_indices, (list, tuple)):
-                return value
+                return prepared
             indices = raw_indices
         else:
-            return value
+            return prepared
         if len(indices) > MAX_SUBSET_SUM_REACHABLE_STATES:
             raise ValueError("subset-sum witness exceeds the 65,536-index result bound")
         maximum_index = (
@@ -223,7 +238,7 @@ class SubsetSumTargetResult(StrictModel):
         for index in indices:
             if type(index) is int and not 0 <= index < maximum_index:
                 raise ValueError("subset-sum witness index lies outside its source")
-        return value
+        return prepared
 
     @model_validator(mode="after")
     def bind_decision_to_source(self) -> Self:

@@ -520,7 +520,6 @@ source = { editable = "." }
 dependencies = [
     { name = "mcp" },
     { name = "networkx" },
-    { name = "numpy" },
     { name = "pydantic" },
     { name = "python-flint" },
     { name = "rfc8785" },
@@ -579,7 +578,6 @@ dev-core = [
 requires-dist = [
     { name = "mcp", specifier = "==2.0.0" },
     { name = "networkx", specifier = "==3.6.1" },
-    { name = "numpy", specifier = "==2.5.1" },
     { name = "pydantic", specifier = ">=2.12,<3" },
     { name = "python-flint", specifier = "==0.9.0" },
     { name = "rfc8785", specifier = "==0.1.4" },

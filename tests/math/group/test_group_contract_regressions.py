@@ -1,14 +1,51 @@
-from __future__ import annotations
+"""Contract regression tests for the finite group operations."""
 
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.group._models import GroupOrbitRequest
+from jacobian.math.group import (
+    PermutationGroupRequest,
+    group_orbit,
+    group_order,
+    group_stabilizer,
+)
+from jacobian.math.group._models import (
+    GroupOrbitRequest,
+    GroupStabilizerRequest,
+    GroupStabilizerResult,
+)
+from jacobian.math.group._operations import (
+    compute_group_orbit,
+    compute_group_order,
+    compute_group_stabilizer,
+)
+
+S3_GENERATORS = ((1, 2, 0), (1, 0, 2))
 
 
 def test_group_orbit_contract_binds_the_point_to_the_declared_degree() -> None:
+    group = PermutationGroupRequest(degree=2, generators=((1, 0),))
     with pytest.raises(ValidationError, match="point"):
-        GroupOrbitRequest(degree=2, generators=((1, 0),), point=3)
+        GroupOrbitRequest(group=group, point=3)
+
+
+def test_group_orbit_request_accepts_stabilizer_value_unchanged() -> None:
+    """The advertised chaining shape: a stabilizer result's canonical
+    subgroup value feeds the orbit request without reshaping."""
+    from jacobian.math.group._operations import compute_group_orbit
+
+    stabilizer_value = PermutationGroupRequest(degree=4, generators=((0, 1, 2, 3),))
+    request = GroupOrbitRequest(group=stabilizer_value, point=0)
+    assert request.group == stabilizer_value
+    result = compute_group_orbit(request)
+    assert result.orbit == (0,)
+    # The pre-fix parallel field shape must stay rejected.
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        GroupOrbitRequest.model_validate(
+            {"degree": 4, "generators": [[1, 2, 3, 0]], "point": 0}
+        )
 
 
 def test_group_conjugacy_classes_partition_s3() -> None:
@@ -196,3 +233,143 @@ def test_group_conjugacy_classes_result_round_trips_through_model_dump() -> None
     )
     revived = GroupConjugacyClassesResult.model_validate(result.model_dump())
     assert revived == result
+
+
+def test_group_stabilizer_request_takes_the_canonical_group_value() -> None:
+    group = PermutationGroupRequest(degree=3, generators=S3_GENERATORS)
+    request = GroupStabilizerRequest(group=group, point=0)
+    assert request.group == group
+
+    # The pre-fix parallel field shape must stay rejected so callers cannot
+    # silently rebuild the canonical value as top-level degree/generators.
+    with pytest.raises(ValidationError):
+        GroupStabilizerRequest(degree=3, generators=S3_GENERATORS, point=0)
+
+
+def test_group_stabilizer_chains_its_own_result_unchanged() -> None:
+    """A stabilizer chain feeds each result's subgroup back as ``group``."""
+    group = PermutationGroupRequest(
+        degree=6,
+        generators=((1, 2, 3, 0, 4, 5), (0, 2, 1, 3, 5, 4)),
+    )
+    first = compute_group_stabilizer(GroupStabilizerRequest(group=group, point=0))
+    assert first.source == group
+
+    second = compute_group_stabilizer(
+        GroupStabilizerRequest(group=first.stabilizer, point=1)
+    )
+    assert second.source == first.stabilizer
+
+    # Chain replay of the orbit-stabilizer theorem:
+    # |G| = |orbit_G(0)| * |orbit_H(1)| * |K| for K <= H <= G.
+    order_g = int(compute_group_order(group).order)
+    orbit_g_0 = compute_group_orbit(GroupOrbitRequest(group=group, point=0)).orbit
+    orbit_h_1 = compute_group_orbit(
+        GroupOrbitRequest(group=first.stabilizer, point=1)
+    ).orbit
+    order_k = int(compute_group_order(second.stabilizer).order)
+    assert len(orbit_g_0) > 1
+    assert len(orbit_h_1) > 1
+    assert order_k > 1
+    assert order_g == len(orbit_g_0) * len(orbit_h_1) * order_k
+
+
+def test_group_stabilizer_result_serializes_into_the_next_request() -> None:
+    """The serialized nested subgroup drops into the next wire request."""
+    group = PermutationGroupRequest(degree=4, generators=((1, 2, 3, 0),))
+    result = compute_group_stabilizer(GroupStabilizerRequest(group=group, point=0))
+    chained = GroupStabilizerRequest(
+        group=result.stabilizer.model_dump(),
+        point=0,
+    )
+    assert chained.group == result.stabilizer
+
+
+def test_native_stabilizer_returns_canonical_group_value_consumers_accept() -> None:
+    group = PermutationGroupRequest(
+        degree=4,
+        generators=((1, 2, 3, 0), (0, 3, 2, 1)),
+    )
+    stab = group_stabilizer(group, 0)
+    assert isinstance(stab, PermutationGroupRequest)
+    assert stab.degree == group.degree
+    assert all(generator[0] == 0 for generator in stab.generators)
+
+    # Native consumers accept the producer's value unchanged.
+    assert group_order(stab) == 2
+    assert group_orbit(stab, 1) == [1, 3]
+    assert group_order(group_stabilizer(stab, 1)) == 1
+
+    # The MCP wrapper and the native producer return the same canonical value.
+    wrapped = compute_group_stabilizer(GroupStabilizerRequest(group=group, point=0))
+    assert stab == wrapped.stabilizer
+
+
+def test_group_stabilizer_orbit_stabilizer_theorem() -> None:
+    """|G| = |orbit(point)| * |stabilizer(point)| for S3."""
+    group = PermutationGroupRequest(degree=3, generators=S3_GENERATORS)
+    order = int(compute_group_order(group).order)
+    orbit = compute_group_orbit(GroupOrbitRequest(group=group, point=0)).orbit
+    stab = compute_group_stabilizer(GroupStabilizerRequest(group=group, point=0))
+
+    # Stabilizer generators must fix the point.
+    for generator in stab.stabilizer.generators:
+        assert generator[0] == 0
+
+    # Stabilizer as a canonical group value is directly consumable.
+    assert stab.source == group
+    assert stab.stabilizer.degree == 3
+    stab_order = int(compute_group_order(stab.stabilizer).order)
+    assert order == len(orbit) * stab_order
+
+
+def test_group_stabilizer_trivial_is_identity_and_consumer_compatible() -> None:
+    """Trivial stabilizer must be consumable without reshaping."""
+    group = PermutationGroupRequest(degree=4, generators=((1, 2, 3, 0),))
+    stab = group_stabilizer(group, 0)
+    assert stab.generators == ((0, 1, 2, 3),)
+    assert group_order(stab) == 1
+
+    wrapped = compute_group_stabilizer(GroupStabilizerRequest(group=group, point=0))
+    assert wrapped.stabilizer.generators == ((0, 1, 2, 3),)
+    assert int(compute_group_order(wrapped.stabilizer).order) == 1
+    assert group_stabilizer(wrapped.stabilizer, 2) == wrapped.stabilizer
+
+
+def test_group_stabilizer_degree_one_boundary() -> None:
+    group = PermutationGroupRequest(degree=1, generators=((0,),))
+    stab = group_stabilizer(group, 0)
+    assert stab.generators == ((0,),)
+    assert group_order(stab) == 1
+    wrapped = compute_group_stabilizer(GroupStabilizerRequest(group=group, point=0))
+    assert wrapped.stabilizer == stab
+
+
+def test_group_stabilizer_rejects_invalid_point() -> None:
+    group = PermutationGroupRequest(degree=2, generators=((1, 0),))
+    with pytest.raises(ValidationError, match="point"):
+        GroupStabilizerRequest(group=group, point=5)
+    with pytest.raises(ValueError, match="point"):
+        group_stabilizer(group, 7)
+
+
+def test_forged_stabilizer_results_fail_defining_invariants() -> None:
+    group = PermutationGroupRequest(degree=4, generators=((1, 2, 3, 0),))
+
+    # A generator that does not fix the point is rejected.
+    with pytest.raises(ValidationError, match="fix the point"):
+        GroupStabilizerResult(
+            point=0,
+            source=group,
+            stabilizer=PermutationGroupRequest(degree=4, generators=((1, 2, 3, 0),)),
+        )
+
+    # A fixing permutation outside the source group breaks membership and the
+    # orbit-stabilizer relation |G| = |orbit| * |stab|.
+    impostor = PermutationGroupRequest(degree=4, generators=((0, 2, 1, 3),))
+    with pytest.raises(ValidationError, match=r"orbit-stabilizer|source group"):
+        GroupStabilizerResult(point=0, source=group, stabilizer=impostor)
+
+    # A genuine stabilizer passes its own validation unchanged.
+    genuine = compute_group_stabilizer(GroupStabilizerRequest(group=group, point=0))
+    assert GroupStabilizerResult.model_validate(genuine.model_dump()) == genuine

@@ -16,6 +16,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "exact conjugacy-class partition of a permutation group via SymPy, a fundamental group invariant",
     ),
     OperationAdmission(
+        "group.stabilizer.compute",
+        AdmissionDecision.KEEP,
+        "exact point-stabilizer generators via SymPy, the orbit-stabilizer complement to group.orbit.compute and group.order.compute",
+    ),
+    OperationAdmission(
         "group.element_order.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",

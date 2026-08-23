@@ -8,6 +8,7 @@ from jacobian.math.group import (
     group_conjugacy_classes,
     group_orbit,
     group_order,
+    group_stabilizer,
 )
 from jacobian.math.group._models import (
     GroupConjugacyClassesRequest,
@@ -17,12 +18,14 @@ from jacobian.math.group._models import (
     GroupOrbitRequest,
     GroupOrbitResult,
     GroupOrderResult,
+    GroupStabilizerRequest,
+    GroupStabilizerResult,
     PermutationGroupRequest,
 )
 
 
 def compute_group_order(request: PermutationGroupRequest) -> GroupOrderResult:
-    order = group_order(request.degree, [list(g) for g in request.generators])
+    order = group_order(request)
     return GroupOrderResult(order=format_canonical_integer(order))
 
 
@@ -32,11 +35,7 @@ def compute_element_order(request: GroupElementOrderRequest) -> GroupElementOrde
 
 
 def compute_group_orbit(request: GroupOrbitRequest) -> GroupOrbitResult:
-    orbit = group_orbit(
-        request.degree,
-        [list(g) for g in request.generators],
-        request.point,
-    )
+    orbit = group_orbit(request.group, request.point)
     return GroupOrbitResult(orbit=tuple(orbit), point=request.point)
 
 
@@ -49,4 +48,12 @@ def compute_group_conjugacy_classes(
     )
     return GroupConjugacyClassesResult(
         classes=tuple(tuple(tuple(p) for p in cls) for cls in classes),
+    )
+
+
+def compute_group_stabilizer(request: GroupStabilizerRequest) -> GroupStabilizerResult:
+    return GroupStabilizerResult(
+        point=request.point,
+        source=request.group,
+        stabilizer=group_stabilizer(request.group, request.point),
     )

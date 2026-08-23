@@ -719,9 +719,7 @@ class TestKillableFactorBackend:
         )
         from jacobian._exact import CanonicalRational
 
-        with pytest.raises(
-            ValidationError, match=r"re-derived|interrupted|replay"
-        ):
+        with pytest.raises(ValidationError, match=r"re-derived|interrupted|replay"):
             MultivariateFactorResult(
                 status="OUTPUT_BUDGET_EXCEEDED",
                 coefficient=CanonicalRational.from_fraction(Fraction(2)),

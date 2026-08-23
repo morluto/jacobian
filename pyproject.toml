@@ -212,6 +212,8 @@ ignore_imports = [
     "jacobian.math.logic._operations -> jacobian.process",
     # General ideal radical/quotient run in a bounded one-shot Singular process.
     "jacobian.math.commutative_algebra_ops._singular -> jacobian.process",
+    # The complete-kernel strategy runs killably in a bounded one-shot process.
+    "jacobian.math.polynomials._groebner_worker -> jacobian.process",
 ]
 
 [[tool.importlinter.contracts]]

@@ -109,7 +109,7 @@ APPROXIMATION_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "quadratic_through_three_points",
-                "Interpolate through (0,1), (1,3), (2,9) to get x^2 + x + 1.",
+                "Interpolate through (0,1), (1,3), (2,9) to get 2*x^2 + 1.",
                 _INTERP_EXAMPLE,
             ),
         ),

@@ -19,6 +19,11 @@ from jacobian.math.approximation_theory._operations import (
     compute_lagrange_basis,
     compute_lagrange_interpolation,
 )
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
 
 
 def _node(num: str, den: str = "1") -> dict:
@@ -316,3 +321,103 @@ class TestLagrangeBasisSourceBinding:
         payload["basis"][1]["barycentric_weight"] = {"num": "7", "den": "3"}
         with pytest.raises(ValidationError, match="barycentric weight"):
             LagrangeBasisResult.model_validate(payload)
+
+
+def _canonical(num: str, den: str = "1") -> CanonicalRational:
+    return CanonicalRational(num=num, den=den)
+
+
+def _dense_polynomial(coeffs: list[Fraction]) -> RationalPolynomial:
+    terms = tuple(
+        RationalPolynomialTerm(
+            coefficient=CanonicalRational.from_fraction(c),
+            exponents=(exp,),
+        )
+        for exp, c in sorted(enumerate(coeffs), key=lambda pair: pair[0], reverse=True)
+        if c != 0
+    )
+    return RationalPolynomial(
+        variables=("x",),
+        polynomial=SparseRationalPolynomial(terms=terms),
+    )
+
+
+class TestLagrangeInterpolateNative:
+    """The native interpolation surface over canonical domain values."""
+
+    def test_reviewer_counterexample_returns_exact_quadratic(self):
+        from jacobian.math.approximation_theory import lagrange_interpolate
+
+        result = lagrange_interpolate(
+            (_canonical("0"), _canonical("1"), _canonical("2")),
+            (_canonical("1"), _canonical("3"), _canonical("9")),
+        )
+        assert result == _dense_polynomial([Fraction(1), Fraction(0), Fraction(2)])
+
+    def test_returned_value_is_a_canonical_consumer_input(self):
+        from jacobian.math.approximation_theory import lagrange_interpolate
+
+        nodes = (_canonical("0"), _canonical("1", "2"), _canonical("3"))
+        values = (_canonical("-1"), _canonical("1", "4"), _canonical("5"))
+        result = RationalPolynomial.model_validate(
+            lagrange_interpolate(nodes, values).model_dump()
+        )
+        assert result.variables == ("x",)
+
+    def test_single_node_constant(self):
+        from jacobian.math.approximation_theory import lagrange_interpolate
+
+        result = lagrange_interpolate(
+            (_canonical("7", "3"),), (_canonical("-11", "5"),)
+        )
+        assert result == _dense_polynomial([Fraction(-11, 5)])
+
+    def test_unsorted_nodes_rejected(self):
+        from jacobian.math.approximation_theory import lagrange_interpolate
+
+        with pytest.raises(ValidationError, match="increasing order"):
+            lagrange_interpolate(
+                (_canonical("1"), _canonical("0")), (_canonical("1"), _canonical("2"))
+            )
+
+    def test_duplicate_nodes_rejected(self):
+        from jacobian.math.approximation_theory import lagrange_interpolate
+
+        with pytest.raises(ValidationError, match="distinct"):
+            lagrange_interpolate(
+                (_canonical("0"), _canonical("0")), (_canonical("1"), _canonical("2"))
+            )
+
+    def test_mismatched_values_rejected(self):
+        from jacobian.math.approximation_theory import lagrange_interpolate
+
+        with pytest.raises(ValidationError, match="same length"):
+            lagrange_interpolate((_canonical("0"), _canonical("1")), (_canonical("1"),))
+
+
+class TestInterpolationAdmissionDisposition:
+    """The duplicate interpolant must stay out of discovery, native only."""
+
+    def test_interpolation_is_native_only_with_supported_symbol(self):
+        import importlib
+
+        from jacobian.catalog.admission import AdmissionDecision
+        from jacobian.math.approximation_theory._admission import REGISTRATION
+
+        record = next(
+            admission
+            for admission in REGISTRATION.admissions
+            if admission.operation_id == "approximation.lagrange.interpolate.compute"
+        )
+        assert record.decision is AdmissionDecision.NATIVE_ONLY
+        module_name, _, symbol_name = record.native_symbol.rpartition(".")
+        module = importlib.import_module(module_name)
+        assert symbol_name in module.__all__
+        assert callable(getattr(module, symbol_name))
+
+    def test_duplicate_interpolant_is_not_served(self):
+        from jacobian.catalog.builtins import BUILTIN_TOOLS
+
+        ids = {tool.operation_id for tool in BUILTIN_TOOLS}
+        assert "approximation.lagrange.interpolate.compute" not in ids
+        assert "approximation.lagrange.basis.compute" in ids

@@ -17,8 +17,10 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     ),
     OperationAdmission(
         "approximation.lagrange.interpolate.compute",
-        AdmissionDecision.KEEP,
-        "exact Lagrange interpolation polynomial over QQ",
+        AdmissionDecision.NATIVE_ONLY,
+        "duplicates polynomial.interpolation.newton_form.compute; the expanded "
+        "polynomial representation stays a native jacobian.math value",
+        native_symbol="jacobian.math.approximation_theory.lagrange_interpolate",
     ),
 )
 

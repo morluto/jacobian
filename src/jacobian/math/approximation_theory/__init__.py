@@ -1,3 +1,5 @@
 """Approximation theory operations."""
 
-__all__: list[str] = []
+from jacobian.math.approximation_theory.native import lagrange_interpolate
+
+__all__ = ["lagrange_interpolate"]

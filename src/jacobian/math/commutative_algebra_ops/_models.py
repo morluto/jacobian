@@ -130,7 +130,7 @@ class IdealRadicalMembershipRequest(StrictModel):
 
 
 class IdealSaturationRequest(StrictModel):
-    """Compute I : <d>^infinity for a bounded ideal and denominator ideal."""
+    """Compute ``I : <d>^infinity`` for a bounded ideal and one polynomial."""
 
     ideal: RationalPolynomialIdeal = Field(
         description=(
@@ -139,10 +139,11 @@ class IdealSaturationRequest(StrictModel):
             "coefficient components are at most 128 digits."
         )
     )
-    denominator: RationalPolynomialIdeal = Field(
+    denominator: RationalPolynomial = Field(
         description=(
-            "An ideal in the dividend's exact ordered ring, with the same "
-            "6-variable, 16-generator, 256-term, degree-12, and 128-digit bounds."
+            "A single nonzero polynomial d in the dividend's exact ordered "
+            "ring, with at most 256 terms, total degree at most 12, and "
+            "coefficient components at most 128 digits."
         )
     )
     resource_budget: IdealComputationBudget = Field(
@@ -152,9 +153,24 @@ class IdealSaturationRequest(StrictModel):
     @model_validator(mode="after")
     def require_backend_domain(self) -> Self:
         _require_ideal_budget(self.ideal, label="ideal")
-        _require_ideal_budget(self.denominator, label="denominator ideal")
-        if self.ideal.variables != self.denominator.variables:
+        if self.denominator.variables != self.ideal.variables:
             raise ValueError("saturation operands must use the same ordered ring")
+        if not self.denominator.polynomial.terms:
+            raise ValueError("saturation denominator must be nonzero")
+        require_polynomial_budget(
+            self.denominator,
+            maximum_terms=MAX_INPUT_TERMS,
+            maximum_exponent=MAX_INPUT_EXPONENT,
+            maximum_coefficient_digits=MAX_COEFFICIENT_DIGITS,
+            label="saturation denominator",
+        )
+        if any(
+            sum(term.exponents) > MAX_INPUT_EXPONENT
+            for term in self.denominator.polynomial.terms
+        ):
+            raise ValueError(
+                f"saturation denominator exceeds total degree {MAX_INPUT_EXPONENT}"
+            )
         return self
 
 

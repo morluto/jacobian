@@ -21,6 +21,7 @@ from jacobian.math.polynomials._conversions import (
     rational_polynomial_to_sympy,
     symbols_for_variables,
 )
+from jacobian.math.polynomials.values import RationalPolynomialIdeal
 
 
 def compute_ideal_radical(request: IdealRadicalRequest) -> IdealRadicalResult:
@@ -82,10 +83,14 @@ def compute_ideal_quotient(request: IdealQuotientRequest) -> IdealQuotientResult
 def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturationResult:
     """Compute I : <d>^infinity through the bounded Singular backend."""
 
+    denominator = RationalPolynomialIdeal(
+        variables=request.denominator.variables,
+        generators=(request.denominator,),
+    )
     backend = run_singular_ideal_operation(
         "saturation",
         request.ideal,
-        request.denominator,
+        denominator,
         request.resource_budget,
     )
     return IdealSaturationResult(

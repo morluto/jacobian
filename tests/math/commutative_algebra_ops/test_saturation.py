@@ -83,7 +83,7 @@ class TestIdealSaturation:
     def test_saturation_xy_by_x(self):
         """<xy> : <x>^inf = <y> in Q[x,y]."""
         ideal = _ideal(("x", "y"), {(1, 1): 1})
-        denominator = _ideal(("x", "y"), {(1, 0): 1})
+        denominator = _polynomial(("x", "y"), {(1, 0): 1})
         request = IdealSaturationRequest(ideal=ideal, denominator=denominator)
         result = compute_ideal_saturation(request)
         assert result.outcome == "COMPUTED"
@@ -99,7 +99,7 @@ class TestIdealSaturation:
     def test_already_saturated(self):
         """An already saturated ideal remains unchanged."""
         ideal = _ideal(("x", "y"), {(1, 0): 1})
-        denominator = _ideal(("x", "y"), {(0, 1): 1})
+        denominator = _polynomial(("x", "y"), {(0, 1): 1})
         request = IdealSaturationRequest(ideal=ideal, denominator=denominator)
         result = compute_ideal_saturation(request)
         assert result.outcome == "COMPUTED"
@@ -112,17 +112,56 @@ class TestIdealSaturation:
     def test_saturation_by_unit(self):
         """Saturation by a unit (nonzero constant) returns the original ideal."""
         ideal = _ideal(("x", "y"), {(2, 0): 1})
-        denominator = _ideal(("x", "y"), {(0, 0): 1})
+        denominator = _polynomial(("x", "y"), {(0, 0): 1})
         request = IdealSaturationRequest(ideal=ideal, denominator=denominator)
         result = compute_ideal_saturation(request)
         assert result.outcome == "COMPUTED"
         assert result.saturation is not None
         assert _ideals_equal(result.saturation, ideal)
 
+    @requires_singular
+    @pytest.mark.requires_backend("singular")
+    def test_principal_saturation_by_product_gives_unit_ideal(self):
+        """<xy> : <xy>^inf is the unit ideal for the single polynomial xy."""
+
+        ideal = _ideal(("x", "y"), {(1, 1): 1})
+        denominator = _polynomial(("x", "y"), {(1, 1): 1})
+        request = IdealSaturationRequest(ideal=ideal, denominator=denominator)
+        result = compute_ideal_saturation(request)
+        assert result.outcome == "COMPUTED"
+        assert result.saturation is not None
+        assert _ideals_equal(result.saturation, _ideal(("x", "y"), {(0, 0): 1})), (
+            "saturation <xy>:<xy>^inf should be the unit ideal"
+        )
+
+    def test_denominator_must_be_single_polynomial(self):
+        """The operation advertises principal saturation I : <d>^infinity."""
+
+        ideal = _ideal(("x", "y"), {(1, 1): 1})
+        denominator = _ideal(("x", "y"), {(1, 0): 1}, {(0, 1): 1})
+        with pytest.raises(ValidationError):
+            IdealSaturationRequest(ideal=ideal, denominator=denominator)
+
+    def test_zero_denominator_rejected(self):
+        """Saturation by the zero polynomial is not admitted."""
+
+        ideal = _ideal(("x", "y"), {(1, 1): 1})
+        denominator = _polynomial(("x", "y"), {})
+        with pytest.raises(ValidationError):
+            IdealSaturationRequest(ideal=ideal, denominator=denominator)
+
     def test_mismatched_rings_rejected(self):
         """Saturation operands must use the same ordered ring."""
         ideal = _ideal(("x", "y"), {(1, 1): 1})
-        denominator = _ideal(("x", "y", "z"), {(1, 0, 0): 1})
+        denominator = _polynomial(("x", "y", "z"), {(1, 0, 0): 1})
+        with pytest.raises(ValidationError):
+            IdealSaturationRequest(ideal=ideal, denominator=denominator)
+
+    def test_denominator_exceeding_total_degree_rejected(self):
+        """The denominator polynomial obeys the same degree-12 bound."""
+
+        ideal = _ideal(("x",), {(2,): 1})
+        denominator = _polynomial(("x",), {(13,): 1})
         with pytest.raises(ValidationError):
             IdealSaturationRequest(ideal=ideal, denominator=denominator)
 
@@ -131,7 +170,7 @@ class TestIdealSaturation:
     def test_saturation_result_has_backend_version(self):
         """Computed saturation should include a backend version."""
         ideal = _ideal(("x", "y"), {(1, 1): 1})
-        denominator = _ideal(("x", "y"), {(1, 0): 1})
+        denominator = _polynomial(("x", "y"), {(1, 0): 1})
         request = IdealSaturationRequest(ideal=ideal, denominator=denominator)
         result = compute_ideal_saturation(request)
         assert result.outcome == "COMPUTED"

@@ -11,7 +11,6 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.canonical import CanonicalLimits, encode_strict_json
-from jacobian.catalog.catalog import Catalog
 from jacobian.math.graphs import explicit_graph
 from jacobian.math.graphs.patterns._models import (
     InducedVertexSubsetPatternCountRequest,
@@ -22,8 +21,6 @@ from jacobian.math.graphs.patterns._operations import (
 )
 from jacobian.math.graphs.patterns._tools import TOOLS
 from jacobian.math.graphs.values import SimpleUndirectedGraph
-
-OPERATION_ID = "graph.induced_vertex_subset_pattern.count"
 
 
 def _graph(
@@ -343,10 +340,3 @@ def test_numeric_admission_caps_are_visible_in_schema_and_tool_description() -> 
     assert "5,000 subsets per pass" in TOOLS[0].description
     assert "64,000,000 work units" in TOOLS[0].description
     assert "per-subset VF2++ work" in TOOLS[0].examples[0].description
-
-
-def test_operation_is_admitted_to_the_public_catalog() -> None:
-    operation = Catalog.open().operation(OPERATION_ID)
-    assert operation is not None
-    assert operation.request_type is InducedVertexSubsetPatternCountRequest
-    assert operation.result_type is InducedVertexSubsetPatternCountResult

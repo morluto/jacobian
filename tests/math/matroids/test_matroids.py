@@ -55,9 +55,7 @@ class TestLinearMatroidRepresentation:
             "columns": 33,
         }
         with pytest.raises(ValidationError, match="at most 32"):
-            LinearMatroid(
-                matrix=PrimeFieldMatrix(**oversized_matrix)
-            )
+            LinearMatroid(matrix=PrimeFieldMatrix(**oversized_matrix))
         payload = {
             "matroid": {"matrix": oversized_matrix},
             "subset": [],

@@ -99,6 +99,25 @@ def symbolic_eigenvalues(
     return [(sstr(value), int(mult)) for value, mult in eigenvalues.items()]
 
 
+def _require_native_system_admission(
+    entries: tuple[tuple[RationalFunction, ...], ...],
+    rhs: tuple[RationalFunction, ...],
+    variables: tuple[str, ...],
+) -> None:
+    """Shape and field-consistency admission shared with the wire request."""
+    if len(rhs) != len(entries):
+        raise ValueError(
+            "the right-hand side length must equal the coefficient row count"
+        )
+    for value in rhs:
+        if value.variables != variables:
+            raise ValueError("the right-hand side must use the declared ordered field")
+    for row in entries:
+        for entry in row:
+            if entry.variables != variables:
+                raise ValueError("matrix entries must use the declared ordered field")
+
+
 def symbolic_linear_system_solve(
     entries: tuple[tuple[RationalFunction, ...], ...],
     rhs: tuple[RationalFunction, ...],
@@ -113,6 +132,8 @@ def symbolic_linear_system_solve(
 
     Returns ``(classification, solution, particular_solution, nullspace_basis)``.
     """
+    _require_native_system_admission(entries, rhs, variables)
+
     import sympy
 
     matrix = _matrix_from_values(entries)

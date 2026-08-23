@@ -434,3 +434,38 @@ class TestSourceBoundResult:
         payload["solution"] = (wrong, wrong)
         with pytest.raises(ValidationError, match="exact solve"):
             SymbolicLinearSystemResult.model_validate(payload)
+
+
+class TestNativeSystemAdmission:
+    def test_native_solve_rejects_short_rhs(self):
+        import pytest
+
+        from jacobian.math.matrices.symbolic.operations import (
+            symbolic_linear_system_solve,
+        )
+
+        entries = ((_rf(("t",), (1, (0,))),),)
+        with pytest.raises(ValueError, match="right-hand side length"):
+            symbolic_linear_system_solve(entries, (), ())
+
+    def test_native_solve_rejects_mismatched_variable_axis(self):
+        import pytest
+
+        from jacobian.math.matrices.symbolic.operations import (
+            symbolic_linear_system_solve,
+        )
+
+        entries = ((_rf(("t",), (1, (0,))),),)
+        with pytest.raises(ValueError, match="declared ordered field"):
+            symbolic_linear_system_solve(entries, (_rf(("s",), (1, (0,))),), ("t",))
+        with pytest.raises(ValueError, match="declared ordered field"):
+            symbolic_linear_system_solve(
+                (
+                    (
+                        _rf(("t",), (1, (0,))),
+                        _rf(("t", "s"), (1, (0, 1))),
+                    ),
+                ),
+                (_rf(("t",), (1, (0,))),),
+                ("t",),
+            )

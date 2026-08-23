@@ -489,6 +489,29 @@ class PinnedLineEntry(StrictModel):
         return self
 
 
+def _count_line_ledger(line: object) -> tuple[int, int]:
+    """One entry's source-pair count plus its authored rational bytes."""
+    if isinstance(line, PinnedLineEntry):
+        return (
+            len(line.pairs),
+            len(line.squared_distance.num) + len(line.squared_distance.den),
+        )
+    if isinstance(line, dict):
+        pairs = line.get("pairs")
+        pair_count = len(pairs) if isinstance(pairs, (list, tuple)) else 0
+        squared_distance = line.get("squared_distance")
+        if isinstance(squared_distance, dict):
+            rational_bytes = sum(
+                len(str(squared_distance.get(key, ""))) for key in ("num", "den")
+            )
+        elif isinstance(squared_distance, CanonicalRational):
+            rational_bytes = len(squared_distance.num) + len(squared_distance.den)
+        else:
+            rational_bytes = 0
+        return pair_count, rational_bytes
+    return 0, 0
+
+
 class PinnedLineDistanceResult(StrictModel):
     """Complete pinned line-distance profile for a point configuration.
 
@@ -542,18 +565,27 @@ class PinnedLineDistanceResult(StrictModel):
         if not isinstance(lines, (list, tuple)):
             return data
         total = 0
+        authored_rational_bytes = 0
         for line in lines:
-            if isinstance(line, PinnedLineEntry):
-                total += len(line.pairs)
-            elif isinstance(line, dict):
-                pairs = line.get("pairs")
-                if isinstance(pairs, (list, tuple)):
-                    total += len(pairs)
+            pair_total, rational_bytes = _count_line_ledger(line)
+            total += pair_total
+            authored_rational_bytes += rational_bytes
             if total > MAX_PAIRS:
                 raise ValueError(
                     "the aggregate source-pair ledger exceeds the "
                     f"{MAX_PAIRS}-pair profile bound"
                 )
+        # Authored rational components are bounded by the same aggregate
+        # result budget as the parsed profile: every valid entry needs at
+        # least two characters per canonical rational, so any payload whose
+        # raw numerator/denominator characters alone approach the budget is
+        # forged padding that must be rejected BEFORE nested parsing.
+        if authored_rational_bytes > MAX_PINNED_PROFILE_RESULT_BYTES:
+            raise ValueError(
+                "authored rational components exceed the "
+                f"{MAX_PINNED_PROFILE_RESULT_BYTES}-byte aggregate result "
+                "budget before parsing"
+            )
         return data
 
     @model_validator(mode="after")

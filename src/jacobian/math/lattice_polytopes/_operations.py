@@ -364,9 +364,14 @@ def _facets_and_box(  # noqa: C901
 
         for point in verts:
             for value in point:
+                # The canonical digit bound measures magnitude: canonical
+                # integers carry the sign outside the digit count, exactly
+                # as the CanonicalRational validator admits them.
                 if (
-                    len(_fmt(value.numerator)) > MAX_CANONICAL_RATIONAL_DIGITS
-                    or len(_fmt(value.denominator)) > MAX_CANONICAL_RATIONAL_DIGITS
+                    len(_fmt(value.numerator).lstrip("-"))
+                    > MAX_CANONICAL_RATIONAL_DIGITS
+                    or len(_fmt(value.denominator).lstrip("-"))
+                    > MAX_CANONICAL_RATIONAL_DIGITS
                 ):
                     raise ValueError(
                         "the H-system derives vertex coordinates beyond the "

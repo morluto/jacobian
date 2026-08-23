@@ -970,3 +970,65 @@ class TestSecondWaveRegressions:
             for item in any_of_h
             if isinstance(item, dict)
         ), h_schema
+
+
+BOUNDARY_COORDINATE = "1" + "0" * 32_767
+
+
+def _singleton_halfspaces(*, negative: bool) -> tuple[Halfspace, ...]:
+    """Pin x to ±10^32767 with matching upper and lower half-spaces."""
+    upper = ("-" + BOUNDARY_COORDINATE) if negative else BOUNDARY_COORDINATE
+    lower = BOUNDARY_COORDINATE if negative else "-" + BOUNDARY_COORDINATE
+    return (
+        _hs((("1", "1"),), (upper, "1")),
+        _hs((("-1", "1"),), (lower, "1")),
+    )
+
+
+class TestDerivedCoordinateSignBoundary:
+    """The canonical digit bound measures magnitude, not sign length."""
+
+    def test_reviewer_negative_singleton_at_boundary_is_admitted(self):
+        """x pinned to -10^32767 derives a vertex whose magnitude has exactly
+        32,768 digits; the request and its single lattice point are valid."""
+        request = LatticePolytopeRequest(
+            halfspaces=_singleton_halfspaces(negative=True)
+        )
+        assert count_lattice_points(request).point_count == 1
+
+    def test_negative_boundary_singleton_enumerates_exactly(self):
+        from jacobian.math.lattice_polytopes._models import COORDINATE_DIGITS
+
+        result = enumerate_lattice_points(
+            EnumerateLatticePointsRequest(
+                halfspaces=_singleton_halfspaces(negative=True)
+            )
+        )
+        assert result.point_count == 1
+        assert result.points[0].coordinates == ("-" + BOUNDARY_COORDINATE,)
+        # The returned coordinate satisfies the same magnitude convention.
+        assert len(result.points[0].coordinates[0].lstrip("-")) == COORDINATE_DIGITS
+
+    def test_positive_boundary_singleton_is_admitted_symmetrically(self):
+        request = LatticePolytopeRequest(
+            halfspaces=_singleton_halfspaces(negative=False)
+        )
+        assert count_lattice_points(request).point_count == 1
+        enumerated = enumerate_lattice_points(request)
+        assert enumerated.points[0].coordinates == (BOUNDARY_COORDINATE,)
+
+    @pytest.mark.parametrize("negative", [False, True])
+    def test_derived_magnitudes_beyond_the_bound_stay_rejected(self, negative):
+        """x/10^10000 <= ±10^25000 pins x = ±10^35000: beyond the canonical
+        representable magnitude regardless of sign, so admission rejects."""
+        small_den = "1" + "0" * 10000
+        big_offset = "1" + "0" * 25000
+        upper = ("-" + big_offset) if negative else big_offset
+        lower = big_offset if negative else "-" + big_offset
+        with pytest.raises(ValidationError, match="representable bound"):
+            LatticePolytopeRequest(
+                halfspaces=(
+                    _hs((("1", small_den),), (upper, "1")),
+                    _hs((("-1", small_den),), (lower, "1")),
+                )
+            )

@@ -1238,3 +1238,38 @@ class TestNativeAdmission:
         )
         with pytest.raises(ValueError, match="conservative"):
             native.orthogonal_polynomials(prefix, max_degree=1)
+
+    def test_native_recurrence_rejects_over_tall_derived_ratio(self) -> None:
+        """The exported native recurrence kernel keeps its own derived-value
+        height gate: a hand-composed family whose norm ratio leaves the
+        canonical range is a typed domain error, not a failed conversion."""
+        from jacobian.math.moments_orthogonal import native
+        from jacobian.math.moments_orthogonal.values import (
+            OrthogonalPolynomialFamily,
+            OrthogonalPolynomialTerm,
+        )
+
+        family = OrthogonalPolynomialFamily(
+            polynomials=(
+                OrthogonalPolynomialTerm(
+                    degree=0,
+                    coefficients=(CanonicalRational(num="1", den="1"),),
+                    squared_norm=CanonicalRational.from_fraction(Fraction(10) ** 32000),
+                ),
+                OrthogonalPolynomialTerm(
+                    degree=1,
+                    coefficients=(
+                        CanonicalRational(num="0", den="1"),
+                        CanonicalRational(num="1", den="1"),
+                    ),
+                    squared_norm=CanonicalRational.from_fraction(
+                        Fraction(1, 10**32000)
+                    ),
+                ),
+            ),
+            variable="x",
+            is_quasi_definite=True,
+            is_positive_definite=True,
+        )
+        with pytest.raises(ValueError, match="digit limit"):
+            native.recurrence_coefficients(family)

@@ -443,3 +443,88 @@ class TestHomologySourceBinding:
         payload["prime"] = 7
         with pytest.raises(ValidationError, match="retained Lie algebra"):
             LieHomologyResult.model_validate(payload)
+
+
+def _abelian(dimension: int) -> tuple[tuple[tuple[int, ...], ...], ...]:
+    return tuple(
+        tuple((0,) * dimension for _ in range(dimension)) for _ in range(dimension)
+    )
+
+
+def _ut5_gf2() -> LieAlgebra:
+    """The 10-dimensional nilpotent algebra of strictly upper-triangular 5x5 matrices.
+
+    Basis E_ij (i < j) with [E_ij, E_jk] = E_ik over GF(2).
+    """
+    pairs = [(i, j) for i in range(5) for j in range(i + 1, 5)]
+    index = {pair: position for position, pair in enumerate(pairs)}
+    n = len(pairs)
+    c = [[[0] * n for _ in range(n)] for _ in range(n)]
+    for a, (i, j) in enumerate(pairs):
+        for b, (j2, k) in enumerate(pairs):
+            if j == j2:
+                c[a][b][index[(i, k)]] = 1
+                c[b][a][index[(i, k)]] = 1
+    return LieAlgebra(
+        prime=2,
+        dimension=n,
+        structure_constants=tuple(tuple(tuple(row) for row in matrix) for matrix in c),
+    )
+
+
+class TestDimensionEnvelope:
+    """The dimension cap is derived from the execution envelope, not fixed."""
+
+    def test_widest_chain_group_fits_one_prime_field_matrix(self):
+        from math import comb
+
+        from jacobian.math.lie_algebra_homology._models import (
+            MAX_LIE_ALGEBRA_DIMENSION,
+        )
+
+        assert MAX_LIE_ALGEBRA_DIMENSION == 10
+        widest = max(
+            comb(MAX_LIE_ALGEBRA_DIMENSION, k)
+            for k in range(MAX_LIE_ALGEBRA_DIMENSION + 1)
+        )
+        assert widest <= 256
+        next_dimension = MAX_LIE_ALGEBRA_DIMENSION + 1
+        assert comb(next_dimension, next_dimension // 2) > 256
+
+    def test_nine_dimensional_abelian_complex_and_homology_execute(self):
+        """A 9-dim GF(2) abelian algebra fits every kernel and output bound
+        and must not be rejected by a coarse dimension ceiling."""
+        from math import comb
+
+        n = 9
+        g = LieAlgebra(prime=2, dimension=n, structure_constants=_abelian(n))
+        complex_result = compute_chevalley_eilenberg_complex(
+            ChevalleyEilenbergComplexRequest(lie_algebra=g)
+        )
+        assert complex_result.group_dimensions == tuple(
+            comb(n, k) for k in range(n + 1)
+        )
+        homology = compute_lie_homology(LieHomologyRequest(lie_algebra=g))
+        assert [group.betti for group in homology.groups] == list(
+            complex_result.group_dimensions
+        )
+
+    def test_ten_dimensional_nonabelian_algebra_executes(self):
+        """The envelope boundary admits non-abelian brackets at dimension 10;
+        d^2 = 0 is replayed by the result validator."""
+        g = _ut5_gf2()
+        complex_result = compute_chevalley_eilenberg_complex(
+            ChevalleyEilenbergComplexRequest(lie_algebra=g)
+        )
+        degrees = sorted(
+            differential.degree for differential in complex_result.differentials
+        )
+        assert degrees == list(range(1, 11))
+        homology = compute_lie_homology(LieHomologyRequest(lie_algebra=g))
+        assert [group.betti for group in homology.groups][:2] == [1, 4]
+
+    def test_eleven_dimensional_algebra_rejected_at_boundary(self):
+        """Dimension 11 would push C(11,5) = 462 rows past one matrix axis,
+        so it stays rejected at the request boundary."""
+        with pytest.raises(ValidationError, match="10"):
+            LieAlgebra(prime=2, dimension=11, structure_constants=_abelian(11))

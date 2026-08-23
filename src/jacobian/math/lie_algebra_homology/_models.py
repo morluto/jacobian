@@ -2,12 +2,30 @@
 
 from __future__ import annotations
 
+from math import comb
 from typing import Self
 
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
+
+_MAX_PRIME_FIELD_AXIS = 256
+"""Shared PrimeFieldMatrix row/column cap."""
+
+MAX_LIE_ALGEBRA_DIMENSION = max(
+    n
+    for n in range(1, _MAX_PRIME_FIELD_AXIS + 1)
+    if comb(n, n // 2) <= _MAX_PRIME_FIELD_AXIS
+)
+"""Largest admitted Lie-algebra dimension.
+
+Derived from the execution envelope rather than hard-coded: every CE
+differential d_p has shape C(n, p - 1) x C(n, p), so the widest chain group
+C(n, floor(n / 2)) must fit one prime-field matrix row/column axis. The
+complete dense complex then carries sum_p C(n, p - 1) * C(n, p) field entries
+(167,960 at the admitted maximum), inside the kernel and transport budgets.
+"""
 
 
 def _require_prime(prime: int) -> None:
@@ -84,9 +102,9 @@ class LieAlgebra(StrictModel):
     """
 
     prime: int = Field(ge=2, le=10_000)
-    dimension: int = Field(ge=1, le=8)
+    dimension: int = Field(ge=1, le=MAX_LIE_ALGEBRA_DIMENSION)
     structure_constants: tuple[tuple[tuple[int, ...], ...], ...] = Field(
-        min_length=1, max_length=8
+        min_length=1, max_length=MAX_LIE_ALGEBRA_DIMENSION
     )
 
     @model_validator(mode="after")
@@ -272,6 +290,7 @@ class LieHomologyResult(StrictModel):
 
 
 __all__ = [
+    "MAX_LIE_ALGEBRA_DIMENSION",
     "ChevalleyEilenbergComplexRequest",
     "ChevalleyEilenbergComplexResult",
     "DifferentialMatrix",

@@ -265,7 +265,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "moment_functional.gaussian_quadrature.compute",
         "Compute exact Gaussian quadrature rule",
         "Compute an exact Gaussian quadrature rule from a bounded moment "
-        "prefix whose degree-n orthogonal polynomial splits over QQ: 2n+1 "
+        "prefix whose degree-n orthogonal polynomial splits over QQ: 2n "
         "moments, n distinct rational nodes, positive weights, exactness "
         "through degree 2n-1.",
         GaussianQuadratureRequest,

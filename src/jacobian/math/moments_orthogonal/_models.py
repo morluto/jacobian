@@ -41,6 +41,38 @@ def _require_determinant_representable(
             )
 
 
+def _require_gram_schmidt_heights_admissible(
+    moments: tuple[CanonicalRational, ...], max_degree: int
+) -> None:
+    """Bound moment heights BEFORE any exact projection runs.
+
+    Monic Gram-Schmidt expresses every derived coefficient and squared
+    norm through degree d as a ratio of determinants of at most (d+1)
+    -square Hankel matrices over the consumed moments mu_0..mu_2d (the
+    classical Cramer-rule form of the elimination). Scaling each row by
+    its denominator product bounds an s x s rational determinant's
+    numerator and denominator by 10**(s*(s+1)*B + s) when every entry
+    carries at most B digits, so bounding each moment by the quotient
+    below guarantees every derived value stays canonical. Degree 0
+    performs no elimination - its only derived value is mu_0 itself -
+    so it needs no input gate beyond canonality.
+    """
+    if max_degree == 0:
+        return
+    side = max_degree + 1
+    per_entry = (MAX_CANONICAL_RATIONAL_DIGITS - 2 * side) // (
+        2 * side * (side + 1)
+    )
+    bound = max(per_entry, 8)
+    for value in moments[: 2 * max_degree + 1]:
+        if RationalHeight.from_canonical(value).exceeds(bound):
+            raise ValueError(
+                f"moment heights exceed the conservative {bound}-digit "
+                f"bound for exact degree-{max_degree} Gram-Schmidt; supply "
+                "a smaller or better-scaled moment prefix"
+            )
+
+
 class HankelRequest(StrictModel):
     """Compute the Hankel matrix H_r from a moment prefix."""
 
@@ -99,7 +131,17 @@ class OrthogonalPolynomialRequest(StrictModel):
     def require_quasi_definite_prefix(self) -> Self:
         """Replay the exact Gram-Schmidt kernel so a prefix whose orthogonal
         family would hit a zero squared norm is rejected at the boundary
-        instead of failing inside execution."""
+        instead of failing inside execution.
+
+        The conservative height gate runs FIRST: without it, parsing would
+        perform every exact projection on unbounded intermediates before
+        discovering an over-tall family at wire construction. After the
+        gate, both this admission replay and the execution that follows it
+        operate on provably bounded intermediates with typed height checks.
+        """
+        _require_gram_schmidt_heights_admissible(
+            self.prefix.moments, self.max_degree
+        )
         from jacobian.math.moments_orthogonal.operations import (
             compute_orthogonal_polynomials,
         )

@@ -166,6 +166,31 @@ def _require_nonzero_norm(norm: Fraction, degree: int) -> None:
         )
 
 
+def _require_canonical_family_values(
+    polynomials: list[list[Fraction]], squared_norms: list[Fraction]
+) -> None:
+    """Typed height gate on derived Gram-Schmidt values.
+
+    Derived coefficients and norms can leave the canonical range even
+    when every input moment stays inside it; measure the exact Fractions
+    before wire conversion so an over-tall family is reported as a typed
+    domain error here instead of failing inside canonical construction.
+    """
+    for n, coefficients in enumerate(polynomials):
+        if any(_fraction_exceeds_canonical_limit(c) for c in coefficients):
+            raise ValueError(
+                f"derived p_{n} coefficients exceed the canonical rational "
+                "digit limit; supply a moment prefix whose orthogonal "
+                "family stays representable"
+            )
+        if _fraction_exceeds_canonical_limit(squared_norms[n]):
+            raise ValueError(
+                f"derived squared norm h_{n} exceeds the canonical "
+                "rational digit limit; supply a moment prefix whose "
+                "orthogonal family stays representable"
+            )
+
+
 def _moment_inner(
     moments: list[Fraction],
     coeffs_a: list[Fraction],
@@ -272,6 +297,12 @@ def compute_orthogonal_polynomials(
     # Zero norms are already rejected above.
     is_quasi_definite = all(sq != 0 for sq in squared_norms)
     is_positive_definite = all(sq > 0 for sq in squared_norms)
+
+    # Derived coefficients and norms can leave the canonical range even
+    # when every input moment stays inside it; measure the exact Fractions
+    # before wire conversion so an over-tall family is reported as a typed
+    # domain error here instead of failing inside canonical construction.
+    _require_canonical_family_values(polynomials, squared_norms)
 
     poly_terms = []
     for n in range(max_deg + 1):

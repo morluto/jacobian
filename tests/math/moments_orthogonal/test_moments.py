@@ -410,13 +410,19 @@ class TestGaussianQuadrature:
         """Construction consumes moments through mu_(2n-1) exactly: 2n
         moments suffice for an exact order-n rule and 2n-1 do not."""
 
-        GaussianQuadratureRequest(
-            prefix=_prefix(self._moments_rational_nodes()[:4]), order=2
-        )
         with pytest.raises(ValueError, match="need at least 4"):
             GaussianQuadratureRequest(
                 prefix=_prefix(self._moments_rational_nodes()[:3]), order=2
             )
+        request = GaussianQuadratureRequest(
+            prefix=_prefix(self._moments_rational_nodes()[:4]), order=2
+        )
+        result = compute_gaussian_quadrature(request)
+        assert {n.node.as_fraction() for n in result.nodes} == {
+            Fraction(-3, 2),
+            Fraction(3, 2),
+        }
+        assert result.exactness_degree == 3
 
     def test_order_one_prefix_needs_only_two_moments(self) -> None:
         """An order-1 prefix (mu_0, mu_1) = (1, 2) determines the exact
@@ -488,6 +494,32 @@ class TestQuadratureSourceBinding:
                 variable="x",
                 exactness_degree=3,
                 prefix=self._prefix(),
+            )
+
+    def test_insufficient_source_prefix_rejected(self) -> None:
+        """A serialized order-1 rule retaining only mu_0 could never be
+        produced by the request boundary, which requires moments through
+        mu_(2n-1); the replay must reject it instead of silently reading
+        missing moments as zero."""
+        from jacobian.math.moments_orthogonal.values import (
+            MomentFunctionalPrefix,
+        )
+
+        minimal = MomentFunctionalPrefix(
+            moments=(CanonicalRational(num="1", den="1"),), variable="x"
+        )
+        with pytest.raises(ValidationError, match="source moments"):
+            GaussianQuadratureRule(
+                order=1,
+                nodes=(
+                    QuadratureNode(
+                        node=CanonicalRational(num="0", den="1"),
+                        weight=CanonicalRational(num="1", den="1"),
+                    ),
+                ),
+                variable="x",
+                exactness_degree=1,
+                prefix=minimal,
             )
 
 
@@ -577,6 +609,150 @@ class TestFamilyResidualBasisCheck:
             is_positive_definite=True,
         )
         assert len(family.polynomials) == 3
+
+
+class TestDegenerateNormRecurrenceIdentities:
+    def _term(self, deg, coeffs, norm):
+        from jacobian.math.moments_orthogonal.values import (
+            OrthogonalPolynomialTerm,
+        )
+
+        return OrthogonalPolynomialTerm(
+            degree=deg,
+            coefficients=tuple(
+                CanonicalRational.from_fraction(Fraction(c)) for c in coeffs
+            ),
+            squared_norm=CanonicalRational.from_fraction(Fraction(norm)),
+        )
+
+    def test_impossible_degenerate_family_rejected(self) -> None:
+        """p_0=1,h_0=0; p_1=x,h_1=1; p_2=x^2,h_2=1 claims L(x^2)=1 through
+        h_1 while orthogonality of p_0 and p_2 forces L(x^2)=0; no linear
+        functional realizes it, so the zero-safe relation h_k = beta_k *
+        h_{k-1} must reject it instead of skipping degenerate norms."""
+        from jacobian.math.moments_orthogonal.values import (
+            OrthogonalPolynomialFamily,
+        )
+
+        with pytest.raises(ValidationError, match="must satisfy"):
+            OrthogonalPolynomialFamily(
+                polynomials=(
+                    self._term(0, (1,), 0),
+                    self._term(1, (0, 1), 1),
+                    self._term(2, (0, 0, 1), 1),
+                ),
+                variable="x",
+                is_quasi_definite=False,
+                is_positive_definite=False,
+            )
+
+    def test_all_zero_norms_remain_admitted(self) -> None:
+        """The zero functional realizes every-vanishing norms, so the fully
+        degenerate family stays authorable."""
+        from jacobian.math.moments_orthogonal.values import (
+            OrthogonalPolynomialFamily,
+        )
+
+        family = OrthogonalPolynomialFamily(
+            polynomials=(
+                self._term(0, (1,), 0),
+                self._term(1, (0, 1), 0),
+                self._term(2, (0, 0, 1), 0),
+            ),
+            variable="x",
+            is_quasi_definite=False,
+            is_positive_definite=False,
+        )
+        assert len(family.polynomials) == 3
+
+    def test_two_term_degenerate_pair_stays_admitted(self) -> None:
+        """A two-polynomial family determines no beta relation (that needs
+        three consecutive terms), and any norm pair is realizable - e.g.
+        L = (0, 0, 1) realizes h_0 = 0 with h_1 = 1 for p_1 = x + 5 - so
+        the degenerate pair stays authorable."""
+        from jacobian.math.moments_orthogonal.values import (
+            OrthogonalPolynomialFamily,
+        )
+
+        admitted = OrthogonalPolynomialFamily(
+            polynomials=(
+                self._term(0, (1,), 0),
+                self._term(1, (5, 1), 1),
+            ),
+            variable="x",
+            is_quasi_definite=False,
+            is_positive_definite=False,
+        )
+        assert len(admitted.polynomials) == 2
+
+
+class TestGramSchmidtHeightAdmission:
+    def test_over_tall_prefix_rejected_before_expansion(self) -> None:
+        """mu_0 = 10^-20000 and mu_1 = 10^20000 force derived Gram-Schmidt
+        values beyond the canonical range; the conservative pre-expansion
+        gate rejects the prefix before any projection runs instead of
+        discovering the overflow at wire construction."""
+        moments = (
+            CanonicalRational.from_fraction(Fraction(1) / Fraction(10) ** 20000),
+            CanonicalRational.from_fraction(Fraction(10) ** 20000),
+            CanonicalRational(num="0", den="1"),
+        )
+        with pytest.raises(ValidationError, match="Gram-Schmidt"):
+            OrthogonalPolynomialRequest(prefix=_prefix(moments), max_degree=1)
+
+    def test_bounded_prefix_still_admits_and_executes(self) -> None:
+        """A prefix inside the conservative bound keeps admitting, including
+        a quasi-definite but not positive-definite family."""
+        moments = (
+            CanonicalRational(num="1", den="1"),
+            CanonicalRational(num="0", den="1"),
+            CanonicalRational(num="-1", den="1"),
+        )
+        request = OrthogonalPolynomialRequest(prefix=_prefix(moments), max_degree=1)
+        result = compute_orthogonal_polynomials(request)
+        assert result.is_quasi_definite is True
+        assert result.is_positive_definite is False
+
+    def test_unconsumed_moments_do_not_gate(self) -> None:
+        """Gram-Schmidt through degree d reads mu_0..mu_2d only; taller
+        unconsumed moments must not prevent composition."""
+        moments = (
+            *_moments_uniform(5),
+            CanonicalRational.from_fraction(Fraction(10) ** 32000),
+        )
+        request = OrthogonalPolynomialRequest(prefix=_prefix(moments), max_degree=2)
+        assert len(compute_orthogonal_polynomials(request).polynomials) == 3
+
+    def test_kernel_reports_over_tall_family_with_typed_error(self) -> None:
+        """Bypassing admission via unvalidated native construction, the
+        kernel itself reports the over-tall derived value as a typed domain
+        error instead of failing inside canonical conversion."""
+        moments = (
+            CanonicalRational.from_fraction(Fraction(1) / Fraction(10) ** 20000),
+            CanonicalRational.from_fraction(Fraction(10) ** 20000),
+            CanonicalRational(num="0", den="1"),
+        )
+        request = OrthogonalPolynomialRequest.model_construct(
+            prefix=_prefix(moments), max_degree=1
+        )
+        with pytest.raises(ValueError, match="digit limit"):
+            compute_orthogonal_polynomials(request)
+
+
+class TestQuadratureMinimalPrefixRoundTrip:
+    def test_order_one_two_moment_prefix_round_trips(self) -> None:
+        """The exact order-1 rule determined by (mu_0, mu_1) = (1, 2)
+        alone survives serialization and replays against its retained
+        minimal prefix."""
+        from jacobian.math.moments_orthogonal.values import GaussianQuadratureRule
+
+        moments = (
+            CanonicalRational(num="1", den="1"),
+            CanonicalRational(num="2", den="1"),
+        )
+        request = GaussianQuadratureRequest(prefix=_prefix(moments), order=1)
+        result = compute_gaussian_quadrature(request)
+        assert GaussianQuadratureRule.model_validate(result.model_dump()) == result
 
 
 class TestRecurrenceTupleDimensions:
@@ -779,44 +955,46 @@ class TestKernelFamilyBinding:
 class TestDerivedAlphaHeightAdmission:
     def test_nonrepresentable_derived_alpha_rejected_at_admission(self) -> None:
         """Two canonical coefficients can differ by a non-canonical rational;
-        the emitted alpha must be bounded before the operation converts it,
-        so an accepted request cannot die mid-execution."""
+        admission derives every emitted alpha exactly as execution does and
+        rejects an over-tall difference at the boundary, so an accepted
+        request cannot die mid-execution."""
         from jacobian.math.moments_orthogonal.values import (
             OrthogonalPolynomialFamily,
             OrthogonalPolynomialTerm,
         )
 
-        big = 10**32768 - 1
-        zero = CanonicalRational(num="0", den="1")
-        one = CanonicalRational(num="1", den="1")
+        q = Fraction(10) ** 10000
+
+        def term(deg, coeffs, norm):
+            return OrthogonalPolynomialTerm(
+                degree=deg,
+                coefficients=tuple(
+                    CanonicalRational.from_fraction(Fraction(c)) for c in coeffs
+                ),
+                squared_norm=CanonicalRational.from_fraction(Fraction(norm)),
+            )
+
+        # p_1 = x + s with s = (q^2+1)/q; p_2 = x^2 + u*x + w. The derived
+        # alpha_1 = residual coefficient of x*p_1 - p_2 is s - u, whose
+        # numerator reaches ~10**40000 digits while both coefficients stay
+        # canonical. The recurrence identity fixes h_1 = beta_1 * h_0 with
+        # beta_1 the residual's component on p_0, so the authored norms are
+        # exactly the consistent ones and the family itself validates.
+        s = (q * q + 1) / q
+        u = -1 / (q * q + 1)
+        w = -(q + 1) / (q * q)
+        derived_alpha_1 = s - u
+        assert abs(derived_alpha_1.numerator) >= Fraction(10) ** 32768
+        consistent_h1 = -w - derived_alpha_1 * s
+
         family = OrthogonalPolynomialFamily(
             polynomials=(
-                OrthogonalPolynomialTerm(
-                    degree=0, coefficients=(one,), squared_norm=one
-                ),
-                # p_1 = x + (10**32768 - 1) with a vanishing norm, which
-                # disables the beta ratio checks without constraining the
-                # derived alpha difference below.
-                OrthogonalPolynomialTerm(
-                    degree=1,
-                    coefficients=(
-                        CanonicalRational.from_fraction(Fraction(big)),
-                        one,
-                    ),
-                    squared_norm=zero,
-                ),
-                OrthogonalPolynomialTerm(
-                    degree=2,
-                    coefficients=(
-                        zero,
-                        CanonicalRational.from_fraction(Fraction(-big)),
-                        one,
-                    ),
-                    squared_norm=one,
-                ),
+                term(0, (Fraction(1),), Fraction(1)),
+                term(1, (s, Fraction(1)), consistent_h1),
+                term(2, (w, u, Fraction(1)), Fraction(1)),
             ),
             variable="x",
-            is_quasi_definite=False,
+            is_quasi_definite=True,
             is_positive_definite=False,
         )
         with pytest.raises(ValidationError, match="canonical rational digit limit"):

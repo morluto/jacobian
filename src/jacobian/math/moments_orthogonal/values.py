@@ -125,7 +125,7 @@ def _decompose_residual_in_basis(
 
 
 def _require_three_term_consistency(family: OrthogonalPolynomialFamily) -> None:
-    """R_k must lie in span{p_{k-1}, p_k} with beta_k = h_k / h_{k-1}."""
+    """R_k must lie in span{p_{k-1}, p_k} with h_k = beta_k * h_{k-1}."""
     polynomials = family.polynomials
     for k in range(len(polynomials) - 1):
         components = _decompose_residual_in_basis(polynomials, k)
@@ -139,14 +139,18 @@ def _require_three_term_consistency(family: OrthogonalPolynomialFamily) -> None:
         if k >= 1:
             h_k = polynomials[k].squared_norm.as_fraction()
             h_prev = polynomials[k - 1].squared_norm.as_fraction()
-            if h_prev == 0 or h_k == 0:
-                # The norm ratio is undefined for degenerate norms; the
-                # definiteness flags carry that classification instead.
-                continue
-            if components[k - 1] != h_k / h_prev:
+            # Claimed orthogonality forces h_k = beta_k * h_{k-1}: reduce
+            # h_k = <p_k, p_k> modulo the recurrence identities and the
+            # vanishing cross products. Unlike a ratio, this multiplicative
+            # form stays meaningful for degenerate norms - a vanishing
+            # h_{k-1} forces h_k = 0 and a nonzero h_k with vanishing
+            # h_{k-1} is unrealizable by any linear functional - so no
+            # degenerate case escapes the norm relation.
+            beta_k = components[k - 1]
+            if h_k != beta_k * h_prev:
                 raise ValueError(
                     "squared norms disagree with the three-term recurrence: "
-                    f"beta_{k} must equal h_{k}/h_{{k-1}}"
+                    f"beta_{k} must satisfy h_{k} = beta_{k} * h_{k - 1}"
                 )
 
 
@@ -280,6 +284,12 @@ class GaussianQuadratureRule(StrictModel):
 
     @model_validator(mode="after")
     def bind_rule_to_source(self) -> Self:
+        if len(self.prefix.moments) < 2 * self.order:
+            raise ValueError(
+                f"order {self.order} rules need at least {2 * self.order} "
+                "source moments through mu_(2*order-1); a shorter retained "
+                "prefix cannot establish the advertised exactness degree"
+            )
         if len(self.nodes) != self.order:
             raise ValueError(
                 f"order {self.order} rules carry exactly {self.order} nodes"

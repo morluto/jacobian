@@ -253,7 +253,7 @@ class FixedLengthCycleResult(StrictModel):
     )
 
     graph: SimpleUndirectedGraph
-    decision: Literal["EXISTS", "DOES_NOT_EXIST", "BUDGET_EXCEEDED"]
+    decision: Literal["EXISTS", "DOES_NOT_EXIST"]
     length: int = Field(ge=3)
     cycle: tuple[str, ...] = Field(default=())
 
@@ -344,9 +344,10 @@ class SubgraphPatternFindRequest(StrictModel):
                 "`host`. Both are canonical `SimpleUndirectedGraph` values so "
                 "callers can pass `explicit_graph` output directly. `pattern` "
                 "must have at most 20 vertices; requests whose worst-case "
-                "exhaustive search - including the host-candidate scans at "
-                "every internal backtracking node - exceeds the work budget "
-                "are rejected."
+                "assignment search exceeds the per-pass work budget are "
+                "rejected. Runtime candidate scans share that budget and may "
+                "return `BUDGET_EXCEEDED`; the retained sources and result "
+                "envelope must fit the canonical output limit."
             )
         },
     )
@@ -385,6 +386,31 @@ class SubgraphPatternFindRequest(StrictModel):
             "subgraph-pattern",
         )
         return self
+
+
+def _replay_subgraph_embedding(
+    pattern: SimpleUndirectedGraph, host: SimpleUndirectedGraph
+) -> tuple[int, ...] | None:
+    """Replay a negative search with the same candidate budget as execution."""
+
+    from jacobian.math.graphs.morphisms._operations import (
+        SearchBudgetExceededError,
+        find_subgraph_embedding,
+    )
+
+    try:
+        return find_subgraph_embedding(
+            pattern.vertices,
+            pattern.edges,
+            host.vertices,
+            host.edges,
+            max_candidate_checks=_MAX_SEARCH_PATHS_PER_PASS,
+        )
+    except SearchBudgetExceededError as exc:
+        raise ValueError(
+            "a DOES_NOT_EXIST decision exceeded the retained source "
+            "candidate-check budget during validation replay"
+        ) from exc
 
 
 class SubgraphPatternFindResult(StrictModel):
@@ -475,19 +501,8 @@ class SubgraphPatternFindResult(StrictModel):
                     f"to satisfy the {MORPHISM_MAX_VERTICES}-vertex "
                     f"{_MAX_SEARCH_PATHS_PER_PASS}-assignment request budget"
                 )
-            from jacobian.math.graphs.morphisms._operations import (
-                find_subgraph_embedding,
-            )
-
-            if (
-                find_subgraph_embedding(
-                    self.pattern.vertices,
-                    self.pattern.edges,
-                    self.host.vertices,
-                    self.host.edges,
-                )
-                is not None
-            ):
+            found = _replay_subgraph_embedding(self.pattern, self.host)
+            if found is not None:
                 raise ValueError(
                     "a DOES_NOT_EXIST decision contradicts the retained "
                     "graphs, which admit an embedding"

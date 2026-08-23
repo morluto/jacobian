@@ -346,6 +346,20 @@ class TestFixedLengthCycle:
         )
         assert result.decision == "EXISTS"
 
+    def test_cycle_result_rejects_unsupported_budget_outcome(self):
+        import pytest
+
+        from jacobian.math.graphs.morphisms._models import FixedLengthCycleResult
+
+        triangle = self._g(["a", "b", "c"], [["a", "b"], ["b", "c"], ["a", "c"]])
+        with pytest.raises(ValueError, match="literal"):
+            FixedLengthCycleResult(
+                graph=triangle,
+                decision="BUDGET_EXCEEDED",
+                length=3,
+                cycle=(),
+            )
+
 
 class TestSubgraphPatternFind:
     def _g(self, vertices, edges):
@@ -625,3 +639,13 @@ class TestBacktrackingNodeBudget:
         assert result.vertex_map == ()
         # The typed non-conclusion round-trips without an exhaustive replay.
         type(result).model_validate(result.model_dump())
+
+        import pytest
+
+        with pytest.raises(ValueError, match="candidate-check budget"):
+            type(result)(
+                pattern=request.pattern,
+                host=request.host,
+                decision="DOES_NOT_EXIST",
+                vertex_map=(),
+            )

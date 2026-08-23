@@ -235,9 +235,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "c4_plain_no_triangle",
                 (
-                    "A plain 4-cycle has no 3-cycle, so the decision is "
-                    "DOES_NOT_EXIST. Preconditions: length 3..20 and at most "
-                    "the vertex count, inside the per-pass path budget."
+                    "A plain 4-cycle has no 3-cycle. Preconditions: length 3..20 "
+                    "and at most the vertex count, the per-pass path budget "
+                    "holds, and the retained graph plus result envelope fit "
+                    "the canonical output limit."
                 ),
                 CYCLE_C4_PLAIN,
             ),
@@ -246,13 +247,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "graph.subgraph_pattern.find",
         "Find a subgraph-pattern embedding",
-        "Given bounded canonical simple graphs pattern H and host G, find an injective "
-        "embedding of H into G such that every edge of H maps to an edge of G "
-        "(ordinary, non-induced subgraph containment). Both graphs are canonical "
-        "`SimpleUndirectedGraph` values for direct composition. Returns one witness "
-        "vertex map ordered by the pattern's vertex order when one exists; a "
-        "search that exhausts its candidate-check budget returns BUDGET_EXCEEDED "
-        "(a typed non-conclusion) rather than a negative decision.",
+        "Given bounded canonical simple graphs pattern H and host G, find an "
+        "injective non-induced embedding. Returns one vertex map in pattern order "
+        "when found. Assignment search is admission-bounded; runtime candidate-"
+        "check exhaustion returns BUDGET_EXCEEDED, a typed non-conclusion. Both "
+        "graphs and the result envelope must fit the canonical output limit.",
         SubgraphPatternFindRequest,
         SubgraphPatternFindResult,
         compute_subgraph_pattern_find,
@@ -273,10 +272,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "p3_not_in_matching",
                 (
-                    "A path P3 pattern does not embed in a host of two "
-                    "disjoint edges, so the decision is DOES_NOT_EXIST. "
-                    "Preconditions: at most 20 pattern vertices, no more "
-                    "pattern than host vertices, inside the per-pass budget."
+                    "A path P3 does not embed in two disjoint host edges. "
+                    "Preconditions: at most 20 pattern vertices, no larger than "
+                    "the host, the per-pass budget holds, and retained graphs "
+                    "plus the result envelope fit the canonical output limit."
                 ),
                 SUBGRAPH_P3_NOT_IN_MATCHING,
             ),

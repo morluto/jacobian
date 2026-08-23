@@ -1,5 +1,7 @@
 """Wire adapters for exact moments and orthogonal polynomials."""
 
+from fractions import Fraction
+
 from jacobian._exact import CanonicalRational
 from jacobian.math.moments_orthogonal._models import (
     ChristoffelDarbouxRequest,
@@ -15,11 +17,15 @@ from jacobian.math.moments_orthogonal._models import (
 )
 
 
-def _to_fractions(values):
+def _to_fractions(
+    values: tuple[CanonicalRational, ...],
+) -> tuple[Fraction, ...]:
     return tuple(v.as_fraction() for v in values)
 
 
-def _from_fractions(values):
+def _from_fractions(
+    values: tuple[Fraction, ...],
+) -> tuple[CanonicalRational, ...]:
     return tuple(CanonicalRational.from_fraction(v) for v in values)
 
 

@@ -66,18 +66,23 @@ def _require_differential_bounds(
                 raise ValueError("differential entry col exceeds source dimension")
 
 
-def _dense_gfprime(entries: tuple[MatrixEntry, ...], rows: int, cols: int, prime: int):
+def _dense_gfprime(
+    entries: tuple[MatrixEntry, ...], rows: int, cols: int, prime: int
+) -> list[list[int]]:
     mat = [[0] * cols for _ in range(rows)]
     for e in entries:
         mat[e.row][e.col] = int(e.value) % prime
     return mat
 
 
-def _gfprime_mat_mul(a, b, prime: int):
+def _gfprime_mat_mul(
+    a: list[list[int]], b: list[list[int]], prime: int
+) -> list[list[int]]:
     if not a or not b or not a[0] or not b[0]:
-        return (
-            [[0] * len(b[0]) if b and b[0] else 0 for _ in range(len(a))] if a else []
-        )
+        # Either factor is empty: the product is the zero matrix of shape
+        # len(a) x len(b[0]) (or empty when either dimension is zero).
+        n_cols = len(b[0]) if b and b[0] else 0
+        return [[0] * n_cols for _ in range(len(a))]
     n_rows = len(a)
     n_cols = len(b[0])
     n_inner = len(b)
@@ -259,7 +264,7 @@ def _require_chain_map_commutativity(
     def dim(complex_: ChainComplex, deg: int) -> int:
         return _chain_map_degree(complex_, deg)
 
-    def diff(entries, rows, cols):
+    def diff(entries: tuple[MatrixEntry, ...], rows: int, cols: int) -> list[list[int]]:
         return _dense_matrix(entries, rows, cols, prime)
 
     # At the source's bottom degree the source differential leaves the

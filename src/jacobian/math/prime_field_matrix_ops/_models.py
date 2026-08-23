@@ -45,7 +45,12 @@ class PrimeFieldMatrixRequest(StrictModel):
 class _PrimeFieldMatrixValidator:
     """Trigger PrimeFieldMatrix validation."""
 
-    def __init__(self, prime, entries, columns):
+    def __init__(
+        self,
+        prime: int,
+        entries: tuple[tuple[int, ...], ...],
+        columns: int,
+    ) -> None:
         PrimeFieldMatrix(prime=prime, entries=entries, columns=columns)
 
 

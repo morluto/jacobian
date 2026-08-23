@@ -2,6 +2,7 @@
 
 from jacobian.math import (
     algebraic_combinatorics,
+    approximation_theory,
     arithmetic,
     arithmetic_dynamics,
     combinatorial_maps,
@@ -22,6 +23,7 @@ from jacobian.math import (
     matrices,
     numerical_semigroups,
     petri_nets,
+    polynomial_support_geometry,
     polynomials,
     prime_field_linear_algebra,
     probability,
@@ -35,6 +37,7 @@ from jacobian.math import (
 
 __all__ = [
     "algebraic_combinatorics",
+    "approximation_theory",
     "arithmetic",
     "arithmetic_dynamics",
     "combinatorial_maps",
@@ -55,6 +58,7 @@ __all__ = [
     "matrices",
     "numerical_semigroups",
     "petri_nets",
+    "polynomial_support_geometry",
     "polynomials",
     "prime_field_linear_algebra",
     "probability",

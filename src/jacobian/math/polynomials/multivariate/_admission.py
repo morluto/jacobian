@@ -33,6 +33,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
             "that cannot be reconstructed from the terminal resultant or GCD"
         ),
     ),
+    OperationAdmission(
+        "polynomial.multivariate.factor.compute",
+        AdmissionDecision.KEEP,
+        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

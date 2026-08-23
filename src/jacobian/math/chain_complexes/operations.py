@@ -267,12 +267,9 @@ def construct_chain_complex(request: ConstructChainComplexRequest) -> ChainCompl
     )
 
 
-def verify_differential(request: VerifyDifferentialRequest) -> VerificationResult:
-    """Verify that d^2 = 0 for a chain complex.
-
-    Returns a dictionary with 'is_valid' (bool) and 'detail' (str).
-    """
-    cx = request.complex
+def _differential_verdict(complex_value: ChainComplexValue) -> tuple[bool, str]:
+    """Decide d^2 = 0 exactly and derive the authoritative detail string."""
+    cx = complex_value
     prime = cx.prime
     diffs = [
         _matrix_to_fractions(m, cx.basis_sizes[i], cx.basis_sizes[i + 1], prime)
@@ -292,34 +289,23 @@ def verify_differential(request: VerifyDifferentialRequest) -> VerificationResul
         )
         is_zero = all(all(val == 0 for val in row) for row in product)
         if not is_zero:
-            return VerificationResult(
-                is_valid=False,
-                detail=f"d^2 != 0 at degree {cx.degree_min + i + 1}",
-                complex=request.complex,
-            )
+            return False, f"d^2 != 0 at degree {cx.degree_min + i + 1}"
 
-    return VerificationResult(
-        is_valid=True,
-        detail="d^2 = 0 for all degrees",
-        complex=request.complex,
-    )
+    return True, "d^2 = 0 for all degrees"
 
 
-def verify_chain_map(request: VerifyChainMapRequest) -> VerificationResult:
-    """Verify that a chain map commutes with differentials.
+def _chain_map_verdict(
+    source: ChainComplexValue,
+    target: ChainComplexValue,
+    map_matrices: tuple[tuple[tuple[str, ...], ...], ...],
+) -> tuple[bool, str]:
+    """Decide the chain-map relation exactly and derive its detail string.
 
-    Returns a dictionary with 'is_valid' (bool) and 'detail' (str).
-
-    Request admission guarantees equal coefficient fields and prime, so a
-    field mismatch can never reach this kernel as a verdict.
+    Endpoints violating d^2 = 0 make the verification false by definition;
+    the relation itself must commute at every differential degree.
     """
-    source = request.source
-    target = request.target
     prime = source.prime
 
-    # A chain map exists only between chain complexes; endpoints violating
-    # d^2=0 make the verification false by definition. Check every
-    # consecutive differential product of each endpoint.
     for label, complex_value in (("source", source), ("target", target)):
         if len(complex_value.differential_matrices) > 1:
             try:
@@ -330,21 +316,15 @@ def verify_chain_map(request: VerifyChainMapRequest) -> VerificationResult:
                     group_columns=list(complex_value.basis_sizes),
                 )
             except ValueError as error:
-                return VerificationResult(
-                    is_valid=False,
-                    detail=str(error) + ", so no chain map between these "
+                return (
+                    False,
+                    str(error) + ", so no chain map between these "
                     "endpoints exists",
-                    source=source,
-                    target=target,
-                    map_matrices=request.map_matrices,
                 )
 
-    # Request admission guarantees one component per degree, equal shape
-    # (target rows x source columns) per component, and coinciding degree
-    # intervals, so tuple index equals actual chain degree.
     map_mats = [
         _matrix_to_fractions(m, target.basis_sizes[i], source.basis_sizes[i], prime)
-        for i, m in enumerate(request.map_matrices)
+        for i, m in enumerate(map_matrices)
     ]
     source_diffs = [
         _matrix_to_fractions(m, source.basis_sizes[i], source.basis_sizes[i + 1], prime)
@@ -355,10 +335,6 @@ def verify_chain_map(request: VerifyChainMapRequest) -> VerificationResult:
         for i, m in enumerate(target.differential_matrices)
     ]
 
-    # f_i: C_i -> D_i has shape target_basis[i] x source_basis[i], so the
-    # chain-map equation at every differential is
-    # d_target_i * f_{i+1} == f_i * d_source_i. Declared widths keep
-    # empty-row differentials and components shape-faithful.
     for i in range(len(source_diffs)):
         result_columns = source.basis_sizes[i + 1]
         left = _matrix_multiply(
@@ -376,19 +352,40 @@ def verify_chain_map(request: VerifyChainMapRequest) -> VerificationResult:
             left_declared_columns=source.basis_sizes[i],
         )
         if left != right:
-            return VerificationResult(
-                is_valid=False,
-                detail=f"chain map does not commute at degree {source.degree_min + i}",
-                source=source,
-                target=target,
-                map_matrices=request.map_matrices,
-            )
+            return False, f"chain map does not commute at degree {source.degree_min + i}"
 
+    return True, "chain map commutes with differentials"
+
+
+def verify_differential(request: VerifyDifferentialRequest) -> VerificationResult:
+    """Verify that d^2 = 0 for a chain complex.
+
+    Returns a dictionary with 'is_valid' (bool) and 'detail' (str).
+    """
+    is_valid, detail = _differential_verdict(request.complex)
     return VerificationResult(
-        is_valid=True,
-        detail="chain map commutes with differentials",
-        source=source,
-        target=target,
+        is_valid=is_valid,
+        detail=detail,
+        complex=request.complex,
+    )
+
+
+def verify_chain_map(request: VerifyChainMapRequest) -> VerificationResult:
+    """Verify that a chain map commutes with differentials.
+
+    Returns a dictionary with 'is_valid' (bool) and 'detail' (str).
+
+    Request admission guarantees equal coefficient fields and prime, so a
+    field mismatch can never reach this kernel as a verdict.
+    """
+    is_valid, detail = _chain_map_verdict(
+        request.source, request.target, request.map_matrices
+    )
+    return VerificationResult(
+        is_valid=is_valid,
+        detail=detail,
+        source=request.source,
+        target=request.target,
         map_matrices=request.map_matrices,
     )
 

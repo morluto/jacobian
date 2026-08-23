@@ -50,6 +50,36 @@ class ConstructChainComplexRequest(StrictModel):
             basis_sizes=self.basis_sizes,
             differential_matrices=self.differential_matrices,
         )
+        # A chain complex must satisfy d^2 = 0; unchecked candidate data
+        # would let the public operation label arbitrary matrices as an
+        # exact chain complex.
+        from jacobian.math.chain_complexes.operations import (
+            _matrix_multiply,
+            _matrix_to_fractions,
+        )
+
+        prime = self.prime
+        differentials = [
+            _matrix_to_fractions(
+                matrix,
+                self.basis_sizes[index],
+                self.basis_sizes[index + 1],
+                prime=prime,
+            )
+            for index, matrix in enumerate(self.differential_matrices)
+        ]
+        for index in range(len(differentials) - 1):
+            composite = _matrix_multiply(
+                differentials[index],
+                differentials[index + 1],
+                prime=prime,
+            )
+            if any(any(entry != 0 for entry in row) for row in composite):
+                raise ValueError(
+                    "differential matrices must satisfy d^2 = 0: the "
+                    f"composite of degrees {index + 1} and {index} is "
+                    "nonzero"
+                )
         return self
 
 

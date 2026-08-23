@@ -72,6 +72,37 @@ class TestVerifyDifferential:
         assert result.is_valid
 
 
+class TestConstructAdmitsOnlyChainComplexes:
+    def test_non_square_zero_differentials_rejected_at_admission(self) -> None:
+        """Identity differentials on 1-dim groups compose to the identity,
+        not zero: the public construct operation must refuse them instead
+        of labelling arbitrary matrices an exact chain complex."""
+        with pytest.raises(ValidationError, match="d\^2 = 0"):
+            ConstructChainComplexRequest(
+                coefficient_field=CoefficientField.RATIONAL,
+                basis_sizes=(1, 1, 1),
+                differential_matrices=((("1",),), (("1",),)),
+            )
+
+    def test_square_zero_differentials_admitted(self) -> None:
+        from jacobian.math.chain_complexes.values import ChainComplexValue
+
+        request = ConstructChainComplexRequest(
+            coefficient_field=CoefficientField.RATIONAL,
+            basis_sizes=(1, 1, 1),
+            differential_matrices=((("0",),), (("0",),)),
+        )
+        value = ChainComplexValue(
+            coefficient_field=request.coefficient_field,
+            prime=request.prime,
+            degree_min=0,
+            degree_max=len(request.basis_sizes) - 1,
+            basis_sizes=request.basis_sizes,
+            differential_matrices=request.differential_matrices,
+        )
+        assert value.basis_sizes == (1, 1, 1)
+
+
 class TestComputeHomology:
     def test_circle_homology(self) -> None:
         result = compute_homology(ComputeHomologyRequest(complex=_circle_complex()))
@@ -1376,6 +1407,22 @@ class TestVerificationVerdictBinding:
         with pytest.raises(ValidationError, match="retain"):
             VerificationResult(is_valid=True, detail="d^2 = 0")
 
+    def test_contradictory_detail_rejected(self) -> None:
+        """The detail is authoritative: a square-zero point cannot carry
+        an explanation contradicting its replayed verdict."""
+        from jacobian.math.chain_complexes.values import VerificationResult
+
+        point = _point_complex()
+        with pytest.raises(ValidationError, match="exact explanation"):
+            VerificationResult(
+                is_valid=True,
+                detail="d^2 != 0",
+                complex=point,
+            )
+        genuine = verify_differential(VerifyDifferentialRequest(complex=point))
+        revalidated = VerificationResult.model_validate(genuine.model_dump())
+        assert revalidated.detail == "d^2 = 0 for all degrees"
+
     def test_true_verdict_retains_complex(self) -> None:
         """Successful differential verification retains its input."""
         result = verify_differential(
@@ -1464,7 +1511,7 @@ class TestVerificationReplayParentChecks:
         point = _point_complex()
         verdict = VerificationResult(
             is_valid=True,
-            detail="commutes",
+            detail="chain map commutes with differentials",
             source=point,
             target=point,
             map_matrices=((("1",),),),

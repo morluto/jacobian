@@ -454,12 +454,14 @@ class VerificationResult(StrictModel):
     @model_validator(mode="after")
     def bind_verification_to_source(self) -> Self:
         """Replay the checked relation against the retained inputs so a
-        detached or forged verdict cannot validate."""
+        detached or forged verdict cannot validate, and require the detail
+        to be the exact authoritative explanation of that replay."""
+        from jacobian.math.chain_complexes._models import (
+            _require_chain_map_components,
+        )
         from jacobian.math.chain_complexes.operations import (
-            _matrix_to_fractions,
-            _parsed_differentials,
-            _require_chain_map_relation,
-            _require_square_zero,
+            _chain_map_verdict,
+            _differential_verdict,
         )
 
         if self.complex is not None:
@@ -467,26 +469,12 @@ class VerificationResult(StrictModel):
                 raise ValueError(
                     "a differential verification result must not carry chain-map inputs"
                 )
-            try:
-                _require_square_zero(
-                    _parsed_differentials(self.complex),
-                    self.complex.prime,
-                    label="verified",
-                    group_columns=list(self.complex.basis_sizes),
-                    degree_min=self.complex.degree_min,
-                )
-                holds = True
-            except ValueError:
-                holds = False
+            holds, expected_detail = _differential_verdict(self.complex)
         elif (
             self.source is not None
             and self.target is not None
             and self.map_matrices is not None
         ):
-            from jacobian.math.chain_complexes._models import (
-                _require_chain_map_components,
-            )
-
             # Replay must apply the request model's complete component
             # and parent checks: otherwise endpoints with different
             # coefficient fields, primes, or degree intervals validate
@@ -497,53 +485,9 @@ class VerificationResult(StrictModel):
                 self.map_matrices,
                 label="chain-map verification",
             )
-            prime = self.source.prime
-            try:
-                map_mats = [
-                    _matrix_to_fractions(
-                        m, self.target.basis_sizes[i], self.source.basis_sizes[i], prime
-                    )
-                    for i, m in enumerate(self.map_matrices)
-                ]
-                source_diffs = [
-                    _matrix_to_fractions(
-                        m,
-                        self.source.basis_sizes[i],
-                        self.source.basis_sizes[i + 1],
-                        prime,
-                    )
-                    for i, m in enumerate(self.source.differential_matrices)
-                ]
-                target_diffs = [
-                    _matrix_to_fractions(
-                        m,
-                        self.target.basis_sizes[i],
-                        self.target.basis_sizes[i + 1],
-                        prime,
-                    )
-                    for i, m in enumerate(self.target.differential_matrices)
-                ]
-                # Producer semantics: endpoints must be genuine complexes
-                # and the map must commute at every differential.
-                for endpoint in (self.source, self.target):
-                    _require_square_zero(
-                        _parsed_differentials(endpoint),
-                        endpoint.prime,
-                        label="chain-map",
-                        group_columns=list(endpoint.basis_sizes),
-                        degree_min=endpoint.degree_min,
-                    )
-                _require_chain_map_relation(
-                    source_diffs,
-                    target_diffs,
-                    map_mats,
-                    prime,
-                    source_group_columns=list(self.source.basis_sizes),
-                    target_group_columns=list(self.target.basis_sizes),
-                )
-                holds = True
-            except (ValueError, IndexError):
-                holds = False
+            holds, expected_detail = _chain_map_verdict(
+                self.source, self.target, self.map_matrices
+            )
         else:
             raise ValueError(
                 "a verification result must retain the complete checked "
@@ -552,6 +496,11 @@ class VerificationResult(StrictModel):
         if holds != self.is_valid:
             raise ValueError(
                 "verification verdict must be the exact replay of the retained relation"
+            )
+        if self.detail != expected_detail:
+            raise ValueError(
+                "verification detail must be the exact explanation of the "
+                "replayed relation"
             )
         return self
 

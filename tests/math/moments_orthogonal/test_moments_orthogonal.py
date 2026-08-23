@@ -446,3 +446,32 @@ class TestRecurrenceAdmissionBoundaries:
         )
         with pytest.raises(ValidationError, match="canonical"):
             RecurrenceCoefficientsRequest(moments=moments)
+
+    def test_odd_prefix_final_norm_validated(self):
+        """An odd-length prefix must validate the norm its last moment fixes.
+
+        moments=(1, 0, -1) has Hankel determinant -1, so it defines no
+        positive functional; the final even-moment norm check must reject it
+        instead of returning coefficients with complete=True.
+        """
+        with pytest.raises(ValueError, match="positive-definite"):
+            recurrence_coefficients(
+                (Fraction(1), Fraction(0), Fraction(-1))
+            )
+        # The same prefix extended to a positive sequence stays admitted and
+        # keeps its known answer alpha=(0).
+        result = recurrence_coefficients(
+            (Fraction(1), Fraction(0), Fraction(1))
+        )
+        assert result.alpha == (Fraction(0),)
+        assert result.beta == (Fraction(1),)
+
+    def test_odd_prefix_wire_rejects_negative_hankel_minor(self):
+        with pytest.raises((ValidationError, ValueError)):
+            RecurrenceCoefficientsRequest(
+                moments=(
+                    _cr(1, 1),
+                    _cr(0, 1),
+                    _cr(-1, 1),
+                )
+            )

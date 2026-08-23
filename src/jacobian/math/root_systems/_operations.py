@@ -83,7 +83,7 @@ def _apply_reflection(
     return result
 
 
-def _weyl_group_data(cartan: list[list[int]]) -> tuple[int, tuple[int, ...], int]:  # noqa: C901
+def _weyl_group_data(cartan: list[list[int]]) -> tuple[int, tuple[int, ...], int]:
     """Compute Weyl group order, longest element, and Coxeter number.
 
     Returns (order, longest_element_permutation, coxeter_number).

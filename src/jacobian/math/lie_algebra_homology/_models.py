@@ -128,22 +128,31 @@ class ChevalleyEilenbergComplexRequest(StrictModel):
 
 
 class DifferentialMatrix(StrictModel):
-    """One differential matrix in the Chevalley-Eilenberg complex."""
+    """One differential matrix in the Chevalley-Eilenberg complex.
+
+    The differential is retained as the canonical prime-field matrix value so
+    it serializes with the result and composes unchanged with the GF(p)
+    matrix operations; the legacy flat fields are derivations of it.
+    """
 
     degree: int = Field(ge=0)
-    source_dim: int = Field(ge=1)
-    target_dim: int = Field(ge=1)
-    entries: tuple[tuple[int, ...], ...] = Field(min_length=1)
-    prime: int = Field(ge=2, le=10_000)
+    matrix: PrimeFieldMatrix
 
     @property
-    def matrix(self) -> PrimeFieldMatrix:
-        """Canonical prime-field matrix value for downstream composition."""
-        return PrimeFieldMatrix(
-            prime=self.prime,
-            entries=self.entries,
-            columns=self.source_dim,
-        )
+    def prime(self) -> int:
+        return self.matrix.prime
+
+    @property
+    def source_dim(self) -> int:
+        return self.matrix.columns
+
+    @property
+    def target_dim(self) -> int:
+        return len(self.matrix.entries)
+
+    @property
+    def entries(self) -> tuple[tuple[int, ...], ...]:
+        return self.matrix.entries
 
 
 class ChevalleyEilenbergComplexResult(StrictModel):
@@ -193,20 +202,8 @@ class ChevalleyEilenbergComplexResult(StrictModel):
                     "differential dimensions must match the chain groups of "
                     "the source Lie algebra"
                 )
-            if len(differential.entries) != differential.target_dim or any(
-                len(row) != differential.source_dim
-                for row in differential.entries
-            ):
-                raise ValueError(
-                    "differential entries must form a "
-                    "target_dim x source_dim matrix"
-                )
-            if any(
-                not 0 <= value < p for row in differential.entries for value in row
-            ):
-                raise ValueError(
-                    "differential entries must be reduced GF(prime) residues"
-                )
+            # Canonical GF(prime) residues are enforced by the retained
+            # PrimeFieldMatrix value itself.
         from jacobian.math.lie_algebra_homology._operations import (
             _ce_differentials,
         )

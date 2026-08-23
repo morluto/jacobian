@@ -13,6 +13,7 @@ from jacobian.math.lie_algebra_homology._models import (
     LieHomologyRequest,
     LieHomologyResult,
 )
+from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
 
 
 def _find_pivot_row(aug: list[list[int]], prime: int, rank: int, col: int) -> int | None:
@@ -122,10 +123,11 @@ def _ce_differentials(
 
         differentials.append(DifferentialMatrix(
             degree=degree,
-            source_dim=source_dim,
-            target_dim=target_dim,
-            entries=tuple(tuple(row) for row in diff_matrix),
-            prime=p,
+            matrix=PrimeFieldMatrix(
+                prime=p,
+                entries=tuple(tuple(row) for row in diff_matrix),
+                columns=source_dim,
+            ),
         ))
     return tuple(differentials)
 

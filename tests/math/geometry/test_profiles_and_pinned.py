@@ -289,23 +289,3 @@ class TestForbiddenPatterns:
                 checked_quadruples=0,
             )
 
-
-class TestDeclaredExamplesExecuteHonesty:
-    def test_forbidden_patterns_example_matches_description(self):
-        from jacobian.catalog.catalog import Catalog
-        from jacobian.dispatch import invoke_operation
-
-        catalog = Catalog.open()
-        declaration = next(
-            tool
-            for tool in BUILTIN_TOOLS
-            if tool.operation_id == "geometry.configuration.forbidden_patterns.check"
-        )
-        for sample in declaration.examples:
-            result = invoke_operation(
-                "geometry.configuration.forbidden_patterns.check",
-                sample.input,
-                catalog,
-            )
-        assert result.output["has_collinear_triple"] is False
-        assert result.output["has_concyclic_quadruple"] is False

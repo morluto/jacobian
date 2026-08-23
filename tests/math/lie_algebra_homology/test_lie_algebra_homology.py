@@ -17,6 +17,7 @@ from jacobian.math.lie_algebra_homology._operations import (
     compute_chevalley_eilenberg_complex,
     compute_lie_homology,
 )
+from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
 
 
 def _sl2_gf5() -> LieAlgebra:
@@ -108,6 +109,25 @@ class TestChevalleyEilenbergComplex:
         # carries the standard (-1)^(a+b+pi) CE sign:
         # d(E^F) = -H, d(E^H) = -(-2E) = 2E... encoded as exact GF(5) residues.
         assert d2.entries == ((0, 2, 0), (0, 0, 3), (4, 0, 0))
+
+    def test_differential_serializes_canonical_matrix(self):
+        """The CE differential serializes as one reusable GF(p) matrix value."""
+        result = compute_chevalley_eilenberg_complex(
+            ChevalleyEilenbergComplexRequest(lie_algebra=_sl2_gf5())
+        )
+        d2 = next(d for d in result.differentials if d.degree == 2)
+        payload = d2.model_dump()
+        assert payload["matrix"]["prime"] == 5
+        assert payload["matrix"]["columns"] == 3
+        assert payload["matrix"]["entries"] == (
+            (0, 2, 0),
+            (0, 0, 3),
+            (4, 0, 0),
+        )
+        # The serialized matrix composes unchanged with the matrix operations.
+        from jacobian.math.prime_field_linear_algebra import rank
+
+        assert rank(PrimeFieldMatrix(**payload["matrix"])) == 3
 
 
 class TestLieAlgebraValidation:
@@ -307,20 +327,25 @@ class TestComplexResultBinding:
             ChevalleyEilenbergComplexRequest(lie_algebra=g)
         )
         d2 = next(d for d in full.differentials if d.degree == 2)
-        truncated = DifferentialMatrix(
-            degree=2,
-            source_dim=2,
-            target_dim=3,
-            entries=d2.entries[:3],
-            prime=5,
-        )
-        tampered_rows = tuple(row[:2] for row in truncated.entries)
+        # Rows narrower than the declared column axis cannot form a matrix value.
+        tampered_rows = tuple(row[:2] for row in d2.entries)
+        with pytest.raises(ValidationError):
+            DifferentialMatrix(
+                degree=2,
+                matrix=PrimeFieldMatrix(
+                    prime=5, entries=tampered_rows, columns=d2.source_dim
+                ),
+            )
+        # A well-formed but forged differential still fails source replay.
+        forged_rows = [list(row) for row in d2.entries]
+        forged_rows[0][0] = (forged_rows[0][0] + 1) % 5
         broken = DifferentialMatrix(
             degree=2,
-            source_dim=2,
-            target_dim=3,
-            entries=tampered_rows,
-            prime=5,
+            matrix=PrimeFieldMatrix(
+                prime=5,
+                entries=tuple(tuple(row) for row in forged_rows),
+                columns=d2.source_dim,
+            ),
         )
         others = tuple(d for d in full.differentials if d.degree != 2)
         with pytest.raises(ValidationError):
@@ -348,10 +373,11 @@ class TestComplexResultBinding:
         rows[0][0] = (rows[0][0] + 1) % 5
         forged_d2 = DifferentialMatrix(
             degree=2,
-            source_dim=d2.source_dim,
-            target_dim=d2.target_dim,
-            entries=tuple(tuple(row) for row in rows),
-            prime=5,
+            matrix=PrimeFieldMatrix(
+                prime=5,
+                entries=tuple(tuple(row) for row in rows),
+                columns=d2.source_dim,
+            ),
         )
         others = tuple(d for d in full.differentials if d.degree != 2)
         with pytest.raises(ValidationError, match="reconstructed"):
@@ -371,20 +397,15 @@ class TestComplexResultBinding:
         d1 = next(d for d in full.differentials if d.degree == 1)
         rows = [list(row) for row in d1.entries]
         rows[0][0] = 5
-        forged = DifferentialMatrix(
-            degree=1,
-            source_dim=d1.source_dim,
-            target_dim=d1.target_dim,
-            entries=tuple(tuple(row) for row in rows),
-            prime=5,
-        )
+        # The canonical prime-field matrix value itself rejects non-residues.
         with pytest.raises(ValidationError, match="residues"):
-            ChevalleyEilenbergComplexResult(
-                lie_algebra=g,
-                dimension=3,
-                group_dimensions=(1, 3, 3, 1),
-                differentials=(forged, full.differentials[1], full.differentials[2]),
-                prime=5,
+            DifferentialMatrix(
+                degree=1,
+                matrix=PrimeFieldMatrix(
+                    prime=5,
+                    entries=tuple(tuple(row) for row in rows),
+                    columns=d1.source_dim,
+                ),
             )
 
 

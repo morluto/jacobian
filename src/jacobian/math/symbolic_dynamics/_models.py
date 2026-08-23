@@ -9,10 +9,14 @@ from pydantic import Field, model_validator
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.polynomials.values import RationalFunction, RationalPolynomial
 from jacobian.math.symbolic_dynamics.operations import (
+    MAX_ZETA_REPLAY_PERIOD,
     _presentation_memory,
     _require_bounded_presentation,
     _require_bounded_support,
+    _require_zeta_budget,
+    artin_mazur_zeta,
     block_language,
     enumeration_size,
     finite_type_presentation,
@@ -161,7 +165,63 @@ class HigherBlockResult(HigherBlockRequest):
         return self
 
 
+class ArtinMazurZetaRequest(StrictModel):
+    """Request the exact Artin--Mazur zeta function of one edge shift."""
+
+    shift: AdjacencyShift
+    replay_period: int = Field(ge=1, le=MAX_ZETA_REPLAY_PERIOD)
+
+    @model_validator(mode="after")
+    def require_bounded_exact_zeta(self) -> Self:
+        _require_zeta_budget(self.shift, self.replay_period)
+        return self
+
+
+class ArtinMazurZetaReplayRow(StrictModel):
+    period: int = Field(ge=1, le=MAX_ZETA_REPLAY_PERIOD)
+    trace_fixed_points: CanonicalInteger
+    logarithmic_derivative_coefficient: CanonicalInteger
+
+
+class ArtinMazurZetaResult(ArtinMazurZetaRequest):
+    determinant_polynomial: RationalPolynomial
+    zeta_function: RationalFunction
+    replay: tuple[ArtinMazurZetaReplayRow, ...] = Field(
+        min_length=1, max_length=MAX_ZETA_REPLAY_PERIOD
+    )
+    convention: Literal["EDGE_SHIFT_ARTIN_MAZUR_ZETA"] = "EDGE_SHIFT_ARTIN_MAZUR_ZETA"
+    method: Literal["SYMPY_EXACT_CHARACTERISTIC_POLYNOMIAL"] = (
+        "SYMPY_EXACT_CHARACTERISTIC_POLYNOMIAL"
+    )
+
+    @model_validator(mode="after")
+    def bind_zeta_and_periodic_replay(self) -> Self:
+        determinant, zeta, coefficients = artin_mazur_zeta(
+            self.shift, self.replay_period
+        )
+        expected_replay = tuple(
+            ArtinMazurZetaReplayRow(
+                period=period,
+                trace_fixed_points=format_canonical_integer(coefficient),
+                logarithmic_derivative_coefficient=format_canonical_integer(
+                    coefficient
+                ),
+            )
+            for period, coefficient in enumerate(coefficients, 1)
+        )
+        if (
+            self.determinant_polynomial != determinant
+            or self.zeta_function != zeta
+            or self.replay != expected_replay
+        ):
+            raise ValueError("Artin--Mazur zeta result is not bound to the request")
+        return self
+
+
 __all__ = [
+    "ArtinMazurZetaReplayRow",
+    "ArtinMazurZetaRequest",
+    "ArtinMazurZetaResult",
     "BlockLanguageRequest",
     "BlockLanguageResult",
     "FiniteTypeShiftRequest",

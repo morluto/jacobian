@@ -490,8 +490,11 @@ def test_ideal_saturation_advertised_example_is_exact() -> None:
     assert result.saturation is not None
     assert _equal(result.saturation, _ideal(("x", "y"), {(0, 1): 1}))
     assert all(
-        _contains_product(_ideal(("x", "y"), {(1, 1): 1}), generator,
-                           _polynomial(("x", "y"), {(1, 0): 1}))
+        _contains_product(
+            _ideal(("x", "y"), {(1, 1): 1}),
+            generator,
+            _polynomial(("x", "y"), {(1, 0): 1}),
+        )
         for generator in result.saturation.generators
     )
 
@@ -508,4 +511,6 @@ def test_ideal_saturation_keeps_every_generator_of_the_result() -> None:
     )
     assert result.outcome == "COMPUTED"
     assert result.saturation is not None
-    assert _equal(result.saturation, _ideal(("x", "y", "z"), {(0, 1, 0): 1}, {(0, 0, 1): 1}))
+    assert _equal(
+        result.saturation, _ideal(("x", "y", "z"), {(0, 1, 0): 1}, {(0, 0, 1): 1})
+    )

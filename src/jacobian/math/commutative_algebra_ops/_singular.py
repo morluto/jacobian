@@ -114,10 +114,7 @@ def _script(
         declarations.append(_singular_ideal("jacobian_right", right))
         # Supported Singular 4.4.x backends expose sat(ideal, ideal) -> ideal;
         # indexing the result would truncate multi-generator saturations.
-        operation_line = (
-            "ideal jacobian_result=sat(jacobian_left,"
-            "jacobian_right);"
-        )
+        operation_line = "ideal jacobian_result=sat(jacobian_left,jacobian_right);"
     else:
         if right is None:
             raise ValueError("quotient requires a divisor ideal")

@@ -17,6 +17,38 @@ MAX_SOS_COEFF_DIGITS = 128
 MAX_SOS_PREDICTED_TERMS = 4096
 
 
+def _require_bounded_polynomial(poly: RationalPolynomial, label: str) -> None:
+    """Bound one input polynomial's terms, total degree, and coefficients."""
+    terms = poly.polynomial.terms
+    if len(terms) > MAX_SOS_SUMMAND_TERMS:
+        raise ValueError(f"{label} exceeds term bound")
+    for term in terms:
+        if sum(term.exponents) > MAX_SOS_DEGREE:
+            raise ValueError(f"{label} exceeds total-degree bound")
+        coeff = term.coefficient
+        if max(len(coeff.num.lstrip("-")), len(coeff.den)) > MAX_SOS_COEFF_DIGITS:
+            raise ValueError(f"{label} coefficient exceeds digit bound")
+
+
+MAX_GRAM_DIMENSION = 32
+
+
+def _require_bounded_gram_work(
+    dimension: int,
+    gram_matrix: tuple[tuple[CanonicalRational, ...], ...],
+    monomial_basis: tuple[RationalPolynomial, ...],
+) -> None:
+    """Bound the exact reconstruction and PSD work for z^T Q z."""
+    # Predicted reconstruction terms for z^T Q z
+    max_basis_terms = max(len(b.polynomial.terms) for b in monomial_basis)
+    predicted = len(gram_matrix) ** 2 * max(1, max_basis_terms**2)
+    if predicted > MAX_SOS_PREDICTED_TERMS * 4:
+        raise ValueError("predicted Gram reconstruction exceeds term bound")
+    # Bound total matrix size to keep exact eigenvalue work bounded
+    if dimension > MAX_GRAM_DIMENSION:
+        raise ValueError("gram matrix dimension exceeds bound")
+
+
 class SOSDecompositionCheckRequest(StrictModel):
     """Check that p = q_1^2 + ... + q_r^2 over QQ."""
 
@@ -27,21 +59,13 @@ class SOSDecompositionCheckRequest(StrictModel):
     def require_matching_ring(self) -> Self:
         for summand in self.summands:
             if summand.variables != self.polynomial.variables:
-                raise ValueError("all summands must use the same ring as the polynomial")
+                raise ValueError(
+                    "all summands must use the same ring as the polynomial"
+                )
         # Bound polynomial expansion before squaring.
-        def _check_poly(poly: RationalPolynomial, label: str) -> None:
-            terms = poly.polynomial.terms
-            if len(terms) > MAX_SOS_SUMMAND_TERMS:
-                raise ValueError(f"{label} exceeds term bound")
-            for term in terms:
-                if sum(term.exponents) > MAX_SOS_DEGREE:
-                    raise ValueError(f"{label} exceeds total-degree bound")
-                coeff = term.coefficient
-                if max(len(coeff.num.lstrip("-")), len(coeff.den)) > MAX_SOS_COEFF_DIGITS:
-                    raise ValueError(f"{label} coefficient exceeds digit bound")
-        _check_poly(self.polynomial, "polynomial")
+        _require_bounded_polynomial(self.polynomial, "polynomial")
         for idx, summand in enumerate(self.summands):
-            _check_poly(summand, f"summand[{idx}]")
+            _require_bounded_polynomial(summand, f"summand[{idx}]")
         # Predicted expansion budget: sum of squares can produce up to terms^2 per summand
         predicted = sum(len(s.polynomial.terms) ** 2 for s in self.summands)
         if predicted > MAX_SOS_PREDICTED_TERMS:
@@ -75,13 +99,17 @@ class GramCertificateRequest(StrictModel):
 
     polynomial: RationalPolynomial
     monomial_basis: tuple[RationalPolynomial, ...] = Field(min_length=1, max_length=64)
-    gram_matrix: tuple[tuple[CanonicalRational, ...], ...] = Field(min_length=1, max_length=64)
+    gram_matrix: tuple[tuple[CanonicalRational, ...], ...] = Field(
+        min_length=1, max_length=64
+    )
 
     @model_validator(mode="after")
     def require_square_matrix(self) -> Self:
         n = len(self.monomial_basis)
         if len(self.gram_matrix) != n:
-            raise ValueError("gram_matrix must be square with side equal to monomial_basis length")
+            raise ValueError(
+                "gram_matrix must be square with side equal to monomial_basis length"
+            )
         for row in self.gram_matrix:
             if len(row) != n:
                 raise ValueError("gram_matrix must be square")
@@ -89,26 +117,10 @@ class GramCertificateRequest(StrictModel):
             if summand.variables != self.polynomial.variables:
                 raise ValueError("monomial basis must use the polynomial ring")
         # Bound reconstruction work: each polynomial and basis element must be bounded
-        def _check_poly(poly: RationalPolynomial, label: str) -> None:
-            if len(poly.polynomial.terms) > MAX_SOS_SUMMAND_TERMS:
-                raise ValueError(f"{label} exceeds term bound")
-            for term in poly.polynomial.terms:
-                if sum(term.exponents) > MAX_SOS_DEGREE:
-                    raise ValueError(f"{label} exceeds total-degree bound")
-                coeff = term.coefficient
-                if max(len(coeff.num.lstrip("-")), len(coeff.den)) > MAX_SOS_COEFF_DIGITS:
-                    raise ValueError(f"{label} coefficient exceeds digit bound")
-        _check_poly(self.polynomial, "polynomial")
+        _require_bounded_polynomial(self.polynomial, "polynomial")
         for idx, basis in enumerate(self.monomial_basis):
-            _check_poly(basis, f"basis[{idx}]")
-        # Predicted reconstruction terms for z^T Q z
-        max_basis_terms = max(len(b.polynomial.terms) for b in self.monomial_basis) if self.monomial_basis else 0
-        predicted = len(self.gram_matrix) ** 2 * max(1, max_basis_terms ** 2)
-        if predicted > MAX_SOS_PREDICTED_TERMS * 4:
-            raise ValueError("predicted Gram reconstruction exceeds term bound")
-        # Bound total matrix size to keep exact PSD check bounded
-        if n > 32:
-            raise ValueError("gram matrix dimension exceeds bound")
+            _require_bounded_polynomial(basis, f"basis[{idx}]")
+        _require_bounded_gram_work(n, self.gram_matrix, self.monomial_basis)
         return self
 
 
@@ -134,7 +146,9 @@ class GramCertificateResult(StrictModel):
         if self.is_symmetric != is_sym:
             raise ValueError("is_symmetric must match the exact symmetry check")
         if self.reconstructs_polynomial != recon:
-            raise ValueError("reconstructs_polynomial must match the exact reconstruction check")
+            raise ValueError(
+                "reconstructs_polynomial must match the exact reconstruction check"
+            )
         if self.is_psd != psd:
             raise ValueError("is_psd must match the exact PSD check")
         if self.is_valid != (is_sym and recon and psd):

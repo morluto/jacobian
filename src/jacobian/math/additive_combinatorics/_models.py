@@ -176,7 +176,6 @@ class DirectSumPredicateResult(StrictModel):
         return self
 
 
-
 # ---------------------------------------------------------------------------
 # Ordered-difference profile for finite integer-vector sets
 # ---------------------------------------------------------------------------
@@ -285,9 +284,7 @@ def _require_pair_replay(
     """Aggregate counts plus per-pair replay against the retained source."""
     expected_total = result.set_size * (result.set_size - 1)
     if result.ordered_pair_count != expected_total:
-        raise ValueError(
-            "ordered_pair_count must equal set_size * (set_size - 1)"
-        )
+        raise ValueError("ordered_pair_count must equal set_size * (set_size - 1)")
     if result.support_size != len(result.classes):
         raise ValueError("support_size must match the class count")
     class_total = sum(len(cls.pairs) for cls in result.classes)
@@ -297,9 +294,7 @@ def _require_pair_replay(
     if result.max_multiplicity != computed_max:
         raise ValueError("max_multiplicity must be the maximum class multiplicity")
     if result.has_repeated_difference != (result.max_multiplicity > 1):
-        raise ValueError(
-            "has_repeated_difference must agree with max_multiplicity > 1"
-        )
+        raise ValueError("has_repeated_difference must agree with max_multiplicity > 1")
     seen: set[tuple[int, int]] = set()
     for cls in result.classes:
         difference = cls.difference.as_ints()
@@ -345,9 +340,7 @@ def _require_class_coverage(
         key = cls.difference.as_ints()
         claimed[key] = claimed.get(key, 0) + len(cls.pairs)
     if claimed != dict(truth):
-        raise ValueError(
-            "difference classes must replay against the source vectors"
-        )
+        raise ValueError("difference classes must replay against the source vectors")
     return truth
 
 
@@ -410,8 +403,6 @@ class OrderedDifferenceProfileResult(StrictModel):
                     "a repeated difference must be reported when one exists"
                 )
         return self
-
-
 
 
 __all__ = [

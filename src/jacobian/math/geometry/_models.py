@@ -514,9 +514,7 @@ class CircumradiusTripleEntry(StrictModel):
     @model_validator(mode="after")
     def bind_collinear_to_value(self) -> Self:
         if self.collinear is (self.squared_circumradius is not None):
-            raise ValueError(
-                "exactly a collinear triple has no squared circumradius"
-            )
+            raise ValueError("exactly a collinear triple has no squared circumradius")
         if (
             self.squared_circumradius is not None
             and self.squared_circumradius.as_fraction() <= 0
@@ -531,7 +529,11 @@ class CircumradiusProfileResult(StrictModel):
     )
     point_count: StrictInt = Field(ge=3, le=MAX_CIRCUMRADIUS_POINT_COUNT)
     triple_count: StrictInt = Field(
-        ge=1, le=MAX_CIRCUMRADIUS_POINT_COUNT * (MAX_CIRCUMRADIUS_POINT_COUNT - 1) * (MAX_CIRCUMRADIUS_POINT_COUNT - 2) // 6
+        ge=1,
+        le=MAX_CIRCUMRADIUS_POINT_COUNT
+        * (MAX_CIRCUMRADIUS_POINT_COUNT - 1)
+        * (MAX_CIRCUMRADIUS_POINT_COUNT - 2)
+        // 6,
     )
     entries: tuple[CircumradiusTripleEntry, ...] = Field(min_length=1)
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
@@ -556,9 +558,7 @@ class CircumradiusProfileResult(StrictModel):
         if len(self.entries) != len(expected):
             raise ValueError("circumradius profile must be complete")
         if self.triple_count != len(expected):
-            raise ValueError(
-                "triple_count must equal C(point_count, 3)"
-            )
+            raise ValueError("triple_count must equal C(point_count, 3)")
         indices = tuple(entry.indices for entry in self.entries)
         if indices != expected:
             raise ValueError(
@@ -566,7 +566,8 @@ class CircumradiusProfileResult(StrictModel):
             )
         # Replay each entry's exact squared circumradius
         coords: list[tuple[Fraction, Fraction]] = [
-            (item.point.x.as_fraction(), item.point.y.as_fraction()) for item in self.points
+            (item.point.x.as_fraction(), item.point.y.as_fraction())
+            for item in self.points
         ]
         for entry, (i, j, k) in zip(self.entries, expected, strict=True):
             _require_entry_replay(entry, coords, self.points, i, j, k)
@@ -628,7 +629,9 @@ class ForbiddenConfiguration(StrictModel):
         for entry in self.points:
             for coord in (entry.point.x, entry.point.y):
                 if max(len(coord.num.lstrip("-")), len(coord.den)) > 256:
-                    raise ValueError("forbidden configuration coordinate exceeds digit bound")
+                    raise ValueError(
+                        "forbidden configuration coordinate exceeds digit bound"
+                    )
         return self
 
 
@@ -703,16 +706,24 @@ class ForbiddenPatternsResult(StrictModel):
         recomputed_concyclic = False
         for i, j, k, ell in combinations(range(len(xy)), 4):
             # Exclude collinear quadruples: see _operations.forbidden_patterns
-            cross_ijk = (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
-            cross_ijl = (xy[j][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
-            cross_ikl = (xy[k][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[k][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
-            cross_jkl = (xy[k][0] - xy[j][0]) * (xy[ell][1] - xy[j][1]) - (xy[k][1] - xy[j][1]) * (xy[ell][0] - xy[j][0])
+            cross_ijk = (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1]) - (
+                xy[j][1] - xy[i][1]
+            ) * (xy[k][0] - xy[i][0])
+            cross_ijl = (xy[j][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (
+                xy[j][1] - xy[i][1]
+            ) * (xy[ell][0] - xy[i][0])
+            cross_ikl = (xy[k][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (
+                xy[k][1] - xy[i][1]
+            ) * (xy[ell][0] - xy[i][0])
+            cross_jkl = (xy[k][0] - xy[j][0]) * (xy[ell][1] - xy[j][1]) - (
+                xy[k][1] - xy[j][1]
+            ) * (xy[ell][0] - xy[j][0])
             if cross_ijk == 0 and cross_ijl == 0 and cross_ikl == 0 and cross_jkl == 0:
                 continue
-            m = [
-                [x * x + y * y, x, y, 1]
+            m: tuple[tuple[Fraction, Fraction, Fraction, Fraction], ...] = tuple(
+                (x * x + y * y, x, y, Fraction(1))
                 for x, y in (xy[i], xy[j], xy[k], xy[ell])
-            ]
+            )
             det = (
                 m[0][0]
                 * (

@@ -31,9 +31,7 @@ class TestPinnedDistancesKnownAnswer:
         assert entry.squared_distance_denominator == "1"
         assert entry.source_pairs == ((0, 1),)
         assert result.min_squared_distance is not None
-        assert (
-            result.min_squared_distance.squared_distance_numerator == "1"
-        )
+        assert result.min_squared_distance.squared_distance_numerator == "1"
 
     def test_three_lines_from_four_points(self) -> None:
         request = PinnedDistanceRequest(

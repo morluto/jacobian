@@ -151,7 +151,6 @@ def decide_direct_sum_predicate(
     )
 
 
-
 def compute_ordered_difference_profile(
     request: OrderedDifferenceProfileRequest,
 ) -> OrderedDifferenceProfileResult:
@@ -177,9 +176,7 @@ def compute_ordered_difference_profile(
         classes.append(
             OrderedDifferenceClass(
                 difference=DifferenceVector(
-                    coordinates=tuple(
-                        format_canonical_integer(value) for value in diff
-                    )
+                    coordinates=tuple(format_canonical_integer(value) for value in diff)
                 ),
                 pairs=tuple(
                     OrderedDifferencePair(minuend_index=i, subtrahend_index=j)
@@ -192,9 +189,7 @@ def compute_ordered_difference_profile(
         # The advertised "first" repeated difference is the numerically
         # smallest difference occurring more than once, not the modal one.
         if multiplicity > 1 and first_repeated is None:
-            first_repeated = tuple(
-                format_canonical_integer(value) for value in diff
-            )
+            first_repeated = tuple(format_canonical_integer(value) for value in diff)
 
     return OrderedDifferenceProfileResult(
         vectors=request.vectors,
@@ -216,4 +211,3 @@ __all__ = [
     "compute_sumset_cardinality",
     "decide_direct_sum_predicate",
 ]
-

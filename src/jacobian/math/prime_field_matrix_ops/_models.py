@@ -42,14 +42,21 @@ class PrimeFieldMatrixRequest(StrictModel):
             raise ValueError("entries must be canonical prime-field residues")
         if not self.entries and self.columns == 0:
             return self
-        _PrimeFieldMatrixValidator(prime=self.prime, entries=self.entries, columns=self.columns)
+        _PrimeFieldMatrixValidator(
+            prime=self.prime, entries=self.entries, columns=self.columns
+        )
         return self
 
 
 class _PrimeFieldMatrixValidator:
     """Trigger PrimeFieldMatrix validation."""
 
-    def __init__(self, prime, entries, columns):
+    def __init__(
+        self,
+        prime: int,
+        entries: tuple[tuple[int, ...], ...],
+        columns: int,
+    ) -> None:
         PrimeFieldMatrix(prime=prime, entries=entries, columns=columns)
 
 

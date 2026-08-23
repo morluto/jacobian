@@ -14,15 +14,22 @@ from jacobian.math.sum_of_squares._operations import (
 
 
 def _poly(variables, *terms):
-    return RationalPolynomial.model_validate({
-        "polynomial_schema_version": "1",
-        "domain": "QQ",
-        "variables": list(variables),
-        "polynomial": {"terms": [
-            {"coefficient": {"num": str(n), "den": str(d)}, "exponents": list(e)}
-            for n, d, e in terms
-        ]},
-    })
+    return RationalPolynomial.model_validate(
+        {
+            "polynomial_schema_version": "1",
+            "domain": "QQ",
+            "variables": list(variables),
+            "polynomial": {
+                "terms": [
+                    {
+                        "coefficient": {"num": str(n), "den": str(d)},
+                        "exponents": list(e),
+                    }
+                    for n, d, e in terms
+                ]
+            },
+        }
+    )
 
 
 class TestSOSDecompositionCheck:

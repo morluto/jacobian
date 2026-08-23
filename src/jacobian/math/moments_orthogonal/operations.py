@@ -35,10 +35,7 @@ def hankel_matrix(moments: Sequence[Fraction]) -> HankelMatrix:
     n = (len(moments) + 1) // 2
     if n > MAX_HANKEL_DIMENSION:
         raise ValueError("Hankel matrix dimension exceeds the supported bound")
-    matrix = tuple(
-        tuple(moments[i + j] for j in range(n))
-        for i in range(n)
-    )
+    matrix = tuple(tuple(moments[i + j] for j in range(n)) for i in range(n))
     return HankelMatrix(matrix=matrix, moments=tuple(moments))
 
 
@@ -100,10 +97,13 @@ def _monic_orthogonal_recurrence(
     for k in range(max_order):
         alpha_k = _inner_product(moments, _shift_up(p_curr), p_curr) / h_curr
         alpha.append(alpha_k)
-        beta_k = Fraction(0) if k == 0 else (h_curr / h_prev if h_prev != 0 else Fraction(0))
+        beta_k = (
+            Fraction(0) if k == 0 else (h_curr / h_prev if h_prev != 0 else Fraction(0))
+        )
         x_p = _shift_up(p_curr)
-        p_next = _subtract(_subtract(x_p, _scale(alpha_k, p_curr)),
-                           _scale(beta_k, p_prev))
+        p_next = _subtract(
+            _subtract(x_p, _scale(alpha_k, p_curr)), _scale(beta_k, p_prev)
+        )
         h_prev = h_curr
         p_prev = p_curr
         p_curr = p_next
@@ -150,9 +150,7 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
     return RecurrenceCoefficients(alpha=tuple(alpha), beta=tuple(beta))
 
 
-def jacobi_matrix(
-    alpha: Sequence[Fraction], beta: Sequence[Fraction]
-) -> JacobiMatrix:
+def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> JacobiMatrix:
     """Build the symmetric tridiagonal Jacobi matrix from recurrence coefficients.
 
     The diagonal entries are ``alpha_0, ..., alpha_{n-1}`` and the positive
@@ -296,6 +294,11 @@ def gaussian_quadrature(
 
 
 __all__ = [
+    "ChristoffelDarbouxKernel",
+    "GaussianQuadrature",
+    "HankelMatrix",
+    "JacobiMatrix",
+    "RecurrenceCoefficients",
     "christoffel_darboux",
     "gaussian_quadrature",
     "hankel_matrix",

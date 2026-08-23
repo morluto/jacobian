@@ -6,10 +6,16 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 
 MAX_INVERSION_COMPONENT_DIGITS = 4_096
+
 
 def _component_digits(value: CanonicalRational) -> int:
     return max(len(value.num.lstrip("-")), len(value.den))
@@ -27,11 +33,21 @@ class CircleInversionRequest(StrictModel):
     radius), and point p ≠ c, returns q = c + (s / ||p - c||²) * (p - c).
     """
 
-    center_x: CanonicalRational = Field(description="x-coordinate of the inversion center")
-    center_y: CanonicalRational = Field(description="y-coordinate of the inversion center")
-    power: CanonicalRational = Field(description="Positive rational inversion power (squared radius)")
-    point_x: CanonicalRational = Field(description="x-coordinate of the point to invert")
-    point_y: CanonicalRational = Field(description="y-coordinate of the point to invert")
+    center_x: CanonicalRational = Field(
+        description="x-coordinate of the inversion center"
+    )
+    center_y: CanonicalRational = Field(
+        description="y-coordinate of the inversion center"
+    )
+    power: CanonicalRational = Field(
+        description="Positive rational inversion power (squared radius)"
+    )
+    point_x: CanonicalRational = Field(
+        description="x-coordinate of the point to invert"
+    )
+    point_y: CanonicalRational = Field(
+        description="y-coordinate of the point to invert"
+    )
 
     @model_validator(mode="after")
     def require_admissible_request(self) -> Self:
@@ -57,11 +73,11 @@ class CircleInversionRequest(StrictModel):
                 value, max_digits=MAX_INVERSION_COMPONENT_DIGITS, label=label
             )
         # Conservative derived-output bound: the exact inversion result must
-        # fit in CanonicalRational (<=32768 digits). The computation q = c + s*(p-c)/|p-c|^2
-        # can at most quadruple digit size; with each input capped at 4096 the
-        # result stays well below the limit, and we also verify explicitly.
-        from fractions import Fraction
-
+        # fit in CanonicalRational (<=32768 digits). The computation
+        # q = c + s*(p-c)/|p-c|^2 can at most quadruple component digit size;
+        # with each input capped at 4096 digits the result stays below the
+        # limit, and we verify explicitly with the chunked canonical formatter,
+        # which is exempt from CPython's int-to-str conversion limit.
         cx, cy = self.center_x.as_fraction(), self.center_y.as_fraction()
         s = self.power.as_fraction()
         px, py = self.point_x.as_fraction(), self.point_y.as_fraction()
@@ -72,9 +88,9 @@ class CircleInversionRequest(StrictModel):
         qx = cx + s * dx / norm_sq
         qy = cy + s * dy / norm_sq
         for frac, name in ((qx, "inverted_x"), (qy, "inverted_y")):
-            num_digits = len(str(abs(frac.numerator)))
-            den_digits = len(str(abs(frac.denominator)))
-            if max(num_digits, den_digits) > 32_768:
+            num_digits = len(format_canonical_integer(frac.numerator))
+            den_digits = len(format_canonical_integer(frac.denominator))
+            if max(num_digits, den_digits) > MAX_CANONICAL_RATIONAL_DIGITS:
                 raise ValueError(f"derived {name} exceeds the canonical digit limit")
         return self
 

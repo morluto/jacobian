@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import sympy
 
+from jacobian._exact import CanonicalRational
 from jacobian.math.polynomials._conversions import (
     rational_polynomial_from_sympy,
     rational_polynomial_to_sympy,
 )
+from jacobian.math.polynomials.values import RationalPolynomial
 from jacobian.math.sum_of_squares._models import (
     GramCertificateRequest,
     GramCertificateResult,
@@ -16,23 +18,24 @@ from jacobian.math.sum_of_squares._models import (
 )
 
 
-def _check_sos_invariants(polynomial, summands):
+def _check_sos_invariants(
+    polynomial: RationalPolynomial,
+    summands: tuple[RationalPolynomial, ...],
+) -> tuple[bool, RationalPolynomial]:
     """Exact replay of SOS decomposition check."""
-    import sympy
-
-    from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy, rational_polynomial_from_sympy
-
     p_sympy = rational_polynomial_to_sympy(polynomial).as_expr()
     sum_expr = sympy.Integer(0)
     for summand in summands:
         q_sympy = rational_polynomial_to_sympy(summand).as_expr()
         sum_expr += q_sympy * q_sympy
-    is_valid = sympy.simplify(sympy.expand(p_sympy - sum_expr)) == 0
+    is_valid = sympy.expand(p_sympy - sum_expr) == 0
     if is_valid:
         computed_sum = polynomial
     else:
         variables = polynomial.variables
-        computed_poly = sympy.Poly(sum_expr, *sympy.symbols(list(variables)), domain=sympy.QQ)
+        computed_poly = sympy.Poly(
+            sum_expr, *sympy.symbols(list(variables)), domain=sympy.QQ
+        )
         computed_sum = rational_polynomial_from_sympy(computed_poly, variables)
     return is_valid, computed_sum
 
@@ -51,21 +54,13 @@ def check_sos_decomposition(
 
 
 def _check_gram_invariants(
-    polynomial,
-    monomial_basis,
-    gram_matrix,
-):
+    polynomial: RationalPolynomial,
+    monomial_basis: tuple[RationalPolynomial, ...],
+    gram_matrix: tuple[tuple[CanonicalRational, ...], ...],
+) -> tuple[bool, bool, bool]:
     """Exact replay of Gram certificate checks."""
-    import sympy
-
-    from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
-
-    n = len(monomial_basis)
     matrix = sympy.Matrix(
-        [
-            [sympy.Rational(c.as_fraction()) for c in row]
-            for row in gram_matrix
-        ]
+        [[sympy.Rational(c.as_fraction()) for c in row] for row in gram_matrix]
     )
     is_symmetric = matrix == matrix.T
     z = sympy.Matrix(
@@ -73,15 +68,9 @@ def _check_gram_invariants(
     ).T
     reconstructed = (z.T * matrix * z)[0, 0]
     p_sympy = rational_polynomial_to_sympy(polynomial).as_expr()
-    reconstructs = sympy.simplify(sympy.expand(reconstructed - p_sympy)) == 0
-    is_psd = False
-    if is_symmetric:
-        eigenvals = matrix.eigenvals()
-        is_psd = all(val >= 0 for val in eigenvals)
-    else:
-        sym_part = (matrix + matrix.T) / 2
-        eigenvals = sym_part.eigenvals()
-        is_psd = all(val >= 0 for val in eigenvals)
+    reconstructs = sympy.expand(reconstructed - p_sympy) == 0
+    eigen_matrix = matrix if is_symmetric else (matrix + matrix.T) / 2
+    is_psd = all(val >= 0 for val in eigen_matrix.eigenvals())
     return is_symmetric, reconstructs, is_psd
 
 

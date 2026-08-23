@@ -6,9 +6,10 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalInteger, format_canonical_integer
-from jacobian._exact import parse_canonical_integer as _parse_int
+from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import parse_canonical_integer as _parse_int
 
 MAX_EXCHANGE_SIZE = 16
 # Exchange-matrix values carry bounded integers so every skew-symmetrizability

@@ -83,9 +83,7 @@ def mapping_cone(
     """Compute the mapping cone of a chain-map value."""
     from jacobian.math.chain_complexes.operations import _compute_mapping_cone
 
-    cone_basis_sizes, cone_diffs = _compute_mapping_cone(
-        source, target, map_matrices
-    )
+    cone_basis_sizes, cone_diffs = _compute_mapping_cone(source, target, map_matrices)
     return MappingConeResult(
         cone_basis_sizes=cone_basis_sizes,
         cone_differential_matrices=cone_diffs,

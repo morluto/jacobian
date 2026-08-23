@@ -78,7 +78,9 @@ def incremental_source_groebner(
     set to one unguarded kernel call, where Buchberger sees every
     ideal-collapsing pair from the start and need never materialize any
     exploding prefix.  An attempt that cannot conclude yields no evidence
-    either way.
+    either way — including an attempt ended by the worker's hard
+    address-space cap, which is bounded work and never a mathematical
+    claim, so it too falls through to the next strategy.
 
     Returns ``(basis, exceeded)``: ``basis`` is the complete reduced
     Gröbner basis when some bounded strategy concluded within budget;
@@ -96,7 +98,7 @@ def incremental_source_groebner(
             return basis, False
         if status == "exceeded":
             return None, True
-        # Aborted attempts decide nothing; retry.
+        # Aborted and memory-exhausted attempts decide nothing; retry.
     status, basis = complete_basis_in_worker(ideal, monomial_order, "complete")
     if status == "ok":
         return basis, False

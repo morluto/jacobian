@@ -1069,3 +1069,191 @@ class TestWorkerFailurePreservation:
             polynomial_ideal_normal_form(request)
         with pytest.raises(GroebnerWorkerExecutionError):
             polynomial_ideal_membership(request)
+
+
+def _fake_worker_result(stdout: bytes):
+    from collections import namedtuple
+
+    return namedtuple("Result", "timed_out cancelled returncode stdout")(
+        timed_out=False, cancelled=False, returncode=0, stdout=stdout
+    )
+
+
+class TestMemoryExhaustionAsBoundedWork:
+    """The hard address-space cap ends an admitted attempt as bounded
+    work: a typed non-conclusion, never a transport failure."""
+
+    def test_exhausted_report_returns_bounded_status(self, monkeypatch):
+        import json
+
+        from jacobian.math.polynomials._groebner_worker import (
+            complete_basis_in_worker,
+        )
+
+        monkeypatch.setattr(
+            "jacobian.math.polynomials._groebner_worker.run_bounded_process",
+            lambda *args, **kwargs: _fake_worker_result(
+                json.dumps({"status": "exhausted"}).encode()
+            ),
+        )
+        status, basis = complete_basis_in_worker(_ideal1(), "grevlex", "ascending")
+        assert status == "exhausted"
+        assert basis is None
+
+    def test_all_exhausted_strategies_report_unknown(self, monkeypatch):
+        """Memory-cap exhaustion across every strategy is a bounded
+        non-conclusion, not a GroebnerWorkerExecutionError."""
+        import json
+
+        monkeypatch.setattr(
+            "jacobian.math.polynomials._groebner_worker.run_bounded_process",
+            lambda *args, **kwargs: _fake_worker_result(
+                json.dumps({"status": "exhausted"}).encode()
+            ),
+        )
+        request = IdealMembershipRequest(
+            ideal=_ideal1(),
+            polynomial=_poly(("x",), {(5,): 1}),
+            monomial_order="grevlex",
+        )
+        normal_form = polynomial_ideal_normal_form(request)
+        assert normal_form.status == "UNKNOWN"
+        assert normal_form.groebner_basis is None and normal_form.remainder is None
+        membership = polynomial_ideal_membership(request)
+        assert membership.status == "UNKNOWN"
+        assert membership.groebner_basis is None and membership.normal_form is None
+
+    def test_exhausted_attempt_falls_through_to_next_strategy(self, monkeypatch):
+        """One memory-capped strategy must not decide the outcome: the
+        parent retries, and a later concluding strategy still computes."""
+        import json
+
+        def exhausted_then_concluding(argv, *args, input_bytes, **kwargs):
+            strategy = json.loads(input_bytes.decode())["strategy"]
+            exhausted = strategy == "ascending" and not exhausted_then_concluding.called
+            exhausted_then_concluding.called = True
+            report = (
+                {"status": "exhausted"}
+                if exhausted
+                else {
+                    "status": "ok",
+                    "basis": [_poly(("x",), {(2,): 1}).model_dump()],
+                }
+            )
+            return _fake_worker_result(json.dumps(report).encode())
+
+        exhausted_then_concluding.called = False
+        monkeypatch.setattr(
+            "jacobian.math.polynomials._groebner_worker.run_bounded_process",
+            exhausted_then_concluding,
+        )
+        request = IdealMembershipRequest(
+            ideal=_ideal1(),
+            polynomial=_poly(("x",), {(3,): 1}),
+            monomial_order="grevlex",
+        )
+        result = polynomial_ideal_normal_form(request)
+        assert result.status == "COMPUTED"
+        assert result.groebner_basis is not None
+        assert result.remainder is not None
+        assert len(result.remainder.polynomial.terms) == 0
+
+
+class TestWorkerReportBasisContract:
+    """An ``ok`` payload must satisfy the complete returned-basis
+    contract at the worker protocol layer, raising the typed execution
+    fault before any caller can consume the malformed basis."""
+
+    @staticmethod
+    def _fake_ok_report(monkeypatch, basis_elements) -> None:
+        import json
+
+        def fake_run(*args, **kwargs):
+            return _fake_worker_result(
+                json.dumps({"status": "ok", "basis": basis_elements}).encode()
+            )
+
+        monkeypatch.setattr(
+            "jacobian.math.polynomials._groebner_worker.run_bounded_process",
+            fake_run,
+        )
+
+    def test_basis_in_foreign_ring_raises_execution_error(self, monkeypatch):
+        from jacobian.math.polynomials._groebner_worker import (
+            GroebnerWorkerExecutionError,
+            complete_basis_in_worker,
+        )
+
+        self._fake_ok_report(monkeypatch, [_poly(("y",), {(2,): 1}).model_dump()])
+        with pytest.raises(GroebnerWorkerExecutionError, match="ordered ring"):
+            complete_basis_in_worker(_ideal1(), "grevlex", "ascending")
+
+    def test_basis_with_reordered_ring_raises_execution_error(self, monkeypatch):
+        from jacobian.math.polynomials._groebner_worker import (
+            GroebnerWorkerExecutionError,
+            complete_basis_in_worker,
+        )
+
+        self._fake_ok_report(monkeypatch, [_poly(("y", "x"), {(1, 1): 1}).model_dump()])
+        with pytest.raises(GroebnerWorkerExecutionError, match="ordered ring"):
+            complete_basis_in_worker(_ideal_xy(), "grevlex", "ascending")
+
+    def test_basis_with_zero_element_raises_execution_error(self, monkeypatch):
+        from jacobian.math.polynomials._groebner_worker import (
+            GroebnerWorkerExecutionError,
+            complete_basis_in_worker,
+        )
+
+        self._fake_ok_report(monkeypatch, [_poly(("x",), {}).model_dump()])
+        with pytest.raises(GroebnerWorkerExecutionError, match="zero polynomial"):
+            complete_basis_in_worker(_ideal1(), "grevlex", "ascending")
+
+    def test_basis_exceeding_aggregate_terms_raises_execution_error(self, monkeypatch):
+        from jacobian.math.polynomials._groebner_worker import (
+            GroebnerWorkerExecutionError,
+            complete_basis_in_worker,
+        )
+
+        bloated = _poly(("x",), {(exponent,): 1 for exponent in range(1025)})
+        self._fake_ok_report(monkeypatch, [bloated.model_dump()])
+        with pytest.raises(GroebnerWorkerExecutionError, match="term output"):
+            complete_basis_in_worker(_ideal1(), "grevlex", "ascending")
+
+    def test_public_operation_surfaces_typed_fault_not_validation_error(
+        self, monkeypatch
+    ):
+        """A malformed nested ``ok`` payload escapes as the typed worker
+        protocol failure, never a generic downstream ValidationError, and
+        without running in-process reduction over foreign-ring data."""
+        from jacobian.math.polynomials._groebner_worker import (
+            GroebnerWorkerExecutionError,
+        )
+
+        self._fake_ok_report(monkeypatch, [_poly(("y",), {(2,): 1}).model_dump()])
+        request = IdealMembershipRequest(
+            ideal=_ideal1(),
+            polynomial=_poly(("x",), {(5,): 1}),
+            monomial_order="grevlex",
+        )
+        with pytest.raises(GroebnerWorkerExecutionError):
+            polynomial_ideal_normal_form(request)
+        with pytest.raises(GroebnerWorkerExecutionError):
+            polynomial_ideal_membership(request)
+
+    def test_wellformed_basis_still_accepted(self, monkeypatch):
+        """The added contract checks keep admitting a genuine reduced
+        basis reported in the submitted ring."""
+        from jacobian.math.polynomials._groebner_worker import (
+            complete_basis_in_worker,
+        )
+
+        self._fake_ok_report(
+            monkeypatch,
+            [
+                _poly(("x",), {(2,): 1}).model_dump(),
+                _poly(("x",), {(1,): Fraction(1, 2)}).model_dump(),
+            ],
+        )
+        status, basis = complete_basis_in_worker(_ideal1(), "grevlex", "ascending")
+        assert status == "ok"
+        assert basis is not None and len(basis) == 2

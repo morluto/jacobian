@@ -614,7 +614,7 @@ class TestKillableFactorBackend:
         # Either bounded outcome is exact: a memory/output-bound hit is the
         # mathematical capacity status, while a deadline hit is the distinct
         # retryable interruption.  Both carry no factors and roundtrip.
-        assert result.status in ("OUTPUT_BUDGET_EXCEEDED", "EXECUTION_INTERRUPTED")
+        assert result.status in ("OUTPUT_BUDGET_EXCEEDED", "EXECUTION_FAILED")
         assert result.factors == ()
         assert result.normalization is None
         assert result.reconstructed == poly
@@ -655,6 +655,118 @@ class TestKillableFactorBackend:
         assert len(response["factors"]) == 2
         assert response["coefficient"] == [1, 1]
 
+    def test_worker_crash_exit_is_execution_failure(self, monkeypatch):
+        """A worker that exits abnormally without parsable output is a
+        crash, never an output-capacity conclusion."""
+        from jacobian.math.polynomials.multivariate._factor_backend import (
+            FactorBackendExhaustedError,
+            FactorBackendFailureError,
+            run_bounded_factorization,
+        )
+
+        def fake_run(*_args, **_kwargs):
+            return TestExecutionInterruptionSeparation._fake_completed(
+                returncode=1,
+                stdout=b"<traceback> not json",
+            )
+
+        monkeypatch.setattr("jacobian.process.run_bounded_process", fake_run)
+        poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
+        with pytest.raises(FactorBackendFailureError) as exc_info:
+            run_bounded_factorization(poly)
+        assert not isinstance(exc_info.value, FactorBackendExhaustedError)
+
+    def test_signal_death_under_limits_is_exhaustion(self, monkeypatch):
+        """Signal death under the declared limits reports the bounded
+        outcome those limits exist to produce."""
+        from jacobian.math.polynomials.multivariate._factor_backend import (
+            FactorBackendExhaustedError,
+            run_bounded_factorization,
+        )
+
+        def fake_run(*_args, **_kwargs):
+            return TestExecutionInterruptionSeparation._fake_completed(
+                returncode=-9,
+                stdout=b"",
+            )
+
+        monkeypatch.setattr("jacobian.process.run_bounded_process", fake_run)
+        poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
+        with pytest.raises(FactorBackendExhaustedError):
+            run_bounded_factorization(poly)
+
+    def test_interrupted_budget_claim_replay_rejected(self, monkeypatch):
+        """An authored OUTPUT_BUDGET_EXCEEDED claim whose verification
+        replay is interrupted must be rejected, not authenticated."""
+        from jacobian.math.polynomials.multivariate import _factor_backend
+        from jacobian.math.polynomials.multivariate._factor_backend import (
+            FactorBackendInterruptedError,
+        )
+
+        poly = _poly(("x", "y"), ((2, 1, (2, 1)), (-2, 1, (1, 0))))
+
+        def fake_run(*_args, **_kwargs):
+            raise FactorBackendInterruptedError("replay stopped")
+
+        monkeypatch.setattr(
+            "jacobian.process.run_bounded_process",
+            fake_run,
+        )
+        monkeypatch.setattr(
+            _factor_backend,
+            "primitive_content_fraction",
+            lambda _poly: Fraction(2),
+        )
+        from jacobian._exact import CanonicalRational
+
+        with pytest.raises(
+            ValidationError, match=r"re-derived|interrupted|replay"
+        ):
+            MultivariateFactorResult(
+                status="OUTPUT_BUDGET_EXCEEDED",
+                coefficient=CanonicalRational.from_fraction(Fraction(2)),
+                factors=(),
+                reconstructed=poly,
+                normalization=None,
+                product_reconstruction=None,
+            )
+
+
+class TestSignedBudgetOutcomeContent:
+    def test_negative_source_budget_outcome_matches_content_convention(self):
+        """The oversized-factor branch and result validation share one
+        exact-content convention, whatever sign the source carries."""
+
+        from jacobian.math.polynomials.multivariate import _factor_backend
+
+        dense = _expanded_product(
+            ("x", "y", "z"),
+            [(64, 1, 0), (64, 1, 1)],
+        )
+        z_linear = _expanded_product(("x", "y", "z"), [(1, 1, 0), (1, 1, 1)])
+        merged: dict[tuple[int, ...], int] = dict(dense)
+        for monomial, value in z_linear.items():
+            shifted = tuple(
+                1 if position == 2 else degree
+                for position, degree in enumerate(monomial)
+            )
+            merged[shifted] = merged.get(shifted, 0) + value
+        merged = {monomial: -value for monomial, value in merged.items()}
+        poly = _poly(
+            ("x", "y", "z"),
+            tuple(
+                (value, 1, exponents)
+                for exponents, value in sorted(merged.items(), reverse=True)
+                if value != 0
+            ),
+        )
+        result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
+        if result.status != "OUTPUT_BUDGET_EXCEEDED":
+            pytest.fail("expected the oversized-factor bounded outcome")
+        expected = _factor_backend.primitive_content_fraction(poly)
+        assert result.coefficient.as_fraction() == expected
+        assert MultivariateFactorResult.model_validate(result.model_dump()) == result
+
 
 class TestExecutionInterruptionSeparation:
     """Timeout and cancellation are execution conditions, never the
@@ -685,7 +797,7 @@ class TestExecutionInterruptionSeparation:
         return SimpleNamespace(**defaults)
 
     def test_deadline_hit_returns_interrupted_not_budget_exceeded(self, monkeypatch):
-        """A worker stopped by its deadline yields EXECUTION_INTERRUPTED,
+        """A worker stopped by its deadline yields EXECUTION_FAILED,
         which validates without rerunning any factorization."""
         poly = _poly(("x", "y"), ((1, 1, (60, 60)), (-1, 1, (59, 0))))
         request = MultivariateFactorRequest(polynomial=poly)
@@ -693,7 +805,7 @@ class TestExecutionInterruptionSeparation:
 
         monkeypatch.setattr(_factor_backend, "FACTOR_WORK_WALL_SECONDS", 0.25)
         result = multivariate_factor(request)
-        assert result.status == "EXECUTION_INTERRUPTED"
+        assert result.status == "EXECUTION_FAILED"
         assert result.factors == ()
         assert result.reconstructed == poly
         assert result.coefficient.as_fraction() == Fraction(1)
@@ -797,7 +909,7 @@ class TestExecutionInterruptionSeparation:
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
         with pytest.raises(ValidationError, match="content"):
             MultivariateFactorResult(
-                status="EXECUTION_INTERRUPTED",
+                status="EXECUTION_FAILED",
                 coefficient=CanonicalRational.from_fraction(Fraction(5)),
                 factors=(),
                 reconstructed=poly,

@@ -143,28 +143,38 @@ def run_bounded_factorization(
             "no portable hard memory limit is available for the bounded "
             "factorization worker on this platform"
         )
-    completed = run_bounded_process(
-        [sys.executable, str(_WORKER_PATH)],
-        input_bytes=_serialized_request(polynomial),
-        timeout_seconds=resolved_wall,
-        environment=worker_environment(
-            locale="C.UTF-8",
-            overrides={
-                "JACOBIAN_FACTOR_ADDRESS_SPACE_BYTES": str(_FACTOR_ADDRESS_SPACE_BYTES)
-            },
-        ),
-        stdout_limit=_FACTOR_STDOUT_LIMIT,
-        stderr_limit=_FACTOR_STDERR_LIMIT,
-        resource_limits=ProcessResourceLimits(
-            # prlimit's CPU limit parses integer seconds only.
-            cpu_seconds=max(1, int(resolved_wall)),
-            address_space_bytes=_FACTOR_ADDRESS_SPACE_BYTES,
-            file_size_bytes=8 * 1024 * 1024,
-        ),
-        platform_tools=ProcessPlatformTools(
-            prlimit_executable=str(Path(prlimit).resolve()) if prlimit else None
-        ),
-    )
+    try:
+        completed = run_bounded_process(
+            [sys.executable, str(_WORKER_PATH)],
+            input_bytes=_serialized_request(polynomial),
+            timeout_seconds=resolved_wall,
+            environment=worker_environment(
+                locale="C.UTF-8",
+                overrides={
+                    "JACOBIAN_FACTOR_ADDRESS_SPACE_BYTES": str(
+                        _FACTOR_ADDRESS_SPACE_BYTES
+                    )
+                },
+            ),
+            stdout_limit=_FACTOR_STDOUT_LIMIT,
+            stderr_limit=_FACTOR_STDERR_LIMIT,
+            resource_limits=ProcessResourceLimits(
+                # prlimit's CPU limit parses integer seconds only.
+                cpu_seconds=max(1, int(resolved_wall)),
+                address_space_bytes=_FACTOR_ADDRESS_SPACE_BYTES,
+                file_size_bytes=8 * 1024 * 1024,
+            ),
+            platform_tools=ProcessPlatformTools(
+                prlimit_executable=str(Path(prlimit).resolve()) if prlimit else None
+            ),
+        )
+    except OSError as exc:
+        # A launcher failure (missing helper, exec failure) produced no
+        # worker run at all: a typed execution failure, never an
+        # output-capacity conclusion.
+        raise FactorBackendFailureError(
+            "the bounded factorization worker could not be started"
+        ) from exc
     if completed.timed_out or completed.cancelled:
         raise FactorBackendInterruptedError(
             "the bounded factorization worker was stopped by its deadline "
@@ -188,11 +198,19 @@ def run_bounded_factorization(
             # exception.
             raise FactorBackendExhaustedError(str(payload.get("error")))
         raise FactorBackendFailureError(str(payload.get("error")))
-    # No parsable response with a clean exit status means the resource
-    # limits killed the worker mid-computation.
-    raise FactorBackendExhaustedError(
-        f"the bounded factorization worker terminated with exit code "
-        f"{completed.returncode} before producing a result"
+    if isinstance(completed.returncode, int) and completed.returncode < 0:
+        # Signal death under the declared limits (SIGXCPU, kernel OOM kill)
+        # is how resource enforcement terminates the worker: report it as
+        # the bounded outcome those limits exist to produce.
+        raise FactorBackendExhaustedError(
+            f"the bounded factorization worker was killed by signal "
+            f"{-completed.returncode} under its declared limits"
+        )
+    # A clean or self-reported abnormal exit without parsable output is a
+    # worker crash, not evidence about output size.
+    raise FactorBackendFailureError(
+        f"the bounded factorization worker exited with code "
+        f"{completed.returncode} without producing a result"
     )
 
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from jacobian.math.polynomials._conversions import (
     rational_polynomial_from_sympy,
@@ -12,6 +12,7 @@ from jacobian.math.polynomials._conversions import (
 from jacobian.math.polynomials.multivariate import _factor_backend
 from jacobian.math.polynomials.multivariate._factor_backend import (
     FactorBackendExhaustedError,
+    FactorBackendFailureError,
     FactorBackendInterruptedError,
 )
 from jacobian.math.polynomials.multivariate._models import (
@@ -188,40 +189,41 @@ def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFacto
     When the exact factorization contains an irreducible factor beyond the
     public output-term budget, or hits a declared resource or output bound,
     returns the typed ``OUTPUT_BUDGET_EXCEEDED`` outcome instead of a host
-    exception; ``coefficient`` then carries the exact rational content of
-    the restated source polynomial.  A worker stopped by its deadline or
-    cancellation establishes nothing about output size, so it returns the
-    distinct non-mathematical ``EXECUTION_INTERRUPTED`` outcome instead.
+    exception; ``coefficient`` then carries the exact positive rational
+    content of the restated source polynomial.  A worker stopped by its
+    deadline or cancellation, a worker crash, or unavailable containment
+    establishes nothing about output size, so it returns the distinct
+    non-mathematical ``EXECUTION_FAILED`` outcome instead.
     """
 
     from jacobian._exact import CanonicalRational
+
+    def _bounded_outcome(
+        status: Literal["OUTPUT_BUDGET_EXCEEDED", "EXECUTION_FAILED"],
+    ) -> MultivariateFactorResult:
+        # Non-FACTORIZED outcomes restate the source and carry its exact
+        # positive primitive content, matching result validation.
+        return MultivariateFactorResult(
+            status=status,
+            coefficient=CanonicalRational.from_fraction(
+                _factor_backend.primitive_content_fraction(request.polynomial)
+            ),
+            factors=(),
+            reconstructed=request.polynomial,
+            normalization=None,
+            product_reconstruction=None,
+        )
 
     try:
         coefficient, raw_factors, reconstructed = _sympy_factorization(
             request.polynomial
         )
     except FactorBackendInterruptedError:
-        return MultivariateFactorResult(
-            status="EXECUTION_INTERRUPTED",
-            coefficient=CanonicalRational.from_fraction(
-                _factor_backend.primitive_content_fraction(request.polynomial)
-            ),
-            factors=(),
-            reconstructed=request.polynomial,
-            normalization=None,
-            product_reconstruction=None,
-        )
+        return _bounded_outcome("EXECUTION_FAILED")
     except FactorBackendExhaustedError:
-        return MultivariateFactorResult(
-            status="OUTPUT_BUDGET_EXCEEDED",
-            coefficient=CanonicalRational.from_fraction(
-                _factor_backend.primitive_content_fraction(request.polynomial)
-            ),
-            factors=(),
-            reconstructed=request.polynomial,
-            normalization=None,
-            product_reconstruction=None,
-        )
+        return _bounded_outcome("OUTPUT_BUDGET_EXCEEDED")
+    except FactorBackendFailureError:
+        return _bounded_outcome("EXECUTION_FAILED")
     coefficient_value = CanonicalRational.from_fraction(
         _monic_content_fraction(coefficient)
     )
@@ -236,14 +238,10 @@ def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFacto
                 )
             )
     except MultivariateOutputBudgetError:
-        return MultivariateFactorResult(
-            status="OUTPUT_BUDGET_EXCEEDED",
-            coefficient=coefficient_value,
-            factors=(),
-            reconstructed=request.polynomial,
-            normalization=None,
-            product_reconstruction=None,
-        )
+        # The oversized-factor branch reports the same exact positive
+        # content as every other bounded outcome; the signed monic leading
+        # coefficient is a FACTORIZED-only convention tied to its factors.
+        return _bounded_outcome("OUTPUT_BUDGET_EXCEEDED")
     factors_list.sort(
         key=lambda record: (
             record.multiplicity,

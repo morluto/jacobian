@@ -303,18 +303,18 @@ class MultivariateFactorResult(StrictModel):
     outcome, that the exact factorization is beyond this operation's
     declared bounds: either an irreducible factor exceeds the public
     output-term budget or a declared resource or output bound was hit.
-    ``EXECUTION_INTERRUPTED`` is not a mathematical conclusion: the worker
-    was stopped by its deadline or cancellation before any factorization
-    was obtained, and callers may retry.  For both non-FACTORIZED statuses
-    ``reconstructed`` restates the requested polynomial unchanged,
-    ``coefficient`` carries the exact rational content of that polynomial,
-    and ``factors`` is empty.
+    ``EXECUTION_FAILED`` is not a mathematical conclusion: the worker was
+    stopped by its deadline or cancellation, crashed, or could not be
+    contained, so no factorization was obtained and callers may retry.
+    For both non-FACTORIZED statuses ``reconstructed`` restates the
+    requested polynomial unchanged, ``coefficient`` carries the exact
+    positive rational content of that polynomial, and ``factors`` is empty.
     """
 
     status: Literal[
         "FACTORIZED",
         "OUTPUT_BUDGET_EXCEEDED",
-        "EXECUTION_INTERRUPTED",
+        "EXECUTION_FAILED",
     ] = "FACTORIZED"
     coefficient: CanonicalRational
     factors: tuple[MultivariateIrreducibleFactor, ...] = Field(max_length=128)
@@ -356,9 +356,9 @@ class MultivariateFactorResult(StrictModel):
                 )
             if self.status == "OUTPUT_BUDGET_EXCEEDED":
                 # A capacity claim IS a mathematical claim about the exact
-                # output, so replay it; an interruption claim establishes
-                # nothing to reproduce and must not rerun the kernel under
-                # a different deadline than the producing call.
+                # output, so replay it.  An interrupted replay establishes
+                # nothing and must not authenticate the claim; a replayed
+                # resource/output exceedance does.
                 _verify_output_budget_exceeded_claim(
                     self.coefficient, self.reconstructed
                 )
@@ -472,13 +472,17 @@ def _verify_output_budget_exceeded_claim(
             reconstructed,
             wall_seconds=_factor_backend.FACTOR_VERIFY_WALL_SECONDS,
         )
-    except (FactorBackendExhaustedError, FactorBackendInterruptedError):
-        # The replay hit the same declared bounds (or was itself stopped by
-        # the wider verification deadline): either way the claimed
-        # beyond-bounds behavior of this exact source is reproduced.  No
-        # deadline asymmetry can invalidate the claim because timeouts no
-        # longer produce OUTPUT_BUDGET_EXCEEDED outcomes at all.
+    except FactorBackendExhaustedError:
+        # The replay hit the same declared bounds: the claimed
+        # beyond-bounds behavior of this exact source is reproduced.  An
+        # interrupted replay proves nothing and must not validate the
+        # claim, so only exhaustion returns here.
         return
+    except FactorBackendInterruptedError as exc:
+        raise ValueError(
+            "budget-exceeded outcome could not be re-derived because the "
+            "verification replay was itself stopped before completing"
+        ) from exc
     from jacobian.math.polynomials._conversions import (
         rational_polynomial_from_sympy,
         rational_polynomial_to_sympy,

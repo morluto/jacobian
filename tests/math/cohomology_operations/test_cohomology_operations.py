@@ -220,6 +220,60 @@ class TestBockstein:
         )
         assert result.is_zero
 
+    def test_cancelling_duplicate_support_is_zero(self):
+        """Sparse supports that cancel modulo p are the zero cocycle."""
+        result = compute_bockstein(
+            BocksteinRequest(
+                prime=3,
+                cochain_degree=2,
+                simplex_values=((0, 1, 2), (0, 1, 2)),
+                simplex_coefficients=(1, 2),
+            )
+        )
+        assert result.is_zero
+        assert result.result_degree == 3
+        assert result.result_simplex_values == ()
+
+    def test_zero_cocycle_with_ambient_complex(self):
+        """The optional ambient stays validated and the result is unchanged."""
+        ambient = ((0,), (1,), (2,), (0, 1), (0, 2), (1, 2), (0, 1, 2))
+        result = compute_bockstein(
+            BocksteinRequest(
+                prime=5,
+                cochain_degree=1,
+                simplex_values=((0, 1),),
+                simplex_coefficients=(10,),
+                ambient_simplices=ambient,
+            )
+        )
+        assert result.is_zero
+        assert result.result_degree == 2
+
+    def test_every_admissible_input_returns_predetermined_zero(self):
+        """Admission reduces every request to the zero cocycle first, so
+        execution can only return the empty degree-(n+1) cochain."""
+        admissible = [
+            (2, 0, (), ()),
+            (2, 1, (), ()),
+            (3, 2, ((0, 1, 2), (0, 1, 2)), (4, 2)),
+            (7, 0, ((5,),), (-14,)),
+            (9973, 16, (tuple(range(17)),), (9973 * 3,)),
+        ]
+        for prime, degree, values, coeffs in admissible:
+            request = BocksteinRequest(
+                prime=prime,
+                cochain_degree=degree,
+                simplex_values=values,
+                simplex_coefficients=coeffs,
+            )
+            result = compute_bockstein(request)
+            assert (
+                result.result_degree,
+                result.result_simplex_values,
+                result.result_simplex_coefficients,
+                result.is_zero,
+            ) == (degree + 1, (), (), True)
+
     def test_nonzero_cocycle(self):
         """Bockstein of a non-zero cocycle is unsupported without the complex."""
         import pytest
@@ -340,9 +394,10 @@ class TestAmbientComplexClosure:
         assert result.result_simplex_values == ()
 
     def test_ambient_simplex_vertex_cap(self):
+        """The advertised per-simplex cap fails at schema parse time."""
         from pydantic import ValidationError
 
-        with pytest.raises(ValidationError, match="64 vertices"):
+        with pytest.raises(ValidationError, match="at most 64 items"):
             SteenrodSquareRequest(
                 cochain_degree=1,
                 simplex_values=((0, 1),),
@@ -350,3 +405,178 @@ class TestAmbientComplexClosure:
                 square_degree=1,
                 ambient_simplices=(tuple(range(65)),),
             )
+
+    def test_huge_single_ambient_simplex_rejected_before_traversal(self):
+        """One extremely large inner array dies at the schema length bound.
+
+        The rejection must come from the ``BoundedAmbientSimplex`` schema
+        constraint, not from validator-side traversal, hashing, or sorting
+        of the simplex (which would report the 64-vertex value error).
+        """
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError) as excinfo:
+            SteenrodSquareRequest(
+                cochain_degree=1,
+                simplex_values=((0, 1),),
+                simplex_coefficients=(1,),
+                square_degree=1,
+                ambient_simplices=(tuple(range(500_000)),),
+            )
+        messages = [error["msg"] for error in excinfo.value.errors()]
+        assert any("at most 64 items" in message for message in messages)
+        assert not any("64 vertices" in message for message in messages)
+
+    def test_bockstein_huge_single_ambient_simplex_rejected_before_traversal(self):
+        """Bockstein shares the schema-bounded inner simplex type."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError) as excinfo:
+            BocksteinRequest(
+                prime=2,
+                cochain_degree=1,
+                simplex_values=(),
+                simplex_coefficients=(),
+                ambient_simplices=(tuple(range(500_000)),),
+            )
+        messages = [error["msg"] for error in excinfo.value.errors()]
+        assert any("at most 64 items" in message for message in messages)
+        assert not any("64 vertices" in message for message in messages)
+
+    def test_ambient_vertex_label_magnitude_is_schema_bounded(self):
+        """A 7-digit label is rejected by the element constraint itself."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="999999"):
+            SteenrodSquareRequest(
+                cochain_degree=1,
+                simplex_values=((0, 1),),
+                simplex_coefficients=(1,),
+                square_degree=1,
+                ambient_simplices=((10**6, 1),),
+            )
+
+
+class TestInstabilityDegreeAdmission:
+    """Sq^k = 0 for k > deg(x) is admitted output-sensitively."""
+
+    def test_high_degree_trivial_square_returns_tiny_exact_zero(self):
+        """cochain_degree=16 with square_degree=17 exceeds the old ceiling."""
+        result = compute_steenrod_square(
+            SteenrodSquareRequest(
+                cochain_degree=16,
+                simplex_values=(),
+                simplex_coefficients=(),
+                square_degree=17,
+            )
+        )
+        assert result.is_zero
+        assert result.result_degree == 33
+        assert result.result_simplex_values == ()
+        assert result.result_simplex_coefficients == ()
+
+    def test_result_degree_budget_boundary(self):
+        """Requests are admitted exactly up to the returned-degree budget."""
+        edge = compute_steenrod_square(
+            SteenrodSquareRequest(
+                cochain_degree=16,
+                simplex_values=(),
+                simplex_coefficients=(),
+                square_degree=112,
+            )
+        )
+        assert edge.is_zero
+        assert edge.result_degree == 128
+
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="exact-result budget"):
+            SteenrodSquareRequest(
+                cochain_degree=16,
+                simplex_values=(),
+                simplex_coefficients=(),
+                square_degree=113,
+            )
+
+    def test_nonzero_cocycle_instability_square_above_old_ceiling(self):
+        """A genuine cocycle admits large trivial squares too."""
+        ambient = (
+            (0,),
+            (1,),
+            (2,),
+            (3,),
+            (0, 1),
+            (0, 2),
+            (0, 3),
+            (1, 2),
+            (1, 3),
+            (2, 3),
+            (0, 1, 2),
+            (0, 1, 3),
+            (0, 2, 3),
+            (1, 2, 3),
+            (0, 1, 2, 3),
+        )
+        result = compute_steenrod_square(
+            SteenrodSquareRequest(
+                cochain_degree=1,
+                simplex_values=((0, 1), (0, 2), (0, 3)),
+                simplex_coefficients=(1, 1, 1),
+                square_degree=40,
+                ambient_simplices=ambient,
+            )
+        )
+        assert result.is_zero
+        assert result.result_degree == 41
+
+    def test_top_and_intermediate_squares_keep_prior_boundaries(self):
+        """k <= n envelopes are unchanged by the output-sensitive bound."""
+        from pydantic import ValidationError
+
+        # Top square still requires ambient targets.
+        with pytest.raises(ValidationError, match="ambient"):
+            SteenrodSquareRequest(
+                cochain_degree=16,
+                simplex_values=(),
+                simplex_coefficients=(),
+                square_degree=16,
+            )
+        # Intermediate squares stay unsupported.
+        with pytest.raises(ValidationError, match="intermediate"):
+            SteenrodSquareRequest(
+                cochain_degree=2,
+                simplex_values=((0, 1, 2),),
+                simplex_coefficients=(1,),
+                square_degree=1,
+            )
+
+
+class TestCatalogAdmission:
+    """Owner-local admission expectations for the cohomology domain."""
+
+    def test_bockstein_is_native_only(self):
+        from jacobian.catalog.admission import AdmissionDecision
+        from jacobian.math.cohomology_operations._admission import ADMISSIONS
+
+        record = next(
+            entry
+            for entry in ADMISSIONS
+            if entry.operation_id == "cohomology.bockstein.compute"
+        )
+        assert record.decision is AdmissionDecision.NATIVE_ONLY
+
+    def test_published_catalog_keeps_only_the_steenrod_square(self):
+        from jacobian.catalog.admission import curate_public_tools
+        from jacobian.math.cohomology_operations._admission import ADMISSIONS
+        from jacobian.math.cohomology_operations._tools import TOOLS
+
+        published = tuple(
+            tool.operation_id for tool in curate_public_tools(TOOLS, ADMISSIONS)
+        )
+        assert published == ("cohomology.steenrod_square.compute",)
+
+    def test_bockstein_native_symbol_is_supported(self):
+        import jacobian.math.cohomology_operations as public_module
+
+        assert "compute_bockstein" in public_module.__all__
+        assert callable(public_module.compute_bockstein)

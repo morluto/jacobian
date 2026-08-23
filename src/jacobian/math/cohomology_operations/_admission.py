@@ -17,8 +17,14 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     ),
     OperationAdmission(
         "cohomology.bockstein.compute",
-        AdmissionDecision.KEEP,
-        "exact Bockstein homomorphism for simplicial cocycles over Z/p",
+        AdmissionDecision.NATIVE_ONLY,
+        "every admitted request reduces to the zero cocycle, so execution "
+        "returns only the predetermined empty degree-(n+1) cochain; no "
+        "reusable mathematical computation beyond recognizing the "
+        "already-required zero input. Retain the deterministic helper under "
+        "the supported native API until the ambient-complex Bockstein kernel "
+        "exists",
+        native_symbol="jacobian.math.cohomology_operations.compute_bockstein",
     ),
 )
 

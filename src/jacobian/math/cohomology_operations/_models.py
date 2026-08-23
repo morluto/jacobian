@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import Field, model_validator
 
@@ -14,7 +14,20 @@ MAX_AMBIENT_SIMPLEX_VERTICES = 64
 
 Supported cochain degrees stop at 16, so top-square targets carry at most
 ``2*16 + 1 = 33`` vertices; 64 keeps validation work linear and bounded with
-headroom over every simplex dimension these operations can target.
+headroom over every simplex dimension these operations can target. The cap
+is encoded in the ``BoundedAmbientSimplex`` schema type, so an oversized
+inner array is rejected during request parsing before any vertex traversal,
+hashing, or sorting work.
+"""
+
+MAX_RESULT_COCHAIN_DEGREE = 128
+"""Cap on the cohomological degree of any returned cochain.
+
+Instability squares ``Sq^k(x) = 0`` for ``k > deg(x)`` return the empty
+degree-``deg(x) + k`` cochain at constant work, so ``square_degree`` is
+bounded output-sensitively: every request whose returned degree stays within
+this budget is admitted, however far ``k`` lies above ``deg(x)``. Top squares
+return degree ``2*cochain_degree <= 32``, always inside this budget.
 """
 
 MAX_VERTEX_LABEL_DIGITS = 6
@@ -38,6 +51,27 @@ each coefficient to 6 digits keeps retained-source size, hashing, and
 sorting bounded while still admitting every residue class via bounded
 representatives (``-999999..999999`` covers all residues for the admitted
 primes).
+"""
+
+MAX_VERTEX_LABEL_MAGNITUDE = 10**MAX_VERTEX_LABEL_DIGITS - 1
+"""Largest admissible absolute vertex label (at most 6 decimal digits)."""
+
+BoundedVertexLabel = Annotated[
+    int,
+    Field(ge=-MAX_VERTEX_LABEL_MAGNITUDE, le=MAX_VERTEX_LABEL_MAGNITUDE),
+]
+"""One ambient-simplex vertex label, magnitude-bounded at the schema layer."""
+
+BoundedAmbientSimplex = Annotated[
+    tuple[BoundedVertexLabel, ...],
+    Field(min_length=1, max_length=MAX_AMBIENT_SIMPLEX_VERTICES),
+]
+"""One ambient simplex with a schema-level per-simplex vertex cap.
+
+The advertised per-simplex cap is enforced while parsing each inner array,
+so a malformed request with one extremely large simplex is rejected before
+``_require_bounded_vertex_labels`` traversal or ``_validate_simplex_entries``
+hashing and sorting can run on it.
 """
 
 
@@ -236,8 +270,11 @@ class SteenrodSquareRequest(StrictModel):
     supported: ``Sq^0`` is the identity, ``Sq^{deg} = cup product``
     (the top square) requires the ambient simplicial complex to locate
     its ``(2*deg)``-simplex targets, and ``Sq^k = 0`` for ``k > deg``
-    (instability).  Intermediate squares ``0 < k < deg`` require
-    cup-``i`` structure and are rejected as unsupported.
+    (instability).  Instability squares perform constant work and return
+    the empty degree-``deg+k`` cochain, so they are admitted whenever the
+    returned degree stays within the declared result budget rather than
+    under a fixed ceiling on ``k``.  Intermediate squares ``0 < k < deg``
+    require cup-``i`` structure and are rejected as unsupported.
 
     Nonzero cochains require ``ambient_simplices`` or ``ambient_complex``
     for cocycle verification (``d x = 0``) and the result is then an
@@ -256,8 +293,8 @@ class SteenrodSquareRequest(StrictModel):
     cochain_degree: int = Field(ge=0, le=16)
     simplex_values: tuple[tuple[int, ...], ...] = Field(min_length=0, max_length=1024)
     simplex_coefficients: tuple[int, ...] = Field(min_length=0, max_length=1024)
-    square_degree: int = Field(ge=0, le=16)
-    ambient_simplices: tuple[tuple[int, ...], ...] = Field(
+    square_degree: int = Field(ge=0, le=MAX_RESULT_COCHAIN_DEGREE)
+    ambient_simplices: tuple[BoundedAmbientSimplex, ...] = Field(
         default=(),
         max_length=4096,
         description=(
@@ -296,10 +333,17 @@ class SteenrodSquareRequest(StrictModel):
                 )
             _validate_simplex_entries((simplex,), "simplex")
         _require_bounded_coefficients(self.simplex_coefficients, "simplex_coefficient")
-        # Also bound ambient vertex labels digit-wise before any hashing or
-        # retained-source work; the count limits alone do not bound transport.
-        if self.ambient_simplices:
-            _require_bounded_vertex_labels(self.ambient_simplices, "ambient simplex")
+        # Instability admission is output-sensitive: the k > deg branch returns
+        # the empty degree-(deg+k) cochain at constant work, so a request is
+        # admitted whenever its returned degree stays inside the exact-result
+        # budget instead of under a fixed ceiling on square_degree.
+        result_degree = self.cochain_degree + self.square_degree
+        if result_degree > MAX_RESULT_COCHAIN_DEGREE:
+            raise ValueError(
+                f"Sq^{self.square_degree} of a degree-{self.cochain_degree} "
+                f"cochain returns degree {result_degree}, above the "
+                f"{MAX_RESULT_COCHAIN_DEGREE}-degree exact-result budget"
+            )
         # Intermediate squares 0<k<deg are not implemented; reject to avoid false zero.
         if 0 < self.square_degree < self.cochain_degree:
             raise ValueError(
@@ -391,7 +435,7 @@ class BocksteinRequest(StrictModel):
     cochain_degree: int = Field(ge=0, le=16)
     simplex_values: tuple[tuple[int, ...], ...] = Field(min_length=0, max_length=1024)
     simplex_coefficients: tuple[int, ...] = Field(min_length=0, max_length=1024)
-    ambient_simplices: tuple[tuple[int, ...], ...] = Field(
+    ambient_simplices: tuple[BoundedAmbientSimplex, ...] = Field(
         default=(),
         max_length=4096,
         description=(
@@ -428,8 +472,6 @@ class BocksteinRequest(StrictModel):
                 )
             _validate_simplex_entries((simplex,), "simplex")
         _require_bounded_coefficients(self.simplex_coefficients, "simplex_coefficient")
-        if self.ambient_simplices:
-            _require_bounded_vertex_labels(self.ambient_simplices, "ambient simplex")
         has_nonzero = not _is_zero_mod_prime_cochain(
             self.simplex_values, self.simplex_coefficients, self.prime
         )

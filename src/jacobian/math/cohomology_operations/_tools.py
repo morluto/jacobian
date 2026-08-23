@@ -67,8 +67,10 @@ COHOMOLOGY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "Compute Sq^0, Sq^n (cup) and Sq^k=0 for k>n over GF(2) for cocycles",
         "Given a cochain x of degree n over GF(2) compute Sq^k(x). "
         "Supported: Sq^0(x)=x (identity), Sq^n(x)=x cup x (top, targets "
-        "2n-simplices), Sq^k=0 for k>n (instability); intermediate 0<k<n "
-        "need cup-i and are rejected. Nonzero cochains require "
+        "2n-simplices), Sq^k=0 for k>n (instability; constant work, admitted "
+        "whenever the returned degree n+k stays within the declared "
+        "result-degree budget); intermediate 0<k<n need cup-i and are "
+        "rejected. Nonzero cochains require "
         "ambient_simplices or ambient_complex for cocycle verification; only "
         "the zero cochain is admissible without ambient. Top squares require "
         "ambient to locate targets.",

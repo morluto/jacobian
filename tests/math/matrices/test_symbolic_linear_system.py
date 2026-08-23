@@ -485,6 +485,18 @@ class TestNativeSystemAdmission:
         with pytest.raises(ValueError, match="budget"):
             self._solve(((inv,),), rhs, ("t",))
 
+    def test_oversized_native_shape_rejected_before_growth_scan(self):
+        """A wide native matrix is rejected by the wire dimension limits
+        before growth admission scans its columns."""
+        import time
+
+        vars_: tuple[str, ...] = ()
+        one = _rf(vars_, (1, ()))
+        started = time.perf_counter()
+        with pytest.raises(ValueError, match="dimensions"):
+            self._solve(((one,) * 20_000,), (one,), vars_)
+        assert time.perf_counter() - started < 5.0
+
 
 class TestNonUniqueWitnessEquivalence:
     """NON_UNIQUE witnesses validate by their defining equations."""
@@ -578,6 +590,74 @@ class TestNonUniqueWitnessEquivalence:
             [zero.model_dump(), two.model_dump()],
         ]
         with pytest.raises(ValidationError, match=r"n - rank|independent"):
+            SymbolicLinearSystemResult.model_validate(payload)
+
+
+class TestWitnessDeserializationHardening:
+    """Relayed payloads are rejected by contract, not backend arithmetic."""
+
+    @staticmethod
+    def _inconsistent_payload():
+        one = _rf((), (1, ()))
+        two = _rf((), (2, ()))
+        matrix = _matrix((), ((one,), (one,)))
+        result = compute_symbolic_linear_system(
+            SymbolicLinearSystemRequest(matrix=matrix, rhs=(one, two))
+        )
+        assert result.classification == "INCONSISTENT"
+        return result.model_dump()
+
+    def test_inconsistent_result_rejects_nullspace_basis(self):
+        from jacobian.math.matrices.symbolic._models import (
+            SymbolicLinearSystemResult,
+        )
+
+        payload = self._inconsistent_payload()
+        payload["nullspace_basis"] = [[_rf((), (1, ())).model_dump()]]
+        with pytest.raises(
+            ValidationError, match="INCONSISTENT must not carry solution data"
+        ):
+            SymbolicLinearSystemResult.model_validate(payload)
+
+    def test_witness_field_mismatch_rejected(self):
+        """A zero system over QQ must not accept witnesses over QQ(z)."""
+        from jacobian.math.matrices.symbolic._models import (
+            SymbolicLinearSystemResult,
+        )
+
+        zero_t = _rf(("t",))
+        matrix = _matrix(("t",), ((zero_t,),))
+        result = compute_symbolic_linear_system(
+            SymbolicLinearSystemRequest(matrix=matrix, rhs=(zero_t,))
+        )
+        assert result.classification == "NON_UNIQUE"
+        payload = result.model_dump()
+        # Every residual stays zero and the basis stays independent over the
+        # foreign field, so only the declared-field check can reject it.
+        foreign_zero = _rf(("z",)).model_dump()
+        payload["particular_solution"] = [foreign_zero]
+        payload["nullspace_basis"] = [[_rf(("z",), (1, (0,))).model_dump()]]
+        with pytest.raises(ValidationError, match="declared ordered field"):
+            SymbolicLinearSystemResult.model_validate(payload)
+
+    def test_undersized_particular_solution_rejected_before_arithmetic(self):
+        from jacobian.math.matrices.symbolic._models import (
+            SymbolicLinearSystemResult,
+        )
+
+        payload = TestNonUniqueWitnessEquivalence._non_unique_result().model_dump()
+        payload["particular_solution"] = [_rf(("t",), (3, (0,))).model_dump()]
+        with pytest.raises(ValidationError, match="column count"):
+            SymbolicLinearSystemResult.model_validate(payload)
+
+    def test_undersized_nullspace_vector_rejected_before_arithmetic(self):
+        from jacobian.math.matrices.symbolic._models import (
+            SymbolicLinearSystemResult,
+        )
+
+        payload = TestNonUniqueWitnessEquivalence._non_unique_result().model_dump()
+        payload["nullspace_basis"] = [[_rf(("t",), (1, (0,))).model_dump()]]
+        with pytest.raises(ValidationError, match=r"basis vector must have exactly"):
             SymbolicLinearSystemResult.model_validate(payload)
 
 

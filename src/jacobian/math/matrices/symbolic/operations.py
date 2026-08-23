@@ -110,11 +110,23 @@ def _require_native_system_request(
     budget checks as the wire request model before SymPy is invoked.
     """
     from jacobian.math.matrices.symbolic._models import (
+        MAX_SYMBOLIC_MATRIX_DIMENSION,
         _require_linear_system_growth_admission,
     )
 
     if not entries:
         raise ValueError("symbolic matrix must be nonempty")
+    # Wire matrix shape/dimension limits are applied BEFORE growth admission:
+    # an oversized shape must be rejected up front instead of paying the
+    # admission scan over a shape the wire envelope would never accept.
+    rows = len(entries)
+    columns = len(entries[0])
+    if not columns:
+        raise ValueError("symbolic matrix must be nonempty")
+    if rows > MAX_SYMBOLIC_MATRIX_DIMENSION or columns > MAX_SYMBOLIC_MATRIX_DIMENSION:
+        raise ValueError("symbolic matrix dimensions must be between 1 and 8")
+    if any(len(row) != columns for row in entries):
+        raise ValueError("symbolic matrix rows must all have the same length")
     if len(rhs) != len(entries):
         raise ValueError(
             "the right-hand side length must equal the coefficient row count"

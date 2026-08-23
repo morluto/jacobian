@@ -672,8 +672,37 @@ class SymbolicLinearSystemResult(StrictModel):
 
         entries = self.system.matrix.entries
         n_cols = len(entries[0])
+        declared_variables = self.system.matrix.variables
         particular = self.particular_solution
         assert particular is not None
+        # Every witness must live on the retained system's declared ordered
+        # field and match its exact column count. Both are checked before
+        # any SymPy arithmetic so a malformed relayed payload fails as a
+        # contract violation instead of a backend host exception.
+        if len(particular) != n_cols:
+            raise ValueError(
+                "particular_solution must have exactly the retained "
+                "system's column count"
+            )
+        for value in particular:
+            if value.variables != declared_variables:
+                raise ValueError(
+                    "witness vectors must use the retained system's "
+                    "declared ordered field"
+                )
+        basis = self.nullspace_basis or ()
+        for vector in basis:
+            if len(vector) != n_cols:
+                raise ValueError(
+                    "every nullspace basis vector must have exactly the "
+                    "retained system's column count"
+                )
+            for value in vector:
+                if value.variables != declared_variables:
+                    raise ValueError(
+                        "witness vectors must use the retained system's "
+                        "declared ordered field"
+                    )
         coefficient = sympy.Matrix(
             [[rational_function_to_sympy(e) for e in row] for row in entries]
         )
@@ -686,7 +715,6 @@ class SymbolicLinearSystemResult(StrictModel):
             raise ValueError(
                 "particular_solution must satisfy the retained system exactly"
             )
-        basis = self.nullspace_basis or ()
         kernel_columns = []
         for vector in basis:
             v_vec = sympy.Matrix([[rational_function_to_sympy(v)] for v in vector])
@@ -717,7 +745,11 @@ class SymbolicLinearSystemResult(StrictModel):
                 raise ValueError("NON_UNIQUE must carry a particular_solution")
             if self.solution is not None:
                 raise ValueError("NON_UNIQUE must not populate the unique solution")
-        elif self.solution is not None or self.particular_solution is not None:
+        elif (
+            self.solution is not None
+            or self.particular_solution is not None
+            or self.nullspace_basis is not None
+        ):
             raise ValueError("INCONSISTENT must not carry solution data")
 
     @model_validator(mode="after")

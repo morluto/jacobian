@@ -23,10 +23,7 @@ class PinnedDistanceRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_unique_points(self) -> Self:
-        keys = tuple(
-            (p.x.num, p.x.den, p.y.num, p.y.den)
-            for p in self.points
-        )
+        keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")
         return self
@@ -90,9 +87,7 @@ def _pinned_distance_entries(
     # d^2 = cross(D, P-A)^2 / |D|^2.  Entries are keyed by the canonical
     # integer line equation so distinct lines are never merged; the distance
     # and every source pair that generates the line are entry data.
-    line_map: dict[
-        tuple[str, str, str], tuple[list[tuple[int, int]], str, str]
-    ] = {}
+    line_map: dict[tuple[str, str, str], tuple[list[tuple[int, int]], str, str]] = {}
     for i in range(len(pts)):
         for j in range(i + 1, len(pts)):
             xi, yi = pts[i]
@@ -135,10 +130,7 @@ class PinnedDistanceResult(StrictModel):
 
     @model_validator(mode="after")
     def require_source_bound_profile(self) -> Self:
-        keys = tuple(
-            (p.x.num, p.x.den, p.y.num, p.y.den)
-            for p in self.points
-        )
+        keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")
         expected = _pinned_distance_entries(self.anchor, self.points)
@@ -149,9 +141,7 @@ class PinnedDistanceResult(StrictModel):
             )
         if self.distinct_line_count != len(expected):
             raise ValueError("distinct_line_count must match the line count")
-        min_entry = (
-            min(expected, key=_entry_distance) if expected else None
-        )
+        min_entry = min(expected, key=_entry_distance) if expected else None
         if self.min_squared_distance != min_entry:
             raise ValueError("min_squared_distance must be the minimum entry")
         return self
@@ -165,9 +155,7 @@ def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceRe
         points=request.points,
         lines=entries,
         distinct_line_count=len(entries),
-        min_squared_distance=(
-            min(entries, key=_entry_distance) if entries else None
-        ),
+        min_squared_distance=(min(entries, key=_entry_distance) if entries else None),
     )
 
 

@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
+from jacobian.math.commutative_algebra_ops import _operations
 from jacobian.math.commutative_algebra_ops._models import (
     EliminationIdealRequest,
+    EliminationIdealResult,
     GroebnerBasisRequest,
     IdealNormalFormRequest,
+    IdealNormalFormResult,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
     compute_elimination_ideal,
@@ -141,3 +147,70 @@ class TestEliminationIdeal:
         )
         for var in result.elimination_ideal.variables:
             assert var != "x"
+
+
+class TestTypedTimeoutOutcomes:
+    """Budget expiry must surface as a typed outcome, not a host exception."""
+
+    def test_normal_form_timeout_returns_typed_outcome(self, monkeypatch):
+        """An expired normal-form budget returns TIMEOUT instead of raising."""
+
+        def exceed_budget(*args, **kwargs):
+            raise _operations._NormalFormTimeoutError("budget expired")
+
+        monkeypatch.setattr(_operations.sympy, "groebner", exceed_budget)
+        g = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 2)))
+        result = compute_ideal_normal_form(
+            IdealNormalFormRequest(
+                ideal=_ideal(("x", "y"), (g,)),
+                polynomial=_poly(("x", "y"), (1, 1, (2, 0))),
+            )
+        )
+        assert result.outcome == "TIMEOUT"
+        assert result.remainder is None
+        assert result.detail is not None
+
+    def test_elimination_timeout_returns_typed_outcome(self, monkeypatch):
+        """An expired elimination budget returns TIMEOUT instead of raising."""
+
+        def exceed_budget(*args, **kwargs):
+            raise _operations._EliminationTimeoutError("budget expired")
+
+        monkeypatch.setattr(_operations.sympy, "groebner", exceed_budget)
+        g = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 2)))
+        result = compute_elimination_ideal(
+            EliminationIdealRequest(
+                ideal=_ideal(("x", "y"), (g,)),
+                eliminated_variables=("x",),
+            )
+        )
+        assert result.outcome == "TIMEOUT"
+        assert result.elimination_ideal is None
+        assert result.eliminated_variables == ("x",)
+        assert result.detail is not None
+
+    def test_timed_out_normal_form_cannot_carry_a_remainder(self):
+        remainder = _poly(("x", "y"), (1, 1, (2, 0)))
+        with pytest.raises(ValidationError, match="timed-out"):
+            IdealNormalFormResult(outcome="TIMEOUT", remainder=remainder)
+
+    def test_computed_normal_form_requires_a_remainder(self):
+        with pytest.raises(ValidationError, match="requires a remainder"):
+            IdealNormalFormResult()
+
+    def test_timed_out_elimination_cannot_carry_an_ideal(self):
+        elimination_ideal = _ideal(
+            ("y",),
+            (_poly(("y",), (1, 1, (2,))),),
+        )
+        with pytest.raises(ValidationError, match="timed-out"):
+            EliminationIdealResult(
+                outcome="TIMEOUT",
+                elimination_ideal=elimination_ideal,
+                eliminated_variables=("x",),
+                detail="budget expired",
+            )
+
+    def test_computed_elimination_requires_an_ideal(self):
+        with pytest.raises(ValidationError, match="requires an ideal"):
+            EliminationIdealResult(eliminated_variables=("x",))

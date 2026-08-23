@@ -219,16 +219,16 @@ class IdealSaturationRequest(StrictModel):
 
     ideal: RationalPolynomialIdeal = Field(
         description=(
-            'An ideal in at most 6 variables with at most 16 generators and '
-            '256 aggregate terms; generator total degree is at most 12 and '
-            'coefficient components are at most 128 digits.'
+            "An ideal in at most 6 variables with at most 16 generators and "
+            "256 aggregate terms; generator total degree is at most 12 and "
+            "coefficient components are at most 128 digits."
         )
     )
     saturation_polynomial: RationalPolynomial = Field(
         description=(
-            'A single polynomial d in the ideal ring, with '
-            'at most 256 terms, total degree at most 12, and coefficient '
-            'components at most 128 digits.'
+            "A single polynomial d in the ideal ring, with "
+            "at most 256 terms, total degree at most 12, and coefficient "
+            "components at most 128 digits."
         )
     )
     resource_budget: IdealComputationBudget = Field(
@@ -246,9 +246,7 @@ class IdealSaturationRequest(StrictModel):
             label="saturation polynomial",
         )
         if self.saturation_polynomial.variables != self.ideal.variables:
-            raise ValueError(
-                "saturation polynomial must use the ideal's ordered ring"
-            )
+            raise ValueError("saturation polynomial must use the ideal's ordered ring")
         if any(
             sum(term.exponents) > MAX_INPUT_EXPONENT
             for term in self.saturation_polynomial.polynomial.terms
@@ -278,13 +276,16 @@ class IdealSaturationResult(StrictModel):
             or self.backend_version is not None
             or not self.detail
         ):
-            raise ValueError("failed saturation computation requires only a safe detail")
+            raise ValueError(
+                "failed saturation computation requires only a safe detail"
+            )
         return self
 
 
 __all__ = [
     "MAX_OUTPUT_GENERATORS",
     "MAX_OUTPUT_TERMS",
+    "EliminationExecutionOutcome",
     "EliminationIdealRequest",
     "EliminationIdealResult",
     "GroebnerBasisRequest",
@@ -301,6 +302,7 @@ __all__ = [
     "IdealRadicalResult",
     "IdealSaturationRequest",
     "IdealSaturationResult",
+    "NormalFormExecutionOutcome",
 ]
 
 
@@ -344,7 +346,10 @@ class GroebnerBasisResult(StrictModel):
                 raise ValueError(
                     "computed basis requires a value and no failure detail"
                 )
-            if self.generator_count != len(self.basis.generators) or self.generator_count < 1:
+            if (
+                self.generator_count != len(self.basis.generators)
+                or self.generator_count < 1
+            ):
                 raise ValueError("generator_count must match the basis generator count")
         elif self.basis is not None or self.detail is None:
             raise ValueError("timed-out computation carries only a safe detail")
@@ -377,18 +382,32 @@ class IdealNormalFormRequest(StrictModel):
         return self
 
 
-class IdealNormalFormResult(StrictModel):
-    """The exact remainder of a polynomial reduced modulo an ideal."""
+NormalFormExecutionOutcome = Literal["COMPUTED", "TIMEOUT"]
 
-    remainder: RationalPolynomial
-    in_ideal: bool
+
+class IdealNormalFormResult(StrictModel):
+    """The exact remainder modulo an ideal, or a typed timeout under the enforced budget."""
+
+    outcome: NormalFormExecutionOutcome = "COMPUTED"
+    remainder: RationalPolynomial | None = None
+    in_ideal: bool = False
+    detail: str | None = None
 
     @model_validator(mode="after")
     def require_consistent_membership(self) -> Self:
-        if self.in_ideal and len(self.remainder.polynomial.terms) > 0:
-            raise ValueError("a polynomial in the ideal must have a zero remainder")
-        if not self.in_ideal and len(self.remainder.polynomial.terms) == 0:
-            raise ValueError("a polynomial not in the ideal must have a nonzero remainder")
+        if self.outcome == "COMPUTED":
+            if self.remainder is None or self.detail is not None:
+                raise ValueError(
+                    "computed normal form requires a remainder and no failure detail"
+                )
+            if self.in_ideal and len(self.remainder.polynomial.terms) > 0:
+                raise ValueError("a polynomial in the ideal must have a zero remainder")
+            if not self.in_ideal and len(self.remainder.polynomial.terms) == 0:
+                raise ValueError(
+                    "a polynomial not in the ideal must have a nonzero remainder"
+                )
+        elif self.remainder is not None or self.detail is None:
+            raise ValueError("timed-out computation carries only a safe detail")
         return self
 
 
@@ -423,18 +442,30 @@ class EliminationIdealRequest(StrictModel):
         return self
 
 
-class EliminationIdealResult(StrictModel):
-    """The elimination ideal I ∩ QQ[remaining variables]."""
+EliminationExecutionOutcome = Literal["COMPUTED", "TIMEOUT"]
 
-    elimination_ideal: RationalPolynomialIdeal
+
+class EliminationIdealResult(StrictModel):
+    """The elimination ideal I ∩ QQ[remaining variables], or a typed timeout under the enforced budget."""
+
+    outcome: EliminationExecutionOutcome = "COMPUTED"
+    elimination_ideal: RationalPolynomialIdeal | None = None
     eliminated_variables: tuple[str, ...] = Field(min_length=1, max_length=MAX_VARS)
     backend: Literal["SYMPY"] = "SYMPY"
+    detail: str | None = None
 
     @model_validator(mode="after")
     def require_consistent_result(self) -> Self:
-        for var in self.eliminated_variables:
-            if var in self.elimination_ideal.variables:
+        if self.outcome == "COMPUTED":
+            if self.elimination_ideal is None or self.detail is not None:
                 raise ValueError(
-                    "eliminated variables must not appear in the elimination ideal"
+                    "computed elimination requires an ideal and no failure detail"
                 )
+            for var in self.eliminated_variables:
+                if var in self.elimination_ideal.variables:
+                    raise ValueError(
+                        "eliminated variables must not appear in the elimination ideal"
+                    )
+        elif self.elimination_ideal is not None or self.detail is None:
+            raise ValueError("timed-out computation carries only a safe detail")
         return self

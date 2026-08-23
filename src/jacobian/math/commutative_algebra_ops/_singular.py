@@ -106,28 +106,40 @@ def _script(
         f"string(jacobian_exponents[{index + 1}])" for index in range(variable_count)
     )
     declarations = [_singular_ideal("jacobian_left", left)]
+    operation_lines: tuple[str, ...]
     if operation == "radical":
-        operation_line = "ideal jacobian_result=radical(jacobian_left);"
+        operation_lines = ("ideal jacobian_result=radical(jacobian_left);",)
     elif operation == "saturation":
         if right is None:
             raise ValueError("saturation requires a saturation polynomial ideal")
         declarations.append(_singular_ideal("jacobian_right", right))
-        operation_line = (
-            "ideal jacobian_result=sat(jacobian_left,"
-            "jacobian_right[1]);"
+        # The pinned backend returns the saturated ideal directly; some library
+        # revisions return it as the first entry of a list.
+        operation_lines = (
+            "def jacobian_saturation=sat(jacobian_left,jacobian_right);",
+            'if( typeof(jacobian_saturation)=="list" )',
+            "{",
+            "  ideal jacobian_result=jacobian_saturation[1];",
+            "}",
+            "else",
+            "{",
+            "  ideal jacobian_result=jacobian_saturation;",
+            "}",
         )
     else:
         if right is None:
             raise ValueError("quotient requires a divisor ideal")
         declarations.append(_singular_ideal("jacobian_right", right))
-        operation_line = "ideal jacobian_result=quotient(jacobian_left,jacobian_right);"
+        operation_lines = (
+            "ideal jacobian_result=quotient(jacobian_left,jacobian_right);",
+        )
     source = "\n".join(
         [
             'LIB "primdec.lib";',
             "option(redSB);",
             f"ring jacobian_ring=0,({variables}),dp;",
             *declarations,
-            operation_line,
+            *operation_lines,
             "jacobian_result=std(jacobian_result);",
             f'print("{_PROTOCOL_HEADER}");',
             'system("version");',

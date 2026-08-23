@@ -29,6 +29,14 @@ from jacobian.math.polynomials._conversions import (
 )
 
 
+class _NormalFormTimeoutError(TimeoutError):
+    """Internal signal-handler escape for the enforced normal-form budget."""
+
+
+class _EliminationTimeoutError(TimeoutError):
+    """Internal signal-handler escape for the enforced elimination budget."""
+
+
 def compute_ideal_radical(request: IdealRadicalRequest) -> IdealRadicalResult:
     """Compute an exact ideal radical through the bounded Singular backend."""
 
@@ -85,14 +93,13 @@ def compute_ideal_quotient(request: IdealQuotientRequest) -> IdealQuotientResult
     )
 
 
-
-
 def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturationResult:
     """Compute an exact ideal saturation I : <d>^infinity through the bounded Singular backend."""
 
     from jacobian.math.polynomials.values import (
         RationalPolynomialIdeal,
     )
+
     saturation_ideal = RationalPolynomialIdeal(
         variables=request.ideal.variables,
         generators=(request.saturation_polynomial,),
@@ -109,6 +116,7 @@ def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturation
         backend_version=backend.backend_version,
         detail=backend.detail,
     )
+
 
 __all__ = [
     "compute_ideal_quotient",
@@ -146,7 +154,7 @@ def compute_groebner_basis(request: GroebnerBasisRequest) -> GroebnerBasisResult
     class _BudgetExceededError(TimeoutError):
         pass
 
-    def _on_budget(signum, frame):
+    def _on_budget(_signum: int, _frame: object) -> None:
         raise _BudgetExceededError("groebner computation exceeded wall_seconds")
 
     previous_handler = signal.signal(signal.SIGALRM, _on_budget)
@@ -222,11 +230,10 @@ def compute_ideal_normal_form(request: IdealNormalFormRequest) -> IdealNormalFor
 
     import signal
 
-    class _NormalFormTimeout(TimeoutError):
-        pass
-
-    def _on_timeout(signum, frame):
-        raise _NormalFormTimeout("normal form Groebner computation exceeded wall time")
+    def _on_timeout(_signum: int, _frame: object) -> None:
+        raise _NormalFormTimeoutError(
+            "normal form Groebner computation exceeded wall time"
+        )
 
     # Use a conservative 10-second budget for the inline Groebner computation;
     # hard ideals would otherwise occupy the execution path indefinitely.
@@ -248,13 +255,13 @@ def compute_ideal_normal_form(request: IdealNormalFormRequest) -> IdealNormalFor
             order="grevlex",
             domain=sympy.QQ,
         )
-    except _NormalFormTimeout:
-        # Map timeout to a typed result that indicates incompleteness rather than
-        # occupying the execution path indefinitely.  For now, raise as ValueError
-        # to be caught as a validation error; the operation's contract is to
-        # return a remainder, so a timeout is a host failure that should be
-        # surfaced as such.  We choose to raise a clear error.
-        raise TimeoutError("normal form computation exceeded the 10s wall-time bound")
+    except _NormalFormTimeoutError:
+        # An admitted request must observe a typed mathematical outcome rather
+        # than a host exception, so budget expiry is part of the result contract.
+        return IdealNormalFormResult(
+            outcome="TIMEOUT",
+            detail=("the Gröbner reduction exceeded the enforced 10s wall-time bound"),
+        )
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, prev_handler)
@@ -273,7 +280,9 @@ def compute_ideal_normal_form(request: IdealNormalFormRequest) -> IdealNormalFor
     )
 
 
-def compute_elimination_ideal(request: EliminationIdealRequest) -> EliminationIdealResult:
+def compute_elimination_ideal(
+    request: EliminationIdealRequest,
+) -> EliminationIdealResult:
     """Compute the elimination ideal I ∩ QQ[remaining variables] using a lex Gröbner basis."""
     from jacobian.math.commutative_algebra_ops._models import EliminationIdealResult
     from jacobian.math.polynomials._conversions import rational_polynomial_from_sympy
@@ -288,7 +297,9 @@ def compute_elimination_ideal(request: EliminationIdealRequest) -> EliminationId
 
     # The elimination theorem requires the eliminated variables to precede
     # the retained variables in the lex monomial order.
-    ordered_variables = tuple(v for v in variables if v in eliminated_set) + tuple(remaining)
+    ordered_variables = tuple(v for v in variables if v in eliminated_set) + tuple(
+        remaining
+    )
     ordered_symbols = symbols_for_variables(ordered_variables)
     ideal_generators = [
         rational_polynomial_to_sympy(generator).as_expr()
@@ -297,11 +308,10 @@ def compute_elimination_ideal(request: EliminationIdealRequest) -> EliminationId
 
     import signal
 
-    class _EliminationTimeout(TimeoutError):
-        pass
-
-    def _on_elim_timeout(signum, frame):
-        raise _EliminationTimeout("elimination Groebner computation exceeded wall_seconds")
+    def _on_elim_timeout(_signum: int, _frame: object) -> None:
+        raise _EliminationTimeoutError(
+            "elimination Groebner computation exceeded wall_seconds"
+        )
 
     prev_handler = signal.signal(signal.SIGALRM, _on_elim_timeout)
     signal.setitimer(signal.ITIMER_REAL, request.resource_budget.wall_seconds)
@@ -312,9 +322,16 @@ def compute_elimination_ideal(request: EliminationIdealRequest) -> EliminationId
             order="lex",
             domain=sympy.QQ,
         )
-    except _EliminationTimeout:
-        raise TimeoutError(
-            f"elimination computation exceeded the enforced {request.resource_budget.wall_seconds}s budget"
+    except _EliminationTimeoutError:
+        # An admitted request must observe a typed mathematical outcome rather
+        # than a host exception, so budget expiry is part of the result contract.
+        return EliminationIdealResult(
+            outcome="TIMEOUT",
+            eliminated_variables=tuple(request.eliminated_variables),
+            detail=(
+                "the lex Gröbner elimination exceeded the enforced "
+                f"{request.resource_budget.wall_seconds}s wall-time budget"
+            ),
         )
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
@@ -344,6 +361,7 @@ def compute_elimination_ideal(request: EliminationIdealRequest) -> EliminationId
             RationalPolynomial,
             RationalPolynomialTerm,
         )
+
         one = RationalPolynomial(
             variables=tuple(remaining),
             polynomial=SparseRationalPolynomial(
@@ -360,6 +378,7 @@ def compute_elimination_ideal(request: EliminationIdealRequest) -> EliminationId
         # No retained-only basis elements: the elimination ideal is the
         # zero ideal, represented by its canonical zero generator.
         from jacobian.math.polynomials.values import RationalPolynomial
+
         zero = RationalPolynomial(
             variables=tuple(remaining),
             polynomial=SparseRationalPolynomial(terms=()),

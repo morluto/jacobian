@@ -472,6 +472,7 @@ def circumradius_profile(
             )
         )
     return CircumradiusProfileResult(
+        points=request.points,
         point_count=n,
         triple_count=len(entries),
         entries=tuple(entries),

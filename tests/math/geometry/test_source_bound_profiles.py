@@ -9,6 +9,7 @@ from jacobian._exact import CanonicalRational
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.geometry._models import (
     CircumradiusProfileRequest,
+    CircumradiusProfileResult,
     ForbiddenConfiguration,
     ForbiddenLabelledPoint,
     ForbiddenPatternsRequest,
@@ -42,7 +43,9 @@ def _entry_distance(entry) -> Fraction:
     )
 
 
-def _labelled(label: str, x: CanonicalRational, y: CanonicalRational) -> LabelledPoint2D:
+def _labelled(
+    label: str, x: CanonicalRational, y: CanonicalRational
+) -> LabelledPoint2D:
     return LabelledPoint2D(label=label, point=RationalPoint2D(x=x, y=y))
 
 
@@ -174,14 +177,69 @@ class TestPinnedDistanceReplay:
         assert result.distinct_line_count == 3
 
 
+class TestCircumradiusSourceBinding:
+    def _square_request(self) -> CircumradiusProfileRequest:
+        return CircumradiusProfileRequest(
+            points=(
+                _labelled("a", _cr(0, 1), _cr(0, 1)),
+                _labelled("b", _cr(1, 1), _cr(0, 1)),
+                _labelled("c", _cr(1, 1), _cr(1, 1)),
+                _labelled("d", _cr(0, 1), _cr(1, 1)),
+            )
+        )
+
+    def test_genuine_profile_round_trips(self) -> None:
+        result = circumradius_profile(self._square_request())
+        assert CircumradiusProfileResult.model_validate(result.model_dump()) == result
+
+    def test_forged_radius_rejected(self) -> None:
+        result = circumradius_profile(self._square_request()).model_dump()
+        result["entries"][0]["squared_circumradius"] = {"num": "7", "den": "3"}
+        with pytest.raises(ValidationError, match="replayed"):
+            CircumradiusProfileResult.model_validate(result)
+
+    def test_forged_labels_rejected(self) -> None:
+        result = circumradius_profile(self._square_request()).model_dump()
+        result["entries"][0]["labels"] = ("x", "y", "z")
+        with pytest.raises(ValidationError, match="labels"):
+            CircumradiusProfileResult.model_validate(result)
+
+    def test_flipped_collinearity_rejected(self) -> None:
+        result = circumradius_profile(self._square_request()).model_dump()
+        nondegenerate = next(
+            entry for entry in result["entries"] if not entry["collinear"]
+        )
+        nondegenerate["collinear"] = True
+        nondegenerate["squared_circumradius"] = None
+        with pytest.raises(ValidationError, match="flags"):
+            CircumradiusProfileResult.model_validate(result)
+
+    def test_detached_points_rejected(self) -> None:
+        result = circumradius_profile(self._square_request())
+        forged = result.model_dump()
+        forged["points"] = [
+            {
+                "label": "a",
+                "point": {"x": {"num": "5", "den": "1"}, "y": {"num": "5", "den": "1"}},
+            },
+            *forged["points"][1:],
+        ]
+        with pytest.raises(ValidationError, match="replayed"):
+            CircumradiusProfileResult.model_validate(forged)
+
+    def test_point_count_mismatch_rejected(self) -> None:
+        result = circumradius_profile(self._square_request()).model_dump()
+        result["point_count"] = 5
+        with pytest.raises(ValidationError, match="point_count"):
+            CircumradiusProfileResult.model_validate(result)
+
+
 class TestForbiddenPatternBinding:
     def _configuration(self, points) -> ForbiddenPatternsRequest:
         return ForbiddenPatternsRequest(
             configuration=ForbiddenConfiguration(
                 points=tuple(
-                    ForbiddenLabelledPoint(
-                        label=f"p{index}", point=point
-                    )
+                    ForbiddenLabelledPoint(label=f"p{index}", point=point)
                     for index, point in enumerate(points)
                 )
             )
@@ -192,7 +250,12 @@ class TestForbiddenPatternBinding:
         assert result.has_collinear_triple is False
         assert result.has_concyclic_quadruple is True
         witness = result.concyclic_quadruple
-        assert (witness.first, witness.second, witness.third, witness.fourth) == (0, 1, 2, 3)
+        assert (witness.first, witness.second, witness.third, witness.fourth) == (
+            0,
+            1,
+            2,
+            3,
+        )
         revalidated = ForbiddenPatternsResult.model_validate(result.model_dump())
         assert revalidated == result
 

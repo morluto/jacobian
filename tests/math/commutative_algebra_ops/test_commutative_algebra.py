@@ -16,11 +16,13 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealQuotientRequest,
     IdealRadicalMembershipRequest,
     IdealRadicalRequest,
+    IdealSaturationRequest,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
     compute_ideal_quotient,
     compute_ideal_radical,
     compute_ideal_radical_membership,
+    compute_ideal_saturation,
 )
 from jacobian.math.commutative_algebra_ops._tools import TOOLS
 from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
@@ -358,6 +360,52 @@ def test_ideal_quotient_by_zero_is_the_unit_ideal() -> None:
     assert _equal(result.quotient, _ideal(("x",), {(0,): 1}))
 
 
+def test_saturation_script_passes_the_declared_ideal_operand() -> None:
+    source = _singular._script(
+        "saturation",
+        _ideal(("x", "y"), {(1, 1): 1}),
+        _ideal(("x", "y"), {(1, 0): 1}),
+    ).decode("ascii")
+    assert "sat(jacobian_left,jacobian_right);" in source
+    assert "jacobian_result=jacobian_saturation[1];" in source
+    assert "jacobian_result=jacobian_saturation;" in source
+
+
+@requires_singular
+@pytest.mark.requires_backend("singular")
+def test_ideal_saturation_published_example_is_exact() -> None:
+    result = compute_ideal_saturation(
+        IdealSaturationRequest(
+            ideal=_ideal(("x", "y"), {(1, 1): 1}),
+            saturation_polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
+        )
+    )
+    assert result.outcome == "COMPUTED"
+    assert result.saturation is not None
+    assert _equal(result.saturation, _ideal(("x", "y"), {(0, 1): 1}))
+
+
+@requires_singular
+@pytest.mark.requires_backend("singular")
+def test_ideal_saturation_counterexample_is_exact() -> None:
+    source = _ideal(("x", "y"), {(2, 1): 1})
+    result = compute_ideal_saturation(
+        IdealSaturationRequest(
+            ideal=source,
+            saturation_polynomial=_polynomial(("x", "y"), {(0, 1): 1}),
+        )
+    )
+    assert result.outcome == "COMPUTED"
+    assert result.saturation is not None
+    saturated = result.saturation
+    assert _equal(saturated, _ideal(("x", "y"), {(2, 0): 1}))
+    divisor = _polynomial(("x", "y"), {(0, 1): 1})
+    assert all(
+        _contains_product(source, generator, divisor)
+        for generator in saturated.generators
+    )
+
+
 @requires_singular
 @pytest.mark.requires_backend("singular")
 def test_ideal_quotient_by_unit_is_the_dividend() -> None:
@@ -468,6 +516,7 @@ def test_ideal_quotient_by_product_equals_iterated_quotient() -> None:
 
 def _poly(variables, terms):
     from jacobian._exact import CanonicalRational
+
     return RationalPolynomial(
         variables=variables,
         polynomial=SparseRationalPolynomial(
@@ -518,15 +567,14 @@ class TestEliminationIdealSemantics:
         from jacobian.math.commutative_algebra_ops._operations import (
             compute_elimination_ideal,
         )
+
         ring = ("x", "y")
         ideal = RationalPolynomialIdeal(
             variables=ring,
             generators=tuple(_poly(ring, g) for g in generators),
         )
         return compute_elimination_ideal(
-            EliminationIdealRequest(
-                ideal=ideal, eliminated_variables=eliminated
-            )
+            EliminationIdealRequest(ideal=ideal, eliminated_variables=eliminated)
         )
 
     @staticmethod
@@ -540,14 +588,15 @@ class TestEliminationIdealSemantics:
     def test_eliminated_variables_lead_lex_order(self):
         """Eliminating y from <x-y, y^2-1> yields <x^2-1>."""
         result = self._eliminate(
-            [((( 1, 0), 1), ((0, 1), -1)), (((0, 2), 1), ((0, 0), -1))],
+            [(((1, 0), 1), ((0, 1), -1)), (((0, 2), 1), ((0, 0), -1))],
             ("y",),
         )
         terms = self._terms(result)
-        assert (( "1", "1", (2,))) in [tuple(t) for t in terms]
-        assert tuple(
-            (n, d, e) for n, d, e in terms
-        )[:2] == (("1", "1", (2,)), ("-1", "1", (0,)))
+        assert (("1", "1", (2,))) in [tuple(t) for t in terms]
+        assert tuple((n, d, e) for n, d, e in terms)[:2] == (
+            ("1", "1", (2,)),
+            ("-1", "1", (0,)),
+        )
 
     def test_zero_elimination_ideal_preserved(self):
         """<x> ∩ QQ[y] = (0): the zero ideal must not become the whole ring."""

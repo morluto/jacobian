@@ -217,7 +217,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {
                     "ideal": _ideal(
                         ("x", "y"),
-                        ((1, 1, (2, 0)), (-1, 1, (0, 1)), (1, 1, (1, 1)), (-1, 1, (0, 0))),
+                        (
+                            (1, 1, (2, 0)),
+                            (-1, 1, (0, 1)),
+                            (1, 1, (1, 1)),
+                            (-1, 1, (0, 0)),
+                        ),
                     ),
                     "monomial_order": "grevlex",
                 },
@@ -229,7 +234,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Reduce a polynomial modulo an ideal",
         "Reduce one bounded polynomial modulo a bounded ideal in QQ[x_1, "
         "x_2, ..., x_n] using a Groebner basis remainder. Returns the exact "
-        "remainder and whether the polynomial is in the ideal.",
+        "remainder and whether the polynomial is in the ideal; a computation "
+        "that exceeds the enforced wall-time bound returns a typed TIMEOUT "
+        "outcome instead of a remainder.",
         IdealNormalFormRequest,
         IdealNormalFormResult,
         compute_ideal_normal_form,
@@ -259,7 +266,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute an elimination ideal",
         "Compute the elimination ideal I ∩ QQ[remaining variables] by "
         "computing a lex Groebner basis and extracting the generators that "
-        "involve only the remaining variables.",
+        "involve only the remaining variables. A computation that exceeds the "
+        "enforced wall-time budget returns a typed TIMEOUT outcome instead of "
+        "an ideal.",
         EliminationIdealRequest,
         EliminationIdealResult,
         compute_elimination_ideal,
@@ -273,7 +282,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {
                     "ideal": _ideal(
                         ("x", "y"),
-                        ((1, 1, (2, 0)), (-1, 1, (0, 2)), (1, 1, (1, 0)), (1, 1, (0, 1))),
+                        (
+                            (1, 1, (2, 0)),
+                            (-1, 1, (0, 2)),
+                            (1, 1, (1, 0)),
+                            (1, 1, (0, 1)),
+                        ),
                     ),
                     "eliminated_variables": ["x"],
                 },

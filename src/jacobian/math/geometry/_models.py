@@ -555,9 +555,7 @@ class CircumradiusTripleEntry(StrictModel):
     @model_validator(mode="after")
     def bind_collinear_to_value(self) -> Self:
         if self.collinear is (self.squared_circumradius is not None):
-            raise ValueError(
-                "exactly a collinear triple has no squared circumradius"
-            )
+            raise ValueError("exactly a collinear triple has no squared circumradius")
         if (
             self.squared_circumradius is not None
             and self.squared_circumradius.as_fraction() <= 0
@@ -566,37 +564,93 @@ class CircumradiusTripleEntry(StrictModel):
         return self
 
 
+def _circumradius_squared(
+    coords: tuple[tuple[Fraction, Fraction], ...],
+    triple: tuple[int, int, int],
+) -> Fraction | None:
+    """Replay one exact squared circumradius, or None for a collinear triple."""
+    (ax, ay), (bx, by), (cx, cy) = (coords[index] for index in triple)
+    dab = (ax - bx) ** 2 + (ay - by) ** 2
+    dbc = (bx - cx) ** 2 + (by - cy) ** 2
+    dac = (ax - cx) ** 2 + (ay - cy) ** 2
+    cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+    if cross == 0:
+        return None
+    return (dab * dbc * dac) / (4 * cross * cross)
+
+
+def _require_canonical_triple_coverage(
+    entries: tuple[CircumradiusTripleEntry, ...],
+    point_count: int,
+) -> None:
+    seen: set[tuple[int, int, int]] = set()
+    for entry in entries:
+        idx = entry.indices
+        if idx != tuple(sorted(idx)):
+            raise ValueError("circumradius entry indices must be sorted")
+        if idx in seen:
+            raise ValueError("circumradius entries must be unique")
+        if not (0 <= idx[0] < idx[1] < idx[2] < point_count):
+            raise ValueError("circumradius entry indices out of range")
+        seen.add(idx)
+    if tuple(entries) != tuple(sorted(entries, key=lambda e: e.indices)):
+        raise ValueError("circumradius entries must be in lexicographic order")
+
+
+def _require_source_bound_circumradii(
+    points: tuple[LabelledPoint2D, ...],
+    entries: tuple[CircumradiusTripleEntry, ...],
+) -> None:
+    """Replay labels, degeneracy, and exact radii from the retained sources."""
+    labels = tuple(item.label for item in points)
+    if len(labels) != len(set(labels)):
+        raise ValueError("source point labels must be unique")
+    coords = tuple(
+        (item.point.x.as_fraction(), item.point.y.as_fraction()) for item in points
+    )
+    if len(coords) != len(set(coords)):
+        raise ValueError("source point coordinates must be unique")
+    for entry in entries:
+        idx = entry.indices
+        if entry.labels != tuple(labels[index] for index in idx):
+            raise ValueError("entry labels must match the retained source points")
+        replayed = _circumradius_squared(coords, idx)
+        if entry.collinear is not (replayed is None):
+            raise ValueError(
+                "entry degeneracy flags must match the retained source points"
+            )
+        if replayed is None:
+            continue
+        if (
+            entry.squared_circumradius is None
+            or entry.squared_circumradius.as_fraction() != replayed
+        ):
+            raise ValueError(
+                "squared circumradius must equal the value replayed from "
+                "the retained source points"
+            )
+
+
 class CircumradiusProfileResult(StrictModel):
+    """The complete circumradius profile bound to its retained source points."""
+
+    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=64)
     point_count: StrictInt = Field(ge=3, le=64)
     triple_count: StrictInt = Field(ge=1, le=41664)
     entries: tuple[CircumradiusTripleEntry, ...] = Field(min_length=1)
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
     @model_validator(mode="after")
-    def require_complete_profile(self) -> Self:
+    def require_complete_source_bound_profile(self) -> Self:
         import math
 
+        if self.point_count != len(self.points):
+            raise ValueError("point_count must match the retained source points")
         expected = math.comb(self.point_count, 3)
-        if self.triple_count != expected:
-            raise ValueError("triple_count must equal comb(point_count, 3)")
-        if len(self.entries) != self.triple_count:
-            raise ValueError("circumradius profile must be complete")
-        # Validate that entries cover every unordered triple exactly once in canonical order
-        seen: set[tuple[int, int, int]] = set()
-        for entry in self.entries:
-            idx = entry.indices
-            if idx != tuple(sorted(idx)):
-                raise ValueError("circumradius entry indices must be sorted")
-            if idx in seen:
-                raise ValueError("circumradius entries must be unique")
-            if not (0 <= idx[0] < idx[1] < idx[2] < self.point_count):
-                raise ValueError("circumradius entry indices out of range")
-            seen.add(idx)
-        # Check canonical lexicographic order
-        if tuple(self.entries) != tuple(sorted(self.entries, key=lambda e: e.indices)):
-            raise ValueError("circumradius entries must be in lexicographic order")
-        if len(seen) != expected:
+        if self.triple_count != expected or len(self.entries) != self.triple_count:
             raise ValueError("circumradius profile must cover every unordered triple")
+        _require_canonical_triple_coverage(self.entries, self.point_count)
+        _require_source_bound_circumradii(self.points, self.entries)
         return self
 
 
@@ -701,10 +755,7 @@ def _screen_forbidden_patterns(
     points: tuple[ForbiddenLabelledPoint, ...],
 ) -> _ForbiddenScreening:
     """Enumerate every triple and quadruple of one configuration exactly."""
-    xy = [
-        (item.point.x.as_fraction(), item.point.y.as_fraction())
-        for item in points
-    ]
+    xy = [(item.point.x.as_fraction(), item.point.y.as_fraction()) for item in points]
     collinear_triple = None
     checked_triples = 0
     for i, j, k in combinations(range(len(xy)), 3):

@@ -22,7 +22,7 @@ MAX_RATIONAL_DIGITS = 4_096
 # as a positive mass, and every subdiagonal entry must stay far from both
 # overflow and underflow so its square root is exact enough.
 MAX_QUADRATURE_MAGNITUDE = Fraction(10) ** 300
-MIN_QUADRATURE_MAGNITUDE = Fraction(1, 10 ** 300)
+MIN_QUADRATURE_MAGNITUDE = Fraction(1, 10**300)
 
 
 def _to_fractions(
@@ -41,9 +41,7 @@ def _validate_moments(moments: tuple[CanonicalRational, ...]) -> None:
     if not 1 <= len(moments) <= MAX_MOMENTS:
         raise ValueError("moment sequence must contain between 1 and 64 moments")
     for value in moments:
-        require_bounded_rational(
-            value, max_digits=MAX_RATIONAL_DIGITS, label="moment"
-        )
+        require_bounded_rational(value, max_digits=MAX_RATIONAL_DIGITS, label="moment")
 
 
 def _validate_alpha_beta(
@@ -182,15 +180,11 @@ class JacobiMatrixResult(JacobiMatrixRequest):
     def bind_jacobi(self) -> Self:
         from jacobian.math.moments_orthogonal.operations import jacobi_matrix
 
-        result = jacobi_matrix(
-            _to_fractions(self.alpha), _to_fractions(self.beta)
-        )
+        result = jacobi_matrix(_to_fractions(self.alpha), _to_fractions(self.beta))
         if self.diagonal != _from_fractions(result.diagonal):
             raise ValueError("diagonal must match the exact Jacobi diagonal")
         if self.off_diagonal != _from_fractions(result.off_diagonal):
-            raise ValueError(
-                "off_diagonal must match the exact Jacobi off-diagonal"
-            )
+            raise ValueError("off_diagonal must match the exact Jacobi off-diagonal")
         return self
 
 
@@ -214,12 +208,8 @@ class ChristoffelDarbouxRequest(StrictModel):
         # 4095-digit x gives 122k-digit denominators.  Cap at 1024 to keep
         # worst-case outputs within the 32768-digit canonical limit.
         max_cd_digits = 1024
-        require_bounded_rational(
-            self.x, max_digits=max_cd_digits, label="x"
-        )
-        require_bounded_rational(
-            self.y, max_digits=max_cd_digits, label="y"
-        )
+        require_bounded_rational(self.x, max_digits=max_cd_digits, label="x")
+        require_bounded_rational(self.y, max_digits=max_cd_digits, label="y")
         # Also check conservative output height estimate
         # Rough estimate: output digits ~ n * max_input_digits
         n = max(len(self.alpha), len(self.beta))
@@ -232,7 +222,9 @@ class ChristoffelDarbouxRequest(StrictModel):
             len(self.y.den.lstrip("-")),
         )
         if n * max_input > 30000:
-            raise ValueError("Christoffel-Darboux inputs would exceed the result digit bound")
+            raise ValueError(
+                "Christoffel-Darboux inputs would exceed the result digit bound"
+            )
         return self
 
 
@@ -255,12 +247,8 @@ class ChristoffelDarbouxResult(ChristoffelDarbouxRequest):
             self.y.as_fraction(),
         )
         if self.kernel != CanonicalRational.from_fraction(result.kernel):
-            raise ValueError(
-                "kernel must be the exact Christoffel-Darboux kernel"
-            )
-        if self.polynomials_evaluated != _from_fractions(
-            result.polynomials_evaluated
-        ):
+            raise ValueError("kernel must be the exact Christoffel-Darboux kernel")
+        if self.polynomials_evaluated != _from_fractions(result.polynomials_evaluated):
             raise ValueError(
                 "polynomials_evaluated must match the evaluated polynomials"
             )
@@ -280,10 +268,7 @@ class GaussianQuadratureRequest(StrictModel):
     def require_valid_coefficients(self) -> Self:
         if not 1 <= len(self.alpha) <= MAX_QUADRATURE_POINTS:
             raise ValueError("alpha must contain between 1 and 16 entries")
-        if (
-            len(self.beta) != len(self.alpha)
-            and len(self.beta) != len(self.alpha) + 1
-        ):
+        if len(self.beta) != len(self.alpha) and len(self.beta) != len(self.alpha) + 1:
             raise ValueError("beta must have length len(alpha) or len(alpha)+1")
         beta_zero = self.beta[0].as_fraction()
         if beta_zero <= 0:

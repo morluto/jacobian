@@ -46,14 +46,14 @@ def padic_operation[
 
 
 _HENSEL_ROOT_EXAMPLE: dict[str, Any] = {
-    "polynomial": {"coefficients": [1, 0, 1]},
+    "polynomial": {"coefficients": ["1", "0", "1"]},
     "prime": 5,
     "root_mod_p": 2,
     "precision": 4,
 }
 
 _PADIC_ROOTS_EXAMPLE: dict[str, Any] = {
-    "polynomial": {"coefficients": [-1, 0, 0, 1]},
+    "polynomial": {"coefficients": ["-1", "0", "0", "1"]},
     "prime": 5,
     "precision": 3,
 }

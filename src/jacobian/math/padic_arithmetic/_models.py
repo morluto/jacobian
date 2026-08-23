@@ -7,24 +7,38 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.canonical import parse_canonical_integer
+from jacobian.math.polynomials._models import IntegerPolynomial
+
+_MAX_PADIC_COEFFICIENTS = 64
 
 
-class IntegerPolynomial(StrictModel):
-    """A univariate integer polynomial a_0 + a_1*x + ... + a_n*x^n."""
+def _require_padic_budget(polynomial: IntegerPolynomial) -> None:
+    """Bound one admitted polynomial for the p-adic kernels.
 
-    coefficients: tuple[int, ...] = Field(min_length=1, max_length=64)
+    Root finding evaluates every residue mod ``p`` against the source
+    polynomial and result replay repeats that sweep, so the work grows
+    linearly in coefficient count; the shared canonical value alone
+    admits far longer inputs than these kernels establish.
+    """
+    if len(polynomial.coefficients) > _MAX_PADIC_COEFFICIENTS:
+        raise ValueError(
+            "p-adic polynomial exceeds the 64-coefficient operation budget"
+        )
 
-    @model_validator(mode="after")
-    def require_valid_coefficients(self) -> Self:
-        if any(
-            type(c) is not int or c < -(2**31) or c >= 2**31 for c in self.coefficients
-        ):
-            raise ValueError("coefficients must be bounded integers")
-        return self
 
-    @property
-    def degree(self) -> int:
-        return len(self.coefficients) - 1
+def _kernel_coefficients(polynomial: IntegerPolynomial) -> tuple[int, ...]:
+    """Convert the canonical descending ``ZZ[x]`` value to ascending ints.
+
+    The canonical integer-polynomial value stores decimal-string
+    coefficients highest degree first; every kernel and validator below
+    indexes coefficient ``i`` as the degree-``i`` term, so the explicit
+    order conversion happens exactly here and nowhere else.
+    """
+    return tuple(
+        parse_canonical_integer(coefficient)
+        for coefficient in reversed(polynomial.coefficients)
+    )
 
 
 MAX_PRIME = 10_000
@@ -67,13 +81,18 @@ class HenselRootRequest(StrictModel):
     precision: int = Field(ge=1, le=64)
 
     @model_validator(mode="after")
+    def require_operation_budget(self) -> Self:
+        _require_padic_budget(self.polynomial)
+        return self
+
+    @model_validator(mode="after")
     def require_valid_root(self) -> Self:
         _require_prime(self.prime)
         if self.root_mod_p >= self.prime:
             raise ValueError("root_mod_p must be in 0..p-1")
         # The contract lifts a SIMPLE root: f(r) = 0 and f'(r) != 0 mod p are
         # mathematical preconditions, so validate them at this boundary.
-        coeffs = self.polynomial.coefficients
+        coeffs = _kernel_coefficients(self.polynomial)
         if _poly_eval_mod_p(coeffs, self.root_mod_p, self.prime) != 0:
             raise ValueError("root_mod_p must satisfy f(root_mod_p) = 0 mod p")
         if _poly_deriv_mod_p(coeffs, self.root_mod_p, self.prime) % self.prime == 0:
@@ -104,11 +123,12 @@ class HenselRootResult(StrictModel):
         p = self.prime
         modulus = p**self.precision
         _require_prime(p)
+        _require_padic_budget(self.polynomial)
         if self.root_mod_p >= p:
             raise ValueError("root_mod_p must be in 0..p-1")
         if self.lifted_root >= modulus:
             raise ValueError("lifted_root must be in 0..p^k - 1")
-        coeffs = self.polynomial.coefficients
+        coeffs = _kernel_coefficients(self.polynomial)
         # Replay the defining invariants against the retained source data so
         # a serialized result cannot detach its lift from its polynomial.
         if _poly_eval_mod_p(coeffs, self.root_mod_p, p) != 0:
@@ -139,6 +159,13 @@ class HenselFactorLiftRequest(StrictModel):
     precision: int = Field(ge=1, le=64)
 
     @model_validator(mode="after")
+    def require_operation_budget(self) -> Self:
+        _require_padic_budget(self.polynomial)
+        _require_padic_budget(self.factor_g)
+        _require_padic_budget(self.factor_h)
+        return self
+
+    @model_validator(mode="after")
     def require_prime_modulus(self) -> Self:
         _require_prime(self.prime)
         return self
@@ -165,6 +192,11 @@ class PAdicRootsRequest(StrictModel):
     polynomial: IntegerPolynomial
     prime: int = Field(ge=2, le=10_000)
     precision: int = Field(ge=1, le=64)
+
+    @model_validator(mode="after")
+    def require_operation_budget(self) -> Self:
+        _require_padic_budget(self.polynomial)
+        return self
 
     @model_validator(mode="after")
     def require_prime_modulus(self) -> Self:
@@ -211,6 +243,7 @@ class PAdicRootsResult(StrictModel):
 
     @model_validator(mode="after")
     def require_consistent_count(self) -> Self:
+        _require_padic_budget(self.polynomial)
         if self.root_count != len(self.roots):
             raise ValueError("root_count must match the number of roots")
         if len(set(self.multiple_residues)) != len(self.multiple_residues):
@@ -227,7 +260,7 @@ class PAdicRootsResult(StrictModel):
         # before replaying the root set against it.
         _require_prime(p)
         modulus = p**k
-        coefficients = self.polynomial.coefficients
+        coefficients = _kernel_coefficients(self.polynomial)
         roots = tuple(entry.root for entry in self.roots)
         if any(root >= modulus for root in roots):
             raise ValueError("roots must lie in 0..p^k - 1")

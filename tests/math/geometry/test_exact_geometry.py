@@ -529,3 +529,79 @@ def _cr(x):
     from jacobian._exact import CanonicalRational
 
     return CanonicalRational.from_fraction(Fraction(x))
+
+
+class TestAggregatePairLedgerBound:
+    def test_oversized_aggregate_pair_ledger_rejected_before_parsing(self):
+        """2016 entries each carrying 2016 distinct pairs would amplify into
+        over four million pair tuples during parsing; the aggregate ledger
+        must be rejected at the mathematical MAX_PAIRS bound instead."""
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import (
+            PinnedLineDistanceResult,
+        )
+
+        entry = {
+            "line_coefficients": [
+                {"num": "0", "den": "1"},
+                {"num": "1", "den": "1"},
+                {"num": "0", "den": "1"},
+            ],
+            "squared_distance": {"num": "1", "den": "2"},
+            "pairs": [[i, i + 1] for i in range(64)],
+        }
+        payload = {
+            "configuration": {
+                "points": [
+                    {
+                        "label": f"p{i}",
+                        "coordinates": [
+                            {"num": str(i), "den": "1"},
+                            {"num": str(i * i), "den": "1"},
+                        ],
+                    }
+                    for i in range(3)
+                ]
+            },
+            "anchor": [{"num": "0", "den": "1"}, {"num": "0", "den": "1"}],
+            "dimension": 2,
+            "point_count": 3,
+            "lines": [entry for _ in range(40)],
+            "distance_multiplicities": [],
+        }
+        with pytest.raises(ValidationError, match="aggregate source-pair ledger"):
+            PinnedLineDistanceResult.model_validate(payload)
+
+    def test_valid_profile_ledger_roundtrips(self):
+        from jacobian.math.geometry.exact._models import (
+            LabelledRationalPoint,
+            PinnedLineDistanceRequest,
+            PinnedLineDistanceResult,
+            PointConfiguration,
+        )
+        from jacobian.math.geometry.exact._operations import (
+            compute_pinned_line_distance_profile,
+        )
+
+        def _cr(value):
+            return {"num": str(value), "den": "1"}
+
+        cfg = PointConfiguration(
+            points=tuple(
+                LabelledRationalPoint(label=label, coordinates=(_cr(x), _cr(y)))
+                for label, x, y in [("a", 0, 0), ("b", 1, 0), ("c", 0, 1), ("d", 1, 1)]
+            )
+        )
+        result = compute_pinned_line_distance_profile(
+            PinnedLineDistanceRequest(
+                configuration=cfg,
+                anchor=({"num": "0", "den": "1"}, {"num": "0", "den": "1"}),
+            )
+        )
+        total_pairs = sum(len(line.pairs) for line in result.lines)
+        assert total_pairs <= 2016
+        assert PinnedLineDistanceResult.model_validate(
+            result.model_dump(mode="json")
+        ) == result

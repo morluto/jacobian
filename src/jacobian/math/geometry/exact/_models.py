@@ -430,6 +430,38 @@ class PinnedLineDistanceResult(StrictModel):
         max_length=MAX_PAIRS
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def require_aggregate_pair_ledger_bound(cls, data: object) -> object:
+        """Cap the aggregate source-pair ledger before any parsing.
+
+        Each ``pairs`` dimension is capped separately, so an authored result
+        could still carry ``MAX_PAIRS`` entries times ``MAX_PAIRS`` pairs.
+        A valid profile contains only ``MAX_PAIRS`` source pairs in total,
+        so the raw aggregate count is checked here — before Pydantic
+        constructs every nested entry — to keep accepted-parse memory tied
+        to the mathematical bound.
+        """
+
+        if not isinstance(data, dict):
+            return data
+        lines = data.get("lines")
+        if not isinstance(lines, (list, tuple)):
+            return data
+        total = 0
+        for line in lines:
+            if not isinstance(line, dict):
+                continue
+            pairs = line.get("pairs")
+            if isinstance(pairs, (list, tuple)):
+                total += len(pairs)
+                if total > MAX_PAIRS:
+                    raise ValueError(
+                        "the aggregate source-pair ledger exceeds the "
+                        f"{MAX_PAIRS}-pair profile bound"
+                    )
+        return data
+
     @model_validator(mode="after")
     def require_consistent_profile(self) -> Self:  # noqa: C901
         from itertools import combinations

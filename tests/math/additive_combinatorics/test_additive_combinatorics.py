@@ -377,3 +377,34 @@ class TestOrderedDifferenceProfile:
     def test_accepts_64_digit_coordinate(self):
         vector = IntegerVector(coordinates=("-" + "1" * 64,))
         assert vector.coordinates == ("-" + "1" * 64,)
+
+
+class TestOrderedDifferenceProfileTransportBound:
+    def test_extreme_coordinates_produce_canonical_string_differences(self):
+        """Differences beyond the JSON safe-integer range stay canonical.
+
+        Vectors at opposite ends of the interoperable integer range differ by
+        2^54 - 2 = 18014398509481982; the profile encodes it as a canonical
+        integer string so the accepted result never fails transport.
+        """
+        result = compute_ordered_difference_profile(
+            OrderedDifferenceProfileRequest(
+                vectors=IntegerVectorSet(
+                    vectors=(
+                        IntegerVector(coordinates=("9007199254740991",)),
+                        IntegerVector(coordinates=("-9007199254740991",)),
+                    ),
+                ),
+            )
+        )
+        encoded = {
+            coordinate
+            for cls in result.classes
+            for coordinate in cls.difference.coordinates
+        }
+        assert "18014398509481982" in encoded
+        OrderedDifferenceProfileResult.model_validate(result.model_dump(mode="json"))
+
+    def test_coordinate_bound_is_enforced(self):
+        with pytest.raises(ValidationError):
+            IntegerVector(coordinates=("1" * 65,))

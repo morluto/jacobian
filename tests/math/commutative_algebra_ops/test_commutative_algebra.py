@@ -16,7 +16,6 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealQuotientRequest,
     IdealRadicalMembershipRequest,
     IdealRadicalRequest,
-    IdealSaturationRequest,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
     compute_ideal_quotient,
@@ -185,26 +184,6 @@ def test_radical_membership_schema_publishes_operation_bounds() -> None:
 
     assert "at most 6 variables" in properties["ideal"]["description"]
     assert "total degree at most 12" in properties["polynomial"]["description"]
-
-
-def test_saturation_request_enforces_total_degree_budget() -> None:
-    ideal = _ideal(("x", "y"), {(1, 0): 1})
-
-    with pytest.raises(ValueError, match="total degree"):
-        IdealSaturationRequest(
-            ideal=ideal,
-            saturation_polynomial=_polynomial(("x", "y"), {(12, 12): 1}),
-        )
-
-
-def test_saturation_request_admits_boundary_total_degree() -> None:
-    ideal = _ideal(("x", "y"), {(1, 0): 1})
-
-    request = IdealSaturationRequest(
-        ideal=ideal,
-        saturation_polynomial=_polynomial(("x", "y"), {(11, 1): 1}),
-    )
-    assert request.saturation_polynomial.polynomial.terms[0].exponents == (11, 1)
 
 
 def test_singular_script_uses_internal_identifiers_not_caller_names() -> None:

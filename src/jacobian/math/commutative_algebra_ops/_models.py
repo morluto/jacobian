@@ -129,6 +129,51 @@ class IdealRadicalMembershipRequest(StrictModel):
         return self
 
 
+class IdealSaturationRequest(StrictModel):
+    """Compute ``I : <d>^infinity`` for a bounded ideal and one polynomial."""
+
+    ideal: RationalPolynomialIdeal = Field(
+        description=(
+            "An ideal in at most 6 variables with at most 16 generators and "
+            "256 aggregate terms; generator total degree is at most 12 and "
+            "coefficient components are at most 128 digits."
+        )
+    )
+    denominator: RationalPolynomial = Field(
+        description=(
+            "A single nonzero polynomial d in the dividend's exact ordered "
+            "ring, with at most 256 terms, total degree at most 12, and "
+            "coefficient components at most 128 digits."
+        )
+    )
+    resource_budget: IdealComputationBudget = Field(
+        default_factory=IdealComputationBudget
+    )
+
+    @model_validator(mode="after")
+    def require_backend_domain(self) -> Self:
+        _require_ideal_budget(self.ideal, label="ideal")
+        if self.denominator.variables != self.ideal.variables:
+            raise ValueError("saturation operands must use the same ordered ring")
+        if not self.denominator.polynomial.terms:
+            raise ValueError("saturation denominator must be nonzero")
+        require_polynomial_budget(
+            self.denominator,
+            maximum_terms=MAX_INPUT_TERMS,
+            maximum_exponent=MAX_INPUT_EXPONENT,
+            maximum_coefficient_digits=MAX_COEFFICIENT_DIGITS,
+            label="saturation denominator",
+        )
+        if any(
+            sum(term.exponents) > MAX_INPUT_EXPONENT
+            for term in self.denominator.polynomial.terms
+        ):
+            raise ValueError(
+                f"saturation denominator exceeds total degree {MAX_INPUT_EXPONENT}"
+            )
+        return self
+
+
 class IdealQuotientRequest(StrictModel):
     """Compute ``(I : J)`` for bounded ideals in one ``QQ`` ring."""
 
@@ -214,51 +259,6 @@ class IdealQuotientResult(StrictModel):
         return self
 
 
-class IdealSaturationRequest(StrictModel):
-    """Compute 'I : <d>^infinity' for a bounded ideal and a polynomial."""
-
-    ideal: RationalPolynomialIdeal = Field(
-        description=(
-            'An ideal in at most 6 variables with at most 16 generators and '
-            '256 aggregate terms; generator total degree is at most 12 and '
-            'coefficient components are at most 128 digits.'
-        )
-    )
-    saturation_polynomial: RationalPolynomial = Field(
-        description=(
-            'A single polynomial d in the ideal ring, with '
-            'at most 256 terms, total degree at most 12, and coefficient '
-            'components at most 128 digits.'
-        )
-    )
-    resource_budget: IdealComputationBudget = Field(
-        default_factory=IdealComputationBudget
-    )
-
-    @model_validator(mode="after")
-    def require_backend_domain(self) -> Self:
-        _require_ideal_budget(self.ideal, label="ideal")
-        require_polynomial_budget(
-            self.saturation_polynomial,
-            maximum_terms=MAX_INPUT_TERMS,
-            maximum_exponent=MAX_INPUT_EXPONENT,
-            maximum_coefficient_digits=MAX_COEFFICIENT_DIGITS,
-            label="saturation polynomial",
-        )
-        if any(
-            sum(term.exponents) > MAX_INPUT_EXPONENT
-            for term in self.saturation_polynomial.polynomial.terms
-        ):
-            raise ValueError(
-                f"saturation polynomial exceeds total degree {MAX_INPUT_EXPONENT}"
-            )
-        if self.saturation_polynomial.variables != self.ideal.variables:
-            raise ValueError(
-                "saturation polynomial must use the ideal's ordered ring"
-            )
-        return self
-
-
 class IdealSaturationResult(StrictModel):
     outcome: IdealExecutionOutcome
     saturation: RationalPolynomialIdeal | None = None
@@ -278,7 +278,9 @@ class IdealSaturationResult(StrictModel):
             or self.backend_version is not None
             or not self.detail
         ):
-            raise ValueError("failed saturation computation requires only a safe detail")
+            raise ValueError(
+                "failed saturation computation requires only a safe detail"
+            )
         return self
 
 

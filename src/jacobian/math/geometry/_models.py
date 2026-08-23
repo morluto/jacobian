@@ -3,12 +3,279 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from itertools import combinations
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+
+MAX_CONFIGURATION_POINTS = 32
+MAX_COORDINATE_DIGITS = 256
+# Serialized-output budget for the circumradius profile, kept below the 10 MiB
+# transport envelope to leave room for request and JSON overhead.
+_MAX_PROFILE_OUTPUT_CHARS = 8_000_000
+# Joint work bound for the exhaustive general-position search.  The sweep
+# performs one exact 4x4 determinant per point quadruple, so the determinant
+# count grows as C(n,4) while every Fraction multiplication grows
+# quadratically in coordinate digit count; the admitted work proxy is
+# ``C(n,4) * max_digits**2`` (measured reference: 32 points x 32 digits
+# costs about 36M proxy units and roughly 16s, so a 1M-unit budget keeps an
+# accepted request well under a second for both the search and its
+# source-binding replay).
+_MAX_GENERAL_POSITION_DETERMINANT_WORK = 1_000_000
+
+
+def _require_bounded_point(point: RationalPoint2D) -> None:
+    require_bounded_rational(
+        point.x, max_digits=MAX_COORDINATE_DIGITS, label="point x-coordinate"
+    )
+    require_bounded_rational(
+        point.y, max_digits=MAX_COORDINATE_DIGITS, label="point y-coordinate"
+    )
+
+
+def _require_bounded_configuration(points: tuple[RationalPoint2D, ...]) -> None:
+    for point in points:
+        _require_bounded_point(point)
+
+
+def _max_coordinate_digits(points: tuple[RationalPoint2D, ...]) -> int:
+    return max(
+        max(
+            len(p.x.num.lstrip("-")),
+            len(p.x.den),
+            len(p.y.num.lstrip("-")),
+            len(p.y.den),
+        )
+        for p in points
+    )
+
+
+def _require_general_position_work_bound(
+    points: tuple[RationalPoint2D, ...],
+) -> None:
+    n = len(points)
+    if n == 0:
+        return
+    max_digits = _max_coordinate_digits(points)
+    quadruples = n * (n - 1) * (n - 2) * (n - 3) // 24
+    work = quadruples * max_digits * max_digits
+    if work > _MAX_GENERAL_POSITION_DETERMINANT_WORK:
+        raise ValueError(
+            f"general-position search with {n} points and {max_digits}-digit "
+            f"coordinates exceeds the exhaustive work bound "
+            f"(C(n,4)*digits^2={work} > "
+            f"{_MAX_GENERAL_POSITION_DETERMINANT_WORK}); reduce point count "
+            "or coordinate size"
+        )
+
+
+def _require_circumradius_output_bound(points: tuple[RationalPoint2D, ...]) -> None:
+    """Bound the serialized profile size before execution.
+
+    Derivation from exact rational growth with ``d`` = max coordinate digits:
+    a coordinate difference has numerator and denominator of at most ``2d``
+    digits; a squared length reaches ``8d`` digits on each side; the squared
+    circumradius ``|AB||BC||CA| / (2*cross)^2`` therefore carries at most
+    ``40d`` digits in its numerator and ``40d`` in its denominator. Allowing
+    80 characters of sign/slash/JSON overhead per entry gives the conservative
+    per-entry estimate ``80*d + 80`` characters.
+    """
+
+    n = len(points)
+    if n == 0:
+        return
+    max_digits = _max_coordinate_digits(points)
+    triples = n * (n - 1) * (n - 2) // 6
+    estimated_chars = triples * (80 * max_digits + 80)
+    if estimated_chars > _MAX_PROFILE_OUTPUT_CHARS:
+        raise ValueError(
+            f"circumradius profile for {n} points with {max_digits}-digit "
+            f"coordinates can serialize up to {estimated_chars} characters "
+            f"(worst-case rational growth), exceeding the "
+            f"{_MAX_PROFILE_OUTPUT_CHARS}-character output budget; reduce "
+            "point count or coordinate size"
+        )
+
+
+def _is_collinear_frac(
+    a: tuple[Fraction, Fraction],
+    b: tuple[Fraction, Fraction],
+    c: tuple[Fraction, Fraction],
+) -> bool:
+    return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]) == 0
+
+
+def _det3_frac(m: tuple[tuple[Fraction, ...], ...]) -> Fraction:
+    return (
+        m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+        - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+        + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
+    )
+
+
+def _det4_frac(m: tuple[tuple[Fraction, ...], ...]) -> Fraction:
+    result = Fraction(0)
+    for col in range(4):
+        sub = tuple(
+            tuple(row[col2] for col2 in range(4) if col2 != col) for row in m[1:]
+        )
+        cofactor = _det3_frac(sub)
+        sign = 1 if col % 2 == 0 else -1
+        result += sign * m[0][col] * cofactor
+    return result
+
+
+def _expected_collinear_indices(
+    pts: list[tuple[Fraction, Fraction]],
+) -> set[tuple[int, int, int]]:
+    result: set[tuple[int, int, int]] = set()
+    for i, j, k in combinations(range(len(pts)), 3):
+        if _is_collinear_frac(pts[i], pts[j], pts[k]):
+            result.add((i, j, k))
+    return result
+
+
+def _expected_concyclic_indices(
+    pts: list[tuple[Fraction, Fraction]],
+    collinear_set: set[tuple[int, int, int]],
+) -> set[tuple[int, int, int, int]]:
+    result: set[tuple[int, int, int, int]] = set()
+    n = len(pts)
+    for i, j, k, m in combinations(range(n), 4):
+        if (
+            (i, j, k) in collinear_set
+            or (i, j, m) in collinear_set
+            or (i, k, m) in collinear_set
+            or (j, k, m) in collinear_set
+        ):
+            continue
+        rows = tuple(
+            (px * px + py * py, px, py, Fraction(1))
+            for px, py in (pts[i], pts[j], pts[k], pts[m])
+        )
+        if _det4_frac(rows) == 0:
+            result.add((i, j, k, m))
+    return result
+
+
+def _check_witness_sorted_distinct(
+    indices: tuple[int, ...], n: int, expected: int, label: str
+) -> None:
+    if len(indices) != expected or len(set(indices)) != expected:
+        raise ValueError(f"{label} indices must be {expected} distinct values")
+    if indices != tuple(sorted(indices)):
+        raise ValueError(f"{label} indices must be sorted")
+    if any(i >= n for i in indices):
+        raise ValueError("index out of range")
+
+
+def _validate_general_position_points(
+    points: tuple[RationalPoint2D, ...], num_points: int
+) -> None:
+    keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in points)
+    if len(keys) != len(set(keys)):
+        raise ValueError("point-set coordinates must be unique")
+    if num_points != len(points):
+        raise ValueError("num_points must equal len(points)")
+
+
+def _validate_general_position_witnesses(
+    collinear: tuple[CollinearTripleWitness, ...],
+    concyclic: tuple[ConcyclicQuadrupleWitness, ...],
+    has_collinear: bool,
+    has_concyclic: bool,
+    n: int,
+) -> None:
+    for triple in collinear:
+        _check_witness_sorted_distinct(triple.indices, n, 3, "collinear triple")
+    for quad in concyclic:
+        _check_witness_sorted_distinct(quad.indices, n, 4, "concyclic quadruple")
+    if has_collinear != bool(collinear):
+        raise ValueError("has_collinear_triple must match collinear_triples")
+    if has_concyclic != bool(concyclic):
+        raise ValueError("has_concyclic_quadruple must match concyclic_quadruples")
+    if tuple(sorted(collinear, key=lambda w: w.indices)) != collinear:
+        raise ValueError("collinear_triples must be sorted lexicographically")
+    if len({w.indices for w in collinear}) != len(collinear):
+        raise ValueError("collinear_triples must be unique")
+    if tuple(sorted(concyclic, key=lambda w: w.indices)) != concyclic:
+        raise ValueError("concyclic_quadruples must be sorted lexicographically")
+    if len({w.indices for w in concyclic}) != len(concyclic):
+        raise ValueError("concyclic_quadruples must be unique")
+
+
+def _validate_general_position_binding(
+    points: tuple[RationalPoint2D, ...],
+    collinear: tuple[CollinearTripleWitness, ...],
+    concyclic: tuple[ConcyclicQuadrupleWitness, ...],
+) -> None:
+    pts = [(p.x.as_fraction(), p.y.as_fraction()) for p in points]
+    expected_collinear = _expected_collinear_indices(pts)
+    actual_collinear = {w.indices for w in collinear}
+    if actual_collinear != expected_collinear:
+        raise ValueError(
+            "collinear_triples must exactly match the configuration's collinear triples"
+        )
+    expected_concyclic = _expected_concyclic_indices(pts, expected_collinear)
+    actual_concyclic = {w.indices for w in concyclic}
+    if actual_concyclic != expected_concyclic:
+        raise ValueError(
+            "concyclic_quadruples must exactly match the configuration's concyclic quadruples "
+            "(excluding collinear quadruples)"
+        )
+
+
+def _validate_circumradius_entries_basic(
+    entries: tuple[CircumradiusTripleEntry, ...], n: int
+) -> set[tuple[int, int, int]]:
+    seen: set[tuple[int, int, int]] = set()
+    for e in entries:
+        if e.indices in seen:
+            raise ValueError("duplicate triple in circumradius profile")
+        seen.add(e.indices)
+        if any(i >= n for i in e.indices):
+            raise ValueError("index out of range")
+    if tuple(sorted(entries, key=lambda e: e.indices)) != entries:
+        raise ValueError("entries must be sorted lexicographically")
+    expected = set(combinations(range(n), 3))
+    if seen != expected:
+        raise ValueError("entries must cover exactly C(n,3) triples")
+    return seen
+
+
+def _validate_circumradius_binding(
+    points: tuple[RationalPoint2D, ...],
+    entries: tuple[CircumradiusTripleEntry, ...],
+) -> None:
+    pts = [(p.x.as_fraction(), p.y.as_fraction()) for p in points]
+    for e in entries:
+        i, j, k = e.indices
+        ax, ay = pts[i]
+        bx, by = pts[j]
+        cx, cy = pts[k]
+        cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+        is_deg = cross == 0
+        if e.is_degenerate != is_deg:
+            raise ValueError("is_degenerate must match collinearity")
+        if is_deg:
+            if e.radius_squared is not None:
+                raise ValueError("degenerate triple cannot have a radius")
+        else:
+            if e.radius_squared is None:
+                raise ValueError("non-degenerate triple must have a radius")
+            ab_sq = (bx - ax) ** 2 + (by - ay) ** 2
+            bc_sq = (cx - bx) ** 2 + (cy - by) ** 2
+            ca_sq = (ax - cx) ** 2 + (ay - cy) ** 2
+            r_sq = Fraction(ab_sq * bc_sq * ca_sq) / Fraction(4 * cross * cross)
+            expected = CanonicalRational.from_fraction(r_sq)
+            require_bounded_rational(
+                expected, max_digits=MAX_COORDINATE_DIGITS * 40, label="circumradius"
+            )
+            if e.radius_squared != expected:
+                raise ValueError("radius_squared must match exact circumradius")
 
 
 class RationalPoint2D(StrictModel):
@@ -439,375 +706,157 @@ class ConvexPolygonTriangulationResult(StrictModel):
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
 
-class LabelledPoint2D(StrictModel):
-    """A labelled rational point in the plane."""
+# ---------------------------------------------------------------------------
+# Configuration-level operations (issues #2107, #2106)
+# ---------------------------------------------------------------------------
 
-    label: str = Field(min_length=1, max_length=64)
-    point: RationalPoint2D
+
+class GeneralPositionRequest(StrictModel):
+    """Search a bounded point configuration for collinear triples and concyclic quadruples.
+
+    Each rational coordinate is bounded to at most 256 digits in numerator and
+    denominator (operation-specific, stricter than the global 32,768-digit
+    CanonicalRational limit). The exhaustive determinant work is coupled to
+    both the combinatorial point count and rational complexity:
+    ``C(n,4) * max_digits**2 <= 1,000,000`` keeps both the search and its
+    source-binding replay within the bounded-work envelope.
+    """
+
+    points: tuple[RationalPoint2D, ...] = Field(
+        min_length=3,
+        max_length=MAX_CONFIGURATION_POINTS,
+        description=(
+            "Bounded point configuration with 3..32 points; each rational coordinate "
+            f"(numerator/denominator) is bounded to at most {MAX_COORDINATE_DIGITS} digits "
+            "(operation-specific limit, stricter than CanonicalRational's 32768-digit "
+            "global limit); additionally C(n,4)*max_digits^2 <= 1000000 bounds the "
+            "exhaustive determinant work"
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_unique(self) -> Self:
+        _require_bounded_configuration(self.points)
+        _require_general_position_work_bound(self.points)
+        keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
+        if len(keys) != len(set(keys)):
+            raise ValueError("point-set coordinates must be unique")
+        return self
+
+
+class CollinearTripleWitness(StrictModel):
+    indices: tuple[int, int, int]
+
+
+class ConcyclicQuadrupleWitness(StrictModel):
+    indices: tuple[int, int, int, int]
+
+
+class GeneralPositionResult(StrictModel):
+    """Complete search result for collinear triples and concyclic quadruples, bound to its source points."""
+
+    points: tuple[RationalPoint2D, ...] = Field(
+        min_length=3, max_length=MAX_CONFIGURATION_POINTS
+    )
+    num_points: int = Field(ge=0)
+    has_collinear_triple: bool
+    has_concyclic_quadruple: bool
+    collinear_triples: tuple[CollinearTripleWitness, ...] = Field(default=())
+    concyclic_quadruples: tuple[ConcyclicQuadrupleWitness, ...] = Field(default=())
+
+    @model_validator(mode="after")
+    def require_canonical(self) -> Self:
+        _require_bounded_configuration(self.points)
+        _require_general_position_work_bound(self.points)
+        _validate_general_position_points(self.points, self.num_points)
+        _validate_general_position_witnesses(
+            self.collinear_triples,
+            self.concyclic_quadruples,
+            self.has_collinear_triple,
+            self.has_concyclic_quadruple,
+            len(self.points),
+        )
+        _validate_general_position_binding(
+            self.points, self.collinear_triples, self.concyclic_quadruples
+        )
+        return self
 
 
 class CircumradiusProfileRequest(StrictModel):
-    """A bounded labelled rational planar point configuration."""
+    """Compute circumradius data for every unordered triple in a point configuration.
 
-    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=64)
+    Each rational coordinate is bounded to at most 256 digits. The serialized
+    profile is bounded before execution by worst-case rational growth: with
+    ``d`` = max coordinate digits, each squared circumradius can carry ``40d``
+    digits in numerator and denominator, so the request is admitted only when
+    ``C(n,3) * (80*d + 80)`` characters stay within the 8,000,000-character
+    output budget (under the 10 MiB transport envelope).
+    """
+
+    points: tuple[RationalPoint2D, ...] = Field(
+        min_length=3,
+        max_length=MAX_CONFIGURATION_POINTS,
+        description=(
+            "Bounded point configuration with 3..32 points; each rational coordinate "
+            f"is bounded to at most {MAX_COORDINATE_DIGITS} digits (operation-specific, "
+            "stricter than CanonicalRational's 32768-digit limit); additionally "
+            "C(n,3)*(80*max_digits+80) characters of worst-case profile size must "
+            "stay within the 8,000,000-character output budget"
+        ),
+    )
 
     @model_validator(mode="after")
-    def require_unique_labels_and_coordinates(self) -> Self:
-        labels = tuple(item.label for item in self.points)
-        if len(labels) != len(set(labels)):
-            raise ValueError("point labels must be unique")
-        keys = tuple(
-            (
-                item.point.x.num,
-                item.point.x.den,
-                item.point.y.num,
-                item.point.y.den,
-            )
-            for item in self.points
-        )
+    def require_unique(self) -> Self:
+        _require_bounded_configuration(self.points)
+        _require_circumradius_output_bound(self.points)
+        keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
-            raise ValueError("point coordinates must be unique")
+            raise ValueError("point-set coordinates must be unique")
         return self
 
 
 class CircumradiusTripleEntry(StrictModel):
-    """Circumradius data for one unordered triple of points."""
+    """One triple and its circumradius disposition."""
 
-    labels: tuple[str, str, str]
-    indices: tuple[StrictInt, StrictInt, StrictInt]
-    collinear: bool
-    squared_circumradius: CanonicalRational | None = None
+    indices: tuple[int, int, int]
+    is_degenerate: bool
+    radius_squared: CanonicalRational | None = None
 
     @model_validator(mode="after")
-    def bind_collinear_to_value(self) -> Self:
-        if self.collinear is (self.squared_circumradius is not None):
-            raise ValueError(
-                "exactly a collinear triple has no squared circumradius"
-            )
-        if (
-            self.squared_circumradius is not None
-            and self.squared_circumradius.as_fraction() <= 0
-        ):
-            raise ValueError("squared circumradius must be positive")
+    def require_canonical(self) -> Self:
+        idx = self.indices
+        if len(idx) != 3 or len(set(idx)) != 3:
+            raise ValueError("triple indices must be 3 distinct values")
+        if idx != tuple(sorted(idx)):
+            raise ValueError("triple indices must be sorted")
+        if self.is_degenerate and self.radius_squared is not None:
+            raise ValueError("degenerate triple cannot have a radius")
+        if not self.is_degenerate and self.radius_squared is None:
+            raise ValueError("non-degenerate triple must have a radius")
         return self
 
 
 class CircumradiusProfileResult(StrictModel):
-    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=64)
-    point_count: StrictInt = Field(ge=3, le=64)
-    triple_count: StrictInt = Field(ge=1, le=41664)
-    entries: tuple[CircumradiusTripleEntry, ...] = Field(min_length=1)
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+    """Complete circumradius profile for every unordered triple, bound to its source points."""
 
-    @model_validator(mode="after")
-    def require_complete_profile(self) -> Self:
-        from itertools import combinations
-
-        if self.point_count != len(self.points):
-            raise ValueError("point_count must match the retained points")
-        # Validate uniqueness as in request
-        labels = tuple(item.label for item in self.points)
-        if len(labels) != len(set(labels)):
-            raise ValueError("point labels must be unique")
-        keys = tuple(
-            (item.point.x.num, item.point.x.den, item.point.y.num, item.point.y.den)
-            for item in self.points
-        )
-        if len(keys) != len(set(keys)):
-            raise ValueError("point coordinates must be unique")
-        expected = tuple(combinations(range(self.point_count), 3))
-        if len(self.entries) != len(expected):
-            raise ValueError("circumradius profile must be complete")
-        if self.triple_count != len(expected):
-            raise ValueError(
-                "triple_count must equal C(point_count, 3)"
-            )
-        indices = tuple(entry.indices for entry in self.entries)
-        if indices != expected:
-            raise ValueError(
-                "entries must carry the canonical C(point_count, 3) triple set"
-            )
-        # Replay each entry's exact squared circumradius
-        coords: list[tuple[Fraction, Fraction]] = [
-            (item.point.x.as_fraction(), item.point.y.as_fraction()) for item in self.points
-        ]
-        for entry, (i, j, k) in zip(self.entries, expected):
-            (ax, ay), (bx, by), (cx, cy) = coords[i], coords[j], coords[k]
-            if entry.labels != (self.points[i].label, self.points[j].label, self.points[k].label):
-                raise ValueError("entry labels must match the source points")
-            if entry.indices != (i, j, k):
-                raise ValueError("entry indices must match the canonical triple")
-            cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
-            if cross == 0:
-                if not entry.collinear or entry.squared_circumradius is not None:
-                    raise ValueError("collinear triple must have no circumradius")
-            else:
-                if entry.collinear or entry.squared_circumradius is None:
-                    raise ValueError("noncollinear triple must carry a circumradius")
-                dab = (ax - bx) ** 2 + (ay - by) ** 2
-                dbc = (bx - cx) ** 2 + (by - cy) ** 2
-                dac = (ax - cx) ** 2 + (ay - cy) ** 2
-                expected_radius = (dab * dbc * dac) / (4 * cross * cross)
-                if entry.squared_circumradius.as_fraction() != expected_radius:
-                    raise ValueError("squared circumradius must match the exact formula")
-        return self
-
-
-class ForbiddenLabelledPoint(StrictModel):
-    """A labelled rational point in the affine plane."""
-
-    label: str = Field(min_length=1, max_length=64)
-    point: RationalPoint2D
-
-
-class ForbiddenConfiguration(StrictModel):
-    """A finite set of labelled rational planar points."""
-
-    points: tuple[ForbiddenLabelledPoint, ...] = Field(min_length=1, max_length=128)
-
-    @model_validator(mode="after")
-    def require_unique_labels_and_coords(self) -> Self:
-        labels = tuple(item.label for item in self.points)
-        if len(labels) != len(set(labels)):
-            raise ValueError("configuration point labels must be unique")
-        keys = tuple(_point_key(item.point) for item in self.points)
-        if len(keys) != len(set(keys)):
-            raise ValueError("configuration point coordinates must be unique")
-        return self
-
-
-class ForbiddenPatternsRequest(StrictModel):
-    """A labelled rational planar point configuration to screen."""
-
-    configuration: ForbiddenConfiguration
-
-
-class CollinearTriple(StrictModel):
-    """A triple of configuration point indices lying on one line."""
-
-    first: StrictInt = Field(ge=0, le=127)
-    second: StrictInt = Field(ge=0, le=127)
-    third: StrictInt = Field(ge=0, le=127)
-
-    @model_validator(mode="after")
-    def require_strictly_ascending(self) -> Self:
-        if not (self.first < self.second < self.third):
-            raise ValueError("collinear triple indices must be strictly ascending")
-        return self
-
-
-class ConcyclicQuadruple(StrictModel):
-    """A quadruple of configuration point indices lying on one circle."""
-
-    first: StrictInt = Field(ge=0, le=127)
-    second: StrictInt = Field(ge=0, le=127)
-    third: StrictInt = Field(ge=0, le=127)
-    fourth: StrictInt = Field(ge=0, le=127)
-
-    @model_validator(mode="after")
-    def require_strictly_ascending(self) -> Self:
-        if not (self.first < self.second < self.third < self.fourth):
-            raise ValueError("concyclic quadruple indices must be strictly ascending")
-        return self
-
-
-def _replay_collinear_prefix(
-    xy: list[tuple[Fraction, Fraction]],
-) -> tuple[bool, int, CollinearTriple | None]:
-    """Replay the lexicographic collinear-triple scan and its stopping prefix."""
-    from itertools import combinations
-
-    checked = 0
-    for i, j, k in combinations(range(len(xy)), 3):
-        checked += 1
-        if (
-            (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1])
-            - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
-            == 0
-        ):
-            return True, checked, CollinearTriple(first=i, second=j, third=k)
-    return False, checked, None
-
-
-def _replay_concyclic_prefix(
-    xy: list[tuple[Fraction, Fraction]],
-) -> tuple[bool, int, ConcyclicQuadruple | None]:
-    """Replay the lexicographic concyclic-quadruple scan and its stopping prefix."""
-    from itertools import combinations
-
-    checked = 0
-    for i, j, k, ell in combinations(range(len(xy)), 4):
-        checked += 1
-        # Exclude collinear quadruples: see _operations.forbidden_patterns
-        cross_ijk = (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
-        cross_ijl = (xy[j][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
-        cross_ikl = (xy[k][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[k][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
-        cross_jkl = (xy[k][0] - xy[j][0]) * (xy[ell][1] - xy[j][1]) - (xy[k][1] - xy[j][1]) * (xy[ell][0] - xy[j][0])
-        if cross_ijk == 0 and cross_ijl == 0 and cross_ikl == 0 and cross_jkl == 0:
-            continue
-        m = [
-            [x * x + y * y, x, y, 1]
-            for x, y in (xy[i], xy[j], xy[k], xy[ell])
-        ]
-        det = (
-            m[0][0]
-            * (
-                m[1][1] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
-                - m[1][2] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
-                + m[1][3] * (m[2][1] * m[3][2] - m[2][2] * m[3][1])
-            )
-            - m[0][1]
-            * (
-                m[1][0] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
-                - m[1][2] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
-                + m[1][3] * (m[2][0] * m[3][2] - m[2][2] * m[3][0])
-            )
-            + m[0][2]
-            * (
-                m[1][0] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
-                - m[1][1] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
-                + m[1][3] * (m[2][0] * m[3][1] - m[2][1] * m[3][0])
-            )
-            - m[0][3]
-            * (
-                m[1][0] * (m[2][1] * m[3][2] - m[2][2] * m[3][1])
-                - m[1][1] * (m[2][0] * m[3][2] - m[2][2] * m[3][0])
-                + m[1][2] * (m[2][0] * m[3][1] - m[2][1] * m[3][0])
-            )
-        )
-        if det == 0:
-            return (
-                True,
-                checked,
-                ConcyclicQuadruple(first=i, second=j, third=k, fourth=ell),
-            )
-    return False, checked, None
-
-
-def _require_collinear_witness(
-    xy: list[tuple[Fraction, Fraction]],
-    witness: CollinearTriple,
-    point_count: int,
-) -> None:
-    if witness.third >= point_count:
-        raise ValueError("collinear triple index exceeds configuration")
-    i, j, k = witness.first, witness.second, witness.third
-    if (
-        (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1])
-        - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
-        != 0
-    ):
-        raise ValueError("collinear_triple witness is not collinear")
-
-
-def _require_concyclic_witness(
-    xy: list[tuple[Fraction, Fraction]],
-    witness: ConcyclicQuadruple,
-    point_count: int,
-) -> None:
-    if witness.fourth >= point_count:
-        raise ValueError("concyclic quadruple index exceeds configuration")
-    i, j, k, ell = (
-        witness.first,
-        witness.second,
-        witness.third,
-        witness.fourth,
+    points: tuple[RationalPoint2D, ...] = Field(
+        min_length=3, max_length=MAX_CONFIGURATION_POINTS
     )
-    cross_ijk = (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
-    cross_ijl = (xy[j][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
-    cross_ikl = (xy[k][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[k][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
-    cross_jkl = (xy[k][0] - xy[j][0]) * (xy[ell][1] - xy[j][1]) - (xy[k][1] - xy[j][1]) * (xy[ell][0] - xy[j][0])
-    if cross_ijk == 0 and cross_ijl == 0 and cross_ikl == 0 and cross_jkl == 0:
-        raise ValueError("concyclic witness is collinear")
-    si = xy[i][0] * xy[i][0] + xy[i][1] * xy[i][1]
-    sj = xy[j][0] * xy[j][0] + xy[j][1] * xy[j][1]
-    sk = xy[k][0] * xy[k][0] + xy[k][1] * xy[k][1]
-    sl = xy[ell][0] * xy[ell][0] + xy[ell][1] * xy[ell][1]
-    m = [
-        [si, xy[i][0], xy[i][1], 1],
-        [sj, xy[j][0], xy[j][1], 1],
-        [sk, xy[k][0], xy[k][1], 1],
-        [sl, xy[ell][0], xy[ell][1], 1],
-    ]
-    det = (
-        m[0][0] * (m[1][1] * (m[2][2] * m[3][3] - m[2][3] * m[3][2]) - m[1][2] * (m[2][1] * m[3][3] - m[2][3] * m[3][1]) + m[1][3] * (m[2][1] * m[3][2] - m[2][2] * m[3][1]))
-        - m[0][1] * (m[1][0] * (m[2][2] * m[3][3] - m[2][3] * m[3][2]) - m[1][2] * (m[2][0] * m[3][3] - m[2][3] * m[3][0]) + m[1][3] * (m[2][0] * m[3][2] - m[2][2] * m[3][0]))
-        + m[0][2] * (m[1][0] * (m[2][1] * m[3][3] - m[2][3] * m[3][1]) - m[1][1] * (m[2][0] * m[3][3] - m[2][3] * m[3][0]) + m[1][3] * (m[2][0] * m[3][1] - m[2][1] * m[3][0]))
-        - m[0][3] * (m[1][0] * (m[2][1] * m[3][2] - m[2][2] * m[3][1]) - m[1][1] * (m[2][0] * m[3][2] - m[2][2] * m[3][0]) + m[1][2] * (m[2][0] * m[3][1] - m[2][1] * m[3][0]))
-    )
-    if det != 0:
-        raise ValueError("concyclic witness is not concyclic")
-
-
-class ForbiddenPatternsResult(StrictModel):
-    """Result of screening a configuration for forbidden patterns.
-
-    Retains its source configuration so both predicates replay against the
-    exact points instead of trusting independently authored booleans, and the
-    reported checked counts must equal the exact lexicographic stopping
-    prefixes of that replay.
-    """
-
-    configuration: ForbiddenConfiguration
-    point_count: StrictInt = Field(ge=1, le=128)
-    has_collinear_triple: bool
-    has_concyclic_quadruple: bool
-    collinear_triple: CollinearTriple | None = None
-    concyclic_quadruple: ConcyclicQuadruple | None = None
-    checked_triples: StrictInt = Field(ge=0)
-    checked_quadruples: StrictInt = Field(ge=0)
+    num_points: int = Field(ge=0)
+    entries: tuple[CircumradiusTripleEntry, ...] = Field(default=())
 
     @model_validator(mode="after")
-    def bind_witnesses(self) -> Self:
-        if self.point_count != len(self.configuration.points):
-            raise ValueError("point_count must match the source configuration")
-
-        xy = [
-            (item.point.x.as_fraction(), item.point.y.as_fraction())
-            for item in self.configuration.points
-        ]
-
-        recomputed_collinear, checked_triples, first_triple = (
-            _replay_collinear_prefix(xy)
-        )
-        recomputed_concyclic, checked_quadruples, first_quadruple = (
-            _replay_concyclic_prefix(xy)
-        )
-        if (
-            self.has_collinear_triple != recomputed_collinear
-            or self.has_concyclic_quadruple != recomputed_concyclic
-        ):
-            raise ValueError(
-                "forbidden-pattern decisions must match an exact replay over "
-                "the retained configuration"
-            )
-        if self.checked_triples != checked_triples:
-            raise ValueError(
-                "checked_triples must equal the exact lexicographic scan "
-                "prefix over the retained configuration"
-            )
-        if self.checked_quadruples != checked_quadruples:
-            raise ValueError(
-                "checked_quadruples must equal the exact lexicographic scan "
-                "prefix over the retained configuration"
-            )
-        if self.has_collinear_triple is (self.collinear_triple is None):
-            raise ValueError("exactly a collinear triple carries one witness")
-        if self.has_concyclic_quadruple is (self.concyclic_quadruple is None):
-            raise ValueError("exactly a concyclic quadruple carries one witness")
-        # A witness must be the exact first one produced by the stopping
-        # scan: a later predicate-satisfying tuple would contradict the
-        # reported checked counts.
-        if self.collinear_triple is not None and self.collinear_triple != first_triple:
-            raise ValueError(
-                "collinear_triple must equal the first witness of the exact "
-                "lexicographic scan over the retained configuration"
-            )
-        if self.concyclic_quadruple is not None and (
-            self.concyclic_quadruple != first_quadruple
-        ):
-            raise ValueError(
-                "concyclic_quadruple must equal the first witness of the "
-                "exact lexicographic scan over the retained configuration"
-            )
+    def require_canonical(self) -> Self:
+        _require_bounded_configuration(self.points)
+        _require_circumradius_output_bound(self.points)
+        keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
+        if len(keys) != len(set(keys)):
+            raise ValueError("point-set coordinates must be unique")
+        n = len(self.points)
+        if self.num_points != n:
+            raise ValueError("num_points must equal len(points)")
+        if len(self.entries) != n * (n - 1) * (n - 2) // 6:
+            raise ValueError("entries must cover exactly C(n,3) triples")
+        _validate_circumradius_entries_basic(self.entries, n)
+        _validate_circumradius_binding(self.points, self.entries)
         return self

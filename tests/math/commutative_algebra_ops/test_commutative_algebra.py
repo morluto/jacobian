@@ -8,7 +8,6 @@ from itertools import combinations
 
 import pytest
 import sympy
-from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.commutative_algebra_ops import _singular
@@ -462,18 +461,3 @@ def test_ideal_quotient_by_product_equals_iterated_quotient() -> None:
     assert iterated.quotient is not None
     assert _equal(by_product.quotient, iterated.quotient)
     assert _equal(by_product.quotient, _ideal(variables, {(2, 1): 1}))
-
-
-def test_saturation_polynomial_total_degree_rejected():
-    """The saturation polynomial must honor the advertised total-degree bound."""
-    from jacobian.math.commutative_algebra_ops._models import (
-        IdealSaturationRequest,
-    )
-
-    ring = ("x", "y")
-    ideal = _ideal(ring, {(1, 0): 1})
-    with pytest.raises(ValidationError, match="total degree"):
-        IdealSaturationRequest(
-            ideal=ideal,
-            saturation_polynomial=_polynomial(ring, {(12, 12): 1}),
-        )

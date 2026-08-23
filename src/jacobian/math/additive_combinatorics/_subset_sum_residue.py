@@ -326,14 +326,39 @@ class SubsetSumResidueProfileResult(StrictModel):
         if not isinstance(value, Mapping):
             return value
 
-        source_shape = _raw_source_shape(value.get("source"))
+        prepared: dict[str, object] = dict(value)
+        raw_source = prepared.get("source")
+        if isinstance(raw_source, Mapping):
+            source = dict(raw_source)
+            source_values = source.get("values")
+            if isinstance(source_values, list):
+                source["values"] = tuple(source_values)
+            prepared["source"] = source
+        raw_counts = prepared.get("residue_counts")
+        if isinstance(raw_counts, list):
+            prepared["residue_counts"] = tuple(raw_counts)
+        raw_witnesses = prepared.get("residue_witnesses")
+        if isinstance(raw_witnesses, list):
+            witnesses: list[object] = []
+            for raw_witness in raw_witnesses:
+                if isinstance(raw_witness, Mapping):
+                    witness = dict(raw_witness)
+                    raw_indices = witness.get("indices")
+                    if isinstance(raw_indices, list):
+                        witness["indices"] = tuple(raw_indices)
+                    witnesses.append(witness)
+                else:
+                    witnesses.append(raw_witness)
+            prepared["residue_witnesses"] = tuple(witnesses)
+
+        source_shape = _raw_source_shape(prepared.get("source"))
         item_count = (
             source_shape[0]
             if source_shape is not None
             else MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS - 1
         )
         result_bytes = source_shape[1] if source_shape is not None else 1_024
-        raw_modulus = value.get("modulus")
+        raw_modulus = prepared.get("modulus")
         expected_rows = (
             raw_modulus
             if type(raw_modulus) is int
@@ -342,18 +367,18 @@ class SubsetSumResidueProfileResult(StrictModel):
         )
 
         result_bytes = _bound_raw_counts(
-            value.get("residue_counts"),
+            prepared.get("residue_counts"),
             expected_rows=expected_rows,
             item_count=item_count,
             result_bytes=result_bytes,
         )
         _bound_raw_witnesses(
-            value.get("residue_witnesses"),
+            prepared.get("residue_witnesses"),
             expected_rows=expected_rows,
             item_count=item_count,
             result_bytes=result_bytes,
         )
-        return value
+        return prepared
 
     @model_validator(mode="after")
     def bind_profile_to_source(self) -> Self:

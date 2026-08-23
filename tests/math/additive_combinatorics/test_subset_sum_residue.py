@@ -66,6 +66,23 @@ def _bitmask_oracle(
     return tuple(counts), witnesses
 
 
+def test_request_and_result_compose_through_strict_json_parsing() -> None:
+    request = SubsetSumResidueProfileRequest.model_validate_json(
+        '{"source":{"values":["2","3"]},"modulus":5,'
+        '"include_empty_subset":false,"include_witnesses":true}',
+        strict=True,
+    )
+
+    assert request.source == IndexedIntegerSequence(values=("2", "3"))
+    result = compute_subset_sum_residue_profile(request)
+    assert (
+        SubsetSumResidueProfileResult.model_validate_json(
+            result.model_dump_json(), strict=True
+        )
+        == result
+    )
+
+
 def test_two_items_have_nonempty_zero_residue_with_canonical_witnesses() -> None:
     result = compute_subset_sum_residue_profile(
         _request(

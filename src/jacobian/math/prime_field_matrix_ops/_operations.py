@@ -63,7 +63,9 @@ def compute_nullspace(request: NullspaceRequest) -> NullspaceResult:
         prime=request.prime,
         entries=request.entries,
         columns=request.columns,
-        nullspace_rows=ns,
+        nullspace_matrix=PrimeFieldMatrix(
+            prime=request.prime, entries=tuple(ns), columns=request.columns
+        ),
     )
 
 

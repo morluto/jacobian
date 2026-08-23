@@ -119,6 +119,27 @@ class RecurrenceCoefficientsRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_moments(self) -> Self:
         _validate_moments(self.moments)
+        # Reject requests whose provable growth envelope exceeds the canonical
+        # component limit BEFORE any exact expansion: every emitted coefficient
+        # is a ratio of Hankel determinants over at most order + 2 supplied
+        # moments, so clearing denominators and applying Hadamard's bound caps
+        # each component at (order + 2) * (A + m * B) digits (+ fixed slack),
+        # with A/B the largest numerator/denominator digit counts. The
+        # 33-moment boundary case is therefore rejected without constructing
+        # its ~48,000-digit intermediates.
+        order = min(MAX_RECURRENCE_ORDER, len(self.moments) // 2)
+        numerator_digits = max(len(v.num.lstrip("-")) for v in self.moments)
+        denominator_digits = max(len(v.den) for v in self.moments)
+        growth_envelope = (order + 2) * (
+            numerator_digits + len(self.moments) * denominator_digits
+        ) + 64
+        if growth_envelope > MAX_CANONICAL_RATIONAL_DIGITS:
+            raise ValueError(
+                "moment heights of "
+                f"{numerator_digits}/{denominator_digits} digits over "
+                f"{len(self.moments)} moments imply recurrence coefficients "
+                "beyond the canonical rational digit bound"
+            )
         # The Gram-Schmidt kernel requires a positive-definite moment
         # functional; admit exactly the sequences it accepts so an accepted
         # request cannot fail inside execution.

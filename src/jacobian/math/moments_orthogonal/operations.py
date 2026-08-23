@@ -215,8 +215,13 @@ def christoffel_darboux(
         raise ValueError("alpha must have length len(beta)-1 or len(beta)")
     if type(x) is not Fraction or type(y) is not Fraction:
         raise TypeError("x and y must use exact Fractions")
-    if beta[0] == 0:
-        raise ValueError("beta_0 must be nonzero")
+    # beta_0 is the zeroth moment of the claimed positive functional; the CD
+    # kernel of such a family is positive on the diagonal, so a negative
+    # beta_0 cannot belong to the documented domain.
+    if beta[0] <= 0:
+        raise ValueError(
+            "beta_0 (the zeroth moment of a positive functional) must be positive"
+        )
     n = len(alpha)
     if n == 0:
         return ChristoffelDarbouxKernel(

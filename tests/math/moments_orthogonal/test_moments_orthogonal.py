@@ -145,9 +145,7 @@ class TestJacobiMatrix:
     def test_nonpositive_beta0_rejected(self) -> None:
         """The native API mirrors the typed positive-functional domain."""
         with pytest.raises(ValueError, match="must be positive"):
-            jacobi_matrix(
-                (_frac(0, 1),), (_frac(-1, 1), _frac(1, 1))
-            )
+            jacobi_matrix((_frac(0, 1),), (_frac(-1, 1), _frac(1, 1)))
         with pytest.raises(ValueError, match="must be positive"):
             jacobi_matrix((_frac(0, 1),), (_frac(0, 1), _frac(1, 1)))
 
@@ -158,7 +156,10 @@ class TestJacobiMatrix:
         with pytest.raises(ValueError, match="positive squared-norm ratios"):
             jacobi_matrix(alpha, beta)
         # beta beyond the consumed prefix does not enter the matrix.
-        assert jacobi_matrix((_frac(0, 1),), (_frac(1, 1), _frac(-1, 2))).off_diagonal == ()
+        assert (
+            jacobi_matrix((_frac(0, 1),), (_frac(1, 1), _frac(-1, 2))).off_diagonal
+            == ()
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -272,7 +273,9 @@ class TestWireAdapters:
         payload = json.loads(result.model_dump_json())["coefficients"]
         assert set(payload) == {"alpha", "beta"}
         JacobiMatrixRequest.model_validate(payload)
-        ChristoffelDarbouxRequest.model_validate({**payload, "x": _cr(1, 2), "y": _cr(1, 3)})
+        ChristoffelDarbouxRequest.model_validate(
+            {**payload, "x": _cr(1, 2), "y": _cr(1, 3)}
+        )
         GaussianQuadratureRequest.model_validate(payload)
 
     def test_recurrence_result_rejects_forged_coefficients(self) -> None:
@@ -378,3 +381,35 @@ class TestDerivedGrowthBudgets:
             y=CanonicalRational.from_integer_ratio(1, 1),
         )
         assert len(request.alpha) == 16
+
+
+class TestAdmissionGrowthEnvelope:
+    def test_envelope_rejects_boundary_case_before_expansion(self):
+        """The documented 33-moment boundary is rejected without expansion."""
+        from jacobian._exact import CanonicalRational
+        from jacobian.math.moments_orthogonal import operations as ops
+
+        def refuse(moments):
+            raise AssertionError("kernel must not run for enveloped requests")
+
+        moments = tuple(
+            CanonicalRational.from_fraction(
+                _frac(1, k + 1) + _frac(1, 10**300 + 2 * k + 1)
+            )
+            for k in range(17)
+        )
+        original = ops.recurrence_coefficients
+        ops.recurrence_coefficients = refuse
+        try:
+            with pytest.raises((ValueError, ValidationError), match="digit bound"):
+                RecurrenceCoefficientsRequest(moments=moments)
+        finally:
+            ops.recurrence_coefficients = original
+
+    def test_native_cd_rejects_negative_zeroth_norm(self):
+        from fractions import Fraction
+
+        with pytest.raises(ValueError, match="must be positive"):
+            christoffel_darboux(
+                (Fraction(0),), (Fraction(-1),), Fraction(1), Fraction(1)
+            )

@@ -166,7 +166,14 @@ class NullspaceRequest(StrictModel):
 
 
 class NullspaceResult(NullspaceRequest):
-    nullspace_rows: tuple[tuple[int, ...], ...]
+    """The nullspace basis as the domain-owned canonical matrix value.
+
+    ``nullspace_matrix`` carries the source prime and the declared column
+    axis, so an empty basis still names its ambient space and the serialized
+    form feeds rank/RREF consumers unchanged.
+    """
+
+    nullspace_matrix: PrimeFieldMatrix
     complete: Literal[True] = True
     method: Literal["EXACT_DOMAIN_MATRIX_NULLSPACE"] = "EXACT_DOMAIN_MATRIX_NULLSPACE"
 
@@ -176,17 +183,15 @@ class NullspaceResult(NullspaceRequest):
             prime=self.prime, entries=self.entries, columns=self.columns
         )
         expected = nullspace(matrix)
-        if self.nullspace_rows != expected:
-            raise ValueError("nullspace_rows must be the exact nullspace basis")
-        if any(
-            type(value) is not int or not 0 <= value < self.prime
-            for row in self.nullspace_rows
-            for value in row
+        if self.nullspace_matrix.entries != tuple(expected):
+            raise ValueError("nullspace_matrix must be the exact nullspace basis")
+        if (
+            self.nullspace_matrix.prime != self.prime
+            or self.nullspace_matrix.columns != self.columns
         ):
-            raise ValueError("nullspace entries must be canonical prime-field residues")
-        for vector in self.nullspace_rows:
-            if len(vector) != self.columns:
-                raise ValueError("nullspace vector length must match matrix columns")
+            raise ValueError(
+                "nullspace_matrix must carry the source prime and column axis"
+            )
         return self
 
 

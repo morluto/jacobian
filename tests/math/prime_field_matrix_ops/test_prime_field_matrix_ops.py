@@ -151,9 +151,9 @@ class TestNullspace:
     def test_basic_nullspace(self) -> None:
         req = NullspaceRequest(prime=2, entries=[[1, 1, 0], [0, 1, 1]], columns=3)
         result = compute_nullspace(req)
-        assert len(result.nullspace_rows) == 1
+        assert len(result.nullspace_matrix.entries) == 1
         # Verify A*v = 0 mod p
-        ns = result.nullspace_rows[0]
+        ns = result.nullspace_matrix.entries[0]
         for row in req.entries:
             dot = sum(a * b for a, b in zip(row, ns, strict=False)) % req.prime
             assert dot == 0
@@ -161,7 +161,7 @@ class TestNullspace:
     def test_full_rank_no_nullspace(self) -> None:
         req = NullspaceRequest(prime=5, entries=[[1, 0], [0, 1]], columns=2)
         result = compute_nullspace(req)
-        assert result.nullspace_rows == ()
+        assert result.nullspace_matrix.entries == ()
 
     def test_nullity(self) -> None:
         """Nullity = columns - rank."""
@@ -169,7 +169,7 @@ class TestNullspace:
         rank_req = RankRequest(prime=3, entries=[[1, 2, 0], [0, 0, 1]], columns=3)
         null_result = compute_nullspace(req)
         rank_result = compute_rank(rank_req)
-        nullity = len(null_result.nullspace_rows)
+        nullity = len(null_result.nullspace_matrix.entries)
         assert nullity == req.columns - rank_result.rank
 
 
@@ -203,3 +203,36 @@ class TestSafePrimeBound:
         largest_prime_below_2_53 = 9007199254740881
         req = RankRequest(prime=largest_prime_below_2_53, entries=[[1], [1]], columns=1)
         assert compute_rank(req).rank == 1
+
+
+class TestCanonicalNullspaceValue:
+    def test_nullspace_result_feeds_rank_unchanged(self):
+        """The serialized basis crosses rank/rref consumer boundaries as-is."""
+        from jacobian.math.prime_field_matrix_ops._models import RankRequest
+        from jacobian.math.prime_field_matrix_ops._operations import compute_rank
+
+        request = NullspaceRequest(
+            prime=5,
+            entries=((1, 2), (2, 4)),
+            columns=2,
+        )
+        result = compute_nullspace(request)
+        basis = result.nullspace_matrix
+        assert (
+            compute_rank(
+                RankRequest(
+                    prime=basis.prime,
+                    entries=basis.entries,
+                    columns=basis.columns,
+                )
+            ).rank
+            == 1
+        )
+
+    def test_empty_basis_keeps_the_column_axis(self):
+
+        request = NullspaceRequest(prime=2, entries=((1,), (1,)), columns=1)
+        result = compute_nullspace(request)
+        assert result.nullspace_matrix.entries == ()
+        assert result.nullspace_matrix.columns == 1
+        assert result.nullspace_matrix.prime == 2

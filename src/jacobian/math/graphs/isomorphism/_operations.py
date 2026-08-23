@@ -8,11 +8,14 @@ import networkx as nx
 from networkx.algorithms import isomorphism as nx_isomorphism
 
 from jacobian.math.graphs.isomorphism._models import (
+    ColoredGraphCanonicalizationRequest,
+    ColoredGraphCanonicalizationResult,
     GraphIsomorphismRequest,
     GraphIsomorphismResult,
     SimpleGraph,
     VertexMappingPair,
 )
+from jacobian.math.graphs.isomorphism.operations import canonicalize_colored_graph
 
 
 def _build_graph(graph: SimpleGraph) -> nx.Graph[int] | nx.DiGraph[int]:
@@ -63,3 +66,11 @@ def decide_graph_isomorphism(
         status="ISOMORPHIC",
         vertex_mapping=tuple(mapping),
     )
+
+
+def compute_colored_graph_canonicalization(
+    request: ColoredGraphCanonicalizationRequest,
+) -> ColoredGraphCanonicalizationResult:
+    """Adapt the public request to the native value-based operation."""
+
+    return canonicalize_colored_graph(request.colored_graph)

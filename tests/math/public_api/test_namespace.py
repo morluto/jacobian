@@ -40,6 +40,7 @@ ROOT_MATH_DOMAINS = (
     "polynomials",
     "prime_field_linear_algebra",
     "probability",
+    "rational_functions",
     "regular_languages",
     "symbolic_dynamics",
     "term_rewriting",

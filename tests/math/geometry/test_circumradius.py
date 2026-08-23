@@ -295,15 +295,12 @@ class TestCatalogContractParity:
     def test_multiplicity_ledger_is_schema_bounded_before_validation(self):
         from jacobian.math.geometry._models import CircumradiusProfileResult
 
-        schema = (
-            CircumradiusProfileResult.model_json_schema()["properties"][
-                "radius_multiplicities"
-            ]["maxItems"]
-        )
+        schema = CircumradiusProfileResult.model_json_schema()["properties"][
+            "radius_multiplicities"
+        ]["maxItems"]
         assert schema == 41664
         forged = tuple(
-            (CanonicalRational(num=str(index), den="1"), 1)
-            for index in range(41665)
+            (CanonicalRational(num=str(index), den="1"), 1) for index in range(41665)
         )
         with pytest.raises(ValidationError, match="at most 41664 items"):
             CircumradiusProfileResult(
@@ -361,7 +358,9 @@ class TestAggregateResultBudget:
 
     def test_same_coordinate_heights_admitted_when_profile_fits_budget(self):
         points = tuple(_height_point(index) for index in range(20))
-        result = circumradius_profile(CircumradiusProfileRequest(configuration={"points": tuple(points)}))
+        result = circumradius_profile(
+            CircumradiusProfileRequest(configuration={"points": tuple(points)})
+        )
         assert result.point_count == 20
         assert result.triple_count == math.comb(20, 3)
         encoded = len(encode_strict_json(result.model_dump(mode="json")))
@@ -407,7 +406,9 @@ class TestAggregateResultBudget:
             }
             for index, t in enumerate(parameters)
         )
-        result = circumradius_profile(CircumradiusProfileRequest(configuration={"points": tuple(points)}))
+        result = circumradius_profile(
+            CircumradiusProfileRequest(configuration={"points": tuple(points)})
+        )
         entry = result.entries[0]
         assert entry.collinear is False
         ax, ay = (Fraction(parameters[0]), parameters[0] ** 2)
@@ -443,7 +444,9 @@ class TestAggregateResultBudget:
             ),
         ]
         for points in configurations:
-            request = CircumradiusProfileRequest(configuration={"points": tuple(points)})
+            request = CircumradiusProfileRequest(
+                configuration={"points": tuple(points)}
+            )
             result = circumradius_profile(request)
             actual = len(encode_strict_json(result.model_dump(mode="json")))
             assert actual <= _maximum_profile_wire_bytes(request.configuration)
@@ -454,8 +457,7 @@ class TestSchemaPublishedBounds:
         schema = CircumradiusProfileRequest.model_json_schema()
         configuration_schema = schema["properties"]["configuration"]
         assert (
-            configuration_schema["coordinate_digit_bound"]
-            == CIRCUMRADIUS_INPUT_HEIGHT
+            configuration_schema["coordinate_digit_bound"] == CIRCUMRADIUS_INPUT_HEIGHT
         )
         assert CIRCUMRADIUS_INPUT_HEIGHT == 64
         assert (
@@ -493,7 +495,7 @@ class TestSchemaPublishedBounds:
                 "den": format_canonical_integer(value.denominator),
             }
 
-        base = "\U0001F600" * 62  # 62 four-byte characters
+        base = "\U0001f600" * 62  # 62 four-byte characters
         points = tuple(
             {
                 "label": f"{base}{index:02d}",
@@ -541,9 +543,7 @@ class TestSchemaPublishedBounds:
         distance_result = compute_distance_profile(
             DistanceProfileRequest(configuration=configuration)
         )
-        circumradius_request = CircumradiusProfileRequest(
-            configuration=configuration
-        )
+        circumradius_request = CircumradiusProfileRequest(configuration=configuration)
         circumradius_result = circumradius_profile(circumradius_request)
         assert distance_result.point_count == 3
         assert circumradius_result.point_count == 3
@@ -722,3 +722,67 @@ class TestRetainedConfigurationAdmission:
         payload = circumradius_profile(_request(pts)).model_dump(mode="json")
         result = CircumradiusProfileResult.model_validate(payload)
         assert result.entries[0].squared_circumradius.as_fraction() == Fraction(2)
+
+
+class TestNfcNormalizedLabelBudget:
+    """The wire estimate must charge labels at their NFC-normalized encoding,
+    because OperationResult.require_canonical_output applies NFC and it can
+    expand a label (review thread: normalize labels before estimating)."""
+
+    def test_nfc_expanding_labels_are_charged_at_admission(self):
+        # 39 collinear points labelled with U+0958 x62 + index: raw UTF-8
+        # measures ~7.9 MiB, but NFC expands each U+0958 into two
+        # characters, so the canonical result exceeds the 10 MiB budget.
+        # Admission must reject before any profile work.
+        label_unit = "\u0958"  # NFC: one character -> two characters
+        points = tuple(
+            {
+                "label": f"{label_unit * 62}{index:02d}",
+                "coordinates": [
+                    {"num": str(index), "den": "1"},
+                    {"num": "0", "den": "1"},
+                ],
+            }
+            for index in range(39)
+        )
+        request_points = PointConfiguration(points=points)
+        estimate = _maximum_profile_wire_bytes(request_points)
+        assert estimate > MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES
+        with pytest.raises(ValidationError, match="aggregate result"):
+            CircumradiusProfileRequest(configuration={"points": points})
+
+    def test_ascii_control_of_same_shape_is_still_admitted(self):
+        # The rejection above must come from normalization growth, not from
+        # an indiscriminately shrunk budget: same shape, ASCII labels fit.
+        points = tuple(
+            {
+                "label": f"{'a' * 62}{index:02d}",
+                "coordinates": [
+                    {"num": str(index), "den": "1"},
+                    {"num": "0", "den": "1"},
+                ],
+            }
+            for index in range(39)
+        )
+        request = CircumradiusProfileRequest(configuration={"points": points})
+        assert len(request.configuration.points) == 39
+
+    def test_estimate_bounds_post_normalization_encoding(self):
+        # For a configuration whose labels expand under NFC, the estimate
+        # must still dominate the actual canonical (post-NFC) encoding.
+        from jacobian.canonical import canonicalize_json
+
+        points = tuple(
+            {
+                "label": "\u0958" * 40 + chr(ord("a") + index),
+                "coordinates": [
+                    _fraction_wire(Fraction(index + 1, index + 7)),
+                    _fraction_wire(Fraction(2 * index + 1, 13)),
+                ],
+            }
+            for index in range(11)
+        )
+        request = CircumradiusProfileRequest(configuration={"points": points})
+        result = circumradius_profile(request)
+        canonical = canonicalize_json(result.model_dump(mode="json"))
+        assert len(canonical) <= _maximum_profile_wire_bytes(request.configuration)

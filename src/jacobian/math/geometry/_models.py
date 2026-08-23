@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from fractions import Fraction
 from itertools import combinations
 from typing import Literal, Self
@@ -496,6 +497,23 @@ def _difference_digit_heights(
     )
 
 
+def _nfc_normalized(value: object) -> object:
+    """Apply the output encoder's NFC normalization step to a wire value.
+
+    ``OperationResult.require_canonical_output`` canonicalizes every string
+    with NFC, which can expand a label (for example U+0958 becomes two
+    characters), so byte estimates must charge the normalized encoding.
+    """
+
+    if isinstance(value, str):
+        return unicodedata.normalize("NFC", value)
+    if isinstance(value, dict):
+        return {key: _nfc_normalized(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_nfc_normalized(item) for item in value]
+    return value
+
+
 def _maximum_profile_wire_bytes(configuration: PointConfiguration) -> int:
     """Upper-bound the canonical wire encoding of the complete profile result.
 
@@ -512,7 +530,9 @@ def _maximum_profile_wire_bytes(configuration: PointConfiguration) -> int:
     moves twice the cross bounds across the fraction with one multiplier
     carry digit. Each entry is costed as an encoding skeleton plus both
     radius component bounds (not their maximum), exact label and index
-    encodings, and slack; the configuration echo is counted exactly.
+    encodings, and slack; the configuration echo and every label are
+    charged at their NFC-normalized encoding, matching the canonical
+    output encoder.
     """
 
     points = configuration.points
@@ -534,7 +554,9 @@ def _maximum_profile_wire_bytes(configuration: PointConfiguration) -> int:
             2 * den_x + 2 * den_y,
         )
 
-    label_bytes = [len(encode_strict_json(item.label)) for item in points]
+    label_bytes = [
+        len(encode_strict_json(_nfc_normalized(item.label))) for item in points
+    ]
     index_bytes = [len(str(index)) for index in range(len(points))]
     skeleton = {
         "collinear": False,
@@ -543,7 +565,9 @@ def _maximum_profile_wire_bytes(configuration: PointConfiguration) -> int:
         "squared_circumradius": {"num": "", "den": ""},
     }
     entry_base = len(encode_strict_json(skeleton))
-    total = len(encode_strict_json(configuration.model_dump(mode="json")))
+    total = len(
+        encode_strict_json(_nfc_normalized(configuration.model_dump(mode="json")))
+    )
     triple_count = 0
     radius_numerator_digits_max = 0
     radius_denominator_digits_max = 0
@@ -573,12 +597,8 @@ def _maximum_profile_wire_bytes(configuration: PointConfiguration) -> int:
             + 1
         )
         cross_denominator_digits = first_denominator + second_denominator
-        radius_numerator_digits = (
-            numerator_bound + 2 * cross_denominator_digits + 1
-        )
-        radius_denominator_digits = (
-            denominator_bound + 2 * cross_numerator_digits + 1
-        )
+        radius_numerator_digits = numerator_bound + 2 * cross_denominator_digits + 1
+        radius_denominator_digits = denominator_bound + 2 * cross_numerator_digits + 1
         radius_numerator_digits_max = max(
             radius_numerator_digits_max, radius_numerator_digits
         )
@@ -801,9 +821,7 @@ class CircumradiusProfileResult(StrictModel):
         if self.degenerate_triple_count != degenerate_count:
             raise ValueError("degenerate triple count does not match the entries")
         if self.nondegenerate_triple_count != nondegenerate_count:
-            raise ValueError(
-                "nondegenerate triple count does not match the entries"
-            )
+            raise ValueError("nondegenerate triple count does not match the entries")
         reconstructed = tuple(
             (
                 CanonicalRational.from_fraction(d),

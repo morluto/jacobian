@@ -9,7 +9,6 @@ from pydantic import Field, model_validator
 from jacobian._models import StrictModel
 from jacobian.math.chain_complexes.values import (
     MAX_TENSOR_GROUP_DIMENSION,
-    MAX_TENSOR_SERIALIZED_CHARS,
     MAX_TENSOR_TOTAL_CELLS,
     ChainComplexValue,
     CoefficientField,
@@ -430,12 +429,33 @@ def _require_admissible_tensor_work(
         basis_sizes=tuple(group_sizes),
         differential_matrices=placeholder_diffs,
     )
-    max_entry_chars = 2 * 512 + 8
-    if max(allocated_cells, 1) * max_entry_chars > MAX_TENSOR_SERIALIZED_CHARS:
+    # Every populated tensor cell copies one admitted coefficient string
+    # (a Koszul negation may add a leading '-') and every remaining cell
+    # prints "0", so the expanded differentials print at most this many
+    # characters. The derived value enforces MAX_MATRIX_ENTRY_CHARS
+    # against its real coefficients, so admission must couple the same
+    # budget to the expansion instead of to shape alone.
+    from jacobian.math.chain_complexes.values import MAX_MATRIX_ENTRY_CHARS
+
+    def _max_entry_length(complex_value: ChainComplexValue) -> int:
+        return max(
+            (
+                len(entry)
+                for matrix in complex_value.differential_matrices
+                for row in matrix
+                for entry in row
+            ),
+            default=1,
+        )
+
+    worst_entry_chars = max(_max_entry_length(left), _max_entry_length(right)) + 1
+    expanded_entry_chars = allocated_cells * worst_entry_chars
+    if expanded_entry_chars > MAX_MATRIX_ENTRY_CHARS:
         raise ValueError(
-            "tensor product serialization exceeds the canonical output "
-            f"ceiling ({allocated_cells} cells x ~{max_entry_chars} "
-            "characters); supply smaller coefficients"
+            "tensor product serialization exceeds the canonical "
+            f"{MAX_MATRIX_ENTRY_CHARS}-character budget: {allocated_cells} "
+            f"expanded cells x ~{worst_entry_chars} characters per copied "
+            "coefficient; supply smaller coefficients"
         )
 
 

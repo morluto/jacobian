@@ -345,6 +345,52 @@ class TestTensorProductSignAndBudget:
         assert result.tensor_basis_sizes == (1, 1)
         assert result.tensor_differential_matrices == ((("-1",),),)
 
+    def test_expanded_coefficients_rejected_at_admission(self) -> None:
+        """A (7,7) dense 512-digit differential by an 8-dimensional point
+        repeats 49 coefficients eight times; admission must reject the
+        expansion instead of failing inside result construction."""
+        big_row = tuple(str(10**511 + i) for i in range(7))
+        big = tuple(big_row for _ in range(7))
+        left = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=1,
+            basis_sizes=(7, 7),
+            differential_matrices=(big,),
+        )
+        point = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=0,
+            basis_sizes=(8,),
+            differential_matrices=(),
+        )
+        with pytest.raises(ValueError, match="serialization exceeds"):
+            TensorProductRequest(left=left, right=point)
+
+    def test_small_coefficient_expansion_still_accepted(self) -> None:
+        """The same shapes with single-digit coefficients stay inside the
+        expanded-character budget and return the typed tensor value."""
+        left = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=1,
+            basis_sizes=(7, 7),
+            differential_matrices=((("1",) * 7,) * 7,),
+        )
+        point = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=0,
+            basis_sizes=(8,),
+            differential_matrices=(),
+        )
+        result = compute_tensor_product(TensorProductRequest(left=left, right=point))
+        assert result.tensor_basis_sizes == (56, 56)
+        assert verify_differential(
+            VerifyDifferentialRequest(complex=result.value)
+        ).is_valid
+
     def test_tensor_intermediate_dimensions_are_bounded(self) -> None:
         """Two 64+64 factors meet the input cell limit but their middle
         tensor group has dimension 8192; admission must reject it."""

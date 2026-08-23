@@ -22,8 +22,6 @@ MAX_TENSOR_TOTAL_CELLS = 65536
 # conservative budgets.
 MAX_CHAIN_MAP_CELLS = 4096
 MAX_CHAIN_MAP_ENTRY_CHARS = 65536
-# Serialization envelope for expanded tensor differentials.
-MAX_TENSOR_SERIALIZED_CHARS = 4_000_000
 # Aggregate printed characters across every differential cell. Coupling
 # total coefficient size to the matrix work bounds rational elimination
 # bit complexity at admission instead of only bounding input shape.

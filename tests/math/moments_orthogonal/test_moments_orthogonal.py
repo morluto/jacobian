@@ -291,3 +291,39 @@ class TestToolsAndExamples:
         for tool in TOOLS:
             names = [ex.name for ex in tool.examples]
             assert len(names) == len(set(names))
+
+
+class TestDerivedGrowthBudgets:
+    @pytest.mark.exhaustive
+    def test_concentrated_moments_overflowing_coefficients_rejected(self):
+        """33 positive-definite moments whose Gram-Schmidt output reaches
+        ~47,902 digits cannot be admitted: the typed result would fail its
+        canonical rational conversion."""
+        moments = tuple(
+            CanonicalRational.from_fraction(
+                Fraction(1, k + 1) + Fraction(1, Fraction(10) ** 100 + 2 * k + 1)
+            )
+            for k in range(33)
+        )
+        with pytest.raises(ValidationError, match="canonical"):
+            RecurrenceCoefficientsRequest(moments=moments)
+
+    def test_degree_aware_cd_budget_rejects_concentrated_growth(self):
+        """16 zero alphas and 16 unit betas with x = y = 10^3000 produce a
+        p_15 of ~45,001 digits; the degree-aware bound rejects the request."""
+        alpha = tuple(CanonicalRational.from_integer_ratio(0, 1) for _ in range(16))
+        beta = tuple(CanonicalRational.from_integer_ratio(1, 1) for _ in range(16))
+        big = CanonicalRational.from_integer_ratio(10**3000, 1)
+        with pytest.raises(ValidationError, match="canonical rational digit"):
+            ChristoffelDarbouxRequest(alpha=alpha, beta=beta, x=big, y=big)
+
+    def test_small_cd_request_still_admitted(self):
+        alpha = tuple(CanonicalRational.from_integer_ratio(0, 1) for _ in range(16))
+        beta = tuple(CanonicalRational.from_integer_ratio(1, 1) for _ in range(16))
+        request = ChristoffelDarbouxRequest(
+            alpha=alpha,
+            beta=beta,
+            x=CanonicalRational.from_integer_ratio(1, 1),
+            y=CanonicalRational.from_integer_ratio(1, 1),
+        )
+        assert len(request.alpha) == 16

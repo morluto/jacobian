@@ -7,7 +7,11 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
 from jacobian.math.moments_orthogonal.values import (
     MAX_MOMENTS,
@@ -124,7 +128,18 @@ class RecurrenceCoefficientsRequest(StrictModel):
             recurrence_coefficients,
         )
 
-        recurrence_coefficients(_to_fractions(self.moments))
+        derived = recurrence_coefficients(_to_fractions(self.moments))
+        # Derived-coefficient growth budget: per-moment bounds do not bound
+        # the exact Gram-Schmidt output, so admission must reject sequences
+        # whose recurrence coefficients leave the canonical rational domain.
+        try:
+            _from_fractions(derived.alpha)
+            _from_fractions(derived.beta)
+        except ValueError as exc:
+            raise ValueError(
+                "derived recurrence coefficients exceed the canonical "
+                "rational digit bound"
+            ) from exc
         return self
 
 
@@ -205,15 +220,33 @@ class ChristoffelDarbouxRequest(StrictModel):
         require_bounded_rational(
             self.y, max_digits=MAX_RATIONAL_DIGITS, label="y"
         )
-        # Bound derived Christoffel-Darboux recurrence growth: the forward
-        # recurrence can produce ~n * max_digits growth; cap total to keep
-        # final kernel and polynomials within CanonicalRational.
+        # Degree-aware derived-growth budget: the forward recurrence
+        # multiplies polynomials by (x - alpha_k) each step and adds
+        # beta_k * p_{k-1}, so p_k carries at most
+        # k*(digit(x)+1) + sum(alpha,beta digits) + k digits, and the kernel
+        # sums n products of evaluated polynomials.  A plain sum of input
+        # component digits would admit concentrated growth such as unit
+        # coefficients with x = 10^3000, whose p_15 already exceeds the
+        # canonical rational domain.
         def _digits(v: CanonicalRational) -> int:
             return max(len(v.num.lstrip("-")), len(v.den))
 
-        total = sum(_digits(v) for v in (*self.alpha, *self.beta, self.x, self.y))
-        if total > 8192:
-            raise ValueError("Christoffel-Darboux inputs exceed derived growth budget")
+        alpha_digits = sum(_digits(v) for v in self.alpha)
+        beta_digits = sum(_digits(v) for v in self.beta)
+        x_digits = _digits(self.x)
+        y_digits = _digits(self.y)
+        order = len(self.alpha)
+        slack = alpha_digits + beta_digits + order
+        p_x_bound = order * (x_digits + 1) + slack
+        p_y_bound = order * (y_digits + 1) + slack
+        kernel_bound = order * (
+            p_x_bound + p_y_bound + beta_digits + order + 2
+        )
+        if max(p_x_bound, p_y_bound, kernel_bound) > MAX_CANONICAL_RATIONAL_DIGITS:
+            raise ValueError(
+                "Christoffel-Darboux inputs can grow the exact kernel beyond "
+                "the canonical rational digit bound"
+            )
         return self
 
 

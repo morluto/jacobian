@@ -724,8 +724,35 @@ class ForbiddenPatternsResult(StrictModel):
             raise ValueError("exactly a collinear triple carries one witness")
         if self.has_concyclic_quadruple is (self.concyclic_quadruple is None):
             raise ValueError("exactly a concyclic quadruple carries one witness")
+        self._require_checked_counts(xy)
         self._require_witness_replays(xy)
         return self
+
+    def _require_checked_counts(
+        self, xy: list[tuple[Fraction, Fraction]]
+    ) -> None:
+        """The authoritative counts must equal the enumerated stopping
+        prefixes of the deterministic lexicographic search."""
+        from itertools import combinations
+
+        expected_triples = 0
+        for i, j, k in combinations(range(len(xy)), 3):
+            expected_triples += 1
+            if _triple_collinear(xy, i, j, k):
+                break
+        expected_quadruples = 0
+        for i, j, k, ell in combinations(range(len(xy)), 4):
+            expected_quadruples += 1
+            if _quadruple_concyclic(xy, i, j, k, ell):
+                break
+        if self.checked_triples != expected_triples:
+            raise ValueError(
+                "checked_triples must match the enumerated stopping prefix"
+            )
+        if self.checked_quadruples != expected_quadruples:
+            raise ValueError(
+                "checked_quadruples must match the enumerated stopping prefix"
+            )
 
     def _require_witness_replays(
         self, xy: list[tuple[Fraction, Fraction]]

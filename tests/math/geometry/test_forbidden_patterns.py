@@ -57,7 +57,7 @@ class TestForbiddenPatternWitnesses:
                 has_collinear_triple=True,
                 has_concyclic_quadruple=False,
                 collinear_triple=CollinearTriple(first=0, second=1, third=3),
-                checked_triples=4,
+                checked_triples=1,
                 checked_quadruples=1,
             )
 
@@ -84,5 +84,19 @@ class TestForbiddenPatternWitnesses:
                     first=0, second=1, third=2, fourth=4
                 ),
                 checked_triples=10,
-                checked_quadruples=5,
+                checked_quadruples=1,
             )
+
+
+class TestCheckedCountBinding:
+    def test_forged_checked_counts_rejected(self):
+        """checked_triples/checked_quadruples are authoritative enumeration
+        diagnostics and must equal the deterministic stopping prefixes."""
+        config = _configuration((0, 0), (1, 0), (2, 0), (0, 1))
+        payload = forbidden_patterns(
+            ForbiddenPatternsRequest(configuration=config)
+        ).model_dump()
+        payload["checked_triples"] = 0
+        payload["checked_quadruples"] = 0
+        with pytest.raises(ValidationError, match="stopping prefix"):
+            ForbiddenPatternsResult.model_validate(payload)

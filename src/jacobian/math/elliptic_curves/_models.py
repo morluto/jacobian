@@ -241,40 +241,6 @@ def _point_heights(point: RationalAffinePoint) -> tuple[RationalHeight, Rational
     )
 
 
-class EllipticCurvePointAdditionRequest(StrictModel):
-    """Add two points on a short Weierstrass elliptic curve."""
-
-    curve: ShortWeierstrassCurve
-    first: RationalAffinePoint
-    second: RationalAffinePoint
-
-    @model_validator(mode="after")
-    def require_group_law(self) -> Self:
-        _require_group_law(self.curve, (self.first, self.second))
-        if self.first == self.second:
-            result = _chord_step_heights(
-                _doubling_lambda_height(self.curve, self.first),
-                _point_heights(self.first),
-                _point_heights(self.first),
-            )
-        elif self.first.x == self.second.x:
-            result = None
-        else:
-            result = _chord_step_heights(
-                _generic_lambda_height(self.first, self.second),
-                _point_heights(self.first),
-                _point_heights(self.second),
-            )
-        if result is not None and any(
-            height.exceeds(MAX_CANONICAL_RATIONAL_DIGITS) for height in result
-        ):
-            raise ValueError(
-                "point addition would produce coordinates exceeding the "
-                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit canonical result bound"
-            )
-        return self
-
-
 class EllipticCurvePointResult(StrictModel):
     """The result of an elliptic curve point operation on its parent curve.
 
@@ -305,30 +271,90 @@ class EllipticCurvePointResult(StrictModel):
         return self
 
 
+class EllipticCurvePointAdditionRequest(StrictModel):
+    """Add two points on a short Weierstrass elliptic curve.
+
+    Both operands are parent-bearing curve-point values — exactly the shape
+    the group-law producers return — so a doubling example's infinity result
+    or any finite point result composes into this request unchanged.
+    """
+
+    curve: ShortWeierstrassCurve
+    first: EllipticCurvePointResult
+    second: EllipticCurvePointResult
+
+    @model_validator(mode="after")
+    def require_operands_in_the_same_group(self) -> Self:
+        if self.first.curve != self.curve or self.second.curve != self.curve:
+            raise ValueError("operands must carry this request's curve as their parent")
+        return self
+
+    @model_validator(mode="after")
+    def require_group_law(self) -> Self:
+        first_point = self.first.point
+        second_point = self.second.point
+        # An identity operand contributes nothing and adds no height.
+        if first_point is None or second_point is None:
+            return self
+        _require_group_law(self.curve, (first_point, second_point))
+        if first_point == second_point:
+            result = _chord_step_heights(
+                _doubling_lambda_height(self.curve, first_point),
+                _point_heights(first_point),
+                _point_heights(first_point),
+            )
+        elif first_point.x == second_point.x:
+            result = None
+        else:
+            result = _chord_step_heights(
+                _generic_lambda_height(first_point, second_point),
+                _point_heights(first_point),
+                _point_heights(second_point),
+            )
+        if result is not None and any(
+            height.exceeds(MAX_CANONICAL_RATIONAL_DIGITS) for height in result
+        ):
+            raise ValueError(
+                "point addition would produce coordinates exceeding the "
+                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit canonical result bound"
+            )
+        return self
+
+
 class ScalarMultiplicationRequest(StrictModel):
     """Compute n*P on a short Weierstrass elliptic curve."""
 
     curve: ShortWeierstrassCurve
-    point: RationalAffinePoint
+    point: EllipticCurvePointResult
     scalar: int = Field(ge=0, le=10_000)
 
     @model_validator(mode="after")
+    def require_operand_in_the_same_group(self) -> Self:
+        if self.point.curve != self.curve:
+            raise ValueError(
+                "the operand must carry this request's curve as its parent"
+            )
+        return self
+
+    @model_validator(mode="after")
     def require_group_law(self) -> Self:
-        _require_group_law(self.curve, (self.point,))
+        if self.point.at_infinity:
+            return self
+        _require_group_law(self.curve, (self.point.point,))
         # Propagate coordinate heights through the same double-and-add scan
         # the kernel performs: each bit doubles the accumulator and adds P on
         # a set bit, and every step's chord-and-tangent output is bounded by
         # rational-height propagation.  The naive n^2 digit heuristic both
         # over-rejects and admits doublings whose exact coordinates exceed
         # the canonical limit, so derive the budget from the recurrence.
-        current = _point_heights(self.point)
+        current = _point_heights(self.point.point)
         for bit in bin(self.scalar)[3:]:
             lam_double = _doubling_lambda_height_from_heights(self.curve, current)
             doubled = _chord_step_heights(lam_double, current, current)
             if bit == "1":
-                lam_add = _generic_lambda_height_from_heights(current, self.point)
+                lam_add = _generic_lambda_height_from_heights(current, self.point.point)
                 current = _chord_step_heights(
-                    lam_add, doubled, _point_heights(self.point)
+                    lam_add, doubled, _point_heights(self.point.point)
                 )
             else:
                 current = doubled

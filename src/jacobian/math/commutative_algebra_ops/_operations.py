@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
+
 import sympy
 
 from jacobian.math.commutative_algebra_ops._models import (
@@ -80,6 +82,59 @@ def compute_ideal_quotient(request: IdealQuotientRequest) -> IdealQuotientResult
     )
 
 
+def _groebner_signature(variables, expressions) -> tuple:
+    """The canonical reduced Groebner basis of the spanned ideal.
+
+    Two finite presentations of the same ideal produce equal signatures,
+    so a replayed relation can be compared against any claimed
+    presentation without depending on generator ordering.
+    """
+
+    if not expressions:
+        return ()
+    basis = sympy.groebner(expressions, *variables, order="lex")
+    signature = []
+    for expr in basis.exprs:
+        component = sympy.Poly(expr, *variables, domain="QQ")
+        terms = tuple(
+            (
+                monomial,
+                Fraction(int(coefficient.numerator), int(coefficient.denominator)),
+            )
+            for monomial, coefficient in sorted(
+                zip(component.monoms(), component.coeffs(), strict=True), reverse=True
+            )
+        )
+        signature.append(terms)
+    return tuple(sorted(signature))
+
+
+def replay_saturation(request: IdealSaturationRequest) -> tuple:
+    """Recompute I : <d>^infinity exactly and return its Groebner signature."""
+    from sympy import Symbol
+
+    variables = symbols_for_variables(request.ideal.variables)
+    t = Symbol("_saturation_t")
+    polys = [
+        *[
+            rational_polynomial_to_sympy(generator).as_expr()
+            for generator in request.ideal.generators
+        ],
+        t * rational_polynomial_to_sympy(request.saturation_polynomial).as_expr() - 1,
+    ]
+    elimination = sympy.groebner(polys, t, *variables, order="lex")
+    # Basis elements free of t generate the elimination ideal I : <d>^infinity.
+    # Absent any such element the intersection with QQ[vars] is the ZERO
+    # ideal — e.g. (0) : <d>^infinity = (0) — not the whole ring; a whole-ring
+    # saturation instead shows up as a constant basis element.
+    saturated = [
+        expr
+        for expr in elimination.exprs
+        if not expr.has(t) and expr != 0
+    ]
+    return _groebner_signature(variables, saturated)
+
+
 def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturationResult:
     """Compute I : <d>^infinity through the bounded Singular backend."""
 
@@ -95,6 +150,7 @@ def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturation
     )
     return IdealSaturationResult(
         outcome=backend.outcome,
+        request=request,
         saturation=backend.ideal,
         backend_version=backend.backend_version,
         detail=backend.detail,
@@ -107,3 +163,11 @@ __all__ = [
     "compute_ideal_radical_membership",
     "compute_ideal_saturation",
 ]
+
+
+def rational_expressions_of_ideal(ideal) -> list:
+    """Convert one wire ideal into SymPy expressions over its own ring."""
+    return [
+        rational_polynomial_to_sympy(generator).as_expr()
+        for generator in ideal.generators
+    ]

@@ -75,12 +75,26 @@ _POINT_ADDITION_EXAMPLE: dict[str, Any] = {
         "coefficient_b": {"num": "0", "den": "1"},
     },
     "first": {
-        "x": {"num": "0", "den": "1"},
-        "y": {"num": "0", "den": "1"},
+        "curve": {
+            "coefficient_a": {"num": "1", "den": "1"},
+            "coefficient_b": {"num": "0", "den": "1"},
+        },
+        "point": {
+            "x": {"num": "0", "den": "1"},
+            "y": {"num": "0", "den": "1"},
+        },
+        "at_infinity": False,
     },
     "second": {
-        "x": {"num": "0", "den": "1"},
-        "y": {"num": "0", "den": "1"},
+        "curve": {
+            "coefficient_a": {"num": "1", "den": "1"},
+            "coefficient_b": {"num": "0", "den": "1"},
+        },
+        "point": {
+            "x": {"num": "0", "den": "1"},
+            "y": {"num": "0", "den": "1"},
+        },
+        "at_infinity": False,
     },
 }
 
@@ -90,8 +104,15 @@ _SCALAR_MULT_EXAMPLE: dict[str, Any] = {
         "coefficient_b": {"num": "0", "den": "1"},
     },
     "point": {
-        "x": {"num": "1", "den": "1"},
-        "y": {"num": "0", "den": "1"},
+        "curve": {
+            "coefficient_a": {"num": "-1", "den": "1"},
+            "coefficient_b": {"num": "0", "den": "1"},
+        },
+        "point": {
+            "x": {"num": "1", "den": "1"},
+            "y": {"num": "0", "den": "1"},
+        },
+        "at_infinity": False,
     },
     "scalar": 2,
 }

@@ -12,6 +12,7 @@ from jacobian.math.elliptic_curves._models import (
     CurveDiscriminantResult,
     CurvePointRequest,
     EllipticCurvePointAdditionRequest,
+    EllipticCurvePointResult,
     EllipticCurveRequest,
     RationalAffinePoint,
     ScalarMultiplicationRequest,
@@ -88,12 +89,23 @@ class TestPointOnCurve:
         assert not result.on_curve
 
 
+def _operand(curve, point):
+    """Wrap a rational affine point as the parent-bearing curve-point value."""
+    return EllipticCurvePointResult(
+        curve=curve,
+        point=point,
+        at_infinity=False,
+    )
+
+
 class TestPointAddition:
     def test_double_y_zero(self):
         curve = ShortWeierstrassCurve(coefficient_a=_pt("1"), coefficient_b=_pt("0"))
         point = RationalAffinePoint(x=_pt("0"), y=_pt("0"))
         result = add_points(
-            EllipticCurvePointAdditionRequest(curve=curve, first=point, second=point)
+            EllipticCurvePointAdditionRequest(
+                curve=curve, first=_operand(curve, point), second=_operand(curve, point)
+            )
         )
         assert result.at_infinity
 
@@ -101,7 +113,9 @@ class TestPointAddition:
         curve = ShortWeierstrassCurve(coefficient_a=_pt("-2"), coefficient_b=_pt("0"))
         p = RationalAffinePoint(x=_pt("2"), y=_pt("2"))
         result = add_points(
-            EllipticCurvePointAdditionRequest(curve=curve, first=p, second=p)
+            EllipticCurvePointAdditionRequest(
+                curve=curve, first=_operand(curve, p), second=_operand(curve, p)
+            )
         )
         assert result.point is not None
         assert result.point.x.as_fraction() == Fraction(9, 4)
@@ -112,7 +126,9 @@ class TestPointAddition:
         p = RationalAffinePoint(x=_pt("2"), y=_pt("2"))
         neg_p = RationalAffinePoint(x=_pt("2"), y=_pt("-2"))
         result = add_points(
-            EllipticCurvePointAdditionRequest(curve=curve, first=p, second=neg_p)
+            EllipticCurvePointAdditionRequest(
+                curve=curve, first=_operand(curve, p), second=_operand(curve, neg_p)
+            )
         )
         assert result.at_infinity
 
@@ -122,7 +138,7 @@ class TestScalarMultiplication:
         curve = ShortWeierstrassCurve(coefficient_a=_pt("-2"), coefficient_b=_pt("0"))
         p = RationalAffinePoint(x=_pt("2"), y=_pt("2"))
         result = scalar_multiply(
-            ScalarMultiplicationRequest(curve=curve, point=p, scalar=0)
+            ScalarMultiplicationRequest(curve=curve, point=_operand(curve, p), scalar=0)
         )
         assert result.at_infinity
 
@@ -130,7 +146,7 @@ class TestScalarMultiplication:
         curve = ShortWeierstrassCurve(coefficient_a=_pt("-2"), coefficient_b=_pt("0"))
         p = RationalAffinePoint(x=_pt("2"), y=_pt("2"))
         result = scalar_multiply(
-            ScalarMultiplicationRequest(curve=curve, point=p, scalar=1)
+            ScalarMultiplicationRequest(curve=curve, point=_operand(curve, p), scalar=1)
         )
         assert result.point is not None
         assert result.point.x.as_fraction() == 2
@@ -140,7 +156,7 @@ class TestScalarMultiplication:
         curve = ShortWeierstrassCurve(coefficient_a=_pt("-2"), coefficient_b=_pt("0"))
         p = RationalAffinePoint(x=_pt("2"), y=_pt("2"))
         result = scalar_multiply(
-            ScalarMultiplicationRequest(curve=curve, point=p, scalar=2)
+            ScalarMultiplicationRequest(curve=curve, point=_operand(curve, p), scalar=2)
         )
         assert result.point is not None
         assert result.point.x.as_fraction() == Fraction(9, 4)
@@ -150,7 +166,7 @@ class TestScalarMultiplication:
         curve = ShortWeierstrassCurve(coefficient_a=_pt("-2"), coefficient_b=_pt("0"))
         p = RationalAffinePoint(x=_pt("2"), y=_pt("2"))
         result = scalar_multiply(
-            ScalarMultiplicationRequest(curve=curve, point=p, scalar=3)
+            ScalarMultiplicationRequest(curve=curve, point=_operand(curve, p), scalar=3)
         )
         assert result.point is not None
         assert result.point.x.as_fraction() == 338
@@ -165,7 +181,7 @@ class TestGroupLawAdmission:
         curve = ShortWeierstrassCurve(coefficient_a=_pt("1"), coefficient_b=_pt("0"))
         p = RationalAffinePoint(x=_pt("0"), y=_pt("0"))
         result = scalar_multiply(
-            ScalarMultiplicationRequest(curve=curve, point=p, scalar=3)
+            ScalarMultiplicationRequest(curve=curve, point=_operand(curve, p), scalar=3)
         )
         assert result.point is not None
         assert result.point.x.as_fraction() == 0
@@ -175,9 +191,11 @@ class TestGroupLawAdmission:
         """(1,1) does not lie on y^2=x^3+x; the old code returned a fake sum."""
         curve = ShortWeierstrassCurve(coefficient_a=_pt("1"), coefficient_b=_pt("0"))
         p = RationalAffinePoint(x=_pt("1"), y=_pt("1"))
-        with pytest.raises(ValidationError, match="lie on the curve"):
+        with pytest.raises(ValidationError, match="lie on the retained curve"):
             add_points(
-                EllipticCurvePointAdditionRequest(curve=curve, first=p, second=p)
+                EllipticCurvePointAdditionRequest(
+                    curve=curve, first=_operand(curve, p), second=_operand(curve, p)
+                )
             )
 
     def test_singular_curve_rejected(self):
@@ -185,7 +203,7 @@ class TestGroupLawAdmission:
         curve = ShortWeierstrassCurve(coefficient_a=_pt("0"), coefficient_b=_pt("0"))
         p = RationalAffinePoint(x=_pt("1"), y=_pt("1"))
         with pytest.raises(ValidationError, match="nonsingular"):
-            ScalarMultiplicationRequest(curve=curve, point=p, scalar=2)
+            ScalarMultiplicationRequest(curve=curve, point=_operand(curve, p), scalar=2)
 
 
 class TestPrimeFieldModulusBound:
@@ -246,31 +264,64 @@ class TestResultSourceBinding:
     def test_point_addition_result_retains_its_parent_curve(self) -> None:
         """Doubling (0,0) on y²=x³+x and on y²=x³-x must serialize
         differently: each result carries its parent curve."""
+        origin = RationalAffinePoint(
+            x=CanonicalRational(num="0", den="1"),
+            y=CanonicalRational(num="0", den="1"),
+        )
         first = add_points(
             EllipticCurvePointAdditionRequest(
                 curve=self._curve("1", "0"),
-                first=RationalAffinePoint(
-                    x=CanonicalRational(num="0", den="1"),
-                    y=CanonicalRational(num="0", den="1"),
-                ),
-                second=RationalAffinePoint(
-                    x=CanonicalRational(num="0", den="1"),
-                    y=CanonicalRational(num="0", den="1"),
-                ),
+                first=_operand(self._curve("1", "0"), origin),
+                second=_operand(self._curve("1", "0"), origin),
             )
         )
         second = add_points(
             EllipticCurvePointAdditionRequest(
                 curve=self._curve("-1", "0"),
-                first=RationalAffinePoint(
-                    x=CanonicalRational(num="0", den="1"),
-                    y=CanonicalRational(num="0", den="1"),
-                ),
-                second=RationalAffinePoint(
-                    x=CanonicalRational(num="0", den="1"),
-                    y=CanonicalRational(num="0", den="1"),
-                ),
+                first=_operand(self._curve("-1", "0"), origin),
+                second=_operand(self._curve("-1", "0"), origin),
             )
         )
         assert first.at_infinity and second.at_infinity
         assert first.curve != second.curve
+
+
+class TestGroupLawComposition:
+    """Group-law results compose into later group-law requests unchanged."""
+
+    def test_infinity_result_feeds_addition_as_identity(self) -> None:
+        curve = ShortWeierstrassCurve(coefficient_a=_pt("1"), coefficient_b=_pt("0"))
+        origin = RationalAffinePoint(x=_pt("0"), y=_pt("0"))
+        doubled = add_points(
+            EllipticCurvePointAdditionRequest(
+                curve=curve,
+                first=_operand(curve, origin),
+                second=_operand(curve, origin),
+            )
+        )
+        assert doubled.at_infinity
+
+        chained = add_points(
+            EllipticCurvePointAdditionRequest(
+                curve=curve,
+                first=doubled,
+                second=_operand(curve, origin),
+            )
+        )
+        assert chained.at_infinity is False
+        assert chained.point.x.as_fraction() == Fraction(0)
+
+    def test_point_addition_result_feeds_scalar_multiply(self) -> None:
+        curve = ShortWeierstrassCurve(coefficient_a=_pt("-2"), coefficient_b=_pt("0"))
+        p = RationalAffinePoint(x=_pt("2"), y=_pt("2"))
+        added = add_points(
+            EllipticCurvePointAdditionRequest(
+                curve=curve,
+                first=_operand(curve, p),
+                second=_operand(curve, p),
+            )
+        )
+        result = scalar_multiply(
+            ScalarMultiplicationRequest(curve=curve, point=added, scalar=2)
+        )
+        assert result.point is not None

@@ -1,7 +1,7 @@
 """Admission bounds and known-answer checks for forbidden-pattern screening."""
 
-from pydantic import ValidationError
 import pytest
+from pydantic import ValidationError
 
 from jacobian.math.geometry._models import (
     ForbiddenConfiguration,
@@ -48,3 +48,21 @@ def test_oversized_coordinate_height_is_rejected_at_admission():
 def test_tool_declares_the_screening_operation():
     ids = {tool.operation_id for tool in PROFILE_OPERATIONS}
     assert "geometry.configuration.forbidden_patterns.check" in ids
+
+
+def test_published_example_matches_general_position_claim():
+    from jacobian.math.geometry._operations import forbidden_patterns
+
+    operation = next(
+        tool
+        for tool in PROFILE_OPERATIONS
+        if tool.operation_id == "geometry.configuration.forbidden_patterns.check"
+    )
+    assert operation.examples, "the screening operation must publish an example"
+    for published in operation.examples:
+        request = operation.request_type.model_validate(published.input)
+        result = forbidden_patterns(request)
+        assert result.has_collinear_triple is False
+        assert result.has_concyclic_quadruple is False
+        assert result.checked_triples == 4
+        assert result.checked_quadruples == 1

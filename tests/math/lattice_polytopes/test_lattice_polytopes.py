@@ -239,16 +239,6 @@ class TestRejection:
         with pytest.raises(ValidationError, match="exactly one"):
             LatticePolytopeRequest()
 
-    def test_empty_halfspace_polytope_rejected(self) -> None:
-        # x <= 0 and -x <= -1 (i.e. x >= 1): no feasible point.
-        with pytest.raises(ValidationError, match="empty"):
-            LatticePolytopeRequest(
-                halfspaces=(
-                    _hs((("1", "1"),), ("0", "1")),
-                    _hs((("-1", "1"),), ("-1", "1")),
-                ),
-            )
-
     def test_all_zero_halfspace_normal_rejected(self) -> None:
         with pytest.raises(ValidationError, match="must not all be zero"):
             Halfspace(
@@ -755,3 +745,111 @@ class TestTightBoundingBox:
             )
         )
         assert result.point_count == 0
+
+
+class TestBoundedEmptyHalfspacePolytopes:
+    """A bounded but empty H-representation has an exact empty value.
+
+    Boundedness (trivial recession cone) is established first; complete
+    vertex enumeration then finding no vertex proves the polyhedron
+    empty, so count zero and an empty enumeration are the exact answers.
+    """
+
+    EMPTY_INTERVAL = (
+        _hs((("1", "1"),), ("0", "1")),  #  x <= 0
+        _hs((("-1", "1"),), ("-1", "1")),  # -x <= -1, i.e. x >= 1
+    )
+
+    def test_reviewer_bounded_empty_interval_counts_zero(self) -> None:
+        request = LatticePolytopeRequest(halfspaces=self.EMPTY_INTERVAL)
+        result = count_lattice_points(request)
+        assert result.point_count == 0
+        assert result.dimension == 1
+        assert result.representation == "halfspaces"
+
+    def test_reviewer_bounded_empty_interval_enumerates_no_points(self) -> None:
+        request = EnumerateLatticePointsRequest(halfspaces=self.EMPTY_INTERVAL)
+        result = enumerate_lattice_points(request)
+        assert result.point_count == 0
+        assert result.points == ()
+        assert result.dimension == 1
+        assert result.representation == "halfspaces"
+
+    def test_bounded_empty_square_is_admitted_and_empty(self) -> None:
+        # x <= -1 with x >= 2 and 0 <= y <= 0: positively spanning
+        # normals, trivial recession cone, no feasible point in 2-D.
+        square = (
+            _hs((("1", "1"), ("0", "1")), ("-1", "1")),
+            _hs((("-1", "1"), ("0", "1")), ("-2", "1")),
+            _hs((("0", "1"), ("1", "1")), ("0", "1")),
+            _hs((("0", "1"), ("-1", "1")), ("0", "1")),
+        )
+        counted = count_lattice_points(LatticePolytopeRequest(halfspaces=square))
+        assert counted.point_count == 0
+        enumerated = enumerate_lattice_points(
+            EnumerateLatticePointsRequest(halfspaces=square)
+        )
+        assert enumerated.point_count == 0
+        assert enumerated.points == ()
+
+    def test_unbounded_representation_still_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="unbounded"):
+            LatticePolytopeRequest(halfspaces=(_hs((("1", "1"),), ("0", "1")),))
+
+    def test_declarations_disclose_the_empty_h_result(self) -> None:
+        from jacobian.math.lattice_polytopes._tools import TOOLS
+
+        tools = {tool.operation_id: tool for tool in TOOLS}
+        for operation_id in (
+            "polytope.lattice_points.enumerate",
+            "polytope.lattice_points.count",
+        ):
+            description = tools[operation_id].description.lower()
+            assert len(tools[operation_id].description) <= 512
+            assert "empty" in description
+        schema = LatticePolytopeRequest.model_json_schema()
+        halfspaces_description = schema["properties"]["halfspaces"]["description"]
+        assert "empty" in halfspaces_description.lower()
+
+
+class TestEnumerationResultPointCap:
+    """The serialized enumeration cannot represent an impossible artifact."""
+
+    def test_point_count_above_the_materialization_cap_is_rejected(self) -> None:
+        from jacobian.math.lattice_polytopes._models import (
+            MAX_LATTICE_POINTS,
+            EnumerateLatticePointsResult,
+        )
+
+        # Field bounds run before cross-field validators, so the raised
+        # error is the cap itself rather than the equality mismatch.
+        with pytest.raises(ValidationError) as excinfo:
+            EnumerateLatticePointsResult(
+                dimension=1,
+                point_count=MAX_LATTICE_POINTS + 1,
+                points=(),
+                representation="vertices",
+            )
+        assert any(
+            error["type"] == "less_than_equal" and error["loc"] == ("point_count",)
+            for error in excinfo.value.errors()
+        )
+
+    def test_schema_advertises_the_admitted_caps(self) -> None:
+        from jacobian.math.lattice_polytopes._models import (
+            MAX_LATTICE_POINTS,
+            EnumerateLatticePointsResult,
+        )
+
+        properties = EnumerateLatticePointsResult.model_json_schema()["properties"]
+        assert properties["point_count"]["maximum"] == MAX_LATTICE_POINTS
+        assert properties["points"]["maxItems"] == MAX_LATTICE_POINTS
+
+    def test_admitted_enumeration_results_satisfy_the_cap(self) -> None:
+        from jacobian.math.lattice_polytopes._models import MAX_LATTICE_POINTS
+
+        result = enumerate_lattice_points(
+            LatticePolytopeRequest(vertices=UNIT_SQUARE_V)
+        )
+        assert 0 <= result.point_count <= MAX_LATTICE_POINTS
+        assert len(result.points) <= MAX_LATTICE_POINTS

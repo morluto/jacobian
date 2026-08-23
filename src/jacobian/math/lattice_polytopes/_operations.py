@@ -25,6 +25,9 @@ origin lies strictly in the interior of the convex hull of the rows of
 row normals.  Once boundedness is established the bounding box is the
 per-axis min/max of the enumerated vertices (every ``C(m, d)``
 subsystem of half-space boundaries that satisfies all half-spaces).
+When that enumeration finds no vertex, the bounded polyhedron is
+empty and both operations return their exact empty value (count zero,
+no points).
 """
 
 from __future__ import annotations
@@ -304,9 +307,12 @@ def _facets_and_box(  # noqa: C901
 ) -> AdmittedGeometry:
     """Build the integer facet inequalities and the integer bounding box.
 
-    Raises ``LatticePointBudgetError`` when the bounding box spans more
-    than ``MAX_BOUND_SPAN`` integer points in any axis, and
-    ``ValueError`` when the polytope is empty or unbounded.
+    Raises ``ValueError`` when the H-representation is unbounded, and
+    ``LatticePointBudgetError`` when the bounding box spans more than
+    ``MAX_BOUND_SPAN`` integer points in any axis or more than the total
+    scan budget.  A bounded but empty H-polytope admits no vertex, so it
+    returns the canonical empty geometry (no facets, per-axis ``[0, -1]``
+    boxes) whose scan is exactly empty.
     """
     facets: list[tuple[tuple[int, ...], int]] = []
     if request.halfspaces is not None:
@@ -320,12 +326,16 @@ def _facets_and_box(  # noqa: C901
         d = request.dimension()
         if not _is_bounded_h(halfspaces, d):
             raise ValueError(
-                "the H-representation is unbounded; lattice-point enumeration "
-                "requires a bounded polytope"
+                "the H-representation is unbounded whenever non-empty "
+                "(its recession cone is nontrivial); lattice-point "
+                "enumeration requires a bounded polytope"
             )
         verts, _ = _vertices_from_h_representation(halfspaces)
         if not verts:
-            raise ValueError("the H-representation defines an empty polytope")
+            # Boundedness was established above, so the polyhedron is
+            # empty: its lattice-point set is empty, and the canonical
+            # empty box scans no candidate at all.
+            return [], [0] * d, [-1] * d, d
         # Facets are the distinct normalized half-spaces (already oriented
         # as <=); normalization merges repeated inequalities so the scan's
         # membership work matches the request-admission bound.

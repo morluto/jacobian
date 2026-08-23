@@ -56,7 +56,7 @@ LATTICE_POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "V-representation must be full-dimensional (vertices must affinely "
         "span the ambient dimension); the supported exception is a "
         "one-dimensional input, accepted for every vertex family including "
-        "a single point.",
+        "a single point. A bounded empty H-system yields no points.",
         EnumerateLatticePointsRequest,
         EnumerateLatticePointsResult,
         enumerate_lattice_points,
@@ -108,7 +108,8 @@ LATTICE_POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "the exact inequalities. A V-representation must be "
         "full-dimensional (vertices must affinely span the ambient "
         "dimension); the supported exception is a one-dimensional input, "
-        "accepted for every vertex family including a single point.",
+        "accepted for every vertex family including a single point. A "
+        "bounded empty H-system counts zero.",
         LatticePolytopeRequest,
         CountLatticePointsResult,
         count_lattice_points,

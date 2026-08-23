@@ -123,7 +123,9 @@ class LatticePolytopeRequest(StrictModel):
         default=None,
         description=(
             "H-representation: the half-spaces ``<a_i, x> <= b_i``. "
-            "Mutually exclusive with ``vertices``."
+            "Mutually exclusive with ``vertices``.  A bounded but empty "
+            "system is valid and yields the exact empty result (count "
+            "zero, no points)."
         ),
     )
     dimension_bound: int = Field(
@@ -247,11 +249,11 @@ class LatticePolytopeRequest(StrictModel):
     def _validate_halfspace_geometry(self) -> None:
         """Admit the half-space geometry before any enumeration work.
 
-        Bounded-ness and non-emptiness are decided exactly inside the
-        shared geometry computation, and membership work is bounded by
-        distinct-facet count times bounding-box scan, so an accepted
-        request always describes a bounded, non-empty polytope whose
-        scan stays inside the admitted work budget.
+        Bounded-ness is decided exactly inside the shared geometry
+        computation, and membership work is bounded by distinct-facet
+        count times bounding-box scan, so an accepted request always
+        describes a bounded, possibly empty polytope whose scan stays
+        inside the admitted work budget.
         """
         if self._membership_work() > MAX_FACET_TESTS:
             raise ValueError(
@@ -286,11 +288,17 @@ class LatticePoint(StrictModel):
 
 
 class EnumerateLatticePointsResult(StrictModel):
-    """The complete list of lattice points inside a bounded rational polytope."""
+    """The complete list of lattice points inside a bounded rational polytope.
+
+    The artifact is capped at ``MAX_LATTICE_POINTS`` points, the same
+    materialization bound admission enforces on every accepted enumerate
+    request, so the serialized result cannot represent an enumeration no
+    admitted request can produce.
+    """
 
     dimension: int = Field(ge=1, le=MAX_DIMENSION)
-    point_count: int = Field(ge=0)
-    points: tuple[LatticePoint, ...]
+    point_count: int = Field(ge=0, le=MAX_LATTICE_POINTS)
+    points: tuple[LatticePoint, ...] = Field(max_length=MAX_LATTICE_POINTS)
     representation: RepresentationName
 
     @model_validator(mode="after")

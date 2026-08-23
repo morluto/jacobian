@@ -15,12 +15,15 @@ from jacobian.math.finite_group_actions._models import (
     ElementCyclesResult,
     PolyaInventoryRequest,
     PolyaInventoryResult,
+    SubsetCanonicalizationRequest,
+    SubsetCanonicalizationResult,
 )
 from jacobian.math.finite_group_actions._operations import (
     compute_burnside_count,
     compute_cycle_index,
     compute_element_cycles,
     compute_polya_inventory,
+    compute_subset_canonicalization,
 )
 
 
@@ -81,6 +84,37 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {
                     "action": _ACTION,
                     "element": 0,
+                },
+            ),
+        ),
+    ),
+    _op(
+        "group_action.subset.canonicalize",
+        "Canonicalize a subset under a finite permutation action",
+        "Return the lexicographically least image of a subset under the "
+        "generated group, using increasing action-domain position tuples, "
+        "together with the lexicographically least transporter to that image "
+        "and exact subset-orbit and setwise-stabilizer sizes.",
+        SubsetCanonicalizationRequest,
+        SubsetCanonicalizationResult,
+        compute_subset_canonicalization,
+        "algebra",
+        "group",
+        "permutation",
+        "subset",
+        "canonicalization",
+        "transporter",
+        "orbit-stabilizer",
+        "exact",
+        examples=(
+            example(
+                "cyclic_c3_singleton_canonicalization",
+                "Canonicalize the singleton at position 2 under C_3; subset "
+                "positions must be distinct indices into the declared domain "
+                "and the generated group must have order at most 720.",
+                {
+                    "action": _ACTION,
+                    "subset": [2],
                 },
             ),
         ),

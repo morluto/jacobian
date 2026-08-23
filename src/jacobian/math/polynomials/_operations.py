@@ -281,6 +281,22 @@ def _compute_membership_context(
     return wire_basis, basis
 
 
+def _budget_exceeded_normal_form(
+    request: IdealMembershipRequest,
+    groebner_basis: tuple[RationalPolynomial, ...] | None,
+) -> IdealNormalFormResult:
+    """Report the typed budget outcome without a partial exact artifact."""
+
+    return IdealNormalFormResult(
+        ideal=request.ideal,
+        polynomial=request.polynomial,
+        monomial_order=request.monomial_order,
+        status="BUDGET_EXCEEDED",
+        groebner_basis=groebner_basis,
+        remainder=None,
+    )
+
+
 def polynomial_ideal_normal_form(
     request: IdealMembershipRequest,
 ) -> IdealNormalFormResult:
@@ -289,15 +305,8 @@ def polynomial_ideal_normal_form(
     variables = request.ideal.variables
     symbols = symbols_for_variables(variables)
     wire_basis, _source_basis = _compute_membership_context(request)
-    source = {"ideal": request.ideal, "polynomial": request.polynomial}
     if wire_basis is None:
-        return IdealNormalFormResult(
-            **source,
-            monomial_order=request.monomial_order,
-            status="BUDGET_EXCEEDED",
-            groebner_basis=None,
-            remainder=None,
-        )
+        return _budget_exceeded_normal_form(request, None)
     # Reduce with a bounded sparse-ring division so an admitted request can
     # never expand an unbounded intermediate remainder before the 1,024-term
     # output boundary is noticed; overflow becomes the typed budget outcome.
@@ -306,13 +315,7 @@ def polynomial_ideal_normal_form(
     dividend = _ring_element(ring_context, request.polynomial)
     replayed = budgeted_reduce(ring_context, dividend, divisors)
     if replayed is None:
-        return IdealNormalFormResult(
-            **source,
-            monomial_order=request.monomial_order,
-            status="BUDGET_EXCEEDED",
-            groebner_basis=wire_basis,
-            remainder=None,
-        )
+        return _budget_exceeded_normal_form(request, wire_basis)
     try:
         remainder = _result_polynomial(
             sympy.Poly.from_dict(
@@ -331,17 +334,16 @@ def polynomial_ideal_normal_form(
     except (PolynomialOutputBudgetError, Exception) as exc:
         from pydantic import ValidationError
 
-        if isinstance(exc, (PolynomialOutputBudgetError, ValidationError)) or "exponent" in str(exc).lower() or "representation limit" in str(exc).lower():
-            return IdealNormalFormResult(
-                **source,
-                monomial_order=request.monomial_order,
-                status="BUDGET_EXCEEDED",
-                groebner_basis=wire_basis,
-                remainder=None,
-            )
+        if (
+            isinstance(exc, (PolynomialOutputBudgetError, ValidationError))
+            or "exponent" in str(exc).lower()
+            or "representation limit" in str(exc).lower()
+        ):
+            return _budget_exceeded_normal_form(request, wire_basis)
         raise
     return IdealNormalFormResult(
-        **source,
+        ideal=request.ideal,
+        polynomial=request.polynomial,
         monomial_order=request.monomial_order,
         status="COMPUTED",
         groebner_basis=wire_basis,
@@ -355,21 +357,26 @@ def polynomial_ideal_membership(
     """Decide whether a polynomial lies in an ideal."""
 
     normal_form = polynomial_ideal_normal_form(request)
-    source = {
-        "ideal": normal_form.ideal,
-        "polynomial": normal_form.polynomial,
-        "monomial_order": normal_form.monomial_order,
-        "groebner_basis": normal_form.groebner_basis,
-    }
     if normal_form.status == "BUDGET_EXCEEDED":
         return IdealMembershipResult(
-            **source,
+            ideal=normal_form.ideal,
+            polynomial=normal_form.polynomial,
+            monomial_order=normal_form.monomial_order,
+            groebner_basis=normal_form.groebner_basis,
             status="BUDGET_EXCEEDED",
             normal_form=None,
         )
-    is_zero = len(normal_form.remainder.polynomial.terms) == 0
+    remainder = normal_form.remainder
+    if remainder is None:
+        raise PolynomialOutputBudgetError(
+            "COMPUTED normal form must carry its exact remainder"
+        )
+    is_zero = len(remainder.polynomial.terms) == 0
     return IdealMembershipResult(
-        **source,
+        ideal=normal_form.ideal,
+        polynomial=normal_form.polynomial,
+        monomial_order=normal_form.monomial_order,
+        groebner_basis=normal_form.groebner_basis,
         status="IN_IDEAL" if is_zero else "NOT_IN_IDEAL",
-        normal_form=normal_form.remainder,
+        normal_form=remainder,
     )

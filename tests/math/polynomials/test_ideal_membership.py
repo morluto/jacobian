@@ -415,7 +415,9 @@ def test_basis_growth_beyond_representability_reports_typed_outcome() -> None:
         return _poly(
             variables,
             {
-                tuple(12 if index == shift + 1 else 0 for index in range(8)): coefficient,
+                tuple(
+                    12 if index == shift + 1 else 0 for index in range(8)
+                ): coefficient,
                 tuple(1 if index == shift else 0 for index in range(8)): -1,
             },
         )
@@ -470,7 +472,13 @@ def test_later_generator_collapse_not_reported_as_budget_overflow() -> None:
         return RationalPolynomial(
             variables=variables,
             polynomial=SparseRationalPolynomial(
-                terms=tuple(sorted((term(e) for e in terms), key=lambda t: t.exponents, reverse=True))
+                terms=tuple(
+                    sorted(
+                        (term(e) for e in terms),
+                        key=lambda t: t.exponents,
+                        reverse=True,
+                    )
+                )
             ),
         )
 
@@ -520,7 +528,13 @@ def _collapse_ideal_generators() -> tuple[RationalPolynomial, ...]:
         return RationalPolynomial(
             variables=variables,
             polynomial=SparseRationalPolynomial(
-                terms=tuple(sorted((term(e) for e in terms), key=lambda t: t.exponents, reverse=True))
+                terms=tuple(
+                    sorted(
+                        (term(e) for e in terms),
+                        key=lambda t: t.exponents,
+                        reverse=True,
+                    )
+                )
             ),
         )
 
@@ -610,9 +624,7 @@ def test_prefix_cap_does_not_decide_outcome_for_late_collapse() -> None:
     from itertools import product
 
     variables = ("x", "y", "z")
-    f_terms = {
-        (0, a, b): 1 for a, b in product(range(9), repeat=2) if a + b <= 8
-    }
+    f_terms = {(0, a, b): 1 for a, b in product(range(9), repeat=2) if a + b <= 8}
     assert len(f_terms) == 45
     ideal = RationalPolynomialIdeal(
         variables=variables,

@@ -38,7 +38,7 @@ def _component_exceeds_limit(numerator: int, denominator: int) -> bool:
 
     from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
 
-    bound = 10**MAX_CANONICAL_RATIONAL_DIGITS
+    bound: int = 10**MAX_CANONICAL_RATIONAL_DIGITS
     return abs(numerator) >= bound or abs(denominator) >= bound
 
 
@@ -148,7 +148,9 @@ def incremental_source_groebner(
     variables = ideal.variables
     symbols = symbols_for_variables(variables)
     try:
-        exprs = [rational_polynomial_to_sympy(gen).as_expr() for gen in ideal.generators]
+        exprs = [
+            rational_polynomial_to_sympy(gen).as_expr() for gen in ideal.generators
+        ]
     except Exception:
         return None, False
     ordered = [exprs[index] for index in _canonical_generator_order(ideal)]
@@ -181,9 +183,7 @@ def incremental_source_groebner(
 def _coefficient_exceeds_canonical_limit(value: Any) -> bool:
     """Check whether one exact QQ coefficient leaves the canonical rational domain."""
 
-    return _component_exceeds_limit(
-        int(value.numerator), int(value.denominator)
-    )
+    return _component_exceeds_limit(int(value.numerator), int(value.denominator))
 
 
 def budgeted_reduce(
@@ -211,9 +211,7 @@ def budgeted_reduce(
         reducer = None
         for divisor in divisors:
             lm = divisor.leading_expv()
-            if lm is not None and all(
-                lead_monom[k] >= lm[k] for k in range(len(lm))
-            ):
+            if lm is not None and all(lead_monom[k] >= lm[k] for k in range(len(lm))):
                 reducer = divisor
                 break
         if reducer is not None:
@@ -292,7 +290,7 @@ def remainder_matches_claim(
     if replayed is None:
         return False
     claimed = _ring_element(ring_context, claimed_remainder)
-    return replayed == claimed
+    return bool(replayed == claimed)
 
 
 def generators_reduce_to_zero(
@@ -305,9 +303,7 @@ def generators_reduce_to_zero(
     ring_context = _sparse_ring(ideal.variables, monomial_order)
     zero = ring_context.zero
     for generator in ideal.generators:
-        replayed = _replay_division(
-            ideal, groebner_basis, generator, monomial_order
-        )
+        replayed = _replay_division(ideal, groebner_basis, generator, monomial_order)
         # An overflowing reduction cannot be corroborated, so fail closed.
         if replayed is None or replayed != zero:
             return False
@@ -402,6 +398,7 @@ def retained_basis_is_groebner(
         return True
     if len(computed_polys) != len(groebner_basis):
         return False
+
     # Compare as unordered sets of wire forms (sorted fingerprint).
     def _key(poly: RationalPolynomial) -> tuple[tuple[tuple[int, ...], str, str], ...]:
         return tuple(

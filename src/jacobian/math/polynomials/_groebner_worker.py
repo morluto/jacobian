@@ -34,8 +34,8 @@ from jacobian.process import (
     worker_environment,
 )
 
-_TIMEOUT_SECONDS = 10.0
-_CPU_SECONDS = 10
+_TIMEOUT_SECONDS = 60.0
+_CPU_SECONDS = 60
 _ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
 _FILE_SIZE_BYTES = 1024 * 1024
 _STDOUT_LIMIT = 128_000_000

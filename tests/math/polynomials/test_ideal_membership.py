@@ -407,7 +407,9 @@ def test_unsubstantiated_budget_outcome_without_basis_rejected() -> None:
         )
 
 
-def test_basis_growth_beyond_representability_reports_non_conclusion() -> None:
+def test_basis_growth_beyond_representability_reports_non_conclusion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # The eight-variable lex chain <x1-C*x2^12, ..., x7-C*x8^12> with
     # C = 10**127 has a reduced basis element whose coefficient would carry
     # hundreds of millions of digits.  No prefix may decide that outcome
@@ -440,11 +442,16 @@ def test_basis_growth_beyond_representability_reports_non_conclusion() -> None:
     )
     # The worker is killed by its wall-clock deadline before its own work
     # guards can report: a retryable transport fault, not a mathematical
-    # conclusion about the ideal.
+    # conclusion about the ideal. The production safety net stays generous
+    # for admitted heavy instances, so this kill-path exercise injects a
+    # short deadline instead of waiting out the real one.
+    import jacobian.math.polynomials._groebner_worker as worker_module
     from jacobian.math.polynomials._groebner_worker import (
         GroebnerWorkerTimeoutError,
     )
 
+    monkeypatch.setattr(worker_module, "_TIMEOUT_SECONDS", 2.0)
+    monkeypatch.setattr(worker_module, "_CPU_SECONDS", 2)
     with pytest.raises(GroebnerWorkerTimeoutError):
         polynomial_ideal_normal_form(request)
     with pytest.raises(GroebnerWorkerTimeoutError):

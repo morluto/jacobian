@@ -128,12 +128,22 @@ class RecurrenceCoefficientsRequest(StrictModel):
             raise ValueError("the zeroth moment must be nonzero")
         # The Gram-Schmidt kernel requires a positive-definite moment
         # functional; admit exactly the sequences it accepts so an accepted
-        # request cannot fail inside execution.
+        # request cannot fail inside execution. The derived coefficients must
+        # also fit the canonical result limit: a sequence can be
+        # positive-definite with every moment representable while its exact
+        # recurrence coefficients overflow CanonicalRational, and such
+        # sequences are rejected here rather than at result construction.
         from jacobian.math.moments_orthogonal.operations import (
             recurrence_coefficients,
         )
 
-        recurrence_coefficients(_to_fractions(self.moments))
+        derived = recurrence_coefficients(_to_fractions(self.moments))
+        for value in (*derived.alpha, *derived.beta):
+            require_bounded_rational(
+                CanonicalRational.from_fraction(value),
+                max_digits=MAX_RATIONAL_DIGITS,
+                label="recurrence coefficient",
+            )
         return self
 
 

@@ -897,3 +897,77 @@ class TestReviewRegressions:
                     assert "full" in lowered
                 if ex.name == "unit_square_halfspaces":
                     assert "bounded" in lowered
+
+
+class TestSecondWaveRegressions:
+    def test_feasibility_probe_uses_unrestricted_coordinates(self):
+        """x <= -1 is unbounded, not empty: the probe must not assume x >= 0."""
+        with pytest.raises(ValidationError, match="unbounded"):
+            LatticePolytopeRequest(halfspaces=(_hs((("-1", "1"),), ("-1", "1")),))
+
+    def test_empty_integer_slice_detected_before_span_budgets(self):
+        """[0,9999]^2 x [1/3,2/3] has an exactly empty integer scan."""
+        request = LatticePolytopeRequest.model_validate(
+            {
+                "vertices": [
+                    {
+                        "coordinates": [
+                            {"num": a, "den": "1"},
+                            {"num": b, "den": "1"},
+                            {"num": c, "den": "3"},
+                        ]
+                    }
+                    for a, b, c in (
+                        ("0", "0", "1"),
+                        ("9999", "0", "1"),
+                        ("0", "9999", "1"),
+                        ("9999", "9999", "2"),
+                    )
+                ]
+            }
+        )
+        result = count_lattice_points(request)
+        assert result.point_count == 0
+
+    def test_derived_h_vertex_coordinates_bounded_at_admission(self):
+        """x/(10^m) <= 10^k pinned from below derives x = 10^(k+m).
+
+        Every input component stays beneath the canonical component limit,
+        yet the solved vertex coordinate exceeds it; admission must reject
+        before an accepted request fails while constructing LatticePoint.
+        """
+        small_den = "1" + "0" * 10000  # 10^10000, 10,001 digits
+        big_offset = "1" + "0" * 25000  # 10^25000, 25,001 digits
+        with pytest.raises(ValidationError, match="representable bound"):
+            LatticePolytopeRequest(
+                halfspaces=(
+                    _hs((("1", small_den),), (big_offset, "1")),
+                    _hs((("-1", small_den),), ("-" + big_offset, "1")),
+                )
+            )
+
+    def test_representation_bounds_are_schema_visible(self):
+        from jacobian.math.lattice_polytopes._models import (
+            MAX_HALFSPACES,
+            MAX_VERTICES,
+            LatticePolytopeRequest,
+        )
+
+        vertices_field = LatticePolytopeRequest.model_fields["vertices"]
+        halfspaces_field = LatticePolytopeRequest.model_fields["halfspaces"]
+        assert vertices_field.metadata or vertices_field.annotation is not None
+        schema = LatticePolytopeRequest.model_json_schema()
+        v_schema = schema["properties"]["vertices"]
+        h_schema = schema["properties"]["halfspaces"]
+        any_of_v = v_schema.get("anyOf", [v_schema])
+        any_of_h = h_schema.get("anyOf", [h_schema])
+        assert any(
+            item.get("maxItems") == MAX_VERTICES
+            for item in any_of_v
+            if isinstance(item, dict)
+        ), v_schema
+        assert any(
+            item.get("maxItems") == MAX_HALFSPACES
+            for item in any_of_h
+            if isinstance(item, dict)
+        ), h_schema

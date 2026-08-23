@@ -318,8 +318,14 @@ def _h_system_feasible(
     matrix = [[_SRational(c) for c in coeffs] for coeffs, _ in halfspaces]
     rhs = [_SRational(offset) for _, offset in halfspaces]
     objective = [0] * len(matrix[0])
+    # SymPy's simplex constrains every variable nonnegative unless bounds
+    # are given; lattice coordinates are unrestricted integers, so the probe
+    # must pass explicit (None, None) bounds or systems like x <= -1 would
+    # be misread as infeasible and an unbounded polyhedron admitted as the
+    # empty geometry.
+    bounds = [(None, None)] * len(matrix[0])
     try:
-        linprog(objective, matrix, rhs)
+        linprog(objective, matrix, rhs, bounds=bounds)
         return True
     except InfeasibleLPError:
         return False
@@ -348,6 +354,25 @@ def _facets_and_box(  # noqa: C901
         ]
         d = request.dimension()
         verts, _ = _vertices_from_h_representation(halfspaces)
+        # Solving the H-system can derive coordinates taller than every
+        # input component (e.g. x <= 1/N with -x <= -1/N pins x = N);
+        # each derived vertex coordinate must stay inside the canonical
+        # rational representable bound or LatticePoint construction would
+        # fail after acceptance.
+        from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
+        from jacobian.canonical import format_canonical_integer as _fmt
+
+        for point in verts:
+            for value in point:
+                if (
+                    len(_fmt(value.numerator)) > MAX_CANONICAL_RATIONAL_DIGITS
+                    or len(_fmt(value.denominator)) > MAX_CANONICAL_RATIONAL_DIGITS
+                ):
+                    raise ValueError(
+                        "the H-system derives vertex coordinates beyond the "
+                        f"canonical {MAX_CANONICAL_RATIONAL_DIGITS}-digit "
+                        "representable bound; tighten the half-space heights"
+                    )
         bounded = _is_bounded_h(halfspaces, d)
         # Infeasibility is checked BEFORE the recession-cone rejection: an
         # infeasible system defines the empty - therefore bounded - polytope
@@ -413,16 +438,22 @@ def _facets_and_box(  # noqa: C901
             _to_integer_facet(normal, offset, d) for normal, offset in rational_facets
         ]
     lo, hi = _bounding_box(verts, d)
-    for k in range(d):
-        if hi[k] - lo[k] + 1 > MAX_BOUND_SPAN:
+    spans = [hi[k] - lo[k] + 1 for k in range(d)]
+    if any(span <= 0 for span in spans):
+        # An axis whose ceil(min) > floor(max) holds no integer candidate:
+        # the full Cartesian scan is exactly empty regardless of the other
+        # axes, so return the canonical empty geometry BEFORE the budget
+        # products reject an exact empty result.
+        return [], [0] * d, [-1] * d, d
+    for span in spans:
+        if span > MAX_BOUND_SPAN:
             raise LatticePointBudgetError(
                 "the integer bounding box exceeds the "
                 f"{MAX_BOUND_SPAN}-point per-axis span bound"
             )
     # Total scan bound: product of per-axis spans, not just per-axis.
     total_scan = 1
-    for k in range(d):
-        span = hi[k] - lo[k] + 1
+    for span in spans:
         total_scan *= span
         if total_scan > 10_000_000:
             raise LatticePointBudgetError(

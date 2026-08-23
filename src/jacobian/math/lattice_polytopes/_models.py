@@ -109,6 +109,8 @@ class LatticePolytopeRequest(StrictModel):
 
     vertices: tuple[Vertex, ...] | None = Field(
         default=None,
+        min_length=1,
+        max_length=MAX_VERTICES,
         description=(
             "V-representation: the vertices of the convex hull.  The "
             "vertices must affinely span the ambient dimension "
@@ -121,6 +123,8 @@ class LatticePolytopeRequest(StrictModel):
     )
     halfspaces: tuple[Halfspace, ...] | None = Field(
         default=None,
+        min_length=1,
+        max_length=MAX_HALFSPACES,
         description=(
             "H-representation: the half-spaces ``<a_i, x> <= b_i``. "
             "Mutually exclusive with ``vertices``.  A bounded but empty "

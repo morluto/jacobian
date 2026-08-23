@@ -19,7 +19,7 @@ from jacobian.math.polynomials.values import (
 )
 
 
-def _frac_from_rational(value) -> Fraction:
+def _frac_from_rational(value: CanonicalRational) -> Fraction:
     return value.as_fraction()
 
 

@@ -436,3 +436,32 @@ class TestRecurrenceOutputBound:
         )
         result = recurrence_coefficients(moments)
         assert len(result.alpha) == 2
+
+
+class TestFinalBetaAtMaximumOrder:
+    def test_serialized_full_order_recurrence_enters_consumers(self):
+        """The 33-moment producer output (16 alphas, 17 betas) feeds consumers."""
+        from fractions import Fraction
+
+        result = recurrence_coefficients(tuple(Fraction(1, k + 1) for k in range(33)))
+        assert (len(result.alpha), len(result.beta)) == (16, 17)
+        request = JacobiMatrixRequest.model_validate(
+            {
+                "alpha": [
+                    {"num": str(v.numerator), "den": str(v.denominator)}
+                    for v in result.alpha
+                ],
+                "beta": [
+                    {"num": str(v.numerator), "den": str(v.denominator)}
+                    for v in result.beta
+                ],
+            }
+        )
+        assembled = jacobi_matrix(
+            tuple(v.as_fraction() for v in request.alpha),
+            tuple(v.as_fraction() for v in request.beta),
+        )
+        assert len(assembled.diagonal) == 16
+        # A trailing beta without the full-order alpha stays rejected.
+        with pytest.raises((ValueError, ValidationError)):
+            jacobi_matrix(result.alpha[:15], result.beta[:17])

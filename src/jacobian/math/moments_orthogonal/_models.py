@@ -58,8 +58,17 @@ def _validate_alpha_beta(
     alpha: tuple[CanonicalRational, ...],
     beta: tuple[CanonicalRational, ...],
 ) -> None:
-    if not 1 <= len(beta) <= MAX_RECURRENCE_ORDER:
-        raise ValueError("beta must contain between 1 and 16 entries")
+    # The final norm determined by a complete odd moment sequence yields one
+    # trailing beta beyond the consumed subdiagonal, so a full-order alpha
+    # admits MAX_RECURRENCE_ORDER + 1 betas.
+    maximum_beta = MAX_RECURRENCE_ORDER + (
+        1 if len(alpha) == MAX_RECURRENCE_ORDER else 0
+    )
+    if not 1 <= len(beta) <= maximum_beta:
+        raise ValueError(
+            f"beta must contain between 1 and {maximum_beta} entries for "
+            f"{len(alpha)} alphas"
+        )
     if not 0 <= len(alpha) <= MAX_RECURRENCE_ORDER:
         raise ValueError("alpha out of range")
     if len(alpha) != len(beta) and len(alpha) != len(beta) - 1:
@@ -352,8 +361,7 @@ class GaussianQuadratureRequest(StrictModel):
             )
         except ValueError as error:
             raise ValueError(
-                "quadrature recurrence data are ill-conditioned at "
-                f"admission: {error}"
+                f"quadrature recurrence data are ill-conditioned at admission: {error}"
             ) from None
         return self
 

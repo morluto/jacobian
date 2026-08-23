@@ -186,3 +186,36 @@ class TestRankSourceBinding:
         forged = _matrix(2, ((1, 0, 0), (0, 1, 0)), 3)
         with pytest.raises(ValidationError, match="reduced row-echelon"):
             RrefResult(matrix=source, rref=forged, pivot_columns=(0, 1))
+
+
+class TestPreConstructionPrimeBound:
+    @pytest.mark.parametrize(
+        "model_name", ["RankRequest", "RrefRequest", "NullspaceRequest"]
+    )
+    def test_oversized_prime_rejected_before_isprime(self, model_name):
+        """A ~3,000-digit modulus is rejected before nested construction."""
+        import time
+
+        from jacobian.math.prime_field_matrix_ops import _models
+
+        model = getattr(_models, model_name)
+        start = time.monotonic()
+        with pytest.raises(ValidationError, match="2147483647"):
+            model.model_validate(
+                {"matrix": {"prime": 2**9941 - 1, "entries": [], "columns": 0}}
+            )
+        assert time.monotonic() - start < 1.0
+
+    def test_detached_result_matrices_bound_before_construction(self):
+        from jacobian.math.prime_field_matrix_ops._models import RrefResult
+
+        with pytest.raises(ValidationError, match="2147483647"):
+            RrefResult.model_validate(
+                {
+                    "matrix": {"prime": 2**9941 - 1, "entries": [[1]], "columns": 1},
+                    "rref": {"prime": 2, "entries": [[1]], "columns": 1},
+                    "pivot_columns": [0],
+                    "complete": True,
+                    "method": "EXACT_DOMAIN_MATRIX_RREF",
+                }
+            )

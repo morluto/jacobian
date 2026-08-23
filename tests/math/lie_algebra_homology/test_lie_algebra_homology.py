@@ -284,6 +284,7 @@ class TestComplexResultBinding:
             source_dim=2,
             target_dim=3,
             entries=d2.entries[:3],
+            prime=5,
         )
         tampered_rows = tuple(row[:2] for row in truncated.entries)
         broken = DifferentialMatrix(
@@ -291,6 +292,7 @@ class TestComplexResultBinding:
             source_dim=2,
             target_dim=3,
             entries=tampered_rows,
+            prime=5,
         )
         others = tuple(d for d in full.differentials if d.degree != 2)
         with pytest.raises(ValidationError):
@@ -321,6 +323,7 @@ class TestComplexResultBinding:
             source_dim=d2.source_dim,
             target_dim=d2.target_dim,
             entries=tuple(tuple(row) for row in rows),
+            prime=5,
         )
         others = tuple(d for d in full.differentials if d.degree != 2)
         with pytest.raises(ValidationError, match="reconstructed"):
@@ -345,6 +348,7 @@ class TestComplexResultBinding:
             source_dim=d1.source_dim,
             target_dim=d1.target_dim,
             entries=tuple(tuple(row) for row in rows),
+            prime=5,
         )
         with pytest.raises(ValidationError, match="residues"):
             ChevalleyEilenbergComplexResult(

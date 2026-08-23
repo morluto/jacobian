@@ -35,8 +35,15 @@ def compute_rref(request: RrefRequest) -> RrefResult:
 
 
 def compute_nullspace(request: NullspaceRequest) -> NullspaceResult:
+    rows = nullspace(request.matrix)
+    nullspace_matrix = PrimeFieldMatrix(
+        prime=request.matrix.prime,
+        entries=tuple(tuple(row) for row in rows),
+        columns=request.matrix.columns,
+    )
     return NullspaceResult(
-        matrix=request.matrix, nullspace_rows=nullspace(request.matrix)
+        matrix=request.matrix,
+        nullspace_matrix=nullspace_matrix,
     )
 
 

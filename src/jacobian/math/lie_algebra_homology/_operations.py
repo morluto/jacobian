@@ -125,6 +125,7 @@ def _ce_differentials(
             source_dim=source_dim,
             target_dim=target_dim,
             entries=tuple(tuple(row) for row in diff_matrix),
+            prime=p,
         ))
     return tuple(differentials)
 

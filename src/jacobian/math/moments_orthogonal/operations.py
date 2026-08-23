@@ -179,6 +179,13 @@ def jacobi_matrix(
         raise TypeError("beta must use exact Fractions")
     if beta[0] <= 0:
         raise ValueError("beta_0 (the zeroth moment) must be positive")
+    # Squared subdiagonal entries must stay positive: a negative value cannot
+    # reconstruct a real symmetric Jacobi matrix.
+    for value in tuple(beta)[1 : len(alpha)]:
+        if value <= 0:
+            raise ValueError(
+                "subdiagonal beta entries must be positive squared-norm ratios"
+            )
     return JacobiMatrix(
         diagonal=tuple(alpha),
         # The squared subdiagonal entries are beta_1, ..., beta_{n-1}; beta_0 is
@@ -216,6 +223,11 @@ def christoffel_darboux(
         raise TypeError("x and y must use exact Fractions")
     if beta[0] <= 0:
         raise ValueError("beta_0 must be positive")
+    # A negative subdiagonal beta cannot arise from a positive functional;
+    # the kernel it produces would be mathematically meaningless.
+    for index in range(1, len(beta)):
+        if beta[index] < 0:
+            raise ValueError("subdiagonal beta entries must be nonnegative")
     n = len(alpha)
     if n == 0:
         return ChristoffelDarbouxKernel(

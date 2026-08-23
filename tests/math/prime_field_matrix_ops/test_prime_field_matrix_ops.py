@@ -88,9 +88,9 @@ class TestNullspace:
     def test_basic_nullspace(self) -> None:
         req = NullspaceRequest(matrix=PrimeFieldMatrix(prime=2, entries=[[1, 1, 0], [0, 1, 1]], columns=3))
         result = compute_nullspace(req)
-        assert len(result.nullspace_rows) == 1
+        assert len(result.nullspace_matrix.entries) == 1
         # Verify A*v = 0 mod p
-        ns = result.nullspace_rows[0]
+        ns = result.nullspace_matrix.entries[0]
         for row in req.matrix.entries:
             dot = sum(a * b for a, b in zip(row, ns, strict=True)) % req.matrix.prime
             assert dot == 0
@@ -98,7 +98,7 @@ class TestNullspace:
     def test_full_rank_no_nullspace(self) -> None:
         req = NullspaceRequest(matrix=PrimeFieldMatrix(prime=5, entries=[[1, 0], [0, 1]], columns=2))
         result = compute_nullspace(req)
-        assert result.nullspace_rows == ()
+        assert result.nullspace_matrix.entries == ()
 
     def test_nullity(self) -> None:
         """Nullity = columns - rank."""
@@ -106,7 +106,7 @@ class TestNullspace:
         rank_req = RankRequest(matrix=PrimeFieldMatrix(prime=3, entries=[[1, 2, 0], [0, 0, 1]], columns=3))
         null_result = compute_nullspace(req)
         rank_result = compute_rank(rank_req)
-        nullity = len(null_result.nullspace_rows)
+        nullity = len(null_result.nullspace_matrix.entries)
         assert nullity == req.matrix.columns - rank_result.rank
 
 

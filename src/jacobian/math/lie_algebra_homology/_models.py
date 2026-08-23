@@ -7,6 +7,7 @@ from typing import Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
 
 
 def _require_prime(prime: int) -> None:
@@ -114,6 +115,16 @@ class DifferentialMatrix(StrictModel):
     source_dim: int = Field(ge=1)
     target_dim: int = Field(ge=1)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=1)
+    prime: int = Field(ge=2, le=10_000)
+
+    @property
+    def matrix(self) -> PrimeFieldMatrix:
+        """Canonical prime-field matrix value for downstream composition."""
+        return PrimeFieldMatrix(
+            prime=self.prime,
+            entries=self.entries,
+            columns=self.source_dim,
+        )
 
 
 class ChevalleyEilenbergComplexResult(StrictModel):

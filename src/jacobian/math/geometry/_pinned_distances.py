@@ -77,6 +77,10 @@ def _require_admitted_pinned_points(
     """Admission checks shared by requests and directly validated results."""
     if len(points) > MAX_PINNED_POINTS:
         raise ValueError("point set exceeds the pinned-distance enumeration budget")
+    if len(points) < 2:
+        raise ValueError(
+            "a pinned-distance profile requires at least two distinct points"
+        )
     keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in points)
     if len(keys) != len(set(keys)):
         raise ValueError("point-set coordinates must be unique")

@@ -351,9 +351,18 @@ class GaussianQuadratureRequest(StrictModel):
             require_bounded_rational(
                 value, max_digits=MAX_RATIONAL_DIGITS, label="coefficient"
             )
-            if abs(value.as_fraction()) > MAX_QUADRATURE_MAGNITUDE:
+            magnitude = abs(value.as_fraction())
+            if magnitude > MAX_QUADRATURE_MAGNITUDE:
                 raise ValueError(
                     "quadrature coefficients exceed the finite-float magnitude bound"
+                )
+            # A semantically nonzero coefficient that converts to 0.0 would
+            # silently collapse a node or weight to zero; every admitted
+            # nonzero entry must survive double conversion as itself.
+            if 0 < magnitude < MIN_QUADRATURE_SUBDIAGONAL:
+                raise ValueError(
+                    "quadrature coefficients below the underflow bound would "
+                    "convert to zero doubles"
                 )
         return self
 

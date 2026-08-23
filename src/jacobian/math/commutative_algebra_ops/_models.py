@@ -339,10 +339,10 @@ class IdealSaturationResult(StrictModel):
                 raise ValueError(
                     "computed saturation requires a value and backend version"
                 )
-            # Replay against the retained sources with an amplified wall
-            # budget so a computation near the configured boundary is not
-            # misjudged by second-process jitter; exact equality is required
-            # on every healthy replay.
+            # Replay against the retained sources inside the caller-declared
+            # budget so validation never occupies more wall time than the
+            # request admitted; exact equality is required on every healthy
+            # replay.
             from jacobian.math.commutative_algebra_ops._singular import (
                 run_singular_ideal_operation,
             )
@@ -354,12 +354,11 @@ class IdealSaturationResult(StrictModel):
                 variables=self.ideal.variables,
                 generators=(self.saturation_polynomial,),
             )
-            replay_budget = self.resource_budget.model_copy(update={"wall_seconds": 60})
             replay = run_singular_ideal_operation(
                 "saturation",
                 self.ideal,
                 divisor,
-                replay_budget,
+                self.resource_budget,
             )
             if (
                 replay.outcome != "COMPUTED"

@@ -334,6 +334,24 @@ class TestWireAdapters:
         assert isinstance(result, GaussianQuadratureResult)
         assert len(result.nodes) == 3
 
+    def test_quadrature_rejects_underflowing_nonzero_alpha(self) -> None:
+        with pytest.raises(ValidationError, match="underflow"):
+            GaussianQuadratureRequest(
+                coefficients=RecurrenceCoefficientsValue(
+                    alpha=(_cr(1, 10**400),),
+                    beta=(_cr(1, 1),),
+                ),
+            )
+
+    def test_quadrature_admits_exact_zero_alpha(self) -> None:
+        request = GaussianQuadratureRequest(
+            coefficients=RecurrenceCoefficientsValue(
+                alpha=(_cr(0, 1),),
+                beta=(_cr(1, 1),),
+            ),
+        )
+        assert isinstance(compute_gaussian_quadrature(request), GaussianQuadratureResult)
+
     def test_hankel_validation_error(self) -> None:
         with pytest.raises(ValidationError):
             HankelMatrixRequest(moments=())

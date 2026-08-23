@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from jacobian.math.finite_group_actions._models import (
     MAX_GROUP_ORDER,
+    ActionBoundSubset,
     BurnsideCountRequest,
     BurnsideCountResult,
     CycleIndexRequest,
@@ -264,14 +265,14 @@ def compute_element_cycles(
 def compute_subset_canonicalization(
     request: SubsetCanonicalizationRequest,
 ) -> SubsetCanonicalizationResult:
-    """Canonicalize one subset under a finite permutation action."""
+    """Canonicalize one action-bound subset under its permutation action."""
+    action = request.subset.action
     canonical, transporter, orbit_size, stabilizer_size = _subset_canonicalization_data(
-        request.action, request.subset
+        action, request.subset.positions
     )
     return SubsetCanonicalizationResult(
-        action=request.action,
         source_subset=request.subset,
-        canonical_subset=canonical,
+        canonical_subset=ActionBoundSubset(action=action, positions=canonical),
         transporter=transporter,
         orbit_size=orbit_size,
         stabilizer_size=stabilizer_size,

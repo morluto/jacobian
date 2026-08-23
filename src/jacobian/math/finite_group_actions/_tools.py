@@ -92,9 +92,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "group_action.subset.canonicalize",
         "Canonicalize a subset under a finite permutation action",
         "Return the lexicographically least image of a subset under the "
-        "generated group, using increasing action-domain position tuples, "
-        "together with the lexicographically least transporter to that image "
-        "and exact subset-orbit and setwise-stabilizer sizes.",
+        "generated group as an action-bound value whose increasing domain "
+        "positions carry their permutation action, together with the "
+        "lexicographically least transporter to that image and exact "
+        "subset-orbit and setwise-stabilizer sizes.",
         SubsetCanonicalizationRequest,
         SubsetCanonicalizationResult,
         compute_subset_canonicalization,
@@ -110,11 +111,14 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "cyclic_c3_singleton_canonicalization",
                 "Canonicalize the singleton at position 2 under C_3; subset "
-                "positions must be distinct indices into the declared domain "
-                "and the generated group must have order at most 720.",
+                "positions are bound to the declared action and must be "
+                "distinct indices into its domain, and the generated group "
+                "must have order at most 720.",
                 {
-                    "action": _ACTION,
-                    "subset": [2],
+                    "subset": {
+                        "action": _ACTION,
+                        "positions": [2],
+                    },
                 },
             ),
         ),

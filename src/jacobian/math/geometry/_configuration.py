@@ -32,9 +32,9 @@ CONFIGURATION_OPERATIONS = (
             example(
                 "square_general_position",
                 "Search a unit square for collinear triples and concyclic "
-                 "quadruples; the four vertices of a square are concyclic (points "
-                 "are bounded: 3..32 points, each coordinate <=256 digits, "
-                 "C(n,4)*max_digits^2<=1000000).",
+                "quadruples; the four vertices of a square are concyclic (points "
+                "are bounded: 3..32 points, each coordinate <=256 digits, "
+                "C(n,4)*max_digits^2<=1000000).",
                 {
                     "points": [
                         {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},

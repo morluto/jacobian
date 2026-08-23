@@ -167,9 +167,7 @@ class TestAdmissionBounds:
 
     def test_general_position_accepts_moderate_configurations(self):
         """Shapes within the C(n,4)*digits^2 budget still run end to end."""
-        points = tuple(
-            _point(str(i), str(i * i + 1)) for i in range(16)
-        )
+        points = tuple(_point(str(i), str(i * i + 1)) for i in range(16))
         result = general_position_search(GeneralPositionRequest(points=points))
         assert result.num_points == 16
 

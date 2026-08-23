@@ -11,6 +11,11 @@ from jacobian.math.geometry.exact._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "geometry.points.pinned_line_distance_profile.compute",
+        AdmissionDecision.KEEP,
+        "complete exact source-bound line ledger and squared-distance partition with material leverage over per-pair projection calls",
+    ),
+    OperationAdmission(
         "geometry.points.distance_graph.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",

@@ -63,13 +63,7 @@ _TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "rank_gf2",
                 "Compute the rank of [[1,0,1],[0,1,1],[1,1,0]] over GF(2); "
                 "the entries must be canonical residues in [0, prime).",
-                {
-                    "matrix": {
-                        "prime": 2,
-                        "entries": [[1, 0, 1], [0, 1, 1], [1, 1, 0]],
-                        "columns": 3,
-                    }
-                },
+                {"prime": 2, "entries": [[1, 0, 1], [0, 1, 1], [1, 1, 0]]},
             ),
         ),
     ),
@@ -90,13 +84,7 @@ _TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "rref_gf2",
                 "Compute the RREF of [[1,0,1],[0,1,1],[1,1,0]] over GF(2); "
                 "the entries must be canonical residues in [0, prime).",
-                {
-                    "matrix": {
-                        "prime": 2,
-                        "entries": [[1, 0, 1], [0, 1, 1], [1, 1, 0]],
-                        "columns": 3,
-                    }
-                },
+                {"prime": 2, "entries": [[1, 0, 1], [0, 1, 1], [1, 1, 0]]},
             ),
         ),
     ),
@@ -117,13 +105,7 @@ _TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "nullspace_gf2",
                 "Compute the nullspace of [[1,0,1],[0,1,1]] over GF(2); "
                 "the entries must be canonical residues in [0, prime).",
-                {
-                    "matrix": {
-                        "prime": 2,
-                        "entries": [[1, 0, 1], [0, 1, 1]],
-                        "columns": 3,
-                    }
-                },
+                {"prime": 2, "entries": [[1, 0, 1], [0, 1, 1]]},
             ),
         ),
     ),

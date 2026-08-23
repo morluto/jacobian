@@ -337,6 +337,43 @@ class IdealSaturationResult(StrictModel):
                     "computed saturation requires its retained source values, "
                     "an exact value, and a backend version"
                 )
+            # A relayed result bypasses IdealSaturationRequest, so reapply the
+            # full request admission to the retained sources and the output
+            # budget to the claimed saturation BEFORE any replay work;
+            # otherwise a payload at the shared type limits could drive the
+            # lex Gröbner elimination far outside the operation's domain.
+            _require_ideal_budget(self.ideal, label="retained ideal")
+            require_polynomial_budget(
+                self.saturation_polynomial,
+                maximum_terms=MAX_INPUT_TERMS,
+                maximum_exponent=MAX_INPUT_EXPONENT,
+                maximum_coefficient_digits=MAX_COEFFICIENT_DIGITS,
+                label="retained saturation polynomial",
+            )
+            if any(
+                sum(term.exponents) > MAX_INPUT_EXPONENT
+                for term in self.saturation_polynomial.polynomial.terms
+            ):
+                raise ValueError(
+                    "retained saturation polynomial exceeds total degree "
+                    f"{MAX_INPUT_EXPONENT}"
+                )
+            if len(self.saturation.generators) > MAX_OUTPUT_GENERATORS:
+                raise ValueError(
+                    "claimed saturation exceeds the "
+                    f"{MAX_OUTPUT_GENERATORS}-generator output limit"
+                )
+            if (
+                sum(
+                    len(generator.polynomial.terms)
+                    for generator in self.saturation.generators
+                )
+                > MAX_OUTPUT_TERMS
+            ):
+                raise ValueError(
+                    "claimed saturation exceeds the "
+                    f"{MAX_OUTPUT_TERMS}-term output limit"
+                )
             _require_saturation_relation(
                 self.ideal, self.saturation_polynomial, self.saturation
             )

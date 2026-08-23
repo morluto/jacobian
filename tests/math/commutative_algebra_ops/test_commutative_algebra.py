@@ -532,6 +532,22 @@ class TestIdealSaturationResultBinding:
         with pytest.raises(ValidationError, match="retained source values"):
             IdealSaturationResult.model_validate(payload)
 
+    def test_out_of_domain_retained_source_rejected_before_replay(self) -> None:
+        """A relayed result cannot carry sources outside the request domain.
+
+        The retained saturation polynomial x^12*y^12 has total degree 24, far
+        outside the advertised degree-12 backend domain; validation must
+        reject it on admission instead of running the Gröbner replay.
+        """
+        with pytest.raises(ValidationError, match="total degree"):
+            IdealSaturationResult(
+                outcome="COMPUTED",
+                ideal=_ideal(("x", "y"), {(1, 1): 1}),
+                saturation_polynomial=_polynomial(("x", "y"), {(12, 12): 1}),
+                saturation=_ideal(("x", "y"), {(1, 0): 1}),
+                backend_version="4.4.0",
+            )
+
     def test_saturation_of_an_unrelated_source_is_rejected(self) -> None:
         """<x> is not (<xy> : <x>^infinity); the replay must reject the claim."""
         with pytest.raises(ValidationError):

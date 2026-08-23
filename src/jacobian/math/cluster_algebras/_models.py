@@ -26,11 +26,7 @@ _MAX_ENTRY_MAGNITUDE = 10**MAX_MUTATED_ENTRY_DIGITS
 
 def _require_bounded_entries(matrix: ExchangeMatrix, *, max_digits: int) -> None:
     magnitude = 10**max_digits
-    if any(
-        abs(entry) >= magnitude
-        for row in matrix.entries
-        for entry in row
-    ):
+    if any(abs(entry) >= magnitude for row in matrix.entries for entry in row):
         raise ValueError(
             f"exchange-matrix coefficients exceed the {max_digits}-digit bound"
         )
@@ -55,9 +51,7 @@ def _require_mutatable(matrix: ExchangeMatrix, index: int) -> None:
             if i == index or j == index:
                 continue
             b_kj = pivot_row[j]
-            growth = abs(
-                positive_i * max(b_kj, 0) - negative_i * max(-b_kj, 0)
-            )
+            growth = abs(positive_i * max(b_kj, 0) - negative_i * max(-b_kj, 0))
             if abs(b_ij) + growth >= _MAX_ENTRY_MAGNITUDE:
                 raise ValueError(
                     "mutation result exceeds the "
@@ -85,7 +79,9 @@ class ExchangeMatrix(StrictModel):
     """
 
     n: int = Field(ge=1, le=MAX_EXCHANGE_SIZE)
-    entries: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=MAX_EXCHANGE_SIZE)
+    entries: tuple[tuple[int, ...], ...] = Field(
+        min_length=1, max_length=MAX_EXCHANGE_SIZE
+    )
     symmetrizer: tuple[int, ...] = Field(min_length=1, max_length=MAX_EXCHANGE_SIZE)
 
     @model_validator(mode="after")
@@ -93,9 +89,7 @@ class ExchangeMatrix(StrictModel):
         # The representation ceiling keeps every skew-symmetrizability product
         # bounded; mutation requests further derive their one-step growth via
         # _require_mutatable.
-        _require_bounded_entries(
-            self, max_digits=MAX_MUTATED_ENTRY_DIGITS
-        )
+        _require_bounded_entries(self, max_digits=MAX_MUTATED_ENTRY_DIGITS)
         _require_bounded_symmetrizer(self)
         _require_shape(self)
         for i in range(self.n):
@@ -108,7 +102,10 @@ class ExchangeMatrix(StrictModel):
                 raise ValueError("diagonal entries must be zero")
         for i in range(self.n):
             for j in range(self.n):
-                if self.symmetrizer[i] * self.entries[i][j] != -self.symmetrizer[j] * self.entries[j][i]:
+                if (
+                    self.symmetrizer[i] * self.entries[i][j]
+                    != -self.symmetrizer[j] * self.entries[j][i]
+                ):
                     raise ValueError(
                         f"skew-symmetrizability condition violated at ({i}, {j})"
                     )

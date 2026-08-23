@@ -29,9 +29,7 @@ def _require_bounded_prime_field_matrix(
     *, prime: int, entries: tuple[tuple[int, ...], ...], columns: int
 ) -> None:
     if prime >= _MAX_MODULUS_MAGNITUDE:
-        raise ValueError(
-            f"prime exceeds the {MAX_MODULUS_DIGITS}-digit modulus bound"
-        )
+        raise ValueError(f"prime exceeds the {MAX_MODULUS_DIGITS}-digit modulus bound")
     if len(entries) > MAX_DIMENSION:
         raise ValueError("matrix exceeds the supported dimension bound")
     if any(len(row) != columns for row in entries):

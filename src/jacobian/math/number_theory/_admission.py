@@ -26,6 +26,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
     OperationAdmission(
+        "finite_abelian_group.spectral_pair.decide",
+        AdmissionDecision.KEEP,
+        "exact spectral-basis predicate not supplied by Boolean Walsh transforms or additive factorization",
+    ),
+    OperationAdmission(
         "integer.compute.aliquot_sum",
         AdmissionDecision.DROP,
         "ordinary arithmetic or cheap projection of a retained exact factorization/divisor result",

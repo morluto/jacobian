@@ -605,3 +605,54 @@ class TestAggregatePairLedgerBound:
         assert PinnedLineDistanceResult.model_validate(
             result.model_dump(mode="json")
         ) == result
+
+
+class TestSortedPairLedger:
+    def _collinear_profile(self):
+        from jacobian.math.geometry.exact._models import (
+            LabelledRationalPoint,
+            PinnedLineDistanceRequest,
+            PointConfiguration,
+        )
+        from jacobian.math.geometry.exact._operations import (
+            compute_pinned_line_distance_profile,
+        )
+
+        cfg = PointConfiguration(
+            points=tuple(
+                LabelledRationalPoint(label=label, coordinates=(_cr(x), _cr(y)))
+                for label, x, y in [("a", 0, 0), ("b", 1, 0), ("c", 2, 0)]
+            )
+        )
+        return compute_pinned_line_distance_profile(
+            PinnedLineDistanceRequest(configuration=cfg, anchor=(_cr(0), _cr(1)))
+        )
+
+    def test_producer_emits_sorted_pair_ledgers(self):
+        result = self._collinear_profile()
+        assert len(result.lines) >= 1
+        for entry in result.lines:
+            assert entry.pairs == tuple(sorted(entry.pairs))
+
+    def test_unsorted_pair_ledger_rejected(self):
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import PinnedLineDistanceResult
+
+        result = self._collinear_profile()
+        payload = result.model_dump(mode="json")
+        collinear_entry = max(range(len(payload["lines"])), key=lambda i: len(payload["lines"][i]["pairs"]))
+        assert len(payload["lines"][collinear_entry]["pairs"]) >= 3
+        payload["lines"][collinear_entry]["pairs"] = [[1, 2], [0, 1], [0, 2]]
+        with pytest.raises(ValidationError, match="must be sorted"):
+            PinnedLineDistanceResult.model_validate(payload)
+
+    def test_serialization_identity_preserved_for_authentic_results(self):
+        from jacobian.math.geometry.exact._models import PinnedLineDistanceResult
+
+        result = self._collinear_profile()
+        assert (
+            PinnedLineDistanceResult.model_validate(result.model_dump(mode="json"))
+            == result
+        )

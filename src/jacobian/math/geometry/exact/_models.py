@@ -395,6 +395,11 @@ class PinnedLineEntry(StrictModel):
                 raise ValueError("source pairs must be ordered (i < j)")
         if len(set(self.pairs)) != len(self.pairs):
             raise ValueError("source pairs must be unique")
+        if self.pairs != tuple(sorted(self.pairs)):
+            raise ValueError(
+                "source pairs must be sorted so each profile has exactly "
+                "one canonical serialization"
+            )
         if self.squared_distance.as_fraction() < 0:
             raise ValueError("squared distance must be nonnegative")
         return self

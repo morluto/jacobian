@@ -489,20 +489,29 @@ def test_ideal_saturation_binds_result_to_its_request() -> None:
 
 @requires_singular
 @pytest.mark.requires_backend("singular")
-def test_forged_saturation_value_rejected_against_retained_request() -> None:
+def test_saturation_result_validation_never_launches_singular(monkeypatch) -> None:
     variables = ("x", "y")
     request = IdealSaturationRequest(
         ideal=_ideal(variables, {(1, 1): 1}),
         saturation_polynomial=_polynomial(variables, {(1, 0): 1}),
     )
-    forged = {
+    payload = {
         "request": request.model_dump(),
         "outcome": "COMPUTED",
-        "saturation": _ideal(variables, {(1, 1): 1}).model_dump(),
+        "saturation": _ideal(variables, {(0, 1): 1}).model_dump(),
         "backend_version": "4.4.0",
     }
-    with pytest.raises(ValidationError, match="retained request"):
-        IdealSaturationResult.model_validate(forged)
+
+    def _fail(*args, **kwargs):
+        raise AssertionError("result validation must not launch Singular")
+
+    monkeypatch.setattr(
+        "jacobian.math.commutative_algebra_ops._singular."
+        "run_singular_ideal_operation",
+        _fail,
+    )
+    validated = IdealSaturationResult.model_validate(payload)
+    assert validated.saturation == _ideal(variables, {(0, 1): 1})
 
 
 def test_detached_saturation_payload_requires_its_request() -> None:

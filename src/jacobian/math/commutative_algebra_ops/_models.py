@@ -271,28 +271,14 @@ class IdealSaturationResult(StrictModel):
 
     @model_validator(mode="after")
     def require_outcome_shape(self) -> Self:
+        # Shape-only validation: the bounded Singular call happens exactly
+        # once inside compute_ideal_saturation.  Model validation must stay
+        # free of process execution so deserialization works on hosts
+        # without Singular and never doubles the enforced wall-time budget.
         if self.outcome == "COMPUTED":
             if self.saturation is None or self.backend_version is None or self.detail:
                 raise ValueError(
                     "computed saturation requires a value and backend version"
-                )
-            from jacobian.math.commutative_algebra_ops._singular import (
-                run_singular_ideal_operation,
-            )
-
-            saturation_ideal = RationalPolynomialIdeal(
-                variables=self.request.ideal.variables,
-                generators=(self.request.saturation_polynomial,),
-            )
-            replay = run_singular_ideal_operation(
-                "saturation",
-                self.request.ideal,
-                saturation_ideal,
-                self.request.resource_budget,
-            )
-            if replay.outcome != "COMPUTED" or replay.ideal != self.saturation:
-                raise ValueError(
-                    "saturation must be the exact saturation of the retained request"
                 )
         elif (
             self.saturation is not None

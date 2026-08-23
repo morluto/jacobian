@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from itertools import combinations
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
+from jacobian.math._rational_height import RationalHeight, sum_heights
 
 
 class RationalPoint2D(StrictModel):
@@ -446,6 +452,40 @@ class LabelledPoint2D(StrictModel):
     point: RationalPoint2D
 
 
+def _circumradius_squared_height(
+    xs: tuple[RationalHeight, ...],
+    ys: tuple[RationalHeight, ...],
+    triple: tuple[int, int, int],
+) -> RationalHeight:
+    """Conservatively bound the decimal digits of one squared circumradius.
+
+    For a triple with side-squared sums ``d`` and cross product ``c``, the
+    exact value is ``R^2 = d_ab * d_bc * d_ac / (4 * c^2)``.  Every
+    subtraction, square, sum, and product is bounded by rational-height
+    propagation, so any accepted triple keeps its exact result within the
+    canonical limit regardless of reduction.
+    """
+    first, second, third = triple
+    dx_ab = sum_heights((xs[first], xs[second]))
+    dy_ab = sum_heights((ys[first], ys[second]))
+    dx_bc = sum_heights((xs[second], xs[third]))
+    dy_bc = sum_heights((ys[second], ys[third]))
+    dx_ac = sum_heights((xs[first], xs[third]))
+    dy_ac = sum_heights((ys[first], ys[third]))
+
+    def side(delta_x: RationalHeight, delta_y: RationalHeight) -> RationalHeight:
+        return sum_heights((delta_x.product(delta_x), delta_y.product(delta_y)))
+
+    cross = sum_heights((dx_ab.product(dy_ac), dy_ab.product(dx_ac)))
+    return (
+        side(dx_ab, dy_ab)
+        .product(side(dx_bc, dy_bc))
+        .product(side(dx_ac, dy_ac))
+        .quotient(cross.product(cross))
+        .quotient(RationalHeight(1, 1))
+    )
+
+
 class CircumradiusProfileRequest(StrictModel):
     """A bounded labelled rational planar point configuration."""
 
@@ -467,12 +507,23 @@ class CircumradiusProfileRequest(StrictModel):
         )
         if len(keys) != len(set(keys)):
             raise ValueError("point coordinates must be unique")
-        # Bound coordinates so that squared circumradius stays within the
-        # canonical result limit.  The formula R^2 = (|a-b|^2|b-c|^2|c-a|^2)/(4*(2*area)^2)
-        # can produce ~6x digit growth; capping at 4096 keeps outputs <32768.
         for item in self.points:
             require_bounded_rational(item.point.x, max_digits=4096, label="point x")
             require_bounded_rational(item.point.y, max_digits=4096, label="point y")
+        # Independent coordinate denominators grow far faster than any flat
+        # multiple of the coordinate cap once R^2 = |a-b|^2|b-c|^2|c-a|^2 /
+        # (4*(2*area)^2) is expanded, so propagate a rational-height bound
+        # through the complete formula for every triple instead.
+        xs = tuple(RationalHeight.from_canonical(item.point.x) for item in self.points)
+        ys = tuple(RationalHeight.from_canonical(item.point.y) for item in self.points)
+        for triple in combinations(range(len(self.points)), 3):
+            if _circumradius_squared_height(xs, ys, triple).exceeds(
+                MAX_CANONICAL_RATIONAL_DIGITS
+            ):
+                raise ValueError(
+                    f"triple {triple} has a squared-circumradius height "
+                    f"exceeding the canonical {MAX_CANONICAL_RATIONAL_DIGITS}-digit limit"
+                )
         return self
 
 

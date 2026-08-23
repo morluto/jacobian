@@ -72,13 +72,9 @@ def _ideals_equal(
     # Groebner bases with the same order give a canonical ideal membership test
     left_gb = sympy.groebner(left_exprs, *symbols, order="grevlex", domain=sympy.QQ)
     right_gb = sympy.groebner(right_exprs, *symbols, order="grevlex", domain=sympy.QQ)
-    for expr in left_exprs:
-        if right_gb.reduce(expr)[1] != 0:
-            return False
-    for expr in right_exprs:
-        if left_gb.reduce(expr)[1] != 0:
-            return False
-    return True
+    return all(right_gb.reduce(expr)[1] == 0 for expr in left_exprs) and all(
+        left_gb.reduce(expr)[1] == 0 for expr in right_exprs
+    )
 
 
 class TestIdealSaturation:
@@ -94,7 +90,9 @@ class TestIdealSaturation:
         assert result.saturation is not None
         assert result.backend_version is not None
         expected = _ideal(("x", "y"), {(0, 1): 1})
-        assert _ideals_equal(result.saturation, expected), "saturation <xy>:<x>^inf should be <y>"
+        assert _ideals_equal(result.saturation, expected), (
+            "saturation <xy>:<x>^inf should be <y>"
+        )
 
     @requires_singular
     @pytest.mark.requires_backend("singular")

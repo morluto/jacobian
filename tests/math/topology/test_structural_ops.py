@@ -9,11 +9,13 @@ from jacobian.math.topology._models import (
     ElementaryCollapseRequest,
     ElementaryCollapseResult,
     JoinRequest,
+    JoinResult,
     PseudomanifoldRequest,
     PseudomanifoldResult,
     ShellingCheckRequest,
     ShellingCheckResult,
     SkeletonRequest,
+    SkeletonResult,
     StarRequest,
     StarResult,
     VertexDeletionRequest,
@@ -651,3 +653,99 @@ class TestShellingSourceBinding:
                 failed_at=None,
                 failure_reason=None,
             )
+
+
+class TestResultSourceBindingRegression:
+    """Serialized results must replay against their retained sources."""
+
+    def test_forged_deletion_keeping_deleted_vertex_rejected(self) -> None:
+        payload = compute_vertex_deletion(
+            VertexDeletionRequest(complex=TRIANGLE, vertices_to_delete=["v0"])
+        ).model_dump()
+        assert payload["deleted_vertices"] == ("v0",)
+        # The reviewer counterexample: a singleton source still carrying the
+        # allegedly deleted vertex cannot validate against the claimed output.
+        payload["complex"] = {"vertices": ["v0"], "facets": [["v0"]]}
+        with pytest.raises(ValidationError, match="induced subcomplex"):
+            VertexDeletionResult.model_validate(payload)
+
+    def test_deletion_roundtrip(self) -> None:
+        result = compute_vertex_deletion(
+            VertexDeletionRequest(complex=CIRCLE, vertices_to_delete=["b"])
+        )
+        assert result.remaining_facets == (("a", "c"),)
+        assert VertexDeletionResult.model_validate(result.model_dump()) == result
+
+    def test_edge_in_zero_skeleton_rejected(self) -> None:
+        request = SkeletonRequest(complex=EDGE, k=0)
+        with pytest.raises(ValidationError, match="exact k-skeleton"):
+            SkeletonResult(
+                complex=request.complex,
+                k=0,
+                skeleton_facets=(("a", "b"),),
+                skeleton_vertices=("a", "b"),
+                skeleton_complex=_canonical_complex(("a", "b"), (("a", "b"),)),
+            )
+
+    def test_skeleton_roundtrip(self) -> None:
+        result = compute_skeleton(SkeletonRequest(complex=TRIANGLE, k=1))
+        assert result.skeleton_facets == (("v0", "v1"), ("v0", "v2"), ("v1", "v2"))
+        assert SkeletonResult.model_validate(result.model_dump()) == result
+
+    def test_single_point_join_result_rejected(self) -> None:
+        request = JoinRequest(
+            complex_a={"vertices": ["a"], "facets": [["a"]]},
+            complex_b={"vertices": ["b"], "facets": [["b"]]},
+        )
+        with pytest.raises(ValidationError, match="facet union"):
+            JoinResult(
+                complex_a=request.complex_a,
+                complex_b=request.complex_b,
+                join_vertices=("a",),
+                join_facets=(("a",),),
+                join_dimension=0,
+                join_complex=_canonical_complex(("a",), (("a",),)),
+            )
+
+    def test_join_roundtrip(self) -> None:
+        result = compute_join(
+            JoinRequest(
+                complex_a={"vertices": ["a"], "facets": [["a"]]},
+                complex_b={"vertices": ["b", "c"], "facets": [["b", "c"]]},
+            )
+        )
+        assert result.join_facets == (("a", "b", "c"),)
+        assert JoinResult.model_validate(result.model_dump()) == result
+
+    def test_subdivision_original_dimension_tamper_rejected(self) -> None:
+        request = BarycentricSubdivisionRequest(complex=EDGE)
+        payload = compute_barycentric_subdivision(request).model_dump()
+        payload["original_dimension"] = 7
+        with pytest.raises(ValidationError, match="original_dimension"):
+            BarycentricSubdivisionResult.model_validate(payload)
+
+    def test_collapse_result_empty_free_face_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            ElementaryCollapseResult(
+                complex=EDGE,
+                is_free_face=True,
+                free_face=(),
+                coface=("a",),
+                remaining_facets=(("b",),),
+                remaining_vertices=("b",),
+                remaining_complex=None,
+            )
+
+    def test_collapse_accepts_reordered_facet_labels(self) -> None:
+        """Freeness is a set relation: facet label order cannot flip it."""
+        reordered = {
+            "vertices": ["a", "b"],
+            "facets": [["b", "a"]],
+        }
+        result = compute_elementary_collapse(
+            ElementaryCollapseRequest(
+                complex=reordered, free_face=["a"], coface=["a", "b"]
+            )
+        )
+        assert result.is_free_face
+        assert ElementaryCollapseResult.model_validate(result.model_dump()) == result

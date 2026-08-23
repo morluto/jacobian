@@ -829,6 +829,7 @@ def compute_vertex_deletion(request: VertexDeletionRequest) -> VertexDeletionRes
     remaining_facets = tuple(maximal_list)
     remaining_vertices = tuple(sorted({v for facet in remaining_facets for v in facet}))
     return VertexDeletionResult(
+        complex=request.complex,
         deleted_vertices=tuple(sorted(to_delete)),
         remaining_vertices=remaining_vertices,
         remaining_facets=remaining_facets,
@@ -855,6 +856,7 @@ def compute_skeleton(request: SkeletonRequest) -> SkeletonResult:
     if skeleton_facets:
         skeleton_complex = _canonical_complex(skeleton_vertices, skeleton_facets)
     return SkeletonResult(
+        complex=request.complex,
         k=k,
         skeleton_facets=skeleton_facets,
         skeleton_vertices=skeleton_vertices,
@@ -887,6 +889,8 @@ def compute_join(request: JoinRequest) -> JoinResult:
         # join_vertices already sorted unique
         join_complex = _canonical_complex(all_vertices, join_facets_tuple)
     return JoinResult(
+        complex_a=request.complex_a,
+        complex_b=request.complex_b,
         join_vertices=all_vertices,
         join_facets=join_facets_tuple,
         join_dimension=join_dim,
@@ -1043,8 +1047,9 @@ def compute_elementary_collapse(
     if free_tuple not in all_faces_set:
         return _collapse_result(False, request.complex.facets)
 
-    # Check that coface is a facet of the complex
-    if coface_tuple not in request.complex.facets:
+    # Check that coface is a facet of the complex; simplices are vertex
+    # sets, so the comparison must not depend on stored label order.
+    if coface_set not in {frozenset(facet) for facet in request.complex.facets}:
         return _collapse_result(False, request.complex.facets)
 
     # Check that free_face is a free face: it is contained in exactly one facet

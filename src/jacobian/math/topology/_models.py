@@ -463,13 +463,28 @@ class SimplicialComplexRequest(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def accept_canonical_complex_value(cls, data: object) -> object:
+        # A before-validator switches the remaining validation to python
+        # semantics, where strict tuples reject JSON arrays; normalize the
+        # accepted array shapes to tuples so strict JSON dispatch (the only
+        # transport path) keeps admitting facet presentations.
         if isinstance(data, FiniteSimplicialComplex):
             return {
-                "vertices": list(data.vertices),
-                "facets": [list(facet) for facet in data.maximal_simplices],
+                "vertices": tuple(data.vertices),
+                "facets": tuple(tuple(facet) for facet in data.maximal_simplices),
             }
         if not isinstance(data, dict):
             return data
+        normalized = dict(data)
+        vertices = normalized.get("vertices")
+        if isinstance(vertices, list):
+            normalized["vertices"] = tuple(vertices)
+        facets = normalized.get("facets")
+        if isinstance(facets, list):
+            normalized["facets"] = tuple(
+                tuple(facet) if isinstance(facet, list) else facet
+                for facet in facets
+            )
+        data = normalized
         if "facets" in data and "maximal_simplices" in data:
             raise ValueError(
                 "pass either facets or a canonical FiniteSimplicialComplex "
@@ -491,8 +506,10 @@ class SimplicialComplexRequest(StrictModel):
                 "check(s) failed"
             ) from error
         return {
-            "vertices": list(canonical.vertices),
-            "facets": [list(facet) for facet in canonical.maximal_simplices],
+            "vertices": tuple(canonical.vertices),
+            "facets": tuple(
+                tuple(facet) for facet in canonical.maximal_simplices
+            ),
         }
 
     @model_validator(mode="after")
@@ -1301,13 +1318,43 @@ class VertexDeletionRequest(StrictModel):
 class VertexDeletionResult(TopologyExactResult):
     """The induced subcomplex after deleting a vertex subset."""
 
-    deleted_vertices: tuple[str, ...]
+    complex: SimplicialComplexRequest
+    deleted_vertices: tuple[VertexLabel, ...]
     remaining_vertices: tuple[str, ...]
     remaining_facets: tuple[tuple[str, ...], ...]
     remaining_complex: FiniteSimplicialComplex
 
     @model_validator(mode="after")
     def require_deletion_canonical(self) -> Self:
+        # Replay the induced-subcomplex relation against the retained source
+        # so a serialized result cannot validate independently of it.
+        deleted = set(self.deleted_vertices)
+        if len(deleted) != len(self.deleted_vertices):
+            raise ValueError("deleted_vertices must be distinct")
+        if not deleted.issubset(set(self.complex.vertices)):
+            raise ValueError("deleted_vertices must be in the retained complex")
+        if tuple(self.deleted_vertices) != tuple(sorted(self.deleted_vertices)):
+            raise ValueError("deleted_vertices must use canonical vertex order")
+        remaining_faces = [
+            face
+            for face in _all_nonempty_faces(
+                tuple(tuple(sorted(f)) for f in self.complex.facets)
+            )
+            if not (set(face) & deleted)
+        ]
+        expected_facets = _maximal_faces(remaining_faces)
+        expected_vertices = tuple(
+            sorted({v for facet in expected_facets for v in facet})
+        )
+        if tuple(self.remaining_facets) != expected_facets:
+            raise ValueError(
+                "remaining_facets must be the induced subcomplex of the "
+                "retained source complex"
+            )
+        if tuple(self.remaining_vertices) != expected_vertices:
+            raise ValueError(
+                "remaining_vertices must match the source-complex replay"
+            )
         if tuple(sorted(self.remaining_complex.maximal_simplices)) != tuple(
             sorted(tuple(sorted(f)) for f in self.remaining_facets)
         ):
@@ -1341,15 +1388,30 @@ class SkeletonRequest(StrictModel):
 
 
 class SkeletonResult(TopologyExactResult):
-    """The k-skeleton as a facet list."""
+    """The k-skeleton as a facet list, bound to its source complex."""
 
-    k: int
+    complex: SimplicialComplexRequest
+    k: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
     skeleton_facets: tuple[tuple[str, ...], ...]
     skeleton_vertices: tuple[str, ...]
     skeleton_complex: FiniteSimplicialComplex | None = None
 
     @model_validator(mode="after")
     def require_skeleton_canonical(self) -> Self:
+        # Replay the exact k-skeleton against the retained source so the
+        # returned complex cannot disagree with k (e.g. an edge in a
+        # 0-skeleton) or with the source itself.
+        expected_facets = _skeleton_maximal_facets(self.complex.facets, self.k)
+        if tuple(self.skeleton_facets) != expected_facets:
+            raise ValueError(
+                "skeleton_facets must be the exact k-skeleton of the "
+                "retained source complex"
+            )
+        expected_vertices = tuple(
+            sorted({v for facet in expected_facets for v in facet})
+        )
+        if tuple(self.skeleton_vertices) != expected_vertices:
+            raise ValueError("skeleton_vertices must match the k-skeleton replay")
         if not self.skeleton_facets:
             if self.skeleton_complex is not None:
                 raise ValueError("empty skeleton must have no complex")
@@ -1393,9 +1455,36 @@ class JoinRequest(StrictModel):
         return self
 
 
-class JoinResult(TopologyExactResult):
-    """The join of two complexes."""
+def _require_complex_matches_facets(
+    complex_value: FiniteSimplicialComplex | None,
+    *,
+    facets: tuple[tuple[str, ...], ...],
+    vertices: tuple[str, ...],
+    empty_message: str,
+    missing_message: str,
+    facets_message: str,
+    vertices_message: str,
+) -> None:
+    """Require an optional canonical complex value to restate a facet list."""
+    if not facets:
+        if complex_value is not None:
+            raise ValueError(empty_message)
+        return
+    if complex_value is None:
+        raise ValueError(missing_message)
+    if tuple(sorted(complex_value.maximal_simplices)) != tuple(
+        sorted(tuple(sorted(f)) for f in facets)
+    ):
+        raise ValueError(facets_message)
+    if tuple(sorted(complex_value.vertices)) != tuple(sorted(vertices)):
+        raise ValueError(vertices_message)
 
+
+class JoinResult(TopologyExactResult):
+    """The join of two complexes, bound to both operands."""
+
+    complex_a: SimplicialComplexRequest
+    complex_b: SimplicialComplexRequest
     join_vertices: tuple[str, ...]
     join_facets: tuple[tuple[str, ...], ...]
     join_dimension: int
@@ -1403,24 +1492,42 @@ class JoinResult(TopologyExactResult):
 
     @model_validator(mode="after")
     def require_join_canonical(self) -> Self:
-        if not self.join_facets:
-            if self.join_complex is not None:
-                raise ValueError("empty join must have no complex")
-        else:
-            if self.join_complex is None:
-                raise ValueError("non-empty join requires join_complex")
-            if tuple(sorted(self.join_complex.maximal_simplices)) != tuple(
-                sorted(tuple(sorted(f)) for f in self.join_facets)
-            ):
-                raise ValueError(
-                    "join_complex maximal simplices must match join_facets"
-                )
-            if tuple(sorted(self.join_complex.vertices)) != tuple(
-                sorted(self.join_vertices)
-            ):
-                raise ValueError("join_complex vertices must match join_vertices")
-            if self.join_complex.dimension != self.join_dimension:
-                raise ValueError("join_complex dimension must match join_dimension")
+        # Replay the facet union against the retained operands so any
+        # internally canonical complex cannot pass as "the" join result.
+        vertices_a = set(self.complex_a.vertices)
+        vertices_b = set(self.complex_b.vertices)
+        if vertices_a & vertices_b:
+            raise ValueError("join operands must have disjoint vertex sets")
+        expected_facets = _join_maximal_facets(
+            self.complex_a.facets, self.complex_b.facets
+        )
+        if tuple(self.join_facets) != expected_facets:
+            raise ValueError(
+                "join_facets must be the exact facet union of the retained operands"
+            )
+        expected_vertices = tuple(sorted(vertices_a | vertices_b))
+        if tuple(self.join_vertices) != expected_vertices:
+            raise ValueError("join_vertices must match the operand vertex sets")
+        expected_dimension = (
+            max(len(facet) - 1 for facet in expected_facets)
+            if expected_facets
+            else 0
+        )
+        if self.join_dimension != expected_dimension:
+            raise ValueError("join_dimension must match the replayed facet union")
+        _require_complex_matches_facets(
+            self.join_complex,
+            facets=self.join_facets,
+            vertices=self.join_vertices,
+            empty_message="empty join must have no complex",
+            missing_message="non-empty join requires join_complex",
+            facets_message="join_complex maximal simplices must match join_facets",
+            vertices_message="join_complex vertices must match join_vertices",
+        )
+        if self.join_complex is not None and (
+            self.join_complex.dimension != self.join_dimension
+        ):
+            raise ValueError("join_complex dimension must match join_dimension")
         return self
 
 
@@ -1457,6 +1564,13 @@ class BarycentricSubdivisionResult(TopologyExactResult):
 
     @model_validator(mode="after")
     def require_subdivision_canonical(self) -> Self:
+        # The advertised original dimension must equal the dimension derived
+        # from the retained source complex's facets.
+        source_dimension = max(len(facet) for facet in self.complex.facets) - 1
+        if self.original_dimension != source_dimension:
+            raise ValueError(
+                "original_dimension must match the retained source complex"
+            )
         if not self.subdivision_facets:
             if self.subdivision_complex is not None:
                 raise ValueError("empty subdivision must have no complex")
@@ -1686,8 +1800,14 @@ class ElementaryCollapseResult(TopologyExactResult):
 
     complex: SimplicialComplexRequest
     is_free_face: bool
-    free_face: tuple[str, ...] = Field(max_length=MAX_TOPOLOGY_DIMENSION)
-    coface: tuple[str, ...] = Field(max_length=MAX_TOPOLOGY_DIMENSION + 1)
+    free_face: tuple[VertexLabel, ...] = Field(
+        min_length=1,
+        max_length=MAX_TOPOLOGY_DIMENSION,
+    )
+    coface: tuple[VertexLabel, ...] = Field(
+        min_length=2,
+        max_length=MAX_TOPOLOGY_DIMENSION + 1,
+    )
     remaining_facets: tuple[tuple[str, ...], ...]
     remaining_vertices: tuple[str, ...]
     remaining_complex: FiniteSimplicialComplex | None = None

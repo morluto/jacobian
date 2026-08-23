@@ -87,6 +87,43 @@ def test_operation_returns_a_source_bound_exact_result() -> None:
             RamanujanSumResult.model_validate(mutation)
 
 
+def test_zero_sum_binds_the_canonical_zero_string() -> None:
+    result = RAMANUJAN_SUM_OPERATION.run(
+        RamanujanSumRequest(modulus="4", frequency="3")
+    )
+    assert result.value == "0"
+    assert result == RamanujanSumResult(modulus="4", frequency="3", value="0")
+
+
+@pytest.mark.parametrize(
+    "noncanonical",
+    ("-0", "+0", "00", "007", "-007", " 1", "1 ", "1_0", "", "-", "+1"),
+)
+def test_result_rejects_noncanonical_value_encodings(noncanonical: str) -> None:
+    with pytest.raises(ValidationError):
+        RamanujanSumResult.model_validate(
+            {"modulus": "4", "frequency": "3", "value": noncanonical}
+        )
+
+
+@pytest.mark.parametrize(
+    ("modulus", "frequency", "value"),
+    (
+        ("5", "0", "4"),
+        ("4", "2", "-2"),
+        ("1", "9", "1"),
+        ("549755813888", "274877906944", "-274877906944"),
+    ),
+)
+def test_result_accepts_canonical_nonzero_values(
+    modulus: str, frequency: str, value: str
+) -> None:
+    result = RamanujanSumResult.model_validate(
+        {"modulus": modulus, "frequency": frequency, "value": value}
+    )
+    assert int(result.value) == ramanujan_sum(int(modulus), int(frequency))
+
+
 def test_ramanujan_sum_request_bounds_factorization_and_frequency_work() -> None:
     boundary = RamanujanSumRequest(
         modulus="999999999999",

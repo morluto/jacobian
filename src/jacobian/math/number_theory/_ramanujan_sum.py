@@ -8,7 +8,7 @@ from pydantic import Field, StringConstraints, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
-from jacobian.math.number_theory._models import BoundedInteger
+from jacobian.math.number_theory._models import _MAX_INTEGER_LENGTH, BoundedInteger
 from jacobian.math.number_theory._support import number_theory_operation
 from jacobian.math.number_theory.ramanujan_sums import ramanujan_sum
 
@@ -22,6 +22,21 @@ RamanujanModulus = Annotated[
     StringConstraints(
         pattern=r"^(?:0|[1-9][0-9]*)$",
         max_length=_MAX_MODULUS_DIGITS,
+        strict=True,
+    ),
+]
+
+# The exact sum binds as a canonical signed decimal integer under the same
+# grammar Jacobian's canonical integer encoding uses everywhere else:
+# zero is exactly "0" and any other value carries an optional minus sign on a
+# nonzero leading digit.  Unlike ``BoundedInteger``, whose grammar also admits
+# "-0", this pattern cannot bind negative zero, so every accepted result
+# string is the unique canonical decimal form of its integer.
+RamanujanSumInteger = Annotated[
+    str,
+    StringConstraints(
+        pattern=r"^(?:0|-?[1-9][0-9]*)$",
+        max_length=_MAX_INTEGER_LENGTH,
         strict=True,
     ),
 ]
@@ -46,7 +61,13 @@ class RamanujanSumResult(StrictModel):
 
     modulus: RamanujanModulus
     frequency: BoundedInteger
-    value: BoundedInteger
+    value: RamanujanSumInteger = Field(
+        description=(
+            "Exact Ramanujan sum as a canonical signed decimal integer: "
+            'zero is exactly "0" and every other value carries an optional '
+            "minus sign with no leading zeros."
+        )
+    )
 
     @model_validator(mode="after")
     def bind_value_to_source(self) -> Self:

@@ -55,12 +55,14 @@ def compute_conjugacy_classes(
     classes = conjugacy_classes(request.degree, [list(g) for g in request.generators])
     class_entries = tuple(
         ConjugacyClass(
-            elements=tuple(tuple(e) for e, _ in [(elem, 0) for elem in cl[0]]),
+            elements=tuple(tuple(e) for e in cl[0]),
             size=cl[1],
         )
         for cl in classes
     )
     return GroupConjugacyClassesResult(
+        degree=request.degree,
+        generators=request.generators,
         classes=class_entries,
         class_count=len(class_entries),
     )
@@ -84,6 +86,8 @@ def compute_subgroup_lattice(
         for sg in subgroups
     )
     return GroupSubgroupLatticeResult(
+        degree=request.degree,
+        generators=request.generators,
         subgroups=entries,
         subgroup_count=len(entries),
     )

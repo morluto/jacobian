@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.math.group._models import (
     GroupConjugacyClassesRequest,
@@ -161,3 +162,96 @@ class TestSourceBoundGroupResults:
                 generators=((*range(1, 64), 0),),
                 order=65,
             )
+
+
+class TestConjugacyResultBoundToSourceGroup:
+    def _s3_result(self):
+        request = GroupConjugacyClassesRequest(
+            degree=3,
+            generators=((1, 0, 2), (0, 2, 1)),
+        )
+        return compute_conjugacy_classes(request)
+
+    def test_result_retains_source_and_revalidates(self) -> None:
+        from jacobian.math.group._models import GroupConjugacyClassesResult
+
+        result = self._s3_result()
+        assert result.degree == 3
+        payload = result.model_dump(mode="json")
+        assert GroupConjugacyClassesResult.model_validate(payload) == result
+
+    def test_non_permutation_class_element_rejected(self) -> None:
+        """A relayed payload claiming a class element outside the retained
+        source group cannot revalidate as an exact conjugacy partition."""
+        from jacobian.math.group._models import GroupConjugacyClassesResult
+
+        payload = self._s3_result().model_dump(mode="json")
+        identity_class = next(
+            entry for entry in payload["classes"] if entry["elements"] == [[0, 1, 2]]
+        )
+        identity_class["elements"] = [[9, 9, 9]]
+        with pytest.raises(ValidationError, match="conjugacy partition"):
+            GroupConjugacyClassesResult.model_validate(payload)
+
+    def test_incomplete_partition_rejected(self) -> None:
+        from jacobian.math.group._models import GroupConjugacyClassesResult
+
+        payload = self._s3_result().model_dump(mode="json")
+        payload["classes"] = payload["classes"][:1]
+        payload["class_count"] = 1
+        with pytest.raises(ValidationError, match="conjugacy partition"):
+            GroupConjugacyClassesResult.model_validate(payload)
+
+
+class TestLatticeResultBoundToSourceGroup:
+    def _c4_result(self):
+        request = GroupSubgroupLatticeRequest(
+            degree=4,
+            generators=((1, 2, 3, 0),),
+        )
+        return compute_subgroup_lattice(request)
+
+    def test_result_retains_source_and_revalidates(self) -> None:
+        from jacobian.math.group._models import GroupSubgroupLatticeResult
+
+        result = self._c4_result()
+        assert result.degree == 4
+        payload = result.model_dump(mode="json")
+        assert GroupSubgroupLatticeResult.model_validate(payload) == result
+
+    def test_incomplete_lattice_rejected(self) -> None:
+        """The degree-2 identity subgroup alone must not revalidate as C2's
+        complete lattice, which also contains C2 itself."""
+        from jacobian.math.group._models import GroupSubgroupLatticeResult
+
+        payload = self._c4_result().model_dump(mode="json")
+        trivial_only = next(
+            entry for entry in payload["subgroups"] if entry["order"] == 1
+        )
+        payload["subgroups"] = [trivial_only]
+        payload["subgroup_count"] = 1
+        with pytest.raises(ValidationError, match="complete subgroup lattice"):
+            GroupSubgroupLatticeResult.model_validate(payload)
+
+    def test_foreign_group_entries_rejected(self) -> None:
+        """Entries of one source group cannot be relayed under another."""
+        from jacobian.math.group._models import GroupSubgroupLatticeResult
+
+        s3_payload = compute_subgroup_lattice(
+            GroupSubgroupLatticeRequest(degree=3, generators=((1, 0, 2),))
+        ).model_dump(mode="json")
+        s3_payload["degree"] = 4
+        s3_payload["generators"] = [[1, 2, 3, 0]]
+        with pytest.raises(ValidationError, match="complete subgroup lattice"):
+            GroupSubgroupLatticeResult.model_validate(s3_payload)
+
+
+class TestNativeEnumerationGeneratorCap:
+    def test_generator_count_capped_before_permutation_construction(self) -> None:
+        from jacobian.math.group.operations import conjugacy_classes, subgroup_lattice
+
+        oversized = [[*range(64)]] * 65
+        with pytest.raises(ValueError, match="at most 64 generators"):
+            conjugacy_classes(64, oversized)
+        with pytest.raises(ValueError, match="at most 64 generators"):
+            subgroup_lattice(64, oversized)

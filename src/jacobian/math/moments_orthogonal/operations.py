@@ -205,8 +205,10 @@ def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> Jacobi
         raise TypeError("alpha must use exact Fractions")
     if any(type(value) is not Fraction for value in beta):
         raise TypeError("beta must use exact Fractions")
-    if beta[0] == 0:
-        raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+    if beta[0] <= 0:
+        raise ValueError(
+            "beta_0 (the zeroth moment of a positive functional) must be positive"
+        )
     # Subdiagonal beta_1.. are squared-norm ratios and must be positive;
     # negative entries would document a non-quasi-definite family.
     for entry in beta[1 : len(alpha)]:
@@ -344,9 +346,7 @@ def gaussian_quadrature(
     # and nonnegative subdiagonal beta, otherwise the "rule" is not a
     # measure (negative masses).
     if beta[0] <= 0:
-        raise ValueError(
-            "beta_0 must be positive for a Gaussian quadrature rule"
-        )
+        raise ValueError("beta_0 must be positive for a Gaussian quadrature rule")
     _validate_quadrature_float_domain(alpha, beta)
     diagonal = np.array([float(a) for a in alpha], dtype=float)
     off: list[float] = []
@@ -361,8 +361,16 @@ def gaussian_quadrature(
     eigenvalues, eigenvectors = np.linalg.eigh(jacobi)
     mu0 = float(beta[0])
     weights_np = mu0 * eigenvectors[0, :] ** 2
-    if any(w < 0 for w in weights_np):
-        raise ValueError("quadrature produced a negative weight")
+    # A Gaussian rule for a positive functional has strictly positive masses.
+    # A nonpositive weight means float64 conditioning underflowed an
+    # eigenvector first component or lost mass; such a recurrence is outside
+    # the advertised positive-rule domain instead of yielding a zero weight.
+    if any(w <= 0 for w in weights_np):
+        raise ValueError(
+            "quadrature weights do not stay positive under float64 "
+            "conditioning: the recurrence is too ill-conditioned for a "
+            "positive n-point rule"
+        )
     # Each double is carried as its exact dyadic rational image so the result
     # stays canonical and reconstructible without JSON floating points.
     return GaussianQuadrature(

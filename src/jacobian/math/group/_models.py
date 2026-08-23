@@ -143,8 +143,12 @@ class ConjugacyClass(StrictModel):
 
 
 class GroupConjugacyClassesResult(StrictModel):
-    """All conjugacy classes of a permutation group."""
+    """All conjugacy classes of a permutation group, bound to its source."""
 
+    degree: int = Field(ge=1, le=MAX_GROUP_DEGREE)
+    generators: tuple[tuple[int, ...], ...] = Field(
+        min_length=1, max_length=MAX_GROUP_DEGREE
+    )
     classes: tuple[ConjugacyClass, ...] = Field(min_length=1)
     class_count: int = Field(ge=1)
     method: Literal["SYMPY_CONJUGACY_CLASSES"] = "SYMPY_CONJUGACY_CLASSES"
@@ -153,6 +157,29 @@ class GroupConjugacyClassesResult(StrictModel):
     def require_consistent_count(self) -> Self:
         if len(self.classes) != self.class_count:
             raise ValueError("class_count must match the number of classes")
+        return self
+
+    @model_validator(mode="after")
+    def bind_classes_to_source_group(self) -> Self:
+        # Replaying through the request model revalidates generator shape and
+        # the bounded group order before the partition is recomputed.
+        GroupConjugacyClassesRequest(degree=self.degree, generators=self.generators)
+        from jacobian.math.group.operations import conjugacy_classes
+
+        expected = {
+            frozenset(tuple(element) for element in class_elements)
+            for class_elements, _ in conjugacy_classes(
+                self.degree, [list(generator) for generator in self.generators]
+            )
+        }
+        actual = {frozenset(bound_class.elements) for bound_class in self.classes}
+        if len(actual) != len(self.classes):
+            raise ValueError("conjugacy classes must be distinct")
+        if actual != expected or self.class_count != len(expected):
+            raise ValueError(
+                "classes must form the exact conjugacy partition of the "
+                "retained source group"
+            )
         return self
 
 
@@ -207,8 +234,12 @@ class SubgroupEntry(StrictModel):
 
 
 class GroupSubgroupLatticeResult(StrictModel):
-    """All subgroups of a bounded permutation group."""
+    """All subgroups of a bounded permutation group, bound to its source."""
 
+    degree: int = Field(ge=1, le=MAX_GROUP_DEGREE)
+    generators: tuple[tuple[int, ...], ...] = Field(
+        min_length=1, max_length=MAX_GROUP_DEGREE
+    )
     subgroups: tuple[SubgroupEntry, ...] = Field(min_length=1)
     subgroup_count: int = Field(ge=1)
     method: Literal["SYMPY_SUBGROUPS"] = "SYMPY_SUBGROUPS"
@@ -217,4 +248,37 @@ class GroupSubgroupLatticeResult(StrictModel):
     def require_consistent_count(self) -> Self:
         if len(self.subgroups) != self.subgroup_count:
             raise ValueError("subgroup_count must match the number of subgroups")
+        return self
+
+    @model_validator(mode="after")
+    def bind_lattice_to_source_group(self) -> Self:
+        # Replaying through the request model revalidates generator shape and
+        # the bounded group order before the lattice is recomputed.
+        GroupSubgroupLatticeRequest(degree=self.degree, generators=self.generators)
+        from sympy.combinatorics import Permutation, PermutationGroup
+
+        from jacobian.math.group.operations import subgroup_lattice
+
+        def closure_key(
+            entry_generators: tuple[tuple[int, ...], ...],
+        ) -> frozenset[tuple[int, ...]]:
+            subgroup = PermutationGroup(
+                *(Permutation(list(generator)) for generator in entry_generators)
+            )
+            return frozenset(tuple(p.array_form) for p in subgroup.elements)
+
+        expected = {
+            closure_key(tuple(tuple(g) for g in subgroup_generators))
+            for subgroup_generators, _ in subgroup_lattice(
+                self.degree, [list(generator) for generator in self.generators]
+            )
+        }
+        actual = {closure_key(entry.generators) for entry in self.subgroups}
+        if len(actual) != len(self.subgroups):
+            raise ValueError("subgroups must be distinct")
+        if actual != expected or self.subgroup_count != len(expected):
+            raise ValueError(
+                "subgroups must be the exact complete subgroup lattice of "
+                "the retained source group"
+            )
         return self

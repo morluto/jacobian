@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.moments_orthogonal import (
     christoffel_darboux,
     gaussian_quadrature,
@@ -22,6 +23,7 @@ from jacobian.math.moments_orthogonal._models import (
     HankelMatrixResult,
     JacobiMatrixRequest,
     JacobiMatrixResult,
+    RecurrenceCoefficients,
     RecurrenceCoefficientsRequest,
     RecurrenceCoefficientsResult,
 )
@@ -48,6 +50,13 @@ def _cr(num: int, den: int) -> CanonicalRational:
 
 
 _HARMONIC_MOMENTS = tuple(_cr(1, k) for k in range(1, 8))
+
+_LEGENDRE_ALPHA = (_cr(1, 2), _cr(1, 2))
+_LEGENDRE_BETA = (_cr(1, 1), _cr(1, 12), _cr(1, 15))
+
+
+def _legendre_coefficients() -> RecurrenceCoefficients:
+    return RecurrenceCoefficients(alpha=_LEGENDRE_ALPHA, beta=_LEGENDRE_BETA)
 
 
 # ---------------------------------------------------------------------------
@@ -137,22 +146,27 @@ class TestRecurrenceCoefficients:
 
 class TestJacobiMatrix:
     def test_assembly(self) -> None:
-        alpha = (_frac(1, 2), _frac(1, 2))
-        beta = (_frac(1, 1), _frac(1, 12), _frac(1, 15))
-        result = jacobi_matrix(alpha, beta)
+        result = jacobi_matrix(
+            (_frac(1, 2), _frac(1, 2)),
+            (_frac(1, 1), _frac(1, 12), _frac(1, 15)),
+        )
         assert result.diagonal == (_frac(1, 2), _frac(1, 2))
         # beta_0 is the zeroth moment; the subdiagonal carries beta_1 only.
         assert result.off_diagonal == (_frac(1, 12),)
 
     def test_empty_alpha(self) -> None:
-        beta = (_frac(1, 1),)
-        result = jacobi_matrix((), beta)
+        result = jacobi_matrix((), (_frac(1, 1),))
         assert result.diagonal == ()
         assert result.off_diagonal == ()
 
-    def test_zero_beta_rejected(self) -> None:
-        with pytest.raises(ValueError, match="nonzero"):
+    def test_zero_beta0_rejected(self) -> None:
+        with pytest.raises(ValueError, match="must be positive"):
             jacobi_matrix((_frac(0, 1),), (_frac(0, 1), _frac(1, 1)))
+
+    def test_negative_beta0_rejected(self) -> None:
+        """The native guard matches the wire contract: mu_0 must be positive."""
+        with pytest.raises(ValueError, match="must be positive"):
+            jacobi_matrix(((_frac(0, 1)),), (_frac(-1, 1),))
 
 
 # ---------------------------------------------------------------------------
@@ -263,20 +277,16 @@ class TestWireAdapters:
         )
         result = compute_recurrence_coefficients(request)
         assert isinstance(result, RecurrenceCoefficientsResult)
-        assert len(result.alpha) == 3
+        assert len(result.coefficients.alpha) == 3
 
     def test_jacobi_wire(self) -> None:
-        request = JacobiMatrixRequest(
-            alpha=(_cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
-        )
+        request = JacobiMatrixRequest(coefficients=_legendre_coefficients())
         result = compute_jacobi_matrix(request)
         assert isinstance(result, JacobiMatrixResult)
 
     def test_christoffel_darboux_wire(self) -> None:
         request = ChristoffelDarbouxRequest(
-            alpha=(_cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            coefficients=_legendre_coefficients(),
             x=_cr(1, 1),
             y=_cr(1, 1),
         )
@@ -291,19 +301,29 @@ class TestWireAdapters:
         beta = tuple(_cr(1, 1) for _ in range(16))
         huge = CanonicalRational.from_fraction(Fraction(1, 10**4095))
         with pytest.raises(ValidationError, match="order-and-height"):
-            ChristoffelDarbouxRequest(alpha=alpha, beta=beta, x=huge, y=huge)
+            ChristoffelDarbouxRequest(
+                coefficients=RecurrenceCoefficients(alpha=alpha, beta=beta),
+                x=huge,
+                y=huge,
+            )
 
     def test_kernel_growth_bound_admits_moderate_inputs(self) -> None:
         alpha = tuple(_cr(0, 1) for _ in range(4))
         beta = tuple(_cr(1, k + 1) for k in range(5))
         x = CanonicalRational.from_fraction(Fraction(10**80 + 1, 10**79 - 3))
-        request = ChristoffelDarbouxRequest(alpha=alpha, beta=beta, x=x, y=x)
+        request = ChristoffelDarbouxRequest(
+            coefficients=RecurrenceCoefficients(alpha=alpha, beta=beta),
+            x=x,
+            y=x,
+        )
         assert compute_christoffel_darboux(request).kernel
 
     def test_gaussian_quadrature_wire(self) -> None:
         request = GaussianQuadratureRequest(
-            alpha=(_cr(1, 2), _cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15), _cr(4, 45)),
+            coefficients=RecurrenceCoefficients(
+                alpha=(_cr(1, 2), _cr(1, 2), _cr(1, 2)),
+                beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15), _cr(4, 45)),
+            ),
         )
         result = compute_gaussian_quadrature(request)
         assert isinstance(result, GaussianQuadratureResult)
@@ -356,3 +376,96 @@ class TestRecurrenceTruncationBoundary:
         moments = tuple(Fraction(1, k + 1) for k in range(34))
         with pytest.raises(ValueError, match="at most 33"):
             recurrence_coefficients(moments)
+
+
+class TestCanonicalRecurrenceCoefficientsValue:
+    """The producer's coefficients value composes into consumers unchanged."""
+
+    def test_serialized_coefficients_feed_consumers_unchanged(self) -> None:
+        request = RecurrenceCoefficientsRequest(moments=_HARMONIC_MOMENTS)
+        result = compute_recurrence_coefficients(request)
+        payload = result.model_dump(mode="json")
+
+        jacobi = JacobiMatrixRequest.model_validate(
+            {"coefficients": payload["coefficients"]}
+        )
+        assert len(compute_jacobi_matrix(jacobi).diagonal) == 3
+
+        kernel = ChristoffelDarbouxRequest.model_validate(
+            {
+                "coefficients": payload["coefficients"],
+                "x": {"num": "1", "den": "1"},
+                "y": {"num": "1", "den": "1"},
+            }
+        )
+        assert compute_christoffel_darboux(kernel).kernel
+
+        quadrature = GaussianQuadratureRequest.model_validate(
+            {"coefficients": payload["coefficients"]}
+        )
+        assert len(compute_gaussian_quadrature(quadrature).nodes) == 3
+
+    def test_consumer_rejects_nonpositive_beta0(self) -> None:
+        with pytest.raises(ValidationError, match="positive"):
+            JacobiMatrixRequest.model_validate(
+                {
+                    "coefficients": {
+                        "alpha": [],
+                        "beta": [{"num": "-1", "den": "1"}],
+                    }
+                }
+            )
+
+    def test_result_revalidates_from_serialized_payload(self) -> None:
+        result = compute_recurrence_coefficients(
+            RecurrenceCoefficientsRequest(moments=_HARMONIC_MOMENTS)
+        )
+        assert (
+            RecurrenceCoefficientsResult.model_validate(result.model_dump(mode="json"))
+            == result
+        )
+
+
+class TestHankelCanonicalMatrixValue:
+    def test_hankel_result_is_canonical_rational_matrix(self) -> None:
+        request = HankelMatrixRequest(moments=_HARMONIC_MOMENTS)
+        result = compute_hankel_matrix(request)
+        assert isinstance(result.matrix, RationalMatrix)
+        assert result.dimension == 4
+
+    def test_hankel_matrix_feeds_rational_matrix_consumers(self) -> None:
+        from jacobian.math.matrices._operation_models import RationalMatrixRequest
+
+        result = compute_hankel_matrix(HankelMatrixRequest(moments=_HARMONIC_MOMENTS))
+        consumer = RationalMatrixRequest(matrix=result.matrix)
+        assert len(consumer.matrix.entries) == 4
+
+    def test_hankel_result_revalidates_and_rejects_forgery(self) -> None:
+        result = compute_hankel_matrix(HankelMatrixRequest(moments=_HARMONIC_MOMENTS))
+        payload = result.model_dump(mode="json")
+        assert HankelMatrixResult.model_validate(payload) == result
+
+        payload["matrix"]["entries"][0][0] = {"num": "7", "den": "1"}
+        with pytest.raises(ValidationError, match="exact Hankel matrix"):
+            HankelMatrixResult.model_validate(payload)
+
+
+class TestConditionedQuadratureAdmission:
+    def test_combined_extremes_rejected_at_admission(self) -> None:
+        """alpha=(0, 10^300), beta=(1, 10^-300) passes every individual
+        finite-float bound but numerically disconnects the Jacobi matrix:
+        the large node's eigenvector first component underflows and its mass
+        would be zero. Admission replays Golub-Welsch and rejects it."""
+        coefficients = RecurrenceCoefficients(
+            alpha=(_cr(0, 1), CanonicalRational.from_fraction(Fraction(10**300))),
+            beta=(
+                _cr(1, 1),
+                CanonicalRational.from_fraction(Fraction(1, 10**300)),
+            ),
+        )
+        with pytest.raises(ValidationError, match="positive n-point rule"):
+            GaussianQuadratureRequest(coefficients=coefficients)
+
+    def test_moderate_conditioning_still_admitted(self) -> None:
+        request = GaussianQuadratureRequest(coefficients=_legendre_coefficients())
+        assert len(request.coefficients.alpha) == 2

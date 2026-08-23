@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sympy.combinatorics import PermutationGroup
+
 __all__ = [
     "conjugacy_classes",
     "element_order",
@@ -10,22 +15,34 @@ __all__ = [
     "subgroup_lattice",
 ]
 
+_MAX_DEGREE = 64
 
-def group_order(degree: int, generators: list[list[int]]) -> int:
-    """Return the exact order of a permutation group via Schreier-Sims."""
-    from jacobian.math.group._models import MAX_GROUP_ORDER
+
+def _bounded_permutation_group(
+    degree: int, generators: list[list[int]]
+) -> PermutationGroup:
+    """Validate bounded native inputs and build the permutation group."""
     from sympy.combinatorics import Permutation, PermutationGroup
 
-    if not 1 <= degree <= 64:
+    from jacobian.math.group._models import MAX_GROUP_DEGREE
+
+    if not 1 <= degree <= _MAX_DEGREE:
         raise ValueError("group degree must be between 1 and 64")
     if not generators:
         raise ValueError("at least one generator is required")
+    if len(generators) > MAX_GROUP_DEGREE:
+        raise ValueError(f"at most {MAX_GROUP_DEGREE} generators are supported")
     perms = []
     for perm in generators:
         if len(perm) != degree or sorted(perm) != list(range(degree)):
             raise ValueError("each generator must be a permutation of 0..n-1")
         perms.append(Permutation(list(perm)))
-    group = PermutationGroup(perms)
+    return PermutationGroup(perms)
+
+
+def group_order(degree: int, generators: list[list[int]]) -> int:
+    """Return the exact order of a permutation group via Schreier-Sims."""
+    group = _bounded_permutation_group(degree, generators)
     return int(group.order())
 
 
@@ -40,18 +57,10 @@ def element_order(degree: int, generator: list[int]) -> int:
 
 def group_orbit(degree: int, generators: list[list[int]], point: int) -> list[int]:
     """Return the orbit of a point under a permutation group."""
-    from sympy.combinatorics import Permutation, PermutationGroup
-
     if not 0 <= point < degree:
         raise ValueError("point must be in 0..n-1")
-    perms = []
-    for perm in generators:
-        if len(perm) != degree or sorted(perm) != list(range(degree)):
-            raise ValueError("each generator must be a permutation of 0..n-1")
-        perms.append(Permutation(list(perm)))
-    group = PermutationGroup(perms)
-    orbit = group.orbit(point)
-    return sorted(orbit)
+    group = _bounded_permutation_group(degree, generators)
+    return sorted(group.orbit(point))
 
 
 def conjugacy_classes(
@@ -63,18 +72,8 @@ def conjugacy_classes(
     class_element is a list of permutation lists.
     """
     from jacobian.math.group._models import MAX_GROUP_ORDER
-    from sympy.combinatorics import Permutation, PermutationGroup
 
-    if not 1 <= degree <= 64:
-        raise ValueError("group degree must be between 1 and 64")
-    if not generators:
-        raise ValueError("at least one generator is required")
-    perms = []
-    for perm in generators:
-        if len(perm) != degree or sorted(perm) != list(range(degree)):
-            raise ValueError("each generator must be a permutation of 0..n-1")
-        perms.append(Permutation(list(perm)))
-    group = PermutationGroup(perms)
+    group = _bounded_permutation_group(degree, generators)
     order = int(group.order())
     if order > MAX_GROUP_ORDER:
         raise ValueError(
@@ -97,19 +96,9 @@ def subgroup_lattice(
     Returns a list of (generators_of_subgroup, subgroup_order) tuples.
     Bounded to groups of order at most 64 to avoid exponential blowup.
     """
-    from jacobian.math.group._models import MAX_GROUP_ORDER
-    from sympy.combinatorics import Permutation, PermutationGroup
+    from sympy.combinatorics import Permutation
 
-    if not 1 <= degree <= 64:
-        raise ValueError("group degree must be between 1 and 64")
-    if not generators:
-        raise ValueError("at least one generator is required")
-    perms = []
-    for perm in generators:
-        if len(perm) != degree or sorted(perm) != list(range(degree)):
-            raise ValueError("each generator must be a permutation of 0..n-1")
-        perms.append(Permutation(list(perm)))
-    group = PermutationGroup(perms)
+    group = _bounded_permutation_group(degree, generators)
     if int(group.order()) > 64:
         raise ValueError(
             "subgroup lattice computation is bounded to groups of order at most 64"
@@ -121,7 +110,7 @@ def subgroup_lattice(
     # order bound.
     identity = Permutation(list(range(degree)))
     trivial_key = frozenset((tuple(identity.array_form),))
-    subgroup_keys: set[frozenset] = {trivial_key}
+    subgroup_keys: set[frozenset[tuple[int, ...]]] = {trivial_key}
     result: list[tuple[list[list[int]], int]] = [([list(identity.array_form)], 1)]
     frontier = [trivial_key]
     elements = list(group.elements)

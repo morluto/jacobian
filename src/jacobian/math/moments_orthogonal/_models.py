@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from fractions import Fraction
 from typing import Literal, Self
 
@@ -14,6 +15,7 @@ from jacobian._exact import (
 )
 from jacobian._models import StrictModel
 from jacobian.math._rational_height import RationalHeight
+from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.moments_orthogonal.values import (
     MAX_MOMENTS,
     MAX_QUADRATURE_POINTS,
@@ -35,7 +37,7 @@ def _to_fractions(
     return tuple(v.as_fraction() for v in values)
 
 
-def _from_fractions(values) -> tuple[CanonicalRational, ...]:
+def _from_fractions(values: Iterable[Fraction]) -> tuple[CanonicalRational, ...]:
     return tuple(CanonicalRational.from_fraction(v) for v in values)
 
 
@@ -93,7 +95,7 @@ class HankelMatrixRequest(StrictModel):
 
 
 class HankelMatrixResult(HankelMatrixRequest):
-    matrix: tuple[tuple[CanonicalRational, ...], ...]
+    matrix: RationalMatrix
     dimension: int = Field(ge=1)
     complete: Literal[True] = True
     method: Literal["EXACT_HANKEL_ASSEMBLY"] = "EXACT_HANKEL_ASSEMBLY"
@@ -103,12 +105,14 @@ class HankelMatrixResult(HankelMatrixRequest):
         from jacobian.math.moments_orthogonal.operations import hankel_matrix
 
         result = hankel_matrix(_to_fractions(self.moments))
-        if self.dimension != len(result.matrix):
-            raise ValueError("dimension must match the Hankel matrix size")
-        expected_matrix = tuple(
-            tuple(CanonicalRational.from_fraction(v) for v in row)
-            for row in result.matrix
+        expected_matrix = RationalMatrix(
+            entries=tuple(
+                tuple(CanonicalRational.from_fraction(v) for v in row)
+                for row in result.matrix
+            )
         )
+        if self.dimension != len(expected_matrix.entries):
+            raise ValueError("dimension must match the Hankel matrix size")
         if self.matrix != expected_matrix:
             raise ValueError("matrix must be the exact Hankel matrix")
         return self
@@ -136,9 +140,26 @@ class RecurrenceCoefficientsRequest(StrictModel):
         return self
 
 
-class RecurrenceCoefficientsResult(RecurrenceCoefficientsRequest):
+class RecurrenceCoefficients(StrictModel):
+    """Canonical three-term recurrence coefficients of a monic orthogonal family.
+
+    ``alpha`` carries the shift coefficients and ``beta`` the squared-norm
+    ratios with positive ``beta_0``; producers return this value and the
+    Jacobi-matrix, Christoffel-Darboux, and Gaussian-quadrature consumers
+    accept it unchanged.
+    """
+
     alpha: tuple[CanonicalRational, ...]
     beta: tuple[CanonicalRational, ...]
+
+    @model_validator(mode="after")
+    def require_positive_definite(self) -> Self:
+        _validate_alpha_beta(self.alpha, self.beta)
+        return self
+
+
+class RecurrenceCoefficientsResult(RecurrenceCoefficientsRequest):
+    coefficients: RecurrenceCoefficients
     complete: Literal[True] = True
     method: Literal["EXACT_GRAM_SCHMIDT"] = "EXACT_GRAM_SCHMIDT"
 
@@ -149,10 +170,14 @@ class RecurrenceCoefficientsResult(RecurrenceCoefficientsRequest):
         )
 
         result = recurrence_coefficients(_to_fractions(self.moments))
-        if self.alpha != _from_fractions(result.alpha):
-            raise ValueError("alpha must be the exact recurrence coefficients")
-        if self.beta != _from_fractions(result.beta):
-            raise ValueError("beta must be the exact recurrence coefficients")
+        if self.coefficients.alpha != _from_fractions(result.alpha):
+            raise ValueError(
+                "coefficients.alpha must be the exact recurrence coefficients"
+            )
+        if self.coefficients.beta != _from_fractions(result.beta):
+            raise ValueError(
+                "coefficients.beta must be the exact recurrence coefficients"
+            )
         return self
 
 
@@ -162,13 +187,7 @@ class RecurrenceCoefficientsResult(RecurrenceCoefficientsRequest):
 
 
 class JacobiMatrixRequest(StrictModel):
-    alpha: tuple[CanonicalRational, ...] = Field(min_length=0)
-    beta: tuple[CanonicalRational, ...] = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def require_valid_coefficients(self) -> Self:
-        _validate_alpha_beta(self.alpha, self.beta)
-        return self
+    coefficients: RecurrenceCoefficients
 
 
 class JacobiMatrixResult(JacobiMatrixRequest):
@@ -181,7 +200,10 @@ class JacobiMatrixResult(JacobiMatrixRequest):
     def bind_jacobi(self) -> Self:
         from jacobian.math.moments_orthogonal.operations import jacobi_matrix
 
-        result = jacobi_matrix(_to_fractions(self.alpha), _to_fractions(self.beta))
+        result = jacobi_matrix(
+            _to_fractions(self.coefficients.alpha),
+            _to_fractions(self.coefficients.beta),
+        )
         if self.diagonal != _from_fractions(result.diagonal):
             raise ValueError("diagonal must match the exact Jacobi diagonal")
         if self.off_diagonal != _from_fractions(result.off_diagonal):
@@ -195,14 +217,12 @@ class JacobiMatrixResult(JacobiMatrixRequest):
 
 
 class ChristoffelDarbouxRequest(StrictModel):
-    alpha: tuple[CanonicalRational, ...] = Field(min_length=0)
-    beta: tuple[CanonicalRational, ...] = Field(min_length=1)
+    coefficients: RecurrenceCoefficients
     x: CanonicalRational
     y: CanonicalRational
 
     @model_validator(mode="after")
     def require_valid_coefficients(self) -> Self:
-        _validate_alpha_beta(self.alpha, self.beta)
         require_bounded_rational(self.x, max_digits=MAX_RATIONAL_DIGITS, label="x")
         require_bounded_rational(self.y, max_digits=MAX_RATIONAL_DIGITS, label="y")
         # Christoffel-Darboux output growth: each monic recurrence step
@@ -214,14 +234,19 @@ class ChristoffelDarbouxRequest(StrictModel):
         # exact kernel; reject any admitted request whose worst case could
         # exceed the canonical rational digit limit during execution.
         point_height = max(_coefficient_height(self.x), _coefficient_height(self.y))
-        alpha_height = max((_coefficient_height(v) for v in self.alpha), default=1)
-        beta_height = max((_coefficient_height(v) for v in self.beta), default=1)
+        alpha_height = max(
+            (_coefficient_height(v) for v in self.coefficients.alpha), default=1
+        )
+        beta_height = max(
+            (_coefficient_height(v) for v in self.coefficients.beta), default=1
+        )
         step = point_height + alpha_height + beta_height + 2
         kernel_bound = sum(
-            2 * k * step + (k + 1) * beta_height + 2 for k in range(len(self.alpha))
+            2 * k * step + (k + 1) * beta_height + 2
+            for k in range(len(self.coefficients.alpha))
         )
         if (
-            kernel_bound + len(str(max(len(self.alpha), 1)))
+            kernel_bound + len(str(max(len(self.coefficients.alpha), 1)))
             > MAX_CANONICAL_RATIONAL_DIGITS
         ):
             raise ValueError(
@@ -244,8 +269,8 @@ class ChristoffelDarbouxResult(ChristoffelDarbouxRequest):
         )
 
         result = christoffel_darboux(
-            _to_fractions(self.alpha),
-            _to_fractions(self.beta),
+            _to_fractions(self.coefficients.alpha),
+            _to_fractions(self.coefficients.beta),
             self.x.as_fraction(),
             self.y.as_fraction(),
         )
@@ -264,38 +289,25 @@ class ChristoffelDarbouxResult(ChristoffelDarbouxRequest):
 
 
 class GaussianQuadratureRequest(StrictModel):
-    alpha: tuple[CanonicalRational, ...] = Field(min_length=1)
-    beta: tuple[CanonicalRational, ...] = Field(min_length=1)
+    coefficients: RecurrenceCoefficients
 
     @model_validator(mode="after")
     def require_valid_coefficients(self) -> Self:
-        if not 1 <= len(self.alpha) <= MAX_QUADRATURE_POINTS:
+        alpha = self.coefficients.alpha
+        beta = self.coefficients.beta
+        if not 1 <= len(alpha) <= MAX_QUADRATURE_POINTS:
             raise ValueError("alpha must contain between 1 and 16 entries")
-        if len(self.beta) != len(self.alpha) and len(self.beta) != len(self.alpha) + 1:
+        if len(beta) != len(alpha) and len(beta) != len(alpha) + 1:
             raise ValueError("beta must have length len(alpha) or len(alpha)+1")
-        beta_zero = self.beta[0].as_fraction()
-        if beta_zero <= 0:
-            raise ValueError(
-                "beta_0 (the zeroth moment of a positive functional) must be positive"
-            )
+        beta_zero = beta[0].as_fraction()
         # Golub-Welsch converts mu_0 to a float64 weight; values below the
         # finite-float range would underflow every mass to zero.
         if abs(beta_zero) < MIN_QUADRATURE_SUBDIAGONAL:
             raise ValueError("beta_0 falls below the quadrature underflow bound")
-        # Subdiagonal entries feed math.sqrt after float conversion; they must
-        # be positive and safely inside the finite IEEE-double range, and the
-        # diagonal and mu_0 must convert to finite doubles without overflow.
-        for index in range(1, min(len(self.alpha), len(self.beta))):
-            sub = self.beta[index].as_fraction()
-            if sub <= 0:
-                raise ValueError(
-                    "subdiagonal beta entries must be positive squared-norm ratios"
-                )
-            if sub < MIN_QUADRATURE_SUBDIAGONAL:
-                raise ValueError(
-                    "subdiagonal beta entries fall below the quadrature underflow bound"
-                )
-        for value in (*self.alpha, *self.beta):
+        # Subdiagonal entries feed math.sqrt after float conversion and must
+        # sit safely inside the finite IEEE-double range together with the
+        # diagonal scale and mu_0.
+        for value in (*alpha, *beta):
             require_bounded_rational(
                 value, max_digits=MAX_RATIONAL_DIGITS, label="coefficient"
             )
@@ -303,6 +315,16 @@ class GaussianQuadratureRequest(StrictModel):
                 raise ValueError(
                     "quadrature coefficients exceed the finite-float magnitude bound"
                 )
+        # Individual finite-float bounds do not bound their combination: a
+        # diagonal scale far above the subdiagonals numerically disconnects
+        # the Jacobi matrix, localized eigenvector first components
+        # underflow, and the rule would lose mass. Golub-Welsch on an
+        # admitted request is deterministic and bounded (<= 16 points), so
+        # admission replays it and rejects any recurrence whose weights do
+        # not stay strictly positive.
+        from jacobian.math.moments_orthogonal.operations import gaussian_quadrature
+
+        gaussian_quadrature(_to_fractions(alpha), _to_fractions(beta))
         return self
 
 
@@ -322,7 +344,8 @@ class GaussianQuadratureResult(GaussianQuadratureRequest):
         )
 
         result = gaussian_quadrature(
-            _to_fractions(self.alpha), _to_fractions(self.beta)
+            _to_fractions(self.coefficients.alpha),
+            _to_fractions(self.coefficients.beta),
         )
         if self.nodes != _from_fractions(result.nodes):
             raise ValueError("nodes must match the Golub-Welsch eigenvalues")
@@ -340,6 +363,7 @@ __all__ = [
     "HankelMatrixResult",
     "JacobiMatrixRequest",
     "JacobiMatrixResult",
+    "RecurrenceCoefficients",
     "RecurrenceCoefficientsRequest",
     "RecurrenceCoefficientsResult",
 ]

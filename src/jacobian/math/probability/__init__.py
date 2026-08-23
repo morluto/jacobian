@@ -1,5 +1,11 @@
 """Supported native exact finite-probability APIs."""
 
+from jacobian.math.probability.local_lemma import (
+    AsymmetricLocalLemmaInequality,
+    AsymmetricLocalLemmaWitness,
+    AsymmetricLocalLemmaWitnessCheckResult,
+    check_asymmetric_local_lemma_witness,
+)
 from jacobian.math.probability.mutual_information import mutual_information
 from jacobian.math.probability.values import (
     FiniteJointTable,
@@ -9,9 +15,13 @@ from jacobian.math.probability.values import (
 )
 
 __all__ = [
+    "AsymmetricLocalLemmaInequality",
+    "AsymmetricLocalLemmaWitness",
+    "AsymmetricLocalLemmaWitnessCheckResult",
     "FiniteJointTable",
     "MutualInformationCertificate",
     "MutualInformationResult",
     "MutualInformationTerm",
+    "check_asymmetric_local_lemma_witness",
     "mutual_information",
 ]

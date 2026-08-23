@@ -116,6 +116,24 @@ class TestMultivariateFactorResultInvariants:
                 reconstructed=reconstructed,
             )
 
+    def test_factorized_outcome_requires_invariant_markers(self):
+        """A FACTORIZED result without the public contract's normalization
+        and product-reconstruction literals cannot validate: consumers rely
+        on those markers to interpret the decomposition."""
+        reconstructed = _poly(("x", "y"), ((1, 1, (2, 0)),))
+        for kwargs in (
+            {"normalization": None, "product_reconstruction": "EXACT"},
+            {"normalization": "CONTENT_AND_MONIC_IRREDUCIBLES", "product_reconstruction": None},
+            {"normalization": None, "product_reconstruction": None},
+        ):
+            with pytest.raises(ValidationError, match="FACTORIZED outcomes declare"):
+                MultivariateFactorResult(
+                    coefficient=CanonicalRational.from_fraction(Fraction(1)),
+                    factors=(),
+                    reconstructed=reconstructed,
+                    **kwargs,
+                )
+
 
 class TestOutputBudgetOutcome:
     def test_oversized_irreducible_factor_returns_typed_outcome(self):

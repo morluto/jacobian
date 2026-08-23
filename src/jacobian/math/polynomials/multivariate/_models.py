@@ -308,6 +308,14 @@ class MultivariateFactorResult(StrictModel):
                 )
             _verify_output_budget_exceeded_claim(self.coefficient, self.reconstructed)
             return self
+        if (
+            self.normalization != "CONTENT_AND_MONIC_IRREDUCIBLES"
+            or self.product_reconstruction != "EXACT"
+        ):
+            raise ValueError(
+                "FACTORIZED outcomes declare content-and-monic-irreducibles "
+                "normalization and exact product reconstruction"
+            )
         if not self.reconstructed.polynomial.terms:
             raise ValueError("reconstructed polynomial must be nonzero")
         _check_factor_records(self.factors, self.reconstructed.variables)

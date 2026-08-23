@@ -59,9 +59,10 @@ def _validate_alpha_beta(
         raise ValueError(
             "beta_0 (the zeroth moment of a positive functional) must be positive"
         )
-    # beta_1, ..., beta_{n-1} are squared-norm ratios of a positive-definite
-    # sequence and occupy the Jacobi subdiagonal; each must be positive.
-    for index in range(1, min(len(alpha), len(beta))):
+    # Every entry after beta_0 is a squared-norm ratio of a positive-definite
+    # sequence; each must be positive, including the trailing coefficient an
+    # odd moment prefix determines beyond the consumed Jacobi subdiagonal.
+    for index in range(1, len(beta)):
         if beta[index].num.startswith("-") or beta[index].num == "0":
             raise ValueError(
                 "subdiagonal beta entries must be positive squared-norm ratios"

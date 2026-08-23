@@ -144,6 +144,28 @@ class TestJacobiMatrix:
         # beta_0 is the zeroth moment; the subdiagonal carries beta_1 only.
         assert result.off_diagonal == (_frac(1, 12),)
 
+    def test_negative_subdiagonal_rejected(self) -> None:
+        """The reviewer's counterexample: a negative entry cannot carry the
+        documented squared subdiagonal or its real square root."""
+        with pytest.raises(ValueError, match="positive squared-norm ratios"):
+            jacobi_matrix((Fraction(0), Fraction(0)), (Fraction(1), Fraction(-1)))
+
+    def test_accepts_recurrence_value_directly(self) -> None:
+        """The natural composition jacobi_matrix(recurrence_coefficients(m))."""
+        value = recurrence_coefficients(tuple(_frac(1, k) for k in range(1, 5)))
+        composed = jacobi_matrix(value)
+        separated = jacobi_matrix(value.alpha, value.beta)
+        assert composed == separated
+
+    def test_mixed_value_and_sequence_rejected(self) -> None:
+        value = recurrence_coefficients((_frac(1, 1), _frac(1, 2)))
+        with pytest.raises(TypeError, match="not both"):
+            jacobi_matrix(value, value.beta)
+
+    def test_missing_beta_rejected(self) -> None:
+        with pytest.raises(TypeError, match="beta is required"):
+            jacobi_matrix((_frac(1, 2),))
+
     def test_empty_alpha(self) -> None:
         beta = (_frac(1, 1),)
         result = jacobi_matrix((), beta)
@@ -187,6 +209,22 @@ class TestChristoffelDarboux:
         result = christoffel_darboux((), beta, _frac(1, 1), _frac(1, 1))
         assert result.kernel == _frac(0, 1)
         assert result.polynomials_evaluated == (_frac(1, 1),)
+
+    def test_accepts_recurrence_value_directly(self) -> None:
+        """christoffel_darboux(value, x, y) composes without unpacking."""
+        value = recurrence_coefficients(tuple(_frac(1, k) for k in range(1, 6)))
+        composed = christoffel_darboux(value, _frac(1, 2), _frac(3, 4))
+        keyword = christoffel_darboux(value, x=_frac(1, 2), y=_frac(3, 4))
+        separated = christoffel_darboux(
+            value.alpha, value.beta, _frac(1, 2), _frac(3, 4)
+        )
+        assert composed == separated
+        assert keyword == separated
+
+    def test_mixed_value_form_rejected(self) -> None:
+        value = recurrence_coefficients((_frac(1, 1), _frac(1, 2)))
+        with pytest.raises(TypeError, match="christoffel_darboux"):
+            christoffel_darboux(value, value.beta, _frac(1, 1))
 
     def test_negative_subdiagonal_rejected(self) -> None:
         """The reviewer's counterexample: a negative norm ratio is not a
@@ -319,6 +357,12 @@ class TestGaussianQuadrature:
     def test_negative_subdiagonal_rejected(self) -> None:
         with pytest.raises(ValueError, match="positive squared-norm ratios"):
             gaussian_quadrature((_frac(0, 1), _frac(0, 1)), (_frac(1, 1), _frac(-1, 3)))
+
+    def test_accepts_recurrence_value_directly(self) -> None:
+        value = recurrence_coefficients(tuple(_frac(1, k) for k in range(1, 8)))
+        composed = gaussian_quadrature(value)
+        separated = gaussian_quadrature(value.alpha, value.beta)
+        assert composed == separated
 
 
 # ---------------------------------------------------------------------------
@@ -456,6 +500,51 @@ class TestRecurrenceValueComposition:
         payload["coefficients"] = forged
         with pytest.raises(ValidationError, match="exact recurrence"):
             RecurrenceCoefficientsResult.model_validate(payload)
+
+
+class TestRecurrenceValueTrailingBeta:
+    """Every beta[1:] entry is a squared-norm ratio, including the tail."""
+
+    def test_negative_trailing_beta_rejected(self) -> None:
+        """The reviewer's counterexample: when len(beta) == len(alpha) + 1 the
+        trailing entry escapes the consumed-subdiagonal range, yet beta_1 is
+        still the squared-norm ratio an odd moment prefix determines."""
+        with pytest.raises(ValidationError, match="positive squared-norm ratios"):
+            RecurrenceCoefficientsValue(
+                alpha=(_cr(0, 1),),
+                beta=(_cr(1, 1), _cr(-1, 1)),
+            )
+
+    def test_zero_trailing_beta_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="positive squared-norm ratios"):
+            RecurrenceCoefficientsValue(
+                alpha=(_cr(0, 1),),
+                beta=(_cr(1, 1), _cr(0, 1)),
+            )
+
+    def test_positive_trailing_beta_admitted(self) -> None:
+        """The known three-harmonic-moments value keeps its final beta_1 = 1/12."""
+        value = RecurrenceCoefficientsValue(
+            alpha=(_cr(1, 2),),
+            beta=(_cr(1, 1), _cr(1, 12)),
+        )
+        assert value.beta == (_cr(1, 1), _cr(1, 12))
+
+    def test_negative_tail_rejected_at_consumer_gate(self) -> None:
+        """A forged serialized value cannot pass through any consumer request."""
+        payload = {
+            "coefficients": {
+                "alpha": [{"num": "0", "den": "1"}],
+                "beta": [
+                    {"num": "1", "den": "1"},
+                    {"num": "-1", "den": "1"},
+                ],
+            }
+        }
+        with pytest.raises(ValidationError, match="positive squared-norm ratios"):
+            JacobiMatrixRequest.model_validate(payload)
+        with pytest.raises(ValidationError, match="positive squared-norm ratios"):
+            GaussianQuadratureRequest.model_validate(payload)
 
 
 class TestRecurrenceAdmissionBoundaries:

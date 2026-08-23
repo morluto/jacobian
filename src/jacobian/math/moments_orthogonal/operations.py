@@ -168,8 +168,59 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
     return RecurrenceCoefficients(alpha=tuple(alpha), beta=tuple(beta))
 
 
-def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> JacobiMatrix:
+def _resolve_coefficient_arguments(
+    alpha: Sequence[Fraction] | RecurrenceCoefficients,
+    beta: Sequence[Fraction] | None,
+) -> tuple[Sequence[Fraction], Sequence[Fraction]]:
+    """Accept the domain value unchanged or separate alpha/beta sequences."""
+    if isinstance(alpha, RecurrenceCoefficients):
+        if beta is not None:
+            raise TypeError(
+                "pass either a recurrence-coefficient value or separate "
+                "alpha and beta sequences, not both"
+            )
+        return alpha.alpha, alpha.beta
+    if beta is None:
+        raise TypeError("beta is required when alpha is a coefficient sequence")
+    return alpha, beta
+
+
+def _resolve_kernel_arguments(
+    alpha: Sequence[Fraction] | RecurrenceCoefficients,
+    beta: Sequence[Fraction] | Fraction | None,
+    x: Fraction | None,
+    y: Fraction | None,
+) -> tuple[Sequence[Fraction], Sequence[Fraction], Fraction, Fraction]:
+    """Accept (coefficients, x, y) or separate alpha/beta sequences with x, y."""
+    if isinstance(alpha, RecurrenceCoefficients):
+        # The composed form carries x and y: positionally they land in the
+        # beta and x slots; with keywords they arrive in their own slots.
+        if beta is None and type(x) is Fraction and type(y) is Fraction:
+            beta, x = x, y
+            y = None
+        # Anything else is a malformed call.
+        if type(beta) is not Fraction or type(x) is not Fraction or y is not None:
+            raise TypeError(
+                "pass either christoffel_darboux(coefficients, x, y) or "
+                "christoffel_darboux(alpha, beta, x, y)"
+            )
+        return alpha.alpha, alpha.beta, beta, x
+    if beta is None or isinstance(beta, Fraction) or x is None or y is None:
+        raise TypeError(
+            "christoffel_darboux requires beta, x, and y with an alpha sequence"
+        )
+    return alpha, beta, x, y
+
+
+def jacobi_matrix(
+    alpha: Sequence[Fraction] | RecurrenceCoefficients,
+    beta: Sequence[Fraction] | None = None,
+) -> JacobiMatrix:
     """Build the symmetric tridiagonal Jacobi matrix from recurrence coefficients.
+
+    Accepts the domain-owned ``RecurrenceCoefficients`` value unchanged so
+    ``jacobi_matrix(recurrence_coefficients(moments))`` composes directly, or
+    separate alpha/beta sequences.
 
     The diagonal entries are ``alpha_0, ..., alpha_{n-1}`` and the positive
     subdiagonal entries are ``sqrt(beta_1), ..., sqrt(beta_n)``. Because the
@@ -177,6 +228,7 @@ def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> Jacobi
     diagonal and the rational squared subdiagonal ``beta`` separately so that the
     full symmetric matrix can be reconstructed by any consumer.
     """
+    alpha, beta = _resolve_coefficient_arguments(alpha, beta)
     if not 1 <= len(beta) <= MAX_RECURRENCE_ORDER:
         raise ValueError("beta must contain between 1 and 16 entries")
     if not 0 <= len(alpha) <= MAX_RECURRENCE_ORDER:
@@ -189,6 +241,13 @@ def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> Jacobi
         raise TypeError("beta must use exact Fractions")
     if beta[0] <= 0:
         raise ValueError("beta_0 (the zeroth moment) must be positive")
+    # Every entry occupying the subdiagonal is a squared-norm ratio; a
+    # nonpositive value cannot carry the documented real square root.
+    for index in range(1, min(len(alpha), len(beta))):
+        if beta[index] <= 0:
+            raise ValueError(
+                "subdiagonal beta entries must be positive squared-norm ratios"
+            )
     return JacobiMatrix(
         diagonal=tuple(alpha),
         # The squared subdiagonal entries are beta_1, ..., beta_{n-1}; beta_0 is
@@ -198,12 +257,16 @@ def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> Jacobi
 
 
 def christoffel_darboux(
-    alpha: Sequence[Fraction],
-    beta: Sequence[Fraction],
-    x: Fraction,
-    y: Fraction,
+    alpha: Sequence[Fraction] | RecurrenceCoefficients,
+    beta: Sequence[Fraction] | Fraction | None = None,
+    x: Fraction | None = None,
+    y: Fraction | None = None,
 ) -> ChristoffelDarbouxKernel:
     """Compute the Christoffel-Darboux kernel ``K_n(x, y)``.
+
+    Accepts the domain-owned ``RecurrenceCoefficients`` value unchanged with
+    the genuine extra parameters ``christoffel_darboux(value, x, y)``, or
+    separate coefficient sequences as ``christoffel_darboux(alpha, beta, x, y)``.
 
     For the monic orthogonal polynomial family with three-term recurrence
 
@@ -216,6 +279,7 @@ def christoffel_darboux(
 
     evaluated by forward recurrence of the polynomials at ``x`` and ``y``.
     """
+    alpha, beta, x, y = _resolve_kernel_arguments(alpha, beta, x, y)
     if not 1 <= len(beta) <= MAX_POLYNOMIAL_COUNT:
         raise ValueError("beta must contain between 1 and 32 entries")
     if not 0 <= len(alpha) <= MAX_POLYNOMIAL_COUNT:
@@ -304,9 +368,14 @@ def _require_quadrature_double_domain(
 
 
 def gaussian_quadrature(
-    alpha: Sequence[Fraction], beta: Sequence[Fraction]
+    alpha: Sequence[Fraction] | RecurrenceCoefficients,
+    beta: Sequence[Fraction] | None = None,
 ) -> GaussianQuadrature:
     """Compute Gaussian quadrature nodes and weights via the Golub-Welsch algorithm.
+
+    Accepts the domain-owned ``RecurrenceCoefficients`` value unchanged so
+    ``gaussian_quadrature(recurrence_coefficients(moments))`` composes
+    directly, or separate alpha/beta sequences.
 
     The nodes are the eigenvalues of the symmetric tridiagonal Jacobi matrix and
     the weights are ``mu_0 * v_{0,i}^2`` where ``v_{0,i}`` is the first component of
@@ -321,6 +390,7 @@ def gaussian_quadrature(
 
     import numpy as np
 
+    alpha, beta = _resolve_coefficient_arguments(alpha, beta)
     _require_quadrature_double_domain(alpha, beta)
     n = len(alpha)
     diagonal = np.array([float(a) for a in alpha], dtype=float)

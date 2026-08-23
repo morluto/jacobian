@@ -46,18 +46,24 @@ applies. Before adopting a small fixed input cap, complete this review:
    factored, modular, symbolic, or implicit values before requiring an expanded
    result, and separate decision, first-witness, and complete-profile contracts
    when their output obligations differ.
-3. Research a maintained specialist backend before writing a custom kernel or
+3. State whether the accepted source is materialized, succinct, generated, or
+   oracle-backed. Identify every expansion the kernel performs, prove that
+   admission can bound it before execution, and check whether an apparently
+   equivalent compact representation changes the complexity class or output
+   obligation. Representation is part of the admitted domain, not an adapter
+   detail.
+4. Research a maintained specialist backend before writing a custom kernel or
    retaining a restrictive pure-Python path. FLINT, GMP, and Arb are relevant
    examples for exact integer, polynomial, matrix, and rigorous ball
    computation; they are not mandatory when another maintained backend better
    fits the operation.
-4. Define preflight admission from the selected algorithm's work,
+5. Define preflight admission from the selected algorithm's work,
    intermediate, memory, and result bounds. Large scalar inputs should remain
    admissible when those derived quantities and the returned value are small.
-5. Document any remaining fixed ceiling as a conservative fallback. State
+6. Document any remaining fixed ceiling as a conservative fallback. State
    whether it is a mathematical, representation, backend, or currently
    uninvestigated limit, and identify the evidence needed to raise it.
-6. Test accepted and rejected boundaries, algorithm or representation
+7. Test accepted and rejected boundaries, algorithm or representation
    crossover points, and realistic source-backed cases. Use defining
    invariants or an independent oracle to show that every selected regime has
    the same public semantics.
@@ -90,6 +96,15 @@ A public operation must satisfy every gate:
    or frozen research workflow.
 9. It has a distinct discovery intent and does not create a near-duplicate
    result that degrades retrieval.
+10. Its admitted representation does not hide an unbounded expansion or a
+    materially different computational problem. The request and preflight name
+    and bound any expansion before execution.
+
+A named technique does not justify a second operation when it has the same
+mathematical input, output, and defining relation as an existing operation.
+Record the technique as discovery vocabulary or a private kernel. Require a
+distinct reusable result, witness, decomposition, or certificate for separate
+admission.
 
 Passing schema validation, having tests, or wrapping a maintained library does
 not by itself satisfy these gates.

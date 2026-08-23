@@ -42,6 +42,11 @@ MIN_QUADRATURE_SUBDIAGONAL = Fraction(1, 10**300)
 MAX_QUADRATURE_ENTRY_SPREAD = Fraction(10) ** 6
 QUADRATURE_WEIGHT_UNDERFLOW_FLOOR = Fraction(1, 10**280)
 QUADRATURE_NODE_UNDERFLOW_FLOOR = Fraction(1, 10**280)
+# Converting admitted rationals to doubles rounds every matrix entry, which
+# perturbs each computed eigenvalue by up to ~n * 2^-52 * S * ||J||^{n-1};
+# an exact determinant below that bound means Golub-Welsch cannot resolve
+# the smallest node even though it does not underflow.
+QUADRATURE_FLOAT_RESOLUTION = Fraction(1, 2**40)
 
 
 def _to_fractions(
@@ -77,9 +82,10 @@ def _validate_alpha_beta(
         raise ValueError(
             "beta_0 (the zeroth moment of a positive functional) must be positive"
         )
-    # beta_1, ..., beta_{n-1} are squared-norm ratios of a positive-definite
-    # sequence and occupy the Jacobi subdiagonal; each must be positive.
-    for index in range(1, min(len(alpha), len(beta))):
+    # Every beta after beta_0 is a squared-norm ratio of a positive-definite
+    # sequence and occupies the Jacobi subdiagonal (the trailing entry of an
+    # odd-length prefix included), so each must be positive.
+    for index in range(1, len(beta)):
         if beta[index].num.startswith("-") or beta[index].num == "0":
             raise ValueError(
                 "subdiagonal beta entries must be positive squared-norm ratios"
@@ -446,12 +452,30 @@ class GaussianQuadratureRequest(StrictModel):
             )
             + 1
         )
-        node_floor = QUADRATURE_NODE_UNDERFLOW_FLOOR * (2 * scale) ** (len(alpha) - 1)
+        underflow_floor = QUADRATURE_NODE_UNDERFLOW_FLOOR * (2 * scale) ** (
+            len(alpha) - 1
+        )
+        # Cancellation during coefficient conversion: two distinct exact
+        # diagonals can round to the same double, handing eigh a singular
+        # matrix whose zero node replaces a small positive exact one.
+        representable_scale = max(
+            max((abs(value.as_fraction()) for value in alpha), default=Fraction(0)),
+            max(beta_magnitudes, default=Fraction(0)),
+            Fraction(1),
+        )
+        resolution_floor = (
+            len(alpha)
+            * QUADRATURE_FLOAT_RESOLUTION
+            * representable_scale
+            * (2 * representable_scale) ** (len(alpha) - 1)
+        )
+        node_floor = max(underflow_floor, resolution_floor)
         if determinant != 0 and abs(determinant) < node_floor:
             raise ValueError(
-                "the assembled Jacobi matrix has an exact eigenvalue below "
-                "the float64 underflow floor; Golub-Welsch would return a "
-                "vanishing node for a mathematically nonzero one"
+                "the assembled Jacobi matrix has an exact eigenvalue that "
+                "float64 cannot resolve or represents as zero; Golub-Welsch "
+                "would return a vanishing node for a mathematically "
+                "nonzero one"
             )
 
 

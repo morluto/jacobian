@@ -491,3 +491,30 @@ class TestRecurrenceAdmissionBoundaries:
         )
         with pytest.raises(ValidationError, match="canonical"):
             RecurrenceCoefficientsRequest(moments=moments)
+
+
+class TestQuadratureSpectrumResolution:
+    """Admission must reject spectra float64 cannot resolve."""
+
+    def test_cancellation_collapsed_diagonals_rejected(self) -> None:
+        """alpha=(1, (10^100+1)/10^100), beta=(1,1): entry spread ~one and
+        det=10^-100 pass the underflow floors, but float64 rounds both
+        diagonals to 1 and eigh receives [[1,1],[1,1]]."""
+        with pytest.raises(ValidationError, match="cannot resolve"):
+            GaussianQuadratureRequest(
+                coefficients=RecurrenceCoefficientsValue(
+                    alpha=(
+                        _cr(1, 1),
+                        CanonicalRational.from_fraction(Fraction(10**100 + 1, 10**100)),
+                    ),
+                    beta=(_cr(1, 1), _cr(1, 1)),
+                ),
+            )
+
+    def test_negative_trailing_beta_rejected(self) -> None:
+        """beta=(1,-1) with a single alpha is not a valid squared-norm ratio."""
+        with pytest.raises(ValidationError, match="squared-norm ratios"):
+            RecurrenceCoefficientsValue(
+                alpha=(_cr(0, 1),),
+                beta=(_cr(1, 1), _cr(-1, 1)),
+            )

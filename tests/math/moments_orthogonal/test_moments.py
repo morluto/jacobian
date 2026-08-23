@@ -1238,3 +1238,77 @@ class TestNativeAdmission:
         )
         with pytest.raises(ValueError, match="conservative"):
             native.orthogonal_polynomials(prefix, max_degree=1)
+
+    def test_native_recurrence_rejects_zero_norm_family(self) -> None:
+        """The reviewer's counterexample: the canonical non-quasi-definite
+        family p_0=1,h_0=0; p_1=x,h_1=0 is authorable as a value, and the
+        native recurrence wrapper must reject it with the shared admission
+        error instead of leaking ZeroDivisionError from the norm division."""
+        from jacobian.math.moments_orthogonal import native
+        from jacobian.math.moments_orthogonal.values import (
+            OrthogonalPolynomialFamily,
+            OrthogonalPolynomialTerm,
+        )
+
+        def term(deg: int, coeffs: tuple[int, ...], h: int):
+            return OrthogonalPolynomialTerm(
+                degree=deg,
+                coefficients=tuple(
+                    CanonicalRational.from_fraction(Fraction(c)) for c in coeffs
+                ),
+                squared_norm=CanonicalRational.from_fraction(Fraction(h)),
+            )
+
+        family = OrthogonalPolynomialFamily(
+            polynomials=(term(0, (1,), 0), term(1, (0, 1), 0)),
+            variable="x",
+            is_quasi_definite=False,
+            is_positive_definite=False,
+        )
+        with pytest.raises(ValueError, match="quasi-definite"):
+            native.recurrence_coefficients(family)
+
+    def test_native_recurrence_rejects_terminal_zero_norm(self) -> None:
+        """Even a terminal vanishing norm leaves the admitted domain: the
+        wire contract already rejects it, so the native surface must not
+        admit a broader family than RecurrenceRequest."""
+        from jacobian.math.moments_orthogonal import native
+        from jacobian.math.moments_orthogonal.values import (
+            OrthogonalPolynomialFamily,
+            OrthogonalPolynomialTerm,
+        )
+
+        family = OrthogonalPolynomialFamily(
+            polynomials=(
+                OrthogonalPolynomialTerm(
+                    degree=0,
+                    coefficients=(CanonicalRational(num="1", den="1"),),
+                    squared_norm=CanonicalRational(num="2", den="1"),
+                ),
+                OrthogonalPolynomialTerm(
+                    degree=1,
+                    coefficients=(
+                        CanonicalRational(num="0", den="1"),
+                        CanonicalRational(num="1", den="1"),
+                    ),
+                    squared_norm=CanonicalRational(num="0", den="1"),
+                ),
+            ),
+            variable="x",
+            is_quasi_definite=False,
+            is_positive_definite=False,
+        )
+        with pytest.raises(ValueError, match="quasi-definite"):
+            native.recurrence_coefficients(family)
+
+    def test_native_recurrence_matches_wire_result(self) -> None:
+        """For an admitted quasi-definite family the direct native call and
+        the wire request produce identical typed recurrence values."""
+        from jacobian.math.moments_orthogonal import native
+
+        family = native.orthogonal_polynomials(_prefix(_moments_uniform(7)), 3)
+        rec_native = native.recurrence_coefficients(family)
+        rec_wire = compute_recurrence(RecurrenceRequest(family=family))
+        assert rec_native == rec_wire
+        assert int(rec_wire.beta[1].num) == 1
+        assert int(rec_wire.beta[1].den) == 3

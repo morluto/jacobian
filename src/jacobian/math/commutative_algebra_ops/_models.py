@@ -402,9 +402,7 @@ def _require_source_bound_basis(
         if any(not expr.is_zero for expr in source_exprs):
             raise ValueError("basis must contain every source-ideal generator")
         return
-    leading_terms = [
-        sympy.LT(expr, *symbols, order=monomial_order) for expr in nonzero
-    ]
+    leading_terms = [sympy.LT(expr, *symbols, order=monomial_order) for expr in nonzero]
     leading_exps = [
         sympy.Poly(lt, *symbols, domain=sympy.QQ).monoms()[0] for lt in leading_terms
     ]
@@ -412,10 +410,10 @@ def _require_source_bound_basis(
     # another generator's leading monomial.
     for index, (expr, lt) in enumerate(zip(nonzero, leading_terms, strict=True)):
         if sympy.LC(expr, *symbols, order=monomial_order) != 1:
-            raise ValueError(
-                "a reduced Gröbner basis has unit leading coefficients"
-            )
-        others = [lt for other_index, lt in enumerate(leading_terms) if other_index != index]
+            raise ValueError("a reduced Gröbner basis has unit leading coefficients")
+        others = [
+            lt for other_index, lt in enumerate(leading_terms) if other_index != index
+        ]
         if others:
             _, remainder = sympy.reduced(
                 expr, others, *symbols, order=monomial_order, domain=sympy.QQ
@@ -535,7 +533,6 @@ class IdealNormalFormRequest(StrictModel):
 
 
 NormalFormExecutionOutcome = Literal["COMPUTED", "TIMEOUT"]
-
 
 
 class IdealNormalFormResult(StrictModel):

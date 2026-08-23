@@ -22,7 +22,6 @@ from jacobian.math.commutative_algebra_ops._models import (
 )
 from jacobian.math.commutative_algebra_ops._singular import (
     run_singular_ideal_operation,
-    run_singular_saturation_verification,
 )
 from jacobian.math.polynomials._conversions import (
     rational_polynomial_to_sympy,

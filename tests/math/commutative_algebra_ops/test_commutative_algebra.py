@@ -16,13 +16,11 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealQuotientRequest,
     IdealRadicalMembershipRequest,
     IdealRadicalRequest,
-    IdealSaturationRequest,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
     compute_ideal_quotient,
     compute_ideal_radical,
     compute_ideal_radical_membership,
-    compute_ideal_saturation,
 )
 from jacobian.math.commutative_algebra_ops._tools import TOOLS
 from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
@@ -360,8 +358,6 @@ def test_ideal_quotient_by_zero_is_the_unit_ideal() -> None:
     assert _equal(result.quotient, _ideal(("x",), {(0,): 1}))
 
 
-
-
 def test_zero_basis_must_use_the_source_ideal_ring() -> None:
     from jacobian.math.commutative_algebra_ops._models import (
         GroebnerBasisRequest,
@@ -387,20 +383,12 @@ def test_zero_basis_must_use_the_source_ideal_ring() -> None:
     assert result.basis is not None
 
 
-
-
 @requires_singular
 @pytest.mark.requires_backend("singular")
-
-
 @requires_singular
 @pytest.mark.requires_backend("singular")
-
-
 @requires_singular
 @pytest.mark.requires_backend("singular")
-
-
 @requires_singular
 @pytest.mark.requires_backend("singular")
 def test_ideal_quotient_by_unit_is_the_dividend() -> None:

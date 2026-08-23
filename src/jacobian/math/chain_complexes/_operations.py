@@ -129,7 +129,9 @@ def _cone_differential(
     entries = []
     for left_row, right_row in zip(top_left.entries, top_right.entries, strict=True):
         entries.append(tuple(left_row) + tuple(right_row))
-    for left_row, right_row in zip(bottom_left.entries, bottom_right.entries, strict=True):
+    for left_row, right_row in zip(
+        bottom_left.entries, bottom_right.entries, strict=True
+    ):
         entries.append(tuple(left_row) + tuple(right_row))
     return PrimeFieldMatrix(
         prime=prime,

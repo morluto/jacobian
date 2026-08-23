@@ -122,9 +122,7 @@ class TestHomology:
             differentials=({"prime": 7, "entries": [[3], [5]], "columns": 1},),
         )
         result = compute_homology(HomologyRequest(complex=cx))
-        kernel_rank = rank(
-            PrimeFieldMatrix(prime=7, entries=((3,), (5,)), columns=1)
-        )
+        kernel_rank = rank(PrimeFieldMatrix(prime=7, entries=((3,), (5,)), columns=1))
         assert kernel_rank == 1
         # d_1: C_1 -> C_0 arrives at degree 0 with the kernel's exact rank.
         assert result.groups[0].boundary_rank == kernel_rank
@@ -527,9 +525,7 @@ class TestAggregateBudgets:
             "min_degree": 0,
             "max_degree": degrees - 1,
             "dimensions": [size] * degrees,
-            "differentials": [
-                zeros_dict(2, size, size) for _ in range(degrees - 1)
-            ],
+            "differentials": [zeros_dict(2, size, size) for _ in range(degrees - 1)],
         }
         payload = {
             "source": base,
@@ -611,7 +607,9 @@ class TestResultReplay:
             chain_map=tuple(
                 # f_deg is the shaped zero map: 1x1 into D_-10 at degree -10,
                 # zero-row elsewhere because the target has no group there.
-                zeros_dict(3, 1, 1) if deg == -10 else {"prime": 3, "entries": [], "columns": 1}
+                zeros_dict(3, 1, 1)
+                if deg == -10
+                else {"prime": 3, "entries": [], "columns": 1}
                 for deg in range(-10, 10)
             ),
         )
@@ -620,4 +618,3 @@ class TestResultReplay:
         assert result.cone.min_degree == -10
         assert result.cone.max_degree == 10
         assert MappingConeResult.model_validate(result.model_dump()) == result
-

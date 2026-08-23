@@ -61,9 +61,7 @@ MAX_DEGREE = 11
 # the aggregate cell budget before any product runs.
 
 MAX_AGGREGATE_CELLS = 262_144
-MAX_AGGREGATE_MULTIPLICATION_WORK = (
-    MAX_AGGREGATE_CELLS * MAX_CHAIN_GROUP_DIMENSION // 2
-)
+MAX_AGGREGATE_MULTIPLICATION_WORK = MAX_AGGREGATE_CELLS * MAX_CHAIN_GROUP_DIMENSION // 2
 MAX_AGGREGATE_ELIMINATION_WORK = MAX_AGGREGATE_CELLS * MAX_CHAIN_GROUP_DIMENSION // 2
 
 
@@ -143,8 +141,7 @@ def _check_d_squared(differentials: tuple[PrimeFieldMatrix, ...]) -> None:
         square = multiply(differentials[i], differentials[i + 1])
         if not _is_zero(square):
             raise ValueError(
-                "differentials must satisfy d^2 = 0 "
-                f"(gap {i} failed over GF({prime}))"
+                f"differentials must satisfy d^2 = 0 (gap {i} failed over GF({prime}))"
             )
 
 
@@ -192,17 +189,14 @@ class ChainComplex(StrictModel):
                 raise ValueError("differentials must cover the degree gaps")
             for i, diff in enumerate(self.differentials):
                 if diff.prime != self.prime:
-                    raise ValueError(
-                        "differential prime must match the complex prime"
-                    )
+                    raise ValueError("differential prime must match the complex prime")
                 if len(diff.entries) != self.dimensions[i]:
                     raise ValueError(
                         f"differential {i} must have {self.dimensions[i]} rows"
                     )
                 if diff.columns != self.dimensions[i + 1]:
                     raise ValueError(
-                        f"differential {i} must have "
-                        f"{self.dimensions[i + 1]} columns"
+                        f"differential {i} must have {self.dimensions[i + 1]} columns"
                     )
             # Gate the aggregate budget before any composition expands, then
             # enforce d^2 = 0 through the shared kernel.
@@ -410,9 +404,7 @@ def _cone_span(source: ChainComplex, target: ChainComplex) -> tuple[int, int]:
     return cone_min, cone_max
 
 
-def _cone_dimension_at(
-    source: ChainComplex, target: ChainComplex, deg: int
-) -> int:
+def _cone_dimension_at(source: ChainComplex, target: ChainComplex, deg: int) -> int:
     """Dimension of Cone(f)_deg = C_{deg-1} (+) D_deg."""
 
     return _chain_map_degree(source, deg - 1) + _chain_map_degree(target, deg)

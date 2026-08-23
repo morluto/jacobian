@@ -11,6 +11,11 @@ from jacobian.math.additive_combinatorics._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "additive.subset_sum.target.solve",
+        AdmissionDecision.KEEP,
+        "one exact target decision and canonical indexed witness with a materially broader result-sensitive envelope than a complete subset-sum profile",
+    ),
+    OperationAdmission(
         "additive.ordered_difference_profile.compute",
         AdmissionDecision.KEEP,
         "one complete exact ordered-difference profile of a bounded integer-vector set retaining every source pair",

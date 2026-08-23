@@ -26,6 +26,12 @@ from jacobian.math.additive_combinatorics._operations import (
     compute_sumset_cardinality,
     decide_direct_sum_predicate,
 )
+from jacobian.math.additive_combinatorics._subset_sum_target import (
+    MAX_SUBSET_SUM_TOTAL_TRANSITIONS,
+    SubsetSumTargetRequest,
+    SubsetSumTargetResult,
+    solve_subset_sum_target_request,
+)
 
 
 def additive_combinatorics_operation[
@@ -86,6 +92,36 @@ _DIRECT_SUM_NON_TILING_EXAMPLE: dict[str, Any] = {
 
 
 ADDITIVE_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
+    additive_combinatorics_operation(
+        "additive.subset_sum.target.solve",
+        "Solve one exact indexed subset-sum target",
+        (
+            "For a bounded indexed integer sequence and one integer target, "
+            "return the canonical attaining index subset or establish exact "
+            "non-attainment after exhausting the admitted reachable-sum state space. "
+            "The complete computation and source-binding replay perform at most "
+            f"{MAX_SUBSET_SUM_TOTAL_TRANSITIONS:,} state transitions."
+        ),
+        SubsetSumTargetRequest,
+        SubsetSumTargetResult,
+        solve_subset_sum_target_request,
+        "additive-combinatorics",
+        "subset-sum",
+        "decision",
+        "witness",
+        "exact",
+        examples=(
+            example(
+                "two_item_target",
+                "The distinct source indices 0 and 1 witness 2+3=5.",
+                {
+                    "source": {"values": ["2", "3"]},
+                    "target": "5",
+                    "allow_empty_subset": False,
+                },
+            ),
+        ),
+    ),
     additive_combinatorics_operation(
         "additive.representation_profile.compute",
         "Compute the representation profile of a sumset",

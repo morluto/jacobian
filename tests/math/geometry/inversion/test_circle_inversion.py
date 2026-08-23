@@ -5,6 +5,7 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import encode_strict_json
 from jacobian.math.geometry.inversion._models import (
     CircleInversionRequest,
     CircleInversionResult,
@@ -103,10 +104,42 @@ class TestWireAdapter:
             point_y={"num": "0", "den": "1"},
         )
         result = compute_circle_inversion(request)
-        assert result.inverted_x.num == "1"
-        assert result.inverted_x.den == "4"
-        assert result.inverted_y.num == "0"
-        assert result.inverted_y.den == "1"
+        assert result.point.x.num == "1"
+        assert result.point.x.den == "4"
+        assert result.point.y.num == "0"
+        assert result.point.y.den == "1"
+
+    def test_result_point_is_the_shared_geometry_value(self) -> None:
+        """The returned point composes unchanged with other geometry tools."""
+        from jacobian.math.geometry._models import RationalPoint2D
+
+        request = CircleInversionRequest(
+            center_x={"num": "0", "den": "1"},
+            center_y={"num": "0", "den": "1"},
+            power={"num": "1", "den": "1"},
+            point_x={"num": "4", "den": "1"},
+            point_y={"num": "0", "den": "1"},
+        )
+        result = compute_circle_inversion(request)
+        assert isinstance(result.point, RationalPoint2D)
+        encoded = encode_strict_json(result.model_dump(mode="json"))
+        assert b"1/4" not in encoded  # coordinates stay canonical strings
+        rebuilt = CircleInversionResult.model_validate(result.model_dump(mode="json"))
+        assert rebuilt == result
+
+    def test_forged_point_rejected_by_replay(self) -> None:
+        payload = compute_circle_inversion(
+            CircleInversionRequest(
+                center_x={"num": "0", "den": "1"},
+                center_y={"num": "0", "den": "1"},
+                power={"num": "1", "den": "1"},
+                point_x={"num": "4", "den": "1"},
+                point_y={"num": "0", "den": "1"},
+            )
+        ).model_dump()
+        payload["point"]["x"] = {"num": "2", "den": "1"}
+        with pytest.raises(ValidationError, match="exact inversion result"):
+            CircleInversionResult.model_validate(payload)
 
     def test_non_origin_center(self) -> None:
         request = CircleInversionRequest(

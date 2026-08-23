@@ -39,6 +39,13 @@ def _require_bounded_gram_work(
     monomial_basis: tuple[RationalPolynomial, ...],
 ) -> None:
     """Bound the exact reconstruction and PSD work for z^T Q z."""
+    # Every matrix coefficient is bounded like every polynomial coefficient;
+    # otherwise a single 32,768-digit entry could drive unbounded
+    # characteristic-polynomial arithmetic inside the exact PSD check.
+    for row in gram_matrix:
+        for entry in row:
+            if max(len(entry.num.lstrip("-")), len(entry.den)) > MAX_SOS_COEFF_DIGITS:
+                raise ValueError("gram_matrix coefficient exceeds digit bound")
     # Predicted reconstruction terms for z^T Q z
     max_basis_terms = max(len(b.polynomial.terms) for b in monomial_basis)
     predicted = len(gram_matrix) ** 2 * max(1, max_basis_terms**2)

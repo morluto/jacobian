@@ -13,17 +13,9 @@ from jacobian._exact import (
 )
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.geometry._models import RationalPoint2D
 
 MAX_INVERSION_COMPONENT_DIGITS = 4_096
-
-
-def _component_digits(value: CanonicalRational) -> int:
-    return max(len(value.num.lstrip("-")), len(value.den))
-
-
-class RationalPoint2D(StrictModel):
-    x: CanonicalRational
-    y: CanonicalRational
 
 
 class CircleInversionRequest(StrictModel):
@@ -96,8 +88,13 @@ class CircleInversionRequest(StrictModel):
 
 
 class CircleInversionResult(CircleInversionRequest):
-    inverted_x: CanonicalRational
-    inverted_y: CanonicalRational
+    """The exact inverted point as the domain-canonical geometry point value.
+
+    ``point`` is the shared ``RationalPoint2D`` so the result composes with
+    every other planar-geometry operation unchanged.
+    """
+
+    point: RationalPoint2D
     complete: Literal[True] = True
     method: Literal["EXACT_RATIONAL_INVERSION"] = "EXACT_RATIONAL_INVERSION"
 
@@ -110,17 +107,16 @@ class CircleInversionResult(CircleInversionRequest):
         px, py = self.point_x.as_fraction(), self.point_y.as_fraction()
 
         result = invert_point(cx, cy, s, px, py)
-        expected_x = CanonicalRational.from_fraction(result[0])
-        expected_y = CanonicalRational.from_fraction(result[1])
-        if self.inverted_x != expected_x:
-            raise ValueError("inverted_x must be the exact inversion result")
-        if self.inverted_y != expected_y:
-            raise ValueError("inverted_y must be the exact inversion result")
+        expected = RationalPoint2D(
+            x=CanonicalRational.from_fraction(result[0]),
+            y=CanonicalRational.from_fraction(result[1]),
+        )
+        if self.point != expected:
+            raise ValueError("point must be the exact inversion result")
         return self
 
 
 __all__ = [
     "CircleInversionRequest",
     "CircleInversionResult",
-    "RationalPoint2D",
 ]

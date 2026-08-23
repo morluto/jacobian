@@ -695,84 +695,170 @@ class ForbiddenPatternsResult(StrictModel):
             (item.point.x.as_fraction(), item.point.y.as_fraction())
             for item in self.configuration.points
         ]
-        from itertools import combinations
-
-        recomputed_collinear = any(
-            (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1])
-            - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
-            == 0
-            for i, j, k in combinations(range(len(xy)), 3)
-        )
-        recomputed_concyclic = False
-        for i, j, k, ell in combinations(range(len(xy)), 4):
-            # Exclude collinear quadruples: see _operations.forbidden_patterns
-            cross_ijk = (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1]) - (
-                xy[j][1] - xy[i][1]
-            ) * (xy[k][0] - xy[i][0])
-            cross_ijl = (xy[j][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (
-                xy[j][1] - xy[i][1]
-            ) * (xy[ell][0] - xy[i][0])
-            cross_ikl = (xy[k][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (
-                xy[k][1] - xy[i][1]
-            ) * (xy[ell][0] - xy[i][0])
-            cross_jkl = (xy[k][0] - xy[j][0]) * (xy[ell][1] - xy[j][1]) - (
-                xy[k][1] - xy[j][1]
-            ) * (xy[ell][0] - xy[j][0])
-            if cross_ijk == 0 and cross_ijl == 0 and cross_ikl == 0 and cross_jkl == 0:
-                continue
-            m: tuple[tuple[Fraction, Fraction, Fraction, Fraction], ...] = tuple(
-                (x * x + y * y, x, y, Fraction(1))
-                for x, y in (xy[i], xy[j], xy[k], xy[ell])
-            )
-            det = (
-                m[0][0]
-                * (
-                    m[1][1] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
-                    - m[1][2] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
-                    + m[1][3] * (m[2][1] * m[3][2] - m[2][2] * m[3][1])
-                )
-                - m[0][1]
-                * (
-                    m[1][0] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
-                    - m[1][2] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
-                    + m[1][3] * (m[2][0] * m[3][2] - m[2][2] * m[3][0])
-                )
-                + m[0][2]
-                * (
-                    m[1][0] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
-                    - m[1][1] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
-                    + m[1][3] * (m[2][0] * m[3][1] - m[2][1] * m[3][0])
-                )
-                - m[0][3]
-                * (
-                    m[1][0] * (m[2][1] * m[3][2] - m[2][2] * m[3][1])
-                    - m[1][1] * (m[2][0] * m[3][2] - m[2][2] * m[3][0])
-                    + m[1][2] * (m[2][0] * m[3][1] - m[2][1] * m[3][0])
-                )
-            )
-            if det == 0:
-                recomputed_concyclic = True
-                break
-        if (
-            self.has_collinear_triple != recomputed_collinear
-            or self.has_concyclic_quadruple != recomputed_concyclic
-        ):
+        found_triple = _first_collinear_triple(xy)
+        found_quad = _first_concyclic_quadruple(xy)
+        if self.has_collinear_triple != (
+            found_triple is not None
+        ) or self.has_concyclic_quadruple != (found_quad is not None):
             raise ValueError(
                 "forbidden-pattern decisions must match an exact replay over "
                 "the retained configuration"
             )
-        if self.has_collinear_triple is (self.collinear_triple is None):
-            raise ValueError("exactly a collinear triple carries one witness")
-        if self.has_concyclic_quadruple is (self.concyclic_quadruple is None):
-            raise ValueError("exactly a concyclic quadruple carries one witness")
-        if (
-            self.collinear_triple is not None
-            and self.collinear_triple.third >= self.point_count
-        ):
-            raise ValueError("collinear triple index exceeds configuration")
-        if (
-            self.concyclic_quadruple is not None
-            and self.concyclic_quadruple.fourth >= self.point_count
-        ):
-            raise ValueError("concyclic quadruple index exceeds configuration")
+        total_triples = _binomial3(self.point_count)
+        total_quads = _binomial4(self.point_count)
+        if self.has_collinear_triple:
+            _require_bound_collinear_triple(
+                self.collinear_triple,
+                found_triple,
+                checked=self.checked_triples,
+            )
+        else:
+            if self.collinear_triple is not None:
+                raise ValueError("a clean sweep carries no collinear witness")
+            if self.checked_triples != total_triples:
+                raise ValueError(
+                    "a complete collinear sweep must check C(point_count, 3) triples"
+                )
+        if self.has_concyclic_quadruple:
+            _require_bound_concyclic_quadruple(
+                self.concyclic_quadruple,
+                found_quad,
+                checked=self.checked_quadruples,
+            )
+        else:
+            if self.concyclic_quadruple is not None:
+                raise ValueError("a clean sweep carries no concyclic witness")
+            if self.checked_quadruples != total_quads:
+                raise ValueError(
+                    "a complete concyclic sweep must check C(point_count, 4) quadruples"
+                )
         return self
+
+
+def _require_bound_collinear_triple(
+    claimed: CollinearTriple | None,
+    found: tuple[int, tuple[int, int, int]] | None,
+    *,
+    checked: int,
+) -> None:
+    """The witness must be the canonical first collinear triple of the sweep."""
+    claimed_indices = (
+        None if claimed is None else (claimed.first, claimed.second, claimed.third)
+    )
+    if found is None or claimed_indices != found[1]:
+        raise ValueError(
+            "collinear triple witness must be the canonical first "
+            "collinear triple of the configuration"
+        )
+    if checked != found[0] + 1:
+        raise ValueError("checked_triples must match the witness position")
+
+
+def _require_bound_concyclic_quadruple(
+    claimed: ConcyclicQuadruple | None,
+    found: tuple[int, tuple[int, int, int, int]] | None,
+    *,
+    checked: int,
+) -> None:
+    """The witness must be the canonical first concyclic quadruple of the sweep."""
+    claimed_indices = (
+        None
+        if claimed is None
+        else (
+            claimed.first,
+            claimed.second,
+            claimed.third,
+            claimed.fourth,
+        )
+    )
+    if found is None or claimed_indices != found[1]:
+        raise ValueError(
+            "concyclic quadruple witness must be the canonical first "
+            "concyclic quadruple of the configuration"
+        )
+    if checked != found[0] + 1:
+        raise ValueError("checked_quadruples must match the witness position")
+
+
+def _binomial3(n: int) -> int:
+    return n * (n - 1) * (n - 2) // 6
+
+
+def _binomial4(n: int) -> int:
+    return n * (n - 1) * (n - 2) * (n - 3) // 24
+
+
+def _collinear_cross(
+    xy: list[tuple[Fraction, Fraction]], i: int, j: int, k: int
+) -> Fraction:
+    return (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (
+        xy[k][0] - xy[i][0]
+    )
+
+
+def _concyclic_det(
+    xy: list[tuple[Fraction, Fraction]], i: int, j: int, k: int, ell: int
+) -> Fraction:
+    m: tuple[tuple[Fraction, Fraction, Fraction, Fraction], ...] = tuple(
+        (x * x + y * y, x, y, Fraction(1)) for x, y in (xy[i], xy[j], xy[k], xy[ell])
+    )
+    return (
+        m[0][0]
+        * (
+            m[1][1] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
+            - m[1][2] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
+            + m[1][3] * (m[2][1] * m[3][2] - m[2][2] * m[3][1])
+        )
+        - m[0][1]
+        * (
+            m[1][0] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
+            - m[1][2] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
+            + m[1][3] * (m[2][0] * m[3][2] - m[2][2] * m[3][0])
+        )
+        + m[0][2]
+        * (
+            m[1][0] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
+            - m[1][1] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
+            + m[1][3] * (m[2][0] * m[3][1] - m[2][1] * m[3][0])
+        )
+        - m[0][3]
+        * (
+            m[1][0] * (m[2][1] * m[3][2] - m[2][2] * m[3][1])
+            - m[1][1] * (m[2][0] * m[3][2] - m[2][2] * m[3][0])
+            + m[1][2] * (m[2][0] * m[3][1] - m[2][1] * m[3][0])
+        )
+    )
+
+
+def _is_degenerate_quadruple(
+    xy: list[tuple[Fraction, Fraction]], i: int, j: int, k: int, ell: int
+) -> bool:
+    """A fully collinear quadruple lies on no finite circle."""
+    return all(
+        _collinear_cross(xy, a, b, c) == 0
+        for a, b, c in ((i, j, k), (i, j, ell), (i, k, ell), (j, k, ell))
+    )
+
+
+def _first_collinear_triple(
+    xy: list[tuple[Fraction, Fraction]],
+) -> tuple[int, tuple[int, int, int]] | None:
+    from itertools import combinations
+
+    for position, (i, j, k) in enumerate(combinations(range(len(xy)), 3)):
+        if _collinear_cross(xy, i, j, k) == 0:
+            return position, (i, j, k)
+    return None
+
+
+def _first_concyclic_quadruple(
+    xy: list[tuple[Fraction, Fraction]],
+) -> tuple[int, tuple[int, int, int, int]] | None:
+    from itertools import combinations
+
+    for position, (i, j, k, ell) in enumerate(combinations(range(len(xy)), 4)):
+        if _is_degenerate_quadruple(xy, i, j, k, ell):
+            continue
+        if _concyclic_det(xy, i, j, k, ell) == 0:
+            return position, (i, j, k, ell)
+    return None

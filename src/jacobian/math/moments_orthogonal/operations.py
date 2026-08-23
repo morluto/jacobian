@@ -189,10 +189,17 @@ def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> Jacobi
         raise TypeError("beta must use exact Fractions")
     if beta[0] == 0:
         raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+    # The squared subdiagonal entries are beta_1, ..., beta_{n-1}; beta_0 is
+    # the zeroth moment and never occupies an off-diagonal position. Each
+    # used entry must be a positive squared norm or its square root cannot
+    # reconstruct a real symmetric Jacobi matrix.
+    for value in tuple(beta)[1 : len(alpha)]:
+        if value <= 0:
+            raise ValueError(
+                "Jacobi subdiagonal entries must be positive squared-norm ratios"
+            )
     return JacobiMatrix(
         diagonal=tuple(alpha),
-        # The squared subdiagonal entries are beta_1, ..., beta_{n-1}; beta_0 is
-        # the zeroth moment and never occupies an off-diagonal position.
         off_diagonal=tuple(beta)[1 : len(alpha)],
     )
 

@@ -188,27 +188,33 @@ class NullspaceRequest(StrictModel):
 
 
 class NullspaceResult(NullspaceRequest):
-    nullspace_rows: tuple[tuple[int, ...], ...]
+    """The exact right-nullspace basis of the retained matrix."""
+
+    nullspace_basis: PrimeFieldMatrix
     complete: Literal[True] = True
     method: Literal["EXACT_DOMAIN_MATRIX_NULLSPACE"] = "EXACT_DOMAIN_MATRIX_NULLSPACE"
 
     @model_validator(mode="after")
     def bind_nullspace(self) -> Self:
+        if (
+            self.nullspace_basis.prime != self.prime
+            or self.nullspace_basis.columns != self.columns
+        ):
+            raise ValueError(
+                "nullspace_basis must carry the source prime and column count"
+            )
         matrix = PrimeFieldMatrix(
             prime=self.prime, entries=self.entries, columns=self.columns
         )
-        expected = nullspace(matrix)
-        if self.nullspace_rows != expected:
-            raise ValueError("nullspace_rows must be the exact nullspace basis")
-        if any(
-            type(value) is not int or not 0 <= value < self.prime
-            for row in self.nullspace_rows
-            for value in row
-        ):
-            raise ValueError("nullspace entries must be canonical prime-field residues")
-        for vector in self.nullspace_rows:
-            if len(vector) != self.columns:
-                raise ValueError("nullspace vector length must match matrix columns")
+        expected_rows = nullspace(matrix)
+        expected = PrimeFieldMatrix(
+            prime=self.prime, entries=expected_rows, columns=self.columns
+        )
+        if self.nullspace_basis != expected:
+            raise ValueError(
+                "nullspace_basis must be the exact nullspace basis of the "
+                "retained matrix"
+            )
         return self
 
 

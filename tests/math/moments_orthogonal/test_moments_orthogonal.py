@@ -151,6 +151,17 @@ class TestJacobiMatrix:
         with pytest.raises(ValueError, match="nonzero"):
             jacobi_matrix((_frac(0, 1),), (_frac(0, 1), _frac(1, 1)))
 
+    def test_nonpositive_subdiagonal_rejected(self) -> None:
+        """A used beta entry must be a positive squared norm, or its square
+        root cannot reconstruct a real symmetric Jacobi matrix."""
+        with pytest.raises(ValueError, match="positive squared-norm"):
+            jacobi_matrix((_frac(0, 1), _frac(0, 1)), (_frac(1, 1), _frac(-1, 1)))
+        with pytest.raises(ValueError, match="positive squared-norm"):
+            jacobi_matrix((_frac(0, 1), _frac(0, 1)), (_frac(1, 1), _frac(0, 1)))
+        # An unused trailing entry does not occupy the subdiagonal.
+        result = jacobi_matrix((_frac(0, 1),), (_frac(1, 1), _frac(-1, 1)))
+        assert result.off_diagonal == ()
+
 
 # ---------------------------------------------------------------------------
 # Christoffel-Darboux kernel

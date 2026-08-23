@@ -98,7 +98,8 @@ _TOOLS: tuple[MathTool[Any, Any], ...] = (
         "prime_field_matrix.nullspace.compute",
         "Compute nullspace over GF(p)",
         "Compute a deterministic basis of the right nullspace of a bounded "
-        "integer matrix over an explicit prime field.",
+        "integer matrix over an explicit prime field, returned as a canonical "
+        "PrimeFieldMatrix that composes into downstream matrix operations.",
         NullspaceRequest,
         NullspaceResult,
         compute_nullspace,

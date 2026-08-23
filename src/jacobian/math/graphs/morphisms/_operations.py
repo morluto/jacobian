@@ -261,17 +261,30 @@ def compute_fixed_length_cycle(
     )
 
 
+class SearchBudgetExceededError(RuntimeError):
+    """The bounded search exhausted its candidate-check budget.
+
+    A search stopped at its budget establishes nothing: it is neither a
+    witness nor a negative decision, so callers must surface the typed
+    non-conclusion instead of projecting it into a decision.
+    """
+
+
 def find_subgraph_embedding(  # noqa: C901
     pattern_vertices: tuple[str, ...],
     pattern_edges: tuple[tuple[str, str], ...],
     host_vertices: tuple[str, ...],
     host_edges: tuple[tuple[str, str], ...],
+    max_candidate_checks: int | None = None,
 ) -> tuple[int, ...] | None:
     """Return host indices ordered by pattern vertex order, or ``None``.
 
     Ordinary (non-induced) subgraph containment via exhaustive bounded
     backtracking.  Callers must enforce the request's assignment-count
-    admission before invoking this kernel.
+    admission before invoking this kernel.  Every host-candidate scan at an
+    internal backtracking node is charged against ``max_candidate_checks``
+    when given; exceeding it raises ``SearchBudgetExceededError`` so a
+    partially searched space can never masquerade as a negative decision.
     """
     # Normalize host labels to indices once, as the cycle kernel does: the
     # assignment-count admission bounds search paths, so every per-check
@@ -294,6 +307,11 @@ def find_subgraph_embedding(  # noqa: C901
     pattern_edge_idx = tuple(
         (pattern_index[u], pattern_index[v]) for u, v in pattern_edges
     )
+    candidate_checks = 0
+    # Every admitted request declares this bound; the sentinel keeps direct
+    # kernel callers (result replay) on the same charged accounting.
+    budget = max_candidate_checks if max_candidate_checks is not None else None
+
     vertex_map_idx: list[int] = [-1] * p_n  # pattern idx -> host idx
     used_host_idx: set[int] = set()
     # Pattern adjacency for quick neighbor checks.
@@ -312,10 +330,18 @@ def find_subgraph_embedding(  # noqa: C901
         return True
 
     def backtrack(pos: int) -> bool:
+        nonlocal candidate_checks
         if pos == p_n:
             return True
         p_idx = pattern_order[pos]
         for h_idx in range(h_n):
+            if budget is not None:
+                candidate_checks += 1
+                if candidate_checks > budget:
+                    raise SearchBudgetExceededError(
+                        f"subgraph-pattern search exceeded its "
+                        f"{budget}-candidate-check per-pass budget"
+                    )
             if h_idx in used_host_idx:
                 continue
             if not _edge_ok(h_idx, p_idx):
@@ -343,12 +369,26 @@ def compute_subgraph_pattern_find(
     Returns ``EXISTS`` with one witness vertex map (ordered by pattern vertex
     order) or ``DOES_NOT_EXIST`` after exhaustive bounded search.
     """
-    found = find_subgraph_embedding(
-        request.pattern.vertices,
-        request.pattern.edges,
-        request.host.vertices,
-        request.host.edges,
+    from jacobian.math.graphs.morphisms._models import (
+        _MAX_SEARCH_PATHS_PER_PASS,
     )
+
+    try:
+        found = find_subgraph_embedding(
+            request.pattern.vertices,
+            request.pattern.edges,
+            request.host.vertices,
+            request.host.edges,
+            max_candidate_checks=_MAX_SEARCH_PATHS_PER_PASS,
+        )
+    except SearchBudgetExceededError:
+        # A search stopped at its budget establishes nothing either way.
+        return SubgraphPatternFindResult(
+            pattern=request.pattern,
+            host=request.host,
+            decision="BUDGET_EXCEEDED",
+            vertex_map=(),
+        )
     if found is not None:
         return SubgraphPatternFindResult(
             pattern=request.pattern,

@@ -586,3 +586,42 @@ class TestSubgraphPatternFindLabelCost:
             SubgraphPatternFindRequest(pattern=smaller_pattern, host=host),
         )
         assert found.decision == "EXISTS"
+
+
+class TestBacktrackingNodeBudget:
+    def _complete(self, n):
+        from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+        verts = tuple(f"{i:02d}" for i in range(1, n + 1))
+        edges = tuple((a, b) for idx, a in enumerate(verts) for b in verts[idx + 1 :])
+        return SimpleUndirectedGraph(vertices=verts, edges=edges)
+
+    def test_internal_backtracking_nodes_are_charged_to_the_budget(self):
+        """K10 into K10-minus-an-edge cannot return a free negative.
+
+        A failed search visits 1,863,219 partial mappings and scans all ten
+        host candidates at each one (~18.6M candidate checks, twice with the
+        validation replay). The kernel charges those candidate checks to the
+        per-pass budget and reports the typed non-conclusion instead of a
+        negative decision established by a partially searched space.
+        """
+        from jacobian.math.graphs.morphisms._models import (
+            SubgraphPatternFindRequest,
+        )
+        from jacobian.math.graphs.morphisms._operations import (
+            compute_subgraph_pattern_find,
+        )
+        from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+        host_edges = tuple(
+            edge for edge in self._complete(10).edges if edge != ("01", "02")
+        )
+        host = SimpleUndirectedGraph(
+            vertices=self._complete(10).vertices, edges=host_edges
+        )
+        request = SubgraphPatternFindRequest(pattern=self._complete(10), host=host)
+        result = compute_subgraph_pattern_find(request)
+        assert result.decision == "BUDGET_EXCEEDED"
+        assert result.vertex_map == ()
+        # The typed non-conclusion round-trips without an exhaustive replay.
+        type(result).model_validate(result.model_dump())

@@ -251,7 +251,7 @@ class FixedLengthCycleResult(StrictModel):
     )
 
     graph: SimpleUndirectedGraph
-    decision: Literal["EXISTS", "DOES_NOT_EXIST"]
+    decision: Literal["EXISTS", "DOES_NOT_EXIST", "BUDGET_EXCEEDED"]
     length: int = Field(ge=3)
     cycle: tuple[str, ...] = Field(default=())
 
@@ -342,7 +342,9 @@ class SubgraphPatternFindRequest(StrictModel):
                 "`host`. Both are canonical `SimpleUndirectedGraph` values so "
                 "callers can pass `explicit_graph` output directly. `pattern` "
                 "must have at most 20 vertices; requests whose worst-case "
-                "exhaustive search exceeds the work budget are rejected."
+                "exhaustive search - including the host-candidate scans at "
+                "every internal backtracking node - exceeds the work budget "
+                "are rejected."
             )
         },
     )
@@ -372,6 +374,7 @@ class SubgraphPatternFindRequest(StrictModel):
                     f"{_MAX_SEARCH_PATHS_PER_PASS}-assignment per-pass budget "
                     f"({MAX_CYCLE_SEARCH_PATHS} including validation replay)"
                 )
+
         # The result echoes both source graphs; reserve output headroom for
         # the envelope and witness labels beyond those echoes.
         _require_output_headroom(
@@ -406,7 +409,7 @@ class SubgraphPatternFindResult(StrictModel):
 
     pattern: SimpleUndirectedGraph
     host: SimpleUndirectedGraph
-    decision: Literal["EXISTS", "DOES_NOT_EXIST"]
+    decision: Literal["EXISTS", "DOES_NOT_EXIST", "BUDGET_EXCEEDED"]
     vertex_map: tuple[str, ...] = Field(default=())
 
     @model_validator(mode="after")
@@ -442,6 +445,11 @@ class SubgraphPatternFindResult(StrictModel):
                 )
                 if key not in host_edges:
                     raise ValueError("an embedding must preserve every pattern edge")
+        elif self.decision == "BUDGET_EXCEEDED":
+            # A budget-exhausted attempt makes no mathematical claim: it
+            # must carry neither a witness nor an implicit negative.
+            if self.vertex_map:
+                raise ValueError("a BUDGET_EXCEEDED result must not carry a vertex map")
         else:
             if self.vertex_map:
                 raise ValueError("a DOES_NOT_EXIST result must not carry a vertex map")

@@ -251,7 +251,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "embedding of H into G such that every edge of H maps to an edge of G "
         "(ordinary, non-induced subgraph containment). Both graphs are canonical "
         "`SimpleUndirectedGraph` values for direct composition. Returns one witness "
-        "vertex map ordered by the pattern's vertex order when one exists.",
+        "vertex map ordered by the pattern's vertex order when one exists; a "
+        "search that exhausts its candidate-check budget returns BUDGET_EXCEEDED "
+        "(a typed non-conclusion) rather than a negative decision.",
         SubgraphPatternFindRequest,
         SubgraphPatternFindResult,
         compute_subgraph_pattern_find,

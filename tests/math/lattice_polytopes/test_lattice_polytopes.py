@@ -726,8 +726,12 @@ class TestTightBoundingBox:
         result = count_lattice_points(
             LatticePolytopeRequest(
                 vertices=(
-                    _v(("1", "2"),),
-                    _v(("19999", "2"),),
+                    _v(
+                        ("1", "2"),
+                    ),
+                    _v(
+                        ("19999", "2"),
+                    ),
                 ),
             )
         )
@@ -739,8 +743,12 @@ class TestTightBoundingBox:
         result = count_lattice_points(
             LatticePolytopeRequest(
                 vertices=(
-                    _v(("1", "2"),),
-                    _v(("3", "4"),),
+                    _v(
+                        ("1", "2"),
+                    ),
+                    _v(
+                        ("3", "4"),
+                    ),
                 ),
             )
         )

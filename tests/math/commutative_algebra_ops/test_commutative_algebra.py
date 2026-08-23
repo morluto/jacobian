@@ -507,3 +507,23 @@ class TestSaturationResultSourceBinding:
                 saturation=_ideal(("x", "y"), {(0, 1): 1}),
                 backend_version="singular-test",
             )
+
+
+class TestSaturationZeroIdeal:
+    """(0) : <d>^infinity = (0); the replay must not confuse it with QQ[vars]."""
+
+    def test_zero_ideal_saturation_round_trips(self) -> None:
+        from jacobian.math.commutative_algebra_ops._models import (
+            IdealSaturationRequest,
+        )
+
+        request = IdealSaturationRequest(
+            ideal=_ideal(("x", "y"), {(0, 0): 0}),
+            saturation_polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
+        )
+        result = compute_ideal_saturation(request)
+        if result.outcome != "COMPUTED":
+            pytest.skip("Singular backend unavailable")
+        payload = result.model_dump(mode="json")
+        reparsed = IdealSaturationResult.model_validate(payload)
+        assert reparsed == result

@@ -123,10 +123,15 @@ def replay_saturation(request: IdealSaturationRequest) -> tuple:
         t * rational_polynomial_to_sympy(request.saturation_polynomial).as_expr() - 1,
     ]
     elimination = sympy.groebner(polys, t, *variables, order="lex")
-    saturated = [expr for expr in elimination.exprs if not expr.has(t)]
-    if not saturated:
-        # The saturation is the whole ring; its reduced basis is "1".
-        return ((((), Fraction(1, 1)),),)
+    # Basis elements free of t generate the elimination ideal I : <d>^infinity.
+    # Absent any such element the intersection with QQ[vars] is the ZERO
+    # ideal — e.g. (0) : <d>^infinity = (0) — not the whole ring; a whole-ring
+    # saturation instead shows up as a constant basis element.
+    saturated = [
+        expr
+        for expr in elimination.exprs
+        if not expr.has(t) and expr != 0
+    ]
     return _groebner_signature(variables, saturated)
 
 

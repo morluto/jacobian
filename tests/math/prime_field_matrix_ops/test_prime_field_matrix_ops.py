@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from jacobian.math.prime_field_matrix_ops._models import (
     NullspaceRequest,
     RankRequest,
+    RankResult,
     RrefRequest,
 )
 from jacobian.math.prime_field_matrix_ops._operations import (
@@ -56,6 +57,29 @@ class TestRank:
     def test_ragged_rows_rejected(self) -> None:
         with pytest.raises(ValidationError):
             RankRequest(prime=2, entries=[[1, 0], [0]], columns=2)
+
+
+class TestRankBinding:
+    """The rank result must be bound to its exact source matrix."""
+
+    def test_result_retains_source_matrix(self) -> None:
+        req = RankRequest(prime=2, entries=[[1, 1, 0], [0, 1, 1]], columns=3)
+        result = compute_rank(req)
+        assert result.entries == ((1, 1, 0), (0, 1, 1))
+        assert result.columns == 3
+        assert result.rank == 2
+
+    def test_authored_matrix_free_result_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            RankResult(rank=2, prime=2)
+
+    def test_authored_composite_prime_result_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            RankResult(rank=2, prime=4, entries=((1, 1), (1, 1)), columns=2)
+
+    def test_forged_rank_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            RankResult(rank=2, prime=2, entries=((1, 0), (0, 0)), columns=2)
 
 
 class TestRref:

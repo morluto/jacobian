@@ -11,7 +11,6 @@ from jacobian.math.group import (
     group_stabilizer,
     subgroup_lattice,
 )
-from jacobian.math.group._models import SubgroupEntry
 from jacobian.math.group._models import (
     GroupConjugacyClassesRequest,
     GroupConjugacyClassesResult,
@@ -25,6 +24,7 @@ from jacobian.math.group._models import (
     GroupSubgroupLatticeRequest,
     GroupSubgroupLatticeResult,
     PermutationGroupRequest,
+    SubgroupEntry,
 )
 
 

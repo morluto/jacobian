@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from fractions import Fraction
 from typing import Literal, Self
 
@@ -34,7 +35,7 @@ def _to_fractions(
     return tuple(v.as_fraction() for v in values)
 
 
-def _from_fractions(values) -> tuple[CanonicalRational, ...]:
+def _from_fractions(values: Sequence[Fraction]) -> tuple[CanonicalRational, ...]:
     return tuple(CanonicalRational.from_fraction(v) for v in values)
 
 
@@ -45,6 +46,32 @@ def _validate_moments(moments: tuple[CanonicalRational, ...]) -> None:
         require_bounded_rational(
             value, max_digits=MAX_RATIONAL_DIGITS, label="moment"
         )
+
+
+def _digit_bound(value: int) -> int:
+    """A safe upper bound for the decimal digits of an integer.
+
+    Avoids ``str`` conversion, which CPython caps at 4,300 digits.
+    """
+    return abs(value).bit_length() * 30103 // 100000 + 1
+
+
+def _require_coefficient_digits(fractions: tuple[Fraction, ...]) -> None:
+    """Bound recurrence outputs by the canonical coefficient contract.
+
+    Kernel completion alone does not establish that the produced alpha and
+    beta fit the typed coefficient value; every component is measured after
+    reduction so an accepted sequence always returns a typed result.
+    """
+    for fraction in fractions:
+        if max(
+            _digit_bound(fraction.numerator),
+            _digit_bound(fraction.denominator),
+        ) > MAX_RATIONAL_DIGITS:
+            raise ValueError(
+                "moment sequence produces recurrence coefficients beyond the "
+                f"{MAX_RATIONAL_DIGITS}-digit canonical coefficient bound"
+            )
 
 
 def _validate_alpha_beta(
@@ -134,7 +161,8 @@ class RecurrenceCoefficientsRequest(StrictModel):
             recurrence_coefficients,
         )
 
-        recurrence_coefficients(_to_fractions(self.moments))
+        result = recurrence_coefficients(_to_fractions(self.moments))
+        _require_coefficient_digits((*result.alpha, *result.beta))
         return self
 
 

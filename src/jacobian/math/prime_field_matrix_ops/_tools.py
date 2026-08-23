@@ -47,11 +47,9 @@ def _op[
     )
 
 
-_MATRIX = {
-    "prime": 2,
-    "entries": [[1, 1, 0], [0, 1, 1]],
-    "columns": 3,
-}
+_MATRIX = {"prime": 2, "entries": [[1, 1, 0], [0, 1, 1]], "columns": 3}
+
+_INPUT = {"matrix": _MATRIX}
 
 _TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
@@ -70,7 +68,7 @@ _TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "rank_over_gf2",
                 "Compute the rank of a 2x3 matrix over GF(2).",
-                _MATRIX,
+                _INPUT,
             ),
         ),
     ),
@@ -90,7 +88,7 @@ _TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "rref_over_gf2",
                 "Compute the RREF of a 2x3 matrix over GF(2).",
-                _MATRIX,
+                _INPUT,
             ),
         ),
     ),
@@ -110,7 +108,7 @@ _TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "nullspace_over_gf2",
                 "Compute the nullspace of a 2x3 matrix over GF(2).",
-                _MATRIX,
+                _INPUT,
             ),
         ),
     ),

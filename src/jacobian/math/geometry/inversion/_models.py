@@ -9,11 +9,7 @@ from pydantic import Field, model_validator
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math._rational_height import RationalHeight, sum_heights
-
-
-class RationalPoint2D(StrictModel):
-    x: CanonicalRational
-    y: CanonicalRational
+from jacobian.math.geometry._models import RationalPoint2D
 
 
 def _displacement_height(
@@ -25,11 +21,9 @@ def _displacement_height(
 
 
 def _inversion_result_heights(
-    center_x: CanonicalRational,
-    center_y: CanonicalRational,
+    center: RationalPoint2D,
     power: CanonicalRational,
-    point_x: CanonicalRational,
-    point_y: CanonicalRational,
+    point: RationalPoint2D,
 ) -> tuple[RationalHeight, RationalHeight]:
     """Conservative height of I(p) = c + s(p - c)/||p - c||^2 before reduction.
 
@@ -39,15 +33,15 @@ def _inversion_result_heights(
     same half-limit domain, so I(I(p)) for an admitted p is again admitted.
     """
 
-    dx = _displacement_height(point_x, center_x)
-    dy = _displacement_height(point_y, center_y)
+    dx = _displacement_height(point.x, center.x)
+    dy = _displacement_height(point.y, center.y)
     norm_squared = sum_heights((dx.product(dx), dy.product(dy)))
     scale = RationalHeight.from_canonical(power).quotient(norm_squared)
     inverted_x = sum_heights(
-        (RationalHeight.from_canonical(center_x), scale.product(dx))
+        (RationalHeight.from_canonical(center.x), scale.product(dx))
     )
     inverted_y = sum_heights(
-        (RationalHeight.from_canonical(center_y), scale.product(dy))
+        (RationalHeight.from_canonical(center.y), scale.product(dy))
     )
     return inverted_x, inverted_y
 
@@ -62,24 +56,17 @@ class CircleInversionRequest(StrictModel):
     radius), and point p ≠ c, returns q = c + (s / ||p - c||²) * (p - c).
     """
 
-    center_x: CanonicalRational = Field(description="x-coordinate of the inversion center")
-    center_y: CanonicalRational = Field(description="y-coordinate of the inversion center")
+    center: RationalPoint2D = Field(description="the inversion center")
     power: CanonicalRational = Field(description="Positive rational inversion power (squared radius)")
-    point_x: CanonicalRational = Field(description="x-coordinate of the point to invert")
-    point_y: CanonicalRational = Field(description="y-coordinate of the point to invert")
+    point: RationalPoint2D = Field(description="the point to invert")
 
     @model_validator(mode="after")
     def require_admissible_request(self) -> Self:
-        if self.power.num == "0":
-            raise ValueError("inversion power must be positive")
-        if self.power.num.startswith("-"):
+        if self.power.num == "0" or self.power.num.startswith("-"):
             raise ValueError("inversion power must be positive")
         # The contract requires p != c; inverting the center would divide by
         # the zero displacement, so reject it at this typed boundary.
-        if (
-            self.point_x.as_fraction() == self.center_x.as_fraction()
-            and self.point_y.as_fraction() == self.center_y.as_fraction()
-        ):
+        if self.point == self.center:
             raise ValueError("the inversion center cannot be inverted")
 
         # Admit only inputs whose own height is at most half the canonical
@@ -87,10 +74,11 @@ class CircleInversionRequest(StrictModel):
         # admitted p is again admitted: the domain is symmetric under the
         # advertised involution and every accepted result can be fed back.
         for rational in (
-            self.center_x,
-            self.center_y,
-            self.point_x,
-            self.point_y,
+            *(
+                component
+                for value in (self.center, self.point)
+                for component in (value.x, value.y)
+            ),
             self.power,
         ):
             height = RationalHeight.from_canonical(rational)
@@ -101,7 +89,7 @@ class CircleInversionRequest(StrictModel):
                 )
 
         inverted_x, inverted_y = _inversion_result_heights(
-            self.center_x, self.center_y, self.power, self.point_x, self.point_y
+            self.center, self.power, self.point
         )
         if inverted_x.exceeds(_HALF_CANONICAL_DIGITS) or inverted_y.exceeds(
             _HALF_CANONICAL_DIGITS
@@ -114,8 +102,7 @@ class CircleInversionRequest(StrictModel):
 
 
 class CircleInversionResult(CircleInversionRequest):
-    inverted_x: CanonicalRational
-    inverted_y: CanonicalRational
+    inverted_point: RationalPoint2D = Field(description="the exact inverted point")
     complete: Literal[True] = True
     method: Literal["EXACT_RATIONAL_INVERSION"] = "EXACT_RATIONAL_INVERSION"
 
@@ -123,22 +110,23 @@ class CircleInversionResult(CircleInversionRequest):
     def bind_inversion(self) -> Self:
         from jacobian.math.geometry.inversion._operations import invert_point
 
-        cx, cy = self.center_x.as_fraction(), self.center_y.as_fraction()
-        s = self.power.as_fraction()
-        px, py = self.point_x.as_fraction(), self.point_y.as_fraction()
-
-        result = invert_point(cx, cy, s, px, py)
+        result = invert_point(
+            self.center.x.as_fraction(),
+            self.center.y.as_fraction(),
+            self.power.as_fraction(),
+            self.point.x.as_fraction(),
+            self.point.y.as_fraction(),
+        )
         expected_x = CanonicalRational.from_fraction(result[0])
         expected_y = CanonicalRational.from_fraction(result[1])
-        if self.inverted_x != expected_x:
-            raise ValueError("inverted_x must be the exact inversion result")
-        if self.inverted_y != expected_y:
-            raise ValueError("inverted_y must be the exact inversion result")
+        if self.inverted_point.x != expected_x or self.inverted_point.y != expected_y:
+            raise ValueError(
+                "inverted_point must be the exact circle-inversion image"
+            )
         return self
 
 
 __all__ = [
     "CircleInversionRequest",
     "CircleInversionResult",
-    "RationalPoint2D",
 ]

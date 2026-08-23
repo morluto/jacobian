@@ -121,6 +121,25 @@ class TestRecurrenceCoefficients:
         assert result.alpha == ()
         assert result.beta == (_frac(1, 1),)
 
+    def test_coefficient_overflow_rejected_at_admission(self) -> None:
+        """A completed kernel is not enough: outputs must fit the contract.
+
+        Standard-normal double-factorial moments perturbed by coprime
+        prime-power reciprocals complete the Gram-Schmidt kernel but produce
+        coefficients with far more than 4,096 digits.
+        """
+        base = (1, 1, 3, 15, 105, 945, 10395, 135135, 2027025, 34459425, 654729075)
+        primes = (10**60 + 267, 10**60 + 353, 10**61 + 91)
+        moments = [Fraction(1)]
+        for k in range(1, 11):
+            q = primes[(k - 1) % len(primes)] + k
+            den = q**9
+            moments.append(Fraction(base[k] * den + 1, den))
+        with pytest.raises(ValidationError, match="coefficient bound"):
+            RecurrenceCoefficientsRequest(
+                moments=tuple(_cr(m.numerator, m.denominator) for m in moments)
+            )
+
 
 # ---------------------------------------------------------------------------
 # Jacobi matrix

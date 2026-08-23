@@ -16,47 +16,26 @@ from jacobian.math.prime_field_matrix_ops._models import (
 )
 
 
-def _matrix(request: RankRequest) -> PrimeFieldMatrix:
-    return PrimeFieldMatrix(
-        prime=request.prime,
-        entries=request.entries,
-        columns=request.columns,
-    )
-
-
 def compute_rank(request: RankRequest) -> RankResult:
-    matrix = _matrix(request)
-    return RankResult(rank=rank(matrix), prime=request.prime, entries=request.entries, columns=request.columns)
+    return RankResult(matrix=request.matrix, rank=rank(request.matrix))
 
 
 def compute_rref(request: RrefRequest) -> RrefResult:
-    matrix = PrimeFieldMatrix(
-        prime=request.prime,
-        entries=request.entries,
-        columns=request.columns,
-    )
-    rref_rows, pivot_columns = rref(matrix)
+    reduced_rows, pivot_columns = rref(request.matrix)
     return RrefResult(
-        prime=request.prime,
-        entries=request.entries,
-        columns=request.columns,
-        rref_rows=rref_rows,
+        matrix=request.matrix,
+        rref=PrimeFieldMatrix(
+            prime=request.matrix.prime,
+            entries=reduced_rows,
+            columns=request.matrix.columns,
+        ),
         pivot_columns=pivot_columns,
     )
 
 
 def compute_nullspace(request: NullspaceRequest) -> NullspaceResult:
-    matrix = PrimeFieldMatrix(
-        prime=request.prime,
-        entries=request.entries,
-        columns=request.columns,
-    )
-    ns = nullspace(matrix)
     return NullspaceResult(
-        prime=request.prime,
-        entries=request.entries,
-        columns=request.columns,
-        nullspace_rows=ns,
+        matrix=request.matrix, nullspace_rows=nullspace(request.matrix)
     )
 
 

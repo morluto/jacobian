@@ -55,13 +55,18 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "unit_inversion_at_origin",
-                "Unit circle inversion around the origin: B=(4,0) -> (1/4,0).",
+                "Unit circle inversion around the origin: B=(4,0) -> (1/4,0); "
+                "the point must differ from the inversion center.",
                 {
-                    "center_x": {"num": "0", "den": "1"},
-                    "center_y": {"num": "0", "den": "1"},
+                    "center": {
+                        "x": {"num": "0", "den": "1"},
+                        "y": {"num": "0", "den": "1"},
+                    },
                     "power": {"num": "1", "den": "1"},
-                    "point_x": {"num": "4", "den": "1"},
-                    "point_y": {"num": "0", "den": "1"},
+                    "point": {
+                        "x": {"num": "4", "den": "1"},
+                        "y": {"num": "0", "den": "1"},
+                    },
                 },
             ),
         ),

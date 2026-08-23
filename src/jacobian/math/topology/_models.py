@@ -1241,7 +1241,10 @@ class StarResult(TopologyExactResult):
     """The closed star of a simplex, bound to its source complex."""
 
     complex: SimplicialComplexRequest
-    simplex: tuple[str, ...]
+    simplex: tuple[str, ...] = Field(
+        min_length=1,
+        max_length=MAX_TOPOLOGY_DIMENSION + 1,
+    )
     star_facets: tuple[tuple[str, ...], ...]
     star_is_empty: bool
     star_complex: FiniteSimplicialComplex | None = None
@@ -1319,7 +1322,10 @@ class VertexDeletionResult(TopologyExactResult):
     """The induced subcomplex after deleting a vertex subset."""
 
     complex: SimplicialComplexRequest
-    deleted_vertices: tuple[VertexLabel, ...]
+    deleted_vertices: tuple[VertexLabel, ...] = Field(
+        min_length=1,
+        max_length=MAX_TOPOLOGY_VERTICES,
+    )
     remaining_vertices: tuple[str, ...]
     remaining_facets: tuple[tuple[str, ...], ...]
     remaining_complex: FiniteSimplicialComplex
@@ -1564,6 +1570,11 @@ class BarycentricSubdivisionResult(TopologyExactResult):
 
     @model_validator(mode="after")
     def require_subdivision_canonical(self) -> Self:
+        # Replay must satisfy the subdivision request's work admission, so a
+        # serialized result cannot bypass the bounded source domain (a source
+        # whose exact subdivision exceeds the result contract is impossible
+        # to obtain from the operation).
+        BarycentricSubdivisionRequest(complex=self.complex)
         # The advertised original dimension must equal the dimension derived
         # from the retained source complex's facets.
         source_dimension = max(len(facet) for facet in self.complex.facets) - 1

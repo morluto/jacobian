@@ -749,3 +749,54 @@ class TestResultSourceBindingRegression:
         )
         assert result.is_free_face
         assert ElementaryCollapseResult.model_validate(result.model_dump()) == result
+
+
+class TestResultDomainMirrorsRequest:
+    """Serialized results must satisfy the request's own admission domain."""
+
+    def test_star_result_empty_simplex_rejected(self) -> None:
+        """No accepted invocation can request the star of the empty face, so
+        a serialized result cannot authenticate it either."""
+        with pytest.raises(ValidationError, match="at least 1 item"):
+            StarResult(
+                complex=EDGE,
+                simplex=(),
+                star_facets=(("a", "b"),),
+                star_is_empty=False,
+                star_complex=_canonical_complex(("a", "b"), (("a", "b"),)),
+            )
+
+    def test_deletion_result_empty_deleted_vertices_rejected(self) -> None:
+        """An identity transformation is not a deletion result: the request
+        requires at least one deleted vertex."""
+        with pytest.raises(ValidationError, match="at least 1 item"):
+            VertexDeletionResult(
+                complex=CIRCLE,
+                deleted_vertices=(),
+                remaining_vertices=("a", "b", "c"),
+                remaining_facets=(("a", "b"), ("b", "c"), ("a", "c")),
+                remaining_complex=_canonical_complex(
+                    ("a", "b", "c"), (("a", "b"), ("b", "c"), ("a", "c"))
+                ),
+            )
+
+    def test_subdivision_result_oversized_source_rejected(self) -> None:
+        """The retained source must satisfy the subdivision request's
+        31-face work admission, which the bare complex type does not carry."""
+        result = compute_barycentric_subdivision(
+            BarycentricSubdivisionRequest(complex=CIRCLE)
+        )
+        payload = result.model_dump()
+        simplex4_plus_point = {
+            "vertices": ["v0", "v1", "v2", "v3", "v4", "p"],
+            "facets": [["v0", "v1", "v2", "v3", "v4"], ["p"]],
+        }
+        payload["complex"] = simplex4_plus_point
+        with pytest.raises(ValidationError, match="at most 31 faces"):
+            BarycentricSubdivisionResult.model_validate(payload)
+
+    def test_subdivision_roundtrip_still_admitted(self) -> None:
+        result = compute_barycentric_subdivision(
+            BarycentricSubdivisionRequest(complex=CIRCLE)
+        )
+        assert BarycentricSubdivisionResult.model_validate(result.model_dump()) == result

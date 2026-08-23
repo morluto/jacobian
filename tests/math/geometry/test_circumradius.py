@@ -549,3 +549,30 @@ class TestSchemaPublishedBounds:
         entry = circumradius_result.entries[0]
         assert entry.squared_circumradius is not None
         assert entry.squared_circumradius.as_fraction() == Fraction(2)
+
+
+class TestCanonicalConfigurationRetention:
+    def test_retained_configuration_feeds_distance_operations_unchanged(self):
+        """The retained source must be the canonical PointConfiguration so
+        it composes into distance_profile / distance_graph without peeling
+        off an inner wrapper."""
+        from jacobian.math.geometry.exact._models import DistanceProfileRequest
+        from jacobian.math.geometry.exact._operations import (
+            compute_distance_profile,
+        )
+
+        pts = (
+            _lp("a", "0", "1", "0", "1"),
+            _lp("b", "2", "1", "0", "1"),
+            _lp("c", "0", "1", "2", "1"),
+        )
+        result = circumradius_profile(_request(pts))
+        assert isinstance(result.configuration, PointConfiguration)
+        assert result.configuration == _request(pts).configuration
+
+        # The advertised composition: pass the retained value unchanged.
+        profile = compute_distance_profile(
+            DistanceProfileRequest(configuration=result.configuration)
+        )
+        assert profile.point_count == 3
+        assert sum(entry.pair_count for entry in profile.entries) == 3

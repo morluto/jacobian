@@ -701,7 +701,13 @@ class CircumradiusTripleEntry(StrictModel):
 class CircumradiusProfileResult(StrictModel):
     """Complete exact circumradius profile bound to its source configuration."""
 
-    configuration: CircumradiusProfileRequest
+    configuration: PointConfiguration = Field(
+        description=(
+            "The canonical labelled rational point configuration retained "
+            "for replay; the same value accepted by distance_profile and "
+            "distance_graph, so it composes into those operations unchanged."
+        )
+    )
     point_count: StrictInt = Field(ge=3, le=64)
     triple_count: StrictInt = Field(ge=1, le=41664)
     entries: tuple[CircumradiusTripleEntry, ...] = Field(min_length=1, max_length=41664)
@@ -723,7 +729,7 @@ class CircumradiusProfileResult(StrictModel):
         import math
 
         # Cap point_count before enumerating expected triples.
-        points = self.configuration.configuration.points
+        points = self.configuration.points
         if self.point_count > 64 or len(points) != self.point_count:
             raise ValueError(
                 "point_count must match the retained configuration (at most 64)"

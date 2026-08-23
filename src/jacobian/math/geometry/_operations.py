@@ -475,7 +475,7 @@ def circumradius_profile(
     for radius in radii:
         histogram[radius] = histogram.get(radius, 0) + 1
     return CircumradiusProfileResult(
-        configuration=request,
+        configuration=request.configuration,
         point_count=n,
         triple_count=len(entries),
         entries=tuple(entries),

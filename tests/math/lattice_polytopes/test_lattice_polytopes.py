@@ -1032,3 +1032,132 @@ class TestDerivedCoordinateSignBoundary:
                     _hs((("-1", small_den),), (lower, "1")),
                 )
             )
+
+
+UNIT_SQUARE_4D_SIDES = (
+    _hs(
+        (("1", "1"), ("0", "1"), ("0", "1"), ("0", "1")),
+        ("1", "1"),
+    ),
+    _hs(
+        (("-1", "1"), ("0", "1"), ("0", "1"), ("0", "1")),
+        ("0", "1"),
+    ),
+    _hs(
+        (("0", "1"), ("1", "1"), ("0", "1"), ("0", "1")),
+        ("1", "1"),
+    ),
+    _hs(
+        (("0", "1"), ("-1", "1"), ("0", "1"), ("0", "1")),
+        ("0", "1"),
+    ),
+    _hs(
+        (("0", "1"), ("0", "1"), ("1", "1"), ("0", "1")),
+        ("1", "1"),
+    ),
+    _hs(
+        (("0", "1"), ("0", "1"), ("-1", "1"), ("0", "1")),
+        ("0", "1"),
+    ),
+    _hs(
+        (("0", "1"), ("0", "1"), ("0", "1"), ("1", "1")),
+        ("1", "1"),
+    ),
+    _hs(
+        (("0", "1"), ("0", "1"), ("0", "1"), ("-1", "1")),
+        ("0", "1"),
+    ),
+)
+
+
+class TestThirdWaveRegressions:
+    def test_nonzero_normal_precondition_is_schema_visible(self):
+        """The validator-owned nonzero-normal restriction is published in
+        the Halfspace schema, the halfspaces field, and both declarations."""
+        from jacobian.math.lattice_polytopes._tools import TOOLS
+
+        schema = LatticePolytopeRequest.model_json_schema()
+        halfspace_schema = schema["$defs"]["Halfspace"]
+        coefficients_description = halfspace_schema["properties"]["coefficients"][
+            "description"
+        ].lower()
+        assert "nonzero" in coefficients_description
+        halfspaces_field = LatticePolytopeRequest.model_fields["halfspaces"]
+        assert "nonzero" in halfspaces_field.description.lower()
+        tools = {tool.operation_id: tool for tool in TOOLS}
+        for operation_id in (
+            "polytope.lattice_points.enumerate",
+            "polytope.lattice_points.count",
+        ):
+            description = tools[operation_id].description.lower()
+            assert "nonzero" in description
+            assert len(tools[operation_id].description) <= 512
+
+    def test_halfspace_example_no_longer_claims_lower_dimensional_rejection(self):
+        """Only V-representations are rejected for lower dimension; the
+        H-example must not advertise that restriction."""
+        from jacobian.math.lattice_polytopes._tools import TOOLS
+
+        for tool in TOOLS:
+            for ex in tool.examples:
+                if ex.name == "unit_square_halfspaces":
+                    assert "lower-dimensional" not in ex.description.lower()
+
+    def test_lower_dimensional_h_segment_is_accepted(self):
+        """x<=0, -x<=0, y<=1, -y<=0 is the segment from (0,0) to (0,1):
+        bounded with positively spanning normals, so it is admitted and
+        counts its two endpoints."""
+        segment = (
+            _hs((("1", "1"), ("0", "1")), ("0", "1")),
+            _hs((("-1", "1"), ("0", "1")), ("0", "1")),
+            _hs((("0", "1"), ("1", "1")), ("1", "1")),
+            _hs((("0", "1"), ("-1", "1")), ("0", "1")),
+        )
+        result = count_lattice_points(LatticePolytopeRequest(halfspaces=segment))
+        assert result.point_count == 2
+
+    def test_repeated_rows_deduplicated_before_vertex_enumeration(self, monkeypatch):
+        """The reviewer's [0,1]^4 with every side repeated eight times:
+        vertex enumeration and the recession-cone test see the 8 distinct
+        primitive rows, not the 32 raw ones."""
+        from jacobian.math.lattice_polytopes import _operations
+
+        seen_sizes: list[int] = []
+        original = _operations._vertices_from_h_representation
+
+        def counting(halfspaces):
+            seen_sizes.append(len(halfspaces))
+            return original(halfspaces)
+
+        monkeypatch.setattr(_operations, "_vertices_from_h_representation", counting)
+        request = LatticePolytopeRequest(halfspaces=UNIT_SQUARE_4D_SIDES * 4)
+        assert len(request.halfspaces) == 32
+        assert seen_sizes == [8]
+        geometry = request.admitted_geometry()
+        assert len(geometry[0]) == 8
+        assert count_lattice_points(request).point_count == 16
+        assert seen_sizes == [8]
+
+    def test_rescaled_duplicate_rows_collapse_before_enumeration(self, monkeypatch):
+        """Positive rescalings of the same inequality collapse onto the
+        primitive row before any geometry routine runs."""
+        from jacobian.math.lattice_polytopes import _operations
+
+        seen_sizes: list[int] = []
+        original = _operations._vertices_from_h_representation
+
+        def counting(halfspaces):
+            seen_sizes.append(len(halfspaces))
+            return original(halfspaces)
+
+        monkeypatch.setattr(_operations, "_vertices_from_h_representation", counting)
+        # Full square plus positive rescalings of two of its sides:
+        # 6 raw rows collapse onto the 4 primitive constraints.
+        sides = (
+            *UNIT_SQUARE_H,
+            _hs((("2", "1"), ("0", "1")), ("2", "1")),  # 2x <= 2 == x <= 1
+            _hs((("0", "1"), ("-3", "1")), ("0", "1")),  # -3y <= 0 == -y <= 0
+        )
+        request = LatticePolytopeRequest(halfspaces=sides)
+        assert seen_sizes == [4]
+        assert count_lattice_points(request).point_count == 4

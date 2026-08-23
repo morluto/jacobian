@@ -50,13 +50,12 @@ LATTICE_POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "polytope.lattice_points.enumerate",
         "Enumerate lattice points inside a bounded rational polytope",
         "Enumerate every lattice (integer) point of a bounded rational "
-        "polytope in V- or H-representation for dimension d <= 4, exactly. "
-        "Facets come from exact rational linear algebra; each bounding-box "
-        "candidate is tested against the exact inequalities. A "
-        "V-representation must be full-dimensional (vertices must affinely "
+        "polytope in V- or H-representation for d <= 4, exactly. "
+        "A V-representation must be full-dimensional (vertices must affinely "
         "span the ambient dimension); the supported exception is a "
         "one-dimensional input, accepted for every vertex family including "
-        "a single point. A bounded empty H-system yields no points.",
+        "a single point. A bounded empty H-system yields no points; every "
+        "half-space needs a nonzero normal.",
         EnumerateLatticePointsRequest,
         EnumerateLatticePointsResult,
         enumerate_lattice_points,
@@ -104,14 +103,12 @@ LATTICE_POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "polytope.lattice_points.count",
         "Count lattice points inside a bounded rational polytope",
         "Count, exactly, the lattice (integer) points of a bounded "
-        "rational polytope in V- or H-representation for dimension "
-        "d <= 4 without listing them. Facets come from exact rational "
-        "linear algebra; each bounding-box candidate is tested against "
-        "the exact inequalities. A V-representation must be "
-        "full-dimensional (vertices must affinely span the ambient "
-        "dimension); the supported exception is a one-dimensional input, "
-        "accepted for every vertex family including a single point. A "
-        "bounded empty H-system counts zero.",
+        "rational polytope in V- or H-representation for d <= 4 without "
+        "listing them. A V-representation must be full-dimensional "
+        "(vertices must affinely span the ambient dimension); the supported "
+        "exception is a one-dimensional input, accepted for every vertex "
+        "family including a single point. A bounded empty H-system counts "
+        "zero; every half-space needs a nonzero normal.",
         LatticePolytopeRequest,
         CountLatticePointsResult,
         count_lattice_points,
@@ -123,8 +120,8 @@ LATTICE_POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "unit_square_halfspaces",
                 "Unit square [0,1]^2 via half-spaces has four lattice "
                 "points. Requires the H-representation to define a bounded "
-                "polytope (normals positively spanning R^d); unbounded or "
-                "lower-dimensional systems are rejected at validation.",
+                "polytope (normals positively spanning R^d); unbounded "
+                "systems are rejected at validation.",
                 {
                     "halfspaces": [
                         {

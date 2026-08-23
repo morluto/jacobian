@@ -353,7 +353,17 @@ def _facets_and_box(  # noqa: C901
             for hs in request.halfspaces
         ]
         d = request.dimension()
-        verts, _ = _vertices_from_h_representation(halfspaces)
+        # Normalize and deduplicate before any geometry routine: vertex
+        # enumeration and the recession-cone test each cost combinations
+        # over the row count, so repeated or positively rescaled
+        # inequalities must collapse onto their primitive form before
+        # either runs.  Positive scaling preserves every inequality, so
+        # this cannot change the polyhedron or any derived value.
+        facets = _dedupe_normalized_halfspaces(halfspaces)
+        deduped = [
+            ([Fraction(a) for a in coeffs], Fraction(rhs)) for coeffs, rhs in facets
+        ]
+        verts, _ = _vertices_from_h_representation(deduped)
         # Solving the H-system can derive coordinates taller than every
         # input component (e.g. x <= 1/N with -x <= -1/N pins x = N);
         # each derived vertex coordinate must stay inside the canonical
@@ -378,11 +388,11 @@ def _facets_and_box(  # noqa: C901
                         f"canonical {MAX_CANONICAL_RATIONAL_DIGITS}-digit "
                         "representable bound; tighten the half-space heights"
                     )
-        bounded = _is_bounded_h(halfspaces, d)
+        bounded = _is_bounded_h(deduped, d)
         # Infeasibility is checked BEFORE the recession-cone rejection: an
         # infeasible system defines the empty - therefore bounded - polytope
         # even when its normals do not positively span the ambient space.
-        if not bounded and (verts or _h_system_feasible(halfspaces)):
+        if not bounded and (verts or _h_system_feasible(deduped)):
             raise ValueError(
                 "the H-representation is unbounded whenever non-empty "
                 "(its recession cone is nontrivial); lattice-point "
@@ -392,10 +402,6 @@ def _facets_and_box(  # noqa: C901
             # Empty: its lattice-point set is empty, and the canonical
             # empty box scans no candidate at all.
             return [], [0] * d, [-1] * d, d
-        # Facets are the distinct normalized half-spaces (already oriented
-        # as <=); normalization merges repeated inequalities so the scan's
-        # membership work matches the request-admission bound.
-        facets = _dedupe_normalized_halfspaces(halfspaces)
     else:
         d = request.dimension()
         vertex_models: tuple[Vertex, ...] = request.vertices  # type: ignore[assignment]

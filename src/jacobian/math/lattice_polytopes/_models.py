@@ -89,7 +89,13 @@ class Halfspace(StrictModel):
     """One rational half-space ``<a, x> <= b`` of an H-representation."""
 
     coefficients: tuple[CanonicalRational, ...] = Field(
-        min_length=1, max_length=MAX_DIMENSION
+        min_length=1,
+        max_length=MAX_DIMENSION,
+        description=(
+            "The normal vector ``a`` of ``<a, x> <= b``.  At least one "
+            "coefficient must be nonzero: constant rows ``0 <= b`` are "
+            "rejected, including the contradiction ``0 <= -1``."
+        ),
     )
     offset: CanonicalRational = Field(
         description="The right-hand side ``b`` of ``<a, x> <= b``.",
@@ -126,10 +132,11 @@ class LatticePolytopeRequest(StrictModel):
         min_length=1,
         max_length=MAX_HALFSPACES,
         description=(
-            "H-representation: the half-spaces ``<a_i, x> <= b_i``. "
-            "Mutually exclusive with ``vertices``.  A bounded but empty "
-            "system is valid and yields the exact empty result (count "
-            "zero, no points)."
+            "H-representation: the half-spaces ``<a_i, x> <= b_i``, each "
+            "with at least one nonzero coefficient (constant rows are "
+            "rejected).  Mutually exclusive with ``vertices``.  A bounded "
+            "but empty system is valid and yields the exact empty result "
+            "(count zero, no points)."
         ),
     )
     dimension_bound: int = Field(

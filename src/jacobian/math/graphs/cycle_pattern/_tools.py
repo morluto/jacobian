@@ -45,50 +45,52 @@ def cycle_pattern_operation[
     )
 
 
+def _named_graph(names: list[str], edges: list[list[str]]) -> dict[str, Any]:
+    return {
+        "graph_schema_version": "1",
+        "vertices": names,
+        "edges": edges,
+    }
+
+
 _CYCLE_DECIDE_EXAMPLE: dict[str, Any] = {
-    "graph": {
-        "vertex_count": 4,
-        "edges": [[0, 1], [1, 2], [2, 3], [3, 0]],
-    },
+    "graph": _named_graph(
+        ["a", "b", "c", "d"],
+        [["a", "b"], ["b", "c"], ["c", "d"], ["a", "d"]],
+    ),
     "length": 4,
 }
 
 _NO_CYCLE_EXAMPLE: dict[str, Any] = {
-    "graph": {
-        "vertex_count": 4,
-        "edges": [[0, 1], [1, 2], [2, 3]],
-    },
+    "graph": _named_graph(
+        ["a", "b", "c", "d"],
+        [["a", "b"], ["b", "c"], ["c", "d"]],
+    ),
     "length": 4,
 }
 
 _TRIANGLE_EXAMPLE: dict[str, Any] = {
-    "graph": {
-        "vertex_count": 3,
-        "edges": [[0, 1], [1, 2], [0, 2]],
-    },
+    "graph": _named_graph(
+        ["a", "b", "c"],
+        [["a", "b"], ["b", "c"], ["a", "c"]],
+    ),
     "length": 3,
 }
 
 _SUBGRAPH_EXAMPLE: dict[str, Any] = {
-    "host": {
-        "vertex_count": 5,
-        "edges": [[0, 1], [1, 2], [2, 3], [3, 4], [4, 0], [0, 2]],
-    },
-    "pattern": {
-        "vertex_count": 3,
-        "edges": [[0, 1], [1, 2]],
-    },
+    "host": _named_graph(
+        ["a", "b", "c", "d", "e"],
+        [["a", "b"], ["b", "c"], ["c", "d"], ["d", "e"], ["a", "e"], ["a", "c"]],
+    ),
+    "pattern": _named_graph(["a", "b", "c"], [["a", "b"], ["b", "c"]]),
 }
 
 _NO_SUBGRAPH_EXAMPLE: dict[str, Any] = {
-    "host": {
-        "vertex_count": 3,
-        "edges": [[0, 1]],
-    },
-    "pattern": {
-        "vertex_count": 3,
-        "edges": [[0, 1], [1, 2], [0, 2]],
-    },
+    "host": _named_graph(["a", "b", "c"], [["a", "b"]]),
+    "pattern": _named_graph(
+        ["a", "b", "c"],
+        [["a", "b"], ["b", "c"], ["a", "c"]],
+    ),
 }
 
 

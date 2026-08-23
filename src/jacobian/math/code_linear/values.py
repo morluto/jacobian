@@ -10,8 +10,8 @@ from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix, rank
 
-MAX_LINEAR_CODE_DIMENSION = 16
 MAX_LINEAR_CODE_LENGTH = 32
+MAX_LINEAR_CODE_DIMENSION = MAX_LINEAR_CODE_LENGTH
 
 
 class PrimeFieldLinearEncoder(StrictModel):
@@ -30,9 +30,11 @@ class PrimeFieldLinearEncoder(StrictModel):
         ),
     )
     coordinate_axis: tuple[OpaqueLabel, ...] = Field(
-        min_length=1,
         max_length=MAX_LINEAR_CODE_LENGTH,
-        description="Ordered unique labels for encoded-word coordinates.",
+        description=(
+            "Ordered unique labels for encoded-word coordinates; the empty axis "
+            "represents the unique length-zero word."
+        ),
     )
     generator_matrix: tuple[tuple[StrictInt, ...], ...] = Field(
         default=(),

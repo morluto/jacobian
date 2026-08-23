@@ -9,11 +9,20 @@ from pydantic import ValidationError
 
 from jacobian.math import code_linear
 from jacobian.math.code_linear._models import (
+    GeneratorMatrixRequest,
+    PunctureRequest,
     ReceivedWordProfileRequest,
     ReceivedWordProfileResult,
     ReceivedWordThreshold,
+    ShortenRequest,
 )
-from jacobian.math.code_linear._operations import compute_received_word_profile
+from jacobian.math.code_linear._operations import (
+    compute_dual_code,
+    compute_from_generator,
+    compute_puncture,
+    compute_received_word_profile,
+    compute_shorten,
+)
 from jacobian.math.code_linear.values import PrimeFieldLinearEncoder
 
 
@@ -72,6 +81,135 @@ def test_row_equivalent_generators_have_the_same_profile() -> None:
     second = _profile(((1, 1, 0), (0, 1, 1)), received)
 
     assert first.distance_histogram == second.distance_histogram
+
+
+def test_canonicalized_encoder_serializes_directly_into_profile() -> None:
+    canonicalized = compute_from_generator(
+        GeneratorMatrixRequest(
+            field_order=2,
+            generator_matrix=((1, 1), (1, 1)),
+            coordinate_axis=("left", "right"),
+        )
+    )
+
+    request = ReceivedWordProfileRequest.model_validate(
+        {
+            "encoder": canonicalized.model_dump(mode="json")["encoder"],
+            "received_word": [1, 0],
+        }
+    )
+    result = compute_received_word_profile(request)
+
+    assert request.encoder == canonicalized.encoder
+    assert request.encoder.message_axis == ("m0",)
+    assert request.encoder.coordinate_axis == ("left", "right")
+    assert result.distance_histogram == (0, 2, 0)
+
+
+def test_dual_encoder_serializes_directly_into_profile() -> None:
+    dual = compute_dual_code(
+        GeneratorMatrixRequest(
+            field_order=2,
+            generator_matrix=((1, 1, 1),),
+            coordinate_axis=("left", "middle", "right"),
+        )
+    )
+
+    request = ReceivedWordProfileRequest.model_validate(
+        {
+            "encoder": dual.model_dump(mode="json")["encoder"],
+            "received_word": [0, 0, 0],
+        }
+    )
+    result = compute_received_word_profile(request)
+
+    assert request.encoder == dual.encoder
+    assert request.encoder.coordinate_axis == ("left", "middle", "right")
+    assert request.encoder.message_axis == ("m0", "m1")
+    assert result.distance_histogram == (1, 0, 3, 0)
+
+
+def test_punctured_encoder_serializes_directly_into_profile() -> None:
+    punctured = compute_puncture(
+        PunctureRequest(
+            field_order=2,
+            generator_matrix=((1, 0, 1), (0, 1, 1)),
+            coordinate_axis=("left", "middle", "right"),
+            coordinate=1,
+        )
+    )
+
+    request = ReceivedWordProfileRequest.model_validate(
+        {
+            "encoder": punctured.model_dump(mode="json")["encoder"],
+            "received_word": [0, 0],
+        }
+    )
+    result = compute_received_word_profile(request)
+
+    assert request.encoder == punctured.encoder
+    assert request.encoder.coordinate_axis == ("left", "right")
+    assert result.distance_histogram == (1, 2, 1)
+
+
+def test_shortened_encoder_serializes_directly_into_profile() -> None:
+    shortened = compute_shorten(
+        ShortenRequest(
+            field_order=2,
+            generator_matrix=((1, 1, 0), (1, 0, 1)),
+            coordinate_axis=("left", "middle", "right"),
+            coordinate=0,
+        )
+    )
+
+    request = ReceivedWordProfileRequest.model_validate(
+        {
+            "encoder": shortened.model_dump(mode="json")["encoder"],
+            "received_word": [1, 0],
+        }
+    )
+    result = compute_received_word_profile(request)
+
+    assert request.encoder == shortened.encoder
+    assert request.encoder.coordinate_axis == ("middle", "right")
+    assert result.distance_histogram == (0, 2, 0)
+
+
+def test_length_one_puncture_composes_into_length_zero_profile() -> None:
+    punctured = compute_puncture(
+        PunctureRequest(
+            field_order=2,
+            generator_matrix=((1,),),
+            coordinate_axis=("only",),
+            coordinate=0,
+        )
+    )
+    request = ReceivedWordProfileRequest.model_validate(
+        {
+            "encoder": punctured.model_dump(mode="json")["encoder"],
+            "received_word": [],
+            "threshold": {
+                "metric": "DISTANCE",
+                "comparison": "LE",
+                "value": 0,
+            },
+            "witness_mode": "ALL",
+        }
+    )
+
+    result = compute_received_word_profile(request)
+
+    assert punctured.encoder.coordinate_axis == ()
+    assert punctured.encoder.message_axis == ()
+    assert punctured.encoder.generator_matrix == ()
+    assert result.distance_histogram == (1,)
+    assert result.codeword_count == 1
+    assert result.minimum_distance == 0
+    assert result.maximum_agreement == 0
+    assert result.threshold_match_count == 1
+    assert tuple(
+        (witness.message, witness.codeword) for witness in result.witnesses
+    ) == (((), ()),)
 
 
 def test_ternary_repetition_profile_counts_every_distinct_codeword() -> None:

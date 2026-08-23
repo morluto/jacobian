@@ -8,6 +8,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math._labels import OpaqueLabel
 from jacobian.math.code_linear.values import (
     MAX_LINEAR_CODE_DIMENSION,
     MAX_LINEAR_CODE_LENGTH,
@@ -56,10 +57,10 @@ class ReceivedWordProfileRequest(StrictModel):
 
     encoder: PrimeFieldLinearEncoder
     received_word: tuple[_FieldElement, ...] = Field(
-        min_length=1,
         max_length=MAX_LINEAR_CODE_LENGTH,
         description=(
-            "Canonical GF(p) residues on the encoder's ordered coordinate axis."
+            "Canonical GF(p) residues on the encoder's ordered coordinate axis; "
+            "the empty word is valid exactly for a length-zero encoder."
         ),
     )
     threshold: ReceivedWordThreshold | None = Field(
@@ -149,7 +150,6 @@ class ReceivedWordWitness(StrictModel):
 
     message: tuple[_FieldElement, ...] = Field(max_length=MAX_LINEAR_CODE_DIMENSION)
     codeword: tuple[_FieldElement, ...] = Field(
-        min_length=1,
         max_length=MAX_LINEAR_CODE_LENGTH,
     )
     distance: StrictInt = Field(ge=0, le=MAX_LINEAR_CODE_LENGTH)
@@ -161,7 +161,7 @@ class ReceivedWordProfileResult(StrictModel):
 
     source: ReceivedWordProfileRequest
     distance_histogram: tuple[_HistogramCount, ...] = Field(
-        min_length=2,
+        min_length=1,
         max_length=MAX_LINEAR_CODE_LENGTH + 1,
         description=(
             "Dense histogram indexed by Hamming distance; agreement a is the "
@@ -227,15 +227,35 @@ def _validate_prime_matrix(
     return width
 
 
+def _validate_coordinate_axis(
+    coordinate_axis: tuple[OpaqueLabel, ...],
+    *,
+    width: int,
+) -> None:
+    if len(coordinate_axis) != width:
+        raise ValueError("coordinate axis must match the generator-matrix columns")
+    if len(set(coordinate_axis)) != len(coordinate_axis):
+        raise ValueError("coordinate-axis labels must be unique")
+
+
 class GeneratorMatrixRequest(StrictModel):
     """A linear code given by a generator matrix over a bounded prime field."""
 
     field_order: int = Field(ge=2, le=251)
     generator_matrix: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=16)
+    coordinate_axis: tuple[OpaqueLabel, ...] = Field(
+        min_length=1,
+        max_length=MAX_LENGTH,
+        description=(
+            "Ordered unique labels for generator-matrix columns; code-producing "
+            "results preserve these labels."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_bounded_prime_matrix(self) -> Self:
         width = _validate_prime_matrix(self.field_order, self.generator_matrix)
+        _validate_coordinate_axis(self.coordinate_axis, width=width)
         if self.field_order ** len(self.generator_matrix) > MAX_CODEWORDS:
             raise ValueError("generator matrix exceeds exact enumeration bound")
         if width > MAX_LENGTH:
@@ -355,12 +375,20 @@ class PunctureRequest(StrictModel):
 
     field_order: int = Field(ge=2, le=251)
     generator_matrix: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=16)
-    coordinate: int = Field(ge=0)
+    coordinate_axis: tuple[OpaqueLabel, ...] = Field(
+        min_length=1,
+        max_length=MAX_LENGTH,
+        description="Ordered unique labels for generator-matrix columns.",
+    )
+    coordinate: int = Field(
+        ge=0,
+        description="Zero-based index into coordinate_axis to delete.",
+    )
 
     @model_validator(mode="after")
     def require_valid_request(self) -> Self:
-        _validate_prime_matrix(self.field_order, self.generator_matrix)
-        width = len(self.generator_matrix[0])
+        width = _validate_prime_matrix(self.field_order, self.generator_matrix)
+        _validate_coordinate_axis(self.coordinate_axis, width=width)
         if self.coordinate >= width:
             raise ValueError("coordinate index out of range")
         return self
@@ -371,12 +399,20 @@ class ShortenRequest(StrictModel):
 
     field_order: int = Field(ge=2, le=251)
     generator_matrix: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=16)
-    coordinate: int = Field(ge=0)
+    coordinate_axis: tuple[OpaqueLabel, ...] = Field(
+        min_length=1,
+        max_length=MAX_LENGTH,
+        description="Ordered unique labels for generator-matrix columns.",
+    )
+    coordinate: int = Field(
+        ge=0,
+        description="Zero-based index into coordinate_axis to fix and delete.",
+    )
 
     @model_validator(mode="after")
     def require_valid_request(self) -> Self:
-        _validate_prime_matrix(self.field_order, self.generator_matrix)
-        width = len(self.generator_matrix[0])
+        width = _validate_prime_matrix(self.field_order, self.generator_matrix)
+        _validate_coordinate_axis(self.coordinate_axis, width=width)
         if self.coordinate >= width:
             raise ValueError("coordinate index out of range")
         return self
@@ -386,20 +422,50 @@ class ShortenRequest(StrictModel):
 
 
 class FromGeneratorResult(StrictModel):
-    canonical_generator: tuple[tuple[int, ...], ...]
+    """A canonical encoder with summaries derived from that encoder."""
+
+    encoder: PrimeFieldLinearEncoder
     dimension: int = Field(ge=0)
     length: int = Field(ge=0)
     cardinality: int = Field(ge=1)
     method: str = "RREF"
 
+    @model_validator(mode="after")
+    def require_consistent_summaries(self) -> Self:
+        if self.dimension != len(self.encoder.message_axis):
+            raise ValueError("dimension must match the encoder message axis")
+        if self.length != len(self.encoder.coordinate_axis):
+            raise ValueError("length must match the encoder coordinate axis")
+        if self.cardinality != self.encoder.codeword_count:
+            raise ValueError("cardinality must match the encoder image")
+        return self
+
 
 class DualCodeResult(StrictModel):
-    dual_generator: tuple[tuple[int, ...], ...]
+    """A canonical dual encoder and its matching parity-check matrix."""
+
+    encoder: PrimeFieldLinearEncoder
     parity_check: ParityCheckMatrix
     dimension: int = Field(ge=0)
     dual_dimension: int = Field(ge=0)
     length: int = Field(ge=0)
     method: str = "NULLSPACE"
+
+    @model_validator(mode="after")
+    def require_consistent_dual(self) -> Self:
+        if self.dual_dimension != len(self.encoder.message_axis):
+            raise ValueError("dual dimension must match the encoder message axis")
+        if self.length != len(self.encoder.coordinate_axis):
+            raise ValueError("length must match the encoder coordinate axis")
+        if self.dimension + self.dual_dimension != self.length:
+            raise ValueError("primal and dual dimensions must sum to the code length")
+        if self.parity_check.field_order != self.encoder.field_order:
+            raise ValueError("parity-check field must match the dual encoder")
+        if self.parity_check.column_count != self.length:
+            raise ValueError("parity-check columns must match the code length")
+        if self.parity_check.rows != self.encoder.generator_matrix:
+            raise ValueError("parity-check rows must match the dual encoder")
+        return self
 
 
 class ParityCheckResult(StrictModel):
@@ -438,14 +504,34 @@ class MacWilliamsResult(StrictModel):
 
 
 class PunctureResult(StrictModel):
-    generator: tuple[tuple[int, ...], ...]
+    """A canonical punctured encoder with derived dimension and length."""
+
+    encoder: PrimeFieldLinearEncoder
     dimension: int = Field(ge=0)
     length: int = Field(ge=0)
     method: str = "PUNCTURE"
 
+    @model_validator(mode="after")
+    def require_consistent_summaries(self) -> Self:
+        if self.dimension != len(self.encoder.message_axis):
+            raise ValueError("dimension must match the encoder message axis")
+        if self.length != len(self.encoder.coordinate_axis):
+            raise ValueError("length must match the encoder coordinate axis")
+        return self
+
 
 class ShortenResult(StrictModel):
-    generator: tuple[tuple[int, ...], ...]
+    """A canonical shortened encoder with derived dimension and length."""
+
+    encoder: PrimeFieldLinearEncoder
     dimension: int = Field(ge=0)
     length: int = Field(ge=0)
     method: str = "SHORTEN"
+
+    @model_validator(mode="after")
+    def require_consistent_summaries(self) -> Self:
+        if self.dimension != len(self.encoder.message_axis):
+            raise ValueError("dimension must match the encoder message axis")
+        if self.length != len(self.encoder.coordinate_axis):
+            raise ValueError("length must match the encoder coordinate axis")
+        return self

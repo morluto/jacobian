@@ -44,21 +44,33 @@ def test_catalog_contains_only_audited_operations() -> None:
 
 
 def test_from_generator_canonicalizes_dependent_rows() -> None:
-    request = GeneratorMatrixRequest(field_order=2, generator_matrix=((1, 1), (1, 1)))
+    request = GeneratorMatrixRequest(
+        field_order=2,
+        generator_matrix=((1, 1), (1, 1)),
+        coordinate_axis=("left", "right"),
+    )
     result = compute_from_generator(request)
     assert result.dimension == 1
     assert result.length == 2
     assert result.cardinality == 2
-    assert result.canonical_generator == ((1, 1),)
+    assert result.encoder.generator_matrix == ((1, 1),)
+    assert result.encoder.message_axis == ("m0",)
+    assert result.encoder.coordinate_axis == ("left", "right")
 
 
 def test_dual_of_repetition_is_parity_check() -> None:
-    request = GeneratorMatrixRequest(field_order=2, generator_matrix=((1, 1),))
+    request = GeneratorMatrixRequest(
+        field_order=2,
+        generator_matrix=((1, 1),),
+        coordinate_axis=("left", "right"),
+    )
     result = compute_dual_code(request)
     assert result.dimension == 1
     assert result.dual_dimension == 1
     assert result.length == 2
-    assert len(result.dual_generator) == 1
+    assert result.encoder.generator_matrix == result.parity_check.rows
+    assert result.encoder.message_axis == ("m0",)
+    assert result.encoder.coordinate_axis == ("left", "right")
 
 
 def test_parity_check_matches_dual() -> None:
@@ -110,7 +122,11 @@ def test_syndrome_nonzero_for_noncodeword() -> None:
 
 def test_full_space_dual_composes_into_empty_syndrome() -> None:
     dual = compute_dual_code(
-        GeneratorMatrixRequest(field_order=2, generator_matrix=((1, 0), (0, 1)))
+        GeneratorMatrixRequest(
+            field_order=2,
+            generator_matrix=((1, 0), (0, 1)),
+            coordinate_axis=("left", "right"),
+        )
     )
     assert dual.parity_check.rows == ()
     result = compute_syndrome(
@@ -125,10 +141,12 @@ def test_rank_one_length_32_code_retains_all_dual_rows() -> None:
         GeneratorMatrixRequest(
             field_order=2,
             generator_matrix=(tuple([1] + [0] * 31),),
+            coordinate_axis=tuple(f"x{index}" for index in range(32)),
         )
     )
     assert len(result.parity_check.rows) == 31
     assert result.parity_check.column_count == 32
+    assert len(result.encoder.message_axis) == 31
 
 
 def test_code_equal_same_matrices() -> None:
@@ -162,19 +180,33 @@ def test_macwilliams_self_dual_repetition_code() -> None:
 
 
 def test_puncture_reduces_length() -> None:
-    request = PunctureRequest(field_order=2, generator_matrix=((1, 1),), coordinate=0)
+    request = PunctureRequest(
+        field_order=2,
+        generator_matrix=((1, 1),),
+        coordinate_axis=("left", "right"),
+        coordinate=0,
+    )
     result = compute_puncture(request)
     assert result.length == 1
     assert result.dimension == 1
+    assert result.encoder.coordinate_axis == ("right",)
+    assert result.encoder.message_axis == ("m0",)
 
 
 def test_shorten_reduces_dimension_and_length() -> None:
     # Shortening the length-3 binary repetition code at coordinate 0
     # keeps codewords with c[0]=0 (only the zero word), so dimension drops to 0.
-    request = ShortenRequest(field_order=2, generator_matrix=((1, 1, 1),), coordinate=0)
+    request = ShortenRequest(
+        field_order=2,
+        generator_matrix=((1, 1, 1),),
+        coordinate_axis=("left", "middle", "right"),
+        coordinate=0,
+    )
     result = compute_shorten(request)
     assert result.length == 2
     assert result.dimension == 0
+    assert result.encoder.coordinate_axis == ("middle", "right")
+    assert result.encoder.message_axis == ()
 
 
 def test_shorten_2d_code() -> None:
@@ -183,7 +215,10 @@ def test_shorten_2d_code() -> None:
     # Shortening at coordinate 0: keep codewords with c[0]=0: {000, 011}.
     # Delete coordinate 0: {00, 11} -> dimension 1, length 2.
     request = ShortenRequest(
-        field_order=2, generator_matrix=((1, 1, 0), (1, 0, 1)), coordinate=0
+        field_order=2,
+        generator_matrix=((1, 1, 0), (1, 0, 1)),
+        coordinate_axis=("left", "middle", "right"),
+        coordinate=0,
     )
     result = compute_shorten(request)
     assert result.length == 2
@@ -206,12 +241,36 @@ def test_macwilliams_ternary() -> None:
 
 def test_request_rejects_nonprime_field() -> None:
     with pytest.raises(ValidationError, match="prime"):
-        GeneratorMatrixRequest(field_order=4, generator_matrix=((1,),))
+        GeneratorMatrixRequest(
+            field_order=4,
+            generator_matrix=((1,),),
+            coordinate_axis=("x",),
+        )
 
 
 def test_request_rejects_bad_entry() -> None:
     with pytest.raises(ValidationError, match="residues"):
-        GeneratorMatrixRequest(field_order=2, generator_matrix=((2,),))
+        GeneratorMatrixRequest(
+            field_order=2,
+            generator_matrix=((2,),),
+            coordinate_axis=("x",),
+        )
+
+
+def test_code_producer_requests_reject_ambiguous_coordinate_axes() -> None:
+    with pytest.raises(ValidationError, match="match the generator-matrix columns"):
+        GeneratorMatrixRequest(
+            field_order=2,
+            generator_matrix=((1, 1),),
+            coordinate_axis=("x",),
+        )
+    with pytest.raises(ValidationError, match="unique"):
+        PunctureRequest(
+            field_order=2,
+            generator_matrix=((1, 1),),
+            coordinate_axis=("x", "x"),
+            coordinate=0,
+        )
 
 
 def test_syndrome_request_rejects_bad_word_length() -> None:

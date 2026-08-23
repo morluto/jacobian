@@ -29,6 +29,7 @@ from jacobian.math.code_linear._models import (
     SyndromeResult,
     _threshold_matches_distance,
 )
+from jacobian.math.code_linear.values import PrimeFieldLinearEncoder
 
 
 class _ReceivedWordProfileData(NamedTuple):
@@ -178,6 +179,23 @@ def _canonical_generator(matrix: list[list[int]], field_order: int) -> list[list
     return list(rref[:rank])
 
 
+def _canonical_encoder(
+    *,
+    field_order: int,
+    coordinate_axis: tuple[str, ...],
+    generator_matrix: list[list[int]],
+) -> PrimeFieldLinearEncoder:
+    """Build an encoder whose ``m0``, ``m1``, ... labels follow basis order."""
+
+    rows = tuple(tuple(row) for row in generator_matrix)
+    return PrimeFieldLinearEncoder(
+        field_order=field_order,
+        message_axis=tuple(f"m{index}" for index in range(len(rows))),
+        coordinate_axis=coordinate_axis,
+        generator_matrix=rows,
+    )
+
+
 def _mat_mul_vec(
     matrix: list[list[int]], vec: list[int], field_order: int
 ) -> list[int]:
@@ -197,7 +215,11 @@ def compute_from_generator(request: GeneratorMatrixRequest) -> FromGeneratorResu
     length = len(request.generator_matrix[0])
     cardinality = request.field_order**dim
     return FromGeneratorResult(
-        canonical_generator=tuple(tuple(row) for row in canonical),
+        encoder=_canonical_encoder(
+            field_order=request.field_order,
+            coordinate_axis=request.coordinate_axis,
+            generator_matrix=canonical,
+        ),
         dimension=dim,
         length=length,
         cardinality=cardinality,
@@ -207,14 +229,21 @@ def compute_from_generator(request: GeneratorMatrixRequest) -> FromGeneratorResu
 def compute_dual_code(request: GeneratorMatrixRequest) -> DualCodeResult:
     matrix = [list(row) for row in request.generator_matrix]
     _, rank = _rref(matrix, request.field_order)
-    null = _nullspace(matrix, request.field_order)
+    null = _canonical_generator(
+        _nullspace(matrix, request.field_order), request.field_order
+    )
     length = len(request.generator_matrix[0])
+    encoder = _canonical_encoder(
+        field_order=request.field_order,
+        coordinate_axis=request.coordinate_axis,
+        generator_matrix=null,
+    )
     return DualCodeResult(
-        dual_generator=tuple(tuple(row) for row in null),
+        encoder=encoder,
         parity_check=ParityCheckMatrix(
             field_order=request.field_order,
             column_count=length,
-            rows=tuple(map(tuple, null)),
+            rows=encoder.generator_matrix,
         ),
         dimension=rank,
         dual_dimension=length - rank,
@@ -392,7 +421,14 @@ def compute_puncture(request: PunctureRequest) -> PunctureResult:
     new_len = len(matrix[0]) - 1
     gen = tuple(tuple(row) for row in rref[:rank]) if rank > 0 else ()
     return PunctureResult(
-        generator=gen,
+        encoder=_canonical_encoder(
+            field_order=request.field_order,
+            coordinate_axis=(
+                request.coordinate_axis[: request.coordinate]
+                + request.coordinate_axis[request.coordinate + 1 :]
+            ),
+            generator_matrix=[list(row) for row in gen],
+        ),
         dimension=rank,
         length=new_len,
     )
@@ -440,7 +476,14 @@ def compute_shorten(request: ShortenRequest) -> ShortenResult:
     new_len = len(matrix[0]) - 1
     gen = tuple(tuple(row) for row in final_rref[:final_rank]) if final_rank > 0 else ()
     return ShortenResult(
-        generator=gen,
+        encoder=_canonical_encoder(
+            field_order=request.field_order,
+            coordinate_axis=(
+                request.coordinate_axis[: request.coordinate]
+                + request.coordinate_axis[request.coordinate + 1 :]
+            ),
+            generator_matrix=[list(row) for row in gen],
+        ),
         dimension=final_rank,
         length=new_len,
     )

@@ -126,7 +126,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "code.linear.from_generator.compute",
         "Canonicalize a linear code from a generator matrix",
         "Reduce a generator matrix over a bounded prime field to canonical "
-        "full-row-rank form and report dimension, length, and cardinality.",
+        "full-row-rank form, preserve its ordered coordinate-axis labels, and "
+        "return a linear encoder. Canonical basis rows receive deterministic "
+        "message-axis labels m0, m1, and so on.",
         GeneratorMatrixRequest,
         FromGeneratorResult,
         compute_from_generator,
@@ -136,16 +138,22 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "binary_repetition",
-                "Canonicalize the binary repetition code of length two.",
-                {"field_order": 2, "generator_matrix": [[1, 1]]},
+                "Canonicalize the binary repetition code of length two; the "
+                "coordinate axis must label the generator columns in order.",
+                {
+                    "field_order": 2,
+                    "generator_matrix": [[1, 1]],
+                    "coordinate_axis": ["x0", "x1"],
+                },
             ),
         ),
     ),
     _op(
         "code.linear.dual.compute",
         "Compute the dual code of a linear code",
-        "Compute the exact dual code C^perp as a generator matrix, returning "
-        "dual dimension and length.",
+        "Compute the exact dual code C^perp as a linear encoder that preserves "
+        "the primal coordinate axis. Canonical dual basis rows receive "
+        "deterministic message-axis labels m0, m1, and so on.",
         GeneratorMatrixRequest,
         DualCodeResult,
         compute_dual_code,
@@ -155,8 +163,13 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "binary_repetition",
-                "Dual of the binary repetition code of length two.",
-                {"field_order": 2, "generator_matrix": [[1, 1]]},
+                "Compute the dual of the binary repetition code of length two; "
+                "the coordinate axis must label the generator columns in order.",
+                {
+                    "field_order": 2,
+                    "generator_matrix": [[1, 1]],
+                    "coordinate_axis": ["x0", "x1"],
+                },
             ),
         ),
     ),
@@ -278,8 +291,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "code.linear.puncture.compute",
         "Puncture a linear code at one coordinate",
-        "Delete one coordinate from the generator matrix and return the "
-        "punctured code with canonical generator basis.",
+        "Delete one indexed coordinate and its axis label, then return the "
+        "punctured code as a canonical linear encoder whose basis rows receive "
+        "deterministic message-axis labels m0, m1, and so on.",
         PunctureRequest,
         PunctureResult,
         compute_puncture,
@@ -293,6 +307,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {
                     "field_order": 2,
                     "generator_matrix": [[1, 1]],
+                    "coordinate_axis": ["x0", "x1"],
                     "coordinate": 0,
                 },
             ),
@@ -302,7 +317,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "code.linear.shorten.compute",
         "Shorten a linear code at one coordinate",
         "Shorten a code by fixing one coordinate to zero and then puncturing "
-        "it, returning the shortened code with canonical generator basis.",
+        "it, deleting that coordinate's axis label and returning a canonical "
+        "linear encoder. Canonical basis rows receive deterministic message-axis "
+        "labels m0, m1, and so on.",
         ShortenRequest,
         ShortenResult,
         compute_shorten,
@@ -316,6 +333,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {
                     "field_order": 2,
                     "generator_matrix": [[1, 1, 1]],
+                    "coordinate_axis": ["x0", "x1", "x2"],
                     "coordinate": 0,
                 },
             ),

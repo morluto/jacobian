@@ -22,10 +22,30 @@ assignees: []
 <!-- The returned mathematical value, witness, certificate, or closed outcome. -->
 
 ## Completeness semantics
-<!-- When may the result say EXACT, DOES_NOT_EXIST, UNKNOWN, UNRESOLVED, or reject the request as out of scope? -->
+<!--
+When may the result say EXACT, DOES_NOT_EXIST, UNKNOWN, UNRESOLVED, or reject
+the request as out of scope? A timeout, resource failure, or backend UNKNOWN
+must not become a negative mathematical conclusion.
+-->
 
 ## Bounds and cost class
-<!-- Public input, search, output, coefficient, dimension, and time budgets. -->
+<!--
+Separate the semantic mathematical domain from this release's execution
+envelope. Name the quantities controlling work, intermediate growth, memory,
+and exact output, and explain the preflight formulas used to admit a request.
+Classify each remaining limit as mathematical, representation-specific,
+backend-specific, or currently uninvestigated. A fixed cap needs a documented
+reason that a sharper result- or algorithm-sensitive budget is not yet safe.
+-->
+
+## Acceleration and exact representation
+<!--
+Which algorithm regimes and maintained backends were considered? Explain when
+the implementation changes regime as inputs grow and why the selected backend
+fits each admitted region. Consider sparse, factored, modular, symbolic, or
+implicit exact results before forcing expansion. Large scalar inputs should
+remain admissible when predicted work, intermediates, and output are small.
+-->
 
 ## Maintained implementation
 <!--
@@ -60,6 +80,8 @@ incorrect implementations? Include the applicable evidence:
 
 - a known-answer or source-backed reference fixture when conventions matter;
 - boundary, degenerate, and adversarial cases;
+- algorithm or representation crossover points and realistic source-backed
+  scale cases;
 - reconstruction, defining-identity, or preservation tests;
 - a bounded exhaustive check or independent differential oracle when
   proportionate.

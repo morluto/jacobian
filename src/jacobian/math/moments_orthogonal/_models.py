@@ -1,361 +1,391 @@
-"""Typed wire contracts for exact moments and orthogonal polynomials."""
+"""Typed wire contracts for moment-functional operations."""
 
 from __future__ import annotations
 
-from fractions import Fraction
-from typing import Literal, Self
+from typing import Self
 
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
-    require_bounded_rational,
 )
 from jacobian._models import StrictModel
 from jacobian.math._rational_height import RationalHeight
-from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.moments_orthogonal.values import (
-    MAX_MOMENTS,
-    MAX_QUADRATURE_POINTS,
-    MAX_RECURRENCE_ORDER,
+    MAX_HANKEL_ORDER,
+    MAX_POLYNOMIAL_DEGREE,
+    MomentFunctionalPrefix,
+    OrthogonalPolynomialFamily,
 )
 
-MAX_RATIONAL_DIGITS = 4_096
 
-# Golub-Welsch converts admitted rationals to IEEE doubles; every accepted
-# coefficient must convert to a finite double and every subdiagonal entry must
-# stay far from both overflow and underflow so its square root is exact enough.
-MAX_QUADRATURE_MAGNITUDE = Fraction(10) ** 300
-MIN_QUADRATURE_SUBDIAGONAL = Fraction(1, 10**300)
-
-
-def _to_fractions(
-    values: tuple[CanonicalRational, ...],
-) -> tuple[Fraction, ...]:
-    return tuple(v.as_fraction() for v in values)
-
-
-def _from_fractions(values: tuple[Fraction, ...]) -> tuple[CanonicalRational, ...]:
-    return tuple(CanonicalRational.from_fraction(v) for v in values)
-
-
-def _validate_moments(moments: tuple[CanonicalRational, ...]) -> None:
-    if not 1 <= len(moments) <= MAX_MOMENTS:
-        raise ValueError("moment sequence must contain between 1 and 64 moments")
-    for value in moments:
-        require_bounded_rational(value, max_digits=MAX_RATIONAL_DIGITS, label="moment")
-
-
-def _coefficient_height(value: CanonicalRational) -> int:
-    height = RationalHeight.from_canonical(value)
-    return max(height.numerator_digits, height.denominator_digits)
-
-
-def _validate_alpha_beta(
-    alpha: tuple[CanonicalRational, ...],
-    beta: tuple[CanonicalRational, ...],
+def _require_determinant_representable(
+    moments: tuple[CanonicalRational, ...], order: int
 ) -> None:
-    if not 1 <= len(beta) <= MAX_RECURRENCE_ORDER:
-        raise ValueError("beta must contain between 1 and 16 entries")
-    if not 0 <= len(alpha) <= MAX_RECURRENCE_ORDER:
-        raise ValueError("alpha out of range")
-    if len(alpha) != len(beta) and len(alpha) != len(beta) - 1:
-        raise ValueError("alpha must have length len(beta)-1 or len(beta)")
-    if beta[0].num == "0" or beta[0].num.startswith("-"):
-        raise ValueError(
-            "beta_0 (the zeroth moment of a positive functional) must be positive"
-        )
-    # beta_1, ..., beta_{n-1} are squared-norm ratios of a positive-definite
-    # sequence and occupy the Jacobi subdiagonal; each must be positive.
-    for index in range(1, min(len(alpha), len(beta))):
-        if beta[index].num.startswith("-") or beta[index].num == "0":
-            raise ValueError(
-                "subdiagonal beta entries must be positive squared-norm ratios"
-            )
-    for value in (*alpha, *beta):
-        require_bounded_rational(
-            value, max_digits=MAX_RATIONAL_DIGITS, label="coefficient"
-        )
+    """Bound entry heights so the exact determinant stays canonical.
 
-
-# ---------------------------------------------------------------------------
-# Hankel matrix
-# ---------------------------------------------------------------------------
-
-
-class HankelMatrixRequest(StrictModel):
-    moments: tuple[CanonicalRational, ...] = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def require_valid_moments(self) -> Self:
-        _validate_moments(self.moments)
-        return self
-
-
-class HankelMatrixResult(HankelMatrixRequest):
-    matrix: RationalMatrix
-    dimension: int = Field(ge=1)
-    complete: Literal[True] = True
-    method: Literal["EXACT_HANKEL_ASSEMBLY"] = "EXACT_HANKEL_ASSEMBLY"
-
-    @model_validator(mode="after")
-    def bind_hankel(self) -> Self:
-        from jacobian.math.moments_orthogonal.operations import hankel_matrix
-
-        result = hankel_matrix(_to_fractions(self.moments))
-        if self.dimension != len(result.matrix):
-            raise ValueError("dimension must match the Hankel matrix size")
-        expected_matrix = tuple(
-            tuple(CanonicalRational.from_fraction(v) for v in row)
-            for row in result.matrix
-        )
-        if self.matrix.entries != expected_matrix:
-            raise ValueError("matrix must be the exact Hankel matrix")
-        return self
-
-
-# ---------------------------------------------------------------------------
-# Recurrence coefficients
-# ---------------------------------------------------------------------------
-
-
-class RecurrenceCoefficientsRequest(StrictModel):
-    moments: tuple[CanonicalRational, ...] = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def require_valid_moments(self) -> Self:
-        _validate_moments(self.moments)
-        # The Gram-Schmidt kernel requires a positive-definite moment
-        # functional; admit exactly the sequences it accepts so an accepted
-        # request cannot fail inside execution.
-        from jacobian.math.moments_orthogonal.operations import (
-            recurrence_coefficients,
-        )
-
-        recurrence_coefficients(_to_fractions(self.moments))
-        return self
-
-
-class RecurrenceCoefficientsResult(RecurrenceCoefficientsRequest):
-    alpha: tuple[CanonicalRational, ...]
-    beta: tuple[CanonicalRational, ...]
-    complete: Literal[True] = True
-    method: Literal["EXACT_GRAM_SCHMIDT"] = "EXACT_GRAM_SCHMIDT"
-
-    @model_validator(mode="after")
-    def bind_recurrence(self) -> Self:
-        from jacobian.math.moments_orthogonal.operations import (
-            recurrence_coefficients,
-        )
-
-        result = recurrence_coefficients(_to_fractions(self.moments))
-        if self.alpha != _from_fractions(result.alpha):
-            raise ValueError("alpha must be the exact recurrence coefficients")
-        if self.beta != _from_fractions(result.beta):
-            raise ValueError("beta must be the exact recurrence coefficients")
-        return self
-
-
-# ---------------------------------------------------------------------------
-# Jacobi matrix
-# ---------------------------------------------------------------------------
-
-
-class JacobiMatrixRequest(StrictModel):
-    """Accept the canonical recurrence result (or raw coefficient tuples).
-
-    A serialized ``RecurrenceCoefficientsResult`` validates unchanged as
-    the request's ``alpha``/``beta`` payload; the extra producer fields
-    are tolerated so consumers compose without reattachment.
+    The determinant of an (order+1)-square rational matrix carries at most
+    roughly (order+1)^2 * H digits for H-digit entries; capping each
+    moment's height keeps it inside MAX_CANONICAL_RATIONAL_DIGITS.
     """
+    per_entry = MAX_CANONICAL_RATIONAL_DIGITS // ((order + 1) ** 2)
+    # A determinant reads 2r+1 consecutive moments; the shifted variant
+    # consumes mu_1..mu_(2r+1). Unconsumed moments must not prevent
+    # composition.
+    for value in moments[: 2 * order + 1]:
+        if RationalHeight.from_canonical(value).exceeds(max(per_entry - 2, 8)):
+            raise ValueError(
+                f"moment heights exceed the conservative {max(per_entry - 2, 8)}-digit "
+                f"bound for an exact order-{order} determinant"
+            )
 
-    alpha: tuple[CanonicalRational, ...] = Field(min_length=0)
-    beta: tuple[CanonicalRational, ...] = Field(min_length=1)
-    model_config = ConfigDict(extra="allow")
+
+def _require_gram_schmidt_heights_admissible(
+    moments: tuple[CanonicalRational, ...], max_degree: int
+) -> None:
+    """Bound moment heights BEFORE any exact projection runs.
+
+    Monic Gram-Schmidt expresses every derived coefficient and squared
+    norm through degree d as a ratio of determinants of at most (d+1)
+    -square Hankel matrices over the consumed moments mu_0..mu_2d (the
+    classical Cramer-rule form of the elimination). Scaling each row by
+    its denominator product bounds an s x s rational determinant's
+    numerator and denominator by 10**(s*(s+1)*B + s) when every entry
+    carries at most B digits, so bounding each moment by the quotient
+    below guarantees every derived value stays canonical. Degree 0
+    performs no elimination - its only derived value is mu_0 itself -
+    so it needs no input gate beyond canonality.
+    """
+    if max_degree == 0:
+        return
+    side = max_degree + 1
+    per_entry = (MAX_CANONICAL_RATIONAL_DIGITS - 2 * side) // (2 * side * (side + 1))
+    bound = max(per_entry, 8)
+    for value in moments[: 2 * max_degree + 1]:
+        if RationalHeight.from_canonical(value).exceeds(bound):
+            raise ValueError(
+                f"moment heights exceed the conservative {bound}-digit "
+                f"bound for exact degree-{max_degree} Gram-Schmidt; supply "
+                "a smaller or better-scaled moment prefix"
+            )
+
+
+class HankelRequest(StrictModel):
+    """Compute the Hankel matrix H_r from a moment prefix."""
+
+    prefix: MomentFunctionalPrefix
+    order: int = Field(ge=0, le=MAX_HANKEL_ORDER)
 
     @model_validator(mode="after")
-    def require_valid_coefficients(self) -> Self:
-        _validate_alpha_beta(self.alpha, self.beta)
+    def require_sufficient_moments(self) -> Self:
+        needed = 2 * self.order + 1
+        if len(self.prefix.moments) < needed:
+            raise ValueError(
+                f"need at least {needed} moments for order {self.order}, got {len(self.prefix.moments)}"
+            )
+        _require_determinant_representable(self.prefix.moments, self.order)
         return self
 
 
-class JacobiMatrixResult(JacobiMatrixRequest):
-    diagonal: tuple[CanonicalRational, ...]
-    off_diagonal: tuple[CanonicalRational, ...]
-    complete: Literal[True] = True
-    method: Literal["EXACT_TRIDIAGONAL_ASSEMBLY"] = "EXACT_TRIDIAGONAL_ASSEMBLY"
+class ShiftedHankelRequest(StrictModel):
+    """Compute the shifted Hankel matrix H_r^(1)[i,j] = mu_(i+j+1)."""
+
+    prefix: MomentFunctionalPrefix
+    # A shifted matrix of order r consumes mu_1..mu_(2r+1); the canonical
+    # prefix holds at most 65 moments, so r = 32 could never validate and
+    # must not be advertised as supported.
+    order: int = Field(ge=0, le=MAX_HANKEL_ORDER - 1)
 
     @model_validator(mode="after")
-    def bind_jacobi(self) -> Self:
-        from jacobian.math.moments_orthogonal.operations import jacobi_matrix
-
-        result = jacobi_matrix(_to_fractions(self.alpha), _to_fractions(self.beta))
-        if self.diagonal != _from_fractions(result.diagonal):
-            raise ValueError("diagonal must match the exact Jacobi diagonal")
-        if self.off_diagonal != _from_fractions(result.off_diagonal):
-            raise ValueError("off_diagonal must match the exact Jacobi off-diagonal")
+    def require_sufficient_moments(self) -> Self:
+        needed = 2 * self.order + 2
+        if len(self.prefix.moments) < needed:
+            raise ValueError(
+                f"need at least {needed} moments for shifted order {self.order}, got {len(self.prefix.moments)}"
+            )
+        # The shifted determinant consumes mu_1..mu_(2r+1); bound exactly
+        # that slice so det H_r^(1) stays canonical.
+        _require_determinant_representable(self.prefix.moments[1:], self.order)
         return self
 
 
-# ---------------------------------------------------------------------------
-# Christoffel-Darboux kernel
-# ---------------------------------------------------------------------------
+class OrthogonalPolynomialRequest(StrictModel):
+    """Compute monic orthogonal polynomials from moments."""
+
+    prefix: MomentFunctionalPrefix
+    max_degree: int = Field(ge=0, le=MAX_POLYNOMIAL_DEGREE)
+
+    @model_validator(mode="after")
+    def require_sufficient_moments(self) -> Self:
+        needed = 2 * self.max_degree + 1
+        if len(self.prefix.moments) < needed:
+            raise ValueError(
+                f"need at least {needed} moments for degree {self.max_degree}, got {len(self.prefix.moments)}"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def require_quasi_definite_prefix(self) -> Self:
+        """Replay the exact Gram-Schmidt kernel so a prefix whose orthogonal
+        family would hit a zero squared norm is rejected at the boundary
+        instead of failing inside execution.
+
+        The conservative height gate runs FIRST: without it, parsing would
+        perform every exact projection on unbounded intermediates before
+        discovering an over-tall family at wire construction. After the
+        gate, both this admission replay and the execution that follows it
+        operate on provably bounded intermediates with typed height checks.
+        """
+        _require_gram_schmidt_heights_admissible(self.prefix.moments, self.max_degree)
+        from jacobian.math.moments_orthogonal.operations import (
+            orthogonal_polynomials_from_moments,
+        )
+
+        orthogonal_polynomials_from_moments(
+            [_m.as_fraction() for _m in self.prefix.moments],
+            self.max_degree,
+            self.prefix.variable,
+        )
+        return self
+
+
+class RecurrenceRequest(StrictModel):
+    """Compute three-term recurrence coefficients from a family."""
+
+    family: OrthogonalPolynomialFamily
+
+    @model_validator(mode="after")
+    def require_quasi_definite_family(self) -> Self:
+        """The kernel divides by squared norms; a non-quasi-definite family
+        would leak ZeroDivisionError instead of a typed result. Admission
+        then replays the exact derivation so every emitted ratio is
+        height-checked here — a family such as h_0 = 10^-20000 with
+        h_1 = 10^20000 (beta_1 = 10^40000) fails parsing, not execution.
+        """
+        if not self.family.is_quasi_definite or any(
+            term.squared_norm.as_fraction() == 0 for term in self.family.polynomials
+        ):
+            raise ValueError(
+                "recurrence coefficients require a quasi-definite family "
+                "with nonzero squared norms"
+            )
+        from jacobian.math.moments_orthogonal.operations import compute_recurrence
+
+        compute_recurrence(self)
+        return self
 
 
 class ChristoffelDarbouxRequest(StrictModel):
-    """Accept the canonical recurrence result (or raw coefficient tuples)."""
+    """Compute the Christoffel-Darboux kernel."""
 
-    alpha: tuple[CanonicalRational, ...] = Field(min_length=0)
-    beta: tuple[CanonicalRational, ...] = Field(min_length=1)
-    x: CanonicalRational
-    y: CanonicalRational
-    model_config = ConfigDict(extra="allow")
+    family: OrthogonalPolynomialFamily
+    degree: int = Field(ge=0)
 
     @model_validator(mode="after")
-    def require_valid_coefficients(self) -> Self:
-        _validate_alpha_beta(self.alpha, self.beta)
-        require_bounded_rational(self.x, max_digits=MAX_RATIONAL_DIGITS, label="x")
-        require_bounded_rational(self.y, max_digits=MAX_RATIONAL_DIGITS, label="y")
-        # Christoffel-Darboux output growth: each monic recurrence step
-        # p_{k+1}(t) = (t - alpha_k) p_k(t) - beta_k p_{k-1}(t) raises the
-        # evaluated height by at most H = height(x/y) + height(alpha)
-        # + height(beta) + 2 digits, so p_k(t) has height at most k*H and,
-        # dividing by h_k = prod(beta), every kernel summand has height at
-        # most 2*k*H + (k+1)*height(beta). Summing all summands bounds the
-        # exact kernel; reject any admitted request whose worst case could
-        # exceed the canonical rational digit limit during execution.
-        point_height = max(_coefficient_height(self.x), _coefficient_height(self.y))
-        alpha_height = max((_coefficient_height(v) for v in self.alpha), default=1)
-        beta_height = max((_coefficient_height(v) for v in self.beta), default=1)
-        step = point_height + alpha_height + beta_height + 2
-        kernel_bound = sum(
-            2 * k * step + (k + 1) * beta_height + 2 for k in range(len(self.alpha))
-        )
-        if (
-            kernel_bound + len(str(max(len(self.alpha), 1)))
-            > MAX_CANONICAL_RATIONAL_DIGITS
-        ):
+    def require_degree_within_family(self) -> Self:
+        if self.degree >= len(self.family.polynomials):
             raise ValueError(
-                "Christoffel-Darboux coefficients exceed the conservative "
-                "combined order-and-height bound for an exact kernel"
+                f"kernel degree {self.degree} exceeds the supplied family "
+                f"of {len(self.family.polynomials)} polynomials"
             )
         return self
 
-
-class ChristoffelDarbouxResult(ChristoffelDarbouxRequest):
-    kernel: CanonicalRational
-    polynomials_evaluated: tuple[CanonicalRational, ...]
-    complete: Literal[True] = True
-    method: Literal["EXACT_CD_RECURRENCE"] = "EXACT_CD_RECURRENCE"
-
     @model_validator(mode="after")
-    def bind_christoffel_darboux(self) -> Self:
+    def require_nonzero_norms_through_degree(self) -> Self:
+        """The defining sum divides each p_k(x) p_k(y) term by h_k; only
+        norms through the requested degree are consumed and gate admission.
+        Admission then replays the bounded coefficient construction so an
+        over-tall kernel (e.g. p_1 = x + 10^17000 with unit norms at
+        degree 1, whose constant coefficient reaches 10^34000 + 1) fails
+        parsing instead of raising during execution.
+        """
+        for term in self.family.polynomials[: self.degree + 1]:
+            if term.squared_norm.as_fraction() == 0:
+                raise ValueError(
+                    f"Christoffel-Darboux kernel degree {self.degree} "
+                    f"requires nonzero squared norms through degree "
+                    f"{self.degree}, but p_{term.degree} has a vanishing norm"
+                )
         from jacobian.math.moments_orthogonal.operations import (
-            christoffel_darboux,
+            compute_christoffel_darboux,
         )
 
-        result = christoffel_darboux(
-            _to_fractions(self.alpha),
-            _to_fractions(self.beta),
-            self.x.as_fraction(),
-            self.y.as_fraction(),
-        )
-        if self.kernel != CanonicalRational.from_fraction(result.kernel):
-            raise ValueError("kernel must be the exact Christoffel-Darboux kernel")
-        if self.polynomials_evaluated != _from_fractions(result.polynomials_evaluated):
-            raise ValueError(
-                "polynomials_evaluated must match the evaluated polynomials"
-            )
+        compute_christoffel_darboux(self)
         return self
 
 
-# ---------------------------------------------------------------------------
-# Gaussian quadrature
-# ---------------------------------------------------------------------------
+class JacobiMatrixRequest(StrictModel):
+    """Compute the finite Jacobi matrix."""
+
+    family: OrthogonalPolynomialFamily
+
+    @model_validator(mode="after")
+    def require_representable_recurrence(self) -> Self:
+        """Pre-computation height bound on the derived recurrence entries.
+
+        Every derived alpha is a difference of admitted family
+        coefficients, but representable coefficients do not imply a
+        representable difference; each derived beta is an adjacent-norm
+        ratio h_k / h_{k-1}: a vanishing norm makes the ratio undefined
+        and a representable pair can still exceed the canonical result
+        height. Reject such families here so every accepted request can
+        return its declared result.
+        """
+        from fractions import Fraction
+
+        polys = self.family.polynomials
+        # A canonical rational carries at most MAX_CANONICAL_RATIONAL_DIGITS
+        # digits, i.e. its absolute value stays below 10**that limit.
+        digit_limit = 10**MAX_CANONICAL_RATIONAL_DIGITS
+        # Derived alphas: alpha_0 = -p_1's constant term; for k >= 1 the
+        # residual x*p_k - p_{k+1} carries alpha_k on p_k. Each emitted
+        # entry must stay canonical before the operation converts it.
+        for k in range(len(polys) - 1):
+            p_k = [c.as_fraction() for c in polys[k].coefficients]
+            p_next = [c.as_fraction() for c in polys[k + 1].coefficients]
+            if k == 0:
+                alpha_k = -p_next[0]
+            else:
+                x_pk = [Fraction(0)] * (len(p_k) + 1)
+                for i, coefficient in enumerate(p_k):
+                    x_pk[i + 1] = coefficient
+                residual = [
+                    (x_pk[i] - p_next[i]) if i < len(p_next) else x_pk[i]
+                    for i in range(len(x_pk))
+                ]
+                alpha_k = residual[k] if k < len(residual) else Fraction(0)
+            if (
+                abs(alpha_k.numerator) >= digit_limit
+                or alpha_k.denominator >= digit_limit
+            ):
+                raise ValueError(
+                    f"derived recurrence entry alpha_{k} exceeds the "
+                    "canonical rational digit limit; supply a family whose "
+                    "coefficient differences stay representable"
+                )
+        # The operation derives norm ratios h_k/h_{k-1} only for the
+        # interior steps that actually appear in the (n-1)-dimensional
+        # matrix; terminal ratios are never emitted and must not gate
+        # admission.
+        for k in range(1, len(polys) - 1):
+            h_k = polys[k].squared_norm.as_fraction()
+            h_prev = polys[k - 1].squared_norm.as_fraction()
+            if h_prev == 0 or h_k == 0:
+                raise ValueError(
+                    f"adjacent-norm ratio beta_{k} is undefined because "
+                    f"squared norm h_{k - 1 if h_prev == 0 else k} vanishes; "
+                    "supply a family with nonzero norms for every emitted ratio"
+                )
+            ratio = h_k / h_prev
+            if abs(ratio.numerator) >= digit_limit or ratio.denominator >= digit_limit:
+                raise ValueError(
+                    f"adjacent-norm ratio beta_{k} exceeds the canonical "
+                    "rational digit limit; supply a family whose squared "
+                    "norm ratios stay representable"
+                )
+        return self
 
 
 class GaussianQuadratureRequest(StrictModel):
-    """Accept the canonical recurrence result (or raw coefficient tuples)."""
+    """Compute an exact Gaussian quadrature rule."""
 
-    alpha: tuple[CanonicalRational, ...] = Field(min_length=1)
-    beta: tuple[CanonicalRational, ...] = Field(min_length=1)
-    model_config = ConfigDict(extra="allow")
+    prefix: MomentFunctionalPrefix
+    order: int = Field(ge=1, le=16)
 
     @model_validator(mode="after")
-    def require_valid_coefficients(self) -> Self:
-        if not 1 <= len(self.alpha) <= MAX_QUADRATURE_POINTS:
-            raise ValueError("alpha must contain between 1 and 16 entries")
-        if len(self.beta) != len(self.alpha) and len(self.beta) != len(self.alpha) + 1:
-            raise ValueError("beta must have length len(alpha) or len(alpha)+1")
-        beta_zero = self.beta[0].as_fraction()
-        if beta_zero <= 0:
+    def require_sufficient_moments(self) -> Self:
+        # The conservative Gram-Schmidt height gate runs BEFORE any exact
+        # projection: without it, a single schema-valid payload such as
+        # mu_0 = 10^-32767 with mu_1 = 10^32767 forces enormous exact
+        # backend work during parsing before the derived-node check fires.
+        _require_gram_schmidt_heights_admissible(self.prefix.moments, self.order)
+        # Building p_order projects only onto earlier polynomials, so the
+        # Gram-Schmidt kernel and the Vandermonde weight solve consume
+        # moments through mu_(2n-1) exactly; execution verifies exactness
+        # through degree 2n-1, so 2n moments are both sufficient and
+        # required.
+        needed = 2 * self.order
+        if len(self.prefix.moments) < needed:
             raise ValueError(
-                "beta_0 (the zeroth moment of a positive functional) must be positive"
+                f"need at least {needed} moments for quadrature order {self.order}, got {len(self.prefix.moments)}"
             )
-        # Golub-Welsch converts beta_0 to a double to scale the weights; a
-        # value below the double subnormal range converts to 0.0 and would
-        # return all-zero weights, silently breaking sum(weights) = mu_0.
-        if beta_zero < MIN_QUADRATURE_SUBDIAGONAL:
-            raise ValueError("beta_0 falls below the quadrature underflow bound")
-        # Subdiagonal entries feed math.sqrt after float conversion; they must
-        # be positive and safely inside the finite IEEE-double range, and the
-        # diagonal and mu_0 must convert to finite doubles without overflow.
-        for index in range(1, min(len(self.alpha), len(self.beta))):
-            sub = self.beta[index].as_fraction()
-            if sub <= 0:
-                raise ValueError(
-                    "subdiagonal beta entries must be positive squared-norm ratios"
-                )
-            if sub < MIN_QUADRATURE_SUBDIAGONAL:
-                raise ValueError(
-                    "subdiagonal beta entries fall below the quadrature underflow bound"
-                )
-        for value in (*self.alpha, *self.beta):
-            require_bounded_rational(
-                value, max_digits=MAX_RATIONAL_DIGITS, label="coefficient"
-            )
-            if abs(value.as_fraction()) > MAX_QUADRATURE_MAGNITUDE:
-                raise ValueError(
-                    "quadrature coefficients exceed the finite-float magnitude bound"
-                )
         return self
 
-
-class GaussianQuadratureResult(GaussianQuadratureRequest):
-    nodes: tuple[CanonicalRational, ...]
-    weights: tuple[CanonicalRational, ...]
-    complete: Literal[True] = True
-    method: Literal["GOLUB_WELSCH_FLOAT64_APPROX"] = "GOLUB_WELSCH_FLOAT64_APPROX"
-    is_approximate: Literal[True] = True
-    precision: Literal["FLOAT64"] = "FLOAT64"
-    exactness: Literal["APPROXIMATE_DYADIC"] = "APPROXIMATE_DYADIC"
-
     @model_validator(mode="after")
-    def bind_gaussian_quadrature(self) -> Self:
+    def require_rational_nodes(self) -> Self:
+        """Admit only prefixes whose degree-n orthogonal polynomial splits
+        into distinct linear factors over QQ.
+
+        The exact-node contract carries canonical rationals; algebraic
+        nodes such as +-sqrt(1/3) cannot be represented, so such prefixes
+        are rejected here instead of failing during execution. Gaussian
+        construction divides by norms only through p_{n-1}, so a vanishing
+        terminal norm (a measure supported on exactly n points) stays
+        admissible.
+        """
+        from fractions import Fraction
+
+        import sympy
+
         from jacobian.math.moments_orthogonal.operations import (
-            gaussian_quadrature,
+            _build_quadrature_rule,
+            _construct_monic_orthogonal_polynomial,
+            _fraction_exceeds_canonical_limit,
         )
 
-        result = gaussian_quadrature(
-            _to_fractions(self.alpha), _to_fractions(self.beta)
-        )
-        if self.nodes != _from_fractions(result.nodes):
-            raise ValueError("nodes must match the Golub-Welsch eigenvalues")
-        if self.weights != _from_fractions(result.weights):
-            raise ValueError("weights must match the Golub-Welsch weights")
+        moments = [Fraction(*v.as_integer_ratio()) for v in self.prefix.moments]
+        coefficients = _construct_monic_orthogonal_polynomial(moments, self.order)
+        x = sympy.Symbol(self.prefix.variable)
+        poly = sum(coefficient * x**i for i, coefficient in enumerate(coefficients))
+        _, factors = sympy.factor_list(poly)
+        if any(
+            sympy.degree(factor, x) != 1 or multiplicity != 1
+            for factor, multiplicity in factors
+        ):
+            raise ValueError(
+                f"quadrature order {self.order} requires p_{self.order} to "
+                "split into distinct linear factors over QQ so every node "
+                "is an exact rational; this moment prefix yields algebraic "
+                "or repeated nodes"
+            )
+        # Positive weights are part of the declared contract; replay the
+        # exact construction so a nonpositive weight is rejected here
+        # instead of raising during execution.
+        _nodes, weights = _build_quadrature_rule(self.prefix, self.order)
+        # Derived nodes and weights can leave the canonical range even when
+        # every input moment stays inside it; measure the exact Fractions
+        # before execution converts them.
+        if any(
+            _fraction_exceeds_canonical_limit(value) for value in (*_nodes, *weights)
+        ):
+            raise ValueError(
+                "derived quadrature nodes or weights exceed the canonical "
+                "rational digit limit; supply a moment prefix whose exact "
+                "rule stays representable"
+            )
+        if any(weight <= 0 for weight in weights):
+            raise ValueError(
+                "quadrature admission requires strictly positive weights; "
+                "this moment prefix yields a nonpositive weight"
+            )
         return self
 
 
 __all__ = [
     "ChristoffelDarbouxRequest",
-    "ChristoffelDarbouxResult",
     "GaussianQuadratureRequest",
-    "GaussianQuadratureResult",
-    "HankelMatrixRequest",
-    "HankelMatrixResult",
+    "HankelRequest",
     "JacobiMatrixRequest",
-    "JacobiMatrixResult",
-    "RecurrenceCoefficientsRequest",
-    "RecurrenceCoefficientsResult",
+    "OrthogonalPolynomialRequest",
+    "RecurrenceRequest",
+    "ShiftedHankelRequest",
 ]
+
+
+MomentFunctionalPrefix.model_rebuild()
+HankelRequest.model_rebuild()
+ShiftedHankelRequest.model_rebuild()
+OrthogonalPolynomialRequest.model_rebuild()
+ChristoffelDarbouxRequest.model_rebuild()
+GaussianQuadratureRequest.model_rebuild()

@@ -8,6 +8,11 @@
       "complexity": 12
     },
     {
+      "path": "src/jacobian/math/geometry/exact/_models.py",
+      "symbol": "require_consistent_profile",
+      "complexity": 30
+    },
+    {
       "path": "src/jacobian/math/graphs/decomposition/_operations.py",
       "symbol": "_find_next_ear",
       "complexity": 12

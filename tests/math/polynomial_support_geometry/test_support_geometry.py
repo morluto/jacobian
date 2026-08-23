@@ -510,9 +510,7 @@ class TestSupportValueInvariants:
 
         unit = CanonicalRational(num="1", den="1")
         for exponent in (-1, 40000):
-            with pytest.raises(
-                ValidationError, match="canonical polynomial domain"
-            ):
+            with pytest.raises(ValidationError, match="canonical polynomial domain"):
                 PolynomialSupport(
                     is_zero=False,
                     term_count=1,

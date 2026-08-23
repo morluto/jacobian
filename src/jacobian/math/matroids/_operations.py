@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from jacobian.math.matroids._models import LinearMatroid
+from jacobian.math.matroids._models import (
+    LinearMatroid,
+    validate_subset_indices,
+)
 from jacobian.math.prime_field_linear_algebra import (
     PrimeFieldMatrix,
 )
@@ -56,5 +59,10 @@ def _closure_invariant(
 def compute_matroid_closure(
     matroid: LinearMatroid, subset: list[int]
 ) -> tuple[tuple[int, ...], int]:
-    """Public native entry: exact closure and subset rank."""
+    """Public native entry: exact closure and subset rank.
+
+    Applies the same subset admission as the wire request so negative or
+    out-of-range indices never reach the kernel through Python indexing.
+    """
+    validate_subset_indices(matroid, subset)
     return _closure_invariant(matroid, subset)

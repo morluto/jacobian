@@ -67,9 +67,32 @@ class LinearMatroid(StrictModel):
                 )
         return data
 
+    @model_validator(mode="after")
+    def require_bounded_ground_set(self) -> Self:
+        if self.matrix.columns > MAX_GROUND_SIZE:
+            raise ValueError(
+                f"ground set must hold at most {MAX_GROUND_SIZE} elements, "
+                f"got {self.matrix.columns}"
+            )
+        return self
+
     @property
     def ground_size(self) -> int:
         return self.matrix.columns
+
+
+def validate_subset_indices(matroid: LinearMatroid, subset: Any) -> None:
+    """Shared closure-subset admission: in-range and distinct indices.
+
+    Used by both the wire request model and the native entry point so a
+    direct kernel call can never admit indices the wire path rejects
+    (negative indexing must not select columns).
+    """
+    for idx in subset:
+        if not (0 <= idx < matroid.ground_size):
+            raise ValueError("subset indices must be in 0..n-1")
+    if len(set(subset)) != len(subset):
+        raise ValueError("subset indices must be distinct")
 
 
 class MatroidClosureRequest(StrictModel):
@@ -80,11 +103,7 @@ class MatroidClosureRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_subset(self) -> Self:
-        for idx in self.subset:
-            if not (0 <= idx < self.matroid.ground_size):
-                raise ValueError("subset indices must be in 0..n-1")
-        if len(set(self.subset)) != len(self.subset):
-            raise ValueError("subset indices must be distinct")
+        validate_subset_indices(self.matroid, self.subset)
         return self
 
 
@@ -114,4 +133,5 @@ __all__ = [
     "LinearMatroid",
     "MatroidClosureRequest",
     "MatroidClosureResult",
+    "validate_subset_indices",
 ]

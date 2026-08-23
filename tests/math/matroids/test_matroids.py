@@ -44,6 +44,27 @@ class TestLinearMatroidRepresentation:
                 {"matrix": {"prime": 2**9941 - 1, "entries": [], "columns": 0}}
             )
 
+    def test_ground_set_beyond_cap_rejected(self):
+        """A 33-column matrix is rejected even though the shared kernel
+        admits up to 256 columns: the advertised envelope is 32 elements."""
+        from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
+
+        oversized_matrix = {
+            "prime": 5,
+            "entries": [(0,) * 33],
+            "columns": 33,
+        }
+        with pytest.raises(ValidationError, match="at most 32"):
+            LinearMatroid(
+                matrix=PrimeFieldMatrix(**oversized_matrix)
+            )
+        payload = {
+            "matroid": {"matrix": oversized_matrix},
+            "subset": [],
+        }
+        with pytest.raises(ValidationError, match="at most 32"):
+            MatroidClosureRequest.model_validate(payload)
+
     def test_empty_matroid_admitted(self):
         """The empty ground set with a preserved row axis is representable."""
         m = LinearMatroid.model_validate(
@@ -82,6 +103,16 @@ class TestClosure:
         m = _matroid(5, [(1, 0), (0, 1)], 2)
         with pytest.raises(ValidationError, match=r"0\.\.n-1"):
             MatroidClosureRequest(matroid=m, subset=(2,))
+
+    def test_native_closure_validates_indices(self):
+        """The native entry point applies the wire subset admission."""
+        m = _matroid(5, [(1, 0), (0, 1)], 2)
+        with pytest.raises(ValueError, match=r"0\.\.n-1"):
+            compute_matroid_closure(m, [-1])
+        with pytest.raises(ValueError, match=r"0\.\.n-1"):
+            compute_matroid_closure(m, [2])
+        with pytest.raises(ValueError, match="distinct"):
+            compute_matroid_closure(m, [0, 0])
 
     def test_forged_closure_rejected(self):
         m = _matroid(5, [(1, 0, 1), (0, 1, 1)], 3)

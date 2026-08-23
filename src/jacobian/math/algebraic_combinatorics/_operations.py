@@ -81,6 +81,7 @@ def compute_rsk_permutation(request: RSKPermutationRequest) -> RSKResult:
         shape=IntegerPartition(parts=shape),
         lis_length=lis_length,
         lds_length=lds_length,
+        convention=request.convention,
     )
 
 

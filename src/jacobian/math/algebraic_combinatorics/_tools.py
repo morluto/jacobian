@@ -132,9 +132,13 @@ ALGEBRAIC_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "rsk_permutation_132",
                 "Compute RSK of permutation (1, 3, 2); "
                 "input must be a permutation of 1..n.",
-                {"permutation": [1, 3, 2]},
+                {
+                    "permutation": [1, 3, 2],
+                    "convention": "ROW_INSERTION_RSK_V1",
+                },
             ),
         ),
+        version="2",
     ),
     ac_operation(
         "tableau.rsk.word.compute",

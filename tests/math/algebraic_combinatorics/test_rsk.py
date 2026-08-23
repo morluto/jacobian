@@ -11,6 +11,17 @@ from jacobian.math.algebraic_combinatorics._operations import compute_rsk_permut
 
 
 class TestRSK:
+    def test_request_and_result_publish_the_row_insertion_convention(self) -> None:
+        request_schema = RSKPermutationRequest.model_json_schema()
+        result_schema = RSKResult.model_json_schema()
+        assert (
+            request_schema["properties"]["convention"]["const"]
+            == "ROW_INSERTION_RSK_V1"
+        )
+        assert (
+            result_schema["properties"]["convention"]["const"] == "ROW_INSERTION_RSK_V1"
+        )
+
     def test_empty(self) -> None:
         result = compute_rsk_permutation(RSKPermutationRequest(permutation=()))
         assert result.permutation == ()
@@ -19,6 +30,7 @@ class TestRSK:
         assert result.q_tableau.rows == ()
         assert result.lis_length == 0
         assert result.lds_length == 0
+        assert result.convention == "ROW_INSERTION_RSK_V1"
 
     def test_identity(self) -> None:
         result = compute_rsk_permutation(

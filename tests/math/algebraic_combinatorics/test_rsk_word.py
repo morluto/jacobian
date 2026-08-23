@@ -9,6 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.admission import AdmissionDecision
+from jacobian.catalog.catalog import Catalog
 from jacobian.math import algebraic_combinatorics
 from jacobian.math.algebraic_combinatorics import (
     inverse_row_insertion_rsk,
@@ -186,25 +187,16 @@ def test_permutation_operation_agrees_with_word_specialization() -> None:
 
 
 def test_permutation_inversion_swaps_the_tableaux() -> None:
-    alphabet = ("1", "2", "3", "4")
     for permutation in itertools.permutations(range(1, 5)):
         inverse = [0] * len(permutation)
         for position, value in enumerate(permutation, start=1):
             inverse[value - 1] = position
-        pair = _pair(
-            FiniteWord(
-                alphabet=alphabet,
-                letters=tuple(str(entry) for entry in permutation),
-            )
+        pair = compute_rsk_permutation(RSKPermutationRequest(permutation=permutation))
+        inverse_pair = compute_rsk_permutation(
+            RSKPermutationRequest(permutation=tuple(inverse))
         )
-        inverse_pair = _pair(
-            FiniteWord(
-                alphabet=alphabet,
-                letters=tuple(str(entry) for entry in inverse),
-            )
-        )
-        assert pair.insertion_tableau.rows == inverse_pair.recording_tableau.rows
-        assert pair.recording_tableau.rows == inverse_pair.insertion_tableau.rows
+        assert pair.p_tableau == inverse_pair.q_tableau
+        assert pair.q_tableau == inverse_pair.p_tableau
 
 
 def test_structurally_incompatible_pairs_fail_before_reverse_insertion() -> None:
@@ -312,6 +304,10 @@ def test_public_operations_are_admitted_and_examples_execute() -> None:
     tools = {tool.operation_id: tool for tool in TOOLS}
     decisions = {admission.operation_id: admission.decision for admission in ADMISSIONS}
     assert public_ids <= tools.keys()
+    assert tools["combinatorics.rsk.permutation.compute"].version == "2"
+    descriptor = Catalog.open().inspect("combinatorics.rsk.permutation.compute")
+    assert descriptor is not None
+    assert descriptor.version == "2"
     assert all(
         decisions[operation_id] is AdmissionDecision.KEEP for operation_id in public_ids
     )

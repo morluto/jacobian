@@ -86,6 +86,7 @@ class RSKPermutationRequest(StrictModel):
     permutation: tuple[StrictInt, ...] = Field(
         min_length=0, max_length=MAX_RSK_PERMUTATION_LENGTH
     )
+    convention: RSKConvention = "ROW_INSERTION_RSK_V1"
 
     @model_validator(mode="after")
     def require_valid_permutation(self) -> Self:
@@ -110,7 +111,7 @@ class RSKResult(StrictModel):
     shape: IntegerPartition
     lis_length: StrictInt = Field(ge=0, le=MAX_RSK_PERMUTATION_LENGTH)
     lds_length: StrictInt = Field(ge=0, le=MAX_RSK_PERMUTATION_LENGTH)
-    method: Literal["ROW_INSERTION_RSK_V1"] = "ROW_INSERTION_RSK_V1"
+    convention: RSKConvention = "ROW_INSERTION_RSK_V1"
 
     @model_validator(mode="after")
     def replay_permutation_rsk(self) -> Self:

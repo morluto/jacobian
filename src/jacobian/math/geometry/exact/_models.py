@@ -21,6 +21,18 @@ COORDINATE_DIGITS = 256
 MAX_QUADRUPLE_SEARCH_POINTS = 18
 """Cap on configuration size for C(n,4) quadruple enumeration (3060 subsets)."""
 
+# A collinear search over n points must be able to return every C(n,3)
+# witness triple in one bounded math.run response.  The complete witness set
+# for an all-collinear configuration is the worst case, so the point cap is
+# derived from a fixed witness budget: each index triple serializes to at
+# most 12 bytes of compact JSON, and C(40,3) = 9,880 triples stay under
+# 120 KB.  Larger collinear searches are rejected at request admission.
+MAX_COLLINEAR_SEARCH_POINTS = 40
+"""Collinear-search point cap derived from the fixed C(40,3) witness budget."""
+
+COLLINEAR_WITNESS_BUDGET = 9880
+"""Maximum complete collinear witness count: C(40,3) index triples."""
+
 INCIDENCE_COORDINATE_DIGITS = 256
 """Conservative per-coordinate digit bound; keeps 10k-quadruple Fractions bounded."""
 _INCIDENCE_INPUT_HEIGHT = INCIDENCE_COORDINATE_DIGITS // 4
@@ -194,35 +206,117 @@ class DistanceGraphResult(StrictModel):
     edges: tuple[tuple[int, int], ...]
 
 
+IncidenceBoundedInteger = Annotated[
+    str,
+    StringConstraints(
+        pattern=rf"^(?:0|-?[1-9][0-9]{{0,{_INCIDENCE_INPUT_HEIGHT - 1}}})$",
+        strict=True,
+        max_length=_INCIDENCE_INPUT_HEIGHT + 1,
+    ),
+]
+"""Canonical signed integer whose magnitude carries at most 64 digits.
+
+The bound is published as a standard JSON Schema ``pattern``/``maxLength`` so
+over-cap coordinate components are rejected at string validation, before any
+nested ``CanonicalRational`` parses, reduces, or reformats them.
+"""
+
+IncidenceBoundedDenominator = Annotated[
+    str,
+    StringConstraints(
+        pattern=rf"^[1-9][0-9]{{0,{_INCIDENCE_INPUT_HEIGHT - 1}}}$",
+        strict=True,
+        max_length=_INCIDENCE_INPUT_HEIGHT,
+    ),
+]
+"""Canonical positive denominator whose magnitude carries at most 64 digits."""
+
+
+class IncidenceBoundedRational(CanonicalRational):
+    """A canonical rational bounded to the incidence-search 64-digit height.
+
+    Operation-local view of the shared ``CanonicalRational``: the shared type
+    keeps its global 32,768-digit limit, while this subclass publishes the
+    incidence admission cap as enforceable JSON Schema constraints so the
+    arithmetic bound fires during field validation, before expansion.
+    ``from_attributes`` lets callers supply existing canonical values
+    unchanged; over-cap components are rejected before parsing.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    num: IncidenceBoundedInteger = Field(
+        description=(
+            "Canonical decimal numerator; at most "
+            f"{_INCIDENCE_INPUT_HEIGHT} digits for incidence-search admission."
+        ),
+        examples=["1"],
+    )
+    den: IncidenceBoundedDenominator = Field(
+        description=(
+            "Positive canonical decimal denominator, reduced, integers use "
+            f"den='1'; at most {_INCIDENCE_INPUT_HEIGHT} digits."
+        ),
+        examples=["2"],
+    )
+
+
+class IncidencePoint(LabelledRationalPoint):
+    """A labelled point whose coordinates carry the incidence digit cap."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    coordinates: tuple[IncidenceBoundedRational, ...] = Field(min_length=1)
+
+
+class IncidencePointConfiguration(PointConfiguration):
+    """A configuration whose points carry the incidence digit cap.
+
+    Operation-local view of the shared ``PointConfiguration`` with identical
+    wire shape; over-cap coordinates are rejected by standard JSON Schema
+    constraints before any mathematical work or nested rational expansion.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    points: tuple[IncidencePoint, ...] = Field(min_length=2, max_length=MAX_POINTS)
+
+
 class CollinearTriplesRequest(StrictModel):
     """Search a planar configuration for collinear triples.
 
-    The configuration must be planar with 3..64 points (the sibling
+    The configuration must be planar with 3..40 points (the sibling
     concyclic search admits 4..18 points under a joint work budget) and
     each coordinate must stay within the 64-digit operation-specific bound
     so that enumeration with huge Fractions stays bounded; see the
-    validator for the precise bound.
+    validator for the precise bound.  The point cap keeps the complete
+    worst-case witness set C(40,3) = 9,880 triples inside one bounded
+    response.
     """
 
     model_config = ConfigDict(
         json_schema_extra={
             "description": (
                 "Search a planar configuration for collinear triples. "
-                "Requires a planar configuration with 3..64 points whose "
+                "Requires a planar configuration with 3..40 points whose "
                 "coordinates are pairwise distinct (no repeated coordinate "
                 "pairs, even under distinct labels); each coordinate must "
                 "stay within the 64-digit operation-specific bound so "
-                "enumeration stays bounded."
+                "enumeration stays bounded.  The 40-point bound keeps the "
+                "complete worst-case witness set C(40,3) = 9,880 triples "
+                "inside one bounded response."
             )
         }
     )
 
-    configuration: PointConfiguration = Field(
+    configuration: IncidencePointConfiguration = Field(
         description=(
-            "Planar point configuration with 3..64 points with pairwise "
+            "Planar point configuration with 3..40 points with pairwise "
             "distinct coordinates; 4..18 points for the sibling concyclic "
             "search. Each coordinate is bounded to 64 digits so that all "
-            "exact determinants stay representable."
+            "exact determinants stay representable.  The point count is "
+            "capped so the complete witness set C(n,3) stays within one "
+            "bounded response."
         )
     )
 
@@ -237,6 +331,13 @@ class CollinearTriplesRequest(StrictModel):
         # boundary so the search scope is exact.
         if len(self.configuration.points) < 3:
             raise ValueError("collinear-triple search requires at least three points")
+        if len(self.configuration.points) > MAX_COLLINEAR_SEARCH_POINTS:
+            raise ValueError(
+                "collinear-triple search exceeds the "
+                f"{MAX_COLLINEAR_SEARCH_POINTS}-point enumeration bound "
+                f"(C({MAX_COLLINEAR_SEARCH_POINTS},3) = {COLLINEAR_WITNESS_BUDGET} "
+                "witness triples); reduce the point count"
+            )
         for idx, point in enumerate(self.configuration.points):
             for dim, coord in enumerate(point.coordinates):
                 _bounded_incidence_coordinate(coord, f"point {idx} coordinate {dim}")
@@ -270,7 +371,7 @@ class ConcyclicQuadruplesRequest(StrictModel):
         }
     )
 
-    configuration: PointConfiguration = Field(
+    configuration: IncidencePointConfiguration = Field(
         description=(
             "Planar point configuration with 4..18 points with pairwise "
             "distinct coordinates; the enumeration covers every unordered "
@@ -311,13 +412,21 @@ class IncidenceSearchResult(StrictModel):
     completeness of the reported incidence set.
     """
 
-    configuration: PointConfiguration
+    configuration: IncidencePointConfiguration
     dimension: int = Field(ge=2, le=2)
-    point_count: int = Field(ge=3, le=64)
+    point_count: int = Field(ge=3, le=MAX_COLLINEAR_SEARCH_POINTS)
     holds: bool = Field(
         description="True iff at least one witness incidence exists.",
     )
-    witnesses: tuple[tuple[int, ...], ...] = Field(default=())
+    witnesses: tuple[tuple[int, ...], ...] = Field(
+        default=(),
+        max_length=COLLINEAR_WITNESS_BUDGET,
+        description=(
+            "Complete canonically ordered witness set; capped at "
+            f"C({MAX_COLLINEAR_SEARCH_POINTS},3) = {COLLINEAR_WITNESS_BUDGET} "
+            "triples so one response stays bounded."
+        ),
+    )
     kind: Literal["COLLINEAR_TRIPLE", "CONCYCLIC_QUADRUPLE"]
 
     @model_validator(mode="after")

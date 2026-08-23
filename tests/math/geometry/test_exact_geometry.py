@@ -4,8 +4,11 @@ from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.geometry.exact._models import (
     COORDINATE_DIGITS,
+    CollinearTriplesRequest,
+    ConcyclicQuadruplesRequest,
     DistanceGraphRequest,
     DistanceProfileRequest,
+    IncidenceSearchResult,
     LabelledRationalPoint,
     PinnedLineDistanceRequest,
     PinnedLineDistanceResult,
@@ -1186,7 +1189,7 @@ class TestIncidenceDistinctCoordinatesAndCap:
             LabelledRationalPoint(label="b", coordinates=(_cr(0), _cr(1))),
             LabelledRationalPoint(label="c", coordinates=(_cr(1), _cr(1))),
         )
-        with pytest.raises(ValidationError, match="point 0 coordinate 0"):
+        with pytest.raises(ValidationError) as excinfo:
             IncidenceSearchResult(
                 configuration=PointConfiguration(points=points),
                 dimension=2,
@@ -1195,6 +1198,16 @@ class TestIncidenceDistinctCoordinatesAndCap:
                 witnesses=(),
                 kind="COLLINEAR_TRIPLE",
             )
+        # Rejected at the component string constraint, before expansion.
+        assert excinfo.value.errors()[0]["type"] == "string_too_long"
+        assert excinfo.value.errors()[0]["loc"] == (
+            "configuration",
+            "points",
+            0,
+            "coordinates",
+            0,
+            "num",
+        )
 
 
 class TestConcyclicWorkBound:
@@ -1404,3 +1417,235 @@ class TestIncidenceWitnessCanonicalOrder:
                 witnesses=tuple(permuted),
                 kind="COLLINEAR_TRIPLE",
             )
+
+
+class TestCollinearWitnessBudget:
+    def test_request_above_witness_budget_cap_rejected(self):
+        """41+ point configurations are rejected at admission because the
+        worst-case complete witness set C(n,3) would exceed one bounded
+        response (review: bound the collinear witness result)."""
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import (
+            CollinearTriplesRequest,
+            LabelledRationalPoint,
+            PointConfiguration,
+        )
+
+        labelled = tuple(
+            LabelledRationalPoint(
+                label=f"P{idx}",
+                coordinates=(
+                    CanonicalRational(num=str(idx), den="1"),
+                    CanonicalRational(num="0", den="1"),
+                ),
+            )
+            for idx in range(41)
+        )
+        configuration = PointConfiguration(points=labelled)
+        with pytest.raises(ValidationError, match="enumeration bound"):
+            CollinearTriplesRequest(configuration=configuration)
+
+    def test_result_schema_publishes_witness_cardinality_cap(self):
+        schema = IncidenceSearchResult.model_json_schema()
+        assert schema["properties"]["witnesses"].get("maxItems") == 9880
+        assert schema["properties"]["point_count"]["maximum"] == 40
+
+    def test_boundary_forty_point_request_admitted(self):
+        from jacobian.math.geometry.exact._models import (
+            CollinearTriplesRequest,
+            LabelledRationalPoint,
+            PointConfiguration,
+        )
+
+        labelled = tuple(
+            LabelledRationalPoint(
+                label=f"P{idx}",
+                coordinates=(
+                    CanonicalRational(num=str(idx), den="1"),
+                    CanonicalRational(num=str(idx * idx), den="1"),
+                ),
+            )
+            for idx in range(40)
+        )
+        request = CollinearTriplesRequest(
+            configuration=PointConfiguration(points=labelled)
+        )
+        assert len(request.configuration.points) == 40
+
+
+class TestIncidenceDigitCapFiresBeforeRationalExpansion:
+    """The 64-digit incidence coordinate cap must reject over-cap component
+    strings at field validation, before nested CanonicalRational values parse,
+    reduce, and reformat up to 32,768-digit components (review thread:
+    enforce the digit cap before nested rational validation)."""
+
+    @staticmethod
+    def _overcap_points():
+        return [
+            {
+                "label": chr(ord("a") + i),
+                "coordinates": [
+                    {"num": "9" * (100 + i), "den": "1"},
+                    {"num": str(i), "den": "1"},
+                ],
+            }
+            for i in range(4)
+        ]
+
+    def test_collinear_request_rejects_at_component_field_level(self):
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError) as excinfo:
+            CollinearTriplesRequest.model_validate(
+                {"configuration": {"points": self._overcap_points()}}
+            )
+        errors = excinfo.value.errors()
+        component_errors = [e for e in errors if len(e["loc"]) == 6]
+        assert component_errors, errors
+        assert all(
+            e["type"] in ("string_too_long", "string_pattern_mismatch")
+            for e in component_errors
+        )
+        # The after-validator admission message must never appear: rejection
+        # happened during string validation, before any rational expansion.
+        assert not any("64-digit" in e["msg"] for e in errors)
+
+    def test_concyclic_request_rejects_at_component_field_level(self):
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError) as excinfo:
+            ConcyclicQuadruplesRequest.model_validate(
+                {"configuration": {"points": self._overcap_points()}}
+            )
+        component_errors = [e for e in excinfo.value.errors() if len(e["loc"]) == 6]
+        assert component_errors
+        assert component_errors[0]["loc"] == (
+            "configuration",
+            "points",
+            0,
+            "coordinates",
+            0,
+            "num",
+        )
+
+    def test_forged_result_rejects_before_replay(self):
+        import pytest
+        from pydantic import ValidationError
+
+        payload = {
+            "configuration": {
+                "points": [
+                    {
+                        "label": "a",
+                        "coordinates": [
+                            {"num": "9" * 100, "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                    },
+                    {
+                        "label": "b",
+                        "coordinates": [
+                            {"num": "8" + "0" * 63, "den": "1"},
+                            {"num": "1", "den": "1"},
+                        ],
+                    },
+                    {
+                        "label": "c",
+                        "coordinates": [
+                            {"num": "7" + "0" * 63, "den": "1"},
+                            {"num": "2", "den": "1"},
+                        ],
+                    },
+                ]
+            },
+            "dimension": 2,
+            "point_count": 3,
+            "holds": False,
+            "witnesses": [],
+            "kind": "COLLINEAR_TRIPLE",
+        }
+        with pytest.raises(ValidationError) as excinfo:
+            IncidenceSearchResult.model_validate(payload)
+        assert excinfo.value.errors()[0]["type"] == "string_too_long"
+
+    def test_schema_publishes_enforceable_component_bounds(self):
+        from jacobian.math.geometry.exact._models import _INCIDENCE_INPUT_HEIGHT
+
+        schema = CollinearTriplesRequest.model_json_schema()
+        rational_def = schema["$defs"]["IncidenceBoundedRational"]
+        num = rational_def["properties"]["num"]
+        den = rational_def["properties"]["den"]
+        assert num["maxLength"] == _INCIDENCE_INPUT_HEIGHT + 1
+        assert den["maxLength"] == _INCIDENCE_INPUT_HEIGHT
+        assert "{0,63}" in num["pattern"]
+        point_ref = schema["$defs"]["IncidencePointConfiguration"]["properties"][
+            "points"
+        ]["items"]["$ref"]
+        assert point_ref.endswith("/IncidencePoint")
+
+    def test_boundary_sixty_four_digit_components_admitted(self):
+        pts = [
+            {
+                "label": "a",
+                "coordinates": [
+                    {"num": "9" * 64, "den": "1"},
+                    {"num": "0", "den": "1"},
+                ],
+            },
+            {
+                "label": "b",
+                "coordinates": [
+                    {"num": "8" + "0" * 63, "den": "1"},
+                    {"num": "1", "den": "1"},
+                ],
+            },
+            {
+                "label": "c",
+                "coordinates": [
+                    {"num": "7" + "0" * 63, "den": "1"},
+                    {"num": "2", "den": "1"},
+                ],
+            },
+        ]
+        request = CollinearTriplesRequest.model_validate(
+            {"configuration": {"points": pts}}
+        )
+        assert len(request.configuration.points[0].coordinates[0].num) == 64
+
+    def test_shared_configuration_instance_composes_unchanged(self):
+        """Native callers may pass a shared PointConfiguration; the operation
+        -local view accepts it via attributes and still enforces the cap."""
+        import pytest
+        from pydantic import ValidationError
+
+        shared = PointConfiguration(
+            points=(
+                LabelledRationalPoint(
+                    label="a",
+                    coordinates=(
+                        CanonicalRational(num="9" * 100, den="1"),
+                        CanonicalRational(num="0", den="1"),
+                    ),
+                ),
+                LabelledRationalPoint(
+                    label="b",
+                    coordinates=(
+                        CanonicalRational(num="1", den="1"),
+                        CanonicalRational(num="0", den="1"),
+                    ),
+                ),
+                LabelledRationalPoint(
+                    label="c",
+                    coordinates=(
+                        CanonicalRational(num="0", den="1"),
+                        CanonicalRational(num="1", den="1"),
+                    ),
+                ),
+            )
+        )
+        with pytest.raises(ValidationError):
+            CollinearTriplesRequest(configuration=shared)

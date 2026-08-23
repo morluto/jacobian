@@ -20,7 +20,7 @@
     {
       "path": "src/jacobian/math/lattice_polytopes/_operations.py",
       "symbol": "_facets_and_box",
-      "complexity": 13
+      "complexity": 17
     },
     {
       "path": "src/jacobian/math/majorization/_operations.py",

@@ -136,6 +136,23 @@ domains when necessary, and narrow the domain or change the typed result when
 the claim cannot be established. Add known-answer, boundary, adversarial, and
 defining-invariant tests.
 
+Bounded does not mean small or constant-time. Exact exhaustive enumeration is
+appropriate when admission can determine the finite candidate space, bound
+per-candidate intermediate growth, and bound the worst-case exact result before
+execution. Prefer operation-specific mathematical quantities such as candidate
+tuples, search nodes, terms, degree, coefficient height, and witness count over
+coarse aggregate input-size proxies. Limits may be generous when their safety
+and usefulness are established; wall time remains an execution safety net, not
+the mathematical work bound.
+
+Distinguish decision or first-witness operations from complete profiles and
+all-witness operations: they may inspect the same candidate family but have
+different output obligations. When a useful finite search exceeds one call's
+ceiling, either narrow the request or expose a deterministic mathematical
+partition whose result identifies the exact region searched. A partial search
+must never establish global absence or completeness, and request-scoped
+partitioning must not introduce kernel-owned durable state.
+
 ## Types and transport
 
 - Domain values, request/result models, and declarations live with their owner

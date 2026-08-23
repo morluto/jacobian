@@ -13,7 +13,12 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "integer.factor.certified_compute",
         AdmissionDecision.KEEP,
-        "distinct explicitly bounded partial factorization with certified-prime and unresolved outcomes",
+        "distinct bounded subexponential factorization with per-factor Pratt primality certificates",
+    ),
+    OperationAdmission(
+        "integer.primality.certificate.compute",
+        AdmissionDecision.KEEP,
+        "distinct bounded Pratt primality certificate with independent verification",
     ),
     OperationAdmission(
         "finite_abelian_group.exact_factorization.compute",

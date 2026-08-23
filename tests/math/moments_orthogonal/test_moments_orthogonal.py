@@ -557,3 +557,28 @@ class TestConditionedQuadratureAdmission:
     def test_moderate_conditioning_still_admitted(self) -> None:
         request = GaussianQuadratureRequest(coefficients=_legendre_coefficients())
         assert len(request.coefficients.alpha) == 2
+
+
+class TestNativeKernelBoundaries:
+    def test_native_kernel_enforces_combined_height_admission(self) -> None:
+        """Direct native callers cannot bypass the wire contract's combined
+        order-and-height bound with huge evaluation points."""
+        coefficients = RecurrenceCoefficients(
+            alpha=tuple(_cr(0, 1) for _ in range(16)),
+            beta=(_cr(1, 1),) * 16,
+        )
+        huge = Fraction(10**30000)
+        with pytest.raises(ValueError, match="combined order-and-height"):
+            christoffel_darboux(coefficients, huge, huge)
+
+    def test_subgroup_entry_caps_retained_generators(self) -> None:
+        """A relayed subgroup entry cannot carry an unbounded generator
+        tuple; validation fails before any backend object is constructed."""
+        from jacobian.math.group._models import SubgroupEntry
+
+        identity = tuple(range(4))
+        with pytest.raises(ValidationError):
+            SubgroupEntry(
+                generators=(identity,) * 65,
+                order=1,
+            )

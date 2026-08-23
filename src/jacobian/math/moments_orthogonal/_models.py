@@ -160,6 +160,45 @@ class JacobiMatrixResult(JacobiMatrixRequest):
 # ---------------------------------------------------------------------------
 
 
+def _require_combined_kernel_height(
+    coefficients: RecurrenceCoefficients,
+    x: CanonicalRational,
+    y: CanonicalRational,
+) -> None:
+    """Combined order-and-height admission shared by wire and native callers.
+
+    Each monic recurrence step p_{k+1}(t) = (t - alpha_k) p_k(t)
+    - beta_k p_{k-1}(t) raises the evaluated height by at most
+    H = height(x/y) + height(alpha) + height(beta) + 2 digits, so p_k(t)
+    has height at most k*H and, dividing by h_k = prod(beta), every kernel
+    summand has height at most 2*k*H + (k+1)*height(beta). Summing all
+    summands bounds the exact kernel; reject any admitted input whose worst
+    case could exceed the canonical rational digit limit during execution.
+    """
+    point_height = max(_coefficient_height(x), _coefficient_height(y))
+    alpha_height = max(
+        (_coefficient_height(v) for v in coefficients.alpha), default=1
+    )
+    # The forward recurrence consumes only beta[:len(alpha)]; a trailing
+    # mu_n entry never enters the kernel, so it must not drive admission.
+    beta_height = max(
+        (_coefficient_height(v) for v in coefficients.beta[: len(coefficients.alpha)]),
+        default=1,
+    )
+    step = point_height + alpha_height + beta_height + 2
+    kernel_bound = sum(
+        2 * k * step + (k + 1) * beta_height + 2 for k in range(len(coefficients.alpha))
+    )
+    if (
+        kernel_bound + len(str(max(len(coefficients.alpha), 1)))
+        > MAX_CANONICAL_RATIONAL_DIGITS
+    ):
+        raise ValueError(
+            "Christoffel-Darboux coefficients exceed the conservative "
+            "combined order-and-height bound for an exact kernel"
+        )
+
+
 class ChristoffelDarbouxRequest(StrictModel):
     coefficients: RecurrenceCoefficients
     x: CanonicalRational
@@ -177,32 +216,9 @@ class ChristoffelDarbouxRequest(StrictModel):
         # most 2*k*H + (k+1)*height(beta). Summing all summands bounds the
         # exact kernel; reject any admitted request whose worst case could
         # exceed the canonical rational digit limit during execution.
-        point_height = max(_coefficient_height(self.x), _coefficient_height(self.y))
-        alpha_height = max(
-            (_coefficient_height(v) for v in self.coefficients.alpha), default=1
+        _require_combined_kernel_height(
+            self.coefficients, self.x, self.y
         )
-        # The forward recurrence consumes only beta[:len(alpha)]; a trailing
-        # mu_n entry never enters the kernel, so it must not drive admission.
-        beta_height = max(
-            (
-                _coefficient_height(v)
-                for v in self.coefficients.beta[: len(self.coefficients.alpha)]
-            ),
-            default=1,
-        )
-        step = point_height + alpha_height + beta_height + 2
-        kernel_bound = sum(
-            2 * k * step + (k + 1) * beta_height + 2
-            for k in range(len(self.coefficients.alpha))
-        )
-        if (
-            kernel_bound + len(str(max(len(self.coefficients.alpha), 1)))
-            > MAX_CANONICAL_RATIONAL_DIGITS
-        ):
-            raise ValueError(
-                "Christoffel-Darboux coefficients exceed the conservative "
-                "combined order-and-height bound for an exact kernel"
-            )
         return self
 
 

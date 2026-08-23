@@ -233,8 +233,20 @@ def christoffel_darboux(
     Accepts the recurrence producer's canonical ``RecurrenceCoefficients``
     value unchanged.
     """
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.moments_orthogonal._models import (
+        _require_combined_kernel_height,
+    )
+
     if type(x) is not Fraction or type(y) is not Fraction:
         raise TypeError("x and y must use exact Fractions")
+    # Native callers bypass the wire validator, so the shared combined
+    # order-and-height admission applies here as well.
+    _require_combined_kernel_height(
+        coefficients,
+        CanonicalRational.from_fraction(x),
+        CanonicalRational.from_fraction(y),
+    )
     alpha = tuple(value.as_fraction() for value in coefficients.alpha)
     beta = tuple(value.as_fraction() for value in coefficients.beta)
     n = len(alpha)

@@ -232,7 +232,11 @@ class GroupSubgroupLatticeRequest(StrictModel):
 class SubgroupEntry(StrictModel):
     """One subgroup with its generators and order."""
 
-    generators: tuple[tuple[int, ...], ...] = Field(min_length=1)
+    # A group of admitted order <= 64 never needs more than 6 generators
+    # (one per prime factor of 64); the cap keeps a relayed payload from
+    # driving unbounded backend construction before the source-bound
+    # comparison runs.
+    generators: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=64)
     order: int = Field(ge=1, le=64)
 
     @model_validator(mode="after")

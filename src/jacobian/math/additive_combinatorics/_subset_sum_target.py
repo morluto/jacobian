@@ -123,15 +123,30 @@ class SubsetSumTargetRequest(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def bound_raw_request(cls, value: object) -> object:
-        """Reject oversized raw strings and containers before nested parsing."""
+        """Reject oversized raw strings and containers before nested parsing.
+
+        Running a before validator moves field validation into Python
+        mode, where decoded JSON arrays no longer coerce to the declared
+        tuple shapes; normalize the source value list to a tuple on a
+        copied path so JSON invocation keeps working while the stored
+        sequence stays canonical.
+        """
 
         if not isinstance(value, Mapping):
             return value
-        _raw_source_item_count(value.get("source"))
-        raw_target = value.get("target")
+        prepared: dict[str, object] = dict(value)
+        raw_source = prepared.get("source")
+        if isinstance(raw_source, Mapping):
+            source = dict(raw_source)
+            values = source.get("values")
+            if isinstance(values, list):
+                source["values"] = tuple(values)
+            prepared["source"] = source
+        _raw_source_item_count(prepared.get("source"))
+        raw_target = prepared.get("target")
         if isinstance(raw_target, str):
             _require_integer_digits(raw_target, "target")
-        return value
+        return prepared
 
     @model_validator(mode="after")
     def require_bounded_exact_search(self) -> Self:

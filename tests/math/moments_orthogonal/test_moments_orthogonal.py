@@ -457,10 +457,11 @@ class TestRecurrenceAdmissionBoundaries:
         with pytest.raises(ValueError, match="positive-definite"):
             recurrence_coefficients((Fraction(1), Fraction(0), Fraction(-1)))
         # The same prefix extended to a positive sequence stays admitted and
-        # keeps its known answer alpha=(0).
+        # keeps its known answer alpha=(0) plus the final beta ratio the
+        # retained third moment determines.
         result = recurrence_coefficients((Fraction(1), Fraction(0), Fraction(1)))
         assert result.alpha == (Fraction(0),)
-        assert result.beta == (Fraction(1),)
+        assert result.beta == (Fraction(1), Fraction(1))
 
     def test_odd_prefix_wire_rejects_negative_hankel_minor(self):
         with pytest.raises((ValidationError, ValueError)):
@@ -471,3 +472,42 @@ class TestRecurrenceAdmissionBoundaries:
                     _cr(-1, 1),
                 )
             )
+
+    def test_three_harmonic_moments_return_final_beta(self):
+        """The reviewer's counterexample: three harmonic moments.
+
+        p_1 = x - 1/2 has squared norm h_1 = mu_2 - mu_1 + mu_0/4 = 1/12,
+        so the odd prefix fully determines beta_1 = h_1/h_0 = 1/12; omitting
+        it would return an incomplete coefficient set with complete=True.
+        """
+        result = recurrence_coefficients((Fraction(1), Fraction(1, 2), Fraction(1, 3)))
+        assert result.alpha == (Fraction(1, 2),)
+        assert result.beta == (Fraction(1), Fraction(1, 12))
+
+    def test_seven_harmonic_moments_return_final_beta(self):
+        """Seven uniform moments determine beta_3 through their last entry."""
+        result = recurrence_coefficients(tuple(_frac(1, k) for k in range(1, 8)))
+        assert len(result.alpha) == 3
+        assert len(result.beta) == 4
+
+    def test_even_length_stops_at_determined_coefficients(self):
+        """An even prefix leaves the final norm undetermined: no extra beta."""
+        result = recurrence_coefficients(tuple(_frac(1, k) for k in range(1, 5)))
+        assert result.alpha == (_frac(1, 2), _frac(1, 2))
+        assert result.beta == (_frac(1, 1), _frac(1, 12))
+
+    def test_wire_result_carries_final_beta_and_composes(self):
+        """The wire result replays the final beta and feeds every consumer."""
+        request = RecurrenceCoefficientsRequest(
+            moments=(_cr(1, 1), _cr(1, 2), _cr(1, 3))
+        )
+        result = compute_recurrence_coefficients(request)
+        assert result.coefficients.beta[-1] == _cr(1, 12)
+        payload = result.model_dump(mode="json")["coefficients"]
+        jacobi = compute_jacobi_matrix(
+            JacobiMatrixRequest.model_validate({"coefficients": payload})
+        )
+        assert jacobi.off_diagonal == ()
+        quadrature = GaussianQuadratureRequest.model_validate({"coefficients": payload})
+        computed = compute_gaussian_quadrature(quadrature)
+        assert len(computed.nodes) == 1

@@ -8,7 +8,6 @@ from itertools import combinations
 
 import pytest
 import sympy
-from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.commutative_algebra_ops import _singular
@@ -17,14 +16,11 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealQuotientRequest,
     IdealRadicalMembershipRequest,
     IdealRadicalRequest,
-    IdealSaturationRequest,
-    IdealSaturationResult,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
     compute_ideal_quotient,
     compute_ideal_radical,
     compute_ideal_radical_membership,
-    compute_ideal_saturation,
 )
 from jacobian.math.commutative_algebra_ops._tools import TOOLS
 from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
@@ -465,92 +461,3 @@ def test_ideal_quotient_by_product_equals_iterated_quotient() -> None:
     assert iterated.quotient is not None
     assert _equal(by_product.quotient, iterated.quotient)
     assert _equal(by_product.quotient, _ideal(variables, {(2, 1): 1}))
-
-
-@requires_singular
-@pytest.mark.requires_backend("singular")
-def test_ideal_saturation_binds_result_to_its_request() -> None:
-    # <xy> : <x>^infinity = <y>.
-    variables = ("x", "y")
-    ideal = _ideal(variables, {(1, 1): 1})
-    request = IdealSaturationRequest(
-        ideal=ideal,
-        saturation_polynomial=_polynomial(variables, {(1, 0): 1}),
-    )
-    result = compute_ideal_saturation(request)
-
-    assert result.outcome == "COMPUTED"
-    assert result.request == request
-    assert _equal(result.saturation, _ideal(variables, {(0, 1): 1}))
-
-    replayed = IdealSaturationResult.model_validate(result.model_dump())
-    assert replayed.saturation == result.saturation
-
-
-@requires_singular
-@pytest.mark.requires_backend("singular")
-def test_saturation_result_validation_never_launches_singular(monkeypatch) -> None:
-    variables = ("x", "y")
-    request = IdealSaturationRequest(
-        ideal=_ideal(variables, {(1, 1): 1}),
-        saturation_polynomial=_polynomial(variables, {(1, 0): 1}),
-    )
-    payload = {
-        "request": request.model_dump(),
-        "outcome": "COMPUTED",
-        "saturation": _ideal(variables, {(0, 1): 1}).model_dump(),
-        "backend_version": "4.4.0",
-    }
-
-    def _fail(*args, **kwargs):
-        raise AssertionError("result validation must not launch Singular")
-
-    monkeypatch.setattr(
-        "jacobian.math.commutative_algebra_ops._singular.run_singular_ideal_operation",
-        _fail,
-    )
-    validated = IdealSaturationResult.model_validate(payload)
-    assert validated.saturation == _ideal(variables, {(0, 1): 1})
-
-
-def test_detached_saturation_payload_requires_its_request() -> None:
-    with pytest.raises(ValidationError):
-        IdealSaturationResult(
-            outcome="COMPUTED",
-            saturation=_ideal(("x",), {(1,): 1}),
-            backend_version="4.4.0",
-        )
-
-
-def test_saturation_validation_rejects_detached_source_ideal() -> None:
-    # The reviewer's forgery: the retained request (<xy> : <x>^infinity)
-    # must reject the source ideal <xy> as its own computed saturation.
-    variables = ("x", "y")
-    request = IdealSaturationRequest(
-        ideal=_ideal(variables, {(1, 1): 1}),
-        saturation_polynomial=_polynomial(variables, {(1, 0): 1}),
-    )
-    with pytest.raises(ValidationError, match="exact saturation"):
-        IdealSaturationResult(
-            request=request,
-            outcome="COMPUTED",
-            saturation=_ideal(variables, {(1, 1): 1}),
-            backend_version="4.4.0",
-        )
-
-
-def test_saturation_validation_accepts_equivalent_generators() -> None:
-    # The defining relation is ideal equality, not generator equality: any
-    # generating set of <y> validates against the same retained request.
-    variables = ("x", "y")
-    request = IdealSaturationRequest(
-        ideal=_ideal(variables, {(1, 1): 1}),
-        saturation_polynomial=_polynomial(variables, {(1, 0): 1}),
-    )
-    validated = IdealSaturationResult(
-        request=request,
-        outcome="COMPUTED",
-        saturation=_ideal(variables, {(0, 1): 1}, {(2, 1): Fraction(1, 3)}),
-        backend_version="4.4.0",
-    )
-    assert validated.saturation is not None

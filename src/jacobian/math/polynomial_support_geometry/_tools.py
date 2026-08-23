@@ -68,7 +68,7 @@ TOOLS: MathTools = (
         description=(
             "Compute the Newton polytope (convex hull of support exponents) of "
             "a polynomial with at most 96 terms, classifying every support "
-            "point exactly as a vertex or interior to the hull of the rest."
+            "point exactly as a vertex or contained in the hull of the rest."
         ),
         request_type=NewtonPolytopeRequest,
         result_type=NewtonPolytope,

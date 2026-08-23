@@ -3,17 +3,11 @@
 from __future__ import annotations
 
 from jacobian._exact import CanonicalRational
-from jacobian.math.polynomial_support_geometry._models import (
-    NewtonPolytopeRequest,
-    SupportRequest,
-)
-from jacobian.math.polynomial_support_geometry.operations import (  # noqa: F401
+from jacobian.math.polynomial_support_geometry.operations import (
     _compute_weight_layers,
     _initial_form_terms,
-    compute_initial_form,
-    compute_newton_polytope,
-    compute_support,
-    compute_weight_profile,
+    newton_polytope_from_polynomial,
+    support_from_polynomial,
 )
 from jacobian.math.polynomial_support_geometry.values import (
     NewtonPolytope,
@@ -37,12 +31,12 @@ __all__ = [
 
 def exponent_support(polynomial: RationalPolynomial) -> PolynomialSupport:
     """Exponent support of one canonical polynomial value."""
-    return compute_support(SupportRequest(polynomial=polynomial))
+    return support_from_polynomial(polynomial)
 
 
 def newton_polytope(polynomial: RationalPolynomial) -> NewtonPolytope:
     """Newton polytope of one canonical polynomial value."""
-    return compute_newton_polytope(NewtonPolytopeRequest(polynomial=polynomial))
+    return newton_polytope_from_polynomial(polynomial)
 
 
 def weight_profile(

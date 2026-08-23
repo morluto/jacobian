@@ -12,6 +12,7 @@ from jacobian.math.polynomial_support_geometry._models import (
     WeightProfileRequest,
 )
 from jacobian.math.polynomial_support_geometry.values import (
+    MAX_NEWTON_TERMS,
     NewtonPolytope,
     PolynomialFaceData,
     PolynomialSupport,
@@ -25,10 +26,7 @@ from jacobian.math.polynomials.values import (
 
 
 def _term_pairs(
-    request: SupportRequest
-    | NewtonPolytopeRequest
-    | WeightProfileRequest
-    | InitialFormRequest,
+    polynomial: RationalPolynomial,
 ) -> list[tuple[Fraction, tuple[int, ...]]]:
     """Extract (coefficient, exponents) from the canonical polynomial value.
 
@@ -38,7 +36,7 @@ def _term_pairs(
     """
     return [
         (term.coefficient.as_fraction(), tuple(term.exponents))
-        for term in request.polynomial.polynomial.terms
+        for term in polynomial.polynomial.terms
         if term.coefficient.as_fraction() != 0
     ]
 
@@ -314,9 +312,13 @@ def _eliminate_column(mat: list[list[int]], rank: int, col: int) -> None:
         ]
 
 
-def compute_support(request: SupportRequest) -> PolynomialSupport:
-    """Compute the exponent support of a polynomial."""
-    terms = _term_pairs(request)
+def support_from_polynomial(polynomial: RationalPolynomial) -> PolynomialSupport:
+    """Domain kernel: the exponent support of one canonical polynomial.
+
+    Shared by the MCP adapter and the native API so both surfaces apply
+    exactly the same mathematical admission and return one value type.
+    """
+    terms = _term_pairs(polynomial)
 
     if not terms:
         return PolynomialSupport(
@@ -324,13 +326,13 @@ def compute_support(request: SupportRequest) -> PolynomialSupport:
             term_count=0,
             exponents=(),
             coefficients=(),
-            variables=request.polynomial.variables,
+            variables=polynomial.variables,
         )
 
     exponents = [t[1] for t in terms]
     coefficients = [t[0] for t in terms]
 
-    n = len(request.polynomial.variables)
+    n = len(polynomial.variables)
     coord_min = tuple(min(e[i] for _, e in terms) for i in range(n))
     coord_max = tuple(max(e[i] for _, e in terms) for i in range(n))
 
@@ -339,7 +341,7 @@ def compute_support(request: SupportRequest) -> PolynomialSupport:
         term_count=len(terms),
         exponents=tuple(exponents),
         coefficients=tuple(CanonicalRational.from_fraction(c) for c in coefficients),
-        variables=request.polynomial.variables,
+        variables=polynomial.variables,
         coordinate_min=coord_min,
         coordinate_max=coord_max,
         total_degree_min=min(sum(e) for _, e in terms),
@@ -347,10 +349,26 @@ def compute_support(request: SupportRequest) -> PolynomialSupport:
     )
 
 
-def compute_newton_polytope(request: NewtonPolytopeRequest) -> NewtonPolytope:
-    """Compute the Newton polytope of a polynomial."""
-    terms = _term_pairs(request)
-    variables = request.polynomial.variables
+def compute_support(request: SupportRequest) -> PolynomialSupport:
+    """MCP adapter: parse one request, call the domain kernel once."""
+    return support_from_polynomial(request.polynomial)
+
+
+def newton_polytope_from_polynomial(
+    polynomial: RationalPolynomial,
+) -> NewtonPolytope:
+    """Domain kernel: the Newton polytope of one canonical polynomial.
+
+    The per-point exact extremality work bound is a mathematical work
+    obligation, not a transport cap, so the kernel enforces it for wire
+    and native callers alike.
+    """
+    if len(polynomial.polynomial.terms) > MAX_NEWTON_TERMS:
+        raise ValueError(
+            f"Newton polytope requests are limited to {MAX_NEWTON_TERMS} terms"
+        )
+    terms = _term_pairs(polynomial)
+    variables = polynomial.variables
 
     if not terms:
         return NewtonPolytope(
@@ -392,6 +410,11 @@ def compute_newton_polytope(request: NewtonPolytopeRequest) -> NewtonPolytope:
         nonextreme=tuple(nonextreme),
         all_support_exponents=tuple(exponents),
     )
+
+
+def compute_newton_polytope(request: NewtonPolytopeRequest) -> NewtonPolytope:
+    """MCP adapter: parse one request, call the domain kernel once."""
+    return newton_polytope_from_polynomial(request.polynomial)
 
 
 def compute_weight_profile(request: WeightProfileRequest) -> PolynomialWeightProfile:

@@ -99,10 +99,8 @@ def add_points(
     y2 = _frac_from_rational(second_point.y) if second_point else None
 
     # Unwrap parent-bearing operands; an identity contributes nothing.
-    p1 = (x1, y1) if x1 is not None and y1 is not None else None
-    p2 = (x2, y2) if x2 is not None and y2 is not None else None
-    if p1 is None:
-        if p2 is None:
+    if x1 is None or y1 is None:
+        if x2 is None or y2 is None:
             return EllipticCurvePointResult(curve=request.curve, at_infinity=True)
         return EllipticCurvePointResult(
             curve=request.curve,
@@ -110,13 +108,15 @@ def add_points(
                 x=_rational_from_frac(x2), y=_rational_from_frac(y2)
             ),
         )
-    if p2 is None:
+    if x2 is None or y2 is None:
         return EllipticCurvePointResult(
             curve=request.curve,
             point=RationalAffinePoint(
                 x=_rational_from_frac(x1), y=_rational_from_frac(y1)
             ),
         )
+    p1 = (x1, y1)
+    p2 = (x2, y2)
 
     result = _point_add(a, b, p1, p2)
     if result is None:
@@ -135,13 +135,14 @@ def scalar_multiply(
     request: ScalarMultiplicationRequest,
 ) -> ScalarMultiplicationResult:
     """Compute n*P on a short Weierstrass elliptic curve using double-and-add."""
-    if request.scalar == 0 or request.point.at_infinity:
+    operand = request.point.point
+    if request.scalar == 0 or request.point.at_infinity or operand is None:
         return ScalarMultiplicationResult(curve=request.curve, at_infinity=True)
 
     a = _frac_from_rational(request.curve.coefficient_a)
     b = _frac_from_rational(request.curve.coefficient_b)
-    px = _frac_from_rational(request.point.point.x)
-    py = _frac_from_rational(request.point.point.y)
+    px = _frac_from_rational(operand.x)
+    py = _frac_from_rational(operand.y)
 
     result: tuple[Fraction, Fraction] | None = None
     # An infinite addend contributes nothing; doubling to the point at

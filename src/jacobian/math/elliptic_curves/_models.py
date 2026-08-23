@@ -341,24 +341,23 @@ class ScalarMultiplicationRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_group_law(self) -> Self:
-        if self.point.at_infinity:
+        operand = self.point.point
+        if self.point.at_infinity or operand is None:
             return self
-        _require_group_law(self.curve, (self.point.point,))
+        _require_group_law(self.curve, (operand,))
         # Propagate coordinate heights through the same double-and-add scan
         # the kernel performs: each bit doubles the accumulator and adds P on
         # a set bit, and every step's chord-and-tangent output is bounded by
         # rational-height propagation.  The naive n^2 digit heuristic both
         # over-rejects and admits doublings whose exact coordinates exceed
         # the canonical limit, so derive the budget from the recurrence.
-        current = _point_heights(self.point.point)
+        current = _point_heights(operand)
         for bit in bin(self.scalar)[3:]:
             lam_double = _doubling_lambda_height_from_heights(self.curve, current)
             doubled = _chord_step_heights(lam_double, current, current)
             if bit == "1":
-                lam_add = _generic_lambda_height_from_heights(current, self.point.point)
-                current = _chord_step_heights(
-                    lam_add, doubled, _point_heights(self.point.point)
-                )
+                lam_add = _generic_lambda_height_from_heights(current, operand)
+                current = _chord_step_heights(lam_add, doubled, _point_heights(operand))
             else:
                 current = doubled
             if any(height.exceeds(MAX_CANONICAL_RATIONAL_DIGITS) for height in current):

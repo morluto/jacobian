@@ -538,3 +538,114 @@ class TestAggregateContentAdmission:
         result = multivariate_factor(request)
         assert result.status == "FACTORIZED"
         assert MultivariateFactorResult.model_validate(result.model_dump()) == result
+
+
+def _expanded_product(
+    variables: tuple[str, ...],
+    binomials: list[tuple[int, int, int]],
+) -> dict[tuple[int, ...], int]:
+    """Expand one product of sparse binomials c*x_i^e - c exactly."""
+
+    from collections import defaultdict
+
+    size = len(variables)
+    accumulator = defaultdict(int)
+    accumulator[tuple(0 for _ in variables)] = 1
+    for exponent, coefficient, index in binomials:
+        shifted = tuple(
+            exponent if position == index else 0
+            for position in range(size)
+        )
+        updated: dict[tuple[int, ...], int] = defaultdict(int)
+        for monomial, value in accumulator.items():
+            shifted_key = tuple(a + b for a, b in zip(monomial, shifted))
+            updated[shifted_key] += value * coefficient
+            updated[monomial] -= value * coefficient
+        accumulator = defaultdict(
+            int,
+            {k: v for k, v in updated.items() if v != 0},
+        )
+    return dict(accumulator)
+
+
+class TestKillableFactorBackend:
+    def test_reviewer_sparse_completing_counterexample_returns_typed_outcome(
+        self, monkeypatch
+    ):
+        """prod_i(x_i^64 - 1) + z*prod_i(x_i - 1) has an irreducible z-linear
+        cofactor with 64^7 + 1 expanded terms.  The admitted request must
+        return its typed outcome through the bounded worker instead of
+        hanging or exhausting memory in the engine process."""
+        import time
+
+        from jacobian.math.polynomials.multivariate import _factor_backend
+
+        monkeypatch.setattr(_factor_backend, "FACTOR_WORK_WALL_SECONDS", 5.0)
+        monkeypatch.setattr(_factor_backend, "FACTOR_VERIFY_WALL_SECONDS", 15.0)
+
+        dense = _expanded_product(
+            ("x1", "x2", "x3", "x4", "x5", "x6", "x7", "z"),
+            [(64, 1, i) for i in range(7)],
+        )
+        z_linear = _expanded_product(
+            ("x1", "x2", "x3", "x4", "x5", "x6", "x7", "z"),
+            [(1, 1, i) for i in range(7)],
+        )
+        merged: dict[tuple[int, ...], int] = dict(dense)
+        for monomial, value in z_linear.items():
+            shifted = tuple(7 if position == 7 else degree for position, degree in enumerate(monomial))
+            merged[shifted] = merged.get(shifted, 0) + value
+        poly = _poly(
+            ("x1", "x2", "x3", "x4", "x5", "x6", "x7", "z"),
+            tuple(
+                (value, 1, exponents)
+                for exponents, value in sorted(merged.items(), reverse=True)
+                if value != 0
+            ),
+        )
+        assert len(poly.polynomial.terms) <= 512
+
+        request = MultivariateFactorRequest(polynomial=poly)
+        started = time.monotonic()
+        result = multivariate_factor(request)
+        elapsed = time.monotonic() - started
+        assert result.status == "OUTPUT_BUDGET_EXCEEDED"
+        assert result.reconstructed == poly
+        assert elapsed < 30.0
+        assert (
+            MultivariateFactorResult.model_validate(result.model_dump()) == result
+        )
+
+    def test_worker_backend_agrees_with_in_process_factor_list(self):
+        """The bounded worker returns the same exact decomposition as an
+        in-process ``factor_list`` on ordinary inputs."""
+        import json
+        import subprocess
+        import sys
+
+        from jacobian.math.polynomials.multivariate._factor_backend import (
+            _WORKER_PATH,
+        )
+
+        poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
+        payload = json.dumps(
+            {
+                "variables": ["x", "y"],
+                "terms": [
+                    [*term.exponents, *term.coefficient.as_integer_ratio()]
+                    for term in poly.polynomial.terms
+                ],
+            }
+        ).encode()
+        completed = subprocess.run(
+            [sys.executable, str(_WORKER_PATH)],
+            input=payload,
+            capture_output=True,
+            timeout=60,
+        )
+        assert completed.returncode == 0
+        response = json.loads(completed.stdout.decode())
+        assert response["ok"] is True
+        # x^2*y - x = x*(x*y - 1): two irreducible factors, content 1.
+        assert len(response["factors"]) == 2
+        assert response["coefficient"] == [1, 1]

@@ -9,6 +9,10 @@ from jacobian.math.polynomials._conversions import (
     rational_polynomial_to_sympy,
     symbols_for_variables,
 )
+from jacobian.math.polynomials.multivariate import _factor_backend
+from jacobian.math.polynomials.multivariate._factor_backend import (
+    FactorBackendExhaustedError,
+)
 from jacobian.math.polynomials.multivariate._models import (
     _MAX_FACTOR_OUTPUT_TERMS as _MAX_OUTPUT_TERMS,
 )
@@ -26,6 +30,7 @@ from jacobian.math.polynomials.multivariate._models import (
     MultivariateScalarValue,
     _monic_content_fraction,
 )
+from jacobian.math.polynomials.values import RationalPolynomial
 
 
 class MultivariateOutputBudgetError(RuntimeError):
@@ -154,13 +159,23 @@ def _to_poly(ring_element: Any, symbols: tuple[Any, ...]) -> Any:
     return Poly(ring_element.as_expr(), *symbols, domain=QQ)
 
 
-def _sympy_factorization(source: Any) -> tuple[Any, tuple[tuple[Any, int], ...], Any]:
-    """Run SymPy's factor_list and verify reconstruction."""
+def _sympy_factorization(
+    polynomial: RationalPolynomial,
+    *,
+    wall_seconds: float | None = None,
+) -> tuple[Any, tuple[tuple[Any, int], ...], Any]:
+    """Run the bounded killable ``factor_list`` backend and verify reconstruction."""
+
     from jacobian.math.polynomials._sympy import _monic_decomposition
 
+    decomposition = _factor_backend.run_bounded_factorization(
+        polynomial,
+        wall_seconds=wall_seconds,
+    )
+    source = rational_polynomial_to_sympy(polynomial)
     return _monic_decomposition(
         source,
-        source.factor_list(),
+        decomposition,
         label="multivariate factorization",
     )
 
@@ -168,15 +183,31 @@ def _sympy_factorization(source: Any) -> tuple[Any, tuple[tuple[Any, int], ...],
 def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFactorResult:
     """Exact factorization over ``QQ[variables]`` via SymPy's ``factor_list``.
 
+    The factorization kernel runs in a bounded, killable worker process.
     When the exact factorization contains an irreducible factor beyond the
-    public output-term budget, returns the typed
-    ``OUTPUT_BUDGET_EXCEEDED`` outcome instead of a host exception.
+    public output-term budget, or cannot be produced within the declared
+    work budget at all, returns the typed ``OUTPUT_BUDGET_EXCEEDED`` outcome
+    instead of a host exception; ``coefficient`` then carries the exact
+    rational content of the restated source polynomial.
     """
 
     from jacobian._exact import CanonicalRational
 
-    source = rational_polynomial_to_sympy(request.polynomial)
-    coefficient, raw_factors, reconstructed = _sympy_factorization(source)
+    try:
+        coefficient, raw_factors, reconstructed = _sympy_factorization(
+            request.polynomial
+        )
+    except FactorBackendExhaustedError:
+        return MultivariateFactorResult(
+            status="OUTPUT_BUDGET_EXCEEDED",
+            coefficient=CanonicalRational.from_fraction(
+                _factor_backend.primitive_content_fraction(request.polynomial)
+            ),
+            factors=(),
+            reconstructed=request.polynomial,
+            normalization=None,
+            product_reconstruction=None,
+        )
     coefficient_value = CanonicalRational.from_fraction(
         _monic_content_fraction(coefficient)
     )

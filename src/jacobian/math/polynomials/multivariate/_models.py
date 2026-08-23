@@ -300,9 +300,13 @@ class MultivariateFactorResult(StrictModel):
 
     ``FACTORIZED`` carries the full content-and-monic-irreducibles
     decomposition.  ``OUTPUT_BUDGET_EXCEEDED`` reports, as a typed bounded
-    outcome, that the exact factorization contains an irreducible factor
-    beyond the public output budget; ``reconstructed`` then restates the
-    requested polynomial unchanged and ``factors`` is empty.
+    outcome, that the exact factorization is beyond this operation's
+    declared bounds: either an irreducible factor exceeds the public
+    output-term budget or the killable factorization worker could not
+    produce the exact factorization within its declared work budget.
+    ``reconstructed`` then restates the requested polynomial unchanged,
+    ``coefficient`` carries the exact rational content of that polynomial,
+    and ``factors`` is empty.
     """
 
     status: Literal["FACTORIZED", "OUTPUT_BUDGET_EXCEEDED"] = "FACTORIZED"
@@ -422,12 +426,33 @@ def _verify_output_budget_exceeded_claim(
 ) -> None:
     """Re-derive a claimed ``OUTPUT_BUDGET_EXCEEDED`` status from its source.
 
-    Replays the kernel's own factorization and conversion so the reported
+    Replays the kernel's own bounded factorization so the reported
     incompleteness is bound to the restated polynomial instead of being an
-    authorable label; the exact rational content is recomputed and compared
-    so every carried field is bound to that same source.
+    authorable label: the exact rational content is recomputed cheaply and
+    compared, and the claim is reproduced only when a replayed factor
+    conversion exceeds the output-term budget or the killable worker cannot
+    produce the exact factorization within its declared work budget at all.
     """
 
+    from jacobian.math.polynomials.multivariate import _factor_backend
+    from jacobian.math.polynomials.multivariate._factor_backend import (
+        FactorBackendExhaustedError,
+    )
+
+    if _factor_backend.primitive_content_fraction(reconstructed) != (
+        coefficient.as_fraction()
+    ):
+        raise ValueError(
+            "budget-exceeded outcome coefficient does not match the exact "
+            "content of the restated polynomial"
+        )
+    try:
+        decomposition = _factor_backend.run_bounded_factorization(
+            reconstructed,
+            wall_seconds=_factor_backend.FACTOR_VERIFY_WALL_SECONDS,
+        )
+    except FactorBackendExhaustedError:
+        return
     from jacobian.math.polynomials._conversions import (
         rational_polynomial_from_sympy,
         rational_polynomial_to_sympy,
@@ -435,16 +460,11 @@ def _verify_output_budget_exceeded_claim(
     from jacobian.math.polynomials._sympy import _monic_decomposition
 
     source = rational_polynomial_to_sympy(reconstructed)
-    content, raw_factors, _ = _monic_decomposition(
+    _content, raw_factors, _reconstructed = _monic_decomposition(
         source,
-        source.factor_list(),
+        decomposition,
         label="multivariate factorization",
     )
-    if _monic_content_fraction(content) != coefficient.as_fraction():
-        raise ValueError(
-            "budget-exceeded outcome coefficient does not match the exact "
-            "content of the restated polynomial"
-        )
     for factor, _multiplicity in raw_factors:
         try:
             rational_polynomial_from_sympy(
@@ -551,26 +571,34 @@ def _verify_exact_reconstruction(
 
     The replay recomputes the exact content and the canonical monic
     irreducible multiset of the retained source polynomial with the same
-    bounded ``factor_list`` invocation the operation itself performs, then
-    compares it against the claimed decomposition.  Monic irreducible
-    factorization over ``QQ[variables]`` is unique, so matching multisets
-    establish the product identity without expanding any intermediate
-    product; partial products of admitted factorizations can be
+    bounded, killable ``factor_list`` invocation the operation itself
+    performs, then compares it against the claimed decomposition.  Monic
+    irreducible factorization over ``QQ[variables]`` is unique, so matching
+    multisets establish the product identity without expanding any
+    intermediate product; partial products of admitted factorizations can be
     exponentially denser than their source (paired cyclotomic sums reach
     4^7 * 2 = 32,768 terms for an 8-variable input of 256 terms), so a
     division replay cannot carry a cofactor bound that covers every
-    admitted factorization.  The verification cost is one engine call on
-    the already-admitted source envelope.
+    admitted factorization.  The verification cost is one killable worker
+    call on the already-admitted source envelope.
     """
 
     from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
     from jacobian.math.polynomials._sympy import _monic_decomposition
+    from jacobian.math.polynomials.multivariate import _factor_backend
+    from jacobian.math.polynomials.multivariate._factor_backend import (
+        FactorBackendExhaustedError,
+    )
 
     try:
+        decomposition = _factor_backend.run_bounded_factorization(
+            reconstructed,
+            wall_seconds=_factor_backend.FACTOR_VERIFY_WALL_SECONDS,
+        )
         source = rational_polynomial_to_sympy(reconstructed)
         content, raw_factors, _ = _monic_decomposition(
             source,
-            source.factor_list(),
+            decomposition,
             label="multivariate factorization",
         )
         claimed: dict[_SympyFactorKey, int] = {}
@@ -590,6 +618,11 @@ def _verify_exact_reconstruction(
             )
     except ValueError:
         raise
+    except FactorBackendExhaustedError as exc:
+        raise ValueError(
+            "factorization verification could not reproduce the exact "
+            "factorization within the declared work budget"
+        ) from exc
     except Exception as exc:  # pragma: no cover - defensive
         raise ValueError("invalid factorization reconstruction") from exc
 

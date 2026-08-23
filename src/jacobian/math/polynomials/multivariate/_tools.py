@@ -234,14 +234,13 @@ MULTIVARIATE_POLYNOMIAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "polynomial.multivariate.factor.compute",
         "Factor a multivariate polynomial over QQ",
         (
-            "Return the exact rational content and complete "
-            "multiplicity-bearing irreducible factorization of one bounded "
-            "nonzero multivariate polynomial over QQ[x_1, ..., x_n] with at least "
-            "two variables (univariate inputs are handled by "
-            "polynomial.factor.compute).  If an irreducible factor exceeds the "
-            "public output budget, returns status OUTPUT_BUDGET_EXCEEDED with "
-            "the requested polynomial restated and no factors instead of a "
-            "partial decomposition.  Backed by SymPy's factor_list."
+            "Exact content and complete multiplicity-bearing irreducible "
+            "factorization of one bounded nonzero multivariate polynomial over "
+            "QQ with >=2 variables (univariate inputs use "
+            "polynomial.factor.compute).  The kernel runs in a bounded "
+            "killable worker; if a factor exceeds the output budget or work "
+            "budget, returns OUTPUT_BUDGET_EXCEEDED with the polynomial, its "
+            "content, and no factors.  Backed by SymPy factor_list."
         ),
         MultivariateFactorRequest,
         MultivariateFactorResult,

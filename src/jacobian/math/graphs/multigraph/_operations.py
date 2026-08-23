@@ -21,6 +21,7 @@ from jacobian.math.graphs.multigraph._models import (
     FiniteAbelianGroup,
     FlowEdgeAssignment,
     LooplessMultigraph,
+    MultigraphEdge,
     MultigraphFlowCheckRequest,
     MultigraphFlowCheckResult,
     MultigraphFlowFindRequest,
@@ -192,6 +193,65 @@ def _build_edge_choices(
     return choices
 
 
+def _incremental_balances_hold(
+    net: list[list[int]], moduli: tuple[int, ...]
+) -> bool:
+    """Return True when every signed component imbalance is zero in the group."""
+    return all(
+        component % moduli[k] == 0
+        for vertex_balance in net
+        for k, component in enumerate(vertex_balance)
+    )
+
+
+def _leaf_found_outcome(
+    graph: LooplessMultigraph,
+    group: FiniteAbelianGroup,
+    net: list[list[int]],
+    moduli: tuple[int, ...],
+    assignments: list[FlowEdgeAssignment],
+    states_explored: int,
+) -> _FlowSearchOutcome | None:
+    """Evaluate one complete assignment; return the FOUND outcome or None.
+
+    The incremental balances decide candidacy in O(vertices * dimension);
+    the authoritative conservation replay then confirms the witness.
+    """
+    if not _incremental_balances_hold(net, moduli):
+        return None
+    if not _check_flow_conservation(graph, group, assignments):
+        return None
+    return _FlowSearchOutcome(
+        status="FOUND",
+        flow=tuple(assignments),
+        states_explored=states_explored,
+        termination_reason="WITNESS_FOUND",
+    )
+
+
+def _balance_apply(
+    net: list[list[int]],
+    edge: MultigraphEdge,
+    assignment: FlowEdgeAssignment,
+    sign: int,
+) -> None:
+    """Add (sign=1) or remove (sign=-1) one assignment's divergence update."""
+    tail, head = _oriented_endpoints(edge, assignment.orientation)
+    for k, component in enumerate(assignment.value):
+        net[tail][k] += sign * component
+        net[head][k] -= sign * component
+
+
+def _pop_balanced_assignment(
+    assignments: list[FlowEdgeAssignment],
+    edges: tuple[MultigraphEdge, ...],
+    net: list[list[int]],
+) -> None:
+    """Pop the deepest assignment and undo its divergence update."""
+    assignment = assignments.pop()
+    _balance_apply(net, edges[len(assignments)], assignment, -1)
+
+
 def _search_dfs(
     graph: LooplessMultigraph,
     group: FiniteAbelianGroup,
@@ -203,7 +263,17 @@ def _search_dfs(
     """Run the bounded DFS search and return the unbound outcome."""
     num_edges = len(graph.edges)
     edges = graph.edges
+    moduli = group.moduli
+    dimension = len(moduli)
     states_explored = 0
+    # Incremental divergence bookkeeping: net[v][k] accumulates the signed
+    # k-component flow imbalance at vertex v over currently assigned edges.
+    # Pushing or popping an assignment updates two vertices in O(dimension),
+    # so leaf conservation costs O(vertices * dimension) instead of
+    # rescanning every edge by ID (quadratic in the edge count) per leaf;
+    # per-state work stays uniformly bounded by the charged state count.
+    net: list[list[int]] = [[0] * dimension for _ in range(graph.vertex_count)]
+
     # Iterative DFS that expands one branch at a time and charges the
     # budget on every partial state. This avoids eagerly pushing all
     # children while copying prefix lists, which would retain up to
@@ -215,19 +285,18 @@ def _search_dfs(
         depth = len(assignments)
         if depth == num_edges:
             # Complete assignment was already counted when the final edge
-            # was pushed. Evaluate conservation within the remaining budget.
-            if _check_flow_conservation(graph, group, assignments):
-                return _FlowSearchOutcome(
-                    status="FOUND",
-                    flow=tuple(assignments),
-                    states_explored=states_explored,
-                    termination_reason="WITNESS_FOUND",
-                )
+            # was pushed; its incremental balances were maintained on the
+            # way down, so evaluating conservation is O(vertices * dimension).
+            found = _leaf_found_outcome(
+                graph, group, net, moduli, assignments, states_explored
+            )
+            if found is not None:
+                return found
             # Backtrack from leaf: pop placeholder and last assignment.
             next_index.pop()
             if not next_index:
                 break
-            assignments.pop()
+            _pop_balanced_assignment(assignments, edges, net)
             continue
 
         choices = choices_per_edge[depth]
@@ -236,7 +305,7 @@ def _search_dfs(
             # Exhausted all choices at this depth — backtrack.
             next_index.pop()
             if assignments:
-                assignments.pop()
+                _pop_balanced_assignment(assignments, edges, net)
             continue
 
         # Advance pointer for this depth so the next sibling is tried
@@ -261,6 +330,7 @@ def _search_dfs(
             value=value,
         )
         assignments.append(new_assign)
+        _balance_apply(net, edge, new_assign, 1)
         next_index.append(0)
 
     return _FlowSearchOutcome(

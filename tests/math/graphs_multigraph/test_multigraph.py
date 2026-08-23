@@ -80,6 +80,7 @@ SQUARE = LooplessMultigraph(
     ),
 )
 
+Z2 = FiniteAbelianGroup(moduli=(2,))
 Z3 = FiniteAbelianGroup(moduli=(3,))
 Z2CUBED = FiniteAbelianGroup(moduli=(2, 2, 2))
 
@@ -829,3 +830,60 @@ class TestEulerianSubsetDuplicates:
     def test_request_still_rejects_duplicate_ids(self):
         with pytest.raises(ValidationError, match="must not repeat"):
             EulerianCyclesRequest(graph=TRIANGLE, edge_subset=("e0", "e0"))
+
+
+class TestLeafWorkBoundedBySearchBudget:
+    """Leaf conservation must not add uncharged quadratic work: a bridge
+    graph with no nowhere-zero Z/2 flow exhausts its full 2^d search tree
+    within the default state budget (review thread: 128-edge worst case)."""
+
+    def test_bridge_over_z2_exhausts_within_default_budget(self) -> None:
+        # Two 9-cycles joined by a bridge: 19 edges, so the nowhere-zero
+        # Z/2 search visits exactly 2^20 - 2 charged states and every
+        # one of the 2^19 leaves must be evaluated cheaply.
+        edges = []
+        for i in range(9):
+            edges.append(MultigraphEdge(edge_id=f"a{i}", left=i, right=(i + 1) % 9))
+        for i in range(9):
+            edges.append(
+                MultigraphEdge(edge_id=f"b{i}", left=9 + i, right=9 + (i + 1) % 9)
+            )
+        edges.append(MultigraphEdge(edge_id="br", left=0, right=9))
+        graph = LooplessMultigraph(vertex_count=18, edges=tuple(edges))
+        result = _flow_find(graph, Z2, resource_budget={"require_nowhere_zero": True})
+        assert result.status == "EXHAUSTED"
+        assert result.termination_reason == "SEARCH_EXHAUSTED"
+        assert result.states_explored <= 1_048_576
+
+    def test_bridge_witness_found_matches_authoritative_conservation(self) -> None:
+        # The same two-cycle graph without the bridge admits a Z/2 flow;
+        # incremental divergence must agree with full conservation.
+        edges = []
+        for i in range(9):
+            edges.append(MultigraphEdge(edge_id=f"a{i}", left=i, right=(i + 1) % 9))
+        for i in range(9):
+            edges.append(
+                MultigraphEdge(edge_id=f"b{i}", left=9 + i, right=9 + (i + 1) % 9)
+            )
+        graph = LooplessMultigraph(vertex_count=18, edges=tuple(edges))
+        result = _flow_find(graph, Z2, resource_budget={"require_nowhere_zero": True})
+        assert result.status == "FOUND"
+        assert result.flow is not None
+
+
+class TestReplayTerminationReasonBinding:
+    def test_found_reason_relabeled_special_case_rejected(self) -> None:
+        result = _flow_find(TRIANGLE, Z3, resource_budget={"require_nowhere_zero": True})
+        assert result.status == "FOUND"
+        payload = result.model_dump()
+        payload["termination_reason"] = "SPECIAL_CASE"
+        with pytest.raises(ValidationError, match="search replay"):
+            MultigraphFlowFindResult.model_validate(payload)
+
+    def test_empty_graph_special_case_relabeled_witness_rejected(self) -> None:
+        empty_graph = LooplessMultigraph(vertex_count=3, edges=())
+        result = _flow_find(empty_graph, Z3)
+        payload = result.model_dump()
+        payload["termination_reason"] = "WITNESS_FOUND"
+        with pytest.raises(ValidationError, match="search replay"):
+            MultigraphFlowFindResult.model_validate(payload)

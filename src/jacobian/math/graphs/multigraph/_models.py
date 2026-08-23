@@ -468,7 +468,11 @@ class MultigraphFlowFindResult(StrictModel):
         )
 
         replay = _search_flow_unbound(self.graph, self.group, self.resource_budget)
-        if replay.status != self.status or replay.states_explored != self.states_explored:
+        if (
+            replay.status != self.status
+            or replay.states_explored != self.states_explored
+            or replay.termination_reason != self.termination_reason
+        ):
             raise ValueError(
                 f"{self.status} outcome does not match the deterministic "
                 f"search replay over the retained domain "

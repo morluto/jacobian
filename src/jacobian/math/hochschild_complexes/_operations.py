@@ -15,7 +15,9 @@ from jacobian.math.hochschild_complexes._models import (
 )
 
 
-def _pivot_row(aug: list[list[int]], col: int, start: int, rows: int, prime: int) -> int | None:
+def _pivot_row(
+    aug: list[list[int]], col: int, start: int, rows: int, prime: int
+) -> int | None:
     """First row at or below ``start`` with a nonzero entry in ``col``."""
     for r in range(start, rows):
         if aug[r][col] % prime != 0:
@@ -67,9 +69,7 @@ def _boundary_rank(
     """GF(p)-rank of the Hochschild boundary C_degree -> C_{degree-1}."""
     n = algebra.dimension
     if n**degree > element_budget:
-        raise ValueError(
-            "requested degree exceeds the supported tensor-element budget"
-        )
+        raise ValueError("requested degree exceeds the supported tensor-element budget")
     if degree == 0:
         return 0
     matrix = bar_differential_entries(
@@ -99,19 +99,21 @@ def compute_hochschild_chain_complex(
 
     group_dims = [1]
     for k in range(1, max_deg + 1):
-        group_dims.append(n ** k)
+        group_dims.append(n**k)
 
     differentials = []
 
     for degree in range(1, max_deg + 1):
-        differentials.append(HochschildDifferential(
-            degree=degree,
-            source_dim=n ** degree,
-            target_dim=n ** (degree - 1),
-            entries=bar_differential_entries(
-                alg.structure_constants, p, degree, alg.augmentation
-            ),
-        ))
+        differentials.append(
+            HochschildDifferential(
+                degree=degree,
+                source_dim=n**degree,
+                target_dim=n ** (degree - 1),
+                entries=bar_differential_entries(
+                    alg.structure_constants, p, degree, alg.augmentation
+                ),
+            )
+        )
 
     return HochschildChainComplexResult(
         algebra=alg,
@@ -135,12 +137,9 @@ def hochschild_homology_groups(
 
     group_dims = [1]
     for k in range(1, max_degree + 1):
-        group_dims.append(n ** k)
+        group_dims.append(n**k)
 
-    ranks = [
-        _boundary_rank(algebra, degree)
-        for degree in range(1, max_degree + 2)
-    ]
+    ranks = [_boundary_rank(algebra, degree) for degree in range(1, max_degree + 2)]
 
     groups = []
     for k in range(max_degree + 1):
@@ -152,10 +151,12 @@ def hochschild_homology_groups(
             raise ValueError(
                 "internal inconsistency: differentials do not square to zero"
             )
-        groups.append(HochschildHomologyGroup(
-            degree=k,
-            betti=betti,
-        ))
+        groups.append(
+            HochschildHomologyGroup(
+                degree=k,
+                betti=betti,
+            )
+        )
     return tuple(groups)
 
 

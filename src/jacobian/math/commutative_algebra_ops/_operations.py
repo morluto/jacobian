@@ -79,14 +79,13 @@ def compute_ideal_quotient(request: IdealQuotientRequest) -> IdealQuotientResult
     )
 
 
-
-
 def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturationResult:
     """Compute an exact ideal saturation I : <d>^infinity through the bounded Singular backend."""
 
     from jacobian.math.polynomials.values import (
         RationalPolynomialIdeal,
     )
+
     saturation_ideal = RationalPolynomialIdeal(
         variables=request.ideal.variables,
         generators=(request.saturation_polynomial,),
@@ -106,6 +105,7 @@ def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturation
         backend_version=backend.backend_version,
         detail=backend.detail,
     )
+
 
 __all__ = [
     "compute_ideal_quotient",

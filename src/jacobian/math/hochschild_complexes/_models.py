@@ -60,12 +60,13 @@ class AlgebraStructure(StrictModel):
         dimension = self.dimension
         for i in range(dimension):
             for j in range(dimension):
-                product_epsilon = sum(
-                    coefficient * epsilon[coefficient_index]
-                    for coefficient_index, coefficient in enumerate(
-                        constants[i][j]
+                product_epsilon = (
+                    sum(
+                        coefficient * epsilon[coefficient_index]
+                        for coefficient_index, coefficient in enumerate(constants[i][j])
                     )
-                ) % prime
+                    % prime
+                )
                 if product_epsilon != (epsilon[i] * epsilon[j]) % prime:
                     raise ValueError(
                         "augmentation must be an algebra homomorphism: "
@@ -132,7 +133,7 @@ class HochschildChainComplexRequest(StrictModel):
         if dimension ** (self.max_degree + 1) > MAX_HOCHSCHILD_TENSOR_ELEMENTS:
             raise ValueError(
                 "requested max_degree exceeds the supported tensor-element budget "
-                f"(dimension^{self.max_degree+1} > {MAX_HOCHSCHILD_TENSOR_ELEMENTS})"
+                f"(dimension^{self.max_degree + 1} > {MAX_HOCHSCHILD_TENSOR_ELEMENTS})"
             )
         densest_entries = dimension ** (2 * self.max_degree - 1)
         if densest_entries > MAX_HOCHSCHILD_MATRIX_ENTRIES:
@@ -190,7 +191,7 @@ class HochschildChainComplexResult(StrictModel):
             if differential.degree != degree:
                 raise ValueError("differential degrees must be consecutive from 1")
             if (
-                differential.source_dim != dimension**degree
+                differential.source_dim != dimension** degree
                 or differential.target_dim != dimension ** (degree - 1)
             ):
                 raise ValueError(

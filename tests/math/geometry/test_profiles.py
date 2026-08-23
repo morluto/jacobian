@@ -14,7 +14,9 @@ from jacobian.math.geometry._models import (
 from jacobian.math.geometry._operations import circumradius_profile
 
 
-def _reciprocal_labelled(label: str, first: int, second: int, digits: int) -> LabelledPoint2D:
+def _reciprocal_labelled(
+    label: str, first: int, second: int, digits: int
+) -> LabelledPoint2D:
     scale = 10 ** (digits - 1)
     return LabelledPoint2D(
         label=label,
@@ -55,9 +57,7 @@ class TestCircumradiusProfile:
             )
 
         result = circumradius_profile(
-            CircumradiusProfileRequest(
-                points=(point(0, 0), point(1, 0), point(0, 1))
-            )
+            CircumradiusProfileRequest(points=(point(0, 0), point(1, 0), point(0, 1)))
         )
         assert result.triple_count == 1
         entry = result.entries[0]
@@ -79,9 +79,7 @@ class TestCircumradiusProfile:
             )
 
         result = circumradius_profile(
-            CircumradiusProfileRequest(
-                points=(point(0, 0), point(1, 0), point(2, 0))
-            )
+            CircumradiusProfileRequest(points=(point(0, 0), point(1, 0), point(2, 0)))
         )
         assert result.entries[0].collinear
         assert result.entries[0].squared_circumradius is None

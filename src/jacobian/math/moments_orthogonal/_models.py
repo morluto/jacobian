@@ -27,7 +27,7 @@ MAX_RATIONAL_DIGITS = 4_096
 # coefficient must convert to a finite double and every subdiagonal entry must
 # stay far from both overflow and underflow so its square root is exact enough.
 MAX_QUADRATURE_MAGNITUDE = Fraction(10) ** 300
-MIN_QUADRATURE_SUBDIAGONAL = Fraction(1, 10 ** 300)
+MIN_QUADRATURE_SUBDIAGONAL = Fraction(1, 10**300)
 
 
 def _to_fractions(
@@ -46,9 +46,7 @@ def _validate_moments(moments: tuple[CanonicalRational, ...]) -> None:
     if not 1 <= len(moments) <= MAX_MOMENTS:
         raise ValueError("moment sequence must contain between 1 and 64 moments")
     for value in moments:
-        require_bounded_rational(
-            value, max_digits=MAX_RATIONAL_DIGITS, label="moment"
-        )
+        require_bounded_rational(value, max_digits=MAX_RATIONAL_DIGITS, label="moment")
 
 
 def _validate_alpha_beta(
@@ -235,9 +233,7 @@ class JacobiMatrixResult(JacobiMatrixRequest):
         if self.diagonal != _from_fractions(result.diagonal):
             raise ValueError("diagonal must match the exact Jacobi diagonal")
         if self.off_diagonal != _from_fractions(result.off_diagonal):
-            raise ValueError(
-                "off_diagonal must match the exact Jacobi off-diagonal"
-            )
+            raise ValueError("off_diagonal must match the exact Jacobi off-diagonal")
         return self
 
 
@@ -274,8 +270,10 @@ class ChristoffelDarbouxRequest(StrictModel):
         )
         for value in (result.kernel, *result.polynomials_evaluated):
             if (
-                len(format_canonical_integer(value.numerator)) > MAX_CANONICAL_RATIONAL_DIGITS
-                or len(format_canonical_integer(value.denominator)) > MAX_CANONICAL_RATIONAL_DIGITS
+                len(format_canonical_integer(value.numerator))
+                > MAX_CANONICAL_RATIONAL_DIGITS
+                or len(format_canonical_integer(value.denominator))
+                > MAX_CANONICAL_RATIONAL_DIGITS
             ):
                 raise ValueError(
                     "requested kernel order exceeds the canonical "
@@ -303,12 +301,8 @@ class ChristoffelDarbouxResult(ChristoffelDarbouxRequest):
             self.y.as_fraction(),
         )
         if self.kernel != CanonicalRational.from_fraction(result.kernel):
-            raise ValueError(
-                "kernel must be the exact Christoffel-Darboux kernel"
-            )
-        if self.polynomials_evaluated != _from_fractions(
-            result.polynomials_evaluated
-        ):
+            raise ValueError("kernel must be the exact Christoffel-Darboux kernel")
+        if self.polynomials_evaluated != _from_fractions(result.polynomials_evaluated):
             raise ValueError(
                 "polynomials_evaluated must match the evaluated polynomials"
             )
@@ -368,8 +362,12 @@ class GaussianQuadratureResult(GaussianQuadratureRequest):
     nodes: tuple[CanonicalRational, ...]
     weights: tuple[CanonicalRational, ...]
     complete: Literal[True] = True
-    method: Literal["APPROXIMATE_GOLUB_WELSCH_FLOAT64"] = "APPROXIMATE_GOLUB_WELSCH_FLOAT64"
-    approximation: Literal["FLOAT64_ROUNDED_DYADIC_RATIONAL"] = "FLOAT64_ROUNDED_DYADIC_RATIONAL"
+    method: Literal["APPROXIMATE_GOLUB_WELSCH_FLOAT64"] = (
+        "APPROXIMATE_GOLUB_WELSCH_FLOAT64"
+    )
+    approximation: Literal["FLOAT64_ROUNDED_DYADIC_RATIONAL"] = (
+        "FLOAT64_ROUNDED_DYADIC_RATIONAL"
+    )
 
     @model_validator(mode="after")
     def bind_gaussian_quadrature(self) -> Self:

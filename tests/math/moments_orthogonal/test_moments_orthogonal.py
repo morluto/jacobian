@@ -40,6 +40,7 @@ from jacobian.math.moments_orthogonal.values import MAX_RECURRENCE_ORDER
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _frac(num: int, den: int) -> Fraction:
     return Fraction(num, den)
 
@@ -107,12 +108,12 @@ class TestRecurrenceCoefficients:
         assert result.beta[0] == _frac(2, 1)
 
     def test_empty_rejected(self) -> None:
-        with pytest.raises(ValueError, match="between 1 and 64"):
+        with pytest.raises(ValueError, match="between 1 and 32"):
             recurrence_coefficients(())
 
     def test_zeroth_moment_nonzero(self) -> None:
         moments = (_frac(0, 1), _frac(1, 1), _frac(1, 2))
-        with pytest.raises(ValueError, match="nonzero"):
+        with pytest.raises(ValueError, match="positive"):
             recurrence_coefficients(moments)
 
     def test_two_moments_determine_one_pair(self) -> None:
@@ -124,9 +125,7 @@ class TestRecurrenceCoefficients:
 
     def test_even_length_sequence_fully_consumed(self) -> None:
         """Four uniform moments determine both coefficient pairs."""
-        result = recurrence_coefficients(
-            tuple(_frac(1, k) for k in range(1, 5))
-        )
+        result = recurrence_coefficients(tuple(_frac(1, k) for k in range(1, 5)))
         assert result.alpha == (_frac(1, 2), _frac(1, 2))
         assert result.beta == (_frac(1, 1), _frac(1, 12))
 
@@ -152,7 +151,7 @@ class TestJacobiMatrix:
         assert result.off_diagonal == ()
 
     def test_zero_beta_rejected(self) -> None:
-        with pytest.raises(ValueError, match="nonzero"):
+        with pytest.raises(ValueError, match="positive"):
             jacobi_matrix((_frac(0, 1),), (_frac(0, 1), _frac(1, 1)))
 
 
@@ -288,9 +287,7 @@ class TestGaussianQuadrature:
 
 class TestWireAdapters:
     def test_hankel_wire(self) -> None:
-        request = HankelMatrixRequest(
-            moments=tuple(_cr(1, k) for k in range(1, 8))
-        )
+        request = HankelMatrixRequest(moments=tuple(_cr(1, k) for k in range(1, 8)))
         result = compute_hankel_matrix(request)
         assert result.dimension == 4
         assert isinstance(result, HankelMatrixResult)
@@ -388,9 +385,7 @@ class TestRecurrenceValueComposition:
         payload = result.model_dump(mode="json")
         coefficients = payload["coefficients"]
 
-        jacobi = JacobiMatrixRequest.model_validate(
-            {"coefficients": coefficients}
-        )
+        jacobi = JacobiMatrixRequest.model_validate({"coefficients": coefficients})
         assert len(jacobi.coefficients.alpha) == 3
 
         christoffel = ChristoffelDarbouxRequest.model_validate(
@@ -415,8 +410,7 @@ class TestRecurrenceValueComposition:
         payload = result.model_dump()
         forged = dict(payload["coefficients"])
         forged["alpha"] = [
-            {"num": "1", "den": str(int(entry["den"]) + 2)}
-            for entry in forged["alpha"]
+            {"num": "1", "den": str(int(entry["den"]) + 2)} for entry in forged["alpha"]
         ]
         payload["coefficients"] = forged
         with pytest.raises(ValidationError, match="exact recurrence"):
@@ -436,16 +430,18 @@ class TestRecurrenceAdmissionBoundaries:
         request = RecurrenceCoefficientsRequest(moments=moments)
         result = compute_recurrence_coefficients(request)
         assert len(result.coefficients.beta) <= MAX_RECURRENCE_ORDER
-        assert RecurrenceCoefficientsResult.model_validate(
-            result.model_dump()
-        ) == result
+        assert (
+            RecurrenceCoefficientsResult.model_validate(result.model_dump()) == result
+        )
 
     def test_derived_coefficient_overflow_rejected_at_admission(self):
         """17 concentrated positive-definite moments whose exact recurrence
         coefficients leave the canonical rational domain cannot be accepted."""
         denominator_scale = Fraction(10) ** 299
         moments = tuple(
-            CanonicalRational.from_fraction(Fraction(1, k + 1) + Fraction(1, denominator_scale + 2 * k + 1))
+            CanonicalRational.from_fraction(
+                Fraction(1, k + 1) + Fraction(1, denominator_scale + 2 * k + 1)
+            )
             for k in range(17)
         )
         with pytest.raises(ValidationError, match="canonical"):

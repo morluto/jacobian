@@ -219,16 +219,16 @@ class IdealSaturationRequest(StrictModel):
 
     ideal: RationalPolynomialIdeal = Field(
         description=(
-            'An ideal in at most 6 variables with at most 16 generators and '
-            '256 aggregate terms; generator total degree is at most 12 and '
-            'coefficient components are at most 128 digits.'
+            "An ideal in at most 6 variables with at most 16 generators and "
+            "256 aggregate terms; generator total degree is at most 12 and "
+            "coefficient components are at most 128 digits."
         )
     )
     saturation_polynomial: RationalPolynomial = Field(
         description=(
-            'A single polynomial d in the ideal ring, with '
-            'at most 256 terms, total degree at most 12, and coefficient '
-            'components at most 128 digits.'
+            "A single polynomial d in the ideal ring, with "
+            "at most 256 terms, total degree at most 12, and coefficient "
+            "components at most 128 digits."
         )
     )
     resource_budget: IdealComputationBudget = Field(
@@ -253,16 +253,14 @@ class IdealSaturationRequest(StrictModel):
                 f"saturation polynomial exceeds total degree {MAX_INPUT_EXPONENT}"
             )
         if self.saturation_polynomial.variables != self.ideal.variables:
-            raise ValueError(
-                "saturation polynomial must use the ideal's ordered ring"
-            )
+            raise ValueError("saturation polynomial must use the ideal's ordered ring")
         return self
 
 
 def require_deterministic_saturation_certificate(
-    ideal,
-    saturation_polynomial,
-    saturation,
+    ideal: RationalPolynomialIdeal,
+    saturation_polynomial: RationalPolynomial,
+    saturation: RationalPolynomialIdeal,
 ) -> None:
     """Deterministic certificate check when backend replay is unavailable.
 
@@ -297,10 +295,7 @@ def require_deterministic_saturation_certificate(
         domain=sympy.QQ,
     )
     for generator in ideal.generators:
-        if (
-            sat_basis.reduce(rational_polynomial_to_sympy(generator).as_expr())[1]
-            != 0
-        ):
+        if sat_basis.reduce(rational_polynomial_to_sympy(generator).as_expr())[1] != 0:
             raise ValueError(
                 "saturation must equal the exact Singular replay of the "
                 "retained ideal and saturation polynomial"
@@ -359,9 +354,7 @@ class IdealSaturationResult(StrictModel):
                 variables=self.ideal.variables,
                 generators=(self.saturation_polynomial,),
             )
-            replay_budget = self.resource_budget.model_copy(
-                update={"wall_seconds": 60}
-            )
+            replay_budget = self.resource_budget.model_copy(update={"wall_seconds": 60})
             replay = run_singular_ideal_operation(
                 "saturation",
                 self.ideal,
@@ -382,6 +375,7 @@ class IdealSaturationResult(StrictModel):
             or self.backend_version is not None
             or not self.detail
         ):
-            raise ValueError("failed saturation computation requires only a safe detail")
+            raise ValueError(
+                "failed saturation computation requires only a safe detail"
+            )
         return self
-

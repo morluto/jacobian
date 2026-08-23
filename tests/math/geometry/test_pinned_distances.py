@@ -80,9 +80,7 @@ class TestAboveConversionLimit:
         )
         result = compute_pinned_distances(request)
         assert result.distinct_line_count >= 1
-        widest = max(
-            len(entry.squared_distance_numerator) for entry in result.lines
-        )
+        widest = max(len(entry.squared_distance_numerator) for entry in result.lines)
         assert widest > 1000  # large exact fractions carried without conversion
         # Result revalidation replays the minimum through canonical parsing.
         PinnedDistanceResult.model_validate(result.model_dump())

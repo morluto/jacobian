@@ -1,5 +1,7 @@
 """Wire adapters for prime-field matrix operations."""
 
+from __future__ import annotations
+
 from jacobian.math.prime_field_linear_algebra import (
     PrimeFieldMatrix,
     nullspace,
@@ -9,6 +11,7 @@ from jacobian.math.prime_field_linear_algebra import (
 from jacobian.math.prime_field_matrix_ops._models import (
     NullspaceRequest,
     NullspaceResult,
+    PrimeFieldMatrixValue,
     RankRequest,
     RankResult,
     RrefRequest,
@@ -16,7 +19,7 @@ from jacobian.math.prime_field_matrix_ops._models import (
 )
 
 
-def _matrix(request: RankRequest) -> PrimeFieldMatrix:
+def _matrix(request: RankRequest | PrimeFieldMatrixValue) -> PrimeFieldMatrix:
     return PrimeFieldMatrix(
         prime=request.prime,
         entries=request.entries,
@@ -24,7 +27,12 @@ def _matrix(request: RankRequest) -> PrimeFieldMatrix:
     )
 
 
-def compute_rank(request: RankRequest) -> RankResult:
+def compute_rank(request: RankRequest | PrimeFieldMatrixValue) -> RankResult:
+    # Accept a reusable PrimeFieldMatrixValue without reconstruction.
+    if isinstance(request, PrimeFieldMatrixValue):
+        request = RankRequest(
+            prime=request.prime, entries=request.entries, columns=request.columns
+        )
     matrix = _matrix(request)
     return RankResult(
         entries=request.entries,
@@ -34,7 +42,11 @@ def compute_rank(request: RankRequest) -> RankResult:
     )
 
 
-def compute_rref(request: RrefRequest) -> RrefResult:
+def compute_rref(request: RrefRequest | PrimeFieldMatrixValue) -> RrefResult:
+    if isinstance(request, PrimeFieldMatrixValue):
+        request = RrefRequest(
+            prime=request.prime, entries=request.entries, columns=request.columns
+        )
     matrix = PrimeFieldMatrix(
         prime=request.prime,
         entries=request.entries,
@@ -46,11 +58,20 @@ def compute_rref(request: RrefRequest) -> RrefResult:
         entries=request.entries,
         columns=request.columns,
         rref_rows=rref_rows,
+        rref=PrimeFieldMatrixValue(
+            prime=request.prime, entries=rref_rows, columns=request.columns
+        ),
         pivot_columns=pivot_columns,
     )
 
 
-def compute_nullspace(request: NullspaceRequest) -> NullspaceResult:
+def compute_nullspace(
+    request: NullspaceRequest | PrimeFieldMatrixValue,
+) -> NullspaceResult:
+    if isinstance(request, PrimeFieldMatrixValue):
+        request = NullspaceRequest(
+            prime=request.prime, entries=request.entries, columns=request.columns
+        )
     matrix = PrimeFieldMatrix(
         prime=request.prime,
         entries=request.entries,
@@ -62,6 +83,9 @@ def compute_nullspace(request: NullspaceRequest) -> NullspaceResult:
         entries=request.entries,
         columns=request.columns,
         nullspace_rows=ns,
+        nullspace=PrimeFieldMatrixValue(
+            prime=request.prime, entries=ns, columns=request.columns
+        ),
     )
 
 

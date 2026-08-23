@@ -22,19 +22,25 @@ class TestKnownAnswers:
 
     def test_unit_inversion_at_origin(self) -> None:
         # B = (4,0) -> (1/4, 0)
-        qx, qy = invert_point(Fraction(0), Fraction(0), Fraction(1), Fraction(4), Fraction(0))
+        qx, qy = invert_point(
+            Fraction(0), Fraction(0), Fraction(1), Fraction(4), Fraction(0)
+        )
         assert qx == Fraction(1, 4)
         assert qy == Fraction(0)
 
     def test_center_inversion(self) -> None:
         # C = (1,2) -> (1/5, 2/5)
-        qx, qy = invert_point(Fraction(0), Fraction(0), Fraction(1), Fraction(1), Fraction(2))
+        qx, qy = invert_point(
+            Fraction(0), Fraction(0), Fraction(1), Fraction(1), Fraction(2)
+        )
         assert qx == Fraction(1, 5)
         assert qy == Fraction(2, 5)
 
     def test_halfplane_inversion(self) -> None:
         # H = (1, 3/2) -> (4/13, 6/13)
-        qx, qy = invert_point(Fraction(0), Fraction(0), Fraction(1), Fraction(1), Fraction(3, 2))
+        qx, qy = invert_point(
+            Fraction(0), Fraction(0), Fraction(1), Fraction(1), Fraction(3, 2)
+        )
         assert qx == Fraction(4, 13)
         assert qy == Fraction(6, 13)
 
@@ -73,7 +79,9 @@ class TestInvariance:
 class TestRejection:
     def test_center_rejected(self) -> None:
         with pytest.raises(ValueError, match="center"):
-            invert_point(Fraction(0), Fraction(0), Fraction(1), Fraction(0), Fraction(0))
+            invert_point(
+                Fraction(0), Fraction(0), Fraction(1), Fraction(0), Fraction(0)
+            )
 
     def test_zero_power_rejected(self) -> None:
         with pytest.raises(ValidationError):
@@ -134,21 +142,11 @@ class TestDigitBounds:
     def test_boundary_inputs_return_exact_result(self) -> None:
         big_den = 10**2729
         request = CircleInversionRequest(
-            center_x=CanonicalRational.from_integer_ratio(
-                10**2728 + 11, big_den
-            ),
-            center_y=CanonicalRational.from_integer_ratio(
-                10**2728 + 17, big_den - 5
-            ),
-            power=CanonicalRational.from_integer_ratio(
-                big_den - 7, 10**2728 + 23
-            ),
-            point_x=CanonicalRational.from_integer_ratio(
-                10**2728 + 29, big_den - 11
-            ),
-            point_y=CanonicalRational.from_integer_ratio(
-                big_den - 13, 10**2728 + 31
-            ),
+            center_x=CanonicalRational.from_integer_ratio(10**2728 + 11, big_den),
+            center_y=CanonicalRational.from_integer_ratio(10**2728 + 17, big_den - 5),
+            power=CanonicalRational.from_integer_ratio(big_den - 7, 10**2728 + 23),
+            point_x=CanonicalRational.from_integer_ratio(10**2728 + 29, big_den - 11),
+            point_y=CanonicalRational.from_integer_ratio(big_den - 13, 10**2728 + 31),
         )
         result = compute_circle_inversion(request)
         qx, qy = result.inverted_point.x, result.inverted_point.y
@@ -162,11 +160,7 @@ class TestDigitBounds:
         px = request.point_x.as_fraction()
         py = request.point_y.as_fraction()
         norm_p = (px - cx) ** 2 + (py - cy) ** 2
-        norm_q = (
-            qx.as_fraction() - cx
-        ) ** 2 + (
-            qy.as_fraction() - cy
-        ) ** 2
+        norm_q = (qx.as_fraction() - cx) ** 2 + (qy.as_fraction() - cy) ** 2
         assert norm_p * norm_q == s * s
 
 

@@ -522,10 +522,14 @@ class CircumradiusProfileRequest(StrictModel):
         # the canonical 32,768-digit limit (see the constant's derivation).
         for item in self.points:
             require_bounded_rational(
-                item.point.x, max_digits=_MAX_CIRCUMRADIUS_COORDINATE_DIGITS, label="point.x"
+                item.point.x,
+                max_digits=_MAX_CIRCUMRADIUS_COORDINATE_DIGITS,
+                label="point.x",
             )
             require_bounded_rational(
-                item.point.y, max_digits=_MAX_CIRCUMRADIUS_COORDINATE_DIGITS, label="point.y"
+                item.point.y,
+                max_digits=_MAX_CIRCUMRADIUS_COORDINATE_DIGITS,
+                label="point.y",
             )
         return self
 
@@ -541,9 +545,7 @@ class CircumradiusTripleEntry(StrictModel):
     @model_validator(mode="after")
     def bind_collinear_to_value(self) -> Self:
         if self.collinear is (self.squared_circumradius is not None):
-            raise ValueError(
-                "exactly a collinear triple has no squared circumradius"
-            )
+            raise ValueError("exactly a collinear triple has no squared circumradius")
         if (
             self.squared_circumradius is not None
             and self.squared_circumradius.as_fraction() <= 0
@@ -561,9 +563,13 @@ def _replay_circumradius_entry(
     first, second, third = indices
     exp_labels = (points[first].label, points[second].label, points[third].label)
     if entry.labels != exp_labels:
-        raise ValueError("circumradius entry labels must follow the retained configuration order")
+        raise ValueError(
+            "circumradius entry labels must follow the retained configuration order"
+        )
     if entry.indices != indices:
-        raise ValueError("circumradius entry indices must follow the retained configuration order")
+        raise ValueError(
+            "circumradius entry indices must follow the retained configuration order"
+        )
     ax, ay = coords[first]
     bx, by = coords[second]
     cx, cy = coords[third]
@@ -603,14 +609,22 @@ class CircumradiusProfileResult(StrictModel):
         # Replay every triple's exact circumradius relation.
         from itertools import combinations
 
-        expected_count = len(self.points) * (len(self.points) - 1) * (len(self.points) - 2) // 6
+        expected_count = (
+            len(self.points) * (len(self.points) - 1) * (len(self.points) - 2) // 6
+        )
         if self.triple_count != expected_count:
-            raise ValueError("triple_count must equal C(n,3) of the retained configuration")
+            raise ValueError(
+                "triple_count must equal C(n,3) of the retained configuration"
+            )
         if len(self.entries) != expected_count:
             raise ValueError("entries must be complete for the retained configuration")
         # Build coordinate map and expected entries.
-        coords = [(p.point.x.as_fraction(), p.point.y.as_fraction()) for p in self.points]
-        for entry, indices in zip(self.entries, combinations(range(len(self.points)), 3), strict=True):
+        coords = [
+            (p.point.x.as_fraction(), p.point.y.as_fraction()) for p in self.points
+        ]
+        for entry, indices in zip(
+            self.entries, combinations(range(len(self.points)), 3), strict=True
+        ):
             _replay_circumradius_entry(entry, self.points, coords, indices)
         return self
 
@@ -646,10 +660,14 @@ class ForbiddenConfiguration(StrictModel):
             raise ValueError("configuration point coordinates must be unique")
         for item in self.points:
             require_bounded_rational(
-                item.point.x, max_digits=_MAX_CIRCUMRADIUS_COORDINATE_DIGITS, label="point.x"
+                item.point.x,
+                max_digits=_MAX_CIRCUMRADIUS_COORDINATE_DIGITS,
+                label="point.x",
             )
             require_bounded_rational(
-                item.point.y, max_digits=_MAX_CIRCUMRADIUS_COORDINATE_DIGITS, label="point.y"
+                item.point.y,
+                max_digits=_MAX_CIRCUMRADIUS_COORDINATE_DIGITS,
+                label="point.y",
             )
         return self
 
@@ -820,14 +838,20 @@ class ForbiddenPatternsResult(StrictModel):
         if self.collinear_triple != expected_collinear:
             raise ValueError("collinear witness must match the replayed enumeration")
         if self.checked_triples != expected_checked_triples:
-            raise ValueError("checked_triples must match the replayed enumeration prefix")
+            raise ValueError(
+                "checked_triples must match the replayed enumeration prefix"
+            )
         expected_has_concyclic, expected_concyclic, expected_checked_quadruples = (
             _replay_concyclic_quadruples(xy)
         )
         if self.has_concyclic_quadruple != expected_has_concyclic:
-            raise ValueError("has_concyclic_quadruple must match the replayed enumeration")
+            raise ValueError(
+                "has_concyclic_quadruple must match the replayed enumeration"
+            )
         if self.concyclic_quadruple != expected_concyclic:
             raise ValueError("concyclic witness must match the replayed enumeration")
         if self.checked_quadruples != expected_checked_quadruples:
-            raise ValueError("checked_quadruples must match the replayed enumeration prefix")
+            raise ValueError(
+                "checked_quadruples must match the replayed enumeration prefix"
+            )
         return self

@@ -8,11 +8,19 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.math.geometry._models import RationalPoint2D
 from jacobian.math.geometry._support import geometry_operation
+
+# Squared distance d^2 = cross(D, P-A)^2 / |D|^2 multiplies coordinate
+# differences: with per-component height H the numerator carries at most
+# 8H + 5 digits and the denominator at most 4H + 3, so bounding every
+# coordinate at 4,000 digits keeps every computed squared distance inside
+# CanonicalRational's 32,768-digit limit.
+MAX_PINNED_COORDINATE_DIGITS = 4_000
 
 
 class PinnedDistanceRequest(StrictModel):
@@ -26,14 +34,26 @@ class PinnedDistanceRequest(StrictModel):
         keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")
+        # Admission guarantees the computed profile fits its result type:
+        # without a coordinate-height bound, distinct 32k-digit denominators
+        # produce a squared distance no canonical rational consumer accepts.
+        for rational in (
+            self.anchor.x,
+            self.anchor.y,
+            *(value for point in self.points for value in (point.x, point.y)),
+        ):
+            require_bounded_rational(
+                rational,
+                max_digits=MAX_PINNED_COORDINATE_DIGITS,
+                label="point-set coordinate",
+            )
         return self
 
 
 class LineDistanceEntry(StrictModel):
     """One distinct line with its exact squared distance and source pairs."""
 
-    squared_distance_numerator: str
-    squared_distance_denominator: str
+    squared_distance: CanonicalRational
     source_pairs: tuple[tuple[int, int], ...]
 
 
@@ -80,7 +100,9 @@ def _profile_entries(
     # d^2 = cross(D, P-A)^2 / |D|^2.  Entries are keyed by the canonical
     # integer line equation so distinct lines are never merged; the distance
     # is entry data.
-    line_map: dict[tuple[str, str, str], tuple[list[tuple[int, int]], str, str]] = {}
+    line_map: dict[
+        tuple[str, str, str], tuple[list[tuple[int, int]], CanonicalRational]
+    ] = {}
 
     for i in range(len(pts)):
         for j in range(i + 1, len(pts)):
@@ -97,19 +119,16 @@ def _profile_entries(
             if key not in line_map:
                 line_map[key] = (
                     [],
-                    format_canonical_integer(sq_dist.numerator),
-                    format_canonical_integer(sq_dist.denominator),
+                    CanonicalRational.from_fraction(sq_dist),
                 )
             line_map[key][0].append((i, j))
 
     entries = []
     for key in sorted(line_map.keys()):
-        pairs, num, den = line_map[key]
         entries.append(
             LineDistanceEntry(
-                squared_distance_numerator=num,
-                squared_distance_denominator=den,
-                source_pairs=tuple(pairs),
+                squared_distance=line_map[key][1],
+                source_pairs=tuple(line_map[key][0]),
             )
         )
     return tuple(entries)
@@ -140,24 +159,26 @@ class PinnedDistanceResult(StrictModel):
                 "retained points"
             )
         if self.lines:
-            min_entry = min(self.lines, key=_entry_distance)
+            # The minimum must be a COMPLETE member of the replayed ledger:
+            # comparing only its scalar distance would accept an entry with
+            # forged source pairs.
+            minimum = min(_entry_distance(entry) for entry in self.lines)
             if self.min_squared_distance is None:
                 raise ValueError("min_squared_distance is required when lines exist")
-            if (
-                self.min_squared_distance.squared_distance_numerator
-                != min_entry.squared_distance_numerator
-                or self.min_squared_distance.squared_distance_denominator
-                != min_entry.squared_distance_denominator
+            if not any(
+                self.min_squared_distance == entry
+                for entry in self.lines
+                if _entry_distance(entry) == minimum
             ):
-                raise ValueError("min_squared_distance must be the minimum entry")
+                raise ValueError(
+                    "min_squared_distance must be a complete line-ledger "
+                    "entry achieving the minimum distance"
+                )
         return self
 
 
 def _entry_distance(entry: LineDistanceEntry) -> Fraction:
-    return Fraction(
-        parse_canonical_integer(entry.squared_distance_numerator),
-        parse_canonical_integer(entry.squared_distance_denominator),
-    )
+    return entry.squared_distance.as_fraction()
 
 
 def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceResult:

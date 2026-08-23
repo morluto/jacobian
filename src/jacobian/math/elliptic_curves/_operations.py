@@ -39,6 +39,7 @@ def compute_discriminant(request: EllipticCurveRequest) -> CurveDiscriminantResu
     b = _frac_from_rational(request.curve.coefficient_b)
     disc = _curve_discriminant(a, b)
     return CurveDiscriminantResult(
+        request=request,
         discriminant=_rational_from_frac(disc),
         is_nonsingular=disc != 0,
     )
@@ -52,7 +53,7 @@ def check_point_on_curve(request: CurvePointRequest) -> PointOnCurveResult:
     y = _frac_from_rational(request.point.y)
     lhs = y * y
     rhs = x * x * x + a * x + b
-    return PointOnCurveResult(on_curve=lhs == rhs)
+    return PointOnCurveResult(request=request, on_curve=lhs == rhs)
 
 
 def _point_add(
@@ -97,9 +98,10 @@ def add_points(
 
     result = _point_add(a, b, (x1, y1), (x2, y2))
     if result is None:
-        return EllipticCurvePointResult(at_infinity=True)
+        return EllipticCurvePointResult(curve=request.curve, at_infinity=True)
     x3, y3 = result
     return EllipticCurvePointResult(
+        curve=request.curve,
         point=RationalAffinePoint(
             x=_rational_from_frac(x3),
             y=_rational_from_frac(y3),

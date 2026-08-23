@@ -3,6 +3,7 @@
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.geometry._models import RationalPoint2D
 from jacobian.math.geometry.inversion._models import (
     CircleInversionRequest,
     CircleInversionResult,
@@ -11,22 +12,21 @@ from jacobian.math.geometry.inversion._models import (
 
 def compute_circle_inversion(request: CircleInversionRequest) -> CircleInversionResult:
     """Compute exact circle inversion of a rational planar point."""
-
-    cx = request.center_x.as_fraction()
-    cy = request.center_y.as_fraction()
-    s = request.power.as_fraction()
-    px = request.point_x.as_fraction()
-    py = request.point_y.as_fraction()
-
-    result = invert_point(cx, cy, s, px, py)
+    image_x, image_y = invert_point(
+        request.center.x.as_fraction(),
+        request.center.y.as_fraction(),
+        request.power.as_fraction(),
+        request.point.x.as_fraction(),
+        request.point.y.as_fraction(),
+    )
     return CircleInversionResult(
-        center_x=request.center_x,
-        center_y=request.center_y,
+        center=request.center,
         power=request.power,
-        point_x=request.point_x,
-        point_y=request.point_y,
-        inverted_x=CanonicalRational.from_fraction(result[0]),
-        inverted_y=CanonicalRational.from_fraction(result[1]),
+        point=request.point,
+        image=RationalPoint2D(
+            x=CanonicalRational.from_fraction(image_x),
+            y=CanonicalRational.from_fraction(image_y),
+        ),
     )
 
 
@@ -45,7 +45,6 @@ def invert_point(
 
     Raises ValueError if p = c.
     """
-
     dx = px - cx
     dy = py - cy
     norm_sq = dx * dx + dy * dy

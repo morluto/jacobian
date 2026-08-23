@@ -671,3 +671,39 @@ class TestNonsimpleFaceExtremality:
         result = _volume_via_vertices((*vertices, midpoint))
         assert result.dimension == 4
         assert result.volume == CanonicalRational(num="4", den="3")
+
+
+class TestNonzeroNormalContractPublished:
+    """The nonzero-normal requirement must be schema-visible and enforced
+    by a typed admission error (review thread: publish or remove it)."""
+
+    def test_zero_normal_row_rejected_at_request_admission(self) -> None:
+        """The reviewer's tautology `0*x + 0*y <= 1` fails typed validation,
+        not a host exception after acceptance."""
+        with pytest.raises(ValueError, match="must not all be zero"):
+            PolytopeVolumeRequest(
+                halfspaces=(
+                    _h((1, 1), (0, 1), offset=(1, 1)),
+                    _h((-1, 1), (0, 1), offset=(0, 1)),
+                    _h((0, 1), (1, 1), offset=(1, 1)),
+                    _h((0, 1), (-1, 1), offset=(0, 1)),
+                    _h((0, 1), (0, 1), offset=(1, 1)),
+                )
+            )
+
+    def test_nonzero_normal_rule_is_schema_visible(self) -> None:
+        schema = Halfspace.model_json_schema()
+        coefficients_description = schema["properties"]["coefficients"]["description"]
+        assert "nonzero" in coefficients_description
+        request_schema = PolytopeVolumeRequest.model_json_schema()
+        halfspaces_description = request_schema["properties"]["halfspaces"][
+            "description"
+        ]
+        assert "nonzero normal" in halfspaces_description
+
+    def test_operation_example_demonstrates_halfspace_input(self) -> None:
+        from jacobian.math.polytope._tools import POLYTOPE_OPERATIONS
+
+        (operation,) = POLYTOPE_OPERATIONS
+        names = [e.name for e in operation.examples]
+        assert "unit_square_halfspaces" in names

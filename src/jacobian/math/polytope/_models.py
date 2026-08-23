@@ -224,10 +224,21 @@ class Vertex(StrictModel):
 
 
 class Halfspace(StrictModel):
-    """One rational half-space ``<a, x> <= b`` of an H-representation."""
+    """One rational half-space ``<a, x> <= b`` of an H-representation.
+
+    The normal ``a`` must be nonzero: at least one coefficient entry must
+    differ from zero.  A row with all-zero coefficients is a tautology or
+    contradiction, not a half-space, and is rejected as a typed request
+    error rather than silently changing the polytope.
+    """
 
     coefficients: tuple[CanonicalRational, ...] = Field(
-        min_length=1, max_length=MAX_DIMENSION
+        min_length=1,
+        max_length=MAX_DIMENSION,
+        description=(
+            "Normal vector a of the half-space <a, x> <= b; at least one "
+            "entry must be nonzero (all-zero rows are rejected)."
+        ),
     )
     offset: CanonicalRational
 
@@ -250,7 +261,9 @@ class PolytopeVolumeRequest(StrictModel):
         max_length=MAX_FACETS,
         description=(
             "H-representation: the half-spaces ``<a_i, x> <= b_i``. "
-            "Mutually exclusive with ``vertices``."
+            "Mutually exclusive with ``vertices``. Each half-space must "
+            "have a nonzero normal: a row whose coefficients are all zero "
+            "is rejected."
         ),
     )
     dimension_bound: int = Field(

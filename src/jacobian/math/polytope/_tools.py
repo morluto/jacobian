@@ -47,7 +47,8 @@ POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "Compute the exact rational volume of a bounded rational polytope "
         "from its V-representation (vertices) or H-representation (half-spaces) "
         "for ambient dimension d <= 6, via triangulation and SymPy exact "
-        "determinant-based simplex volume.",
+        "determinant-based simplex volume. Every half-space must carry a "
+        "nonzero normal: rows whose coefficients are all zero are rejected.",
         PolytopeVolumeRequest,
         PolytopeVolumeResult,
         compute_polytope_volume,
@@ -83,6 +84,43 @@ POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                                 {"num": "0", "den": "1"},
                                 {"num": "1", "den": "1"},
                             ]
+                        },
+                    ],
+                },
+            ),
+            example(
+                "unit_square_halfspaces",
+                "Unit square [0,1]^2 as four half-spaces, each with a "
+                "nonzero normal (volume = 1).",
+                {
+                    "halfspaces": [
+                        {
+                            "coefficients": [
+                                {"num": "-1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            "offset": {"num": "0", "den": "1"},
+                        },
+                        {
+                            "coefficients": [
+                                {"num": "1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            "offset": {"num": "1", "den": "1"},
+                        },
+                        {
+                            "coefficients": [
+                                {"num": "0", "den": "1"},
+                                {"num": "-1", "den": "1"},
+                            ],
+                            "offset": {"num": "0", "den": "1"},
+                        },
+                        {
+                            "coefficients": [
+                                {"num": "0", "den": "1"},
+                                {"num": "1", "den": "1"},
+                            ],
+                            "offset": {"num": "1", "den": "1"},
                         },
                     ],
                 },

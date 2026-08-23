@@ -127,6 +127,29 @@ class TestCoefficientBounds:
         )
         assert ientries(mutate_seed(composed).exchange_matrix) == ientries(b)
 
+    def test_involutive_mutation_near_ceiling_admitted(self):
+        # b01=10**64, b12=6*10**64, b02=10**128 mutates to b'02=7*10**128;
+        # resubmitting that result must be admitted because the signed update
+        # returns b''02=7*10**128 - 6*10**128 = 10**128, not 13*10**128.
+        e = 10**64
+        b = em(
+            3,
+            (
+                (str(0), str(e), str(10**128)),
+                (str(-e), str(0), str(6 * e)),
+                (str(-(10**128)), str(-6 * e), str(0)),
+            ),
+            (str(1), str(1), str(1)),
+        )
+        once = mutate_seed(SeedMutationRequest(exchange_matrix=b, mutation_index=1))
+        assert parse_canonical_integer(
+            once.exchange_matrix.entries[0][2]
+        ) == 7 * 10**128
+        involuted = mutate_seed(
+            SeedMutationRequest(exchange_matrix=once.exchange_matrix, mutation_index=1)
+        )
+        assert ientries(involuted.exchange_matrix) == ientries(b)
+
     def test_request_rejects_mutation_exceeding_representation_ceiling(self):
         edge = 10**100
         b = em(
@@ -173,9 +196,30 @@ class TestCoefficientBounds:
 
     def test_result_ceiling_rejects_oversized_entries(self):
         # Even skew-symmetrizable matrices cannot carry unbounded integers.
-        huge = 10**130
+        # Enforcement precedes integer conversion: the schema caps canonical
+        # string length, and the digit-bound validator rejects values the
+        # string cap alone admits (a 130-character positive value).
+        beyond_schema = "9" * 500
+        with pytest.raises(ValidationError):
+            em(2, ((str(0), beyond_schema), (str(-1), str(0))), (str(1), str(1)))
+        at_schema_cap = "1" + "0" * 129
         with pytest.raises(ValidationError, match="129-digit bound"):
-            em(2, ((str(0), str(huge)), (str(-huge), str(0))), (str(1), str(1)))
+            em(2, ((str(0), at_schema_cap), (str(-1), str(0))), (str(1), str(1)))
+
+    def test_seventeen_by_seventeen_zero_matrix_is_admitted(self):
+        # Work and output derive from cells times coefficient heights, not a
+        # rank cap: 289 trivial updates returning a small exact matrix.
+        n = 17
+        b = em(n, tuple((0,) * n for _ in range(n)), (1,) * n)
+        result = mutate_seed(SeedMutationRequest(exchange_matrix=b, mutation_index=0))
+        assert ientries(result.exchange_matrix) == tuple(
+            (0,) * n for _ in range(n)
+        )
+
+    def test_zero_matrix_beyond_cell_budget_rejected(self):
+        n = 65  # 65**2 > MAX_EXCHANGE_CELLS even for an all-zero matrix
+        with pytest.raises(ValidationError):
+            em(n, tuple((0,) * n for _ in range(n)), (1,) * n)
 
     def test_gvector_request_accepts_representable_coefficients(self):
         # The g-vector result is the identity, so any representable seed works.

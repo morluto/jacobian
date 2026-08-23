@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from math import isqrt
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StringConstraints, model_validator
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 from jacobian.canonical import parse_canonical_integer as _parse_int
 
-MAX_EXCHANGE_SIZE = 16
 # Exchange-matrix values carry bounded integers so every skew-symmetrizability
 # product stays bounded work: symmetrizer entries stay below
 # 10**MAX_EXCHANGE_ENTRY_DIGITS and entries below 10**MAX_MUTATED_ENTRY_DIGITS.
@@ -23,8 +23,27 @@ MAX_EXCHANGE_SIZE = 16
 # mutation result is therefore itself an admissible input.
 MAX_EXCHANGE_ENTRY_DIGITS = 64
 MAX_MUTATED_ENTRY_DIGITS = 2 * MAX_EXCHANGE_ENTRY_DIGITS + 1
-_MAX_SYMMETRIZER_MAGNITUDE = 10**MAX_EXCHANGE_ENTRY_DIGITS
+# Work and output derive from dimensions and coefficient heights rather than a
+# coarse rank cap: mutation performs n**2 updates on coefficients of at most
+# MAX_MUTATED_ENTRY_DIGITS digits, validation performs n**2 symmetrized
+# products, and the exact result is an n x n matrix with cells of at most
+# MAX_MUTATED_ENTRY_DIGITS digits. The cell budget below therefore bounds all
+# admitted kernel work and serialized output; it is a conservative envelope,
+# not a mathematical restriction on exchange-matrix dimension.
+MAX_EXCHANGE_CELLS = 4096
+_MAX_EXCHANGE_SIDE = isqrt(MAX_EXCHANGE_CELLS)
+_MAX_ENTRY_STRING_LENGTH = MAX_MUTATED_ENTRY_DIGITS + 1
+_MAX_SYMMETRIZER_STRING_LENGTH = MAX_EXCHANGE_ENTRY_DIGITS + 1
 _MAX_ENTRY_MAGNITUDE = 10**MAX_MUTATED_ENTRY_DIGITS
+
+ExchangeCoefficient = Annotated[
+    CanonicalInteger,
+    StringConstraints(strict=True, max_length=_MAX_ENTRY_STRING_LENGTH),
+]
+SymmetrizerCoefficient = Annotated[
+    CanonicalInteger,
+    StringConstraints(strict=True, max_length=_MAX_SYMMETRIZER_STRING_LENGTH),
+]
 
 
 def parsed_entries(matrix: ExchangeMatrix) -> tuple[tuple[int, ...], ...]:
@@ -46,15 +65,20 @@ def encoded_entries(
 
 
 def _require_bounded_entries(matrix: ExchangeMatrix, *, max_digits: int) -> None:
-    magnitude = 10**max_digits
-    if any(abs(entry) >= magnitude for row in parsed_entries(matrix) for entry in row):
+    # Inspect canonical-string lengths before any integer conversion so the
+    # declared digit ceiling bounds parsing work and intermediate allocation.
+    if any(
+        len(value.lstrip("-")) > max_digits
+        for row in matrix.entries
+        for value in row
+    ):
         raise ValueError(
             f"exchange-matrix coefficients exceed the {max_digits}-digit bound"
         )
 
 
 def _require_bounded_symmetrizer(matrix: ExchangeMatrix) -> None:
-    if any(abs(d) >= _MAX_SYMMETRIZER_MAGNITUDE for d in parsed_symmetrizer(matrix)):
+    if any(len(d.lstrip("-")) > MAX_EXCHANGE_ENTRY_DIGITS for d in matrix.symmetrizer):
         raise ValueError(
             "symmetrizer coefficients exceed the "
             f"{MAX_EXCHANGE_ENTRY_DIGITS}-digit bound"
@@ -72,8 +96,8 @@ def _require_mutatable(matrix: ExchangeMatrix, index: int) -> None:
             if i == index or j == index:
                 continue
             b_kj = pivot_row[j]
-            growth = abs(positive_i * max(b_kj, 0) - negative_i * max(-b_kj, 0))
-            if abs(b_ij) + growth >= _MAX_ENTRY_MAGNITUDE:
+            delta = positive_i * max(b_kj, 0) - negative_i * max(-b_kj, 0)
+            if abs(b_ij + delta) >= _MAX_ENTRY_MAGNITUDE:
                 raise ValueError(
                     "mutation result exceeds the "
                     f"{MAX_MUTATED_ENTRY_DIGITS}-digit exchange-matrix bound"
@@ -99,15 +123,18 @@ class ExchangeMatrix(StrictModel):
     accept matrices that are not skew-symmetrizable.
     """
 
-    n: int = Field(ge=1, le=MAX_EXCHANGE_SIZE)
+    # The side limit is isqrt(MAX_EXCHANGE_CELLS): admitting n admits exactly
+    # n**2 <= MAX_EXCHANGE_CELLS cells of bounded-coefficient work.
+    n: int = Field(ge=1, le=_MAX_EXCHANGE_SIDE)
     # Coefficients are canonical integer strings: mutation squares magnitudes,
     # so raw JSON integers would leave the interoperable transport range while
-    # the mathematical value stays exact.
-    entries: tuple[tuple[CanonicalInteger, ...], ...] = Field(
-        min_length=1, max_length=MAX_EXCHANGE_SIZE
+    # the mathematical value stays exact. The per-string max_length is the
+    # schema-visible form of the digit ceiling (digits plus an optional sign).
+    entries: tuple[tuple[ExchangeCoefficient, ...], ...] = Field(
+        min_length=1, max_length=_MAX_EXCHANGE_SIDE
     )
-    symmetrizer: tuple[CanonicalInteger, ...] = Field(
-        min_length=1, max_length=MAX_EXCHANGE_SIZE
+    symmetrizer: tuple[SymmetrizerCoefficient, ...] = Field(
+        min_length=1, max_length=_MAX_EXCHANGE_SIDE
     )
 
     @model_validator(mode="after")
@@ -115,9 +142,9 @@ class ExchangeMatrix(StrictModel):
         # The representation ceiling keeps every skew-symmetrizability product
         # bounded; mutation requests further derive their one-step growth via
         # _require_mutatable.
+        _require_shape(self)
         _require_bounded_entries(self, max_digits=MAX_MUTATED_ENTRY_DIGITS)
         _require_bounded_symmetrizer(self)
-        _require_shape(self)
         entries = parsed_entries(self)
         symmetrizer = parsed_symmetrizer(self)
         for i in range(self.n):

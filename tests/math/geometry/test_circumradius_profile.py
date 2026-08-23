@@ -150,3 +150,10 @@ class TestCollinearLabelBinding:
         payload["entries"][0]["labels"] = ["A", "B", "Z"]
         with pytest.raises(ValidationError):
             CircumradiusProfileResult.model_validate(payload)
+
+    def test_forged_labels_on_noncollinear_entry_are_rejected(self) -> None:
+        result = circumradius_profile(_unit_right_triangle())
+        payload = result.model_dump()
+        payload["entries"][0]["labels"] = ["X", "Y", "Z"]
+        with pytest.raises(ValidationError, match="labels must match source"):
+            CircumradiusProfileResult.model_validate(payload)

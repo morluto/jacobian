@@ -26,7 +26,7 @@ MAX_RATIONAL_DIGITS = 4_096
 # coefficient must convert to a finite double and every subdiagonal entry must
 # stay far from both overflow and underflow so its square root is exact enough.
 MAX_QUADRATURE_MAGNITUDE = Fraction(10) ** 300
-MIN_QUADRATURE_SUBDIAGONAL = Fraction(1, 10 ** 300)
+MIN_QUADRATURE_SUBDIAGONAL = Fraction(1, 10**300)
 
 
 def _to_fractions(
@@ -35,7 +35,7 @@ def _to_fractions(
     return tuple(v.as_fraction() for v in values)
 
 
-def _from_fractions(values) -> tuple[CanonicalRational, ...]:
+def _from_fractions(values: tuple[Fraction, ...]) -> tuple[CanonicalRational, ...]:
     return tuple(CanonicalRational.from_fraction(v) for v in values)
 
 
@@ -43,9 +43,7 @@ def _validate_moments(moments: tuple[CanonicalRational, ...]) -> None:
     if not 1 <= len(moments) <= MAX_MOMENTS:
         raise ValueError("moment sequence must contain between 1 and 64 moments")
     for value in moments:
-        require_bounded_rational(
-            value, max_digits=MAX_RATIONAL_DIGITS, label="moment"
-        )
+        require_bounded_rational(value, max_digits=MAX_RATIONAL_DIGITS, label="moment")
 
 
 def _validate_alpha_beta(
@@ -201,15 +199,11 @@ class JacobiMatrixResult(JacobiMatrixRequest):
     def bind_jacobi(self) -> Self:
         from jacobian.math.moments_orthogonal.operations import jacobi_matrix
 
-        result = jacobi_matrix(
-            _to_fractions(self.alpha), _to_fractions(self.beta)
-        )
+        result = jacobi_matrix(_to_fractions(self.alpha), _to_fractions(self.beta))
         if self.diagonal != _from_fractions(result.diagonal):
             raise ValueError("diagonal must match the exact Jacobi diagonal")
         if self.off_diagonal != _from_fractions(result.off_diagonal):
-            raise ValueError(
-                "off_diagonal must match the exact Jacobi off-diagonal"
-            )
+            raise ValueError("off_diagonal must match the exact Jacobi off-diagonal")
         return self
 
 
@@ -294,8 +288,9 @@ def _require_bounded_kernel_growth(
         h_num += bn[k]
         h_den += bd[k]
         # term_k = p_k(x) p_k(y) / h_k before reduction.
-        term_bounds.append((px_num[k] + py_num[k] + h_den,
-                            px_den[k] + py_den[k] + h_num))
+        term_bounds.append(
+            (px_num[k] + py_num[k] + h_den, px_den[k] + py_den[k] + h_num)
+        )
         total_den += term_bounds[-1][1]
     # Summing over the common denominator multiplies each term numerator by
     # every other term's denominator; reduction only shrinks the result.
@@ -323,12 +318,8 @@ class ChristoffelDarbouxRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_coefficients(self) -> Self:
         _validate_alpha_beta(self.alpha, self.beta)
-        require_bounded_rational(
-            self.x, max_digits=MAX_RATIONAL_DIGITS, label="x"
-        )
-        require_bounded_rational(
-            self.y, max_digits=MAX_RATIONAL_DIGITS, label="y"
-        )
+        require_bounded_rational(self.x, max_digits=MAX_RATIONAL_DIGITS, label="x")
+        require_bounded_rational(self.y, max_digits=MAX_RATIONAL_DIGITS, label="y")
         _require_bounded_kernel_growth(
             tuple(v.as_fraction() for v in self.alpha),
             tuple(v.as_fraction() for v in self.beta),
@@ -357,12 +348,8 @@ class ChristoffelDarbouxResult(ChristoffelDarbouxRequest):
             self.y.as_fraction(),
         )
         if self.kernel != CanonicalRational.from_fraction(result.kernel):
-            raise ValueError(
-                "kernel must be the exact Christoffel-Darboux kernel"
-            )
-        if self.polynomials_evaluated != _from_fractions(
-            result.polynomials_evaluated
-        ):
+            raise ValueError("kernel must be the exact Christoffel-Darboux kernel")
+        if self.polynomials_evaluated != _from_fractions(result.polynomials_evaluated):
             raise ValueError(
                 "polynomials_evaluated must match the evaluated polynomials"
             )
@@ -374,61 +361,71 @@ class ChristoffelDarbouxResult(ChristoffelDarbouxRequest):
 # ---------------------------------------------------------------------------
 
 
+def _validate_quadrature_shape(
+    alpha: tuple[CanonicalRational, ...],
+    beta: tuple[CanonicalRational, ...],
+) -> None:
+    if not 1 <= len(alpha) <= MAX_QUADRATURE_POINTS:
+        raise ValueError("alpha must contain between 1 and 16 entries")
+    if len(beta) != len(alpha) and len(beta) != len(alpha) + 1:
+        raise ValueError("beta must have length len(alpha) or len(alpha)+1")
+    beta_zero = beta[0].as_fraction()
+    if beta_zero <= 0:
+        raise ValueError(
+            "beta_0 (the zeroth moment of a positive functional) must be positive"
+        )
+    if beta_zero < MIN_QUADRATURE_SUBDIAGONAL:
+        raise ValueError(
+            "beta_0 falls below the quadrature underflow bound; "
+            "beta_0 must be >= 1e-300 to convert to a finite IEEE double"
+        )
+    # Subdiagonal entries feed math.sqrt after float conversion; they must
+    # be positive and safely inside the finite IEEE-double range.
+    for index in range(1, min(len(alpha), len(beta))):
+        sub = beta[index].as_fraction()
+        if sub <= 0:
+            raise ValueError(
+                "subdiagonal beta entries must be positive squared-norm ratios"
+            )
+        if sub < MIN_QUADRATURE_SUBDIAGONAL:
+            raise ValueError(
+                "subdiagonal beta entries fall below the quadrature underflow bound"
+            )
+
+
+def _validate_quadrature_double_representable(
+    values: tuple[CanonicalRational, ...],
+) -> None:
+    """Every coefficient must convert to a finite, nonzero-preserving double."""
+    for value in values:
+        require_bounded_rational(
+            value, max_digits=MAX_RATIONAL_DIGITS, label="coefficient"
+        )
+        if abs(value.as_fraction()) > MAX_QUADRATURE_MAGNITUDE:
+            raise ValueError(
+                "quadrature coefficients exceed the finite-float magnitude bound"
+            )
+        # Ensure every coefficient converts to a finite IEEE double without
+        # underflowing to zero (beta_0 already checked, but diagonal alpha
+        # values and subdiagonals must also be representable).
+        try:
+            converted = float(value.as_fraction())
+        except (OverflowError, ValueError) as err:
+            raise ValueError(
+                "quadrature coefficient does not fit in IEEE double"
+            ) from err
+        if converted == 0.0 and value.as_fraction() != 0:
+            raise ValueError("quadrature coefficient underflows IEEE double to zero")
+
+
 class GaussianQuadratureRequest(StrictModel):
     alpha: tuple[CanonicalRational, ...] = Field(min_length=1)
     beta: tuple[CanonicalRational, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
     def require_valid_coefficients(self) -> Self:
-        if not 1 <= len(self.alpha) <= MAX_QUADRATURE_POINTS:
-            raise ValueError("alpha must contain between 1 and 16 entries")
-        if (
-            len(self.beta) != len(self.alpha)
-            and len(self.beta) != len(self.alpha) + 1
-        ):
-            raise ValueError("beta must have length len(alpha) or len(alpha)+1")
-        beta_zero = self.beta[0].as_fraction()
-        if beta_zero <= 0:
-            raise ValueError(
-                "beta_0 (the zeroth moment of a positive functional) must be positive"
-            )
-        if beta_zero < MIN_QUADRATURE_SUBDIAGONAL:
-            raise ValueError(
-                "beta_0 falls below the quadrature underflow bound; "
-                "beta_0 must be >= 1e-300 to convert to a finite IEEE double"
-            )
-        # Subdiagonal entries feed math.sqrt after float conversion; they must
-        # be positive and safely inside the finite IEEE-double range, and the
-        # diagonal and mu_0 must convert to finite doubles without overflow.
-        for index in range(1, min(len(self.alpha), len(self.beta))):
-            sub = self.beta[index].as_fraction()
-            if sub <= 0:
-                raise ValueError(
-                    "subdiagonal beta entries must be positive squared-norm ratios"
-                )
-            if sub < MIN_QUADRATURE_SUBDIAGONAL:
-                raise ValueError(
-                    "subdiagonal beta entries fall below the quadrature underflow bound"
-                )
-        for value in (*self.alpha, *self.beta):
-            require_bounded_rational(
-                value, max_digits=MAX_RATIONAL_DIGITS, label="coefficient"
-            )
-            if abs(value.as_fraction()) > MAX_QUADRATURE_MAGNITUDE:
-                raise ValueError(
-                    "quadrature coefficients exceed the finite-float magnitude bound"
-                )
-            # Ensure every coefficient converts to a finite IEEE double without
-            # underflowing to zero (beta_0 already checked, but diagonal alpha
-            # values and subdiagonals must also be representable).
-            try:
-                converted = float(value.as_fraction())
-            except (OverflowError, ValueError):
-                raise ValueError("quadrature coefficient does not fit in IEEE double")
-            if converted == 0.0 and value.as_fraction() != 0:
-                raise ValueError(
-                    "quadrature coefficient underflows IEEE double to zero"
-                )
+        _validate_quadrature_shape(self.alpha, self.beta)
+        _validate_quadrature_double_representable((*self.alpha, *self.beta))
         return self
 
 
@@ -467,7 +464,9 @@ class GaussianQuadratureResult(GaussianQuadratureRequest):
             _to_fractions(self.alpha), _to_fractions(self.beta)
         )
         if self.approximate_nodes != _from_fractions(result.approximate_nodes):
-            raise ValueError("approximate_nodes must match the Golub-Welsch eigenvalues")
+            raise ValueError(
+                "approximate_nodes must match the Golub-Welsch eigenvalues"
+            )
         if self.approximate_weights != _from_fractions(result.approximate_weights):
             raise ValueError("approximate_weights must match the Golub-Welsch weights")
         return self

@@ -44,9 +44,15 @@ class CircleInversionRequest(StrictModel):
     inverted coordinates stay within the canonical 32,768-digit limit.
     """
 
-    center: GeometryPoint = Field(description="Inversion center as a canonical geometry point")
-    power: CanonicalRational = Field(description="Positive rational inversion power (squared radius)")
-    point: GeometryPoint = Field(description="Point to invert as a canonical geometry point")
+    center: GeometryPoint = Field(
+        description="Inversion center as a canonical geometry point"
+    )
+    power: CanonicalRational = Field(
+        description="Positive rational inversion power (squared radius)"
+    )
+    point: GeometryPoint = Field(
+        description="Point to invert as a canonical geometry point"
+    )
 
     @model_validator(mode="after")
     def require_admissible_request(self) -> Self:

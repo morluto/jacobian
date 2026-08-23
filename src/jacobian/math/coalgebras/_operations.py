@@ -17,7 +17,9 @@ from jacobian.math.coalgebras._models import (
 from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
 
 
-def compute_comultiplication(request: ComultiplicationRequest) -> ComultiplicationResult:
+def compute_comultiplication(
+    request: ComultiplicationRequest,
+) -> ComultiplicationResult:
     """Compute Delta(c_i) for a basis element of a coalgebra.
 
     Returns the comultiplication as a dimension x dimension matrix of coefficients
@@ -29,8 +31,7 @@ def compute_comultiplication(request: ComultiplicationRequest) -> Comultiplicati
     p = ca.prime
 
     coeffs = tuple(
-        tuple(ca.comultiplication[i][j][k] % p for k in range(n))
-        for j in range(n)
+        tuple(ca.comultiplication[i][j][k] % p for k in range(n)) for j in range(n)
     )
 
     return ComultiplicationResult(
@@ -68,7 +69,9 @@ def _group_like_coefficients(
     p = ca.prime
 
     comult = tuple(
-        tuple(tuple(ca.comultiplication[i][j][k] % p for k in range(n)) for j in range(n))
+        tuple(
+            tuple(ca.comultiplication[i][j][k] % p for k in range(n)) for j in range(n)
+        )
         for i in range(n)
     )
     counit = tuple(ca.counit[i] % p for i in range(n))
@@ -79,19 +82,20 @@ def _group_like_coefficients(
             continue
 
         delta = [
-            [
-                sum(coeffs[i] * comult[i][j][k] for i in range(n)) % p
-                for k in range(n)
-            ]
+            [sum(coeffs[i] * comult[i][j][k] for i in range(n)) % p for k in range(n)]
             for j in range(n)
         ]
-        tensor_square = [[coeffs[j] * coeffs[k] % p for k in range(n)] for j in range(n)]
+        tensor_square = [
+            [coeffs[j] * coeffs[k] % p for k in range(n)] for j in range(n)
+        ]
         if delta == tensor_square:
             found.append(coeffs)
     return tuple(found)
 
 
-def find_group_like_elements(request: GroupLikeElementsRequest) -> GroupLikeElementsResult:
+def find_group_like_elements(
+    request: GroupLikeElementsRequest,
+) -> GroupLikeElementsResult:
     """Find all group-like elements g in a coalgebra over GF(p).
 
     An element g is group-like if Delta(g) = g ⊗ g and epsilon(g) = 1.

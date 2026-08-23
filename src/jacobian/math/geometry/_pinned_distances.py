@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from math import gcd
-from typing import Literal
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -33,16 +33,17 @@ class PinnedDistanceRequest(StrictModel):
     )
 
     @model_validator(mode="after")
-    def require_unique_points(self):
-        keys = tuple(
-            (p.x.num, p.x.den, p.y.num, p.y.den)
-            for p in self.points
-        )
+    def require_unique_points(self) -> Self:
+        keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")
         for pt in (self.anchor, *self.points):
-            require_bounded_rational(pt.x, max_digits=_MAX_PINNED_COORDINATE_DIGITS, label="coordinate")
-            require_bounded_rational(pt.y, max_digits=_MAX_PINNED_COORDINATE_DIGITS, label="coordinate")
+            require_bounded_rational(
+                pt.x, max_digits=_MAX_PINNED_COORDINATE_DIGITS, label="coordinate"
+            )
+            require_bounded_rational(
+                pt.y, max_digits=_MAX_PINNED_COORDINATE_DIGITS, label="coordinate"
+            )
         return self
 
 
@@ -66,24 +67,24 @@ class PinnedDistanceResult(StrictModel):
     method: Literal["EXACT_PINNED_DISTANCES"] = "EXACT_PINNED_DISTANCES"
 
     @model_validator(mode="after")
-    def require_invariants(self):
+    def require_invariants(self) -> Self:
         from jacobian._exact import require_bounded_rational
 
         # A directly supplied result bypasses PinnedDistanceRequest, so
         # reapply the cardinality, uniqueness, and coordinate-height bounds
         # before any replay work.
         if len(self.points) > MAX_PINNED_DISTANCE_POINTS:
-            raise ValueError(
-                "point set exceeds the pinned-distance enumeration budget"
-            )
-        keys = tuple(
-            (p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points
-        )
+            raise ValueError("point set exceeds the pinned-distance enumeration budget")
+        keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")
         for pt in (self.anchor, *self.points):
-            require_bounded_rational(pt.x, max_digits=_MAX_PINNED_COORDINATE_DIGITS, label="coordinate")
-            require_bounded_rational(pt.y, max_digits=_MAX_PINNED_COORDINATE_DIGITS, label="coordinate")
+            require_bounded_rational(
+                pt.x, max_digits=_MAX_PINNED_COORDINATE_DIGITS, label="coordinate"
+            )
+            require_bounded_rational(
+                pt.y, max_digits=_MAX_PINNED_COORDINATE_DIGITS, label="coordinate"
+            )
         if self.distinct_line_count != len(self.lines):
             raise ValueError("distinct_line_count must match the line count")
         # Replay the bounded computation from the retained points so an
@@ -91,16 +92,18 @@ class PinnedDistanceResult(StrictModel):
         expected = _line_entries_from_points(self.anchor, self.points)
         if self.lines != expected:
             raise ValueError(
-                "lines must equal the exact replay from the retained "
-                "anchor and points"
+                "lines must equal the exact replay from the retained anchor and points"
             )
         if self.min_squared_distance is not None:
             if not self.lines:
                 raise ValueError("no minimum entry can exist without lines")
-            min_entry = min(expected, key=lambda e: Fraction(
-                parse_canonical_integer(e.squared_distance_numerator),
-                parse_canonical_integer(e.squared_distance_denominator),
-            ))
+            min_entry = min(
+                expected,
+                key=lambda e: Fraction(
+                    parse_canonical_integer(e.squared_distance_numerator),
+                    parse_canonical_integer(e.squared_distance_denominator),
+                ),
+            )
             if self.min_squared_distance != min_entry:
                 raise ValueError("min_squared_distance must be the minimum entry")
         elif self.lines:
@@ -153,9 +156,7 @@ def _line_entries_from_points(
     # d^2 = cross(D, P-A)^2 / |D|^2
     # Entries are keyed by the canonical integer line equation a*x + b*y = c so
     # that distinct lines are never merged; the distance is entry data.
-    line_map: dict[
-        tuple[str, str, str], tuple[list[tuple[int, int]], str, str]
-    ] = {}
+    line_map: dict[tuple[str, str, str], tuple[list[tuple[int, int]], str, str]] = {}
 
     for i in range(len(pts)):
         for j in range(i + 1, len(pts)):
@@ -198,10 +199,17 @@ def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceRe
 
     entries = _line_entries_from_points(request.anchor, request.points)
 
-    min_entry = min(entries, key=lambda e: Fraction(
-        parse_canonical_integer(e.squared_distance_numerator),
-        parse_canonical_integer(e.squared_distance_denominator),
-    )) if entries else None
+    min_entry = (
+        min(
+            entries,
+            key=lambda e: Fraction(
+                parse_canonical_integer(e.squared_distance_numerator),
+                parse_canonical_integer(e.squared_distance_denominator),
+            ),
+        )
+        if entries
+        else None
+    )
 
     return PinnedDistanceResult(
         anchor=request.anchor,

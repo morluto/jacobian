@@ -65,8 +65,7 @@ class Coalgebra(StrictModel):
         for value in self.counit:
             if not 0 <= value < self.prime:
                 raise ValueError(
-                    "counit entries must be canonical residues in "
-                    f"0..{self.prime - 1}"
+                    f"counit entries must be canonical residues in 0..{self.prime - 1}"
                 )
 
     def _require_coalgebra_axioms(self) -> None:
@@ -93,9 +92,7 @@ class Coalgebra(StrictModel):
                         left = sum(d[i][t][ell] * d[t][j][k] for t in range(n)) % p
                         right = sum(d[i][j][t] * d[t][k][ell] for t in range(n)) % p
                         if left != right:
-                            raise ValueError(
-                                "comultiplication must be coassociative"
-                            )
+                            raise ValueError("comultiplication must be coassociative")
 
         # Counit identities: both (epsilon tensor id)Delta = id and
         # (id tensor epsilon)Delta = id must hold.
@@ -149,9 +146,7 @@ class ComultiplicationResult(StrictModel):
         # The canonical value carries its own field: a GF(p) coalgebra cannot
         # describe a matrix over a different modulus.
         if self.matrix.prime != p:
-            raise ValueError(
-                "matrix prime must match the retained coalgebra's field"
-            )
+            raise ValueError("matrix prime must match the retained coalgebra's field")
         expected = tuple(
             tuple(ca.comultiplication[self.element_index][j][k] % p for k in range(n))
             for j in range(n)
@@ -192,8 +187,7 @@ class CounitResult(StrictModel):
             raise ValueError("element_index must be in 0..dimension-1")
         if self.value != ca.counit[self.element_index] % ca.prime:
             raise ValueError(
-                "value must be the exact counit of the retained coalgebra "
-                "basis element"
+                "value must be the exact counit of the retained coalgebra basis element"
             )
         return self
 
@@ -211,7 +205,7 @@ class GroupLikeElementsRequest(StrictModel):
     @model_validator(mode="after")
     def require_enumerable(self) -> Self:
         if (
-            self.coalgebra.prime ** self.coalgebra.dimension
+            self.coalgebra.prime**self.coalgebra.dimension
             > GROUP_LIKE_ENUMERATION_BUDGET
         ):
             raise ValueError(
@@ -238,11 +232,11 @@ class GroupLikeElementsResult(StrictModel):
     def bind_group_like_to_source(self) -> Self:
         """Replay the exhaustive enumeration against the retained coalgebra.
 
-        The request model bounds prime**dimension within the documented
-        enumeration budget, so replaying the defining relations
-        Delta(g) = g (x) g and epsilon(g) = 1 over the whole element space is
-        deterministic bounded work; the retained conclusion must be exactly
-        that enumeration.
+        The enumeration admission bound is reapplied here because a serialized
+        result validates its ``coalgebra`` as a plain ``Coalgebra``, which
+        carries no enumerability guarantee; only then is the defining replay
+        Delta(g) = g (x) g and epsilon(g) = 1 over the whole element space
+        deterministic bounded work that the retained conclusion must match.
         """
         from jacobian.math.coalgebras._operations import _group_like_coefficients
 
@@ -253,7 +247,7 @@ class GroupLikeElementsResult(StrictModel):
         # a Coalgebra, not as a GroupLikeElementsRequest, so the request
         # guard alone never runs.
         if (
-            self.coalgebra.prime ** self.coalgebra.dimension
+            self.coalgebra.prime**self.coalgebra.dimension
             > GROUP_LIKE_ENUMERATION_BUDGET
         ):
             raise ValueError(
@@ -274,8 +268,7 @@ class GroupLikeElementsResult(StrictModel):
         expected = _group_like_coefficients(self.coalgebra)
         if tuple(element.coefficients for element in self.elements) != expected:
             raise ValueError(
-                "elements must be the exact group-like set of the retained "
-                "coalgebra"
+                "elements must be the exact group-like set of the retained coalgebra"
             )
         return self
 

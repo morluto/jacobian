@@ -162,7 +162,7 @@ class TestGroupLikeElements:
             ),
             counit=(1, 1),
         )
-        assert ca.prime ** ca.dimension > GROUP_LIKE_ENUMERATION_BUDGET
+        assert ca.prime**ca.dimension > GROUP_LIKE_ENUMERATION_BUDGET
         with pytest.raises(ValueError, match="enumeration requires"):
             GroupLikeElementsRequest(coalgebra=ca)
 
@@ -177,7 +177,7 @@ class TestGroupLikeElements:
             ),
             counit=(1, 1),
         )
-        assert ca.prime ** ca.dimension <= GROUP_LIKE_ENUMERATION_BUDGET
+        assert ca.prime**ca.dimension <= GROUP_LIKE_ENUMERATION_BUDGET
         result = find_group_like_elements(GroupLikeElementsRequest(coalgebra=ca))
         # Both basis elements are group-like in this direct-sum coalgebra.
         assert result.count == 2
@@ -205,9 +205,7 @@ class TestSourceBoundResults:
             ComultiplicationRequest(coalgebra=ca, element_index=1)
         )
         counit = compute_counit(CounitRequest(coalgebra=ca, element_index=0))
-        group_like = find_group_like_elements(
-            GroupLikeElementsRequest(coalgebra=ca)
-        )
+        group_like = find_group_like_elements(GroupLikeElementsRequest(coalgebra=ca))
         assert ComultiplicationResult.model_validate(comult.model_dump()) == comult
         assert CounitResult.model_validate(counit.model_dump()) == counit
         assert (
@@ -223,6 +221,22 @@ class TestSourceBoundResults:
         """A nonempty coalgebra cannot validate an empty enumeration."""
         ca = self._two_dim_coalgebra()
         with pytest.raises(ValueError, match="exact group-like set"):
+            GroupLikeElementsResult(coalgebra=ca, elements=(), count=0)
+
+    def test_detached_result_reapplies_enumeration_budget(self):
+        """A serialized result validates its coalgebra as a plain Coalgebra,
+        so the replay must reapply prime**dimension admission itself."""
+        ca = Coalgebra(
+            prime=9973,
+            dimension=2,
+            comultiplication=(
+                ((1, 0), (0, 0)),
+                ((0, 0), (0, 1)),
+            ),
+            counit=(1, 1),
+        )
+        assert ca.prime**ca.dimension > GROUP_LIKE_ENUMERATION_BUDGET
+        with pytest.raises(ValidationError, match="enumeration requires"):
             GroupLikeElementsResult(coalgebra=ca, elements=(), count=0)
 
     def test_forged_comultiplication_coefficients_are_rejected(self):
@@ -280,7 +294,7 @@ class TestEnumerationBudgetBeforeReplay:
             ),
             counit=(1, 1),
         )
-        assert big.prime ** big.dimension > GROUP_LIKE_ENUMERATION_BUDGET
+        assert big.prime**big.dimension > GROUP_LIKE_ENUMERATION_BUDGET
         started = time.monotonic()
         with pytest.raises(ValidationError, match="enumeration requires"):
             GroupLikeElementsResult(coalgebra=big, elements=(), count=0)

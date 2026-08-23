@@ -65,6 +65,48 @@ class TestSourceReplayBinding:
         )
         assert distances == [("0", "1"), ("0", "1"), ("144", "25")]
 
+    def test_pair_partition_matches_generating_pairs(self) -> None:
+        result = compute_pinned_distances(self._request())
+        by_pairs = {entry.source_pairs: entry for entry in result.lines}
+        assert by_pairs[((0, 1),)].squared_distance_numerator == "0"
+        assert by_pairs[((0, 2),)].squared_distance_numerator == "0"
+        hypotenuse = by_pairs[((1, 2),)]
+        assert (
+            hypotenuse.squared_distance_numerator,
+            hypotenuse.squared_distance_denominator,
+        ) == ("144", "25")
+
+    def test_collinear_configuration_single_line(self) -> None:
+        result = compute_pinned_distances(
+            PinnedDistanceRequest(
+                anchor=_pt("0", "0"),
+                points=(_pt("1", "0"), _pt("2", "0"), _pt("4", "0")),
+            )
+        )
+        assert result.distinct_line_count == 1
+        entry = result.lines[0]
+        assert (
+            entry.squared_distance_numerator,
+            entry.squared_distance_denominator,
+        ) == ("0", "1")
+        assert entry.source_pairs == ((0, 1), (0, 2), (1, 2))
+
+    def test_rational_coordinates_exact_distance(self) -> None:
+        result = compute_pinned_distances(
+            PinnedDistanceRequest(
+                anchor=_pt("0", "0"),
+                points=(_pt("1", "0"), _pt("0", "1")),
+            )
+        )
+        assert result.distinct_line_count == 1
+        # Line x + y = 1 has squared distance 1/2 from the origin.
+        assert result.lines[0].squared_distance_numerator == "1"
+        assert result.lines[0].squared_distance_denominator == "2"
+
+    def test_round_trip_replay(self) -> None:
+        result = compute_pinned_distances(self._request())
+        assert PinnedDistanceResult.model_validate(result.model_dump()) == result
+
     def test_empty_profile_with_distinct_points_rejected(self) -> None:
         with pytest.raises(ValidationError, match="replay"):
             PinnedDistanceResult(
@@ -91,6 +133,20 @@ class TestSourceReplayBinding:
                 min_squared_distance=forged_entry,
             )
 
+    def test_forged_source_pair_partition_rejected(self) -> None:
+        genuine = compute_pinned_distances(self._request())
+        payload = genuine.model_dump()
+        payload["lines"][0]["source_pairs"] = ((0, 1), (1, 2))
+        with pytest.raises(ValidationError, match="replay"):
+            PinnedDistanceResult.model_validate(payload)
+
+    def test_forged_line_count_rejected(self) -> None:
+        genuine = compute_pinned_distances(self._request())
+        payload = genuine.model_dump()
+        payload["distinct_line_count"] = len(payload["lines"]) + 1
+        with pytest.raises(ValidationError, match="line count"):
+            PinnedDistanceResult.model_validate(payload)
+
     def test_detached_minimum_rejected(self) -> None:
         genuine = compute_pinned_distances(self._request())
         other = next(e for e in genuine.lines if e != genuine.min_squared_distance)
@@ -101,6 +157,13 @@ class TestSourceReplayBinding:
                 lines=genuine.lines,
                 distinct_line_count=genuine.distinct_line_count,
                 min_squared_distance=other,
+            )
+
+    def test_duplicate_request_points_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="unique"):
+            PinnedDistanceRequest(
+                anchor=_pt("0", "0"),
+                points=(_pt("1", "0"), _pt("1", "0")),
             )
 
 
@@ -120,10 +183,7 @@ class TestAdmissionBudget:
             )
 
     def test_point_count_capped_by_enumeration_budget(self) -> None:
-        points = tuple(
-            _pt(str(index), str(index * index))
-            for index in range(33)
-        )
+        points = tuple(_pt(str(index), str(index * index)) for index in range(33))
         with pytest.raises(ValidationError):
             PinnedDistanceRequest(anchor=_pt("0", "0"), points=points)
 

@@ -381,3 +381,40 @@ class TestToolsAndExamples:
         for tool in TOOLS:
             names = [ex.name for ex in tool.examples]
             assert len(names) == len(set(names))
+
+
+class TestNativeQuadratureDomain:
+    """Direct native callers face the wire request's finite-double domain."""
+
+    def test_native_overflow_magnitude_rejected(self):
+        from fractions import Fraction
+
+        with pytest.raises(ValueError, match="finite-float magnitude bound"):
+            gaussian_quadrature((Fraction(10**1000),), (Fraction(1),))
+
+    def test_native_negative_mass_rejected(self):
+        from fractions import Fraction
+
+        with pytest.raises(ValueError, match="must be positive"):
+            gaussian_quadrature((Fraction(0),), (Fraction(-1),))
+
+    def test_native_zero_subdiagonal_rejected(self):
+        from fractions import Fraction
+
+        with pytest.raises(ValueError, match="positive squared-norm ratios"):
+            gaussian_quadrature((Fraction(0), Fraction(1)), (Fraction(1), Fraction(0)))
+
+    def test_native_cd_rejects_nonpositive_norms(self):
+        from fractions import Fraction
+
+        with pytest.raises(ValueError, match="positive squared-norm ratios"):
+            christoffel_darboux(
+                (Fraction(0), Fraction(0)),
+                (Fraction(1), Fraction(-1)),
+                Fraction(1),
+                Fraction(1),
+            )
+        with pytest.raises(ValueError, match="must be positive"):
+            christoffel_darboux(
+                (Fraction(0),), (Fraction(-1),), Fraction(1), Fraction(1)
+            )

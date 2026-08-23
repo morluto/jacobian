@@ -6,6 +6,8 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
+from jacobian._exact import CanonicalInteger, format_canonical_integer
+from jacobian._exact import parse_canonical_integer as _parse_int
 from jacobian._models import StrictModel
 
 MAX_EXCHANGE_SIZE = 16
@@ -24,16 +26,34 @@ _MAX_SYMMETRIZER_MAGNITUDE = 10**MAX_EXCHANGE_ENTRY_DIGITS
 _MAX_ENTRY_MAGNITUDE = 10**MAX_MUTATED_ENTRY_DIGITS
 
 
+def parsed_entries(matrix: ExchangeMatrix) -> tuple[tuple[int, ...], ...]:
+    """The exchange matrix as exact integers for kernel consumption."""
+    return tuple(tuple(_parse_int(value) for value in row) for row in matrix.entries)
+
+
+def parsed_symmetrizer(matrix: ExchangeMatrix) -> tuple[int, ...]:
+    return tuple(_parse_int(d) for d in matrix.symmetrizer)
+
+
+def encoded_entries(
+    entries: tuple[tuple[int, ...], ...],
+) -> tuple[tuple[str, ...], ...]:
+    """Canonical integer strings so every coefficient survives JSON transport."""
+    return tuple(
+        tuple(format_canonical_integer(value) for value in row) for row in entries
+    )
+
+
 def _require_bounded_entries(matrix: ExchangeMatrix, *, max_digits: int) -> None:
     magnitude = 10**max_digits
-    if any(abs(entry) >= magnitude for row in matrix.entries for entry in row):
+    if any(abs(entry) >= magnitude for row in parsed_entries(matrix) for entry in row):
         raise ValueError(
             f"exchange-matrix coefficients exceed the {max_digits}-digit bound"
         )
 
 
 def _require_bounded_symmetrizer(matrix: ExchangeMatrix) -> None:
-    if any(abs(d) >= _MAX_SYMMETRIZER_MAGNITUDE for d in matrix.symmetrizer):
+    if any(abs(d) >= _MAX_SYMMETRIZER_MAGNITUDE for d in parsed_symmetrizer(matrix)):
         raise ValueError(
             "symmetrizer coefficients exceed the "
             f"{MAX_EXCHANGE_ENTRY_DIGITS}-digit bound"
@@ -42,7 +62,7 @@ def _require_bounded_symmetrizer(matrix: ExchangeMatrix) -> None:
 
 def _require_mutatable(matrix: ExchangeMatrix, index: int) -> None:
     """Admit exactly those mutations whose result stays representable."""
-    rows = matrix.entries
+    rows = parsed_entries(matrix)
     pivot_row = rows[index]
     for i, row in enumerate(rows):
         positive_i = max(row[index], 0)
@@ -79,10 +99,15 @@ class ExchangeMatrix(StrictModel):
     """
 
     n: int = Field(ge=1, le=MAX_EXCHANGE_SIZE)
-    entries: tuple[tuple[int, ...], ...] = Field(
+    # Coefficients are canonical integer strings: mutation squares magnitudes,
+    # so raw JSON integers would leave the interoperable transport range while
+    # the mathematical value stays exact.
+    entries: tuple[tuple[CanonicalInteger, ...], ...] = Field(
         min_length=1, max_length=MAX_EXCHANGE_SIZE
     )
-    symmetrizer: tuple[int, ...] = Field(min_length=1, max_length=MAX_EXCHANGE_SIZE)
+    symmetrizer: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_EXCHANGE_SIZE
+    )
 
     @model_validator(mode="after")
     def require_valid_matrix(self) -> Self:
@@ -92,20 +117,19 @@ class ExchangeMatrix(StrictModel):
         _require_bounded_entries(self, max_digits=MAX_MUTATED_ENTRY_DIGITS)
         _require_bounded_symmetrizer(self)
         _require_shape(self)
+        entries = parsed_entries(self)
+        symmetrizer = parsed_symmetrizer(self)
         for i in range(self.n):
-            if self.symmetrizer[i] <= 0:
+            if symmetrizer[i] <= 0:
                 raise ValueError(
                     "symmetrizer entries must be strictly positive integers"
                 )
         for i in range(self.n):
-            if self.entries[i][i] != 0:
+            if entries[i][i] != 0:
                 raise ValueError("diagonal entries must be zero")
         for i in range(self.n):
             for j in range(self.n):
-                if (
-                    self.symmetrizer[i] * self.entries[i][j]
-                    != -self.symmetrizer[j] * self.entries[j][i]
-                ):
+                if symmetrizer[i] * entries[i][j] != -symmetrizer[j] * entries[j][i]:
                     raise ValueError(
                         f"skew-symmetrizability condition violated at ({i}, {j})"
                     )
@@ -193,4 +217,7 @@ __all__ = [
     "GVectorResult",
     "SeedMutationRequest",
     "SeedMutationResult",
+    "encoded_entries",
+    "parsed_entries",
+    "parsed_symmetrizer",
 ]

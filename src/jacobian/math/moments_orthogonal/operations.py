@@ -9,8 +9,10 @@ from jacobian.math.moments_orthogonal.values import (
     MAX_HANKEL_DIMENSION,
     MAX_MOMENTS,
     MAX_POLYNOMIAL_COUNT,
+    MAX_QUADRATURE_MAGNITUDE,
     MAX_QUADRATURE_POINTS,
     MAX_RECURRENCE_ORDER,
+    MIN_QUADRATURE_MAGNITUDE,
     ChristoffelDarbouxKernel,
     GaussianQuadrature,
     HankelMatrix,
@@ -185,6 +187,87 @@ def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> Jacobi
     )
 
 
+def _require_finite_double_coefficients(
+    alpha: Sequence[Fraction], beta: Sequence[Fraction]
+) -> None:
+    """Enforce the finite IEEE-double domain the Golub-Welsch backend computes in.
+
+    The decomposition converts every admitted coefficient to an IEEE double: a
+    magnitude beyond the double range overflows (raising inside execution), a
+    tiny positive value underflows to zero, and an underflowed ``beta_0``
+    silently collapses every quadrature weight even though the weights must
+    sum to ``beta_0``. The native kernel enforces the same domain as the wire
+    request model so direct callers cannot reach a host conversion exception.
+    """
+    if beta[0] <= 0:
+        raise ValueError(
+            "beta_0 (the zeroth moment of a positive functional) must be positive"
+        )
+    if beta[0] < MIN_QUADRATURE_MAGNITUDE:
+        raise ValueError(
+            "beta_0 falls below the quadrature underflow bound; "
+            "beta_0 must be >= 1e-300 to convert to a finite IEEE double"
+        )
+    # Subdiagonal entries feed math.sqrt after float conversion; they must be
+    # positive squared-norm ratios safely inside the finite double range.
+    for index in range(1, min(len(alpha), len(beta))):
+        sub = beta[index]
+        if sub <= 0:
+            raise ValueError(
+                "subdiagonal beta entries must be positive squared-norm ratios"
+            )
+        if sub < MIN_QUADRATURE_MAGNITUDE:
+            raise ValueError(
+                "subdiagonal beta entries fall below the quadrature underflow bound"
+            )
+    for value in (*alpha, *beta):
+        if abs(value) > MAX_QUADRATURE_MAGNITUDE:
+            raise ValueError(
+                "quadrature coefficients exceed the finite-float magnitude bound"
+            )
+        try:
+            converted = float(value)
+        except (OverflowError, ValueError) as error:
+            raise ValueError(
+                "quadrature coefficient does not fit in IEEE double"
+            ) from error
+        if converted == 0.0 and value != 0:
+            raise ValueError("quadrature coefficient underflows IEEE double to zero")
+
+
+def _require_cd_admission(
+    alpha: Sequence[Fraction],
+    beta: Sequence[Fraction],
+    x: Fraction,
+    y: Fraction,
+) -> None:
+    """Shape, exactness, and positivity admission for the CD kernel."""
+    if not 1 <= len(beta) <= MAX_POLYNOMIAL_COUNT:
+        raise ValueError("beta must contain between 1 and 32 entries")
+    if not 0 <= len(alpha) <= MAX_POLYNOMIAL_COUNT:
+        raise ValueError("alpha out of range")
+    if len(alpha) != len(beta) and len(alpha) != len(beta) - 1:
+        raise ValueError("alpha must have length len(beta)-1 or len(beta)")
+    if type(x) is not Fraction or type(y) is not Fraction:
+        raise TypeError("x and y must use exact Fractions")
+    if any(type(value) is not Fraction for value in alpha):
+        raise TypeError("alpha must use exact Fractions")
+    if any(type(value) is not Fraction for value in beta):
+        raise TypeError("beta must use exact Fractions")
+    # beta_0 is the zeroth moment of the claimed positive functional, and
+    # beta_1..beta_{n-1} are squared-norm ratios: none can be nonpositive for
+    # the documented family, matching the wire request's admission.
+    if beta[0] <= 0:
+        raise ValueError(
+            "beta_0 (the zeroth moment of a positive functional) must be positive"
+        )
+    for index in range(1, min(len(alpha), len(beta))):
+        if beta[index] <= 0:
+            raise ValueError(
+                "subdiagonal beta entries must be positive squared-norm ratios"
+            )
+
+
 def christoffel_darboux(
     alpha: Sequence[Fraction],
     beta: Sequence[Fraction],
@@ -210,10 +293,7 @@ def christoffel_darboux(
         raise ValueError("alpha out of range")
     if len(alpha) != len(beta) and len(alpha) != len(beta) - 1:
         raise ValueError("alpha must have length len(beta)-1 or len(beta)")
-    if type(x) is not Fraction or type(y) is not Fraction:
-        raise TypeError("x and y must use exact Fractions")
-    if beta[0] == 0:
-        raise ValueError("beta_0 must be nonzero")
+    _require_cd_admission(alpha, beta, x, y)
     n = len(alpha)
     if n == 0:
         return ChristoffelDarbouxKernel(
@@ -269,8 +349,10 @@ def gaussian_quadrature(
         raise ValueError("alpha must contain between 1 and 16 entries")
     if len(beta) != n and len(beta) != n + 1:
         raise ValueError("beta must have length len(alpha) or len(alpha)+1")
-    if beta[0] == 0:
-        raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+    # The kernel runs in IEEE doubles; enforce its finite-double domain here so
+    # direct callers cannot overflow or silently lose mass at this conversion,
+    # identically to the wire request model.
+    _require_finite_double_coefficients(alpha, beta)
     diagonal = np.array([float(a) for a in alpha], dtype=float)
     off: list[float] = []
     for k in range(n - 1):

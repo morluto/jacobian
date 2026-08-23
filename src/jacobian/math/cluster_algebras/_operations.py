@@ -9,6 +9,8 @@ from jacobian.math.cluster_algebras._models import (
     SeedMutationRequest,
     SeedMutationResult,
     _identity_matrix,
+    encoded_entries,
+    parsed_entries,
 )
 
 
@@ -19,7 +21,7 @@ def _mutation_of(matrix: ExchangeMatrix, k: int) -> ExchangeMatrix:
     the mutation without recursion.
     """
     n = matrix.n
-    old = [list(row) for row in matrix.entries]
+    old = [list(row) for row in parsed_entries(matrix)]
 
     new = [[0] * n for _ in range(n)]
     for i in range(n):
@@ -40,7 +42,7 @@ def _mutation_of(matrix: ExchangeMatrix, k: int) -> ExchangeMatrix:
                 )
     return ExchangeMatrix(
         n=n,
-        entries=tuple(tuple(row) for row in new),
+        entries=encoded_entries(tuple(tuple(row) for row in new)),
         symmetrizer=matrix.symmetrizer,
     )
 

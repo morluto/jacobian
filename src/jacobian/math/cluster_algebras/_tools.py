@@ -48,8 +48,8 @@ def cluster_algebra_operation[
 _MUTATION_EXAMPLE: dict[str, Any] = {
     "exchange_matrix": {
         "n": 2,
-        "entries": [[0, 1], [-1, 0]],
-        "symmetrizer": [1, 1],
+        "entries": [["0", "1"], ["-1", "0"]],
+        "symmetrizer": ["1", "1"],
     },
     "mutation_index": 0,
 }
@@ -57,8 +57,8 @@ _MUTATION_EXAMPLE: dict[str, Any] = {
 _GVECTOR_EXAMPLE: dict[str, Any] = {
     "exchange_matrix": {
         "n": 2,
-        "entries": [[0, 1], [-1, 0]],
-        "symmetrizer": [1, 1],
+        "entries": [["0", "1"], ["-1", "0"]],
+        "symmetrizer": ["1", "1"],
     },
 }
 

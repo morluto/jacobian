@@ -4,12 +4,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
+from fractions import Fraction as _Fraction
 
 MAX_MOMENTS = 64
 MAX_POLYNOMIAL_COUNT = 32
 MAX_HANKEL_DIMENSION = 32
 MAX_RECURRENCE_ORDER = 16
 MAX_QUADRATURE_POINTS = 16
+
+# Golub-Welsch converts admitted rationals to IEEE doubles; every accepted
+# coefficient must convert to a finite nonzero double and every subdiagonal
+# entry must stay far from both overflow and underflow so its square root is
+# exact enough.
+MAX_QUADRATURE_MAGNITUDE = _Fraction(10) ** 300
+MIN_QUADRATURE_MAGNITUDE = _Fraction(1, 10**300)
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,8 +69,10 @@ __all__ = [
     "MAX_HANKEL_DIMENSION",
     "MAX_MOMENTS",
     "MAX_POLYNOMIAL_COUNT",
+    "MAX_QUADRATURE_MAGNITUDE",
     "MAX_QUADRATURE_POINTS",
     "MAX_RECURRENCE_ORDER",
+    "MIN_QUADRATURE_MAGNITUDE",
     "ChristoffelDarbouxKernel",
     "GaussianQuadrature",
     "HankelMatrix",

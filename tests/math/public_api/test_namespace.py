@@ -16,6 +16,7 @@ import importlib
 import jacobian
 
 ROOT_MATH_DOMAINS = (
+    "additive_combinatorics",
     "algebraic_combinatorics",
     "arithmetic",
     "arithmetic_dynamics",

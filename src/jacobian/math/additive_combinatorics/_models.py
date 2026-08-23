@@ -11,6 +11,15 @@ from pydantic import Field, StringConstraints, model_validator
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.math.additive_combinatorics.operations import (
+    MAX_SUBSET_SUM_DP_TRANSITIONS,
+    MAX_SUBSET_SUM_PROFILE_RESULT_BYTES,
+    _subset_sum_profile_envelope,
+)
+from jacobian.math.additive_combinatorics.values import (
+    MAX_SUBSET_SUM_PROFILE_ENTRIES,
+    IndexedIntegerSequence,
+)
 
 _MAX_SET_SIZE = 256
 _MAX_RESULT_SIZE = _MAX_SET_SIZE * _MAX_SET_SIZE
@@ -310,6 +319,39 @@ class RepresentationProfileResult(StrictModel):
 
 
 # ---------------------------------------------------------------------------
+# Complete indexed subset-sum profile
+# ---------------------------------------------------------------------------
+
+
+class SubsetSumProfileRequest(StrictModel):
+    """Compute every indexed subset-sum multiplicity, including the empty set.
+
+    Admission is result-sensitive: it bounds the exact sum span, the number of
+    source-selection vectors, sparse-DP transitions, multiplicity digits, and
+    worst-case serialized profile before the dynamic program begins.
+    """
+
+    source: IndexedIntegerSequence = Field(
+        description=(
+            "The ordered indexed integer sequence. Each position is selectable "
+            "at most once; repeated values and zeros remain distinct positions. "
+            "Before execution, S=min(2^n, positive_sum-negative_sum+1, "
+            "product(m_v+1) over distinct nonzero values v) must fit "
+            f"{MAX_SUBSET_SUM_PROFILE_ENTRIES:,} "
+            f"rows, 4*n*S must not exceed {MAX_SUBSET_SUM_DP_TRANSITIONS:,} "
+            "dictionary transitions across construction and validation replay, "
+            "and the conservative serialized-result estimate must not exceed "
+            f"{MAX_SUBSET_SUM_PROFILE_RESULT_BYTES:,} bytes."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_admitted_profile_envelope(self) -> Self:
+        _subset_sum_profile_envelope(self.source)
+        return self
+
+
+# ---------------------------------------------------------------------------
 # Additive energy
 # ---------------------------------------------------------------------------
 
@@ -416,6 +458,7 @@ __all__ = [
     "RepresentationProfileEntry",
     "RepresentationProfileRequest",
     "RepresentationProfileResult",
+    "SubsetSumProfileRequest",
     "SumsetCardinalityRequest",
     "SumsetCardinalityResult",
 ]

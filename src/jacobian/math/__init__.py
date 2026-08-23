@@ -1,6 +1,7 @@
 """Native-value mathematical APIs supported by Jacobian."""
 
 from jacobian.math import (
+    additive_combinatorics,
     algebraic_combinatorics,
     arithmetic,
     arithmetic_dynamics,
@@ -34,6 +35,7 @@ from jacobian.math import (
 )
 
 __all__ = [
+    "additive_combinatorics",
     "algebraic_combinatorics",
     "arithmetic",
     "arithmetic_dynamics",

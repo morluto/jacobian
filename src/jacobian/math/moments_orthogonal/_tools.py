@@ -101,7 +101,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute monic orthogonal polynomial recurrence coefficients",
         "Compute exact three-term recurrence coefficients (alpha, beta) for "
         "the monic orthogonal polynomial family defined by a moment sequence, "
-        "via exact Gram-Schmidt orthogonalization.",
+        "via exact Gram-Schmidt orthogonalization. Requires at most 32 "
+        "moments, positive mu_0, a positive-definite functional, and derived "
+        "coefficients inside the canonical result domain.",
         RecurrenceCoefficientsRequest,
         RecurrenceCoefficientsResult,
         compute_recurrence_coefficients,
@@ -166,12 +168,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "moments.gaussian_quadrature.compute",
         "Compute Gaussian quadrature nodes and weights",
-        "Compute Gaussian quadrature nodes and weights from the symmetric "
-        "tridiagonal Jacobi matrix via the Golub-Welsch algorithm. "
-        "APPROXIMATE: coefficients convert to IEEE-754 float64 and each "
-        "returned node/weight is the exact dyadic image of one computed "
-        "double, with no error bound; unlike the other moments operations "
-        "these values are not exact rationals.",
+        "Golub-Welsch quadrature from the tridiagonal Jacobi matrix. "
+        "APPROXIMATE: inputs convert to float64; nodes/weights are dyadic "
+        "images of doubles, with no error bound — not exact rationals. "
+        "Admission also demands well-scaled matrices: magnitudes in "
+        "[10^-300, 10^300], spread at most 10^6, and a determinant floor "
+        "proving every eigenvalue resolves in float64.",
         GaussianQuadratureRequest,
         GaussianQuadratureResult,
         compute_gaussian_quadrature,

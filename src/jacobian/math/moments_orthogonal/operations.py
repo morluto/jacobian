@@ -9,8 +9,10 @@ from jacobian.math.moments_orthogonal.values import (
     MAX_HANKEL_DIMENSION,
     MAX_MOMENTS,
     MAX_POLYNOMIAL_COUNT,
+    MAX_QUADRATURE_MAGNITUDE,
     MAX_QUADRATURE_POINTS,
     MAX_RECURRENCE_ORDER,
+    MIN_QUADRATURE_SUBDIAGONAL,
     ChristoffelDarbouxKernel,
     GaussianQuadrature,
     HankelMatrix,
@@ -263,6 +265,55 @@ def christoffel_darboux(
     )
 
 
+def _require_finite_double_coefficients(
+    alpha: Sequence[Fraction], beta: Sequence[Fraction]
+) -> None:
+    """Enforce the finite IEEE-double domain the Golub-Welsch backend computes in.
+
+    The decomposition converts every admitted coefficient to an IEEE double: a
+    magnitude beyond the double range overflows, a tiny positive value
+    underflows to zero, and an underflowed ``beta_0`` silently collapses every
+    quadrature weight even though the weights must sum to ``beta_0``. These
+    bounds are part of the mathematical domain of the computation, so the
+    native kernel enforces them identically to the wire request model and a
+    direct caller cannot lose the measure's mass to float conversion.
+    """
+    if beta[0] <= 0:
+        raise ValueError("beta_0 (the zeroth moment) must be positive")
+    if beta[0] < MIN_QUADRATURE_SUBDIAGONAL:
+        raise ValueError(
+            "beta_0 falls below the quadrature underflow bound; "
+            "beta_0 must be >= 1e-300 to convert to a finite IEEE double"
+        )
+    # Subdiagonal entries feed math.sqrt after float conversion; they must be
+    # positive squared-norm ratios safely inside the finite double range.
+    for index in range(1, min(len(alpha), len(beta))):
+        sub = beta[index]
+        if sub <= 0:
+            raise ValueError(
+                "subdiagonal beta entries must be positive squared-norm ratios"
+            )
+        if sub < MIN_QUADRATURE_SUBDIAGONAL:
+            raise ValueError(
+                "subdiagonal beta entries fall below the quadrature underflow bound"
+            )
+    for value in (*alpha, *beta):
+        if abs(value) > MAX_QUADRATURE_MAGNITUDE:
+            raise ValueError(
+                "quadrature coefficients exceed the finite-float magnitude bound"
+            )
+        try:
+            converted = float(value)
+        except (OverflowError, ValueError) as error:
+            raise ValueError(
+                "quadrature coefficient does not fit in IEEE double"
+            ) from error
+        if converted == 0.0 and value != 0:
+            raise ValueError(
+                "quadrature coefficient underflows IEEE double to zero"
+            )
+
+
 def gaussian_quadrature(
     alpha: Sequence[Fraction], beta: Sequence[Fraction]
 ) -> GaussianQuadrature:
@@ -285,17 +336,16 @@ def gaussian_quadrature(
         raise ValueError("alpha must contain between 1 and 16 entries")
     if len(beta) != n and len(beta) != n + 1:
         raise ValueError("beta must have length len(alpha) or len(alpha)+1")
-    if beta[0] <= 0:
-        raise ValueError("beta_0 (the zeroth moment) must be positive")
+    # The kernel runs in IEEE doubles; enforce its finite-double domain here so
+    # direct callers cannot underflow beta_0 (or any coefficient) into silent
+    # mass loss, identically to the request model.
+    _require_finite_double_coefficients(alpha, beta)
     diagonal = np.array([float(a) for a in alpha], dtype=float)
     off: list[float] = []
     for k in range(n - 1):
         if k + 1 >= len(beta):
             break
-        sub = beta[k + 1]
-        if sub < 0:
-            raise ValueError("subdiagonal beta entries must be nonnegative")
-        off.append(math.sqrt(float(sub)))
+        off.append(math.sqrt(float(beta[k + 1])))
     jacobi = np.diag(diagonal)
     if off:
         off_arr = np.array(off, dtype=float)

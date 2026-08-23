@@ -11,6 +11,12 @@ MAX_HANKEL_DIMENSION = 32
 MAX_RECURRENCE_ORDER = 16
 MAX_QUADRATURE_POINTS = 16
 
+# Golub-Welsch converts admitted rationals to IEEE doubles; every accepted
+# coefficient must convert to a finite double and every subdiagonal entry must
+# stay far from both overflow and underflow so its square root is exact enough.
+MAX_QUADRATURE_MAGNITUDE = Fraction(10) ** 300
+MIN_QUADRATURE_SUBDIAGONAL = Fraction(1, 10 ** 300)
+
 
 @dataclass(frozen=True, slots=True)
 class HankelMatrix:
@@ -64,8 +70,10 @@ __all__ = [
     "MAX_HANKEL_DIMENSION",
     "MAX_MOMENTS",
     "MAX_POLYNOMIAL_COUNT",
+    "MAX_QUADRATURE_MAGNITUDE",
     "MAX_QUADRATURE_POINTS",
     "MAX_RECURRENCE_ORDER",
+    "MIN_QUADRATURE_SUBDIAGONAL",
     "ChristoffelDarbouxKernel",
     "GaussianQuadrature",
     "HankelMatrix",

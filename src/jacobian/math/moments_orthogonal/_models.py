@@ -21,12 +21,6 @@ from jacobian.math.moments_orthogonal.values import (
 
 MAX_RATIONAL_DIGITS = 4_096
 
-# Golub-Welsch converts admitted rationals to IEEE doubles; every accepted
-# coefficient must convert to a finite double and every subdiagonal entry must
-# stay far from both overflow and underflow so its square root is exact enough.
-MAX_QUADRATURE_MAGNITUDE = Fraction(10) ** 300
-MIN_QUADRATURE_SUBDIAGONAL = Fraction(1, 10 ** 300)
-
 
 def _to_fractions(
     values: tuple[CanonicalRational, ...],
@@ -392,6 +386,10 @@ class GaussianQuadratureRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_coefficients(self) -> Self:
+        from jacobian.math.moments_orthogonal.operations import (
+            _require_finite_double_coefficients,
+        )
+
         alpha = self.coefficients.alpha
         beta = self.coefficients.beta
         if not 1 <= len(alpha) <= MAX_QUADRATURE_POINTS:
@@ -401,48 +399,18 @@ class GaussianQuadratureRequest(StrictModel):
             and len(beta) != len(alpha) + 1
         ):
             raise ValueError("beta must have length len(alpha) or len(alpha)+1")
-        beta_zero = beta[0].as_fraction()
-        if beta_zero <= 0:
-            raise ValueError(
-                "beta_0 (the zeroth moment of a positive functional) must be positive"
-            )
-        if beta_zero < MIN_QUADRATURE_SUBDIAGONAL:
-            raise ValueError(
-                "beta_0 falls below the quadrature underflow bound; "
-                "beta_0 must be >= 1e-300 to convert to a finite IEEE double"
-            )
-        # Subdiagonal entries feed math.sqrt after float conversion; they must
-        # be positive and safely inside the finite IEEE-double range, and the
-        # diagonal and mu_0 must convert to finite doubles without overflow.
-        for index in range(1, min(len(alpha), len(beta))):
-            sub = beta[index].as_fraction()
-            if sub <= 0:
-                raise ValueError(
-                    "subdiagonal beta entries must be positive squared-norm ratios"
-                )
-            if sub < MIN_QUADRATURE_SUBDIAGONAL:
-                raise ValueError(
-                    "subdiagonal beta entries fall below the quadrature underflow bound"
-                )
         for value in (*alpha, *beta):
             require_bounded_rational(
                 value, max_digits=MAX_RATIONAL_DIGITS, label="coefficient"
             )
-            if abs(value.as_fraction()) > MAX_QUADRATURE_MAGNITUDE:
-                raise ValueError(
-                    "quadrature coefficients exceed the finite-float magnitude bound"
-                )
-            # Ensure every coefficient converts to a finite IEEE double without
-            # underflowing to zero (beta_0 already checked, but diagonal alpha
-            # values and subdiagonals must also be representable).
-            try:
-                converted = float(value.as_fraction())
-            except (OverflowError, ValueError):
-                raise ValueError("quadrature coefficient does not fit in IEEE double")
-            if converted == 0.0 and value.as_fraction() != 0:
-                raise ValueError(
-                    "quadrature coefficient underflows IEEE double to zero"
-                )
+        # The finite-double domain is owned by the Golub-Welsch kernel; the
+        # request admits exactly what the native kernel accepts (positivity,
+        # underflow bound on beta_0 and each subdiagonal, finite magnitude) so
+        # an accepted request cannot fail inside execution.
+        _require_finite_double_coefficients(
+            tuple(value.as_fraction() for value in alpha),
+            tuple(value.as_fraction() for value in beta),
+        )
         return self
 
 

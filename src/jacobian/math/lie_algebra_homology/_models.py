@@ -17,6 +17,18 @@ def _require_prime(prime: int) -> None:
         raise ValueError("prime must be a prime integer")
 
 
+def _require_canonical_residues(
+    c: tuple[tuple[tuple[int, ...], ...], ...], n: int, p: int
+) -> None:
+    for i in range(n):
+        for j in range(n):
+            if any(not 0 <= value < p for value in c[i][j]):
+                raise ValueError(
+                    "structure constant entries must be canonical GF(prime) "
+                    f"residues: 0 <= value < {p}"
+                )
+
+
 def _require_alternating(
     c: tuple[tuple[tuple[int, ...], ...], ...], n: int, p: int
 ) -> None:
@@ -65,9 +77,11 @@ class LieAlgebra(StrictModel):
 
     The Lie bracket is specified by structure constants: for basis
     elements e_i, e_j, the bracket [e_i, e_j] = sum_k c_{ij}^k * e_k.
-    The tensor must define a genuine Lie bracket: it is alternating,
+    Every coefficient must be a canonical GF(p) residue (0 <= c < p), so one
+    GF(p) Lie algebra has exactly one serialized source value; the tensor
+    must also define a genuine Lie bracket: it is alternating,
     antisymmetric modulo p, and satisfies the Jacobi identity exactly;
-    all three are established at this request boundary because the
+    all are established at this request boundary because the
     Chevalley-Eilenberg differential squares to zero only for such
     brackets.
     """
@@ -96,6 +110,11 @@ class LieAlgebra(StrictModel):
         p = self.prime
         c = self.structure_constants
         _require_prime(p)
+        # Canonical residues first: identities hold only modulo p, so an
+        # unreduced representative (e.g. 2 over GF(2)) would otherwise define
+        # the same GF(p) algebra while serializing a distinct source value,
+        # and both result types would retain that noncanonical coefficient.
+        _require_canonical_residues(c, n, p)
         _require_alternating(c, n, p)
         _require_antisymmetric(c, n, p)
         _require_jacobi(c, n, p)

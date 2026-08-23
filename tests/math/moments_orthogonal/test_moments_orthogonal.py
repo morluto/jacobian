@@ -283,6 +283,39 @@ class TestGaussianQuadrature:
         # They are declared approximate, not exact algebraic numbers
         assert result.approximate_nodes != ()
 
+    def test_native_kernel_rejects_underflowed_beta_zero(self) -> None:
+        """beta_0 below the underflow bound cannot silently lose the mass."""
+        with pytest.raises(ValueError, match="underflow bound"):
+            gaussian_quadrature((_frac(0, 1),), (_frac(1, 10**400),))
+
+    def test_native_kernel_rejects_underflowed_subdiagonal(self) -> None:
+        # A two-point Jacobi matrix uses beta[1] as its subdiagonal; below the
+        # underflow bound its square root would not survive double conversion.
+        with pytest.raises(ValueError, match="underflow bound"):
+            gaussian_quadrature(
+                (_frac(0, 1), _frac(0, 1)),
+                (_frac(1, 1), _frac(1, 10**400)),
+            )
+
+    def test_native_kernel_rejects_magnitude_overflow(self) -> None:
+        with pytest.raises(ValueError, match="finite-float magnitude"):
+            gaussian_quadrature((_frac(0, 1),), (_frac(10**400, 1),))
+
+    def test_native_kernel_matches_request_model_float_domain(self) -> None:
+        """The wire request rejects the same payloads as the native kernel."""
+        coefficients = RecurrenceCoefficients(
+            alpha=(_cr(0, 1),),
+            beta=(_cr(1, 1), _cr(1, 10**400)),
+        )
+        with pytest.raises(ValidationError):
+            GaussianQuadratureRequest(coefficients=coefficients)
+        # With one node the unused trailing entry still cannot underflow to
+        # zero silently; kernel and model reject it through the same bound.
+        with pytest.raises(ValueError, match="underflow"):
+            gaussian_quadrature(
+                (_frac(0, 1),), (_frac(1, 1), _frac(1, 10**400))
+            )
+
 
 # ---------------------------------------------------------------------------
 # Wire adapter tests

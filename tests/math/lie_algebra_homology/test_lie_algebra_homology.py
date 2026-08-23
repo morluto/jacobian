@@ -148,6 +148,34 @@ class TestLieAlgebraValidation:
         with pytest.raises(ValidationError, match="Jacobi"):
             LieAlgebra(prime=5, dimension=3, structure_constants=constants)
 
+    def test_noncanonical_diagonal_residue_rejected(self):
+        # 2 mod 2 is zero, so every Lie identity holds vacuously; the entry
+        # must still be rejected because it is not a canonical GF(2) residue.
+        with pytest.raises(ValidationError, match="canonical GF\\(prime\\) residues"):
+            LieAlgebra(
+                prime=2,
+                dimension=1,
+                structure_constants=(((2,),),),
+            )
+
+    def test_noncanonical_offdiagonal_residue_rejected(self):
+        # c[0][1] = 5 and c[1][0] = 5 are antisymmetric and Jacobi modulo 5
+        # (both reduce to zero) but are not canonical GF(5) residues.
+        constants = (
+            ((0, 0), (5, 0)),
+            ((5, 0), (0, 0)),
+        )
+        with pytest.raises(ValidationError, match="canonical GF\\(prime\\) residues"):
+            LieAlgebra(prime=5, dimension=2, structure_constants=constants)
+
+    def test_canonical_residues_accepted(self):
+        g = LieAlgebra(
+            prime=2,
+            dimension=1,
+            structure_constants=(((0,),),),
+        )
+        assert g.structure_constants == (((0,),),)
+
 
 class TestLieHomology:
     """Test Lie algebra homology computation."""

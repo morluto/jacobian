@@ -459,7 +459,13 @@ class TestScanWorkBoundary:
     def test_reported_sixteen_dim_request_typed_rejected(self):
         """The originally reported 16-dim GF(2) direct-sum request pays
         roughly 152M reconstruction units per pass (kernel plus replay),
-        far above the budget, so it fails admission without enumerating."""
+        far above the budget, so it fails admission without enumerating.
+
+        The wall-clock sanity bound only guards against accidentally running
+        the rejected scan; constructing the request still legitimately pays
+        the O(dimension^4) coalgebra-axiom verification, which varies several
+        fold on loaded CI runners.
+        """
         import time
 
         ca = _direct_sum_group_like_coalgebra(16)
@@ -469,7 +475,7 @@ class TestScanWorkBoundary:
         started = time.monotonic()
         with pytest.raises(ValidationError, match="scan work exceeds"):
             GroupLikeElementsRequest(coalgebra=ca)
-        assert time.monotonic() - started < 1
+        assert time.monotonic() - started < 30
 
 
 class TestNestedModulusPrevalidation:

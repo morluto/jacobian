@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import CanonicalLimits
 from jacobian.math.universal_algebra import (
     ApplicationTerm,
     FiniteAlgebra,
@@ -449,13 +450,66 @@ class TestCongruence:
 
 class TestQuotient:
     def test_trivial_quotient(self) -> None:
-        result = compute_quotient(
+        source = _boolean_algebra()
+        result = compute_quotient(QuotientRequest(algebra=source, partition=((0, 1),)))
+        assert isinstance(result, FiniteAlgebraHomomorphism)
+        assert result.source == source
+        assert result.target.carrier == ("B0",)
+        assert len(result.target.operations) == 2
+        assert result.mapping == (0, 0)
+        SubalgebraRequest(algebra=result.target, generators=(0,))
+
+    def test_quotient_homomorphism_composes_with_profile_unchanged(self) -> None:
+        quotient_map = compute_quotient(
             QuotientRequest(algebra=_boolean_algebra(), partition=((0, 1),))
         )
-        assert result.algebra.carrier == ("B0",)
-        assert len(result.algebra.operations) == 2
-        assert result.quotient_map == (0, 0)
-        SubalgebraRequest(algebra=result.algebra, generators=(0,))
+
+        native_profile = compute_homomorphism_profile(
+            HomomorphismProfileRequest(carrier_map=quotient_map)
+        )
+        wire_profile = compute_homomorphism_profile(
+            HomomorphismProfileRequest.model_validate(
+                {"carrier_map": quotient_map.model_dump(mode="json")}
+            )
+        )
+
+        assert native_profile.status == "HOMOMORPHISM"
+        assert native_profile.homomorphism == quotient_map
+        assert wire_profile == native_profile
+
+    def test_quotient_rejects_when_retained_source_has_no_output_headroom(
+        self,
+    ) -> None:
+        source = FiniteAlgebra(
+            carrier=("x" * (CanonicalLimits().max_output_bytes - 1_024),),
+            operations=(),
+            tables=(),
+        )
+
+        with pytest.raises(ValidationError, match="canonical quotient homomorphism"):
+            QuotientRequest(algebra=source, partition=((0,),))
+
+    def test_quotient_charges_construction_and_map_replay_work(self) -> None:
+        def constant_ternary_algebra(size: int) -> FiniteAlgebra:
+            return FiniteAlgebra(
+                carrier=tuple(f"a{index}" for index in range(size)),
+                operations=(OperationSymbol(operation_id="f", arity=3),),
+                tables=((0,) * size**3,),
+            )
+
+        accepted_size = 23
+        accepted = QuotientRequest(
+            algebra=constant_ternary_algebra(accepted_size),
+            partition=tuple((index,) for index in range(accepted_size)),
+        )
+        assert len(accepted.partition) == accepted_size
+
+        rejected_size = 24
+        with pytest.raises(ValidationError, match="construction and homomorphism"):
+            QuotientRequest(
+                algebra=constant_ternary_algebra(rejected_size),
+                partition=tuple((index,) for index in range(rejected_size)),
+            )
 
 
 # ---------------------------------------------------------------------------

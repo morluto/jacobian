@@ -335,22 +335,59 @@ class CongruenceResult(StrictModel):
 class QuotientRequest(_PartitionRequest):
     """Construct ``A/theta`` for an admitted congruence partition."""
 
-
-class QuotientResult(StrictModel):
-    """A directly composable quotient algebra and its carrier map."""
-
-    algebra: FiniteAlgebra
-    quotient_map: tuple[int, ...] = Field(
-        min_length=1,
-        max_length=MAX_CARRIER_SIZE,
-    )
-
     @model_validator(mode="after")
-    def require_map_into_quotient(self) -> Self:
-        if any(
-            not 0 <= value < len(self.algebra.carrier) for value in self.quotient_map
-        ):
-            raise ValueError("quotient map value is outside the quotient carrier")
+    def require_source_bound_result_headroom(self) -> Self:
+        """Bound the retained source, quotient tables, and carrier map."""
+
+        quotient_size = len(self.partition)
+        quotient_table_cells = sum(
+            quotient_size**operation.arity for operation in self.algebra.operations
+        )
+        quotient_work = (
+            _congruence_work(self.algebra)
+            + sum(len(table) for table in self.algebra.tables)
+            + quotient_table_cells
+        )
+        if quotient_work > MAX_ENUMERATION_WORK:
+            raise ValueError(
+                "quotient construction and homomorphism replay exceed the "
+                "operation work budget"
+            )
+        try:
+            source_bytes = len(encode_strict_json(self.algebra.model_dump(mode="json")))
+            operation_bytes = len(
+                encode_strict_json(
+                    [
+                        operation.model_dump(mode="json")
+                        for operation in self.algebra.operations
+                    ]
+                )
+            )
+            quotient_carrier_bytes = sum(
+                len(encode_strict_json(f"B{index}")) + 1
+                for index in range(quotient_size)
+            )
+        except CanonicalizationError as exc:
+            raise ValueError(
+                "quotient source exceeds the canonical output limit"
+            ) from exc
+        quotient_index_bytes = len(str(quotient_size - 1)) + 1
+        quotient_table_bytes = quotient_table_cells * quotient_index_bytes
+        mapping_bytes = len(self.algebra.carrier) * quotient_index_bytes
+        predicted_bytes = (
+            source_bytes
+            + operation_bytes
+            + quotient_carrier_bytes
+            + quotient_table_bytes
+            + mapping_bytes
+            + _HOMOMORPHISM_RESULT_RESERVE_BYTES
+        )
+        output_limit = CanonicalLimits().max_output_bytes
+        if predicted_bytes > output_limit:
+            raise ValueError(
+                "canonical quotient homomorphism would exceed the "
+                f"{output_limit}-byte output limit"
+            )
         return self
 
 
@@ -366,7 +403,6 @@ __all__ = [
     "HomomorphismProfileRequest",
     "HomomorphismProfileResult",
     "QuotientRequest",
-    "QuotientResult",
     "SubalgebraRequest",
     "SubalgebraResult",
 ]

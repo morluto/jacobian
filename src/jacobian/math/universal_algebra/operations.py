@@ -261,8 +261,8 @@ def congruence_check(
 
 def quotient(
     algebra: FiniteAlgebra, partition: tuple[tuple[int, ...], ...]
-) -> tuple[FiniteAlgebra, tuple[int, ...]]:
-    """Return the quotient algebra ``A/theta`` induced by a congruence."""
+) -> FiniteAlgebraHomomorphism:
+    """Return the canonical quotient homomorphism ``A -> A/theta``."""
     check = congruence_check(algebra, partition)
     if not check["is_congruence"]:
         raise ValueError("partition is not a congruence")
@@ -295,5 +295,8 @@ def quotient(
         operations=algebra.operations,
         tables=tuple(quotient_tables),
     )
-    quotient_map = tuple(block_of[element] for element in range(n))
-    return quotient_algebra, quotient_map
+    return FiniteAlgebraHomomorphism(
+        source=algebra,
+        target=quotient_algebra,
+        mapping=tuple(block_of[element] for element in range(n)),
+    )

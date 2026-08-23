@@ -8,9 +8,8 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
+from jacobian.math.symmetric_functions.values import IntegerPartition
 
-_MAX_PARTITION_SIZE = 100
-_MAX_PARTITION_PARTS = 50
 _MAX_POINT_COORDINATE_DIGITS = 6
 _MAX_POINT_COORDINATE_ABS = 10**_MAX_POINT_COORDINATE_DIGITS - 1
 _MAX_SCHUR_RESULT_DIGITS = 4000
@@ -27,35 +26,6 @@ PointCoordinate = Annotated[
     ),
 ]
 """One bounded evaluation coordinate: ``abs(value) <= 10**6 - 1``."""
-
-
-class IntegerPartition(StrictModel):
-    """A partition of a positive integer as a weakly decreasing tuple.
-
-    Parts must be positive and weakly decreasing, there are at most 50
-    parts, and the total size (sum of the parts) is capped at 100.
-    """
-
-    parts: tuple[int, ...] = Field(
-        min_length=0,
-        max_length=_MAX_PARTITION_PARTS,
-        description=(
-            f"Positive weakly-decreasing parts with a total size (sum) of at "
-            f"most {_MAX_PARTITION_SIZE}; at most {_MAX_PARTITION_PARTS} parts."
-        ),
-    )
-
-    @model_validator(mode="after")
-    def require_valid_partition(self) -> Self:
-        if not self.parts:
-            return self
-        if any(p <= 0 for p in self.parts):
-            raise ValueError("partition parts must be positive")
-        if any(self.parts[i] < self.parts[i + 1] for i in range(len(self.parts) - 1)):
-            raise ValueError("partition parts must be weakly decreasing")
-        if sum(self.parts) > _MAX_PARTITION_SIZE:
-            raise ValueError("partition size exceeds the supported bound")
-        return self
 
 
 class PartitionRequest(StrictModel):

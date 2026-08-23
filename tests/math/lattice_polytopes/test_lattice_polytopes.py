@@ -861,3 +861,39 @@ class TestEnumerationResultPointCap:
         )
         assert 0 <= result.point_count <= MAX_LATTICE_POINTS
         assert len(result.points) <= MAX_LATTICE_POINTS
+
+
+class TestReviewRegressions:
+    def test_infeasible_but_bounded_h_system_admitted_as_empty(self):
+        """x<=0 and -x<=-1 is empty (bounded); normals span only one axis."""
+        from jacobian.math.lattice_polytopes._operations import _facets_and_box
+
+        request = LatticePolytopeRequest(
+            halfspaces=(
+                _hs((("1", "1"), ("0", "1")), ("0", "1")),
+                _hs((("-1", "1"), ("0", "1")), ("-1", "1")),
+            )
+        )
+        geometry = _facets_and_box(request)
+        # The canonical empty box: per-axis [0, -1] scanning no candidate.
+        assert geometry[2] == [-1, -1]
+
+    def test_feasible_unbounded_lineality_system_still_rejected(self):
+        """A feasible vertex-free system with lineality stays rejected."""
+
+        with pytest.raises(ValidationError, match="unbounded"):
+            LatticePolytopeRequest(
+                halfspaces=(_hs((("1", "1"), ("0", "1")), ("0", "1")),)
+            )
+
+    def test_examples_state_their_validator_owned_preconditions(self):
+        """Discovery examples teach the admission preconditions."""
+        from jacobian.math.lattice_polytopes._tools import TOOLS
+
+        for tool in TOOLS:
+            for ex in tool.examples:
+                lowered = ex.description.lower()
+                if ex.name == "unit_square_vertices":
+                    assert "full" in lowered
+                if ex.name == "unit_square_halfspaces":
+                    assert "bounded" in lowered

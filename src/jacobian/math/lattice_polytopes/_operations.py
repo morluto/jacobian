@@ -302,6 +302,29 @@ def _to_integer_facet(
     return coeffs, rhs
 
 
+def _h_system_feasible(
+    halfspaces: list[tuple[list[Rational], Rational]],
+) -> bool:
+    """Decide exactly whether ``{x : A x <= b}`` contains any rational point.
+
+    Uses SymPy's exact simplex with a zero objective; infeasibility is the
+    distinguishing test between a bounded-but-empty H-polytope (admitted as
+    the canonical empty geometry) and an unbounded polyhedron without
+    vertices (rejected).
+    """
+    from sympy import Rational as _SRational
+    from sympy.solvers.simplex import InfeasibleLPError, linprog
+
+    matrix = [[_SRational(c) for c in coeffs] for coeffs, _ in halfspaces]
+    rhs = [_SRational(offset) for _, offset in halfspaces]
+    objective = [0] * len(matrix[0])
+    try:
+        linprog(objective, matrix, rhs)
+        return True
+    except InfeasibleLPError:
+        return False
+
+
 def _facets_and_box(  # noqa: C901
     request: LatticePolytopeRequest,
 ) -> AdmittedGeometry:
@@ -324,16 +347,19 @@ def _facets_and_box(  # noqa: C901
             for hs in request.halfspaces
         ]
         d = request.dimension()
-        if not _is_bounded_h(halfspaces, d):
-            raise ValueError(
-                "the H-representation is unbounded whenever non-empty "
-                "(its recession cone is nontrivial); lattice-point "
-                "enumeration requires a bounded polytope"
-            )
         verts, _ = _vertices_from_h_representation(halfspaces)
+        bounded = _is_bounded_h(halfspaces, d)
+        # Infeasibility is checked BEFORE the recession-cone rejection: an
+        # infeasible system defines the empty - therefore bounded - polytope
+        # even when its normals do not positively span the ambient space.
+        if not bounded and (verts or _h_system_feasible(halfspaces)):
+            raise ValueError(
+                    "the H-representation is unbounded whenever non-empty "
+                    "(its recession cone is nontrivial); lattice-point "
+                    "enumeration requires a bounded polytope"
+                )
         if not verts:
-            # Boundedness was established above, so the polyhedron is
-            # empty: its lattice-point set is empty, and the canonical
+            # Empty: its lattice-point set is empty, and the canonical
             # empty box scans no candidate at all.
             return [], [0] * d, [-1] * d, d
         # Facets are the distinct normalized half-spaces (already oriented

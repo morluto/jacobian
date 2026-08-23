@@ -66,7 +66,9 @@ LATTICE_POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "unit_square_vertices",
-                "Unit square [0,1]^2 has four lattice points.",
+                "Unit square [0,1]^2 has four lattice points. Requires "
+                "vertices spanning the full ambient dimension: a "
+                "lower-dimensional hull is rejected at validation.",
                 {
                     "vertices": [
                         {
@@ -119,7 +121,10 @@ LATTICE_POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "unit_square_halfspaces",
-                "Unit square [0,1]^2 via half-spaces has four lattice points.",
+                "Unit square [0,1]^2 via half-spaces has four lattice "
+                "points. Requires the H-representation to define a bounded "
+                "polytope (normals positively spanning R^d); unbounded or "
+                "lower-dimensional systems are rejected at validation.",
                 {
                     "halfspaces": [
                         {

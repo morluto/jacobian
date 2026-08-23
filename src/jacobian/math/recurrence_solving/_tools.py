@@ -120,9 +120,10 @@ RECURRENCE_SOLVING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "GF(p), find the minimal linear recurrence (LFSR connection) it "
         "satisfies on the supplied prefix using the Berlekamp-Massey "
         "algorithm, returning the canonical PrimeFieldRecurrence value with "
-        "coefficients over GF(p) or NO_FITTING_RECURRENCE. The recurrence "
-        "is established for indices L <= n < len(sequence) only; it makes "
-        "no claim about unobserved terms.",
+        "its coefficients over GF(p). Every admitted finite sequence fits a "
+        "recurrence of order at most len(sequence), so the result is always "
+        "a fitted recurrence. Established for indices L <= n < "
+        "len(sequence) only; no claim about unobserved terms.",
         PrimeFieldRecurrenceFindRequest,
         PrimeFieldRecurrenceFindResult,
         compute_prime_field_find_recurrence,

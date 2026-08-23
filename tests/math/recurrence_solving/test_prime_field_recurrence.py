@@ -1,5 +1,7 @@
 """Tests for Berlekamp-Massey recurrence finding over prime fields."""
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -114,15 +116,19 @@ class TestPrimeFieldRecurrenceFind:
                 ),
             )
 
-    def test_result_rejects_false_no_fitting_recurrence(self):
-        with pytest.raises(ValidationError, match="Berlekamp-Massey"):
-            PrimeFieldRecurrenceFindResult(
-                sequence=FIBONACCI_MOD_7,
-                recurrence=PrimeFieldRecurrence(
-                    prime=7, coefficients=(), order=0,
-                    status="NO_FITTING_RECURRENCE",
-                ),
+    def test_no_fitting_status_is_not_part_of_the_prime_field_contract(self):
+        with pytest.raises(ValidationError):
+            PrimeFieldRecurrence(
+                prime=7,
+                coefficients=(),
+                order=0,
+                status="NO_FITTING_RECURRENCE",
             )
+        schema = PrimeFieldRecurrence.model_json_schema()
+        assert schema["properties"]["status"]["const"] == "FOUND"
+        assert "NO_FITTING_RECURRENCE" not in json.dumps(
+            PrimeFieldRecurrenceFindResult.model_json_schema()
+        )
 
     def test_result_rejects_wrong_coefficients_at_minimal_order(self):
         with pytest.raises(ValidationError, match="Berlekamp-Massey"):
@@ -145,7 +151,6 @@ class TestPrimeFieldRecurrenceFind:
             PrimeFieldRecurrenceFindResult(
                 sequence=sequence,
                 recurrence=PrimeFieldRecurrence(
-                    prime=2, coefficients=(), order=0,
-                    status="NO_FITTING_RECURRENCE",
+                    prime=2, coefficients=(1,), order=1, status="FOUND"
                 ),
             )

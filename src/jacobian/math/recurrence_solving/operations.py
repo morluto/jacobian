@@ -29,7 +29,6 @@ _MAX_FIELD_PRIME = 10_000
 _MAX_FIELD_SEQUENCE_LENGTH = 256
 
 
-
 def _validate_berlekamp_inputs(sequence: list[int], prime: int) -> None:
     if type(prime) is not int or not 2 <= prime <= _MAX_FIELD_PRIME:
         raise ValueError(

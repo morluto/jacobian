@@ -119,6 +119,9 @@ class PrimeFieldRecurrence(StrictModel):
     and MCP results embed it unchanged, so native and wire consumers share
     one type.  The recurrence is established only on the observed prefix
     ``L <= n < len(sequence)``; it carries no claim about unobserved terms.
+    Every admitted finite sequence admits a recurrence of order at most its
+    own length (order ``len(sequence)`` fits vacuously), so the outcome is
+    always a fitted recurrence and no missing-recurrence state exists.
     """
 
     prime: StrictInt = Field(ge=2, le=_MAX_FIELD_PRIME)
@@ -130,18 +133,16 @@ class PrimeFieldRecurrence(StrictModel):
         ),
     )
     order: StrictInt = Field(ge=0, le=_MAX_FIELD_SEQUENCE_LENGTH)
-    status: Literal["FOUND", "NO_FITTING_RECURRENCE"]
+    status: Literal["FOUND"] = Field(
+        description="Always FOUND: every admitted finite sequence fits a recurrence."
+    )
 
     @model_validator(mode="after")
     def require_canonical(self) -> Self:
         _require_bounded_prime(self.prime)
         _require_canonical_residues(self.coefficients, self.prime, "coefficients")
-        if self.status == "FOUND" and self.order != len(self.coefficients):
+        if self.order != len(self.coefficients):
             raise ValueError("order must equal the number of coefficients")
-        if self.status == "NO_FITTING_RECURRENCE" and (
-            self.order != 0 or self.coefficients
-        ):
-            raise ValueError("a no-fitting-recurrence value carries no coefficients")
         return self
 
 

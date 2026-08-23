@@ -377,12 +377,12 @@ class TestBoundedResultValidation:
     def test_stdout_limited_worker_returns_typed_limit(self, monkeypatch):
         """A killed worker whose output exceeded the transport cap yields
         LIMIT_EXCEEDED, not ERROR."""
-        from jacobian.math.commutative_algebra_ops import _singular
+        from jacobian.math.commutative_algebra_ops import _operations as ops
 
         def fake_kernel(*args, **kwargs):
             return False, b"", True  # not timed out; empty output; limit hit
 
-        monkeypatch.setattr(_singular, "run_bounded_stdin_python_kernel", fake_kernel)
+        monkeypatch.setattr(ops, "run_bounded_stdin_python_kernel", fake_kernel)
         g = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 1)))
         result = compute_groebner_basis(
             GroebnerBasisRequest(ideal=_ideal(("x", "y"), (g,)))

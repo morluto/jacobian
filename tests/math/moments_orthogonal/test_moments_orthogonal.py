@@ -114,12 +114,21 @@ class TestRecurrenceCoefficients:
         with pytest.raises(ValueError, match="nonzero"):
             recurrence_coefficients(moments)
 
-    def test_insufficient_moments_for_recurrence(self) -> None:
-        """With only 2 moments we can't produce any recurrence coefficient."""
+    def test_two_moments_determine_first_coefficient(self) -> None:
+        """mu=(1, 1/2) already determines alpha_0 = mu_1/mu_0 = 1/2; the
+        subdiagonal stays at beta_0 = mu_0 because h_1 is not determined."""
         moments = (_frac(1, 1), _frac(1, 2))
         result = recurrence_coefficients(moments)
-        assert result.alpha == ()
+        assert result.alpha == (_frac(1, 2),)
         assert result.beta == (_frac(1, 1),)
+
+    def test_even_length_sequence_yields_trailing_alpha(self) -> None:
+        """mu=(1,1,2,6) determines alpha=(1,3) and beta=(1,1): the final
+        shift coefficient consumes only the last available moment."""
+        moments = (_frac(1, 1), _frac(1, 1), _frac(2, 1), _frac(6, 1))
+        result = recurrence_coefficients(moments)
+        assert result.alpha == (_frac(1, 1), _frac(3, 1))
+        assert result.beta == (_frac(1, 1), _frac(1, 1))
 
 
 # ---------------------------------------------------------------------------

@@ -85,8 +85,11 @@ def _monic_orthogonal_recurrence(
     ``p_{k+1}(x) = (x - alpha_k) p_k(x) - beta_k p_{k-1}(x)``
     with ``p_{-1} = 0``, ``p_0 = 1``, ``beta_0 = mu_0``.
 
-    ``max_order`` recurrence coefficients ``alpha`` are produced, requiring
-    at least ``2 * max_order + 1`` moments.
+    ``max_order`` recurrence coefficients ``alpha`` are produced, consuming
+    moments through ``mu_(2 * max_order - 1)``: the final shift coefficient
+    is fully determined by the supplied odd-indexed moment, and the next
+    squared norm (which would consume ``mu_(2 * max_order)``) is never
+    needed for the emitted coefficients.
     """
     alpha: list[Fraction] = []
     beta: list[Fraction] = [moments[0]]
@@ -97,6 +100,10 @@ def _monic_orthogonal_recurrence(
     for k in range(max_order):
         alpha_k = _inner_product(moments, _shift_up(p_curr), p_curr) / h_curr
         alpha.append(alpha_k)
+        if k == max_order - 1:
+            # The last shift coefficient is already determined; advancing
+            # the squared norm would consume an unavailable next moment.
+            break
         beta_k = (
             Fraction(0) if k == 0 else (h_curr / h_prev if h_prev != 0 else Fraction(0))
         )
@@ -109,15 +116,10 @@ def _monic_orthogonal_recurrence(
         p_curr = p_next
         h_curr = _inner_product(moments, p_curr, p_curr)
         if h_curr <= 0:
-            if h_curr == 0:
-                raise ValueError(
-                    "moment sequence does not define a positive-definite measure"
-                )
             raise ValueError(
                 "moment sequence does not define a positive-definite measure"
             )
-        if k < max_order - 1:
-            beta.append(h_curr / h_prev)
+        beta.append(h_curr / h_prev)
     return alpha, beta
 
 
@@ -143,7 +145,7 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
         raise TypeError("moments must use exact Fractions")
     if moments[0] <= 0:
         raise ValueError("the zeroth moment must be nonzero")
-    max_order = min(MAX_RECURRENCE_ORDER, (m - 1) // 2)
+    max_order = min(MAX_RECURRENCE_ORDER, m // 2)
     if max_order < 1:
         return RecurrenceCoefficients(alpha=(), beta=(moments[0],))
     alpha, beta = _monic_orthogonal_recurrence(moments, max_order)
@@ -238,7 +240,10 @@ def christoffel_darboux(
         px_prev, px_curr = px_curr, px_next
         py_prev, py_curr = py_curr, py_next
         # Advancing the squared norm to h_{k+1} uses beta_{k+1} = beta[k + 1].
-        if k + 1 >= len(beta) or beta[k + 1] == 0:
+        # Every consumed norm ratio must be positive: a negative or vanishing
+        # subdiagonal cannot arise from a positive-definite functional, and
+        # dividing by it would forge a kernel outside the documented domain.
+        if k + 1 >= len(beta) or beta[k + 1] <= 0:
             raise ValueError(
                 "recurrence coefficients do not define the requested kernel"
             )

@@ -206,7 +206,6 @@ class TestGroupLawAdmission:
             ScalarMultiplicationRequest(curve=curve, point=_operand(curve, p), scalar=2)
 
 
-
 class TestResultSourceBinding:
     """Authoritative elliptic results are bound to their source curves."""
 

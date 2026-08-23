@@ -832,6 +832,66 @@ class TestEulerianSubsetDuplicates:
             EulerianCyclesRequest(graph=TRIANGLE, edge_subset=("e0", "e0"))
 
 
+class TestEulerianParityDichotomy:
+    """The decomposition must be reconstructible from its source parity: an
+    Eulerian source must be fully decomposed; the empty covers_all=False
+    outcome is reserved for a non-Eulerian source."""
+
+    def test_forged_false_failure_on_eulerian_source_rejected(self) -> None:
+        payload = {
+            "graph": TRIANGLE.model_dump(),
+            "edge_subset": None,
+            "cycles": (),
+            "edge_usage": (("e0", 0), ("e1", 0), ("e2", 0)),
+            "covers_all": False,
+        }
+        with pytest.raises(ValidationError, match="Eulerian source"):
+            EulerianCyclesResult.model_validate(payload)
+
+    def test_partial_decomposition_on_non_eulerian_source_rejected(self) -> None:
+        graph = LooplessMultigraph(
+            vertex_count=4,
+            edges=(
+                MultigraphEdge(edge_id="e0", left=0, right=1),
+                MultigraphEdge(edge_id="e1", left=1, right=2),
+                MultigraphEdge(edge_id="e2", left=2, right=0),
+                MultigraphEdge(edge_id="p", left=0, right=3),
+            ),
+        )
+        payload = {
+            "graph": graph.model_dump(),
+            "edge_subset": None,
+            "cycles": ({"vertices": (0, 1, 2, 0), "edge_ids": ("e0", "e1", "e2")},),
+            "edge_usage": (("e0", 1), ("e1", 1), ("e2", 1), ("p", 0)),
+            "covers_all": False,
+        }
+        with pytest.raises(ValidationError, match="non-Eulerian source"):
+            EulerianCyclesResult.model_validate(payload)
+
+    def test_non_eulerian_genuine_result_roundtrips(self) -> None:
+        result = compute_eulerian_cycles(EulerianCyclesRequest(graph=BRIDGE_GRAPH))
+        assert not result.covers_all and result.cycles == ()
+        rebuilt = EulerianCyclesResult.model_validate(result.model_dump())
+        assert rebuilt == result
+
+    def test_figure_eight_decomposition_roundtrips(self) -> None:
+        graph = LooplessMultigraph(
+            vertex_count=5,
+            edges=(
+                MultigraphEdge(edge_id="a0", left=0, right=1),
+                MultigraphEdge(edge_id="a1", left=1, right=2),
+                MultigraphEdge(edge_id="a2", left=2, right=0),
+                MultigraphEdge(edge_id="b0", left=0, right=3),
+                MultigraphEdge(edge_id="b1", left=3, right=4),
+                MultigraphEdge(edge_id="b2", left=4, right=0),
+            ),
+        )
+        result = compute_eulerian_cycles(EulerianCyclesRequest(graph=graph))
+        assert result.covers_all and len(result.cycles) == 2
+        rebuilt = EulerianCyclesResult.model_validate(result.model_dump())
+        assert rebuilt == result
+
+
 class TestLeafWorkBoundedBySearchBudget:
     """Leaf conservation must not add uncharged quadratic work: a bridge
     graph with no nowhere-zero Z/2 flow exhausts its full 2^d search tree

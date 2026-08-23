@@ -633,7 +633,14 @@ class CycleRecord(StrictModel):
 
 
 class EulerianCyclesResult(StrictModel):
-    """Deterministic edge-disjoint cycle decomposition, bound to its source edge set."""
+    """Deterministic edge-disjoint cycle decomposition, bound to its source edge set.
+
+    Validation replays the defining relation against the retained source:
+    incidence, disjointness, usage, coverage, and the Eulerian dichotomy —
+    an Eulerian requested multiset must be fully decomposed with
+    ``covers_all=True``, while the empty ``covers_all=False`` outcome is
+    reserved for a non-Eulerian requested multiset.
+    """
 
     result_schema_version: Literal["1"] = "1"
     graph: LooplessMultigraph
@@ -669,6 +676,20 @@ class EulerianCyclesResult(StrictModel):
             raise ValueError(
                 f"covers_all {self.covers_all} does not match expected {expected_covers}"
             )
+        if requested and _subset_is_eulerian(self.graph, requested):
+            # An Eulerian source must be fully decomposed; the empty
+            # covers_all=False outcome is reserved for non-Eulerian sources.
+            if not self.covers_all:
+                raise ValueError(
+                    "an Eulerian source must be fully decomposed "
+                    "(covers_all=True); an empty covers_all=False outcome "
+                    "is only valid for a non-Eulerian source"
+                )
+        elif requested and self.cycles != ():
+            raise ValueError(
+                "a non-Eulerian source must yield an empty decomposition "
+                "(cycles=()) with covers_all=False"
+            )
         return self
 
 
@@ -701,6 +722,20 @@ def _verify_cycle_incidence(
                 raise ValueError(f"cycle edge {eid} incidence does not match graph")
             used[eid] += 1
     return used
+
+
+def _subset_is_eulerian(
+    graph: LooplessMultigraph,
+    requested: set[str],
+) -> bool:
+    """Return whether every vertex has even degree in the requested multiset."""
+
+    degree: dict[int, int] = dict.fromkeys(range(graph.vertex_count), 0)
+    for eid in requested:
+        edge = graph.edge_by_id(eid)
+        degree[edge.left] += 1
+        degree[edge.right] += 1
+    return all(d % 2 == 0 for d in degree.values())
 
 
 def _expected_covers_all(

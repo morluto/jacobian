@@ -5,20 +5,17 @@ from __future__ import annotations
 import networkx as nx
 
 from jacobian.math.graphs.cycle_pattern._models import (
+    _FIRST_PASS_BUDGET_CONTEXT_KEY,
     FixedLengthCycleRequest,
     FixedLengthCycleResult,
     SubgraphEmbedding,
     SubgraphPatternRequest,
     SubgraphPatternResult,
-    _decided_negative_cycle_result,
-    _decided_negative_embedding_result,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 # Backtracking recursion nodes across one request; a schema-valid request
-# cannot occupy the inline path beyond this deterministic work bound, and
-# the bound covers the whole request: producing searches carry their own
-# exhaustion so validation never replays a negative from a second budget.
+# cannot occupy the inline path beyond this deterministic work bound.
 MAX_SEARCH_NODES = 2_000_000
 
 
@@ -92,10 +89,6 @@ def decide_fixed_length_cycle(
     A backtracking DFS rooted at each vertex finds the lexicographically
     smallest cycle of the requested length, if one exists.  To avoid
     duplicates, only cycles whose minimum vertex is the root are returned.
-    The declared node budget covers the whole request: a decided negative
-    reuses the producing search's exhaustion instead of paying a second
-    replay, while independently supplied results still validate through
-    full replay.
     """
     g = _build_graph(request.graph)
     k = request.length
@@ -133,7 +126,13 @@ def decide_fixed_length_cycle(
                 ),
             )
 
-    return _decided_negative_cycle_result(request.graph, k)
+    # The first pass above exhausted the admitted search and decided the
+    # negative here; attaching its budget as evidence keeps validation from
+    # charging a second identical pass to this request.
+    return FixedLengthCycleResult.model_validate(
+        {"graph": request.graph, "length": k, "exists": False},
+        context={_FIRST_PASS_BUDGET_CONTEXT_KEY: budget},
+    )
 
 
 class _NodeBudget:
@@ -260,9 +259,7 @@ def find_subgraph_pattern(
 
     Backtracking search assigns pattern vertices to distinct host vertices,
     checking edge preservation at each step.  Returns the lexicographically
-    smallest embedding, if one exists.  As with the cycle decision, the
-    declared node budget covers the whole request: decided negatives reuse
-    the producing search instead of a second replay.
+    smallest embedding, if one exists.
     """
     host_g = _build_graph(request.host)
     pattern_g = _build_graph(request.pattern)
@@ -317,7 +314,17 @@ def find_subgraph_pattern(
             embedding=emb,
         )
 
-    return _decided_negative_embedding_result(request.host, request.pattern)
+    # The first pass above exhausted the admitted search and decided the
+    # negative here; attaching its budget as evidence keeps validation from
+    # charging a second identical pass to this request.
+    return SubgraphPatternResult.model_validate(
+        {
+            "host_graph": request.host,
+            "pattern_graph": request.pattern,
+            "exists": False,
+        },
+        context={_FIRST_PASS_BUDGET_CONTEXT_KEY: budget},
+    )
 
 
 class _BudgetExceededError(Exception):

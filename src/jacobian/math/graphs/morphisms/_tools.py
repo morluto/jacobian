@@ -263,8 +263,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "triangle_in_c4_with_chord",
                 (
                     "A triangle pattern embeds in a 4-cycle-with-chord host. "
-                    "Preconditions: at most 20 vertices each, pattern no larger "
-                    "than host, inside the assignment budget, and enough "
+                    "Preconditions: pattern at most 20 vertices, no larger than "
+                    "host, inside the assignment budget, and enough "
                     "output headroom for the echoed sources."
                 ),
                 SUBGRAPH_TRIANGLE_IN_C4_CHORD,

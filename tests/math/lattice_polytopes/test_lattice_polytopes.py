@@ -954,7 +954,6 @@ class TestSecondWaveRegressions:
         )
 
         vertices_field = LatticePolytopeRequest.model_fields["vertices"]
-        halfspaces_field = LatticePolytopeRequest.model_fields["halfspaces"]
         assert vertices_field.metadata or vertices_field.annotation is not None
         schema = LatticePolytopeRequest.model_json_schema()
         v_schema = schema["properties"]["vertices"]

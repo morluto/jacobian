@@ -9,6 +9,7 @@ from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math._rational_height import RationalHeight
 
 
 class RationalPoint2D(StrictModel):
@@ -446,10 +447,30 @@ class LabelledPoint2D(StrictModel):
     point: RationalPoint2D
 
 
+def _circumradius_input_height_ok(point: RationalPoint2D) -> bool:
+    # Conservative worst-case propagation for
+    # R^2 = (|a-b|^2 |b-c|^2 |c-a|^2) / (4 * cross^2). A coordinate difference
+    # of two H-digit rationals has numerator at most 2H+1 digits and
+    # denominator at most 2H; each squared side reaches ~4H+3 over 4H, and the
+    # cross product ~4H+5 over 4H, so every reduced R^2 component stays within
+    # roughly (12H+9) + (8H+10) + small slack = 20H + 25 digits. The bound
+    # covers the AGGREGATE profile transport, not one entry: with at most 24
+    # points there are C(24,3) = 2024 entries of two such components plus
+    # per-entry JSON overhead (~350 bytes, including three <=64-char labels):
+    # 2024 * (2*(20*100+25) + 350) ~= 8.9 MB < the canonical 10 MiB output
+    # limit together with the retained configuration. Without it an accepted
+    # request could fail while constructing or serializing its result.
+    max_input = 100
+    for v in (point.x, point.y):
+        if RationalHeight.from_canonical(v).exceeds(max_input):
+            return False
+    return True
+
+
 class CircumradiusProfileRequest(StrictModel):
     """A bounded labelled rational planar point configuration."""
 
-    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=64)
+    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=24)
 
     @model_validator(mode="after")
     def require_unique_labels_and_coordinates(self) -> Self:
@@ -467,6 +488,13 @@ class CircumradiusProfileRequest(StrictModel):
         )
         if len(keys) != len(set(keys)):
             raise ValueError("point coordinates must be unique")
+        for item in self.points:
+            if not _circumradius_input_height_ok(item.point):
+                raise ValueError(
+                    "circumradius coordinates exceed the conservative "
+                    "100-digit input bound that keeps every exact squared "
+                    "circumradius inside its canonical result contract"
+                )
         return self
 
 
@@ -493,9 +521,9 @@ class CircumradiusTripleEntry(StrictModel):
 
 
 class CircumradiusProfileResult(StrictModel):
-    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=64)
-    point_count: StrictInt = Field(ge=3, le=64)
-    triple_count: StrictInt = Field(ge=1, le=41664)
+    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=24)
+    point_count: StrictInt = Field(ge=3, le=24)
+    triple_count: StrictInt = Field(ge=1, le=2024)
     entries: tuple[CircumradiusTripleEntry, ...] = Field(min_length=1)
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 

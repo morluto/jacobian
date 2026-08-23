@@ -253,13 +253,16 @@ class EllipticCurvePointResult(StrictModel):
     curve: ShortWeierstrassCurve
     point: RationalAffinePoint | None = None
     at_infinity: bool = False
-    is_infinity: bool = False
 
     @model_validator(mode="after")
     def require_consistent_point(self) -> Self:
-        if self.point is not None and (self.at_infinity or self.is_infinity):
+        # One canonical infinity discriminator: at_infinity. Accepting a
+        # second independent flag would let one mathematical value
+        # serialize several ways and let downstream at_infinity readers
+        # misread a validated infinity as finite-with-no-point.
+        if self.point is not None and self.at_infinity:
             raise ValueError("a finite point and infinity are mutually exclusive")
-        if self.point is None and not (self.at_infinity or self.is_infinity):
+        if self.point is None and not self.at_infinity:
             raise ValueError("must carry a finite point or indicate infinity")
         if self.point is not None:
             x = self.point.x.as_fraction()

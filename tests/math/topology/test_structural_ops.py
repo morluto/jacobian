@@ -14,6 +14,7 @@ from jacobian.math.topology._models import (
     PseudomanifoldResult,
     ShellingCheckRequest,
     ShellingCheckResult,
+    SimplicialComplexRequest,
     SkeletonRequest,
     SkeletonResult,
     StarRequest,
@@ -637,6 +638,38 @@ class TestJoinBounds:
 
         with pytest.raises(ValidationError, match="80 vertices"):
             JoinRequest(complex_a=star_complex("a"), complex_b=star_complex("b"))
+
+    def test_forged_oversized_join_result_rejected_before_expansion(self) -> None:
+        """Serialized operands above the facet-product bound are rejected
+        by admission before the result replay expands the union."""
+
+        def edge_complex(prefix: str) -> dict[str, object]:
+            vertices = [f"{prefix}{i}" for i in range(32)]
+            facets = [
+                [f"{prefix}{i}", f"{prefix}{(i + step) % 32}"]
+                for step in range(1, 5)
+                for i in range(32)
+            ]
+            return {"vertices": vertices, "facets": facets}
+
+        with pytest.raises(ValidationError, match="16384 maximal facets"):
+            JoinResult(
+                complex_a=edge_complex("a"),
+                complex_b=edge_complex("b"),
+                join_vertices=tuple(f"a{i}" for i in range(32)),
+                join_facets=(("a0", "a1"),),
+                join_dimension=1,
+            )
+
+    def test_request_schema_advertises_canonical_alternative(self) -> None:
+        """The published input schema shows both accepted shapes so
+        schema-guided callers can pass a canonical complex unchanged."""
+        schema = SimplicialComplexRequest.model_json_schema()
+        assert "anyOf" in schema
+        branches = schema["anyOf"]
+        property_sets = [frozenset(branch.get("properties", {})) for branch in branches]
+        assert any("facets" in props for props in property_sets)
+        assert any("maximal_simplices" in props for props in property_sets)
 
 
 class TestSkeletonBounds:

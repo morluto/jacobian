@@ -6,7 +6,7 @@ import hashlib
 from collections.abc import Iterable
 from enum import StrEnum
 from itertools import combinations, pairwise
-from typing import Annotated, Literal, NamedTuple, Self
+from typing import Annotated, Any, Literal, NamedTuple, Self
 
 from pydantic import (
     Field,
@@ -17,6 +17,8 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from pydantic.json_schema import JsonSchemaValue
+from pydantic_core import CoreSchema
 
 from jacobian._digest import Sha256Digest
 from jacobian._exact import CanonicalInteger
@@ -520,6 +522,31 @@ class SimplicialComplexRequest(StrictModel):
             )
         _require_request_complex(self.vertices, self.facets)
         return self
+
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls,
+        core_schema: CoreSchema,
+        handler: Any,
+    ) -> JsonSchemaValue:
+        """Advertise both accepted input shapes in the published schema.
+
+        The runtime accepts either the facet presentation or an unchanged
+        canonical ``FiniteSimplicialComplex`` dump (the before-validator
+        normalizes the latter), so schema-guided callers must see both
+        alternatives; otherwise a serialized canonical value could not be
+        validated against any advertised consumer schema.
+        """
+        facet_presentation = handler(core_schema)
+        canonical_value = handler(FiniteSimplicialComplex.__pydantic_core_schema__)
+        facet_presentation.pop("title", None)
+        return {
+            "anyOf": [facet_presentation, canonical_value],
+            "description": (
+                "Either the facet presentation (vertices + facets) or an "
+                "unchanged canonical FiniteSimplicialComplex value."
+            ),
+        }
 
 
 class FacesInDimension(StrictModel):
@@ -1444,6 +1471,44 @@ class SkeletonResult(TopologyExactResult):
         return self
 
 
+def _require_join_admission(
+    complex_a: SimplicialComplexRequest,
+    complex_b: SimplicialComplexRequest,
+) -> None:
+    """Shared join admission checked BEFORE any facet-product expansion.
+
+    Disjoint maximal operand facets pair into pairwise-distinct maximal
+    unions, so the exact join facet count is the product below and every
+    derived bound (vertices, facet width, facet count) is checkable
+    without expanding that product or running the quadratic maximal-face
+    scan.
+    """
+    va = set(complex_a.vertices)
+    vb = set(complex_b.vertices)
+    if va & vb:
+        raise ValueError("join requires disjoint vertex sets; rename vertices first")
+    combined_vertices = tuple(sorted(va | vb))
+    if len(combined_vertices) > MAX_TOPOLOGY_VERTICES:
+        raise ValueError(
+            f"join would span {len(combined_vertices)} vertices, above "
+            f"the {MAX_TOPOLOGY_VERTICES}-vertex canonical bound"
+        )
+    widest_join_facet = max(len(facet) for facet in complex_a.facets) + max(
+        len(facet) for facet in complex_b.facets
+    )
+    if widest_join_facet > MAX_TOPOLOGY_DIMENSION + 1:
+        raise ValueError(
+            f"join facets would span {widest_join_facet} vertices, "
+            f"above the {MAX_TOPOLOGY_DIMENSION + 1}-vertex facet bound"
+        )
+    join_facet_count = len(complex_a.facets) * len(complex_b.facets)
+    if join_facet_count > MAX_TOPOLOGY_FACETS:
+        raise ValueError(
+            f"join would carry {join_facet_count} maximal facets, above "
+            f"the {MAX_TOPOLOGY_FACETS}-facet result contract"
+        )
+
+
 class JoinRequest(StrictModel):
     """Join two simplicial complexes on disjoint vertex sets."""
 
@@ -1452,36 +1517,10 @@ class JoinRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_admissible_join(self) -> Self:
-        va = set(self.complex_a.vertices)
-        vb = set(self.complex_b.vertices)
-        if va & vb:
-            raise ValueError(
-                "join requires disjoint vertex sets; rename vertices first"
-            )
-        # Disjoint maximal operand facets pair into pairwise-distinct
-        # maximal unions, so the exact join facet count is the product
-        # below. Check every derived bound BEFORE expanding that product
-        # so an oversized join is rejected without quadratic work.
-        combined_vertices = tuple(sorted(va | vb))
-        if len(combined_vertices) > MAX_TOPOLOGY_VERTICES:
-            raise ValueError(
-                f"join would span {len(combined_vertices)} vertices, above "
-                f"the {MAX_TOPOLOGY_VERTICES}-vertex canonical bound"
-            )
-        widest_join_facet = max(len(facet) for facet in self.complex_a.facets) + max(
-            len(facet) for facet in self.complex_b.facets
+        _require_join_admission(self.complex_a, self.complex_b)
+        combined_vertices = tuple(
+            sorted(set(self.complex_a.vertices) | set(self.complex_b.vertices))
         )
-        if widest_join_facet > MAX_TOPOLOGY_DIMENSION + 1:
-            raise ValueError(
-                f"join facets would span {widest_join_facet} vertices, "
-                f"above the {MAX_TOPOLOGY_DIMENSION + 1}-vertex facet bound"
-            )
-        join_facet_count = len(self.complex_a.facets) * len(self.complex_b.facets)
-        if join_facet_count > MAX_TOPOLOGY_FACETS:
-            raise ValueError(
-                f"join would carry {join_facet_count} maximal facets, above "
-                f"the {MAX_TOPOLOGY_FACETS}-facet result contract"
-            )
         join_facets = _join_maximal_facets(self.complex_a.facets, self.complex_b.facets)
         SimplicialComplexRequest(vertices=combined_vertices, facets=join_facets)
         return self
@@ -1526,10 +1565,11 @@ class JoinResult(TopologyExactResult):
     def require_join_canonical(self) -> Self:
         # Replay the facet union against the retained operands so any
         # internally canonical complex cannot pass as "the" join result.
+        # Apply join admission FIRST so an oversized serialized operand
+        # pair is rejected without repeating the expensive expansion.
+        _require_join_admission(self.complex_a, self.complex_b)
         vertices_a = set(self.complex_a.vertices)
         vertices_b = set(self.complex_b.vertices)
-        if vertices_a & vertices_b:
-            raise ValueError("join operands must have disjoint vertex sets")
         expected_facets = _join_maximal_facets(
             self.complex_a.facets, self.complex_b.facets
         )

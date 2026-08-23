@@ -9,8 +9,10 @@ from pydantic import Field, model_validator
 from jacobian._models import StrictModel
 from jacobian.math.hochschild_complexes._bar import bar_differential_entries
 from jacobian.math.prime_field_linear_algebra import (
-    PrimeFieldMatrix,
     _MAX_DIMENSION as PRIME_FIELD_MAX_DIM,
+)
+from jacobian.math.prime_field_linear_algebra import (
+    PrimeFieldMatrix,
 )
 
 MAX_ALGEBRA_DIM = 8
@@ -153,9 +155,12 @@ class HochschildChainComplexRequest(StrictModel):
         if dimension**self.max_degree > PRIME_FIELD_MAX_DIM:
             raise ValueError(
                 "requested max_degree exceeds the supported matrix dimension bound "
-                f"(dimension^max_degree = {dimension ** self.max_degree} > {PRIME_FIELD_MAX_DIM})"
+                f"(dimension^max_degree = {dimension**self.max_degree} > {PRIME_FIELD_MAX_DIM})"
             )
-        if self.max_degree >= 1 and dimension ** (self.max_degree - 1) > PRIME_FIELD_MAX_DIM:
+        if (
+            self.max_degree >= 1
+            and dimension ** (self.max_degree - 1) > PRIME_FIELD_MAX_DIM
+        ):
             raise ValueError(
                 "requested max_degree exceeds the supported matrix dimension bound "
                 f"(dimension^max_degree-1 = {dimension ** (self.max_degree - 1)} > {PRIME_FIELD_MAX_DIM})"

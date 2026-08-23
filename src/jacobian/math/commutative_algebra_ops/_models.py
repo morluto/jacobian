@@ -361,6 +361,12 @@ class GroebnerBasisResult(StrictModel):
                 self.request.ideal,
                 self.request.monomial_order,
             )
+            _require_basis_ideal_equality(
+                self.basis,
+                self.request.ideal,
+                self.request.monomial_order,
+                float(self.request.resource_budget.wall_seconds),
+            )
         elif self.basis is not None or self.detail is None:
             raise ValueError("timed-out computation carries only a safe detail")
         return self
@@ -426,9 +432,6 @@ def _require_source_bound_basis(
     _require_buchberger_criterion(
         nonzero, leading_terms, leading_exps, symbols, monomial_order
     )
-    _require_basis_ideal_equality(
-        nonzero, source_exprs, source, symbols, monomial_order
-    )
 
 
 def _require_buchberger_criterion(
@@ -466,44 +469,42 @@ def _require_buchberger_criterion(
 
 
 def _require_basis_ideal_equality(
-    nonzero: list[Any],
-    source_exprs: list[Any],
+    basis: RationalPolynomialIdeal,
     source: RationalPolynomialIdeal,
-    symbols: tuple[Any, ...],
     monomial_order: str,
+    wall_seconds: float,
 ) -> None:
-    """Membership against a verified basis is decided by reduction to zero."""
-    import sympy
+    """Verify both ideal inclusions inside the killable worker process.
 
-    # Recompute the bounded source basis once so both inclusions reduce
-    # against verified Gröbner bases.
-    from jacobian.math.polynomials._conversions import symbols_for_variables
+    The source-side Gröbner computation is unbounded work, so it runs under
+    the declared killable budget exactly like the producing computation; a
+    parent-process recomputation would repeat the expensive search with no
+    wall-time bound. A verification that cannot conclude within the budget
+    fails closed.
+    """
+    from jacobian.math.commutative_algebra_ops._operations import _run_sympy_kernel
 
-    source_symbols = symbols_for_variables(source.variables)
-    source_basis = sympy.groebner(
-        source_exprs,
-        *source_symbols,
-        order=monomial_order,
-        domain=sympy.QQ,
-    )
-    for expr in nonzero:
-        _, remainder = sympy.reduced(
-            expr,
-            list(source_basis.exprs),
-            *source_symbols,
-            order=monomial_order,
-            domain=sympy.QQ,
+    payload = {
+        "mode": "verify_ideal_equality",
+        "variables": list(source.variables),
+        "order": monomial_order,
+        "generators": [
+            generator.model_dump(mode="json") for generator in source.generators
+        ],
+        "basis": [generator.model_dump(mode="json") for generator in basis.generators],
+    }
+    try:
+        result = _run_sympy_kernel(payload, wall_seconds)
+    except Exception as error:
+        raise ValueError(
+            "the retained sources could not be verified against this basis "
+            f"within the enforced wall-time budget: {error}"
+        ) from None
+    if not result.get("equal"):
+        raise ValueError(
+            "basis and source ideals differ: "
+            + str(result.get("detail", "inclusion replay failed"))
         )
-        if remainder != 0:
-            raise ValueError("basis generators must lie in the source ideal")
-    for expr in source_exprs:
-        if expr.is_zero:
-            continue
-        _, remainder = sympy.reduced(
-            expr, nonzero, *symbols, order=monomial_order, domain=sympy.QQ
-        )
-        if remainder != 0:
-            raise ValueError("source ideal must be contained in the basis ideal")
 
 
 # ---------------------------------------------------------------------------
@@ -511,11 +512,19 @@ def _require_basis_ideal_equality(
 # ---------------------------------------------------------------------------
 
 
+NormalFormMonomialOrder = Literal["lex", "grlex", "grevlex"]
+
+
 class IdealNormalFormRequest(StrictModel):
-    """Reduce one polynomial modulo an ideal's Gröbner basis."""
+    """Reduce one polynomial modulo an ideal's Gröbner basis.
+
+    ``monomial_order`` names the order of the Groebner basis the reduction
+    uses; normal forms depend on it, so it is part of the public contract.
+    """
 
     ideal: RationalPolynomialIdeal
     polynomial: RationalPolynomial
+    monomial_order: NormalFormMonomialOrder = "grevlex"
 
     @model_validator(mode="after")
     def require_backend_domain(self) -> Self:
@@ -542,6 +551,7 @@ class IdealNormalFormResult(StrictModel):
     outcome: NormalFormExecutionOutcome = "COMPUTED"
     remainder: RationalPolynomial | None = None
     in_ideal: bool | None = None
+    monomial_order: NormalFormMonomialOrder = "grevlex"
     detail: str | None = None
 
     @model_validator(mode="after")
@@ -550,10 +560,20 @@ class IdealNormalFormResult(StrictModel):
             raise ValueError(
                 "an incomplete normal-form outcome states no membership conclusion"
             )
+        if self.monomial_order != self.request.monomial_order:
+            raise ValueError("monomial_order must match the retained request")
         if self.outcome == "COMPUTED":
             if self.remainder is None or self.detail is not None:
                 raise ValueError(
                     "computed normal form requires a remainder and no failure detail"
+                )
+            # A computed outcome claims its authoritative membership
+            # decision; omitting it would let the result claim success
+            # while withholding the conclusion.
+            if self.in_ideal is None:
+                raise ValueError(
+                    "a computed normal form must state its membership "
+                    "conclusion in in_ideal"
                 )
             if self.in_ideal and len(self.remainder.polynomial.terms) > 0:
                 raise ValueError("a polynomial in the ideal must have a zero remainder")
@@ -590,14 +610,14 @@ def _require_source_bound_remainder(
     basis = sympy.groebner(
         ideal_generators,
         *symbols,
-        order="grevlex",
+        order=request.monomial_order,
         domain=sympy.QQ,
     )
     _, replayed = sympy.reduced(
         polynomial_expr,
         list(basis.exprs),
         *symbols,
-        order="grevlex",
+        order=request.monomial_order,
         domain=sympy.QQ,
     )
     expected = rational_polynomial_from_sympy(
@@ -662,6 +682,8 @@ class EliminationIdealResult(StrictModel):
                 raise ValueError(
                     "computed elimination requires an ideal and no failure detail"
                 )
+            if self.eliminated_variables != self.request.eliminated_variables:
+                raise ValueError("eliminated_variables must match the retained request")
             for var in self.eliminated_variables:
                 if var in self.elimination_ideal.variables:
                     raise ValueError(

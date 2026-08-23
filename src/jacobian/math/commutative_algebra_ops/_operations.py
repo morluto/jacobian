@@ -109,12 +109,14 @@ def main() -> None:
         elif mode == "normal_form":
             target = RationalPolynomial.model_validate(payload["polynomial"])
             poly_expr = rational_polynomial_to_sympy(target).as_expr()
-            basis = sympy.groebner(exprs, *symbols, order="grevlex", domain=sympy.QQ)
+            basis = sympy.groebner(
+                exprs, *symbols, order=payload.get("order", "grevlex"), domain=sympy.QQ
+            )
             _, remainder = sympy.reduced(
                 poly_expr,
                 list(basis.exprs),
                 *symbols,
-                order="grevlex",
+                order=payload.get("order", "grevlex"),
                 domain=sympy.QQ,
             )
             remainder_poly = sympy.Poly(remainder, *symbols, domain=sympy.QQ)
@@ -127,6 +129,53 @@ def main() -> None:
                     "remainder": converted.model_dump(mode="json"),
                 }
             )
+        elif mode == "verify_ideal_equality":
+            claimed = [
+                RationalPolynomial.model_validate(item)
+                for item in payload["basis"]
+            ]
+            claimed_exprs = [
+                rational_polynomial_to_sympy(g).as_expr() for g in claimed
+            ]
+            source_basis = sympy.groebner(
+                exprs, *symbols, order=payload.get("order", "grevlex"),
+                domain=sympy.QQ,
+            )
+            for generator in claimed_exprs:
+                _, rem = sympy.reduced(
+                    generator,
+                    list(source_basis.exprs),
+                    *symbols,
+                    order=payload.get("order", "grevlex"),
+                    domain=sympy.QQ,
+                )
+                if rem != 0:
+                    _emit({
+                        "status": "ok",
+                        "equal": False,
+                        "detail": "a basis generator leaves a nonzero "
+                                  "remainder modulo the source ideal",
+                    })
+                    return
+            for expr in exprs:
+                if expr.is_zero:
+                    continue
+                _, rem = sympy.reduced(
+                    expr,
+                    claimed_exprs,
+                    *symbols,
+                    order=payload.get("order", "grevlex"),
+                    domain=sympy.QQ,
+                )
+                if rem != 0:
+                    _emit({
+                        "status": "ok",
+                        "equal": False,
+                        "detail": "a source generator is not contained in "
+                                  "the claimed basis ideal",
+                    })
+                    return
+            _emit({"status": "ok", "equal": True})
         elif mode == "elimination":
             eliminated = set(payload["eliminated"])
             remaining = [v for v in variables if v not in eliminated]
@@ -413,6 +462,7 @@ def compute_ideal_normal_form(request: IdealNormalFormRequest) -> IdealNormalFor
     payload = {
         "mode": "normal_form",
         "variables": list(request.ideal.variables),
+        "order": request.monomial_order,
         "generators": [
             generator.model_dump(mode="json") for generator in request.ideal.generators
         ],
@@ -455,6 +505,7 @@ def compute_ideal_normal_form(request: IdealNormalFormRequest) -> IdealNormalFor
         request=request,
         remainder=remainder_poly,
         in_ideal=in_ideal,
+        monomial_order=request.monomial_order,
     )
 
 

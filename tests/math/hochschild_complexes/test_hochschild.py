@@ -194,6 +194,59 @@ class TestHochschildAdmissionAndTopDegree:
         result = compute_hochschild_homology(request)
         assert [group.betti for group in result.groups] == [1, 0, 0, 0]
 
+    def test_nine_dim_coordinatewise_algebra_admitted(self):
+        """GF(5)^9 with max_degree=1 fits every derived budget and must be admitted.
+
+        Regression: a fixed dimension<=8 ceiling used to reject it even though
+        its 729 structure constants, 81 highest tensor elements, 9x81 largest
+        homology boundary, and 9-wide chain-complex matrix are all inside the
+        declared budgets.
+        """
+        alg = _coordinatewise_algebra(5, 9)
+        assert alg.dimension**3 == 729
+        homology = compute_hochschild_homology(
+            HochschildHomologyRequest(algebra=alg, max_degree=1)
+        )
+        # GF(5)^9 is separable with the projection augmentation, so
+        # HH_0 = K and all higher groups vanish.
+        assert [group.betti for group in homology.groups] == [1, 0]
+        complex_result = compute_hochschild_chain_complex(
+            HochschildChainComplexRequest(algebra=alg, max_degree=1)
+        )
+        assert complex_result.group_dimensions == (1, 9)
+        # The accepted payload round-trips through its own validator.
+        HochschildChainComplexResult.model_validate(complex_result.model_dump())
+
+    def test_associativity_admission_budget_rejected(self):
+        """Dimensions whose 2*n^5 associativity walk exceeds the work budget fail."""
+        from jacobian.math.hochschild_complexes._models import (
+            MAX_ASSOCIATIVITY_DOT_STEPS,
+        )
+
+        boundary = 25
+        assert 2 * boundary**5 <= MAX_ASSOCIATIVITY_DOT_STEPS
+        assert 2 * (boundary + 1) ** 5 > MAX_ASSOCIATIVITY_DOT_STEPS
+        with pytest.raises(ValidationError, match="associativity-admission"):
+            _coordinatewise_algebra(2, boundary + 1)
+
+    def test_structure_input_budget_rejected(self):
+        """Multiplication tables beyond the dense-payload entry budget fail."""
+        from jacobian.math.hochschild_complexes._models import (
+            MAX_STRUCTURE_CONSTANT_ENTRIES,
+        )
+
+        oversized = 51
+        assert oversized**3 > MAX_STRUCTURE_CONSTANT_ENTRIES
+        with pytest.raises(ValidationError, match="input-entry budget"):
+            _coordinatewise_algebra(2, oversized)
+
+    def test_request_budgets_bind_above_the_old_dimension_ceiling(self):
+        """Larger admitted algebras still face the per-request envelopes."""
+        with pytest.raises(ValidationError, match="tensor-element"):
+            HochschildHomologyRequest(
+                algebra=_coordinatewise_algebra(2, 10), max_degree=4
+            )
+
 
 class TestChainComplexSourceBinding:
     """The chain complex result must be bound to its retained source algebra."""
@@ -260,6 +313,59 @@ class TestChainComplexSourceBinding:
         payload["prime"] = 5
         with pytest.raises(ValidationError, match="retained algebra"):
             HochschildChainComplexResult.model_validate(payload)
+
+    def test_mismatched_differential_prime_rejected(self):
+        """A differential over another prime must be rejected, not reinterpreted.
+
+        The exact GF(5) entries stay canonical residues of the larger GF(7),
+        so only an explicit prime-binding check can stop the payload from
+        silently switching fields inside rank/RREF/nullspace consumers.
+        """
+        algebra = _dual_numbers(5)
+        result = compute_hochschild_chain_complex(
+            HochschildChainComplexRequest(algebra=algebra, max_degree=1)
+        )
+        assert result.differentials[0].matrix.entries != ((0,),)
+        payload = result.model_dump()
+        payload["differentials"][0]["matrix"]["prime"] = 7
+        with pytest.raises(
+            ValidationError, match="must carry the retained algebra prime"
+        ):
+            HochschildChainComplexResult.model_validate(payload)
+
+    def test_all_zero_differential_foreign_prime_rejected(self):
+        """The review's example: an all-zero GF(7) differential for a GF(5) algebra."""
+        zero_algebra = AlgebraStructure(
+            prime=5,
+            dimension=2,
+            structure_constants=(
+                ((0, 0), (0, 0)),
+                ((0, 0), (0, 0)),
+            ),
+            augmentation=(0, 0),
+        )
+        result = compute_hochschild_chain_complex(
+            HochschildChainComplexRequest(algebra=zero_algebra, max_degree=1)
+        )
+        assert result.differentials[0].matrix.entries == ((0, 0),)
+        payload = result.model_dump()
+        payload["differentials"][0]["matrix"]["prime"] = 7
+        with pytest.raises(
+            ValidationError, match="must carry the retained algebra prime"
+        ):
+            HochschildChainComplexResult.model_validate(payload)
+
+    def test_matching_differential_prime_accepted(self):
+        """Round-tripped differentials carrying the algebra prime still validate."""
+        algebra = self._swap_algebra()
+        result = compute_hochschild_chain_complex(
+            HochschildChainComplexRequest(algebra=algebra, max_degree=2)
+        )
+        assert all(
+            differential.matrix.prime == algebra.prime
+            for differential in result.differentials
+        )
+        HochschildChainComplexResult.model_validate(result.model_dump())
 
 
 class TestHomologySourceBinding:

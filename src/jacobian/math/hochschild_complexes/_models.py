@@ -15,14 +15,34 @@ from jacobian.math.prime_field_linear_algebra import (
     PrimeFieldMatrix,
 )
 
-MAX_ALGEBRA_DIM = 8
-MAX_MODULE_DIM = 8
 MAX_HOCHSCHILD_DEGREE = 4
 MAX_HOCHSCHILD_TENSOR_ELEMENTS = 20_000
 # A dense boundary matrix d_k holds n^(k-1) * n^k entries; Gaussian elimination
 # copies it and performs O(pivots * entries) field work. The entry budget keeps
 # both the matrix and its elimination copy small alongside the tensor budget.
 MAX_HOCHSCHILD_MATRIX_ENTRIES = 131_072
+# Algebra admission derives every bound from measured work instead of a fixed
+# dimension ceiling:
+#
+# - Structure input: the multiplication table carries dimension^3 constant
+#   entries plus ``dimension`` augmentation scalars -- a dense GF(p)-entry
+#   payload of the same size class as the densest admitted max_degree=1
+#   homology boundary d_2 : A^tensor2 -> A, which has exactly
+#   dimension x dimension^2 = dimension^3 entries. The table therefore shares
+#   MAX_HOCHSCHILD_MATRIX_ENTRIES (dimension <= 50).
+# - Associativity admission: the defining walk visits all dimension^4 basis
+#   quadruples and evaluates two dimension-term dot products per quadruple,
+#   i.e. 2*dimension^5 modular multiply-adds (~38M steps/second measured).
+#   MAX_ASSOCIATIVITY_DOT_STEPS bounds that admission work directly
+#   (2*n^5 <= 20M admits n <= 25 at sub-second cost). Larger dimensions are a
+#   backend gap -- admitting them requires an accelerated associativity
+#   kernel, not a change of mathematical domain.
+# - Tensor elements, boundary-matrix entries, matrix dimensions, and result
+#   sizes stay bounded per request by require_hochschild_budget and the
+#   request/result validators below, which bound each
+#   (dimension, max_degree) combination separately.
+MAX_STRUCTURE_CONSTANT_ENTRIES = MAX_HOCHSCHILD_MATRIX_ENTRIES
+MAX_ASSOCIATIVITY_DOT_STEPS = 20_000_000
 
 
 class AlgebraStructure(StrictModel):
@@ -36,11 +56,9 @@ class AlgebraStructure(StrictModel):
     """
 
     prime: int = Field(ge=2, le=10_000)
-    dimension: int = Field(ge=1, le=MAX_ALGEBRA_DIM)
-    structure_constants: tuple[tuple[tuple[int, ...], ...], ...] = Field(
-        min_length=1, max_length=MAX_ALGEBRA_DIM
-    )
-    augmentation: tuple[int, ...] = Field(min_length=1, max_length=MAX_ALGEBRA_DIM)
+    dimension: int = Field(ge=1)
+    structure_constants: tuple[tuple[tuple[int, ...], ...], ...] = Field(min_length=1)
+    augmentation: tuple[int, ...] = Field(min_length=1)
 
     def _require_canonical_residues(self) -> None:
         """Reject noncanonical constants and augmentation values: each must
@@ -95,13 +113,34 @@ class AlgebraStructure(StrictModel):
 
         if not isprime(self.prime):
             raise ValueError("prime must be a prime integer")
+        # Gate the multiplication-table walks on the derived input and work
+        # budgets before touching the constants, so oversized tables fail fast.
+        structure_entries = self.dimension**3 + self.dimension
+        if structure_entries > MAX_STRUCTURE_CONSTANT_ENTRIES:
+            raise ValueError(
+                "structure constants exceed the supported input-entry budget "
+                f"(dimension^3 + dimension = {structure_entries} "
+                f"> {MAX_STRUCTURE_CONSTANT_ENTRIES})"
+            )
+        associativity_steps = 2 * self.dimension**5
+        if associativity_steps > MAX_ASSOCIATIVITY_DOT_STEPS:
+            raise ValueError(
+                "algebra dimension exceeds the associativity-admission work "
+                f"budget (2*dimension^5 = {associativity_steps} "
+                f"> {MAX_ASSOCIATIVITY_DOT_STEPS}); admitting larger algebras "
+                "requires an accelerated associativity check"
+            )
         self._require_canonical_residues()
         self._require_associative()
         self._require_multiplicative_augmentation()
         return self
 
     def _require_associative(self) -> None:
-        """Hochschild differentials square to zero only over associative algebras."""
+        """Hochschild differentials square to zero only over associative algebras.
+
+        The defining walk costs 2*dimension^5 modular multiply-adds over all
+        basis quadruples; require_valid gates it with MAX_ASSOCIATIVITY_DOT_STEPS.
+        """
         p = self.prime
         c = self.structure_constants
         n = self.dimension
@@ -225,6 +264,13 @@ class HochschildChainComplexResult(StrictModel):
         for degree, differential in enumerate(self.differentials, start=1):
             if differential.degree != degree:
                 raise ValueError("differential degrees must be consecutive from 1")
+            # Bind each differential to the algebra's field: a matrix over a
+            # different prime could pass every shape and entry comparison and
+            # then silently change fields inside rank/RREF/nullspace consumers.
+            if differential.matrix.prime != algebra.prime:
+                raise ValueError(
+                    "differential matrices must carry the retained algebra prime"
+                )
             if (
                 differential.source_dim != dimension** degree
                 or differential.target_dim != dimension ** (degree - 1)

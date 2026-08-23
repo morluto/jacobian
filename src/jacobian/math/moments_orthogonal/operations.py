@@ -290,6 +290,11 @@ def _require_finite_doubles(
             raise ValueError(
                 "quadrature coefficients exceed the finite IEEE-double range"
             )
+        # A nonzero coefficient whose double conversion is 0.0 silently
+        # collapses a weight or Jacobi subdiagonal; mirror the wire request's
+        # nonzero-preserving representability contract here.
+        if converted == 0.0 and value != 0:
+            raise ValueError("quadrature coefficient underflows IEEE double to zero")
 
 
 def gaussian_quadrature(

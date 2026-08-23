@@ -8,9 +8,9 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import require_bounded_rational
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.math.geometry._models import RationalPoint2D
 from jacobian.math.geometry._support import geometry_operation
@@ -50,8 +50,7 @@ class PinnedDistanceRequest(StrictModel):
 class LineDistanceEntry(StrictModel):
     """One distinct line with its exact squared distance and source pairs."""
 
-    squared_distance_numerator: str
-    squared_distance_denominator: str
+    squared_distance: CanonicalRational
     source_pairs: tuple[tuple[int, int], ...]
 
 
@@ -71,10 +70,13 @@ class PinnedDistanceResult(StrictModel):
         from jacobian._exact import require_bounded_rational
 
         # A directly supplied result bypasses PinnedDistanceRequest, so
-        # reapply the cardinality, uniqueness, and coordinate-height bounds
-        # before any replay work.
-        if len(self.points) > MAX_PINNED_DISTANCE_POINTS:
-            raise ValueError("point set exceeds the pinned-distance enumeration budget")
+        # reapply the full request cardinality, uniqueness, and
+        # coordinate-height bounds before any replay work.
+        if not 2 <= len(self.points) <= MAX_PINNED_DISTANCE_POINTS:
+            raise ValueError(
+                "point set must contain between 2 and "
+                f"{MAX_PINNED_DISTANCE_POINTS} points"
+            )
         keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")
@@ -99,10 +101,7 @@ class PinnedDistanceResult(StrictModel):
                 raise ValueError("no minimum entry can exist without lines")
             min_entry = min(
                 expected,
-                key=lambda e: Fraction(
-                    parse_canonical_integer(e.squared_distance_numerator),
-                    parse_canonical_integer(e.squared_distance_denominator),
-                ),
+                key=lambda e: e.squared_distance.as_fraction(),
             )
             if self.min_squared_distance != min_entry:
                 raise ValueError("min_squared_distance must be the minimum entry")
@@ -156,7 +155,7 @@ def _line_entries_from_points(
     # d^2 = cross(D, P-A)^2 / |D|^2
     # Entries are keyed by the canonical integer line equation a*x + b*y = c so
     # that distinct lines are never merged; the distance is entry data.
-    line_map: dict[tuple[str, str, str], tuple[list[tuple[int, int]], str, str]] = {}
+    line_map: dict[tuple[str, str, str], tuple[list[tuple[int, int]], Fraction]] = {}
 
     for i in range(len(pts)):
         for j in range(i + 1, len(pts)):
@@ -172,20 +171,15 @@ def _line_entries_from_points(
             sq_dist = Fraction(cross * cross, norm_sq)
             key = _canonical_line_key(xi, yi, xj, yj)
             if key not in line_map:
-                line_map[key] = (
-                    [],
-                    format_canonical_integer(sq_dist.numerator),
-                    format_canonical_integer(sq_dist.denominator),
-                )
+                line_map[key] = ([], sq_dist)
             line_map[key][0].append((i, j))
 
     entries = []
     for key in sorted(line_map.keys()):
-        pairs, num, den = line_map[key]
+        pairs, sq_dist = line_map[key]
         entries.append(
             LineDistanceEntry(
-                squared_distance_numerator=num,
-                squared_distance_denominator=den,
+                squared_distance=CanonicalRational.from_fraction(sq_dist),
                 source_pairs=tuple(pairs),
             )
         )
@@ -195,17 +189,12 @@ def _line_entries_from_points(
 def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceResult:
     """Compute exact squared distances from an anchor to all pair-spanned lines."""
 
-    from jacobian.canonical import parse_canonical_integer
-
     entries = _line_entries_from_points(request.anchor, request.points)
 
     min_entry = (
         min(
             entries,
-            key=lambda e: Fraction(
-                parse_canonical_integer(e.squared_distance_numerator),
-                parse_canonical_integer(e.squared_distance_denominator),
-            ),
+            key=lambda e: e.squared_distance.as_fraction(),
         )
         if entries
         else None

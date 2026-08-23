@@ -14,6 +14,7 @@ from jacobian._exact import (
 )
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.moments_orthogonal.values import (
     MAX_MOMENTS,
     MAX_QUADRATURE_POINTS,
@@ -88,7 +89,7 @@ class HankelMatrixRequest(StrictModel):
 
 
 class HankelMatrixResult(HankelMatrixRequest):
-    matrix: tuple[tuple[CanonicalRational, ...], ...]
+    matrix: RationalMatrix
     dimension: int = Field(ge=1)
     complete: Literal[True] = True
     method: Literal["EXACT_HANKEL_ASSEMBLY"] = "EXACT_HANKEL_ASSEMBLY"
@@ -100,9 +101,11 @@ class HankelMatrixResult(HankelMatrixRequest):
         result = hankel_matrix(_to_fractions(self.moments))
         if self.dimension != len(result.matrix):
             raise ValueError("dimension must match the Hankel matrix size")
-        expected_matrix = tuple(
-            tuple(CanonicalRational.from_fraction(v) for v in row)
-            for row in result.matrix
+        expected_matrix = RationalMatrix(
+            entries=tuple(
+                tuple(CanonicalRational.from_fraction(v) for v in row)
+                for row in result.matrix
+            )
         )
         if self.matrix != expected_matrix:
             raise ValueError("matrix must be the exact Hankel matrix")

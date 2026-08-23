@@ -446,6 +446,27 @@ class LabelledPoint2D(StrictModel):
     label: str = Field(min_length=1, max_length=64)
     point: RationalPoint2D
 
+    @model_validator(mode="after")
+    def require_transport_stable_label(self) -> Self:
+        _require_transport_stable_label(self.label)
+        return self
+
+
+def _require_transport_stable_label(label: str) -> None:
+    """Admit only labels whose JSON encoding cannot exceed one byte per char.
+
+    Labels repeat inside every entry of an aggregate profile, so a control
+    character (six escaped bytes per occurrence) or a quote/backslash (two)
+    multiplies one admitted configuration's serialized size well past the
+    character-count budget and can push the complete profile through the
+    transport output limit after computation.
+    """
+    if any(ord(ch) < 32 or ord(ch) > 126 or ch in '"\\' for ch in label):
+        raise ValueError(
+            "point labels must be printable ASCII characters excluding "
+            "quote and backslash"
+        )
+
 
 def _circumradius_input_height_ok(point: RationalPoint2D) -> bool:
     # Conservative worst-case propagation for the complete profile transport:
@@ -455,10 +476,13 @@ def _circumradius_input_height_ok(point: RationalPoint2D) -> bool:
     # cross product ~4H+5 over 4H, so every reduced R^2 component stays within
     # roughly (12H+9) + (8H+10) + small slack = 20H + 25 digits. The bound
     # must hold for the AGGREGATE profile, not one entry: C(24,3) = 2024
-    # entries of two such components plus per-entry JSON overhead (~350 bytes,
-    # including three <=64-char labels) must fit inside the canonical 10 MiB
-    # output limit together with the retained configuration:
-    # 2024 * (2*(20*100+25) + 350) ~= 8.87 MB < 10 MiB. H = 1024 would allow
+    # entries of two such components plus per-entry JSON overhead. The label
+    # grammar admits only printable ASCII without quote/backslash, so each
+    # label byte encodes to exactly one JSON byte: 3 * (64 + 3) <= 201 bytes
+    # of labels per entry plus ~150 bytes of keys, indices, and flags must fit
+    # inside the canonical 10 MiB output limit together with the retained
+    # configuration:
+    # 2024 * (2*(20*100+25) + ~350) ~= 8.87 MB < 10 MiB. H = 1024 would allow
     # a single admitted profile to exceed transport after computation, so the
     # per-coordinate input height is capped at 100 digits.
     max_input = 100
@@ -612,6 +636,11 @@ class ForbiddenLabelledPoint(StrictModel):
 
     label: str = Field(min_length=1, max_length=64)
     point: RationalPoint2D
+
+    @model_validator(mode="after")
+    def require_transport_stable_label(self) -> Self:
+        _require_transport_stable_label(self.label)
+        return self
 
 
 MAX_FORBIDDEN_POINTS = 32

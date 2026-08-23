@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
+
 import pytest
 from pydantic import ValidationError
 
@@ -57,24 +59,17 @@ class TestSourceReplayBinding:
         # distance zero; the hypotenuse line has distance (3*4/5)^2 = 144/25.
         result = compute_pinned_distances(self._request())
         distances = sorted(
-            (
-                entry.squared_distance_numerator,
-                entry.squared_distance_denominator,
-            )
-            for entry in result.lines
+            entry.squared_distance.as_fraction() for entry in result.lines
         )
-        assert distances == [("0", "1"), ("0", "1"), ("144", "25")]
+        assert distances == [Fraction(0), Fraction(0), Fraction(144, 25)]
 
     def test_pair_partition_matches_generating_pairs(self) -> None:
         result = compute_pinned_distances(self._request())
         by_pairs = {entry.source_pairs: entry for entry in result.lines}
-        assert by_pairs[((0, 1),)].squared_distance_numerator == "0"
-        assert by_pairs[((0, 2),)].squared_distance_numerator == "0"
+        assert by_pairs[((0, 1),)].squared_distance.as_fraction() == 0
+        assert by_pairs[((0, 2),)].squared_distance.as_fraction() == 0
         hypotenuse = by_pairs[((1, 2),)]
-        assert (
-            hypotenuse.squared_distance_numerator,
-            hypotenuse.squared_distance_denominator,
-        ) == ("144", "25")
+        assert hypotenuse.squared_distance.as_fraction() == Fraction(144, 25)
 
     def test_collinear_configuration_single_line(self) -> None:
         result = compute_pinned_distances(
@@ -85,10 +80,7 @@ class TestSourceReplayBinding:
         )
         assert result.distinct_line_count == 1
         entry = result.lines[0]
-        assert (
-            entry.squared_distance_numerator,
-            entry.squared_distance_denominator,
-        ) == ("0", "1")
+        assert entry.squared_distance.as_fraction() == 0
         assert entry.source_pairs == ((0, 1), (0, 2), (1, 2))
 
     def test_rational_coordinates_exact_distance(self) -> None:
@@ -100,8 +92,7 @@ class TestSourceReplayBinding:
         )
         assert result.distinct_line_count == 1
         # Line x + y = 1 has squared distance 1/2 from the origin.
-        assert result.lines[0].squared_distance_numerator == "1"
-        assert result.lines[0].squared_distance_denominator == "2"
+        assert result.lines[0].squared_distance.as_fraction() == Fraction(1, 2)
 
     def test_round_trip_replay(self) -> None:
         result = compute_pinned_distances(self._request())
@@ -117,11 +108,23 @@ class TestSourceReplayBinding:
                 min_squared_distance=None,
             )
 
+    def test_subcardinal_result_rejected(self) -> None:
+        # A relayed result must satisfy the request's minimum cardinality:
+        # an empty or single-point profile is never a complete answer.
+        for points in ((), (_pt("0", "0"),)):
+            with pytest.raises(ValidationError, match="between 2 and"):
+                PinnedDistanceResult(
+                    anchor=_pt("0", "0"),
+                    points=points,
+                    lines=(),
+                    distinct_line_count=0,
+                    min_squared_distance=None,
+                )
+
     def test_forged_entry_rejected(self) -> None:
         genuine = compute_pinned_distances(self._request())
         forged_entry = LineDistanceEntry(
-            squared_distance_numerator="7",
-            squared_distance_denominator="1",
+            squared_distance=CanonicalRational.from_fraction(Fraction(7, 1)),
             source_pairs=genuine.lines[0].source_pairs,
         )
         with pytest.raises(ValidationError, match="replay"):
@@ -192,7 +195,7 @@ class TestResultAdmissionBounds:
     def test_oversized_result_point_set_rejected_before_replay(self) -> None:
         """A directly validated result cannot bypass the cardinality cap."""
         points = tuple(_pt(str(index), str(index * index)) for index in range(40))
-        with pytest.raises(ValidationError, match="enumeration budget"):
+        with pytest.raises(ValidationError, match="between 2 and"):
             PinnedDistanceResult(
                 anchor=_pt("0", "0"),
                 points=points,

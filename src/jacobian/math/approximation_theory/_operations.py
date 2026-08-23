@@ -12,7 +12,11 @@ from jacobian.math.approximation_theory._models import (
     LagrangeInterpolationRequest,
     LagrangeInterpolationResult,
 )
-from jacobian.math.polynomials.values import RationalPolynomial, RationalPolynomialTerm, SparseRationalPolynomial
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
 
 
 def _frac_from_rational(value) -> Fraction:
@@ -99,7 +103,7 @@ def compute_lagrange_basis(request: LagrangeBasisRequest) -> LagrangeBasisResult
             x_i = nodes[i]
             linear_factor = [-x_i, Fraction(1)]
             poly = _poly_multiply(poly, linear_factor)
-            denom *= (x_k - x_i)
+            denom *= x_k - x_i
 
         bary_weight = Fraction(1) / denom
 

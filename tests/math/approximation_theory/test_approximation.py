@@ -30,17 +30,46 @@ class TestDerivedGrowthBudget:
     def test_huge_denominator_nodes_rejected(self):
         # (10^2000 + k)/10^2000 is already reduced and has a 2001-digit
         # denominator per node; four such nodes blow the component budget.
-        nodes = [
-            _node(str(10**2000 + k), "1" + "0" * 2000) for k in (1, 3, 7, 9)
-        ]
+        nodes = [_node(str(10**2000 + k), "1" + "0" * 2000) for k in (1, 3, 7, 9)]
         with pytest.raises(ValidationError, match="component budget"):
-            RationalNodeSet(nodes=tuple(CanonicalRational.model_validate(n) for n in nodes))
+            RationalNodeSet(
+                nodes=tuple(CanonicalRational.model_validate(n) for n in nodes)
+            )
 
     def test_many_moderate_nodes_accepted(self):
         primes = [
-            11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71,
-            73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139,
-            149, 151,
+            11,
+            13,
+            17,
+            19,
+            23,
+            29,
+            31,
+            37,
+            41,
+            43,
+            47,
+            53,
+            59,
+            61,
+            67,
+            71,
+            73,
+            79,
+            83,
+            89,
+            97,
+            101,
+            103,
+            107,
+            109,
+            113,
+            127,
+            131,
+            137,
+            139,
+            149,
+            151,
         ]
         nodes = [_node(str(p), str(10**14)) for p in primes]
         request = LagrangeBasisRequest(
@@ -146,7 +175,9 @@ class TestLagrangeInterpolation:
 
 class TestLagrangeBasisSourceBinding:
     def _nodes(self, *values):
-        return RationalNodeSet(nodes=tuple(CanonicalRational.model_validate(_node(v)) for v in values))
+        return RationalNodeSet(
+            nodes=tuple(CanonicalRational.model_validate(_node(v)) for v in values)
+        )
 
     def test_genuine_result_round_trips(self):
         request = LagrangeBasisRequest(nodes=self._nodes("0", "1", "2"))
@@ -173,7 +204,9 @@ class TestLagrangeBasisSourceBinding:
 
     def test_swapped_nodes_rejected_by_delta_replay(self):
         """A basis computed on other nodes fails l_k(x_j) = delta_kj."""
-        basis_a = compute_lagrange_basis(LagrangeBasisRequest(nodes=self._nodes("0", "1")))
+        basis_a = compute_lagrange_basis(
+            LagrangeBasisRequest(nodes=self._nodes("0", "1"))
+        )
         payload = basis_a.model_dump()
         payload["nodes"] = {
             "nodes": [
@@ -204,9 +237,18 @@ class TestLagrangeBasisSourceBinding:
                         "variables": ["x"],
                         "polynomial": {
                             "terms": [
-                                {"coefficient": {"num": "1", "den": "1"}, "exponents": [2]},
-                                {"coefficient": {"num": "-2", "den": "1"}, "exponents": [1]},
-                                {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]},
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [2],
+                                },
+                                {
+                                    "coefficient": {"num": "-2", "den": "1"},
+                                    "exponents": [1],
+                                },
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [0],
+                                },
                             ]
                         },
                     },
@@ -220,7 +262,10 @@ class TestLagrangeBasisSourceBinding:
                         "variables": ["x"],
                         "polynomial": {
                             "terms": [
-                                {"coefficient": {"num": "1", "den": "1"}, "exponents": [1]},
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [1],
+                                },
                             ]
                         },
                     },

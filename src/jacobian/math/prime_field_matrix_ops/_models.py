@@ -41,7 +41,9 @@ class PrimeFieldMatrixRequest(StrictModel):
             raise ValueError("entries must be canonical prime-field residues")
         if not self.entries and self.columns == 0:
             return self
-        _PrimeFieldMatrixValidator(prime=self.prime, entries=self.entries, columns=self.columns)
+        _PrimeFieldMatrixValidator(
+            prime=self.prime, entries=self.entries, columns=self.columns
+        )
         return self
 
 

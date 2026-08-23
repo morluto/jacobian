@@ -947,3 +947,50 @@ class TestReplayTerminationReasonBinding:
         payload["termination_reason"] = "WITNESS_FOUND"
         with pytest.raises(ValidationError, match="search replay"):
             MultigraphFlowFindResult.model_validate(payload)
+
+
+# ---------------------------------------------------------------------------
+# Published contract matches implemented behavior (review follow-ups)
+# ---------------------------------------------------------------------------
+
+
+class TestFigureEightCycleRejected:
+    def test_repeated_interior_vertex_rejected(self) -> None:
+        """The reviewer's figure-eight: two triangles sharing vertex 0 is a
+        closed edge-simple trail, not a cycle, so CycleRecord rejects it."""
+        with pytest.raises(ValidationError, match="interior vertices"):
+            CycleRecord(
+                vertices=(0, 1, 2, 0, 3, 4, 0),
+                edge_ids=("a0", "a1", "a2", "b0", "b1", "b2"),
+            )
+
+    def test_simple_cycle_rule_is_schema_visible(self) -> None:
+        """The distinct-interior-vertices rule must be published in the
+        generated schema, not only enforced by the hidden validator."""
+        schema = CycleRecord.model_json_schema()
+        vertices_description = schema["properties"]["vertices"]["description"]
+        assert "distinct" in vertices_description
+        assert "closing" in vertices_description
+        model_description = schema["description"]
+        assert "simple cycle" in model_description
+
+
+class TestEulerianSubsetParityContractPublished:
+    def test_odd_parity_subset_is_accepted_and_returns_empty(self) -> None:
+        """A two-edge path has odd induced degrees; the request is valid and
+        returns the typed empty decomposition with covers_all=False."""
+        result = compute_eulerian_cycles(
+            EulerianCyclesRequest(graph=TRIANGLE, edge_subset=("e0", "e1"))
+        )
+        assert result.cycles == ()
+        assert result.covers_all is False
+
+    def test_schema_describes_parity_as_result_not_precondition(self) -> None:
+        schema = EulerianCyclesRequest.model_json_schema()
+        model_description = schema["description"]
+        field_description = schema["properties"]["edge_subset"]["description"]
+        for text in (model_description, field_description):
+            assert "parity is accepted" in text
+            # The old overstated precondition must not come back.
+            assert "must be even" not in text
+            assert "covers_all=False" in text

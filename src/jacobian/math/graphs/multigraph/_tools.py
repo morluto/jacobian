@@ -139,12 +139,14 @@ MULTIGRAPH_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ),
     multigraph_operation(
         "graph.multigraph.eulerian_cycles.compute",
-        "Decompose an even-parity edge multiset into Eulerian cycles",
+        "Decompose an edge multiset into edge-disjoint Eulerian cycles",
         "Compute a deterministic edge-disjoint cycle decomposition of an"
-        " Eulerian edge subset in a loopless multigraph using NetworkX."
+        " edge subset in a loopless multigraph using NetworkX."
         " Returns explicit cycles as closed vertex/edge-ID sequences and a"
-        " complete edge-usage profile. Non-Eulerian edge subsets return an"
-        " empty decomposition with covers_all=False.",
+        " complete edge-usage profile. Any induced-degree parity is accepted:"
+        " Eulerian subsets are fully decomposed with covers_all=True, while"
+        " non-Eulerian subsets return an empty decomposition with"
+        " covers_all=False.",
         EulerianCyclesRequest,
         EulerianCyclesResult,
         compute_eulerian_cycles,
@@ -158,6 +160,12 @@ MULTIGRAPH_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "triangle_eulerian",
                 "Decompose a triangle into an Eulerian cycle.",
                 {"graph": _TRIANGLE_GRAPH},
+            ),
+            example(
+                "path_subset_not_eulerian",
+                "A two-edge path has odd induced degrees, so the accepted"
+                " request returns the empty decomposition with covers_all=False.",
+                {"graph": _TRIANGLE_GRAPH, "edge_subset": ["e0", "e1"]},
             ),
         ),
     ),

@@ -492,11 +492,12 @@ def _decompose_circuit_into_simple_cycles(
 def compute_eulerian_cycles(
     request: EulerianCyclesRequest,
 ) -> EulerianCyclesResult:
-    """Decompose an even-parity edge multiset into edge-disjoint cycles.
+    """Decompose an edge multiset into edge-disjoint cycles.
 
-    Uses NetworkX's Eulerian circuit algorithm on a MultiGraph.  If the edge
-    set is not Eulerian (some vertex has odd degree), the result is an empty
-    decomposition with ``covers_all=False``.
+    Uses NetworkX's Eulerian circuit algorithm on a MultiGraph.  Any induced
+    degree parity is accepted: if the edge set is not Eulerian (some vertex
+    has odd degree), the result is an empty decomposition with
+    ``covers_all=False``.
     """
     graph = request.graph
     if request.edge_subset is not None:

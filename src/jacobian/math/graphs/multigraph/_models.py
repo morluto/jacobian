@@ -577,17 +577,26 @@ def _verify_found_witness(
 
 
 class EulerianCyclesRequest(StrictModel):
-    """Request to decompose an even-parity edge multiset into cycles.
+    """Request to decompose an edge multiset into edge-disjoint cycles.
 
     When ``edge_subset`` is omitted, the full edge set of ``graph`` is used.
-    When provided, it must reference existing edge IDs and the induced degree
-    of every vertex must be even (Eulerian condition).  The result is one
-    deterministic decomposition into edge-disjoint cycles.
+    When provided, it must reference existing edge IDs without repeats; any
+    induced-degree parity is accepted.  Parity determines the result: an
+    Eulerian (all even induced degrees) multiset returns one deterministic
+    full decomposition with ``covers_all=True``, while a non-Eulerian
+    multiset returns the empty decomposition with ``covers_all=False``.
     """
 
     graph: LooplessMultigraph
     edge_subset: tuple[StrictStr, ...] | None = Field(
-        default=None, max_length=MAX_EDGES
+        default=None,
+        max_length=MAX_EDGES,
+        description=(
+            "Optional edge IDs to decompose; must reference existing edge IDs "
+            "without repeats. Any induced-degree parity is accepted. Even "
+            "(Eulerian) parity yields a full decomposition with covers_all=True; "
+            "odd parity yields the empty decomposition with covers_all=False."
+        ),
     )
 
     @model_validator(mode="after")
@@ -609,10 +618,29 @@ class CycleRecord(StrictModel):
     ``vertices`` and ``edge_ids`` alternate so that ``edge_ids[i]`` connects
     ``vertices[i]`` and ``vertices[(i+1) % len]``.  The sequence is closed:
     the first vertex equals the last, and ``len(vertices) == len(edge_ids) + 1``.
+    It is a simple cycle: every vertex except the repeated closing endpoint
+    must be distinct.  A closed walk that revisits an interior vertex (for
+    example a figure-eight made of two cycles sharing one vertex) is not a
+    cycle and is rejected.
     """
 
-    vertices: tuple[StrictInt, ...] = Field(min_length=3, max_length=MAX_CYCLE_LENGTH)
-    edge_ids: tuple[StrictStr, ...] = Field(min_length=2, max_length=MAX_CYCLE_LENGTH)
+    vertices: tuple[StrictInt, ...] = Field(
+        min_length=3,
+        max_length=MAX_CYCLE_LENGTH,
+        description=(
+            "Closed vertex sequence: first equals last, len(vertices) == "
+            "len(edge_ids) + 1, and every interior vertex (all entries except "
+            "the closing duplicate) must be distinct."
+        ),
+    )
+    edge_ids: tuple[StrictStr, ...] = Field(
+        min_length=2,
+        max_length=MAX_CYCLE_LENGTH,
+        description=(
+            "Edge IDs alternating with vertices: edge_ids[i] connects "
+            "vertices[i] and vertices[i+1]; no edge ID may repeat."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_closed_cycle(self) -> Self:

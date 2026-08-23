@@ -249,6 +249,35 @@ class TestEdgeIntersectionPreflight:
                 }
             )
 
+    def test_sparse_overlap_family_uses_exact_incidence_cell_count(self) -> None:
+        vertices = tuple(f"v{i:03}" for i in range(100))
+        edges = tuple(
+            (
+                f"e{edge_index:03}",
+                tuple(
+                    vertices[(edge_index + offset) % len(vertices)]
+                    for offset in range(14)
+                ),
+            )
+            for edge_index in range(100)
+        )
+        hypergraph = FiniteHypergraph(vertices=vertices, edges=edges)
+
+        pair_count, incidences, cells, estimated_bytes = (
+            _edge_intersection_preflight_data(hypergraph)
+        )
+        request = EdgeIntersectionsRequest(hypergraph=hypergraph)
+        result = compute_edge_intersections(request)
+
+        assert pair_count == MAX_EDGE_PAIR_COUNT
+        assert incidences == 1_400
+        assert cells == 100 * (14 * 13 // 2) == 9_100
+        assert (
+            sum(entry.intersection_size for entry in result.pair_intersections) == cells
+        )
+        actual_bytes = len(encode_strict_json(result.model_dump(mode="json")))
+        assert actual_bytes <= estimated_bytes <= MAX_EDGE_INTERSECTION_RESULT_BYTES
+
     def test_more_than_one_hundred_indexed_edges_is_rejected(self) -> None:
         with pytest.raises(ValidationError):
             EdgeIntersectionsRequest(
@@ -298,10 +327,7 @@ class TestEdgeIntersectionPreflight:
         result_schema = EdgeIntersectionsResult.model_json_schema()
 
         assert metadata["edge_pair_bound"] == MAX_EDGE_PAIR_COUNT
-        assert (
-            metadata["worst_case_intersection_cells_bound"]
-            == MAX_EDGE_INTERSECTION_CELLS
-        )
+        assert metadata["intersection_cells_bound"] == MAX_EDGE_INTERSECTION_CELLS
         assert (
             metadata["canonical_result_bytes_bound"]
             == MAX_EDGE_INTERSECTION_RESULT_BYTES

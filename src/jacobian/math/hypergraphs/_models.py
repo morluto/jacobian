@@ -86,22 +86,26 @@ def _strict_label_wire_bytes(label: str) -> int:
 def _edge_intersection_preflight_data(
     hypergraph: FiniteHypergraph,
 ) -> tuple[int, int, int, int]:
-    """Return pair, incidence, intersection-cell, and result-byte bounds.
+    """Return pair, incidence, intersection-cell, and result-byte quantities.
 
     The result estimate is computed without intersecting or materializing any
-    edge pair.  For each pair, an intersection's encoded memberships are
-    bounded by the smaller encoded member list of its two source edges.
+    edge pair.  A vertex of degree ``d`` occurs in exactly ``C(d, 2)`` pair
+    intersections, so incidence degrees give both the exact returned-cell
+    count and the exact encoded contribution of all intersection labels.
     """
 
     edge_count = len(hypergraph.edges)
     pair_count = edge_count * (edge_count - 1) // 2
-    edge_sizes = tuple(len(members) for _, members in hypergraph.edges)
-    total_incidences = sum(edge_sizes)
-    intersection_cells = sum(
-        min(edge_sizes[left], edge_sizes[right])
-        for left in range(edge_count)
-        for right in range(left + 1, edge_count)
-    )
+    vertex_degrees = dict.fromkeys(hypergraph.vertices, 0)
+    total_incidences = 0
+    for _, members in hypergraph.edges:
+        total_incidences += len(members)
+        for member in members:
+            vertex_degrees[member] += 1
+    vertex_pair_multiplicities = {
+        vertex: degree * (degree - 1) // 2 for vertex, degree in vertex_degrees.items()
+    }
+    intersection_cells = sum(vertex_pair_multiplicities.values())
 
     labels = (*hypergraph.vertices, *(edge_id for edge_id, _ in hypergraph.edges))
     label_bytes = sum(_label_utf8_bytes(label) for label in labels)
@@ -117,27 +121,20 @@ def _edge_intersection_preflight_data(
     edge_id_wire_bytes = tuple(
         _strict_label_wire_bytes(edge_id) for edge_id, _ in hypergraph.edges
     )
-    # Add one byte per possible member for a comma.  This overcounts each
+    # Add one byte per returned member for a comma.  This overcounts each
     # nonempty JSON array by one byte and therefore remains a safe bound.
-    edge_member_wire_bytes = tuple(
-        sum(vertex_wire_bytes[member] + 1 for member in members)
-        for _, members in hypergraph.edges
+    pair_intersection_bytes = sum(
+        multiplicity * (vertex_wire_bytes[vertex] + 1)
+        for vertex, multiplicity in vertex_pair_multiplicities.items()
     )
-    pair_label_bytes = 0
-    pair_intersection_bytes = 0
-    maximum_pair_payload_bytes = 0
-    for left in range(edge_count):
-        for right in range(left + 1, edge_count):
-            edge_id_bytes = edge_id_wire_bytes[left] + edge_id_wire_bytes[right]
-            intersection_bytes = min(
-                edge_member_wire_bytes[left], edge_member_wire_bytes[right]
-            )
-            pair_label_bytes += edge_id_bytes
-            pair_intersection_bytes += intersection_bytes
-            maximum_pair_payload_bytes = max(
-                maximum_pair_payload_bytes,
-                edge_id_bytes + intersection_bytes,
-            )
+    pair_label_bytes = (edge_count - 1) * sum(edge_id_wire_bytes)
+    largest_edge_id_bytes = sum(sorted(edge_id_wire_bytes, reverse=True)[:2])
+    possible_violation_members = sum(
+        vertex_wire_bytes[vertex] + 1
+        for vertex, degree in vertex_degrees.items()
+        if degree >= 2
+    )
+    maximum_pair_payload_bytes = largest_edge_id_bytes + possible_violation_members
 
     source_bytes = len(encode_strict_json(hypergraph.model_dump(mode="json")))
     estimated_result_bytes = (
@@ -170,7 +167,7 @@ def _require_edge_intersection_preflight(hypergraph: FiniteHypergraph) -> None:
         )
     if intersection_cells > MAX_EDGE_INTERSECTION_CELLS:
         raise ValueError(
-            "edge-intersection profile exceeds the worst-case "
+            "edge-intersection profile exceeds the "
             f"{MAX_EDGE_INTERSECTION_CELLS}-intersection-cell bound"
         )
     if estimated_result_bytes > MAX_EDGE_INTERSECTION_RESULT_BYTES:
@@ -185,7 +182,7 @@ class EdgeIntersectionsRequest(StrictModel):
     """Request the complete indexed edge-intersection profile.
 
     Every unordered pair of distinct indexed edges is returned.  Admission
-    bounds the pair family, aggregate source incidences, worst-case returned
+    bounds the pair family, aggregate source incidences, exact returned
     intersection memberships, label bytes, and canonical serialized result
     before any pair intersection is materialized.
     """
@@ -194,13 +191,13 @@ class EdgeIntersectionsRequest(StrictModel):
         description=(
             "Canonical finite hypergraph with at most 100 vertices and 100 "
             "indexed edges. The complete profile is admitted only when its "
-            "worst-case pair intersections contain at most 65,536 memberships "
+            "pair intersections contain at most 65,536 memberships "
             "and its retained-source result fits the canonical output limit."
         ),
         json_schema_extra={
             "edge_pair_bound": MAX_EDGE_PAIR_COUNT,
             "aggregate_input_incidences_bound": MAX_TOTAL_INCIDENCES,
-            "worst_case_intersection_cells_bound": MAX_EDGE_INTERSECTION_CELLS,
+            "intersection_cells_bound": MAX_EDGE_INTERSECTION_CELLS,
             "aggregate_label_bytes_bound": MAX_HYPERGRAPH_LABEL_BYTES,
             "canonical_result_bytes_bound": MAX_EDGE_INTERSECTION_RESULT_BYTES,
         },

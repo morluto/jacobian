@@ -1624,3 +1624,47 @@ class TestMappingConeSourceBinding:
         revalidated = MappingConeResult.model_validate(result.model_dump())
         assert revalidated.source_degree_min == -1
         assert revalidated.cone_basis_sizes == (3, 6, 3)
+
+
+class TestReviewRegressions2236:
+    def test_empty_width_construct_replay_preserves_declared_widths(self):
+        """A valid declared 0x1 map survives the construct-time d^2 replay."""
+        from jacobian.math.chain_complexes._models import (
+            CoefficientField,
+            ConstructChainComplexRequest,
+        )
+
+        request = ConstructChainComplexRequest(
+            coefficient_field=CoefficientField.PRIME_FIELD,
+            prime=5,
+            basis_sizes=(0, 1, 1),
+            differential_matrices=((), (("1",),)),
+        )
+        assert request.basis_sizes == (0, 1, 1)
+
+    def test_endpoint_replay_reports_shifted_chain_degrees(self):
+        """The shared endpoint replay names declared chain degrees, not 0."""
+
+        from jacobian.math.chain_complexes.operations import (
+            _matrix_to_fractions,
+            _require_square_zero,
+        )
+
+        def broken_diffs():
+            # Two 2x2 identity differentials over GF(5): d^2 != 0 by design.
+            identity = (("1", "0"), ("0", "1"))
+            return [
+                _matrix_to_fractions(identity, 2, 2, 5),
+                _matrix_to_fractions(identity, 2, 2, 5),
+            ]
+
+        with pytest.raises(ValueError) as shifted_error:
+            _require_square_zero(
+                broken_diffs(),
+                5,
+                label="source",
+                group_columns=[2, 2, 2],
+                degree_min=-5,
+            )
+        detail = str(shifted_error.value)
+        assert "at chain degree -5" in detail, detail

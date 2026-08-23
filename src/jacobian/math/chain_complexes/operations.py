@@ -314,12 +314,12 @@ def _chain_map_verdict(
                     prime,
                     label=label,
                     group_columns=list(complex_value.basis_sizes),
+                    degree_min=complex_value.degree_min,
                 )
             except ValueError as error:
                 return (
                     False,
-                    str(error) + ", so no chain map between these "
-                    "endpoints exists",
+                    str(error) + ", so no chain map between these endpoints exists",
                 )
 
     map_mats = [
@@ -352,7 +352,10 @@ def _chain_map_verdict(
             left_declared_columns=source.basis_sizes[i],
         )
         if left != right:
-            return False, f"chain map does not commute at degree {source.degree_min + i}"
+            return (
+                False,
+                f"chain map does not commute at degree {source.degree_min + i}",
+            )
 
     return True, "chain map commutes with differentials"
 

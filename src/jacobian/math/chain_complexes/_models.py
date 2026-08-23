@@ -73,6 +73,11 @@ class ConstructChainComplexRequest(StrictModel):
                 differentials[index],
                 differentials[index + 1],
                 prime=prime,
+                # Declared group widths keep zero-row/zero-width composites
+                # shape-faithful: an empty 0 x n map must not be re-inferred
+                # as zero-width during the construct-time replay.
+                left_declared_columns=self.basis_sizes[index + 1],
+                result_columns=self.basis_sizes[index + 2],
             )
             if any(any(entry != 0 for entry in row) for row in composite):
                 raise ValueError(

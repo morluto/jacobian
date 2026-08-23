@@ -10,6 +10,9 @@ from jacobian.math.polynomials._conversions import (
     symbols_for_variables,
 )
 from jacobian.math.polynomials.multivariate._models import (
+    _MAX_FACTOR_OUTPUT_TERMS as _MAX_OUTPUT_TERMS,
+)
+from jacobian.math.polynomials.multivariate._models import (
     MultivariateDivisionRequest,
     MultivariateDivisionResult,
     MultivariateFactorRequest,
@@ -22,8 +25,6 @@ from jacobian.math.polynomials.multivariate._models import (
     MultivariateResultantResult,
     MultivariateScalarValue,
 )
-
-_MAX_OUTPUT_TERMS = 1024
 
 
 class MultivariateOutputBudgetError(RuntimeError):
@@ -164,7 +165,12 @@ def _sympy_factorization(source: Any) -> tuple[Any, tuple[tuple[Any, int], ...],
 
 
 def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFactorResult:
-    """Exact factorization over ``QQ[variables]`` via SymPy's ``factor_list``."""
+    """Exact factorization over ``QQ[variables]`` via SymPy's ``factor_list``.
+
+    When the exact factorization contains an irreducible factor beyond the
+    public output-term budget, returns the typed
+    ``OUTPUT_BUDGET_EXCEEDED`` outcome instead of a host exception.
+    """
 
     from fractions import Fraction
 
@@ -184,12 +190,22 @@ def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFacto
     coefficient_value = CanonicalRational.from_fraction(coeff_fraction)
 
     factors_list = []
-    for factor, multiplicity in raw_factors:
-        factors_list.append(
-            MultivariateIrreducibleFactor(
-                factor=_result_polynomial(factor, request.polynomial.variables),
-                multiplicity=multiplicity,
+    try:
+        for factor, multiplicity in raw_factors:
+            factors_list.append(
+                MultivariateIrreducibleFactor(
+                    factor=_result_polynomial(factor, request.polynomial.variables),
+                    multiplicity=multiplicity,
+                )
             )
+    except MultivariateOutputBudgetError:
+        return MultivariateFactorResult(
+            status="OUTPUT_BUDGET_EXCEEDED",
+            coefficient=coefficient_value,
+            factors=(),
+            reconstructed=request.polynomial,
+            normalization=None,
+            product_reconstruction=None,
         )
     factors_list.sort(
         key=lambda record: (

@@ -23,6 +23,10 @@ _MAX_ELIMINATION_DEGREE_SUM = 64
 # validator uses the same bound to reject large possible supports before
 # SymPy expands the Sylvester determinant.
 _MAX_RESULTANT_TERMS = 1_024
+# Public output-term budget for one converted irreducible factor.  The
+# operation converter uses this same bound; keeping it here lets the result
+# validator reproduce the kernel's exact exceedance decision.
+_MAX_FACTOR_OUTPUT_TERMS = 1_024
 
 MonomialOrder = Literal["lex", "grlex", "grevlex"]
 """Declared monomial order for multivariate polynomial division."""
@@ -252,27 +256,53 @@ class MultivariateIrreducibleFactor(StrictModel):
 
 
 class MultivariateFactorResult(StrictModel):
+    """Exact factorization outcome over ``QQ[variables]``.
+
+    ``FACTORIZED`` carries the full content-and-monic-irreducibles
+    decomposition.  ``OUTPUT_BUDGET_EXCEEDED`` reports, as a typed bounded
+    outcome, that the exact factorization contains an irreducible factor
+    beyond the public output budget; ``reconstructed`` then restates the
+    requested polynomial unchanged and ``factors`` is empty.
+    """
+
+    status: Literal["FACTORIZED", "OUTPUT_BUDGET_EXCEEDED"] = "FACTORIZED"
     coefficient: CanonicalRational
     factors: tuple[MultivariateIrreducibleFactor, ...] = Field(max_length=128)
     reconstructed: RationalPolynomial
-    normalization: Literal["CONTENT_AND_MONIC_IRREDUCIBLES"] = (
+    normalization: Literal["CONTENT_AND_MONIC_IRREDUCIBLES"] | None = (
         "CONTENT_AND_MONIC_IRREDUCIBLES"
     )
-    product_reconstruction: Literal["EXACT"] = "EXACT"
+    product_reconstruction: Literal["EXACT"] | None = "EXACT"
 
     @model_validator(mode="after")
     def require_canonical(self) -> Self:
         if self.coefficient.as_fraction() == 0:
             raise ValueError("factorization coefficient must be nonzero")
-        if not self.reconstructed.polynomial.terms:
-            raise ValueError("reconstructed polynomial must be nonzero")
-        _check_factor_records(self.factors, self.reconstructed.variables)
         require_polynomial_budget(
             self.reconstructed,
             maximum_terms=_MAX_MULTIVARIATE_TERMS,
             maximum_exponent=_MAX_MULTIVARIATE_EXPONENT,
             maximum_coefficient_digits=_MAX_MULTIVARIATE_COEFFICIENT_DIGITS,
         )
+        if self.status == "OUTPUT_BUDGET_EXCEEDED":
+            if self.factors:
+                raise ValueError(
+                    "budget-exceeded outcomes carry no irreducible factors"
+                )
+            if (
+                self.normalization is not None
+                or self.product_reconstruction is not None
+            ):
+                raise ValueError(
+                    "budget-exceeded outcomes declare no normalization or "
+                    "product reconstruction"
+                )
+            _verify_output_budget_exceeded_claim(self.reconstructed)
+            return self
+        if not self.reconstructed.polynomial.terms:
+            raise ValueError("reconstructed polynomial must be nonzero")
+        _check_factor_records(self.factors, self.reconstructed.variables)
+        _require_aggregate_degree_consistent(self.factors, self.reconstructed)
         _require_distinct_canonical_order(self.factors)
         _verify_monic_irreducibles(self.factors)
         _verify_exact_reconstruction(
@@ -294,6 +324,72 @@ def _factor_total_degree(record: MultivariateIrreducibleFactor) -> int:
     return max(
         (sum(term.exponents) for term in record.factor.polynomial.terms),
         default=0,
+    )
+
+
+def _reconstructed_total_degree(reconstructed: RationalPolynomial) -> int:
+    return max(
+        (sum(term.exponents) for term in reconstructed.polynomial.terms),
+        default=0,
+    )
+
+
+def _require_aggregate_degree_consistent(
+    factors: tuple[MultivariateIrreducibleFactor, ...],
+    reconstructed: RationalPolynomial,
+) -> None:
+    """Reject aggregate degree mismatches before any product expansion.
+
+    The exact product's total degree equals the multiplicity-weighted sum of
+    factor degrees, so a prefix overshoot proves the payload cannot satisfy
+    the defining invariant without expanding a prohibitive dense product.
+    """
+
+    target = _reconstructed_total_degree(reconstructed)
+    aggregate = 0
+    for record in factors:
+        aggregate += _factor_total_degree(record) * record.multiplicity
+        if aggregate > target:
+            raise ValueError(
+                "aggregate irreducible degree exceeds the reconstructed "
+                "total degree; the factorization product cannot match"
+            )
+
+
+def _verify_output_budget_exceeded_claim(reconstructed: RationalPolynomial) -> None:
+    """Re-derive a claimed ``OUTPUT_BUDGET_EXCEEDED`` status from its source.
+
+    Replays the kernel's own factorization and conversion so the reported
+    incompleteness is bound to the restated polynomial instead of being an
+    authorable label.
+    """
+
+    from jacobian.math.polynomials._conversions import (
+        rational_polynomial_from_sympy,
+        rational_polynomial_to_sympy,
+    )
+    from jacobian.math.polynomials._sympy import _monic_decomposition
+
+    source = rational_polynomial_to_sympy(reconstructed)
+    _, raw_factors, _ = _monic_decomposition(
+        source,
+        source.factor_list(),
+        label="multivariate factorization",
+    )
+    for factor, _multiplicity in raw_factors:
+        try:
+            rational_polynomial_from_sympy(
+                factor,
+                reconstructed.variables,
+                maximum_terms=_MAX_FACTOR_OUTPUT_TERMS,
+            )
+        except ValueError as exc:
+            if "term operation budget" in str(exc):
+                return
+            raise
+    raise ValueError(
+        "claimed output-budget exceedance is not reproduced by the exact "
+        "factorization of the restated polynomial"
     )
 
 
@@ -387,10 +483,16 @@ def _verify_exact_reconstruction(
             *symbols,
             domain=QQ,
         )
+        target_degree = _reconstructed_total_degree(reconstructed)
         for record in factors:
             factor_poly = rational_polynomial_to_sympy(record.factor)
             for _ in range(record.multiplicity):
                 product = product * factor_poly
+                if product.total_degree() > target_degree:
+                    raise ValueError(
+                        "factorization product degree exceeds the "
+                        "reconstructed total degree"
+                    )
         if product != reconstructed_poly:
             raise ValueError(
                 "factorization product does not equal reconstructed polynomial"

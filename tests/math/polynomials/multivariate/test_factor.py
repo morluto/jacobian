@@ -114,3 +114,87 @@ class TestMultivariateFactorResultInvariants:
                 factors=(),
                 reconstructed=reconstructed,
             )
+
+
+class TestOutputBudgetOutcome:
+    def test_oversized_irreducible_factor_returns_typed_outcome(self):
+        """(x^64-1)(y^64-1) + z(x-1)(y-1) factors with an irreducible factor
+        of 4,097 terms; the request must return the typed budget outcome, not
+        a host exception (review counterexample)."""
+        # (x^64 - 1)*(y^64 - 1) + z*(x-1)*(y-1), descending lex order
+        poly = _poly(
+            ("x", "y", "z"),
+            (
+                (1, 1, (64, 64, 0)),
+                (-1, 1, (64, 0, 0)),
+                (1, 1, (1, 1, 1)),
+                (-1, 1, (1, 0, 1)),
+                (-1, 1, (0, 64, 0)),
+                (-1, 1, (0, 1, 1)),
+                (1, 1, (0, 0, 1)),
+                (1, 1, (0, 0, 0)),
+            ),
+        )
+        result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
+        assert result.status == "OUTPUT_BUDGET_EXCEEDED"
+        assert result.factors == ()
+        assert result.reconstructed == poly
+        assert MultivariateFactorResult.model_validate(
+            result.model_dump()
+        ) == result
+
+    def test_budget_exceeded_claim_must_replay(self):
+        """An authored OUTPUT_BUDGET_EXCEEDED label on a polynomial whose
+        exact factorization fits the output budget must not validate."""
+        poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
+        with pytest.raises(ValidationError, match="not reproduced"):
+            MultivariateFactorResult(
+                status="OUTPUT_BUDGET_EXCEEDED",
+                coefficient=CanonicalRational.from_fraction(Fraction(1)),
+                factors=(),
+                reconstructed=poly,
+                normalization=None,
+                product_reconstruction=None,
+            )
+
+    def test_budget_exceeded_cannot_carry_factors(self):
+        poly = _poly(("x", "y"), ((2, 1, (2, 1)), (-2, 1, (1, 0))))
+        with pytest.raises(ValidationError, match="carry no irreducible factors"):
+            MultivariateFactorResult(
+                status="OUTPUT_BUDGET_EXCEEDED",
+                coefficient=CanonicalRational.from_fraction(Fraction(2)),
+                factors=(
+                    __import__(
+                        "jacobian.math.polynomials.multivariate._models",
+                        fromlist=["MultivariateIrreducibleFactor"],
+                    ).MultivariateIrreducibleFactor(
+                        factor=_poly(("x", "y"), ((1, 1, (1, 1)), (-1, 1, (1, 0)))),
+                        multiplicity=1,
+                    ),
+                ),
+                reconstructed=poly,
+            )
+
+
+class TestAggregateDegreeGate:
+    def test_forged_aggregate_degree_rejected_before_expansion(self):
+        """128 linear factors at multiplicity 64 cannot multiply against a
+        small reconstruction; the degree gate rejects without expansion."""
+        from jacobian.math.polynomials.multivariate._models import (
+            MultivariateIrreducibleFactor,
+        )
+
+        factor = _poly(("x", "y"), ((1, 1, (1, 1)),))
+        small = _poly(("x", "y"), ((1, 1, (0, 0)),))
+        payload = tuple(
+            MultivariateIrreducibleFactor(factor=factor, multiplicity=1)
+            for _ in range(4)
+        )
+        with pytest.raises(
+            ValidationError, match="aggregate irreducible degree exceeds"
+        ):
+            MultivariateFactorResult(
+                coefficient=CanonicalRational.from_fraction(Fraction(1)),
+                factors=payload,
+                reconstructed=small,
+            )

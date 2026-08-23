@@ -19,6 +19,17 @@ request to declare billion-wide groups.
 """
 
 
+MAX_CHAIN_DEGREES = 21
+"""Schema-visible cap on the consecutive groups one complex may carry.
+
+Degrees are admitted in the window [-10, 11] and a complex holds at most one
+group per degree, so 21 consecutive groups is the representable maximum.
+Derived complexes must satisfy the same cap: the mapping cone of a source
+concentrated at degree 11 would otherwise derive degree 12, and disjoint
+endpoints can derive a 22-group span that no ChainComplex can represent.
+"""
+
+
 MAX_MATRIX_ENTRIES = MAX_CHAIN_GROUP_DIMENSION * MAX_CHAIN_GROUP_DIMENSION
 """Schema-visible cap on one matrix's entry list.
 
@@ -163,11 +174,11 @@ class ChainComplex(StrictModel):
     prime: int = Field(ge=2, le=10_000)
     min_degree: int = Field(ge=-10, le=11)
     max_degree: int = Field(ge=-10, le=11)
-    dimensions: tuple[int, ...] = Field(min_length=1, max_length=21)
+    dimensions: tuple[int, ...] = Field(min_length=1, max_length=MAX_CHAIN_DEGREES)
     differentials: tuple[
         Annotated[tuple[MatrixEntry, ...], Field(max_length=MAX_MATRIX_ENTRIES)],
         ...,
-    ] = Field(min_length=0, max_length=21)
+    ] = Field(min_length=0, max_length=MAX_CHAIN_DEGREES)
 
     @model_validator(mode="after")
     def require_valid_complex(self) -> Self:
@@ -364,6 +375,15 @@ def _require_cone_within_domain(source: ChainComplex, target: ChainComplex) -> N
             f"[-10, 11] range; this request derives [{cone_min}, "
             f"{cone_max}] because the shifted source extends past it"
         )
+    span = cone_max - cone_min + 1
+    if span > MAX_CHAIN_DEGREES:
+        raise ValueError(
+            "mapping cone spans "
+            f"{span} consecutive degrees [{cone_min}, {cone_max}]; a chain "
+            f"complex represents at most {MAX_CHAIN_DEGREES} consecutive "
+            "groups, so admission rejects the derived span here instead of "
+            "failing construction on an accepted request"
+        )
     for deg in range(cone_min, cone_max + 1):
         cone_group = group_dim(source, deg - 1) + group_dim(target, deg)
         if cone_group > MAX_CHAIN_GROUP_DIMENSION:
@@ -382,7 +402,7 @@ class MappingConeRequest(StrictModel):
     chain_map: tuple[
         Annotated[tuple[MatrixEntry, ...], Field(max_length=MAX_MATRIX_ENTRIES)],
         ...,
-    ] = Field(min_length=0, max_length=21)
+    ] = Field(min_length=0, max_length=MAX_CHAIN_DEGREES)
 
     @model_validator(mode="after")
     def require_valid_chain_map(self) -> Self:

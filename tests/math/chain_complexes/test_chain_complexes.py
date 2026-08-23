@@ -387,3 +387,39 @@ class TestReviewRegressions:
         relayed["cone"]["dimensions"] = (2, 9, 9)
         with pytest.raises(ValidationError, match="exact mapping cone"):
             MappingConeResult.model_validate(relayed)
+
+    def test_cone_span_beyond_21_groups_rejected_at_admission(self):
+        # Disjoint endpoints derive Cone(f)_n = C_{n-1} + D_n over
+        # [-10, 11]: 22 consecutive groups, one more than any ChainComplex
+        # represents. Admission must reject the request before construction.
+        source = ChainComplex(
+            prime=2, min_degree=10, max_degree=10, dimensions=(1,), differentials=()
+        )
+        target = ChainComplex(
+            prime=2, min_degree=-10, max_degree=-10, dimensions=(1,), differentials=()
+        )
+        with pytest.raises(ValidationError, match="22 consecutive degrees"):
+            MappingConeRequest(source=source, target=target, chain_map=((),))
+
+    def test_full_span_21_group_cone_accepted_and_roundtrips(self):
+        # A derived cone of exactly 21 groups stays representable: source
+        # degrees [-10, 9] shifted to [-9, 10] plus a target group at -10
+        # spans [-10, 10], so execution must return a typed result.
+        from jacobian.math.chain_complexes._models import MappingConeResult
+
+        source = ChainComplex(
+            prime=3,
+            min_degree=-10,
+            max_degree=9,
+            dimensions=tuple(1 for _ in range(20)),
+            differentials=tuple(() for _ in range(19)),
+        )
+        target = ChainComplex(
+            prime=3, min_degree=-10, max_degree=-10, dimensions=(1,), differentials=()
+        )
+        request = MappingConeRequest(source=source, target=target, chain_map=((),) * 20)
+        result = compute_mapping_cone(request)
+        assert len(result.cone.dimensions) == 21
+        assert result.cone.min_degree == -10
+        assert result.cone.max_degree == 10
+        assert MappingConeResult.model_validate(result.model_dump()) == result

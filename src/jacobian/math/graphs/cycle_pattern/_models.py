@@ -12,7 +12,7 @@ from typing import Literal, Self
 from pydantic import Field, ValidationInfo, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.canonical import canonicalize_json
+from jacobian.canonical import canonicalize_json, encode_strict_json
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_CYCLE_GRAPH_ORDER = 64
@@ -46,8 +46,22 @@ def _encoded_graph_bytes(graph: SimpleUndirectedGraph) -> int:
     return len(canonicalize_json(graph.model_dump(mode="json")))
 
 
-def _longest_label_bytes(graph: SimpleUndirectedGraph) -> int:
-    return max((len(vertex.encode("utf-8")) for vertex in graph.vertices), default=0)
+def _encoded_label_bytes(label: str) -> int:
+    """Serialized size of one label as a JSON string value."""
+    return len(encode_strict_json(label))
+
+
+def _label_wire_costs_desc(graph: SimpleUndirectedGraph) -> list[int]:
+    """Exact canonical wire costs of every vertex label, most expensive first.
+
+    Canonical JSON escapes control characters to six wire bytes, so raw
+    UTF-8 length can undercharge labels; each cost is measured on the
+    encoded form the result will actually carry.
+    """
+    return sorted(
+        (_encoded_label_bytes(vertex) for vertex in graph.vertices),
+        reverse=True,
+    )
 
 
 def _require_admissible_cycle_result_bytes(
@@ -58,9 +72,10 @@ def _require_admissible_cycle_result_bytes(
     The result retains the source graph and a positive witness repeats up
     to ``length`` vertex labels, so admission predicts the canonical
     encoding of everything the result carries and rejects requests that
-    cannot fit the output budget.
+    cannot fit the output budget. Witness repetitions are charged at the
+    exact encoded costs of the most expensive labels.
     """
-    witness_bytes = min(length, len(graph.vertices)) * (_longest_label_bytes(graph) + 3)
+    witness_bytes = sum(_label_wire_costs_desc(graph)[:length])
     predicted = (
         _encoded_graph_bytes(graph) + witness_bytes + _RESULT_ENVELOPE_SLACK_BYTES
     )
@@ -78,16 +93,20 @@ def _require_admissible_pattern_result_bytes(
 
     The result retains both graphs plus one mapping entry per pattern
     vertex; admission predicts that aggregate encoding against the output
-    budget before any search runs.
+    budget before any search runs. Mapping entries pair each pattern label
+    with a distinct host label, so charging the largest encoded costs from
+    each side independently bounds every injective mapping.
     """
-    pattern_label_bytes = sum(
-        len(vertex.encode("utf-8")) for vertex in pattern.vertices
+    pattern_costs = _label_wire_costs_desc(pattern)
+    host_costs = _label_wire_costs_desc(host)
+    mapping_bytes = (
+        sum(pattern_costs)
+        + sum(host_costs[: len(pattern_costs)])
+        + 5 * len(pattern.vertices)
     )
-    mapping_bytes = len(pattern.vertices) * (_longest_label_bytes(host) + 5)
     predicted = (
         _encoded_graph_bytes(host)
         + _encoded_graph_bytes(pattern)
-        + pattern_label_bytes
         + mapping_bytes
         + _RESULT_ENVELOPE_SLACK_BYTES
     )

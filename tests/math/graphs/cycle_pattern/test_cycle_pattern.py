@@ -506,6 +506,55 @@ class TestResultTransportAdmission:
         with pytest.raises(ValidationError, match="result budget"):
             FixedLengthCycleRequest(graph=graph, length=3)
 
+    def test_escape_heavy_labels_charged_at_encoded_cost_for_cycles(self):
+        """Witness repeats are charged at canonical, not raw UTF-8, size.
+
+        Each control character occupies six escaped wire bytes, so charging
+        repeats by raw length under-reserves exactly when the retained echo
+        plus repeated labels can outgrow the transport ceiling.
+        """
+        from jacobian.canonical import CanonicalLimits, encode_strict_json
+
+        names = ["\u0001" * 350_000] * 3 + [f"f{i:02d}" for i in range(61)]
+        names[1] = "\u0002" * 350_000
+        names[2] = "\u0003" * 350_000
+        graph = SimpleUndirectedGraph.model_validate({"vertices": names, "edges": []})
+        assert (
+            len(
+                encode_strict_json(
+                    {"graph": graph.model_dump(mode="json"), "length": 3}
+                )
+            )
+            <= CanonicalLimits().max_input_bytes
+        )
+        with pytest.raises(ValidationError, match="result budget"):
+            FixedLengthCycleRequest(graph=graph, length=3)
+
+    def test_escape_heavy_labels_charged_at_encoded_cost_for_patterns(self):
+        """Mapping entries likewise reserve encoded host-label sizes."""
+        host = _graph(["\u0001" * 450_000, "\u0002" * 450_000, "\u0003" * 450_000], [])
+        pattern = _graph(["u"], [])
+        with pytest.raises(ValidationError, match="result budget"):
+            SubgraphPatternRequest(host=host, pattern=pattern)
+
+    def test_reservation_bounds_the_positive_result_encoding(self):
+        """The prediction dominates what a produced result actually encodes."""
+        from jacobian.canonical import encode_strict_json
+        from jacobian.math.graphs.cycle_pattern._models import (
+            MAX_CYCLE_PATTERN_RESULT_BYTES,
+        )
+
+        names = [name * 64 for name in "abcdefgh"]
+        edges = [
+            tuple(sorted((names[i], names[(i + 1) % len(names)])))
+            for i in range(len(names))
+        ]
+        g = _graph(names, edges)
+        result = decide_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=8))
+        assert result.exists and result.cycle is not None
+        encoded = len(encode_strict_json(result.model_dump(mode="json")))
+        assert encoded <= MAX_CYCLE_PATTERN_RESULT_BYTES
+
 
 class TestEmbeddingFunctionContract:
     """An authored mapping must be an injective function on distinct names."""

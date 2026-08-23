@@ -268,7 +268,10 @@ def _require_pair_replay(
     class_total = sum(len(cls.pairs) for cls in result.classes)
     if class_total != expected_total:
         raise ValueError("pair counts must sum to ordered_pair_count")
-    computed_max = max(len(cls.pairs) for cls in result.classes)
+    computed_max = max(
+        (len(cls.pairs) for cls in result.classes),
+        default=0,
+    )
     if result.max_multiplicity != computed_max:
         raise ValueError("max_multiplicity must be the maximum class multiplicity")
     if result.has_repeated_difference != (result.max_multiplicity > 1):

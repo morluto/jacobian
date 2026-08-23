@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.math.chain_complexes._models import (
     ChainComplex,
     HomologyRequest,
+    HomologyResult,
+    MappingConeRequest,
     MatrixEntry,
 )
 from jacobian.math.chain_complexes._operations import (
@@ -129,3 +132,62 @@ class TestPublishedExample:
         result = compute_mapping_cone(request)
         assert result.cone.dimensions == (1, 1)
         assert len(result.cone.differentials) == 1
+
+
+class TestAdmissionRegressions:
+    def test_oversized_group_dimensions_rejected(self):
+        with pytest.raises(ValidationError, match="dense-work bound"):
+            ChainComplex(
+                prime=2,
+                min_degree=0,
+                max_degree=1,
+                dimensions=(10**9, 10**9),
+                differentials=((),),
+            )
+
+    def test_degree_eleven_homology_roundtrips(self):
+        request = HomologyRequest(
+            complex=ChainComplex(
+                prime=3,
+                min_degree=11,
+                max_degree=11,
+                dimensions=(1,),
+                differentials=(),
+            )
+        )
+        result = compute_homology(request)
+        assert result.max_degree == 11
+        assert result.groups[0].degree == 11
+        assert HomologyResult.model_validate(result.model_dump()) == result
+
+    def test_chain_map_into_out_of_range_target_degree_rejected(self):
+        """f_0 must index the target group at degree 0, not tuple position."""
+        source = ChainComplex(
+            prime=2, min_degree=0, max_degree=0, dimensions=(1,), differentials=()
+        )
+        target = ChainComplex(
+            prime=2, min_degree=1, max_degree=1, dimensions=(1,), differentials=()
+        )
+        with pytest.raises(ValidationError, match="exceeds target dimension"):
+            MappingConeRequest(
+                source=source,
+                target=target,
+                chain_map=(
+                    (MatrixEntry(row=0, col=0, value="1"),),
+                ),
+            )
+
+    def test_chain_map_to_matching_degree_accepted(self):
+        source = ChainComplex(
+            prime=2, min_degree=0, max_degree=0, dimensions=(1,), differentials=()
+        )
+        target = ChainComplex(
+            prime=2, min_degree=0, max_degree=0, dimensions=(1,), differentials=()
+        )
+        request = MappingConeRequest(
+            source=source,
+            target=target,
+            chain_map=((MatrixEntry(row=0, col=0, value="1"),),),
+        )
+        cone = compute_mapping_cone(request)
+        assert cone.cone.dimensions == (1, 1)

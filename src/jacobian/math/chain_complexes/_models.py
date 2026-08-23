@@ -9,6 +9,17 @@ from pydantic import Field, model_validator
 from jacobian._models import StrictModel
 
 
+MAX_CHAIN_GROUP_DIMENSION = 512
+"""Conservative per-group dimension bound derived from the dense work budget.
+
+The exact kernels build dense GF(p) matrices over the declared group
+dimensions and run Gaussian elimination whose work is O(d^3) in the largest
+group dimension; d = 512 keeps any accepted request's elimination inside a
+bounded elementary-operation envelope instead of allowing an admitted
+request to declare billion-wide groups.
+"""
+
+
 class MatrixEntry(StrictModel):
     """One entry of a sparse differential matrix."""
 
@@ -56,6 +67,11 @@ class ChainComplex(StrictModel):
             raise ValueError("dimensions must cover the degree range")
         if any(d < 0 for d in self.dimensions):
             raise ValueError("dimensions must be non-negative")
+        if any(d > MAX_CHAIN_GROUP_DIMENSION for d in self.dimensions):
+            raise ValueError(
+                "group dimensions must not exceed the dense-work bound "
+                f"{MAX_CHAIN_GROUP_DIMENSION}"
+            )
         if self.differentials:
             if len(self.differentials) != expected_length - 1:
                 raise ValueError("differentials must cover the degree gaps")
@@ -127,14 +143,21 @@ class HomologyResult(StrictModel):
 
     groups: tuple[HomologyGroup, ...] = Field(min_length=1)
     prime: int = Field(ge=2, le=10_000)
-    min_degree: int = Field(ge=-10, le=10)
-    max_degree: int = Field(ge=-10, le=10)
+    min_degree: int = Field(ge=-10, le=11)
+    max_degree: int = Field(ge=-10, le=11)
 
     @model_validator(mode="after")
     def require_consistent_groups(self) -> Self:
         if len(self.groups) != self.max_degree - self.min_degree + 1:
             raise ValueError("homology groups must cover the degree range")
         return self
+
+
+def _chain_map_target_dim(target: ChainComplex, degree: int) -> int:
+    """Dimension of the target group at ``degree``; zero outside its range."""
+    if target.min_degree <= degree <= target.max_degree:
+        return target.dimensions[degree - target.min_degree]
+    return 0
 
 
 class MappingConeRequest(StrictModel):
@@ -150,10 +173,14 @@ class MappingConeRequest(StrictModel):
             raise ValueError("source and target must have same prime")
         if len(self.chain_map) != len(self.source.dimensions):
             raise ValueError("chain_map must have one entry per source degree")
-        # Each chain map entry f_n: C_n -> D_n must respect dimensions
+        # Each chain map entry f_n: C_n -> D_n must respect dimensions.
+        # Target groups are indexed by mathematical degree, not tuple
+        # position: a source group at degree n maps into the target group at
+        # the same degree, and zero when that degree is outside the target.
         for i, entries in enumerate(self.chain_map):
+            degree = self.source.min_degree + i
             s_dim = self.source.dimensions[i]
-            t_dim = self.target.dimensions[i] if i < len(self.target.dimensions) else 0
+            t_dim = _chain_map_target_dim(self.target, degree)
             for e in entries:
                 if e.row >= t_dim:
                     raise ValueError("chain_map entry row exceeds target dimension")
@@ -212,11 +239,10 @@ class MappingConeRequest(StrictModel):
             left = _mul(dD, f_n)
             right = _mul(f_n_minus_1, dC)
             # Compare left and right; they should be equal matrices
-            if left != right:
-                # For empty matrices, both are empty list, which is equal
-                # For non-empty, check elementwise
-                if left or right:
-                    raise ValueError(f"chain map does not commute at degree {n}")
+            # Empty matrices compare equal elementwise, so only a
+            # non-empty disagreement breaks commutativity.
+            if left != right and (left or right):
+                raise ValueError(f"chain map does not commute at degree {n}")
         return self
 
 

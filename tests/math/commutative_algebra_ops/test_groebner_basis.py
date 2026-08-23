@@ -6,6 +6,7 @@ from jacobian.math.commutative_algebra_ops import _operations
 from jacobian.math.commutative_algebra_ops._models import (
     EliminationIdealRequest,
     GroebnerBasisRequest,
+    IdealComputationBudget,
     IdealNormalFormRequest,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
@@ -218,3 +219,51 @@ class TestTypedKernelOutcomes:
         assert result.basis is None
         assert "worker crashed" in (result.detail or "")
 
+
+
+class TestKillableWorkerContract:
+    def test_budget_delegates_to_the_bounded_process_runner(self, monkeypatch):
+        """Wall budgets must run through the killable process engine.
+
+        A detached daemon thread cannot be terminated, so repeated hard
+        requests would accumulate SymPy work inside the server while returning
+        TIMEOUT. The operation therefore delegates every kernel call to
+        ``run_bounded_process`` with the declared wall budget.
+        """
+        import jacobian.process as process_module
+
+        observed: dict[str, object] = {}
+        real_runner = process_module.run_bounded_process
+
+        def spy(*args, **kwargs):
+            observed["timeout"] = kwargs.get("timeout_seconds")
+            observed["child_is_process"] = True
+            return real_runner(*args, **kwargs)
+
+        monkeypatch.setattr(process_module, "run_bounded_process", spy)
+        g1 = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 1)))
+        g2 = _poly(("x", "y"), (1, 1, (1, 1)), (-1, 1, (0, 0)))
+        result = compute_groebner_basis(
+            GroebnerBasisRequest(
+                ideal=_ideal(("x", "y"), (g1, g2)),
+                resource_budget=IdealComputationBudget(wall_seconds=10),
+            )
+        )
+        assert result.outcome == "COMPUTED"
+        assert observed["timeout"] == 10
+
+    def test_timed_out_call_leaves_no_lingering_threads(self, monkeypatch):
+        """After a typed TIMEOUT the process owns no leftover kernel threads."""
+
+        def exceed_budget(*args, **kwargs):
+            raise _operations._SympyKernelTimeoutError()
+
+        baseline = __import__("threading").active_count()
+        monkeypatch.setattr(_operations, "_run_sympy_kernel", exceed_budget)
+        g1 = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 1)))
+        g2 = _poly(("x", "y"), (1, 1, (1, 1)), (-1, 1, (0, 0)))
+        result = compute_groebner_basis(
+            GroebnerBasisRequest(ideal=_ideal(("x", "y"), (g1, g2)))
+        )
+        assert result.outcome == "TIMEOUT"
+        assert __import__("threading").active_count() == baseline

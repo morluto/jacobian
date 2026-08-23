@@ -5,6 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from fractions import Fraction
 
+from jacobian._exact import CanonicalRational
+from jacobian._models import StrictModel
+
 MAX_MOMENTS = 64
 MAX_POLYNOMIAL_COUNT = 32
 MAX_HANKEL_DIMENSION = 32
@@ -52,9 +55,20 @@ class GaussianQuadrature:
     returned value is the exact dyadic rational image of one computed double,
     so results stay canonical and reconstructible without JSON floats.
     """
-
     nodes: tuple[Fraction, ...]
     weights: tuple[Fraction, ...]
+
+
+class RecurrenceCoefficientsValue(StrictModel):
+    """Canonical exact three-term recurrence coefficients (alpha, beta).
+
+    The domain-owned wire value for one recurrence pair: producers return
+    it and Jacobi, Christoffel-Darboux, and quadrature consumers accept it
+    unchanged.
+    """
+
+    alpha: tuple[CanonicalRational, ...]
+    beta: tuple[CanonicalRational, ...]
 
 
 __all__ = [
@@ -68,4 +82,5 @@ __all__ = [
     "HankelMatrix",
     "JacobiMatrix",
     "RecurrenceCoefficients",
+    "RecurrenceCoefficientsValue",
 ]

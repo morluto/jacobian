@@ -14,185 +14,109 @@ from jacobian.math.prime_field_linear_algebra import (
 )
 
 MAX_DIMENSION = 256
-MAX_PRIME = 1000000
-
-
-def _require_prime(value: int) -> None:
-    if (
-        value < 2
-        or value > MAX_PRIME
-        or any(value % d == 0 for d in range(2, int(value**0.5) + 1))
-    ):
-        raise ValueError("prime must be a prime modulus within the bounded domain")
-
-
-class PrimeFieldMatrixRequest(StrictModel):
-    prime: int = Field(ge=2, le=MAX_PRIME)
-    entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
-    columns: int = Field(ge=0, le=MAX_DIMENSION)
-
-    @model_validator(mode="after")
-    def require_valid_matrix(self) -> Self:
-        if len(self.entries) > MAX_DIMENSION:
-            raise ValueError("matrix exceeds the supported dimension bound")
-        if any(len(row) != self.columns for row in self.entries):
-            raise ValueError("every row must match the declared column count")
-        if any(
-            type(value) is not int or not 0 <= value < self.prime
-            for row in self.entries
-            for value in row
-        ):
-            raise ValueError("entries must be canonical prime-field residues")
-        if not self.entries and self.columns == 0:
-            return self
-        _PrimeFieldMatrixValidator(
-            prime=self.prime, entries=self.entries, columns=self.columns
-        )
-        return self
-
-
-class _PrimeFieldMatrixValidator:
-    """Trigger PrimeFieldMatrix validation."""
-
-    def __init__(
-        self,
-        prime: int,
-        entries: tuple[tuple[int, ...], ...],
-        columns: int,
-    ) -> None:
-        PrimeFieldMatrix(prime=prime, entries=entries, columns=columns)
 
 
 class RankRequest(StrictModel):
-    prime: int = Field(ge=2, le=MAX_PRIME)
-    entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
-    columns: int = Field(ge=0, le=MAX_DIMENSION)
+    """Rank of one bounded matrix over an explicit prime field.
 
-    @model_validator(mode="after")
-    def require_valid_matrix(self) -> Self:
-        if len(self.entries) > MAX_DIMENSION:
-            raise ValueError("matrix exceeds the supported dimension bound")
-        if any(len(row) != self.columns for row in self.entries):
-            raise ValueError("every row must match the declared column count")
-        if any(
-            type(value) is not int or not 0 <= value < self.prime
-            for row in self.entries
-            for value in row
-        ):
-            raise ValueError("entries must be canonical prime-field residues")
-        PrimeFieldMatrix(prime=self.prime, entries=self.entries, columns=self.columns)
-        return self
+    The matrix is the domain-owned canonical ``PrimeFieldMatrix`` value, so a
+    matrix produced by any prime-field operation enters unchanged.
+    """
+
+    matrix: PrimeFieldMatrix
 
 
-class RankResult(RankRequest):
+class RankResult(StrictModel):
+    """The exact rank bound to the retained source matrix."""
+
+    matrix: PrimeFieldMatrix
     rank: int = Field(ge=0)
     complete: Literal[True] = True
     method: Literal["EXACT_DOMAIN_MATRIX_RANK"] = "EXACT_DOMAIN_MATRIX_RANK"
 
     @model_validator(mode="after")
-    def bind_rank(self) -> Self:
+    def bind_rank_to_source(self) -> Self:
         if self.rank > MAX_DIMENSION:
             raise ValueError("rank exceeds the supported dimension bound")
-        from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix, rref
+        # Source-bound replay: the retained canonical matrix's exact rank
+        # must equal the claimed value.
+        from jacobian.math.prime_field_linear_algebra import rank
 
-        matrix = PrimeFieldMatrix(
-            prime=self.prime, entries=self.entries, columns=self.columns
-        )
-        _, expected_pivots = rref(matrix)
-        expected = len(expected_pivots)
+        expected = rank(self.matrix)
         if self.rank != expected:
-            raise ValueError("rank does not match recomputation from the source matrix")
+            raise ValueError(
+                f"rank {self.rank} must be the exact rank {expected} of the "
+                "retained matrix"
+            )
         return self
 
 
 class RrefRequest(StrictModel):
-    prime: int = Field(ge=2, le=MAX_PRIME)
-    entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
-    columns: int = Field(ge=0, le=MAX_DIMENSION)
+    """Reduced row-echelon form of one bounded matrix over a prime field.
 
-    @model_validator(mode="after")
-    def require_valid_matrix(self) -> Self:
-        if len(self.entries) > MAX_DIMENSION:
-            raise ValueError("matrix exceeds the supported dimension bound")
-        if any(len(row) != self.columns for row in self.entries):
-            raise ValueError("every row must match the declared column count")
-        if any(
-            type(value) is not int or not 0 <= value < self.prime
-            for row in self.entries
-            for value in row
-        ):
-            raise ValueError("entries must be canonical prime-field residues")
-        PrimeFieldMatrix(prime=self.prime, entries=self.entries, columns=self.columns)
-        return self
+    Accepts the domain-owned canonical ``PrimeFieldMatrix`` value so the
+    transformed matrix returned by ``RrefResult`` re-enters unchanged.
+    """
+
+    matrix: PrimeFieldMatrix
 
 
-class RrefResult(RrefRequest):
-    rref_rows: tuple[tuple[int, ...], ...]
+class RrefResult(StrictModel):
+    """The exact RREF as a canonical prime-field matrix value.
+
+    ``rref`` is the domain-owned matrix value, so downstream rank and
+    nullspace consumers accept it unchanged instead of extracting row tuples
+    into flat request fields.
+    """
+
+    matrix: PrimeFieldMatrix
+    rref: PrimeFieldMatrix
     pivot_columns: tuple[int, ...]
     complete: Literal[True] = True
     method: Literal["EXACT_DOMAIN_MATRIX_RREF"] = "EXACT_DOMAIN_MATRIX_RREF"
 
     @model_validator(mode="after")
     def bind_rref(self) -> Self:
-        matrix = PrimeFieldMatrix(
-            prime=self.prime, entries=self.entries, columns=self.columns
-        )
-        expected_rows, expected_pivots = rref(matrix)
-        if self.rref_rows != expected_rows:
-            raise ValueError("rref_rows must be the exact reduced row-echelon form")
+        if self.rref.prime != self.matrix.prime or (
+            self.rref.columns != self.matrix.columns
+        ):
+            raise ValueError(
+                "rref must be a matrix value over the source ring with the "
+                "source shape"
+            )
+        expected_rows, expected_pivots = rref(self.matrix)
+        if self.rref.entries != expected_rows:
+            raise ValueError("rref must be the exact reduced row-echelon form")
         if self.pivot_columns != expected_pivots:
             raise ValueError("pivot_columns must be the exact pivot column sequence")
-        if any(
-            type(value) is not int or not 0 <= value < self.prime
-            for row in self.rref_rows
-            for value in row
-        ):
-            raise ValueError("rref entries must be canonical prime-field residues")
         return self
 
 
 class NullspaceRequest(StrictModel):
-    prime: int = Field(ge=2, le=MAX_PRIME)
-    entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
-    columns: int = Field(ge=0, le=MAX_DIMENSION)
+    """Right nullspace basis of one bounded matrix over a prime field.
 
-    @model_validator(mode="after")
-    def require_valid_matrix(self) -> Self:
-        if len(self.entries) > MAX_DIMENSION:
-            raise ValueError("matrix exceeds the supported dimension bound")
-        if any(len(row) != self.columns for row in self.entries):
-            raise ValueError("every row must match the declared column count")
-        if any(
-            type(value) is not int or not 0 <= value < self.prime
-            for row in self.entries
-            for value in row
-        ):
-            raise ValueError("entries must be canonical prime-field residues")
-        PrimeFieldMatrix(prime=self.prime, entries=self.entries, columns=self.columns)
-        return self
+    Accepts the domain-owned canonical ``PrimeFieldMatrix`` value, including
+    the transformed matrix carried by an ``RrefResult``.
+    """
+
+    matrix: PrimeFieldMatrix
 
 
-class NullspaceResult(NullspaceRequest):
+class NullspaceResult(StrictModel):
+    """The deterministic nullspace basis bound to the retained source matrix."""
+
+    matrix: PrimeFieldMatrix
     nullspace_rows: tuple[tuple[int, ...], ...]
     complete: Literal[True] = True
     method: Literal["EXACT_DOMAIN_MATRIX_NULLSPACE"] = "EXACT_DOMAIN_MATRIX_NULLSPACE"
 
     @model_validator(mode="after")
     def bind_nullspace(self) -> Self:
-        matrix = PrimeFieldMatrix(
-            prime=self.prime, entries=self.entries, columns=self.columns
-        )
-        expected = nullspace(matrix)
+        expected = nullspace(self.matrix)
         if self.nullspace_rows != expected:
             raise ValueError("nullspace_rows must be the exact nullspace basis")
-        if any(
-            type(value) is not int or not 0 <= value < self.prime
-            for row in self.nullspace_rows
-            for value in row
-        ):
-            raise ValueError("nullspace entries must be canonical prime-field residues")
         for vector in self.nullspace_rows:
-            if len(vector) != self.columns:
+            if len(vector) != self.matrix.columns:
                 raise ValueError("nullspace vector length must match matrix columns")
         return self
 

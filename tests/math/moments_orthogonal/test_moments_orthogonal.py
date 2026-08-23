@@ -33,6 +33,7 @@ from jacobian.math.moments_orthogonal._operations import (
     compute_recurrence_coefficients,
 )
 from jacobian.math.moments_orthogonal._tools import TOOLS
+from jacobian.math.moments_orthogonal.values import RecurrenceCoefficientsValue
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -220,12 +221,18 @@ class TestGaussianQuadratureWireBoundaries:
         """beta_0 that converts to the double 0.0 must not reach Golub-Welsch."""
         underflowing = _cr(1, 10**4000)
         with pytest.raises(ValidationError, match="underflow"):
-            GaussianQuadratureRequest(alpha=(_cr(0, 1),), beta=(underflowing,))
+            GaussianQuadratureRequest(
+                coefficients=RecurrenceCoefficientsValue(
+                    alpha=(_cr(0, 1),), beta=(underflowing,)
+                )
+            )
 
     def test_beta_zero_at_underflow_boundary_is_admitted(self) -> None:
         boundary = _cr(1, 10**300)
         request = GaussianQuadratureRequest(
-            alpha=(_cr(0, 1),), beta=(boundary, _cr(1, 12))
+            coefficients=RecurrenceCoefficientsValue(
+                alpha=(_cr(0, 1),), beta=(boundary, _cr(1, 12))
+            )
         )
         result = compute_gaussian_quadrature(request)
         assert len(result.weights) == 1
@@ -234,7 +241,11 @@ class TestGaussianQuadratureWireBoundaries:
     def test_beta_zero_below_underflow_boundary_rejected(self) -> None:
         below = _cr(1, 10**301)
         with pytest.raises(ValidationError, match="underflow"):
-            GaussianQuadratureRequest(alpha=(_cr(0, 1),), beta=(below,))
+            GaussianQuadratureRequest(
+                coefficients=RecurrenceCoefficientsValue(
+                    alpha=(_cr(0, 1),), beta=(below,)
+                )
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -261,13 +272,13 @@ class TestRecurrenceOutputHeightAdmission:
         )
         result = compute_recurrence_coefficients(request)
         assert isinstance(result, RecurrenceCoefficientsResult)
-        assert len(result.alpha) == 5
+        assert len(result.coefficients.alpha) == 5
 
     def test_single_short_sequence_still_admitted(self) -> None:
         request = RecurrenceCoefficientsRequest(moments=(_cr(3, 7),))
         result = compute_recurrence_coefficients(request)
-        assert result.alpha == ()
-        assert result.beta == (_cr(3, 7),)
+        assert result.coefficients.alpha == ()
+        assert result.coefficients.beta == (_cr(3, 7),)
 
 
 class TestChristoffelDarbouxOutputHeightAdmission:
@@ -281,8 +292,9 @@ class TestChristoffelDarbouxOutputHeightAdmission:
         alpha = tuple(_cr(1, 10**4095 + 2 * i + 1) for i in range(6))
         with pytest.raises(ValidationError, match="Christoffel-Darboux kernel"):
             ChristoffelDarbouxRequest(
-                alpha=alpha,
-                beta=self._unit_beta(6),
+                coefficients=RecurrenceCoefficientsValue(
+                    alpha=alpha, beta=self._unit_beta(6)
+                ),
                 x=_cr(0, 1),
                 y=_cr(0, 1),
             )
@@ -293,16 +305,19 @@ class TestChristoffelDarbouxOutputHeightAdmission:
         )
         with pytest.raises(ValidationError, match="Christoffel-Darboux kernel"):
             ChristoffelDarbouxRequest(
-                alpha=alpha,
-                beta=self._unit_beta(6),
+                coefficients=RecurrenceCoefficientsValue(
+                    alpha=alpha, beta=self._unit_beta(6)
+                ),
                 x=_cr(0, 1),
                 y=_cr(0, 1),
             )
 
     def test_moderate_rational_coefficients_still_compute(self) -> None:
         request = ChristoffelDarbouxRequest(
-            alpha=tuple(_cr(i + 1, 7) for i in range(6)),
-            beta=self._unit_beta(6),
+            coefficients=RecurrenceCoefficientsValue(
+                alpha=tuple(_cr(i + 1, 7) for i in range(6)),
+                beta=self._unit_beta(6),
+            ),
             x=_cr(3, 7),
             y=_cr(-2, 5),
         )
@@ -329,20 +344,44 @@ class TestWireAdapters:
         )
         result = compute_recurrence_coefficients(request)
         assert isinstance(result, RecurrenceCoefficientsResult)
-        assert len(result.alpha) == 3
+        assert len(result.coefficients.alpha) == 3
+
+    def test_recurrence_value_composes_into_consumers_unchanged(self) -> None:
+        """The serialized canonical coefficient value feeds every
+        coefficient consumer directly."""
+        request = RecurrenceCoefficientsRequest(
+            moments=tuple(_cr(1, k) for k in range(1, 8))
+        )
+        value = compute_recurrence_coefficients(request).coefficients
+        jacobi = compute_jacobi_matrix(JacobiMatrixRequest(coefficients=value))
+        assert jacobi.coefficients == value
+        kernel = compute_christoffel_darboux(
+            ChristoffelDarbouxRequest(
+                coefficients=value, x=_cr(1, 1), y=_cr(1, 2)
+            )
+        )
+        assert kernel.coefficients == value
+        quadrature = compute_gaussian_quadrature(
+            GaussianQuadratureRequest(coefficients=value)
+        )
+        assert quadrature.coefficients == value
 
     def test_jacobi_wire(self) -> None:
         request = JacobiMatrixRequest(
-            alpha=(_cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            coefficients=RecurrenceCoefficientsValue(
+                alpha=(_cr(1, 2), _cr(1, 2)),
+                beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            ),
         )
         result = compute_jacobi_matrix(request)
         assert isinstance(result, JacobiMatrixResult)
 
     def test_christoffel_darboux_wire(self) -> None:
         request = ChristoffelDarbouxRequest(
-            alpha=(_cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            coefficients=RecurrenceCoefficientsValue(
+                alpha=(_cr(1, 2), _cr(1, 2)),
+                beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            ),
             x=_cr(1, 1),
             y=_cr(1, 1),
         )
@@ -351,8 +390,10 @@ class TestWireAdapters:
 
     def test_gaussian_quadrature_wire(self) -> None:
         request = GaussianQuadratureRequest(
-            alpha=(_cr(1, 2), _cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15), _cr(4, 45)),
+            coefficients=RecurrenceCoefficientsValue(
+                alpha=(_cr(1, 2), _cr(1, 2), _cr(1, 2)),
+                beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15), _cr(4, 45)),
+            ),
         )
         result = compute_gaussian_quadrature(request)
         assert isinstance(result, GaussianQuadratureResult)

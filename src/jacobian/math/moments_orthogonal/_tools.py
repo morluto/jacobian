@@ -135,7 +135,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "three_point_jacobi",
                 "Assemble the Jacobi matrix from three recurrence coefficients.",
-                {"alpha": _ALPHA, "beta": _BETA},
+                {"coefficients": {"alpha": _ALPHA, "beta": _BETA}},
             ),
         ),
     ),
@@ -156,8 +156,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "cd_at_1_1",
                 "Evaluate the Christoffel-Darboux kernel at x=y=1.",
                 {
-                    "alpha": _ALPHA,
-                    "beta": _BETA,
+                    "coefficients": {"alpha": _ALPHA, "beta": _BETA},
                     "x": {"num": "1", "den": "1"},
                     "y": {"num": "1", "den": "1"},
                 },
@@ -181,15 +180,17 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "two_point_gauss",
                 "Compute 2-point Gaussian quadrature from 2 recurrence coefficients.",
                 {
-                    "alpha": [
-                        {"num": "0", "den": "1"},
-                        {"num": "0", "den": "1"},
-                    ],
-                    "beta": [
-                        {"num": "2", "den": "1"},
-                        {"num": "1", "den": "3"},
-                        {"num": "4", "den": "45"},
-                    ],
+                    "coefficients": {
+                        "alpha": [
+                            {"num": "0", "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                        "beta": [
+                            {"num": "2", "den": "1"},
+                            {"num": "1", "den": "3"},
+                            {"num": "4", "den": "45"},
+                        ],
+                    },
                 },
             ),
         ),

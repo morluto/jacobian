@@ -328,7 +328,7 @@ class GroebnerBasisRequest(StrictModel):
         return self
 
 
-GroebnerExecutionOutcome = Literal["COMPUTED", "TIMEOUT"]
+GroebnerExecutionOutcome = Literal["COMPUTED", "LIMIT_EXCEEDED", "TIMEOUT"]
 
 
 class GroebnerBasisResult(StrictModel):
@@ -532,7 +532,7 @@ class IdealNormalFormRequest(StrictModel):
         return self
 
 
-NormalFormExecutionOutcome = Literal["COMPUTED", "TIMEOUT"]
+NormalFormExecutionOutcome = Literal["COMPUTED", "LIMIT_EXCEEDED", "TIMEOUT"]
 
 
 class IdealNormalFormResult(StrictModel):
@@ -638,7 +638,7 @@ class EliminationIdealRequest(StrictModel):
         return self
 
 
-EliminationExecutionOutcome = Literal["COMPUTED", "TIMEOUT"]
+EliminationExecutionOutcome = Literal["COMPUTED", "LIMIT_EXCEEDED", "TIMEOUT"]
 
 
 class EliminationIdealResult(StrictModel):

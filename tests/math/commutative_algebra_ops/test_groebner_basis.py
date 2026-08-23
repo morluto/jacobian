@@ -274,6 +274,52 @@ class TestTypedTimeoutOutcomes:
         assert result.basis is not None
         assert result.generator_count >= 1
 
+    def test_budget_holds_on_worker_threads(self):
+        """The wall budget uses thread-safe enforcement, so the operation
+        runs on any MCP worker thread where signal timers are forbidden."""
+        import threading
+
+        errors: list[BaseException] = []
+        observed: list = []
+
+        def _run() -> None:
+            try:
+                g1 = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 1)))
+                g2 = _poly(("x", "y"), (1, 1, (1, 1)), (-1, 1, (0, 0)))
+                observed.append(
+                    compute_groebner_basis(
+                        GroebnerBasisRequest(ideal=_ideal(("x", "y"), (g1, g2)))
+                    )
+                )
+            except BaseException as error:
+                errors.append(error)
+
+        worker = threading.Thread(target=_run)
+        worker.start()
+        worker.join(timeout=30)
+        assert not errors
+        assert observed and observed[0].outcome == "COMPUTED"
+
+    def test_result_limit_exhaustion_returns_typed_outcome(self, monkeypatch):
+        """An admitted ideal whose exact basis exceeds the declared output
+        limits yields a typed LIMIT_EXCEEDED outcome, not a host exception."""
+        import jacobian.math.polynomials._conversions as conversions
+
+        def exceed_terms(*args, **kwargs):
+            raise ValueError(
+                f"polynomial result exceeds the {kwargs.get('maximum_terms')}"
+                "-term operation budget"
+            )
+
+        monkeypatch.setattr(conversions, "rational_polynomial_from_sympy", exceed_terms)
+        g = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 1)))
+        result = compute_groebner_basis(
+            GroebnerBasisRequest(ideal=_ideal(("x", "y"), (g,)))
+        )
+        assert result.outcome == "LIMIT_EXCEEDED"
+        assert result.basis is None
+        assert result.detail is not None
+
     def test_timed_out_normal_form_cannot_carry_a_remainder(self):
         remainder = _poly(("x", "y"), (1, 1, (2, 0)))
         with pytest.raises(ValidationError, match="timed-out"):

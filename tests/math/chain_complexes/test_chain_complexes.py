@@ -555,6 +555,155 @@ class TestNativeSurface:
         product = tensor_product_complex(_point_complex(), _point_complex())
         assert product.tensor_basis_sizes == (1,)
 
+    def test_native_surface_excludes_wire_envelope_handlers(self) -> None:
+        """The authoritative package __all__ advertises only value-based
+        functions; request handlers stay private to operations/_tools."""
+        import jacobian.math.chain_complexes as chain_complexes_package
+
+        assert set(chain_complexes_package.__all__) == {
+            "chain_map_commutes",
+            "differential_squares_to_zero",
+            "homology_groups",
+            "mapping_cone",
+            "tensor_product_complex",
+        }
+        from jacobian.math.chain_complexes.operations import compute_homology
+
+        request = compute_homology.__annotations__.get("request")
+        assert request is not None
+
+
+class TestMappingConeCanonicalValue:
+    """The cone is returned as a first-class chain-complex value whose
+    derived bounds are admitted at the request boundary."""
+
+    def test_identity_cone_composes_into_homology_unchanged(self) -> None:
+        """The identity cone of a point feeds ComputeHomologyRequest
+        directly through its canonical value."""
+        from jacobian.math.chain_complexes._models import ComputeHomologyRequest
+        from jacobian.math.chain_complexes.operations import compute_homology
+
+        point = _point_complex()
+        one = (("1",),)
+        result = compute_mapping_cone(
+            MappingConeRequest(source=point, target=point, map_matrices=(one,))
+        )
+        homology = compute_homology(ComputeHomologyRequest(complex=result.value))
+        assert [group.betti_number for group in homology.homology_groups] == [
+            0,
+            0,
+        ]
+        assert result.value.degree_min == point.degree_min
+
+    def test_derived_group_dimension_rejected_at_admission(self) -> None:
+        """A cone group of 64 + 64 faces exceeds the canonical basis bound
+        and fails the request instead of dying inside execution."""
+        source = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=1,
+            basis_sizes=(64, 0),
+            differential_matrices=(((),) * 64,),
+        )
+        target = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=1,
+            basis_sizes=(0, 64),
+            differential_matrices=((),),
+        )
+        with pytest.raises(ValueError, match="MAX_BASIS_SIZE"):
+            MappingConeRequest(
+                source=source,
+                target=target,
+                map_matrices=((), ((),) * 64),
+            )
+
+    def test_derived_degree_interval_rejected_at_admission(self) -> None:
+        """A 33-group source forces a 34-group cone whose degree interval
+        leaves the canonical chain-degree range."""
+        sizes = (1,) * 33
+        zeros = ((("0",),),) * 32
+        complex_value = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=32,
+            basis_sizes=sizes,
+            differential_matrices=zeros,
+        )
+        one = (("1",),)
+        with pytest.raises(ValueError, match="less than or equal"):
+            MappingConeRequest(
+                source=complex_value,
+                target=complex_value,
+                map_matrices=(one,) * 33,
+            )
+
+    def test_derived_serialization_envelope_rejected_at_admission(self) -> None:
+        """Copied coefficients push the cone past the canonical entry-char
+        ceiling; admission rejects it before any dense allocation."""
+        digits = 200
+        row = tuple(str(10**digits + i) for i in range(16))
+        big_zero = tuple(row for _ in range(16))
+        source = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=1,
+            basis_sizes=(16, 16),
+            differential_matrices=(big_zero,),
+        )
+        target = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=1,
+            basis_sizes=(16, 16),
+            differential_matrices=(big_zero,),
+        )
+        identity_16 = tuple(
+            tuple("1" if i == j else "0" for j in range(16)) for i in range(16)
+        )
+        with pytest.raises(ValueError, match="serialization exceeds"):
+            MappingConeRequest(
+                source=source,
+                target=target,
+                map_matrices=(identity_16, identity_16),
+            )
+
+    def test_result_round_trips_and_rejects_tampered_value(self) -> None:
+        from pydantic import ValidationError
+
+        from jacobian.math.chain_complexes.values import MappingConeResult
+
+        point = _point_complex()
+        one = (("1",),)
+        result = compute_mapping_cone(
+            MappingConeRequest(source=point, target=point, map_matrices=(one,))
+        )
+        revalidated = MappingConeResult.model_validate(result.model_dump())
+        assert revalidated == result
+
+        payload = result.model_dump()
+        payload["value"]["basis_sizes"] = (2, *payload["value"]["basis_sizes"][1:])
+        with pytest.raises(ValidationError):
+            MappingConeResult.model_validate(payload)
+
+
+class TestSchemaVisibleCoefficientGrammar:
+    def test_construct_schema_documents_entry_grammar(self) -> None:
+        description = ConstructChainComplexRequest.model_json_schema()["properties"][
+            "differential_matrices"
+        ]["description"]
+        assert "residues in [0, p)" in description
+        assert "never evaluates" in description
+
+    def test_chain_map_schemas_document_map_matrix_grammar(self) -> None:
+        for model in (VerifyChainMapRequest, MappingConeRequest):
+            description = model.model_json_schema()["properties"]["map_matrices"][
+                "description"
+            ]
+            assert "canonical coefficient grammar" in description
+            assert "residues in [0, p)" in description
+
 
 class TestChainMapEndpointPrecondition:
     def test_non_square_zero_endpoints_fail_verification(self) -> None:

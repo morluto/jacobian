@@ -275,7 +275,12 @@ class HomologyResult(StrictModel):
 
 
 class MappingConeResult(StrictModel):
-    """The mapping cone of a retained chain map."""
+    """The mapping cone of a retained chain map.
+
+    The derived complex retains its coefficient field, prime, and degree
+    interval as a first-class chain-complex value so it composes into
+    homology, tensor, map, and cone operations unchanged.
+    """
 
     cone_basis_sizes: tuple[int, ...]
     cone_differential_matrices: tuple[tuple[tuple[str, ...], ...], ...]
@@ -284,6 +289,7 @@ class MappingConeResult(StrictModel):
     source: ChainComplexValue
     target: ChainComplexValue
     map_matrices: tuple[tuple[tuple[str, ...], ...], ...]
+    value: ChainComplexValue
 
     @model_validator(mode="after")
     def bind_cone_to_source(self) -> Self:
@@ -319,6 +325,23 @@ class MappingConeResult(StrictModel):
         ):
             raise ValueError(
                 "cone must be the exact mapping cone of the retained chain map"
+            )
+        if (
+            self.value.basis_sizes != basis_sizes
+            or self.value.differential_matrices != differential_matrices
+        ):
+            raise ValueError(
+                "retained canonical value must equal the exact mapping cone"
+            )
+        expected_degree_max = self.source.degree_min + len(basis_sizes) - 1
+        if (
+            self.value.coefficient_field != self.source.coefficient_field
+            or self.value.prime != self.source.prime
+            or self.value.degree_min != self.source.degree_min
+            or self.value.degree_max != expected_degree_max
+        ):
+            raise ValueError(
+                "canonical value context must match the retained endpoints"
             )
         return self
 

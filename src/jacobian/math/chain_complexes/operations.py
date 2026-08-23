@@ -735,6 +735,14 @@ def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
         source=request.source,
         target=request.target,
         map_matrices=request.map_matrices,
+        value=ChainComplexValue(
+            coefficient_field=request.source.coefficient_field,
+            prime=request.source.prime,
+            degree_min=request.source.degree_min,
+            degree_max=request.source.degree_min + len(cone_basis_sizes) - 1,
+            basis_sizes=cone_basis_sizes,
+            differential_matrices=cone_diffs,
+        ),
     )
 
 

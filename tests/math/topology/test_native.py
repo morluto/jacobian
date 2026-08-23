@@ -64,6 +64,37 @@ def test_gf_p_chain_result_enters_homology_unchanged() -> None:
     ]
 
 
+def test_producer_result_carries_its_canonical_value() -> None:
+    """The public GF(p) producer exposes the canonical chain-complex
+    value on the serialized result boundary itself."""
+    from pydantic import ValidationError
+
+    result = _prime_field_chain(_circle(), 2)
+    assert result.canonical_value is not None
+    assert result.canonical_value == simplicial_chain_complex_value(result)
+    homology = compute_homology(ComputeHomologyRequest(complex=result.canonical_value))
+    assert [group.betti_number for group in homology.homology_groups] == [1, 1]
+
+    payload = result.model_dump()
+    payload["canonical_value"]["prime"] = 3
+    with pytest.raises(ValidationError, match="exact"):
+        type(result).model_validate(payload)
+
+
+def test_integral_producer_result_admits_no_canonical_value() -> None:
+    """Integral boundaries live over ZZ, so no canonical value exists."""
+    integral = _operation("topology.simplicial_complex.chain_complex.compute").run(
+        ChainComplexRequest(
+            complex=_circle(),
+            coefficient_ring=ChainCoefficientRing.INTEGER,
+            convention=HomologyConvention.UNREDUCED,
+        )
+    )
+    assert integral.canonical_value is None
+    with pytest.raises(ValueError, match="unreduced prime-field"):
+        simplicial_chain_complex_value(integral)
+
+
 def test_converted_profile_matches_topology_homology_producer() -> None:
     """The composed profile agrees with the topology domain's own exact
     homology of the same complex over the same field."""
@@ -126,37 +157,27 @@ def test_reduced_chains_carry_an_unrepresentable_augmentation() -> None:
             convention=HomologyConvention.REDUCED,
         )
     )
-    with pytest.raises(ValueError, match="augmentation"):
+    assert reduced.canonical_value is None
+    with pytest.raises(ValueError, match="unreduced prime-field"):
         simplicial_chain_complex_value(reduced)
 
 
 def test_oversized_simplicial_groups_stay_outside_the_canonical_domain() -> None:
-    """A producer result whose groups exceed the canonical value's bounds
-    is rejected explicitly instead of failing inside construction."""
-    from jacobian.math.topology._models import (
-        MAX_TOPOLOGY_CHAIN_GROUP,
-        SimplexBasis,
-        SparseBoundaryMatrix,
-    )
-    from jacobian.math.topology._models import HomologyConvention as Convention
+    """A GF(p) request whose groups exceed the canonical value's basis
+    bound is rejected at admission: every accepted producer result must
+    carry its canonical chain-complex value."""
+    from jacobian.math.chain_complexes.values import MAX_BASIS_SIZE
 
-    oversized = type(_prime_field_chain(_circle(), 2))(
-        complex_digest="sha256:" + "0" * 64,
-        coefficient_ring=ChainCoefficientRing.PRIME_FIELD,
-        prime=2,
-        convention=Convention.UNREDUCED,
-        simplex_bases=(
-            SimplexBasis(dimension=0, simplices=(("a",),) * MAX_TOPOLOGY_CHAIN_GROUP),
-        ),
-        boundary_matrices=(
-            SparseBoundaryMatrix(
-                source_dimension=0,
-                target_dimension=-1,
-                rows=0,
-                columns=MAX_TOPOLOGY_CHAIN_GROUP,
-            ),
-        ),
-        boundary_squared_zero=(),
+    labels = tuple(f"v{i}" for i in range(12))
+    facets = tuple((labels[a], labels[b]) for a in range(12) for b in range(a + 1, 12))
+    assert len(facets) > MAX_BASIS_SIZE
+    big = _operation("topology.simplicial_complex.canonicalize").run(
+        SimplicialComplexRequest(vertices=labels, facets=facets)
     )
-    with pytest.raises(ValueError, match="basis bound"):
-        simplicial_chain_complex_value(oversized)
+    with pytest.raises(ValueError, match="faces per chain group"):
+        ChainComplexRequest(
+            complex=big.complex,
+            coefficient_ring=ChainCoefficientRing.PRIME_FIELD,
+            prime=2,
+            convention=HomologyConvention.UNREDUCED,
+        )

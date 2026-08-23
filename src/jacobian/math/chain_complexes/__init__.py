@@ -7,27 +7,15 @@ from jacobian.math.chain_complexes.native import (
     mapping_cone,
     tensor_product_complex,
 )
-from jacobian.math.chain_complexes.operations import (
-    compute_homology,
-    compute_mapping_cone,
-    compute_tensor_product,
-    construct_chain_complex,
-    verify_chain_map,
-    verify_differential,
-)
 
-# The first five names are the native surface: they accept domain values
-# directly. The remainder are the wire-envelope handlers used by MCP.
+# The authoritative native surface: every export accepts domain values
+# directly. Wire-envelope request handlers live in
+# ``jacobian.math.chain_complexes.operations`` and are projected to MCP
+# through ``_tools.py``; they are not part of this native API.
 __all__ = [
     "chain_map_commutes",
-    "compute_homology",
-    "compute_mapping_cone",
-    "compute_tensor_product",
-    "construct_chain_complex",
     "differential_squares_to_zero",
     "homology_groups",
     "mapping_cone",
     "tensor_product_complex",
-    "verify_chain_map",
-    "verify_differential",
 ]

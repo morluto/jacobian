@@ -7,6 +7,12 @@ from collections.abc import Sequence
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
 from jacobian.math import prime_field_linear_algebra as prime_field
+from jacobian.math.chain_complexes.values import (
+    MAX_BASIS_SIZE,
+    MAX_MATRIX_CELLS,
+    ChainComplexValue,
+    CoefficientField,
+)
 from jacobian.math.matrices.certified_snf.operations import (
     certificate_from_reduction,
     inverse_unimodular,
@@ -237,6 +243,13 @@ def _chain_result(request: ChainComplexRequest) -> ChainComplexResult:
         boundary_matrices=boundaries,
         augmentation=augmentation,
         boundary_squared_zero=tuple(ledger),
+        canonical_value=_canonical_value_from_parts(
+            request.coefficient_ring,
+            request.convention,
+            request.prime,
+            bases,
+            boundaries,
+        ),
     )
 
 
@@ -244,6 +257,76 @@ def _chain(
     request: ChainComplexRequest,
 ) -> ChainComplexResult:
     return _chain_result(request)
+
+
+def _canonical_value_from_parts(
+    coefficient_ring: ChainCoefficientRing,
+    convention: HomologyConvention,
+    prime: int | None,
+    simplex_bases: tuple[SimplexBasis, ...],
+    boundary_matrices: tuple[SparseBoundaryMatrix, ...],
+) -> ChainComplexValue | None:
+    """The canonical chain-complex value of one simplicial chain complex.
+
+    Only unreduced prime-field results convert: integral boundaries live
+    over ZZ rather than QQ or GF(p), and reduced chains carry an
+    augmentation map outside the canonical value's representation. The
+    ordered lexicographic face bases remain the implicit column/row
+    ordering of each dense differential; simplex labels do not survive
+    because the canonical value is based but unlabeled.
+    """
+    if coefficient_ring is not ChainCoefficientRing.PRIME_FIELD:
+        return None
+    if convention is HomologyConvention.REDUCED:
+        return None
+    if prime is None:
+        raise ValueError("prime-field chains must declare their modulus")
+    basis_sizes = tuple(len(basis.simplices) for basis in simplex_bases)
+    total_cells = sum(matrix.rows * matrix.columns for matrix in boundary_matrices)
+    if any(size > MAX_BASIS_SIZE for size in basis_sizes):
+        raise ValueError(
+            f"simplicial chain group exceeds the canonical basis bound {MAX_BASIS_SIZE}"
+        )
+    if total_cells > MAX_MATRIX_CELLS:
+        raise ValueError(
+            f"simplicial boundary data exceeds the canonical cell bound "
+            f"{MAX_MATRIX_CELLS}"
+        )
+    # Boundary matrix k maps C_k -> C_{k-1}; the canonical value stores
+    # differentials[i] as C_{i+1} -> C_i, i.e. boundary_matrices[i + 1].
+    differential_matrices = []
+    for matrix in boundary_matrices[1:]:
+        dense = [[0] * matrix.columns for _ in range(matrix.rows)]
+        for entry in matrix.entries:
+            dense[entry.row][entry.column] = entry.value % prime
+        differential_matrices.append(
+            tuple(tuple(str(value) for value in row) for row in dense)
+        )
+    return ChainComplexValue(
+        coefficient_field=CoefficientField.PRIME_FIELD,
+        prime=prime,
+        degree_min=0,
+        degree_max=len(basis_sizes) - 1,
+        basis_sizes=basis_sizes,
+        differential_matrices=tuple(differential_matrices),
+    )
+
+
+def _canonical_chain_complex_value(result: ChainComplexResult) -> ChainComplexValue:
+    """The canonical chain-complex value carried by one chain result."""
+    value = _canonical_value_from_parts(
+        result.coefficient_ring,
+        result.convention,
+        result.prime,
+        result.simplex_bases,
+        result.boundary_matrices,
+    )
+    if value is None:
+        raise ValueError(
+            "only unreduced prime-field simplicial chain complexes convert "
+            "to a canonical chain-complex value"
+        )
+    return value
 
 
 def _prime_matrix(

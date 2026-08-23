@@ -22,7 +22,17 @@ class ConstructChainComplexRequest(StrictModel):
     coefficient_field: CoefficientField = CoefficientField.RATIONAL
     prime: int | None = Field(default=None, ge=2)
     basis_sizes: tuple[int, ...] = Field(min_length=1)
-    differential_matrices: tuple[tuple[tuple[str, ...], ...], ...]
+    differential_matrices: tuple[tuple[tuple[str, ...], ...], ...] = Field(
+        description=(
+            "Dense row-major differential matrices; entry i maps chain group "
+            "i+1 into chain group i. Each entry is one canonical "
+            "coefficient string: an integer with no leading zeros and no "
+            "negative zero ('0', '5', '-3'), or for QQ a fully reduced "
+            "fraction with denominator >= 2 ('-1/2'); for GF(p) only "
+            "integer residues in [0, p) are accepted. Parsing is plain "
+            "integer/fraction string parsing and never evaluates input."
+        )
+    )
 
     @model_validator(mode="after")
     def require_consistent_dimensions(self) -> Self:
@@ -149,7 +159,15 @@ class VerifyChainMapRequest(StrictModel):
 
     source: ChainComplexValue
     target: ChainComplexValue
-    map_matrices: tuple[tuple[tuple[str, ...], ...], ...]
+    map_matrices: tuple[tuple[tuple[str, ...], ...], ...] = Field(
+        description=(
+            "One dense component per chain degree, each shaped "
+            "(target basis size) x (source basis size). Entries follow the "
+            "same canonical coefficient grammar as differential matrices: "
+            "integers without leading zeros, reduced QQ fractions, and "
+            "GF(p) residues in [0, p); strings are parsed, never evaluated."
+        )
+    )
 
     @model_validator(mode="after")
     def require_admissible_map_components(self) -> Self:
@@ -193,12 +211,83 @@ class ComputeHomologyRequest(StrictModel):
         return self
 
 
+def _entry_character_count(complex_value: ChainComplexValue) -> int:
+    """Total printed characters across one complex's differential cells."""
+    return sum(
+        len(entry)
+        for matrix in complex_value.differential_matrices
+        for row in matrix
+        for entry in row
+    )
+
+
+def _require_admissible_cone_value(
+    source: ChainComplexValue,
+    target: ChainComplexValue,
+    map_matrices: tuple[tuple[tuple[str, ...], ...], ...],
+) -> None:
+    """Bound the derived mapping-cone work before any allocation.
+
+    The cone becomes a first-class ``ChainComplexValue``, so its degree
+    interval, group dimensions, dense cell budget, and serialization
+    envelope must be established at admission rather than discovered
+    during execution.
+    """
+    from jacobian.math.chain_complexes.operations import _cone_group_sizes
+    from jacobian.math.chain_complexes.values import (
+        MAX_MATRIX_ENTRY_CHARS,
+        ChainComplexValue,
+    )
+
+    cone_basis_sizes = _cone_group_sizes(source, target)
+    degree_min = source.degree_min
+    placeholder_diffs = tuple(
+        tuple(("0",) * cone_basis_sizes[deg + 1] for _ in range(cone_basis_sizes[deg]))
+        for deg in range(max(0, len(cone_basis_sizes) - 1))
+    )
+    ChainComplexValue(
+        coefficient_field=source.coefficient_field,
+        prime=source.prime,
+        degree_min=degree_min,
+        degree_max=degree_min + len(cone_basis_sizes) - 1,
+        basis_sizes=cone_basis_sizes,
+        differential_matrices=placeholder_diffs,
+    )
+    # Every populated cone cell copies one admitted coefficient string
+    # (possibly gaining a leading '-') and every remaining cell prints
+    # "0", so this bounds the derived serialization from above.
+    cone_cells = sum(
+        cone_basis_sizes[i] * cone_basis_sizes[i + 1]
+        for i in range(len(cone_basis_sizes) - 1)
+    )
+    worst_case_chars = (
+        _entry_character_count(source)
+        + _entry_character_count(target)
+        + sum(len(entry) for matrix in map_matrices for row in matrix for entry in row)
+        + cone_cells
+    )
+    if worst_case_chars > MAX_MATRIX_ENTRY_CHARS:
+        raise ValueError(
+            "mapping cone serialization exceeds the canonical output "
+            f"ceiling ({worst_case_chars} characters against "
+            f"{MAX_MATRIX_ENTRY_CHARS}); supply smaller coefficients"
+        )
+
+
 class MappingConeRequest(StrictModel):
     """Compute the mapping cone of a chain map."""
 
     source: ChainComplexValue
     target: ChainComplexValue
-    map_matrices: tuple[tuple[tuple[str, ...], ...], ...]
+    map_matrices: tuple[tuple[tuple[str, ...], ...], ...] = Field(
+        description=(
+            "One dense component per chain degree, each shaped "
+            "(target basis size) x (source basis size). Entries follow the "
+            "same canonical coefficient grammar as differential matrices: "
+            "integers without leading zeros, reduced QQ fractions, and "
+            "GF(p) residues in [0, p); strings are parsed, never evaluated."
+        )
+    )
 
     @model_validator(mode="after")
     def require_admissible_map_components(self) -> Self:
@@ -255,6 +344,9 @@ class MappingConeRequest(StrictModel):
             list(self.source.basis_sizes),
             list(self.target.basis_sizes),
         )
+        # The returned cone is exposed as a first-class canonical value, so
+        # its derived bounds are part of the accepted request domain.
+        _require_admissible_cone_value(self.source, self.target, self.map_matrices)
         return self
 
 

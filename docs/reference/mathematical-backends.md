@@ -50,6 +50,21 @@ Child processes use the shared bounded-process supervisor. Backend adapters test
 their codec and outcome projection; the supervisor's owning tests prove
 process-group termination and descendant cleanup.
 
+## External reference oracles
+
+A mathematical implementation used only to compare results during development
+is a differential oracle, not necessarily a Jacobian runtime backend. Heavy or
+native software may remain outside the ordinary installation and required CI
+environment when its installation or runtime cost is disproportionate to the
+bounded operation under test.
+
+Required correctness evidence must remain deterministic and runnable without
+the optional oracle. For a non-unique result, define a canonical normalization
+or mathematical equivalence before comparing implementations; incidental
+ordering, rooting, identifiers, or witness choice are not disagreements.
+Agreement with an oracle supplements but never replaces Jacobian's independent
+reconstruction or defining-invariant validation.
+
 ## Singular
 
 The commutative-algebra domain uses Singular as a private child-process backend
@@ -58,8 +73,7 @@ polynomial ring, collision-proof internal identifiers, a fixed ordering, and a
 strict result encoding. Singular does not define the public request or result
 types.
 
-SageMath is useful during development as an independent differential oracle
-for Singular-backed algorithms. It is not a Jacobian runtime dependency or a
-required CI environment. Required mathematical evidence belongs in bounded,
-repository-owned property tests so that it remains deterministic and locally
-reproducible.
+SageMath is the current development-time differential oracle for selected
+Singular-backed algorithms. It is not a Jacobian runtime dependency or a
+required CI environment; the Singular adapter and bounded repository-owned
+property tests carry the required evidence.

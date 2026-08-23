@@ -68,9 +68,7 @@ def _require_bounded_entries(matrix: ExchangeMatrix, *, max_digits: int) -> None
     # Inspect canonical-string lengths before any integer conversion so the
     # declared digit ceiling bounds parsing work and intermediate allocation.
     if any(
-        len(value.lstrip("-")) > max_digits
-        for row in matrix.entries
-        for value in row
+        len(value.lstrip("-")) > max_digits for row in matrix.entries for value in row
     ):
         raise ValueError(
             f"exchange-matrix coefficients exceed the {max_digits}-digit bound"

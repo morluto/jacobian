@@ -142,9 +142,9 @@ class TestCoefficientBounds:
             (str(1), str(1), str(1)),
         )
         once = mutate_seed(SeedMutationRequest(exchange_matrix=b, mutation_index=1))
-        assert parse_canonical_integer(
-            once.exchange_matrix.entries[0][2]
-        ) == 7 * 10**128
+        assert (
+            parse_canonical_integer(once.exchange_matrix.entries[0][2]) == 7 * 10**128
+        )
         involuted = mutate_seed(
             SeedMutationRequest(exchange_matrix=once.exchange_matrix, mutation_index=1)
         )
@@ -212,9 +212,7 @@ class TestCoefficientBounds:
         n = 17
         b = em(n, tuple((0,) * n for _ in range(n)), (1,) * n)
         result = mutate_seed(SeedMutationRequest(exchange_matrix=b, mutation_index=0))
-        assert ientries(result.exchange_matrix) == tuple(
-            (0,) * n for _ in range(n)
-        )
+        assert ientries(result.exchange_matrix) == tuple((0,) * n for _ in range(n))
 
     def test_zero_matrix_beyond_cell_budget_rejected(self):
         n = 65  # 65**2 > MAX_EXCHANGE_CELLS even for an all-zero matrix

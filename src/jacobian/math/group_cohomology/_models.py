@@ -10,14 +10,24 @@ from jacobian._models import StrictModel
 from jacobian.math.group._models import PermutationGroupRequest
 
 MAX_GROUP_ORDER = 64
-MAX_COCHAIN_DEGREE = 6
-# The bar differential over C^n = GF(p)^{|G|^n} is materialized densely;
-# bounding |G|^{max_degree+1} bounds every cochain vector and matrix row count.
+# Degree n allocates an ``order**(n+1)``-element cochain space C^n and a dense
+# ``order**(n+1)``-by-``order**n`` coboundary, so these two coupled budgets
+# bound every cochain vector, matrix allocation, and Gaussian-elimination
+# workload (cells times pivot-row length) at every admitted degree.
 MAX_COCHAIN_TENSOR_ELEMENTS = 4_096
-# Each coboundary delta^n: C^n -> C^{n+1} is a dense |G|^(n+1)-by-|G|^n matrix,
-# so bounding |G|^(2*max_degree+1) bounds the full allocation and the Gaussian
-# elimination work (cells times pivot-row length) for every degree at once.
 MAX_BAR_MATRIX_CELLS = 65_536
+# The admitted top degree is *derived* from those budgets per enumerated group
+# order (see ``_admitted_max_degree``), not fixed here. This ceiling binds only
+# when the coupled budgets cannot: for the order-1 group every cochain space,
+# coboundary, tensor count, and cell count is identically one for any degree,
+# so the kernel performs one O(1) rank computation per degree and emits one
+# small record per degree. There this fallback caps exactly the result tuple
+# length and the linear number of kernel steps; every group of order >= 2 is
+# bounded far below it by the work-derived envelope.
+MAX_COCHAIN_DEGREE = 64
+"""Conservative fallback on max_degree bounding result size and kernel step
+count when the coupled work budgets cannot bind (order-1 groups)."""
+
 # Prime modulus: the kernel supports arbitrary primes but primality testing
 # and each modular inverse pow(a, p-2, p) scale with digit length / log p,
 # not the prime's numeric value alone. Bar matrices are at most
@@ -50,8 +60,37 @@ def _enumerated_group_order(group: PermutationGroupRequest) -> int:
     return int(pg.order())
 
 
+def _admitted_max_degree(order: int) -> int:
+    """Largest degree whose predicted work stays inside the coupled budgets.
+
+    Derived from the actual work the kernel performs, not a fixed cap: at
+    degree n it allocates an ``order**(n+1)``-element cochain space and an
+    ``order**(2n+1)``-cell dense coboundary matrix, so a top degree d is
+    admissible exactly when both quantities stay within their budgets for
+    every n <= d. The exact integer search terminates in O(log order) steps
+    because both quantities grow geometrically. For ``order == 1`` every
+    quantity is identically one at any degree, so the budgets can never bind
+    and only the conservative fallback ``MAX_COCHAIN_DEGREE`` applies.
+    """
+    if order == 1:
+        return MAX_COCHAIN_DEGREE
+    degree = 0
+    while (
+        order ** (degree + 1) <= MAX_COCHAIN_TENSOR_ELEMENTS
+        and order ** (2 * degree + 1) <= MAX_BAR_MATRIX_CELLS
+    ):
+        degree += 1
+    return degree - 1
+
+
 class GroupCohomologyRequest(StrictModel):
-    """Compute group cohomology with trivial coefficients over GF(p)."""
+    """Compute group cohomology with trivial coefficients over GF(p).
+
+    ``max_degree`` is admitted against the work the kernel actually performs:
+    the largest degree whose cochain spaces and dense bar coboundaries stay
+    within the coupled tensor/cell budgets for this group's enumerated order,
+    or the conservative fallback ceiling for the degenerate order-1 group.
+    """
 
     group: PermutationGroupRequest = Field(
         description=(
@@ -75,17 +114,15 @@ class GroupCohomologyRequest(StrictModel):
                 f"enumerated group order {order} exceeds the bounded maximum "
                 f"{MAX_GROUP_ORDER}"
             )
-        if order ** (self.max_degree + 1) > MAX_COCHAIN_TENSOR_ELEMENTS:
+        admitted_degree = _admitted_max_degree(order)
+        if self.max_degree > admitted_degree:
             raise ValueError(
-                "cochain dimensions |G|^n exceed the supported "
-                f"{MAX_COCHAIN_TENSOR_ELEMENTS}-element budget; reduce the "
-                "group order or max_degree"
-            )
-        if order ** (2 * self.max_degree + 1) > MAX_BAR_MATRIX_CELLS:
-            raise ValueError(
-                "dense bar matrices |G|^(2n+1) exceed the supported "
-                f"{MAX_BAR_MATRIX_CELLS}-cell budget; reduce the group "
-                "order or max_degree"
+                f"max_degree {self.max_degree} exceeds the work-derived "
+                f"degree budget {admitted_degree} for enumerated group order "
+                f"{order}: cochain spaces |G|^(n+1) must stay within the "
+                f"{MAX_COCHAIN_TENSOR_ELEMENTS}-element budget and dense bar "
+                f"coboundaries |G|^(2n+1) within the "
+                f"{MAX_BAR_MATRIX_CELLS}-cell budget"
             )
         return self
 

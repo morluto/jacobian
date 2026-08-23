@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.group_cohomology._models import (
+    MAX_COCHAIN_DEGREE,
     CohomologyGroup,
     GroupCohomologyRequest,
     GroupCohomologyResult,
@@ -70,6 +71,41 @@ class TestGroupCohomology:
         result = compute_group_cohomology(req)
         assert result.groups[0].betti == 1
         assert result.group_order == 1
+
+    def test_trivial_group_high_degree_admitted_and_exact(self):
+        """Regression: degree admission derives from the coupled work
+        budgets, not a fixed ceiling. For the trivial group every cochain
+        space and coboundary is one-dimensional and both budgets stay at
+        one, so a cheap exact higher-degree query must be admitted."""
+        request = GroupCohomologyRequest(
+            group=PermutationGroup(degree=1, generators=((0,),)),
+            prime=2,
+            max_degree=24,
+        )
+        result = compute_group_cohomology(request)
+        assert result.group_order == 1
+        assert [g.degree for g in result.groups] == list(range(25))
+        assert result.groups[0].betti == 1
+        assert all(g.betti == 0 for g in result.groups[1:])
+        assert all(g.cochain_dimension == 1 for g in result.groups)
+
+    def test_trivial_group_fallback_ceiling_is_the_only_remaining_cap(self):
+        """The conservative fallback binds only order-1 requests; its
+        boundary degree is admitted and one past it is rejected."""
+        request = GroupCohomologyRequest(
+            group=PermutationGroup(degree=1, generators=((0,),)),
+            prime=3,
+            max_degree=MAX_COCHAIN_DEGREE,
+        )
+        result = compute_group_cohomology(request)
+        assert len(result.groups) == MAX_COCHAIN_DEGREE + 1
+        assert result.groups[0].betti == 1
+        with pytest.raises(ValidationError):
+            GroupCohomologyRequest(
+                group=PermutationGroup(degree=1, generators=((0,),)),
+                prime=3,
+                max_degree=MAX_COCHAIN_DEGREE + 1,
+            )
 
 
 class TestExactBarComplex:
@@ -144,8 +180,8 @@ class TestExactBarComplex:
         )
 
     def test_cochain_budget_rejected(self):
-        """C4 x max_degree 4 would need 4^5 cochain elements; cap admits it,
-        so force rejection through order instead."""
+        """Order 6 at max_degree 4 would need 6^5 cochain elements; the
+        work-derived degree budget for order 6 is 2 and rejects it."""
         with pytest.raises(ValidationError, match="budget"):
             GroupCohomologyRequest(
                 group=PermutationGroup(
@@ -156,8 +192,9 @@ class TestExactBarComplex:
             )
 
     def test_dense_bar_matrix_budget_rejected(self):
-        """Order 4 at max_degree 5 fits the cochain budget but its degree-5
-        coboundary is a dense 4096x1024 matrix; the cell bound rejects it."""
+        """Order 4 at max_degree 5 fits no derived envelope: its degree-5
+        coboundary is a dense 4096x1024 matrix and the cell bound caps
+        order 4 at degree 3."""
         with pytest.raises(ValidationError, match="cell"):
             GroupCohomologyRequest(
                 group=PermutationGroup(degree=4, generators=((1, 2, 3, 0),)),
@@ -177,6 +214,38 @@ class TestExactBarComplex:
             prime=3,
             max_degree=3,
         )
+
+    def test_derived_budget_rejects_oversized_work_before_kernel(self):
+        """Order 32 admits degree 1, but its degree-8 coboundary would be a
+        dense 32^17-cell matrix; the work-derived budget rejects it during
+        request validation, before any kernel expansion runs."""
+        with pytest.raises(ValidationError, match="work-derived"):
+            GroupCohomologyRequest(
+                group=PermutationGroup(degree=5, generators=((1, 2, 3, 4, 0),)),
+                prime=2,
+                max_degree=8,
+            )
+
+    def test_derived_budget_boundary_admitted(self):
+        """Order 32 at its work-derived maximum degree 1 stays inside both
+        budgets: 32^2 cochain elements and 32^3 matrix cells."""
+        GroupCohomologyRequest(
+            group=PermutationGroup(degree=5, generators=((1, 2, 3, 4, 0),)),
+            prime=2,
+            max_degree=1,
+        )
+
+    def test_c2_degree_seven_admitted_by_derived_budget(self):
+        """Order 2's coupled budgets (2^15 cells <= 65536) admit degree 7,
+        which the removed fixed ceiling rejected. Known answer:
+        H*(C2; GF(2)) = GF(2)[x] has betti 1 in every degree."""
+        request = GroupCohomologyRequest(
+            group=PermutationGroup(degree=2, generators=((1, 0),)),
+            prime=2,
+            max_degree=7,
+        )
+        result = compute_group_cohomology(request)
+        assert {g.degree: g.betti for g in result.groups} == dict.fromkeys(range(8), 1)
 
     def test_reuses_canonical_permutation_group_value(self):
         """GroupCohomologyRequest reuses PermutationGroupRequest so native

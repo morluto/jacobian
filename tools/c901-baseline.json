@@ -14,13 +14,18 @@
     },
     {
       "path": "src/jacobian/math/graphs/morphisms/_models.py",
+      "symbol": "require_consistent_pattern_witness",
+      "complexity": 14
+    },
+    {
+      "path": "src/jacobian/math/graphs/morphisms/_models.py",
       "symbol": "require_consistent_witness",
-      "complexity": 12
+      "complexity": 16
     },
     {
       "path": "src/jacobian/math/graphs/morphisms/_operations.py",
-      "symbol": "compute_subgraph_pattern_find",
-      "complexity": 15
+      "symbol": "find_subgraph_embedding",
+      "complexity": 14
     },
     {
       "path": "src/jacobian/math/graphs/tree_decompositions/operations.py",

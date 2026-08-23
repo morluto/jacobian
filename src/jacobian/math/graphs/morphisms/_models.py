@@ -410,7 +410,7 @@ class SubgraphPatternFindResult(StrictModel):
     vertex_map: tuple[str, ...] = Field(default=())
 
     @model_validator(mode="after")
-    def require_consistent_witness(self) -> Self:  # noqa: C901
+    def require_consistent_pattern_witness(self) -> Self:  # noqa: C901
         if self.decision == "EXISTS":
             if len(self.vertex_map) != len(self.pattern.vertices):
                 raise ValueError(

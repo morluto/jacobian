@@ -17,7 +17,9 @@ TOOLS = (
             "Return the canonical exact decomposition f = R' + H over QQ(x), "
             "where H is proper with square-free denominator. The result also "
             "completely decides whether f has a rational primitive; a nonzero "
-            "H does not rule out a formal primitive involving logarithms."
+            "H does not rule out a formal primitive involving logarithms. The "
+            "current conservative envelope admits numerator degree 6, denominator "
+            "degree 3, and two-digit rational coefficient components."
         ),
         request_type=HermiteReductionRequest,
         result_type=HermiteReductionResult,

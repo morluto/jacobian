@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.polynomials._conversions import (
@@ -31,7 +31,13 @@ class HermiteReductionRequest(StrictModel):
     This is a scale limit, not a restriction on the mathematical domain.
     """
 
-    function: RationalFunction
+    function: RationalFunction = Field(
+        description=(
+            "A canonical univariate QQ(x) value with numerator degree at most 6, "
+            "denominator degree at most 3, at most 7/4 respective terms, and "
+            "at most two decimal digits in each rational coefficient component."
+        )
+    )
 
     @model_validator(mode="after")
     def require_univariate_reduction_budget(self) -> Self:

@@ -17,7 +17,6 @@ from jacobian.math.moments_orthogonal._models import (
     JacobiMatrixResult,
     RecurrenceCoefficientsRequest,
     RecurrenceCoefficientsResult,
-    RecurrenceCoefficientsValue,
 )
 
 
@@ -53,10 +52,7 @@ def compute_recurrence_coefficients(
     result = recurrence_coefficients(_to_fractions(request.moments))
     return RecurrenceCoefficientsResult(
         moments=request.moments,
-        coefficients=RecurrenceCoefficientsValue(
-            alpha=_from_fractions(result.alpha),
-            beta=_from_fractions(result.beta),
-        ),
+        coefficients=result,
     )
 
 

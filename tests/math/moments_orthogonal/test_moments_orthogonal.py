@@ -45,6 +45,11 @@ def _frac(num: int, den: int) -> Fraction:
     return Fraction(num, den)
 
 
+def _fracs(values) -> tuple[Fraction, ...]:
+    """View canonical coefficient entries as exact Fractions."""
+    return tuple(v.as_fraction() for v in values)
+
+
 def _cr(num: int, den: int) -> CanonicalRational:
     return CanonicalRational.from_integer_ratio(num, den)
 
@@ -100,12 +105,12 @@ class TestRecurrenceCoefficients:
         moments = tuple(_frac(1, k) for k in range(1, 8))
         result = recurrence_coefficients(moments)
         # For Legendre polynomials on [0,1], alpha_k = 1/2 for all k
-        assert all(a == _frac(1, 2) for a in result.alpha)
+        assert all(a == _frac(1, 2) for a in _fracs(result.alpha))
 
     def test_beta_zero_is_mu0(self) -> None:
         moments = (_frac(2, 1), _frac(1, 1), _frac(2, 3), _frac(1, 2))
         result = recurrence_coefficients(moments)
-        assert result.beta[0] == _frac(2, 1)
+        assert result.beta[0].as_fraction() == _frac(2, 1)
 
     def test_empty_rejected(self) -> None:
         with pytest.raises(ValueError, match="between 1 and 32"):
@@ -120,23 +125,23 @@ class TestRecurrenceCoefficients:
         """Two moments determine exactly alpha_0 and beta_0."""
         moments = (_frac(1, 1), _frac(1, 2))
         result = recurrence_coefficients(moments)
-        assert result.alpha == (_frac(1, 2),)
-        assert result.beta == (_frac(1, 1),)
+        assert _fracs(result.alpha) == (_frac(1, 2),)
+        assert _fracs(result.beta) == (_frac(1, 1),)
 
     def test_even_length_sequence_fully_consumed(self) -> None:
         """Four uniform moments determine both coefficient pairs."""
         result = recurrence_coefficients(tuple(_frac(1, k) for k in range(1, 5)))
-        assert result.alpha == (_frac(1, 2), _frac(1, 2))
-        assert result.beta == (_frac(1, 1), _frac(1, 12))
+        assert _fracs(result.alpha) == (_frac(1, 2), _frac(1, 2))
+        assert _fracs(result.beta) == (_frac(1, 1), _frac(1, 12))
 
     def test_odd_length_trailing_moment_determines_final_beta(self) -> None:
         """mu_2 distinguishes (1,0,1) from (1,0,2); neither may ignore it."""
         first = recurrence_coefficients((_frac(1, 1), _frac(0, 1), _frac(1, 1)))
         second = recurrence_coefficients((_frac(1, 1), _frac(0, 1), _frac(2, 1)))
-        assert first.alpha == (_frac(0, 1),)
-        assert second.alpha == (_frac(0, 1),)
-        assert first.beta == (_frac(1, 1), _frac(1, 1))
-        assert second.beta == (_frac(1, 1), _frac(2, 1))
+        assert _fracs(first.alpha) == (_frac(0, 1),)
+        assert _fracs(second.alpha) == (_frac(0, 1),)
+        assert _fracs(first.beta) == (_frac(1, 1), _frac(1, 1))
+        assert _fracs(second.beta) == (_frac(1, 1), _frac(2, 1))
 
     def test_odd_length_indefinite_trailing_hankel_rejected(self) -> None:
         """(1, 0, -1) has an indefinite trailing Hankel minor and is rejected."""

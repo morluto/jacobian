@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from fractions import Fraction
 
+from jacobian._exact import CanonicalRational
 from jacobian.math.moments_orthogonal.values import (
     MAX_HANKEL_DIMENSION,
     MAX_MOMENTS,
@@ -159,9 +160,15 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
         raise ValueError("the zeroth moment must be positive")
     max_order = min(MAX_RECURRENCE_ORDER, m // 2)
     if max_order < 1:
-        return RecurrenceCoefficients(alpha=(), beta=(moments[0],))
+        return RecurrenceCoefficients(
+            alpha=(),
+            beta=(CanonicalRational.from_fraction(moments[0]),),
+        )
     alpha, beta = _monic_orthogonal_recurrence(moments, max_order)
-    return RecurrenceCoefficients(alpha=tuple(alpha), beta=tuple(beta))
+    return RecurrenceCoefficients(
+        alpha=tuple(CanonicalRational.from_fraction(a) for a in alpha),
+        beta=tuple(CanonicalRational.from_fraction(b) for b in beta),
+    )
 
 
 def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> JacobiMatrix:

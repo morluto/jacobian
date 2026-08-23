@@ -167,8 +167,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "moments.gaussian_quadrature.compute",
         "Compute Gaussian quadrature nodes and weights",
         "Compute Gaussian quadrature nodes and weights from the symmetric "
-        "tridiagonal Jacobi matrix via the Golub-Welsch algorithm "
-        "(eigenvalue decomposition).",
+        "tridiagonal Jacobi matrix via the Golub-Welsch algorithm. "
+        "APPROXIMATE: coefficients convert to IEEE-754 float64 and each "
+        "returned node/weight is the exact dyadic image of one computed "
+        "double, with no error bound; unlike the other moments operations "
+        "these values are not exact rationals.",
         GaussianQuadratureRequest,
         GaussianQuadratureResult,
         compute_gaussian_quadrature,

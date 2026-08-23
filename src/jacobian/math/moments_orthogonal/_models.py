@@ -19,6 +19,7 @@ from jacobian.math.moments_orthogonal.values import (
     MAX_MOMENTS,
     MAX_QUADRATURE_POINTS,
     MAX_RECURRENCE_ORDER,
+    RecurrenceCoefficients,
 )
 
 MAX_RATIONAL_DIGITS = 4_096
@@ -113,7 +114,6 @@ class HankelMatrixRequest(StrictModel):
 class HankelMatrixResult(HankelMatrixRequest):
     matrix: tuple[tuple[CanonicalRational, ...], ...]
     dimension: int = Field(ge=1)
-    complete: Literal[True] = True
     method: Literal["EXACT_HANKEL_ASSEMBLY"] = "EXACT_HANKEL_ASSEMBLY"
 
     @model_validator(mode="after")
@@ -174,8 +174,8 @@ class RecurrenceCoefficientsRequest(StrictModel):
         # leaves that canonical domain.
         try:
             RecurrenceCoefficientsValue(
-                alpha=_from_fractions(derived.alpha),
-                beta=_from_fractions(derived.beta),
+                alpha=derived.alpha,
+                beta=derived.beta,
             )
         except ValidationError as exc:
             raise ValueError(
@@ -185,27 +185,13 @@ class RecurrenceCoefficientsRequest(StrictModel):
         return self
 
 
-class RecurrenceCoefficientsValue(StrictModel):
-    """The one canonical recurrence-coefficient value.
-
-    Produced by ``moments.recurrence_coefficients.compute`` and accepted
-    unchanged by the Jacobi-matrix, Christoffel-Darboux, and quadrature
-    consumers, so a serialized result composes into those requests without
-    reconstructing parallel payloads.
-    """
-
-    alpha: tuple[CanonicalRational, ...]
-    beta: tuple[CanonicalRational, ...]
-
-    @model_validator(mode="after")
-    def require_valid(self) -> Self:
-        _validate_alpha_beta(self.alpha, self.beta)
-        return self
+# The one canonical recurrence-coefficient value lives in values.py and is
+# shared by the producer, every consumer, and the native API.
+RecurrenceCoefficientsValue = RecurrenceCoefficients
 
 
 class RecurrenceCoefficientsResult(RecurrenceCoefficientsRequest):
     coefficients: RecurrenceCoefficientsValue
-    complete: Literal[True] = True
     method: Literal["EXACT_GRAM_SCHMIDT"] = "EXACT_GRAM_SCHMIDT"
 
     @model_validator(mode="after")
@@ -216,8 +202,8 @@ class RecurrenceCoefficientsResult(RecurrenceCoefficientsRequest):
 
         result = recurrence_coefficients(_to_fractions(self.moments))
         expected = RecurrenceCoefficientsValue(
-            alpha=_from_fractions(result.alpha),
-            beta=_from_fractions(result.beta),
+            alpha=result.alpha,
+            beta=result.beta,
         )
         if self.coefficients != expected:
             raise ValueError(
@@ -239,7 +225,6 @@ class JacobiMatrixRequest(StrictModel):
 class JacobiMatrixResult(JacobiMatrixRequest):
     diagonal: tuple[CanonicalRational, ...]
     off_diagonal: tuple[CanonicalRational, ...]
-    complete: Literal[True] = True
     method: Literal["EXACT_TRIDIAGONAL_ASSEMBLY"] = "EXACT_TRIDIAGONAL_ASSEMBLY"
 
     @model_validator(mode="after")
@@ -305,7 +290,6 @@ class ChristoffelDarbouxRequest(StrictModel):
 class ChristoffelDarbouxResult(ChristoffelDarbouxRequest):
     kernel: CanonicalRational
     polynomials_evaluated: tuple[CanonicalRational, ...]
-    complete: Literal[True] = True
     method: Literal["EXACT_CD_RECURRENCE"] = "EXACT_CD_RECURRENCE"
 
     @model_validator(mode="after")
@@ -482,7 +466,6 @@ class GaussianQuadratureRequest(StrictModel):
 class GaussianQuadratureResult(GaussianQuadratureRequest):
     nodes: tuple[CanonicalRational, ...]
     weights: tuple[CanonicalRational, ...]
-    complete: Literal[True] = True
     method: Literal["APPROXIMATE_GOLUB_WELSCH_FLOAT64"] = (
         "APPROXIMATE_GOLUB_WELSCH_FLOAT64"
     )

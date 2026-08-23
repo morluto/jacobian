@@ -39,6 +39,7 @@ from jacobian.math.moments_orthogonal._tools import TOOLS
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _frac(num: int, den: int) -> Fraction:
     return Fraction(num, den)
 
@@ -128,26 +129,21 @@ class TestRecurrenceCoefficients:
                 )
             )
 
-
     @staticmethod
     def _overflowing_moments(count: int):
         """Positive functional whose exact coefficients overflow canonically."""
         moments = []
         for k in range(count):
             if k % 2 == 0:
-                num = sum(x ** k for x in range(-8, 9))
+                num = sum(x**k for x in range(-8, 9))
                 moments.append(CanonicalRational(num=str(num), den="1"))
             else:
-                moments.append(
-                    CanonicalRational(num="1", den=str(10**135 + 2 * k + 1))
-                )
+                moments.append(CanonicalRational(num="1", den=str(10**135 + 2 * k + 1)))
         return tuple(moments)
 
     def test_large_but_admissible_coefficients_pass(self) -> None:
         """The height check admits coefficients within the canonical limit."""
-        request = RecurrenceCoefficientsRequest(
-            moments=self._overflowing_moments(21)
-        )
+        request = RecurrenceCoefficientsRequest(moments=self._overflowing_moments(21))
         assert len(request.moments) == 21
 
     @pytest.mark.exhaustive
@@ -156,9 +152,7 @@ class TestRecurrenceCoefficients:
         # Every input component stays small, but one exact recurrence
         # coefficient exceeds the canonical 32,768-digit limit.
         with pytest.raises((ValueError, ValidationError), match="canonical"):
-            RecurrenceCoefficientsRequest(
-                moments=self._overflowing_moments(33)
-            )
+            RecurrenceCoefficientsRequest(moments=self._overflowing_moments(33))
 
     def test_insufficient_moments_for_recurrence(self) -> None:
         """With only 2 moments we can't produce any recurrence coefficient."""
@@ -266,14 +260,10 @@ class TestGaussianQuadrature:
 
     def test_approximate_irrational_nodes(self) -> None:
         """Nodes ±sqrt(2) are irrational and returned as IEEE-double approximations."""
+        # alpha=(0,0), beta=(1,2) gives a Jacobi matrix with exact ±sqrt(2)
         alpha = (_frac(0, 1), _frac(0, 1))
-        beta = (_frac(1, 1), _frac(1, 1), _frac(1, 1))
-        # With alpha=(0,0) and beta with unit subdiagonals, Jacobi matrix is
-        # [[0,1],[1,0]] whose eigenvalues are ±sqrt(1) approximated as ±1.
-        # Use beta=(1,2) case from review: alpha=(0,0), beta=(1,2) has exact ±sqrt(2)
-        alpha2 = (_frac(0, 1), _frac(0, 1))
-        beta2 = (_frac(1, 1), _frac(2, 1))
-        result = gaussian_quadrature(alpha2, beta2)
+        beta = (_frac(1, 1), _frac(2, 1))
+        result = gaussian_quadrature(alpha, beta)
         # approximate nodes must be close to ±sqrt(2) within double precision
         import math
 
@@ -312,9 +302,7 @@ class TestGaussianQuadrature:
         # With one node the unused trailing entry still cannot underflow to
         # zero silently; kernel and model reject it through the same bound.
         with pytest.raises(ValueError, match="underflow"):
-            gaussian_quadrature(
-                (_frac(0, 1),), (_frac(1, 1), _frac(1, 10**400))
-            )
+            gaussian_quadrature((_frac(0, 1),), (_frac(1, 1), _frac(1, 10**400)))
 
 
 # ---------------------------------------------------------------------------
@@ -324,9 +312,7 @@ class TestGaussianQuadrature:
 
 class TestWireAdapters:
     def test_hankel_wire(self) -> None:
-        request = HankelMatrixRequest(
-            moments=tuple(_cr(1, k) for k in range(1, 8))
-        )
+        request = HankelMatrixRequest(moments=tuple(_cr(1, k) for k in range(1, 8)))
         result = compute_hankel_matrix(request)
         assert result.dimension == 4
         assert isinstance(result, HankelMatrixResult)
@@ -362,6 +348,7 @@ class TestWireAdapters:
         )
         result = compute_jacobi_matrix(request)
         assert isinstance(result, JacobiMatrixResult)
+
     def test_christoffel_darboux_wire(self) -> None:
         request = ChristoffelDarbouxRequest(
             coefficients=RecurrenceCoefficients(

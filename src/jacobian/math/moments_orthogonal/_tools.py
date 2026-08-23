@@ -184,8 +184,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "two_point_gauss",
-                "Compute 2-point Gaussian quadrature from 2 recurrence "
-                "coefficients.",
+                "Compute 2-point Gaussian quadrature from 2 recurrence coefficients.",
                 {
                     "coefficients": {
                         "alpha": [

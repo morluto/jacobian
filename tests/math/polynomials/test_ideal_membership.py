@@ -920,6 +920,51 @@ class TestWorkerFailurePreservation:
         with pytest.raises(GroebnerWorkerExecutionError, match="returncode 3"):
             complete_basis_in_worker(_ideal1(), "grevlex", "ascending")
 
+    @pytest.mark.parametrize("stdout", [b"[]", b"null", b'"ok"', b"42"])
+    def test_non_object_report_raises_execution_error(self, monkeypatch, stdout):
+        """A valid-JSON report with a non-object top level is a broken
+        worker protocol, not an AttributeError escape or a conclusion."""
+        from collections import namedtuple
+
+        from jacobian.math.polynomials._groebner_worker import (
+            GroebnerWorkerExecutionError,
+            complete_basis_in_worker,
+        )
+
+        fake = namedtuple("Result", "timed_out cancelled returncode stdout")(
+            timed_out=False, cancelled=False, returncode=0, stdout=stdout
+        )
+        monkeypatch.setattr(
+            "jacobian.math.polynomials._groebner_worker.run_bounded_process",
+            lambda *args, **kwargs: fake,
+        )
+        with pytest.raises(GroebnerWorkerExecutionError, match="not a JSON object"):
+            complete_basis_in_worker(_ideal1(), "grevlex", "ascending")
+
+    def test_failed_worker_report_raises_execution_error(self, monkeypatch):
+        """The worker's own ``failed`` tag is an internal adapter fault,
+        not inconclusive mathematical work."""
+        import json
+        from collections import namedtuple
+
+        from jacobian.math.polynomials._groebner_worker import (
+            GroebnerWorkerExecutionError,
+            complete_basis_in_worker,
+        )
+
+        fake = namedtuple("Result", "timed_out cancelled returncode stdout")(
+            timed_out=False,
+            cancelled=False,
+            returncode=0,
+            stdout=json.dumps({"status": "failed"}).encode(),
+        )
+        monkeypatch.setattr(
+            "jacobian.math.polynomials._groebner_worker.run_bounded_process",
+            lambda *args, **kwargs: fake,
+        )
+        with pytest.raises(GroebnerWorkerExecutionError, match="internal"):
+            complete_basis_in_worker(_ideal1(), "grevlex", "ascending")
+
     def test_hard_timeout_raises_typed_transport_failure(self, monkeypatch):
         """A deadline-killed worker is retryable timing, not a conclusion."""
         from collections import namedtuple
@@ -982,3 +1027,38 @@ class TestWorkerFailurePreservation:
         )
         with pytest.raises(GroebnerWorkerLaunchError):
             polynomial_ideal_normal_form(request)
+
+    def test_public_operations_surface_failed_worker_reports(self, monkeypatch):
+        """A worker that self-reports ``failed`` is a broken adapter, so
+        both public operations raise the typed execution fault instead of
+        reporting mathematical UNKNOWN after exhausting the strategies."""
+        import json
+
+        from jacobian.math.polynomials._groebner_worker import (
+            GroebnerWorkerExecutionError,
+        )
+
+        def report_failed(*args, **kwargs):
+            from collections import namedtuple
+
+            Result = namedtuple("Result", "timed_out cancelled returncode stdout")
+            return Result(
+                timed_out=False,
+                cancelled=False,
+                returncode=0,
+                stdout=json.dumps({"status": "failed"}).encode(),
+            )
+
+        monkeypatch.setattr(
+            "jacobian.math.polynomials._groebner_worker.run_bounded_process",
+            report_failed,
+        )
+        request = IdealMembershipRequest(
+            ideal=_ideal1(),
+            polynomial=_poly(("x",), {(5,): 1}),
+            monomial_order="grevlex",
+        )
+        with pytest.raises(GroebnerWorkerExecutionError):
+            polynomial_ideal_normal_form(request)
+        with pytest.raises(GroebnerWorkerExecutionError):
+            polynomial_ideal_membership(request)

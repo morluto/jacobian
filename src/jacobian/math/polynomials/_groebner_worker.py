@@ -8,7 +8,11 @@ a wall clock and hard resource limits — and reports a tagged outcome:
 of the submitted generating set leaves an output budget (sound evidence,
 because that basis is unique), ``aborted`` when an intermediate prefix of
 an incremental strategy left a budget (a work bound, never a conclusion,
-since later generators can shrink an ideal), or ``failed``.
+since later generators can shrink an ideal), or ``failed`` when the
+kernel or the wire codec raised inside the attempt — a broken adapter is
+a transport fault, so the parent surfaces it as
+:class:`GroebnerWorkerExecutionError` instead of projecting it into a
+domain status.
 """
 
 from __future__ import annotations
@@ -17,7 +21,7 @@ import json
 import shutil
 import sys
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
@@ -201,6 +205,37 @@ def _resolve_memory_enforcement() -> str | None:
     return None
 
 
+def _decode_report(raw: bytes) -> dict[str, Any]:
+    """Decode one worker report, failing closed on protocol violations."""
+
+    try:
+        report = json.loads(raw.decode("utf-8"))
+    except Exception as error:
+        raise GroebnerWorkerExecutionError(str(error)) from None
+    if not isinstance(report, dict):
+        # A decoded payload with the wrong top-level shape is a broken
+        # worker protocol, not evidence about the ideal.
+        raise GroebnerWorkerExecutionError(
+            f"groebner worker report is {type(report).__name__}, not a JSON object"
+        )
+    return report
+
+
+def _basis_from_report(report: dict[str, Any]) -> tuple[RationalPolynomial, ...]:
+    """Convert a worker ``ok`` report to the canonical wire basis."""
+
+    from pydantic import ValidationError
+
+    try:
+        return tuple(
+            RationalPolynomial.model_validate(element) for element in report["basis"]
+        )
+    except (ValidationError, TypeError, KeyError, ValueError) as error:
+        # A declared basis outside the canonical contract is a worker fault,
+        # not evidence about the ideal.
+        raise GroebnerWorkerExecutionError(str(error)) from None
+
+
 def complete_basis_in_worker(
     ideal: RationalPolynomialIdeal,
     monomial_order: str,
@@ -214,15 +249,16 @@ def complete_basis_in_worker(
     one unguarded call where Buchberger sees every collapsing pair from
     the start.  Returns ``("ok", basis)`` when the attempt concluded
     within every output budget, ``("exceeded", None)`` for evidenced
-    complete-basis overflow, and ``("aborted"|"failed", None)`` when the
-    attempt self-reports no conclusion. Launch failures, cancellation,
-    wall-clock timeouts, and malformed worker exits are execution/deployment
-    faults, not mathematical conclusions: they raise their typed
+    complete-basis overflow, and ``("aborted", None)`` when an incremental
+    strategy self-reports a bounded non-conclusion. A worker ``failed``
+    report — a kernel or codec exception inside the attempt — raises
+    :class:`GroebnerWorkerExecutionError`: a broken worker/backend adapter
+    is a transport fault, never work exhaustion. Launch failures,
+    cancellation, wall-clock timeouts, malformed worker exits, and
+    reports with the wrong top-level shape raise their typed
     ``GroebnerWorkerError`` subclasses instead of collapsing into a domain
     status.
     """
-
-    from pydantic import ValidationError
 
     payload = {
         "variables": list(ideal.variables),
@@ -273,24 +309,18 @@ def complete_basis_in_worker(
             f"groebner worker exited with returncode "
             f"{completed.returncode} without a report"
         )
-    try:
-        report = json.loads(completed.stdout.decode("utf-8"))
-    except Exception as error:
-        raise GroebnerWorkerExecutionError(str(error)) from None
+    report = _decode_report(completed.stdout)
     status = report.get("status")
-    if status in ("exceeded", "aborted", "failed"):
+    if status in ("exceeded", "aborted"):
         return status, None
+    if status == "failed":
+        raise GroebnerWorkerExecutionError(
+            "groebner worker reported an internal kernel or codec failure "
+            "without any mathematical conclusion"
+        )
     if status != "ok":
         raise GroebnerWorkerExecutionError(f"unknown worker status {status!r}")
-    try:
-        basis = tuple(
-            RationalPolynomial.model_validate(element) for element in report["basis"]
-        )
-    except (ValidationError, TypeError, KeyError, ValueError) as error:
-        # A declared basis outside the canonical contract is a worker fault,
-        # not evidence about the ideal.
-        raise GroebnerWorkerExecutionError(str(error)) from None
-    return "ok", basis
+    return "ok", _basis_from_report(report)
 
 
 __all__ = [

@@ -74,11 +74,11 @@ def incremental_source_groebner(
     Strategy one and two run the guarded incremental construction over
     content-derived ascending and descending generator orders; a
     mid-sequence budget trip there aborts that strategy as a pure work
-    bound.  When both abort or fail, strategy three submits the whole
-    generating set to one unguarded kernel call, where Buchberger sees
-    every ideal-collapsing pair from the start and need never materialize
-    any exploding prefix.  An attempt that cannot conclude yields no
-    evidence either way.
+    bound.  When both abort, strategy three submits the whole generating
+    set to one unguarded kernel call, where Buchberger sees every
+    ideal-collapsing pair from the start and need never materialize any
+    exploding prefix.  An attempt that cannot conclude yields no evidence
+    either way.
 
     Returns ``(basis, exceeded)``: ``basis`` is the complete reduced
     Gröbner basis when some bounded strategy concluded within budget;
@@ -96,7 +96,7 @@ def incremental_source_groebner(
             return basis, False
         if status == "exceeded":
             return None, True
-        # Aborted or failed attempts decide nothing; retry.
+        # Aborted attempts decide nothing; retry.
     status, basis = complete_basis_in_worker(ideal, monomial_order, "complete")
     if status == "ok":
         return basis, False

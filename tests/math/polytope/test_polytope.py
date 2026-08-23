@@ -9,6 +9,7 @@ import pytest
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.polytope._models import (
+    MAX_FACETS,
     MAX_VERTICES,
     Halfspace,
     PolytopeVolumeRequest,
@@ -35,6 +36,30 @@ def _h(*coeffs: tuple[int, int], offset: tuple[int, int]) -> Halfspace:
         coefficients=tuple({"num": str(num), "den": str(den)} for num, den in coeffs),
         offset={"num": str(offset[0]), "den": str(offset[1])},
     )
+
+
+def _scaled_halfspace(row: Halfspace, factor: int) -> Halfspace:
+    """Return the equivalent half-space scaled by a positive integer."""
+    return Halfspace(
+        coefficients=tuple(
+            CanonicalRational(num=str(int(c.num) * factor), den=c.den)
+            for c in row.coefficients
+        ),
+        offset=CanonicalRational(
+            num=str(int(row.offset.num) * factor), den=row.offset.den
+        ),
+    )
+
+
+def _six_simplex_rows() -> tuple[Halfspace, ...]:
+    """The standard six-simplex ``{x >= 0, sum x <= 1}``: seven rows."""
+    rows = []
+    for axis in range(6):
+        coeffs = [(0, 1)] * 6
+        coeffs[axis] = (-1, 1)
+        rows.append(_h(*coeffs, offset=(0, 1)))
+    rows.append(_h(*([(1, 1)] * 6), offset=(1, 1)))
+    return tuple(rows)
 
 
 def _volume_via_vertices(vertices: tuple[Vertex, ...]) -> PolytopeVolumeResult:
@@ -827,3 +852,122 @@ class TestHullWorkBoundPublished:
         points = tuple(_v(*((1000 * j + i, 1) for i in range(4))) for j in range(49))
         with pytest.raises(ValueError, match=r"combinatorial bound \(211876"):
             PolytopeVolumeRequest(vertices=points)
+
+
+class TestHalfspaceWorkBoundPublished:
+    """The H-representation work ceiling must be schema-visible on the
+    distinct-row count so callers can size redundant-copy-laden requests
+    without trial execution (review thread: publish the coupled limit)."""
+
+    @staticmethod
+    def _expected_max_distinct(dimension: int) -> int:
+        from math import comb
+
+        from jacobian.math.polytope._models import MAX_BOUNDEDNESS_COMBINATIONS
+
+        m = MAX_FACETS
+        while comb(m, dimension) > MAX_BOUNDEDNESS_COMBINATIONS:
+            m -= 1
+        return m
+
+    def test_formula_and_threshold_are_schema_visible(self) -> None:
+        from jacobian.math.polytope._models import MAX_BOUNDEDNESS_COMBINATIONS
+
+        schema = PolytopeVolumeRequest.model_json_schema()
+        description = schema["properties"]["halfspaces"]["description"]
+        assert f"C(m, d) <= {MAX_BOUNDEDNESS_COMBINATIONS}" in description
+        assert "duplicate rows" in description
+
+    def test_documented_per_dimension_counts_match_the_bound(self) -> None:
+        """Every published usable-count figure is exactly the largest m
+        with C(m, d) <= the enforced boundedness budget."""
+        schema = PolytopeVolumeRequest.model_json_schema()
+        description = schema["properties"]["halfspaces"]["description"]
+        for d in (5, 6):
+            expected = self._expected_max_distinct(d)
+            assert f"{expected} for d = {d}" in description
+        flat = self._expected_max_distinct(4)
+        assert flat == MAX_FACETS
+        assert f"{flat} distinct half-spaces for d <= 4" in description
+
+    def test_distinct_rows_still_exceed_the_deduplicated_budget(self) -> None:
+        """31 genuinely distinct six-dimensional rows satisfy every visible
+        field rule yet exceed C(31, 6) = 736281 > 700000 on distinct rows;
+        the typed budget error names the published ceiling."""
+        base = _six_simplex_rows()
+        rows = list(base)
+        for t in range(1, 25):
+            coeffs = [(0, 1)] * 6
+            coeffs[0] = (-1, 1)
+            coeffs[1] = (t, 1)
+            rows.append(_h(*coeffs, offset=(t + 1, 1)))
+        assert len(rows) == 31
+        with pytest.raises(ValueError, match=r"boundedness precheck exceeds"):
+            PolytopeVolumeRequest(halfspaces=tuple(rows))
+
+
+class TestHalfspaceDuplicateRowAdmission:
+    """Redundant H-representation rows must neither change the boundedness
+    decision nor inflate its combinatorial work estimate (review thread: a
+    six-dimensional simplex plus repeated redundant copies was rejected at
+    raw C(31, 6) although it derives only seven vertices)."""
+
+    def test_clean_six_simplex_volume_is_one_over_720(self) -> None:
+        result = _volume_via_halfspaces(_six_simplex_rows())
+        assert result.volume == CanonicalRational(num="1", den="720")
+        assert result.dimension == 6
+        assert result.representation == "halfspaces"
+
+    def test_simplex_plus_24_redundant_copies_is_admitted(self) -> None:
+        """Seven defining inequalities plus 24 redundant copies -- exact
+        duplicates and positive rescalings interleaved, 31 raw rows with
+        ``C(31, 6) = 736281`` above the old raw-row budget -- describe the
+        same simplex and must return its exact volume."""
+        base = _six_simplex_rows()
+        rows = list(base)
+        for j in range(24):
+            row = base[j % 7]
+            if j % 2 == 0:
+                rows.append(row)
+            else:
+                rows.append(_scaled_halfspace(row, 2))
+        assert len(rows) == 31
+        result = _volume_via_halfspaces(tuple(rows))
+        assert result.volume == CanonicalRational(num="1", den="720")
+        assert result.dimension == 6
+        assert result.representation == "halfspaces"
+
+    def test_deduplication_merges_positive_rescalings_only(self) -> None:
+        """Rows identical up to a positive factor collapse onto their first
+        occurrence; a different offset or a sign-flipped normal imposes a
+        different inequality and is kept."""
+        from jacobian.math.polytope._operations import _deduplicate_halfspaces
+
+        rows = (
+            _h((1, 2), (0, 1), offset=(3, 2)),  # x/2 <= 3/2, i.e. x <= 3
+            _h((2, 1), (0, 1), offset=(6, 1)),  # 2x <= 6, same inequality
+            _h((1, 1), (0, 1), offset=(4, 1)),  # x <= 4, other offset
+            _h((-1, 1), (0, 1), offset=(-3, 1)),  # -x <= -3, sign-flipped
+        )
+        unique = _deduplicate_halfspaces(rows)
+        assert [rows.index(row) for row in unique] == [0, 2, 3]
+
+    def test_sign_flip_does_not_merge_and_stays_bounded(self) -> None:
+        """The unit square survives duplicated and rescaled rows: merging
+        must never merge opposite orientations of one axis."""
+        unit_square = (
+            _h((1, 1), (0, 1), offset=(1, 1)),
+            _h((-1, 1), (0, 1), offset=(0, 1)),
+            _h((0, 1), (1, 1), offset=(1, 1)),
+            _h((0, 1), (-1, 1), offset=(0, 1)),
+        )
+        padded = (
+            *unit_square,
+            _scaled_halfspace(unit_square[0], 3),
+            unit_square[1],
+            unit_square[2],
+            _scaled_halfspace(unit_square[3], 5),
+        )
+        result = _volume_via_halfspaces(padded)
+        assert result.volume == CanonicalRational(num="1", den="1")
+        assert result.dimension == 2

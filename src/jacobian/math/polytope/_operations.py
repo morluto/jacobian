@@ -34,6 +34,7 @@ from sympy.matrices.exceptions import NonInvertibleMatrixError
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.polytope._models import (
+    MAX_BOUNDEDNESS_COMBINATIONS,
     MAX_HULL_SUBFACETS,
     Halfspace,
     PolytopeVolumeRequest,
@@ -106,6 +107,48 @@ def _facets_from_points(
     return out
 
 
+def _deduplicate_halfspaces(
+    halfspaces: tuple[Halfspace, ...],
+) -> tuple[Halfspace, ...]:
+    """Drop rows that repeat an earlier half-space up to a positive scale.
+
+    Two inequalities ``<a, x> <= b`` and ``<a', x> <= b'`` impose the
+    identical constraint exactly when ``(a', b') = lambda * (a, b)`` for
+    some ``lambda > 0``. Each row is normalized to that primitive form --
+    coefficients cleared to coprime integers by the positive factor
+    ``lcm(denominators)/gcd(numerators)`` with the sign kept -- and the
+    offset scaled by the same factor is compared as an exact rational, so
+    repeated or positively rescaled copies collapse onto their first
+    occurrence without reordering the remaining rows. Sign-flipped rows
+    impose a different inequality and are never merged.
+    """
+
+    seen: set[tuple[tuple[int, ...], tuple[int, int]]] = set()
+    unique: list[Halfspace] = []
+    for hs in halfspaces:
+        fracs = [Fraction(*c.as_integer_ratio()) for c in hs.coefficients]
+        offset = Fraction(*hs.offset.as_integer_ratio())
+        lcm = 1
+        for frac in fracs:
+            lcm = lcm * frac.denominator // math.gcd(lcm, frac.denominator)
+        ints = [int(frac * lcm) for frac in fracs]
+        g = 0
+        for value in ints:
+            g = math.gcd(g, abs(value))
+        if g == 0:
+            # All-zero normals cannot occur: request validation rejects
+            # them before admission; keep the row untouched as a fallback.
+            g = 1
+        key = (
+            tuple(value // g for value in ints),
+            ((offset * lcm / g).numerator, (offset * lcm / g).denominator),
+        )
+        if key not in seen:
+            seen.add(key)
+            unique.append(hs)
+    return tuple(unique)
+
+
 def _is_bounded_h(halfspaces: tuple[Halfspace, ...]) -> bool:
     """Decide whether ``{x : A x <= b}`` is bounded.
 
@@ -114,9 +157,13 @@ def _is_bounded_h(halfspaces: tuple[Halfspace, ...]) -> bool:
     the convex hull of the rows of ``A``. That interior test is an exact
     facet enumeration of the row normals.  The rows must positively span
     ``R^d``; equivalently their convex hull must be full-dimensional.
+    Redundant rows -- exact copies or positive rescalings of an earlier
+    half-space -- are removed first, so duplicated constraints neither
+    change the decision nor inflate the combinatorial work estimate.
     """
 
     dim = len(halfspaces[0].coefficients)
+    halfspaces = _deduplicate_halfspaces(halfspaces)
     if dim == 1:
         positive = any(
             Rational(*hs.coefficients[0].as_integer_ratio()) > 0 for hs in halfspaces
@@ -141,14 +188,18 @@ def _is_bounded_h(halfspaces: tuple[Halfspace, ...]) -> bool:
             return False
     except Exception:
         return False
-    # Guard the exact facet enumeration of the row normals.
+    # Guard the exact facet enumeration of the row normals: the budget
+    # applies to the distinct rows after duplicate removal, exactly as the
+    # enumeration below counts its own work.
     try:
         combo_count = math.comb(len(normals), dim)
     except ValueError:
         combo_count = 10**18
-    if combo_count > 700_000:
+    if combo_count > MAX_BOUNDEDNESS_COMBINATIONS:
         raise ValueError(
-            "H-representation boundedness check exceeds the 700k-combination budget"
+            "H-representation boundedness precheck exceeds the "
+            f"{MAX_BOUNDEDNESS_COMBINATIONS}-combination budget "
+            f"({combo_count} > {MAX_BOUNDEDNESS_COMBINATIONS})"
         )
     hull_facets = _facets_from_points(normals, dim)
     if not hull_facets:
@@ -554,9 +605,13 @@ def _vertices_from_h_representation(
     ``<a_i, x> = b_i``), provided it satisfies every remaining
     half-space. Solving every ``C(m, dim)`` subsystem of ``dim``
     half-spaces is a bounded, exact vertex enumeration for the small
-    dimensions this operation admits.
+    dimensions this operation admits; duplicate rows (identical up to a
+    common positive factor) are removed first because they only add
+    singular subsystems, so the enumeration counts each distinct
+    constraint once.
     """
     dim = len(halfspaces[0].coefficients)
+    halfspaces = _deduplicate_halfspaces(halfspaces)
     rows = _halfspace_rows(halfspaces)
     n = len(rows)
     # Guard against combinatorial blow-up before materialising combinations.

@@ -38,6 +38,20 @@ lives here so the published request-schema descriptions quote the same
 constant the admission check enforces.
 """
 
+MAX_BOUNDEDNESS_COMBINATIONS = 700_000
+"""Ceiling on the row combinations the H-representation boundedness
+precheck may consider.
+
+Deciding boundedness exactly enumerates the facets of the convex hull of
+the row normals, which considers ``C(m, d)`` d-subsets of the ``m``
+distinct half-spaces in ambient dimension ``d``. Duplicate rows
+(identical up to a common positive factor) are removed first, so
+redundant copies neither change the decision nor inflate the estimate;
+requests with ``C(m, d) > 700_000`` distinct rows are rejected as budget
+exhaustion. The bound lives here so the published request-schema
+description quotes the same constant the admission check enforces.
+"""
+
 COORDINATE_DIGITS = 32_768
 """Per-component digit bound forwarded to the canonical rational validator."""
 
@@ -267,7 +281,9 @@ class PolytopeVolumeRequest(StrictModel):
     enumeration considers ``C(n, d)`` d-subsets of ``n`` distinct vertices
     in dimension ``d``, and requests with ``C(n, d) > 200000`` are rejected.
     The same limit applies to the vertex set derived from an
-    H-representation.
+    H-representation, whose own rows are additionally bounded by
+    ``C(m, d) <= 700000`` on the distinct half-spaces (see the field
+    descriptions for the exact published rules).
     """
 
     vertices: tuple[Vertex, ...] | None = Field(
@@ -294,7 +310,16 @@ class PolytopeVolumeRequest(StrictModel):
             "H-representation: the half-spaces ``<a_i, x> <= b_i``. "
             "Mutually exclusive with ``vertices``. Each half-space must "
             "have a nonzero normal: a row whose coefficients are all zero "
-            "is rejected."
+            "is rejected. Coupled hull-work bound: duplicate rows "
+            "(identical up to a common positive factor) are removed, then "
+            f"admission requires C(m, d) <= {MAX_BOUNDEDNESS_COMBINATIONS} "
+            "on the m distinct half-spaces in ambient dimension d (the "
+            "boundedness precheck exactly enumerates the hull of the row "
+            "normals); within the 64-row maximum this admits 64 distinct "
+            "half-spaces for d <= 4, 40 for d = 5, and 30 for d = 6. The "
+            f"derived vertex set is then subject to the C(n, d) <= "
+            f"{MAX_HULL_SUBFACETS} hull-work bound published on the "
+            "vertices field."
         ),
     )
     dimension_bound: int = Field(
@@ -438,6 +463,7 @@ class PolytopeVolumeResult(StrictModel):
 
 
 __all__ = [
+    "MAX_BOUNDEDNESS_COMBINATIONS",
     "MAX_DIMENSION",
     "MAX_FACETS",
     "MAX_HULL_SUBFACETS",

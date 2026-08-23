@@ -37,6 +37,7 @@ ROOT_MATH_DOMAINS = (
     "matrices",
     "numerical_semigroups",
     "petri_nets",
+    "polynomial_support_geometry",
     "polynomials",
     "prime_field_linear_algebra",
     "probability",

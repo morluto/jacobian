@@ -440,10 +440,21 @@ class ConvexPolygonTriangulationResult(StrictModel):
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
 
+_LABEL_PATTERN = r"^[\x20\x21\x23-\x5b\x5d-\x7e]+$"
+
+
 class LabelledPoint2D(StrictModel):
     """A labelled rational point in the plane."""
 
-    label: str = Field(min_length=1, max_length=64)
+    label: str = Field(
+        min_length=1,
+        max_length=64,
+        pattern=_LABEL_PATTERN,
+        description=(
+            "Unique point label of 1-64 printable ASCII characters "
+            "(0x20-0x7e) excluding quote and backslash"
+        ),
+    )
     point: RationalPoint2D
 
     @model_validator(mode="after")
@@ -634,7 +645,15 @@ def _require_circumradius_source_replay(
 class ForbiddenLabelledPoint(StrictModel):
     """A labelled rational point in the affine plane."""
 
-    label: str = Field(min_length=1, max_length=64)
+    label: str = Field(
+        min_length=1,
+        max_length=64,
+        pattern=_LABEL_PATTERN,
+        description=(
+            "Unique point label of 1-64 printable ASCII characters "
+            "(0x20-0x7e) excluding quote and backslash"
+        ),
+    )
     point: RationalPoint2D
 
     @model_validator(mode="after")

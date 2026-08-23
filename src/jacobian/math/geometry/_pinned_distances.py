@@ -213,7 +213,7 @@ PINNED_DISTANCE_OPERATIONS = (
     geometry_operation(
         "geometry.points.compute.pinned_distances",
         "Compute pinned distances to pair-spanned lines",
-        "Given a bounded labelled rational point configuration and a rational "
+        "Given a bounded rational point configuration and a rational "
         "anchor, return the complete exact squared-distance profile from the "
         "anchor to every distinct line spanned by point pairs, retaining "
         "every source pair that generates each line.",

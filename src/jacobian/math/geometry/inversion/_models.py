@@ -13,25 +13,12 @@ from jacobian.math.geometry._models import RationalPoint2D as GeometryPoint
 # Inversion q = c + (s / ||p-c||^2) * (p - c) grows rational components by a
 # derivable factor. With every input numerator and denominator bounded at D
 # digits: a coordinate difference has <= 2D+1 digits over 2D; the squared
-# norm <= 8D+3 over 8D; the scale <= 9A digits over 9A+3; the scaled
-# displacement <= 11A+2 over 11A+3; and each output component stays within
-# 12D+4 digits. Requiring 12*2730+4 = 32,764 <= 32,768 keeps every accepted
-# inversion inside CanonicalRational's canonical limit, so admission here
-# cannot turn into a result-construction failure.
-# Inversion q = c + (s / ||p-c||^2) * (p - c) grows rational components by a
-# derivable factor. With every input numerator and denominator bounded at D
-# digits: a coordinate difference has <= 2D+1 digits over 2D; the squared
 # norm <= 8D+3 over 8D; the scale <= 9D digits over 9D+3; the scaled
 # displacement <= 11D+2 over 11D+3; and each output component stays within
 # 12D+4 digits. Requiring 12*2730+4 = 32,764 <= 32,768 keeps every accepted
 # inversion inside CanonicalRational's canonical limit, so admission here
 # cannot turn into a result-construction failure.
 MAX_INVERSION_INPUT_DIGITS = 2_730
-
-
-class RationalPoint2D(StrictModel):
-    x: CanonicalRational
-    y: CanonicalRational
 
 
 class CircleInversionRequest(StrictModel):
@@ -110,5 +97,4 @@ class CircleInversionResult(CircleInversionRequest):
 __all__ = [
     "CircleInversionRequest",
     "CircleInversionResult",
-    "RationalPoint2D",
 ]

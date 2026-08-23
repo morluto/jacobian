@@ -84,18 +84,47 @@ class HenselRootRequest(StrictModel):
 
 
 class HenselRootResult(StrictModel):
-    """A p-adic root approximation lifted via Hensel's lemma."""
+    """A p-adic root approximation lifted via Hensel's lemma.
 
+    Retains the source polynomial and the original residue so the lift can
+    be replayed: the residue is a simple root of f mod p, the lifted root
+    reduces to it mod p, and it vanishes modulo p^precision.
+    """
+
+    polynomial: IntegerPolynomial
     lifted_root: int = Field(ge=0)
     prime: int = Field(ge=2, le=10_000)
+    root_mod_p: int = Field(ge=0)
     precision: int = Field(ge=1, le=64)
     is_simple_root: bool
 
     @model_validator(mode="after")
     def require_valid_lifted_root(self) -> Self:
-        modulus = self.prime**self.precision
-        if self.lifted_root < 0 or self.lifted_root >= modulus:
+        p = self.prime
+        modulus = p**self.precision
+        _require_prime(p)
+        if self.root_mod_p >= p:
+            raise ValueError("root_mod_p must be in 0..p-1")
+        if self.lifted_root >= modulus:
             raise ValueError("lifted_root must be in 0..p^k - 1")
+        coeffs = self.polynomial.coefficients
+        # Replay the defining invariants against the retained source data so
+        # a serialized result cannot detach its lift from its polynomial.
+        if _poly_eval_mod_p(coeffs, self.root_mod_p, p) != 0:
+            raise ValueError("root_mod_p must satisfy f(root_mod_p) = 0 mod p")
+        if _poly_deriv_mod_p(coeffs, self.root_mod_p, p) % p == 0:
+            raise ValueError(
+                "the lifted residue must be simple: "
+                "f'(root_mod_p) must be nonzero mod p"
+            )
+        if self.lifted_root % p != self.root_mod_p:
+            raise ValueError("lifted_root must reduce to root_mod_p modulo the prime")
+        if _poly_eval_mod_p(coeffs, self.lifted_root, modulus) != 0:
+            raise ValueError(
+                "lifted_root must satisfy f(lifted_root) = 0 modulo p^precision"
+            )
+        if not self.is_simple_root:
+            raise ValueError("only simple roots are lifted, so the flag must hold")
         return self
 
 

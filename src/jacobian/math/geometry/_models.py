@@ -694,7 +694,12 @@ class ConcyclicQuadruple(StrictModel):
 def _cleared_configuration_points(
     points: tuple[ForbiddenLabelledPoint, ...],
 ) -> tuple[tuple[int, int, int], ...]:
-    """Clear denominators: exact zero tests are unchanged by row scaling."""
+    """Homogeneous integer coordinates ``(X, Y, D)`` with point ``(X/D, Y/D)``.
+
+    Each row carries its own denominator so collinearity and concyclicity
+    stay homogeneous determinants whose zeroness matches the rational
+    coordinates exactly.
+    """
     cleared = []
     for item in points:
         fx = item.point.x.as_fraction()
@@ -710,8 +715,16 @@ def _cleared_configuration_points(
     return tuple(cleared)
 
 
-def _int_collinear(a: tuple[int, int], b: tuple[int, int], c: tuple[int, int]) -> bool:
-    return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]) == 0
+def _homogeneous_collinear(
+    a: tuple[int, int, int],
+    b: tuple[int, int, int],
+    c: tuple[int, int, int],
+) -> bool:
+    return (
+        a[0] * (b[1] * c[2] - b[2] * c[1])
+        - a[1] * (b[0] * c[2] - b[2] * c[0])
+        + a[2] * (b[0] * c[1] - b[1] * c[0])
+    ) == 0
 
 
 def _int_det3(m: list[list[int]]) -> int:
@@ -732,35 +745,34 @@ def _int_det4(m: list[list[int]]) -> int:
 
 
 def _scan_collinear_triple(
-    xy: list[tuple[int, int]],
+    cleared: tuple[tuple[int, int, int], ...],
 ) -> tuple[CollinearTriple | None, int]:
     """Mirror the operation's ascending triple scan; report work performed."""
     from itertools import combinations
 
     examined = 0
-    for i, j, k in combinations(range(len(xy)), 3):
+    for i, j, k in combinations(range(len(cleared)), 3):
         examined += 1
-        if _int_collinear(xy[i], xy[j], xy[k]):
+        if _homogeneous_collinear(cleared[i], cleared[j], cleared[k]):
             return CollinearTriple(first=i, second=j, third=k), examined
     return None, examined
 
 
 def _scan_concyclic_quadruple(
     cleared: tuple[tuple[int, int, int], ...],
-    xy: list[tuple[int, int]],
 ) -> tuple[ConcyclicQuadruple | None, int]:
     """Mirror the operation's ascending quadruple scan of nondegenerate circles."""
     from itertools import combinations
 
     examined = 0
-    for i, j, k, ell in combinations(range(len(xy)), 4):
+    for i, j, k, ell in combinations(range(len(cleared)), 4):
         examined += 1
         rows = [
             [x * x + y * y, x * d, y * d, d * d]
             for x, y, d in (cleared[index] for index in (i, j, k, ell))
         ]
         if _int_det4(rows) == 0 and not any(
-            _int_collinear(xy[a], xy[b], xy[c])
+            _homogeneous_collinear(cleared[a], cleared[b], cleared[c])
             for a, b, c in combinations((i, j, k, ell), 3)
         ):
             return ConcyclicQuadruple(first=i, second=j, third=k, fourth=ell), examined
@@ -809,8 +821,7 @@ class ForbiddenPatternsResult(StrictModel):
         # and quadruple, each witness must be geometrically true, and the
         # checked counts must match the exact scan prefix that produced them.
         cleared = _cleared_configuration_points(points)
-        xy = [(x, y) for x, y, _ in cleared]
-        first_collinear, examined_triples = _scan_collinear_triple(xy)
+        first_collinear, examined_triples = _scan_collinear_triple(cleared)
         if self.has_collinear_triple != (first_collinear is not None):
             raise ValueError(
                 "collinear decision does not match the retained configuration"
@@ -824,7 +835,7 @@ class ForbiddenPatternsResult(StrictModel):
             raise ValueError(
                 "collinear witness must be the first collinear triple in enumeration order"
             )
-        first_concyclic, examined_quadruples = _scan_concyclic_quadruple(cleared, xy)
+        first_concyclic, examined_quadruples = _scan_concyclic_quadruple(cleared)
         if self.has_concyclic_quadruple != (first_concyclic is not None):
             raise ValueError(
                 "concyclic decision does not match the retained configuration"

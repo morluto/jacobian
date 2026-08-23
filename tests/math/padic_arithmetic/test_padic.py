@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from jacobian.math.padic_arithmetic._models import (
     HenselRootRequest,
+    HenselRootResult,
     IntegerPolynomial,
     PAdicRootsRequest,
 )
@@ -100,6 +101,46 @@ class TestPAdicRoots:
             HenselRootRequest(
                 polynomial=poly, prime=4, root_mod_p=1, precision=2
             )
+
+    def test_result_binds_to_source_polynomial(self):
+        """The exact result retains polynomial and residue and replays them:
+        genuine lifts round-trip through serialization, while forged lifts,
+        wrong residues, detached polynomials, and a False simple flag are
+        rejected at validation."""
+        poly = IntegerPolynomial(coefficients=(1, 0, 1))  # x^2 + 1
+        result = hensel_lift_root(
+            HenselRootRequest(
+                polynomial=poly, prime=5, root_mod_p=2, precision=4
+            )
+        )
+        assert result.polynomial == poly
+        assert result.root_mod_p == 2
+        assert result.lifted_root % 5 == 2
+
+        roundtrip = HenselRootResult.model_validate(result.model_dump())
+        assert roundtrip == result
+
+        detached = result.model_dump()
+        detached["polynomial"]["coefficients"] = [1, 0, 2]
+        with pytest.raises(ValidationError, match=r"f\(root_mod_p\) = 0"):
+            HenselRootResult.model_validate(detached)
+
+        forged = result.model_dump()
+        forged["lifted_root"] = (forged["lifted_root"] + 1) % 625
+        with pytest.raises(ValidationError):
+            HenselRootResult.model_validate(forged)
+
+        wrong_residue = result.model_dump()
+        # residue 3 is itself a simple root of x^2+1 mod 5, so only the
+        # congruence of the lift to its residue can reject this tampering
+        wrong_residue["root_mod_p"] = 3
+        with pytest.raises(ValidationError, match="reduce to root_mod_p"):
+            HenselRootResult.model_validate(wrong_residue)
+
+        not_simple = result.model_dump()
+        not_simple["is_simple_root"] = False
+        with pytest.raises(ValidationError, match="simple"):
+            HenselRootResult.model_validate(not_simple)
 
     def test_multiple_root_lift_rejected(self):
         """f=x^2+5, p=5: r=0 is a multiple root; lifting is refused."""

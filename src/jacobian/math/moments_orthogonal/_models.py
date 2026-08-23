@@ -133,7 +133,13 @@ class RecurrenceCoefficientsRequest(StrictModel):
             recurrence_coefficients,
         )
 
-        recurrence_coefficients(_to_fractions(self.moments))
+        result = recurrence_coefficients(_to_fractions(self.moments))
+        # Positivity alone does not bound output size: coefficient
+        # denominators multiply unrelated moment denominators across the
+        # Gram-Schmidt recurrence, so admit exactly the sequences whose
+        # exact coefficients are representable as canonical rationals.
+        for value in (*result.alpha, *result.beta):
+            CanonicalRational.from_fraction(value)
         return self
 
 

@@ -285,6 +285,30 @@ class TestWireAdapters:
         result = compute_christoffel_darboux(request)
         assert isinstance(result, ChristoffelDarbouxResult)
 
+    def test_recurrence_coefficient_height_rejected(self) -> None:
+        """Nine positive-definite moments with 3601-digit denominators grow
+        ~97,000-digit recurrence coefficients in the exact Gram-Schmidt
+        kernel; the request must be rejected at admission instead of raising
+        during result conversion."""
+
+        def moment(k: int) -> CanonicalRational:
+            q = 10**3600 + 2 * k + 1
+            value = Fraction(1, k + 1) + Fraction(1, q)
+            return CanonicalRational.from_fraction(value)
+
+        with pytest.raises(ValidationError):
+            RecurrenceCoefficientsRequest(moments=tuple(moment(k) for k in range(9)))
+
+    def test_recurrence_representable_moments_accepted(self) -> None:
+        """A positive-definite sequence whose exact coefficients stay inside
+        the canonical limit is admitted and computes end-to-end."""
+        request = RecurrenceCoefficientsRequest(
+            moments=tuple(_cr(1, k) for k in range(1, 8))
+        )
+        result = compute_recurrence_coefficients(request)
+        assert isinstance(result, RecurrenceCoefficientsResult)
+        assert len(result.alpha) == 3
+
     def test_gaussian_quadrature_wire(self) -> None:
         request = GaussianQuadratureRequest(
             alpha=(_cr(1, 2), _cr(1, 2), _cr(1, 2)),

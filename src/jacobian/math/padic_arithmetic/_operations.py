@@ -75,8 +75,10 @@ def hensel_lift_root(request: HenselRootRequest) -> HenselRootResult:
         coeffs, request.prime, request.root_mod_p, request.precision
     )
     return HenselRootResult(
+        polynomial=request.polynomial,
         lifted_root=lifted,
         prime=request.prime,
+        root_mod_p=request.root_mod_p,
         precision=request.precision,
         is_simple_root=True,
     )

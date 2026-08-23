@@ -17,14 +17,12 @@ TOOLS: MathTools = (
         title="Count induced vertex-subset copies of a graph pattern",
         description=(
             "Count host vertex subsets whose induced simple graph is isomorphic "
-            "to a supplied pattern, once per subset rather than per embedding. "
-            "Admission preflights C(|V(host)|, |V(pattern)|), encoded source and "
-            "retained-result bytes, C(|V(pattern)|, 2) direct host-edge probes "
-            "and explicit local-graph construction per subset, and worst-case "
-            "NetworkX VF2++ partial-map work for every subset. It admits at most "
-            "5,000 subsets per pass and 64,000,000 work units "
-            "across counting and source-bound result replay; these are "
-            "conservative current-backend limits."
+            "to a pattern, once per subset, not per embedding. Admission preflights "
+            "C(|V(host)|, |V(pattern)|), exact source/result bytes, "
+            "C(|V(pattern)|, 2) direct host-edge probes, explicit local-graph "
+            "construction, and a worst-case NetworkX VF2++ partial-map bound. "
+            "Limits are 5,000 subsets per pass and 64,000,000 work units across "
+            "counting and source-bound replay; this is a conservative backend envelope."
         ),
         request_type=InducedVertexSubsetPatternCountRequest,
         result_type=InducedVertexSubsetPatternCountResult,

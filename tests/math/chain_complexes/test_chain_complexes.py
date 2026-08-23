@@ -269,3 +269,59 @@ class TestMappingConeValidationRegression:
                 target=target,
                 chain_map=((MatrixEntry(row=0, col=0, value="1"),),),
             )
+
+
+class TestTriageRegressions:
+    """Regression tests for the PR 2246 triage fixes."""
+
+    def test_bottom_degree_chain_map_equation_checked(self):
+        # Source concentrated in degree 1 (zero source differential), target
+        # with identity d_1: D_1 -> D_0, identity f_1: the bottom equation
+        # d^D_1 * f_1 = 0 fails, so the map is not a chain map.
+        source = ChainComplex(
+            prime=2, min_degree=1, max_degree=1, dimensions=(1,), differentials=()
+        )
+        target = ChainComplex(
+            prime=2,
+            min_degree=0,
+            max_degree=1,
+            dimensions=(1, 1),
+            differentials=((MatrixEntry(row=0, col=0, value="1"),),),
+        )
+        with pytest.raises(ValidationError, match="commute at degree 1"):
+            MappingConeRequest(
+                source=source,
+                target=target,
+                chain_map=((MatrixEntry(row=0, col=0, value="1"),),),
+            )
+
+    def test_homology_result_rejects_forged_groups(self):
+        cx = ChainComplex(
+            prime=2,
+            min_degree=0,
+            max_degree=1,
+            dimensions=(1, 2),
+            differentials=(
+                (
+                    MatrixEntry(row=0, col=0, value="1"),
+                    MatrixEntry(row=0, col=1, value="1"),
+                ),
+            ),
+        )
+        result = compute_homology(HomologyRequest(complex=cx))
+        forged = result.model_copy(
+            update={
+                "groups": (
+                    type(result.groups[0])(
+                        degree=0,
+                        betti=1,
+                        dimension=0,
+                        boundary_rank=0,
+                        cycle_rank=0,
+                    ),
+                    result.groups[1],
+                )
+            }
+        )
+        with pytest.raises(ValidationError, match="exact homology"):
+            HomologyResult.model_validate(forged.model_dump())

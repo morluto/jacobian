@@ -292,7 +292,7 @@ class TestGaussianQuadrature:
         derivation rejects such data instead of returning a degenerate rule."""
         huge = Fraction(10**300)
         tiny = Fraction(1, 10**300)
-        with pytest.raises(ValueError, match="underflows"):
+        with pytest.raises(ValueError, match="underflow"):
             gaussian_quadrature((Fraction(0), huge), (_frac(1, 1), tiny))
 
 
@@ -356,6 +356,29 @@ class TestWireAdapters:
         result = compute_gaussian_quadrature(request)
         assert isinstance(result, GaussianQuadratureResult)
         assert len(result.nodes) == 3
+
+    def test_ill_conditioned_quadrature_data_rejected_at_admission(self) -> None:
+        """Individually bounded but relatively ill-scaled recurrence data
+        never reach execution: the wire request refuses data whose derived
+        masses would underflow float64, so every accepted request reaches a
+        GaussianQuadratureResult instead of an execution failure."""
+        huge = _cr_from({"num": "1" + "0" * 300, "den": "1"})
+        tiny = _cr_from({"num": "1", "den": "1" + "0" * 300})
+        with pytest.raises(ValidationError, match="ill-conditioned at admission"):
+            GaussianQuadratureRequest(
+                alpha=(_cr(0, 1), huge),
+                beta=(_cr(1, 1), tiny),
+            )
+
+    def test_well_scaled_quadrature_data_is_admitted(self) -> None:
+        """Admission stays open for coefficients whose derivation yields
+        strictly positive finite masses."""
+        request = GaussianQuadratureRequest(
+            alpha=(_cr(0, 1), _cr(1, 1)),
+            beta=(_cr(1, 1), _cr(1, 4)),
+        )
+        result = compute_gaussian_quadrature(request)
+        assert all(weight.as_fraction() > 0 for weight in result.weights)
 
     def test_hankel_validation_error(self) -> None:
         with pytest.raises(ValidationError):

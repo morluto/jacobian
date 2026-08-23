@@ -340,18 +340,14 @@ def _require_quadrature_coefficients(
             )
 
 
-def gaussian_quadrature(
+def _derive_quadrature_floats(
     alpha: Sequence[Fraction], beta: Sequence[Fraction]
-) -> GaussianQuadrature:
-    """Compute approximate Gaussian quadrature nodes and weights via the Golub-Welsch algorithm.
+) -> tuple[tuple[float, ...], tuple[float, ...]]:
+    """Run the bounded Golub-Welsch derivation in float64.
 
-    The nodes are the eigenvalues of the symmetric tridiagonal Jacobi matrix and
-    the weights are ``mu_0 * v_{0,i}^2`` where ``v_{0,i}`` is the first component of
-    the normalized eigenvector for node ``i``. Because the nodes are roots of the
-    orthogonal polynomial (generically irrational), the result is numerical
-    (IEEE double) and returned as dyadic rational approximations with an
-    explicit ``is_approximate`` / ``FLOAT64`` precision contract. Downstream
-    exact arithmetic must not treat these as canonical exact nodes.
+    Returns the exact dyadic images of the derived nodes and masses, or
+    raises ``ValueError`` when float64 cannot represent a finite node or a
+    strictly positive mass for these recurrence data.
     """
     import math
 
@@ -380,14 +376,31 @@ def gaussian_quadrature(
     weight_values = tuple(float(value) for value in weights)
     if not all(math.isfinite(value) for value in node_values):
         raise ValueError(
-            "quadrature derivation produced nodes outside the finite "
-            "float64 range for these recurrence data"
+            "the derived nodes leave the finite float64 range for these "
+            "recurrence data"
         )
     if any(not math.isfinite(value) or value <= 0.0 for value in weight_values):
         raise ValueError(
-            "quadrature derivation underflows the positive float64 mass "
-            "range for these recurrence data; tighten the coefficient scale"
+            "the derived masses underflow the positive float64 range for "
+            "these recurrence data"
         )
+    return node_values, weight_values
+
+
+def gaussian_quadrature(
+    alpha: Sequence[Fraction], beta: Sequence[Fraction]
+) -> GaussianQuadrature:
+    """Compute approximate Gaussian quadrature nodes and weights via the Golub-Welsch algorithm.
+
+    The nodes are the eigenvalues of the symmetric tridiagonal Jacobi matrix and
+    the weights are ``mu_0 * v_{0,i}^2`` where ``v_{0,i}`` is the first component of
+    the normalized eigenvector for node ``i``. Because the nodes are roots of the
+    orthogonal polynomial (generically irrational), the result is numerical
+    (IEEE double) and returned as dyadic rational approximations with an explicit
+    ``is_approximate`` / ``FLOAT64`` precision contract. Downstream
+    exact arithmetic must not treat these as canonical exact nodes.
+    """
+    node_values, weight_values = _derive_quadrature_floats(alpha, beta)
     # Each double is carried as its exact dyadic rational image so the result
     # stays canonical and reconstructible without JSON floating points.
     return GaussianQuadrature(

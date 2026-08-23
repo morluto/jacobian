@@ -294,6 +294,14 @@ class ChristoffelDarbouxResult(ChristoffelDarbouxRequest):
 # ---------------------------------------------------------------------------
 
 
+def _require_quadrature_shape(alpha_length: int, beta_length: int) -> None:
+    """Reject coefficient list shapes outside the bounded quadrature domain."""
+    if not 1 <= alpha_length <= MAX_QUADRATURE_POINTS:
+        raise ValueError("alpha must contain between 1 and 16 entries")
+    if beta_length != alpha_length and beta_length != alpha_length + 1:
+        raise ValueError("beta must have length len(alpha) or len(alpha)+1")
+
+
 class GaussianQuadratureRequest(StrictModel):
     alpha: tuple[CanonicalRational, ...] = Field(min_length=1)
     model_config = ConfigDict(extra="allow")
@@ -301,10 +309,7 @@ class GaussianQuadratureRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_coefficients(self) -> Self:
-        if not 1 <= len(self.alpha) <= MAX_QUADRATURE_POINTS:
-            raise ValueError("alpha must contain between 1 and 16 entries")
-        if len(self.beta) != len(self.alpha) and len(self.beta) != len(self.alpha) + 1:
-            raise ValueError("beta must have length len(alpha) or len(alpha)+1")
+        _require_quadrature_shape(len(self.alpha), len(self.beta))
         beta_zero = self.beta[0].as_fraction()
         if beta_zero <= 0:
             raise ValueError(
@@ -314,9 +319,6 @@ class GaussianQuadratureRequest(StrictModel):
         # finite-float range would underflow every mass to zero.
         if abs(beta_zero) < MIN_QUADRATURE_SUBDIAGONAL:
             raise ValueError("beta_0 falls below the quadrature underflow bound")
-        # Subdiagonal entries feed math.sqrt after float conversion; they must
-        # be positive and safely inside the finite IEEE-double range, and the
-        # diagonal and mu_0 must convert to finite doubles without overflow.
         for index in range(1, min(len(self.alpha), len(self.beta))):
             sub = self.beta[index].as_fraction()
             if sub <= 0:
@@ -335,6 +337,24 @@ class GaussianQuadratureRequest(StrictModel):
                 raise ValueError(
                     "quadrature coefficients exceed the finite-float magnitude bound"
                 )
+        # Conditioning admission: independently bounded coefficients can still
+        # be relatively ill-scaled so that the Golub-Welsch masses underflow
+        # float64. Run the exact same bounded derivation here and refuse such
+        # data before acceptance, so every admitted request reaches a
+        # GaussianQuadratureResult instead of an execution failure.
+        from jacobian.math.moments_orthogonal.operations import (
+            _derive_quadrature_floats,
+        )
+
+        try:
+            _derive_quadrature_floats(
+                _to_fractions(self.alpha), _to_fractions(self.beta)
+            )
+        except ValueError as error:
+            raise ValueError(
+                "quadrature recurrence data are ill-conditioned at "
+                f"admission: {error}"
+            ) from None
         return self
 
 

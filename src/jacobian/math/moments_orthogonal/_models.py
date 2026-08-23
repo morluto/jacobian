@@ -157,18 +157,20 @@ class RecurrenceRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_quasi_definite_family(self) -> Self:
-        """The kernel divides by squared norms; a non-quasi-definite family
-        would leak ZeroDivisionError instead of a typed result. Admission
-        then replays the exact derivation so every emitted ratio is
-        height-checked here — a family such as h_0 = 10^-20000 with
-        h_1 = 10^20000 (beta_1 = 10^40000) fails parsing, not execution.
+        """The kernel divides by every squared norm except the terminal one
+        (``beta_k = h_k / h_{k-1}`` for k >= 1); a vanishing interior norm
+        would leak ZeroDivisionError instead of a typed result, while a
+        vanishing terminal norm leaves ``alpha`` and every ``beta`` exactly
+        defined. Admission then replays the exact derivation so every
+        emitted ratio is height-checked here — a family such as
+        h_0 = 10^-20000 with h_1 = 10^20000 (beta_1 = 10^40000) fails
+        parsing, not execution.
         """
-        if not self.family.is_quasi_definite or any(
-            term.squared_norm.as_fraction() == 0 for term in self.family.polynomials
-        ):
+        interior = self.family.polynomials[:-1]
+        if any(term.squared_norm.as_fraction() == 0 for term in interior):
             raise ValueError(
-                "recurrence coefficients require a quasi-definite family "
-                "with nonzero squared norms"
+                "recurrence coefficients require every non-terminal "
+                "squared norm to be nonzero"
             )
         from jacobian.math.moments_orthogonal.operations import compute_recurrence
 

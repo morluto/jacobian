@@ -357,6 +357,25 @@ def compute_orthogonal_polynomials(
     )
 
 
+def _require_quasi_definite_family(family: OrthogonalPolynomialFamily) -> None:
+    """Recurrence ratios divide by every squared norm except the terminal
+    one: ``beta_k = h_k / h_{k-1}`` for k >= 1 uses p_0..p_{n-2} as
+    denominators, and ``alpha`` reads adjacent polynomial coefficients. A
+    vanishing terminal norm therefore leaves the recurrence exactly defined,
+    while any interior zero norm would leak a division failure from execution.
+
+    Degenerate canonical families remain authorable values for composition;
+    each consuming operation rejects them at admission. This guard keeps the
+    native path on the same admitted domain as ``RecurrenceRequest``.
+    """
+    polynomials = family.polynomials[:-1]
+    if any(term.squared_norm.as_fraction() == 0 for term in polynomials):
+        raise ValueError(
+            "recurrence coefficients require every non-terminal squared "
+            "norm to be nonzero"
+        )
+
+
 def recurrence_coefficients_from_family(
     family: OrthogonalPolynomialFamily,
 ) -> ThreeTermRecurrence:
@@ -370,6 +389,7 @@ def recurrence_coefficients_from_family(
     need ``p_n`` or additional moments - is omitted.  ``beta[0]`` is an
     unused placeholder; ``beta[k] = <p_k,p_k>/<p_{k-1},p_{k-1}>`` for k >= 1.
     """
+    _require_quasi_definite_family(family)
     polys = family.polynomials
     n = len(polys)
 

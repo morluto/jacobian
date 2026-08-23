@@ -113,6 +113,10 @@ applicable` with a reason; it must not be omitted.
 
 - Semantic mathematical domain and postcondition:
 - Canonical public value type:
+- Source representation: materialized, succinct, generated, or oracle-backed:
+- Expansion performed by the kernel and its pre-execution bound:
+- Representation-sensitive complexity, including any compact representation
+  that changes the algorithmic problem:
 - Admitted request envelope and its controlling quantities:
 - Producer/consumer closure, or why not applicable:
 - Degenerate inputs:
@@ -308,6 +312,35 @@ too large. If a bound is conservative, name the quantity it bounds, state why
 it is safe for the algorithm, and test both the rejected adversarial case and a
 useful case near the boundary. Do not use a post-hoc output-term cap,
 truncation, sentinel, or host exception as a hidden computational budget.
+
+### Representation-sensitive expansion
+
+Representation is part of the execution envelope, even when two encodings
+denote the same kind of mathematical object. Complete the following review
+before selecting the kernel or request bounds:
+
+- Is the input materialized, succinct, generated, or oracle-backed?
+- What expansion does the kernel perform?
+- Can admission bound that expansion before execution?
+- Does an apparently equivalent compact representation change the complexity
+  class or output obligation?
+
+Name the accepted representation in the public contract and derive every
+expansion budget from its canonical fields. Do not admit a compact value and
+discover only inside the backend that it expands into too many states, terms,
+assignments, or support points. Generated and oracle-backed inputs need the
+same finite, deterministic source and work contract as materialized inputs; if
+that contract cannot be stated and validated before execution, narrow or
+reject the representation.
+
+For example, exact total variation between two materialized finite tables is a
+linear pass over their aligned support. Accepting succinct product
+distributions is not merely a wire-format convenience: expanding their joint
+support can be exponential, and computing the same invariant from the compact
+representation can be a materially harder problem. Those representations
+therefore need separate admission evidence and may require different
+operations or result semantics even though the mathematical formula is the
+same.
 
 ### Choose the controlling quantity
 

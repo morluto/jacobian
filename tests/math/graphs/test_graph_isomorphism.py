@@ -36,9 +36,7 @@ def _complete_edges(n: int) -> list[tuple[int, int]]:
     return [(i, j) for i in range(n) for j in range(i + 1, n)]
 
 
-def _is_mapping_valid_isomorphism(  # noqa: C901
-    graph_a: dict, graph_b: dict, mapping: tuple
-) -> bool:
+def _is_mapping_valid_isomorphism(graph_a: dict, graph_b: dict, mapping: tuple) -> bool:
     """Independently verify that ``mapping`` is a graph isomorphism."""
     if not mapping:
         return False

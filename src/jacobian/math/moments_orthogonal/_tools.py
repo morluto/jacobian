@@ -98,7 +98,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "uniform_hankel",
-                "Hankel matrix for uniform measure mu_k = 2/(k+1).",
+                "Hankel matrix for the uniform measure on [-1,1]: "
+                "mu_k = 2/(k+1) for even k and mu_k = 0 for odd k. The "
+                "prefix must hold at least 2*order+1 moments scaled so the "
+                "exact determinant stays canonical.",
                 {"prefix": {"moments": _MOMENTS[:5], "variable": "x"}, "order": 2},
             ),
         ),
@@ -116,7 +119,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "shifted_hankel_uniform",
-                "Shifted Hankel matrix for uniform measure.",
+                "Shifted Hankel matrix for the uniform measure on [-1,1]: "
+                "odd moments vanish, so H^(1) reads mu_1..mu_(2*order+1). "
+                "The prefix must hold at least 2*order+2 moments within the "
+                "determinant height bound.",
                 {"prefix": {"moments": _MOMENTS[:6], "variable": "x"}, "order": 2},
             ),
         ),
@@ -135,7 +141,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "legendre_from_uniform",
-                "Compute monic Legendre-like polynomials from uniform moments.",
+                "Monic Legendre-like polynomials from the uniform moments "
+                "on [-1,1] (odd moments vanish). The prefix needs at least "
+                "2*max_degree+1 moments that stay quasi-definite through "
+                "max_degree and meet the Gram-Schmidt height bound.",
                 {"prefix": {"moments": _MOMENTS[:7], "variable": "x"}, "max_degree": 3},
             ),
         ),
@@ -154,7 +163,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "recurrence_from_legendre",
-                "Compute recurrence from monic Legendre-like polynomials.",
+                "Recurrence of a monic Legendre-like family. The family "
+                "must be quasi-definite with a nonzero squared norm for "
+                "every supplied polynomial.",
                 {
                     "family": {
                         "polynomials": [
@@ -194,7 +205,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "cd_kernel_degree_0",
-                "Christoffel-Darboux kernel of degree 0.",
+                "Christoffel-Darboux kernel of degree 0. The requested "
+                "degree must stay below the family size, and every squared "
+                "norm through that degree must be nonzero.",
                 {
                     "family": {
                         "polynomials": [
@@ -235,7 +248,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "jacobi_matrix_legendre",
-                "Jacobi matrix for monic Legendre-like polynomials.",
+                "Jacobi matrix of a monic Legendre-like family. Adjacent "
+                "squared norms feeding an emitted ratio must be nonzero, "
+                "and derived recurrence entries must stay canonical.",
                 {
                     "family": {
                         "polynomials": [
@@ -278,8 +293,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "gaussian_quadrature_rational_nodes",
                 (
-                    "Gaussian quadrature for the measure with weight 7 at "
-                    "+-1 and 5 at +-2: nodes +-3/2 with weight 12."
+                    "Gaussian quadrature for weight 7 at +-1 and 5 at +-2: "
+                    "nodes +-3/2, weight 12. The prefix needs at least "
+                    "2*order canonical moments whose degree-order "
+                    "orthogonal polynomial splits over QQ into distinct "
+                    "factors with positive weights."
                 ),
                 {
                     "prefix": {

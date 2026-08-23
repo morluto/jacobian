@@ -446,7 +446,10 @@ class TestGaussianQuadrature:
         assert result.order == 1
         assert len(result.nodes) == 1
         assert (int(result.nodes[0].node.num), int(result.nodes[0].node.den)) == (2, 1)
-        assert (int(result.nodes[0].weight.num), int(result.nodes[0].weight.den)) == (1, 1)
+        assert (int(result.nodes[0].weight.num), int(result.nodes[0].weight.den)) == (
+            1,
+            1,
+        )
         assert result.exactness_degree == 1
 
     def test_algebraic_nodes_rejected_at_admission(self) -> None:

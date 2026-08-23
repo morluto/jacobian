@@ -60,9 +60,7 @@ def _require_gram_schmidt_heights_admissible(
     if max_degree == 0:
         return
     side = max_degree + 1
-    per_entry = (MAX_CANONICAL_RATIONAL_DIGITS - 2 * side) // (
-        2 * side * (side + 1)
-    )
+    per_entry = (MAX_CANONICAL_RATIONAL_DIGITS - 2 * side) // (2 * side * (side + 1))
     bound = max(per_entry, 8)
     for value in moments[: 2 * max_degree + 1]:
         if RationalHeight.from_canonical(value).exceeds(bound):
@@ -139,9 +137,7 @@ class OrthogonalPolynomialRequest(StrictModel):
         gate, both this admission replay and the execution that follows it
         operate on provably bounded intermediates with typed height checks.
         """
-        _require_gram_schmidt_heights_admissible(
-            self.prefix.moments, self.max_degree
-        )
+        _require_gram_schmidt_heights_admissible(self.prefix.moments, self.max_degree)
         from jacobian.math.moments_orthogonal.operations import (
             compute_orthogonal_polynomials,
         )

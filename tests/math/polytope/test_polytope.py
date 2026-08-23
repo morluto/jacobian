@@ -273,14 +273,18 @@ class TestRejection:
             PolytopeVolumeRequest(
                 vertices=(
                     Vertex(coordinates=(_cr0(), _cr0())),
-                    Vertex(coordinates=(
-                        CanonicalRational(num=huge, den="1"),
-                        _cr0(),
-                    )),
-                    Vertex(coordinates=(
-                        _cr0(),
-                        CanonicalRational(num=huge, den="1"),
-                    )),
+                    Vertex(
+                        coordinates=(
+                            CanonicalRational(num=huge, den="1"),
+                            _cr0(),
+                        )
+                    ),
+                    Vertex(
+                        coordinates=(
+                            _cr0(),
+                            CanonicalRational(num=huge, den="1"),
+                        )
+                    ),
                 )
             )
 
@@ -291,14 +295,18 @@ class TestRejection:
             PolytopeVolumeRequest(
                 vertices=(
                     Vertex(coordinates=(_cr0(), _cr0())),
-                    Vertex(coordinates=(
-                        CanonicalRational(num=big, den="1"),
-                        _cr0(),
-                    )),
-                    Vertex(coordinates=(
-                        _cr0(),
-                        CanonicalRational(num=big, den="1"),
-                    )),
+                    Vertex(
+                        coordinates=(
+                            CanonicalRational(num=big, den="1"),
+                            _cr0(),
+                        )
+                    ),
+                    Vertex(
+                        coordinates=(
+                            _cr0(),
+                            CanonicalRational(num=big, den="1"),
+                        )
+                    ),
                 )
             )
         )
@@ -347,9 +355,7 @@ class TestDimensionOne:
             PolytopeVolumeRequest(
                 vertices=(
                     Vertex(coordinates=(_cr0(),)),
-                    Vertex(coordinates=(
-                        CanonicalRational(num="1", den="1"),
-                    )),
+                    Vertex(coordinates=(CanonicalRational(num="1", den="1"),)),
                 )
             )
         )
@@ -366,6 +372,68 @@ class TestDimensionOne:
         )
         assert result.volume == CanonicalRational(num="1", den="1")
         assert result.dimension == 1
+
+    def test_small_denominator_interval_is_measured_in_digits(self):
+        """Admission measures decimal component lengths, not numeric values:
+        the interval [0, 1/40000] has only a five-digit volume denominator
+        and must be admitted despite the raw denominator value 40000."""
+        result = compute_polytope_volume(
+            PolytopeVolumeRequest(
+                vertices=(
+                    Vertex(coordinates=(_cr0(),)),
+                    Vertex(coordinates=(CanonicalRational(num="1", den="40000"),)),
+                )
+            )
+        )
+        assert result.volume == CanonicalRational(num="1", den="40000")
+        assert result.dimension == 1
+
+    def test_negative_endpoints_are_measured_by_length(self):
+        """Signed numerators contribute their digit length, not their value."""
+        result = compute_polytope_volume(
+            PolytopeVolumeRequest(
+                vertices=(
+                    Vertex(coordinates=(CanonicalRational(num="-3", den="1"),)),
+                    Vertex(coordinates=(CanonicalRational(num="5", den="1"),)),
+                )
+            )
+        )
+        assert result.volume == CanonicalRational(num="8", den="1")
+
+    def test_endpoint_denominator_product_beyond_the_bound_rejected(self):
+        """Endpoints 1/A and 1/(A+1) at ~16,401-digit denominators have a
+        reduced volume denominator of ~32,802 digits; the product bound
+        rejects them instead of leaking a canonical-conversion failure."""
+
+        def endpoint(den: int) -> Vertex:
+            return Vertex(
+                coordinates=(
+                    CanonicalRational(num="1", den=format_canonical_integer(den)),
+                )
+            )
+
+        big = 10**16400
+        with pytest.raises(ValueError, match="result bound"):
+            PolytopeVolumeRequest(vertices=(endpoint(big), endpoint(big + 1)))
+
+    def test_representable_large_denominator_interval_computed(self):
+        """Coprime ~10,001-digit endpoint denominators multiply to a
+        20,001-digit volume denominator that fits and must be returned."""
+
+        def endpoint(den: int) -> Vertex:
+            return Vertex(
+                coordinates=(
+                    CanonicalRational(num="1", den=format_canonical_integer(den)),
+                )
+            )
+
+        result = compute_polytope_volume(
+            PolytopeVolumeRequest(
+                vertices=(endpoint(10**10000 + 3), endpoint(10**10000 + 7))
+            )
+        )
+        assert result.dimension == 1
+        assert len(result.volume.den) == 20_001
 
 
 class TestDenominatorGrowth:
@@ -440,12 +508,11 @@ class TestTriangulationWideDenominatorBound:
         vertices = []
         rays = ((2, 0), (1, 1), (0, 2), (-1, 1), (-2, 0), (-1, -1), (0, -2), (1, -1))
         for i, (a, b) in enumerate(rays):
+
             def coord(value: int, den: str) -> CanonicalRational:
                 if value == 0:
                     return CanonicalRational(num="0", den="1")
-                return CanonicalRational(
-                    num=format_canonical_integer(value), den=den
-                )
+                return CanonicalRational(num=format_canonical_integer(value), den=den)
 
             vertices.append(
                 Vertex(
@@ -459,15 +526,54 @@ class TestTriangulationWideDenominatorBound:
             PolytopeVolumeRequest(vertices=tuple(vertices))
 
 
+class TestDuplicateVertexAdmission:
+    def test_duplicated_corners_cannot_bypass_the_result_bound(self):
+        """Duplicating each corner of the 40,000-digit triangle must not
+        let an empty triangulation skip result-size admission; the
+        deduplicated guard rejects before execution can fail conversion."""
+        big = format_canonical_integer(10**20000)
+        corners = (
+            Vertex(coordinates=(_cr0(), _cr0())),
+            Vertex(
+                coordinates=(
+                    CanonicalRational(num=big, den="1"),
+                    _cr0(),
+                )
+            ),
+            Vertex(
+                coordinates=(
+                    _cr0(),
+                    CanonicalRational(num=big, den="1"),
+                )
+            ),
+        )
+        duplicated = tuple(vertex for vertex in corners for _ in range(2))
+        with pytest.raises(ValueError, match="result bound"):
+            PolytopeVolumeRequest(vertices=duplicated)
+
+    def test_duplicated_representable_square_is_still_computed(self):
+        """Exact deduplication keeps ordinary duplicate-laden inputs working."""
+        square = (
+            _v((0, 1), (0, 1)),
+            _v((1, 1), (0, 1)),
+            _v((1, 1), (1, 1)),
+            _v((0, 1), (1, 1)),
+        )
+        result = compute_polytope_volume(
+            PolytopeVolumeRequest(
+                vertices=tuple(vertex for vertex in square for _ in range(2))
+            )
+        )
+        assert result.volume == CanonicalRational(num="1", den="1")
+
+
 class TestNativeApiAdmission:
     def test_native_rejects_dimension_and_vertex_excess(self):
         """A 7-dimensional simplex exceeds the 6-dimension native bound."""
         from jacobian.math.polytope import convex_hull_volume
 
         origin = tuple(Fraction(0) for _ in range(7))
-        axes = tuple(
-            tuple(Fraction(int(i == j)) for j in range(7)) for i in range(7)
-        )
+        axes = tuple(tuple(Fraction(int(i == j)) for j in range(7)) for i in range(7))
         with pytest.raises(ValueError, match="dimension"):
             convex_hull_volume((origin, *axes))
 
@@ -498,3 +604,13 @@ class TestNativeApiAdmission:
             )
         )
         assert len(area.num) == 20_000
+
+    def test_native_rejects_hull_work_overflow_before_enumeration(self):
+        """64 generic six-dimensional points exceed the hull-work bound at
+        C(64, 6) = 74,974,368 subsets; the native wrapper rejects exactly
+        like ``PolytopeVolumeRequest`` instead of enumerating unguarded."""
+        from jacobian.math.polytope import convex_hull_volume
+
+        points = tuple(tuple(Fraction(i**k) for k in range(6)) for i in range(1, 65))
+        with pytest.raises(ValueError, match="combinatorial bound"):
+            convex_hull_volume(points)

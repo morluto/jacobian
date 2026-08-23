@@ -38,11 +38,6 @@
       "complexity": 12
     },
     {
-      "path": "src/jacobian/math/polytope/_models.py",
-      "symbol": "_validate_halfspaces",
-      "complexity": 12
-    },
-    {
       "path": "src/jacobian/math/root_systems/_operations.py",
       "symbol": "_weyl_group_data",
       "complexity": 11

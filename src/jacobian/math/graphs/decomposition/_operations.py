@@ -176,7 +176,7 @@ def _find_cycle(g: nx.Graph[int], start: int) -> list[int]:
     return cycle
 
 
-def _find_next_ear(  # noqa: C901
+def _find_next_ear(
     g: nx.Graph[int],
     used_vertices: set[int],
     used_edges: set[tuple[int, int]],

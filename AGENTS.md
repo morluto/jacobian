@@ -23,6 +23,12 @@ larger solutions.
 Atomicity is semantic: an operation establishes one stable, reusable
 mathematical postcondition. It need not have a small or simple implementation.
 
+Established mathematical techniques are sources of executable vocabulary, not
+automatic operation IDs. Make a technique discoverable through relevant public
+operations, but admit it separately only when it establishes a distinct stable
+postcondition. Alternative algorithms for the same postcondition remain private
+kernel choices.
+
 It exposes two MCP tools:
 
 | Agent verb | MCP tool | Meaning |

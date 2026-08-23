@@ -72,12 +72,15 @@ def incremental_source_groebner(
 
     The kernel runs incrementally, one generator at a time, and every
     intermediate basis is checked against the output budget (aggregate
-    1,024-term, exponent, and canonical-coefficient limits) before the
-    next generator is added.  This conservatively bounds basis growth so
-    admitted requests cannot drive an unbounded intermediate coefficient
-    expansion inside the kernel.  Adding generators and re-reducing
-    converges to the unique reduced basis, so the final result equals a
-    single-shot computation whenever that stays within budget.
+    1,024-term, exponent, and canonical-coefficient limits).  Because a
+    later generator can collapse an oversized intermediate ideal — most
+    simply a nonzero constant generator, which makes any ideal the unit
+    ideal regardless of presentation order — constant generators are
+    detected up front and short-circuit to their own in-budget basis
+    instead of letting an oversized prefix decide the outcome.  Adding
+    generators and re-reducing converges to the unique reduced basis, so
+    the final result equals a single-shot computation whenever that stays
+    within budget.
 
     Returns ``(basis, exceeded)``: ``basis`` is ``None`` when the kernel
     failed or an intermediate left the budget; ``exceeded`` distinguishes
@@ -98,6 +101,18 @@ def incremental_source_groebner(
         exprs = [rational_polynomial_to_sympy(gen).as_expr() for gen in ideal.generators]
     except Exception:
         return None, False
+    # A nonzero constant generator collapses the ideal to the unit ideal no
+    # matter how an oversized prefix basis looks; presentation order must
+    # not turn that collapse into a false budget overflow.
+    for expr in exprs:
+        if getattr(expr, "is_Number", False) and expr != 0:
+            try:
+                basis = groebner(
+                    [expr], *symbols, order=monomial_order, domain=QQ
+                )
+            except Exception:
+                return None, False
+            return basis, False
     current: list[Any] = []
     basis = None
     for expr in exprs:

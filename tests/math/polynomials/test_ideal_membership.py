@@ -449,3 +449,53 @@ def test_queried_polynomial_total_degree_budget_enforced() -> None:
             ideal=_ideal_xy(),
             polynomial=_poly(("x", "y"), {(12, 12): 1}),
         )
+
+
+def test_later_generator_collapse_not_reported_as_budget_overflow() -> None:
+    # <x-(1+y+z)^4, x^12, 1>: an oversized prefix basis must not decide the
+    # outcome; the trailing nonzero constant generator collapses the ideal
+    # to the unit ideal regardless of presentation order, so x^12 is in the
+    # ideal and no budget overflow is reported.
+    from itertools import product
+
+    variables = ("x", "y", "z")
+
+    def term(exponents: tuple[int, ...]) -> RationalPolynomialTerm:
+        return RationalPolynomialTerm(
+            coefficient=CanonicalRational.from_fraction(Fraction(1)),
+            exponents=exponents,
+        )
+
+    def poly(terms: tuple[tuple[int, ...], ...]):
+        return RationalPolynomial(
+            variables=variables,
+            polynomial=SparseRationalPolynomial(
+                terms=tuple(sorted((term(e) for e in terms), key=lambda t: t.exponents, reverse=True))
+            ),
+        )
+
+    combos = [c for c in product(range(5), repeat=2) if sum(c) <= 4]
+    g1_terms: tuple[tuple[int, ...], ...] = (
+        (1, 0, 0),
+        *((0, c[0], c[1]) for c in combos),
+    )
+    assert len(g1_terms) == 16
+    ideal = RationalPolynomialIdeal(
+        variables=variables,
+        generators=(
+            poly(g1_terms),
+            poly(((12, 0, 0),)),
+            poly(((0, 0, 0),)),
+        ),
+    )
+    request = IdealMembershipRequest(
+        ideal=ideal,
+        polynomial=poly(((12, 0, 0),)),
+        monomial_order="lex",
+    )
+    result = polynomial_ideal_normal_form(request)
+    assert result.status == "COMPUTED"
+    assert result.groebner_basis is not None
+    basis_terms = result.groebner_basis[0].polynomial.terms
+    assert len(basis_terms) == 1
+    assert basis_terms[0].coefficient.as_fraction() == 1

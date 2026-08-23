@@ -152,9 +152,7 @@ class TestLatticeWorkBound:
         orders = sorted(entry.order for entry in result.subgroups)
         assert orders[0] == 1 and orders[-1] == 64
         # Every entry's generator chain stays within log2(order) <= 6 links.
-        assert max(
-            len(entry.group.generators) for entry in result.subgroups
-        ) <= 6
+        assert max(len(entry.group.generators) for entry in result.subgroups) <= 6
         # Entries are canonical permutation-group values: chainable into
         # other permutation-group consumers unchanged.
         first = result.subgroups[0].group
@@ -267,9 +265,7 @@ class TestExceededOutcomeSourceBinding:
         assert (
             str(
                 compute_group_order(
-                    PermutationGroupRequest.model_validate(
-                        order_two.group.model_dump()
-                    )
+                    PermutationGroupRequest.model_validate(order_two.group.model_dump())
                 ).order
             )
             == "2"

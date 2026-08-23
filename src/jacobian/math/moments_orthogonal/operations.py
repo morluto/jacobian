@@ -152,6 +152,26 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
     return RecurrenceCoefficients(alpha=tuple(alpha), beta=tuple(beta))
 
 
+def _require_positive_betas(
+    alpha: Sequence[Fraction], beta: Sequence[Fraction]
+) -> None:
+    """Require positive ``beta_0`` and every used subdiagonal ``beta_1, ...``.
+
+    ``beta_0`` is the squared norm of ``p_0`` and each used subdiagonal entry
+    advances the squared norms of the family, so a nonpositive entry cannot
+    define an orthogonal family or a real symmetric Jacobi matrix.
+    """
+    if beta[0] <= 0:
+        raise ValueError(
+            "beta_0 (the zeroth moment of a positive functional) must be positive"
+        )
+    for index in range(1, min(len(alpha), len(beta))):
+        if beta[index] <= 0:
+            raise ValueError(
+                "subdiagonal beta entries must be positive squared-norm ratios"
+            )
+
+
 def jacobi_matrix(
     alpha: Sequence[Fraction], beta: Sequence[Fraction]
 ) -> JacobiMatrix:
@@ -177,15 +197,7 @@ def jacobi_matrix(
         raise TypeError("alpha must use exact Fractions")
     if any(type(value) is not Fraction for value in beta):
         raise TypeError("beta must use exact Fractions")
-    if beta[0] <= 0:
-        raise ValueError(
-            "beta_0 (the zeroth moment of a positive functional) must be positive"
-        )
-    for index in range(1, min(len(alpha), len(beta))):
-        if beta[index] <= 0:
-            raise ValueError(
-                "subdiagonal beta entries must be positive squared-norm ratios"
-            )
+    _require_positive_betas(alpha, beta)
     return JacobiMatrix(
         diagonal=tuple(alpha),
         # The squared subdiagonal entries are beta_1, ..., beta_{n-1}; beta_0 is
@@ -212,6 +224,11 @@ def christoffel_darboux(
         K_n(x, y) = sum_{k=0}^{n-1} p_k(x) p_k(y) / h_k
 
     evaluated by forward recurrence of the polynomials at ``x`` and ``y``.
+
+    ``h_0 = beta_0`` is the squared norm of ``p_0`` and each used
+    ``beta_1, ..., beta_{n-1}`` advances the squared norms, so ``beta_0`` and
+    every used subdiagonal entry must be positive; a nonpositive entry cannot
+    define the squared norms of an orthogonal family and is rejected here.
     """
     if not 1 <= len(beta) <= MAX_POLYNOMIAL_COUNT:
         raise ValueError("beta must contain between 1 and 32 entries")
@@ -221,8 +238,7 @@ def christoffel_darboux(
         raise ValueError("alpha must have length len(beta)-1 or len(beta)")
     if type(x) is not Fraction or type(y) is not Fraction:
         raise TypeError("x and y must use exact Fractions")
-    if beta[0] == 0:
-        raise ValueError("beta_0 must be nonzero")
+    _require_positive_betas(alpha, beta)
     n = len(alpha)
     if n == 0:
         return ChristoffelDarbouxKernel(

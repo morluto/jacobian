@@ -205,6 +205,40 @@ class TestChristoffelDarboux:
         assert result.kernel == _frac(0, 1)
         assert result.polynomials_evaluated == (_frac(1, 1),)
 
+    def test_negative_beta0_rejected(self) -> None:
+        """h_0 = beta_0 is a squared norm; the diagonal kernel cannot be -1."""
+        with pytest.raises(ValueError, match="must be positive"):
+            christoffel_darboux(
+                (_frac(0, 1),), (_frac(-1, 1),), _frac(0, 1), _frac(0, 1)
+            )
+
+    def test_negative_subdiagonal_rejected(self) -> None:
+        """Used beta_1.. advance the squared norms; negatives make them
+        indefinite and cannot define an orthogonal family."""
+        with pytest.raises(ValueError, match="positive squared-norm ratios"):
+            christoffel_darboux(
+                (_frac(0, 1), _frac(0, 1)),
+                (_frac(1, 1), _frac(-1, 1)),
+                _frac(0, 1),
+                _frac(0, 1),
+            )
+
+    def test_zero_subdiagonal_rejected(self) -> None:
+        with pytest.raises(ValueError, match="positive squared-norm ratios"):
+            christoffel_darboux(
+                (_frac(0, 1), _frac(0, 1)),
+                (_frac(1, 1), _frac(0, 1)),
+                _frac(0, 1),
+                _frac(0, 1),
+            )
+
+    def test_unused_trailing_beta_not_required_positive(self) -> None:
+        """alpha length bounds the used subdiagonal; unused tail is inert."""
+        result = christoffel_darboux(
+            (_frac(0, 1),), (_frac(2, 1), _frac(-1, 1)), _frac(1, 2), _frac(1, 2)
+        )
+        assert result.polynomials_evaluated == (_frac(1, 1),)
+
 
 # ---------------------------------------------------------------------------
 # Gaussian quadrature
@@ -241,11 +275,7 @@ class TestGaussianQuadrature:
 
     def test_approximate_irrational_nodes(self) -> None:
         """Nodes ±sqrt(2) are irrational and returned as IEEE-double approximations."""
-        alpha = (_frac(0, 1), _frac(0, 1))
-        beta = (_frac(1, 1), _frac(1, 1), _frac(1, 1))
-        # With alpha=(0,0) and beta with unit subdiagonals, Jacobi matrix is
-        # [[0,1],[1,0]] whose eigenvalues are ±sqrt(1) approximated as ±1.
-        # Use beta=(1,2) case from review: alpha=(0,0), beta=(1,2) has exact ±sqrt(2)
+        # alpha=(0,0) and beta=(1,2) has exact nodes ±sqrt(2)
         alpha2 = (_frac(0, 1), _frac(0, 1))
         beta2 = (_frac(1, 1), _frac(2, 1))
         result = gaussian_quadrature(alpha2, beta2)

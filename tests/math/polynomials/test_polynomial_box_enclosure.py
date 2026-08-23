@@ -8,7 +8,7 @@ from itertools import product
 import pytest
 from pydantic import ValidationError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import encode_strict_json
 from jacobian.math.polynomials.intervals._models import (
     MAX_BOX_ENCLOSURE_COEFFICIENT_DIGITS,
@@ -398,6 +398,55 @@ def test_coefficient_and_endpoint_digit_boundaries() -> None:
         )
 
 
+def _maximum_canonical_interval_payload() -> dict[str, dict[str, str]]:
+    upper_integer = "9" * MAX_CANONICAL_RATIONAL_DIGITS
+    lower_integer = f"{'9' * (MAX_CANONICAL_RATIONAL_DIGITS - 1)}8"
+    return {
+        "lower": {"num": lower_integer, "den": upper_integer},
+        "upper": {"num": upper_integer, "den": lower_integer},
+    }
+
+
+def test_interval_ordering_is_covered_before_request_endpoint_preflight() -> None:
+    assert MAX_BOX_ENCLOSURE_INTERMEDIATE_DIGITS == 2 * MAX_CANONICAL_RATIONAL_DIGITS
+    polynomial_payload = _polynomial(("x",), {}).model_dump(mode="json")
+    with pytest.raises(ValidationError, match="endpoint exceeds"):
+        PolynomialBoxEnclosureRequest.model_validate(
+            {
+                "polynomial": polynomial_payload,
+                "box": {
+                    "variables": ["x"],
+                    "intervals": [_maximum_canonical_interval_payload()],
+                },
+            }
+        )
+
+    oversized_interval = _maximum_canonical_interval_payload()
+    oversized_interval["upper"]["num"] = "1" + "0" * MAX_CANONICAL_RATIONAL_DIGITS
+    with pytest.raises(ValidationError, match="canonical 32,768-digit limit"):
+        PolynomialBoxEnclosureRequest.model_validate(
+            {
+                "polynomial": polynomial_payload,
+                "box": {
+                    "variables": ["x"],
+                    "intervals": [oversized_interval],
+                },
+            }
+        )
+
+
+def test_forged_result_interval_ordering_stays_inside_intermediate_bound() -> None:
+    result = _enclose(
+        _polynomial(("x",), {}),
+        _box(("x",), ((0, 0),)),
+    )
+    payload = result.model_dump(mode="json")
+    payload["enclosure"] = _maximum_canonical_interval_payload()
+
+    with pytest.raises(ValidationError, match="natural interval extension"):
+        PolynomialBoxEnclosureResult.model_validate(payload)
+
+
 def _digit_rational(
     numerator_digits: int, denominator_digits: int
 ) -> CanonicalRational:
@@ -473,22 +522,34 @@ def test_exact_result_digit_growth_boundary() -> None:
 
 
 def test_intermediate_digit_growth_boundary() -> None:
-    at_limit = _growth_boundary_request(
+    legacy_limit = _growth_boundary_request(
         second_endpoint_numerator_digits=MAX_BOX_ENCLOSURE_ENDPOINT_DIGITS - 1,
         second_endpoint_denominator_digits=MAX_BOX_ENCLOSURE_ENDPOINT_DIGITS - 1,
         coefficient_numerator="9" * (MAX_BOX_ENCLOSURE_PER_VARIABLE_DEGREE - 2),
         coefficient_denominator_digits=MAX_BOX_ENCLOSURE_PER_VARIABLE_DEGREE,
     )
-    assert MAX_BOX_ENCLOSURE_INTERMEDIATE_DIGITS == 49_152
-    assert compute_polynomial_box_enclosure(at_limit).box == at_limit.box
+    assert (
+        _estimate_growth(legacy_limit.polynomial, legacy_limit.box).intermediate_digits
+        == 49_152
+    )
+    assert compute_polynomial_box_enclosure(legacy_limit).box == legacy_limit.box
 
-    with pytest.raises(ValidationError, match="intermediate bound"):
-        _growth_boundary_request(
-            second_endpoint_numerator_digits=MAX_BOX_ENCLOSURE_ENDPOINT_DIGITS - 1,
-            second_endpoint_denominator_digits=MAX_BOX_ENCLOSURE_ENDPOINT_DIGITS - 1,
-            coefficient_numerator="9" * (MAX_BOX_ENCLOSURE_PER_VARIABLE_DEGREE - 1),
-            coefficient_denominator_digits=MAX_BOX_ENCLOSURE_PER_VARIABLE_DEGREE,
-        )
+    above_legacy_limit = _growth_boundary_request(
+        second_endpoint_numerator_digits=MAX_BOX_ENCLOSURE_ENDPOINT_DIGITS - 1,
+        second_endpoint_denominator_digits=MAX_BOX_ENCLOSURE_ENDPOINT_DIGITS - 1,
+        coefficient_numerator="9" * (MAX_BOX_ENCLOSURE_PER_VARIABLE_DEGREE - 1),
+        coefficient_denominator_digits=MAX_BOX_ENCLOSURE_PER_VARIABLE_DEGREE,
+    )
+    growth = _estimate_growth(
+        above_legacy_limit.polynomial,
+        above_legacy_limit.box,
+    )
+    assert growth.intermediate_digits == 49_153
+    assert growth.intermediate_digits < MAX_BOX_ENCLOSURE_INTERMEDIATE_DIGITS
+    assert (
+        compute_polynomial_box_enclosure(above_legacy_limit).box
+        == above_legacy_limit.box
+    )
 
 
 def test_result_byte_estimate_covers_exact_retained_source_serialization() -> None:

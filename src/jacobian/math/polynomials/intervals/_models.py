@@ -34,11 +34,13 @@ MAX_BOX_ENCLOSURE_PER_VARIABLE_DEGREE = 64
 MAX_BOX_ENCLOSURE_TOTAL_DEGREE = 128
 MAX_BOX_ENCLOSURE_COEFFICIENT_DIGITS = 128
 MAX_BOX_ENCLOSURE_ENDPOINT_DIGITS = 128
-# Exact Fraction addition and interval ordering may transiently cross-multiply
-# partial-result, term, or final endpoint components. This conservative ceiling
-# is separate from the 32,768-digit canonical result ceiling and is checked
-# from source heights before any polynomial endpoint is exponentiated.
-MAX_BOX_ENCLOSURE_INTERMEDIATE_DIGITS = 49_152
+# Shared interval values validate before this operation's narrower source
+# preflight. Ordering two maximum-size canonical rationals may therefore
+# cross-multiply one numerator and the opposite denominator. The intermediate
+# ceiling covers that value-level validation as well as Fraction addition and
+# comparison in the kernel; source-derived growth is checked before any
+# polynomial endpoint is exponentiated.
+MAX_BOX_ENCLOSURE_INTERMEDIATE_DIGITS = 2 * MAX_CANONICAL_RATIONAL_DIGITS
 MAX_BOX_ENCLOSURE_RESULT_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
 MAX_BOX_ENCLOSURE_RESULT_BYTES = CanonicalLimits().max_output_bytes
 

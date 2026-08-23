@@ -180,6 +180,14 @@ class NewtonPolytope(StrictModel):
     @model_validator(mode="after")
     def require_newton_invariants(self) -> Self:
         _require_newton_context(self)
+        # The producer's empty-polytope convention is affine dimension
+        # zero; a deserialized zero result must not contradict its own
+        # empty support.
+        if self.is_zero and self.affine_dimension != 0:
+            raise ValueError(
+                "the zero polynomial's empty Newton polytope has "
+                "affine dimension zero"
+            )
         if not self.is_zero:
             support = set(self.all_support_exponents)
             if support != set(self.vertices) | set(self.nonextreme):

@@ -70,9 +70,22 @@ class WeightProfileRequest(StrictModel):
     """Request the weight profile of a polynomial."""
 
     polynomial: RationalPolynomial = Field(
-        description="The canonical sparse polynomial whose weight profile is requested."
+        description=(
+            "The canonical sparse polynomial whose weight profile is "
+            "requested: a nonzero polynomial with at most 1024 terms and "
+            "coefficient numerator/denominator components of at most 512 "
+            "digits."
+        )
     )
-    weight: tuple[int, ...] = Field(min_length=1, max_length=MAX_WEIGHT_COMPONENTS)
+    weight: tuple[int, ...] = Field(
+        min_length=1,
+        max_length=MAX_WEIGHT_COMPONENTS,
+        description=(
+            "One integer per variable of the retained polynomial; each "
+            "component is bounded in magnitude by 2**31 so derived "
+            "weights stay inside the interoperable JSON integer range."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_matching_dimensions(self) -> Self:
@@ -102,9 +115,22 @@ class InitialFormRequest(StrictModel):
     """Request the initial form of a polynomial."""
 
     polynomial: RationalPolynomial = Field(
-        description="The canonical sparse polynomial whose initial form is requested."
+        description=(
+            "The canonical sparse polynomial whose initial form is "
+            "requested: a nonzero polynomial with at most 1024 terms and "
+            "coefficient numerator/denominator components of at most 512 "
+            "digits."
+        )
     )
-    weight: tuple[int, ...] = Field(min_length=1, max_length=MAX_WEIGHT_COMPONENTS)
+    weight: tuple[int, ...] = Field(
+        min_length=1,
+        max_length=MAX_WEIGHT_COMPONENTS,
+        description=(
+            "One integer per variable of the retained polynomial; each "
+            "component is bounded in magnitude by 2**31 so derived "
+            "weights stay inside the interoperable JSON integer range."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_matching_dimensions(self) -> Self:

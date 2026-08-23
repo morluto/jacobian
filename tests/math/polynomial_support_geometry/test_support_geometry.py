@@ -482,6 +482,25 @@ class TestSupportValueInvariants:
                 coordinate_max=(5,),
             )
 
+    def test_zero_newton_polytope_requires_zero_affine_dimension(self) -> None:
+        """A deserialized zero result must not contradict its own empty
+        support: the empty polytope has affine dimension zero."""
+        from jacobian.math.polynomial_support_geometry.values import NewtonPolytope
+
+        with pytest.raises(ValidationError, match="affine dimension zero"):
+            NewtonPolytope(
+                is_zero=True,
+                variables=("x",),
+                ambient_dimension=1,
+                affine_dimension=1,
+            )
+        assert NewtonPolytope(
+            is_zero=True,
+            variables=("x",),
+            ambient_dimension=1,
+            affine_dimension=0,
+        ).is_zero
+
     def test_exponents_outside_canonical_domain_rejected(self) -> None:
         """Support points outside the canonical polynomial exponent domain
         cannot revalidate: the source type rejects negative exponents and

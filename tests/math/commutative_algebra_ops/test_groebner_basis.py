@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.commutative_algebra_ops import _operations, _singular
+from jacobian.math.commutative_algebra_ops import _operations
 from jacobian.math.commutative_algebra_ops._models import (
     EliminationIdealRequest,
     GroebnerBasisRequest,

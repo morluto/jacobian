@@ -158,9 +158,12 @@ def test_retraction_check_c4_to_edge() -> None:
     assert result.is_retraction is True
 
 
-def _canonical_graph(vertices: list[str], edges: list[list[str]]) -> SimpleUndirectedGraph:
+def _canonical_graph(
+    vertices: list[str], edges: list[list[str]]
+) -> SimpleUndirectedGraph:
     return SimpleUndirectedGraph(
-        vertices=tuple(vertices), edges=tuple(tuple(e) for e in edges)  # type: ignore[arg-type]
+        vertices=tuple(vertices),
+        edges=tuple(tuple(e) for e in edges),  # type: ignore[arg-type]
     )
 
 
@@ -174,7 +177,10 @@ class TestFixedLengthCycle:
             compute_fixed_length_cycle,
         )
 
-        g = self._g(["a", "b", "c", "d"], [["a", "b"], ["a", "c"], ["a", "d"], ["b", "c"], ["c", "d"]])
+        g = self._g(
+            ["a", "b", "c", "d"],
+            [["a", "b"], ["a", "c"], ["a", "d"], ["b", "c"], ["c", "d"]],
+        )
         result = compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
         assert result.decision == "EXISTS"
         assert len(result.cycle) == 3
@@ -197,7 +203,9 @@ class TestFixedLengthCycle:
             compute_fixed_length_cycle,
         )
 
-        g = self._g(["a", "b", "c", "d"], [["a", "b"], ["a", "d"], ["b", "c"], ["c", "d"]])
+        g = self._g(
+            ["a", "b", "c", "d"], [["a", "b"], ["a", "d"], ["b", "c"], ["c", "d"]]
+        )
         result = compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
         assert result.decision == "DOES_NOT_EXIST"
         assert result.cycle == ()
@@ -208,7 +216,9 @@ class TestFixedLengthCycle:
             compute_fixed_length_cycle,
         )
 
-        g = self._g(["a", "b", "c", "d"], [["a", "b"], ["a", "d"], ["b", "c"], ["c", "d"]])
+        g = self._g(
+            ["a", "b", "c", "d"], [["a", "b"], ["a", "d"], ["b", "c"], ["c", "d"]]
+        )
         result = compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=4))
         assert result.decision == "EXISTS"
         assert len(result.cycle) == 4
@@ -304,9 +314,7 @@ class TestFixedLengthCycle:
         # must validate through replay like any operation-produced value.
         path_edges = [[chr(ord("a") + i), chr(ord("a") + i + 1)] for i in range(5)]
         g = self._g(list("abcdef"), path_edges)
-        result = compute_fixed_length_cycle(
-            FixedLengthCycleRequest(graph=g, length=3)
-        )
+        result = compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
         assert result.decision == "DOES_NOT_EXIST"
         revalidated = FixedLengthCycleResult(
             graph=g, decision=result.decision, length=result.length, cycle=result.cycle
@@ -352,7 +360,10 @@ class TestSubgraphPatternFind:
         )
 
         pat = self._g(["x", "y", "z"], [["x", "y"], ["x", "z"], ["y", "z"]])
-        host = self._g(["a", "b", "c", "d"], [["a", "b"], ["a", "c"], ["a", "d"], ["b", "c"], ["c", "d"]])
+        host = self._g(
+            ["a", "b", "c", "d"],
+            [["a", "b"], ["a", "c"], ["a", "d"], ["b", "c"], ["c", "d"]],
+        )
         result = compute_subgraph_pattern_find(
             SubgraphPatternFindRequest(pattern=pat, host=host),
         )
@@ -427,7 +438,9 @@ class TestSubgraphPatternFind:
 
         pat = explicit_graph(vertices=("x", "y"), edges=(("x", "y"),))
         host = explicit_graph(vertices=("a", "b", "c"), edges=(("a", "b"), ("b", "c")))
-        result = compute_subgraph_pattern_find(SubgraphPatternFindRequest(pattern=pat, host=host))
+        result = compute_subgraph_pattern_find(
+            SubgraphPatternFindRequest(pattern=pat, host=host)
+        )
         assert result.decision == "EXISTS"
 
     def test_request_admission_accounts_for_operation_and_replay_passes(self):
@@ -441,9 +454,11 @@ class TestSubgraphPatternFind:
         # P(11, 8) = 6,652,800 assignments fits inside the advertised total
         # budget but not inside the per-pass share that also covers the
         # validator's replay of a negative decision, so it must be rejected.
-        pat = self._g([f"x{i}" for i in range(8)], [[f"x{i}", f"x{i+1}"] for i in range(7)])
+        pat = self._g(
+            [f"x{i}" for i in range(8)], [[f"x{i}", f"x{i + 1}"] for i in range(7)]
+        )
         host_labels = [f"h{i:02d}" for i in range(11)]
-        host = self._g(host_labels, [[f"h{i:02d}", f"h{i+1:02d}"] for i in range(10)])
+        host = self._g(host_labels, [[f"h{i:02d}", f"h{i + 1:02d}"] for i in range(10)])
         assert MAX_CYCLE_SEARCH_PATHS // 2 < 11 * 10 * 9 * 8 * 7 * 6 * 5 * 4
         with pytest.raises(ValueError, match="per-pass budget"):
             SubgraphPatternFindRequest(pattern=pat, host=host)
@@ -489,9 +504,7 @@ class TestSubgraphPatternFind:
 
         # An honest negative: a triangle pattern cannot embed in a path.
         pat = self._g(["x", "y", "z"], [["x", "y"], ["x", "z"], ["y", "z"]])
-        host = self._g(
-            ["a", "b", "c"], [["a", "b"], ["b", "c"]]
-        )
+        host = self._g(["a", "b", "c"], [["a", "b"], ["b", "c"]])
         result = compute_subgraph_pattern_find(
             SubgraphPatternFindRequest(pattern=pat, host=host),
         )

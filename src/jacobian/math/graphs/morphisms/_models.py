@@ -135,7 +135,9 @@ MAX_CYCLE_SEARCH_PATHS = 10_000_000
 # retained sources.  Admission charges each pass at most half the total so a
 # complete negative operation stays inside the advertised budget.
 SEARCH_PASSES_PER_NEGATIVE_DECISION = 2
-_MAX_SEARCH_PATHS_PER_PASS = MAX_CYCLE_SEARCH_PATHS // SEARCH_PASSES_PER_NEGATIVE_DECISION
+_MAX_SEARCH_PATHS_PER_PASS = (
+    MAX_CYCLE_SEARCH_PATHS // SEARCH_PASSES_PER_NEGATIVE_DECISION
+)
 
 # Results retain their source graphs, so a request near the canonical input
 # limit can produce a response past the identical output limit.  Admission
@@ -156,9 +158,7 @@ def _require_output_headroom(
     source_bytes: int, witness_label_bytes: int, operation: str
 ) -> None:
     estimated_result_bytes = (
-        source_bytes
-        + witness_label_bytes
-        + _RESULT_ENVELOPE_RESERVE_BYTES
+        source_bytes + witness_label_bytes + _RESULT_ENVELOPE_RESERVE_BYTES
     )
     output_limit = CanonicalLimits().max_output_bytes
     if estimated_result_bytes > output_limit:
@@ -310,9 +310,7 @@ class FixedLengthCycleResult(StrictModel):
             from jacobian.math.graphs.morphisms._operations import find_cycle_of_length
 
             if (
-                find_cycle_of_length(
-                    self.graph.vertices, self.graph.edges, self.length
-                )
+                find_cycle_of_length(self.graph.vertices, self.graph.edges, self.length)
                 is not None
             ):
                 raise ValueError(

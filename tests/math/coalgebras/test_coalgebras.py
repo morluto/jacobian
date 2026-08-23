@@ -456,6 +456,21 @@ class TestScanWorkBoundary:
         with pytest.raises(ValidationError, match="scan work exceeds"):
             GroupLikeElementsRequest(coalgebra=ca)
 
+    def test_reported_sixteen_dim_request_typed_rejected(self):
+        """The originally reported 16-dim GF(2) direct-sum request pays
+        roughly 152M reconstruction units per pass (kernel plus replay),
+        far above the budget, so it fails admission without enumerating."""
+        import time
+
+        ca = _direct_sum_group_like_coalgebra(16)
+        assert (
+            group_like_scan_work(ca.prime, ca.dimension) > GROUP_LIKE_SCAN_WORK_BUDGET
+        )
+        started = time.monotonic()
+        with pytest.raises(ValidationError, match="scan work exceeds"):
+            GroupLikeElementsRequest(coalgebra=ca)
+        assert time.monotonic() - started < 1
+
 
 class TestNestedModulusPrevalidation:
     """The raw nested matrix modulus is checked before PrimeFieldMatrix

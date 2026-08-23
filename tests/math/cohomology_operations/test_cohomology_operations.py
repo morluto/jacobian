@@ -59,7 +59,7 @@ class TestSteenrodSquare:
         """Sq^n(x) = x cup x for a degree-n cocycle."""
         # For degree 1, x supported on edges (0,1) and (1,2) cups to triangle
         # (0,1,2) only when that 2-simplex lies in the ambient complex.
-        ambient = ((0, 1), (1, 2), (0, 1, 2))
+        ambient = ((0,), (1,), (2,), (0, 1), (1, 2), (0, 2), (0, 1, 2))
         result = compute_steenrod_square(
             SteenrodSquareRequest(
                 cochain_degree=1,
@@ -91,7 +91,7 @@ class TestSteenrodSquare:
                 simplex_values=((0, 1), (1, 2)),
                 simplex_coefficients=(1, 1),
                 square_degree=1,
-                ambient_simplices=((0, 1), (1, 2)),
+                ambient_simplices=((0,), (1,), (2,), (0, 1), (1, 2)),
             )
         )
         assert result.is_zero
@@ -106,7 +106,7 @@ class TestSteenrodSquare:
                 simplex_values=((5, 6),),
                 simplex_coefficients=(1,),
                 square_degree=1,
-                ambient_simplices=((0, 1),),
+                ambient_simplices=((0,), (1,), (0, 1)),
             )
 
     # Cups that don't share the middle vertex should not contribute
@@ -117,7 +117,7 @@ class TestSteenrodSquare:
                 simplex_values=((0, 1), (0, 2)),
                 simplex_coefficients=(1, 1),
                 square_degree=1,
-                ambient_simplices=((0, 1), (0, 2), (0, 1, 2)),
+                ambient_simplices=((0,), (1,), (2,), (0, 1), (0, 2), (1, 2), (0, 1, 2)),
             )
         )
         assert result2.is_zero
@@ -168,7 +168,7 @@ class TestSteenrodSquare:
                 simplex_values=((0, 1), (0, 1)),
                 simplex_coefficients=(1, 1),
                 square_degree=1,
-                ambient_simplices=((0, 1), (0, 2), (1, 2), (0, 1, 2)),
+                ambient_simplices=((0,), (1,), (2,), (0, 1), (0, 2), (1, 2), (0, 1, 2)),
             )
         )
         assert result.is_zero
@@ -183,7 +183,7 @@ class TestSteenrodSquare:
             simplex_values=((0, 1), (1, 2)),
             simplex_coefficients=(1, 1),
             square_degree=1,
-            ambient_simplices=((0, 1), (1, 2), (0, 1, 2)),
+            ambient_simplices=((0,), (1,), (2,), (0, 1), (1, 2), (0, 2), (0, 1, 2)),
         )
         genuine = compute_steenrod_square(request)
         assert genuine.result_simplex_values == ((0, 1, 2),)
@@ -248,7 +248,7 @@ class TestCocycleAdmission:
                 simplex_values=((0, 1),),
                 simplex_coefficients=(1,),
                 square_degree=1,
-                ambient_simplices=((0, 1), (1, 2), (0, 2), (0, 1, 2)),
+                ambient_simplices=((0,), (1,), (2,), (0, 1), (1, 2), (0, 2), (0, 1, 2)),
             )
 
     def test_genuine_cocycle_admitted(self):
@@ -258,7 +258,85 @@ class TestCocycleAdmission:
                 simplex_values=((0, 1), (0, 2)),
                 simplex_coefficients=(1, 1),
                 square_degree=1,
-                ambient_simplices=((0, 1), (1, 2), (0, 2), (0, 1, 2)),
+                ambient_simplices=((0,), (1,), (2,), (0, 1), (1, 2), (0, 2), (0, 1, 2)),
             )
         )
         assert result.is_zero
+
+
+# The full boundary-plus-interior data of the 3-simplex (0,1,2,3): a
+# downward-closed complex on four vertices.
+_TETRAHEDRON = (
+    (0,),
+    (1,),
+    (2,),
+    (3,),
+    (0, 1),
+    (0, 2),
+    (0, 3),
+    (1, 2),
+    (1, 3),
+    (2, 3),
+    (0, 1, 2),
+    (0, 1, 3),
+    (0, 2, 3),
+    (1, 2, 3),
+    (0, 1, 2, 3),
+)
+
+
+class TestAmbientComplexClosure:
+    """The supplied complex must carry every face its simplices imply."""
+
+    def test_non_closed_complex_rejected(self):
+        """A tetrahedron entry implies faces that are not listed here."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="downward closed"):
+            SteenrodSquareRequest(
+                cochain_degree=1,
+                simplex_values=((0, 1),),
+                simplex_coefficients=(1,),
+                square_degree=1,
+                ambient_simplices=((0, 1), (0, 1, 2, 3)),
+            )
+
+    def test_implied_triangle_enforces_cocycle(self):
+        """On the closed tetrahedron the triangle (0,1,2) exists, so an edge
+        (0,1)-supported cochain has nonzero coboundary and cannot pass."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="not a cocycle"):
+            SteenrodSquareRequest(
+                cochain_degree=1,
+                simplex_values=((0, 1),),
+                simplex_coefficients=(1,),
+                square_degree=1,
+                ambient_simplices=_TETRAHEDRON,
+            )
+
+    def test_coboundary_of_vertex_on_closed_tetrahedron_admitted(self):
+        """d(vertex 0) is a genuine cocycle of the closed tetrahedron."""
+        result = compute_steenrod_square(
+            SteenrodSquareRequest(
+                cochain_degree=1,
+                simplex_values=((0, 1), (0, 2), (0, 3)),
+                simplex_coefficients=(1, 1, 1),
+                square_degree=1,
+                ambient_simplices=_TETRAHEDRON,
+            )
+        )
+        assert result.is_zero
+        assert result.result_simplex_values == ()
+
+    def test_ambient_simplex_vertex_cap(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="64 vertices"):
+            SteenrodSquareRequest(
+                cochain_degree=1,
+                simplex_values=((0, 1),),
+                simplex_coefficients=(1,),
+                square_degree=1,
+                ambient_simplices=(tuple(range(65)),),
+            )

@@ -8,6 +8,14 @@ from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 
+MAX_AMBIENT_SIMPLEX_VERTICES = 64
+"""Cap on the vertex count of one supplied ambient simplex.
+
+Supported cochain degrees stop at 16, so top-square targets carry at most
+``2*16 + 1 = 33`` vertices; 64 keeps validation work linear and bounded with
+headroom over every simplex dimension these operations can target.
+"""
+
 
 def _validate_simplex_entries(
     entries: tuple[tuple[int, ...], ...],
@@ -20,6 +28,25 @@ def _validate_simplex_entries(
             raise ValueError(f"{label} vertices must be distinct")
         if tuple(sorted(simplex)) != simplex:
             raise ValueError(f"{label} vertices must be sorted canonical")
+
+
+def _require_downward_closed(simplices: tuple[tuple[int, ...], ...]) -> None:
+    """Require every codimension-one face of every supplied simplex.
+
+    A finite simplicial complex is determined by its listed simplices only
+    when it is closed under taking faces. Without closure, a tetrahedron
+    entry would silently imply triangles and edges that the coboundary test
+    and top-square targeting never see.
+    """
+    known = set(simplices)
+    for simplex in simplices:
+        for index in range(len(simplex)):
+            face = simplex[:index] + simplex[index + 1 :]
+            if face and face not in known:
+                raise ValueError(
+                    "ambient_simplices must be downward closed: the face "
+                    f"{face} of {simplex} is absent"
+                )
 
 
 def _require_cocycle(
@@ -53,6 +80,32 @@ def _require_cocycle(
             )
 
 
+def _validate_ambient_complex(
+    cochain_degree: int,
+    support: tuple[tuple[int, ...], ...],
+    coefficients: tuple[int, ...],
+    ambient: tuple[tuple[int, ...], ...],
+) -> None:
+    """Validate shape, closure, support containment, and cocyclicity.
+
+    The complex must be closed under taking faces before any of the other
+    checks run: an omitted implied face would hide a nonzero coboundary or
+    let a cup product target a simplex that does not exist.
+    """
+    _validate_simplex_entries(ambient, "ambient simplex")
+    if any(len(simplex) > MAX_AMBIENT_SIMPLEX_VERTICES for simplex in ambient):
+        raise ValueError(
+            "each ambient simplex may carry at most "
+            f"{MAX_AMBIENT_SIMPLEX_VERTICES} vertices"
+        )
+    known = set(ambient)
+    for simplex in support:
+        if simplex not in known:
+            raise ValueError("cochain support must lie inside the ambient complex")
+    _require_downward_closed(ambient)
+    _require_cocycle(cochain_degree, support, coefficients, ambient)
+
+
 class SteenrodSquareRequest(StrictModel):
     """Compute Steenrod squares Sq^k(x) for a cocycle over GF(2).
 
@@ -74,8 +127,10 @@ class SteenrodSquareRequest(StrictModel):
         max_length=4096,
         description=(
             "Simplices of the ambient complex, each a canonically sorted "
-            "vertex tuple; required whenever square_degree equals "
-            "cochain_degree and the cochain degree is positive."
+            "vertex tuple with at most 64 vertices; the collection must be "
+            "downward closed (every face of every listed simplex is listed). "
+            "Required whenever square_degree equals cochain_degree and the "
+            "cochain degree is positive."
         ),
     )
 
@@ -98,25 +153,21 @@ class SteenrodSquareRequest(StrictModel):
             raise ValueError(
                 "intermediate Steenrod squares 0<k<deg require cup-i products and are not supported"
             )
-        if self.square_degree == self.cochain_degree and self.cochain_degree >= 1:
-            # A top square is the cup product x cup x carried by
-            # (2*deg)-simplices of the ambient complex. Without the complex,
-            # the vertex union cannot distinguish an absent face from a
-            # present one, so no exact claim is possible.
-            if not self.ambient_simplices:
-                raise ValueError(
-                    "the top Steenrod square requires the ambient simplicial "
-                    "complex; supply ambient_simplices"
-                )
-            _validate_simplex_entries(self.ambient_simplices, "ambient simplex")
-            known = set(self.ambient_simplices)
-            for simplex in self.simplex_values:
-                if simplex not in known:
-                    raise ValueError(
-                        "cochain support must lie inside the ambient complex"
-                    )
+        # A top square is the cup product x cup x carried by (2*deg)-simplices
+        # of the ambient complex. Without the complex, the vertex union cannot
+        # distinguish an absent face from a present one, so no exact claim is
+        # possible.
+        if (
+            self.square_degree == self.cochain_degree
+            and self.cochain_degree >= 1
+            and not self.ambient_simplices
+        ):
+            raise ValueError(
+                "the top Steenrod square requires the ambient simplicial "
+                "complex; supply ambient_simplices"
+            )
         if self.ambient_simplices:
-            _require_cocycle(
+            _validate_ambient_complex(
                 self.cochain_degree,
                 self.simplex_values,
                 self.simplex_coefficients,

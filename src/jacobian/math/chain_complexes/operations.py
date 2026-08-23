@@ -185,7 +185,8 @@ def _require_square_zero(
 
     ``group_columns`` carries chain-group dimensions so zero-width groups
     preserve outer product dimensions; diagnostics report the declared
-    chain degree (``degree_min + index``), not the tuple index.
+    chain degree of the composed pair (``degree_min + index + 1``, matching
+    the verification operation's verdict), not the tuple index.
     """
     for i in range(len(diffs) - 1):
         result_columns = group_columns[i + 2] if group_columns is not None else None
@@ -201,7 +202,7 @@ def _require_square_zero(
         )
         if any(value != 0 for row in product for value in row):
             raise ValueError(
-                f"{label} complex violates d^2=0 at chain degree {degree_min + i}"
+                f"{label} complex violates d^2=0 at chain degree {degree_min + i + 1}"
             )
 
 

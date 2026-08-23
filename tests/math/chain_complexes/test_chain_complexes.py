@@ -1103,7 +1103,9 @@ class TestChainDegreeDiagnostics:
             basis_sizes=(1, 1, 1),
             differential_matrices=((("1",),), (("1",),)),
         )
-        with pytest.raises(ValueError, match="chain degree -2"):
+        # The failing pair is (d_{-2}, d_{-1}); its composition is reported
+        # at the middle declared degree -1, matching verify_differential.
+        with pytest.raises(ValueError, match="chain degree -1"):
             compute_homology(ComputeHomologyRequest(complex=bad))
 
 
@@ -1667,4 +1669,65 @@ class TestReviewRegressions2236:
                 degree_min=-5,
             )
         detail = str(shifted_error.value)
-        assert "at chain degree -5" in detail, detail
+        # The composed pair's middle declared degree, matching the
+        # verification operation's verdict for the same complex.
+        assert "at chain degree -4" in detail, detail
+
+
+class TestNativeWrappersCallKernelsDirectly:
+    """Native wrappers invoke typed kernels without the wire envelope."""
+
+    @staticmethod
+    def _circle() -> ChainComplexValue:
+        return ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=1,
+            basis_sizes=(1, 1),
+            differential_matrices=((("0",),),),
+        )
+
+    def test_native_paths_survive_disabled_wire_handlers(self, monkeypatch):
+        """Blocking every wire handler still yields correct native results."""
+        import jacobian.math.chain_complexes.operations as ops
+
+        def blocked(*args, **kwargs):
+            raise AssertionError("wire handler reached from the native path")
+
+        for name in (
+            "compute_homology",
+            "verify_differential",
+            "verify_chain_map",
+            "compute_mapping_cone",
+            "compute_tensor_product",
+        ):
+            monkeypatch.setattr(ops, name, blocked)
+
+        from jacobian.math.chain_complexes import native
+
+        circle = self._circle()
+        homology = native.homology_groups(circle)
+        assert homology.homology_groups[0].betti_number == 1
+        assert native.differential_squares_to_zero(circle).is_valid is True
+        identity_map = ((("1",),),)
+        assert len(identity_map) == 1
+        identity_map = ((("1",),), (("1",),))
+        cone = native.mapping_cone(circle, circle, identity_map)
+        assert cone.source_degree_min == 0
+        tensor = native.tensor_product_complex(circle, circle)
+        assert tensor.value.degree_max == 2
+
+    def test_native_chain_map_verdict_matches_wire_semantics(self, monkeypatch):
+        import jacobian.math.chain_complexes.operations as ops
+
+        def blocked(*args, **kwargs):
+            raise AssertionError("wire handler reached from the native path")
+
+        monkeypatch.setattr(ops, "verify_chain_map", blocked)
+        from jacobian.math.chain_complexes import native
+
+        circle = self._circle()
+        # One component per chain group: the identity chain map.
+        identity = ((("1",),), (("1",),))
+        verdict = native.chain_map_commutes(circle, circle, identity)
+        assert verdict.is_valid is True

@@ -273,12 +273,15 @@ def find_subgraph_embedding(  # noqa: C901
     backtracking.  Callers must enforce the request's assignment-count
     admission before invoking this kernel.
     """
-    # Build host adjacency as set of unordered label pairs for fast check.
-    host_edge_set: set[tuple[str, str]] = set()
-    for u, v in host_edges:
-        host_edge_set.add((u, v) if u < v else (v, u))
+    # Normalize host labels to indices once, as the cycle kernel does: the
+    # assignment-count admission bounds search paths, so every per-check
+    # cost must be index work rather than label-length-dependent string
+    # comparisons, which long shared-prefix labels would multiply into an
+    # unbounded admitted run.
+    _, host_adj = _canonical_label_adjacency(host_vertices, host_edges)
     p_n = len(pattern_vertices)
     h_n = len(host_vertices)
+    pattern_index = {label: i for i, label in enumerate(pattern_vertices)}
     # Map pattern vertex label -> degree for ordering.
     pattern_degree: dict[str, int] = dict.fromkeys(pattern_vertices, 0)
     for u, v in pattern_edges:
@@ -289,7 +292,7 @@ def find_subgraph_embedding(  # noqa: C901
     )
     # Pattern edges as pairs of indices in pattern vertex order.
     pattern_edge_idx = tuple(
-        (pattern_vertices.index(u), pattern_vertices.index(v)) for u, v in pattern_edges
+        (pattern_index[u], pattern_index[v]) for u, v in pattern_edges
     )
     vertex_map_idx: list[int] = [-1] * p_n  # pattern idx -> host idx
     used_host_idx: set[int] = set()
@@ -299,18 +302,12 @@ def find_subgraph_embedding(  # noqa: C901
         pattern_adj[u_idx].append(v_idx)
         pattern_adj[v_idx].append(u_idx)
 
-    def _edge_ok(candidate_label: str, p_idx: int) -> bool:
+    def _edge_ok(candidate_idx: int, p_idx: int) -> bool:
         for nbr in pattern_adj[p_idx]:
             mapped = vertex_map_idx[nbr]
             if mapped == -1:
                 continue
-            other_label = host_vertices[mapped]
-            key = (
-                (candidate_label, other_label)
-                if candidate_label < other_label
-                else (other_label, candidate_label)
-            )
-            if key not in host_edge_set:
+            if mapped not in host_adj[candidate_idx]:
                 return False
         return True
 
@@ -321,8 +318,7 @@ def find_subgraph_embedding(  # noqa: C901
         for h_idx in range(h_n):
             if h_idx in used_host_idx:
                 continue
-            candidate_label = host_vertices[h_idx]
-            if not _edge_ok(candidate_label, p_idx):
+            if not _edge_ok(h_idx, p_idx):
                 continue
             vertex_map_idx[p_idx] = h_idx
             used_host_idx.add(h_idx)

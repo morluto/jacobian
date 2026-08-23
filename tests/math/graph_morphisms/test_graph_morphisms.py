@@ -531,3 +531,58 @@ class TestSubgraphPatternFind:
                 pattern=big_pat, host=big_host, decision="DOES_NOT_EXIST", vertex_map=()
             )
         assert MAX_CYCLE_SEARCH_PATHS > 0
+
+
+class TestSubgraphPatternFindLabelCost:
+    def _g(self, vertices, edges):
+        return _canonical_graph(vertices, edges)
+
+    def test_long_shared_prefix_labels_decide_correctly(self):
+        """Search work must be index work, not label-byte comparisons.
+
+        Host labels share a long common prefix; lexicographic comparisons
+        on such labels would multiply every assignment check by the label
+        length and turn the admitted P(n,k) budget into an effectively
+        unbounded run (review counterexample shape: matching pattern vs a
+        host with fewer edges).
+        """
+        from jacobian.math.graphs.morphisms._models import (
+            SubgraphPatternFindRequest,
+            SubgraphPatternFindResult,
+        )
+        from jacobian.math.graphs.morphisms._operations import (
+            compute_subgraph_pattern_find,
+        )
+
+        prefix = "n" * 4096
+        pat = self._g(
+            tuple(f"{prefix}p{i}" for i in range(10)),
+            [[f"{prefix}p{i}", f"{prefix}p{5 + i}"] for i in range(5)],
+        )
+        # Four disjoint edges only: no 5-edge matching exists.
+        host = self._g(
+            tuple(f"{prefix}h{i}" for i in range(10)),
+            [
+                [f"{prefix}h0", f"{prefix}h1"],
+                [f"{prefix}h2", f"{prefix}h3"],
+                [f"{prefix}h4", f"{prefix}h5"],
+                [f"{prefix}h6", f"{prefix}h7"],
+            ],
+        )
+        result = compute_subgraph_pattern_find(
+            SubgraphPatternFindRequest(pattern=pat, host=host),
+        )
+        assert result.decision == "DOES_NOT_EXIST"
+        SubgraphPatternFindResult(
+            pattern=pat, host=host, decision=result.decision, vertex_map=()
+        )
+
+        # The same host admits a 4-edge matching after dropping one edge.
+        smaller_pattern = self._g(
+            tuple(f"{prefix}q{i}" for i in range(8)),
+            [[f"{prefix}q{i}", f"{prefix}q{4 + i}"] for i in range(4)],
+        )
+        found = compute_subgraph_pattern_find(
+            SubgraphPatternFindRequest(pattern=smaller_pattern, host=host),
+        )
+        assert found.decision == "EXISTS"

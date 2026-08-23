@@ -30,7 +30,6 @@ _MAX_TRANSITION_PROFILE_DP_UPDATES = 2_000_000
 _MAX_TRANSITION_PROFILE_VECTOR_UPDATE_WORK = 20_000_000
 _MAX_TRANSITION_PROFILE_VECTOR_COORDINATES = 4_000_000
 _MAX_TRANSITION_PROFILE_RESULT_BYTES = 4 * 1024 * 1024
-_MAX_TRANSITION_PROFILE_PREFLIGHT_SCANS = 4_000_000
 _MAX_TRANSITION_PROFILE_COMPOSITION_CELLS = 20_000_000
 
 # Conservative canonical-wire allowances. One source transition has four
@@ -130,7 +129,7 @@ def _path_count_and_walk_update_bound(
     path_length: int,
     composition_update_bound: int,
 ) -> tuple[int, int, int]:
-    """Return target path count, path-extension count, and peak layer paths."""
+    """Return target path count, capped path extensions, and peak layer paths."""
 
     outgoing = _outgoing_transitions(automaton)
 
@@ -138,19 +137,14 @@ def _path_count_and_walk_update_bound(
     counts[source_state] = 1
     walk_updates = 0
     max_layer_paths = 1
-    preflight_scans = 0
     for _ in range(path_length):
         next_counts = [0] * automaton.state_count
         for state, multiplicity in enumerate(counts):
             if not multiplicity:
                 continue
-            preflight_scans += len(outgoing[state])
-            if preflight_scans > _MAX_TRANSITION_PROFILE_PREFLIGHT_SCANS:
-                raise ValueError(
-                    "transition-Parikh preflight reachable-state scan bound exceeded; "
-                    "reduce the path length or reachable transition carrier"
-                )
             for transition in outgoing[state]:
+                # Every reachable-state scan extends at least one path, so this
+                # capped count also bounds the state preflight's transition work.
                 walk_updates = min(
                     _MAX_TRANSITION_PROFILE_DP_UPDATES + 1,
                     walk_updates + multiplicity,

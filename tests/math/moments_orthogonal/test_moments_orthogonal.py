@@ -24,6 +24,7 @@ from jacobian.math.moments_orthogonal._models import (
     JacobiMatrixResult,
     RecurrenceCoefficientsRequest,
     RecurrenceCoefficientsResult,
+    RecurrenceCoefficientsValue,
 )
 from jacobian.math.moments_orthogonal._operations import (
     compute_christoffel_darboux,
@@ -264,20 +265,24 @@ class TestWireAdapters:
         )
         result = compute_recurrence_coefficients(request)
         assert isinstance(result, RecurrenceCoefficientsResult)
-        assert len(result.alpha) == 3
+        assert len(result.coefficients.alpha) == 3
 
     def test_jacobi_wire(self) -> None:
         request = JacobiMatrixRequest(
-            alpha=(_cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            coefficients=RecurrenceCoefficientsValue(
+                alpha=(_cr(1, 2), _cr(1, 2)),
+                beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            )
         )
         result = compute_jacobi_matrix(request)
         assert isinstance(result, JacobiMatrixResult)
 
     def test_christoffel_darboux_wire(self) -> None:
         request = ChristoffelDarbouxRequest(
-            alpha=(_cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            coefficients=RecurrenceCoefficientsValue(
+                alpha=(_cr(1, 2), _cr(1, 2)),
+                beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            ),
             x=_cr(1, 1),
             y=_cr(1, 1),
         )
@@ -294,8 +299,10 @@ class TestWireAdapters:
 
         with pytest.raises(ValidationError):
             ChristoffelDarbouxRequest(
-                alpha=tuple(tall(i) for i in range(16)),
-                beta=tuple(tall(16 + i) for i in range(16)),
+                coefficients=RecurrenceCoefficientsValue(
+                    alpha=tuple(tall(i) for i in range(16)),
+                    beta=tuple(tall(16 + i) for i in range(16)),
+                ),
                 x=tall(32),
                 y=tall(33),
             )
@@ -308,8 +315,10 @@ class TestWireAdapters:
             return CanonicalRational(num="1", den=str(10**40 + 2 * i + 1))
 
         request = ChristoffelDarbouxRequest(
-            alpha=tuple(small(i) for i in range(16)),
-            beta=tuple(small(16 + i) for i in range(16)),
+            coefficients=RecurrenceCoefficientsValue(
+                alpha=tuple(small(i) for i in range(16)),
+                beta=tuple(small(16 + i) for i in range(16)),
+            ),
             x=small(32),
             y=small(33),
         )
@@ -338,12 +347,14 @@ class TestWireAdapters:
         )
         result = compute_recurrence_coefficients(request)
         assert isinstance(result, RecurrenceCoefficientsResult)
-        assert len(result.alpha) == 3
+        assert len(result.coefficients.alpha) == 3
 
     def test_gaussian_quadrature_wire(self) -> None:
         request = GaussianQuadratureRequest(
-            alpha=(_cr(1, 2), _cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15), _cr(4, 45)),
+            coefficients=RecurrenceCoefficientsValue(
+                alpha=(_cr(1, 2), _cr(1, 2), _cr(1, 2)),
+                beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15), _cr(4, 45)),
+            )
         )
         result = compute_gaussian_quadrature(request)
         assert isinstance(result, GaussianQuadratureResult)
@@ -378,3 +389,49 @@ class TestToolsAndExamples:
         for tool in TOOLS:
             names = [ex.name for ex in tool.examples]
             assert len(names) == len(set(names))
+
+
+class TestOddPrefixTrailingCoefficient:
+    """Every retained moment must determine the returned coefficients."""
+
+    def test_odd_length_trailing_moment_determines_final_beta(self) -> None:
+        """mu_2 distinguishes (1,0,1) from (1,0,2) through beta_1."""
+        first = recurrence_coefficients((_frac(1, 1), _frac(0, 1), _frac(1, 1)))
+        second = recurrence_coefficients((_frac(1, 1), _frac(0, 1), _frac(2, 1)))
+        assert first.alpha == (_frac(0, 1),)
+        assert second.alpha == (_frac(0, 1),)
+        assert first.beta == (_frac(1, 1), _frac(1, 1))
+        assert second.beta == (_frac(1, 1), _frac(2, 1))
+
+    def test_odd_length_indefinite_trailing_hankel_rejected(self) -> None:
+        """(1, 0, -1) has an indefinite trailing Hankel minor."""
+        with pytest.raises(ValueError, match="positive-definite"):
+            recurrence_coefficients((_frac(1, 1), _frac(0, 1), _frac(-1, 1)))
+
+
+class TestCanonicalCoefficientsComposition:
+    """The serialized recurrence value feeds every consumer unchanged."""
+
+    def test_result_coefficients_feed_all_consumers(self) -> None:
+        request = RecurrenceCoefficientsRequest(
+            moments=tuple(_cr(2, k) for k in range(1, 8))
+        )
+        produced = compute_recurrence_coefficients(request)
+        value = produced.coefficients
+
+        jacobi = compute_jacobi_matrix(JacobiMatrixRequest(coefficients=value))
+        assert isinstance(jacobi, JacobiMatrixResult)
+
+        cd = compute_christoffel_darboux(
+            ChristoffelDarbouxRequest(
+                coefficients=value,
+                x=_cr(1, 1),
+                y=_cr(1, 1),
+            )
+        )
+        assert isinstance(cd, ChristoffelDarbouxResult)
+
+        quadrature = compute_gaussian_quadrature(
+            GaussianQuadratureRequest(coefficients=value)
+        )
+        assert isinstance(quadrature, GaussianQuadratureResult)

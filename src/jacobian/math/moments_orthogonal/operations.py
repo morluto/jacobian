@@ -86,10 +86,10 @@ def _monic_orthogonal_recurrence(
     with ``p_{-1} = 0``, ``p_0 = 1``, ``beta_0 = mu_0``.
 
     ``max_order`` recurrence coefficients ``alpha`` are produced, consuming
-    moments through ``mu_(2 * max_order - 1)``: the final shift coefficient
-    is fully determined by the supplied odd-indexed moment, and the next
-    squared norm (which would consume ``mu_(2 * max_order)``) is never
-    needed for the emitted coefficients.
+    moments through ``mu_(2 * max_order - 1)``; when the retained prefix
+    also carries the odd moment ``mu_{2*max_order}``, the final squared
+    norm and its trailing ``beta`` coefficient are derived from it, so
+    every retained moment is consumed.
     """
     alpha: list[Fraction] = []
     beta: list[Fraction] = [moments[0]]
@@ -100,10 +100,6 @@ def _monic_orthogonal_recurrence(
     for k in range(max_order):
         alpha_k = _inner_product(moments, _shift_up(p_curr), p_curr) / h_curr
         alpha.append(alpha_k)
-        if k == max_order - 1:
-            # The last shift coefficient is already determined; advancing
-            # the squared norm would consume an unavailable next moment.
-            break
         beta_k = (
             Fraction(0) if k == 0 else (h_curr / h_prev if h_prev != 0 else Fraction(0))
         )
@@ -114,12 +110,26 @@ def _monic_orthogonal_recurrence(
         h_prev = h_curr
         p_prev = p_curr
         p_curr = p_next
+        if k == max_order - 1:
+            break
         h_curr = _inner_product(moments, p_curr, p_curr)
         if h_curr <= 0:
             raise ValueError(
                 "moment sequence does not define a positive-definite measure"
             )
         beta.append(h_curr / h_prev)
+    if len(moments) > 2 * max_order:
+        # An odd-length prefix retains mu_{2*max_order}, which determines the
+        # final squared norm h_n = <p_n, p_n> and therefore the trailing
+        # beta_n = h_n / h_{n-1}. Consuming it keeps the result a complete
+        # function of every retained moment; an indefinite trailing Hankel
+        # form is rejected instead of silently ignored.
+        h_final = _inner_product(moments, p_curr, p_curr)
+        if h_final <= 0:
+            raise ValueError(
+                "moment sequence does not define a positive-definite measure"
+            )
+        beta.append(h_final / h_curr)
     return alpha, beta
 
 

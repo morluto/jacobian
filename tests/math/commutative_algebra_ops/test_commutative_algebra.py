@@ -8,6 +8,7 @@ from itertools import combinations
 
 import pytest
 import sympy
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.commutative_algebra_ops import _singular
@@ -16,11 +17,13 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealQuotientRequest,
     IdealRadicalMembershipRequest,
     IdealRadicalRequest,
+    IdealSaturationResult,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
     compute_ideal_quotient,
     compute_ideal_radical,
     compute_ideal_radical_membership,
+    compute_ideal_saturation,
 )
 from jacobian.math.commutative_algebra_ops._tools import TOOLS
 from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
@@ -461,3 +464,46 @@ def test_ideal_quotient_by_product_equals_iterated_quotient() -> None:
     assert iterated.quotient is not None
     assert _equal(by_product.quotient, iterated.quotient)
     assert _equal(by_product.quotient, _ideal(variables, {(2, 1): 1}))
+
+
+class TestSaturationResultSourceBinding:
+    """A COMPUTED saturation cannot detach from its source request."""
+
+    def _request(self):
+        from jacobian.math.commutative_algebra_ops._models import (
+            IdealSaturationRequest,
+        )
+
+        return IdealSaturationRequest(
+            ideal=_ideal(("x", "y"), {(1, 1): 1}),
+            saturation_polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
+        )
+
+    def test_computed_result_retains_source_and_revalidates(self) -> None:
+        result = compute_ideal_saturation(self._request())
+        assert result.request == self._request()
+        assert result.outcome == "COMPUTED"
+        payload = result.model_dump(mode="json")
+        reparsed = IdealSaturationResult.model_validate(payload)
+        assert reparsed == result
+
+    def test_forged_saturation_is_rejected_by_replay(self) -> None:
+        """(<x*y> : <x>^infinity) is <y>; claiming <x> must fail replay."""
+        request = self._request()
+        assert compute_ideal_saturation(request).outcome == "COMPUTED"
+        payload = {
+            "outcome": "COMPUTED",
+            "request": request.model_dump(mode="json"),
+            "saturation": _ideal(("x", "y"), {(1, 0): 1}).model_dump(mode="json"),
+            "backend_version": "singular-test",
+        }
+        with pytest.raises(ValidationError, match="exact saturation"):
+            IdealSaturationResult.model_validate(payload)
+
+    def test_computed_result_requires_the_retained_request(self) -> None:
+        with pytest.raises(ValidationError, match="source request"):
+            IdealSaturationResult(
+                outcome="COMPUTED",
+                saturation=_ideal(("x", "y"), {(0, 1): 1}),
+                backend_version="singular-test",
+            )

@@ -45,7 +45,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute circle inversion of a rational planar point",
         "Given a rational planar center, a positive rational inversion power "
         "(squared radius), and a rational point p ≠ c, return the exact "
-        "rational inverted point q = c + (s / ||p-c||²) * (p-c).",
+        "rational inverted point q = c + (s / ||p-c||²) * (p-c). Center and "
+        "point are canonical geometry points; the image composes unchanged. "
+        "Inputs and exact image stay within the reusable admission bound.",
         CircleInversionRequest,
         CircleInversionResult,
         compute_circle_inversion,
@@ -57,11 +59,15 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "unit_inversion_at_origin",
                 "Unit circle inversion around the origin: B=(4,0) -> (1/4,0).",
                 {
-                    "center_x": {"num": "0", "den": "1"},
-                    "center_y": {"num": "0", "den": "1"},
+                    "center": {
+                        "x": {"num": "0", "den": "1"},
+                        "y": {"num": "0", "den": "1"},
+                    },
                     "power": {"num": "1", "den": "1"},
-                    "point_x": {"num": "4", "den": "1"},
-                    "point_y": {"num": "0", "den": "1"},
+                    "point": {
+                        "x": {"num": "4", "den": "1"},
+                        "y": {"num": "0", "den": "1"},
+                    },
                 },
             ),
         ),

@@ -3,21 +3,20 @@
 from __future__ import annotations
 
 from jacobian.math.moments_orthogonal._models import (
-    ChristoffelDarbouxRequest,
     GaussianQuadratureRequest,
     HankelRequest,
     JacobiMatrixRequest,
-    RecurrenceRequest,
     ShiftedHankelRequest,
 )
 from jacobian.math.moments_orthogonal.operations import (
-    compute_christoffel_darboux,
+    _require_gram_schmidt_admission,
+    christoffel_darboux_kernel_from_family,
     compute_gaussian_quadrature,
     compute_hankel_matrix,
     compute_jacobi_matrix,
-    compute_recurrence,
     compute_shifted_hankel,
     orthogonal_polynomials_from_moments,
+    recurrence_coefficients_from_family,
 )
 from jacobian.math.moments_orthogonal.values import (
     ChristoffelDarbouxKernel,
@@ -57,26 +56,25 @@ def orthogonal_polynomials(
 ) -> OrthogonalPolynomialFamily:
     """Exact monic orthogonal polynomial family p_0,...,p_max_degree.
 
-    Calls the shared Gram-Schmidt kernel directly — no wire envelope, so
-    the exact projection runs once per call.
+    Applies the shared degree, moment-count, and height admission before
+    calling the Gram-Schmidt kernel directly — no wire envelope, so the
+    exact projection runs once per call.
     """
-
+    _require_gram_schmidt_admission(prefix, max_degree)
     moments = [_m.as_fraction() for _m in prefix.moments]
     return orthogonal_polynomials_from_moments(moments, max_degree, prefix.variable)
 
 
 def recurrence_coefficients(family: OrthogonalPolynomialFamily) -> ThreeTermRecurrence:
     """Exact three-term recurrence coefficients of one orthogonal family."""
-    return compute_recurrence(RecurrenceRequest(family=family))
+    return recurrence_coefficients_from_family(family)
 
 
 def christoffel_darboux_kernel(
     family: OrthogonalPolynomialFamily, degree: int
 ) -> ChristoffelDarbouxKernel:
     """Exact Christoffel-Darboux kernel K_degree(x,y) of one family."""
-    return compute_christoffel_darboux(
-        ChristoffelDarbouxRequest(family=family, degree=degree)
-    )
+    return christoffel_darboux_kernel_from_family(family, degree)
 
 
 def jacobi_matrix(family: OrthogonalPolynomialFamily) -> JacobiMatrix:

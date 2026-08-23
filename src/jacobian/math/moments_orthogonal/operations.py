@@ -320,6 +320,33 @@ def orthogonal_polynomials_from_moments(
     )
 
 
+def _require_gram_schmidt_admission(
+    prefix: MomentFunctionalPrefix, max_degree: int
+) -> None:
+    """Shared degree, moment-count, and height admission for the kernel.
+
+    The wire request model enforces the same bounds through its fields and
+    validators; native callers bypass that envelope, so this gate keeps
+    the exported exact API from fabricating omitted moments (a short
+    prefix silently reads missing moments as zero) or accepting
+    unsupported degrees.
+    """
+    from jacobian.math.moments_orthogonal._models import (
+        _require_gram_schmidt_heights_admissible,
+    )
+    from jacobian.math.moments_orthogonal.values import MAX_POLYNOMIAL_DEGREE
+
+    if not 0 <= max_degree <= MAX_POLYNOMIAL_DEGREE:
+        raise ValueError(f"max_degree must be between 0 and {MAX_POLYNOMIAL_DEGREE}")
+    needed = 2 * max_degree + 1
+    if len(prefix.moments) < needed:
+        raise ValueError(
+            f"need at least {needed} moments for degree {max_degree}, got "
+            f"{len(prefix.moments)}"
+        )
+    _require_gram_schmidt_heights_admissible(prefix.moments, max_degree)
+
+
 def compute_orthogonal_polynomials(
     request: OrthogonalPolynomialRequest,
 ) -> OrthogonalPolynomialFamily:
@@ -330,8 +357,10 @@ def compute_orthogonal_polynomials(
     )
 
 
-def compute_recurrence(request: RecurrenceRequest) -> ThreeTermRecurrence:
-    """Compute three-term recurrence coefficients from orthogonal polynomials.
+def recurrence_coefficients_from_family(
+    family: OrthogonalPolynomialFamily,
+) -> ThreeTermRecurrence:
+    """Domain kernel: three-term recurrence coefficients of one family.
 
     p_{k+1}(x) = (x - alpha_k) p_k(x) - beta_k p_{k-1}(x)
 
@@ -341,7 +370,7 @@ def compute_recurrence(request: RecurrenceRequest) -> ThreeTermRecurrence:
     need ``p_n`` or additional moments - is omitted.  ``beta[0]`` is an
     unused placeholder; ``beta[k] = <p_k,p_k>/<p_{k-1},p_{k-1}>`` for k >= 1.
     """
-    polys = request.family.polynomials
+    polys = family.polynomials
     n = len(polys)
 
     def poly_to_frac_list(p: OrthogonalPolynomialTerm) -> list[Fraction]:
@@ -384,8 +413,13 @@ def compute_recurrence(request: RecurrenceRequest) -> ThreeTermRecurrence:
     return ThreeTermRecurrence(
         alpha=tuple(_from_fraction(a) for a in alphas),
         beta=tuple(_from_fraction(b) for b in betas),
-        variable=request.family.variable,
+        variable=family.variable,
     )
+
+
+def compute_recurrence(request: RecurrenceRequest) -> ThreeTermRecurrence:
+    """MCP adapter: parse one request, call the domain kernel once."""
+    return recurrence_coefficients_from_family(request.family)
 
 
 def _kernel_coefficient_matrix(
@@ -411,10 +445,10 @@ def _kernel_coefficient_matrix(
     return coefficients
 
 
-def compute_christoffel_darboux(
-    request: ChristoffelDarbouxRequest,
+def christoffel_darboux_kernel_from_family(
+    family: OrthogonalPolynomialFamily, degree: int
 ) -> ChristoffelDarbouxKernel:
-    """Compute the bivariate Christoffel-Darboux kernel K_m(x,y).
+    """Domain kernel: the bivariate Christoffel-Darboux kernel K_m(x,y).
 
     K_m(x, y) = sum_{k=0}^m p_k(x) p_k(y) / h_k is returned as the exact
     bivariate coefficient matrix ``coefficients[i][j]`` of ``x^i y^j`` so
@@ -422,8 +456,8 @@ def compute_christoffel_darboux(
     diagonal specialization K_m(x,x) is a derived evaluation, not the
     kernel itself.
     """
-    polys = request.family.polynomials
-    m = request.degree
+    polys = family.polynomials
+    m = degree
 
     if m >= len(polys):
         raise ValueError(f"degree {m} exceeds family size {len(polys)}")
@@ -447,9 +481,16 @@ def compute_christoffel_darboux(
             tuple(_from_fraction(coefficients[i][j]) for j in range(size))
             for i in range(size)
         ),
-        variable=request.family.variable,
-        family=request.family,
+        variable=family.variable,
+        family=family,
     )
+
+
+def compute_christoffel_darboux(
+    request: ChristoffelDarbouxRequest,
+) -> ChristoffelDarbouxKernel:
+    """MCP adapter: parse one request, call the domain kernel once."""
+    return christoffel_darboux_kernel_from_family(request.family, request.degree)
 
 
 def compute_jacobi_matrix(request: JacobiMatrixRequest) -> JacobiMatrix:

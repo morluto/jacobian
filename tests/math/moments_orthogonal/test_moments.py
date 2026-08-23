@@ -1207,3 +1207,34 @@ class TestAdmissionReplaysExecution:
         )
         with pytest.raises(ValidationError):
             ChristoffelDarbouxRequest(family=family, degree=1)
+
+
+class TestNativeAdmission:
+    def test_native_short_prefix_rejected_before_kernel(self) -> None:
+        """The native surface applies the shared moment-count admission so
+        it cannot fabricate omitted moments as zeros."""
+        from jacobian.math.moments_orthogonal import native
+
+        prefix = _prefix(
+            (
+                CanonicalRational(num="1", den="1"),
+                CanonicalRational(num="2", den="1"),
+            )
+        )
+        with pytest.raises(ValueError, match="need at least 3 moments"):
+            native.orthogonal_polynomials(prefix, max_degree=1)
+
+    def test_native_over_tall_prefix_rejected_by_height_gate(self) -> None:
+        """The native surface enforces the same conservative height bound
+        as the wire request."""
+        from jacobian.math.moments_orthogonal import native
+
+        prefix = _prefix(
+            (
+                CanonicalRational.from_fraction(Fraction(1, 10**20000)),
+                CanonicalRational.from_fraction(Fraction(10) ** 20000),
+                CanonicalRational.from_fraction(Fraction(10) ** 20000),
+            )
+        )
+        with pytest.raises(ValueError, match="conservative"):
+            native.orthogonal_polynomials(prefix, max_degree=1)

@@ -200,7 +200,9 @@ EXACT_GEOMETRY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "general_position_no_collinear",
                 (
                     "Four points A=(-1,0), B=(1,0), C=(0,2), D=(0,-2) have no "
-                    "three collinear. The configuration must be planar."
+                    "three collinear. The configuration must be planar with "
+                    "3..64 points, pairwise distinct coordinates, each "
+                    "coordinate at most 64 digits."
                 ),
                 NO_COLLINEAR_GENERAL_POSITION,
             ),
@@ -208,7 +210,9 @@ EXACT_GEOMETRY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "collinear_triple_present",
                 (
                     "A=(0,0), B=(2,0), C=(0,2), D=(0,-2): A, C, D are collinear "
-                    "on x=0, so a collinear triple exists."
+                    "on x=0, so a collinear triple exists. The configuration "
+                    "must be planar with 3..64 points, pairwise distinct "
+                    "coordinates, each coordinate at most 64 digits."
                 ),
                 HAS_COLLINEAR_TRIPLE,
             ),
@@ -234,7 +238,10 @@ EXACT_GEOMETRY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "unit_circle_concyclic",
                 (
                     "Four points on the unit circle (1,0),(0,1),(-1,0),(0,-1) "
-                    "are concyclic. The configuration must be planar."
+                    "are concyclic. The configuration must be planar with "
+                    "4..18 points, pairwise distinct coordinates, each "
+                    "coordinate at most 64 digits, and joint work budget "
+                    "C(n,4)*h <= 65536 (h = largest coordinate digit length)."
                 ),
                 HAS_CONCYCLIC_QUADRUPLE,
             ),

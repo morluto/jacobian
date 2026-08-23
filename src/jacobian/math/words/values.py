@@ -13,6 +13,7 @@ MAX_ALPHABET_SIZE = 50
 MAX_SYMBOL_LENGTH = 64
 MAX_MORPHISM_IMAGE_LENGTH = 10_000
 MAX_MORPHISM_OUTPUT_LENGTH = MAX_WORD_LENGTH
+MAX_SUBSTITUTION_DEPENDENCY_OCCURRENCES = 10_000
 
 Symbol = Annotated[str, Field(min_length=1, max_length=MAX_SYMBOL_LENGTH)]
 
@@ -60,13 +61,117 @@ class WordMorphism(StrictModel):
         return self
 
 
+class Substitution(StrictModel):
+    """A finite-alphabet endomorphism, retaining its canonical morphism."""
+
+    morphism: WordMorphism
+
+    @model_validator(mode="after")
+    def require_endomorphism(self) -> Self:
+        if self.morphism.source_alphabet != self.morphism.target_alphabet:
+            raise ValueError(
+                "a substitution must have identical source and target alphabets"
+            )
+        return self
+
+
+class ProlongableSubstitution(StrictModel):
+    """A substitution with a certified unbounded nested seed iterate."""
+
+    substitution: Substitution
+    seed: Symbol
+
+    @model_validator(mode="after")
+    def require_growing_seed(self) -> Self:
+        morphism = self.substitution.morphism
+        if self.seed not in morphism.source_alphabet:
+            raise ValueError("seed must belong to the substitution alphabet")
+        seed_index = morphism.source_alphabet.index(self.seed)
+        seed_image = morphism.images[seed_index]
+        if not seed_image or seed_image[0] != self.seed:
+            raise ValueError("the seed image must begin with the seed")
+        if len(seed_image) == 1:
+            raise ValueError("the seed image must contain a nonempty growing suffix")
+        image_map = dict(zip(morphism.source_alphabet, morphism.images, strict=True))
+        mortal = {symbol for symbol, image in image_map.items() if not image}
+        changed = True
+        while changed:
+            changed = False
+            for symbol, image in image_map.items():
+                if symbol not in mortal and all(letter in mortal for letter in image):
+                    mortal.add(symbol)
+                    changed = True
+        if all(letter in mortal for letter in seed_image[1:]):
+            raise ValueError("the seed suffix must not eventually erase")
+        return self
+
+
+class SubstitutionDependencyEdge(StrictModel):
+    """One letter dependency with all occurrence positions in its source image."""
+
+    source: Symbol
+    target: Symbol
+    multiplicity: int = Field(ge=1, le=MAX_MORPHISM_IMAGE_LENGTH)
+    positions: tuple[int, ...] = Field(
+        min_length=1, max_length=MAX_MORPHISM_IMAGE_LENGTH
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_positions(self) -> Self:
+        if self.positions != tuple(sorted(set(self.positions))):
+            raise ValueError("dependency positions must be strictly increasing")
+        if self.positions[0] < 0:
+            raise ValueError("dependency positions must be nonnegative")
+        if self.multiplicity != len(self.positions):
+            raise ValueError("dependency multiplicity must equal the position count")
+        return self
+
+
+class SubstitutionDependencyGraph(StrictModel):
+    """The exact alphabet-labelled dependency graph of one substitution."""
+
+    substitution: Substitution
+    edges: tuple[SubstitutionDependencyEdge, ...] = Field(
+        max_length=MAX_ALPHABET_SIZE * MAX_ALPHABET_SIZE
+    )
+
+    @model_validator(mode="after")
+    def bind_graph_to_substitution(self) -> Self:
+        morphism = self.substitution.morphism
+        expected = tuple(
+            SubstitutionDependencyEdge(
+                source=source,
+                target=target,
+                multiplicity=image.count(target),
+                positions=tuple(
+                    position
+                    for position, letter in enumerate(image)
+                    if letter == target
+                ),
+            )
+            for source, image in zip(
+                morphism.source_alphabet, morphism.images, strict=True
+            )
+            for target in morphism.target_alphabet
+            if target in image
+        )
+        if self.edges != expected:
+            raise ValueError("dependency graph is not bound to the substitution")
+        return self
+
+
 __all__ = [
     "MAX_ALPHABET_SIZE",
     "MAX_MORPHISM_IMAGE_LENGTH",
     "MAX_MORPHISM_OUTPUT_LENGTH",
+    "MAX_SUBSTITUTION_DEPENDENCY_OCCURRENCES",
     "MAX_SYMBOL_LENGTH",
     "MAX_WORD_LENGTH",
     "FiniteWord",
+    "ProlongableSubstitution",
+    "Substitution",
+    "SubstitutionDependencyEdge",
+    "SubstitutionDependencyGraph",
     "Symbol",
     "WordMorphism",
 ]

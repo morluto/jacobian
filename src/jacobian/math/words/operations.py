@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 from jacobian.math.words.values import (
     MAX_MORPHISM_OUTPUT_LENGTH,
     FiniteWord,
+    ProlongableSubstitution,
+    Substitution,
+    SubstitutionDependencyEdge,
+    SubstitutionDependencyGraph,
     WordMorphism,
 )
 
@@ -23,6 +28,27 @@ class PeriodAnalysis:
     periods: tuple[int, ...]
     least_period: int
     primitive: bool
+
+
+@dataclass(frozen=True, slots=True)
+class FixedPointPrefixAnalysis:
+    prefix: FiniteWord
+    least_iterate_depth: int
+    retained_prefix_lengths: tuple[int, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PrimitivityAnalysis:
+    incidence_matrix: tuple[tuple[int, ...], ...]
+    strongly_connected_components: tuple[tuple[str, ...], ...]
+    irreducible: bool
+    aperiodic: bool | None
+    primitive: bool
+    least_positive_power: int | None
+    exponent_upper_bound: int
+    obstruction: Literal[
+        "NONE", "REDUCIBLE_DEPENDENCY_GRAPH", "PERIODIC_DEPENDENCY_GRAPH"
+    ]
 
 
 def factors_of_length(word: FiniteWord, factor_length: int) -> FactorAnalysis:
@@ -148,17 +174,153 @@ def incidence_matrix(morphism: WordMorphism) -> tuple[tuple[int, ...], ...]:
     )
 
 
+def substitution_dependency_graph(
+    substitution: Substitution,
+) -> SubstitutionDependencyGraph:
+    """Return every nonzero letter dependency in alphabet row order."""
+
+    morphism = substitution.morphism
+    edges = tuple(
+        SubstitutionDependencyEdge(
+            source=source,
+            target=target,
+            multiplicity=image.count(target),
+            positions=tuple(
+                position for position, letter in enumerate(image) if letter == target
+            ),
+        )
+        for source, image in zip(morphism.source_alphabet, morphism.images, strict=True)
+        for target in morphism.target_alphabet
+        if target in image
+    )
+    return SubstitutionDependencyGraph(substitution=substitution, edges=edges)
+
+
+def fixed_point_prefix(
+    source: ProlongableSubstitution, prefix_length: int
+) -> FixedPointPrefixAnalysis:
+    """Return the requested prefix from the least sufficient seed iterate."""
+
+    if not 0 <= prefix_length <= MAX_MORPHISM_OUTPUT_LENGTH:
+        raise ValueError(f"prefix length must be in 0..{MAX_MORPHISM_OUTPUT_LENGTH}")
+    morphism = source.substitution.morphism
+    image_map = dict(zip(morphism.source_alphabet, morphism.images, strict=True))
+    current: tuple[str, ...] = (source.seed,)
+    retained_prefix_lengths = [min(1, prefix_length)]
+    depth = 0
+    while len(current) < prefix_length:
+        current = tuple(output for letter in current for output in image_map[letter])[
+            :prefix_length
+        ]
+        depth += 1
+        retained_prefix_lengths.append(len(current))
+    return FixedPointPrefixAnalysis(
+        prefix=FiniteWord(
+            alphabet=morphism.target_alphabet,
+            letters=current[:prefix_length],
+        ),
+        least_iterate_depth=depth,
+        retained_prefix_lengths=tuple(retained_prefix_lengths),
+    )
+
+
+def _boolean_product(left: tuple[int, ...], right: tuple[int, ...]) -> tuple[int, ...]:
+    product: list[int] = []
+    for left_row in left:
+        row = 0
+        remaining = left_row
+        while remaining:
+            bit = remaining & -remaining
+            row |= right[bit.bit_length() - 1]
+            remaining ^= bit
+        product.append(row)
+    return tuple(product)
+
+
+def substitution_primitivity_profile(
+    dependency_graph: SubstitutionDependencyGraph,
+) -> PrimitivityAnalysis:
+    """Decide primitivity by Boolean powers through the Wielandt bound."""
+
+    import networkx as nx
+
+    alphabet = dependency_graph.substitution.morphism.source_alphabet
+    index = {symbol: position for position, symbol in enumerate(alphabet)}
+    graph: nx.DiGraph[str] = nx.DiGraph()
+    graph.add_nodes_from(alphabet)
+    graph.add_edges_from((edge.source, edge.target) for edge in dependency_graph.edges)
+
+    components = tuple(
+        sorted(
+            (
+                tuple(sorted(component, key=index.__getitem__))
+                for component in nx.strongly_connected_components(graph)
+            ),
+            key=lambda component: index[component[0]],
+        )
+    )
+    irreducible = len(components) == 1
+    aperiodic = nx.is_aperiodic(graph) if irreducible else None
+
+    order = len(alphabet)
+    exponent_upper_bound = 1 if order == 1 else (order - 1) ** 2 + 1
+    adjacency_rows = [0] * order
+    for edge in dependency_graph.edges:
+        adjacency_rows[index[edge.source]] |= 1 << index[edge.target]
+    adjacency = tuple(adjacency_rows)
+    full_row = (1 << order) - 1
+    power = adjacency
+    least_positive_power = None
+    for exponent in range(1, exponent_upper_bound + 1):
+        if all(row == full_row for row in power):
+            least_positive_power = exponent
+            break
+        power = _boolean_product(power, adjacency)
+
+    primitive = least_positive_power is not None
+    if primitive != (irreducible and aperiodic is True):
+        raise RuntimeError("graph and Boolean-power primitivity criteria disagree")
+    obstruction: Literal[
+        "NONE", "REDUCIBLE_DEPENDENCY_GRAPH", "PERIODIC_DEPENDENCY_GRAPH"
+    ]
+    if primitive:
+        obstruction = "NONE"
+    elif not irreducible:
+        obstruction = "REDUCIBLE_DEPENDENCY_GRAPH"
+    else:
+        obstruction = "PERIODIC_DEPENDENCY_GRAPH"
+
+    matrix = [[0] * order for _ in range(order)]
+    for edge in dependency_graph.edges:
+        matrix[index[edge.target]][index[edge.source]] = edge.multiplicity
+    return PrimitivityAnalysis(
+        incidence_matrix=tuple(tuple(row) for row in matrix),
+        strongly_connected_components=components,
+        irreducible=irreducible,
+        aperiodic=aperiodic,
+        primitive=primitive,
+        least_positive_power=least_positive_power,
+        exponent_upper_bound=exponent_upper_bound,
+        obstruction=obstruction,
+    )
+
+
 __all__ = [
     "FactorAnalysis",
+    "FixedPointPrefixAnalysis",
     "PeriodAnalysis",
+    "PrimitivityAnalysis",
     "apply_morphism",
     "compose_morphisms",
     "conjugates",
     "factor_occurrences",
     "factors_of_length",
+    "fixed_point_prefix",
     "incidence_matrix",
     "parikh_vector",
     "periods",
     "prefix_function",
     "primitive_root",
+    "substitution_dependency_graph",
+    "substitution_primitivity_profile",
 ]

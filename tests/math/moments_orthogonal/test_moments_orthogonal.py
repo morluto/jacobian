@@ -196,6 +196,36 @@ class TestChristoffelDarboux:
         assert result.kernel == _frac(0, 1)
         assert result.polynomials_evaluated == (_frac(1, 1),)
 
+    def test_nonpositive_beta_rejected(self) -> None:
+        """K_n(x, x) is a sum of squares over positive squared norms and
+        strictly positive; nonpositive used beta entries leave the
+        positive-definite family the kernel is defined on."""
+        with pytest.raises(ValueError, match="must be positive"):
+            christoffel_darboux(
+                (_frac(0, 1),), (_frac(-2, 1),), _frac(1, 1), _frac(1, 1)
+            )
+        with pytest.raises(ValueError, match="positive squared-norm"):
+            christoffel_darboux(
+                (_frac(0, 1), _frac(0, 1)),
+                (_frac(1, 1), _frac(-1, 1)),
+                _frac(1, 1),
+                _frac(1, 1),
+            )
+        with pytest.raises(ValueError, match="positive squared-norm"):
+            christoffel_darboux(
+                (_frac(0, 1), _frac(0, 1)),
+                (_frac(1, 1), _frac(0, 1)),
+                _frac(1, 1),
+                _frac(1, 1),
+            )
+
+    def test_unused_trailing_beta_outside_contract(self) -> None:
+        """beta_n is unused for alpha length n, mirroring the wire model."""
+        result = christoffel_darboux(
+            (_frac(0, 1),), (_frac(1, 1), _frac(-1, 1)), _frac(1, 1), _frac(1, 1)
+        )
+        assert result.kernel == _frac(1, 1)
+
 
 # ---------------------------------------------------------------------------
 # Gaussian quadrature

@@ -204,6 +204,32 @@ def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> Jacobi
     )
 
 
+def _validate_kernel_coefficients(
+    alpha: Sequence[Fraction], beta: Sequence[Fraction]
+) -> None:
+    """Coefficient admission shared with the wire request model.
+
+    The squared norms are ``h_0 = beta_0`` and ``h_k = beta_k * h_{k-1}``;
+    every used subdiagonal entry must be a positive ratio so each norm
+    dividing a kernel summand stays positive.
+    """
+    if not 1 <= len(beta) <= MAX_POLYNOMIAL_COUNT:
+        raise ValueError("beta must contain between 1 and 32 entries")
+    if not 0 <= len(alpha) <= MAX_POLYNOMIAL_COUNT:
+        raise ValueError("alpha out of range")
+    if len(alpha) != len(beta) and len(alpha) != len(beta) - 1:
+        raise ValueError("alpha must have length len(beta)-1 or len(beta)")
+    if beta[0] <= 0:
+        raise ValueError(
+            "beta_0 (the zeroth moment of a positive functional) must be positive"
+        )
+    for index in range(1, min(len(alpha), len(beta))):
+        if beta[index] <= 0:
+            raise ValueError(
+                "subdiagonal beta entries must be positive squared-norm ratios"
+            )
+
+
 def christoffel_darboux(
     alpha: Sequence[Fraction],
     beta: Sequence[Fraction],
@@ -222,17 +248,13 @@ def christoffel_darboux(
         K_n(x, y) = sum_{k=0}^{n-1} p_k(x) p_k(y) / h_k
 
     evaluated by forward recurrence of the polynomials at ``x`` and ``y``.
+
+    The coefficients must describe a positive-definite orthogonal family:
+    ``beta_0`` and every used subdiagonal entry must be positive.
     """
-    if not 1 <= len(beta) <= MAX_POLYNOMIAL_COUNT:
-        raise ValueError("beta must contain between 1 and 32 entries")
-    if not 0 <= len(alpha) <= MAX_POLYNOMIAL_COUNT:
-        raise ValueError("alpha out of range")
-    if len(alpha) != len(beta) and len(alpha) != len(beta) - 1:
-        raise ValueError("alpha must have length len(beta)-1 or len(beta)")
     if type(x) is not Fraction or type(y) is not Fraction:
         raise TypeError("x and y must use exact Fractions")
-    if beta[0] == 0:
-        raise ValueError("beta_0 must be nonzero")
+    _validate_kernel_coefficients(alpha, beta)
     n = len(alpha)
     if n == 0:
         return ChristoffelDarbouxKernel(

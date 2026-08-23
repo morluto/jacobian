@@ -172,9 +172,7 @@ def _require_positive_betas(
             )
 
 
-def jacobi_matrix(
-    alpha: Sequence[Fraction], beta: Sequence[Fraction]
-) -> JacobiMatrix:
+def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> JacobiMatrix:
     """Build the symmetric tridiagonal Jacobi matrix from recurrence coefficients.
 
     The diagonal entries are ``alpha_0, ..., alpha_{n-1}`` and the positive

@@ -27,8 +27,7 @@ def _point(label: str, x: int, y: int) -> ForbiddenLabelledPoint:
 def _configuration(*coordinates: tuple[int, int]) -> ForbiddenConfiguration:
     return ForbiddenConfiguration(
         points=tuple(
-            _point(f"p{index}", x, y)
-            for index, (x, y) in enumerate(coordinates)
+            _point(f"p{index}", x, y) for index, (x, y) in enumerate(coordinates)
         )
     )
 
@@ -77,9 +76,7 @@ class TestCheckedCountBinding:
         assert result.checked_triples == 1
 
     def test_larger_configuration_counts_every_prefix(self) -> None:
-        configuration = _configuration(
-            (0, 0), (1, 0), (0, 2), (3, 1), (5, 7), (4, 11)
-        )
+        configuration = _configuration((0, 0), (1, 0), (0, 2), (3, 1), (5, 7), (4, 11))
         result = forbidden_patterns(
             ForbiddenPatternsRequest(configuration=configuration)
         )

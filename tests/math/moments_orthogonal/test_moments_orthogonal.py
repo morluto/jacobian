@@ -38,6 +38,7 @@ from jacobian.math.moments_orthogonal._tools import TOOLS
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _frac(num: int, den: int) -> Fraction:
     return Fraction(num, den)
 
@@ -119,19 +120,15 @@ class TestRecurrenceCoefficients:
         moments = []
         for k in range(count):
             if k % 2 == 0:
-                num = sum(x ** k for x in range(-8, 9))
+                num = sum(x**k for x in range(-8, 9))
                 moments.append(CanonicalRational(num=str(num), den="1"))
             else:
-                moments.append(
-                    CanonicalRational(num="1", den=str(10**135 + 2 * k + 1))
-                )
+                moments.append(CanonicalRational(num="1", den=str(10**135 + 2 * k + 1)))
         return tuple(moments)
 
     def test_large_but_admissible_coefficients_pass(self) -> None:
         """The height check admits coefficients within the canonical limit."""
-        request = RecurrenceCoefficientsRequest(
-            moments=self._overflowing_moments(21)
-        )
+        request = RecurrenceCoefficientsRequest(moments=self._overflowing_moments(21))
         assert len(request.moments) == 21
 
     @pytest.mark.exhaustive
@@ -140,9 +137,7 @@ class TestRecurrenceCoefficients:
         # Every input component stays small, but one exact recurrence
         # coefficient (alpha_7) exceeds the canonical digit limit.
         with pytest.raises((ValueError, ValidationError), match="canonical"):
-            RecurrenceCoefficientsRequest(
-                moments=self._overflowing_moments(33)
-            )
+            RecurrenceCoefficientsRequest(moments=self._overflowing_moments(33))
 
     def test_insufficient_moments_for_recurrence(self) -> None:
         """With only 2 moments we can't produce any recurrence coefficient."""
@@ -239,9 +234,7 @@ class TestChristoffelDarbouxAdmission:
         alpha = (_cr(0, 1), _cr(0, 1))
         beta = (_cr(10**4095 - 1, 1), _cr(1, 3), _cr(1, 7))
         point = _cr(10**4095 - 1, 1)
-        request = ChristoffelDarbouxRequest(
-            alpha=alpha, beta=beta, x=point, y=point
-        )
+        request = ChristoffelDarbouxRequest(alpha=alpha, beta=beta, x=point, y=point)
         assert compute_christoffel_darboux(request).kernel.as_fraction() > 0
 
 
@@ -319,9 +312,7 @@ class TestGaussianQuadratureAdmission:
 
 class TestWireAdapters:
     def test_hankel_wire(self) -> None:
-        request = HankelMatrixRequest(
-            moments=tuple(_cr(1, k) for k in range(1, 8))
-        )
+        request = HankelMatrixRequest(moments=tuple(_cr(1, k) for k in range(1, 8)))
         result = compute_hankel_matrix(request)
         assert result.dimension == 4
         assert isinstance(result, HankelMatrixResult)
@@ -341,6 +332,7 @@ class TestWireAdapters:
         )
         result = compute_jacobi_matrix(request)
         assert isinstance(result, JacobiMatrixResult)
+
     def test_christoffel_darboux_wire(self) -> None:
         request = ChristoffelDarbouxRequest(
             alpha=(_cr(1, 2), _cr(1, 2)),

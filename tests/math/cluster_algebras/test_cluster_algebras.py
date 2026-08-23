@@ -72,16 +72,12 @@ class TestSeedMutation:
     def test_zero_symmetrizer_rejected(self):
         """A symmetrizer with a zero entry is not an exchange matrix."""
         with pytest.raises(ValueError, match="strictly positive"):
-            ExchangeMatrix(
-                n=2, entries=((0, 1), (-1, 0)), symmetrizer=(0, 2)
-            )
+            ExchangeMatrix(n=2, entries=((0, 1), (-1, 0)), symmetrizer=(0, 2))
 
     def test_negative_symmetrizer_rejected(self):
         """A symmetrizer with a negative entry is rejected."""
         with pytest.raises(ValueError, match="strictly positive"):
-            ExchangeMatrix(
-                n=2, entries=((0, 1), (-1, 0)), symmetrizer=(1, -1)
-            )
+            ExchangeMatrix(n=2, entries=((0, 1), (-1, 0)), symmetrizer=(1, -1))
 
 
 class TestCoefficientBounds:
@@ -146,9 +142,7 @@ class TestCoefficientBounds:
         # Even skew-symmetrizable matrices cannot carry unbounded integers.
         huge = 10**130
         with pytest.raises(ValidationError, match="129-digit bound"):
-            ExchangeMatrix(
-                n=2, entries=((0, huge), (-huge, 0)), symmetrizer=(1, 1)
-            )
+            ExchangeMatrix(n=2, entries=((0, huge), (-huge, 0)), symmetrizer=(1, 1))
 
     def test_gvector_request_accepts_representable_coefficients(self):
         # The g-vector result is the identity, so any representable seed works.
@@ -165,7 +159,9 @@ class TestGVectorBinding:
     """Exact g-vector results must replay against their retained source."""
 
     def test_result_binds_to_source_and_convention(self):
-        b = ExchangeMatrix(n=3, entries=((0, 1, 0), (-1, 0, 1), (0, -1, 0)), symmetrizer=(1, 1, 1))
+        b = ExchangeMatrix(
+            n=3, entries=((0, 1, 0), (-1, 0, 1), (0, -1, 0)), symmetrizer=(1, 1, 1)
+        )
         result = compute_g_vectors(GVectorRequest(exchange_matrix=b))
         assert result.exchange_matrix == b
         assert result.g_matrix == ((1, 0, 0), (0, 1, 0), (0, 0, 1))
@@ -200,7 +196,9 @@ class TestGVectorBinding:
             )
 
     def test_forged_empty_payload_rejected(self):
-        b = ExchangeMatrix(n=3, entries=((0, 1, 0), (-1, 0, 1), (0, -1, 0)), symmetrizer=(1, 1, 1))
+        b = ExchangeMatrix(
+            n=3, entries=((0, 1, 0), (-1, 0, 1), (0, -1, 0)), symmetrizer=(1, 1, 1)
+        )
         with pytest.raises(ValidationError):
             GVectorResult(exchange_matrix=b, g_matrix=(), convention="anything")
 

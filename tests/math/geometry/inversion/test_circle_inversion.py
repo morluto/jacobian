@@ -21,19 +21,25 @@ class TestKnownAnswers:
 
     def test_unit_inversion_at_origin(self) -> None:
         # B = (4,0) -> (1/4, 0)
-        qx, qy = invert_point(Fraction(0), Fraction(0), Fraction(1), Fraction(4), Fraction(0))
+        qx, qy = invert_point(
+            Fraction(0), Fraction(0), Fraction(1), Fraction(4), Fraction(0)
+        )
         assert qx == Fraction(1, 4)
         assert qy == Fraction(0)
 
     def test_c_inversion(self) -> None:
         # C = (1,2) -> (1/5, 2/5)
-        qx, qy = invert_point(Fraction(0), Fraction(0), Fraction(1), Fraction(1), Fraction(2))
+        qx, qy = invert_point(
+            Fraction(0), Fraction(0), Fraction(1), Fraction(1), Fraction(2)
+        )
         assert qx == Fraction(1, 5)
         assert qy == Fraction(2, 5)
 
     def test_h_inversion(self) -> None:
         # H = (1, 3/2) -> (4/13, 6/13)
-        qx, qy = invert_point(Fraction(0), Fraction(0), Fraction(1), Fraction(1), Fraction(3, 2))
+        qx, qy = invert_point(
+            Fraction(0), Fraction(0), Fraction(1), Fraction(1), Fraction(3, 2)
+        )
         assert qx == Fraction(4, 13)
         assert qy == Fraction(6, 13)
 
@@ -72,7 +78,9 @@ class TestInvariance:
 class TestRejection:
     def test_center_rejected(self) -> None:
         with pytest.raises(ValueError, match="center"):
-            invert_point(Fraction(0), Fraction(0), Fraction(1), Fraction(0), Fraction(0))
+            invert_point(
+                Fraction(0), Fraction(0), Fraction(1), Fraction(0), Fraction(0)
+            )
 
     def test_zero_power_rejected(self) -> None:
         with pytest.raises(ValidationError):

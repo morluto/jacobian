@@ -149,7 +149,6 @@ def decide_direct_sum_predicate(
     )
 
 
-
 def compute_ordered_difference_profile(
     request: OrderedDifferenceProfileRequest,
 ) -> OrderedDifferenceProfileResult:

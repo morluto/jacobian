@@ -196,9 +196,7 @@ class TestOrderedDifferenceProfile:
         assert result.max_multiplicity == 2
         assert result.first_repeated_difference == (-1, 0)
         # The difference (1,0) is realized by two ordered pairs.
-        diff_10 = [
-            c for c in result.classes if c.difference == (1, 0)
-        ]
+        diff_10 = [c for c in result.classes if c.difference == (1, 0)]
         assert len(diff_10) == 1
         assert len(diff_10[0].source_pairs) == 2
         assert {a for a, _ in diff_10[0].source_pairs} == {1, 2}
@@ -232,21 +230,15 @@ class TestOrderedDifferenceProfile:
         shifted = compute_ordered_difference_profile(
             self._req([(5, -3), (6, -3), (5, -2)]),
         )
-        base_diffs = {
-            c.difference: len(c.source_pairs) for c in base.classes
-        }
-        shifted_diffs = {
-            c.difference: len(c.source_pairs) for c in shifted.classes
-        }
+        base_diffs = {c.difference: len(c.source_pairs) for c in base.classes}
+        shifted_diffs = {c.difference: len(c.source_pairs) for c in shifted.classes}
         assert base_diffs == shifted_diffs
 
     def test_sign_reversal(self):
         result = compute_ordered_difference_profile(
             self._req([(0, 0), (1, 0), (0, 1), (1, 1)]),
         )
-        diffs = {
-            c.difference: len(c.source_pairs) for c in result.classes
-        }
+        diffs = {c.difference: len(c.source_pairs) for c in result.classes}
         # For every difference v, the multiplicity of -v must equal that of v.
         for d, count in diffs.items():
             neg = tuple(-x for x in d)
@@ -313,7 +305,10 @@ class TestOrderedDifferenceProfile:
             self._req([(0, 0), (1, 0), (1, 1), (0, 1)]),
         )
         payload = result.model_dump()
-        payload["source_set"]["vectors"] = [(9, 9), *payload["source_set"]["vectors"][1:]]
+        payload["source_set"]["vectors"] = [
+            (9, 9),
+            *payload["source_set"]["vectors"][1:],
+        ]
         with pytest.raises(ValidationError, match="replay"):
             OrderedDifferenceProfileResult.model_validate(payload)
 
@@ -353,9 +348,10 @@ class TestOrderedDifferenceProfile:
 
     def test_request_schema_publishes_coordinate_digit_bound(self):
         schema = OrderedDifferenceProfileRequest.model_json_schema()
-        assert "MAX_VECTOR_COORDINATE_DIGITS" in schema["$defs"][
-            "FiniteIntegerVectorSet"
-        ]["description"]
+        assert (
+            "MAX_VECTOR_COORDINATE_DIGITS"
+            in schema["$defs"]["FiniteIntegerVectorSet"]["description"]
+        )
 
     def test_rejects_coordinate_beyond_digit_bound(self):
         overflow = 10**64

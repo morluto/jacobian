@@ -176,7 +176,6 @@ class DirectSumPredicateResult(StrictModel):
         return self
 
 
-
 # ---------------------------------------------------------------------------
 # Ordered-difference profile for finite integer-vector sets
 # ---------------------------------------------------------------------------
@@ -199,7 +198,9 @@ class FiniteIntegerVectorSet(StrictModel):
     digits so profile construction and result replay stay bounded.
     """
 
-    vectors: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=MAX_VECTOR_SET_SIZE)
+    vectors: tuple[tuple[int, ...], ...] = Field(
+        min_length=1, max_length=MAX_VECTOR_SET_SIZE
+    )
 
     @model_validator(mode="after")
     def require_valid_vectors(self) -> Self:
@@ -209,16 +210,14 @@ class FiniteIntegerVectorSet(StrictModel):
         if dim < 1:
             raise ValueError("vectors must have at least one coordinate")
         if dim > MAX_VECTOR_DIMENSION:
-            raise ValueError(f"vector dimension exceeds the {MAX_VECTOR_DIMENSION}-coordinate bound")
+            raise ValueError(
+                f"vector dimension exceeds the {MAX_VECTOR_DIMENSION}-coordinate bound"
+            )
         if any(len(v) != dim for v in self.vectors):
             raise ValueError("all vectors must have the same dimension")
         if any(any(type(c) is not int for c in v) for v in self.vectors):
             raise ValueError("vector coordinates must be integers")
-        if any(
-            abs(c) >= _MAX_COORDINATE_MAGNITUDE
-            for v in self.vectors
-            for c in v
-        ):
+        if any(abs(c) >= _MAX_COORDINATE_MAGNITUDE for v in self.vectors for c in v):
             raise ValueError(
                 "vector coordinates exceed the "
                 f"{MAX_VECTOR_COORDINATE_DIGITS}-digit bound"
@@ -256,9 +255,7 @@ def _require_source_binding(result: OrderedDifferenceProfileResult) -> None:
     if result.dimension != len(result.source_set.vectors[0]) or result.set_size != len(
         result.source_set.vectors
     ):
-        raise ValueError(
-            "dimension and set_size must match the retained source set"
-        )
+        raise ValueError("dimension and set_size must match the retained source set")
 
 
 def _require_honest_repetition(
@@ -337,10 +334,7 @@ def _require_complete_pair_coverage(
     if len(seen) != result.total_ordered_pairs:
         raise ValueError("source pair coverage must equal total_ordered_pairs")
     expected_pairs = {
-        (i, j)
-        for i in range(result.set_size)
-        for j in range(result.set_size)
-        if i != j
+        (i, j) for i in range(result.set_size) for j in range(result.set_size) if i != j
     }
     if seen != expected_pairs:
         raise ValueError("source pair set must be the complete ordered pair set")

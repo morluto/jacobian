@@ -10,14 +10,20 @@ from jacobian.math.polynomials._conversions import (
     symbols_for_variables,
 )
 from jacobian.math.polynomials.multivariate._models import (
+    _MAX_SUBRESULTANT_SEQUENCE_TERMS,
     MultivariateDivisionRequest,
     MultivariateDivisionResult,
     MultivariateGcdRequest,
     MultivariateGcdResult,
     MultivariatePolynomialValue,
+    MultivariatePrincipalSubresultantCoefficient,
     MultivariateResultantRequest,
     MultivariateResultantResult,
     MultivariateScalarValue,
+    MultivariateSubresultantMember,
+    MultivariateSubresultantSequenceRequest,
+    MultivariateSubresultantSequenceResult,
+    _degree_in_variable,
 )
 
 _MAX_OUTPUT_TERMS = 1024
@@ -109,7 +115,8 @@ def compute_multivariate_resultant(
     """Compute the resultant of two multivariate polynomials w.r.t. one variable."""
 
     from sympy import QQ, Poly
-    from sympy import resultant as sympy_resultant
+
+    from jacobian.math.polynomials._sympy import polynomial_resultant
 
     variables = request.left.variables
     elimination_index = variables.index(request.elimination_variable)
@@ -117,7 +124,7 @@ def compute_multivariate_resultant(
 
     left = rational_polynomial_to_sympy(request.left)
     right = rational_polynomial_to_sympy(request.right)
-    value = sympy_resultant(left.as_expr(), right.as_expr(), generator)
+    value = polynomial_resultant(left, right, generator)
 
     remaining_variables = tuple(
         variable for variable in variables if variable != request.elimination_variable
@@ -138,6 +145,77 @@ def compute_multivariate_resultant(
         resultant=MultivariatePolynomialValue(
             value=_result_polynomial(resultant_poly, remaining_variables),
         ),
+    )
+
+
+def compute_multivariate_subresultant_sequence(
+    request: MultivariateSubresultantSequenceRequest,
+) -> MultivariateSubresultantSequenceResult:
+    """Return the exact nonzero Brown PRS in one declared main variable."""
+
+    from jacobian.math.polynomials.multivariate._subresultants import (
+        polynomial_leading_coefficient_in_remaining_ring,
+        polynomial_resultant_in_remaining_ring,
+        polynomial_subresultant_sequence,
+    )
+
+    source_order, polynomials, principal_coefficients = (
+        polynomial_subresultant_sequence(
+            request.left,
+            request.right,
+            request.main_variable,
+            maximum_terms=_MAX_SUBRESULTANT_SEQUENCE_TERMS,
+        )
+    )
+    variable_index = request.left.variables.index(request.main_variable)
+    members = tuple(
+        MultivariateSubresultantMember(
+            polynomial=polynomial,
+            degree_in_main_variable=_degree_in_variable(polynomial, variable_index),
+        )
+        for polynomial in polynomials
+    )
+    degrees = {member.degree_in_main_variable for member in members}
+    greatest_degree = max(degrees)
+    resultant = polynomial_resultant_in_remaining_ring(
+        request.left,
+        request.right,
+        request.main_variable,
+        maximum_terms=_MAX_SUBRESULTANT_SEQUENCE_TERMS,
+    )
+    gcd_degree = members[-1].degree_in_main_variable
+    gcd_leading_coefficient = polynomial_leading_coefficient_in_remaining_ring(
+        members[-1].polynomial,
+        request.main_variable,
+        maximum_terms=_MAX_SUBRESULTANT_SEQUENCE_TERMS,
+    )
+    left_degree = _degree_in_variable(request.left, variable_index)
+    right_degree = _degree_in_variable(request.right, variable_index)
+    return MultivariateSubresultantSequenceResult(
+        left=request.left,
+        right=request.right,
+        main_variable=request.main_variable,
+        source_order=source_order,
+        members=members,
+        skipped_member_degrees=tuple(
+            degree for degree in range(greatest_degree + 1) if degree not in degrees
+        ),
+        principal_subresultant_coefficients=tuple(
+            MultivariatePrincipalSubresultantCoefficient(
+                index=index,
+                coefficient=coefficient,
+            )
+            for index, coefficient in enumerate(principal_coefficients)
+        ),
+        resultant=resultant,
+        resultant_sign_from_sequence_order=(
+            -1
+            if source_order == "RIGHT_LEFT" and left_degree * right_degree % 2 == 1
+            else 1
+        ),
+        gcd_member_index=len(members) - 1,
+        gcd_degree_in_main_variable=gcd_degree,
+        gcd_member_leading_coefficient=gcd_leading_coefficient,
     )
 
 

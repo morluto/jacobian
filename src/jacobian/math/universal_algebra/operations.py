@@ -7,9 +7,13 @@ from itertools import product as iproduct
 from .values import (
     ApplicationTerm,
     FiniteAlgebra,
+    FiniteAlgebraCarrierMap,
+    FiniteAlgebraHomomorphism,
     FlatTerm,
     OperationSymbol,
     VariableTerm,
+    _first_homomorphism_failure,
+    _homomorphism_kernel_and_image,
     require_term_for_algebra,
 )
 
@@ -18,6 +22,7 @@ __all__ = [
     "equation_profile",
     "evaluate_term",
     "generated_subalgebra",
+    "homomorphism_profile",
     "quotient",
 ]
 
@@ -126,6 +131,50 @@ def generated_subalgebra(
         "generated_carrier": tuple(sorted_carrier),
         "rounds": rounds,
         "is_closed": set(generators) == carrier_set if generators else True,
+    }
+
+
+def homomorphism_profile(carrier_map: FiniteAlgebraCarrierMap) -> dict[str, object]:
+    """Check one total map for preservation of every basic operation.
+
+    Operations are checked in signature order and argument tuples in
+    lexicographic carrier-position order.  A failure returns that first exact
+    obstruction.  A successful result returns a checked homomorphism together
+    with its canonical kernel fibers and image.
+    """
+
+    failure = _first_homomorphism_failure(carrier_map)
+    if failure is not None:
+        return {
+            "status": "NOT_A_HOMOMORPHISM",
+            "carrier_map": carrier_map,
+            "obstruction": {
+                "operation": failure.operation,
+                "operation_id": carrier_map.source.operations[
+                    failure.operation
+                ].operation_id,
+                "source_arguments": failure.source_arguments,
+                "target_arguments": failure.target_arguments,
+                "source_output": failure.source_output,
+                "mapped_source_output": failure.mapped_source_output,
+                "target_output": failure.target_output,
+            },
+        }
+
+    homomorphism = FiniteAlgebraHomomorphism.model_validate(
+        carrier_map.model_dump(mode="python")
+    )
+    kernel_partition, image = _homomorphism_kernel_and_image(carrier_map.mapping)
+    injective = len(image) == len(carrier_map.source.carrier)
+    surjective = len(image) == len(carrier_map.target.carrier)
+    return {
+        "status": "HOMOMORPHISM",
+        "homomorphism": homomorphism,
+        "kernel_partition": kernel_partition,
+        "image": image,
+        "injective": injective,
+        "surjective": surjective,
+        "isomorphism": injective and surjective,
     }
 
 

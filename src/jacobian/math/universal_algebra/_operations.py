@@ -10,6 +10,8 @@ from jacobian.math.universal_algebra._models import (
     EquationProfileResult,
     EvaluateRequest,
     EvaluateResult,
+    HomomorphismProfileRequest,
+    HomomorphismProfileResult,
     QuotientRequest,
     QuotientResult,
     SubalgebraRequest,
@@ -20,6 +22,7 @@ from jacobian.math.universal_algebra.operations import (
     equation_profile,
     evaluate_term,
     generated_subalgebra,
+    homomorphism_profile,
     quotient,
 )
 
@@ -28,6 +31,7 @@ __all__ = [
     "compute_equation_profile",
     "compute_evaluate",
     "compute_generated_subalgebra",
+    "compute_homomorphism_profile",
     "compute_quotient",
 ]
 
@@ -62,6 +66,14 @@ def compute_generated_subalgebra(request: SubalgebraRequest) -> SubalgebraResult
         generated_carrier=result["generated_carrier"],  # type: ignore[arg-type]
         rounds=result["rounds"],  # type: ignore[arg-type]
         is_closed=result["is_closed"],  # type: ignore[arg-type]
+    )
+
+
+def compute_homomorphism_profile(
+    request: HomomorphismProfileRequest,
+) -> HomomorphismProfileResult:
+    return HomomorphismProfileResult.model_validate(
+        homomorphism_profile(request.carrier_map)
     )
 
 

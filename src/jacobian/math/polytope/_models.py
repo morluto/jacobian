@@ -172,8 +172,10 @@ def require_volume_components_within_result_bound(
     pipeline — exact deduplication, redundant-vertex filtering,
     triangulation — so an empty or failed triangulation here means the
     kernel returns exact volume zero, which is always representable.  The
-    combinatorial hull-work bound applies across the whole request before
-    any enumeration runs, so every caller of this guard (request
+    combinatorial hull-work bound applies to the *unique* points before
+    any enumeration runs, exactly as the kernel counts its own work after
+    deduplication, so repeated points neither inflate the budget nor let
+    unrepresentable inputs slip past; every caller of this guard (request
     validation or the native wrapper) is protected from unguarded hull
     work.
     """
@@ -188,8 +190,14 @@ def require_volume_components_within_result_bound(
         _triangulate,
     )
 
+    # Deduplicate exactly as the kernel does before any admission work:
+    # the budget below measures the hull enumeration the kernel actually
+    # performs on unique points, and duplicate points would otherwise
+    # break the polygonal adjacency into an empty triangulation and let
+    # unrepresentable inputs skip admission entirely.
+    pts = [list(point) for point in _deduplicate_exact_points(points)]
     try:
-        subfacets = math.comb(len(points), dim)
+        subfacets = math.comb(len(pts), dim)
     except ValueError:
         subfacets = 10**18
     if subfacets > MAX_HULL_SUBFACETS:
@@ -197,12 +205,6 @@ def require_volume_components_within_result_bound(
             "polytope hull enumeration exceeds the combinatorial bound "
             f"({subfacets} > {MAX_HULL_SUBFACETS} d-subsets)"
         )
-
-    # Deduplicate exactly as the kernel does before filtering so this
-    # guard's pipeline matches execution: duplicate points would otherwise
-    # break the polygonal adjacency into an empty triangulation and let
-    # unrepresentable inputs skip admission entirely.
-    pts = [list(point) for point in _deduplicate_exact_points(points)]
     pts = _filter_redundant_vertices(pts, dim)
     if len(pts) < dim + 1:
         return
@@ -301,29 +303,12 @@ def _validate_vertices(vertices: tuple[Vertex, ...], dimension_bound: int) -> No
     for vertex in vertices:
         if len(vertex.coordinates) != dim:
             raise ValueError("all vertices must share one dimension")
-    # Combinatorial admission first: C(n, d) d-subsets for hull
-    # enumeration.  The operation's brute-force hull needs to consider each
-    # d-subset; reject here so neither execution nor the triangulation-aware
-    # growth bound below ever enumerates beyond this budget.  This admits
-    # the 5-cube (C(32,5)=201376) test threshold but rejects larger hulls.
-    import math
+    from jacobian.math.polytope._operations import _vertices_from_v_representation
 
-    from jacobian.math.polytope._operations import (
-        MAX_HULL_SUBFACETS,
-        _vertices_from_v_representation,
-    )
-
-    try:
-        subfacets = math.comb(len(vertices), dim)
-    except ValueError:
-        subfacets = 10**18
-    if subfacets > MAX_HULL_SUBFACETS:
-        raise ValueError(
-            "polytope hull enumeration exceeds the combinatorial bound "
-            f"({subfacets} > {MAX_HULL_SUBFACETS} d-subsets)"
-        )
     # Exact-volume growth is bounded over the whole triangulation, so the
-    # same admission runs on the rational points themselves.
+    # same admission runs on the rational points themselves; it applies
+    # the combinatorial hull-work bound after exact deduplication,
+    # mirroring the kernel pipeline.
     points, resolved_dim = _vertices_from_v_representation(vertices)
     require_volume_components_within_result_bound(points, resolved_dim)
 

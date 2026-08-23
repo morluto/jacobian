@@ -566,6 +566,34 @@ class TestDuplicateVertexAdmission:
         )
         assert result.volume == CanonicalRational(num="1", den="1")
 
+    def test_all_duplicate_points_admit_a_trivial_hull_with_zero_volume(self):
+        """The hull-work budget counts unique points: 64 copies of one
+        six-dimensional point form a trivial hull whose documented volume
+        is exact zero, so raw C(64, 6) counting must not reject it."""
+        point = tuple((0, 1) for _ in range(6))
+        result = _volume_via_vertices(tuple(_v(*point) for _ in range(64)))
+        assert result.volume == CanonicalRational(num="0", den="1")
+        assert result.dimension == 6
+
+    def test_few_unique_points_among_many_copies_are_admitted(self):
+        """32 copies each of two distinct six-dimensional points have a
+        degenerate hull of exact zero volume."""
+        pair = (
+            _v(*(((0, 1),) + ((0, 1),) * 5)),
+            _v(*(((1, 1),) + ((0, 1),) * 5)),
+        )
+        result = _volume_via_vertices(pair * 32)
+        assert result.volume == CanonicalRational(num="0", den="1")
+        assert result.dimension == 6
+
+    def test_distinct_points_still_exceed_the_hull_budget(self):
+        """64 distinct six-dimensional points remain rejected at C(64, 6)."""
+        vertices = tuple(
+            _v(*((i**k % 97 + i, 1) for k in range(6))) for i in range(1, 65)
+        )
+        with pytest.raises(ValueError, match="combinatorial bound"):
+            PolytopeVolumeRequest(vertices=vertices)
+
 
 class TestNativeApiAdmission:
     def test_native_rejects_dimension_and_vertex_excess(self):
@@ -614,6 +642,14 @@ class TestNativeApiAdmission:
         points = tuple(tuple(Fraction(i**k) for k in range(6)) for i in range(1, 65))
         with pytest.raises(ValueError, match="combinatorial bound"):
             convex_hull_volume(points)
+
+    def test_native_admits_all_duplicate_points_with_zero_volume(self):
+        """The native wrapper applies the hull budget to unique points: 64
+        copies of one six-dimensional point return exact zero."""
+        from jacobian.math.polytope import convex_hull_volume
+
+        value = convex_hull_volume(tuple((Fraction(0),) * 6 for _ in range(64)))
+        assert value == CanonicalRational(num="0", den="1")
 
 
 class TestNonsimpleFaceExtremality:

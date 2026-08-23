@@ -4,9 +4,16 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import ConfigDict, Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.formal_concept_analysis.basis import (
+    MAX_DG_ATTRIBUTES,
+    MAX_DG_CANDIDATE_STATES,
+    MAX_DG_LOGICAL_WORK,
+    MAX_DG_RESULT_BYTES,
+    _duquenne_guigues_preflight,
+)
 from jacobian.math.formal_concept_analysis.values import (
     MAX_ATTRIBUTES,
     FiniteAttributeImplicationSystem,
@@ -66,6 +73,30 @@ class ImplicationClosureRequest(StrictModel):
                 "implication seed attribute is outside the declared carrier"
             )
         object.__setattr__(self, "seed", tuple(sorted(self.seed)))
+        return self
+
+
+class DuquenneGuiguesBasisRequest(StrictModel):
+    """Compute the complete canonical implication basis of one context."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Compute all pseudo-intents and the complete Duquenne-Guigues "
+                f"basis for a FormalContext with at most {MAX_DG_ATTRIBUTES} "
+                f"attributes ({MAX_DG_CANDIDATE_STATES} candidate states). "
+                "Admission reserves producer and independent replay work before "
+                f"enumeration, bounded by {MAX_DG_LOGICAL_WORK:,} logical "
+                f"steps and {MAX_DG_RESULT_BYTES:,} serialized result bytes."
+            )
+        }
+    )
+
+    context: FormalContext
+
+    @model_validator(mode="after")
+    def require_complete_preflight(self) -> Self:
+        _duquenne_guigues_preflight(self.context)
         return self
 
 
@@ -138,6 +169,7 @@ __all__ = [
     "ConceptLatticeResult",
     "ConceptResult",
     "DerivationResult",
+    "DuquenneGuiguesBasisRequest",
     "EnumerateConceptsRequest",
     "EnumerateConceptsResult",
     "ImplicationClosureRequest",

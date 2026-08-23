@@ -188,7 +188,8 @@ class TestPinnedDistanceReplay:
     def test_forged_source_pairs_rejected(self):
         genuine = self._result()
         forged_entry = LineDistanceEntry(
-            squared_distance=genuine.lines[0].squared_distance,
+            squared_distance_numerator=genuine.lines[0].squared_distance_numerator,
+            squared_distance_denominator=genuine.lines[0].squared_distance_denominator,
             source_pairs=((8, 9),),
         )
         with pytest.raises(ValidationError):
@@ -203,7 +204,8 @@ class TestPinnedDistanceReplay:
     def test_forged_distance_rejected(self):
         genuine = self._result()
         forged_entry = LineDistanceEntry(
-            squared_distance=CanonicalRational(num="123", den="7"),
+            squared_distance_numerator="123",
+            squared_distance_denominator="7",
             source_pairs=genuine.lines[0].source_pairs,
         )
         with pytest.raises(ValidationError):

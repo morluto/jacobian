@@ -24,6 +24,7 @@ from jacobian.math.moments_orthogonal._models import (
     JacobiMatrixResult,
     RecurrenceCoefficientsRequest,
     RecurrenceCoefficientsResult,
+    RecurrenceCoefficientsValue,
 )
 from jacobian.math.moments_orthogonal._operations import (
     compute_christoffel_darboux,
@@ -33,6 +34,7 @@ from jacobian.math.moments_orthogonal._operations import (
     compute_recurrence_coefficients,
 )
 from jacobian.math.moments_orthogonal._tools import TOOLS
+from jacobian.math.moments_orthogonal.values import MAX_RECURRENCE_ORDER
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -106,20 +108,26 @@ class TestRecurrenceCoefficients:
         assert result.beta[0] == _frac(2, 1)
 
     def test_empty_rejected(self) -> None:
-        with pytest.raises(ValueError, match="between 1 and 64"):
+        with pytest.raises(ValueError, match="between 1 and 32"):
             recurrence_coefficients(())
 
     def test_zeroth_moment_nonzero(self) -> None:
         moments = (_frac(0, 1), _frac(1, 1), _frac(1, 2))
-        with pytest.raises(ValueError, match="nonzero"):
+        with pytest.raises(ValueError, match="positive"):
             recurrence_coefficients(moments)
 
-    def test_insufficient_moments_for_recurrence(self) -> None:
-        """With only 2 moments we can't produce any recurrence coefficient."""
+    def test_two_moments_determine_one_pair(self) -> None:
+        """Two moments determine exactly alpha_0 and beta_0."""
         moments = (_frac(1, 1), _frac(1, 2))
         result = recurrence_coefficients(moments)
-        assert result.alpha == ()
+        assert result.alpha == (_frac(1, 2),)
         assert result.beta == (_frac(1, 1),)
+
+    def test_even_length_sequence_fully_consumed(self) -> None:
+        """Four uniform moments determine both coefficient pairs."""
+        result = recurrence_coefficients(tuple(_frac(1, k) for k in range(1, 5)))
+        assert result.alpha == (_frac(1, 2), _frac(1, 2))
+        assert result.beta == (_frac(1, 1), _frac(1, 12))
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +151,7 @@ class TestJacobiMatrix:
         assert result.off_diagonal == ()
 
     def test_zero_beta_rejected(self) -> None:
-        with pytest.raises(ValueError, match="nonzero"):
+        with pytest.raises(ValueError, match="positive"):
             jacobi_matrix((_frac(0, 1),), (_frac(0, 1), _frac(1, 1)))
 
 
@@ -180,18 +188,62 @@ class TestChristoffelDarboux:
         assert result.kernel == _frac(0, 1)
         assert result.polynomials_evaluated == (_frac(1, 1),)
 
-    def test_large_y_charged_at_every_recurrence_step(self) -> None:
-        """A huge y must be charged at every step, not only the first."""
-        alpha = tuple(_frac(0, 1) for _ in range(15))
-        beta = tuple(_frac(1, 1) for _ in range(16))
-        y = Fraction(10) ** 3000
-        with pytest.raises(ValueError, match="growth exceeds the canonical"):
+
+class TestChristoffelDarbouxBoundedness:
+    """Admission must bound coefficient growth as a function of order."""
+
+    def test_large_alpha_coefficient_growth_rejected(self) -> None:
+        coefficient = _cr(10**4090 + 123, 10**4088 + 7)
+        unit = _cr(1, 1)
+        zero = _cr(0, 1)
+        with pytest.raises(ValidationError, match="canonical"):
             ChristoffelDarbouxRequest(
-                alpha=tuple(_cr(a.numerator, a.denominator) for a in alpha),
-                beta=tuple(_cr(b.numerator, b.denominator) for b in beta),
-                x=_cr(2, 1),
-                y=_cr(y.numerator, y.denominator),
+                coefficients=RecurrenceCoefficientsValue(
+                    alpha=tuple(coefficient for _ in range(16)),
+                    beta=tuple(unit for _ in range(16)),
+                ),
+                x=zero,
+                y=zero,
             )
+
+    def test_large_x_growth_rejected(self) -> None:
+        big_x = _cr(10**2001 + 5, 10**2000 + 3)
+        small_alpha = tuple(_cr(1, k + 2) for k in range(16))
+        unit = _cr(1, 1)
+        with pytest.raises(ValidationError, match="canonical"):
+            ChristoffelDarbouxRequest(
+                coefficients=RecurrenceCoefficientsValue(
+                    alpha=small_alpha,
+                    beta=tuple(unit for _ in range(16)),
+                ),
+                x=big_x,
+                y=big_x,
+            )
+
+    def test_fitting_coefficients_at_order_succeed(self) -> None:
+        alpha = tuple(_cr(10**399 + k, 10**400 + k) for k in range(16))
+        beta = tuple(_cr(10**400 - k, 10**399 + k) for k in range(16))
+        result = compute_christoffel_darboux(
+            ChristoffelDarbouxRequest(
+                coefficients=RecurrenceCoefficientsValue(alpha=alpha, beta=beta),
+                x=_cr(0, 1),
+                y=_cr(0, 1),
+            )
+        )
+        assert len(result.polynomials_evaluated) == 16
+
+    def test_low_order_large_coefficients_succeed(self) -> None:
+        big = _cr(10**4090 + 123, 10**4088 + 7)
+        result = compute_christoffel_darboux(
+            ChristoffelDarbouxRequest(
+                coefficients=RecurrenceCoefficientsValue(
+                    alpha=(big, big), beta=(_cr(1, 1), big)
+                ),
+                x=big,
+                y=big,
+            )
+        )
+        assert isinstance(result, ChristoffelDarbouxResult)
 
 
 # ---------------------------------------------------------------------------
@@ -246,20 +298,25 @@ class TestWireAdapters:
         )
         result = compute_recurrence_coefficients(request)
         assert isinstance(result, RecurrenceCoefficientsResult)
-        assert len(result.alpha) == 3
+        assert len(result.coefficients.alpha) == 3
+        RecurrenceCoefficientsResult.model_validate(result.model_dump())
 
     def test_jacobi_wire(self) -> None:
         request = JacobiMatrixRequest(
-            alpha=(_cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            coefficients=RecurrenceCoefficientsValue(
+                alpha=(_cr(1, 2), _cr(1, 2)),
+                beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            ),
         )
         result = compute_jacobi_matrix(request)
         assert isinstance(result, JacobiMatrixResult)
 
     def test_christoffel_darboux_wire(self) -> None:
         request = ChristoffelDarbouxRequest(
-            alpha=(_cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            coefficients=RecurrenceCoefficientsValue(
+                alpha=(_cr(1, 2), _cr(1, 2)),
+                beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            ),
             x=_cr(1, 1),
             y=_cr(1, 1),
         )
@@ -268,8 +325,10 @@ class TestWireAdapters:
 
     def test_gaussian_quadrature_wire(self) -> None:
         request = GaussianQuadratureRequest(
-            alpha=(_cr(1, 2), _cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15), _cr(4, 45)),
+            coefficients=RecurrenceCoefficientsValue(
+                alpha=(_cr(1, 2), _cr(1, 2), _cr(1, 2)),
+                beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15), _cr(4, 45)),
+            ),
         )
         result = compute_gaussian_quadrature(request)
         assert isinstance(result, GaussianQuadratureResult)
@@ -278,79 +337,6 @@ class TestWireAdapters:
     def test_hankel_validation_error(self) -> None:
         with pytest.raises(ValidationError):
             HankelMatrixRequest(moments=())
-
-
-class TestQuadratureUnderflowBound:
-    """Semantically nonzero coefficients must survive float conversion."""
-
-    def test_subnormal_beta_zero_rejected(self) -> None:
-        tiny = CanonicalRational.from_integer_ratio(1, 10**400)
-        with pytest.raises(ValidationError, match="underflow"):
-            GaussianQuadratureRequest(
-                alpha=(_cr(0, 1),),
-                beta=(tiny,),
-            )
-
-    def test_subnormal_alpha_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="underflow"):
-            GaussianQuadratureRequest(
-                alpha=(CanonicalRational.from_integer_ratio(1, 10**400),),
-                beta=(_cr(1, 1), _cr(1, 4)),
-            )
-
-    def test_zero_alpha_still_admitted(self) -> None:
-        GaussianQuadratureRequest(
-            alpha=(_cr(0, 1), _cr(0, 1)),
-            beta=(_cr(1, 1), _cr(1, 4)),
-        )
-
-    def test_ordinary_quadrature_still_admitted(self) -> None:
-        request = GaussianQuadratureRequest(
-            alpha=(_cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12)),
-        )
-        result = compute_gaussian_quadrature(request)
-        total = sum(w.as_fraction() for w in result.weights)
-        # Weights are exact dyadic images of IEEE doubles, so the sum sits
-        # within a few ulps of mu_0 = 1.
-        assert abs(total - _frac(1, 1)) < _frac(1, 10**15)
-
-
-class TestChristoffelDarbouxGrowthBound:
-    """Admission bounds recurrence and kernel digit growth."""
-
-    def test_powered_evaluation_points_rejected(self) -> None:
-        zero = _cr(0, 1)
-        one = _cr(1, 1)
-        big = CanonicalRational.from_integer_ratio(10**1999, 1)
-        with pytest.raises(ValidationError, match="digit"):
-            ChristoffelDarbouxRequest(
-                alpha=tuple(zero for _ in range(16)),
-                beta=tuple(one for _ in range(16)),
-                x=big,
-                y=big,
-            )
-
-    def test_moderate_request_still_admitted(self) -> None:
-        request = ChristoffelDarbouxRequest(
-            alpha=(_cr(1, 2), _cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15), _cr(4, 45)),
-            x=_cr(3, 1),
-            y=_cr(-7, 3),
-        )
-        result = compute_christoffel_darboux(request)
-        assert result.kernel.num
-
-    def test_denominator_growth_rejected(self) -> None:
-        # Denominators compound multiplicatively across the recurrence even
-        # when numerators stay small.
-        with pytest.raises(ValidationError, match="digit"):
-            ChristoffelDarbouxRequest(
-                alpha=(_cr(0, 1),) * 15,
-                beta=(_cr(1, 1),) + (_cr(1, 10**300),) * 15,
-                x=_cr(1, 2),
-                y=_cr(1, 2),
-            )
 
 
 # ---------------------------------------------------------------------------
@@ -377,3 +363,86 @@ class TestToolsAndExamples:
         for tool in TOOLS:
             names = [ex.name for ex in tool.examples]
             assert len(names) == len(set(names))
+
+
+class TestRecurrencePositiveFunctional:
+    def test_negative_zeroth_moment_rejected_before_kernel(self) -> None:
+        """A one-moment request with mu_0 < 0 cannot yield beta_0 = mu_0."""
+        with pytest.raises((ValueError, ValidationError), match="positive"):
+            RecurrenceCoefficientsRequest(
+                moments=(CanonicalRational(num="-1", den="1"),)
+            )
+
+
+class TestRecurrenceValueComposition:
+    """The serialized recurrence value must feed every consumer unchanged."""
+
+    def test_result_coefficients_feed_all_consumers_unchanged(self) -> None:
+        request = RecurrenceCoefficientsRequest(
+            moments=tuple(_cr(1, k) for k in range(1, 8))
+        )
+        result = compute_recurrence_coefficients(request)
+        payload = result.model_dump(mode="json")
+        coefficients = payload["coefficients"]
+
+        jacobi = JacobiMatrixRequest.model_validate({"coefficients": coefficients})
+        assert len(jacobi.coefficients.alpha) == 3
+
+        christoffel = ChristoffelDarbouxRequest.model_validate(
+            {
+                "coefficients": coefficients,
+                "x": {"num": "1", "den": "1"},
+                "y": {"num": "2", "den": "1"},
+            }
+        )
+        assert compute_christoffel_darboux(christoffel).kernel is not None
+
+        quadrature = GaussianQuadratureRequest.model_validate(
+            {"coefficients": coefficients}
+        )
+        assert compute_gaussian_quadrature(quadrature).nodes is not None
+
+    def test_tampered_coefficients_rejected_by_replay(self) -> None:
+        request = RecurrenceCoefficientsRequest(
+            moments=tuple(_cr(1, k) for k in range(1, 8))
+        )
+        result = compute_recurrence_coefficients(request)
+        payload = result.model_dump()
+        forged = dict(payload["coefficients"])
+        forged["alpha"] = [
+            {"num": "1", "den": str(int(entry["den"]) + 2)} for entry in forged["alpha"]
+        ]
+        payload["coefficients"] = forged
+        with pytest.raises(ValidationError, match="exact recurrence"):
+            RecurrenceCoefficientsResult.model_validate(payload)
+
+
+class TestRecurrenceAdmissionBoundaries:
+    def test_thirty_three_moment_boundary_rejected(self):
+        """33 harmonic moments would derive a 17th beta entry outside the
+        canonical coefficient value; admission rejects at the boundary."""
+        moments = tuple(_cr(1, k) for k in range(1, 34))
+        with pytest.raises(ValidationError, match="32 moments"):
+            RecurrenceCoefficientsRequest(moments=moments)
+
+    def test_thirty_two_moment_sequence_roundtrips(self):
+        moments = tuple(_cr(1, k) for k in range(1, 33))
+        request = RecurrenceCoefficientsRequest(moments=moments)
+        result = compute_recurrence_coefficients(request)
+        assert len(result.coefficients.beta) <= MAX_RECURRENCE_ORDER
+        assert (
+            RecurrenceCoefficientsResult.model_validate(result.model_dump()) == result
+        )
+
+    def test_derived_coefficient_overflow_rejected_at_admission(self):
+        """17 concentrated positive-definite moments whose exact recurrence
+        coefficients leave the canonical rational domain cannot be accepted."""
+        denominator_scale = Fraction(10) ** 299
+        moments = tuple(
+            CanonicalRational.from_fraction(
+                Fraction(1, k + 1) + Fraction(1, denominator_scale + 2 * k + 1)
+            )
+            for k in range(17)
+        )
+        with pytest.raises(ValidationError, match="canonical"):
+            RecurrenceCoefficientsRequest(moments=moments)

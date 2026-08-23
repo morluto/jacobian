@@ -33,6 +33,7 @@ ROOT_MATH_DOMAINS = (
     "graphical_models",
     "graphs",
     "greedoids",
+    "group_cohomology",
     "impartial_games",
     "matrices",
     "moments_orthogonal",

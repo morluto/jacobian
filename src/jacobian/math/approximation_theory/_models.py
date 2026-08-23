@@ -181,6 +181,14 @@ class LagrangeInterpolationResult(StrictModel):
 
     polynomial: RationalPolynomial
 
+    @model_validator(mode="after")
+    def require_interpolation_variable(self) -> Self:
+        if self.polynomial.variables != ("x",):
+            raise ValueError(
+                "interpolation polynomial must use the single variable 'x'"
+            )
+        return self
+
     @property
     def degree(self) -> int:
         if not self.polynomial.polynomial.terms:

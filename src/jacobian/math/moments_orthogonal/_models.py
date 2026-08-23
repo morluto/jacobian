@@ -141,9 +141,33 @@ class RecurrenceCoefficientsRequest(StrictModel):
         return self
 
 
+class CanonicalRecurrenceCoefficients(StrictModel):
+    """One canonical monic ``(alpha, beta)`` recurrence coefficient pair.
+
+    This is the domain-owned value produced by ``moments.recurrence.compute``
+    and accepted unchanged by the ``JacobiMatrixRequest``,
+    ``ChristoffelDarbouxRequest``, and ``GaussianQuadratureRequest``
+    consumers, whose serialized coefficient shape is exactly this model's.
+    """
+
+    alpha: tuple[CanonicalRational, ...] = Field(min_length=0)
+    beta: tuple[CanonicalRational, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def require_valid_coefficients(self) -> Self:
+        _validate_alpha_beta(self.alpha, self.beta)
+        return self
+
+
 class RecurrenceCoefficientsResult(RecurrenceCoefficientsRequest):
-    alpha: tuple[CanonicalRational, ...]
-    beta: tuple[CanonicalRational, ...]
+    """Exact recurrence coefficients bound to their retained moments.
+
+    ``coefficients`` carries the canonical pair; feeding its serialized
+    ``{alpha, beta}`` payload straight into any downstream consumer request
+    composes without renaming or reattachment.
+    """
+
+    coefficients: CanonicalRecurrenceCoefficients
     complete: Literal[True] = True
     method: Literal["EXACT_GRAM_SCHMIDT"] = "EXACT_GRAM_SCHMIDT"
 
@@ -154,10 +178,15 @@ class RecurrenceCoefficientsResult(RecurrenceCoefficientsRequest):
         )
 
         result = recurrence_coefficients(_to_fractions(self.moments))
-        if self.alpha != _from_fractions(result.alpha):
-            raise ValueError("alpha must be the exact recurrence coefficients")
-        if self.beta != _from_fractions(result.beta):
-            raise ValueError("beta must be the exact recurrence coefficients")
+        expected = CanonicalRecurrenceCoefficients(
+            alpha=_from_fractions(result.alpha),
+            beta=_from_fractions(result.beta),
+        )
+        if self.coefficients != expected:
+            raise ValueError(
+                "coefficients must be the exact Gram-Schmidt recurrence "
+                "coefficients of the retained moments"
+            )
         return self
 
 
@@ -336,6 +365,7 @@ class GaussianQuadratureResult(GaussianQuadratureRequest):
 
 
 __all__ = [
+    "CanonicalRecurrenceCoefficients",
     "ChristoffelDarbouxRequest",
     "ChristoffelDarbouxResult",
     "GaussianQuadratureRequest",

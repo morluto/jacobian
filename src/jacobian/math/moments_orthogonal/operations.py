@@ -169,8 +169,17 @@ def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> Jacobi
         raise TypeError("alpha must use exact Fractions")
     if any(type(value) is not Fraction for value in beta):
         raise TypeError("beta must use exact Fractions")
-    if beta[0] == 0:
-        raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+    if beta[0] <= 0:
+        # The typed JacobiMatrixRequest admits only positive-definite
+        # functionals; the native API returns invalid matrix data otherwise.
+        raise ValueError(
+            "beta_0 (the zeroth moment of a positive functional) must be positive"
+        )
+    for index in range(1, min(len(alpha), len(beta))):
+        if beta[index] <= 0:
+            raise ValueError(
+                "subdiagonal beta entries must be positive squared-norm ratios"
+            )
     return JacobiMatrix(
         diagonal=tuple(alpha),
         # The squared subdiagonal entries are beta_1, ..., beta_{n-1}; beta_0 is
@@ -263,16 +272,23 @@ def gaussian_quadrature(
         raise ValueError("alpha must contain between 1 and 16 entries")
     if len(beta) != n and len(beta) != n + 1:
         raise ValueError("beta must have length len(alpha) or len(alpha)+1")
-    if beta[0] == 0:
-        raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+    if beta[0] <= 0:
+        # Mirror the typed operation contract: mu_0 is the zeroth moment of a
+        # positive functional, so a nonpositive weight would be invalid
+        # quadrature data rather than a computed rule.
+        raise ValueError(
+            "beta_0 (the zeroth moment of a positive functional) must be positive"
+        )
     diagonal = np.array([float(a) for a in alpha], dtype=float)
     off: list[float] = []
     for k in range(n - 1):
         if k + 1 >= len(beta):
             break
         sub = beta[k + 1]
-        if sub < 0:
-            raise ValueError("subdiagonal beta entries must be nonnegative")
+        if sub <= 0:
+            raise ValueError(
+                "subdiagonal beta entries must be positive squared-norm ratios"
+            )
         off.append(math.sqrt(float(sub)))
     jacobi = np.diag(diagonal)
     if off:

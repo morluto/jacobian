@@ -2,6 +2,7 @@
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.moments_orthogonal._models import (
+    CanonicalRecurrenceCoefficients,
     ChristoffelDarbouxRequest,
     ChristoffelDarbouxResult,
     GaussianQuadratureRequest,
@@ -47,8 +48,10 @@ def compute_recurrence_coefficients(
     result = recurrence_coefficients(_to_fractions(request.moments))
     return RecurrenceCoefficientsResult(
         moments=request.moments,
-        alpha=_from_fractions(result.alpha),
-        beta=_from_fractions(result.beta),
+        coefficients=CanonicalRecurrenceCoefficients(
+            alpha=_from_fractions(result.alpha),
+            beta=_from_fractions(result.beta),
+        ),
     )
 
 

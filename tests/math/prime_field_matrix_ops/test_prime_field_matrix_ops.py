@@ -8,6 +8,7 @@ from jacobian.math.prime_field_matrix_ops._models import (
     RankRequest,
     RankResult,
     RrefRequest,
+    RrefResult,
 )
 from jacobian.math.prime_field_matrix_ops._operations import (
     compute_nullspace,
@@ -80,13 +81,13 @@ class TestRref:
     def test_basic_rref(self) -> None:
         req = RrefRequest(prime=2, entries=[[1, 1, 0], [0, 1, 1]], columns=3)
         result = compute_rref(req)
-        assert result.rref_rows == ((1, 0, 1), (0, 1, 1))
+        assert result.reduced_matrix.entries == ((1, 0, 1), (0, 1, 1))
         assert result.pivot_columns == (0, 1)
 
     def test_identity_matrix(self) -> None:
         req = RrefRequest(prime=7, entries=[[1, 0], [0, 1]], columns=2)
         result = compute_rref(req)
-        assert result.rref_rows == ((1, 0), (0, 1))
+        assert result.reduced_matrix.entries == ((1, 0), (0, 1))
         assert result.pivot_columns == (0, 1)
 
     def test_zero_matrix(self) -> None:
@@ -98,6 +99,52 @@ class TestRref:
         req = RrefRequest(prime=5, entries=[[0, 0, 1], [1, 0, 0]], columns=3)
         result = compute_rref(req)
         assert result.pivot_columns == tuple(sorted(result.pivot_columns))
+
+    def test_reduced_matrix_composes_with_downstream_requests(self) -> None:
+        """The serialized matrix value feeds rank/nullspace unchanged."""
+        import json
+
+        req = RrefRequest(prime=2, entries=[[1, 1, 0], [0, 1, 1]], columns=3)
+        result = compute_rref(req)
+        payload = json.loads(result.model_dump_json())["reduced_matrix"]
+        assert set(payload) == {"prime", "entries", "columns"}
+        assert NullspaceRequest.model_validate(payload).columns == 3
+        assert compute_rank(RankRequest.model_validate(payload)).rank == 2
+
+    def test_zero_row_reduction_keeps_column_axis(self) -> None:
+        result = compute_rref(RrefRequest(prime=5, entries=[], columns=4))
+        assert result.reduced_matrix.entries == ()
+        assert result.reduced_matrix.columns == 4
+        RrefResult.model_validate(result.model_dump())
+
+    def test_result_round_trips(self) -> None:
+        req = RrefRequest(prime=2, entries=[[1, 1, 0], [0, 1, 1]], columns=3)
+        result = compute_rref(req)
+        RrefResult.model_validate(result.model_dump())
+
+    def test_result_rejects_wrong_reduced_matrix(self) -> None:
+        with pytest.raises(ValidationError, match="exact reduced row-echelon"):
+            RrefResult(
+                prime=2,
+                entries=((1, 1, 0), (0, 1, 1)),
+                columns=3,
+                reduced_matrix={
+                    "prime": 2,
+                    "entries": ((1, 0, 0), (0, 1, 0)),
+                    "columns": 3,
+                },
+                pivot_columns=(0, 1),
+            )
+
+    def test_result_rejects_foreign_prime_on_reduced_matrix(self) -> None:
+        with pytest.raises(ValidationError):
+            RrefResult(
+                prime=2,
+                entries=((1, 1),),
+                columns=2,
+                reduced_matrix={"prime": 3, "entries": ((1, 1),), "columns": 2},
+                pivot_columns=(0,),
+            )
 
 
 class TestNullspace:

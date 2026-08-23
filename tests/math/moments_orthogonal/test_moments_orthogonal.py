@@ -142,9 +142,23 @@ class TestJacobiMatrix:
         assert result.diagonal == ()
         assert result.off_diagonal == ()
 
-    def test_zero_beta_rejected(self) -> None:
-        with pytest.raises(ValueError, match="nonzero"):
+    def test_nonpositive_beta0_rejected(self) -> None:
+        """The native API mirrors the typed positive-functional domain."""
+        with pytest.raises(ValueError, match="must be positive"):
+            jacobi_matrix(
+                (_frac(0, 1),), (_frac(-1, 1), _frac(1, 1))
+            )
+        with pytest.raises(ValueError, match="must be positive"):
             jacobi_matrix((_frac(0, 1),), (_frac(0, 1), _frac(1, 1)))
+
+    def test_negative_subdiagonal_rejected(self) -> None:
+        """Consumed subdiagonal entries are squared norms and must be > 0."""
+        alpha = (_frac(0, 1), _frac(0, 1))
+        beta = (_frac(1, 1), _frac(-1, 2), _frac(1, 3))
+        with pytest.raises(ValueError, match="positive squared-norm ratios"):
+            jacobi_matrix(alpha, beta)
+        # beta beyond the consumed prefix does not enter the matrix.
+        assert jacobi_matrix((_frac(0, 1),), (_frac(1, 1), _frac(-1, 2))).off_diagonal == ()
 
 
 # ---------------------------------------------------------------------------
@@ -214,6 +228,23 @@ class TestGaussianQuadrature:
         with pytest.raises(ValueError, match="between 1 and 16"):
             gaussian_quadrature((), (_frac(1, 1),))
 
+    def test_nonpositive_zeroth_moment_rejected(self) -> None:
+        """The native API mirrors the typed contract's positive functional."""
+        with pytest.raises(ValueError, match="must be positive"):
+            gaussian_quadrature(alpha=(_frac(0, 1),), beta=(_frac(-1, 1),))
+        with pytest.raises(ValueError, match="must be positive"):
+            gaussian_quadrature(
+                alpha=(_frac(0, 1), _frac(0, 1)),
+                beta=(_frac(0, 1), _frac(1, 2), _frac(1, 3)),
+            )
+
+    def test_nonpositive_subdiagonal_rejected(self) -> None:
+        with pytest.raises(ValueError, match="positive squared-norm ratios"):
+            gaussian_quadrature(
+                alpha=(_frac(0, 1), _frac(0, 1)),
+                beta=(_frac(1, 1), _frac(0, 1), _frac(1, 3)),
+            )
+
 
 # ---------------------------------------------------------------------------
 # Wire adapter tests
@@ -233,7 +264,27 @@ class TestWireAdapters:
         )
         result = compute_recurrence_coefficients(request)
         assert isinstance(result, RecurrenceCoefficientsResult)
-        assert len(result.alpha) == 3
+        assert len(result.coefficients.alpha) == 3
+        # The serialized canonical coefficient pair composes unchanged with
+        # each downstream consumer request.
+        import json
+
+        payload = json.loads(result.model_dump_json())["coefficients"]
+        assert set(payload) == {"alpha", "beta"}
+        JacobiMatrixRequest.model_validate(payload)
+        ChristoffelDarbouxRequest.model_validate({**payload, "x": _cr(1, 2), "y": _cr(1, 3)})
+        GaussianQuadratureRequest.model_validate(payload)
+
+    def test_recurrence_result_rejects_forged_coefficients(self) -> None:
+        moments = tuple(_cr(1, k) for k in range(1, 8))
+        result = compute_recurrence_coefficients(
+            RecurrenceCoefficientsRequest(moments=moments)
+        )
+        payload = result.model_dump()
+        payload["coefficients"]["alpha"] = list(payload["coefficients"]["alpha"])
+        payload["coefficients"]["alpha"][0] = {"num": "7", "den": "1"}
+        with pytest.raises(ValidationError, match="exact Gram-Schmidt"):
+            RecurrenceCoefficientsResult.model_validate(payload)
 
     def test_jacobi_wire(self) -> None:
         request = JacobiMatrixRequest(

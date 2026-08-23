@@ -12,6 +12,7 @@ from jacobian.math.approximation_theory._models import (
     LagrangeBasisRequest,
     LagrangeBasisResult,
     LagrangeInterpolationRequest,
+    LagrangeInterpolationResult,
     RationalNodeSet,
 )
 from jacobian.math.approximation_theory._operations import (
@@ -171,6 +172,40 @@ class TestLagrangeInterpolation:
                 nodes=nodes,
                 values=(_node("1"), _node("2"), _node("3")),
             )
+
+
+class TestLagrangeInterpolationAxisBinding:
+    def test_produced_result_uses_x_axis(self):
+        nodes = RationalNodeSet(nodes=(_node("0"), _node("1")))
+        result = compute_lagrange_interpolation(
+            LagrangeInterpolationRequest(
+                nodes=nodes, values=(_node("1"), _node("2"))
+            )
+        )
+        assert result.polynomial.variables == ("x",)
+        LagrangeInterpolationResult.model_validate(result.model_dump())
+
+    def test_foreign_variable_axis_rejected(self):
+        """A revalidated result cannot carry a different parent ring."""
+        from jacobian.math.polynomials.values import (
+            RationalPolynomial,
+            RationalPolynomialTerm,
+            SparseRationalPolynomial,
+        )
+
+        ypoly = RationalPolynomial(
+            variables=("y",),
+            polynomial=SparseRationalPolynomial(
+                terms=(
+                    RationalPolynomialTerm(
+                        coefficient=CanonicalRational(num="1", den="1"),
+                        exponents=(0,),
+                    ),
+                )
+            ),
+        )
+        with pytest.raises(ValidationError, match="variable 'x'"):
+            LagrangeInterpolationResult(polynomial=ypoly)
 
 
 class TestLagrangeBasisSourceBinding:

@@ -1,4 +1,9 @@
-"""Typed wire contracts for graph cycle and subgraph-pattern operations."""
+"""Typed wire contracts for graph cycle and subgraph-pattern operations.
+
+Graphs are carried as the domain-owned canonical ``SimpleUndirectedGraph``
+value so serialized producer output composes into these requests unchanged;
+integer indexing stays private to the bounded search kernel.
+"""
 
 from __future__ import annotations
 
@@ -7,40 +12,30 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+MAX_CYCLE_GRAPH_ORDER = 64
 
 
-class UndirectedGraph(StrictModel):
-    """A simple undirected graph for cycle and pattern operations."""
-
-    vertex_count: int = Field(ge=1, le=64)
-    edges: tuple[tuple[int, int], ...] = Field(min_length=0, max_length=512)
-
-    @model_validator(mode="after")
-    def require_valid_edges(self) -> Self:
-        seen: set[tuple[int, int]] = set()
-        for source, target in self.edges:
-            if not (
-                0 <= source < self.vertex_count and 0 <= target < self.vertex_count
-            ):
-                raise ValueError("edge vertices must be in 0..vertex_count-1")
-            if source == target:
-                raise ValueError("self-loops are not allowed")
-            canonical = (min(source, target), max(source, target))
-            if canonical in seen:
-                raise ValueError("undirected edges must be unique")
-            seen.add(canonical)
-        return self
+def _require_admissible_order(graph: SimpleUndirectedGraph) -> None:
+    if len(graph.vertices) > MAX_CYCLE_GRAPH_ORDER:
+        raise ValueError(
+            "graphs are bounded to at most "
+            f"{MAX_CYCLE_GRAPH_ORDER} vertices so the exhaustive searches "
+            "keep a declared work and result bound"
+        )
 
 
 class FixedLengthCycleRequest(StrictModel):
     """Decide whether a graph contains a simple cycle of a given length."""
 
-    graph: UndirectedGraph
-    length: int = Field(ge=3, le=20)
+    graph: SimpleUndirectedGraph
+    length: int = Field(ge=3, le=MAX_CYCLE_GRAPH_ORDER)
 
     @model_validator(mode="after")
     def require_length_within_bounds(self) -> Self:
-        if self.length > self.graph.vertex_count:
+        _require_admissible_order(self.graph)
+        if self.length > len(self.graph.vertices):
             raise ValueError("cycle length cannot exceed vertex count")
         return self
 
@@ -54,23 +49,25 @@ def _require_decided_witness_pair(exists: bool | None, witness: object) -> None:
 
 
 def _require_cycle_witness_replay(
-    graph: UndirectedGraph, length: int, cycle: tuple[int, ...]
+    graph: SimpleUndirectedGraph, length: int, cycle: tuple[str, ...]
 ) -> None:
     """A positive cycle witness must replay as edges of its source graph."""
     if len(cycle) != length:
         raise ValueError("witness cycle length must match the declared length")
     if len(set(cycle)) != length:
         raise ValueError("witness cycle vertices must be distinct")
-    if any(v >= graph.vertex_count for v in cycle):
+    names = set(graph.vertices)
+    if any(vertex not in names for vertex in cycle):
         raise ValueError("witness cycle vertices must lie in the graph")
-    edges = {(min(a, b), max(a, b)) for a, b in graph.edges}
+    edges = set(graph.edges)
     for index, u in enumerate(cycle):
         v = cycle[(index + 1) % len(cycle)]
-        if (min(u, v), max(u, v)) not in edges:
+        edge = (u, v) if u < v else (v, u)
+        if edge not in edges:
             raise ValueError("witness cycle must replay as edges of the source graph")
 
 
-def _require_negative_cycle_replay(graph: UndirectedGraph, length: int) -> None:
+def _require_negative_cycle_replay(graph: SimpleUndirectedGraph, length: int) -> None:
     """Replay the same bounded exhaustive search the operation ran.
 
     A decided negative result implies the search completed within its
@@ -119,17 +116,14 @@ class FixedLengthCycleResult(SearchOutcome):
     exactly for the undecided SEARCH_BUDGET_EXCEEDED outcome.
     """
 
-    graph: UndirectedGraph
-    vertex_count: int = Field(ge=1, le=64)
-    length: int = Field(ge=3, le=20)
+    graph: SimpleUndirectedGraph
+    length: int = Field(ge=3, le=MAX_CYCLE_GRAPH_ORDER)
     exists: bool | None = None
-    cycle: tuple[int, ...] | None = None
+    cycle: tuple[str, ...] | None = None
 
     @model_validator(mode="after")
     def bind_witness(self) -> Self:
-        if self.graph.vertex_count != self.vertex_count:
-            raise ValueError("vertex_count must match graph.vertex_count")
-        if self.length > self.graph.vertex_count:
+        if self.length > len(self.graph.vertices):
             raise ValueError("cycle length cannot exceed vertex count")
         if self.outcome != "DECIDED":
             if self.exists is not None or self.cycle is not None:
@@ -148,12 +142,14 @@ class FixedLengthCycleResult(SearchOutcome):
 class SubgraphPatternRequest(StrictModel):
     """Find an injective embedding of a pattern graph into a host graph."""
 
-    host: UndirectedGraph
-    pattern: UndirectedGraph
+    host: SimpleUndirectedGraph
+    pattern: SimpleUndirectedGraph
 
     @model_validator(mode="after")
     def require_pattern_fits(self) -> Self:
-        if self.pattern.vertex_count > self.host.vertex_count:
+        _require_admissible_order(self.host)
+        _require_admissible_order(self.pattern)
+        if len(self.pattern.vertices) > len(self.host.vertices):
             raise ValueError("pattern vertex count cannot exceed host vertex count")
         return self
 
@@ -161,7 +157,7 @@ class SubgraphPatternRequest(StrictModel):
 class SubgraphEmbedding(StrictModel):
     """One injective embedding of a pattern graph into a host graph."""
 
-    mapping: tuple[tuple[int, int], ...]
+    mapping: tuple[tuple[str, str], ...]
 
     @model_validator(mode="after")
     def require_valid_mapping(self) -> Self:
@@ -171,6 +167,10 @@ class SubgraphEmbedding(StrictModel):
         codomain = tuple(dst for _, dst in self.mapping)
         if domain != tuple(sorted(domain)):
             raise ValueError("embedding domain must be sorted")
+        # The mapping must be a function on distinct pattern vertices before
+        # dictionary conversion could silently drop duplicate entries.
+        if len(set(domain)) != len(domain):
+            raise ValueError("embedding domain vertices must be distinct")
         if len(set(codomain)) != len(codomain):
             raise ValueError("embedding codomain must be injective")
         return self
@@ -183,20 +183,17 @@ class SubgraphPatternResult(SearchOutcome):
     coverage, and exact edge preservation against the inputs.
     """
 
-    host_graph: UndirectedGraph
-    pattern_graph: UndirectedGraph
-    host_vertex_count: int = Field(ge=1, le=64)
-    pattern_vertex_count: int = Field(ge=1, le=64)
+    host_graph: SimpleUndirectedGraph
+    pattern_graph: SimpleUndirectedGraph
     exists: bool | None = None
     embedding: SubgraphEmbedding | None = None
 
     @model_validator(mode="after")
     def bind_witness(self) -> Self:
-        if (
-            self.host_vertex_count != self.host_graph.vertex_count
-            or self.pattern_vertex_count != self.pattern_graph.vertex_count
-        ):
-            raise ValueError("vertex counts must match their source graphs")
+        _require_admissible_order(self.host_graph)
+        _require_admissible_order(self.pattern_graph)
+        if len(self.pattern_graph.vertices) > len(self.host_graph.vertices):
+            raise ValueError("pattern vertex count cannot exceed host vertex count")
         if self.outcome != "DECIDED":
             if self.exists is not None or self.embedding is not None:
                 raise ValueError(
@@ -214,26 +211,28 @@ class SubgraphPatternResult(SearchOutcome):
 
 
 def _require_embedding_witness_replay(
-    host_graph: UndirectedGraph,
-    pattern_graph: UndirectedGraph,
+    host_graph: SimpleUndirectedGraph,
+    pattern_graph: SimpleUndirectedGraph,
     embedding: SubgraphEmbedding,
 ) -> None:
     """A positive embedding must replay injectively and preserve edges."""
     mapping = dict(embedding.mapping)
-    if set(mapping) != set(range(pattern_graph.vertex_count)):
+    if set(mapping) != set(pattern_graph.vertices):
         raise ValueError("embedding must cover every pattern vertex")
-    if any(hv < 0 or hv >= host_graph.vertex_count for hv in mapping.values()):
+    host_names = set(host_graph.vertices)
+    if any(hv not in host_names for hv in mapping.values()):
         raise ValueError("embedding codomain must lie in the host graph")
-    host_edges = {(min(a, b), max(a, b)) for a, b in host_graph.edges}
+    host_edges = set(host_graph.edges)
     for a, b in pattern_graph.edges:
         ha, hb = mapping[a], mapping[b]
-        if (min(ha, hb), max(ha, hb)) not in host_edges:
+        edge = (ha, hb) if ha < hb else (hb, ha)
+        if edge not in host_edges:
             raise ValueError("embedding must preserve every pattern edge in the host")
 
 
 def _require_negative_embedding_replay(
-    host_graph: UndirectedGraph,
-    pattern_graph: UndirectedGraph,
+    host_graph: SimpleUndirectedGraph,
+    pattern_graph: SimpleUndirectedGraph,
 ) -> None:
     """Replay the same degree-pruned bounded search the operation ran.
 
@@ -260,10 +259,10 @@ def _require_negative_embedding_replay(
 
 
 __all__ = [
+    "MAX_CYCLE_GRAPH_ORDER",
     "FixedLengthCycleRequest",
     "FixedLengthCycleResult",
     "SubgraphEmbedding",
     "SubgraphPatternRequest",
     "SubgraphPatternResult",
-    "UndirectedGraph",
 ]

@@ -10,23 +10,31 @@ from jacobian.math.graphs.cycle_pattern._models import (
     SubgraphEmbedding,
     SubgraphPatternRequest,
     SubgraphPatternResult,
-    UndirectedGraph,
 )
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 # Backtracking recursion nodes across one request; a schema-valid request
 # cannot occupy the inline path beyond this deterministic work bound.
 MAX_SEARCH_NODES = 2_000_000
 
 
-def _build_graph(graph: UndirectedGraph) -> nx.Graph[int]:
+def vertex_order(graph: SimpleUndirectedGraph) -> list[str]:
+    """The canonical sorted vertex axis; integer indices index into it."""
+    return sorted(graph.vertices)
+
+
+def _build_graph(graph: SimpleUndirectedGraph) -> nx.Graph[int]:
+    """Index the canonical value's vertices privately for the search kernel."""
+    names = vertex_order(graph)
+    index = {name: position for position, name in enumerate(names)}
     g: nx.Graph[int] = nx.Graph()
-    g.add_nodes_from(range(graph.vertex_count))
+    g.add_nodes_from(range(len(names)))
     for source, target in graph.edges:
-        g.add_edge(source, target)
+        g.add_edge(index[source], index[target])
     return g
 
 
-def _decide_cycle_bounded(graph: UndirectedGraph, length: int) -> bool:
+def _decide_cycle_bounded(graph: SimpleUndirectedGraph, length: int) -> bool:
     """Bounded exhaustive k-cycle decision shared by execution and validation.
 
     Raises ``_BudgetExceededError`` when the deterministic node budget is
@@ -34,7 +42,7 @@ def _decide_cycle_bounded(graph: UndirectedGraph, length: int) -> bool:
     """
     g = _build_graph(graph)
     budget = _NodeBudget()
-    for start in range(graph.vertex_count):
+    for start in range(len(graph.vertices)):
         found = _search_cycle_from(g, start, length, budget)
         if found is not None:
             return True
@@ -44,8 +52,8 @@ def _decide_cycle_bounded(graph: UndirectedGraph, length: int) -> bool:
 
 
 def _decide_embedding_bounded(
-    host_graph: UndirectedGraph,
-    pattern_graph: UndirectedGraph,
+    host_graph: SimpleUndirectedGraph,
+    pattern_graph: SimpleUndirectedGraph,
 ) -> bool:
     """Bounded exhaustive embedding decision shared by execution and validation.
 
@@ -83,16 +91,15 @@ def decide_fixed_length_cycle(
     """
     g = _build_graph(request.graph)
     k = request.length
-    n = request.graph.vertex_count
+    names = vertex_order(request.graph)
     budget = _NodeBudget()
 
-    for start in range(n):
+    for start in range(len(names)):
         try:
             found = _search_cycle_from(g, start, k, budget)
         except _BudgetExceededError:
             return FixedLengthCycleResult(
                 graph=request.graph,
-                vertex_count=n,
                 length=k,
                 outcome="SEARCH_BUDGET_EXCEEDED",
                 detail=(
@@ -103,15 +110,13 @@ def decide_fixed_length_cycle(
         if found is not None:
             return FixedLengthCycleResult(
                 graph=request.graph,
-                vertex_count=n,
                 length=k,
                 exists=True,
-                cycle=tuple(found),
+                cycle=tuple(names[position] for position in found),
             )
         if budget.exceeded():
             return FixedLengthCycleResult(
                 graph=request.graph,
-                vertex_count=n,
                 length=k,
                 outcome="SEARCH_BUDGET_EXCEEDED",
                 detail=(
@@ -122,7 +127,6 @@ def decide_fixed_length_cycle(
 
     return FixedLengthCycleResult(
         graph=request.graph,
-        vertex_count=n,
         length=k,
         exists=False,
     )
@@ -256,6 +260,8 @@ def find_subgraph_pattern(
     """
     host_g = _build_graph(request.host)
     pattern_g = _build_graph(request.pattern)
+    host_names = vertex_order(request.host)
+    pattern_names = vertex_order(request.pattern)
     pattern_vertices = sorted(pattern_g.nodes())
 
     pattern_adj: dict[int, set[int]] = {
@@ -272,8 +278,6 @@ def find_subgraph_pattern(
         return SubgraphPatternResult(
             host_graph=request.host,
             pattern_graph=request.pattern,
-            host_vertex_count=request.host.vertex_count,
-            pattern_vertex_count=request.pattern.vertex_count,
             outcome="SEARCH_BUDGET_EXCEEDED",
             detail=(
                 f"subgraph search exceeded {MAX_SEARCH_NODES} recursion "
@@ -296,13 +300,13 @@ def find_subgraph_pattern(
 
     if decided:
         emb = SubgraphEmbedding(
-            mapping=tuple((pv, mapping[pv]) for pv in pattern_vertices),
+            mapping=tuple(
+                (pattern_names[pv], host_names[mapping[pv]]) for pv in pattern_vertices
+            ),
         )
         return SubgraphPatternResult(
             host_graph=request.host,
             pattern_graph=request.pattern,
-            host_vertex_count=request.host.vertex_count,
-            pattern_vertex_count=request.pattern.vertex_count,
             exists=True,
             embedding=emb,
         )
@@ -310,8 +314,6 @@ def find_subgraph_pattern(
     return SubgraphPatternResult(
         host_graph=request.host,
         pattern_graph=request.pattern,
-        host_vertex_count=request.host.vertex_count,
-        pattern_vertex_count=request.pattern.vertex_count,
         exists=False,
     )
 

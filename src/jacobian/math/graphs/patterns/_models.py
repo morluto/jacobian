@@ -23,7 +23,7 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 # either graph.
 COUNT_AND_VALIDATION_PASSES = 2
 
-# The subset count separately bounds induced-subgraph view construction. The
+# The subset count separately bounds explicit candidate construction. The
 # total work budget below additionally charges exact isomorphism search. These
 # are conservative limits for the current pure-Python NetworkX envelope, not
 # restrictions on the mathematical definition; widening requires sharper
@@ -55,12 +55,14 @@ def _partial_injection_state_bound(order: int) -> int:
 def _per_candidate_work(pattern_order: int) -> int:
     if pattern_order == 0:
         return 0
-    # Creating the subset tuple and graph view visits every chosen vertex.
-    # NetworkX's edge-count and degree filters can each scan both directions
-    # of every possible induced edge, and sorting the degrees is bounded by a
-    # quadratic comparison budget.
-    subset_and_view_construction = pattern_order
-    induced_edge_and_degree_checks = 4 * max(1, comb(pattern_order, 2))
+    # Creating the subset tuple and the explicit local graph each visits every
+    # selected vertex. Every possible local edge incurs one O(1) host-edge
+    # probe and, in the dense case, one O(1) insertion in the candidate graph.
+    subset_and_vertex_construction = 2 * pattern_order
+    pair_probes_and_edge_insertions = 2 * max(1, comb(pattern_order, 2))
+    # Edge-count and degree iteration visit the local vertices, while sorting
+    # the degree sequence is conservatively bounded by order^2 comparisons.
+    local_edge_and_degree_checks = 2 * pattern_order
     degree_sort_checks = max(1, pattern_order * pattern_order)
     # VF2++ explores a subset of the partial injective maps. Candidate
     # generation and feasibility inspect at most order^2 adjacency relations
@@ -69,8 +71,9 @@ def _per_candidate_work(pattern_order: int) -> int:
         1, pattern_order * pattern_order
     )
     return (
-        subset_and_view_construction
-        + induced_edge_and_degree_checks
+        subset_and_vertex_construction
+        + pair_probes_and_edge_insertions
+        + local_edge_and_degree_checks
         + degree_sort_checks
         + isomorphism_checks
     )
@@ -155,8 +158,8 @@ def _require_bounded_request(
         raise ValueError(
             f"induced-pattern exact count requires {total_work:,} work units, "
             f"exceeding the {MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS:,}-unit bound "
-            "for graph construction, induced-edge comparison, VF2++ search, "
-            "and result-validation replay"
+            "for graph construction, direct host-edge probes, explicit candidate "
+            "scans, VF2++ search, and result-validation replay"
         )
 
 
@@ -171,10 +174,11 @@ class InducedVertexSubsetPatternCountRequest(StrictModel):
                 "SimpleUndirectedGraph bounds (at most 256 vertices and 32,640 "
                 "edges). Admission preflights the exact candidate count "
                 "C(|V(host)|, |V(pattern)|), encoded request and retained-result "
-                "bytes, graph records, induced-view construction and adjacency "
-                "scans, and a worst-case VF2++ partial-injection state bound for "
-                "every subset. It permits at most 5,000 subsets per pass and "
-                "64,000,000 total work units across both counting and source-bound "
+                "bytes, graph records, explicit candidate construction from "
+                "C(|V(pattern)|, 2) direct host-edge probes per subset, local "
+                "candidate scans, and a worst-case VF2++ partial-injection state "
+                "bound for every subset. It permits at most 5,000 subsets per pass "
+                "and 64,000,000 total work units across both counting and source-bound "
                 "result-validation passes. The retained result must fit the "
                 "10,485,760-byte canonical output bound. These are conservative "
                 "current-backend limits, not restrictions on the mathematical "

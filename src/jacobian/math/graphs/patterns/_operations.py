@@ -24,6 +24,22 @@ def _integer_graph(value: SimpleUndirectedGraph) -> nx.Graph[int]:
     return graph
 
 
+def _explicit_induced_candidate(
+    host: nx.Graph[int],
+    subset: tuple[int, ...],
+) -> nx.Graph[int]:
+    """Materialize one induced candidate with work depending only on its order."""
+
+    candidate: nx.Graph[int] = nx.Graph()
+    candidate.add_nodes_from(range(len(subset)))
+    candidate.add_edges_from(
+        (left_index, right_index)
+        for left_index, right_index in combinations(range(len(subset)), 2)
+        if host.has_edge(subset[left_index], subset[right_index])
+    )
+    return candidate
+
+
 def count_induced_vertex_subset_patterns(
     host: SimpleUndirectedGraph,
     pattern: SimpleUndirectedGraph,
@@ -44,7 +60,7 @@ def count_induced_vertex_subset_patterns(
 
     occurrence_count = 0
     for subset in combinations(range(host_order), pattern_order):
-        induced = host_graph.subgraph(subset)
+        induced = _explicit_induced_candidate(host_graph, subset)
         if induced.number_of_edges() != pattern_edge_count:
             continue
         if tuple(sorted(degree for _, degree in induced.degree())) != pattern_degrees:

@@ -19,9 +19,10 @@ TOOLS: MathTools = (
             "Count host vertex subsets whose induced simple graph is isomorphic "
             "to a supplied pattern, once per subset rather than per embedding. "
             "Admission preflights C(|V(host)|, |V(pattern)|), encoded source and "
-            "retained-result bytes, graph construction, induced adjacency scans, "
-            "and worst-case NetworkX VF2++ partial-map work for every subset. It "
-            "admits at most 5,000 subsets per pass and 64,000,000 work units "
+            "retained-result bytes, C(|V(pattern)|, 2) direct host-edge probes "
+            "and explicit local-graph construction per subset, and worst-case "
+            "NetworkX VF2++ partial-map work for every subset. It admits at most "
+            "5,000 subsets per pass and 64,000,000 work units "
             "across counting and source-bound result replay; these are "
             "conservative current-backend limits."
         ),
@@ -40,7 +41,10 @@ TOOLS: MathTools = (
         examples=(
             example(
                 "two_induced_p4_in_p5",
-                "Count the two four-vertex subsets of P5 inducing P4. Admission preflights C(5, 4)=5 subsets plus construction, adjacency scans, and per-subset VF2++ work in both passes; limits are 5,000 subsets per pass and 64,000,000 total work units.",
+                "Count two P4 subsets in P5. Admission preflights 5 subsets, 6 "
+                "direct host-edge probes and one local graph per subset, plus "
+                "per-subset VF2++ work across two passes; limits are 5,000 subsets "
+                "per pass and 64,000,000 work units.",
                 {
                     "host": {
                         "vertices": ["a", "b", "c", "d", "e"],

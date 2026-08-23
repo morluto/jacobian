@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import random
 from itertools import combinations, pairwise, permutations
+from math import comb
 
 import networkx as nx
 import pytest
@@ -273,6 +274,30 @@ def test_request_accepts_useful_case_near_subset_bound() -> None:
     assert compute_induced_vertex_subset_pattern_count(request).occurrence_count == "0"
 
 
+def test_dense_host_at_subset_bound_avoids_host_filtered_views(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_has_edge = nx.Graph.has_edge
+    host_pair_probes = 0
+
+    def fail_subgraph(*_args: object, **_kwargs: object) -> nx.Graph[object]:
+        raise AssertionError("candidate construction must not scan a host graph view")
+
+    def count_host_pair_probe(graph: nx.Graph[int], left: int, right: int) -> bool:
+        nonlocal host_pair_probes
+        if graph.number_of_nodes() == 100:
+            host_pair_probes += 1
+        return original_has_edge(graph, left, right)
+
+    monkeypatch.setattr(nx.Graph, "subgraph", fail_subgraph)
+    monkeypatch.setattr(nx.Graph, "has_edge", count_host_pair_probe)
+
+    # C(100, 2) = 4,950, so this dense case exercises the useful candidate
+    # boundary without allowing work to depend on the host vertices' degrees.
+    assert _count(_complete(100, "h"), _complete(2, "p")) == "4950"
+    assert host_pair_probes == 2 * comb(100, 2)
+
+
 def test_request_rejects_next_graph_order_above_subset_bound() -> None:
     # C(21, 4) = 5,985, so rejection happens before enumeration.
     with pytest.raises(ValidationError, match="5,000-candidate per-pass bound"):
@@ -336,7 +361,10 @@ def test_numeric_admission_caps_are_visible_in_schema_and_tool_description() -> 
     assert "64,000,000 total work units" in schema
     assert "10,485,760-byte canonical output bound" in schema
     assert "C(|V(host)|, |V(pattern)|)" in schema
+    assert "C(|V(pattern)|, 2) direct host-edge probes" in schema
     assert "partial-injection state bound" in schema
     assert "5,000 subsets per pass" in TOOLS[0].description
     assert "64,000,000 work units" in TOOLS[0].description
+    assert "direct host-edge probes" in TOOLS[0].description
+    assert "one local graph per subset" in TOOLS[0].examples[0].description
     assert "per-subset VF2++ work" in TOOLS[0].examples[0].description

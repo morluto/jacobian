@@ -257,6 +257,97 @@ class TestRequestValidation:
             PrimeFieldMatrixRequest(prime=2**127 - 1, entries=((1,),))
 
 
+class TestAcceptedRequestShapes:
+    """Either separate fields or one canonical matrix value, never both."""
+
+    def _canonical_payload(self) -> dict:
+        return {
+            "prime": 5,
+            "entries": [[0, 2, 0], [0, 0, 3], [4, 0, 0]],
+            "columns": 3,
+        }
+
+    def test_serialized_columns_shape_accepted(self):
+        """A caller holding {prime, entries, columns} passes it unchanged."""
+        import json
+
+        payload = self._canonical_payload()
+        encoded = json.dumps(payload)
+        request = PrimeFieldMatrixRequest.model_validate_json(encoded, strict=True)
+        assert request.columns == 3
+        assert compute_rank(request).rank == 3
+        assert compute_rref(request).pivot_columns == (0, 1, 2)
+        assert compute_nullspace(request).nullity == 0
+
+    def test_embedded_canonical_value_composes(self):
+        from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
+
+        canonical = PrimeFieldMatrix(
+            prime=5, entries=((0, 2, 0), (0, 0, 3), (4, 0, 0)), columns=3
+        )
+        result = compute_rank(PrimeFieldMatrixRequest(matrix=canonical))
+        assert result.rank == 3
+        assert result.prime == 5
+        rref_result = compute_rref(PrimeFieldMatrixRequest(matrix=canonical))
+        assert rref_result.pivot_columns == (0, 1, 2)
+        ns_result = compute_nullspace(PrimeFieldMatrixRequest(matrix=canonical))
+        assert ns_result.nullity == 0
+
+    def test_embedded_shape_results_round_trip_through_public_dispatch(self):
+        """Results built from either shape revalidate as serialized output."""
+        import json
+
+        from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
+
+        embedded_result = compute_rank(
+            PrimeFieldMatrixRequest(
+                matrix=PrimeFieldMatrix(prime=5, entries=((1, 2), (2, 4)), columns=2)
+            )
+        )
+        serialized = json.loads(embedded_result.model_dump_json())
+        revalidated = PrimeFieldMatrixRankResult.model_validate(serialized)
+        assert revalidated == embedded_result
+        assert serialized["source"]["matrix"]["columns"] == 2
+
+    def test_mixed_shapes_rejected(self):
+        from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
+
+        canonical = PrimeFieldMatrix(prime=5, entries=((1, 0), (0, 1)), columns=2)
+        with pytest.raises(ValidationError, match="not both"):
+            PrimeFieldMatrixRequest(matrix=canonical, prime=5)
+        with pytest.raises(ValidationError, match="not both"):
+            PrimeFieldMatrixRequest(matrix=canonical, entries=((1, 0), (0, 1)))
+        with pytest.raises(ValidationError, match="not both"):
+            PrimeFieldMatrixRequest(matrix=canonical, columns=2)
+
+    def test_missing_both_shapes_rejected(self):
+        with pytest.raises(ValidationError, match="canonical matrix"):
+            PrimeFieldMatrixRequest()
+        with pytest.raises(ValidationError, match="canonical matrix"):
+            PrimeFieldMatrixRequest(prime=2)
+
+    def test_wrong_declared_columns_rejected(self):
+        with pytest.raises(ValidationError, match="row width"):
+            PrimeFieldMatrixRequest(**self._canonical_payload() | {"columns": 4})
+
+    def test_empty_embedded_matrix_rejected_like_flat_shape(self):
+        from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
+
+        with pytest.raises(ValidationError, match="non-empty"):
+            PrimeFieldMatrixRequest(
+                matrix=PrimeFieldMatrix(prime=2, entries=(), columns=0)
+            )
+
+    def test_flat_shape_still_rejects_out_of_domain_matrices(self):
+        for payload in (
+            self._canonical_payload() | {"entries": [[5, 0], [0, 1]]},
+            self._canonical_payload() | {"prime": 6},
+            {"prime": 2, "entries": [[1, 0, 1], [0, 1]]},
+        ):
+            with pytest.raises(ValidationError):
+                PrimeFieldMatrixRequest.model_validate(payload)
+
+
 class TestResultReplay:
     """Serialized results must revalidate only when they match the source."""
 

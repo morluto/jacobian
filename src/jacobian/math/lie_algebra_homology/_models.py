@@ -27,6 +27,21 @@ complete dense complex then carries sum_p C(n, p - 1) * C(n, p) field entries
 (167,960 at the admitted maximum), inside the kernel and transport budgets.
 """
 
+MAX_LIE_ALGEBRA_PRIME = 2_147_483_647
+"""Conservative characteristic envelope shared with the GF(p) linear-algebra domain.
+
+CE construction performs no prime-dependent expansion: each differential keeps
+its C(n, degree - 1) x C(n, degree) residue shape for every characteristic,
+each stored value is one canonical residue, and elimination work scales only
+polynomially in log(prime) through the shared DomainMatrix kernel. The dense
+complex admits at most 167,960 residues in total, so per-entry bit growth
+never approaches any budget before the shared backend characteristic cap.
+Until a sharper characteristic/bit-length budget is established for this
+domain, this documented conservative fallback admits exactly the
+characteristics the shared ``PrimeFieldMatrix`` kernel accepts, keeping one
+GF(p) envelope across domains rather than an operation-local ceiling.
+"""
+
 
 def _require_prime(prime: int) -> None:
     from sympy import isprime
@@ -101,7 +116,7 @@ class LieAlgebra(StrictModel):
     brackets.
     """
 
-    prime: int = Field(ge=2, le=10_000)
+    prime: int = Field(ge=2, le=MAX_LIE_ALGEBRA_PRIME)
     dimension: int = Field(ge=1, le=MAX_LIE_ALGEBRA_DIMENSION)
     structure_constants: tuple[tuple[tuple[int, ...], ...], ...] = Field(
         min_length=1, max_length=MAX_LIE_ALGEBRA_DIMENSION
@@ -194,7 +209,7 @@ class ChevalleyEilenbergComplexResult(StrictModel):
     dimension: int = Field(ge=1)
     group_dimensions: tuple[int, ...] = Field(min_length=1)
     differentials: tuple[DifferentialMatrix, ...]
-    prime: int = Field(ge=2, le=10_000)
+    prime: int = Field(ge=2, le=MAX_LIE_ALGEBRA_PRIME)
 
     @model_validator(mode="after")
     def bind_complex_to_lie_algebra(self) -> Self:
@@ -265,7 +280,7 @@ class LieHomologyResult(StrictModel):
     lie_algebra: LieAlgebra
     groups: tuple[LieHomologyGroup, ...] = Field(min_length=1)
     dimension: int = Field(ge=1)
-    prime: int = Field(ge=2, le=10_000)
+    prime: int = Field(ge=2, le=MAX_LIE_ALGEBRA_PRIME)
 
     @model_validator(mode="after")
     def bind_to_source_lie_algebra(self) -> Self:
@@ -291,6 +306,7 @@ class LieHomologyResult(StrictModel):
 
 __all__ = [
     "MAX_LIE_ALGEBRA_DIMENSION",
+    "MAX_LIE_ALGEBRA_PRIME",
     "ChevalleyEilenbergComplexRequest",
     "ChevalleyEilenbergComplexResult",
     "DifferentialMatrix",

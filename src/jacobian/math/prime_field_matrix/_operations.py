@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 from jacobian.math.prime_field_linear_algebra import (
-    PrimeFieldMatrix,
-)
-from jacobian.math.prime_field_linear_algebra import (
     nullspace as _nullspace,
 )
 from jacobian.math.prime_field_linear_algebra import (
@@ -19,34 +16,27 @@ from jacobian.math.prime_field_matrix._models import (
     PrimeFieldMatrixRequest,
     PrimeFieldNullspaceResult,
     PrimeFieldRrefResult,
+    _kernel_matrix,
 )
-
-
-def _to_kernel(request: PrimeFieldMatrixRequest) -> PrimeFieldMatrix:
-    return PrimeFieldMatrix(
-        prime=request.prime,
-        entries=request.entries,
-        columns=len(request.entries[0]),
-    )
 
 
 def compute_rank(request: PrimeFieldMatrixRequest) -> PrimeFieldMatrixRankResult:
     """Compute the rank of a matrix over GF(p)."""
-    matrix = _to_kernel(request)
+    matrix = _kernel_matrix(request)
     return PrimeFieldMatrixRankResult(
         source=request,
-        prime=request.prime,
+        prime=matrix.prime,
         rank=_rank(matrix),
     )
 
 
 def compute_rref(request: PrimeFieldMatrixRequest) -> PrimeFieldRrefResult:
     """Compute the reduced row-echelon form of a matrix over GF(p)."""
-    matrix = _to_kernel(request)
+    matrix = _kernel_matrix(request)
     rref_rows, pivot_columns = _rref(matrix)
     return PrimeFieldRrefResult(
         source=request,
-        prime=request.prime,
+        prime=matrix.prime,
         rref=rref_rows,
         pivot_columns=pivot_columns,
         rank=len(pivot_columns),
@@ -55,11 +45,11 @@ def compute_rref(request: PrimeFieldMatrixRequest) -> PrimeFieldRrefResult:
 
 def compute_nullspace(request: PrimeFieldMatrixRequest) -> PrimeFieldNullspaceResult:
     """Compute a basis for the right nullspace of a matrix over GF(p)."""
-    matrix = _to_kernel(request)
+    matrix = _kernel_matrix(request)
     basis = _nullspace(matrix)
     return PrimeFieldNullspaceResult(
         source=request,
-        prime=request.prime,
+        prime=matrix.prime,
         nullspace=basis,
         nullity=len(basis),
     )

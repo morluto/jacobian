@@ -77,7 +77,10 @@ LIE_HOMOLOGY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "abelian_2d",
-                "Compute the CE complex of a 2D abelian Lie algebra over GF(2).",
+                "Compute the CE chain complex of a 2D abelian Lie algebra over "
+                "GF(2); structure_constants must be the dimension x dimension x "
+                "dimension tensor of canonical GF(prime) residues defining an "
+                "alternating bracket satisfying antisymmetry and Jacobi.",
                 _CE_EXAMPLE,
             ),
         ),
@@ -99,7 +102,10 @@ LIE_HOMOLOGY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "abelian_2d_homology",
-                "Compute homology of a 2D abelian Lie algebra over GF(2).",
+                "Compute homology of a 2D abelian Lie algebra over GF(2); "
+                "structure_constants must be the dimension x dimension x "
+                "dimension tensor of canonical GF(prime) residues defining an "
+                "alternating bracket satisfying antisymmetry and Jacobi.",
                 _CE_EXAMPLE,
             ),
         ),

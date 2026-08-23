@@ -118,7 +118,8 @@ class TestChevalleyEilenbergComplex:
             (0, 0, 3),
             (4, 0, 0),
         )
-        # The serialized matrix composes unchanged with the matrix operations.
+        # The serialized matrix composes unchanged with the matrix operations;
+        # the cross-owner public seam lives in tests/integration/algebra.
         from jacobian.math.prime_field_linear_algebra import rank
 
         assert rank(PrimeFieldMatrix(**payload["matrix"])) == 3
@@ -528,3 +529,44 @@ class TestDimensionEnvelope:
         so it stays rejected at the request boundary."""
         with pytest.raises(ValidationError, match="10"):
             LieAlgebra(prime=2, dimension=11, structure_constants=_abelian(11))
+
+
+class TestCharacteristicEnvelope:
+    """The characteristic bound is the documented shared conservative fallback."""
+
+    def test_envelope_matches_the_shared_prime_field_backend(self):
+        from jacobian.math.lie_algebra_homology._models import (
+            MAX_LIE_ALGEBRA_PRIME,
+        )
+
+        assert MAX_LIE_ALGEBRA_PRIME == 2_147_483_647
+
+    def test_large_characteristic_trivial_algebra_executes(self):
+        """A 1-dim abelian algebra over GF(10007) must not be rejected."""
+        g = LieAlgebra(prime=10007, dimension=1, structure_constants=(((0,),),))
+        homology = compute_lie_homology(LieHomologyRequest(lie_algebra=g))
+        assert [group.betti for group in homology.groups] == [1, 1]
+        complex_result = compute_chevalley_eilenberg_complex(
+            ChevalleyEilenbergComplexRequest(lie_algebra=g)
+        )
+        assert complex_result.prime == 10007
+
+    def test_shared_envelope_maximum_executes(self):
+        """The largest admitted characteristic runs through the CE kernel."""
+        from jacobian.math.lie_algebra_homology._models import (
+            MAX_LIE_ALGEBRA_PRIME,
+        )
+
+        g = LieAlgebra(
+            prime=MAX_LIE_ALGEBRA_PRIME, dimension=1, structure_constants=(((0,),),)
+        )
+        homology = compute_lie_homology(LieHomologyRequest(lie_algebra=g))
+        assert [group.betti for group in homology.groups] == [1, 1]
+
+    def test_characteristic_above_shared_envelope_rejected(self):
+        with pytest.raises(ValidationError):
+            LieAlgebra(
+                prime=2_147_483_648,
+                dimension=1,
+                structure_constants=(((0,),),),
+            )

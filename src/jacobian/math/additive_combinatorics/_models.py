@@ -13,9 +13,9 @@ from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.additive_combinatorics import _multiset_sum
 
-# The materialized-axis cap includes the 327-prime source used for the OEIS
-# A385316 reference profile. Binary Cartesian operations retain their
-# independent pair envelope below.
+# This conservative materialized-axis cap bounds source parsing and binomial
+# preflight. Operation-specific work and result bounds impose the sharper
+# execution envelope; binary Cartesian operations retain their pair cap below.
 _MAX_SET_SIZE = _multiset_sum.MAX_SOURCE_SIZE
 _MAX_CARTESIAN_PAIR_COUNT = 256 * 256
 _MAX_RESULT_SIZE = _MAX_CARTESIAN_PAIR_COUNT

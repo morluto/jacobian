@@ -51,15 +51,17 @@ def support_bound(
 ) -> int:
     if candidates == 0:
         return 0
-    if bounds is None:
-        return candidates
     if arity == 0:
         minimum_sum = maximum_sum = 0
     else:
         minimum_sum = arity * values[0]
         maximum_sum = arity * values[-1]
-    intersection_lower = max(bounds[0], minimum_sum)
-    intersection_upper = min(bounds[1], maximum_sum)
+    if bounds is None:
+        intersection_lower = minimum_sum
+        intersection_upper = maximum_sum
+    else:
+        intersection_lower = max(bounds[0], minimum_sum)
+        intersection_upper = min(bounds[1], maximum_sum)
     if intersection_lower > intersection_upper:
         return 0
     return min(candidates, intersection_upper - intersection_lower + 1)

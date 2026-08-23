@@ -196,8 +196,21 @@ def test_sum_window_endpoint_digit_bound_is_enforced() -> None:
 def test_full_profile_rejects_worst_case_support_above_result_bound() -> None:
     source_size = 361
     assert source_size * (source_size + 1) // 2 > _MAX_MULTISET_SUM_SUPPORT_SIZE
+    spacing = 2 * source_size * source_size
+    offset = 10**63
+    source = tuple(offset + spacing * i + i * i for i in range(source_size))
     with pytest.raises(ValidationError, match="row result bound"):
-        _request(tuple(range(source_size)), 2)
+        _request(source, 2)
+
+
+def test_dense_full_profile_uses_the_attainable_sum_range_bound() -> None:
+    source = tuple(range(_MAX_SET_SIZE))
+    result = compute_multiset_sum_representation_profile(_request(source, 2))
+
+    assert len(result.entries) == 2 * _MAX_SET_SIZE - 1
+    assert sum(entry.multiplicity for entry in result.entries) == (
+        _MAX_SET_SIZE * (_MAX_SET_SIZE + 1) // 2
+    )
 
 
 def test_narrow_window_admits_large_candidate_family_with_small_output() -> None:

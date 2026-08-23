@@ -21,6 +21,27 @@ MAX_HERMITE_DENOMINATOR_DEGREE = 3
 MAX_HERMITE_COEFFICIENT_DIGITS = 2
 
 
+def require_hermite_reduction_budget(function: RationalFunction) -> None:
+    """Validate the shared native and catalog Hermite-reduction envelope."""
+
+    if len(function.variables) != 1:
+        raise ValueError("Hermite reduction requires exactly one variable")
+    require_sparse_polynomial_budget(
+        function.numerator,
+        maximum_terms=MAX_HERMITE_NUMERATOR_DEGREE + 1,
+        maximum_exponent=MAX_HERMITE_NUMERATOR_DEGREE,
+        maximum_coefficient_digits=MAX_HERMITE_COEFFICIENT_DIGITS,
+        label="Hermite-reduction numerator",
+    )
+    require_sparse_polynomial_budget(
+        function.denominator,
+        maximum_terms=MAX_HERMITE_DENOMINATOR_DEGREE + 1,
+        maximum_exponent=MAX_HERMITE_DENOMINATOR_DEGREE,
+        maximum_coefficient_digits=MAX_HERMITE_COEFFICIENT_DIGITS,
+        label="Hermite-reduction denominator",
+    )
+
+
 class HermiteReductionRequest(StrictModel):
     """One conservatively bounded canonical element of ``QQ(x)``.
 
@@ -41,22 +62,7 @@ class HermiteReductionRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_univariate_reduction_budget(self) -> Self:
-        if len(self.function.variables) != 1:
-            raise ValueError("Hermite reduction requires exactly one variable")
-        require_sparse_polynomial_budget(
-            self.function.numerator,
-            maximum_terms=MAX_HERMITE_NUMERATOR_DEGREE + 1,
-            maximum_exponent=MAX_HERMITE_NUMERATOR_DEGREE,
-            maximum_coefficient_digits=MAX_HERMITE_COEFFICIENT_DIGITS,
-            label="Hermite-reduction numerator",
-        )
-        require_sparse_polynomial_budget(
-            self.function.denominator,
-            maximum_terms=MAX_HERMITE_DENOMINATOR_DEGREE + 1,
-            maximum_exponent=MAX_HERMITE_DENOMINATOR_DEGREE,
-            maximum_coefficient_digits=MAX_HERMITE_COEFFICIENT_DIGITS,
-            label="Hermite-reduction denominator",
-        )
+        require_hermite_reduction_budget(self.function)
         return self
 
 
@@ -67,8 +73,6 @@ class HermiteReductionResult(HermiteReductionRequest):
     remainder: RationalFunction
     rational_primitive_status: Literal["RATIONAL_PRIMITIVE", "NO_RATIONAL_PRIMITIVE"]
     rational_primitive: RationalFunction | None
-    complete: Literal[True] = True
-    method: Literal["HOROWITZ_OSTROGRADSKY"] = "HOROWITZ_OSTROGRADSKY"
 
     @model_validator(mode="after")
     def bind_exact_reduction(self) -> Self:

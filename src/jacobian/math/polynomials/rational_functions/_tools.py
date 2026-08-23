@@ -2,11 +2,13 @@
 
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
-from jacobian.math.rational_functions._models import (
+from jacobian.math.polynomials.rational_functions._models import (
     HermiteReductionRequest,
     HermiteReductionResult,
 )
-from jacobian.math.rational_functions._operations import compute_hermite_reduction
+from jacobian.math.polynomials.rational_functions._operations import (
+    compute_hermite_reduction,
+)
 
 TOOLS = (
     MathTool(

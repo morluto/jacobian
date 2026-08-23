@@ -1,10 +1,10 @@
 """Public exact rational-function operation adapters."""
 
-from jacobian.math.rational_functions._models import (
+from jacobian.math.polynomials.rational_functions._models import (
     HermiteReductionRequest,
     HermiteReductionResult,
 )
-from jacobian.math.rational_functions.operations import hermite_reduction
+from jacobian.math.polynomials.rational_functions.operations import hermite_reduction
 
 
 def compute_hermite_reduction(

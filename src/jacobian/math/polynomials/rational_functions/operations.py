@@ -1,4 +1,4 @@
-"""Exact native operations on rational functions."""
+"""Exact native operations on canonical rational functions."""
 
 from __future__ import annotations
 
@@ -8,6 +8,9 @@ from jacobian.math.polynomials._conversions import (
     rational_function_from_sympy,
     rational_function_to_sympy,
     symbols_for_variables,
+)
+from jacobian.math.polynomials.rational_functions._models import (
+    require_hermite_reduction_budget,
 )
 from jacobian.math.polynomials.values import RationalFunction
 
@@ -46,14 +49,15 @@ def _hermite_parts(function: RationalFunction) -> tuple[Any, Any]:
 def hermite_reduction(
     function: RationalFunction,
 ) -> tuple[RationalFunction, RationalFunction]:
-    """Compute canonical ``f = R' + H`` over ``QQ(x)``.
+    """Compute canonical ``f = R' + H`` over the admitted subset of ``QQ(x)``.
 
-    ``H`` is proper with square-free denominator. ``R`` uses zero as its
-    additive constant, so the pair is unique for the source function.
+    The current native envelope matches the catalog operation: numerator degree
+    at most 6, denominator degree at most 3, and at most two decimal digits in
+    each rational coefficient component. ``H`` is proper with square-free
+    denominator. ``R`` has zero additive constant, so the pair is unique.
     """
 
-    if len(function.variables) != 1:
-        raise ValueError("Hermite reduction requires exactly one variable")
+    require_hermite_reduction_budget(function)
     rational_part, remainder = _hermite_parts(function)
     return (
         rational_function_from_sympy(rational_part, function.variables),

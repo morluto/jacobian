@@ -5,7 +5,7 @@ from jacobian.catalog.admission import (
     OperationAdmission,
     OperationRegistration,
 )
-from jacobian.math.rational_functions._tools import TOOLS
+from jacobian.math.polynomials.rational_functions._tools import TOOLS
 
 ADMISSIONS = (
     OperationAdmission(

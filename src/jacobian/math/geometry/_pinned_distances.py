@@ -1,4 +1,5 @@
 """Pinned distance to pair-spanned lines operations."""
+
 from __future__ import annotations
 
 from fractions import Fraction
@@ -26,9 +27,7 @@ MAX_PINNED_COORDINATE_DIGITS = 256
 
 
 def _bounded_coordinate(value: CanonicalRational, label: str) -> None:
-    if RationalHeight.from_canonical(value).exceeds(
-        MAX_PINNED_COORDINATE_DIGITS
-    ):
+    if RationalHeight.from_canonical(value).exceeds(MAX_PINNED_COORDINATE_DIGITS):
         raise ValueError(
             f"{label} coordinates exceed the conservative "
             f"{MAX_PINNED_COORDINATE_DIGITS}-digit pinned-distance bound"
@@ -179,9 +178,7 @@ def _distance_ledger(
     ay = anchor.y.as_fraction()
     pts = [(p.x.as_fraction(), p.y.as_fraction()) for p in points]
 
-    line_map: dict[
-        tuple[str, str, str], tuple[list[tuple[int, int]], str, str]
-    ] = {}
+    line_map: dict[tuple[str, str, str], tuple[list[tuple[int, int]], str, str]] = {}
     for i in range(len(pts)):
         for j in range(i + 1, len(pts)):
             xi, yi = pts[i]
@@ -218,9 +215,7 @@ def _distance_ledger(
 def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceResult:
     """Compute exact squared distances from an anchor to all pair-spanned lines."""
     entries = _distance_ledger(request.anchor, request.points)
-    min_entry = (
-        min(entries, key=_entry_distance) if entries else None
-    )
+    min_entry = min(entries, key=_entry_distance) if entries else None
 
     return PinnedDistanceResult(
         anchor=request.anchor,

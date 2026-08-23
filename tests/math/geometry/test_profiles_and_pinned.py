@@ -101,7 +101,9 @@ class TestPinnedDistances:
     def test_source_bound_replay_rejects_tampered_ledger(self):
         anchor = _point("0", "0")
         points = (_point("1", "0"), _point("0", "1"), _point("1", "1"))
-        result = compute_pinned_distances(PinnedDistanceRequest(anchor=anchor, points=points))
+        result = compute_pinned_distances(
+            PinnedDistanceRequest(anchor=anchor, points=points)
+        )
         assert len(result.lines) == 3
         with pytest.raises(ValidationError, match="exact canonical ledger"):
             PinnedDistanceResult(
@@ -151,9 +153,7 @@ class TestCircumradiusProfile:
         assert result.point_count == 4
         assert result.triple_count == 4
         half = CanonicalRational(num="1", den="2")
-        assert all(
-            entry.squared_circumradius == half for entry in result.entries
-        )
+        assert all(entry.squared_circumradius == half for entry in result.entries)
 
     def test_collinear_triples_are_flagged_degenerate(self):
         request = CircumradiusProfileRequest(
@@ -238,7 +238,11 @@ class TestForbiddenPatterns:
         )
         result = forbidden_patterns(request)
         assert result.has_collinear_triple is True
-        assert (result.collinear_triple.first, result.collinear_triple.second, result.collinear_triple.third) == (0, 1, 2)
+        assert (
+            result.collinear_triple.first,
+            result.collinear_triple.second,
+            result.collinear_triple.third,
+        ) == (0, 1, 2)
         assert result.checked_triples == 1
 
     def test_concyclic_quadruple_on_unit_square(self):
@@ -288,4 +292,3 @@ class TestForbiddenPatterns:
                 checked_triples=1,
                 checked_quadruples=0,
             )
-

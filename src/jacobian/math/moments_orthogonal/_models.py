@@ -37,9 +37,7 @@ def _validate_moments(moments: tuple[CanonicalRational, ...]) -> None:
     if not 1 <= len(moments) <= MAX_MOMENTS:
         raise ValueError("moment sequence must contain between 1 and 64 moments")
     for value in moments:
-        require_bounded_rational(
-            value, max_digits=MAX_RATIONAL_DIGITS, label="moment"
-        )
+        require_bounded_rational(value, max_digits=MAX_RATIONAL_DIGITS, label="moment")
 
 
 def _validate_alpha_beta(
@@ -179,9 +177,7 @@ class RecurrenceCoefficientsResult(RecurrenceCoefficientsRequest):
             beta=_from_fractions(result.beta),
         )
         if self.coefficients != expected:
-            raise ValueError(
-                "coefficients must be the exact recurrence coefficients"
-            )
+            raise ValueError("coefficients must be the exact recurrence coefficients")
         return self
 
 
@@ -216,9 +212,7 @@ class JacobiMatrixResult(JacobiMatrixRequest):
         if self.diagonal != _from_fractions(result.diagonal):
             raise ValueError("diagonal must match the exact Jacobi diagonal")
         if self.off_diagonal != _from_fractions(result.off_diagonal):
-            raise ValueError(
-                "off_diagonal must match the exact Jacobi off-diagonal"
-            )
+            raise ValueError("off_diagonal must match the exact Jacobi off-diagonal")
         return self
 
 
@@ -303,8 +297,9 @@ def _require_bounded_kernel_growth(
         h_num += bn[k]
         h_den += bd[k]
         # term_k = p_k(x) p_k(y) / h_k before reduction.
-        term_bounds.append((px_num[k] + py_num[k] + h_den,
-                            px_den[k] + py_den[k] + h_num))
+        term_bounds.append(
+            (px_num[k] + py_num[k] + h_den, px_den[k] + py_den[k] + h_num)
+        )
         total_den += term_bounds[-1][1]
     # Summing over the common denominator multiplies each term numerator by
     # every other term's denominator; reduction only shrinks the result.
@@ -331,12 +326,8 @@ class ChristoffelDarbouxRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_coefficients(self) -> Self:
         _validate_alpha_beta(self.coefficients.alpha, self.coefficients.beta)
-        require_bounded_rational(
-            self.x, max_digits=MAX_RATIONAL_DIGITS, label="x"
-        )
-        require_bounded_rational(
-            self.y, max_digits=MAX_RATIONAL_DIGITS, label="y"
-        )
+        require_bounded_rational(self.x, max_digits=MAX_RATIONAL_DIGITS, label="x")
+        require_bounded_rational(self.y, max_digits=MAX_RATIONAL_DIGITS, label="y")
         _require_bounded_kernel_growth(
             tuple(v.as_fraction() for v in self.coefficients.alpha),
             tuple(v.as_fraction() for v in self.coefficients.beta),
@@ -365,12 +356,8 @@ class ChristoffelDarbouxResult(ChristoffelDarbouxRequest):
             self.y.as_fraction(),
         )
         if self.kernel != CanonicalRational.from_fraction(result.kernel):
-            raise ValueError(
-                "kernel must be the exact Christoffel-Darboux kernel"
-            )
-        if self.polynomials_evaluated != _from_fractions(
-            result.polynomials_evaluated
-        ):
+            raise ValueError("kernel must be the exact Christoffel-Darboux kernel")
+        if self.polynomials_evaluated != _from_fractions(result.polynomials_evaluated):
             raise ValueError(
                 "polynomials_evaluated must match the evaluated polynomials"
             )
@@ -395,10 +382,7 @@ class GaussianQuadratureRequest(StrictModel):
         beta = self.coefficients.beta
         if not 1 <= len(alpha) <= MAX_QUADRATURE_POINTS:
             raise ValueError("alpha must contain between 1 and 16 entries")
-        if (
-            len(beta) != len(alpha)
-            and len(beta) != len(alpha) + 1
-        ):
+        if len(beta) != len(alpha) and len(beta) != len(alpha) + 1:
             raise ValueError("beta must have length len(alpha) or len(alpha)+1")
         for value in (*alpha, *beta):
             require_bounded_rational(
@@ -451,7 +435,9 @@ class GaussianQuadratureResult(GaussianQuadratureRequest):
             _to_fractions(self.coefficients.beta),
         )
         if self.approximate_nodes != _from_fractions(result.approximate_nodes):
-            raise ValueError("approximate_nodes must match the Golub-Welsch eigenvalues")
+            raise ValueError(
+                "approximate_nodes must match the Golub-Welsch eigenvalues"
+            )
         if self.approximate_weights != _from_fractions(result.approximate_weights):
             raise ValueError("approximate_weights must match the Golub-Welsch weights")
         return self

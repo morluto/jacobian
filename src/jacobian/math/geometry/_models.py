@@ -429,9 +429,7 @@ class CircumradiusTripleEntry(StrictModel):
     @model_validator(mode="after")
     def bind_collinear_to_value(self) -> Self:
         if self.collinear is (self.squared_circumradius is not None):
-            raise ValueError(
-                "exactly a collinear triple has no squared circumradius"
-            )
+            raise ValueError("exactly a collinear triple has no squared circumradius")
         if (
             self.squared_circumradius is not None
             and self.squared_circumradius.as_fraction() <= 0
@@ -462,9 +460,7 @@ def _require_triple_index_coverage(
                 "positions in range"
             )
         if key in seen:
-            raise ValueError(
-                "circumradius entries must cover each triple exactly once"
-            )
+            raise ValueError("circumradius entries must cover each triple exactly once")
         seen.add(key)
     if len(seen) != expected:
         raise ValueError(
@@ -478,8 +474,7 @@ def _require_circumradius_source_replay(
 ) -> None:
     """Replay every entry against its retained source coordinates."""
     coords = [
-        (item.point.x.as_fraction(), item.point.y.as_fraction())
-        for item in points
+        (item.point.x.as_fraction(), item.point.y.as_fraction()) for item in points
     ]
     for entry in entries:
         first, second, third = entry.indices
@@ -605,9 +600,7 @@ class ConcyclicQuadruple(StrictModel):
     @model_validator(mode="after")
     def require_strictly_ascending(self) -> Self:
         if not (self.first < self.second < self.third < self.fourth):
-            raise ValueError(
-                "concyclic quadruple indices must be strictly ascending"
-            )
+            raise ValueError("concyclic quadruple indices must be strictly ascending")
         return self
 
 

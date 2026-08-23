@@ -23,7 +23,10 @@ class _BoundedMatrixRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_within_budget(self) -> Self:
-        if len(self.matrix.entries) > MAX_DIMENSION or self.matrix.columns > MAX_DIMENSION:
+        if (
+            len(self.matrix.entries) > MAX_DIMENSION
+            or self.matrix.columns > MAX_DIMENSION
+        ):
             raise ValueError("matrix exceeds the supported dimension bound")
         return self
 
@@ -67,9 +70,7 @@ class RrefResult(RrefRequest):
             or self.rref_matrix.prime != self.matrix.prime
             or self.rref_matrix.columns != self.matrix.columns
         ):
-            raise ValueError(
-                "rref_matrix must be the exact reduced row-echelon form"
-            )
+            raise ValueError("rref_matrix must be the exact reduced row-echelon form")
         if self.pivot_columns != expected_pivots:
             raise ValueError("pivot_columns must be the exact pivot column sequence")
         return self

@@ -35,8 +35,7 @@ def _require_alternating(
     for i in range(n):
         if any(value % p != 0 for value in c[i][i]):
             raise ValueError(
-                "structure constants must define an alternating bracket: "
-                "[e_i, e_i] = 0"
+                "structure constants must define an alternating bracket: [e_i, e_i] = 0"
             )
 
 
@@ -53,9 +52,7 @@ def _require_antisymmetric(
                     )
 
 
-def _require_jacobi(
-    c: tuple[tuple[tuple[int, ...], ...], ...], n: int, p: int
-) -> None:
+def _require_jacobi(c: tuple[tuple[tuple[int, ...], ...], ...], n: int, p: int) -> None:
     for i in range(n):
         for j in range(n):
             for k in range(n):
@@ -96,16 +93,18 @@ class LieAlgebra(StrictModel):
     def require_valid_structure(self) -> Self:
         n = self.dimension
         if len(self.structure_constants) != n:
-            raise ValueError("structure_constants must be dimension x dimension x dimension")
+            raise ValueError(
+                "structure_constants must be dimension x dimension x dimension"
+            )
         for i in range(n):
             if len(self.structure_constants[i]) != n:
-                raise ValueError(
-                    "each structure_constants[i] must have dimension rows"
-                )
+                raise ValueError("each structure_constants[i] must have dimension rows")
         for i in range(n):
             for j in range(n):
                 if len(self.structure_constants[i][j]) != n:
-                    raise ValueError("structure constant entry must have dimension components")
+                    raise ValueError(
+                        "structure constant entry must have dimension components"
+                    )
 
         p = self.prime
         c = self.structure_constants
@@ -258,9 +257,7 @@ class LieHomologyResult(StrictModel):
             self.dimension != self.lie_algebra.dimension
             or self.prime != self.lie_algebra.prime
         ):
-            raise ValueError(
-                "dimension and prime must match the retained Lie algebra"
-            )
+            raise ValueError("dimension and prime must match the retained Lie algebra")
         expected = lie_homology_groups(self.lie_algebra)
         if self.groups != expected:
             raise ValueError(

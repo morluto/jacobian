@@ -42,10 +42,7 @@ def _compose(d1, d2, prime: int) -> list[list[int]]:
     assert inner == len(d2)
     cols = len(d2[0])
     return [
-        [
-            sum(d1[r][k] * d2[k][c] for k in range(inner)) % prime
-            for c in range(cols)
-        ]
+        [sum(d1[r][k] * d2[k][c] for k in range(inner)) % prime for c in range(cols)]
         for r in range(rows)
     ]
 
@@ -88,15 +85,12 @@ class TestChevalleyEilenbergComplex:
             ChevalleyEilenbergComplexRequest(lie_algebra=_sl2_gf5())
         )
         matrices = {
-            d.degree: [list(row) for row in d.entries]
-            for d in result.differentials
+            d.degree: [list(row) for row in d.entries] for d in result.differentials
         }
         # d_1 is identically zero and d_3 composes against d_2.
         assert matrices[1] == [[0, 0, 0]]
         for degree in range(1, 3):
-            composed = _compose(
-                matrices[degree], matrices[degree + 1], result.prime
-            )
+            composed = _compose(matrices[degree], matrices[degree + 1], result.prime)
             assert all(value == 0 for row in composed for value in row)
 
     def test_sl2_d2_matrix_entries(self):
@@ -315,9 +309,7 @@ class TestComplexResultBinding:
                 lie_algebra=g,
                 dimension=3,
                 group_dimensions=(1, 3, 3, 1),
-                differentials=tuple(
-                    d for d in full.differentials if d.degree != 1
-                ),
+                differentials=tuple(d for d in full.differentials if d.degree != 1),
                 prime=5,
             )
 

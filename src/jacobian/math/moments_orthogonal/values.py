@@ -15,7 +15,7 @@ MAX_QUADRATURE_POINTS = 16
 # coefficient must convert to a finite double and every subdiagonal entry must
 # stay far from both overflow and underflow so its square root is exact enough.
 MAX_QUADRATURE_MAGNITUDE = Fraction(10) ** 300
-MIN_QUADRATURE_SUBDIAGONAL = Fraction(1, 10 ** 300)
+MIN_QUADRATURE_SUBDIAGONAL = Fraction(1, 10**300)
 
 
 @dataclass(frozen=True, slots=True)

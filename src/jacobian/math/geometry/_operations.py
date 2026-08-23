@@ -491,10 +491,7 @@ def _screen_configuration(
     from itertools import combinations
 
     n = len(pts)
-    xy = [
-        (item.point.x.as_fraction(), item.point.y.as_fraction())
-        for item in pts
-    ]
+    xy = [(item.point.x.as_fraction(), item.point.y.as_fraction()) for item in pts]
 
     def _collinear(a: int, b: int, c: int) -> bool:
         xa, ya = xy[a]
@@ -604,8 +601,7 @@ def circumradius_profile(
 
     points = request.points
     coords = [
-        (item.point.x.as_fraction(), item.point.y.as_fraction())
-        for item in points
+        (item.point.x.as_fraction(), item.point.y.as_fraction()) for item in points
     ]
     entries: list[CircumradiusTripleEntry] = []
     for i, j, k in combinations(range(len(points)), 3):

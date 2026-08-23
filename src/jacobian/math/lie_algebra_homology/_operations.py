@@ -16,7 +16,9 @@ from jacobian.math.lie_algebra_homology._models import (
 from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
 
 
-def _find_pivot_row(aug: list[list[int]], prime: int, rank: int, col: int) -> int | None:
+def _find_pivot_row(
+    aug: list[list[int]], prime: int, rank: int, col: int
+) -> int | None:
     """Return the first row index >= rank with a nonzero entry in col."""
     for r in range(rank, len(aug)):
         if aug[r][col] % prime != 0:
@@ -66,7 +68,7 @@ def _wedge_index(indices: tuple[int, ...], dim: int) -> int:
     """Convert a sorted tuple of indices to a lexicographic wedge basis index."""
     result = 0
     for i, idx in enumerate(indices):
-        result += idx * (dim ** i)
+        result += idx * (dim**i)
     return result
 
 
@@ -104,7 +106,9 @@ def _ce_differentials(
                 for b_idx in range(a_idx + 1, len(wedge)):
                     b = wedge[b_idx]
                     bracket = c[a][b]
-                    remaining = tuple(x for k, x in enumerate(wedge) if k != a_idx and k != b_idx)
+                    remaining = tuple(
+                        x for k, x in enumerate(wedge) if k != a_idx and k != b_idx
+                    )
 
                     for k, coeff in enumerate(bracket):
                         if coeff == 0:
@@ -119,16 +123,20 @@ def _ce_differentials(
                         entry_sign = (-1) ** (a_idx + b_idx + insertion_pos)
                         target_idx = target_basis.index(new_wedge)
                         entry = (entry_sign * int(coeff)) % p
-                        diff_matrix[target_idx][j] = (diff_matrix[target_idx][j] + entry) % p
+                        diff_matrix[target_idx][j] = (
+                            diff_matrix[target_idx][j] + entry
+                        ) % p
 
-        differentials.append(DifferentialMatrix(
-            degree=degree,
-            matrix=PrimeFieldMatrix(
-                prime=p,
-                entries=tuple(tuple(row) for row in diff_matrix),
-                columns=source_dim,
-            ),
-        ))
+        differentials.append(
+            DifferentialMatrix(
+                degree=degree,
+                matrix=PrimeFieldMatrix(
+                    prime=p,
+                    entries=tuple(tuple(row) for row in diff_matrix),
+                    columns=source_dim,
+                ),
+            )
+        )
     return tuple(differentials)
 
 
@@ -185,11 +193,13 @@ def lie_homology_groups(lie_algebra: LieAlgebra) -> tuple[LieHomologyGroup, ...]
         # contained in ker(d_k) and this difference cannot be negative; an
         # inconsistency must surface rather than be clamped away.
         betti = dim - rank_d_k - rank_d_k1
-        groups.append(LieHomologyGroup(
-            degree=k,
-            betti=betti,
-            dimension=dim,
-        ))
+        groups.append(
+            LieHomologyGroup(
+                degree=k,
+                betti=betti,
+                dimension=dim,
+            )
+        )
     return tuple(groups)
 
 

@@ -1,0 +1,22 @@
+﻿2026-08-23T16:29:40.2256626Z ##[group]Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+2026-08-23T16:29:40.2257038Z with:
+2026-08-23T16:29:40.2257246Z   node-version: 24
+2026-08-23T16:29:40.2257480Z   package-manager-cache: false
+2026-08-23T16:29:40.2257755Z   check-latest: false
+2026-08-23T16:29:40.2260671Z   token: ***
+2026-08-23T16:29:40.2260879Z env:
+2026-08-23T16:29:40.2261135Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:40.2261590Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:40.2262015Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:40.2262412Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:40.2262805Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:40.2263190Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:40.2263590Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:40.2263968Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:40.2264291Z ##[endgroup]
+2026-08-23T16:29:40.3552112Z Found in cache @ /opt/hostedtoolcache/node/24.19.0/x64
+2026-08-23T16:29:40.3555236Z ##[group]Environment details
+2026-08-23T16:29:40.7651241Z node: v24.19.0
+2026-08-23T16:29:40.7651733Z npm: 11.17.0
+2026-08-23T16:29:40.7652109Z yarn: 1.22.22
+2026-08-23T16:29:40.7652833Z ##[endgroup]

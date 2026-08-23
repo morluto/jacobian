@@ -1,0 +1,8 @@
+2026-08-23T16:31:31.6710000Z Evaluating coverage.if
+2026-08-23T16:31:31.6710000Z Evaluating: always()
+2026-08-23T16:31:31.6710000Z Result: true
+2026-08-23T16:31:32.1440000Z Requested labels: ubuntu-latest
+2026-08-23T16:31:32.1440000Z Job defined at: morluto/jacobian/.github/workflows/ci.yml@refs/pull/2240/merge
+2026-08-23T16:31:32.1440000Z Waiting for a runner to pick up this job...
+2026-08-23T16:31:32.4220000Z Job is waiting for a hosted runner to come online.
+2026-08-23T16:31:32.4230000Z Job is about to start running on the hosted runner: GitHub Actions 1000206586

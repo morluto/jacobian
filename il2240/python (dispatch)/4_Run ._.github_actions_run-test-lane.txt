@@ -1,0 +1,155 @@
+﻿2026-08-23T16:29:36.8873864Z Prepare all required actions
+2026-08-23T16:29:36.8874282Z Getting action download info
+2026-08-23T16:29:36.9642578Z Download action repository 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' (SHA:043fb46d1a93c77aae656e7c1c64a875d1fc6a0a)
+2026-08-23T16:29:37.1236180Z ##[group]Run ./.github/actions/run-test-lane
+2026-08-23T16:29:37.1236433Z with:
+2026-08-23T16:29:37.1236612Z   lane: dispatch
+2026-08-23T16:29:37.1236810Z   junit-artifact: junit-python-dispatch-3.12
+2026-08-23T16:29:37.1237079Z   coverage-artifact: coverage-data-python-dispatch
+2026-08-23T16:29:37.1237352Z   coverage-file: .coverage.python-dispatch
+2026-08-23T16:29:37.1237577Z env:
+2026-08-23T16:29:37.1237785Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.1238134Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:37.1238465Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.1238769Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.1239097Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.1239396Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:37.1239703Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:37.1239996Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:37.1240252Z ##[endgroup]
+2026-08-23T16:29:37.1251926Z ##[start-action display=Run dispatch tests;id=__self_2.__run]
+2026-08-23T16:29:37.1265001Z ##[group]Run make test-dispatch
+2026-08-23T16:29:37.1265242Z [36;1mmake test-dispatch[0m
+2026-08-23T16:29:37.1297759Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-23T16:29:37.1298033Z env:
+2026-08-23T16:29:37.1298253Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.1298598Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:37.1298926Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.1299233Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.1299531Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.1299827Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:37.1300141Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:37.1300429Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:37.1300818Z   PYTEST_ARGS: --junitxml=pytest.xml --cov --cov-report= --cov-fail-under=0
+2026-08-23T16:29:37.1301119Z ##[endgroup]
+2026-08-23T16:29:37.1533809Z uv run --locked pytest -n 2 --dist worksteal --timeout=30 \
+2026-08-23T16:29:37.1534278Z 	tests/dispatch \
+2026-08-23T16:29:37.1534640Z 	--durations=10 --junitxml=pytest.xml --cov --cov-report= --cov-fail-under=0
+2026-08-23T16:29:45.7675138Z ============================= test session starts ==============================
+2026-08-23T16:29:45.7676052Z platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0
+2026-08-23T16:29:45.7676933Z Using --randomly-seed=3093360591
+2026-08-23T16:29:45.7677361Z rootdir: /home/runner/work/jacobian/jacobian
+2026-08-23T16:29:45.7677768Z configfile: pyproject.toml
+2026-08-23T16:29:45.7678403Z plugins: anyio-4.14.2, randomly-4.1.0, split-0.11.0, cov-7.1.0, repeat-0.9.4, hypothesis-6.165.7, timeout-2.4.0, xdist-3.8.0
+2026-08-23T16:29:45.7679051Z timeout: 30.0s
+2026-08-23T16:29:45.7679331Z timeout method: thread
+2026-08-23T16:29:45.7679619Z timeout func_only: False
+2026-08-23T16:29:45.7679926Z created: 2/2 workers
+2026-08-23T16:29:45.7680198Z 2 workers [13 items]
+2026-08-23T16:29:45.7680363Z 
+2026-08-23T16:29:48.1018947Z .............                                                            [100%]
+2026-08-23T16:29:48.1019457Z ------ generated xml file: /home/runner/work/jacobian/jacobian/pytest.xml ------
+2026-08-23T16:29:48.1019877Z ============================= slowest 10 durations =============================
+2026-08-23T16:29:48.1020085Z 
+2026-08-23T16:29:48.1020242Z (10 durations < 0.005s hidden.  Use -vv to show these durations.)
+2026-08-23T16:29:48.1020963Z ============================== 13 passed in 8.87s ==============================
+2026-08-23T16:29:48.1514515Z ##[end-action id=__self_2.__run;outcome=success;conclusion=success;duration_ms=11026]
+2026-08-23T16:29:48.1517588Z ##[start-action display=Run uv cache prune --ci;id=__self_2.__run_2]
+2026-08-23T16:29:48.1537967Z ##[group]Run uv cache prune --ci
+2026-08-23T16:29:48.1538220Z [36;1muv cache prune --ci[0m
+2026-08-23T16:29:48.1571356Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-23T16:29:48.1571805Z env:
+2026-08-23T16:29:48.1572029Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:48.1572376Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:48.1572722Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:48.1573018Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:48.1573337Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:48.1573635Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:48.1573952Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:48.1574241Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:48.1574490Z ##[endgroup]
+2026-08-23T16:29:48.1823229Z Pruning cache at: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:48.3144709Z Removed 8972 files (345.3MiB)
+2026-08-23T16:29:48.3160315Z ##[end-action id=__self_2.__run_2;outcome=success;conclusion=success;duration_ms=164]
+2026-08-23T16:29:48.3162955Z ##[start-action display=Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a;id=__self_2.__actions_upload-artifact]
+2026-08-23T16:29:48.3192420Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-08-23T16:29:48.3192737Z with:
+2026-08-23T16:29:48.3192922Z   name: junit-python-dispatch-3.12
+2026-08-23T16:29:48.3193158Z   path: pytest.xml
+2026-08-23T16:29:48.3193339Z   if-no-files-found: ignore
+2026-08-23T16:29:48.3193536Z   retention-days: 7
+2026-08-23T16:29:48.3193713Z   compression-level: 6
+2026-08-23T16:29:48.3193894Z   overwrite: false
+2026-08-23T16:29:48.3194069Z   include-hidden-files: false
+2026-08-23T16:29:48.3194272Z   archive: true
+2026-08-23T16:29:48.3194435Z env:
+2026-08-23T16:29:48.3194640Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:48.3194973Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:48.3195299Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:48.3195605Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:48.3195909Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:48.3196391Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:48.3196713Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:48.3197017Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:48.3197256Z ##[endgroup]
+2026-08-23T16:29:48.4360197Z With the provided path, there will be 1 file uploaded
+2026-08-23T16:29:48.4364270Z Artifact name is valid!
+2026-08-23T16:29:48.4364649Z Root directory input is valid!
+2026-08-23T16:29:48.6324544Z Uploading artifact: junit-python-dispatch-3.12.zip
+2026-08-23T16:29:48.6355968Z Beginning upload of artifact content to blob storage
+2026-08-23T16:29:48.6969110Z Uploaded bytes 646
+2026-08-23T16:29:48.7083519Z Finished uploading artifact content to blob storage!
+2026-08-23T16:29:48.7084347Z SHA256 digest of uploaded artifact is b4f5745f171157eb9b40d9c22529c8b81b6c68626048c77c6c3c139ac3e37845
+2026-08-23T16:29:48.7085063Z Finalizing artifact upload
+2026-08-23T16:29:48.9486628Z Artifact junit-python-dispatch-3.12 successfully finalized. Artifact ID 9496394322
+2026-08-23T16:29:48.9487327Z Artifact junit-python-dispatch-3.12 has been successfully uploaded! Final size is 646 bytes. Artifact ID is 9496394322
+2026-08-23T16:29:48.9489932Z Artifact download URL: https://github.com/morluto/jacobian/actions/runs/32651818223/artifacts/9496394322
+2026-08-23T16:29:48.9566856Z ##[end-action id=__self_2.__actions_upload-artifact;outcome=success;conclusion=success;duration_ms=640]
+2026-08-23T16:29:48.9571265Z ##[start-action display=Run mv .coverage .coverage.python-dispatch;id=__self_2.__run_3]
+2026-08-23T16:29:48.9586454Z ##[group]Run mv .coverage .coverage.python-dispatch
+2026-08-23T16:29:48.9586803Z [36;1mmv .coverage .coverage.python-dispatch[0m
+2026-08-23T16:29:48.9624469Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-23T16:29:48.9624803Z env:
+2026-08-23T16:29:48.9625143Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:48.9625677Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:48.9626022Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:48.9626410Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:48.9626930Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:48.9627276Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:48.9627602Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:48.9628050Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:48.9628432Z ##[endgroup]
+2026-08-23T16:29:48.9706074Z ##[end-action id=__self_2.__run_3;outcome=success;conclusion=success;duration_ms=13]
+2026-08-23T16:29:48.9707985Z ##[start-action display=Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a;id=__self_2.__actions_upload-artifact_2]
+2026-08-23T16:29:48.9736178Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-08-23T16:29:48.9736505Z with:
+2026-08-23T16:29:48.9736699Z   name: coverage-data-python-dispatch
+2026-08-23T16:29:48.9736939Z   path: .coverage.python-dispatch
+2026-08-23T16:29:48.9737158Z   include-hidden-files: true
+2026-08-23T16:29:48.9737378Z   if-no-files-found: warn
+2026-08-23T16:29:48.9737576Z   compression-level: 6
+2026-08-23T16:29:48.9737768Z   overwrite: false
+2026-08-23T16:29:48.9737936Z   archive: true
+2026-08-23T16:29:48.9738100Z env:
+2026-08-23T16:29:48.9738315Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:48.9738659Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:48.9738996Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:48.9739307Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:48.9739610Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:48.9739924Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:48.9740371Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:48.9740675Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:48.9740918Z ##[endgroup]
+2026-08-23T16:29:49.0873450Z With the provided path, there will be 1 file uploaded
+2026-08-23T16:29:49.0877293Z Artifact name is valid!
+2026-08-23T16:29:49.0877702Z Root directory input is valid!
+2026-08-23T16:29:49.2653129Z Uploading artifact: coverage-data-python-dispatch.zip
+2026-08-23T16:29:49.2684030Z Beginning upload of artifact content to blob storage
+2026-08-23T16:29:49.3882494Z Uploaded bytes 768392
+2026-08-23T16:29:49.4017435Z Finished uploading artifact content to blob storage!
+2026-08-23T16:29:49.4018253Z SHA256 digest of uploaded artifact is 43f90035b500a323cf48ae0ce0b7b2617d700b4c9a67dcabfa3e9dc313f88aa2
+2026-08-23T16:29:49.4018922Z Finalizing artifact upload
+2026-08-23T16:29:49.5931732Z Artifact coverage-data-python-dispatch successfully finalized. Artifact ID 9496394478
+2026-08-23T16:29:49.5932760Z Artifact coverage-data-python-dispatch has been successfully uploaded! Final size is 768392 bytes. Artifact ID is 9496394478
+2026-08-23T16:29:49.5935543Z Artifact download URL: https://github.com/morluto/jacobian/actions/runs/32651818223/artifacts/9496394478
+2026-08-23T16:29:49.6015980Z ##[end-action id=__self_2.__actions_upload-artifact_2;outcome=success;conclusion=success;duration_ms=630]

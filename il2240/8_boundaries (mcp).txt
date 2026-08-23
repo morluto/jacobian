@@ -1,0 +1,591 @@
+﻿2026-08-23T16:29:31.1944582Z Current runner version: '2.336.0'
+2026-08-23T16:29:31.1971381Z ##[group]Runner Image Provisioner
+2026-08-23T16:29:31.1972236Z Hosted Compute Agent
+2026-08-23T16:29:31.1972977Z Version: 20260729.566
+2026-08-23T16:29:31.1973642Z Commit: cf7153fe6e25b664e8693c24944bf2b00355d109
+2026-08-23T16:29:31.1974434Z Build Date: 2026-07-29T19:17:02Z
+2026-08-23T16:29:31.1975232Z Worker ID: {a2c68948-ed45-4c0a-93b4-a5df015322ac}
+2026-08-23T16:29:31.1975986Z Azure Region: centralus
+2026-08-23T16:29:31.1976691Z ##[endgroup]
+2026-08-23T16:29:31.1978228Z ##[group]Operating System
+2026-08-23T16:29:31.1978997Z Ubuntu
+2026-08-23T16:29:31.1979572Z 24.04.4
+2026-08-23T16:29:31.1980121Z LTS
+2026-08-23T16:29:31.1980718Z ##[endgroup]
+2026-08-23T16:29:31.1981300Z ##[group]Runner Image
+2026-08-23T16:29:31.1981911Z Image: ubuntu-24.04
+2026-08-23T16:29:31.1982609Z Version: 20260816.277.1
+2026-08-23T16:29:31.1983918Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260816.277/images/ubuntu/Ubuntu2404-Readme.md
+2026-08-23T16:29:31.1985603Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260816.277
+2026-08-23T16:29:31.1987072Z ##[endgroup]
+2026-08-23T16:29:31.1988971Z ##[group]GITHUB_TOKEN Permissions
+2026-08-23T16:29:31.1991384Z Contents: read
+2026-08-23T16:29:31.1992534Z Metadata: read
+2026-08-23T16:29:31.1993487Z ##[endgroup]
+2026-08-23T16:29:31.1996642Z Secret source: Actions
+2026-08-23T16:29:31.1999071Z Prepare workflow directory
+2026-08-23T16:29:31.2372742Z Prepare all required actions
+2026-08-23T16:29:31.2419470Z Getting action download info
+2026-08-23T16:29:31.4785512Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-08-23T16:29:31.7052039Z Complete job name: boundaries (mcp)
+2026-08-23T16:29:31.7802672Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-08-23T16:29:31.7803740Z with:
+2026-08-23T16:29:31.7804212Z   persist-credentials: false
+2026-08-23T16:29:31.7804786Z   repository: morluto/jacobian
+2026-08-23T16:29:31.7809163Z   token: ***
+2026-08-23T16:29:31.7809620Z   ssh-strict: true
+2026-08-23T16:29:31.7810079Z   ssh-user: git
+2026-08-23T16:29:31.7810518Z   clean: true
+2026-08-23T16:29:31.7810996Z   sparse-checkout-cone-mode: true
+2026-08-23T16:29:31.7811536Z   fetch-depth: 1
+2026-08-23T16:29:31.7811978Z   fetch-tags: false
+2026-08-23T16:29:31.7812432Z   show-progress: true
+2026-08-23T16:29:31.7812887Z   lfs: false
+2026-08-23T16:29:31.7813312Z   submodules: false
+2026-08-23T16:29:31.7813768Z   set-safe-directory: true
+2026-08-23T16:29:31.7814289Z   allow-unsafe-pr-checkout: false
+2026-08-23T16:29:31.7815023Z ##[endgroup]
+2026-08-23T16:29:31.8830233Z Syncing repository: morluto/jacobian
+2026-08-23T16:29:31.8832012Z ##[group]Getting Git version info
+2026-08-23T16:29:31.8832837Z Working directory is '/home/runner/work/jacobian/jacobian'
+2026-08-23T16:29:31.8833900Z [command]/usr/bin/git version
+2026-08-23T16:29:31.8887133Z git version 2.55.0
+2026-08-23T16:29:31.8906393Z ##[endgroup]
+2026-08-23T16:29:31.8917100Z Temporarily overriding HOME='/home/runner/work/_temp/77b40b9e-443d-4f8f-b9fa-0b3209a81682' before making global git config changes
+2026-08-23T16:29:31.8919076Z Adding repository directory to the temporary git global config as a safe directory
+2026-08-23T16:29:31.8923417Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/jacobian/jacobian
+2026-08-23T16:29:31.8971885Z Deleting the contents of '/home/runner/work/jacobian/jacobian'
+2026-08-23T16:29:31.8975225Z ##[group]Determining repository object format
+2026-08-23T16:29:31.8976757Z ##[endgroup]
+2026-08-23T16:29:31.8977499Z ##[group]Initializing the repository
+2026-08-23T16:29:31.8980959Z [command]/usr/bin/git init /home/runner/work/jacobian/jacobian
+2026-08-23T16:29:31.9075547Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-08-23T16:29:31.9077481Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-08-23T16:29:31.9080192Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-08-23T16:29:31.9081243Z hint: call:
+2026-08-23T16:29:31.9081659Z hint:
+2026-08-23T16:29:31.9082186Z hint: 	git config --global init.defaultBranch <name>
+2026-08-23T16:29:31.9082814Z hint:
+2026-08-23T16:29:31.9083413Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-08-23T16:29:31.9084336Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-08-23T16:29:31.9085065Z hint:
+2026-08-23T16:29:31.9085485Z hint: 	git branch -m <name>
+2026-08-23T16:29:31.9085967Z hint:
+2026-08-23T16:29:31.9086745Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-08-23T16:29:31.9088341Z Initialized empty Git repository in /home/runner/work/jacobian/jacobian/.git/
+2026-08-23T16:29:31.9090801Z [command]/usr/bin/git remote add origin https://github.com/morluto/jacobian
+2026-08-23T16:29:31.9134085Z ##[endgroup]
+2026-08-23T16:29:31.9134887Z ##[group]Disabling automatic garbage collection
+2026-08-23T16:29:31.9138964Z [command]/usr/bin/git config --local gc.auto 0
+2026-08-23T16:29:31.9170375Z ##[endgroup]
+2026-08-23T16:29:31.9171575Z ##[group]Setting up auth
+2026-08-23T16:29:31.9176500Z Removing SSH command configuration
+2026-08-23T16:29:31.9183417Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-08-23T16:29:31.9208688Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-08-23T16:29:31.9548212Z Removing HTTP extra header
+2026-08-23T16:29:31.9553060Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-08-23T16:29:31.9585807Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-08-23T16:29:31.9818932Z Removing includeIf entries pointing to credentials config files
+2026-08-23T16:29:31.9823639Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-08-23T16:29:31.9854902Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-08-23T16:29:32.0086825Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-d187d134-a764-4a17-b44e-8f0ceeeac351.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-08-23T16:29:32.0123418Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/jacobian/jacobian/.git.path /home/runner/work/_temp/git-credentials-d187d134-a764-4a17-b44e-8f0ceeeac351.config
+2026-08-23T16:29:32.0153412Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/jacobian/jacobian/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-d187d134-a764-4a17-b44e-8f0ceeeac351.config
+2026-08-23T16:29:32.0186811Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-d187d134-a764-4a17-b44e-8f0ceeeac351.config
+2026-08-23T16:29:32.0218084Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-d187d134-a764-4a17-b44e-8f0ceeeac351.config
+2026-08-23T16:29:32.0246420Z ##[endgroup]
+2026-08-23T16:29:32.0247188Z ##[group]Fetching the repository
+2026-08-23T16:29:32.0253546Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +2fcc3c8860901592b520a714b0222f46c434e94e:refs/remotes/pull/2240/merge
+2026-08-23T16:29:33.2164028Z From https://github.com/morluto/jacobian
+2026-08-23T16:29:33.2166189Z  * [new ref]         2fcc3c8860901592b520a714b0222f46c434e94e -> pull/2240/merge
+2026-08-23T16:29:33.2170748Z ##[endgroup]
+2026-08-23T16:29:33.2172412Z ##[group]Determining the checkout info
+2026-08-23T16:29:33.2174504Z ##[endgroup]
+2026-08-23T16:29:33.2176117Z [command]/usr/bin/git sparse-checkout disable
+2026-08-23T16:29:33.2230892Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-08-23T16:29:33.2261555Z ##[group]Checking out the ref
+2026-08-23T16:29:33.2265535Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/2240/merge
+2026-08-23T16:29:33.4897536Z Note: switching to 'refs/remotes/pull/2240/merge'.
+2026-08-23T16:29:33.4906489Z 
+2026-08-23T16:29:33.4906978Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-08-23T16:29:33.4907652Z changes and commit them, and you can discard any commits you make in this
+2026-08-23T16:29:33.4908527Z state without impacting any branches by switching back to a branch.
+2026-08-23T16:29:33.4908890Z 
+2026-08-23T16:29:33.4909246Z If you want to create a new branch to retain commits you create, you may
+2026-08-23T16:29:33.4910021Z do so (now or later) by using -c with the switch command. Example:
+2026-08-23T16:29:33.4910325Z 
+2026-08-23T16:29:33.4910497Z   git switch -c <new-branch-name>
+2026-08-23T16:29:33.4910705Z 
+2026-08-23T16:29:33.4910871Z Or undo this operation with:
+2026-08-23T16:29:33.4911066Z 
+2026-08-23T16:29:33.4911211Z   git switch -
+2026-08-23T16:29:33.4911392Z 
+2026-08-23T16:29:33.4911718Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-08-23T16:29:33.4912079Z 
+2026-08-23T16:29:33.4912516Z HEAD is now at 2fcc3c8 Merge 0646a18675a482fad24638d9aadd8393523e7b8c into f60dc9fbe8af14be74437810beb98b9469915061
+2026-08-23T16:29:33.4914006Z ##[endgroup]
+2026-08-23T16:29:33.4957575Z [command]/usr/bin/git log -1 --format=%H
+2026-08-23T16:29:33.4984336Z 2fcc3c8860901592b520a714b0222f46c434e94e
+2026-08-23T16:29:33.4994346Z ##[group]Removing auth
+2026-08-23T16:29:33.4995199Z Removing SSH command configuration
+2026-08-23T16:29:33.4998641Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-08-23T16:29:33.5032386Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-08-23T16:29:33.5274961Z Removing HTTP extra header
+2026-08-23T16:29:33.5280417Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-08-23T16:29:33.5315955Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-08-23T16:29:33.5560111Z Removing includeIf entries pointing to credentials config files
+2026-08-23T16:29:33.5563826Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-08-23T16:29:33.5592453Z includeif.gitdir:/home/runner/work/jacobian/jacobian/.git.path
+2026-08-23T16:29:33.5593155Z includeif.gitdir:/home/runner/work/jacobian/jacobian/.git/worktrees/*.path
+2026-08-23T16:29:33.5593659Z includeif.gitdir:/github/workspace/.git.path
+2026-08-23T16:29:33.5594101Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-08-23T16:29:33.5601415Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/jacobian/jacobian/.git.path
+2026-08-23T16:29:33.5624950Z /home/runner/work/_temp/git-credentials-d187d134-a764-4a17-b44e-8f0ceeeac351.config
+2026-08-23T16:29:33.5634897Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/jacobian/jacobian/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-d187d134\-a764\-4a17\-b44e\-8f0ceeeac351\.config
+2026-08-23T16:29:33.5667458Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/jacobian/jacobian/.git/worktrees/*.path
+2026-08-23T16:29:33.5691541Z /home/runner/work/_temp/git-credentials-d187d134-a764-4a17-b44e-8f0ceeeac351.config
+2026-08-23T16:29:33.5698861Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/jacobian/jacobian/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-d187d134\-a764\-4a17\-b44e\-8f0ceeeac351\.config
+2026-08-23T16:29:33.5733898Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-08-23T16:29:33.5756515Z /github/runner_temp/git-credentials-d187d134-a764-4a17-b44e-8f0ceeeac351.config
+2026-08-23T16:29:33.5765056Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-d187d134\-a764\-4a17\-b44e\-8f0ceeeac351\.config
+2026-08-23T16:29:33.5830141Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-08-23T16:29:33.5869859Z /github/runner_temp/git-credentials-d187d134-a764-4a17-b44e-8f0ceeeac351.config
+2026-08-23T16:29:33.5883735Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-d187d134\-a764\-4a17\-b44e\-8f0ceeeac351\.config
+2026-08-23T16:29:33.5918891Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-08-23T16:29:33.6158483Z Removing credentials config '/home/runner/work/_temp/git-credentials-d187d134-a764-4a17-b44e-8f0ceeeac351.config'
+2026-08-23T16:29:33.6167098Z ##[endgroup]
+2026-08-23T16:29:33.6463136Z Prepare all required actions
+2026-08-23T16:29:33.6463801Z Getting action download info
+2026-08-23T16:29:33.7315093Z Download action repository 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97' (SHA:5fda3b95a4ea91299a34e894583c3862153e4b97)
+2026-08-23T16:29:33.8134179Z Download action repository 'astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d' (SHA:20cfd1bf945f4377ade1205e4dbc17946fc9a30d)
+2026-08-23T16:29:34.3365781Z ##[group]Run ./.github/actions/setup-python-tests
+2026-08-23T16:29:34.3366130Z with:
+2026-08-23T16:29:34.3366356Z   python-version: 3.12
+2026-08-23T16:29:34.3366610Z ##[endgroup]
+2026-08-23T16:29:34.3422122Z ##[start-action display=Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97;id=__self.__actions_setup-python]
+2026-08-23T16:29:34.3514184Z ##[group]Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+2026-08-23T16:29:34.3514579Z with:
+2026-08-23T16:29:34.3514792Z   python-version: 3.12
+2026-08-23T16:29:34.3515077Z   check-latest: false
+2026-08-23T16:29:34.3517653Z   token: ***
+2026-08-23T16:29:34.3518027Z   update-environment: true
+2026-08-23T16:29:34.3518284Z   allow-prereleases: false
+2026-08-23T16:29:34.3518526Z   freethreaded: false
+2026-08-23T16:29:34.3518753Z ##[endgroup]
+2026-08-23T16:29:34.4686536Z ##[group]Installed versions
+2026-08-23T16:29:34.4766214Z Successfully set up CPython (3.12.14)
+2026-08-23T16:29:34.4767514Z ##[endgroup]
+2026-08-23T16:29:34.4863191Z ##[end-action id=__self.__actions_setup-python;outcome=success;conclusion=success;duration_ms=143]
+2026-08-23T16:29:34.4866319Z ##[start-action display=Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d;id=__self.__astral-sh_setup-uv]
+2026-08-23T16:29:34.4969064Z ##[group]Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+2026-08-23T16:29:34.4969444Z with:
+2026-08-23T16:29:34.4969650Z   version: 0.11.28
+2026-08-23T16:29:34.4969879Z   enable-cache: true
+2026-08-23T16:29:34.4970168Z   cache-dependency-glob: pyproject.toml
+uv.lock
+
+2026-08-23T16:29:34.4970490Z   activate-environment: false
+2026-08-23T16:29:34.4970747Z   no-project: false
+2026-08-23T16:29:34.4971026Z   working-directory: /home/runner/work/jacobian/jacobian
+2026-08-23T16:29:34.4973745Z   github-token: ***
+2026-08-23T16:29:34.4973994Z   restore-cache: true
+2026-08-23T16:29:34.4974241Z   save-cache: true
+2026-08-23T16:29:34.4974498Z   prune-cache: false
+2026-08-23T16:29:34.4974722Z   cache-python: false
+2026-08-23T16:29:34.4974964Z   ignore-nothing-to-cache: false
+2026-08-23T16:29:34.4975237Z   ignore-empty-workdir: false
+2026-08-23T16:29:34.4975506Z   download-from-astral-mirror: true
+2026-08-23T16:29:34.4975782Z   add-problem-matchers: true
+2026-08-23T16:29:34.4976015Z   quiet: false
+2026-08-23T16:29:34.4976427Z   resolution-strategy: highest
+2026-08-23T16:29:34.4976671Z env:
+2026-08-23T16:29:34.4976934Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:34.4977410Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:34.4978040Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:34.4978430Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:34.4978801Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:34.4979167Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:34.4979492Z ##[endgroup]
+2026-08-23T16:29:34.6721954Z Fetching manifest data from https://raw.githubusercontent.com/astral-sh/versions/main/v1/uv.ndjson ...
+2026-08-23T16:29:34.7513511Z Downloading uv from "https://releases.astral.sh/github/uv/releases/download/0.11.28/uv-x86_64-unknown-linux-gnu.tar.gz" ...
+2026-08-23T16:29:35.1749955Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/2766499f-acaf-494b-91e5-0c984751bbae -f /home/runner/work/_temp/c9438185-91ca-47b0-b6bb-2249260adf0b
+2026-08-23T16:29:35.7180986Z Added /home/runner/.local/bin to the path
+2026-08-23T16:29:35.7185269Z Added /opt/hostedtoolcache/uv/0.11.28/x86_64 to the path
+2026-08-23T16:29:35.7186398Z Set UV_PYTHON_INSTALL_DIR to /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:35.7187000Z Added /home/runner/work/_temp/uv-python-dir to the path
+2026-08-23T16:29:35.7198275Z Set UV_CACHE_DIR to /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:35.7198810Z Successfully installed uv version 0.11.28
+2026-08-23T16:29:35.8290001Z Searching files using cache dependency glob: /home/runner/work/jacobian/jacobian/pyproject.toml,/home/runner/work/jacobian/jacobian/uv.lock
+2026-08-23T16:29:35.8343080Z /home/runner/work/jacobian/jacobian/pyproject.toml
+2026-08-23T16:29:35.8359053Z /home/runner/work/jacobian/jacobian/uv.lock
+2026-08-23T16:29:35.8370880Z Found 2 files to hash.
+2026-08-23T16:29:35.8434322Z Trying to restore cache from GitHub Actions cache with key: setup-uv-2-x86_64-unknown-linux-gnu-ubuntu-24.04-3.12.14-093e6ac7a43736257e00e74ee52b918850e689133b60efd78f1f4579d6deebfb
+2026-08-23T16:29:35.9622921Z Cache hit for: setup-uv-2-x86_64-unknown-linux-gnu-ubuntu-24.04-3.12.14-093e6ac7a43736257e00e74ee52b918850e689133b60efd78f1f4579d6deebfb
+2026-08-23T16:29:36.3466181Z Received 95774 of 95774 (100.0%), 0.4 MBs/sec
+2026-08-23T16:29:36.3466717Z Cache Size: ~0 MB (95774 B)
+2026-08-23T16:29:36.3509465Z [command]/usr/bin/tar -xf /home/runner/work/_temp/1d88a1de-a0c9-4d80-89a5-1d37a78c8f0d/cache.tzst -P -C /home/runner/work/jacobian/jacobian --use-compress-program unzstd
+2026-08-23T16:29:36.3601736Z Cache restored successfully
+2026-08-23T16:29:36.3605905Z cache restored from GitHub Actions cache with key: setup-uv-2-x86_64-unknown-linux-gnu-ubuntu-24.04-3.12.14-093e6ac7a43736257e00e74ee52b918850e689133b60efd78f1f4579d6deebfb
+2026-08-23T16:29:36.4713403Z ##[end-action id=__self.__astral-sh_setup-uv;outcome=success;conclusion=success;duration_ms=1984]
+2026-08-23T16:29:36.4719761Z ##[start-action display=Sync the frozen environment;id=__self.__run]
+2026-08-23T16:29:36.4758279Z ##[group]Run uv sync --locked --dev
+2026-08-23T16:29:36.4758726Z [36;1muv sync --locked --dev[0m
+2026-08-23T16:29:36.4805931Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-23T16:29:36.4806320Z env:
+2026-08-23T16:29:36.4806615Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:36.4807088Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:36.4807552Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:36.4808274Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:36.4808678Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:36.4809080Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:36.4809500Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:36.4810129Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:36.4810445Z   UV_PYTHON: 3.12
+2026-08-23T16:29:36.4810674Z ##[endgroup]
+2026-08-23T16:29:36.5059342Z Using CPython 3.12.14 interpreter at: /opt/hostedtoolcache/Python/3.12.14/x64/bin/python3.12
+2026-08-23T16:29:36.5060154Z Creating virtual environment at: .venv
+2026-08-23T16:29:36.5111108Z Resolved 103 packages in 0.93ms
+2026-08-23T16:29:36.5229135Z    Building jacobian @ file:///home/runner/work/jacobian/jacobian
+2026-08-23T16:29:36.6235911Z Downloading cryptography (4.5MiB)
+2026-08-23T16:29:36.6237558Z Downloading pydantic-core (2.0MiB)
+2026-08-23T16:29:36.6239362Z Downloading ast-serialize (1.2MiB)
+2026-08-23T16:29:36.6241029Z Downloading mypy (14.6MiB)
+2026-08-23T16:29:36.6245666Z Downloading networkx (2.0MiB)
+2026-08-23T16:29:36.6250222Z Downloading deptry (1.8MiB)
+2026-08-23T16:29:36.6253117Z Downloading sympy (6.0MiB)
+2026-08-23T16:29:36.6255136Z Downloading ruff (10.5MiB)
+2026-08-23T16:29:36.6263689Z Downloading virtualenv (5.3MiB)
+2026-08-23T16:29:36.6270589Z Downloading numpy (15.9MiB)
+2026-08-23T16:29:36.6273950Z Downloading pip (1.7MiB)
+2026-08-23T16:29:36.6276228Z Downloading pygments (1.2MiB)
+2026-08-23T16:29:36.6305432Z Downloading grimp (2.2MiB)
+2026-08-23T16:29:36.6305877Z Downloading python-flint (9.7MiB)
+2026-08-23T16:29:36.6306292Z Downloading hypothesis (1.1MiB)
+2026-08-23T16:29:36.6306568Z Downloading z3-solver (31.5MiB)
+2026-08-23T16:29:37.2410813Z  Downloaded ast-serialize
+2026-08-23T16:29:37.3534639Z  Downloaded deptry
+2026-08-23T16:29:37.3547306Z  Downloaded pydantic-core
+2026-08-23T16:29:37.3777064Z  Downloaded hypothesis
+2026-08-23T16:29:37.3979244Z  Downloaded grimp
+2026-08-23T16:29:37.5907174Z  Downloaded pygments
+2026-08-23T16:29:37.6404681Z  Downloaded virtualenv
+2026-08-23T16:29:37.6700661Z  Downloaded cryptography
+2026-08-23T16:29:37.6762638Z  Downloaded pip
+2026-08-23T16:29:37.7657435Z  Downloaded networkx
+2026-08-23T16:29:37.9207177Z       Built jacobian @ file:///home/runner/work/jacobian/jacobian
+2026-08-23T16:29:37.9380675Z  Downloaded ruff
+2026-08-23T16:29:37.9469366Z  Downloaded python-flint
+2026-08-23T16:29:38.3614597Z  Downloaded z3-solver
+2026-08-23T16:29:38.3640532Z  Downloaded numpy
+2026-08-23T16:29:38.4180860Z  Downloaded sympy
+2026-08-23T16:29:38.5105575Z  Downloaded mypy
+2026-08-23T16:29:38.5108444Z Prepared 101 packages in 1.99s
+2026-08-23T16:29:38.6102669Z Installed 101 packages in 99ms
+2026-08-23T16:29:38.6103180Z  + annotated-doc==0.0.4
+2026-08-23T16:29:38.6103572Z  + annotated-types==0.7.0
+2026-08-23T16:29:38.6103938Z  + anyio==4.14.2
+2026-08-23T16:29:38.6104269Z  + ast-serialize==0.6.0
+2026-08-23T16:29:38.6104620Z  + attrs==26.1.0
+2026-08-23T16:29:38.6104957Z  + boolean-py==5.0
+2026-08-23T16:29:38.6105293Z  + cachecontrol==0.14.4
+2026-08-23T16:29:38.6105639Z  + certifi==2026.7.22
+2026-08-23T16:29:38.6105969Z  + cffi==2.1.0
+2026-08-23T16:29:38.6106287Z  + cfgv==3.5.0
+2026-08-23T16:29:38.6106632Z  + charset-normalizer==3.4.9
+2026-08-23T16:29:38.6107062Z  + click==8.4.2
+2026-08-23T16:29:38.6107382Z  + coverage==7.15.2
+2026-08-23T16:29:38.6107958Z  + cryptography==50.0.0
+2026-08-23T16:29:38.6108347Z  + cyclonedx-python-lib==11.11.0
+2026-08-23T16:29:38.6108797Z  + defusedxml==0.7.1
+2026-08-23T16:29:38.6109209Z  + deptry==0.25.1
+2026-08-23T16:29:38.6109695Z  + distlib==0.4.3
+2026-08-23T16:29:38.6110231Z  + execnet==2.1.2
+2026-08-23T16:29:38.6110743Z  + filelock==3.32.0
+2026-08-23T16:29:38.6111133Z  + grimp==3.15
+2026-08-23T16:29:38.6111794Z  + h11==0.16.0
+2026-08-23T16:29:38.6112236Z  + httpcore2==2.7.0
+2026-08-23T16:29:38.6112899Z  + httpx2==2.7.0
+2026-08-23T16:29:38.6113581Z  + hypothesis==6.165.7
+2026-08-23T16:29:38.6113976Z  + identify==2.6.19
+2026-08-23T16:29:38.6114350Z  + idna==3.18
+2026-08-23T16:29:38.6114897Z  + import-linter==2.13
+2026-08-23T16:29:38.6115251Z  + iniconfig==2.3.0
+2026-08-23T16:29:38.6115998Z  + jacobian==0.13.0 (from file:///home/runner/work/jacobian/jacobian)
+2026-08-23T16:29:38.6116581Z  + jsonschema==4.26.0
+2026-08-23T16:29:38.6117258Z  + jsonschema-specifications==2025.9.1
+2026-08-23T16:29:38.6117686Z  + librt==0.13.0
+2026-08-23T16:29:38.6118234Z  + license-expression==30.4.4
+2026-08-23T16:29:38.6118709Z  + markdown-it-py==4.2.0
+2026-08-23T16:29:38.6119214Z  + mcp==2.0.0
+2026-08-23T16:29:38.6119752Z  + mcp-types==2.0.0
+2026-08-23T16:29:38.6120281Z  + mdurl==0.1.2
+2026-08-23T16:29:38.6120837Z  + mpmath==1.3.0
+2026-08-23T16:29:38.6121436Z  + msgpack==1.2.1
+2026-08-23T16:29:38.6121865Z  + mypy==2.3.0
+2026-08-23T16:29:38.6122391Z  + mypy-extensions==1.1.0
+2026-08-23T16:29:38.6122861Z  + networkx==3.6.1
+2026-08-23T16:29:38.6123365Z  + nodeenv==1.10.0
+2026-08-23T16:29:38.6123893Z  + numpy==2.5.1
+2026-08-23T16:29:38.6124416Z  + opentelemetry-api==1.44.0
+2026-08-23T16:29:38.6124911Z  + packageurl-python==0.17.6
+2026-08-23T16:29:38.6125297Z  + packaging==26.2
+2026-08-23T16:29:38.6125877Z  + pathspec==1.1.1
+2026-08-23T16:29:38.6126393Z  + pip==26.1.2
+2026-08-23T16:29:38.6127004Z  + pip-api==0.0.34
+2026-08-23T16:29:38.6127520Z  + pip-audit==2.10.1
+2026-08-23T16:29:38.6128341Z  + pip-requirements-parser==32.0.1
+2026-08-23T16:29:38.6128782Z  + platformdirs==4.11.0
+2026-08-23T16:29:38.6129249Z  + pluggy==1.6.0
+2026-08-23T16:29:38.6129682Z  + pre-commit==4.6.2
+2026-08-23T16:29:38.6130320Z  + psutil==7.2.2
+2026-08-23T16:29:38.6130679Z  + py-serializable==2.1.0
+2026-08-23T16:29:38.6131048Z  + pycparser==3.0
+2026-08-23T16:29:38.6131379Z  + pydantic==2.13.4
+2026-08-23T16:29:38.6131718Z  + pydantic-core==2.46.4
+2026-08-23T16:29:38.6132080Z  + pygments==2.20.0
+2026-08-23T16:29:38.6132436Z  + pyjwt==2.13.0
+2026-08-23T16:29:38.6132831Z  + pyparsing==3.3.2
+2026-08-23T16:29:38.6133151Z  + pyperf==2.10.0
+2026-08-23T16:29:38.6133454Z  + pytest==9.1.1
+2026-08-23T16:29:38.6133765Z  + pytest-cov==7.1.0
+2026-08-23T16:29:38.6134126Z  + pytest-randomly==4.1.0
+2026-08-23T16:29:38.6134508Z  + pytest-repeat==0.9.4
+2026-08-23T16:29:38.6134860Z  + pytest-split==0.11.0
+2026-08-23T16:29:38.6135207Z  + pytest-timeout==2.4.0
+2026-08-23T16:29:38.6135571Z  + pytest-xdist==3.8.0
+2026-08-23T16:29:38.6135928Z  + python-discovery==1.5.0
+2026-08-23T16:29:38.6136294Z  + python-flint==0.9.0
+2026-08-23T16:29:38.6136646Z  + python-multipart==0.0.32
+2026-08-23T16:29:38.6137020Z  + pyyaml==6.0.3
+2026-08-23T16:29:38.6137342Z  + referencing==0.37.0
+2026-08-23T16:29:38.6137992Z  + requests==2.34.2
+2026-08-23T16:29:38.6138352Z  + requirements-parser==0.13.1
+2026-08-23T16:29:38.6139196Z  + rfc8785==0.1.4
+2026-08-23T16:29:38.6139524Z  + rich==15.0.0
+2026-08-23T16:29:38.6139846Z  + rpds-py==2026.6.3
+2026-08-23T16:29:38.6140176Z  + ruff==0.16.3
+2026-08-23T16:29:38.6140516Z  + shellingham==1.5.4
+2026-08-23T16:29:38.6140875Z  + sortedcontainers==2.4.0
+2026-08-23T16:29:38.6141257Z  + sse-starlette==3.4.6
+2026-08-23T16:29:38.6141607Z  + starlette==1.3.1
+2026-08-23T16:29:38.6141983Z  + sympy==1.14.0
+2026-08-23T16:29:38.6142585Z  + tomli==2.4.1
+2026-08-23T16:29:38.6143182Z  + tomli-w==1.2.0
+2026-08-23T16:29:38.6143616Z  + truststore==0.10.4
+2026-08-23T16:29:38.6144116Z  + typer==0.27.1
+2026-08-23T16:29:38.6144738Z  + types-jsonschema==4.26.0.20260518
+2026-08-23T16:29:38.6145379Z  + types-networkx==3.6.1.20260728
+2026-08-23T16:29:38.6145956Z  + typing-extensions==4.16.0
+2026-08-23T16:29:38.6146551Z  + typing-inspection==0.4.2
+2026-08-23T16:29:38.6147051Z  + urllib3==2.7.0
+2026-08-23T16:29:38.6147533Z  + uvicorn==0.51.0
+2026-08-23T16:29:38.6148114Z  + virtualenv==21.7.0
+2026-08-23T16:29:38.6148647Z  + vulture==2.16
+2026-08-23T16:29:38.6148929Z  + z3-solver==5.0.0.0
+2026-08-23T16:29:38.6269492Z ##[end-action id=__self.__run;outcome=success;conclusion=success;duration_ms=2154]
+2026-08-23T16:29:38.6273810Z ##[start-action display=Require the requested Python version;id=__self.__run_2]
+2026-08-23T16:29:38.6294122Z ##[group]Run uv run --locked python -c "import os, sys; expected = tuple(map(int, os.environ['UV_PYTHON'].split('.'))); assert sys.version_info[:2] == expected, f'expected Python {expected}, got {sys.version_info[:2]}'"
+2026-08-23T16:29:38.6295515Z [36;1muv run --locked python -c "import os, sys; expected = tuple(map(int, os.environ['UV_PYTHON'].split('.'))); assert sys.version_info[:2] == expected, f'expected Python {expected}, got {sys.version_info[:2]}'"[0m
+2026-08-23T16:29:38.6338869Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-23T16:29:38.6339249Z env:
+2026-08-23T16:29:38.6339546Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:38.6339996Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:38.6340430Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:38.6340841Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:38.6341250Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:38.6341662Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:38.6342080Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:38.6342471Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:38.6342813Z   UV_PYTHON: 3.12
+2026-08-23T16:29:38.6343033Z ##[endgroup]
+2026-08-23T16:29:38.6955617Z ##[end-action id=__self.__run_2;outcome=success;conclusion=success;duration_ms=68]
+2026-08-23T16:29:38.7038878Z Prepare all required actions
+2026-08-23T16:29:38.7039388Z Getting action download info
+2026-08-23T16:29:38.7842088Z Download action repository 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' (SHA:043fb46d1a93c77aae656e7c1c64a875d1fc6a0a)
+2026-08-23T16:29:38.8768227Z ##[group]Run ./.github/actions/run-test-lane
+2026-08-23T16:29:38.8768538Z with:
+2026-08-23T16:29:38.8768754Z   lane: mcp
+2026-08-23T16:29:38.8768983Z   junit-artifact: junit-mcp-3.12
+2026-08-23T16:29:38.8769277Z   coverage-artifact: coverage-data-mcp
+2026-08-23T16:29:38.8769575Z   coverage-file: .coverage.mcp
+2026-08-23T16:29:38.8769825Z env:
+2026-08-23T16:29:38.8770113Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:38.8770563Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:38.8771027Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:38.8771466Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:38.8771859Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:38.8772247Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:38.8772659Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:38.8773043Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:38.8773358Z ##[endgroup]
+2026-08-23T16:29:38.8787666Z ##[start-action display=Run mcp tests;id=__self_2.__run]
+2026-08-23T16:29:38.8805079Z ##[group]Run make test-mcp
+2026-08-23T16:29:38.8805372Z [36;1mmake test-mcp[0m
+2026-08-23T16:29:38.8847134Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-23T16:29:38.8847502Z env:
+2026-08-23T16:29:38.8847917Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:38.8848396Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:38.8848835Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:38.8849250Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:38.8849638Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:38.8850025Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:38.8850449Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:38.8850829Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:38.8851299Z   PYTEST_ARGS: --junitxml=pytest.xml --cov --cov-report= --cov-fail-under=0
+2026-08-23T16:29:38.8851689Z ##[endgroup]
+2026-08-23T16:29:38.9102305Z uv run --locked python tools/pytest_lifecycle.py --name mcp --timeout-seconds 4800 -- \
+2026-08-23T16:29:38.9103223Z 	-n 2 --dist worksteal --timeout=120 --timeout-method=signal \
+2026-08-23T16:29:38.9103759Z 	tests/mcp \
+2026-08-23T16:29:38.9104634Z 	--durations=10 --junitxml=pytest.xml --cov --cov-report= --cov-fail-under=0
+2026-08-23T16:29:51.1879242Z ============================= test session starts ==============================
+2026-08-23T16:29:51.1880341Z platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0
+2026-08-23T16:29:51.1908862Z Using --randomly-seed=1812454424
+2026-08-23T16:29:51.1936217Z rootdir: /home/runner/work/jacobian/jacobian
+2026-08-23T16:29:51.1937292Z configfile: pyproject.toml
+2026-08-23T16:29:51.1938446Z plugins: anyio-4.14.2, randomly-4.1.0, split-0.11.0, cov-7.1.0, repeat-0.9.4, hypothesis-6.165.7, timeout-2.4.0, xdist-3.8.0
+2026-08-23T16:29:51.1939399Z timeout: 120.0s
+2026-08-23T16:29:51.1939902Z timeout method: signal
+2026-08-23T16:29:51.1940700Z timeout func_only: False
+2026-08-23T16:29:51.1951480Z created: 2/2 workers
+2026-08-23T16:29:51.1952062Z 2 workers [15 items]
+2026-08-23T16:29:51.1952445Z 
+2026-08-23T16:30:02.7008456Z ...............                                                          [100%]
+2026-08-23T16:30:02.7009314Z ------ generated xml file: /home/runner/work/jacobian/jacobian/pytest.xml ------
+2026-08-23T16:30:02.7010512Z ============================= slowest 10 durations =============================
+2026-08-23T16:30:02.7011460Z 3.41s call     tests/mcp/test_mcp_catalog_and_policy.py::test_mcp_compact_operation_index_is_searchable_and_paginated
+2026-08-23T16:30:02.7012547Z 3.27s call     tests/mcp/test_mcp_entrypoint.py::test_mcp_stdio_entrypoint_exposes_stable_math_tools
+2026-08-23T16:30:02.7013619Z 3.06s call     tests/mcp/test_mcp_sdk_2_conformance.py::test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources
+2026-08-23T16:30:02.7014799Z 3.01s call     tests/mcp/test_mcp_catalog_and_policy.py::test_mcp_operation_browse_pages_the_complete_immutable_library
+2026-08-23T16:30:02.7015907Z 2.70s call     tests/mcp/test_mcp_catalog_and_policy.py::test_mcp_catalog_is_the_complete_static_operation_library
+2026-08-23T16:30:02.7017066Z 0.62s call     tests/mcp/test_mcp_invocation_journey.py::test_mcp_composes_public_finite_field_values_with_native_projections
+2026-08-23T16:30:02.7018367Z 0.25s call     tests/mcp/test_remote_mcp_auth.py::test_token_file_is_strict_and_remote_cli_fails_closed
+2026-08-23T16:30:02.7019320Z 0.12s call     tests/mcp/test_mcp_invocation_journey.py::test_mcp_describes_and_invokes_operations
+2026-08-23T16:30:02.7020218Z 0.08s call     tests/mcp/test_mcp_entrypoint.py::test_mcp_entrypoint_has_nonstarting_help
+2026-08-23T16:30:02.7021088Z 0.08s call     tests/mcp/test_mcp_entrypoint.py::test_mcp_entrypoint_reports_distribution_version
+2026-08-23T16:30:02.7021810Z ============================= 15 passed in 21.82s ==============================
+2026-08-23T16:30:02.8238574Z ##[end-action id=__self_2.__run;outcome=success;conclusion=success;duration_ms=23945]
+2026-08-23T16:30:02.8241405Z ##[start-action display=Run uv cache prune --ci;id=__self_2.__run_2]
+2026-08-23T16:30:02.8266390Z ##[group]Run uv cache prune --ci
+2026-08-23T16:30:02.8266841Z [36;1muv cache prune --ci[0m
+2026-08-23T16:30:02.8306497Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-23T16:30:02.8307062Z env:
+2026-08-23T16:30:02.8307527Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:02.8308418Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:30:02.8327233Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:02.8328075Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:02.8328611Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:02.8329026Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:30:02.8329447Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:30:02.8329843Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:30:02.8330185Z ##[endgroup]
+2026-08-23T16:30:02.8540330Z Pruning cache at: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:30:03.0239817Z Removed 8972 files (345.3MiB)
+2026-08-23T16:30:03.0264073Z ##[end-action id=__self_2.__run_2;outcome=success;conclusion=success;duration_ms=202]
+2026-08-23T16:30:03.0266939Z ##[start-action display=Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a;id=__self_2.__actions_upload-artifact]
+2026-08-23T16:30:03.0304678Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-08-23T16:30:03.0305074Z with:
+2026-08-23T16:30:03.0305296Z   name: junit-mcp-3.12
+2026-08-23T16:30:03.0305529Z   path: pytest.xml
+2026-08-23T16:30:03.0305755Z   if-no-files-found: ignore
+2026-08-23T16:30:03.0306002Z   retention-days: 7
+2026-08-23T16:30:03.0306220Z   compression-level: 6
+2026-08-23T16:30:03.0306448Z   overwrite: false
+2026-08-23T16:30:03.0306669Z   include-hidden-files: false
+2026-08-23T16:30:03.0306920Z   archive: true
+2026-08-23T16:30:03.0307126Z env:
+2026-08-23T16:30:03.0307400Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.0308363Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:30:03.0308817Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.0309390Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.0309792Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.0310168Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:30:03.0310567Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:30:03.0310939Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:30:03.0311243Z ##[endgroup]
+2026-08-23T16:30:03.1775832Z With the provided path, there will be 1 file uploaded
+2026-08-23T16:30:03.1781277Z Artifact name is valid!
+2026-08-23T16:30:03.1781705Z Root directory input is valid!
+2026-08-23T16:30:03.4068172Z Uploading artifact: junit-mcp-3.12.zip
+2026-08-23T16:30:03.4106513Z Beginning upload of artifact content to blob storage
+2026-08-23T16:30:03.6074612Z Uploaded bytes 831
+2026-08-23T16:30:03.6547973Z Finished uploading artifact content to blob storage!
+2026-08-23T16:30:03.6548921Z SHA256 digest of uploaded artifact is febe408b3a1021f38612d583d1301771bd46711eaea1fdf81f505a06d9a14798
+2026-08-23T16:30:03.6549700Z Finalizing artifact upload
+2026-08-23T16:30:03.9025435Z Artifact junit-mcp-3.12 successfully finalized. Artifact ID 9496397578
+2026-08-23T16:30:03.9026684Z Artifact junit-mcp-3.12 has been successfully uploaded! Final size is 831 bytes. Artifact ID is 9496397578
+2026-08-23T16:30:03.9030384Z Artifact download URL: https://github.com/morluto/jacobian/actions/runs/32651818223/artifacts/9496397578
+2026-08-23T16:30:03.9117452Z ##[end-action id=__self_2.__actions_upload-artifact;outcome=success;conclusion=success;duration_ms=884]
+2026-08-23T16:30:03.9123029Z ##[start-action display=Run mv .coverage .coverage.mcp;id=__self_2.__run_3]
+2026-08-23T16:30:03.9142678Z ##[group]Run mv .coverage .coverage.mcp
+2026-08-23T16:30:03.9143037Z [36;1mmv .coverage .coverage.mcp[0m
+2026-08-23T16:30:03.9184233Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-23T16:30:03.9184609Z env:
+2026-08-23T16:30:03.9184910Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.9185391Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:30:03.9185849Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.9186253Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.9186669Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.9187074Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:30:03.9187496Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:30:03.9188124Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:30:03.9188463Z ##[endgroup]
+2026-08-23T16:30:03.9273108Z ##[end-action id=__self_2.__run_3;outcome=success;conclusion=success;duration_ms=14]
+2026-08-23T16:30:03.9275738Z ##[start-action display=Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a;id=__self_2.__actions_upload-artifact_2]
+2026-08-23T16:30:03.9311530Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-08-23T16:30:03.9311946Z with:
+2026-08-23T16:30:03.9312175Z   name: coverage-data-mcp
+2026-08-23T16:30:03.9312425Z   path: .coverage.mcp
+2026-08-23T16:30:03.9312666Z   include-hidden-files: true
+2026-08-23T16:30:03.9312927Z   if-no-files-found: warn
+2026-08-23T16:30:03.9313170Z   compression-level: 6
+2026-08-23T16:30:03.9313399Z   overwrite: false
+2026-08-23T16:30:03.9313622Z   archive: true
+2026-08-23T16:30:03.9313836Z env:
+2026-08-23T16:30:03.9314102Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.9314555Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:30:03.9314984Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.9315381Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.9315790Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.9316192Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:30:03.9316747Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:30:03.9317125Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:30:03.9317446Z ##[endgroup]
+2026-08-23T16:30:04.0757663Z With the provided path, there will be 1 file uploaded
+2026-08-23T16:30:04.0763218Z Artifact name is valid!
+2026-08-23T16:30:04.0764086Z Root directory input is valid!
+2026-08-23T16:30:04.3353777Z Uploading artifact: coverage-data-mcp.zip
+2026-08-23T16:30:04.3393714Z Beginning upload of artifact content to blob storage
+2026-08-23T16:30:04.7814272Z Uploaded bytes 795728
+2026-08-23T16:30:04.8253614Z Finished uploading artifact content to blob storage!
+2026-08-23T16:30:04.8254688Z SHA256 digest of uploaded artifact is 2a229731795c956e6fe59cc3400698487a7d9259fd0fdc8e3243c604c2df354e
+2026-08-23T16:30:04.8255527Z Finalizing artifact upload
+2026-08-23T16:30:05.1025039Z Artifact coverage-data-mcp successfully finalized. Artifact ID 9496397833
+2026-08-23T16:30:05.1026151Z Artifact coverage-data-mcp has been successfully uploaded! Final size is 795728 bytes. Artifact ID is 9496397833
+2026-08-23T16:30:05.1030111Z Artifact download URL: https://github.com/morluto/jacobian/actions/runs/32651818223/artifacts/9496397833
+2026-08-23T16:30:05.1121934Z ##[end-action id=__self_2.__actions_upload-artifact_2;outcome=success;conclusion=success;duration_ms=1184]
+2026-08-23T16:30:05.1203282Z Post job cleanup.
+2026-08-23T16:30:05.1207468Z ##[start-action display=Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d;id=__7e42f3b0-b263-4517-b587-7670d1696546.__astral-sh_setup-uv]
+2026-08-23T16:30:05.1268273Z Post job cleanup.
+2026-08-23T16:30:05.2419678Z UV_CACHE_DIR is already set to /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:30:05.2422825Z UV_PYTHON_INSTALL_DIR is already set to /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:30:05.2425661Z Cache hit occurred on key setup-uv-2-x86_64-unknown-linux-gnu-ubuntu-24.04-3.12.14-093e6ac7a43736257e00e74ee52b918850e689133b60efd78f1f4579d6deebfb, not saving cache.
+2026-08-23T16:30:05.3489009Z ##[end-action id=__7e42f3b0-b263-4517-b587-7670d1696546.__astral-sh_setup-uv;outcome=success;conclusion=success;duration_ms=227]
+2026-08-23T16:30:05.3491998Z ##[start-action display=Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97;id=__7e42f3b0-b263-4517-b587-7670d1696546.__actions_setup-python]
+2026-08-23T16:30:05.3536494Z Post job cleanup.
+2026-08-23T16:30:05.4741083Z ##[end-action id=__7e42f3b0-b263-4517-b587-7670d1696546.__actions_setup-python;outcome=success;conclusion=success;duration_ms=124]
+2026-08-23T16:30:05.4807163Z Post job cleanup.
+2026-08-23T16:30:05.5669609Z [command]/usr/bin/git version
+2026-08-23T16:30:05.5707497Z git version 2.55.0
+2026-08-23T16:30:05.5741741Z Temporarily overriding HOME='/home/runner/work/_temp/59ed561b-6ef8-415e-852c-ee84033eab32' before making global git config changes
+2026-08-23T16:30:05.5743800Z Adding repository directory to the temporary git global config as a safe directory
+2026-08-23T16:30:05.5747538Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/jacobian/jacobian
+2026-08-23T16:30:05.5778618Z Removing SSH command configuration
+2026-08-23T16:30:05.5784485Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-08-23T16:30:05.5817485Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-08-23T16:30:05.6071220Z Removing HTTP extra header
+2026-08-23T16:30:05.6076381Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-08-23T16:30:05.6110753Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-08-23T16:30:05.6351659Z Removing includeIf entries pointing to credentials config files
+2026-08-23T16:30:05.6358745Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-08-23T16:30:05.6389351Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-08-23T16:30:05.6772468Z Cleaning up orphan processes

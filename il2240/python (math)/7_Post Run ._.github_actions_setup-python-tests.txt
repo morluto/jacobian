@@ -1,0 +1,10 @@
+﻿2026-08-23T16:31:29.0294431Z Post job cleanup.
+2026-08-23T16:31:29.0298327Z ##[start-action display=Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d;id=__3147d4f6-5f13-496b-a4ef-36bf0b9f4714.__astral-sh_setup-uv]
+2026-08-23T16:31:29.0373630Z Post job cleanup.
+2026-08-23T16:31:29.1474652Z UV_CACHE_DIR is already set to /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:31:29.1477243Z UV_PYTHON_INSTALL_DIR is already set to /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:31:29.1479737Z Cache hit occurred on key setup-uv-2-x86_64-unknown-linux-gnu-ubuntu-24.04-3.12.14-093e6ac7a43736257e00e74ee52b918850e689133b60efd78f1f4579d6deebfb, not saving cache.
+2026-08-23T16:31:29.2537044Z ##[end-action id=__3147d4f6-5f13-496b-a4ef-36bf0b9f4714.__astral-sh_setup-uv;outcome=success;conclusion=success;duration_ms=223]
+2026-08-23T16:31:29.2540162Z ##[start-action display=Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97;id=__3147d4f6-5f13-496b-a4ef-36bf0b9f4714.__actions_setup-python]
+2026-08-23T16:31:29.2587906Z Post job cleanup.
+2026-08-23T16:31:29.3704651Z ##[end-action id=__3147d4f6-5f13-496b-a4ef-36bf0b9f4714.__actions_setup-python;outcome=success;conclusion=success;duration_ms=116]

@@ -1,0 +1,126 @@
+﻿2026-08-23T16:29:31.6611983Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-08-23T16:29:31.6613328Z with:
+2026-08-23T16:29:31.6613848Z   persist-credentials: false
+2026-08-23T16:29:31.6614507Z   repository: morluto/jacobian
+2026-08-23T16:29:31.6618615Z   token: ***
+2026-08-23T16:29:31.6619111Z   ssh-strict: true
+2026-08-23T16:29:31.6619659Z   ssh-user: git
+2026-08-23T16:29:31.6620114Z   clean: true
+2026-08-23T16:29:31.6620658Z   sparse-checkout-cone-mode: true
+2026-08-23T16:29:31.6621264Z   fetch-depth: 1
+2026-08-23T16:29:31.6621756Z   fetch-tags: false
+2026-08-23T16:29:31.6622272Z   show-progress: true
+2026-08-23T16:29:31.6622776Z   lfs: false
+2026-08-23T16:29:31.6623554Z   submodules: false
+2026-08-23T16:29:31.6624076Z   set-safe-directory: true
+2026-08-23T16:29:31.6624618Z   allow-unsafe-pr-checkout: false
+2026-08-23T16:29:31.6625576Z ##[endgroup]
+2026-08-23T16:29:31.7697737Z Syncing repository: morluto/jacobian
+2026-08-23T16:29:31.7700569Z ##[group]Getting Git version info
+2026-08-23T16:29:31.7701332Z Working directory is '/home/runner/work/jacobian/jacobian'
+2026-08-23T16:29:31.7702420Z [command]/usr/bin/git version
+2026-08-23T16:29:31.7703146Z git version 2.55.0
+2026-08-23T16:29:31.7704741Z ##[endgroup]
+2026-08-23T16:29:31.7710097Z Temporarily overriding HOME='/home/runner/work/_temp/7f601986-a84e-4119-9bc8-7c21d0012cb3' before making global git config changes
+2026-08-23T16:29:31.7711335Z Adding repository directory to the temporary git global config as a safe directory
+2026-08-23T16:29:31.7712379Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/jacobian/jacobian
+2026-08-23T16:29:31.7734817Z Deleting the contents of '/home/runner/work/jacobian/jacobian'
+2026-08-23T16:29:31.7736981Z ##[group]Determining repository object format
+2026-08-23T16:29:31.7738372Z ##[endgroup]
+2026-08-23T16:29:31.7739085Z ##[group]Initializing the repository
+2026-08-23T16:29:31.7742224Z [command]/usr/bin/git init /home/runner/work/jacobian/jacobian
+2026-08-23T16:29:31.7838082Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-08-23T16:29:31.7839085Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-08-23T16:29:31.7840081Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-08-23T16:29:31.7840986Z hint: call:
+2026-08-23T16:29:31.7841385Z hint:
+2026-08-23T16:29:31.7841876Z hint: 	git config --global init.defaultBranch <name>
+2026-08-23T16:29:31.7842444Z hint:
+2026-08-23T16:29:31.7843254Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-08-23T16:29:31.7844726Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-08-23T16:29:31.7845945Z hint:
+2026-08-23T16:29:31.7846526Z hint: 	git branch -m <name>
+2026-08-23T16:29:31.7847024Z hint:
+2026-08-23T16:29:31.7847769Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-08-23T16:29:31.7849141Z Initialized empty Git repository in /home/runner/work/jacobian/jacobian/.git/
+2026-08-23T16:29:31.7851303Z [command]/usr/bin/git remote add origin https://github.com/morluto/jacobian
+2026-08-23T16:29:31.7886156Z ##[endgroup]
+2026-08-23T16:29:31.7886917Z ##[group]Disabling automatic garbage collection
+2026-08-23T16:29:31.7888756Z [command]/usr/bin/git config --local gc.auto 0
+2026-08-23T16:29:31.7911166Z ##[endgroup]
+2026-08-23T16:29:31.7912108Z ##[group]Setting up auth
+2026-08-23T16:29:31.7912622Z Removing SSH command configuration
+2026-08-23T16:29:31.7916636Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-08-23T16:29:31.7940522Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-08-23T16:29:31.8220009Z Removing HTTP extra header
+2026-08-23T16:29:31.8225535Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-08-23T16:29:31.8251246Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-08-23T16:29:31.8415933Z Removing includeIf entries pointing to credentials config files
+2026-08-23T16:29:31.8421015Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-08-23T16:29:31.8446984Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-08-23T16:29:31.8616605Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-205e728a-df38-435e-8de7-724767c3e3af.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-08-23T16:29:31.8646718Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/jacobian/jacobian/.git.path /home/runner/work/_temp/git-credentials-205e728a-df38-435e-8de7-724767c3e3af.config
+2026-08-23T16:29:31.8669704Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/jacobian/jacobian/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-205e728a-df38-435e-8de7-724767c3e3af.config
+2026-08-23T16:29:31.8698001Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-205e728a-df38-435e-8de7-724767c3e3af.config
+2026-08-23T16:29:31.8721589Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-205e728a-df38-435e-8de7-724767c3e3af.config
+2026-08-23T16:29:31.8741925Z ##[endgroup]
+2026-08-23T16:29:31.8742647Z ##[group]Fetching the repository
+2026-08-23T16:29:31.8748073Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +2fcc3c8860901592b520a714b0222f46c434e94e:refs/remotes/pull/2240/merge
+2026-08-23T16:29:32.7594808Z From https://github.com/morluto/jacobian
+2026-08-23T16:29:32.7596817Z  * [new ref]         2fcc3c8860901592b520a714b0222f46c434e94e -> pull/2240/merge
+2026-08-23T16:29:32.7601308Z ##[endgroup]
+2026-08-23T16:29:32.7603211Z ##[group]Determining the checkout info
+2026-08-23T16:29:32.7605174Z ##[endgroup]
+2026-08-23T16:29:32.7606863Z [command]/usr/bin/git sparse-checkout disable
+2026-08-23T16:29:32.7654618Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-08-23T16:29:32.7679882Z ##[group]Checking out the ref
+2026-08-23T16:29:32.7683677Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/2240/merge
+2026-08-23T16:29:32.9294764Z Note: switching to 'refs/remotes/pull/2240/merge'.
+2026-08-23T16:29:32.9296725Z 
+2026-08-23T16:29:32.9298411Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-08-23T16:29:32.9302419Z changes and commit them, and you can discard any commits you make in this
+2026-08-23T16:29:32.9306802Z state without impacting any branches by switching back to a branch.
+2026-08-23T16:29:32.9309294Z 
+2026-08-23T16:29:32.9311082Z If you want to create a new branch to retain commits you create, you may
+2026-08-23T16:29:32.9315196Z do so (now or later) by using -c with the switch command. Example:
+2026-08-23T16:29:32.9319046Z 
+2026-08-23T16:29:32.9320494Z   git switch -c <new-branch-name>
+2026-08-23T16:29:32.9321556Z 
+2026-08-23T16:29:32.9322370Z Or undo this operation with:
+2026-08-23T16:29:32.9323580Z 
+2026-08-23T16:29:32.9324321Z   git switch -
+2026-08-23T16:29:32.9325177Z 
+2026-08-23T16:29:32.9326730Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-08-23T16:29:32.9329128Z 
+2026-08-23T16:29:32.9331015Z HEAD is now at 2fcc3c8 Merge 0646a18675a482fad24638d9aadd8393523e7b8c into f60dc9fbe8af14be74437810beb98b9469915061
+2026-08-23T16:29:32.9336931Z ##[endgroup]
+2026-08-23T16:29:32.9349454Z [command]/usr/bin/git log -1 --format=%H
+2026-08-23T16:29:32.9369052Z 2fcc3c8860901592b520a714b0222f46c434e94e
+2026-08-23T16:29:32.9385623Z ##[group]Removing auth
+2026-08-23T16:29:32.9387734Z Removing SSH command configuration
+2026-08-23T16:29:32.9391072Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-08-23T16:29:32.9412531Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-08-23T16:29:32.9588938Z Removing HTTP extra header
+2026-08-23T16:29:32.9591924Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-08-23T16:29:32.9621173Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-08-23T16:29:32.9819914Z Removing includeIf entries pointing to credentials config files
+2026-08-23T16:29:32.9824090Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-08-23T16:29:32.9846897Z includeif.gitdir:/home/runner/work/jacobian/jacobian/.git.path
+2026-08-23T16:29:32.9849377Z includeif.gitdir:/home/runner/work/jacobian/jacobian/.git/worktrees/*.path
+2026-08-23T16:29:32.9851343Z includeif.gitdir:/github/workspace/.git.path
+2026-08-23T16:29:32.9853200Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-08-23T16:29:32.9858260Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/jacobian/jacobian/.git.path
+2026-08-23T16:29:32.9877637Z /home/runner/work/_temp/git-credentials-205e728a-df38-435e-8de7-724767c3e3af.config
+2026-08-23T16:29:32.9890181Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/jacobian/jacobian/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-205e728a\-df38\-435e\-8de7\-724767c3e3af\.config
+2026-08-23T16:29:32.9919734Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/jacobian/jacobian/.git/worktrees/*.path
+2026-08-23T16:29:32.9946601Z /home/runner/work/_temp/git-credentials-205e728a-df38-435e-8de7-724767c3e3af.config
+2026-08-23T16:29:32.9957229Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/jacobian/jacobian/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-205e728a\-df38\-435e\-8de7\-724767c3e3af\.config
+2026-08-23T16:29:32.9985682Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-08-23T16:29:33.0005220Z /github/runner_temp/git-credentials-205e728a-df38-435e-8de7-724767c3e3af.config
+2026-08-23T16:29:33.0036905Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-205e728a\-df38\-435e\-8de7\-724767c3e3af\.config
+2026-08-23T16:29:33.0050106Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-08-23T16:29:33.0094330Z /github/runner_temp/git-credentials-205e728a-df38-435e-8de7-724767c3e3af.config
+2026-08-23T16:29:33.0133368Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-205e728a\-df38\-435e\-8de7\-724767c3e3af\.config
+2026-08-23T16:29:33.0176899Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-08-23T16:29:33.0376340Z Removing credentials config '/home/runner/work/_temp/git-credentials-205e728a-df38-435e-8de7-724767c3e3af.config'
+2026-08-23T16:29:33.0387026Z ##[endgroup]

@@ -1,0 +1,27 @@
+﻿2026-08-23T16:29:40.7785299Z ##[group]Run make lint-full
+2026-08-23T16:29:40.7785616Z [36;1mmake lint-full[0m
+2026-08-23T16:29:40.7840165Z shell: /usr/bin/bash -e {0}
+2026-08-23T16:29:40.7840422Z env:
+2026-08-23T16:29:40.7840695Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:40.7841154Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:40.7841584Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:40.7842091Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:40.7842684Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:40.7843085Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:40.7843480Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:40.7843862Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:40.7844155Z ##[endgroup]
+2026-08-23T16:29:40.8144225Z uv run --locked ruff check src tests benchmarks
+2026-08-23T16:29:41.1299568Z All checks passed!
+2026-08-23T16:29:41.1313907Z uv run --locked ruff format --check src tests benchmarks
+2026-08-23T16:29:41.4696250Z 2284 files already formatted
+2026-08-23T16:29:41.4720992Z make complexity-check
+2026-08-23T16:29:41.4741922Z make[1]: Entering directory '/home/runner/work/jacobian/jacobian'
+2026-08-23T16:29:41.4742476Z uv run --locked python tools/check_complexity.py
+2026-08-23T16:29:41.7282463Z C901 baseline unchanged: 10 known violations, limit 10.
+2026-08-23T16:29:41.7381139Z make[1]: Leaving directory '/home/runner/work/jacobian/jacobian'
+2026-08-23T16:29:41.7383076Z uv run --locked deptry .
+2026-08-23T16:29:42.0321807Z Scanning 797 files...
+2026-08-23T16:29:42.2841164Z 
+2026-08-23T16:29:42.2842204Z [1m[32mSuccess! No dependency issues found.[m
+2026-08-23T16:29:42.3026150Z uv run --locked vulture src tests --min-confidence=80 --ignore-names synthetic_harbor_root,git_initialized_root

@@ -1,0 +1,42 @@
+﻿2026-08-23T16:31:36.7249128Z Current runner version: '2.336.0'
+2026-08-23T16:31:36.7274845Z ##[group]Runner Image Provisioner
+2026-08-23T16:31:36.7275726Z Hosted Compute Agent
+2026-08-23T16:31:36.7276317Z Version: 20260729.566
+2026-08-23T16:31:36.7277056Z Commit: cf7153fe6e25b664e8693c24944bf2b00355d109
+2026-08-23T16:31:36.7277854Z Build Date: 2026-07-29T19:17:02Z
+2026-08-23T16:31:36.7278939Z Worker ID: {f3d2d6eb-8389-4eb0-95fb-f46e90e0827b}
+2026-08-23T16:31:36.7279677Z Azure Region: westus2
+2026-08-23T16:31:36.7280273Z ##[endgroup]
+2026-08-23T16:31:36.7281775Z ##[group]Operating System
+2026-08-23T16:31:36.7282425Z Ubuntu
+2026-08-23T16:31:36.7282973Z 24.04.4
+2026-08-23T16:31:36.7283599Z LTS
+2026-08-23T16:31:36.7284116Z ##[endgroup]
+2026-08-23T16:31:36.7284773Z ##[group]Runner Image
+2026-08-23T16:31:36.7285380Z Image: ubuntu-24.04
+2026-08-23T16:31:36.7285989Z Version: 20260816.277.1
+2026-08-23T16:31:36.7287305Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260816.277/images/ubuntu/Ubuntu2404-Readme.md
+2026-08-23T16:31:36.7289184Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260816.277
+2026-08-23T16:31:36.7290176Z ##[endgroup]
+2026-08-23T16:31:36.7291330Z ##[group]GITHUB_TOKEN Permissions
+2026-08-23T16:31:36.7293262Z Contents: read
+2026-08-23T16:31:36.7293869Z Metadata: read
+2026-08-23T16:31:36.7294540Z ##[endgroup]
+2026-08-23T16:31:36.7296574Z Secret source: Actions
+2026-08-23T16:31:36.7297725Z Prepare workflow directory
+2026-08-23T16:31:36.7621681Z Prepare all required actions
+2026-08-23T16:31:36.7669143Z Getting action download info
+2026-08-23T16:31:37.1566477Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-08-23T16:31:37.2962610Z Download action repository 'actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c' (SHA:3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c)
+2026-08-23T16:31:37.5997821Z Download action repository 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' (SHA:043fb46d1a93c77aae656e7c1c64a875d1fc6a0a)
+2026-08-23T16:31:37.7673708Z Complete job name: Coverage
+2026-08-23T16:31:37.8368619Z ##[group]Run test "$PYTHON_RESULT" = success
+2026-08-23T16:31:37.8369390Z [36;1mtest "$PYTHON_RESULT" = success[0m
+2026-08-23T16:31:37.8370043Z [36;1mtest "$BOUNDARIES_RESULT" = success[0m
+2026-08-23T16:31:37.8409702Z shell: /usr/bin/bash -e {0}
+2026-08-23T16:31:37.8410505Z env:
+2026-08-23T16:31:37.8410942Z   PYTHON_RESULT: failure
+2026-08-23T16:31:37.8411462Z   BOUNDARIES_RESULT: success
+2026-08-23T16:31:37.8411971Z ##[endgroup]
+2026-08-23T16:31:37.8541126Z ##[error]Process completed with exit code 1.
+2026-08-23T16:31:37.8738733Z Cleaning up orphan processes

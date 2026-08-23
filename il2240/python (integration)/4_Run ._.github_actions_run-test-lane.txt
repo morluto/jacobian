@@ -1,0 +1,472 @@
+﻿2026-08-23T16:29:37.3477781Z Prepare all required actions
+2026-08-23T16:29:37.3478288Z Getting action download info
+2026-08-23T16:29:37.4065908Z Download action repository 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' (SHA:043fb46d1a93c77aae656e7c1c64a875d1fc6a0a)
+2026-08-23T16:29:37.5327744Z ##[group]Run ./.github/actions/run-test-lane
+2026-08-23T16:29:37.5328060Z with:
+2026-08-23T16:29:37.5328272Z   lane: integration
+2026-08-23T16:29:37.5328525Z   junit-artifact: junit-python-integration-3.12
+2026-08-23T16:29:37.5328891Z   coverage-artifact: coverage-data-python-integration
+2026-08-23T16:29:37.5329246Z   coverage-file: .coverage.python-integration
+2026-08-23T16:29:37.5329535Z env:
+2026-08-23T16:29:37.5329786Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.5330236Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:37.5330667Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.5331058Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.5331472Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.5331860Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:37.5332271Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:37.5332656Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:37.5332963Z ##[endgroup]
+2026-08-23T16:29:37.5346976Z ##[start-action display=Run integration tests;id=__self_2.__run]
+2026-08-23T16:29:37.5363596Z ##[group]Run make test-integration
+2026-08-23T16:29:37.5363915Z [36;1mmake test-integration[0m
+2026-08-23T16:29:37.5400552Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-23T16:29:37.5400906Z env:
+2026-08-23T16:29:37.5401195Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.5401652Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:37.5402095Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.5402493Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.5402886Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.5403272Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:37.5403673Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:37.5404054Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:37.5404510Z   PYTEST_ARGS: --junitxml=pytest.xml --cov --cov-report= --cov-fail-under=0
+2026-08-23T16:29:37.5404908Z ##[endgroup]
+2026-08-23T16:29:37.5659770Z uv run --locked pytest -n 2 --dist worksteal --timeout=120 \
+2026-08-23T16:29:37.5660401Z 	tests/integration \
+2026-08-23T16:29:37.5661166Z 	--durations=10 --junitxml=pytest.xml --cov --cov-report= --cov-fail-under=0
+2026-08-23T16:29:54.3854983Z ============================= test session starts ==============================
+2026-08-23T16:29:54.3855534Z platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0
+2026-08-23T16:29:54.3855945Z Using --randomly-seed=1585135981
+2026-08-23T16:29:54.3856243Z rootdir: /home/runner/work/jacobian/jacobian
+2026-08-23T16:29:54.3856867Z configfile: pyproject.toml
+2026-08-23T16:29:54.3857421Z plugins: anyio-4.14.2, randomly-4.1.0, split-0.11.0, cov-7.1.0, repeat-0.9.4, hypothesis-6.165.7, timeout-2.4.0, xdist-3.8.0
+2026-08-23T16:29:54.3857960Z timeout: 120.0s
+2026-08-23T16:29:54.3858172Z timeout method: thread
+2026-08-23T16:29:54.3858403Z timeout func_only: False
+2026-08-23T16:29:54.3858637Z created: 2/2 workers
+2026-08-23T16:29:54.3858845Z 2 workers [1024 items]
+2026-08-23T16:29:54.3858969Z 
+2026-08-23T16:29:55.4977671Z ........................................................................ [  7%]
+2026-08-23T16:29:56.2844920Z ............................................F........................... [ 14%]
+2026-08-23T16:29:57.7297943Z ........................................................................ [ 21%]
+2026-08-23T16:29:58.1496893Z ........................................................................ [ 28%]
+2026-08-23T16:30:00.6571589Z ...............F..........................F............................. [ 35%]
+2026-08-23T16:30:02.9683625Z ........................................................................ [ 42%]
+2026-08-23T16:30:03.3908717Z ........................................................................ [ 49%]
+2026-08-23T16:30:04.1252558Z ........................................................................ [ 56%]
+2026-08-23T16:30:06.4603794Z ........................................................................ [ 63%]
+2026-08-23T16:30:11.8322668Z ........................................................................ [ 70%]
+2026-08-23T16:30:48.6664367Z ........................................................................ [ 77%]
+2026-08-23T16:30:50.5060576Z ........................................................................ [ 84%]
+2026-08-23T16:30:53.7837623Z ........................................................................ [ 91%]
+2026-08-23T16:30:57.2919918Z ........................................................................ [ 98%]
+2026-08-23T16:31:16.3533385Z ................                                                         [100%]
+2026-08-23T16:31:16.3534158Z =================================== FAILURES ===================================
+2026-08-23T16:31:16.3535053Z _ test_advertised_invocation_example_executes_successfully[prime_field.matrix.rref.compute] _
+2026-08-23T16:31:16.3536087Z [gw1] linux -- Python 3.12.14 /home/runner/work/jacobian/jacobian/.venv/bin/python
+2026-08-23T16:31:16.3536690Z 
+2026-08-23T16:31:16.3536855Z operation_id = 'prime_field.matrix.rref.compute'
+2026-08-23T16:31:16.3537333Z payload = {'matrix': {'prime': 2, 'entries': [[1, 0, 1], [0, 1, 1], [1, 1, 0]], 'columns': 3}}
+2026-08-23T16:31:16.3537932Z catalog = <jacobian.catalog.catalog.Catalog object at 0x7fa5f157bd70>
+2026-08-23T16:31:16.3538255Z 
+2026-08-23T16:31:16.3538359Z     def invoke_operation(
+2026-08-23T16:31:16.3538632Z         operation_id: OperationId,
+2026-08-23T16:31:16.3538918Z         payload: dict[str, Any],
+2026-08-23T16:31:16.3539180Z         catalog: Catalog,
+2026-08-23T16:31:16.3539449Z     ) -> OperationResult:
+2026-08-23T16:31:16.3539820Z         """Select, parse, call, and project one typed mathematical operation."""
+2026-08-23T16:31:16.3540213Z     
+2026-08-23T16:31:16.3540417Z         started = time.monotonic()
+2026-08-23T16:31:16.3540729Z         operation = catalog.operation(operation_id)
+2026-08-23T16:31:16.3541050Z         if operation is None:
+2026-08-23T16:31:16.3541367Z             raise ValueError(f"unknown operation: {operation_id}")
+2026-08-23T16:31:16.3541705Z         try:
+2026-08-23T16:31:16.3541912Z             parsed = cast(
+2026-08-23T16:31:16.3542403Z                 StrictModel,
+2026-08-23T16:31:16.3542737Z >               parse_operation_input(operation.request_type, payload),
+2026-08-23T16:31:16.3543124Z                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-08-23T16:31:16.3543784Z             )
+2026-08-23T16:31:16.3543962Z 
+2026-08-23T16:31:16.3544092Z src/jacobian/dispatch.py:67: 
+2026-08-23T16:31:16.3544616Z _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+2026-08-23T16:31:16.3544891Z 
+2026-08-23T16:31:16.3545196Z model = <class 'jacobian.math.prime_field_matrix._models.PrimeFieldMatrixRequest'>
+2026-08-23T16:31:16.3545828Z payload = {'matrix': {'prime': 2, 'entries': [[1, 0, 1], [0, 1, 1], [1, 1, 0]], 'columns': 3}}
+2026-08-23T16:31:16.3546270Z 
+2026-08-23T16:31:16.3546736Z     def parse_operation_input[ModelT: BaseModel](
+2026-08-23T16:31:16.3547201Z         model: type[ModelT], payload: dict[str, Any]
+2026-08-23T16:31:16.3571160Z     ) -> ModelT:
+2026-08-23T16:31:16.3571741Z         """Parse one bounded request once into its owning strict model."""
+2026-08-23T16:31:16.3572231Z     
+2026-08-23T16:31:16.3572561Z         encoded = encode_strict_json(payload)
+2026-08-23T16:31:16.3573162Z >       return model.model_validate_json(encoded, strict=True)
+2026-08-23T16:31:16.3574080Z                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-08-23T16:31:16.3574996Z E       pydantic_core._pydantic_core.ValidationError: 1 validation error for PrimeFieldMatrixRequest
+2026-08-23T16:31:16.3575583Z E       matrix.entries
+2026-08-23T16:31:16.3576063Z E         Input should be a valid array [type=tuple_type, input_value=[[1, 0, 1], [0, 1, 1], [1, 1, 0]], input_type=list]
+2026-08-23T16:31:16.3577062Z E           For further information visit https://errors.pydantic.dev/2.13/v/tuple_type
+2026-08-23T16:31:16.3577461Z 
+2026-08-23T16:31:16.3577589Z src/jacobian/dispatch.py:50: ValidationError
+2026-08-23T16:31:16.3577806Z 
+2026-08-23T16:31:16.3578003Z The above exception was the direct cause of the following exception:
+2026-08-23T16:31:16.3578301Z 
+2026-08-23T16:31:16.3579068Z operation = MathTool(operation_id='prime_field.matrix.rref.compute', version='1', title='Compute RREF over GF(p)', description='Co...esidues in [0, prime).', input={'matrix': {'prime': 2, 'entries': [[1, 0, 1], [0, 1, 1], [1, 1, 0]], 'columns': 3}}),))
+2026-08-23T16:31:16.3580008Z 
+2026-08-23T16:31:16.3580124Z     @pytest.mark.parametrize(
+2026-08-23T16:31:16.3580384Z         "operation",
+2026-08-23T16:31:16.3580609Z         _builtin_operations(),
+2026-08-23T16:31:16.3580896Z         ids=lambda operation: operation.operation_id,
+2026-08-23T16:31:16.3581203Z     )
+2026-08-23T16:31:16.3581476Z     def test_advertised_invocation_example_executes_successfully(
+2026-08-23T16:31:16.3581838Z         operation: MathTool,
+2026-08-23T16:31:16.3582073Z     ) -> None:
+2026-08-23T16:31:16.3582317Z         operation_id = operation.operation_id
+2026-08-23T16:31:16.3582623Z         examples = operation.examples
+2026-08-23T16:31:16.3583011Z         assert examples, f"{operation_id} must advertise one executable example"
+2026-08-23T16:31:16.3583430Z         for invocation_example in examples:
+2026-08-23T16:31:16.3583740Z >           public_result = invoke_operation(
+2026-08-23T16:31:16.3584023Z                 operation_id,
+2026-08-23T16:31:16.3584280Z                 invocation_example.input,
+2026-08-23T16:31:16.3584546Z                 _CATALOG,
+2026-08-23T16:31:16.3584766Z             )
+2026-08-23T16:31:16.3584874Z 
+2026-08-23T16:31:16.3585031Z tests/integration/catalog/test_builtin_examples.py:34: 
+2026-08-23T16:31:16.3585419Z _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+2026-08-23T16:31:16.3585667Z 
+2026-08-23T16:31:16.3585798Z operation_id = 'prime_field.matrix.rref.compute'
+2026-08-23T16:31:16.3586239Z payload = {'matrix': {'prime': 2, 'entries': [[1, 0, 1], [0, 1, 1], [1, 1, 0]], 'columns': 3}}
+2026-08-23T16:31:16.3587030Z catalog = <jacobian.catalog.catalog.Catalog object at 0x7fa5f157bd70>
+2026-08-23T16:31:16.3587519Z 
+2026-08-23T16:31:16.3587618Z     def invoke_operation(
+2026-08-23T16:31:16.3587862Z         operation_id: OperationId,
+2026-08-23T16:31:16.3588133Z         payload: dict[str, Any],
+2026-08-23T16:31:16.3588384Z         catalog: Catalog,
+2026-08-23T16:31:16.3588620Z     ) -> OperationResult:
+2026-08-23T16:31:16.3588960Z         """Select, parse, call, and project one typed mathematical operation."""
+2026-08-23T16:31:16.3589333Z     
+2026-08-23T16:31:16.3589526Z         started = time.monotonic()
+2026-08-23T16:31:16.3589811Z         operation = catalog.operation(operation_id)
+2026-08-23T16:31:16.3590113Z         if operation is None:
+2026-08-23T16:31:16.3590418Z             raise ValueError(f"unknown operation: {operation_id}")
+2026-08-23T16:31:16.3590747Z         try:
+2026-08-23T16:31:16.3590941Z             parsed = cast(
+2026-08-23T16:31:16.3591168Z                 StrictModel,
+2026-08-23T16:31:16.3591486Z                 parse_operation_input(operation.request_type, payload),
+2026-08-23T16:31:16.3591832Z             )
+2026-08-23T16:31:16.3592098Z         except (CanonicalizationError, ValidationError) as exc:
+2026-08-23T16:31:16.3592497Z >           raise OperationRequestValidationError(exc) from exc
+2026-08-23T16:31:16.3593037Z E           jacobian.dispatch.OperationRequestValidationError: operation payload failed validation
+2026-08-23T16:31:16.3593563Z 
+2026-08-23T16:31:16.3593743Z src/jacobian/dispatch.py:70: OperationRequestValidationError
+2026-08-23T16:31:16.3594304Z _ test_advertised_invocation_example_executes_successfully[prime_field.matrix.nullspace.compute] _
+2026-08-23T16:31:16.3594927Z [gw1] linux -- Python 3.12.14 /home/runner/work/jacobian/jacobian/.venv/bin/python
+2026-08-23T16:31:16.3595243Z 
+2026-08-23T16:31:16.3595394Z operation_id = 'prime_field.matrix.nullspace.compute'
+2026-08-23T16:31:16.3595828Z payload = {'matrix': {'prime': 2, 'entries': [[1, 0, 1], [0, 1, 1]], 'columns': 3}}
+2026-08-23T16:31:16.3596321Z catalog = <jacobian.catalog.catalog.Catalog object at 0x7fa5f157bd70>
+2026-08-23T16:31:16.3596842Z 
+2026-08-23T16:31:16.3596939Z     def invoke_operation(
+2026-08-23T16:31:16.3597192Z         operation_id: OperationId,
+2026-08-23T16:31:16.3597457Z         payload: dict[str, Any],
+2026-08-23T16:31:16.3597703Z         catalog: Catalog,
+2026-08-23T16:31:16.3597936Z     ) -> OperationResult:
+2026-08-23T16:31:16.3598283Z         """Select, parse, call, and project one typed mathematical operation."""
+2026-08-23T16:31:16.3598653Z     
+2026-08-23T16:31:16.3598848Z         started = time.monotonic()
+2026-08-23T16:31:16.3599135Z         operation = catalog.operation(operation_id)
+2026-08-23T16:31:16.3599447Z         if operation is None:
+2026-08-23T16:31:16.3599754Z             raise ValueError(f"unknown operation: {operation_id}")
+2026-08-23T16:31:16.3600077Z         try:
+2026-08-23T16:31:16.3600274Z             parsed = cast(
+2026-08-23T16:31:16.3600504Z                 StrictModel,
+2026-08-23T16:31:16.3600821Z >               parse_operation_input(operation.request_type, payload),
+2026-08-23T16:31:16.3601199Z                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-08-23T16:31:16.3601486Z             )
+2026-08-23T16:31:16.3601599Z 
+2026-08-23T16:31:16.3601700Z src/jacobian/dispatch.py:67: 
+2026-08-23T16:31:16.3602001Z _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+2026-08-23T16:31:16.3602241Z 
+2026-08-23T16:31:16.3602481Z model = <class 'jacobian.math.prime_field_matrix._models.PrimeFieldMatrixRequest'>
+2026-08-23T16:31:16.3603010Z payload = {'matrix': {'prime': 2, 'entries': [[1, 0, 1], [0, 1, 1]], 'columns': 3}}
+2026-08-23T16:31:16.3603313Z 
+2026-08-23T16:31:16.3603443Z     def parse_operation_input[ModelT: BaseModel](
+2026-08-23T16:31:16.3603785Z         model: type[ModelT], payload: dict[str, Any]
+2026-08-23T16:31:16.3604081Z     ) -> ModelT:
+2026-08-23T16:31:16.3604373Z         """Parse one bounded request once into its owning strict model."""
+2026-08-23T16:31:16.3604727Z     
+2026-08-23T16:31:16.3604937Z         encoded = encode_strict_json(payload)
+2026-08-23T16:31:16.3605448Z >       return model.model_validate_json(encoded, strict=True)
+2026-08-23T16:31:16.3605797Z                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-08-23T16:31:16.3606287Z E       pydantic_core._pydantic_core.ValidationError: 1 validation error for PrimeFieldMatrixRequest
+2026-08-23T16:31:16.3607021Z E       matrix.entries
+2026-08-23T16:31:16.3607447Z E         Input should be a valid array [type=tuple_type, input_value=[[1, 0, 1], [0, 1, 1]], input_type=list]
+2026-08-23T16:31:16.3608074Z E           For further information visit https://errors.pydantic.dev/2.13/v/tuple_type
+2026-08-23T16:31:16.3608413Z 
+2026-08-23T16:31:16.3608537Z src/jacobian/dispatch.py:50: ValidationError
+2026-08-23T16:31:16.3608740Z 
+2026-08-23T16:31:16.3608928Z The above exception was the direct cause of the following exception:
+2026-08-23T16:31:16.3609209Z 
+2026-08-23T16:31:16.3609993Z operation = MathTool(operation_id='prime_field.matrix.nullspace.compute', version='1', title='Compute nullspace basis over GF(p)',...canonical residues in [0, prime).', input={'matrix': {'prime': 2, 'entries': [[1, 0, 1], [0, 1, 1]], 'columns': 3}}),))
+2026-08-23T16:31:16.3610864Z 
+2026-08-23T16:31:16.3610970Z     @pytest.mark.parametrize(
+2026-08-23T16:31:16.3611342Z         "operation",
+2026-08-23T16:31:16.3611559Z         _builtin_operations(),
+2026-08-23T16:31:16.3611864Z         ids=lambda operation: operation.operation_id,
+2026-08-23T16:31:16.3612160Z     )
+2026-08-23T16:31:16.3612434Z     def test_advertised_invocation_example_executes_successfully(
+2026-08-23T16:31:16.3612788Z         operation: MathTool,
+2026-08-23T16:31:16.3613017Z     ) -> None:
+2026-08-23T16:31:16.3613240Z         operation_id = operation.operation_id
+2026-08-23T16:31:16.3613535Z         examples = operation.examples
+2026-08-23T16:31:16.3613921Z         assert examples, f"{operation_id} must advertise one executable example"
+2026-08-23T16:31:16.3614327Z         for invocation_example in examples:
+2026-08-23T16:31:16.3614630Z >           public_result = invoke_operation(
+2026-08-23T16:31:16.3614910Z                 operation_id,
+2026-08-23T16:31:16.3615163Z                 invocation_example.input,
+2026-08-23T16:31:16.3615427Z                 _CATALOG,
+2026-08-23T16:31:16.3615646Z             )
+2026-08-23T16:31:16.3615758Z 
+2026-08-23T16:31:16.3615906Z tests/integration/catalog/test_builtin_examples.py:34: 
+2026-08-23T16:31:16.3616286Z _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+2026-08-23T16:31:16.3616772Z 
+2026-08-23T16:31:16.3616934Z operation_id = 'prime_field.matrix.nullspace.compute'
+2026-08-23T16:31:16.3617365Z payload = {'matrix': {'prime': 2, 'entries': [[1, 0, 1], [0, 1, 1]], 'columns': 3}}
+2026-08-23T16:31:16.3617870Z catalog = <jacobian.catalog.catalog.Catalog object at 0x7fa5f157bd70>
+2026-08-23T16:31:16.3618161Z 
+2026-08-23T16:31:16.3618259Z     def invoke_operation(
+2026-08-23T16:31:16.3618499Z         operation_id: OperationId,
+2026-08-23T16:31:16.3618765Z         payload: dict[str, Any],
+2026-08-23T16:31:16.3619024Z         catalog: Catalog,
+2026-08-23T16:31:16.3619252Z     ) -> OperationResult:
+2026-08-23T16:31:16.3619594Z         """Select, parse, call, and project one typed mathematical operation."""
+2026-08-23T16:31:16.3619964Z     
+2026-08-23T16:31:16.3620164Z         started = time.monotonic()
+2026-08-23T16:31:16.3620455Z         operation = catalog.operation(operation_id)
+2026-08-23T16:31:16.3620759Z         if operation is None:
+2026-08-23T16:31:16.3621057Z             raise ValueError(f"unknown operation: {operation_id}")
+2026-08-23T16:31:16.3621390Z         try:
+2026-08-23T16:31:16.3621588Z             parsed = cast(
+2026-08-23T16:31:16.3621813Z                 StrictModel,
+2026-08-23T16:31:16.5195240Z                 parse_operation_input(operation.request_type, payload),
+2026-08-23T16:31:16.5196144Z             )
+2026-08-23T16:31:16.5196943Z         except (CanonicalizationError, ValidationError) as exc:
+2026-08-23T16:31:16.5197565Z >           raise OperationRequestValidationError(exc) from exc
+2026-08-23T16:31:16.5199364Z E           jacobian.dispatch.OperationRequestValidationError: operation payload failed validation
+2026-08-23T16:31:16.5200277Z 
+2026-08-23T16:31:16.5200697Z src/jacobian/dispatch.py:70: OperationRequestValidationError
+2026-08-23T16:31:16.5201919Z _ test_advertised_invocation_example_executes_successfully[prime_field.matrix.rank.compute] _
+2026-08-23T16:31:16.5203231Z [gw1] linux -- Python 3.12.14 /home/runner/work/jacobian/jacobian/.venv/bin/python
+2026-08-23T16:31:16.5203896Z 
+2026-08-23T16:31:16.5204191Z operation_id = 'prime_field.matrix.rank.compute'
+2026-08-23T16:31:16.5204972Z payload = {'matrix': {'prime': 2, 'entries': [[1, 0, 1], [0, 1, 1], [1, 1, 0]], 'columns': 3}}
+2026-08-23T16:31:16.5205848Z catalog = <jacobian.catalog.catalog.Catalog object at 0x7fa5f157bd70>
+2026-08-23T16:31:16.5206349Z 
+2026-08-23T16:31:16.5206735Z     def invoke_operation(
+2026-08-23T16:31:16.5207166Z         operation_id: OperationId,
+2026-08-23T16:31:16.5207629Z         payload: dict[str, Any],
+2026-08-23T16:31:16.5208016Z         catalog: Catalog,
+2026-08-23T16:31:16.5208267Z     ) -> OperationResult:
+2026-08-23T16:31:16.5208629Z         """Select, parse, call, and project one typed mathematical operation."""
+2026-08-23T16:31:16.5209217Z     
+2026-08-23T16:31:16.5209420Z         started = time.monotonic()
+2026-08-23T16:31:16.5209740Z         operation = catalog.operation(operation_id)
+2026-08-23T16:31:16.5210072Z         if operation is None:
+2026-08-23T16:31:16.5210397Z             raise ValueError(f"unknown operation: {operation_id}")
+2026-08-23T16:31:16.5210746Z         try:
+2026-08-23T16:31:16.5210954Z             parsed = cast(
+2026-08-23T16:31:16.5211204Z                 StrictModel,
+2026-08-23T16:31:16.5211537Z >               parse_operation_input(operation.request_type, payload),
+2026-08-23T16:31:16.5211931Z                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-08-23T16:31:16.5212232Z             )
+2026-08-23T16:31:16.5212358Z 
+2026-08-23T16:31:16.5212475Z src/jacobian/dispatch.py:67: 
+2026-08-23T16:31:16.5212790Z _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+2026-08-23T16:31:16.5213046Z 
+2026-08-23T16:31:16.5213298Z model = <class 'jacobian.math.prime_field_matrix._models.PrimeFieldMatrixRequest'>
+2026-08-23T16:31:16.5213895Z payload = {'matrix': {'prime': 2, 'entries': [[1, 0, 1], [0, 1, 1], [1, 1, 0]], 'columns': 3}}
+2026-08-23T16:31:16.5214238Z 
+2026-08-23T16:31:16.5214370Z     def parse_operation_input[ModelT: BaseModel](
+2026-08-23T16:31:16.5214718Z         model: type[ModelT], payload: dict[str, Any]
+2026-08-23T16:31:16.5215018Z     ) -> ModelT:
+2026-08-23T16:31:16.5215317Z         """Parse one bounded request once into its owning strict model."""
+2026-08-23T16:31:16.5215655Z     
+2026-08-23T16:31:16.5215860Z         encoded = encode_strict_json(payload)
+2026-08-23T16:31:16.5216205Z >       return model.model_validate_json(encoded, strict=True)
+2026-08-23T16:31:16.5216812Z                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-08-23T16:31:16.5217320Z E       pydantic_core._pydantic_core.ValidationError: 1 validation error for PrimeFieldMatrixRequest
+2026-08-23T16:31:16.5217803Z E       matrix.entries
+2026-08-23T16:31:16.5218258Z E         Input should be a valid array [type=tuple_type, input_value=[[1, 0, 1], [0, 1, 1], [1, 1, 0]], input_type=list]
+2026-08-23T16:31:16.5218923Z E           For further information visit https://errors.pydantic.dev/2.13/v/tuple_type
+2026-08-23T16:31:16.5219255Z 
+2026-08-23T16:31:16.5219377Z src/jacobian/dispatch.py:50: ValidationError
+2026-08-23T16:31:16.5219585Z 
+2026-08-23T16:31:16.5219766Z The above exception was the direct cause of the following exception:
+2026-08-23T16:31:16.5220045Z 
+2026-08-23T16:31:16.5220800Z operation = MathTool(operation_id='prime_field.matrix.rank.compute', version='1', title='Compute matrix rank over GF(p)', descript...esidues in [0, prime).', input={'matrix': {'prime': 2, 'entries': [[1, 0, 1], [0, 1, 1], [1, 1, 0]], 'columns': 3}}),))
+2026-08-23T16:31:16.5221809Z 
+2026-08-23T16:31:16.5221918Z     @pytest.mark.parametrize(
+2026-08-23T16:31:16.5222173Z         "operation",
+2026-08-23T16:31:16.5222401Z         _builtin_operations(),
+2026-08-23T16:31:16.5222687Z         ids=lambda operation: operation.operation_id,
+2026-08-23T16:31:16.5222985Z     )
+2026-08-23T16:31:16.5223252Z     def test_advertised_invocation_example_executes_successfully(
+2026-08-23T16:31:16.5223603Z         operation: MathTool,
+2026-08-23T16:31:16.5223839Z     ) -> None:
+2026-08-23T16:31:16.5224061Z         operation_id = operation.operation_id
+2026-08-23T16:31:16.5224369Z         examples = operation.examples
+2026-08-23T16:31:16.5224754Z         assert examples, f"{operation_id} must advertise one executable example"
+2026-08-23T16:31:16.5225168Z         for invocation_example in examples:
+2026-08-23T16:31:16.5225462Z >           public_result = invoke_operation(
+2026-08-23T16:31:16.5225742Z                 operation_id,
+2026-08-23T16:31:16.5225994Z                 invocation_example.input,
+2026-08-23T16:31:16.5226278Z                 _CATALOG,
+2026-08-23T16:31:16.5226795Z             )
+2026-08-23T16:31:16.5226952Z 
+2026-08-23T16:31:16.5227110Z tests/integration/catalog/test_builtin_examples.py:34: 
+2026-08-23T16:31:16.5227638Z _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+2026-08-23T16:31:16.5227888Z 
+2026-08-23T16:31:16.5228027Z operation_id = 'prime_field.matrix.rank.compute'
+2026-08-23T16:31:16.5228456Z payload = {'matrix': {'prime': 2, 'entries': [[1, 0, 1], [0, 1, 1], [1, 1, 0]], 'columns': 3}}
+2026-08-23T16:31:16.5228971Z catalog = <jacobian.catalog.catalog.Catalog object at 0x7fa5f157bd70>
+2026-08-23T16:31:16.5229267Z 
+2026-08-23T16:31:16.5229362Z     def invoke_operation(
+2026-08-23T16:31:16.5229600Z         operation_id: OperationId,
+2026-08-23T16:31:16.5229858Z         payload: dict[str, Any],
+2026-08-23T16:31:16.5230101Z         catalog: Catalog,
+2026-08-23T16:31:16.5230329Z     ) -> OperationResult:
+2026-08-23T16:31:16.5230668Z         """Select, parse, call, and project one typed mathematical operation."""
+2026-08-23T16:31:16.5231029Z     
+2026-08-23T16:31:16.5231219Z         started = time.monotonic()
+2026-08-23T16:31:16.5231511Z         operation = catalog.operation(operation_id)
+2026-08-23T16:31:16.5231823Z         if operation is None:
+2026-08-23T16:31:16.5232127Z             raise ValueError(f"unknown operation: {operation_id}")
+2026-08-23T16:31:16.5232447Z         try:
+2026-08-23T16:31:16.5232646Z             parsed = cast(
+2026-08-23T16:31:16.5232880Z                 StrictModel,
+2026-08-23T16:31:16.5233193Z                 parse_operation_input(operation.request_type, payload),
+2026-08-23T16:31:16.5233531Z             )
+2026-08-23T16:31:16.5233803Z         except (CanonicalizationError, ValidationError) as exc:
+2026-08-23T16:31:16.5234210Z >           raise OperationRequestValidationError(exc) from exc
+2026-08-23T16:31:16.5234765Z E           jacobian.dispatch.OperationRequestValidationError: operation payload failed validation
+2026-08-23T16:31:16.5235171Z 
+2026-08-23T16:31:16.5235342Z src/jacobian/dispatch.py:70: OperationRequestValidationError
+2026-08-23T16:31:16.5235827Z ------ generated xml file: /home/runner/work/jacobian/jacobian/pytest.xml ------
+2026-08-23T16:31:16.5236286Z ============================= slowest 10 durations =============================
+2026-08-23T16:31:16.5237415Z 39.71s call     tests/integration/catalog/test_public_operation_contract_conformance.py::test_every_accepted_boundary_mutation_returns_the_declared_result[polynomial.ideal.groebner_basis.compute]
+2026-08-23T16:31:16.5238726Z 35.78s call     tests/integration/catalog/test_public_operation_contract_conformance.py::test_every_accepted_boundary_mutation_returns_the_declared_result[matrix.symbolic.rank.compute]
+2026-08-23T16:31:16.5240014Z 18.21s call     tests/integration/catalog/test_public_operation_contract_conformance.py::test_every_accepted_boundary_mutation_returns_the_declared_result[polynomial.ideal.normal_form.compute]
+2026-08-23T16:31:16.5241475Z 17.80s call     tests/integration/catalog/test_public_operation_contract_conformance.py::test_every_accepted_boundary_mutation_returns_the_declared_result[polynomial.ideal.elimination.compute]
+2026-08-23T16:31:16.5242699Z 2.11s call     tests/integration/catalog/test_builtin_examples.py::test_advertised_invocation_example_executes_successfully[polynomial.ideal.groebner_basis.compute]
+2026-08-23T16:31:16.5243784Z 1.92s call     tests/integration/catalog/test_builtin_examples.py::test_advertised_invocation_example_executes_successfully[matrix.symbolic.rank.compute]
+2026-08-23T16:31:16.5245037Z 1.27s call     tests/integration/catalog/test_public_operation_contract_conformance.py::test_every_accepted_boundary_mutation_returns_the_declared_result[matrix.symbolic.characteristic_polynomial.compute]
+2026-08-23T16:31:16.5246709Z 1.06s call     tests/integration/catalog/test_public_operation_contract_conformance.py::test_every_accepted_boundary_mutation_returns_the_declared_result[matrix.symbolic.determinant.compute]
+2026-08-23T16:31:16.5248130Z 1.00s call     tests/integration/catalog/test_public_operation_contract_conformance.py::test_every_accepted_boundary_mutation_returns_the_declared_result[sequence.recurrence.closed_form.compute]
+2026-08-23T16:31:16.5249625Z 0.99s call     tests/integration/catalog/test_public_operation_contract_conformance.py::test_every_accepted_boundary_mutation_returns_the_declared_result[finite_field.polynomial_map.table.compute]
+2026-08-23T16:31:16.5250512Z =========================== short test summary info ============================
+2026-08-23T16:31:16.5251638Z FAILED tests/integration/catalog/test_builtin_examples.py::test_advertised_invocation_example_executes_successfully[prime_field.matrix.rref.compute] - jacobian.dispatch.OperationRequestValidationError: operation payload failed validation
+2026-08-23T16:31:16.5253449Z FAILED tests/integration/catalog/test_builtin_examples.py::test_advertised_invocation_example_executes_successfully[prime_field.matrix.nullspace.compute] - jacobian.dispatch.OperationRequestValidationError: operation payload failed validation
+2026-08-23T16:31:16.5255249Z FAILED tests/integration/catalog/test_builtin_examples.py::test_advertised_invocation_example_executes_successfully[prime_field.matrix.rank.compute] - jacobian.dispatch.OperationRequestValidationError: operation payload failed validation
+2026-08-23T16:31:16.5256352Z ================== 3 failed, 1021 passed in 96.72s (0:01:36) ===================
+2026-08-23T16:31:16.6079313Z make: *** [Makefile:59: test-integration] Error 1
+2026-08-23T16:31:16.6095069Z ##[error]Process completed with exit code 2.
+2026-08-23T16:31:16.6102478Z ##[end-action id=__self_2.__run;outcome=failure;conclusion=failure;duration_ms=99075]
+2026-08-23T16:31:16.6107373Z ##[start-action display=Run uv cache prune --ci;id=__self_2.__run_2]
+2026-08-23T16:31:16.6130520Z ##[group]Run uv cache prune --ci
+2026-08-23T16:31:16.6130832Z [36;1muv cache prune --ci[0m
+2026-08-23T16:31:16.6167005Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-23T16:31:16.6167376Z env:
+2026-08-23T16:31:16.6167658Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:16.6168106Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:31:16.6168554Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:16.6168939Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:16.6169329Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:16.6169722Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:31:16.6170126Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:31:16.6170518Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:31:16.6170823Z ##[endgroup]
+2026-08-23T16:31:16.6338816Z Pruning cache at: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:31:16.7910133Z Removed 8972 files (345.3MiB)
+2026-08-23T16:31:16.7932967Z ##[end-action id=__self_2.__run_2;outcome=success;conclusion=success;duration_ms=182]
+2026-08-23T16:31:16.7936082Z ##[start-action display=Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a;id=__self_2.__actions_upload-artifact]
+2026-08-23T16:31:16.7973639Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-08-23T16:31:16.7974047Z with:
+2026-08-23T16:31:16.7974261Z   name: junit-python-integration-3.12
+2026-08-23T16:31:16.7974542Z   path: pytest.xml
+2026-08-23T16:31:16.7974760Z   if-no-files-found: ignore
+2026-08-23T16:31:16.7975002Z   retention-days: 7
+2026-08-23T16:31:16.7975218Z   compression-level: 6
+2026-08-23T16:31:16.7975441Z   overwrite: false
+2026-08-23T16:31:16.7975654Z   include-hidden-files: false
+2026-08-23T16:31:16.7975893Z   archive: true
+2026-08-23T16:31:16.7976082Z env:
+2026-08-23T16:31:16.7976341Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:16.7977104Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:31:16.7977577Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:16.7977973Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:16.7978371Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:16.7978940Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:31:16.7979347Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:31:16.7979725Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:31:16.7980034Z ##[endgroup]
+2026-08-23T16:31:16.9321062Z With the provided path, there will be 1 file uploaded
+2026-08-23T16:31:16.9325020Z Artifact name is valid!
+2026-08-23T16:31:16.9325918Z Root directory input is valid!
+2026-08-23T16:31:17.1125514Z Uploading artifact: junit-python-integration-3.12.zip
+2026-08-23T16:31:17.1166855Z Beginning upload of artifact content to blob storage
+2026-08-23T16:31:17.1734700Z Uploaded bytes 17546
+2026-08-23T16:31:17.1871280Z Finished uploading artifact content to blob storage!
+2026-08-23T16:31:17.1872308Z SHA256 digest of uploaded artifact is 1caa57db152886fdbaa1ea67a7ae87be72c69c4df3268b8d95c00db20236186f
+2026-08-23T16:31:17.1873105Z Finalizing artifact upload
+2026-08-23T16:31:17.3865100Z Artifact junit-python-integration-3.12 successfully finalized. Artifact ID 9496414228
+2026-08-23T16:31:17.3867280Z Artifact junit-python-integration-3.12 has been successfully uploaded! Final size is 17546 bytes. Artifact ID is 9496414228
+2026-08-23T16:31:17.3869755Z Artifact download URL: https://github.com/morluto/jacobian/actions/runs/32651818223/artifacts/9496414228
+2026-08-23T16:31:17.3955132Z ##[end-action id=__self_2.__actions_upload-artifact;outcome=success;conclusion=success;duration_ms=601]
+2026-08-23T16:31:17.3960376Z ##[start-action display=Run mv .coverage .coverage.python-integration;id=__self_2.__run_3]
+2026-08-23T16:31:17.3978302Z ##[group]Run mv .coverage .coverage.python-integration
+2026-08-23T16:31:17.3978730Z [36;1mmv .coverage .coverage.python-integration[0m
+2026-08-23T16:31:17.4015154Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-23T16:31:17.4015520Z env:
+2026-08-23T16:31:17.4015793Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:17.4016266Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:31:17.4016987Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:17.4017380Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:17.4017778Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:17.4018174Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:31:17.4018591Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:31:17.4018973Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:31:17.4019276Z ##[endgroup]
+2026-08-23T16:31:17.4093956Z ##[end-action id=__self_2.__run_3;outcome=success;conclusion=success;duration_ms=13]
+2026-08-23T16:31:17.4096769Z ##[start-action display=Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a;id=__self_2.__actions_upload-artifact_2]
+2026-08-23T16:31:17.4141350Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-08-23T16:31:17.4141766Z with:
+2026-08-23T16:31:17.4141996Z   name: coverage-data-python-integration
+2026-08-23T16:31:17.4142308Z   path: .coverage.python-integration
+2026-08-23T16:31:17.4142594Z   include-hidden-files: true
+2026-08-23T16:31:17.4142852Z   if-no-files-found: warn
+2026-08-23T16:31:17.4143097Z   compression-level: 6
+2026-08-23T16:31:17.4143330Z   overwrite: false
+2026-08-23T16:31:17.4143542Z   archive: true
+2026-08-23T16:31:17.4143739Z env:
+2026-08-23T16:31:17.4144008Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:17.4144453Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:31:17.4144895Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:17.4145293Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:17.4145688Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:17.4146085Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:31:17.4146946Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:31:17.4147366Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:31:17.4147686Z ##[endgroup]
+2026-08-23T16:31:17.5495716Z With the provided path, there will be 1 file uploaded
+2026-08-23T16:31:17.5501160Z Artifact name is valid!
+2026-08-23T16:31:17.5501767Z Root directory input is valid!
+2026-08-23T16:31:17.7669435Z Uploading artifact: coverage-data-python-integration.zip
+2026-08-23T16:31:17.7715381Z Beginning upload of artifact content to blob storage
+2026-08-23T16:31:17.9959153Z Uploaded bytes 1311072
+2026-08-23T16:31:18.0075923Z Finished uploading artifact content to blob storage!
+2026-08-23T16:31:18.0077172Z SHA256 digest of uploaded artifact is bb4dee9a22ce0e354de67850fce19b9fbdf9983a7782035c36546d30097896de
+2026-08-23T16:31:18.0078242Z Finalizing artifact upload
+2026-08-23T16:31:18.2038787Z Artifact coverage-data-python-integration successfully finalized. Artifact ID 9496414422
+2026-08-23T16:31:18.2039930Z Artifact coverage-data-python-integration has been successfully uploaded! Final size is 1311072 bytes. Artifact ID is 9496414422
+2026-08-23T16:31:18.2042838Z Artifact download URL: https://github.com/morluto/jacobian/actions/runs/32651818223/artifacts/9496414422
+2026-08-23T16:31:18.2127255Z ##[end-action id=__self_2.__actions_upload-artifact_2;outcome=success;conclusion=success;duration_ms=802]

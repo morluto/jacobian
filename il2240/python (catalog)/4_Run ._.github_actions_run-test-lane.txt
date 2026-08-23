@@ -1,0 +1,164 @@
+﻿2026-08-23T16:29:41.5856470Z Prepare all required actions
+2026-08-23T16:29:41.5857081Z Getting action download info
+2026-08-23T16:29:41.6911042Z Download action repository 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' (SHA:043fb46d1a93c77aae656e7c1c64a875d1fc6a0a)
+2026-08-23T16:29:41.8900305Z ##[group]Run ./.github/actions/run-test-lane
+2026-08-23T16:29:41.8900567Z with:
+2026-08-23T16:29:41.8900744Z   lane: catalog
+2026-08-23T16:29:41.8900953Z   junit-artifact: junit-python-catalog-3.12
+2026-08-23T16:29:41.8901230Z   coverage-artifact: coverage-data-python-catalog
+2026-08-23T16:29:41.8901499Z   coverage-file: .coverage.python-catalog
+2026-08-23T16:29:41.8901728Z env:
+2026-08-23T16:29:41.8902122Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:41.8902494Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:41.8902833Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:41.8903155Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:41.8903515Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:41.8903825Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:41.8904140Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:41.8904440Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:41.8904685Z ##[endgroup]
+2026-08-23T16:29:41.8916974Z ##[start-action display=Run catalog tests;id=__self_2.__run]
+2026-08-23T16:29:41.8929790Z ##[group]Run make test-catalog
+2026-08-23T16:29:41.8930050Z [36;1mmake test-catalog[0m
+2026-08-23T16:29:41.8950698Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-23T16:29:41.8950979Z env:
+2026-08-23T16:29:41.8951213Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:41.8951571Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:41.8951975Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:41.8952313Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:41.8952621Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:41.8952926Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:41.8953251Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:41.8953551Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:41.8953913Z   PYTEST_ARGS: --junitxml=pytest.xml --cov --cov-report= --cov-fail-under=0
+2026-08-23T16:29:41.8954213Z ##[endgroup]
+2026-08-23T16:29:41.9161493Z uv run --locked pytest -n 2 --dist worksteal --timeout=30 \
+2026-08-23T16:29:41.9162126Z 	tests/catalog \
+2026-08-23T16:29:41.9162549Z 	--durations=10 --junitxml=pytest.xml --cov --cov-report= --cov-fail-under=0
+2026-08-23T16:29:51.0972784Z ============================= test session starts ==============================
+2026-08-23T16:29:51.0973389Z platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0
+2026-08-23T16:29:51.0973862Z Using --randomly-seed=1665031838
+2026-08-23T16:29:51.0974208Z rootdir: /home/runner/work/jacobian/jacobian
+2026-08-23T16:29:51.0974571Z configfile: pyproject.toml
+2026-08-23T16:29:51.0975190Z plugins: anyio-4.14.2, randomly-4.1.0, split-0.11.0, cov-7.1.0, repeat-0.9.4, hypothesis-6.165.7, timeout-2.4.0, xdist-3.8.0
+2026-08-23T16:29:51.0975588Z timeout: 30.0s
+2026-08-23T16:29:51.0975767Z timeout method: thread
+2026-08-23T16:29:51.0975959Z timeout func_only: False
+2026-08-23T16:29:51.0976152Z created: 2/2 workers
+2026-08-23T16:29:51.0976343Z 2 workers [27 items]
+2026-08-23T16:29:51.0976445Z 
+2026-08-23T16:29:56.4100730Z ...........................                                              [100%]
+2026-08-23T16:29:56.4101830Z ------ generated xml file: /home/runner/work/jacobian/jacobian/pytest.xml ------
+2026-08-23T16:29:56.4103012Z ============================= slowest 10 durations =============================
+2026-08-23T16:29:56.4104095Z 2.31s call     tests/catalog/test_catalog.py::test_every_served_operation_publishes_request_valid_examples
+2026-08-23T16:29:56.4105996Z 2.10s call     tests/catalog/test_catalog_invariants.py::test_search_browse_and_inspect_results_stay_within_the_public_catalog
+2026-08-23T16:29:56.4107394Z 2.07s call     tests/catalog/test_catalog.py::test_compact_discovery_matches_full_descriptor_discovery
+2026-08-23T16:29:56.4108689Z 0.08s call     tests/catalog/test_admission.py::test_public_guidance_does_not_advertise_excluded_operation_ids
+2026-08-23T16:29:56.4110111Z 0.02s call     tests/catalog/test_catalog.py::test_natural_prime_power_query_ranks_factorization_before_prime_navigation
+2026-08-23T16:29:56.4111448Z 0.02s call     tests/catalog/test_catalog.py::test_search_and_browse_do_not_materialize_descriptors
+2026-08-23T16:29:56.4112729Z 0.02s call     tests/catalog/test_search.py::test_standard_det_abbreviation_ranks_determinants_before_charpolys
+2026-08-23T16:29:56.4113519Z 0.01s call     tests/catalog/test_catalog.py::test_search_finds_lattice_hnf_in_matrix_domain
+2026-08-23T16:29:56.4114262Z 0.01s call     tests/catalog/test_catalog.py::test_browse_includes_lattice_hnf_in_matrix_domain
+2026-08-23T16:29:56.4114675Z 
+2026-08-23T16:29:56.4114919Z (1 durations < 0.005s hidden.  Use -vv to show these durations.)
+2026-08-23T16:29:56.4115412Z ============================= 27 passed in 11.81s ==============================
+2026-08-23T16:29:56.4726706Z ##[end-action id=__self_2.__run;outcome=success;conclusion=success;duration_ms=14580]
+2026-08-23T16:29:56.4729176Z ##[start-action display=Run uv cache prune --ci;id=__self_2.__run_2]
+2026-08-23T16:29:56.4749408Z ##[group]Run uv cache prune --ci
+2026-08-23T16:29:56.4749682Z [36;1muv cache prune --ci[0m
+2026-08-23T16:29:56.4771151Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-23T16:29:56.4771466Z env:
+2026-08-23T16:29:56.4771708Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:56.4772260Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:56.4772645Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:56.4772973Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:56.4773296Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:56.4773631Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:56.4773963Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:56.4774269Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:56.4774516Z ##[endgroup]
+2026-08-23T16:29:56.4915510Z Pruning cache at: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:56.5626839Z Removed 8972 files (345.3MiB)
+2026-08-23T16:29:56.5639649Z ##[end-action id=__self_2.__run_2;outcome=success;conclusion=success;duration_ms=90]
+2026-08-23T16:29:56.5642373Z ##[start-action display=Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a;id=__self_2.__actions_upload-artifact]
+2026-08-23T16:29:56.5671623Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-08-23T16:29:56.5672207Z with:
+2026-08-23T16:29:56.5672535Z   name: junit-python-catalog-3.12
+2026-08-23T16:29:56.5672768Z   path: pytest.xml
+2026-08-23T16:29:56.5672962Z   if-no-files-found: ignore
+2026-08-23T16:29:56.5673170Z   retention-days: 7
+2026-08-23T16:29:56.5673370Z   compression-level: 6
+2026-08-23T16:29:56.5673566Z   overwrite: false
+2026-08-23T16:29:56.5673758Z   include-hidden-files: false
+2026-08-23T16:29:56.5673973Z   archive: true
+2026-08-23T16:29:56.5674148Z env:
+2026-08-23T16:29:56.5674384Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:56.5674752Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:56.5675125Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:56.5675458Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:56.5675785Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:56.5676239Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:56.5676574Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:56.5676906Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:56.5677163Z ##[endgroup]
+2026-08-23T16:29:56.6823725Z With the provided path, there will be 1 file uploaded
+2026-08-23T16:29:56.6824942Z Artifact name is valid!
+2026-08-23T16:29:56.6825374Z Root directory input is valid!
+2026-08-23T16:29:57.0270090Z Uploading artifact: junit-python-catalog-3.12.zip
+2026-08-23T16:29:57.0303143Z Beginning upload of artifact content to blob storage
+2026-08-23T16:29:57.2953501Z Uploaded bytes 1118
+2026-08-23T16:29:57.3554040Z Finished uploading artifact content to blob storage!
+2026-08-23T16:29:57.3554762Z SHA256 digest of uploaded artifact is e66112a1624123aa167c9e2e1afbc1c6bb5587616f71b897d3155047942ed2c9
+2026-08-23T16:29:57.3555488Z Finalizing artifact upload
+2026-08-23T16:29:57.7349547Z Artifact junit-python-catalog-3.12 successfully finalized. Artifact ID 9496396285
+2026-08-23T16:29:57.7350319Z Artifact junit-python-catalog-3.12 has been successfully uploaded! Final size is 1118 bytes. Artifact ID is 9496396285
+2026-08-23T16:29:57.7352983Z Artifact download URL: https://github.com/morluto/jacobian/actions/runs/32651818223/artifacts/9496396285
+2026-08-23T16:29:57.7409757Z ##[end-action id=__self_2.__actions_upload-artifact;outcome=success;conclusion=success;duration_ms=1176]
+2026-08-23T16:29:57.7414616Z ##[start-action display=Run mv .coverage .coverage.python-catalog;id=__self_2.__run_3]
+2026-08-23T16:29:57.7429210Z ##[group]Run mv .coverage .coverage.python-catalog
+2026-08-23T16:29:57.7429558Z [36;1mmv .coverage .coverage.python-catalog[0m
+2026-08-23T16:29:57.7453159Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-23T16:29:57.7453476Z env:
+2026-08-23T16:29:57.7453724Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:57.7454090Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:57.7454476Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:57.7454808Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:57.7455146Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:57.7455479Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:57.7455818Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:57.7456141Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:57.7456398Z ##[endgroup]
+2026-08-23T16:29:57.7511869Z ##[end-action id=__self_2.__run_3;outcome=success;conclusion=success;duration_ms=9]
+2026-08-23T16:29:57.7514332Z ##[start-action display=Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a;id=__self_2.__actions_upload-artifact_2]
+2026-08-23T16:29:57.7543378Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-08-23T16:29:57.7543725Z with:
+2026-08-23T16:29:57.7543929Z   name: coverage-data-python-catalog
+2026-08-23T16:29:57.7544175Z   path: .coverage.python-catalog
+2026-08-23T16:29:57.7544411Z   include-hidden-files: true
+2026-08-23T16:29:57.7544635Z   if-no-files-found: warn
+2026-08-23T16:29:57.7544840Z   compression-level: 6
+2026-08-23T16:29:57.7545034Z   overwrite: false
+2026-08-23T16:29:57.7545225Z   archive: true
+2026-08-23T16:29:57.7545398Z env:
+2026-08-23T16:29:57.7545633Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:57.7545995Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:57.7546344Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:57.7546675Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:57.7547004Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:57.7547340Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:57.7547677Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:57.7548095Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:57.7548366Z ##[endgroup]
+2026-08-23T16:29:57.8727466Z With the provided path, there will be 1 file uploaded
+2026-08-23T16:29:57.8731275Z Artifact name is valid!
+2026-08-23T16:29:57.8731600Z Root directory input is valid!
+2026-08-23T16:29:58.1874518Z Uploading artifact: coverage-data-python-catalog.zip
+2026-08-23T16:29:58.1906308Z Beginning upload of artifact content to blob storage
+2026-08-23T16:29:58.8382347Z Uploaded bytes 900042
+2026-08-23T16:29:58.8994689Z Finished uploading artifact content to blob storage!
+2026-08-23T16:29:58.8995483Z SHA256 digest of uploaded artifact is dc5d022b1692b09922b319cc1e2f20d7309a2cb5ad390300e6e05ecc0c9bd331
+2026-08-23T16:29:58.8996026Z Finalizing artifact upload
+2026-08-23T16:29:59.2662027Z Artifact coverage-data-python-catalog successfully finalized. Artifact ID 9496396616
+2026-08-23T16:29:59.2662841Z Artifact coverage-data-python-catalog has been successfully uploaded! Final size is 900042 bytes. Artifact ID is 9496396616
+2026-08-23T16:29:59.2666229Z Artifact download URL: https://github.com/morluto/jacobian/actions/runs/32651818223/artifacts/9496396616
+2026-08-23T16:29:59.2728542Z ##[end-action id=__self_2.__actions_upload-artifact_2;outcome=success;conclusion=success;duration_ms=1521]

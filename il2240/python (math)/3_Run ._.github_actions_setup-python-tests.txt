@@ -1,0 +1,245 @@
+﻿2026-08-23T16:29:33.0658331Z Prepare all required actions
+2026-08-23T16:29:33.0659060Z Getting action download info
+2026-08-23T16:29:33.1501812Z Download action repository 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97' (SHA:5fda3b95a4ea91299a34e894583c3862153e4b97)
+2026-08-23T16:29:33.2119481Z Download action repository 'astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d' (SHA:20cfd1bf945f4377ade1205e4dbc17946fc9a30d)
+2026-08-23T16:29:33.7233498Z ##[group]Run ./.github/actions/setup-python-tests
+2026-08-23T16:29:33.7233915Z with:
+2026-08-23T16:29:33.7234177Z   python-version: 3.12
+2026-08-23T16:29:33.7234443Z ##[endgroup]
+2026-08-23T16:29:33.7294305Z ##[start-action display=Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97;id=__self.__actions_setup-python]
+2026-08-23T16:29:33.7386606Z ##[group]Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+2026-08-23T16:29:33.7387062Z with:
+2026-08-23T16:29:33.7387317Z   python-version: 3.12
+2026-08-23T16:29:33.7387593Z   check-latest: false
+2026-08-23T16:29:33.7390427Z   token: ***
+2026-08-23T16:29:33.7390691Z   update-environment: true
+2026-08-23T16:29:33.7390995Z   allow-prereleases: false
+2026-08-23T16:29:33.7391276Z   freethreaded: false
+2026-08-23T16:29:33.7391546Z ##[endgroup]
+2026-08-23T16:29:33.8487211Z ##[group]Installed versions
+2026-08-23T16:29:33.8563441Z Successfully set up CPython (3.12.14)
+2026-08-23T16:29:33.8564612Z ##[endgroup]
+2026-08-23T16:29:33.8626910Z ##[end-action id=__self.__actions_setup-python;outcome=success;conclusion=success;duration_ms=133]
+2026-08-23T16:29:33.8630277Z ##[start-action display=Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d;id=__self.__astral-sh_setup-uv]
+2026-08-23T16:29:33.8734392Z ##[group]Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+2026-08-23T16:29:33.8734839Z with:
+2026-08-23T16:29:33.8735078Z   version: 0.11.28
+2026-08-23T16:29:33.8735334Z   enable-cache: true
+2026-08-23T16:29:33.8735654Z   cache-dependency-glob: pyproject.toml
+uv.lock
+
+2026-08-23T16:29:33.8736204Z   activate-environment: false
+2026-08-23T16:29:33.8736504Z   no-project: false
+2026-08-23T16:29:33.8736824Z   working-directory: /home/runner/work/jacobian/jacobian
+2026-08-23T16:29:33.8739684Z   github-token: ***
+2026-08-23T16:29:33.8739959Z   restore-cache: true
+2026-08-23T16:29:33.8740223Z   save-cache: true
+2026-08-23T16:29:33.8740470Z   prune-cache: false
+2026-08-23T16:29:33.8740731Z   cache-python: false
+2026-08-23T16:29:33.8741011Z   ignore-nothing-to-cache: false
+2026-08-23T16:29:33.8741318Z   ignore-empty-workdir: false
+2026-08-23T16:29:33.8741632Z   download-from-astral-mirror: true
+2026-08-23T16:29:33.8741960Z   add-problem-matchers: true
+2026-08-23T16:29:33.8742241Z   quiet: false
+2026-08-23T16:29:33.8742649Z   resolution-strategy: highest
+2026-08-23T16:29:33.8743092Z env:
+2026-08-23T16:29:33.8743407Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:33.8743896Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:33.8744364Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:33.8744797Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:33.8745227Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:33.8745656Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:33.8746015Z ##[endgroup]
+2026-08-23T16:29:34.0517880Z Fetching manifest data from https://raw.githubusercontent.com/astral-sh/versions/main/v1/uv.ndjson ...
+2026-08-23T16:29:34.1177099Z Downloading uv from "https://releases.astral.sh/github/uv/releases/download/0.11.28/uv-x86_64-unknown-linux-gnu.tar.gz" ...
+2026-08-23T16:29:34.4357409Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/39dc29b1-1a5e-4284-b7d3-dd0b1685b6b2 -f /home/runner/work/_temp/bfe86096-eb45-4def-9541-679538bfc402
+2026-08-23T16:29:34.9425244Z Added /home/runner/.local/bin to the path
+2026-08-23T16:29:34.9429153Z Added /opt/hostedtoolcache/uv/0.11.28/x86_64 to the path
+2026-08-23T16:29:34.9431000Z Set UV_PYTHON_INSTALL_DIR to /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:34.9432040Z Added /home/runner/work/_temp/uv-python-dir to the path
+2026-08-23T16:29:34.9443266Z Set UV_CACHE_DIR to /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:34.9443923Z Successfully installed uv version 0.11.28
+2026-08-23T16:29:35.0524506Z Searching files using cache dependency glob: /home/runner/work/jacobian/jacobian/pyproject.toml,/home/runner/work/jacobian/jacobian/uv.lock
+2026-08-23T16:29:35.0575164Z /home/runner/work/jacobian/jacobian/pyproject.toml
+2026-08-23T16:29:35.0590244Z /home/runner/work/jacobian/jacobian/uv.lock
+2026-08-23T16:29:35.0601485Z Found 2 files to hash.
+2026-08-23T16:29:35.0651675Z Trying to restore cache from GitHub Actions cache with key: setup-uv-2-x86_64-unknown-linux-gnu-ubuntu-24.04-3.12.14-093e6ac7a43736257e00e74ee52b918850e689133b60efd78f1f4579d6deebfb
+2026-08-23T16:29:35.1948316Z Cache hit for: setup-uv-2-x86_64-unknown-linux-gnu-ubuntu-24.04-3.12.14-093e6ac7a43736257e00e74ee52b918850e689133b60efd78f1f4579d6deebfb
+2026-08-23T16:29:35.5165066Z Received 95774 of 95774 (100.0%), 0.5 MBs/sec
+2026-08-23T16:29:35.5165944Z Cache Size: ~0 MB (95774 B)
+2026-08-23T16:29:35.5199341Z [command]/usr/bin/tar -xf /home/runner/work/_temp/ca9cc339-8fc2-43a7-bb98-7ce997803560/cache.tzst -P -C /home/runner/work/jacobian/jacobian --use-compress-program unzstd
+2026-08-23T16:29:35.5280398Z Cache restored successfully
+2026-08-23T16:29:35.5284781Z cache restored from GitHub Actions cache with key: setup-uv-2-x86_64-unknown-linux-gnu-ubuntu-24.04-3.12.14-093e6ac7a43736257e00e74ee52b918850e689133b60efd78f1f4579d6deebfb
+2026-08-23T16:29:35.6358388Z ##[end-action id=__self.__astral-sh_setup-uv;outcome=success;conclusion=success;duration_ms=1772]
+2026-08-23T16:29:35.6365582Z ##[start-action display=Sync the frozen environment;id=__self.__run]
+2026-08-23T16:29:35.6401505Z ##[group]Run uv sync --locked --dev
+2026-08-23T16:29:35.6401937Z [36;1muv sync --locked --dev[0m
+2026-08-23T16:29:35.6431044Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-23T16:29:35.6431426Z env:
+2026-08-23T16:29:35.6431704Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:35.6432130Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:35.6432554Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:35.6433126Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:35.6433546Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:35.6433971Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:35.6434363Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:35.6434922Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:35.6435217Z   UV_PYTHON: 3.12
+2026-08-23T16:29:35.6435427Z ##[endgroup]
+2026-08-23T16:29:35.6621770Z Using CPython 3.12.14 interpreter at: /opt/hostedtoolcache/Python/3.12.14/x64/bin/python3.12
+2026-08-23T16:29:35.6622539Z Creating virtual environment at: .venv
+2026-08-23T16:29:35.6669936Z Resolved 103 packages in 0.80ms
+2026-08-23T16:29:35.6796649Z    Building jacobian @ file:///home/runner/work/jacobian/jacobian
+2026-08-23T16:29:35.7765972Z Downloading ast-serialize (1.2MiB)
+2026-08-23T16:29:35.7769588Z Downloading pip (1.7MiB)
+2026-08-23T16:29:35.7770546Z Downloading numpy (15.9MiB)
+2026-08-23T16:29:35.7772392Z Downloading mypy (14.6MiB)
+2026-08-23T16:29:35.7774082Z Downloading pygments (1.2MiB)
+2026-08-23T16:29:35.7776094Z Downloading ruff (10.5MiB)
+2026-08-23T16:29:35.7780366Z Downloading sympy (6.0MiB)
+2026-08-23T16:29:35.7781920Z Downloading pydantic-core (2.0MiB)
+2026-08-23T16:29:35.7783917Z Downloading deptry (1.8MiB)
+2026-08-23T16:29:35.7790488Z Downloading networkx (2.0MiB)
+2026-08-23T16:29:35.7791541Z Downloading python-flint (9.7MiB)
+2026-08-23T16:29:35.7794900Z Downloading virtualenv (5.3MiB)
+2026-08-23T16:29:35.7796579Z Downloading grimp (2.2MiB)
+2026-08-23T16:29:35.7799966Z Downloading cryptography (4.5MiB)
+2026-08-23T16:29:35.7801764Z Downloading z3-solver (31.5MiB)
+2026-08-23T16:29:35.7803733Z Downloading hypothesis (1.1MiB)
+2026-08-23T16:29:36.4315141Z  Downloaded ast-serialize
+2026-08-23T16:29:36.5103693Z  Downloaded pydantic-core
+2026-08-23T16:29:36.5245709Z  Downloaded deptry
+2026-08-23T16:29:36.5526126Z  Downloaded grimp
+2026-08-23T16:29:36.5559366Z  Downloaded hypothesis
+2026-08-23T16:29:36.6942570Z  Downloaded pygments
+2026-08-23T16:29:36.7560280Z  Downloaded virtualenv
+2026-08-23T16:29:36.7907350Z  Downloaded pip
+2026-08-23T16:29:36.7949596Z  Downloaded cryptography
+2026-08-23T16:29:36.8799104Z  Downloaded networkx
+2026-08-23T16:29:37.0060549Z  Downloaded python-flint
+2026-08-23T16:29:37.0383342Z  Downloaded ruff
+2026-08-23T16:29:37.0438960Z       Built jacobian @ file:///home/runner/work/jacobian/jacobian
+2026-08-23T16:29:37.4184689Z  Downloaded z3-solver
+2026-08-23T16:29:37.4213837Z  Downloaded numpy
+2026-08-23T16:29:37.4592329Z  Downloaded sympy
+2026-08-23T16:29:37.5511858Z  Downloaded mypy
+2026-08-23T16:29:37.5514091Z Prepared 101 packages in 1.88s
+2026-08-23T16:29:37.6242123Z Installed 101 packages in 72ms
+2026-08-23T16:29:37.6242703Z  + annotated-doc==0.0.4
+2026-08-23T16:29:37.6243796Z  + annotated-types==0.7.0
+2026-08-23T16:29:37.6244195Z  + anyio==4.14.2
+2026-08-23T16:29:37.6244545Z  + ast-serialize==0.6.0
+2026-08-23T16:29:37.6244904Z  + attrs==26.1.0
+2026-08-23T16:29:37.6245232Z  + boolean-py==5.0
+2026-08-23T16:29:37.6245587Z  + cachecontrol==0.14.4
+2026-08-23T16:29:37.6245942Z  + certifi==2026.7.22
+2026-08-23T16:29:37.6246288Z  + cffi==2.1.0
+2026-08-23T16:29:37.6246601Z  + cfgv==3.5.0
+2026-08-23T16:29:37.6246938Z  + charset-normalizer==3.4.9
+2026-08-23T16:29:37.6247354Z  + click==8.4.2
+2026-08-23T16:29:37.6247677Z  + coverage==7.15.2
+2026-08-23T16:29:37.6248015Z  + cryptography==50.0.0
+2026-08-23T16:29:37.6248403Z  + cyclonedx-python-lib==11.11.0
+2026-08-23T16:29:37.6248832Z  + defusedxml==0.7.1
+2026-08-23T16:29:37.6249189Z  + deptry==0.25.1
+2026-08-23T16:29:37.6249541Z  + distlib==0.4.3
+2026-08-23T16:29:37.6249874Z  + execnet==2.1.2
+2026-08-23T16:29:37.6250204Z  + filelock==3.32.0
+2026-08-23T16:29:37.6250527Z  + grimp==3.15
+2026-08-23T16:29:37.6250845Z  + h11==0.16.0
+2026-08-23T16:29:37.6251155Z  + httpcore2==2.7.0
+2026-08-23T16:29:37.6251493Z  + httpx2==2.7.0
+2026-08-23T16:29:37.6251831Z  + hypothesis==6.165.7
+2026-08-23T16:29:37.6252189Z  + identify==2.6.19
+2026-08-23T16:29:37.6252513Z  + idna==3.18
+2026-08-23T16:29:37.6252847Z  + import-linter==2.13
+2026-08-23T16:29:37.6253321Z  + iniconfig==2.3.0
+2026-08-23T16:29:37.6253831Z  + jacobian==0.13.0 (from file:///home/runner/work/jacobian/jacobian)
+2026-08-23T16:29:37.6254433Z  + jsonschema==4.26.0
+2026-08-23T16:29:37.6255120Z  + jsonschema-specifications==2025.9.1
+2026-08-23T16:29:37.6255565Z  + librt==0.13.0
+2026-08-23T16:29:37.6255917Z  + license-expression==30.4.4
+2026-08-23T16:29:37.6256332Z  + markdown-it-py==4.2.0
+2026-08-23T16:29:37.6256706Z  + mcp==2.0.0
+2026-08-23T16:29:37.6257035Z  + mcp-types==2.0.0
+2026-08-23T16:29:37.6257380Z  + mdurl==0.1.2
+2026-08-23T16:29:37.6257703Z  + mpmath==1.3.0
+2026-08-23T16:29:37.6258026Z  + msgpack==1.2.1
+2026-08-23T16:29:37.6258356Z  + mypy==2.3.0
+2026-08-23T16:29:37.6258685Z  + mypy-extensions==1.1.0
+2026-08-23T16:29:37.6259055Z  + networkx==3.6.1
+2026-08-23T16:29:37.6259382Z  + nodeenv==1.10.0
+2026-08-23T16:29:37.6259712Z  + numpy==2.5.1
+2026-08-23T16:29:37.6260058Z  + opentelemetry-api==1.44.0
+2026-08-23T16:29:37.6260470Z  + packageurl-python==0.17.6
+2026-08-23T16:29:37.6260858Z  + packaging==26.2
+2026-08-23T16:29:37.6261187Z  + pathspec==1.1.1
+2026-08-23T16:29:37.6261521Z  + pip==26.1.2
+2026-08-23T16:29:37.6261850Z  + pip-api==0.0.34
+2026-08-23T16:29:37.6262189Z  + pip-audit==2.10.1
+2026-08-23T16:29:37.6262575Z  + pip-requirements-parser==32.0.1
+2026-08-23T16:29:37.6263092Z  + platformdirs==4.11.0
+2026-08-23T16:29:37.6263447Z  + pluggy==1.6.0
+2026-08-23T16:29:37.6263779Z  + pre-commit==4.6.2
+2026-08-23T16:29:37.6264123Z  + psutil==7.2.2
+2026-08-23T16:29:37.6264644Z  + py-serializable==2.1.0
+2026-08-23T16:29:37.6265015Z  + pycparser==3.0
+2026-08-23T16:29:37.6265346Z  + pydantic==2.13.4
+2026-08-23T16:29:37.6265743Z  + pydantic-core==2.46.4
+2026-08-23T16:29:37.6266111Z  + pygments==2.20.0
+2026-08-23T16:29:37.6266432Z  + pyjwt==2.13.0
+2026-08-23T16:29:37.6266766Z  + pyparsing==3.3.2
+2026-08-23T16:29:37.6267139Z  + pyperf==2.10.0
+2026-08-23T16:29:37.6267585Z  + pytest==9.1.1
+2026-08-23T16:29:37.6267918Z  + pytest-cov==7.1.0
+2026-08-23T16:29:37.6268288Z  + pytest-randomly==4.1.0
+2026-08-23T16:29:37.6268687Z  + pytest-repeat==0.9.4
+2026-08-23T16:29:37.6269063Z  + pytest-split==0.11.0
+2026-08-23T16:29:37.6269439Z  + pytest-timeout==2.4.0
+2026-08-23T16:29:37.6269827Z  + pytest-xdist==3.8.0
+2026-08-23T16:29:37.6270196Z  + python-discovery==1.5.0
+2026-08-23T16:29:37.6270594Z  + python-flint==0.9.0
+2026-08-23T16:29:37.6270963Z  + python-multipart==0.0.32
+2026-08-23T16:29:37.6271349Z  + pyyaml==6.0.3
+2026-08-23T16:29:37.6271670Z  + referencing==0.37.0
+2026-08-23T16:29:37.6271988Z  + requests==2.34.2
+2026-08-23T16:29:37.6272399Z  + requirements-parser==0.13.1
+2026-08-23T16:29:37.6272889Z  + rfc8785==0.1.4
+2026-08-23T16:29:37.6273308Z  + rich==15.0.0
+2026-08-23T16:29:37.6273616Z  + rpds-py==2026.6.3
+2026-08-23T16:29:37.6273934Z  + ruff==0.16.3
+2026-08-23T16:29:37.6274238Z  + shellingham==1.5.4
+2026-08-23T16:29:37.6274589Z  + sortedcontainers==2.4.0
+2026-08-23T16:29:37.6274942Z  + sse-starlette==3.4.6
+2026-08-23T16:29:37.6275270Z  + starlette==1.3.1
+2026-08-23T16:29:37.6275540Z  + sympy==1.14.0
+2026-08-23T16:29:37.6275825Z  + tomli==2.4.1
+2026-08-23T16:29:37.6276115Z  + tomli-w==1.2.0
+2026-08-23T16:29:37.6276451Z  + truststore==0.10.4
+2026-08-23T16:29:37.6276786Z  + typer==0.27.1
+2026-08-23T16:29:37.6277150Z  + types-jsonschema==4.26.0.20260518
+2026-08-23T16:29:37.6277596Z  + types-networkx==3.6.1.20260728
+2026-08-23T16:29:37.6278019Z  + typing-extensions==4.16.0
+2026-08-23T16:29:37.6278395Z  + typing-inspection==0.4.2
+2026-08-23T16:29:37.6278771Z  + urllib3==2.7.0
+2026-08-23T16:29:37.6279095Z  + uvicorn==0.51.0
+2026-08-23T16:29:37.6279492Z  + virtualenv==21.7.0
+2026-08-23T16:29:37.6279875Z  + vulture==2.16
+2026-08-23T16:29:37.6280209Z  + z3-solver==5.0.0.0
+2026-08-23T16:29:37.6343602Z ##[end-action id=__self.__run;outcome=success;conclusion=success;duration_ms=1997]
+2026-08-23T16:29:37.6347333Z ##[start-action display=Require the requested Python version;id=__self.__run_2]
+2026-08-23T16:29:37.6364527Z ##[group]Run uv run --locked python -c "import os, sys; expected = tuple(map(int, os.environ['UV_PYTHON'].split('.'))); assert sys.version_info[:2] == expected, f'expected Python {expected}, got {sys.version_info[:2]}'"
+2026-08-23T16:29:37.6365870Z [36;1muv run --locked python -c "import os, sys; expected = tuple(map(int, os.environ['UV_PYTHON'].split('.'))); assert sys.version_info[:2] == expected, f'expected Python {expected}, got {sys.version_info[:2]}'"[0m
+2026-08-23T16:29:37.6389223Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-23T16:29:37.6389577Z env:
+2026-08-23T16:29:37.6389860Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.6390283Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:37.6390699Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.6391078Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.6391446Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.6391832Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:37.6392220Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:37.6392689Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:37.6393277Z   UV_PYTHON: 3.12
+2026-08-23T16:29:37.6393565Z ##[endgroup]
+2026-08-23T16:29:37.6824656Z ##[end-action id=__self.__run_2;outcome=success;conclusion=success;duration_ms=47]

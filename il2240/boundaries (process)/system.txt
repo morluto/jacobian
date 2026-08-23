@@ -1,0 +1,8 @@
+2026-08-23T16:29:27.6170000Z Requested labels: ubuntu-latest
+2026-08-23T16:29:27.6170000Z Job defined at: morluto/jacobian/.github/workflows/ci.yml@refs/pull/2240/merge
+2026-08-23T16:29:27.6170000Z Waiting for a runner to pick up this job...
+2026-08-23T16:29:27.6150000Z Evaluating boundaries.if
+2026-08-23T16:29:27.6150000Z Evaluating: success()
+2026-08-23T16:29:27.6150000Z Result: true
+2026-08-23T16:29:28.4380000Z Job is waiting for a hosted runner to come online.
+2026-08-23T16:29:28.4390000Z Job is about to start running on the hosted runner: GitHub Actions 1000206566

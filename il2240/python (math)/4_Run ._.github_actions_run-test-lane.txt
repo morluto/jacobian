@@ -1,0 +1,214 @@
+﻿2026-08-23T16:29:37.6911580Z Prepare all required actions
+2026-08-23T16:29:37.6912097Z Getting action download info
+2026-08-23T16:29:37.7725653Z Download action repository 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' (SHA:043fb46d1a93c77aae656e7c1c64a875d1fc6a0a)
+2026-08-23T16:29:37.8596181Z ##[group]Run ./.github/actions/run-test-lane
+2026-08-23T16:29:37.8596483Z with:
+2026-08-23T16:29:37.8596687Z   lane: math
+2026-08-23T16:29:37.8596915Z   junit-artifact: junit-python-math-3.12
+2026-08-23T16:29:37.8597234Z   coverage-artifact: coverage-data-python-math
+2026-08-23T16:29:37.8597545Z   coverage-file: .coverage.python-math
+2026-08-23T16:29:37.8597801Z env:
+2026-08-23T16:29:37.8598053Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.8598470Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:37.8598894Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.8599270Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.8599681Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.8600052Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:37.8600436Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:37.8600808Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:37.8601097Z ##[endgroup]
+2026-08-23T16:29:37.8615299Z ##[start-action display=Run math tests;id=__self_2.__run]
+2026-08-23T16:29:37.8630397Z ##[group]Run make test-math
+2026-08-23T16:29:37.8630679Z [36;1mmake test-math[0m
+2026-08-23T16:29:37.8652751Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-23T16:29:37.8653194Z env:
+2026-08-23T16:29:37.8653468Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.8653904Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:37.8654321Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.8654705Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.8655093Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:37.8655471Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:37.8655869Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:37.8656230Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:37.8656662Z   PYTEST_ARGS: --junitxml=pytest.xml --cov --cov-report= --cov-fail-under=0
+2026-08-23T16:29:37.8657032Z ##[endgroup]
+2026-08-23T16:29:37.8728206Z uv run --locked pytest -n 4 --dist worksteal --timeout=120 \
+2026-08-23T16:29:37.8728801Z 	-m "not exhaustive" tests/math \
+2026-08-23T16:29:37.8729308Z 	--durations=10 --junitxml=pytest.xml --cov --cov-report= --cov-fail-under=0
+2026-08-23T16:30:08.8834217Z ============================= test session starts ==============================
+2026-08-23T16:30:08.8835039Z platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0
+2026-08-23T16:30:08.8835692Z Using --randomly-seed=586199527
+2026-08-23T16:30:08.8836189Z rootdir: /home/runner/work/jacobian/jacobian
+2026-08-23T16:30:08.8836710Z configfile: pyproject.toml
+2026-08-23T16:30:08.8837537Z plugins: anyio-4.14.2, randomly-4.1.0, split-0.11.0, cov-7.1.0, repeat-0.9.4, hypothesis-6.165.7, timeout-2.4.0, xdist-3.8.0
+2026-08-23T16:30:08.8838367Z timeout: 120.0s
+2026-08-23T16:30:08.8838701Z timeout method: thread
+2026-08-23T16:30:08.8839084Z timeout func_only: False
+2026-08-23T16:30:08.8839457Z created: 4/4 workers
+2026-08-23T16:30:08.8839785Z 4 workers [2387 items]
+2026-08-23T16:30:08.8840009Z 
+2026-08-23T16:30:09.0642310Z ........................................................................ [  3%]
+2026-08-23T16:30:09.2823717Z ........................................................................ [  6%]
+2026-08-23T16:30:09.6374139Z ........................................................................ [  9%]
+2026-08-23T16:30:09.9536477Z ........................................................................ [ 12%]
+2026-08-23T16:30:10.4270993Z ........................................................................ [ 15%]
+2026-08-23T16:30:11.4390199Z ........................................................................ [ 18%]
+2026-08-23T16:30:13.5231585Z ........................................................................ [ 21%]
+2026-08-23T16:30:14.1554041Z ........................................................................ [ 24%]
+2026-08-23T16:30:14.6021797Z ........................................................................ [ 27%]
+2026-08-23T16:30:18.8743960Z ........................................................................ [ 30%]
+2026-08-23T16:30:19.4439515Z ........................................................................ [ 33%]
+2026-08-23T16:30:19.7024278Z ......................................................s.s..s...s.s...... [ 36%]
+2026-08-23T16:30:19.9447376Z ........................................................................ [ 39%]
+2026-08-23T16:30:20.4040769Z ........................................................................ [ 42%]
+2026-08-23T16:30:21.1133977Z ........................................................................ [ 45%]
+2026-08-23T16:30:21.7064063Z ........................................................................ [ 48%]
+2026-08-23T16:30:22.3839092Z ........................................................................ [ 51%]
+2026-08-23T16:30:22.7366578Z ........................................................................ [ 54%]
+2026-08-23T16:30:24.1779713Z ........................................................................ [ 57%]
+2026-08-23T16:30:24.4394051Z ........................................................................ [ 60%]
+2026-08-23T16:30:24.9502312Z ........................................................................ [ 63%]
+2026-08-23T16:30:25.5056972Z ........................................................................ [ 66%]
+2026-08-23T16:30:26.0343694Z .sssss.s.ssssssssss.sss.ssssssss........................................ [ 69%]
+2026-08-23T16:30:28.0362660Z ..............................sss...sssssss............................. [ 72%]
+2026-08-23T16:30:28.9542104Z ........................................................................ [ 75%]
+2026-08-23T16:30:29.7380622Z ........................................................................ [ 78%]
+2026-08-23T16:30:30.2856308Z ........................................................................ [ 81%]
+2026-08-23T16:30:30.6568303Z ........................................................................ [ 84%]
+2026-08-23T16:30:31.8208936Z ........................................................................ [ 87%]
+2026-08-23T16:30:33.0224708Z ........................................................................ [ 90%]
+2026-08-23T16:30:33.8103968Z ........................................................................ [ 93%]
+2026-08-23T16:30:34.0444120Z ........................................................................ [ 96%]
+2026-08-23T16:30:35.3860547Z ........................................................................ [ 99%]
+2026-08-23T16:31:26.5980918Z ...........                                                              [100%]
+2026-08-23T16:31:26.5981852Z ------ generated xml file: /home/runner/work/jacobian/jacobian/pytest.xml ------
+2026-08-23T16:31:26.5982500Z ============================= slowest 10 durations =============================
+2026-08-23T16:31:26.5983944Z 55.62s call     tests/math/symbolic_dynamics/test_symbolic_dynamics.py::test_random_block_languages_match_bounded_extension_oracle
+2026-08-23T16:31:26.5985980Z 21.31s call     tests/math/additive_combinatorics/test_ordered_difference.py::TestOrderedDifferenceProfile::test_worst_case_profile_stays_within_result_budget
+2026-08-23T16:31:26.5987314Z 7.21s call     tests/math/formal_power_series/test_result_height.py::test_largest_multiplication_result_fits_shared_output_envelope
+2026-08-23T16:31:26.5988359Z 3.12s call     tests/math/prime_field_matrix/test_prime_field_matrix.py::TestCanonicalValueComposition::test_duplicate_family_removed_from_catalog
+2026-08-23T16:31:26.5989734Z 2.99s call     tests/math/group/test_group_contract_regressions.py::test_group_conjugacy_classes_serialization_is_hash_seed_independent
+2026-08-23T16:31:26.5990763Z 2.86s call     tests/math/geometry/test_exact_geometry.py::TestPinnedLineDistance::test_aggregate_output_budget_rejects_unencodable_profiles
+2026-08-23T16:31:26.5991686Z 2.75s call     tests/math/matrices/test_symbolic_matrix.py::test_symbolic_rank_of_full_and_singular_matrices
+2026-08-23T16:31:26.5992590Z 2.22s call     tests/math/graphs/test_graph_optimization_atlas.py::test_gallai_edmonds_barrier_certifies_every_graph_through_order_six
+2026-08-23T16:31:26.5993851Z 2.17s call     tests/math/commutative_algebra_ops/test_groebner_basis.py::TestKillableWorkerContract::test_budget_delegates_to_the_bounded_process_runner
+2026-08-23T16:31:26.5994848Z 2.10s call     tests/math/commutative_algebra_ops/test_groebner_basis.py::TestGroebnerBasis::test_simple_ideal
+2026-08-23T16:31:26.5995505Z =========================== short test summary info ============================
+2026-08-23T16:31:26.5996141Z SKIPPED [1] tests/math/commutative_algebra_ops/test_saturation.py:81: Singular 4.4 backend is not installed
+2026-08-23T16:31:26.5996937Z SKIPPED [1] tests/math/commutative_algebra_ops/test_saturation.py:168: Singular 4.4 backend is not installed
+2026-08-23T16:31:26.5997728Z SKIPPED [1] tests/math/commutative_algebra_ops/test_saturation.py:122: Singular 4.4 backend is not installed
+2026-08-23T16:31:26.5998516Z SKIPPED [1] tests/math/commutative_algebra_ops/test_saturation.py:97: Singular 4.4 backend is not installed
+2026-08-23T16:31:26.5999303Z SKIPPED [1] tests/math/commutative_algebra_ops/test_saturation.py:110: Singular 4.4 backend is not installed
+2026-08-23T16:31:26.6000143Z SKIPPED [25] tests/math/commutative_algebra_ops/test_commutative_algebra.py:280: Singular 4.4 backend is not installed
+2026-08-23T16:31:26.6001029Z SKIPPED [2] tests/math/commutative_algebra_ops/test_commutative_algebra.py:267: Singular 4.4 backend is not installed
+2026-08-23T16:31:26.6001879Z SKIPPED [1] tests/math/commutative_algebra_ops/test_commutative_algebra.py:347: Singular 4.4 backend is not installed
+2026-08-23T16:31:26.6002738Z SKIPPED [1] tests/math/commutative_algebra_ops/test_commutative_algebra.py:386: Singular 4.4 backend is not installed
+2026-08-23T16:31:26.6003786Z SKIPPED [1] tests/math/commutative_algebra_ops/test_commutative_algebra.py:468: Singular 4.4 backend is not installed
+2026-08-23T16:31:26.6004644Z SKIPPED [1] tests/math/commutative_algebra_ops/test_commutative_algebra.py:408: Singular 4.4 backend is not installed
+2026-08-23T16:31:26.6005493Z SKIPPED [1] tests/math/commutative_algebra_ops/test_commutative_algebra.py:224: Singular 4.4 backend is not installed
+2026-08-23T16:31:26.6006495Z SKIPPED [1] tests/math/commutative_algebra_ops/test_commutative_algebra.py:254: Singular 4.4 backend is not installed
+2026-08-23T16:31:26.6007369Z SKIPPED [1] tests/math/commutative_algebra_ops/test_commutative_algebra.py:242: Singular 4.4 backend is not installed
+2026-08-23T16:31:26.6008225Z SKIPPED [1] tests/math/commutative_algebra_ops/test_commutative_algebra.py:433: Singular 4.4 backend is not installed
+2026-08-23T16:31:26.6009078Z SKIPPED [1] tests/math/commutative_algebra_ops/test_commutative_algebra.py:304: Singular 4.4 backend is not installed
+2026-08-23T16:31:26.6009947Z SKIPPED [1] tests/math/commutative_algebra_ops/test_commutative_algebra.py:325: Singular 4.4 backend is not installed
+2026-08-23T16:31:26.6010629Z ================= 2345 passed, 42 skipped in 107.17s (0:01:47) =================
+2026-08-23T16:31:26.7079581Z ##[end-action id=__self_2.__run;outcome=success;conclusion=success;duration_ms=108846]
+2026-08-23T16:31:26.7081878Z ##[start-action display=Run uv cache prune --ci;id=__self_2.__run_2]
+2026-08-23T16:31:26.7104080Z ##[group]Run uv cache prune --ci
+2026-08-23T16:31:26.7104389Z [36;1muv cache prune --ci[0m
+2026-08-23T16:31:26.7126292Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-23T16:31:26.7126638Z env:
+2026-08-23T16:31:26.7126903Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:26.7127333Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:31:26.7127748Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:26.7128127Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:26.7128506Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:26.7128880Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:31:26.7129271Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:31:26.7129650Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:31:26.7129951Z ##[endgroup]
+2026-08-23T16:31:26.7398080Z Pruning cache at: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:31:26.8185165Z Removed 8972 files (345.3MiB)
+2026-08-23T16:31:26.8199583Z ##[end-action id=__self_2.__run_2;outcome=success;conclusion=success;duration_ms=111]
+2026-08-23T16:31:26.8202567Z ##[start-action display=Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a;id=__self_2.__actions_upload-artifact]
+2026-08-23T16:31:26.8240716Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-08-23T16:31:26.8241174Z with:
+2026-08-23T16:31:26.8241426Z   name: junit-python-math-3.12
+2026-08-23T16:31:26.8241718Z   path: pytest.xml
+2026-08-23T16:31:26.8241975Z   if-no-files-found: ignore
+2026-08-23T16:31:26.8242255Z   retention-days: 7
+2026-08-23T16:31:26.8242511Z   compression-level: 6
+2026-08-23T16:31:26.8242769Z   overwrite: false
+2026-08-23T16:31:26.8243154Z   include-hidden-files: false
+2026-08-23T16:31:26.8243459Z   archive: true
+2026-08-23T16:31:26.8243651Z env:
+2026-08-23T16:31:26.8243917Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:26.8244334Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:31:26.8244760Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:26.8245148Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:26.8245514Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:26.8245889Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:31:26.8246275Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:31:26.8246649Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:31:26.8246942Z ##[endgroup]
+2026-08-23T16:31:26.9618845Z With the provided path, there will be 1 file uploaded
+2026-08-23T16:31:26.9623495Z Artifact name is valid!
+2026-08-23T16:31:26.9624243Z Root directory input is valid!
+2026-08-23T16:31:27.2418213Z Uploading artifact: junit-python-math-3.12.zip
+2026-08-23T16:31:27.2458934Z Beginning upload of artifact content to blob storage
+2026-08-23T16:31:27.4839108Z Uploaded bytes 40145
+2026-08-23T16:31:27.5324183Z Finished uploading artifact content to blob storage!
+2026-08-23T16:31:27.5325344Z SHA256 digest of uploaded artifact is 3dfd8f5cdb9e47c31cd143cab7fc46f3de66cf800930ac402e47ff0a83cd7333
+2026-08-23T16:31:27.5326390Z Finalizing artifact upload
+2026-08-23T16:31:27.8063990Z Artifact junit-python-math-3.12 successfully finalized. Artifact ID 9496416723
+2026-08-23T16:31:27.8064832Z Artifact junit-python-math-3.12 has been successfully uploaded! Final size is 40145 bytes. Artifact ID is 9496416723
+2026-08-23T16:31:27.8069758Z Artifact download URL: https://github.com/morluto/jacobian/actions/runs/32651818223/artifacts/9496416723
+2026-08-23T16:31:27.8141886Z ##[end-action id=__self_2.__actions_upload-artifact;outcome=success;conclusion=success;duration_ms=993]
+2026-08-23T16:31:27.8146629Z ##[start-action display=Run mv .coverage .coverage.python-math;id=__self_2.__run_3]
+2026-08-23T16:31:27.8164064Z ##[group]Run mv .coverage .coverage.python-math
+2026-08-23T16:31:27.8164451Z [36;1mmv .coverage .coverage.python-math[0m
+2026-08-23T16:31:27.8186458Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-23T16:31:27.8186812Z env:
+2026-08-23T16:31:27.8187086Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:27.8187510Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:31:27.8187943Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:27.8188321Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:27.8188705Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:27.8189086Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:31:27.8189484Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:31:27.8189871Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:31:27.8190169Z ##[endgroup]
+2026-08-23T16:31:27.8251471Z ##[end-action id=__self_2.__run_3;outcome=success;conclusion=success;duration_ms=10]
+2026-08-23T16:31:27.8254583Z ##[start-action display=Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a;id=__self_2.__actions_upload-artifact_2]
+2026-08-23T16:31:27.8293519Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-08-23T16:31:27.8293993Z with:
+2026-08-23T16:31:27.8294273Z   name: coverage-data-python-math
+2026-08-23T16:31:27.8294599Z   path: .coverage.python-math
+2026-08-23T16:31:27.8294912Z   include-hidden-files: true
+2026-08-23T16:31:27.8295216Z   if-no-files-found: warn
+2026-08-23T16:31:27.8295493Z   compression-level: 6
+2026-08-23T16:31:27.8295753Z   overwrite: false
+2026-08-23T16:31:27.8296005Z   archive: true
+2026-08-23T16:31:27.8296238Z env:
+2026-08-23T16:31:27.8296543Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:27.8297021Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:31:27.8297436Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:27.8297821Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:27.8298205Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:31:27.8298592Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:31:27.8298988Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:31:27.8299351Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:31:27.8299650Z ##[endgroup]
+2026-08-23T16:31:27.9600412Z With the provided path, there will be 1 file uploaded
+2026-08-23T16:31:27.9605607Z Artifact name is valid!
+2026-08-23T16:31:27.9606078Z Root directory input is valid!
+2026-08-23T16:31:28.2101335Z Uploading artifact: coverage-data-python-math.zip
+2026-08-23T16:31:28.2139294Z Beginning upload of artifact content to blob storage
+2026-08-23T16:31:28.6955944Z Uploaded bytes 1258242
+2026-08-23T16:31:28.7362218Z Finished uploading artifact content to blob storage!
+2026-08-23T16:31:28.7363567Z SHA256 digest of uploaded artifact is c586426d33f2626d581b81e2987eda43fa842292c0aaa590f0ced8f8db123123
+2026-08-23T16:31:28.7364624Z Finalizing artifact upload
+2026-08-23T16:31:29.0128559Z Artifact coverage-data-python-math successfully finalized. Artifact ID 9496416981
+2026-08-23T16:31:29.0130029Z Artifact coverage-data-python-math has been successfully uploaded! Final size is 1258242 bytes. Artifact ID is 9496416981
+2026-08-23T16:31:29.0133623Z Artifact download URL: https://github.com/morluto/jacobian/actions/runs/32651818223/artifacts/9496416981
+2026-08-23T16:31:29.0210659Z ##[end-action id=__self_2.__actions_upload-artifact_2;outcome=success;conclusion=success;duration_ms=1195]

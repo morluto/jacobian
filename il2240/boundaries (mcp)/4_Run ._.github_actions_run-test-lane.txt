@@ -1,0 +1,164 @@
+﻿2026-08-23T16:29:38.7038865Z Prepare all required actions
+2026-08-23T16:29:38.7039386Z Getting action download info
+2026-08-23T16:29:38.7842058Z Download action repository 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' (SHA:043fb46d1a93c77aae656e7c1c64a875d1fc6a0a)
+2026-08-23T16:29:38.8768208Z ##[group]Run ./.github/actions/run-test-lane
+2026-08-23T16:29:38.8768535Z with:
+2026-08-23T16:29:38.8768750Z   lane: mcp
+2026-08-23T16:29:38.8768980Z   junit-artifact: junit-mcp-3.12
+2026-08-23T16:29:38.8769274Z   coverage-artifact: coverage-data-mcp
+2026-08-23T16:29:38.8769573Z   coverage-file: .coverage.mcp
+2026-08-23T16:29:38.8769823Z env:
+2026-08-23T16:29:38.8770109Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:38.8770560Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:38.8771024Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:38.8771419Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:38.8771857Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:38.8772245Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:38.8772657Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:38.8773040Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:38.8773356Z ##[endgroup]
+2026-08-23T16:29:38.8787657Z ##[start-action display=Run mcp tests;id=__self_2.__run]
+2026-08-23T16:29:38.8805071Z ##[group]Run make test-mcp
+2026-08-23T16:29:38.8805369Z [36;1mmake test-mcp[0m
+2026-08-23T16:29:38.8847123Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-23T16:29:38.8847499Z env:
+2026-08-23T16:29:38.8847914Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:38.8848392Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:29:38.8848832Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:38.8849233Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:38.8849636Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:29:38.8850022Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:29:38.8850447Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:29:38.8850827Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:29:38.8851296Z   PYTEST_ARGS: --junitxml=pytest.xml --cov --cov-report= --cov-fail-under=0
+2026-08-23T16:29:38.8851687Z ##[endgroup]
+2026-08-23T16:29:38.9102257Z uv run --locked python tools/pytest_lifecycle.py --name mcp --timeout-seconds 4800 -- \
+2026-08-23T16:29:38.9103217Z 	-n 2 --dist worksteal --timeout=120 --timeout-method=signal \
+2026-08-23T16:29:38.9103755Z 	tests/mcp \
+2026-08-23T16:29:38.9104628Z 	--durations=10 --junitxml=pytest.xml --cov --cov-report= --cov-fail-under=0
+2026-08-23T16:29:51.1879146Z ============================= test session starts ==============================
+2026-08-23T16:29:51.1880334Z platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0
+2026-08-23T16:29:51.1908829Z Using --randomly-seed=1812454424
+2026-08-23T16:29:51.1936193Z rootdir: /home/runner/work/jacobian/jacobian
+2026-08-23T16:29:51.1937286Z configfile: pyproject.toml
+2026-08-23T16:29:51.1938439Z plugins: anyio-4.14.2, randomly-4.1.0, split-0.11.0, cov-7.1.0, repeat-0.9.4, hypothesis-6.165.7, timeout-2.4.0, xdist-3.8.0
+2026-08-23T16:29:51.1939394Z timeout: 120.0s
+2026-08-23T16:29:51.1939898Z timeout method: signal
+2026-08-23T16:29:51.1940695Z timeout func_only: False
+2026-08-23T16:29:51.1951460Z created: 2/2 workers
+2026-08-23T16:29:51.1952058Z 2 workers [15 items]
+2026-08-23T16:29:51.1952440Z 
+2026-08-23T16:30:02.7008401Z ...............                                                          [100%]
+2026-08-23T16:30:02.7009307Z ------ generated xml file: /home/runner/work/jacobian/jacobian/pytest.xml ------
+2026-08-23T16:30:02.7010029Z ============================= slowest 10 durations =============================
+2026-08-23T16:30:02.7011454Z 3.41s call     tests/mcp/test_mcp_catalog_and_policy.py::test_mcp_compact_operation_index_is_searchable_and_paginated
+2026-08-23T16:30:02.7012542Z 3.27s call     tests/mcp/test_mcp_entrypoint.py::test_mcp_stdio_entrypoint_exposes_stable_math_tools
+2026-08-23T16:30:02.7013613Z 3.06s call     tests/mcp/test_mcp_sdk_2_conformance.py::test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources
+2026-08-23T16:30:02.7014792Z 3.01s call     tests/mcp/test_mcp_catalog_and_policy.py::test_mcp_operation_browse_pages_the_complete_immutable_library
+2026-08-23T16:30:02.7015902Z 2.70s call     tests/mcp/test_mcp_catalog_and_policy.py::test_mcp_catalog_is_the_complete_static_operation_library
+2026-08-23T16:30:02.7017061Z 0.62s call     tests/mcp/test_mcp_invocation_journey.py::test_mcp_composes_public_finite_field_values_with_native_projections
+2026-08-23T16:30:02.7018355Z 0.25s call     tests/mcp/test_remote_mcp_auth.py::test_token_file_is_strict_and_remote_cli_fails_closed
+2026-08-23T16:30:02.7019315Z 0.12s call     tests/mcp/test_mcp_invocation_journey.py::test_mcp_describes_and_invokes_operations
+2026-08-23T16:30:02.7020213Z 0.08s call     tests/mcp/test_mcp_entrypoint.py::test_mcp_entrypoint_has_nonstarting_help
+2026-08-23T16:30:02.7021083Z 0.08s call     tests/mcp/test_mcp_entrypoint.py::test_mcp_entrypoint_reports_distribution_version
+2026-08-23T16:30:02.7021806Z ============================= 15 passed in 21.82s ==============================
+2026-08-23T16:30:02.8238555Z ##[end-action id=__self_2.__run;outcome=success;conclusion=success;duration_ms=23945]
+2026-08-23T16:30:02.8241397Z ##[start-action display=Run uv cache prune --ci;id=__self_2.__run_2]
+2026-08-23T16:30:02.8266378Z ##[group]Run uv cache prune --ci
+2026-08-23T16:30:02.8266838Z [36;1muv cache prune --ci[0m
+2026-08-23T16:30:02.8306489Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-23T16:30:02.8307057Z env:
+2026-08-23T16:30:02.8307507Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:02.8308415Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:30:02.8327217Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:02.8328056Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:02.8328609Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:02.8329023Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:30:02.8329445Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:30:02.8329841Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:30:02.8330182Z ##[endgroup]
+2026-08-23T16:30:02.8540294Z Pruning cache at: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:30:03.0239778Z Removed 8972 files (345.3MiB)
+2026-08-23T16:30:03.0264063Z ##[end-action id=__self_2.__run_2;outcome=success;conclusion=success;duration_ms=202]
+2026-08-23T16:30:03.0266909Z ##[start-action display=Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a;id=__self_2.__actions_upload-artifact]
+2026-08-23T16:30:03.0304669Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-08-23T16:30:03.0305071Z with:
+2026-08-23T16:30:03.0305293Z   name: junit-mcp-3.12
+2026-08-23T16:30:03.0305527Z   path: pytest.xml
+2026-08-23T16:30:03.0305753Z   if-no-files-found: ignore
+2026-08-23T16:30:03.0306000Z   retention-days: 7
+2026-08-23T16:30:03.0306218Z   compression-level: 6
+2026-08-23T16:30:03.0306446Z   overwrite: false
+2026-08-23T16:30:03.0306666Z   include-hidden-files: false
+2026-08-23T16:30:03.0306918Z   archive: true
+2026-08-23T16:30:03.0307124Z env:
+2026-08-23T16:30:03.0307398Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.0308359Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:30:03.0308814Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.0309197Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.0309789Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.0310165Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:30:03.0310565Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:30:03.0310929Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:30:03.0311240Z ##[endgroup]
+2026-08-23T16:30:03.1775790Z With the provided path, there will be 1 file uploaded
+2026-08-23T16:30:03.1781260Z Artifact name is valid!
+2026-08-23T16:30:03.1781700Z Root directory input is valid!
+2026-08-23T16:30:03.4068139Z Uploading artifact: junit-mcp-3.12.zip
+2026-08-23T16:30:03.4106497Z Beginning upload of artifact content to blob storage
+2026-08-23T16:30:03.6074570Z Uploaded bytes 831
+2026-08-23T16:30:03.6547743Z Finished uploading artifact content to blob storage!
+2026-08-23T16:30:03.6548888Z SHA256 digest of uploaded artifact is febe408b3a1021f38612d583d1301771bd46711eaea1fdf81f505a06d9a14798
+2026-08-23T16:30:03.6549694Z Finalizing artifact upload
+2026-08-23T16:30:03.9025375Z Artifact junit-mcp-3.12 successfully finalized. Artifact ID 9496397578
+2026-08-23T16:30:03.9026669Z Artifact junit-mcp-3.12 has been successfully uploaded! Final size is 831 bytes. Artifact ID is 9496397578
+2026-08-23T16:30:03.9030378Z Artifact download URL: https://github.com/morluto/jacobian/actions/runs/32651818223/artifacts/9496397578
+2026-08-23T16:30:03.9117443Z ##[end-action id=__self_2.__actions_upload-artifact;outcome=success;conclusion=success;duration_ms=884]
+2026-08-23T16:30:03.9123018Z ##[start-action display=Run mv .coverage .coverage.mcp;id=__self_2.__run_3]
+2026-08-23T16:30:03.9142657Z ##[group]Run mv .coverage .coverage.mcp
+2026-08-23T16:30:03.9143035Z [36;1mmv .coverage .coverage.mcp[0m
+2026-08-23T16:30:03.9184227Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-23T16:30:03.9184606Z env:
+2026-08-23T16:30:03.9184907Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.9185371Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:30:03.9185846Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.9186251Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.9186667Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.9187072Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:30:03.9187494Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:30:03.9188120Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:30:03.9188461Z ##[endgroup]
+2026-08-23T16:30:03.9273098Z ##[end-action id=__self_2.__run_3;outcome=success;conclusion=success;duration_ms=14]
+2026-08-23T16:30:03.9275731Z ##[start-action display=Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a;id=__self_2.__actions_upload-artifact_2]
+2026-08-23T16:30:03.9311508Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-08-23T16:30:03.9311944Z with:
+2026-08-23T16:30:03.9312166Z   name: coverage-data-mcp
+2026-08-23T16:30:03.9312423Z   path: .coverage.mcp
+2026-08-23T16:30:03.9312663Z   include-hidden-files: true
+2026-08-23T16:30:03.9312925Z   if-no-files-found: warn
+2026-08-23T16:30:03.9313169Z   compression-level: 6
+2026-08-23T16:30:03.9313397Z   overwrite: false
+2026-08-23T16:30:03.9313620Z   archive: true
+2026-08-23T16:30:03.9313834Z env:
+2026-08-23T16:30:03.9314099Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.9314552Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-08-23T16:30:03.9314981Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.9315379Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.9315788Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-08-23T16:30:03.9316182Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-08-23T16:30:03.9316593Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-08-23T16:30:03.9317123Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-08-23T16:30:03.9317443Z ##[endgroup]
+2026-08-23T16:30:04.0757620Z With the provided path, there will be 1 file uploaded
+2026-08-23T16:30:04.0763200Z Artifact name is valid!
+2026-08-23T16:30:04.0764080Z Root directory input is valid!
+2026-08-23T16:30:04.3353748Z Uploading artifact: coverage-data-mcp.zip
+2026-08-23T16:30:04.3393699Z Beginning upload of artifact content to blob storage
+2026-08-23T16:30:04.7814229Z Uploaded bytes 795728
+2026-08-23T16:30:04.8253582Z Finished uploading artifact content to blob storage!
+2026-08-23T16:30:04.8254680Z SHA256 digest of uploaded artifact is 2a229731795c956e6fe59cc3400698487a7d9259fd0fdc8e3243c604c2df354e
+2026-08-23T16:30:04.8255522Z Finalizing artifact upload
+2026-08-23T16:30:05.1024991Z Artifact coverage-data-mcp successfully finalized. Artifact ID 9496397833
+2026-08-23T16:30:05.1026107Z Artifact coverage-data-mcp has been successfully uploaded! Final size is 795728 bytes. Artifact ID is 9496397833
+2026-08-23T16:30:05.1030095Z Artifact download URL: https://github.com/morluto/jacobian/actions/runs/32651818223/artifacts/9496397833
+2026-08-23T16:30:05.1121921Z ##[end-action id=__self_2.__actions_upload-artifact_2;outcome=success;conclusion=success;duration_ms=1184]

@@ -1,0 +1,32 @@
+﻿2026-08-23T16:29:31.6835241Z Current runner version: '2.336.0'
+2026-08-23T16:29:31.6859923Z ##[group]Runner Image Provisioner
+2026-08-23T16:29:31.6860813Z Hosted Compute Agent
+2026-08-23T16:29:31.6861412Z Version: 20260729.566
+2026-08-23T16:29:31.6862098Z Commit: cf7153fe6e25b664e8693c24944bf2b00355d109
+2026-08-23T16:29:31.6862869Z Build Date: 2026-07-29T19:17:02Z
+2026-08-23T16:29:31.6863538Z Worker ID: {7b333c75-1d4b-4676-9ebf-b03b4ff60bde}
+2026-08-23T16:29:31.6864317Z Azure Region: westus3
+2026-08-23T16:29:31.6864893Z ##[endgroup]
+2026-08-23T16:29:31.6866393Z ##[group]Operating System
+2026-08-23T16:29:31.6867081Z Ubuntu
+2026-08-23T16:29:31.6867587Z 24.04.4
+2026-08-23T16:29:31.6868164Z LTS
+2026-08-23T16:29:31.6868901Z ##[endgroup]
+2026-08-23T16:29:31.6869528Z ##[group]Runner Image
+2026-08-23T16:29:31.6870180Z Image: ubuntu-24.04
+2026-08-23T16:29:31.6870745Z Version: 20260816.277.1
+2026-08-23T16:29:31.6871861Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260816.277/images/ubuntu/Ubuntu2404-Readme.md
+2026-08-23T16:29:31.6873634Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260816.277
+2026-08-23T16:29:31.6874662Z ##[endgroup]
+2026-08-23T16:29:31.6875797Z ##[group]GITHUB_TOKEN Permissions
+2026-08-23T16:29:31.6877661Z Contents: read
+2026-08-23T16:29:31.6878282Z Metadata: read
+2026-08-23T16:29:31.6879159Z ##[endgroup]
+2026-08-23T16:29:31.6881241Z Secret source: Actions
+2026-08-23T16:29:31.6882402Z Prepare workflow directory
+2026-08-23T16:29:31.7222604Z Prepare all required actions
+2026-08-23T16:29:31.7270797Z Getting action download info
+2026-08-23T16:29:32.0360572Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-08-23T16:29:32.1862071Z Download action repository 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020' (SHA:820762786026740c76f36085b0efc47a31fe5020)
+2026-08-23T16:29:32.3206987Z Download action repository 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' (SHA:043fb46d1a93c77aae656e7c1c64a875d1fc6a0a)
+2026-08-23T16:29:32.5432881Z Complete job name: static

@@ -1,0 +1,444 @@
+﻿2026-08-23T16:29:31.4690733Z Current runner version: '2.336.0'
+2026-08-23T16:29:31.4724435Z ##[group]Runner Image Provisioner
+2026-08-23T16:29:31.4725630Z Hosted Compute Agent
+2026-08-23T16:29:31.4726695Z Version: 20260729.566
+2026-08-23T16:29:31.4727658Z Commit: cf7153fe6e25b664e8693c24944bf2b00355d109
+2026-08-23T16:29:31.4728929Z Build Date: 2026-07-29T19:17:02Z
+2026-08-23T16:29:31.4729979Z Worker ID: {9288baf5-a892-4996-8b5d-01b8433b7385}
+2026-08-23T16:29:31.4731135Z Azure Region: eastus2
+2026-08-23T16:29:31.4732288Z ##[endgroup]
+2026-08-23T16:29:31.4734415Z ##[group]Operating System
+2026-08-23T16:29:31.4735472Z Ubuntu
+2026-08-23T16:29:31.4736267Z 24.04.4
+2026-08-23T16:29:31.4737112Z LTS
+2026-08-23T16:29:31.4737955Z ##[endgroup]
+2026-08-23T16:29:31.4738805Z ##[group]Runner Image
+2026-08-23T16:29:31.4739918Z Image: ubuntu-24.04
+2026-08-23T16:29:31.4740783Z Version: 20260816.277.1
+2026-08-23T16:29:31.4743166Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260816.277/images/ubuntu/Ubuntu2404-Readme.md
+2026-08-23T16:29:31.4745736Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260816.277
+2026-08-23T16:29:31.4747320Z ##[endgroup]
+2026-08-23T16:29:31.4748959Z ##[group]GITHUB_TOKEN Permissions
+2026-08-23T16:29:31.4751976Z Contents: read
+2026-08-23T16:29:31.4752872Z Metadata: read
+2026-08-23T16:29:31.4753859Z ##[endgroup]
+2026-08-23T16:29:31.4756713Z Secret source: Actions
+2026-08-23T16:29:31.4758443Z Prepare workflow directory
+2026-08-23T16:29:31.5335517Z Prepare all required actions
+2026-08-23T16:29:31.5403604Z Getting action download info
+2026-08-23T16:29:31.7082644Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-08-23T16:29:31.9285074Z Complete job name: Singular Runtime
+2026-08-23T16:29:31.9806105Z ##[group]Checking docker version
+2026-08-23T16:29:31.9819436Z ##[command]/usr/bin/docker version --format '{{.Server.APIVersion}}'
+2026-08-23T16:29:32.0465721Z '1.48'
+2026-08-23T16:29:32.0483963Z Docker daemon API version: '1.48'
+2026-08-23T16:29:32.0484790Z ##[command]/usr/bin/docker version --format '{{.Client.APIVersion}}'
+2026-08-23T16:29:32.0658168Z '1.48'
+2026-08-23T16:29:32.0672737Z Docker client API version: '1.48'
+2026-08-23T16:29:32.0679393Z ##[endgroup]
+2026-08-23T16:29:32.0682181Z ##[group]Clean up resources from previous jobs
+2026-08-23T16:29:32.0688417Z ##[command]/usr/bin/docker ps --all --quiet --no-trunc --filter "label=85624a"
+2026-08-23T16:29:32.0844282Z ##[command]/usr/bin/docker network prune --force --filter "label=85624a"
+2026-08-23T16:29:32.0980687Z ##[endgroup]
+2026-08-23T16:29:32.0981306Z ##[group]Create local container network
+2026-08-23T16:29:32.0992765Z ##[command]/usr/bin/docker network create --label 85624a github_network_16339a404afa458da1b966bc1b161c09
+2026-08-23T16:29:32.1516798Z 1e884a5b506456058a138f3d23803552e0e6ed1c991d83c8f81a02a1a706d2e1
+2026-08-23T16:29:32.1526301Z ##[endgroup]
+2026-08-23T16:29:32.1550859Z ##[group]Starting job container
+2026-08-23T16:29:32.1575754Z ##[command]/usr/bin/docker --config /home/runner/work/_temp/.docker_bcc3248e-608c-41a8-ba7e-d7940232d906 login ghcr.io -u morluto --password-stdin
+2026-08-23T16:29:32.3347395Z ##[command]/usr/bin/docker --config /home/runner/work/_temp/.docker_bcc3248e-608c-41a8-ba7e-d7940232d906 pull ghcr.io/astral-sh/uv:0.11.28-python3.12-trixie-slim@sha256:3137a0b606f65a74ee0245f43dae219b09e8af98fc37fef20841cbceef35a646
+2026-08-23T16:29:32.5584260Z ghcr.io/astral-sh/uv@sha256:3137a0b606f65a74ee0245f43dae219b09e8af98fc37fef20841cbceef35a646: Pulling from astral-sh/uv
+2026-08-23T16:29:32.6207937Z e95a6c7ea7d4: Pulling fs layer
+2026-08-23T16:29:32.6208800Z aff2d9f8dc87: Pulling fs layer
+2026-08-23T16:29:32.6209531Z df79d931cd67: Pulling fs layer
+2026-08-23T16:29:32.6210235Z b32430367bf0: Pulling fs layer
+2026-08-23T16:29:32.6210853Z dafb78acf6e7: Pulling fs layer
+2026-08-23T16:29:32.6211457Z b32430367bf0: Waiting
+2026-08-23T16:29:32.6212282Z dafb78acf6e7: Waiting
+2026-08-23T16:29:32.7232145Z aff2d9f8dc87: Verifying Checksum
+2026-08-23T16:29:32.7233684Z aff2d9f8dc87: Download complete
+2026-08-23T16:29:32.7617919Z df79d931cd67: Verifying Checksum
+2026-08-23T16:29:32.7619946Z df79d931cd67: Download complete
+2026-08-23T16:29:32.7885699Z b32430367bf0: Verifying Checksum
+2026-08-23T16:29:32.7886647Z b32430367bf0: Download complete
+2026-08-23T16:29:32.8243973Z e95a6c7ea7d4: Download complete
+2026-08-23T16:29:32.9695208Z dafb78acf6e7: Verifying Checksum
+2026-08-23T16:29:32.9696959Z dafb78acf6e7: Download complete
+2026-08-23T16:29:33.8274903Z e95a6c7ea7d4: Pull complete
+2026-08-23T16:29:34.0211244Z aff2d9f8dc87: Pull complete
+2026-08-23T16:29:34.5914438Z df79d931cd67: Pull complete
+2026-08-23T16:29:34.6033313Z b32430367bf0: Pull complete
+2026-08-23T16:29:34.9693656Z dafb78acf6e7: Pull complete
+2026-08-23T16:29:34.9734453Z Digest: sha256:3137a0b606f65a74ee0245f43dae219b09e8af98fc37fef20841cbceef35a646
+2026-08-23T16:29:34.9742028Z Status: Downloaded newer image for ghcr.io/astral-sh/uv@sha256:3137a0b606f65a74ee0245f43dae219b09e8af98fc37fef20841cbceef35a646
+2026-08-23T16:29:34.9750731Z ghcr.io/astral-sh/uv:0.11.28-python3.12-trixie-slim@sha256:3137a0b606f65a74ee0245f43dae219b09e8af98fc37fef20841cbceef35a646
+2026-08-23T16:29:34.9847748Z ##[command]/usr/bin/docker create --name ec2a326f0a214069956e701e79887eff_ghcrioastralshuv01128python312trixieslimsha2563137a0b606f65a74ee0245f43dae219b09e8af98fc37fef20841cbceef35a646_984170 --label 85624a --workdir /__w/jacobian/jacobian --network github_network_16339a404afa458da1b966bc1b161c09  -e "HOME=/github/home" -e GITHUB_ACTIONS=true -e CI=true -v "/var/run/docker.sock":"/var/run/docker.sock" -v "/home/runner/work":"/__w" -v "/home/runner/actions-runner/cached/2.336.0/externals":"/__e":ro -v "/home/runner/work/_temp":"/__w/_temp" -v "/home/runner/work/_actions":"/__w/_actions" -v "/opt/hostedtoolcache":"/__t" -v "/home/runner/work/_temp/_github_home":"/github/home" -v "/home/runner/work/_temp/_github_workflow":"/github/workflow" --entrypoint "tail" ghcr.io/astral-sh/uv:0.11.28-python3.12-trixie-slim@sha256:3137a0b606f65a74ee0245f43dae219b09e8af98fc37fef20841cbceef35a646 "-f" "/dev/null"
+2026-08-23T16:29:35.0127149Z aecae69f5738cdaa16a66a4836d3b5c63062fc9d2b6f1fde54e510e4ac025ebe
+2026-08-23T16:29:35.0152095Z ##[command]/usr/bin/docker start aecae69f5738cdaa16a66a4836d3b5c63062fc9d2b6f1fde54e510e4ac025ebe
+2026-08-23T16:29:35.1955879Z aecae69f5738cdaa16a66a4836d3b5c63062fc9d2b6f1fde54e510e4ac025ebe
+2026-08-23T16:29:35.1985815Z ##[command]/usr/bin/docker ps --all --filter id=aecae69f5738cdaa16a66a4836d3b5c63062fc9d2b6f1fde54e510e4ac025ebe --filter status=running --no-trunc --format "{{.ID}} {{.Status}}"
+2026-08-23T16:29:35.2112608Z aecae69f5738cdaa16a66a4836d3b5c63062fc9d2b6f1fde54e510e4ac025ebe Up Less than a second
+2026-08-23T16:29:35.2132609Z ##[command]/usr/bin/docker inspect --format "{{range .Config.Env}}{{println .}}{{end}}" aecae69f5738cdaa16a66a4836d3b5c63062fc9d2b6f1fde54e510e4ac025ebe
+2026-08-23T16:29:35.2255748Z GITHUB_ACTIONS=true
+2026-08-23T16:29:35.2256621Z CI=true
+2026-08-23T16:29:35.2262578Z HOME=/github/home
+2026-08-23T16:29:35.2263318Z PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+2026-08-23T16:29:35.2264065Z LANG=C.UTF-8
+2026-08-23T16:29:35.2264486Z GPG_KEY=7169605F62C751356D054A26A821E680E5FA6305
+2026-08-23T16:29:35.2265032Z PYTHON_VERSION=3.12.13
+2026-08-23T16:29:35.2265721Z PYTHON_SHA256=c08bc65a81971c1dd5783182826503369466c7e67374d1646519adf05207b684
+2026-08-23T16:29:35.2266464Z UV_TOOL_BIN_DIR=/usr/local/bin
+2026-08-23T16:29:35.2279049Z ##[endgroup]
+2026-08-23T16:29:35.2288829Z ##[group]Waiting for all services to be ready
+2026-08-23T16:29:35.2290686Z ##[endgroup]
+2026-08-23T16:29:35.2606199Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-08-23T16:29:35.2606952Z with:
+2026-08-23T16:29:35.2607239Z   persist-credentials: false
+2026-08-23T16:29:35.2607567Z   repository: morluto/jacobian
+2026-08-23T16:29:35.2610110Z   token: ***
+2026-08-23T16:29:35.2610387Z   ssh-strict: true
+2026-08-23T16:29:35.2610658Z   ssh-user: git
+2026-08-23T16:29:35.2611179Z   clean: true
+2026-08-23T16:29:35.2611454Z   sparse-checkout-cone-mode: true
+2026-08-23T16:29:35.2612076Z   fetch-depth: 1
+2026-08-23T16:29:35.2612450Z   fetch-tags: false
+2026-08-23T16:29:35.2612735Z   show-progress: true
+2026-08-23T16:29:35.2613008Z   lfs: false
+2026-08-23T16:29:35.2613258Z   submodules: false
+2026-08-23T16:29:35.2613527Z   set-safe-directory: true
+2026-08-23T16:29:35.2613839Z   allow-unsafe-pr-checkout: false
+2026-08-23T16:29:35.2614489Z ##[endgroup]
+2026-08-23T16:29:35.2680640Z ##[command]/usr/bin/docker exec  aecae69f5738cdaa16a66a4836d3b5c63062fc9d2b6f1fde54e510e4ac025ebe sh -c "cat /etc/*release | grep ^ID"
+2026-08-23T16:29:35.4849313Z Syncing repository: morluto/jacobian
+2026-08-23T16:29:35.4851605Z ##[group]Getting Git version info
+2026-08-23T16:29:35.4852320Z Working directory is '/__w/jacobian/jacobian'
+2026-08-23T16:29:35.4853015Z ##[endgroup]
+2026-08-23T16:29:35.4853319Z Deleting the contents of '/__w/jacobian/jacobian'
+2026-08-23T16:29:35.4853855Z The repository will be downloaded using the GitHub REST API
+2026-08-23T16:29:35.4854641Z To create a local Git repository instead, add Git 2.18 or higher to the PATH
+2026-08-23T16:29:35.4855277Z Downloading the archive
+2026-08-23T16:29:36.2681166Z Writing archive to disk
+2026-08-23T16:29:36.2779306Z Extracting the archive
+2026-08-23T16:29:36.2876080Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /__w/jacobian/jacobian/dbac4c3f-8995-4055-a780-dd800c13ab7f -f /__w/jacobian/jacobian/dbac4c3f-8995-4055-a780-dd800c13ab7f.tar.gz
+2026-08-23T16:29:36.5939825Z Resolved version morluto-jacobian-2fcc3c8
+2026-08-23T16:29:36.6257997Z ##[group]Run apt-get update
+2026-08-23T16:29:36.6258392Z [36;1mapt-get update[0m
+2026-08-23T16:29:36.6258751Z [36;1mapt-get install -y --no-install-recommends \[0m
+2026-08-23T16:29:36.6259101Z [36;1m  make \[0m
+2026-08-23T16:29:36.6259360Z [36;1m  "singular=${SINGULAR_DEBIAN_VERSION}"[0m
+2026-08-23T16:29:36.6259756Z [36;1mtest "$(Singular -q --execute 'system("version");quit;' \[0m
+2026-08-23T16:29:36.6260155Z [36;1m  | tr -d '[:space:]')" = "44100"[0m
+2026-08-23T16:29:36.6263602Z shell: sh -e {0}
+2026-08-23T16:29:36.6263843Z env:
+2026-08-23T16:29:36.6264064Z   DEBIAN_FRONTEND: noninteractive
+2026-08-23T16:29:36.6264356Z   SINGULAR_DEBIAN_VERSION: 1:4.4.1+ds-2
+2026-08-23T16:29:36.6264638Z ##[endgroup]
+2026-08-23T16:29:36.7469498Z Get:1 http://deb.debian.org/debian trixie InRelease [140 kB]
+2026-08-23T16:29:36.7675854Z Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+2026-08-23T16:29:36.7681648Z Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
+2026-08-23T16:29:36.7901423Z Get:4 http://deb.debian.org/debian trixie/main amd64 Packages [9673 kB]
+2026-08-23T16:29:36.8648733Z Get:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages [4412 B]
+2026-08-23T16:29:36.8659931Z Get:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages [240 kB]
+2026-08-23T16:29:37.5753351Z Fetched 10.1 MB in 1s (11.7 MB/s)
+2026-08-23T16:29:38.1288315Z Reading package lists...
+2026-08-23T16:29:38.6857186Z Reading package lists...
+2026-08-23T16:29:38.8441156Z Building dependency tree...
+2026-08-23T16:29:38.8441689Z Reading state information...
+2026-08-23T16:29:39.0382538Z The following additional packages will be installed:
+2026-08-23T16:29:39.0387499Z   libcdd0t64 libflint19 libgf2x3 libgmp-dev libgmpxx4ldbl libmpfr6 libntl44
+2026-08-23T16:29:39.0395002Z   libsingular4m4n1 singular-data singular-modules singular-ui
+2026-08-23T16:29:39.0407791Z Suggested packages:
+2026-08-23T16:29:39.0408878Z   gmp-doc libgmp10-doc libmpfr-dev make-doc singular-doc
+2026-08-23T16:29:39.0409477Z   graphicsmagick-imagemagick-compat | imagemagick
+2026-08-23T16:29:39.0410147Z Recommended packages:
+2026-08-23T16:29:39.0410712Z   graphviz 4ti2 normaliz surf-alggeo topcom
+2026-08-23T16:29:39.1388070Z The following NEW packages will be installed:
+2026-08-23T16:29:39.1391526Z   libcdd0t64 libflint19 libgf2x3 libgmp-dev libgmpxx4ldbl libmpfr6 libntl44
+2026-08-23T16:29:39.1396210Z   libsingular4m4n1 make singular singular-data singular-modules singular-ui
+2026-08-23T16:29:39.1718857Z 0 upgraded, 13 newly installed, 0 to remove and 11 not upgraded.
+2026-08-23T16:29:39.1719371Z Need to get 15.8 MB of archives.
+2026-08-23T16:29:39.1719780Z After this operation, 49.6 MB of additional disk space will be used.
+2026-08-23T16:29:39.1720429Z Get:1 http://deb.debian.org/debian trixie/main amd64 libgmpxx4ldbl amd64 2:6.3.0+dfsg-3 [329 kB]
+2026-08-23T16:29:39.1938802Z Get:2 http://deb.debian.org/debian trixie/main amd64 libgmp-dev amd64 2:6.3.0+dfsg-3 [642 kB]
+2026-08-23T16:29:39.2129277Z Get:3 http://deb.debian.org/debian trixie/main amd64 libcdd0t64 amd64 094m-1.1+b1 [105 kB]
+2026-08-23T16:29:39.2135682Z Get:4 http://deb.debian.org/debian trixie/main amd64 libmpfr6 amd64 4.2.2-1 [729 kB]
+2026-08-23T16:29:39.2229834Z Get:5 http://deb.debian.org/debian trixie/main amd64 libflint19 amd64 3.1.3-2 [3791 kB]
+2026-08-23T16:29:39.2459617Z Get:6 http://deb.debian.org/debian trixie/main amd64 libgf2x3 amd64 1.3.0-3 [51.4 kB]
+2026-08-23T16:29:39.2525072Z Get:7 http://deb.debian.org/debian trixie/main amd64 libntl44 amd64 11.5.1-1+b3 [868 kB]
+2026-08-23T16:29:39.2559437Z Get:8 http://deb.debian.org/debian trixie/main amd64 libsingular4m4n1 amd64 1:4.4.1+ds-2 [2821 kB]
+2026-08-23T16:29:39.2701955Z Get:9 http://deb.debian.org/debian trixie/main amd64 make amd64 4.4.1-2 [463 kB]
+2026-08-23T16:29:39.2719611Z Get:10 http://deb.debian.org/debian trixie/main amd64 singular-data all 1:4.4.1+ds-2 [4776 kB]
+2026-08-23T16:29:39.2951628Z Get:11 http://deb.debian.org/debian trixie/main amd64 singular-ui amd64 1:4.4.1+ds-2 [13.6 kB]
+2026-08-23T16:29:39.3057600Z Get:12 http://deb.debian.org/debian trixie/main amd64 singular-modules amd64 1:4.4.1+ds-2 [1202 kB]
+2026-08-23T16:29:39.3113732Z Get:13 http://deb.debian.org/debian trixie/main amd64 singular amd64 1:4.4.1+ds-2 [7876 B]
+2026-08-23T16:29:39.9665416Z Fetched 15.8 MB in 0s (98.4 MB/s)
+2026-08-23T16:29:39.9792383Z Selecting previously unselected package libgmpxx4ldbl:amd64.
+2026-08-23T16:29:39.9808071Z (Reading database ... 
+2026-08-23T16:29:39.9808769Z (Reading database ... 5%
+2026-08-23T16:29:39.9809413Z (Reading database ... 10%
+2026-08-23T16:29:39.9809989Z (Reading database ... 15%
+2026-08-23T16:29:39.9810589Z (Reading database ... 20%
+2026-08-23T16:29:39.9811147Z (Reading database ... 25%
+2026-08-23T16:29:39.9811686Z (Reading database ... 30%
+2026-08-23T16:29:39.9812327Z (Reading database ... 35%
+2026-08-23T16:29:39.9812889Z (Reading database ... 40%
+2026-08-23T16:29:39.9813392Z (Reading database ... 45%
+2026-08-23T16:29:39.9813960Z (Reading database ... 50%
+2026-08-23T16:29:39.9814497Z (Reading database ... 55%
+2026-08-23T16:29:39.9814982Z (Reading database ... 60%
+2026-08-23T16:29:39.9815439Z (Reading database ... 65%
+2026-08-23T16:29:39.9841506Z (Reading database ... 70%
+2026-08-23T16:29:39.9846808Z (Reading database ... 75%
+2026-08-23T16:29:39.9848565Z (Reading database ... 80%
+2026-08-23T16:29:39.9853094Z (Reading database ... 85%
+2026-08-23T16:29:39.9858111Z (Reading database ... 90%
+2026-08-23T16:29:39.9867337Z (Reading database ... 95%
+2026-08-23T16:29:39.9867849Z (Reading database ... 100%
+2026-08-23T16:29:39.9868390Z (Reading database ... 5645 files and directories currently installed.)
+2026-08-23T16:29:39.9874984Z Preparing to unpack .../00-libgmpxx4ldbl_2%3a6.3.0+dfsg-3_amd64.deb ...
+2026-08-23T16:29:39.9892686Z Unpacking libgmpxx4ldbl:amd64 (2:6.3.0+dfsg-3) ...
+2026-08-23T16:29:40.0054229Z Selecting previously unselected package libgmp-dev:amd64.
+2026-08-23T16:29:40.0064477Z Preparing to unpack .../01-libgmp-dev_2%3a6.3.0+dfsg-3_amd64.deb ...
+2026-08-23T16:29:40.0071432Z Unpacking libgmp-dev:amd64 (2:6.3.0+dfsg-3) ...
+2026-08-23T16:29:40.0377935Z Selecting previously unselected package libcdd0t64:amd64.
+2026-08-23T16:29:40.0388494Z Preparing to unpack .../02-libcdd0t64_094m-1.1+b1_amd64.deb ...
+2026-08-23T16:29:40.0396277Z Unpacking libcdd0t64:amd64 (094m-1.1+b1) ...
+2026-08-23T16:29:40.0587118Z Selecting previously unselected package libmpfr6:amd64.
+2026-08-23T16:29:40.0597748Z Preparing to unpack .../03-libmpfr6_4.2.2-1_amd64.deb ...
+2026-08-23T16:29:40.0605828Z Unpacking libmpfr6:amd64 (4.2.2-1) ...
+2026-08-23T16:29:40.0918151Z Selecting previously unselected package libflint19:amd64.
+2026-08-23T16:29:40.0929381Z Preparing to unpack .../04-libflint19_3.1.3-2_amd64.deb ...
+2026-08-23T16:29:40.0936752Z Unpacking libflint19:amd64 (3.1.3-2) ...
+2026-08-23T16:29:40.2560113Z Selecting previously unselected package libgf2x3:amd64.
+2026-08-23T16:29:40.2569776Z Preparing to unpack .../05-libgf2x3_1.3.0-3_amd64.deb ...
+2026-08-23T16:29:40.2576958Z Unpacking libgf2x3:amd64 (1.3.0-3) ...
+2026-08-23T16:29:40.2729177Z Selecting previously unselected package libntl44:amd64.
+2026-08-23T16:29:40.2739317Z Preparing to unpack .../06-libntl44_11.5.1-1+b3_amd64.deb ...
+2026-08-23T16:29:40.2747170Z Unpacking libntl44:amd64 (11.5.1-1+b3) ...
+2026-08-23T16:29:40.3270145Z Selecting previously unselected package libsingular4m4n1:amd64.
+2026-08-23T16:29:40.3280524Z Preparing to unpack .../07-libsingular4m4n1_1%3a4.4.1+ds-2_amd64.deb ...
+2026-08-23T16:29:40.3288365Z Unpacking libsingular4m4n1:amd64 (1:4.4.1+ds-2) ...
+2026-08-23T16:29:40.4640596Z Selecting previously unselected package make.
+2026-08-23T16:29:40.4651255Z Preparing to unpack .../08-make_4.4.1-2_amd64.deb ...
+2026-08-23T16:29:40.4658668Z Unpacking make (4.4.1-2) ...
+2026-08-23T16:29:40.4968492Z Selecting previously unselected package singular-data.
+2026-08-23T16:29:40.4979155Z Preparing to unpack .../09-singular-data_1%3a4.4.1+ds-2_all.deb ...
+2026-08-23T16:29:40.4987654Z Unpacking singular-data (1:4.4.1+ds-2) ...
+2026-08-23T16:29:40.7133009Z Selecting previously unselected package singular-ui.
+2026-08-23T16:29:40.7145674Z Preparing to unpack .../10-singular-ui_1%3a4.4.1+ds-2_amd64.deb ...
+2026-08-23T16:29:40.7153623Z Unpacking singular-ui (1:4.4.1+ds-2) ...
+2026-08-23T16:29:40.7285292Z Selecting previously unselected package singular-modules:amd64.
+2026-08-23T16:29:40.7296137Z Preparing to unpack .../11-singular-modules_1%3a4.4.1+ds-2_amd64.deb ...
+2026-08-23T16:29:40.7303517Z Unpacking singular-modules:amd64 (1:4.4.1+ds-2) ...
+2026-08-23T16:29:40.7976594Z Selecting previously unselected package singular:amd64.
+2026-08-23T16:29:40.7987211Z Preparing to unpack .../12-singular_1%3a4.4.1+ds-2_amd64.deb ...
+2026-08-23T16:29:40.7994915Z Unpacking singular:amd64 (1:4.4.1+ds-2) ...
+2026-08-23T16:29:40.8147249Z Setting up libgf2x3:amd64 (1.3.0-3) ...
+2026-08-23T16:29:40.8165453Z Setting up libgmpxx4ldbl:amd64 (2:6.3.0+dfsg-3) ...
+2026-08-23T16:29:40.8182612Z Setting up make (4.4.1-2) ...
+2026-08-23T16:29:40.8199265Z Setting up libmpfr6:amd64 (4.2.2-1) ...
+2026-08-23T16:29:40.8217439Z Setting up singular-data (1:4.4.1+ds-2) ...
+2026-08-23T16:29:40.8249573Z Setting up libflint19:amd64 (3.1.3-2) ...
+2026-08-23T16:29:40.8268419Z Setting up libntl44:amd64 (11.5.1-1+b3) ...
+2026-08-23T16:29:40.8286900Z Setting up libgmp-dev:amd64 (2:6.3.0+dfsg-3) ...
+2026-08-23T16:29:40.8305084Z Setting up libsingular4m4n1:amd64 (1:4.4.1+ds-2) ...
+2026-08-23T16:29:40.8327909Z Setting up libcdd0t64:amd64 (094m-1.1+b1) ...
+2026-08-23T16:29:40.8346718Z Setting up singular-ui (1:4.4.1+ds-2) ...
+2026-08-23T16:29:40.8364224Z Setting up singular-modules:amd64 (1:4.4.1+ds-2) ...
+2026-08-23T16:29:40.8381211Z Setting up singular:amd64 (1:4.4.1+ds-2) ...
+2026-08-23T16:29:40.8402508Z Processing triggers for libc-bin (2.41-12+deb13u3) ...
+2026-08-23T16:29:40.8789252Z ##[group]Run uv sync --locked
+2026-08-23T16:29:40.8789584Z [36;1muv sync --locked[0m
+2026-08-23T16:29:40.8789946Z shell: sh -e {0}
+2026-08-23T16:29:40.8790161Z ##[endgroup]
+2026-08-23T16:29:41.1052657Z Using CPython 3.12.13 interpreter at: /usr/local/bin/python3.12
+2026-08-23T16:29:41.1053273Z Creating virtual environment at: .venv
+2026-08-23T16:29:41.1108076Z Resolved 103 packages in 1ms
+2026-08-23T16:29:41.1303881Z    Building jacobian @ file:///__w/jacobian/jacobian
+2026-08-23T16:29:41.2246752Z Downloading sympy (6.0MiB)
+2026-08-23T16:29:41.2256211Z Downloading pydantic-core (2.0MiB)
+2026-08-23T16:29:41.2264021Z Downloading virtualenv (5.3MiB)
+2026-08-23T16:29:41.2264654Z Downloading numpy (15.9MiB)
+2026-08-23T16:29:41.2266662Z Downloading cryptography (4.5MiB)
+2026-08-23T16:29:41.2274066Z Downloading pygments (1.2MiB)
+2026-08-23T16:29:41.2276168Z Downloading ast-serialize (1.2MiB)
+2026-08-23T16:29:41.2283782Z Downloading grimp (2.2MiB)
+2026-08-23T16:29:41.2285687Z Downloading mypy (14.6MiB)
+2026-08-23T16:29:41.2290370Z Downloading pip (1.7MiB)
+2026-08-23T16:29:41.2297115Z Downloading deptry (1.8MiB)
+2026-08-23T16:29:41.2299466Z Downloading ruff (10.5MiB)
+2026-08-23T16:29:41.2303056Z Downloading networkx (2.0MiB)
+2026-08-23T16:29:41.2313479Z Downloading hypothesis (1.1MiB)
+2026-08-23T16:29:41.2317416Z Downloading z3-solver (31.5MiB)
+2026-08-23T16:29:41.2323029Z Downloading python-flint (9.7MiB)
+2026-08-23T16:29:41.7542979Z  Downloaded ast-serialize
+2026-08-23T16:29:41.8951158Z  Downloaded pydantic-core
+2026-08-23T16:29:41.9220225Z  Downloaded hypothesis
+2026-08-23T16:29:41.9270928Z  Downloaded deptry
+2026-08-23T16:29:41.9650808Z  Downloaded grimp
+2026-08-23T16:29:42.1724470Z  Downloaded pygments
+2026-08-23T16:29:42.1953588Z  Downloaded virtualenv
+2026-08-23T16:29:42.2095791Z  Downloaded cryptography
+2026-08-23T16:29:42.2825877Z  Downloaded pip
+2026-08-23T16:29:42.4916205Z  Downloaded ruff
+2026-08-23T16:29:42.4991244Z  Downloaded python-flint
+2026-08-23T16:29:42.5075851Z  Downloaded networkx
+2026-08-23T16:29:42.8723960Z       Built jacobian @ file:///__w/jacobian/jacobian
+2026-08-23T16:29:43.0010412Z  Downloaded z3-solver
+2026-08-23T16:29:43.0104211Z  Downloaded numpy
+2026-08-23T16:29:43.0736561Z  Downloaded sympy
+2026-08-23T16:29:43.1575755Z  Downloaded mypy
+2026-08-23T16:29:43.1577673Z Prepared 101 packages in 2.04s
+2026-08-23T16:29:43.1594625Z warning: Failed to hardlink files; falling back to full copy. This may lead to degraded performance.
+2026-08-23T16:29:43.1596145Z          If the cache and target directories are on different filesystems, hardlinking may not be supported.
+2026-08-23T16:29:43.1597476Z          If this is intentional, set `export UV_LINK_MODE=copy` or use `--link-mode=copy` to suppress this warning.
+2026-08-23T16:29:43.8409304Z Installed 101 packages in 682ms
+2026-08-23T16:29:43.8409800Z  + annotated-doc==0.0.4
+2026-08-23T16:29:43.8410194Z  + annotated-types==0.7.0
+2026-08-23T16:29:43.8410562Z  + anyio==4.14.2
+2026-08-23T16:29:43.8411067Z  + ast-serialize==0.6.0
+2026-08-23T16:29:43.8411468Z  + attrs==26.1.0
+2026-08-23T16:29:43.8427792Z  + boolean-py==5.0
+2026-08-23T16:29:43.8428178Z  + cachecontrol==0.14.4
+2026-08-23T16:29:43.8428619Z  + certifi==2026.7.22
+2026-08-23T16:29:43.8433324Z  + cffi==2.1.0
+2026-08-23T16:29:43.8433646Z  + cfgv==3.5.0
+2026-08-23T16:29:43.8433968Z  + charset-normalizer==3.4.9
+2026-08-23T16:29:43.8434331Z  + click==8.4.2
+2026-08-23T16:29:43.8434766Z  + coverage==7.15.2
+2026-08-23T16:29:43.8435216Z  + cryptography==50.0.0
+2026-08-23T16:29:43.8435590Z  + cyclonedx-python-lib==11.11.0
+2026-08-23T16:29:43.8435979Z  + defusedxml==0.7.1
+2026-08-23T16:29:43.8436312Z  + deptry==0.25.1
+2026-08-23T16:29:43.8436612Z  + distlib==0.4.3
+2026-08-23T16:29:43.8436908Z  + execnet==2.1.2
+2026-08-23T16:29:43.8437207Z  + filelock==3.32.0
+2026-08-23T16:29:43.8437520Z  + grimp==3.15
+2026-08-23T16:29:43.8437826Z  + h11==0.16.0
+2026-08-23T16:29:43.8438126Z  + httpcore2==2.7.0
+2026-08-23T16:29:43.8438432Z  + httpx2==2.7.0
+2026-08-23T16:29:43.8439120Z  + hypothesis==6.165.7
+2026-08-23T16:29:43.8439442Z  + identify==2.6.19
+2026-08-23T16:29:43.8439729Z  + idna==3.18
+2026-08-23T16:29:43.8440028Z  + import-linter==2.13
+2026-08-23T16:29:43.8440348Z  + iniconfig==2.3.0
+2026-08-23T16:29:43.8440763Z  + jacobian==0.13.0 (from file:///__w/jacobian/jacobian)
+2026-08-23T16:29:43.8441257Z  + jsonschema==4.26.0
+2026-08-23T16:29:43.8441615Z  + jsonschema-specifications==2025.9.1
+2026-08-23T16:29:43.8442171Z  + librt==0.13.0
+2026-08-23T16:29:43.8442492Z  + license-expression==30.4.4
+2026-08-23T16:29:43.8442867Z  + markdown-it-py==4.2.0
+2026-08-23T16:29:43.8443189Z  + mcp==2.0.0
+2026-08-23T16:29:43.8443682Z  + mcp-types==2.0.0
+2026-08-23T16:29:43.8443977Z  + mdurl==0.1.2
+2026-08-23T16:29:43.8444265Z  + mpmath==1.3.0
+2026-08-23T16:29:43.8444550Z  + msgpack==1.2.1
+2026-08-23T16:29:43.8444843Z  + mypy==2.3.0
+2026-08-23T16:29:43.8445148Z  + mypy-extensions==1.1.0
+2026-08-23T16:29:43.8445488Z  + networkx==3.6.1
+2026-08-23T16:29:43.8445790Z  + nodeenv==1.10.0
+2026-08-23T16:29:43.8446093Z  + numpy==2.5.1
+2026-08-23T16:29:43.8446418Z  + opentelemetry-api==1.44.0
+2026-08-23T16:29:43.8446781Z  + packageurl-python==0.17.6
+2026-08-23T16:29:43.8447093Z  + packaging==26.2
+2026-08-23T16:29:43.8447298Z  + pathspec==1.1.1
+2026-08-23T16:29:43.8447495Z  + pip==26.1.2
+2026-08-23T16:29:43.8447690Z  + pip-api==0.0.34
+2026-08-23T16:29:43.8447903Z  + pip-audit==2.10.1
+2026-08-23T16:29:43.8448145Z  + pip-requirements-parser==32.0.1
+2026-08-23T16:29:43.8448427Z  + platformdirs==4.11.0
+2026-08-23T16:29:43.8448660Z  + pluggy==1.6.0
+2026-08-23T16:29:43.8448867Z  + pre-commit==4.6.2
+2026-08-23T16:29:43.8449080Z  + psutil==7.2.2
+2026-08-23T16:29:43.8449295Z  + py-serializable==2.1.0
+2026-08-23T16:29:43.8449523Z  + pycparser==3.0
+2026-08-23T16:29:43.8449730Z  + pydantic==2.13.4
+2026-08-23T16:29:43.8449940Z  + pydantic-core==2.46.4
+2026-08-23T16:29:43.8450169Z  + pygments==2.20.0
+2026-08-23T16:29:43.8450371Z  + pyjwt==2.13.0
+2026-08-23T16:29:43.8450567Z  + pyparsing==3.3.2
+2026-08-23T16:29:43.8450786Z  + pyperf==2.10.0
+2026-08-23T16:29:43.8451102Z  + pytest==9.1.1
+2026-08-23T16:29:43.8451308Z  + pytest-cov==7.1.0
+2026-08-23T16:29:43.8451533Z  + pytest-randomly==4.1.0
+2026-08-23T16:29:43.8453833Z  + pytest-repeat==0.9.4
+2026-08-23T16:29:43.8454136Z  + pytest-split==0.11.0
+2026-08-23T16:29:43.8454381Z  + pytest-timeout==2.4.0
+2026-08-23T16:29:43.8454610Z  + pytest-xdist==3.8.0
+2026-08-23T16:29:43.8454839Z  + python-discovery==1.5.0
+2026-08-23T16:29:43.8455077Z  + python-flint==0.9.0
+2026-08-23T16:29:43.8455301Z  + python-multipart==0.0.32
+2026-08-23T16:29:43.8455547Z  + pyyaml==6.0.3
+2026-08-23T16:29:43.8455756Z  + referencing==0.37.0
+2026-08-23T16:29:43.8455985Z  + requests==2.34.2
+2026-08-23T16:29:43.8456214Z  + requirements-parser==0.13.1
+2026-08-23T16:29:43.8456524Z  + rfc8785==0.1.4
+2026-08-23T16:29:43.8456730Z  + rich==15.0.0
+2026-08-23T16:29:43.8456938Z  + rpds-py==2026.6.3
+2026-08-23T16:29:43.8457143Z  + ruff==0.16.3
+2026-08-23T16:29:43.8457340Z  + shellingham==1.5.4
+2026-08-23T16:29:43.8457567Z  + sortedcontainers==2.4.0
+2026-08-23T16:29:43.8457803Z  + sse-starlette==3.4.6
+2026-08-23T16:29:43.8458020Z  + starlette==1.3.1
+2026-08-23T16:29:43.8458237Z  + sympy==1.14.0
+2026-08-23T16:29:43.8458437Z  + tomli==2.4.1
+2026-08-23T16:29:43.8458650Z  + tomli-w==1.2.0
+2026-08-23T16:29:43.8458855Z  + truststore==0.10.4
+2026-08-23T16:29:43.8459061Z  + typer==0.27.1
+2026-08-23T16:29:43.8459273Z  + types-jsonschema==4.26.0.20260518
+2026-08-23T16:29:43.8459549Z  + types-networkx==3.6.1.20260728
+2026-08-23T16:29:43.8459814Z  + typing-extensions==4.16.0
+2026-08-23T16:29:43.8460067Z  + typing-inspection==0.4.2
+2026-08-23T16:29:43.8460310Z  + urllib3==2.7.0
+2026-08-23T16:29:43.8460515Z  + uvicorn==0.51.0
+2026-08-23T16:29:43.8460723Z  + virtualenv==21.7.0
+2026-08-23T16:29:43.8460943Z  + vulture==2.16
+2026-08-23T16:29:43.8461142Z  + z3-solver==5.0.0.0
+2026-08-23T16:29:43.8630538Z ##[group]Run make test-singular
+2026-08-23T16:29:43.8630864Z [36;1mmake test-singular[0m
+2026-08-23T16:29:43.8631235Z shell: sh -e {0}
+2026-08-23T16:29:43.8631458Z ##[endgroup]
+2026-08-23T16:29:43.9210239Z uv run --locked python tools/pytest_lifecycle.py --name singular --timeout-seconds 1200 -- \
+2026-08-23T16:29:43.9211152Z 	-n 0 --timeout=120 --timeout-method=signal \
+2026-08-23T16:29:43.9211957Z 	tests/math/commutative_algebra_ops \
+2026-08-23T16:29:43.9212440Z 	tests/process/commutative_algebra_ops \
+2026-08-23T16:29:43.9212879Z 	--durations=10 
+2026-08-23T16:29:47.8940865Z ============================= test session starts ==============================
+2026-08-23T16:29:47.8941683Z platform linux -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0
+2026-08-23T16:29:47.8942610Z Using --randomly-seed=626792044
+2026-08-23T16:29:47.8943448Z rootdir: /__w/jacobian/jacobian
+2026-08-23T16:29:47.8943863Z configfile: pyproject.toml
+2026-08-23T16:29:47.8944917Z plugins: anyio-4.14.2, randomly-4.1.0, split-0.11.0, cov-7.1.0, repeat-0.9.4, hypothesis-6.165.7, timeout-2.4.0, xdist-3.8.0
+2026-08-23T16:29:47.8945807Z timeout: 120.0s
+2026-08-23T16:29:47.8946145Z timeout method: signal
+2026-08-23T16:29:47.8946496Z timeout func_only: False
+2026-08-23T16:29:47.8946824Z collected 87 items
+2026-08-23T16:29:47.8947010Z 
+2026-08-23T16:29:49.5812539Z tests/math/commutative_algebra_ops/test_commutative_algebra.py ......... [ 10%]
+2026-08-23T16:29:53.4397725Z ..........................................                               [ 58%]
+2026-08-23T16:29:53.6189028Z tests/math/commutative_algebra_ops/test_saturation.py .........          [ 68%]
+2026-08-23T16:29:54.8263581Z tests/process/commutative_algebra_ops/test_singular_process.py ......... [ 79%]
+2026-08-23T16:29:54.9668732Z ....                                                                     [ 83%]
+2026-08-23T16:30:05.0686455Z tests/math/commutative_algebra_ops/test_groebner_basis.py .............. [100%]
+2026-08-23T16:30:05.0687042Z 
+2026-08-23T16:30:05.0687316Z ============================= slowest 10 durations =============================
+2026-08-23T16:30:05.0694633Z 1.42s call     tests/math/commutative_algebra_ops/test_groebner_basis.py::TestKillableWorkerContract::test_budget_delegates_to_the_bounded_process_runner
+2026-08-23T16:30:05.0696042Z 1.41s call     tests/math/commutative_algebra_ops/test_groebner_basis.py::TestGroebnerBasis::test_simple_ideal
+2026-08-23T16:30:05.0697083Z 1.41s call     tests/math/commutative_algebra_ops/test_groebner_basis.py::TestGroebnerBasis::test_lex_order
+2026-08-23T16:30:05.0698125Z 1.33s call     tests/math/commutative_algebra_ops/test_groebner_basis.py::TestGroebnerBasis::test_principal_ideal
+2026-08-23T16:30:05.0699320Z 1.00s call     tests/process/commutative_algebra_ops/test_singular_process.py::test_timeout_is_not_reported_as_a_mathematical_result
+2026-08-23T16:30:05.0700918Z 0.79s call     tests/math/commutative_algebra_ops/test_commutative_algebra.py::TestIdealMembershipViaGroebnerBasis::test_membership_needs_groebner_reduction
+2026-08-23T16:30:05.0702528Z 0.77s call     tests/math/commutative_algebra_ops/test_groebner_basis.py::TestIdealNormalForm::test_polynomial_in_ideal
+2026-08-23T16:30:05.0703765Z 0.74s call     tests/math/commutative_algebra_ops/test_groebner_basis.py::TestIdealNormalForm::test_polynomial_in_ideal_exactly
+2026-08-23T16:30:05.0705136Z 0.72s call     tests/math/commutative_algebra_ops/test_commutative_algebra.py::TestEliminationIdealSemantics::test_eliminated_variables_lead_lex_order
+2026-08-23T16:30:05.0706464Z 0.70s call     tests/math/commutative_algebra_ops/test_groebner_basis.py::TestEliminationIdeal::test_eliminate_one_variable
+2026-08-23T16:30:05.0707319Z ============================= 87 passed in 19.67s ==============================
+2026-08-23T16:30:05.3738165Z Post job cleanup.
+2026-08-23T16:30:05.3745740Z ##[command]/usr/bin/docker exec  aecae69f5738cdaa16a66a4836d3b5c63062fc9d2b6f1fde54e510e4ac025ebe sh -c "cat /etc/*release | grep ^ID"
+2026-08-23T16:30:05.5702799Z Stop and remove container: ec2a326f0a214069956e701e79887eff_ghcrioastralshuv01128python312trixieslimsha2563137a0b606f65a74ee0245f43dae219b09e8af98fc37fef20841cbceef35a646_984170
+2026-08-23T16:30:05.5707928Z ##[command]/usr/bin/docker rm --force aecae69f5738cdaa16a66a4836d3b5c63062fc9d2b6f1fde54e510e4ac025ebe
+2026-08-23T16:30:05.7446057Z aecae69f5738cdaa16a66a4836d3b5c63062fc9d2b6f1fde54e510e4ac025ebe
+2026-08-23T16:30:05.7477861Z Remove container network: github_network_16339a404afa458da1b966bc1b161c09
+2026-08-23T16:30:05.7483007Z ##[command]/usr/bin/docker network rm github_network_16339a404afa458da1b966bc1b161c09
+2026-08-23T16:30:05.8597555Z github_network_16339a404afa458da1b966bc1b161c09
+2026-08-23T16:30:05.8688207Z Cleaning up orphan processes

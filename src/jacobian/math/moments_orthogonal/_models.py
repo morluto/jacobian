@@ -29,7 +29,9 @@ def _to_fractions(
     return tuple(v.as_fraction() for v in values)
 
 
-def _from_fractions(values) -> tuple[CanonicalRational, ...]:
+def _from_fractions(
+    values: tuple[Fraction, ...],
+) -> tuple[CanonicalRational, ...]:
     return tuple(CanonicalRational.from_fraction(v) for v in values)
 
 

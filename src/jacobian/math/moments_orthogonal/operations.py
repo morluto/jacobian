@@ -378,6 +378,11 @@ def gaussian_quadrature(
 
 
 __all__ = [
+    "ChristoffelDarbouxKernel",
+    "GaussianQuadrature",
+    "HankelMatrix",
+    "JacobiMatrix",
+    "RecurrenceCoefficients",
     "christoffel_darboux",
     "gaussian_quadrature",
     "hankel_matrix",

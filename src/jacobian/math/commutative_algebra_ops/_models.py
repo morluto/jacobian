@@ -382,6 +382,30 @@ def _sympy_monomial(symbols: tuple[Any, ...], exponents: tuple[int, ...]) -> Any
     return monomial
 
 
+def _require_zero_free_basis(
+    basis_exprs: list[Any],
+    source_exprs: list[Any],
+) -> list[Any] | None:
+    """Gate zero entries, returning ``None`` when no replay is needed.
+
+    A reduced Gröbner basis never contains the zero polynomial. Only the
+    producer's singleton-zero representation of the zero ideal itself may
+    carry one; any other zero entry silently weakens every invariant check.
+    """
+    if not basis_exprs:
+        if any(not expr.is_zero for expr in source_exprs):
+            raise ValueError("basis must contain every source-ideal generator")
+        return None
+    if any(expr.is_zero for expr in basis_exprs):
+        if not (len(basis_exprs) == 1 and all(expr.is_zero for expr in source_exprs)):
+            raise ValueError(
+                "a reduced Gröbner basis contains no zero generator; only "
+                "the zero ideal admits the singleton-zero representation"
+            )
+        return None
+    return basis_exprs
+
+
 def _require_source_bound_basis(
     basis: RationalPolynomialIdeal,
     source: RationalPolynomialIdeal,
@@ -403,10 +427,8 @@ def _require_source_bound_basis(
     symbols = symbols_for_variables(basis.variables)
     basis_exprs = [to_expr(generator) for generator in basis.generators]
     source_exprs = [to_expr(generator) for generator in source.generators]
-    nonzero = [expr for expr in basis_exprs if not expr.is_zero]
-    if not nonzero:
-        if any(not expr.is_zero for expr in source_exprs):
-            raise ValueError("basis must contain every source-ideal generator")
+    nonzero = _require_zero_free_basis(basis_exprs, source_exprs)
+    if nonzero is None:
         return
     leading_terms = [sympy.LT(expr, *symbols, order=monomial_order) for expr in nonzero]
     leading_exps = [

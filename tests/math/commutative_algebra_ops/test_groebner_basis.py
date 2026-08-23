@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from jacobian.math.commutative_algebra_ops import _operations
 from jacobian.math.commutative_algebra_ops._models import (
     EliminationIdealRequest,
     GroebnerBasisRequest,
+    GroebnerBasisResult,
     IdealComputationBudget,
     IdealNormalFormRequest,
 )
@@ -81,6 +85,70 @@ class TestGroebnerBasis:
             GroebnerBasisRequest(ideal=ideal, monomial_order="lex")
         )
         assert result.generator_count >= 1
+
+
+class TestGroebnerBasisValidation:
+    """Authored results must satisfy reduced-basis invariants exactly."""
+
+    def test_zero_generator_rejected_for_nonzero_ideal(self):
+        """A claimed basis (x, 0) for <x> is not a reduced Gröbner basis."""
+        g = _poly(("x",), (1, 1, (1,)))
+        request = GroebnerBasisRequest(ideal=_ideal(("x",), (g,)), monomial_order="lex")
+        zero = _poly(("x",))
+        forged_basis = RationalPolynomialIdeal(variables=("x",), generators=(g, zero))
+        with pytest.raises(ValidationError, match="no zero generator"):
+            GroebnerBasisResult(
+                request=request,
+                outcome="COMPUTED",
+                basis=forged_basis,
+                generator_count=2,
+                monomial_order="lex",
+            )
+
+    def test_singleton_zero_only_for_zero_ideal(self):
+        """The singleton-zero representation is reserved for the zero ideal."""
+        nonzero_g = _poly(("x",), (1, 1, (1,)))
+        zero = _poly(("x",))
+        request = GroebnerBasisRequest(
+            ideal=_ideal(("x",), (nonzero_g,)), monomial_order="lex"
+        )
+        with pytest.raises(ValidationError, match="singleton-zero"):
+            GroebnerBasisResult(
+                request=request,
+                outcome="COMPUTED",
+                basis=RationalPolynomialIdeal(variables=("x",), generators=(zero,)),
+                generator_count=1,
+                monomial_order="lex",
+            )
+
+    def test_zero_ideal_produces_singleton_zero_basis(self):
+        """The producer's canonical zero-ideal basis revalidates end to end."""
+        zero = _poly(("x",))
+        result = compute_groebner_basis(
+            GroebnerBasisRequest(ideal=_ideal(("x",), (zero,)))
+        )
+        assert result.outcome == "COMPUTED"
+        assert result.generator_count == 1
+        assert len(result.basis.generators[0].polynomial.terms) == 0
+
+    def test_basis_with_trailing_zero_for_mixed_source_rejected(self):
+        """<x, 0> has reduced basis (x); appending a zero entry is invalid."""
+        g = _poly(("x", "y"), (1, 1, (1, 0)))
+        zero = _poly(("x", "y"))
+        request = GroebnerBasisRequest(
+            ideal=_ideal(("x", "y"), (g, zero)), monomial_order="grevlex"
+        )
+        forged_basis = RationalPolynomialIdeal(
+            variables=("x", "y"), generators=(g, zero)
+        )
+        with pytest.raises(ValidationError, match="no zero generator"):
+            GroebnerBasisResult(
+                request=request,
+                outcome="COMPUTED",
+                basis=forged_basis,
+                generator_count=2,
+                monomial_order="grevlex",
+            )
 
 
 class TestIdealNormalForm:

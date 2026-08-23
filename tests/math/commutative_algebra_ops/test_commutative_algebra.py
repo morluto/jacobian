@@ -722,6 +722,70 @@ class TestSaturationContainment:
         )
         assert seen["budget"] == budget
 
+    def test_over_limit_claim_is_refused_before_replay(self, monkeypatch) -> None:
+        """A serialized COMPUTED claim outside the backend's declared output
+        limits cannot validate even when ideal-equivalent to the truth."""
+        from jacobian.math.commutative_algebra_ops._models import (
+            MAX_OUTPUT_TERMS,
+            IdealSaturationResult,
+        )
+
+        def fail(*args: object, **kwargs: object) -> str:
+            raise AssertionError("replay must not start for oversized claims")
+
+        monkeypatch.setattr(_singular, "run_singular_saturation_verification", fail)
+        x = _polynomial(("x", "y"), {(1, 0): 1})
+        padded = _polynomial(("x", "y"), {(1, exponent): 1 for exponent in range(64)})
+        oversized = RationalPolynomialIdeal(
+            variables=("x", "y"),
+            generators=(x, *([padded] * 16)),
+        )
+        assert (
+            sum(len(generator.polynomial.terms) for generator in oversized.generators)
+            > MAX_OUTPUT_TERMS
+        )
+        with pytest.raises(ValueError, match="exact-result limit"):
+            IdealSaturationResult(
+                outcome="COMPUTED",
+                source_ideal=RationalPolynomialIdeal(
+                    variables=("x", "y"), generators=(x,)
+                ),
+                source_polynomial=_polynomial(("x", "y"), {(0, 1): 1}),
+                saturation=oversized,
+                backend_version="4.4",
+                verification_budget=IdealComputationBudget(),
+            )
+
+    def test_claim_at_the_output_limit_round_trips(self, monkeypatch) -> None:
+        """An ideal-equivalent claim of exactly the declared aggregate-term
+        limit still validates, so the refusal is a boundary, not a ban."""
+        from jacobian.math.commutative_algebra_ops._models import (
+            MAX_OUTPUT_TERMS,
+            IdealSaturationResult,
+        )
+
+        self._stub_verdict(monkeypatch, "VERIFIED")
+        x = _polynomial(("x", "y"), {(1, 0): 1})
+        padded = _polynomial(("x", "y"), {(1, exponent): 1 for exponent in range(64)})
+        shorter = _polynomial(("x", "y"), {(1, exponent): 1 for exponent in range(63)})
+        at_limit = RationalPolynomialIdeal(
+            variables=("x", "y"),
+            generators=(x, *([padded] * 15), shorter),
+        )
+        assert (
+            sum(len(generator.polynomial.terms) for generator in at_limit.generators)
+            == MAX_OUTPUT_TERMS
+        )
+        result = IdealSaturationResult(
+            outcome="COMPUTED",
+            source_ideal=RationalPolynomialIdeal(variables=("x", "y"), generators=(x,)),
+            source_polynomial=_polynomial(("x", "y"), {(0, 1): 1}),
+            saturation=at_limit,
+            backend_version="4.4",
+            verification_budget=IdealComputationBudget(),
+        )
+        assert result.saturation == at_limit
+
     @requires_singular
     @pytest.mark.requires_backend("singular")
     def test_forged_result_refused_by_real_backend(self) -> None:

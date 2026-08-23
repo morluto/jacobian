@@ -286,6 +286,95 @@ class TestSolutionGrowthAdmission:
         assert result.nullspace_basis is not None
 
 
+class TestAdmissionWorkBounding:
+    """Growth admission derives its bounds without factorial enumeration."""
+
+    def _identity(self, size: int):
+        one = _rf((), (1, ()))
+        zero = _rf(())
+        entries = tuple(
+            tuple(one if i == j else zero for j in range(size)) for i in range(size)
+        )
+        return _matrix((), entries), one, zero
+
+    def test_identity_eight_by_eight_zero_rhs_round_trips(self):
+        """The trivial 8x8 identity system with a zero right-hand side is
+        admitted, solved, and revalidated from its serialized result."""
+        from jacobian.math.matrices.symbolic._models import (
+            SymbolicLinearSystemResult,
+        )
+
+        matrix, _, zero = self._identity(8)
+        request = SymbolicLinearSystemRequest(matrix=matrix, rhs=(zero,) * 8)
+        result = compute_symbolic_linear_system(request)
+        assert result.classification == "UNIQUE"
+        assert result.solution is not None
+        assert all(
+            value.numerator.terms == ()
+            and value.denominator.terms[0].coefficient.num == "1"
+            for value in result.solution
+        )
+        revalidated = SymbolicLinearSystemResult.model_validate(result.model_dump())
+        assert revalidated.solution == result.solution
+
+    def test_diagonal_system_with_unit_rhs_keeps_exact_sparse_bounds(self):
+        """An 8x8 diagonal system with unit right-hand side stays admitted.
+
+        Its exact per-size expansion is 1; the loose closed-form fallback
+        would charge the right-hand-side column degree 8 and reject on the
+        coefficient budget, so acceptance pins the exact enumeration path.
+        """
+        import time
+
+        matrix, one, _ = self._identity(8)
+        started = time.perf_counter()
+        request = SymbolicLinearSystemRequest(matrix=matrix, rhs=(one,) * 8)
+        assert time.perf_counter() - started < 5.0
+        result = compute_symbolic_linear_system(request)
+        assert result.classification == "UNIQUE"
+
+    def test_exhausted_enumeration_falls_back_to_sound_closed_form(self, monkeypatch):
+        """With the exact enumeration budget at zero every size uses the
+        closed-form injection bound: still sound, coarser on sparse data.
+
+        The star system's exact expansion is 1, but its first row and
+        column support degrees force a closed-form bound of 8, which
+        exceeds the coefficient budget; both verdicts stay typed."""
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.matrices.symbolic import _models
+
+        one = _rf((), (1, ()))
+        zero = _rf(())
+        entries = tuple(
+            tuple(one for _ in range(8))
+            if i == 0
+            else tuple(one if j == 0 else zero for j in range(8))
+            for i in range(8)
+        )
+        matrix = _matrix((), entries)
+        request = SymbolicLinearSystemRequest(matrix=matrix, rhs=(zero,) * 8)
+        assert request.matrix.entries == entries
+        monkeypatch.setattr(_models, "_EXPANSION_ENUMERATION_NODE_BUDGET", 0)
+        with pytest.raises(ValidationError, match="coefficient"):
+            SymbolicLinearSystemRequest(matrix=matrix, rhs=(zero,) * 8)
+
+    def test_dense_eight_by_eight_system_is_rejected_quickly(self):
+        """A fully dense 8x8 unit system exceeds the derived term budget."""
+        import time
+
+        import pytest
+        from pydantic import ValidationError
+
+        one = _rf((), (1, ()))
+        matrix = _matrix((), ((one,) * 8,) * 8)
+        started = time.perf_counter()
+        with pytest.raises(ValidationError, match="term budget"):
+            SymbolicLinearSystemRequest(matrix=matrix, rhs=(one,) * 8)
+        assert time.perf_counter() - started < 5.0
+
+
 class TestSourceBoundResult:
     """The retained result must be verifiable against its source system."""
 

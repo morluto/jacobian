@@ -214,6 +214,26 @@ class IdealQuotientResult(StrictModel):
         return self
 
 
+def _require_saturation_result_budget(
+    saturation: RationalPolynomialIdeal,
+    budget: IdealComputationBudget,
+) -> None:
+    """Hold a claimed computed saturation to the backend's output limits."""
+    if len(saturation.generators) > budget.maximum_output_generators:
+        raise ValueError(
+            "computed saturation exceeds the declared "
+            f"{budget.maximum_output_generators}-generator exact-result limit"
+        )
+    if (
+        sum(len(generator.polynomial.terms) for generator in saturation.generators)
+        > budget.maximum_output_terms
+    ):
+        raise ValueError(
+            "computed saturation exceeds the declared "
+            f"{budget.maximum_output_terms}-term exact-result limit"
+        )
+
+
 class IdealSaturationRequest(StrictModel):
     """Compute 'I : <d>^infinity' for a bounded ideal and a polynomial."""
 
@@ -327,6 +347,11 @@ class IdealSaturationResult(StrictModel):
                 raise ValueError(
                     "computed saturation requires a value and backend version"
                 )
+            # The claimed exact result must stay inside the declared
+            # backend output domain before any replay formats it into a
+            # script, so an independently authored payload cannot validate
+            # a shape the bounded backend could never produce.
+            _require_saturation_result_budget(saturation, verification_budget)
             IdealSaturationRequest(
                 ideal=self.source_ideal,
                 saturation_polynomial=self.source_polynomial,

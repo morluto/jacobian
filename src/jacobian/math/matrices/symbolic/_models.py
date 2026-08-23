@@ -324,32 +324,132 @@ def _entry_growth_factor(value: RationalFunction) -> int:
     return max(numerator_terms, denominator_terms) ** 2
 
 
-def _minor_expansion_bound(
+_EXPANSION_ENUMERATION_NODE_BUDGET = 200_000
+
+
+class _ExpansionBudgetExhaustedError(Exception):
+    """Exact Leibniz enumeration exceeded its admission node budget."""
+
+
+def _augmented_growth_support(
     entries: tuple[tuple[RationalFunction, ...], ...],
     rhs: tuple[RationalFunction, ...],
-    row_indices: tuple[int, ...],
-    column_indices: tuple[int, ...],
-) -> int:
-    """Leibniz sum of per-entry growth factors for one minor of ``[A | b]``."""
+) -> tuple[tuple[tuple[int, int], ...], ...]:
+    """Nonzero ``(column, growth factor)`` cells per row of ``[A | b]``."""
     columns = len(entries[0])
-    size = len(row_indices)
-    total = 0
-    for permutation in permutations(range(size)):
-        product = 1
-        for row_position, column_position in enumerate(permutation):
-            row_index = row_indices[row_position]
-            column_index = column_indices[column_position]
-            if column_index == columns:
-                if row_index >= len(rhs):
-                    return 0
-                value = rhs[row_index]
-            else:
-                value = entries[row_index][column_index]
-            product *= _entry_growth_factor(value)
-            if product == 0:
-                break
-        total += product
-    return total
+    support: list[tuple[tuple[int, int], ...]] = []
+    for row_index, row in enumerate(entries):
+        cells = [
+            (column, _entry_growth_factor(value)) for column, value in enumerate(row)
+        ]
+        if row_index < len(rhs):
+            cells.append((columns, _entry_growth_factor(rhs[row_index])))
+        support.append(tuple(cell for cell in cells if cell[1] > 0))
+    return tuple(support)
+
+
+def _injection_count_bound(
+    support: tuple[tuple[tuple[int, int], ...], ...],
+    columns_count: int,
+    size: int,
+) -> int:
+    """Closed-form expansion bound over every size-k minor of ``[A | b]``.
+
+    A Leibniz term survives only through an injection of its rows into
+    distinct nonzero-growth columns, so the number of surviving terms is
+    bounded by the product of the smaller of each largest row and column
+    degree, times the largest single-cell growth factor to the size.
+    """
+    row_degrees = sorted((len(row) for row in support), reverse=True)
+    column_degrees = [0] * (columns_count + 1)
+    for row in support:
+        for column, _ in row:
+            column_degrees[column] += 1
+    column_degrees.sort(reverse=True)
+    growth_factors = [factor for row in support for _, factor in row]
+    maximum_growth: int = max(growth_factors, default=0)
+    degree_product = 1
+    for index in range(size):
+        degree_product *= min(row_degrees[index], column_degrees[index])
+    expansion_bound: int = degree_product * maximum_growth**size
+    return expansion_bound
+
+
+def _exact_size_expansion(
+    support: tuple[tuple[tuple[int, int], ...], ...],
+    rows_count: int,
+    columns_count: int,
+    size: int,
+    visited: list[int],
+) -> int:
+    """Exact maximum Leibniz expansion over every size-k minor.
+
+    The structural walk visits only nonzero-growth cells and charges each
+    visit to ``visited[0]``, aborting once the shared admission budget is
+    exhausted.
+    """
+
+    def walk(
+        row_position: int,
+        row_indices: tuple[int, ...],
+        available: int,
+        product: int,
+    ) -> int:
+        if row_position == len(row_indices):
+            return product
+        total = 0
+        for column, factor in support[row_indices[row_position]]:
+            bit = 1 << column
+            if available & bit:
+                visited[0] += 1
+                if visited[0] > _EXPANSION_ENUMERATION_NODE_BUDGET:
+                    raise _ExpansionBudgetExhaustedError()
+                total += walk(
+                    row_position + 1,
+                    row_indices,
+                    available ^ bit,
+                    product * factor,
+                )
+        return total
+
+    maximum = 0
+    for row_indices in combinations(range(rows_count), size):
+        for column_indices in combinations(range(columns_count + 1), size):
+            column_mask = sum(1 << column for column in column_indices)
+            maximum = max(maximum, walk(0, row_indices, column_mask, 1))
+    return maximum
+
+
+def _expansion_bounds_by_size(
+    entries: tuple[tuple[RationalFunction, ...], ...],
+    rhs: tuple[RationalFunction, ...],
+) -> list[int]:
+    """Per-size maximum minor expansion, exact within a node budget.
+
+    Sparse systems complete the exact structural enumeration far below
+    the budget; once it is exceeded, remaining sizes fall back to
+    ``_injection_count_bound``, so request validation never performs
+    factorial permutation work.
+    """
+    rows_count = len(entries)
+    columns_count = len(entries[0])
+    work = min(rows_count, columns_count)
+    support = _augmented_growth_support(entries, rhs)
+    bounds = [0] * (work + 1)
+    visited = [0]
+    exhausted = False
+    for size in range(1, work + 1):
+        if exhausted:
+            bounds[size] = _injection_count_bound(support, columns_count, size)
+            continue
+        try:
+            bounds[size] = _exact_size_expansion(
+                support, rows_count, columns_count, size, visited
+            )
+        except _ExpansionBudgetExhaustedError:
+            exhausted = True
+            bounds[size] = _injection_count_bound(support, columns_count, size)
+    return bounds
 
 
 def _solution_component_growth_bound(
@@ -374,16 +474,7 @@ def _solution_component_growth_bound(
     # expansion work behind some solution component; A's own minors are a
     # subset of these. Lower-rank minors matter when all work-size minors
     # are structurally zero.
-    maximum_expansion_by_size = [0] * (work + 1)
-    for size in range(1, work + 1):
-        for row_indices in combinations(range(rows), size):
-            for column_indices in combinations(range(columns + 1), size):
-                expansion = _minor_expansion_bound(
-                    entries, rhs, row_indices, column_indices
-                )
-                maximum_expansion_by_size[size] = max(
-                    maximum_expansion_by_size[size], expansion
-                )
+    maximum_expansion_by_size = _expansion_bounds_by_size(entries, rhs)
 
     values = tuple(value for row in entries for value in row) + tuple(rhs)
     maximum_exponent = max(

@@ -28,14 +28,6 @@ _MAX_RESULTANT_TERMS = 1_024
 # operation converter uses this same bound; keeping it here lets the result
 # validator reproduce the kernel's exact exceedance decision.
 _MAX_FACTOR_OUTPUT_TERMS = 1_024
-# Reconstruction replay divides the restated polynomial by each irreducible
-# power instead of expanding their product, so no intermediate ever carries
-# more terms than these named caps.  The densest legitimate cofactors come
-# from paired geometric sums over the admitted exponent envelope (64 x 64 =
-# 4,096 terms); the caps keep one safety octave above that envelope and bound
-# the cumulative divisor-term work spent replaying one result.
-_MAX_RECONSTRUCTION_COFACTOR_TERMS = 8_192
-_MAX_RECONSTRUCTION_WORK_TERMS = 1_048_576
 
 MonomialOrder = Literal["lex", "grlex", "grevlex"]
 """Declared monomial order for multivariate polynomial division."""
@@ -330,7 +322,11 @@ class MultivariateFactorResult(StrictModel):
         return self
 
 
-def _factor_content_key(record: MultivariateIrreducibleFactor) -> tuple:
+_FactorContentKey = tuple[tuple[tuple[int, ...], str, str], ...]
+_SympyFactorKey = tuple[tuple[tuple[int, ...], int, int], ...]
+
+
+def _factor_content_key(record: MultivariateIrreducibleFactor) -> _FactorContentKey:
     return tuple(
         (term.exponents, term.coefficient.num, term.coefficient.den)
         for term in record.factor.polynomial.terms
@@ -453,7 +449,7 @@ def _check_factor_records(
 def _require_distinct_canonical_order(
     factors: tuple[MultivariateIrreducibleFactor, ...],
 ) -> None:
-    seen: set[tuple] = set()
+    seen: set[_FactorContentKey] = set()
     for key in (_factor_content_key(record) for record in factors):
         if key in seen:
             raise ValueError("irreducible factors must be distinct")
@@ -472,7 +468,7 @@ def _require_distinct_canonical_order(
         raise ValueError("irreducible factors must use canonical order")
 
 
-def _require_monic(poly: object, factor: RationalPolynomial) -> None:
+def _require_monic(poly: Any, factor: RationalPolynomial) -> None:
     lc = poly.LC()
     if getattr(lc, "p", None) != 1 or getattr(lc, "q", None) != 1:
         raise ValueError(f"irreducible factor {factor} is not monic")
@@ -497,6 +493,16 @@ def _verify_monic_irreducibles(
             raise ValueError("invalid factor normalization check") from exc
 
 
+def _sympy_factor_key(poly: Any) -> _SympyFactorKey:
+    """Return the canonical hashable form of one monic QQ ``Poly``."""
+
+    return tuple(
+        sorted(
+            (tuple(monom), int(coeff.p), int(coeff.q)) for monom, coeff in poly.terms()
+        )
+    )
+
+
 def _verify_exact_reconstruction(
     coefficient: CanonicalRational,
     factors: tuple[MultivariateIrreducibleFactor, ...],
@@ -504,54 +510,42 @@ def _verify_exact_reconstruction(
 ) -> None:
     """Check coefficient * ∏ factor**multiplicity == reconstructed exactly.
 
-    The replay divides the restated polynomial by each monic irreducible
-    power instead of expanding their product: every division must be exact,
-    so invalid payloads fail on the first inexact step without ever
-    materializing a dense intermediate product.  Largest-degree factors are
-    divided off first, which keeps legitimate cofactors sparse, and every
-    intermediate quotient and the cumulative divisor-term work stay inside
-    the named replay caps.
+    The replay recomputes the exact content and the canonical monic
+    irreducible multiset of the retained source polynomial with the same
+    bounded ``factor_list`` invocation the operation itself performs, then
+    compares it against the claimed decomposition.  Monic irreducible
+    factorization over ``QQ[variables]`` is unique, so matching multisets
+    establish the product identity without expanding any intermediate
+    product; partial products of admitted factorizations can be
+    exponentially denser than their source (paired cyclotomic sums reach
+    4^7 * 2 = 32,768 terms for an 8-variable input of 256 terms), so a
+    division replay cannot carry a cofactor bound that covers every
+    admitted factorization.  The verification cost is one engine call on
+    the already-admitted source envelope.
     """
 
-    from sympy import QQ, Poly
-    from sympy import Rational as SymRational
-
-    from jacobian.math.polynomials._conversions import (
-        rational_polynomial_to_sympy,
-        symbols_for_variables,
-    )
+    from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
+    from jacobian.math.polynomials._sympy import _monic_decomposition
 
     try:
-        inverse = Fraction(1) / coefficient.as_fraction()
-        quotient = rational_polynomial_to_sympy(reconstructed) * SymRational(
-            inverse.numerator, inverse.denominator
+        source = rational_polynomial_to_sympy(reconstructed)
+        content, raw_factors, _ = _monic_decomposition(
+            source,
+            source.factor_list(),
+            label="multivariate factorization",
         )
-        work = 0
-        for record in sorted(
-            factors,
-            key=lambda item: (-_factor_total_degree(item), -item.multiplicity),
+        claimed: dict[_SympyFactorKey, int] = {}
+        for record in factors:
+            key = _sympy_factor_key(rational_polynomial_to_sympy(record.factor))
+            claimed[key] = claimed.get(key, 0) + record.multiplicity
+        replayed: dict[_SympyFactorKey, int] = {}
+        for factor, multiplicity in raw_factors:
+            key = _sympy_factor_key(factor)
+            replayed[key] = replayed.get(key, 0) + multiplicity
+        if (
+            _monic_content_fraction(content) != coefficient.as_fraction()
+            or claimed != replayed
         ):
-            divisor = rational_polynomial_to_sympy(record.factor)
-            divisor_terms = max(len(divisor.terms()), 1)
-            for _ in range(record.multiplicity):
-                quotient, remainder = quotient.div(divisor)
-                if not remainder.is_zero:
-                    raise ValueError(
-                        "factorization product does not equal reconstructed polynomial"
-                    )
-                cofactor_terms = len(quotient.terms())
-                if cofactor_terms > _MAX_RECONSTRUCTION_COFACTOR_TERMS:
-                    raise ValueError(
-                        "reconstruction replay cofactor exceeds its "
-                        "bounded support envelope"
-                    )
-                work += cofactor_terms * divisor_terms
-                if work > _MAX_RECONSTRUCTION_WORK_TERMS:
-                    raise ValueError(
-                        "reconstruction replay exceeds its bounded work envelope"
-                    )
-        unit = Poly(1, *symbols_for_variables(reconstructed.variables), domain=QQ)
-        if quotient != unit:
             raise ValueError(
                 "factorization product does not equal reconstructed polynomial"
             )

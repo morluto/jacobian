@@ -123,7 +123,10 @@ class TestMultivariateFactorResultInvariants:
         reconstructed = _poly(("x", "y"), ((1, 1, (2, 0)),))
         for kwargs in (
             {"normalization": None, "product_reconstruction": "EXACT"},
-            {"normalization": "CONTENT_AND_MONIC_IRREDUCIBLES", "product_reconstruction": None},
+            {
+                "normalization": "CONTENT_AND_MONIC_IRREDUCIBLES",
+                "product_reconstruction": None,
+            },
             {"normalization": None, "product_reconstruction": None},
         ):
             with pytest.raises(ValidationError, match="FACTORIZED outcomes declare"):
@@ -369,3 +372,111 @@ class TestBudgetOutcomeCoefficientBinding:
             dump["coefficient"] = {"num": numerator, "den": "7"}
             with pytest.raises(ValidationError):
                 MultivariateFactorResult.model_validate(dump)
+
+
+def _difference_product_terms(variables, exponent):
+    """Expand prod_i (variable_i**exponent - 1) into descending-lex terms."""
+
+    accumulated = {tuple(0 for _ in variables): Fraction(1)}
+    for index in range(len(variables)):
+        shifted = {}
+        for exps, coeff in accumulated.items():
+            shifted[exps] = shifted.get(exps, Fraction(0)) + coeff
+            raised = list(exps)
+            raised[index] += exponent
+            shifted[tuple(raised)] = shifted.get(tuple(raised), Fraction(0)) - coeff
+        accumulated = {exps: coeff for exps, coeff in shifted.items() if coeff != 0}
+    terms = [
+        (coeff.numerator, coeff.denominator, exps)
+        for exps, coeff in accumulated.items()
+    ]
+    terms.sort(key=lambda term: term[2], reverse=True)
+    return terms
+
+
+class TestUniqueFactorizationReplay:
+    def test_paired_cyclotomic_product_returns_typed_result(self):
+        """prod_{i=1..8} (x_i^12 - 1) is the review counterexample whose
+        division replay materialized 32,768-term quotients; the request must
+        return the typed FACTORIZED result with all 48 irreducible factors."""
+        variables = tuple(f"x{i}" for i in range(1, 9))
+        poly = _poly(variables, _difference_product_terms(variables, 12))
+        assert len(poly.polynomial.terms) == 256
+        result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
+        assert result.status == "FACTORIZED"
+        assert len(result.factors) == 48
+        assert result.reconstructed == poly
+        assert MultivariateFactorResult.model_validate(result.model_dump()) == result
+
+    def test_cyclotomic_pair_known_answer(self):
+        """(x^12-1)(y^12-1) splits into six cyclotomic factors per variable;
+        every factor is monic with multiplicity one and total degrees are
+        1, 1, 2, 2, 2, 4 per variable."""
+        poly = _poly(("x", "y"), _difference_product_terms(("x", "y"), 12))
+        result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
+        assert result.status == "FACTORIZED"
+        assert result.coefficient.as_fraction() == 1
+        assert {record.multiplicity for record in result.factors} == {1}
+        degrees = sorted(
+            max(
+                (sum(term.exponents) for term in record.factor.polynomial.terms),
+                default=0,
+            )
+            for record in result.factors
+        )
+        assert degrees == [1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 4, 4]
+
+    def test_swapped_monic_irreducible_factor_rejected(self):
+        """Replacing one true factor with another monic irreducible of the
+        same total degree keeps the canonical envelope but must fail the
+        unique-factorization replay."""
+        poly = _poly(("x", "y"), _difference_product_terms(("x", "y"), 12))
+        result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
+        impostor = MultivariateIrreducibleFactor(
+            factor=_poly(("x", "y"), ((1, 1, (2, 0)), (1, 1, (0, 2)), (1, 1, (0, 0)))),
+            multiplicity=1,
+        )
+        records = [*result.factors[:-1], impostor]
+        records.sort(key=_sort_key)
+        with pytest.raises(ValidationError, match="does not equal reconstructed"):
+            MultivariateFactorResult(
+                coefficient=result.coefficient,
+                factors=tuple(records),
+                reconstructed=result.reconstructed,
+            )
+
+    def test_multiplicity_shift_between_equal_degree_factors_rejected(self):
+        """Moving multiplicity between equal-degree factors preserves the
+        aggregate degree yet changes the decomposition; the replay must
+        reject it."""
+        poly = _poly(("x", "y"), _difference_product_terms(("x", "y"), 12))
+        result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
+
+        def degree_of(record):
+            return max(
+                (sum(term.exponents) for term in record.factor.polynomial.terms),
+                default=0,
+            )
+
+        by_degree = {}
+        for record in result.factors:
+            by_degree.setdefault(degree_of(record), []).append(record)
+        victims = by_degree[2]
+        dropped, kept = victims[0], victims[1]
+        promoted = MultivariateIrreducibleFactor(
+            factor=victims[2].factor,
+            multiplicity=2,
+        )
+        records = [
+            record
+            for record in result.factors
+            if record not in (dropped, kept, victims[2])
+        ]
+        records.append(promoted)
+        records.sort(key=_sort_key)
+        with pytest.raises(ValidationError, match="does not equal reconstructed"):
+            MultivariateFactorResult(
+                coefficient=result.coefficient,
+                factors=tuple(records),
+                reconstructed=result.reconstructed,
+            )

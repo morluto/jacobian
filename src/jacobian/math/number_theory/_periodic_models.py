@@ -6,6 +6,7 @@ from fractions import Fraction
 from typing import Annotated, Literal, Self
 
 from pydantic import ConfigDict, Field, StrictBool, StringConstraints, model_validator
+from pydantic.json_schema import JsonSchemaValue
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
@@ -47,9 +48,9 @@ _PERIODIC_REQUEST_DESCRIPTION = (
 )
 
 
-def _periodic_request_schema_extra(*, profile: bool) -> dict[str, object]:
+def _periodic_request_schema_extra(*, profile: bool) -> JsonSchemaValue:
     description = _PERIODIC_REQUEST_DESCRIPTION
-    extra: dict[str, object] = {
+    extra: JsonSchemaValue = {
         "description": description,
         "examples": [_PERIODIC_REQUEST_EXAMPLE],
         "aggregate_raw_residue_row_limit": MAX_PERIODIC_SOURCE_ROWS,

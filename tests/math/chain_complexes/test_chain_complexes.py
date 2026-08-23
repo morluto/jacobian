@@ -325,3 +325,65 @@ class TestTriageRegressions:
         )
         with pytest.raises(ValidationError, match="exact homology"):
             HomologyResult.model_validate(forged.model_dump())
+
+
+class TestReviewRegressions:
+    def test_duplicate_differential_coordinates_rejected(self):
+        with pytest.raises(ValidationError, match="duplicate matrix entry"):
+            ChainComplex(
+                prime=2,
+                min_degree=0,
+                max_degree=1,
+                dimensions=(2, 2),
+                differentials=(
+                    (
+                        MatrixEntry(row=0, col=0, value="1"),
+                        MatrixEntry(row=0, col=0, value="1"),
+                    ),
+                ),
+            )
+
+    def test_entry_list_longer_than_cells_rejected(self):
+        source = ChainComplex(
+            prime=2, min_degree=0, max_degree=0, dimensions=(1,), differentials=()
+        )
+        target = ChainComplex(
+            prime=2, min_degree=0, max_degree=0, dimensions=(1,), differentials=()
+        )
+        # chain_map component for a 1x1 map admits one cell; three entries
+        # cannot carry distinct in-range coordinates.
+        with pytest.raises(ValidationError, match="rows x columns cells"):
+            MappingConeRequest(
+                source=source,
+                target=target,
+                chain_map=(
+                    (
+                        MatrixEntry(row=0, col=0, value="1"),
+                        MatrixEntry(row=0, col=0, value="1"),
+                        MatrixEntry(row=0, col=0, value="1"),
+                    ),
+                ),
+            )
+
+    def test_mapping_cone_result_replays_retained_source_map(self):
+        from pydantic import ValidationError
+
+        from jacobian.math.chain_complexes._models import MappingConeResult
+
+        source = ChainComplex(
+            prime=5, min_degree=0, max_degree=1, dimensions=(1, 1), differentials=((),)
+        )
+        target = ChainComplex(
+            prime=5, min_degree=0, max_degree=0, dimensions=(1,), differentials=()
+        )
+        request = MappingConeRequest(
+            source=source,
+            target=target,
+            chain_map=((MatrixEntry(row=0, col=0, value="1"),), ()),
+        )
+        result = compute_mapping_cone(request)
+        assert MappingConeResult.model_validate(result.model_dump()) == result
+        relayed = result.model_dump()
+        relayed["cone"]["dimensions"] = (2, 9, 9)
+        with pytest.raises(ValidationError, match="exact mapping cone"):
+            MappingConeResult.model_validate(relayed)

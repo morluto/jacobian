@@ -114,12 +114,26 @@ class TestRecurrenceCoefficients:
         with pytest.raises(ValueError, match="nonzero"):
             recurrence_coefficients(moments)
 
-    def test_insufficient_moments_for_recurrence(self) -> None:
-        """With only 2 moments we can't produce any recurrence coefficient."""
+    def test_even_length_returns_final_determined_alpha(self) -> None:
+        """Two moments already determine alpha_0 = mu_1/mu_0."""
         moments = (_frac(1, 1), _frac(1, 2))
         result = recurrence_coefficients(moments)
-        assert result.alpha == ()
+        assert result.alpha == (_frac(1, 2),)
         assert result.beta == (_frac(1, 1),)
+
+    def test_four_moments_return_two_alphas_and_beta(self) -> None:
+        """Four moments determine two alphas and beta_1; none are discarded."""
+        # Uniform measure on {0, 1/3, 2/3, 1}: the highest computable alpha is
+        # determined by mu_0..mu_3 and no norm beyond them is required.
+        moments = tuple(_frac(1, k + 1) for k in range(4))
+        result = recurrence_coefficients(moments)
+        assert len(result.alpha) == 2
+        assert len(result.beta) == 2
+        # The same sequence padded with one more moment must agree on the
+        # shared prefix coefficients.
+        longer = recurrence_coefficients(tuple(_frac(1, k + 1) for k in range(5)))
+        assert longer.alpha[:2] == result.alpha
+        assert longer.beta[:2] == result.beta
 
 
 # ---------------------------------------------------------------------------
@@ -143,8 +157,13 @@ class TestJacobiMatrix:
         assert result.off_diagonal == ()
 
     def test_zero_beta_rejected(self) -> None:
-        with pytest.raises(ValueError, match="nonzero"):
+        with pytest.raises(ValueError, match="must be positive"):
             jacobi_matrix((_frac(0, 1),), (_frac(0, 1), _frac(1, 1)))
+
+    def test_negative_subdiagonal_rejected(self) -> None:
+        """A negative squared subdiagonal cannot reconstruct a real matrix."""
+        with pytest.raises(ValueError, match="positive squared-norm ratios"):
+            jacobi_matrix((_frac(0, 1), _frac(0, 1)), (_frac(1, 1), _frac(-1, 1)))
 
 
 # ---------------------------------------------------------------------------
@@ -320,3 +339,37 @@ class TestToolsAndExamples:
         for tool in TOOLS:
             names = [ex.name for ex in tool.examples]
             assert len(names) == len(set(names))
+
+
+class TestNativeQuadratureDomain:
+    """Direct native callers face the wire request's finite-double domain."""
+
+    def test_native_overflow_magnitude_rejected(self):
+        from fractions import Fraction
+
+        with pytest.raises(ValueError, match="finite-float magnitude bound"):
+            gaussian_quadrature((Fraction(10**400),), (Fraction(1),))
+
+    def test_native_negative_mass_rejected(self):
+        from fractions import Fraction
+
+        with pytest.raises(ValueError, match="must be positive"):
+            gaussian_quadrature((Fraction(0),), (Fraction(-1),))
+
+
+class TestAdmissionBoundsDerivedOutputs:
+    def test_request_rejects_coefficients_the_result_cannot_carry(self):
+        """Admission proves derived coefficients fit before execution runs."""
+        from jacobian._exact import CanonicalRational
+
+        weights = [10**1250 + i for i in range(15)]
+        den = sum(weights)
+        moments = []
+        for k in range(29):
+            num = sum(w * node**k for w, node in zip(weights, range(15), strict=True))
+            from math import gcd
+
+            g = gcd(num, den)
+            moments.append(CanonicalRational(num=str(num // g), den=str(den // g)))
+        with pytest.raises((ValueError, ValidationError), match="canonical"):
+            RecurrenceCoefficientsRequest(moments=tuple(moments))

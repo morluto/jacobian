@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import Field, model_validator
 
@@ -16,6 +16,16 @@ dimensions and run Gaussian elimination whose work is O(d^3) in the largest
 group dimension; d = 512 keeps any accepted request's elimination inside a
 bounded elementary-operation envelope instead of allowing an admitted
 request to declare billion-wide groups.
+"""
+
+
+MAX_MATRIX_ENTRIES = MAX_CHAIN_GROUP_DIMENSION * MAX_CHAIN_GROUP_DIMENSION
+"""Schema-visible cap on one matrix's entry list.
+
+A sparse matrix over groups bounded by MAX_CHAIN_GROUP_DIMENSION has at most
+MAX_CHAIN_GROUP_DIMENSION**2 distinct coordinates, so no admissible matrix
+ever needs a longer list; the cap keeps validation and dense conversion from
+traversing unbounded repeated input even before dimensions are checked.
 """
 
 
@@ -36,6 +46,30 @@ class MatrixEntry(StrictModel):
         if self.value == "-0":
             raise ValueError("matrix value must be a canonical integer string")
         return self
+
+
+def _require_distinct_bounded_entries(
+    entries: tuple[MatrixEntry, ...], rows: int, cols: int
+) -> None:
+    """Reject duplicate coordinates and lists longer than the matrix cells.
+
+    Duplicate coordinates silently overwrite each other during dense
+    conversion, so they would make validation see a different matrix than the
+    caller sent; and a list longer than ``rows * cols`` cannot consist of
+    distinct in-range coordinates at all.
+    """
+    if len(entries) > rows * cols:
+        raise ValueError(
+            "matrix carries more entries than its rows x columns cells allow"
+        )
+    seen: set[tuple[int, int]] = set()
+    for entry in entries:
+        coordinate = (entry.row, entry.col)
+        if coordinate in seen:
+            raise ValueError(
+                f"duplicate matrix entry at row {entry.row}, col {entry.col}"
+            )
+        seen.add(coordinate)
 
 
 def _require_admissible_dimensions(dimensions: tuple[int, ...]) -> None:
@@ -64,6 +98,7 @@ def _require_differential_bounds(
                 raise ValueError("differential entry row exceeds target dimension")
             if entry.col >= source_dim:
                 raise ValueError("differential entry col exceeds source dimension")
+        _require_distinct_bounded_entries(diff, target_dim, source_dim)
 
 
 def _dense_gfprime(
@@ -129,9 +164,10 @@ class ChainComplex(StrictModel):
     min_degree: int = Field(ge=-10, le=11)
     max_degree: int = Field(ge=-10, le=11)
     dimensions: tuple[int, ...] = Field(min_length=1, max_length=21)
-    differentials: tuple[tuple[MatrixEntry, ...], ...] = Field(
-        min_length=0, max_length=21
-    )
+    differentials: tuple[
+        Annotated[tuple[MatrixEntry, ...], Field(max_length=MAX_MATRIX_ENTRIES)],
+        ...,
+    ] = Field(min_length=0, max_length=21)
 
     @model_validator(mode="after")
     def require_valid_complex(self) -> Self:
@@ -343,7 +379,10 @@ class MappingConeRequest(StrictModel):
 
     source: ChainComplex
     target: ChainComplex
-    chain_map: tuple[tuple[MatrixEntry, ...], ...] = Field(min_length=0, max_length=21)
+    chain_map: tuple[
+        Annotated[tuple[MatrixEntry, ...], Field(max_length=MAX_MATRIX_ENTRIES)],
+        ...,
+    ] = Field(min_length=0, max_length=21)
 
     @model_validator(mode="after")
     def require_valid_chain_map(self) -> Self:
@@ -364,6 +403,7 @@ class MappingConeRequest(StrictModel):
                     raise ValueError("chain_map entry row exceeds target dimension")
                 if e.col >= s_dim:
                     raise ValueError("chain_map entry col exceeds source dimension")
+            _require_distinct_bounded_entries(entries, t_dim, s_dim)
         _require_chain_map_commutativity(self.source, self.target, self.chain_map)
         # The cone complex Cone(f)_n = C_{n-1} + D_n must itself stay inside
         # the representable degree range and per-group dimension budget, so
@@ -374,9 +414,27 @@ class MappingConeRequest(StrictModel):
 
 
 class MappingConeResult(StrictModel):
-    """The mapping cone complex of a chain map."""
+    """The mapping cone complex of a chain map.
 
+    Retains the full request (source and target complexes plus the chain map)
+    so an authoritative cone replays the exact construction at validation; a
+    relayed payload carrying any other complex cannot revalidate.
+    """
+
+    request: MappingConeRequest
     cone: ChainComplex
+
+    @model_validator(mode="after")
+    def require_source_bound_cone(self) -> Self:
+        from jacobian.math.chain_complexes._operations import _build_cone_complex
+
+        expected = _build_cone_complex(self.request)
+        if self.cone != expected:
+            raise ValueError(
+                "cone must be the exact mapping cone of the retained "
+                "source complexes and chain map"
+            )
+        return self
 
 
 __all__ = [

@@ -40,7 +40,6 @@ ROOT_MATH_DOMAINS = (
     "petri_nets",
     "polynomials",
     "prime_field_linear_algebra",
-    "prime_field_matrix_ops",
     "probability",
     "regular_languages",
     "symbolic_dynamics",

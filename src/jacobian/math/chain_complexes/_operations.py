@@ -258,17 +258,8 @@ def _cone_differential(
     return _dense_to_entries(mat, prime)
 
 
-def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
-    """Compute the mapping cone of a chain map f: C -> D.
-
-    The mapping cone has groups Cone(f)_n = C_{n-1} ⊕ D_n and the
-    differential is
-
-        d_cone_n = [ -d^C_{n-1}   0
-                      f_{n-1}   d^D_n ]
-
-    where d^C, d^D are the source/target differentials and f is the chain map.
-    """
+def _build_cone_complex(request: MappingConeRequest) -> ChainComplex:
+    """Pure mapping-cone construction used by execution and result replay."""
     source = request.source
     target = request.target
     if source.prime != target.prime:
@@ -293,7 +284,7 @@ def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
         for k in range(len(cone_dims) - 1)
     ]
 
-    cone_complex = ChainComplex(
+    return ChainComplex(
         prime=prime,
         min_degree=cone_min,
         max_degree=cone_max,
@@ -301,7 +292,19 @@ def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
         differentials=tuple(cone_diffs),
     )
 
-    return MappingConeResult(cone=cone_complex)
+
+def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
+    """Compute the mapping cone of a chain map f: C -> D.
+
+    The mapping cone has groups Cone(f)_n = C_{n-1} ⊕ D_n and the
+    differential is
+
+        d_cone_n = [ -d^C_{n-1}   0
+                      f_{n-1}   d^D_n ]
+
+    where d^C, d^D are the source/target differentials and f is the chain map.
+    """
+    return MappingConeResult(request=request, cone=_build_cone_complex(request))
 
 
 __all__ = [

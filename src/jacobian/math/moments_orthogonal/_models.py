@@ -16,17 +16,13 @@ from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.moments_orthogonal.values import (
     MAX_MOMENTS,
+    MAX_QUADRATURE_MAGNITUDE,
     MAX_QUADRATURE_POINTS,
     MAX_RECURRENCE_ORDER,
+    MIN_QUADRATURE_SUBDIAGONAL,
 )
 
 MAX_RATIONAL_DIGITS = 4_096
-
-# Golub-Welsch converts admitted rationals to IEEE doubles; every accepted
-# coefficient must convert to a finite double and every subdiagonal entry must
-# stay far from both overflow and underflow so its square root is exact enough.
-MAX_QUADRATURE_MAGNITUDE = Fraction(10) ** 300
-MIN_QUADRATURE_SUBDIAGONAL = Fraction(1, 10**300)
 
 
 def _to_fractions(
@@ -137,12 +133,30 @@ class RecurrenceCoefficientsRequest(StrictModel):
         _validate_moments(self.moments)
         # The Gram-Schmidt kernel requires a positive-definite moment
         # functional; admit exactly the sequences it accepts so an accepted
-        # request cannot fail inside execution.
+        # request cannot fail inside execution. Admission also proves every
+        # derived coefficient fits the canonical limit the result construction
+        # applies, so a near-bound positive sequence is rejected here rather
+        # than failing while building its typed result.
+        from jacobian._exact import CanonicalRational
         from jacobian.math.moments_orthogonal.operations import (
             recurrence_coefficients,
         )
 
-        recurrence_coefficients(_to_fractions(self.moments))
+        computed = recurrence_coefficients(_to_fractions(self.moments))
+        for value in (*computed.alpha, *computed.beta):
+            try:
+                canonical = CanonicalRational.from_fraction(value)
+            except ValueError as error:
+                raise ValueError(
+                    "recurrence coefficient growth exceeds the canonical "
+                    f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit result limit; "
+                    "reduce the moment component magnitude"
+                ) from error
+            require_bounded_rational(
+                canonical,
+                max_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+                label="derived recurrence coefficient",
+            )
         return self
 
 

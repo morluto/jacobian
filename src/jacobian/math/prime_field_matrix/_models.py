@@ -50,10 +50,23 @@ class PrimeFieldMatrixRequest(StrictModel):
         # Bound the characteristic BEFORE the nested canonical value is
         # constructed: PrimeFieldMatrix.__post_init__ runs the (expensive)
         # primality test, so an oversized prime must be rejected first.
+        # Running a before validator moves field validation into Python
+        # mode, where decoded JSON arrays no longer coerce to the declared
+        # tuple shapes; normalize them here so JSON invocation keeps
+        # working while every stored value stays a canonical tuple.
         if isinstance(data, dict):
             raw = data.get("matrix")
             if isinstance(raw, dict):
                 prime = raw.get("prime")
+                entries = raw.get("entries")
+                if isinstance(entries, list):
+                    # Copy along the rewritten path: the caller owns the
+                    # payload, so normalization must not mutate it.
+                    matrix = dict(raw)
+                    matrix["entries"] = tuple(
+                        tuple(row) if isinstance(row, list) else row for row in entries
+                    )
+                    data = {**data, "matrix": matrix}
             else:
                 prime = getattr(raw, "prime", None)
             if isinstance(prime, int) and not 2 <= prime <= MAX_PRIME:

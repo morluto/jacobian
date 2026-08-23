@@ -111,3 +111,29 @@ class TestCircumradiusProfile:
         assert entry.squared_circumradius is not None
         assert len(entry.squared_circumradius.num) <= 32_768
         assert len(entry.squared_circumradius.den) <= 32_768
+
+
+class TestCircumradiusAggregateBudget:
+    def test_large_profile_with_boundary_digits_rejected(self):
+        """The 24-point reciprocal construction at the 819-digit boundary
+        would emit a ~46 MB exact profile; the aggregate output budget
+        couples point count and coordinate size to reject it."""
+        points = tuple(_ratio_point(f"P{i}", i, 819) for i in range(24))
+        with pytest.raises(ValidationError, match="aggregate output"):
+            CircumradiusProfileRequest(points=points)
+
+    def test_small_coordinate_full_profile_still_admitted(self):
+        """Small-coordinate configurations keep the full 24-point profile."""
+        points = tuple(
+            LabelledPoint2D(
+                label=f"P{i}",
+                point=RationalPoint2D(
+                    x=CanonicalRational.from_integer_ratio(i, 1),
+                    y=CanonicalRational.from_integer_ratio(i * i + 1, 1),
+                ),
+            )
+            for i in range(24)
+        )
+        request = CircumradiusProfileRequest(points=points)
+        result = circumradius_profile(request)
+        assert result.triple_count == 2024

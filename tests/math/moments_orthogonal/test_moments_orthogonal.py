@@ -34,6 +34,7 @@ from jacobian.math.moments_orthogonal._operations import (
     compute_recurrence_coefficients,
 )
 from jacobian.math.moments_orthogonal._tools import TOOLS
+from jacobian.math.moments_orthogonal.values import MAX_RECURRENCE_ORDER
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -420,3 +421,32 @@ class TestRecurrenceValueComposition:
         payload["coefficients"] = forged
         with pytest.raises(ValidationError, match="exact recurrence"):
             RecurrenceCoefficientsResult.model_validate(payload)
+
+
+class TestRecurrenceAdmissionBoundaries:
+    def test_thirty_three_moment_boundary_rejected(self):
+        """33 harmonic moments would derive a 17th beta entry outside the
+        canonical coefficient value; admission rejects at the boundary."""
+        moments = tuple(_cr(1, k) for k in range(1, 34))
+        with pytest.raises(ValidationError, match="32 moments"):
+            RecurrenceCoefficientsRequest(moments=moments)
+
+    def test_thirty_two_moment_sequence_roundtrips(self):
+        moments = tuple(_cr(1, k) for k in range(1, 33))
+        request = RecurrenceCoefficientsRequest(moments=moments)
+        result = compute_recurrence_coefficients(request)
+        assert len(result.coefficients.beta) <= MAX_RECURRENCE_ORDER
+        assert RecurrenceCoefficientsResult.model_validate(
+            result.model_dump()
+        ) == result
+
+    def test_derived_coefficient_overflow_rejected_at_admission(self):
+        """17 concentrated positive-definite moments whose exact recurrence
+        coefficients leave the canonical rational domain cannot be accepted."""
+        denominator_scale = Fraction(10) ** 299
+        moments = tuple(
+            CanonicalRational.from_fraction(Fraction(1, k + 1) + Fraction(1, denominator_scale + 2 * k + 1))
+            for k in range(17)
+        )
+        with pytest.raises(ValidationError, match="canonical"):
+            RecurrenceCoefficientsRequest(moments=moments)

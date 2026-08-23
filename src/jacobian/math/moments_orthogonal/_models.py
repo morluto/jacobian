@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from fractions import Fraction
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationError, model_validator
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
@@ -125,13 +125,15 @@ class RecurrenceCoefficientsRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_moments(self) -> Self:
         _validate_moments(self.moments)
-        # The kernel returns at most MAX_RECURRENCE_ORDER coefficients, consuming
-        # at most 2*MAX_RECURRENCE_ORDER+1 moments. Longer moment sequences would
-        # be silently truncated while still reporting complete=True.
-        if len(self.moments) > 2 * MAX_RECURRENCE_ORDER + 1:
+        # The kernel consumes at most 2*MAX_RECURRENCE_ORDER moments: order
+        # min(MAX_RECURRENCE_ORDER, (m-1)//2) coefficients need an odd moment
+        # count, and 33 moments would derive a seventeenth beta entry outside
+        # the canonical RecurrenceCoefficientsValue domain.
+        if len(self.moments) > 2 * MAX_RECURRENCE_ORDER:
             raise ValueError(
-                f"moment sequence length {len(self.moments)} exceeds the {2 * MAX_RECURRENCE_ORDER + 1} moments "
-                "consumed by the maximum supported recurrence order"
+                f"moment sequence length {len(self.moments)} exceeds the "
+                f"{2 * MAX_RECURRENCE_ORDER} moments consumed by the maximum "
+                "supported recurrence order"
             )
         # A nonpositive zeroth moment is not a positive functional, and the
         # kernel's short-sequence return would otherwise emit beta_0 = mu_0
@@ -147,7 +149,21 @@ class RecurrenceCoefficientsRequest(StrictModel):
             recurrence_coefficients,
         )
 
-        recurrence_coefficients(_to_fractions(self.moments))
+        derived = recurrence_coefficients(_to_fractions(self.moments))
+        # Derived-coefficient growth budget: the typed result carries alpha
+        # and beta as canonical rationals inside RecurrenceCoefficientsValue,
+        # so admission must reject sequences whose exact Gram-Schmidt output
+        # leaves that canonical domain.
+        try:
+            RecurrenceCoefficientsValue(
+                alpha=_from_fractions(derived.alpha),
+                beta=_from_fractions(derived.beta),
+            )
+        except ValidationError as exc:
+            raise ValueError(
+                "derived recurrence coefficients exceed the canonical "
+                "coefficient value domain"
+            ) from exc
         return self
 
 

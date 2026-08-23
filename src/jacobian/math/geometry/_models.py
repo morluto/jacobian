@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from fractions import Fraction
 from typing import Literal, Self
 
@@ -459,6 +460,37 @@ class LabelledPoint2D(StrictModel):
 # one request's aggregate output inside a practical transport budget.
 MAX_CIRCUMRADIUS_PROFILE_POINTS = 24
 
+# Aggregate output/work budget coupling point count and coordinate size.
+# Per the derivation above, one squared-circumradius component of a triple
+# whose coordinates carry at most B digits stays below 40*B + 4 decimal
+# characters; admission sums that envelope over both components of every
+# emitted triple so no admitted request can produce an unbounded aggregate
+# exact payload or replay cost.
+MAX_CIRCUMRADIUS_AGGREGATE_OUTPUT_CHARS = 1_000_000
+
+
+def _require_circumradius_aggregate_output_bound(
+    points: tuple[LabelledPoint2D, ...],
+) -> None:
+    digit_counts = [
+        max(
+            len(item.point.x.num.lstrip("-")),
+            len(item.point.x.den),
+            len(item.point.y.num.lstrip("-")),
+            len(item.point.y.den),
+        )
+        for item in points
+    ]
+    b = max(digit_counts)
+    per_component = 40 * b + 4
+    aggregate = math.comb(len(points), 3) * 2 * per_component
+    if aggregate > MAX_CIRCUMRADIUS_AGGREGATE_OUTPUT_CHARS:
+        raise ValueError(
+            "point count times coordinate size can grow the exact radius "
+            f"profile beyond the {MAX_CIRCUMRADIUS_AGGREGATE_OUTPUT_CHARS}-"
+            "character aggregate output budget"
+        )
+
 
 class CircumradiusProfileRequest(StrictModel):
     """A bounded labelled rational planar point configuration."""
@@ -483,6 +515,9 @@ class CircumradiusProfileRequest(StrictModel):
         )
         if len(keys) != len(set(keys)):
             raise ValueError("point coordinates must be unique")
+        # Couple point count and coordinate size so the aggregate exact
+        # output and its replay work stay inside the transport budget.
+        _require_circumradius_aggregate_output_bound(self.points)
         # Bound coordinate digit length so exact circumradius stays within
         # the canonical 32,768-digit limit (see the constant's derivation).
         for item in self.points:

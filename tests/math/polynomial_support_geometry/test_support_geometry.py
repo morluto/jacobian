@@ -386,7 +386,7 @@ class TestNewtonReplay:
         result = compute_newton_polytope(NewtonPolytopeRequest(polynomial=polynomial))
         payload = result.model_dump()
         good = payload["vertices"]
-        payload["vertices"] = list(good) + [[1, 1]]
+        payload["vertices"] = [*list(good), [1, 1]]
         payload["nonextreme"] = []
         with pytest.raises(ValidationError, match="exact convex-hull"):
             NewtonPolytope.model_validate(payload)
@@ -480,4 +480,95 @@ class TestSupportValueInvariants:
                 variables=("x",),
                 coordinate_min=(3,),
                 coordinate_max=(5,),
+            )
+
+    def test_exponents_outside_canonical_domain_rejected(self) -> None:
+        """Support points outside the canonical polynomial exponent domain
+        cannot revalidate: the source type rejects negative exponents and
+        anything above the shared representation limit."""
+        from jacobian._exact import CanonicalRational
+        from jacobian.math.polynomial_support_geometry.values import PolynomialSupport
+
+        unit = CanonicalRational(num="1", den="1")
+        for exponent in (-1, 40000):
+            with pytest.raises(
+                ValidationError, match="canonical polynomial domain"
+            ):
+                PolynomialSupport(
+                    is_zero=False,
+                    term_count=1,
+                    exponents=((exponent,),),
+                    coefficients=(unit,),
+                    variables=("x",),
+                    coordinate_min=(exponent,),
+                    coordinate_max=(exponent,),
+                    total_degree_min=exponent,
+                    total_degree_max=exponent,
+                )
+
+    def test_newton_exponents_outside_canonical_domain_rejected(self) -> None:
+        from jacobian.math.polynomial_support_geometry.values import NewtonPolytope
+
+        for point in (-1, 40000):
+            with pytest.raises(ValidationError, match="canonical polynomial domain"):
+                NewtonPolytope.model_validate(
+                    {
+                        "is_zero": False,
+                        "variables": ["x"],
+                        "ambient_dimension": 1,
+                        "affine_dimension": 0,
+                        "vertices": [[point]],
+                        "nonextreme": [],
+                        "all_support_exponents": [[point]],
+                    }
+                )
+
+    def test_empty_variable_axis_rejected(self) -> None:
+        """Every canonical polynomial ring names at least one variable."""
+        from jacobian.math.polynomial_support_geometry.values import PolynomialSupport
+
+        with pytest.raises(ValidationError, match="at least 1 item"):
+            PolynomialSupport(is_zero=True, term_count=0, variables=())
+        from jacobian._exact import CanonicalRational
+
+        with pytest.raises(ValidationError, match="at least 1 item"):
+            PolynomialSupport(
+                is_zero=False,
+                term_count=1,
+                exponents=((),),
+                coefficients=(CanonicalRational(num="5", den="1"),),
+                variables=(),
+                total_degree_min=0,
+                total_degree_max=0,
+            )
+
+    def test_duplicate_newton_points_rejected(self) -> None:
+        """Retained vertices, nonextreme points, and support are sets of
+        distinct exponents; duplicates would make the tuple fields
+        noncanonical before any set-based check runs."""
+        from jacobian.math.polynomial_support_geometry.values import NewtonPolytope
+
+        with pytest.raises(ValidationError, match="distinct"):
+            NewtonPolytope.model_validate(
+                {
+                    "is_zero": False,
+                    "variables": ["x"],
+                    "ambient_dimension": 1,
+                    "affine_dimension": 1,
+                    "vertices": [[0], [0], [2]],
+                    "nonextreme": [[1]],
+                    "all_support_exponents": [[0], [1], [2]],
+                }
+            )
+        with pytest.raises(ValidationError, match="distinct"):
+            NewtonPolytope.model_validate(
+                {
+                    "is_zero": False,
+                    "variables": ["x"],
+                    "ambient_dimension": 1,
+                    "affine_dimension": 0,
+                    "vertices": [[0]],
+                    "nonextreme": [],
+                    "all_support_exponents": [[0], [0]],
+                }
             )

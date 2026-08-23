@@ -8,7 +8,11 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.math.polynomials.values import PolynomialVariable, RationalPolynomial
+from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_EXPONENT,
+    PolynomialVariable,
+    RationalPolynomial,
+)
 
 MAX_SUPPORT_TERMS = 4096
 MAX_NEWTON_DIMENSION = 8
@@ -21,12 +25,61 @@ MAX_WEIGHT_COMPONENTS = 8
 MAX_NEWTON_TERMS = 96
 
 
+def _require_canonical_exponents(exponents: tuple[tuple[int, ...], ...]) -> None:
+    """Support points must lie in the canonical polynomial exponent domain."""
+    if any(
+        exponent < 0 or exponent > MAX_POLYNOMIAL_EXPONENT
+        for exp in exponents
+        for exponent in exp
+    ):
+        raise ValueError("support exponents exceed the canonical polynomial domain")
+
+
 def _require_nonzero_support(value: PolynomialSupport) -> None:
     """A claimed nonzero support carries nonzero coefficients and extrema."""
     # An exponent with a zero coefficient is not part of a support.
     if any(coefficient.as_fraction() == 0 for coefficient in value.coefficients):
         raise ValueError(
             "support coefficients must be nonzero; zero terms are omitted"
+        )
+
+
+def _require_shape_consistency(value: PolynomialSupport, width: int) -> None:
+    """Term count, distinctness, and axis shape precede extrema replay."""
+    if len(value.exponents) != len(value.coefficients) or value.term_count != len(
+        value.exponents
+    ):
+        raise ValueError(
+            "term count must match the number of exponents and coefficients"
+        )
+    if len(set(value.variables)) != width:
+        raise ValueError("variables must be unique and canonically named")
+    # An exponent set cannot contain duplicates: a canonical polynomial
+    # has unique exponent tuples, so duplicated support entries would
+    # report a term count no polynomial can reconstruct.
+    if len(set(value.exponents)) != len(value.exponents):
+        raise ValueError("support exponents must be distinct")
+    if any(len(exp) != width for exp in value.exponents):
+        raise ValueError("exponent tuples must use the declared variable axis")
+    _require_canonical_exponents(value.exponents)
+    if value.coordinate_min and len(value.coordinate_min) != width:
+        raise ValueError("coordinate extrema must use the declared variable axis")
+
+
+def _require_replayed_extrema(value: PolynomialSupport, width: int) -> None:
+    """A nonzero support carries the exact extrema of its own exponents."""
+    degrees = [sum(exp) for exp in value.exponents]
+    if (
+        value.total_degree_min != min(degrees)
+        or value.total_degree_max != max(degrees)
+        or tuple(value.coordinate_min)
+        != tuple(min(exp[i] for exp in value.exponents) for i in range(width))
+        or tuple(value.coordinate_max)
+        != tuple(max(exp[i] for exp in value.exponents) for i in range(width))
+    ):
+        raise ValueError(
+            "coordinate and degree extrema must be the exact extrema of "
+            "the retained support"
         )
 
 
@@ -42,7 +95,7 @@ class PolynomialSupport(StrictModel):
         default=(), max_length=MAX_SUPPORT_TERMS
     )
     variables: tuple[PolynomialVariable, ...] = Field(
-        min_length=0, max_length=MAX_NEWTON_DIMENSION
+        min_length=1, max_length=MAX_NEWTON_DIMENSION
     )
     coordinate_min: tuple[int, ...] = Field(default=(), max_length=MAX_NEWTON_DIMENSION)
     coordinate_max: tuple[int, ...] = Field(default=(), max_length=MAX_NEWTON_DIMENSION)
@@ -56,24 +109,8 @@ class PolynomialSupport(StrictModel):
         # Cross-field consistency: the term count, exponent tuples, and
         # coefficients must agree, and the coordinate/degree extrema must
         # match the retained support.
-        if len(self.exponents) != len(self.coefficients) or self.term_count != len(
-            self.exponents
-        ):
-            raise ValueError(
-                "term count must match the number of exponents and coefficients"
-            )
         width = len(self.variables)
-        if len(set(self.variables)) != width:
-            raise ValueError("variables must be unique and canonically named")
-        # An exponent set cannot contain duplicates: a canonical polynomial
-        # has unique exponent tuples, so duplicated support entries would
-        # report a term count no polynomial can reconstruct.
-        if len(set(self.exponents)) != len(self.exponents):
-            raise ValueError("support exponents must be distinct")
-        if any(len(exp) != width for exp in self.exponents):
-            raise ValueError("exponent tuples must use the declared variable axis")
-        if self.coordinate_min and len(self.coordinate_min) != width:
-            raise ValueError("coordinate extrema must use the declared variable axis")
+        _require_shape_consistency(self, width)
         if self.is_zero:
             if self.total_degree_min is not None or self.total_degree_max is not None:
                 raise ValueError("an empty support carries no degree extrema")
@@ -85,19 +122,7 @@ class PolynomialSupport(StrictModel):
         _require_nonzero_support(self)
         if self.total_degree_min is None or self.total_degree_max is None:
             raise ValueError("a nonzero support must carry its degree extrema")
-        degrees = [sum(exp) for exp in self.exponents]
-        if (
-            self.total_degree_min != min(degrees)
-            or self.total_degree_max != max(degrees)
-            or tuple(self.coordinate_min)
-            != tuple(min(exp[i] for exp in self.exponents) for i in range(width))
-            or tuple(self.coordinate_max)
-            != tuple(max(exp[i] for exp in self.exponents) for i in range(width))
-        ):
-            raise ValueError(
-                "coordinate and degree extrema must be the exact extrema of "
-                "the retained support"
-            )
+        _require_replayed_extrema(self, width)
         return self
 
 
@@ -109,11 +134,20 @@ def _require_newton_context(value: NewtonPolytope) -> None:
         raise ValueError("ambient dimension must equal the retained variable count")
     if value.affine_dimension > value.ambient_dimension:
         raise ValueError("affine dimension cannot exceed the ambient dimension")
+    # Duplicates are not a valid support or vertex set: the tuple fields are
+    # authoritative, so they must be unique before the set-based partition
+    # and classification checks below.
+    for points in (value.vertices, value.nonextreme, value.all_support_exponents):
+        if len(set(points)) != len(points):
+            raise ValueError("retained Newton polytope points must be distinct")
     if any(
         len(exp) != value.ambient_dimension
         for exp in (*value.vertices, *value.nonextreme, *value.all_support_exponents)
     ):
         raise ValueError("every retained exponent must use the ambient dimension")
+    _require_canonical_exponents(
+        (*value.vertices, *value.nonextreme, *value.all_support_exponents)
+    )
 
 
 class NewtonPolytope(StrictModel):

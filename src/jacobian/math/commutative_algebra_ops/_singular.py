@@ -106,26 +106,22 @@ def _script(
         f"string(jacobian_exponents[{index + 1}])" for index in range(variable_count)
     )
     declarations = [_singular_ideal("jacobian_left", left)]
-    # Load only the library each kernel needs: loading several emits
-    # redefinition warnings on stderr, which the protocol treats as failure.
     if operation == "radical":
-        libraries = 'LIB "primdec.lib";'
         operation_line = "ideal jacobian_result=radical(jacobian_left);"
     elif operation == "saturation":
         if right is None:
-            raise ValueError("saturation requires a divisor ideal")
-        libraries = 'LIB "elim.lib";'
+            raise ValueError("saturation requires a saturation polynomial ideal")
         declarations.append(_singular_ideal("jacobian_right", right))
-        operation_line = "ideal jacobian_result=sat(jacobian_left,jacobian_right);"
+        operation_line = "ideal jacobian_result=sat(jacobian_left,jacobian_right[1]);"
     else:
         if right is None:
             raise ValueError("quotient requires a divisor ideal")
-        libraries = ""
         declarations.append(_singular_ideal("jacobian_right", right))
         operation_line = "ideal jacobian_result=quotient(jacobian_left,jacobian_right);"
     source = "\n".join(
-        [line for line in (libraries, "option(redSB);") if line]
-        + [
+        [
+            'LIB "primdec.lib";',
+            "option(redSB);",
             f"ring jacobian_ring=0,({variables}),dp;",
             *declarations,
             operation_line,

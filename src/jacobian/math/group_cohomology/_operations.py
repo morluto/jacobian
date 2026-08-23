@@ -33,9 +33,7 @@ def _cayley_table(elements: list[tuple[int, ...]]) -> list[list[int]]:
         for j, b in enumerate(perms):
             product_form = tuple((a * b).array_form)
             if product_form not in index:
-                raise ValueError(
-                    "enumerated set is not closed under multiplication"
-                )
+                raise ValueError("enumerated set is not closed under multiplication")
             table[i][j] = index[product_form]
     return table
 
@@ -62,8 +60,7 @@ def _gaussian_rank(matrix: list[list[int]], prime: int) -> int:
             factor = aug[r][col] % prime
             if r != rank and factor != 0:
                 aug[r] = [
-                    (aug[r][cc] - factor * aug[rank][cc]) % prime
-                    for cc in range(cols)
+                    (aug[r][cc] - factor * aug[rank][cc]) % prime for cc in range(cols)
                 ]
         rank += 1
         if rank >= rows:
@@ -78,9 +75,7 @@ def _encode(indexes: tuple[int, ...], base: int) -> int:
     return value
 
 
-def _bar_delta_rank(
-    group_size: int, n: int, cayley: list[list[int]], p: int
-) -> int:
+def _bar_delta_rank(group_size: int, n: int, cayley: list[list[int]], p: int) -> int:
     """GF(p)-rank of the inhomogeneous bar coboundary delta^n: C^n -> C^{n+1}.
 
     (delta f)(g_1,...,g_{n+1}) =
@@ -91,6 +86,7 @@ def _bar_delta_rank(
     rows = group_size ** (n + 1)
     cols = group_size**n if n > 0 else 1
     matrix = [[0] * cols for _ in range(rows)]
+
     def add(row: int, arg: tuple[int, ...], coeff: int) -> None:
         col = _encode(arg, group_size)
         matrix[row][col] = (matrix[row][col] + coeff) % p

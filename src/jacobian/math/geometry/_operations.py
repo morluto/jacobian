@@ -14,6 +14,8 @@ from jacobian.math.geometry._models import (
     CircumradiusProfileResult,
     CircumradiusTripleEntry,
     ClosedSegment2D,
+    ForbiddenPatternsRequest,
+    ForbiddenPatternsResult,
     GeometryBooleanResult,
     GeometryCircleResult,
     GeometryConvexHullResult,
@@ -470,13 +472,16 @@ def circumradius_profile(
             )
         )
     return CircumradiusProfileResult(
+        points=request.points,
         point_count=n,
         triple_count=len(entries),
         entries=tuple(entries),
     )
 
 
-def forbidden_patterns(request):
+def forbidden_patterns(
+    request: ForbiddenPatternsRequest,
+) -> ForbiddenPatternsResult:
     """Find a collinear triple or concyclic quadruple, or establish neither exists.
 
     Three points are collinear when the 2x2 cross-product determinant
@@ -497,10 +502,7 @@ def forbidden_patterns(request):
 
     pts = request.configuration.points
     n = len(pts)
-    xy = [
-        (entry.point.x.as_fraction(), entry.point.y.as_fraction())
-        for entry in pts
-    ]
+    xy = [(entry.point.x.as_fraction(), entry.point.y.as_fraction()) for entry in pts]
 
     collinear_triple = None
     has_collinear = False
@@ -545,9 +547,17 @@ def forbidden_patterns(request):
             - m[0][3] * _minor3(m, 1, 2, 3, 0, 1, 2)
         )
         if det == 0:
-            # Four collinear points also satisfy det==0 but are not concyclic
-            # (no circle contains them). Require a noncollinear triple.
-            if _is_collinear_quadruple((xi, yi), (xj, yj), (xk, yk), (xl, yl)):
+            # Collinear quadruples also give det==0 but are not concyclic;
+            # require the 4 points not be collinear (at least one triple noncollinear).
+            is_collinear_quad = True
+            for a, b, c in ((i, j, k), (i, j, ell), (i, k, ell), (j, k, ell)):
+                xa, ya = xy[a]
+                xb, yb = xy[b]
+                xc, yc = xy[c]
+                if (xb - xa) * (yc - ya) - (yb - ya) * (xc - xa) != 0:
+                    is_collinear_quad = False
+                    break
+            if is_collinear_quad:
                 continue
             has_concyclic = True
             concyclic_quadruple = ConcyclicQuadruple(
@@ -567,27 +577,15 @@ def forbidden_patterns(request):
     )
 
 
-def _is_collinear_quadruple(
-    p0: tuple[Fraction, Fraction],
-    p1: tuple[Fraction, Fraction],
-    p2: tuple[Fraction, Fraction],
-    p3: tuple[Fraction, Fraction],
-) -> bool:
-    """Return True if four distinct points are collinear."""
-
-    def _collinear(
-        a: tuple[Fraction, Fraction],
-        b: tuple[Fraction, Fraction],
-        c: tuple[Fraction, Fraction],
-    ) -> bool:
-        return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]) == 0
-
-    # Four points are collinear iff every triple is collinear, equivalently
-    # all points lie on the line through p0 and p1 (p0 != p1 because points unique).
-    return _collinear(p0, p1, p2) and _collinear(p0, p1, p3)
-
-
-def _minor3(m, r0, r1, r2, c0, c1, c2):
+def _minor3(
+    m: list[list[Any]],
+    r0: int,
+    r1: int,
+    r2: int,
+    c0: int,
+    c1: int,
+    c2: int,
+) -> Any:
     """3x3 determinant of selected rows and columns."""
     return (
         m[r0][c0] * (m[r1][c1] * m[r2][c2] - m[r1][c2] * m[r2][c1])

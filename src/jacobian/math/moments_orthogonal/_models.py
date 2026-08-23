@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from fractions import Fraction
 from typing import Literal, Self
 
@@ -22,12 +23,10 @@ from jacobian.math.moments_orthogonal.values import (
 MAX_RATIONAL_DIGITS = 4_096
 
 # Golub-Welsch converts admitted rationals to IEEE doubles; every accepted
-# coefficient must convert to a finite double, every semantically nonzero
-# coefficient must stay clear of underflow so its mathematical value survives
-# conversion, and subdiagonal entries must stay far from both boundaries so
-# their square roots are exact enough.
+# coefficient must convert to a finite double and every subdiagonal entry must
+# stay far from both overflow and underflow so its square root is exact enough.
 MAX_QUADRATURE_MAGNITUDE = Fraction(10) ** 300
-MIN_QUADRATURE_MAGNITUDE = Fraction(1, 10 ** 300)
+MIN_QUADRATURE_SUBDIAGONAL = Fraction(1, 10**300)
 
 
 def _to_fractions(
@@ -36,7 +35,7 @@ def _to_fractions(
     return tuple(v.as_fraction() for v in values)
 
 
-def _from_fractions(values) -> tuple[CanonicalRational, ...]:
+def _from_fractions(values: Iterable[Fraction]) -> tuple[CanonicalRational, ...]:
     return tuple(CanonicalRational.from_fraction(v) for v in values)
 
 
@@ -44,9 +43,7 @@ def _validate_moments(moments: tuple[CanonicalRational, ...]) -> None:
     if not 1 <= len(moments) <= MAX_MOMENTS:
         raise ValueError("moment sequence must contain between 1 and 64 moments")
     for value in moments:
-        require_bounded_rational(
-            value, max_digits=MAX_RATIONAL_DIGITS, label="moment"
-        )
+        require_bounded_rational(value, max_digits=MAX_RATIONAL_DIGITS, label="moment")
 
 
 def _validate_alpha_beta(
@@ -123,14 +120,36 @@ class RecurrenceCoefficientsRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_moments(self) -> Self:
         _validate_moments(self.moments)
+        # The kernel returns at most MAX_RECURRENCE_ORDER coefficients, consuming
+        # at most 2*MAX_RECURRENCE_ORDER+1 moments. Longer moment sequences would
+        # be silently truncated while still reporting complete=True.
+        if len(self.moments) > 2 * MAX_RECURRENCE_ORDER + 1:
+            raise ValueError(
+                f"moment sequence length {len(self.moments)} exceeds the {2 * MAX_RECURRENCE_ORDER + 1} moments "
+                "consumed by the maximum supported recurrence order"
+            )
         # The Gram-Schmidt kernel requires a positive-definite moment
         # functional; admit exactly the sequences it accepts so an accepted
-        # request cannot fail inside execution.
+        # request cannot fail inside execution. The positivity replay also
+        # yields the exact coefficients, so admission can prove the returned
+        # result fits the canonical limit before the operation runs.
+        from jacobian._exact import CanonicalRational
+        from jacobian.math._rational_height import RationalHeight
         from jacobian.math.moments_orthogonal.operations import (
             recurrence_coefficients,
         )
 
-        recurrence_coefficients(_to_fractions(self.moments))
+        computed = recurrence_coefficients(_to_fractions(self.moments))
+        for value in (*computed.alpha, *computed.beta):
+            canonical = CanonicalRational.from_fraction(value)
+            if RationalHeight.from_canonical(canonical).exceeds(
+                MAX_CANONICAL_RATIONAL_DIGITS
+            ):
+                raise ValueError(
+                    "recurrence coefficient growth exceeds the canonical "
+                    f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit result limit; "
+                    "reduce the moment component magnitude"
+                )
         return self
 
 
@@ -179,15 +198,11 @@ class JacobiMatrixResult(JacobiMatrixRequest):
     def bind_jacobi(self) -> Self:
         from jacobian.math.moments_orthogonal.operations import jacobi_matrix
 
-        result = jacobi_matrix(
-            _to_fractions(self.alpha), _to_fractions(self.beta)
-        )
+        result = jacobi_matrix(_to_fractions(self.alpha), _to_fractions(self.beta))
         if self.diagonal != _from_fractions(result.diagonal):
             raise ValueError("diagonal must match the exact Jacobi diagonal")
         if self.off_diagonal != _from_fractions(result.off_diagonal):
-            raise ValueError(
-                "off_diagonal must match the exact Jacobi off-diagonal"
-            )
+            raise ValueError("off_diagonal must match the exact Jacobi off-diagonal")
         return self
 
 
@@ -210,8 +225,9 @@ def _require_bounded_kernel_growth(
 
     The forward recurrence p_{k+1}(t) = (t - alpha_k) p_k(t) - beta_k p_{k-1}(t)
     compounds numerator and denominator digits across steps; derive a
-    conservative upper bound from the concrete request and reject any request
-    whose kernel or evaluated polynomials could exceed the canonical limit.
+    conservative upper bound from the concrete request (coefficient sizes,
+    evaluation-point sizes, and order) and reject any request whose kernel or
+    evaluated polynomials could exceed the canonical limit.
     """
     limit = MAX_CANONICAL_RATIONAL_DIGITS
 
@@ -233,7 +249,8 @@ def _require_bounded_kernel_growth(
         if not alpha:
             return pn, pd
         # u_k = point - alpha_k over a common denominator; each evaluation
-        # point derives its own bounds so a large y is fully charged.
+        # point derives its own bounds so coefficient sizes are charged at
+        # every step.
         un = [max(point_n + ad[k], an[k] + point_d) + 1 for k in range(len(alpha))]
         ud = [point_d + ad[k] for k in range(len(alpha))]
         pn.append(un[0])
@@ -270,8 +287,9 @@ def _require_bounded_kernel_growth(
         h_num += bn[k]
         h_den += bd[k]
         # term_k = p_k(x) p_k(y) / h_k before reduction.
-        term_bounds.append((px_num[k] + py_num[k] + h_den,
-                            px_den[k] + py_den[k] + h_num))
+        term_bounds.append(
+            (px_num[k] + py_num[k] + h_den, px_den[k] + py_den[k] + h_num)
+        )
         total_den += term_bounds[-1][1]
     # Summing over the common denominator multiplies each term numerator by
     # every other term's denominator; reduction only shrinks the result.
@@ -299,12 +317,8 @@ class ChristoffelDarbouxRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_coefficients(self) -> Self:
         _validate_alpha_beta(self.alpha, self.beta)
-        require_bounded_rational(
-            self.x, max_digits=MAX_RATIONAL_DIGITS, label="x"
-        )
-        require_bounded_rational(
-            self.y, max_digits=MAX_RATIONAL_DIGITS, label="y"
-        )
+        require_bounded_rational(self.x, max_digits=MAX_RATIONAL_DIGITS, label="x")
+        require_bounded_rational(self.y, max_digits=MAX_RATIONAL_DIGITS, label="y")
         _require_bounded_kernel_growth(
             tuple(v.as_fraction() for v in self.alpha),
             tuple(v.as_fraction() for v in self.beta),
@@ -333,12 +347,8 @@ class ChristoffelDarbouxResult(ChristoffelDarbouxRequest):
             self.y.as_fraction(),
         )
         if self.kernel != CanonicalRational.from_fraction(result.kernel):
-            raise ValueError(
-                "kernel must be the exact Christoffel-Darboux kernel"
-            )
-        if self.polynomials_evaluated != _from_fractions(
-            result.polynomials_evaluated
-        ):
+            raise ValueError("kernel must be the exact Christoffel-Darboux kernel")
+        if self.polynomials_evaluated != _from_fractions(result.polynomials_evaluated):
             raise ValueError(
                 "polynomials_evaluated must match the evaluated polynomials"
             )
@@ -358,40 +368,37 @@ class GaussianQuadratureRequest(StrictModel):
     def require_valid_coefficients(self) -> Self:
         if not 1 <= len(self.alpha) <= MAX_QUADRATURE_POINTS:
             raise ValueError("alpha must contain between 1 and 16 entries")
-        if (
-            len(self.beta) != len(self.alpha)
-            and len(self.beta) != len(self.alpha) + 1
-        ):
+        if len(self.beta) != len(self.alpha) and len(self.beta) != len(self.alpha) + 1:
             raise ValueError("beta must have length len(alpha) or len(alpha)+1")
         beta_zero = self.beta[0].as_fraction()
         if beta_zero <= 0:
             raise ValueError(
                 "beta_0 (the zeroth moment of a positive functional) must be positive"
             )
+        if beta_zero < MIN_QUADRATURE_SUBDIAGONAL:
+            raise ValueError(
+                "beta_0 falls below the quadrature underflow bound and would give zero weight"
+            )
         # Subdiagonal entries feed math.sqrt after float conversion; they must
-        # be positive squared-norm ratios.
+        # be positive and safely inside the finite IEEE-double range, and the
+        # diagonal and mu_0 must convert to finite doubles without overflow.
         for index in range(1, min(len(self.alpha), len(self.beta))):
-            if self.beta[index].as_fraction() <= 0:
+            sub = self.beta[index].as_fraction()
+            if sub <= 0:
                 raise ValueError(
                     "subdiagonal beta entries must be positive squared-norm ratios"
                 )
-        # Every coefficient becomes an IEEE double; a semantically nonzero
-        # value that underflows to 0.0 would erase positive quadrature mass or
-        # collapse node positions, so it must survive conversion.
+            if sub < MIN_QUADRATURE_SUBDIAGONAL:
+                raise ValueError(
+                    "subdiagonal beta entries fall below the quadrature underflow bound"
+                )
         for value in (*self.alpha, *self.beta):
             require_bounded_rational(
                 value, max_digits=MAX_RATIONAL_DIGITS, label="coefficient"
             )
-            converted = value.as_fraction()
-            magnitude = abs(converted)
-            if magnitude > MAX_QUADRATURE_MAGNITUDE:
+            if abs(value.as_fraction()) > MAX_QUADRATURE_MAGNITUDE:
                 raise ValueError(
                     "quadrature coefficients exceed the finite-float magnitude bound"
-                )
-            if converted != 0 and magnitude < MIN_QUADRATURE_MAGNITUDE:
-                raise ValueError(
-                    "quadrature coefficients fall below the finite-float "
-                    "underflow bound"
                 )
         return self
 
@@ -400,7 +407,12 @@ class GaussianQuadratureResult(GaussianQuadratureRequest):
     nodes: tuple[CanonicalRational, ...]
     weights: tuple[CanonicalRational, ...]
     complete: Literal[True] = True
-    method: Literal["GOLUB_WELSCH"] = "GOLUB_WELSCH"
+    method: Literal["APPROXIMATE_GOLUB_WELSCH_FLOAT64"] = (
+        "APPROXIMATE_GOLUB_WELSCH_FLOAT64"
+    )
+    approximation: Literal["FLOAT64_ROUNDED_DYADIC_RATIONAL"] = (
+        "FLOAT64_ROUNDED_DYADIC_RATIONAL"
+    )
 
     @model_validator(mode="after")
     def bind_gaussian_quadrature(self) -> Self:

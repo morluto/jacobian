@@ -32,10 +32,34 @@ PROFILE_OPERATIONS = (
                 "Compute circumradius data for four points of a unit square.",
                 {
                     "points": [
-                        {"label": "A", "point": {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}}},
-                        {"label": "B", "point": {"x": {"num": "1", "den": "1"}, "y": {"num": "0", "den": "1"}}},
-                        {"label": "C", "point": {"x": {"num": "1", "den": "1"}, "y": {"num": "1", "den": "1"}}},
-                        {"label": "D", "point": {"x": {"num": "0", "den": "1"}, "y": {"num": "1", "den": "1"}}},
+                        {
+                            "label": "A",
+                            "point": {
+                                "x": {"num": "0", "den": "1"},
+                                "y": {"num": "0", "den": "1"},
+                            },
+                        },
+                        {
+                            "label": "B",
+                            "point": {
+                                "x": {"num": "1", "den": "1"},
+                                "y": {"num": "0", "den": "1"},
+                            },
+                        },
+                        {
+                            "label": "C",
+                            "point": {
+                                "x": {"num": "1", "den": "1"},
+                                "y": {"num": "1", "den": "1"},
+                            },
+                        },
+                        {
+                            "label": "D",
+                            "point": {
+                                "x": {"num": "0", "den": "1"},
+                                "y": {"num": "1", "den": "1"},
+                            },
+                        },
                     ],
                 },
             ),
@@ -54,16 +78,39 @@ PROFILE_OPERATIONS = (
         "incidence",
         examples=(
             example(
-                "generic_quadruple_screen",
-                "A generic quadruple of points has no collinear triple and no "
-                "concyclic quadruple.",
+                "no_forbidden_patterns",
+                "Four points (0,0), (1,0), (0,1), (1,2) have no collinear triple and no concyclic quadruple.",
                 {
                     "configuration": {
                         "points": [
-                            {"label": "A", "point": {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}}},
-                            {"label": "B", "point": {"x": {"num": "1", "den": "1"}, "y": {"num": "0", "den": "1"}}},
-                            {"label": "C", "point": {"x": {"num": "0", "den": "1"}, "y": {"num": "2", "den": "1"}}},
-                            {"label": "D", "point": {"x": {"num": "2", "den": "1"}, "y": {"num": "1", "den": "1"}}},
+                            {
+                                "label": "A",
+                                "point": {
+                                    "x": {"num": "0", "den": "1"},
+                                    "y": {"num": "0", "den": "1"},
+                                },
+                            },
+                            {
+                                "label": "B",
+                                "point": {
+                                    "x": {"num": "1", "den": "1"},
+                                    "y": {"num": "0", "den": "1"},
+                                },
+                            },
+                            {
+                                "label": "C",
+                                "point": {
+                                    "x": {"num": "0", "den": "1"},
+                                    "y": {"num": "1", "den": "1"},
+                                },
+                            },
+                            {
+                                "label": "D",
+                                "point": {
+                                    "x": {"num": "1", "den": "1"},
+                                    "y": {"num": "2", "den": "1"},
+                                },
+                            },
                         ],
                     },
                 },

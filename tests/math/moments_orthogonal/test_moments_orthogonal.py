@@ -38,6 +38,7 @@ from jacobian.math.moments_orthogonal._tools import TOOLS
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _frac(num: int, den: int) -> Fraction:
     return Fraction(num, den)
 
@@ -234,9 +235,7 @@ class TestGaussianQuadrature:
 
 class TestWireAdapters:
     def test_hankel_wire(self) -> None:
-        request = HankelMatrixRequest(
-            moments=tuple(_cr(1, k) for k in range(1, 8))
-        )
+        request = HankelMatrixRequest(moments=tuple(_cr(1, k) for k in range(1, 8)))
         result = compute_hankel_matrix(request)
         assert result.dimension == 4
         assert isinstance(result, HankelMatrixResult)
@@ -256,6 +255,7 @@ class TestWireAdapters:
         )
         result = compute_jacobi_matrix(request)
         assert isinstance(result, JacobiMatrixResult)
+
     def test_christoffel_darboux_wire(self) -> None:
         request = ChristoffelDarbouxRequest(
             alpha=(_cr(1, 2), _cr(1, 2)),
@@ -284,7 +284,7 @@ class TestQuadratureUnderflowBound:
     """Semantically nonzero coefficients must survive float conversion."""
 
     def test_subnormal_beta_zero_rejected(self) -> None:
-        tiny = CanonicalRational.from_integer_ratio(1, 10 ** 400)
+        tiny = CanonicalRational.from_integer_ratio(1, 10**400)
         with pytest.raises(ValidationError, match="underflow"):
             GaussianQuadratureRequest(
                 alpha=(_cr(0, 1),),
@@ -294,7 +294,7 @@ class TestQuadratureUnderflowBound:
     def test_subnormal_alpha_rejected(self) -> None:
         with pytest.raises(ValidationError, match="underflow"):
             GaussianQuadratureRequest(
-                alpha=(CanonicalRational.from_integer_ratio(1, 10 ** 400),),
+                alpha=(CanonicalRational.from_integer_ratio(1, 10**400),),
                 beta=(_cr(1, 1), _cr(1, 4)),
             )
 
@@ -313,7 +313,7 @@ class TestQuadratureUnderflowBound:
         total = sum(w.as_fraction() for w in result.weights)
         # Weights are exact dyadic images of IEEE doubles, so the sum sits
         # within a few ulps of mu_0 = 1.
-        assert abs(total - _frac(1, 1)) < _frac(1, 10 ** 15)
+        assert abs(total - _frac(1, 1)) < _frac(1, 10**15)
 
 
 class TestChristoffelDarbouxGrowthBound:
@@ -322,7 +322,7 @@ class TestChristoffelDarbouxGrowthBound:
     def test_powered_evaluation_points_rejected(self) -> None:
         zero = _cr(0, 1)
         one = _cr(1, 1)
-        big = CanonicalRational.from_integer_ratio(10 ** 1999, 1)
+        big = CanonicalRational.from_integer_ratio(10**1999, 1)
         with pytest.raises(ValidationError, match="digit"):
             ChristoffelDarbouxRequest(
                 alpha=tuple(zero for _ in range(16)),
@@ -347,7 +347,7 @@ class TestChristoffelDarbouxGrowthBound:
         with pytest.raises(ValidationError, match="digit"):
             ChristoffelDarbouxRequest(
                 alpha=(_cr(0, 1),) * 15,
-                beta=(_cr(1, 1),) + (_cr(1, 10 ** 300),) * 15,
+                beta=(_cr(1, 1),) + (_cr(1, 10**300),) * 15,
                 x=_cr(1, 2),
                 y=_cr(1, 2),
             )

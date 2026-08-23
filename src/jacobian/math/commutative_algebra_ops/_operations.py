@@ -21,7 +21,6 @@ from jacobian.math.polynomials._conversions import (
     rational_polynomial_to_sympy,
     symbols_for_variables,
 )
-from jacobian.math.polynomials.values import RationalPolynomialIdeal
 
 
 def compute_ideal_radical(request: IdealRadicalRequest) -> IdealRadicalResult:
@@ -80,10 +79,12 @@ def compute_ideal_quotient(request: IdealQuotientRequest) -> IdealQuotientResult
     )
 
 
-
-
 def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturationResult:
     """Compute an exact ideal saturation I : <d>^infinity through the bounded Singular backend."""
+
+    from jacobian.math.polynomials.values import (
+        RationalPolynomialIdeal,
+    )
 
     saturation_ideal = RationalPolynomialIdeal(
         variables=request.ideal.variables,
@@ -97,10 +98,14 @@ def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturation
     )
     return IdealSaturationResult(
         outcome=backend.outcome,
+        ideal=request.ideal,
+        saturation_polynomial=request.saturation_polynomial,
+        resource_budget=request.resource_budget,
         saturation=backend.ideal,
         backend_version=backend.backend_version,
         detail=backend.detail,
     )
+
 
 __all__ = [
     "compute_ideal_quotient",

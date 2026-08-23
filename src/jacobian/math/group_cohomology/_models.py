@@ -114,8 +114,7 @@ class GroupCohomologyResult(StrictModel):
         replay_groups, replay_order = _cohomology_profile(self.request)
         if self.groups != replay_groups or self.group_order != replay_order:
             raise ValueError(
-                "groups must be the exact cohomology of the retained source "
-                "request"
+                "groups must be the exact cohomology of the retained source request"
             )
         return self
 

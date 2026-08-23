@@ -230,7 +230,6 @@ requires_singular = pytest.mark.skipif(
 )
 
 
-
 @requires_singular
 @pytest.mark.requires_backend("singular")
 def test_ideal_saturation_is_not_the_first_colon_ideal() -> None:
@@ -276,6 +275,8 @@ def test_ideal_saturation_satisfies_the_defining_colon_invariant() -> None:
         _contains(result.saturation, generator)
         for generator in first.quotient.generators
     )
+
+
 @requires_singular
 @pytest.mark.requires_backend("singular")
 def test_ideal_radical_counterexample_is_exact() -> None:

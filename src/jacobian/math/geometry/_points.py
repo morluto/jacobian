@@ -2,8 +2,10 @@
 
 from jacobian.catalog._examples import example
 from jacobian.math.geometry._models import (
+    CircleInversionRequest,
     GeometryBooleanResult,
     GeometryConvexHullResult,
+    GeometryPointResult,
     GeometryRationalResult,
     PointPairRequest,
     PointQuadrupleRequest,
@@ -11,6 +13,7 @@ from jacobian.math.geometry._models import (
     PointTripleRequest,
 )
 from jacobian.math.geometry._operations import (
+    circle_inversion,
     collinear,
     concyclic,
     convex_hull_points,
@@ -140,6 +143,40 @@ POINT_OPERATIONS = (
                         {"x": {"num": "3", "den": "1"}, "y": {"num": "0", "den": "1"}},
                         {"x": {"num": "0", "den": "1"}, "y": {"num": "3", "den": "1"}},
                     ]
+                },
+            ),
+        ),
+    ),
+    geometry_operation(
+        "geometry.points.compute.circle_inversion",
+        "Invert a point in a circle",
+        "Given a rational planar center c, a positive rational inversion power "
+        "s (the squared inversion radius), and a rational planar point p != c, "
+        "return the exact inverted point I_{c,s}(p) = c + (s / ||p - c||^2) * "
+        "(p - c) using Jacobian's canonical rational planar point value.",
+        CircleInversionRequest,
+        GeometryPointResult,
+        circle_inversion,
+        "geometry",
+        "inversion",
+        "circle",
+        examples=(
+            example(
+                "unit_inversion_of_two_zero",
+                (
+                    "Unit inversion (s=1) centered at the origin maps (2,0) to "
+                    "(1/2, 0). The point must differ from the center."
+                ),
+                {
+                    "center": {
+                        "x": {"num": "0", "den": "1"},
+                        "y": {"num": "0", "den": "1"},
+                    },
+                    "power": {"num": "1", "den": "1"},
+                    "point": {
+                        "x": {"num": "2", "den": "1"},
+                        "y": {"num": "0", "den": "1"},
+                    },
                 },
             ),
         ),

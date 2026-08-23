@@ -898,3 +898,104 @@ class TestPinnedCoordinateCapIsSchemaEnforced:
         )
         assert request.point_count if hasattr(request, "point_count") else True
         assert len(request.configuration.points) == 3
+
+
+class TestAuthoredComponentBudget:
+    def test_forged_rational_components_rejected_before_parsing(self):
+        """Multi-megabyte authored coefficients are rejected pre-parse."""
+        import pytest
+        from pydantic import ValidationError
+
+        # Just above the aggregate result budget: every valid entry needs at
+        # least two characters per canonical rational, so this much raw
+        # numerator text cannot belong to an admissible profile.
+        from jacobian.math.geometry.exact._models import (
+            MAX_PINNED_PROFILE_RESULT_BYTES as _MAX_BYTES,
+        )
+        from jacobian.math.geometry.exact._models import (
+            PinnedLineDistanceResult,
+        )
+
+        huge = "1" * (_MAX_BYTES + 1)
+        payload = {
+            "dimension": 2,
+            "point_count": 2,
+            "lines": [
+                {
+                    "line_coefficients": [
+                        {"num": "1", "den": "1"},
+                        {"num": "0", "den": "1"},
+                        {"num": "0", "den": "1"},
+                    ],
+                    "squared_distance": {"num": huge, "den": "1"},
+                    "pairs": [[0, 1]],
+                }
+            ],
+            "distance_multiplicities": [
+                [{"num": "1", "den": "1"}, 1],
+            ],
+        }
+        with pytest.raises(ValidationError, match="aggregate result budget"):
+            PinnedLineDistanceResult.model_validate(payload)
+
+
+class TestAuthoredComponentCoverage:
+    def test_oversized_line_coefficient_rejected_before_parsing(self):
+        """Line coefficients count toward the pre-parse aggregate budget."""
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import (
+            MAX_PINNED_PROFILE_RESULT_BYTES,
+            PinnedLineDistanceResult,
+        )
+
+        huge = "1" * (MAX_PINNED_PROFILE_RESULT_BYTES + 1)
+        payload = {
+            "dimension": 2,
+            "point_count": 2,
+            "lines": [
+                {
+                    "line_coefficients": [
+                        {"num": huge, "den": "1"},
+                        {"num": "0", "den": "1"},
+                        {"num": "0", "den": "1"},
+                    ],
+                    "squared_distance": {"num": "1", "den": "1"},
+                    "pairs": [[0, 1]],
+                }
+            ],
+            "distance_multiplicities": [[{"num": "1", "den": "1"}, 1]],
+        }
+        with pytest.raises(ValidationError, match="aggregate result budget"):
+            PinnedLineDistanceResult.model_validate(payload)
+
+    def test_oversized_multiplicity_rational_rejected_before_parsing(self):
+        """Distance-multiplicity rationals count toward the pre-parse bound."""
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import (
+            MAX_PINNED_PROFILE_RESULT_BYTES,
+            PinnedLineDistanceResult,
+        )
+
+        huge = "1" * (MAX_PINNED_PROFILE_RESULT_BYTES + 1)
+        payload = {
+            "dimension": 2,
+            "point_count": 2,
+            "lines": [
+                {
+                    "line_coefficients": [
+                        {"num": "1", "den": "1"},
+                        {"num": "0", "den": "1"},
+                        {"num": "0", "den": "1"},
+                    ],
+                    "squared_distance": {"num": "1", "den": "1"},
+                    "pairs": [[0, 1]],
+                }
+            ],
+            "distance_multiplicities": [[{"num": huge, "den": "1"}, 1]],
+        }
+        with pytest.raises(ValidationError, match="aggregate result budget"):
+            PinnedLineDistanceResult.model_validate(payload)

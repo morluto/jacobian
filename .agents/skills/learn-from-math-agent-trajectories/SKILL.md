@@ -127,6 +127,27 @@ searches or websites. Verify precise hypotheses and dates against primary
 sources. Mark discussion-thread claims, preprints, peer-reviewed results, and
 agent conjectures distinctly.
 
+When a trajectory embeds useful mathematics inside a specialized proof,
+record the method boundary before classifying it:
+
+```text
+mathematical goal:
+local exact move:
+global proof lift:
+source representation:
+stable reusable postcondition:
+literature identity:
+Jacobian disposition:
+```
+
+This record prevents opposite errors: promoting the whole proof workflow into
+one operation, or dismissing a stable operation because its implementation
+appears inside a theorem-specific script. For example, one nullspace update is
+usually too low-level and an entire allocation theorem is too high-level;
+exact rounding that preserves named rows and bounds the monitored-column error
+can be the reusable boundary. Base every field on observable artifacts and
+primary sources rather than inferred hidden reasoning.
+
 ## Attribute the lesson
 
 Classify each important event as one of:
@@ -152,6 +173,14 @@ membership. A candidate operation must expose one reusable bounded
 postcondition with typed inputs and an exact, incomplete, or unknown result. It
 must not encode the motivating conjecture, prescribe a proof strategy, or
 claim an asymptotic theorem that still requires model reasoning.
+
+When an existing operation has the required postcondition but rejects a large
+input through a coarse cap, attribute the lesson to admission or scale/backend
+rather than inventing a second operation. Check whether the result and derived
+work are compact, whether an exact sparse, factored, modular, symbolic, or
+implicit representation avoids expansion, and whether a maintained backend or
+different algorithm regime would widen the envelope. A timeout alone neither
+proves that the cap is necessary nor establishes a mathematical negative.
 
 Separate gap diagnosis from public-operation admission. First decide whether
 the trajectory establishes a reusable missing mathematical postcondition on

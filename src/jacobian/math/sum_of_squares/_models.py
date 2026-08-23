@@ -100,6 +100,20 @@ class SOSDecompositionCheckRequest(StrictModel):
                 )
         # Bound polynomial expansion before squaring.
         _require_bounded_sos_work(self.polynomial, self.summands)
+        # The term-product cap does not bound exact coefficient growth: 64
+        # eight-term summands with distinct 128-digit prime denominators can
+        # align onto one output coefficient and reduce to a ~65,000-digit
+        # denominator. Admission therefore replays the exact expansion so
+        # any over-canonical computed_sum fails parsing, not execution.
+        from jacobian.math.sum_of_squares._operations import _check_sos_invariants
+
+        try:
+            _check_sos_invariants(self.polynomial, self.summands)
+        except Exception as exc:
+            raise ValueError(
+                "SOS expansion leaves the canonical polynomial domain; "
+                "supply smaller or better-scaled summand coefficients"
+            ) from exc
         return self
 
 

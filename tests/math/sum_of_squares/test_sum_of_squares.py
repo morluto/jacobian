@@ -320,3 +320,41 @@ class TestExactPsdCriterion:
             )
         )
         assert result.is_psd is False
+
+
+class TestSOSCoefficientGrowthAdmission:
+    """Admission replays the exact expansion so over-canonical computed sums
+    fail parsing instead of raising inside execution."""
+
+    def test_aligned_prime_denominators_rejected_at_admission(self) -> None:
+        """64 eight-term summands meet the 4,096-product cap while their
+        121-digit denominators align onto one output coefficient; the
+        reduced denominator far exceeds the canonical limit, so admission —
+        not execution — must reject."""
+
+        def summand(k: int):
+            # Eight terms with pairwise-distinct large prime-like
+            # denominators, all squaring down onto low degrees.
+            terms = [
+                {
+                    "coefficient": {
+                        "num": "1",
+                        "den": str(10**120 + 64 * e + 2 * k + 3),
+                    },
+                    "exponents": [7 - e],
+                }
+                for e in range(8)
+            ]
+            return RationalPolynomial.model_validate(
+                {
+                    "polynomial_schema_version": "1",
+                    "domain": "QQ",
+                    "variables": ["x"],
+                    "polynomial": {"terms": terms},
+                }
+            )
+
+        summands = tuple(summand(k) for k in range(64))
+        p = _poly(("x",), (1, 1, (2,)), (1, 1, (0,)))
+        with pytest.raises(ValidationError):
+            SOSDecompositionCheckRequest(polynomial=p, summands=summands)

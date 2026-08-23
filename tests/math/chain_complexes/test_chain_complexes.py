@@ -44,7 +44,10 @@ class TestHomology:
             max_degree=1,
             dimensions=(1, 2),
             differentials=(
-                (MatrixEntry(row=0, col=0, value="1"), MatrixEntry(row=0, col=1, value="1")),
+                (
+                    MatrixEntry(row=0, col=0, value="1"),
+                    MatrixEntry(row=0, col=1, value="1"),
+                ),
             ),
         )
         result = compute_homology(HomologyRequest(complex=cx))
@@ -62,8 +65,14 @@ class TestHomology:
             max_degree=2,
             dimensions=(1, 2, 1),
             differentials=(
-                (MatrixEntry(row=0, col=0, value="1"), MatrixEntry(row=0, col=1, value="1")),
-                (MatrixEntry(row=0, col=0, value="1"), MatrixEntry(row=1, col=0, value="1")),
+                (
+                    MatrixEntry(row=0, col=0, value="1"),
+                    MatrixEntry(row=0, col=1, value="1"),
+                ),
+                (
+                    MatrixEntry(row=0, col=0, value="1"),
+                    MatrixEntry(row=1, col=0, value="1"),
+                ),
             ),
         )
         result = compute_homology(HomologyRequest(complex=cx))
@@ -112,9 +121,7 @@ class TestPublishedExample:
 
     def test_published_homology_example_betti_numbers(self):
         homology = next(
-            tool
-            for tool in TOOLS
-            if tool.operation_id.endswith("homology.compute")
+            tool for tool in TOOLS if tool.operation_id.endswith("homology.compute")
         )
         request = homology.request_type.model_validate(homology.examples[0].input)
         result = compute_homology(request)
@@ -122,13 +129,9 @@ class TestPublishedExample:
 
     def test_published_mapping_cone_example_is_acyclic(self):
         cone_tool = next(
-            tool
-            for tool in TOOLS
-            if tool.operation_id.endswith("mapping_cone.compute")
+            tool for tool in TOOLS if tool.operation_id.endswith("mapping_cone.compute")
         )
-        request = cone_tool.request_type.model_validate(
-            cone_tool.examples[0].input
-        )
+        request = cone_tool.request_type.model_validate(cone_tool.examples[0].input)
         result = compute_mapping_cone(request)
         assert result.cone.dimensions == (1, 1)
         assert len(result.cone.differentials) == 1
@@ -172,9 +175,7 @@ class TestAdmissionRegressions:
             MappingConeRequest(
                 source=source,
                 target=target,
-                chain_map=(
-                    (MatrixEntry(row=0, col=0, value="1"),),
-                ),
+                chain_map=((MatrixEntry(row=0, col=0, value="1"),),),
             )
 
     def test_chain_map_to_matching_degree_accepted(self):

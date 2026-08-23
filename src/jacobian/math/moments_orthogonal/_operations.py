@@ -55,9 +55,7 @@ def compute_recurrence_coefficients(
 def compute_jacobi_matrix(request: JacobiMatrixRequest) -> JacobiMatrixResult:
     from jacobian.math.moments_orthogonal.operations import jacobi_matrix
 
-    result = jacobi_matrix(
-        _to_fractions(request.alpha), _to_fractions(request.beta)
-    )
+    result = jacobi_matrix(_to_fractions(request.alpha), _to_fractions(request.beta))
     return JacobiMatrixResult(
         alpha=request.alpha,
         beta=request.beta,

@@ -38,6 +38,81 @@ class MatrixEntry(StrictModel):
         return self
 
 
+def _require_admissible_dimensions(dimensions: tuple[int, ...]) -> None:
+    """Bound every chain group to the dense-work elimination envelope."""
+    if any(d < 0 for d in dimensions):
+        raise ValueError("dimensions must be non-negative")
+    if any(d > MAX_CHAIN_GROUP_DIMENSION for d in dimensions):
+        raise ValueError(
+            "group dimensions must not exceed the dense-work bound "
+            f"{MAX_CHAIN_GROUP_DIMENSION}"
+        )
+
+
+def _require_differential_bounds(
+    differentials: tuple[tuple[MatrixEntry, ...], ...],
+    dimensions: tuple[int, ...],
+) -> None:
+    """Keep every differential entry inside its source and target group."""
+    for i, diff in enumerate(differentials):
+        # Homological convention d_{min+i+1}: C_{min+i+1} -> C_{min+i}
+        # So differential i has source = dimensions[i+1], target = dimensions[i]
+        source_dim = dimensions[i + 1]
+        target_dim = dimensions[i]
+        for entry in diff:
+            if entry.row >= target_dim:
+                raise ValueError("differential entry row exceeds target dimension")
+            if entry.col >= source_dim:
+                raise ValueError("differential entry col exceeds source dimension")
+
+
+def _dense_gfprime(entries: tuple[MatrixEntry, ...], rows: int, cols: int, prime: int):
+    mat = [[0] * cols for _ in range(rows)]
+    for e in entries:
+        mat[e.row][e.col] = int(e.value) % prime
+    return mat
+
+
+def _gfprime_mat_mul(a, b, prime: int):
+    if not a or not b or not a[0] or not b[0]:
+        return (
+            [[0] * len(b[0]) if b and b[0] else 0 for _ in range(len(a))] if a else []
+        )
+    n_rows = len(a)
+    n_cols = len(b[0])
+    n_inner = len(b)
+    result = [[0] * n_cols for _ in range(n_rows)]
+    for r in range(n_rows):
+        for k in range(n_inner):
+            if a[r][k] == 0:
+                continue
+            for c in range(n_cols):
+                result[r][c] = (result[r][c] + a[r][k] * b[k][c]) % prime
+    return result
+
+
+def _require_differential_squared_zero(
+    differentials: tuple[tuple[MatrixEntry, ...], ...],
+    dimensions: tuple[int, ...],
+    prime: int,
+) -> None:
+    """Verify d^2 = 0 by dense GF(prime) composition of adjacent differentials."""
+    for i in range(len(differentials) - 1):
+        # d_{i+1}: C_{i+1} -> C_i, dims[i] x dims[i+1]
+        # d_{i+2}: C_{i+2} -> C_{i+1}, dims[i+1] x dims[i+2]
+        # Composition d_{i+1} * d_{i+2}: dims[i] x dims[i+2] should be zero
+        a = _dense_gfprime(differentials[i], dimensions[i], dimensions[i + 1], prime)
+        b = _dense_gfprime(
+            differentials[i + 1],
+            dimensions[i + 1],
+            dimensions[i + 2],
+            prime,
+        )
+        prod = _gfprime_mat_mul(a, b, prime)
+        if any(any(v % prime != 0 for v in row) for row in prod):
+            raise ValueError("differentials must satisfy d^2 = 0")
+
+
 class ChainComplex(StrictModel):
     """A bounded homological chain complex over a prime field GF(p).
 
@@ -64,58 +139,15 @@ class ChainComplex(StrictModel):
         expected_length = self.max_degree - self.min_degree + 1
         if len(self.dimensions) != expected_length:
             raise ValueError("dimensions must cover the degree range")
-        if any(d < 0 for d in self.dimensions):
-            raise ValueError("dimensions must be non-negative")
-        if any(d > MAX_CHAIN_GROUP_DIMENSION for d in self.dimensions):
-            raise ValueError(
-                "group dimensions must not exceed the dense-work bound "
-                f"{MAX_CHAIN_GROUP_DIMENSION}"
-            )
+        _require_admissible_dimensions(self.dimensions)
         if self.differentials:
             if len(self.differentials) != expected_length - 1:
                 raise ValueError("differentials must cover the degree gaps")
-            for i, diff in enumerate(self.differentials):
-                # Homological convention d_{min+i+1}: C_{min+i+1} -> C_{min+i}
-                # So differential i has source = dimensions[i+1], target = dimensions[i]
-                source_dim = self.dimensions[i + 1]
-                target_dim = self.dimensions[i]
-                for entry in diff:
-                    if entry.row >= target_dim:
-                        raise ValueError("differential entry row exceeds target dimension")
-                    if entry.col >= source_dim:
-                        raise ValueError("differential entry col exceeds source dimension")
-            # Enforce d_{n-1} * d_n = 0 for all n (d^2 = 0)
-            # Build dense matrices and check composition.
-            def _build_dense(entries, rows, cols):
-                mat = [[0] * cols for _ in range(rows)]
-                for e in entries:
-                    mat[e.row][e.col] = int(e.value) % self.prime
-                return mat
-
-            def _mat_mul(a, b):
-                if not a or not b or not a[0] or not b[0]:
-                    return [[0] * len(b[0]) if b and b[0] else 0 for _ in range(len(a))] if a else []
-                n_rows = len(a)
-                n_cols = len(b[0])
-                n_inner = len(b)
-                result = [[0] * n_cols for _ in range(n_rows)]
-                for r in range(n_rows):
-                    for k in range(n_inner):
-                        if a[r][k] == 0:
-                            continue
-                        for c in range(n_cols):
-                            result[r][c] = (result[r][c] + a[r][k] * b[k][c]) % self.prime
-                return result
-
-            for i in range(len(self.differentials) - 1):
-                # d_{i+1}: C_{i+1} -> C_i, dims[i] x dims[i+1]
-                # d_{i+2}: C_{i+2} -> C_{i+1}, dims[i+1] x dims[i+2]
-                # Composition d_{i+1} * d_{i+2}: dims[i] x dims[i+2] should be zero
-                a = _build_dense(self.differentials[i], self.dimensions[i], self.dimensions[i + 1])
-                b = _build_dense(self.differentials[i + 1], self.dimensions[i + 1], self.dimensions[i + 2])
-                prod = _mat_mul(a, b)
-                if any(any(v % self.prime != 0 for v in row) for row in prod):
-                    raise ValueError("differentials must satisfy d^2 = 0")
+            _require_differential_bounds(self.differentials, self.dimensions)
+            # Enforce d_{n-1} * d_n = 0 for all n (d^2 = 0) over GF(prime).
+            _require_differential_squared_zero(
+                self.differentials, self.dimensions, self.prime
+            )
         return self
 
 
@@ -157,9 +189,7 @@ def _chain_map_target_dim(target: ChainComplex, degree: int) -> int:
     return 0
 
 
-def _chain_map_degree(
-    complex_: ChainComplex, deg: int
-) -> int:
+def _chain_map_degree(complex_: ChainComplex, deg: int) -> int:
     if complex_.min_degree <= deg <= complex_.max_degree:
         return complex_.dimensions[deg - complex_.min_degree]
     return 0
@@ -217,11 +247,7 @@ def _require_chain_map_commutativity(
         i = n - s_min
         # d^C_n: C_n -> C_{n-1}, always inside the source range.
         d_c = diff(
-            (
-                source.differentials[i - 1]
-                if i - 1 < len(source.differentials)
-                else ()
-            ),
+            (source.differentials[i - 1] if i - 1 < len(source.differentials) else ()),
             dim(source, n - 1),
             dim(source, n),
         )

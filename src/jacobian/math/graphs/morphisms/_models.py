@@ -185,10 +185,12 @@ class FixedLengthCycleRequest(StrictModel):
             "description": (
                 "Decide whether the canonical simple graph contains a simple "
                 "cycle of length `length` (3..20). The request is rejected when "
-                "the worst-case exhaustive search would exceed the work budget. "
-                "Accepts the domain-owned `SimpleUndirectedGraph` so callers can "
-                "compose the output of `explicit_graph` or `compose_graphs` "
-                "directly."
+                "the worst-case exhaustive search would exceed the work budget, "
+                "or when the retained source graph plus witness labels would not "
+                "leave enough canonical-output headroom for the echoed-source "
+                "response. Accepts the domain-owned `SimpleUndirectedGraph` so "
+                "callers can compose the output of `explicit_graph` or "
+                "`compose_graphs` directly."
             )
         },
     )

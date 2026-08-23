@@ -225,11 +225,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "c4_with_chord_has_triangle",
                 (
-                    "A 4-cycle with a chord contains a 3-cycle (triangle); the "
-                    "cycle length k must be at least 3 and at most the vertex "
-                    "count. Preconditions: both graphs carry at most 20 "
-                    "vertices and the request stays inside the per-pass path "
-                    "budget."
+                    "A 4-cycle with a chord contains a 3-cycle (triangle); "
+                    "length k is 3..vertex count. Preconditions: at most 20 "
+                    "vertices, inside the path budget, and enough output "
+                    "headroom for the echoed source graph."
                 ),
                 CYCLE_C4_WITH_CHORD_SIMPLE,
             ),
@@ -265,9 +264,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "triangle_in_c4_with_chord",
                 (
                     "A triangle pattern embeds in a 4-cycle-with-chord host. "
-                    "Preconditions: pattern and host each carry at most 20 "
-                    "vertices, the pattern has no more vertices than the host, "
-                    "and the search stays inside the assignment budget."
+                    "Preconditions: at most 20 vertices each, pattern no larger "
+                    "than host, inside the assignment budget, and enough "
+                    "output headroom for the echoed sources."
                 ),
                 SUBGRAPH_TRIANGLE_IN_C4_CHORD,
             ),

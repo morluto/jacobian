@@ -1,113 +1,60 @@
-"""Domain-owned linear matroid operations."""
+"""Domain-owned linear matroid operations over the shared GF(p) kernels."""
 
 from __future__ import annotations
 
-from jacobian.math.matroids._models import (
-    LinearMatroid,
-    MatroidClosureRequest,
-    MatroidClosureResult,
-    MatroidRankRequest,
-    MatroidRankResult,
+from jacobian.math.matroids._models import LinearMatroid
+from jacobian.math.prime_field_linear_algebra import (
+    PrimeFieldMatrix,
+)
+from jacobian.math.prime_field_linear_algebra import (
+    rank as pf_rank,
 )
 
 
-def _pivot_row(
-    augmented: list[list[int]], col: int, start: int, prime: int
-) -> int | None:
-    """Find the first row at or below ``start`` with a nonzero pivot column."""
-    for r in range(start, len(augmented)):
-        if augmented[r][col] % prime != 0:
-            return r
-    return None
-
-
-def _scale_and_clear(
-    augmented: list[list[int]], rank: int, col: int, cols: int, prime: int
-) -> None:
-    """Scale the pivot row to a unit leading entry and clear its column."""
-    inv_pivot = pow(augmented[rank][col] % prime, prime - 2, prime)
-    for c in range(cols):
-        augmented[rank][c] = (augmented[rank][c] * inv_pivot) % prime
-    for r, row in enumerate(augmented):
-        factor = row[col] % prime
-        if r != rank and factor != 0:
-            for c in range(cols):
-                row[c] = (row[c] - factor * augmented[rank][c]) % prime
-
-
-def _gaussian_rank(matrix: list[list[int]], prime: int) -> int:
-    """Compute the rank of a matrix over GF(prime) using Gaussian elimination."""
-    rows = len(matrix)
-    if rows == 0:
-        return 0
-    cols = len(matrix[0])
-    augmented = [row[:] for row in matrix]
-
-    rank = 0
-    for col in range(cols):
-        pivot = _pivot_row(augmented, col, rank, prime)
-        if pivot is None:
-            continue
-        augmented[rank], augmented[pivot] = augmented[pivot], augmented[rank]
-        _scale_and_clear(augmented, rank, col, cols, prime)
-        rank += 1
-        if rank >= rows:
-            break
-    return rank
-
-
-def _column_matrix(
-    matroid: LinearMatroid, column_indices: list[int] | None = None
-) -> list[list[int]]:
-    """Build a column-major matrix from selected columns of the matroid."""
-    cols = (
-        column_indices
-        if column_indices is not None
-        else list(range(len(matroid.columns)))
-    )
-    return [[matroid.columns[j][i] for j in cols] for i in range(matroid.num_rows)]
-
-
-def compute_rank(request: MatroidRankRequest) -> MatroidRankResult:
-    """Compute the rank of a linear matroid over a prime field."""
-    matrix = _column_matrix(request.matroid)
-    rank = _gaussian_rank(matrix, request.matroid.prime)
-    return MatroidRankResult(
-        matroid=request.matroid,
-        rank=rank,
+def _selected_columns_matrix(
+    matroid: LinearMatroid, column_indices: list[int]
+) -> PrimeFieldMatrix:
+    """The canonical matrix restricted to the selected ground elements."""
+    rows = matroid.matrix.entries
+    selected = [tuple(row[j] for j in column_indices) for row in rows]
+    return PrimeFieldMatrix(
+        prime=matroid.matrix.prime,
+        entries=tuple(selected),
+        columns=len(column_indices),
     )
 
 
-def compute_closure(request: MatroidClosureRequest) -> MatroidClosureResult:
-    """Compute the closure (smallest flat) of a subset in a linear matroid.
+def matroid_rank(matroid: LinearMatroid) -> int:
+    """Exact rank of the linear matroid (dimension of the column span).
 
-    The closure of S is S union all elements e such that e is in the span of S.
+    Routes through the maintained shared ``rank`` kernel so the matroid
+    domain never maintains a divergent elimination implementation.
     """
-    matroid = request.matroid
-    subset = list(request.subset)
+    return pf_rank(matroid.matrix)
 
-    subset_rank = _gaussian_rank(_column_matrix(matroid, subset), matroid.prime)
 
+def _closure_invariant(
+    matroid: LinearMatroid, subset: list[int]
+) -> tuple[tuple[int, ...], int]:
+    """Pure closure core: the flat of ``subset`` and its rank.
+
+    An element e joins the closure exactly when adding it does not raise
+    the subset's rank; every intermediate rank routes through the shared
+    kernel. Returns ``(sorted_closure, subset_rank)``.
+    """
+    subset_rank = pf_rank(_selected_columns_matrix(matroid, subset))
     closure = set(subset)
-    for i in range(len(matroid.columns)):
-        if i in closure:
+    for element in range(matroid.ground_size):
+        if element in closure:
             continue
-        test_subset = sorted(closure | {i})
-        test_rank = _gaussian_rank(_column_matrix(matroid, test_subset), matroid.prime)
-        if test_rank == subset_rank:
-            closure.add(i)
-
-    closure_sorted = sorted(closure)
-    return MatroidClosureResult(
-        matroid=matroid,
-        subset=request.subset,
-        closure=tuple(closure_sorted),
-        closure_size=len(closure_sorted),
-        rank=subset_rank,
-    )
+        test = sorted(closure | {element})
+        if pf_rank(_selected_columns_matrix(matroid, test)) == subset_rank:
+            closure.add(element)
+    return tuple(sorted(closure)), subset_rank
 
 
-__all__ = [
-    "compute_closure",
-    "compute_rank",
-]
+def compute_matroid_closure(
+    matroid: LinearMatroid, subset: list[int]
+) -> tuple[tuple[int, ...], int]:
+    """Public native entry: exact closure and subset rank."""
+    return _closure_invariant(matroid, subset)

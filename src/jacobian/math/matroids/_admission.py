@@ -11,14 +11,9 @@ from jacobian.math.matroids._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
-        "matroid.rank.compute",
-        AdmissionDecision.KEEP,
-        "exact matroid rank via Gaussian elimination over a prime field",
-    ),
-    OperationAdmission(
         "matroid.closure.compute",
         AdmissionDecision.KEEP,
-        "exact matroid closure (flat) computation via column span over a prime field",
+        "exact matroid closure (flat) via the shared prime-field column-rank kernel",
     ),
 )
 

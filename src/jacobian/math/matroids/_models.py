@@ -2,84 +2,76 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Any, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import ConfigDict, Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
 
 MAX_GROUND_SIZE = 32
-MAX_ROWS = 16
+"""Schema-visible cap on the ground-set cardinality (matrix columns)."""
 
-
-def _require_prime(value: int) -> None:
-    """Reject composite moduli: the kernel claims GF(p) Fermat inverses."""
-    if value < 2 or any(
-        value % divisor == 0 for divisor in range(2, int(value**0.5) + 1)
-    ):
-        raise ValueError("prime must be a prime field modulus")
+MAX_PRIME = 2_147_483_647
+"""Explicit conservative bound on the field prime before primality testing."""
 
 
 class LinearMatroid(StrictModel):
-    """A matroid represented by columns of a matrix over a prime field.
+    """A linear matroid over GF(p) represented by a canonical matrix.
 
-    The ground set is {0, ..., n-1} where n is the number of columns.
-    Each column is a vector over GF(p).
+    The ground set ``{0, ..., columns - 1}`` indexes the columns of the
+    domain-owned ``PrimeFieldMatrix``; rank and closure derive from the
+    column span. The empty matroid is admitted: with zero columns the row
+    axis stays declared, the rank is exactly zero, and every closure is
+    empty. The characteristic is bounded before construction so no accepted
+    value performs unbounded primality work.
     """
 
-    prime: int = Field(ge=2, le=10_000)
-    num_rows: int = Field(ge=1, le=MAX_ROWS)
-    columns: tuple[tuple[int, ...], ...] = Field(
-        min_length=1, max_length=MAX_GROUND_SIZE
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "A linear matroid over GF(p) as the canonical "
+                "`PrimeFieldMatrix`: the ground set indexes matrix columns, "
+                "entries are canonical residues in [0, prime), and up to 32 "
+                "columns. The empty matroid (zero columns) is admitted."
+            )
+        }
     )
 
-    @model_validator(mode="after")
-    def require_valid_columns(self) -> Self:
-        _require_prime(self.prime)
-        if len(self.columns) < 1:
-            raise ValueError("at least one column is required")
-        for col in self.columns:
-            if len(col) != self.num_rows:
-                raise ValueError("each column must have num_rows entries")
-            for entry in col:
-                if not (0 <= entry < self.prime):
-                    raise ValueError("entries must be in 0..p-1")
-        return self
+    matrix: PrimeFieldMatrix
 
+    @model_validator(mode="before")
+    @classmethod
+    def require_bounded_declared_prime(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            raw = data.get("matrix")
+            prime = (
+                raw.get("prime")
+                if isinstance(raw, dict)
+                else getattr(raw, "prime", None)
+            )
+            if isinstance(prime, int) and not 2 <= prime <= MAX_PRIME:
+                raise ValueError(
+                    f"field prime must lie in [2, {MAX_PRIME}] so validation "
+                    "work stays bounded"
+                )
+        return data
 
-class MatroidRankRequest(StrictModel):
-    """Compute the rank of a linear matroid."""
-
-    matroid: LinearMatroid
-
-
-class MatroidRankResult(MatroidRankRequest):
-    """The rank of a matroid (dimension of its column space)."""
-
-    rank: StrictInt = Field(ge=0)
-
-    @model_validator(mode="after")
-    def require_valid_rank(self) -> Self:
-        from jacobian.math.matroids._operations import _column_matrix, _gaussian_rank
-
-        expected = _gaussian_rank(_column_matrix(self.matroid), self.matroid.prime)
-        if self.rank != expected:
-            raise ValueError("rank must be the exact matroid rank")
-        if self.rank > min(len(self.matroid.columns), MAX_ROWS):
-            raise ValueError("rank cannot exceed ground size or number of rows")
-        return self
+    @property
+    def ground_size(self) -> int:
+        return self.matrix.columns
 
 
 class MatroidClosureRequest(StrictModel):
     """Compute the closure of a subset in a linear matroid."""
 
     matroid: LinearMatroid
-    subset: tuple[int, ...] = Field(min_length=0, max_length=MAX_GROUND_SIZE)
+    subset: tuple[StrictInt, ...] = Field(default=(), max_length=MAX_GROUND_SIZE)
 
     @model_validator(mode="after")
     def require_valid_subset(self) -> Self:
         for idx in self.subset:
-            if not (0 <= idx < len(self.matroid.columns)):
+            if not (0 <= idx < self.matroid.ground_size):
                 raise ValueError("subset indices must be in 0..n-1")
         if len(set(self.subset)) != len(self.subset):
             raise ValueError("subset indices must be distinct")
@@ -89,41 +81,22 @@ class MatroidClosureRequest(StrictModel):
 class MatroidClosureResult(MatroidClosureRequest):
     """The closure (flat) of a subset in a linear matroid."""
 
-    closure: tuple[int, ...]
-    closure_size: StrictInt = Field(ge=0, le=MAX_GROUND_SIZE)
+    closure: tuple[StrictInt, ...] = Field(default=(), max_length=MAX_GROUND_SIZE)
     rank: StrictInt = Field(ge=0)
 
     @model_validator(mode="after")
     def require_valid_closure(self) -> Self:
-        from jacobian.math.matroids._operations import _column_matrix, _gaussian_rank
-
-        if len(set(self.closure)) != len(self.closure):
-            raise ValueError("closure elements must be distinct")
-        if self.closure_size != len(self.closure):
-            raise ValueError("closure_size must match closure length")
-        for idx in self.closure:
-            if not (0 <= idx < len(self.matroid.columns)):
-                raise ValueError("closure indices must be in 0..n-1")
-        # Replay the bounded closure invariant: closure is subset plus all
-        # elements whose rank does not increase the subset's span.
-        subset_rank = _gaussian_rank(
-            _column_matrix(self.matroid, list(self.subset)), self.matroid.prime
+        from jacobian.math.matroids._operations import (
+            _closure_invariant,
         )
+
+        expected_closure, subset_rank = _closure_invariant(
+            self.matroid, list(self.subset)
+        )
+        if tuple(self.closure) != tuple(expected_closure):
+            raise ValueError("closure must be the exact flat of the subset")
         if self.rank != subset_rank:
             raise ValueError("rank must be the rank of the requested subset")
-        # Compute expected closure
-        expected = set(self.subset)
-        for i in range(len(self.matroid.columns)):
-            if i in expected:
-                continue
-            test = sorted(expected | {i})
-            test_rank = _gaussian_rank(
-                _column_matrix(self.matroid, test), self.matroid.prime
-            )
-            if test_rank == subset_rank:
-                expected.add(i)
-        if set(self.closure) != expected:
-            raise ValueError("closure must be the exact flat of the subset")
         return self
 
 
@@ -131,6 +104,4 @@ __all__ = [
     "LinearMatroid",
     "MatroidClosureRequest",
     "MatroidClosureResult",
-    "MatroidRankRequest",
-    "MatroidRankResult",
 ]

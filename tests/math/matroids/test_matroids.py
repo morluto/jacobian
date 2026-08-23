@@ -5,85 +5,104 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.matroids._models import (
+from jacobian._exact import CanonicalInteger  # noqa: F401  (canonical grammar)
+from jacobian.math.matroids import (
     LinearMatroid,
-    MatroidClosureRequest,
-    MatroidRankRequest,
+    compute_matroid_closure,
+    matroid_rank,
 )
-from jacobian.math.matroids._operations import (
-    compute_closure,
-    compute_rank,
-)
+from jacobian.math.matroids._models import MatroidClosureRequest
+from jacobian.math.matroids._tools import compute_closure
 
 
-class TestMatroidRank:
-    """Test matroid rank computation."""
+def _matroid(prime: int, rows, columns: int) -> LinearMatroid:
+    from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
 
-    def test_composite_prime_rejected(self):
-        """Composite moduli are not prime fields; Fermat inverses break."""
-        with pytest.raises(ValidationError, match="prime field modulus"):
-            LinearMatroid(prime=4, num_rows=1, columns=((0,), (1,)))
+    entries = tuple(tuple(row[j] for j in range(columns)) for row in rows)
+    return LinearMatroid(
+        matrix=PrimeFieldMatrix(prime=prime, entries=entries, columns=columns)
+    )
 
-    def test_full_rank(self):
-        """U(2,3) has rank 2."""
-        matroid = LinearMatroid(prime=5, num_rows=2, columns=((1, 0), (0, 1), (1, 1)))
-        result = compute_rank(MatroidRankRequest(matroid=matroid))
-        assert result.rank == 2
 
-    def test_dependent_columns(self):
-        """A matrix with dependent columns has lower rank."""
-        matroid = LinearMatroid(
-            prime=7,
-            num_rows=3,
-            columns=((1, 0, 0), (0, 1, 0), (1, 1, 0)),
+def _identity_rows(r: int):
+    return [tuple(1 if i == j else 0 for j in range(r)) for i in range(r)]
+
+
+class TestLinearMatroidRepresentation:
+    def test_canonical_matrix_representation(self):
+        """The ground set indexes columns of the canonical matrix value."""
+        from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
+
+        m = _matroid(5, _identity_rows(2), 2)
+        assert isinstance(m.matrix, PrimeFieldMatrix)
+        assert m.ground_size == 2
+
+    def test_oversized_prime_rejected_before_construction(self):
+        """A ~3,000-digit prime is bounded before primality work."""
+        with pytest.raises(ValidationError, match="2147483647"):
+            LinearMatroid.model_validate(
+                {"matrix": {"prime": 2**9941 - 1, "entries": [], "columns": 0}}
+            )
+
+    def test_empty_matroid_admitted(self):
+        """The empty ground set with a preserved row axis is representable."""
+        m = LinearMatroid.model_validate(
+            {
+                "matrix": {
+                    "prime": 5,
+                    "entries": [[], []],
+                    "columns": 0,
+                }
+            }
         )
-        result = compute_rank(MatroidRankRequest(matroid=matroid))
-        assert result.rank == 2
-
-    def test_single_column(self):
-        """A single nonzero column has rank 1."""
-        matroid = LinearMatroid(prime=5, num_rows=3, columns=((1, 2, 3),))
-        result = compute_rank(MatroidRankRequest(matroid=matroid))
-        assert result.rank == 1
-
-    def test_zero_column(self):
-        """A zero column contributes no rank."""
-        matroid = LinearMatroid(prime=5, num_rows=2, columns=((0, 0), (1, 1)))
-        result = compute_rank(MatroidRankRequest(matroid=matroid))
-        assert result.rank == 1
+        assert m.ground_size == 0
+        assert matroid_rank(m) == 0
+        closure, rank = compute_matroid_closure(m, [])
+        assert closure == () and rank == 0
 
 
-class TestMatroidClosure:
-    """Test matroid closure computation."""
+class TestClosure:
+    def test_closure_of_basis_is_everything_in_its_span(self):
+        """U(2,3): the closure of a basis is the whole ground set."""
+        m = _matroid(5, _identity_rows(2) and [(1, 0, 1), (0, 1, 1)], 3)
+        closure, rank = compute_matroid_closure(m, [0, 1])
+        assert rank == 2
+        assert closure == (0, 1, 2)
 
-    def test_closure_includes_span(self):
-        """Closure of {0, 1} in U(2,3) includes element 2 (in the span)."""
-        matroid = LinearMatroid(prime=5, num_rows=2, columns=((1, 0), (0, 1), (1, 1)))
-        result = compute_closure(MatroidClosureRequest(matroid=matroid, subset=(0, 1)))
-        assert result.closure == (0, 1, 2)
-
-    def test_closure_of_singleton(self):
-        """Closure of a single independent element is just that element."""
-        matroid = LinearMatroid(prime=5, num_rows=2, columns=((1, 0), (0, 1), (1, 1)))
-        result = compute_closure(MatroidClosureRequest(matroid=matroid, subset=(0,)))
+    def test_wire_closure_round_trips(self):
+        m = _matroid(5, [(1, 0, 1), (0, 1, 1)], 3)
+        request = MatroidClosureRequest(matroid=m, subset=(0,))
+        result = compute_closure(request)
         assert result.closure == (0,)
+        assert result.rank == 1
+        payload = result.model_dump(mode="json")
+        assert type(result).model_validate(payload) == result
 
-    def test_closure_empty(self):
-        """Closure of the empty set is the set of loops (zero columns)."""
-        matroid = LinearMatroid(
-            prime=5,
-            num_rows=2,
-            columns=((0, 0), (1, 0), (0, 1)),
-        )
-        result = compute_closure(MatroidClosureRequest(matroid=matroid, subset=()))
-        # The zero column is in the closure of the empty set
-        assert 0 in result.closure
+    def test_subset_indices_validated(self):
+        m = _matroid(5, [(1, 0), (0, 1)], 2)
+        with pytest.raises(ValidationError, match=r"0\.\.n-1"):
+            MatroidClosureRequest(matroid=m, subset=(2,))
 
-    def test_closure_is_flat(self):
-        """The rank of the closure equals the rank of the subset."""
-        matroid = LinearMatroid(
-            prime=7, num_rows=3, columns=((1, 0, 0), (0, 1, 0), (1, 1, 0), (0, 0, 1))
-        )
-        result = compute_closure(MatroidClosureRequest(matroid=matroid, subset=(0, 1)))
-        # The closure should include column 2 (in span of {0,1}) but not 3
-        assert result.rank == 2
+    def test_forged_closure_rejected(self):
+        m = _matroid(5, [(1, 0, 1), (0, 1, 1)], 3)
+        request = MatroidClosureRequest(matroid=m, subset=(0, 1))
+        forged = request.model_dump()
+        closure, rank = compute_matroid_closure(m, [0, 1])
+        assert set(closure) == {0, 1, 2}
+        # Drop the spanned element: not a flat.
+        forged["closure"] = [0, 1]
+        forged["rank"] = rank
+        from jacobian.math.matroids._models import MatroidClosureResult
+
+        with pytest.raises(ValidationError):
+            MatroidClosureResult.model_validate(forged)
+
+
+class TestCatalogAdmission:
+    def test_duplicate_rank_operation_not_registered(self):
+        """prime_field.matrix.rank covers full-ground-set rank; no duplicate."""
+        from jacobian.catalog.builtins import BUILTIN_TOOLS
+
+        ids = [t.operation_id for t in BUILTIN_TOOLS]
+        assert "matroid.rank.compute" not in ids
+        assert "matroid.closure.compute" in ids

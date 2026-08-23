@@ -238,6 +238,80 @@ class TestGaussianQuadratureWireBoundaries:
 
 
 # ---------------------------------------------------------------------------
+# Exact output-height admission
+# ---------------------------------------------------------------------------
+
+
+class TestRecurrenceOutputHeightAdmission:
+    def test_moment_bounded_sequence_with_overflowing_recurrence_rejected(
+        self,
+    ) -> None:
+        """Per-moment caps cannot bound Gram-Schmidt growth; admission must."""
+
+        def moment(k: int) -> CanonicalRational:
+            value = Fraction(1, k + 1) + Fraction(1, 10**800 + 2 * k + 1)
+            return CanonicalRational.from_fraction(value)
+
+        with pytest.raises(ValidationError, match="recurrence coefficients"):
+            RecurrenceCoefficientsRequest(moments=tuple(moment(k) for k in range(11)))
+
+    def test_harmonic_boundary_sequence_still_computes_typed_result(self) -> None:
+        request = RecurrenceCoefficientsRequest(
+            moments=tuple(_cr(1, k) for k in range(1, 12))
+        )
+        result = compute_recurrence_coefficients(request)
+        assert isinstance(result, RecurrenceCoefficientsResult)
+        assert len(result.alpha) == 5
+
+    def test_single_short_sequence_still_admitted(self) -> None:
+        request = RecurrenceCoefficientsRequest(moments=(_cr(3, 7),))
+        result = compute_recurrence_coefficients(request)
+        assert result.alpha == ()
+        assert result.beta == (_cr(3, 7),)
+
+
+class TestChristoffelDarbouxOutputHeightAdmission:
+    @staticmethod
+    def _unit_beta(count: int) -> tuple[CanonicalRational, ...]:
+        return (_cr(1, 1),) * count
+
+    def test_denominator_heavy_coefficients_rejected(self) -> None:
+        """Coefficient denominators drive kernel growth and must be admitted."""
+
+        alpha = tuple(_cr(1, 10**4095 + 2 * i + 1) for i in range(6))
+        with pytest.raises(ValidationError, match="Christoffel-Darboux kernel"):
+            ChristoffelDarbouxRequest(
+                alpha=alpha,
+                beta=self._unit_beta(6),
+                x=_cr(0, 1),
+                y=_cr(0, 1),
+            )
+
+    def test_numerator_heavy_coefficients_rejected(self) -> None:
+        alpha = tuple(
+            CanonicalRational.from_integer_ratio(10**4094 + i, 1) for i in range(6)
+        )
+        with pytest.raises(ValidationError, match="Christoffel-Darboux kernel"):
+            ChristoffelDarbouxRequest(
+                alpha=alpha,
+                beta=self._unit_beta(6),
+                x=_cr(0, 1),
+                y=_cr(0, 1),
+            )
+
+    def test_moderate_rational_coefficients_still_compute(self) -> None:
+        request = ChristoffelDarbouxRequest(
+            alpha=tuple(_cr(i + 1, 7) for i in range(6)),
+            beta=self._unit_beta(6),
+            x=_cr(3, 7),
+            y=_cr(-2, 5),
+        )
+        result = compute_christoffel_darboux(request)
+        assert isinstance(result, ChristoffelDarbouxResult)
+        assert len(result.polynomials_evaluated) == 6
+
+
+# ---------------------------------------------------------------------------
 # Wire adapter tests
 # ---------------------------------------------------------------------------
 

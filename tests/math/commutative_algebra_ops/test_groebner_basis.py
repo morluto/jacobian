@@ -189,6 +189,91 @@ class TestTypedTimeoutOutcomes:
         assert result.eliminated_variables == ("x",)
         assert result.detail is not None
 
+    def test_groebner_verification_expiry_returns_typed_outcome(self, monkeypatch):
+        """Budget expiry during source-bound verification returns TIMEOUT."""
+
+        calls = []
+        real_groebner = _operations.sympy.groebner
+
+        def expire_on_verification(*args, **kwargs):
+            calls.append(1)
+            if len(calls) == 2:
+                raise _operations._GroebnerBudgetExceededError("budget expired")
+            return real_groebner(*args, **kwargs)
+
+        monkeypatch.setattr(_operations.sympy, "groebner", expire_on_verification)
+        g1 = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 1)))
+        g2 = _poly(("x", "y"), (1, 1, (1, 1)), (-1, 1, (0, 0)))
+        result = compute_groebner_basis(
+            GroebnerBasisRequest(ideal=_ideal(("x", "y"), (g1, g2)))
+        )
+        assert len(calls) == 2
+        assert result.outcome == "TIMEOUT"
+        assert result.basis is None
+        assert result.detail is not None
+
+    def test_normal_form_verification_expiry_returns_typed_outcome(self, monkeypatch):
+        """The enforced budget covers the normal-form verification replay."""
+
+        calls = []
+        real_groebner = _operations.sympy.groebner
+
+        def expire_on_verification(*args, **kwargs):
+            calls.append(1)
+            if len(calls) == 2:
+                raise _operations._NormalFormTimeoutError("budget expired")
+            return real_groebner(*args, **kwargs)
+
+        monkeypatch.setattr(_operations.sympy, "groebner", expire_on_verification)
+        g = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 2)))
+        result = compute_ideal_normal_form(
+            IdealNormalFormRequest(
+                ideal=_ideal(("x", "y"), (g,)),
+                polynomial=_poly(("x", "y"), (1, 1, (2, 0))),
+            )
+        )
+        assert len(calls) == 2
+        assert result.outcome == "TIMEOUT"
+        assert result.remainder is None
+        assert result.detail is not None
+
+    def test_elimination_verification_expiry_returns_typed_outcome(self, monkeypatch):
+        """The declared budget covers elimination invariant verification."""
+
+        calls = []
+        real_groebner = _operations.sympy.groebner
+
+        def expire_on_verification(*args, **kwargs):
+            calls.append(1)
+            if len(calls) == 2:
+                raise _operations._EliminationTimeoutError("budget expired")
+            return real_groebner(*args, **kwargs)
+
+        monkeypatch.setattr(_operations.sympy, "groebner", expire_on_verification)
+        g = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 2)))
+        result = compute_elimination_ideal(
+            EliminationIdealRequest(
+                ideal=_ideal(("x", "y"), (g,)),
+                eliminated_variables=("x",),
+                resource_budget={"wall_seconds": 5},
+            )
+        )
+        assert len(calls) == 2
+        assert result.outcome == "TIMEOUT"
+        assert result.elimination_ideal is None
+        assert result.detail is not None
+
+    def test_groebner_within_budget_still_computes(self):
+        """A small admitted ideal still computes and verifies its basis."""
+        g1 = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 1)))
+        g2 = _poly(("x", "y"), (1, 1, (1, 1)), (-1, 1, (0, 0)))
+        result = compute_groebner_basis(
+            GroebnerBasisRequest(ideal=_ideal(("x", "y"), (g1, g2)))
+        )
+        assert result.outcome == "COMPUTED"
+        assert result.basis is not None
+        assert result.generator_count >= 1
+
     def test_timed_out_normal_form_cannot_carry_a_remainder(self):
         remainder = _poly(("x", "y"), (1, 1, (2, 0)))
         with pytest.raises(ValidationError, match="timed-out"):
@@ -218,9 +303,7 @@ class TestTypedTimeoutOutcomes:
         with pytest.raises(ValidationError, match="timed-out"):
             EliminationIdealResult(
                 request=EliminationIdealRequest(
-                    ideal=_ideal(
-                        ("x", "y"), (_poly(("x", "y"), (1, 1, (2, 0))),)
-                    ),
+                    ideal=_ideal(("x", "y"), (_poly(("x", "y"), (1, 1, (2, 0))),)),
                     eliminated_variables=("x",),
                 ),
                 outcome="TIMEOUT",
@@ -233,9 +316,7 @@ class TestTypedTimeoutOutcomes:
         with pytest.raises(ValidationError, match="requires an ideal"):
             EliminationIdealResult(
                 request=EliminationIdealRequest(
-                    ideal=_ideal(
-                        ("x", "y"), (_poly(("x", "y"), (1, 1, (2, 0))),)
-                    ),
+                    ideal=_ideal(("x", "y"), (_poly(("x", "y"), (1, 1, (2, 0))),)),
                     eliminated_variables=("x",),
                 ),
                 eliminated_variables=("x",),

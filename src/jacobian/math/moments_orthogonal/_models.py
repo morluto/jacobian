@@ -7,7 +7,11 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
 from jacobian.math.moments_orthogonal.values import (
     MAX_MOMENTS,
@@ -35,6 +39,28 @@ def _from_fractions(
     values: tuple[Fraction, ...],
 ) -> tuple[CanonicalRational, ...]:
     return tuple(CanonicalRational.from_fraction(v) for v in values)
+
+
+def _require_canonical_kernel_output(
+    values: tuple[Fraction, ...],
+    *,
+    label: str,
+) -> None:
+    """Require every exact kernel output to fit the canonical rational limit.
+
+    Per-component input caps cannot bound recurrence growth, so admission
+    executes the bounded kernel and rejects any sequence whose complete
+    exact output exceeds the canonical limit before the operation runs.
+    """
+
+    for value in values:
+        try:
+            CanonicalRational.from_fraction(value)
+        except ValueError:
+            raise ValueError(
+                f"the exact {label} exceed the canonical "
+                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit limit for this input"
+            ) from None
 
 
 def _validate_moments(moments: tuple[CanonicalRational, ...]) -> None:
@@ -124,14 +150,18 @@ class RecurrenceCoefficientsRequest(StrictModel):
         # to run the full recurrence.
         if self.moments[0].as_fraction() <= 0:
             raise ValueError("the zeroth moment must be nonzero")
-        # The Gram-Schmidt kernel requires a positive-definite moment
-        # functional; admit exactly the sequences it accepts so an accepted
-        # request cannot fail inside execution.
+        # Per-moment digit caps cannot bound exact recurrence-coefficient
+        # growth, so admission replays the bounded kernel and requires its
+        # complete output to fit the canonical limit.
         from jacobian.math.moments_orthogonal.operations import (
             recurrence_coefficients,
         )
 
-        recurrence_coefficients(_to_fractions(self.moments))
+        result = recurrence_coefficients(_to_fractions(self.moments))
+        _require_canonical_kernel_output(
+            (*result.alpha, *result.beta),
+            label="recurrence coefficients",
+        )
         return self
 
 
@@ -210,21 +240,28 @@ class ChristoffelDarbouxRequest(StrictModel):
         max_cd_digits = 1024
         require_bounded_rational(self.x, max_digits=max_cd_digits, label="x")
         require_bounded_rational(self.y, max_digits=max_cd_digits, label="y")
-        # Also check conservative output height estimate
-        # Rough estimate: output digits ~ n * max_input_digits
-        n = max(len(self.alpha), len(self.beta))
-        max_input = max(
-            max((len(v.num.lstrip("-")) for v in self.alpha), default=0),
-            max((len(v.num.lstrip("-")) for v in self.beta), default=0),
-            len(self.x.num.lstrip("-")),
-            len(self.x.den.lstrip("-")),
-            len(self.y.num.lstrip("-")),
-            len(self.y.den.lstrip("-")),
+        # Coefficient numerators and denominators both drive exact kernel
+        # growth, and no static per-component estimate bounds it, so
+        # admission replays the bounded kernel and requires its complete
+        # output to fit the canonical limit.
+        from jacobian.math.moments_orthogonal.operations import (
+            christoffel_darboux,
         )
-        if n * max_input > 30000:
-            raise ValueError(
-                "Christoffel-Darboux inputs would exceed the result digit bound"
-            )
+
+        result = christoffel_darboux(
+            _to_fractions(self.alpha),
+            _to_fractions(self.beta),
+            self.x.as_fraction(),
+            self.y.as_fraction(),
+        )
+        _require_canonical_kernel_output(
+            (result.kernel,),
+            label="Christoffel-Darboux kernel",
+        )
+        _require_canonical_kernel_output(
+            result.polynomials_evaluated,
+            label="evaluated orthogonal polynomials",
+        )
         return self
 
 

@@ -286,3 +286,98 @@ class TestForbiddenPatternBinding:
         result["point_count"] = 5
         with pytest.raises(ValidationError, match="point_count"):
             ForbiddenPatternsResult.model_validate(result)
+
+
+class TestForbiddenScreeningWorkBound:
+    @staticmethod
+    def _parabola_points(count: int) -> tuple[RationalPoint2D, ...]:
+        return tuple(
+            RationalPoint2D(x=_cr(t, 1), y=_cr(t * t, 1)) for t in range(1, count + 1)
+        )
+
+    def _request(self, points) -> ForbiddenPatternsRequest:
+        return ForbiddenPatternsRequest(
+            configuration=ForbiddenConfiguration(
+                points=tuple(
+                    ForbiddenLabelledPoint(label=f"p{index}", point=point)
+                    for index, point in enumerate(points)
+                )
+            )
+        )
+
+    def test_128_point_configuration_rejected_by_work_budget(self) -> None:
+        """The complete enumeration must stay inside its declared budget."""
+        with pytest.raises(ValidationError, match="screening work"):
+            self._request(self._parabola_points(128))
+
+    def test_heavy_denominator_configuration_rejected_by_work_budget(self) -> None:
+        points = tuple(
+            RationalPoint2D(x=_cr(t, 1), y=_cr(1, 10**300 + 2 * t + 1))
+            for t in range(1, 41)
+        )
+        with pytest.raises(ValidationError, match="screening work"):
+            self._request(points)
+
+    def test_coordinate_component_cap_rejects_extreme_height(self) -> None:
+        points = (
+            RationalPoint2D(x=_cr(0, 1), y=_cr(1, 10**4096 + 1)),
+            _point(1, 0),
+            _point(0, 1),
+        )
+        with pytest.raises(ValidationError, match="configuration point y"):
+            self._request(points)
+
+    def test_pattern_free_boundary_configuration_computes_exactly(self) -> None:
+        from math import comb
+
+        request = self._request(self._parabola_points(48))
+        result = forbidden_patterns(request)
+        assert result.has_collinear_triple is False
+        assert result.has_concyclic_quadruple is False
+        assert result.checked_triples == comb(48, 3)
+        assert result.checked_quadruples == comb(48, 4)
+        revalidated = ForbiddenPatternsResult.model_validate(result.model_dump())
+        assert revalidated == result
+
+    def test_cleared_denominators_preserve_decisions_and_witnesses(self) -> None:
+        integer_points = self._parabola_points(6)
+        scaled = tuple(
+            RationalPoint2D(x=_cr(t, 3), y=_cr(t * t, 3)) for t in range(1, 7)
+        )
+        integer_result = forbidden_patterns(self._request(integer_points))
+        fractional_result = forbidden_patterns(self._request(scaled))
+        assert (
+            integer_result.has_collinear_triple,
+            integer_result.has_concyclic_quadruple,
+        ) == (
+            fractional_result.has_collinear_triple,
+            fractional_result.has_concyclic_quadruple,
+        )
+        assert integer_result.checked_triples == fractional_result.checked_triples
+        assert integer_result.checked_quadruples == fractional_result.checked_quadruples
+
+    def test_unit_square_witness_unchanged_under_scaling(self) -> None:
+        base = forbidden_patterns(self._request(UNIT_SQUARE))
+        scaled = tuple(
+            RationalPoint2D(
+                x=CanonicalRational.from_fraction(p.x.as_fraction() / 5),
+                y=CanonicalRational.from_fraction(p.y.as_fraction() / 5),
+            )
+            for p in UNIT_SQUARE
+        )
+        result = forbidden_patterns(self._request(scaled))
+        assert (result.has_collinear_triple, result.has_concyclic_quadruple) == (
+            base.has_collinear_triple,
+            base.has_concyclic_quadruple,
+        )
+        assert (
+            result.concyclic_quadruple.first,
+            result.concyclic_quadruple.second,
+            result.concyclic_quadruple.third,
+            result.concyclic_quadruple.fourth,
+        ) == (
+            base.concyclic_quadruple.first,
+            base.concyclic_quadruple.second,
+            base.concyclic_quadruple.third,
+            base.concyclic_quadruple.fourth,
+        )

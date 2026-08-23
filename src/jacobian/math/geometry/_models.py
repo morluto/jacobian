@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from fractions import Fraction
 from itertools import combinations
 from typing import Literal, NamedTuple, Self
@@ -52,14 +53,14 @@ def _on_segment(
 
 
 def _minor3(
-    m: tuple[list[Fraction], ...],
+    m: tuple[list[int], ...],
     r0: int,
     r1: int,
     r2: int,
     c0: int,
     c1: int,
     c2: int,
-) -> Fraction:
+) -> int:
     """3x3 determinant of selected rows and columns."""
     return (
         m[r0][c0] * (m[r1][c1] * m[r2][c2] - m[r1][c2] * m[r2][c1])
@@ -683,19 +684,76 @@ class ForbiddenLabelledPoint(StrictModel):
     point: RationalPoint2D
 
 
+# Exhaustive screening enumerates every quadruple with exact arithmetic, so
+# admission must bound the complete enumeration work, not only the input
+# shape.  Clearing denominators once scales every coordinate by the lcm of
+# the coordinate denominators, whose digit size is at most the summed
+# nontrivial component denominators; each of the comb(n, 4) determinants
+# then costs at least linearly more as that cleared size grows.  The product
+# below is the named conservative work proxy: a pattern-free 64-point
+# small-integer configuration (about 3.2M units) screens in roughly two
+# seconds, and admitted configurations perform comparable or less
+# determinant work per unit.
+_MAX_FORBIDDEN_COORDINATE_DIGITS = 4_096
+_MAX_FORBIDDEN_SCREENING_WORK_UNITS = 4_000_000
+
+
+def _forbidden_screening_work_units(
+    points: tuple[ForbiddenLabelledPoint, ...],
+) -> int:
+    """Conservative exact-enumeration work proxy for one configuration."""
+
+    denominator_digit_sum = 0
+    max_numerator_digits = 0
+    for item in points:
+        for value in (item.point.x, item.point.y):
+            if value.den != "1":
+                denominator_digit_sum += len(value.den)
+            max_numerator_digits = max(max_numerator_digits, len(value.num.lstrip("-")))
+    return math.comb(len(points), 4) * (
+        denominator_digit_sum + max_numerator_digits + 1
+    )
+
+
 class ForbiddenConfiguration(StrictModel):
-    """A finite set of labelled rational planar points."""
+    """A bounded finite set of labelled rational planar points.
+
+    The joint point-count and coordinate-height budget keeps the complete
+    exhaustive collinear/concyclic screening (performed twice: once by the
+    operation and once by source-bound result validation) inside the inline
+    execution envelope.
+    """
 
     points: tuple[ForbiddenLabelledPoint, ...] = Field(min_length=1, max_length=128)
 
     @model_validator(mode="after")
-    def require_unique_labels_and_coords(self) -> Self:
+    def require_unique_labels_and_bounded_screening(self) -> Self:
         labels = tuple(item.label for item in self.points)
         if len(labels) != len(set(labels)):
             raise ValueError("configuration point labels must be unique")
         keys = tuple(_point_key(item.point) for item in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("configuration point coordinates must be unique")
+        for item in self.points:
+            require_bounded_rational(
+                item.point.x,
+                max_digits=_MAX_FORBIDDEN_COORDINATE_DIGITS,
+                label="configuration point x",
+            )
+            require_bounded_rational(
+                item.point.y,
+                max_digits=_MAX_FORBIDDEN_COORDINATE_DIGITS,
+                label="configuration point y",
+            )
+        if _forbidden_screening_work_units(self.points) > (
+            _MAX_FORBIDDEN_SCREENING_WORK_UNITS
+        ):
+            raise ValueError(
+                "point configuration exceeds the exhaustive screening work "
+                f"budget of {_MAX_FORBIDDEN_SCREENING_WORK_UNITS} units "
+                "(quadruple count times cleared coordinate digit size); "
+                "reduce the point count or coordinate height"
+            )
         return self
 
 
@@ -745,24 +803,24 @@ class _ForbiddenScreening(NamedTuple):
     checked_quadruples: int
 
 
-def _collinear(
-    first: tuple[Fraction, Fraction],
-    second: tuple[Fraction, Fraction],
-    third: tuple[Fraction, Fraction],
+def _collinear_scaled(
+    first: tuple[int, int],
+    second: tuple[int, int],
+    third: tuple[int, int],
 ) -> bool:
     (xi, yi), (xj, yj), (xk, yk) = first, second, third
     return (xj - xi) * (yk - yi) - (yj - yi) * (xk - xi) == 0
 
 
-def _concyclic_det4(
-    first: tuple[Fraction, Fraction],
-    second: tuple[Fraction, Fraction],
-    third: tuple[Fraction, Fraction],
-    fourth: tuple[Fraction, Fraction],
-) -> Fraction:
-    def row(point: tuple[Fraction, Fraction]) -> list[Fraction]:
+def _concyclic_det4_scaled(
+    first: tuple[int, int],
+    second: tuple[int, int],
+    third: tuple[int, int],
+    fourth: tuple[int, int],
+) -> int:
+    def row(point: tuple[int, int]) -> list[int]:
         x, y = point
-        return [x * x + y * y, x, y, Fraction(1)]
+        return [x * x + y * y, x, y, 1]
 
     m = (row(first), row(second), row(third), row(fourth))
     return (
@@ -776,26 +834,39 @@ def _concyclic_det4(
 def _screen_forbidden_patterns(
     points: tuple[ForbiddenLabelledPoint, ...],
 ) -> _ForbiddenScreening:
-    """Enumerate every triple and quadruple of one configuration exactly."""
+    """Enumerate every triple and quadruple of one configuration exactly.
+
+    Coordinates are cleared once by scaling with the positive lcm of all
+    coordinate denominators.  Both determinants then become integer
+    polynomials in the scaled coordinates whose vanishing is equivalent to
+    the original rational test, so decisions, witnesses, and enumeration
+    counts are identical to direct exact Fraction evaluation.
+    """
+
     xy = [(item.point.x.as_fraction(), item.point.y.as_fraction()) for item in points]
+    scale = math.lcm(
+        *(d for point in xy for d in (point[0].denominator, point[1].denominator))
+    )
+    scaled = [(int(x * scale), int(y * scale)) for x, y in xy]
+
     collinear_triple = None
     checked_triples = 0
-    for i, j, k in combinations(range(len(xy)), 3):
+    for i, j, k in combinations(range(len(scaled)), 3):
         checked_triples += 1
-        if _collinear(xy[i], xy[j], xy[k]):
+        if _collinear_scaled(scaled[i], scaled[j], scaled[k]):
             collinear_triple = (i, j, k)
             break
 
     concyclic_quadruple = None
     checked_quadruples = 0
-    for i, j, k, ell in combinations(range(len(xy)), 4):
+    for i, j, k, ell in combinations(range(len(scaled)), 4):
         checked_quadruples += 1
-        if _concyclic_det4(xy[i], xy[j], xy[k], xy[ell]) != 0:
+        if _concyclic_det4_scaled(scaled[i], scaled[j], scaled[k], scaled[ell]) != 0:
             continue
         # A quadruple containing a collinear triple is degenerate: three
         # distinct collinear points cannot lie on a finite circle.
         if any(
-            _collinear(xy[a], xy[b], xy[c])
+            _collinear_scaled(scaled[a], scaled[b], scaled[c])
             for a, b, c in ((i, j, k), (i, j, ell), (i, k, ell), (j, k, ell))
         ):
             continue

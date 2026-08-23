@@ -29,6 +29,10 @@ from jacobian.math.polynomials._conversions import (
 )
 
 
+class _GroebnerBudgetExceededError(TimeoutError):
+    """Internal signal-handler escape for the enforced Gröbner budget."""
+
+
 class _NormalFormTimeoutError(TimeoutError):
     """Internal signal-handler escape for the enforced normal-form budget."""
 
@@ -147,15 +151,13 @@ def compute_groebner_basis(request: GroebnerBasisRequest) -> GroebnerBasisResult
     order_map = {"lex": "lex", "grlex": "grlex", "grevlex": "grevlex"}
     order = order_map.get(request.monomial_order, "grevlex")
 
-    # Enforce the advertised wall-time budget around the backend call so an
-    # admitted request cannot occupy the inline execution path indefinitely.
+    # Enforce the advertised wall-time budget across the backend call,
+    # result conversion, and source-bound invariant verification, so an
+    # admitted request cannot occupy the inline execution path beyond it.
     import signal
 
-    class _BudgetExceededError(TimeoutError):
-        pass
-
     def _on_budget(_signum: int, _frame: object) -> None:
-        raise _BudgetExceededError("groebner computation exceeded wall_seconds")
+        raise _GroebnerBudgetExceededError("groebner budget expired")
 
     previous_handler = signal.signal(signal.SIGALRM, _on_budget)
     signal.setitimer(signal.ITIMER_REAL, request.resource_budget.wall_seconds)
@@ -166,55 +168,55 @@ def compute_groebner_basis(request: GroebnerBasisRequest) -> GroebnerBasisResult
             order=order,
             domain=sympy.QQ,
         )
-    except _BudgetExceededError:
+
+        basis_generators = tuple(
+            rational_polynomial_from_sympy(
+                sympy.Poly(expr, *variable_symbols, domain=sympy.QQ),
+                variables,
+                maximum_terms=MAX_OUTPUT_TERMS,
+            )
+            for expr in basis
+        )
+
+        if not basis_generators:
+            # sympy.groebner yields an empty iterable for the zero ideal
+            # represented by a single zero polynomial; canonicalize to the
+            # domain's zero-polynomial generator.
+            from jacobian.math.polynomials.values import (
+                RationalPolynomial,
+                SparseRationalPolynomial,
+            )
+
+            zero = RationalPolynomial(
+                variables=variables,
+                polynomial=SparseRationalPolynomial(terms=()),
+            )
+            basis_generators = (zero,)
+
+        ideal = RationalPolynomialIdeal(
+            variables=variables,
+            generators=basis_generators,
+        )
+
+        return GroebnerBasisResult(
+            request=request,
+            basis=ideal,
+            generator_count=len(basis_generators),
+            monomial_order=request.monomial_order,
+        )
+    except _GroebnerBudgetExceededError:
         return GroebnerBasisResult(
             request=request,
             outcome="TIMEOUT",
             monomial_order=request.monomial_order,
             detail=(
-                "groebner computation exceeded the enforced "
-                f"{request.resource_budget.wall_seconds}s budget"
+                "groebner computation or source-bound verification exceeded "
+                f"the enforced {request.resource_budget.wall_seconds}s budget"
             ),
         )
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, previous_handler)
-
-    basis_generators = tuple(
-        rational_polynomial_from_sympy(
-            sympy.Poly(expr, *variable_symbols, domain=sympy.QQ),
-            variables,
-            maximum_terms=MAX_OUTPUT_TERMS,
-        )
-        for expr in basis
-    )
-
-    if not basis_generators:
-        # sympy.groebner yields an empty iterable for the zero ideal
-        # represented by a single zero polynomial; canonicalize to the
-        # domain's zero-polynomial generator.
-        from jacobian.math.polynomials.values import (
-            RationalPolynomial,
-            SparseRationalPolynomial,
-        )
-
-        zero = RationalPolynomial(
-            variables=variables,
-            polynomial=SparseRationalPolynomial(terms=()),
-        )
-        basis_generators = (zero,)
-
-    ideal = RationalPolynomialIdeal(
-        variables=variables,
-        generators=basis_generators,
-    )
-
-    return GroebnerBasisResult(
-        request=request,
-        basis=ideal,
-        generator_count=len(basis_generators),
-        monomial_order=request.monomial_order,
-    )
 
 
 def compute_ideal_normal_form(request: IdealNormalFormRequest) -> IdealNormalFormResult:
@@ -238,7 +240,8 @@ def compute_ideal_normal_form(request: IdealNormalFormRequest) -> IdealNormalFor
         )
 
     # Use a conservative 10-second budget for the inline Groebner computation;
-    # hard ideals would otherwise occupy the execution path indefinitely.
+    # hard ideals would otherwise occupy the execution path indefinitely.  The
+    # budget stays enforced across conversion and source-bound verification.
     prev_handler = signal.signal(signal.SIGALRM, _on_timeout)
     signal.setitimer(signal.ITIMER_REAL, 10)
     try:
@@ -257,31 +260,34 @@ def compute_ideal_normal_form(request: IdealNormalFormRequest) -> IdealNormalFor
             order="grevlex",
             domain=sympy.QQ,
         )
+
+        remainder_poly = rational_polynomial_from_sympy(
+            sympy.Poly(remainder, *variable_symbols, domain=sympy.QQ),
+            variables,
+        )
+
+        # The polynomial is in the ideal if and only if the remainder is zero
+        in_ideal = len(remainder_poly.polynomial.terms) == 0
+
+        return IdealNormalFormResult(
+            request=request,
+            remainder=remainder_poly,
+            in_ideal=in_ideal,
+        )
     except _NormalFormTimeoutError:
         # An admitted request must observe a typed mathematical outcome rather
         # than a host exception, so budget expiry is part of the result contract.
         return IdealNormalFormResult(
             request=request,
             outcome="TIMEOUT",
-            detail=("the Gröbner reduction exceeded the enforced 10s wall-time bound"),
+            detail=(
+                "the Gröbner reduction or its source-bound verification "
+                "exceeded the enforced 10s wall-time bound"
+            ),
         )
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, prev_handler)
-
-    remainder_poly = rational_polynomial_from_sympy(
-        sympy.Poly(remainder, *variable_symbols, domain=sympy.QQ),
-        variables,
-    )
-
-    # The polynomial is in the ideal if and only if the remainder is zero
-    in_ideal = len(remainder_poly.polynomial.terms) == 0
-
-    return IdealNormalFormResult(
-        request=request,
-        remainder=remainder_poly,
-        in_ideal=in_ideal,
-    )
 
 
 def compute_elimination_ideal(
@@ -326,6 +332,65 @@ def compute_elimination_ideal(
             order="lex",
             domain=sympy.QQ,
         )
+
+        remaining_symbols = symbols_for_variables(tuple(remaining))
+        elimination_generators = []
+        unit_ideal = False
+        for expr in basis:
+            poly = sympy.Poly(expr, *ordered_symbols, domain=sympy.QQ)
+            involved = {str(s) for s in poly.free_symbols}
+            if not involved:
+                # A nonzero constant basis element means the whole ring.
+                unit_ideal = True
+                break
+            if involved.issubset(set(remaining)):
+                elimination_generators.append(
+                    rational_polynomial_from_sympy(
+                        sympy.Poly(expr, *remaining_symbols, domain=sympy.QQ),
+                        tuple(remaining),
+                    )
+                )
+
+        if unit_ideal:
+            from jacobian._exact import CanonicalRational
+            from jacobian.math.polynomials.values import (
+                RationalPolynomial,
+                RationalPolynomialTerm,
+            )
+
+            one = RationalPolynomial(
+                variables=tuple(remaining),
+                polynomial=SparseRationalPolynomial(
+                    terms=(
+                        RationalPolynomialTerm(
+                            coefficient=CanonicalRational(num="1", den="1"),
+                            exponents=(0,) * len(remaining),
+                        ),
+                    )
+                ),
+            )
+            elimination_generators = [one]
+        elif not elimination_generators:
+            # No retained-only basis elements: the elimination ideal is the
+            # zero ideal, represented by its canonical zero generator.
+            from jacobian.math.polynomials.values import RationalPolynomial
+
+            zero = RationalPolynomial(
+                variables=tuple(remaining),
+                polynomial=SparseRationalPolynomial(terms=()),
+            )
+            elimination_generators = [zero]
+
+        ideal = RationalPolynomialIdeal(
+            variables=tuple(remaining),
+            generators=tuple(elimination_generators),
+        )
+
+        return EliminationIdealResult(
+            request=request,
+            elimination_ideal=ideal,
+            eliminated_variables=tuple(request.eliminated_variables),
+        )
     except _EliminationTimeoutError:
         # An admitted request must observe a typed mathematical outcome rather
         # than a host exception, so budget expiry is part of the result contract.
@@ -334,69 +399,11 @@ def compute_elimination_ideal(
             outcome="TIMEOUT",
             eliminated_variables=tuple(request.eliminated_variables),
             detail=(
-                "the lex Gröbner elimination exceeded the enforced "
+                "the lex Gröbner elimination or its source-bound verification "
+                "exceeded the enforced "
                 f"{request.resource_budget.wall_seconds}s wall-time budget"
             ),
         )
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, prev_handler)
-
-    remaining_symbols = symbols_for_variables(tuple(remaining))
-    elimination_generators = []
-    unit_ideal = False
-    for expr in basis:
-        poly = sympy.Poly(expr, *ordered_symbols, domain=sympy.QQ)
-        involved = {str(s) for s in poly.free_symbols}
-        if not involved:
-            # A nonzero constant basis element means the whole ring.
-            unit_ideal = True
-            break
-        if involved.issubset(set(remaining)):
-            elimination_generators.append(
-                rational_polynomial_from_sympy(
-                    sympy.Poly(expr, *remaining_symbols, domain=sympy.QQ),
-                    tuple(remaining),
-                )
-            )
-
-    if unit_ideal:
-        from jacobian._exact import CanonicalRational
-        from jacobian.math.polynomials.values import (
-            RationalPolynomial,
-            RationalPolynomialTerm,
-        )
-
-        one = RationalPolynomial(
-            variables=tuple(remaining),
-            polynomial=SparseRationalPolynomial(
-                terms=(
-                    RationalPolynomialTerm(
-                        coefficient=CanonicalRational(num="1", den="1"),
-                        exponents=(0,) * len(remaining),
-                    ),
-                )
-            ),
-        )
-        elimination_generators = [one]
-    elif not elimination_generators:
-        # No retained-only basis elements: the elimination ideal is the
-        # zero ideal, represented by its canonical zero generator.
-        from jacobian.math.polynomials.values import RationalPolynomial
-
-        zero = RationalPolynomial(
-            variables=tuple(remaining),
-            polynomial=SparseRationalPolynomial(terms=()),
-        )
-        elimination_generators = [zero]
-
-    ideal = RationalPolynomialIdeal(
-        variables=tuple(remaining),
-        generators=tuple(elimination_generators),
-    )
-
-    return EliminationIdealResult(
-        request=request,
-        elimination_ideal=ideal,
-        eliminated_variables=tuple(request.eliminated_variables),
-    )

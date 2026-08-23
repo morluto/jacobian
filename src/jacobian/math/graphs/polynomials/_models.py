@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Annotated, Self
 
-from pydantic import ConfigDict, Field, StrictInt, model_validator
+from pydantic import ConfigDict, Field, StrictInt, StringConstraints, model_validator
 
-from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import (
     CanonicalLimits,
@@ -25,6 +24,11 @@ from jacobian.math.polynomials.values import (
     RationalPolynomial,
     require_polynomial_budget,
 )
+
+_NonnegativeCanonicalInteger = Annotated[
+    str,
+    StringConstraints(pattern=r"^(?:0|[1-9][0-9]*)$", strict=True),
+]
 
 
 class GraphEdge(StrictModel):
@@ -194,7 +198,7 @@ class TreeIndependencePolynomialResult(StrictModel):
     """One source-bound exact independence polynomial and its defining values."""
 
     graph: SimpleUndirectedGraph
-    coefficients: tuple[CanonicalInteger, ...] = Field(
+    coefficients: tuple[_NonnegativeCanonicalInteger, ...] = Field(
         min_length=2,
         max_length=MAX_INDEPENDENCE_POLYNOMIAL_TERMS,
         description=(
@@ -208,7 +212,7 @@ class TreeIndependencePolynomialResult(StrictModel):
         le=MAX_INDEPENDENCE_POLYNOMIAL_DEGREE,
         description="The tree independence number alpha(T).",
     )
-    independent_set_count: CanonicalInteger = Field(
+    independent_set_count: _NonnegativeCanonicalInteger = Field(
         description="The total I_T(1) as a canonical decimal integer."
     )
 

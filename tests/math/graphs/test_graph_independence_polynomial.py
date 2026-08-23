@@ -347,6 +347,36 @@ def test_result_rejects_overbudget_derived_values_before_replay(
         TreeIndependencePolynomialResult.model_validate(valid)
 
 
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    [
+        ("coefficients", ["1", "-4", "3"]),
+        ("independent_set_count", "-8"),
+    ],
+)
+def test_result_rejects_negative_derived_values_before_replay(
+    field: str,
+    replacement: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    valid = compute_independence_polynomial(
+        TreeIndependencePolynomialRequest(graph=_path(4))
+    ).model_dump(mode="json")
+    valid[field] = replacement
+
+    def fail_replay(_graph: SimpleUndirectedGraph) -> tuple[int, ...]:
+        raise AssertionError("negative cardinalities must fail before replay")
+
+    monkeypatch.setattr(
+        polynomial_operations,
+        "independence_polynomial_coefficients",
+        fail_replay,
+    )
+
+    with pytest.raises(ValidationError):
+        TreeIndependencePolynomialResult.model_validate(valid)
+
+
 def test_native_module_exports_canonical_value_and_dense_projection() -> None:
     from jacobian.math.graphs import polynomials
 

@@ -1,0 +1,241 @@
+"""Source-bound incidence profiles and finite trade comparison tests."""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+from pydantic import ValidationError
+
+from jacobian.math.incidence_structures import (
+    ContainmentProfileResult,
+    IncidenceStructure,
+    IncidenceTradeResult,
+    check_incidence_trade,
+    containment_profile,
+)
+from jacobian.math.incidence_structures._models import (
+    ContainmentProfileRequest,
+    IncidenceTradeRequest,
+)
+from jacobian.math.incidence_structures._operations import compute_incidence_trade
+
+_TRADE_POINTS = ("1", "3", "4", "5", "6", "7", "8", "9", "10", "11", "13", "20")
+_REMOVED_BLOCKS = (
+    ("1",),
+    ("13",),
+    ("20",),
+    ("5", "7"),
+    ("5", "8"),
+    ("6", "10"),
+    ("6", "11"),
+    ("1", "3", "5"),
+    ("1", "4", "6"),
+    ("3", "4", "9"),
+    ("5", "6", "9"),
+    ("7", "8", "13"),
+    ("10", "11", "20"),
+)
+_INSERTED_BLOCKS = (
+    ("1", "5"),
+    ("1", "6"),
+    ("5", "6"),
+    ("7", "13"),
+    ("8", "13"),
+    ("10", "20"),
+    ("11", "20"),
+    ("1", "3", "4"),
+    ("3", "5", "9"),
+    ("4", "6", "9"),
+    ("5", "7", "8"),
+    ("6", "10", "11"),
+)
+
+
+def _family(
+    blocks: tuple[tuple[str, ...], ...],
+    prefix: str,
+    *,
+    points: tuple[str, ...] = _TRADE_POINTS,
+) -> IncidenceStructure:
+    return IncidenceStructure(
+        points=points,
+        block_ids=tuple(f"{prefix}{index}" for index in range(len(blocks))),
+        blocks=blocks,
+    )
+
+
+def test_published_thirteen_for_twelve_trade_matches_through_order_two() -> None:
+    removed = _family(_REMOVED_BLOCKS, "r")
+    inserted = _family(_INSERTED_BLOCKS, "a")
+
+    removed_points = containment_profile(removed, 1)
+    inserted_points = containment_profile(inserted, 1)
+    removed_pairs = containment_profile(removed, 2)
+    inserted_pairs = containment_profile(inserted, 2)
+
+    assert removed_points.subset_profile == inserted_points.subset_profile
+    assert removed_points.total_multiplicity == inserted_points.total_multiplicity == 29
+    assert removed_pairs.subset_profile == inserted_pairs.subset_profile
+    assert removed_pairs.total_multiplicity == inserted_pairs.total_multiplicity == 22
+    assert removed_pairs.histogram == inserted_pairs.histogram == ((0, 44), (1, 22))
+
+    result = check_incidence_trade(removed, inserted, 2)
+    assert result.zeroth_difference == 1
+    assert result.positive_moments_equal
+    assert tuple(comparison.order for comparison in result.comparisons) == (1, 2)
+    assert tuple(
+        (comparison.left_total, comparison.right_total)
+        for comparison in result.comparisons
+    ) == ((29, 29), (22, 22))
+    assert all(not comparison.differences for comparison in result.comparisons)
+
+
+def test_distinct_indices_preserve_repeated_blocks() -> None:
+    repeated = _family((("a",), ("a",)), "b", points=("a", "b"))
+
+    result = containment_profile(repeated, 1)
+
+    assert result.subset_profile == ((("a",), 2), (("b",), 0))
+    assert result.histogram == ((0, 1), (2, 1))
+    assert result.total_multiplicity == 2
+
+
+def test_nontrade_returns_every_nonzero_difference_in_point_order() -> None:
+    left = _family((("a",),), "l", points=("a", "b"))
+    right = _family((("b",),), "r", points=("a", "b"))
+
+    result = check_incidence_trade(left, right, 1)
+
+    assert result.zeroth_difference == 0
+    assert not result.positive_moments_equal
+    comparison = result.comparisons[0]
+    assert not comparison.equal
+    assert tuple(
+        (
+            difference.subset,
+            difference.left_multiplicity,
+            difference.right_multiplicity,
+        )
+        for difference in comparison.differences
+    ) == ((("a",), 1, 0), (("b",), 0, 1))
+
+
+def test_second_order_difference_is_distinct_from_equal_first_moments() -> None:
+    left = _family((("a", "b"),), "l", points=("a", "b"))
+    right = _family((("a",), ("b",)), "r", points=("a", "b"))
+
+    result = check_incidence_trade(left, right, 2)
+
+    assert result.zeroth_difference == -1
+    assert not result.positive_moments_equal
+    first, second = result.comparisons
+    assert first.equal
+    assert first.left_total == first.right_total == 2
+    assert second.equal is False
+    assert second.left_total == 1
+    assert second.right_total == 0
+    assert tuple(
+        (
+            difference.subset,
+            difference.left_multiplicity,
+            difference.right_multiplicity,
+        )
+        for difference in second.differences
+    ) == ((("a", "b"), 1, 0),)
+
+
+def test_empty_fixed_order_profile_has_explicit_zero_convention() -> None:
+    incidence = _family((("a", "b"),), "b", points=("a", "b"))
+
+    result = containment_profile(incidence, 3)
+
+    assert result.subset_profile == ()
+    assert result.histogram == ()
+    assert result.total_multiplicity == 0
+    assert result.min_multiplicity == result.max_multiplicity == 0
+    assert result.is_constant
+    assert result.constant_lambda == 0
+
+
+def test_profile_admission_uses_the_complete_subset_count() -> None:
+    accepted_points = tuple(f"p{index}" for index in range(32))
+    accepted = _family(((),), "b", points=accepted_points)
+    assert ContainmentProfileRequest(incidence=accepted, t=3).t == 3
+
+    rejected_points = tuple(f"p{index}" for index in range(33))
+    rejected = _family(((),), "b", points=rejected_points)
+    with pytest.raises(ValidationError, match="subset-count budget"):
+        ContainmentProfileRequest(incidence=rejected, t=3)
+
+
+def test_profile_admission_reserves_output_for_repeated_labels() -> None:
+    points = tuple(f"p{index}-" + "x" * 1_000 for index in range(100))
+    incidence = _family(((),), "b", points=points)
+
+    with pytest.raises(ValidationError, match="output budget"):
+        ContainmentProfileRequest(incidence=incidence, t=2)
+
+
+def test_trade_requires_identical_ordered_point_parents() -> None:
+    left = _family((("a",),), "l", points=("a", "b"))
+    right = _family((("a",),), "r", points=("b", "a"))
+
+    with pytest.raises(ValidationError, match="same ordered point axis"):
+        IncidenceTradeRequest(left=left, right=right, max_order=1)
+
+
+def test_profile_result_replays_source_and_authoritative_totals() -> None:
+    incidence = _family((("a",), ("a", "b")), "b", points=("a", "b"))
+    result = containment_profile(incidence, 1)
+    payload: dict[str, Any] = result.model_dump(mode="python")
+    payload["total_multiplicity"] = result.total_multiplicity + 1
+
+    with pytest.raises(ValidationError, match="does not match"):
+        ContainmentProfileResult.model_validate(payload)
+
+    changed_source = _family((("b",), ("a", "b")), "b", points=("a", "b"))
+    payload = result.model_dump(mode="python")
+    payload["incidence"] = changed_source
+    with pytest.raises(ValidationError, match="does not match"):
+        ContainmentProfileResult.model_validate(payload)
+
+
+def test_trade_result_replays_sources_and_zeroth_difference() -> None:
+    left = _family((("a",), ("b",)), "l", points=("a", "b"))
+    right = _family((("a", "b"),), "r", points=("a", "b"))
+    result = check_incidence_trade(left, right, 1)
+    payload: dict[str, Any] = result.model_dump(mode="python")
+    payload["zeroth_difference"] = 0
+
+    with pytest.raises(ValidationError, match="does not match"):
+        IncidenceTradeResult.model_validate(payload)
+
+
+def test_request_schema_exposes_validator_owned_trade_rules() -> None:
+    schema = IncidenceTradeRequest.model_json_schema()
+    assert "same ordered point axis" in schema["description"]
+    assert (
+        "Largest positive subset order"
+        in schema["properties"]["max_order"]["description"]
+    )
+
+
+def test_trade_operation_is_discoverable_and_example_executes() -> None:
+    from jacobian.catalog.builtins import BUILTIN_TOOLS
+
+    operation = next(
+        tool for tool in BUILTIN_TOOLS if tool.operation_id == "incidence.trade.check"
+    )
+    example = operation.examples[0]
+    result = operation.run(operation.request_type.model_validate(example.input))
+    assert result.positive_moments_equal
+    assert result.zeroth_difference == 1
+
+
+def test_catalog_adapter_returns_the_native_result() -> None:
+    left = _family((("a",), ("b",)), "l", points=("a", "b"))
+    right = _family((("a", "b"),), "r", points=("a", "b"))
+    request = IncidenceTradeRequest(left=left, right=right, max_order=1)
+
+    assert compute_incidence_trade(request) == check_incidence_trade(left, right, 1)

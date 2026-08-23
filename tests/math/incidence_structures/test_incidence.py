@@ -117,6 +117,8 @@ class TestContainmentProfile:
             (("p2",), 2),
             (("p3",), 1),
         )
+        assert result.incidence.points == ("p1", "p2", "p3")
+        assert result.total_multiplicity == 4
         assert result.min_multiplicity == 1
         assert result.max_multiplicity == 2
         assert not result.is_constant
@@ -134,6 +136,7 @@ class TestContainmentProfile:
         )
         assert result.min_multiplicity == 0
         assert result.max_multiplicity == 1
+        assert result.total_multiplicity == 2
 
     def test_t1_fano_constant(self) -> None:
         result = compute_containment_profile(

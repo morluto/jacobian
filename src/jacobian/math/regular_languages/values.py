@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Self
 
 from pydantic import Field, model_validator
 
@@ -16,7 +16,9 @@ MAX_DFA_TRANSITIONS = 4096
 MAX_WORD_LENGTH = 1000
 MAX_COUNT_WORD_LENGTH = 200
 
-MAX_LABELED_AUTOMATON_STATES = 64
+# A materialized state axis is cheap relative to the transition/profile data;
+# operation-owned reachable-work bounds decide which path requests are admitted.
+MAX_LABELED_AUTOMATON_STATES = 4_096
 MAX_LABELED_AUTOMATON_ALPHABET = 32
 MAX_LABELED_AUTOMATON_TRANSITIONS = 4096
 # Conservative layer-iteration fallback for the pure-Python recurrence. Derived
@@ -184,7 +186,6 @@ class TransitionParikhProfile(StrictModel):
     total_path_count: CanonicalInteger = Field(
         max_length=MAX_TRANSITION_PROFILE_COUNT_DIGITS
     )
-    complete: Literal[True] = True
 
     @model_validator(mode="after")
     def require_source_and_canonical_complete_profile(self) -> Self:

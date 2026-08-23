@@ -23,6 +23,7 @@ from jacobian.math.regular_languages.operations import (
 )
 from jacobian.math.regular_languages.values import (
     DFA,
+    MAX_LABELED_AUTOMATON_STATES,
     MAX_LABELED_AUTOMATON_TRANSITIONS,
     MAX_TRANSITION_PROFILE_PATH_LENGTH,
     AutomatonTransition,
@@ -113,7 +114,6 @@ def test_two_loop_paths_form_a_histogram_not_a_set() -> None:
         }
     )
     assert profile.total_path_count == "4"
-    assert profile.complete is True
 
 
 def test_length_zero_and_empty_transition_conventions_retain_the_carrier() -> None:
@@ -562,32 +562,61 @@ def test_length_bound_keeps_large_degenerate_cases_typed() -> None:
         )
 
 
-def _atlas_carry_product_automaton() -> FiniteLabeledAutomaton:
-    """Atlas's three digit roles crossed with its carry state for one clock state."""
+def _atlas_clock_carry_product_automaton() -> tuple[FiniteLabeledAutomaton, int]:
+    """Atlas's three clock states in each role, crossed with carry."""
 
+    delta = ((0, 0, 1), (0, 0, 2), (0, 0, 0))
     carries = (-1, 0, 1)
+    states = tuple(
+        (*clock_states, carry)
+        for clock_states in product(range(3), repeat=3)
+        for carry in carries
+    )
+    state_index = {state: index for index, state in enumerate(states)}
     rows: list[tuple[int, int, int]] = []
-    for source_state, carry in enumerate(carries):
+    for source_state, (left_state, middle_state, right_state, carry) in enumerate(
+        states
+    ):
         for symbol, (a, b, c) in enumerate(product(range(3), repeat=3)):
             value = a + c - 2 * b + carry
             if value % 3 == 0 and value // 3 in carries:
-                rows.append((source_state, symbol, carries.index(value // 3)))
-    return _automaton(3, 27, tuple(rows))
+                target = (
+                    delta[left_state][a],
+                    delta[middle_state][b],
+                    delta[right_state][c],
+                    value // 3,
+                )
+                rows.append((source_state, symbol, state_index[target]))
+    start = state_index[(0, 0, 0, 0)]
+    return _automaton(len(states), 27, tuple(rows)), start
 
 
-def test_atlas_length_three_carry_product_profile_is_complete() -> None:
+def test_atlas_length_three_clock_cubed_carry_profile_is_complete() -> None:
     # Source: route_enum.py and macro_engine.py at Atlas revision
     # 0394e3d3b249439ffabec7d96a3311aa441651b8. The source script enumerates
-    # this digit-triple/carry product exactly only through length four.
-    automaton = _atlas_carry_product_automaton()
+    # the full clock^3/carry product exactly only through length four.
+    automaton, start = _atlas_clock_carry_product_automaton()
 
-    profile = transition_parikh_profile(automaton, 1, 1, 3)
+    profile = transition_parikh_profile(automaton, start, start, 3)
 
-    assert len(automaton.transitions) == 27
-    assert len(profile.entries) == 195
-    assert profile.total_path_count == "365"
-    assert max(_profile_map(profile).values()) == 6
-    assert _profile_map(profile) == _brute_profile(automaton, 1, 1, 3)
+    assert automaton.state_count == 81
+    assert len(automaton.transitions) == 729
+    assert profile.total_path_count != "0"
+    assert _profile_map(profile) == _brute_profile(automaton, start, start, 3)
+
+
+def test_labeled_automaton_state_materialization_boundary() -> None:
+    FiniteLabeledAutomaton(
+        state_count=MAX_LABELED_AUTOMATON_STATES,
+        alphabet_size=0,
+        transitions=(),
+    )
+    with pytest.raises(ValidationError, match="less than or equal"):
+        FiniteLabeledAutomaton(
+            state_count=MAX_LABELED_AUTOMATON_STATES + 1,
+            alphabet_size=0,
+            transitions=(),
+        )
 
 
 def _clock_automaton(delta: tuple[tuple[int, int, int], ...]) -> FiniteLabeledAutomaton:

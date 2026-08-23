@@ -133,15 +133,12 @@ def _path_count_and_walk_update_bound(
 
     outgoing = _outgoing_transitions(automaton)
 
-    counts = [0] * automaton.state_count
-    counts[source_state] = 1
+    counts = {source_state: 1}
     walk_updates = 0
     max_layer_paths = 1
     for _ in range(path_length):
-        next_counts = [0] * automaton.state_count
-        for state, multiplicity in enumerate(counts):
-            if not multiplicity:
-                continue
+        next_counts: dict[int, int] = {}
+        for state, multiplicity in counts.items():
             for transition in outgoing[state]:
                 # Every reachable-state scan extends at least one path, so this
                 # capped count also bounds the state preflight's transition work.
@@ -149,7 +146,9 @@ def _path_count_and_walk_update_bound(
                     _MAX_TRANSITION_PROFILE_DP_UPDATES + 1,
                     walk_updates + multiplicity,
                 )
-                next_counts[transition.target] += multiplicity
+                next_counts[transition.target] = (
+                    next_counts.get(transition.target, 0) + multiplicity
+                )
         if (
             walk_updates > _MAX_TRANSITION_PROFILE_DP_UPDATES
             and composition_update_bound > _MAX_TRANSITION_PROFILE_DP_UPDATES
@@ -159,10 +158,10 @@ def _path_count_and_walk_update_bound(
                 "path length or transition branching"
             )
         counts = next_counts
-        max_layer_paths = max(max_layer_paths, sum(counts))
-        if not any(counts):
+        max_layer_paths = max(max_layer_paths, sum(counts.values()))
+        if not counts:
             break
-    return counts[target_state], walk_updates, max_layer_paths
+    return counts.get(target_state, 0), walk_updates, max_layer_paths
 
 
 def _capped_combination(n: int, k: int, cap: int) -> int:

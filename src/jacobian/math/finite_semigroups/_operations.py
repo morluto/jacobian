@@ -352,7 +352,7 @@ def _intersection_partition(
     return tuple(result)
 
 
-def _join_partition(  # noqa: C901
+def _join_partition(
     elements: tuple[str, ...],
     partition_a: tuple[tuple[str, ...], ...],
     partition_b: tuple[tuple[str, ...], ...],

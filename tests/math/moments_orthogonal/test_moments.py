@@ -824,6 +824,78 @@ class TestFiniteSupportQuadratureAdmission:
         assert revalidated == result
 
 
+class TestDerivedQuadratureHeightAdmission:
+    def test_over_tall_derived_node_rejected_with_typed_error(self) -> None:
+        """mu_1/mu_0 exceeds the canonical component bound even though every
+        input moment is canonical; admission must reject the derived rule
+        instead of letting execution fail inside canonical conversion."""
+        moments = (
+            CanonicalRational.from_fraction(Fraction(1, 10**16400)),
+            CanonicalRational.from_fraction(Fraction(10) ** 16400),
+            CanonicalRational(num="0", den="1"),
+        )
+        with pytest.raises(ValidationError, match="canonical rational digit limit"):
+            GaussianQuadratureRequest(prefix=_prefix(moments), order=1)
+
+    def test_representable_large_node_admitted_and_round_trips(self) -> None:
+        """A 4,501-digit rational node stays inside the canonical contract;
+        exact numeric ordering must not stringify roots, which would trip
+        CPython's integer-string conversion limit during admission."""
+        moments = (
+            CanonicalRational(num="1", den="1"),
+            CanonicalRational.from_fraction(Fraction(10) ** 4500),
+            CanonicalRational(num="0", den="1"),
+        )
+        request = GaussianQuadratureRequest(prefix=_prefix(moments), order=1)
+        result = compute_gaussian_quadrature(request)
+        assert result.nodes[0].node.as_fraction() == Fraction(10) ** 4500
+        assert result.nodes[0].weight == CanonicalRational(num="1", den="1")
+        assert GaussianQuadratureRule.model_validate(result.model_dump()) == result
+
+
+class TestReplayedRulePositivity:
+    def test_negative_weight_rule_rejected_on_revalidation(self) -> None:
+        """A serialized rule whose retained prefix replays to a negative
+        weight violates the operation's advertised positive-weight contract
+        and must not revalidate as the operation's exact result."""
+        prefix = _prefix(
+            tuple(CanonicalRational(num=v, den="1") for v in ("-1", "0", "0"))
+        )
+        with pytest.raises(ValidationError, match="strictly positive"):
+            GaussianQuadratureRule(
+                order=1,
+                nodes=(
+                    QuadratureNode(
+                        node=CanonicalRational(num="0", den="1"),
+                        weight=CanonicalRational(num="-1", den="1"),
+                    ),
+                ),
+                variable="x",
+                exactness_degree=1,
+                prefix=prefix,
+            )
+
+    def test_quasi_definite_positive_weight_rule_revalidates(self) -> None:
+        """A genuine positive-weight order-1 rule keeps validating against
+        its quasi-definite source prefix."""
+        prefix = _prefix(
+            tuple(CanonicalRational(num=v, den="1") for v in ("1", "0", "-1"))
+        )
+        rule = GaussianQuadratureRule(
+            order=1,
+            nodes=(
+                QuadratureNode(
+                    node=CanonicalRational(num="0", den="1"),
+                    weight=CanonicalRational(num="1", den="1"),
+                ),
+            ),
+            variable="x",
+            exactness_degree=1,
+            prefix=prefix,
+        )
+        assert GaussianQuadratureRule.model_validate(rule.model_dump()) == rule
+
+
 class TestShiftedHankelOrderCap:
     def test_order_32_is_not_schema_advertised(self) -> None:
         """A shifted matrix of order 32 would need mu_1..mu_66 but the

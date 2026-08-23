@@ -494,17 +494,18 @@ def _construct_quadrature_rule(
         sympy.Rational(int(p_n[i].numerator), int(p_n[i].denominator)) * var_symbol**i
         for i in range(len(p_n))
     )
-    roots = sorted(sympy.solve(poly_sym, var_symbol), key=lambda r: (r, str(r)))
+    # Exact numeric ordering only: stringifying a root would trip CPython's
+    # integer-string conversion limit inside the admitted canonical range.
     nodes_frac = []
-    for r in roots:
+    for r in sympy.solve(poly_sym, var_symbol):
         # Admission guarantees every root is a distinct rational; keep a
         # typed guard so a backend surprise cannot produce a wrong value.
         if not r.is_Rational:
             raise ValueError("orthogonal polynomial produced a non-rational node")
         nodes_frac.append(Fraction(int(r.p), int(r.q)))
+    nodes_frac.sort()
     if len(nodes_frac) != n:
         raise ValueError(f"Expected {n} roots, got {len(nodes_frac)}")
-    nodes_frac.sort()
 
     vandermonde = [[nodes_frac[i] ** k for i in range(n)] for k in range(n)]
     weights = _solve_linear_system(vandermonde, moments[:n])

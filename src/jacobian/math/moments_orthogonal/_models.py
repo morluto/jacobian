@@ -267,6 +267,7 @@ class GaussianQuadratureRequest(StrictModel):
         from jacobian.math.moments_orthogonal.operations import (
             _build_quadrature_rule,
             _construct_monic_orthogonal_polynomial,
+            _fraction_exceeds_canonical_limit,
         )
 
         moments = [Fraction(*v.as_integer_ratio()) for v in self.prefix.moments]
@@ -288,6 +289,17 @@ class GaussianQuadratureRequest(StrictModel):
         # exact construction so a nonpositive weight is rejected here
         # instead of raising during execution.
         _nodes, weights = _build_quadrature_rule(self.prefix, self.order)
+        # Derived nodes and weights can leave the canonical range even when
+        # every input moment stays inside it; measure the exact Fractions
+        # before execution converts them.
+        if any(
+            _fraction_exceeds_canonical_limit(value) for value in (*_nodes, *weights)
+        ):
+            raise ValueError(
+                "derived quadrature nodes or weights exceed the canonical "
+                "rational digit limit; supply a moment prefix whose exact "
+                "rule stays representable"
+            )
         if any(weight <= 0 for weight in weights):
             raise ValueError(
                 "quadrature admission requires strictly positive weights; "

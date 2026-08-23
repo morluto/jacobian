@@ -305,6 +305,13 @@ class GaussianQuadratureRule(StrictModel):
         nodes_frac, weights = _construct_quadrature_rule(p_n, moments, self.order)
         if weights is None:
             raise ValueError("Vandermonde system is singular")
+        # The operation's contract carries strictly positive weights only;
+        # a payload replaying to a nonpositive rule is not an exact result
+        # of this operation.
+        if any(weight <= 0 for weight in weights):
+            raise ValueError(
+                "replayed quadrature rules must carry strictly positive weights"
+            )
         if tuple(self.nodes) != tuple(
             QuadratureNode(
                 node=CanonicalRational.from_fraction(node),

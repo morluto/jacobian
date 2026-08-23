@@ -112,7 +112,7 @@ def scalar_multiply(
 ) -> ScalarMultiplicationResult:
     """Compute n*P on a short Weierstrass elliptic curve using double-and-add."""
     if request.scalar == 0:
-        return ScalarMultiplicationResult(at_infinity=True)
+        return ScalarMultiplicationResult(curve=request.curve, at_infinity=True)
 
     a = _frac_from_rational(request.curve.coefficient_a)
     b = _frac_from_rational(request.curve.coefficient_b)
@@ -142,8 +142,9 @@ def scalar_multiply(
         n >>= 1
 
     if result is None:
-        return ScalarMultiplicationResult(at_infinity=True)
+        return ScalarMultiplicationResult(curve=request.curve, at_infinity=True)
     return ScalarMultiplicationResult(
+        curve=request.curve,
         point=RationalAffinePoint(
             x=_rational_from_frac(result[0]),
             y=_rational_from_frac(result[1]),

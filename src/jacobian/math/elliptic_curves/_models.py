@@ -9,7 +9,7 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.math._rational_height import RationalHeight
+from jacobian.math._rational_height import RationalHeight, sum_heights
 
 
 class ShortWeierstrassCurve(StrictModel):
@@ -121,6 +121,89 @@ def _require_group_law(
             raise ValueError("point must lie on the curve")
 
 
+def _generic_lambda_height_from_heights(
+    first: tuple[RationalHeight, RationalHeight],
+    second: RationalAffinePoint,
+) -> RationalHeight:
+    """Height bound of lambda = (y2 - y1) / (x2 - x1) with a symbolic first operand."""
+    dy = sum_heights(
+        (RationalHeight.from_canonical(second.y), first[1])
+    )
+    dx = sum_heights(
+        (RationalHeight.from_canonical(second.x), first[0])
+    )
+    return dy.quotient(dx)
+
+
+def _doubling_lambda_height_from_heights(
+    curve: ShortWeierstrassCurve, point: tuple[RationalHeight, RationalHeight]
+) -> RationalHeight:
+    """Height bound of lambda = (3x^2 + A) / (2y) for symbolic coordinates."""
+    x, y = point
+    three_x_squared = RationalHeight(2 * x.numerator_digits + 1, 2 * x.denominator_digits)
+    numerator = sum_heights(
+        (three_x_squared, RationalHeight.from_canonical(curve.coefficient_a))
+    )
+    return numerator.quotient(RationalHeight(y.numerator_digits + 1, y.denominator_digits))
+
+
+def _generic_lambda_height(
+    first: RationalAffinePoint, second: RationalAffinePoint
+) -> RationalHeight:
+    """Height bound of lambda = (y2 - y1) / (x2 - x1)."""
+    dy = sum_heights(
+        (RationalHeight.from_canonical(second.y), RationalHeight.from_canonical(first.y))
+    )
+    dx = sum_heights(
+        (RationalHeight.from_canonical(second.x), RationalHeight.from_canonical(first.x))
+    )
+    return dy.quotient(dx)
+
+
+def _doubling_lambda_height(
+    curve: ShortWeierstrassCurve, point: RationalAffinePoint
+) -> RationalHeight:
+    """Height bound of lambda = (3x^2 + A) / (2y)."""
+    x = RationalHeight.from_canonical(point.x)
+    three_x_squared = RationalHeight(2 * x.numerator_digits + 1, 2 * x.denominator_digits)
+    numerator = sum_heights(
+        (three_x_squared, RationalHeight.from_canonical(curve.coefficient_a))
+    )
+    y = RationalHeight.from_canonical(point.y)
+    return numerator.quotient(RationalHeight(y.numerator_digits + 1, y.denominator_digits))
+
+
+def _chord_step_heights(
+    lam: RationalHeight,
+    first: tuple[RationalHeight, RationalHeight],
+    second: tuple[RationalHeight, RationalHeight],
+) -> tuple[RationalHeight, RationalHeight]:
+    """Conservative coordinate heights of one chord-and-tangent output.
+
+    With lambda bounded by ``lam``, x3 = lambda^2 - x1 - x2 and
+    y3 = lambda * (x1 - x3) - y1 propagate through rational-height sums,
+    products, and quotients.
+    """
+    lam_squared = lam.product(lam)
+    x3 = sum_heights((lam_squared, first[0], second[0]))
+    inner = sum_heights((first[0], x3))
+    y3 = sum_heights((lam.product(inner), first[1]))
+    return (
+        RationalHeight(
+            max(x3.numerator_digits, y3.numerator_digits),
+            max(x3.denominator_digits, y3.denominator_digits),
+        ),
+        y3,
+    )
+
+
+def _point_heights(point: RationalAffinePoint) -> tuple[RationalHeight, RationalHeight]:
+    return (
+        RationalHeight.from_canonical(point.x),
+        RationalHeight.from_canonical(point.y),
+    )
+
+
 class EllipticCurvePointAdditionRequest(StrictModel):
     """Add two points on a short Weierstrass elliptic curve."""
 
@@ -131,6 +214,27 @@ class EllipticCurvePointAdditionRequest(StrictModel):
     @model_validator(mode="after")
     def require_group_law(self) -> Self:
         _require_group_law(self.curve, (self.first, self.second))
+        if self.first == self.second:
+            result = _chord_step_heights(
+                _doubling_lambda_height(self.curve, self.first),
+                _point_heights(self.first),
+                _point_heights(self.first),
+            )
+        elif self.first.x == self.second.x:
+            result = None
+        else:
+            result = _chord_step_heights(
+                _generic_lambda_height(self.first, self.second),
+                _point_heights(self.first),
+                _point_heights(self.second),
+            )
+        if result is not None and any(
+            height.exceeds(MAX_CANONICAL_RATIONAL_DIGITS) for height in result
+        ):
+            raise ValueError(
+                "point addition would produce coordinates exceeding the "
+                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit canonical result bound"
+            )
         return self
 
 
@@ -160,49 +264,34 @@ class ScalarMultiplicationRequest(StrictModel):
     @model_validator(mode="after")
     def require_group_law(self) -> Self:
         _require_group_law(self.curve, (self.point,))
-        # Conservative height bound: the naive height of n*P grows roughly as
-        # n^2 times the height of P for generic curves.  Estimate the digit
-        # growth and reject requests that would exceed the canonical limit.
-        max_point_digits = max(
-            len(self.point.x.num.lstrip("-")),
-            len(self.point.x.den.lstrip("-")),
-            len(self.point.y.num.lstrip("-")),
-            len(self.point.y.den.lstrip("-")),
-        )
-        # Use n^2 * digit growth as a conservative upper bound; the true
-        # growth for the given example (2,2) with n=300 is 35k digits, which
-        # exceeds the 32k limit, so n=300 must be rejected for that point.
-        # For small points (1 digit), n=300 gives 90k estimated >32k, so reject.
-        # For n=100, estimated 10k <32k, so allow.
-        estimated_digits = self.scalar * self.scalar * max(1, max_point_digits)
-        # Also account for coefficient height
-        coeff_digits = max(
-            len(self.curve.coefficient_a.num.lstrip("-")),
-            len(self.curve.coefficient_a.den.lstrip("-")),
-            len(self.curve.coefficient_b.num.lstrip("-")),
-            len(self.curve.coefficient_b.den.lstrip("-")),
-        )
-        estimated_digits += coeff_digits * self.scalar
-        if estimated_digits > MAX_CANONICAL_RATIONAL_DIGITS:
-            raise ValueError(
-                "scalar multiplication would exceed the canonical result height; "
-                "reduce the scalar or use smaller coordinates"
-            )
-        # Also enforce a hard scalar cap derived from the worst-case point size:
-        # even for 1-digit points, scalar=1000 would give 1M estimated digits,
-        # so cap at 500 for safety when point digits are minimal.
-        if self.scalar > 500 and max_point_digits <= 2:
-            # For larger points, the n^2 bound already rejects; for tiny points
-            # we still cap to keep intermediate work bounded.
-            raise ValueError(
-                "scalar exceeds the conservative work bound for the given point size"
-            )
+        # Propagate coordinate heights through the same double-and-add scan
+        # the kernel performs: each bit doubles the accumulator and adds P on
+        # a set bit, and every step's chord-and-tangent output is bounded by
+        # rational-height propagation.  The naive n^2 digit heuristic both
+        # over-rejects and admits doublings whose exact coordinates exceed
+        # the canonical limit, so derive the budget from the recurrence.
+        current = _point_heights(self.point)
+        for bit in bin(self.scalar)[3:]:
+            lam_double = _doubling_lambda_height_from_heights(self.curve, current)
+            doubled = _chord_step_heights(lam_double, current, current)
+            if bit == "1":
+                lam_add = _generic_lambda_height_from_heights(current, self.point)
+                current = _chord_step_heights(lam_add, doubled, _point_heights(self.point))
+            else:
+                current = doubled
+            if any(height.exceeds(MAX_CANONICAL_RATIONAL_DIGITS) for height in current):
+                raise ValueError(
+                    "scalar multiplication would exceed the canonical result "
+                    f"height ({MAX_CANONICAL_RATIONAL_DIGITS} digits); reduce "
+                    "the scalar or use smaller coordinates"
+                )
         return self
 
 
 class ScalarMultiplicationResult(StrictModel):
-    """The result of scalar multiplication n*P."""
+    """The result of scalar multiplication n*P on its retained parent curve."""
 
+    curve: ShortWeierstrassCurve
     point: RationalAffinePoint | None = None
     at_infinity: bool = False
 
@@ -212,6 +301,18 @@ class ScalarMultiplicationResult(StrictModel):
             raise ValueError("a finite point and infinity are mutually exclusive")
         if self.point is None and not self.at_infinity:
             raise ValueError("must carry a finite point or indicate infinity")
+        # The curve parent defines the group the result lives in: without it,
+        # identical coordinate pairs on different curves serialize to the
+        # same value and callers cannot feed the point back into another
+        # group-law request.  Replay membership so the retained point cannot
+        # detach from its claimed parent.
+        if self.point is not None:
+            x = self.point.x.as_fraction()
+            y = self.point.y.as_fraction()
+            a = self.curve.coefficient_a.as_fraction()
+            b = self.curve.coefficient_b.as_fraction()
+            if y * y != x**3 + a * x + b:
+                raise ValueError("result point must lie on the retained curve")
         return self
 
 

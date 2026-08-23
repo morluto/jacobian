@@ -7,7 +7,11 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
 from jacobian.math.moments_orthogonal.values import (
     MAX_MOMENTS,
@@ -217,18 +221,31 @@ class ChristoffelDarbouxRequest(StrictModel):
         require_bounded_rational(
             self.y, max_digits=max_cd_digits, label="y"
         )
-        # Also check conservative output height estimate
-        # Rough estimate: output digits ~ n * max_input_digits
-        n = max(len(self.alpha), len(self.beta))
-        max_input = max(
-            max((len(v.num.lstrip("-")) for v in self.alpha), default=0),
-            max((len(v.num.lstrip("-")) for v in self.beta), default=0),
-            len(self.x.num.lstrip("-")),
-            len(self.x.den.lstrip("-")),
-            len(self.y.num.lstrip("-")),
-            len(self.y.den.lstrip("-")),
+
+        def component_digits(value: CanonicalRational) -> int:
+            return max(len(value.num.lstrip("-")), len(value.den.lstrip("-")))
+
+        # Each recurrence step multiplies the running polynomial value by
+        # (t - alpha_k) at both evaluation points and the kernel divides by
+        # products of beta, so numerator and denominator digits grow
+        # additively by d(x) + d(y) + 2*d(coefficient) per step.  Count both
+        # components of every coefficient; numerators alone treat a large
+        # admitted denominator as a one-digit input.
+        coefficient_digits = max(
+            (
+                component_digits(value)
+                for value in (*self.alpha, *self.beta)
+            ),
+            default=0,
         )
-        if n * max_input > 30000:
+        n = max(len(self.alpha), len(self.beta))
+        growth_per_step = (
+            component_digits(self.x)
+            + component_digits(self.y)
+            + 2 * coefficient_digits
+            + 8
+        )
+        if n * growth_per_step > MAX_CANONICAL_RATIONAL_DIGITS:
             raise ValueError("Christoffel-Darboux inputs would exceed the result digit bound")
         return self
 

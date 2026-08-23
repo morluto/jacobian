@@ -614,3 +614,24 @@ class TestNativeApiAdmission:
         points = tuple(tuple(Fraction(i**k) for k in range(6)) for i in range(1, 65))
         with pytest.raises(ValueError, match="combinatorial bound"):
             convex_hull_volume(points)
+
+
+class TestNonsimpleFaceExtremality:
+    def test_edge_midpoint_of_4d_prism_is_not_a_vertex(self) -> None:
+        """Reviewer counterexample: the midpoint (e1, 1/2) of a vertical
+        edge of conv(+/-e1, +/-e2, +/-e3) x [0,1] lies on four maximal
+        facets, so incident-facet counting kept it; active-normal rank
+        (3 < 4) identifies it as non-extreme, and the exact volume is
+        that of the prism, 2^3/3! = 4/3."""
+        vertices = []
+        for index in range(3):
+            for sign in (1, -1):
+                for t in ("0", "1"):
+                    coords = [(0, 1)] * 4
+                    coords[index] = (sign, 1)
+                    coords[3] = (int(t), 1)
+                    vertices.append(_v(*coords))
+        midpoint = _v((1, 1), (0, 1), (0, 1), (1, 2))
+        result = _volume_via_vertices((*vertices, midpoint))
+        assert result.dimension == 4
+        assert result.volume == CanonicalRational(num="4", den="3")

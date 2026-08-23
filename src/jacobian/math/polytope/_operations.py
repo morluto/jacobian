@@ -277,17 +277,47 @@ def _max_facets(points: list[list[Rational]], dim: int) -> list[list[int]]:
     return [sorted(members) for members in groups.values()]
 
 
+def _extreme_point_indices(
+    groups: dict[tuple[int, ...], set[int]],
+    point_count: int,
+    dim: int,
+) -> tuple[list[int], list[int]]:
+    """Return (extreme indices, boundary counts) from grouped maximal facets.
+
+    A point is extreme when the normals of its containing facets span the
+    ambient space; every group member lies exactly on that facet's plane.
+    """
+    counts = [0] * point_count
+    active_normals: list[list[list[Rational]]] = [[] for _ in range(point_count)]
+    for sig, members in groups.items():
+        normal = list(sig[:-1])
+        for idx in members:
+            if 0 <= idx < point_count:
+                counts[idx] += 1
+                active_normals[idx].append(normal)
+    kept = [
+        i
+        for i in range(point_count)
+        if active_normals[i] and Matrix(active_normals[i]).rank() == dim
+    ]
+    return kept, counts
+
+
 def _filter_redundant_vertices(
     points: list[list[Rational]], dim: int
 ) -> list[list[Rational]]:
     """Return the extreme hull vertices, dropping redundant boundary points.
 
-    A bounded convex polytope's vertices are those points that belong to at
-    least ``dim`` maximal (d-1)-facets. Redundant collinear edge points or
-    interior face points belong to fewer facets and are removed. This
-    prevents the 2-D adjacency graph from becoming non-simple (e.g., a
-    3x3 square with all 12 boundary integer points would otherwise give
-    every node degree >2 and cause triangulation to fail).
+    A point of the polytope is a vertex exactly when the normals of the
+    maximal facets containing it span the ambient space (the active-
+    constraint rank test).  Counting incident facets is not enough: a
+    non-extreme point on a lower-dimensional face of a nonsimple polytope
+    can lie on many facets whose normals are rank-deficient -- e.g. the
+    midpoint of a vertical edge of ``conv(+/-e1,+/-e2,+/-e3)x[0,1]`` lies
+    on four facets yet spans only rank 3 in dimension 4.  This prevents
+    the 2-D adjacency graph from becoming non-simple (e.g., a 3x3 square
+    with all 12 boundary integer points would otherwise give every node
+    degree >2 and cause triangulation to fail).
     """
 
     if len(points) <= dim + 1:
@@ -300,16 +330,15 @@ def _filter_redundant_vertices(
         # for the small, non-budget-exhausting cases that the operation
         # admits.
         return points
-    facets = _max_facets(points, dim)
-    if not facets:
+    groups: dict[tuple[int, ...], set[int]] = {}
+    for subfacet in _hull_subfacets(points, dim):
+        sig = _plane_signature(subfacet, points)
+        if sig is None:
+            continue
+        groups.setdefault(sig, set()).update(subfacet)
+    if not groups:
         return points
-    counts = [0] * len(points)
-    for facet in facets:
-        for idx in facet:
-            if 0 <= idx < len(points):
-                counts[idx] += 1
-    threshold = dim if dim > 1 else 1
-    keep_indices = [i for i, c in enumerate(counts) if c >= threshold]
+    keep_indices, counts = _extreme_point_indices(groups, len(points), dim)
     # If filtering would discard too much (e.g., degenerate or numeric
     # failure), keep the hull boundary instead of collapsing.
     if len(keep_indices) < dim + 1:

@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.math.graphs.multigraph import _operations as multigraph_operations
 from jacobian.math.graphs.multigraph._models import (
     MAX_GROUP_CARDINALITY,
     MAX_GROUP_MODULUS,
@@ -460,6 +461,8 @@ class TestFlowSearchUnknown:
         assert result.status == "UNKNOWN"
         assert result.termination_reason == "STATE_BUDGET_EXCEEDED"
         assert result.flow is None
+        # A budget-exceeded search reports exactly max_states charged states.
+        assert result.states_explored == 1
 
 
 # ---------------------------------------------------------------------------
@@ -655,11 +658,11 @@ class TestZeroEdgeIdentification:
 
 
 # ---------------------------------------------------------------------------
-# Source-binding replay of non-witness outcomes
+# Source binding of non-witness outcomes (validated without re-searching)
 # ---------------------------------------------------------------------------
 
 
-class TestSourceBindingReplay:
+class TestSourceBinding:
     def test_forged_exhausted_on_flow_admitting_graph_rejected(self):
         """A triangle admits a nowhere-zero Z/3 flow; EXHAUSTED must not validate."""
         payload = {
@@ -671,7 +674,7 @@ class TestSourceBindingReplay:
             "states_explored": 0,
             "termination_reason": "SEARCH_EXHAUSTED",
         }
-        with pytest.raises(ValidationError, match="search replay"):
+        with pytest.raises(ValidationError, match="completed enumeration"):
             MultigraphFlowFindResult.model_validate(payload)
 
     def test_genuine_exhausted_roundtrips(self):
@@ -707,7 +710,7 @@ class TestSourceBindingReplay:
         payload = unknown.model_dump()
         payload["status"] = "EXHAUSTED"
         payload["termination_reason"] = "SEARCH_EXHAUSTED"
-        with pytest.raises(ValidationError, match="search replay"):
+        with pytest.raises(ValidationError, match="completed enumeration"):
             MultigraphFlowFindResult.model_validate(payload)
 
     def test_unbound_results_are_rejected(self):
@@ -753,7 +756,7 @@ class TestSourceBindingReplay:
             "states_explored": 0,
             "termination_reason": "SPECIAL_CASE",
         }
-        with pytest.raises(ValidationError, match="search replay"):
+        with pytest.raises(ValidationError, match="SPECIAL_CASE"):
             MultigraphFlowFindResult.model_validate(payload)
 
     def test_genuine_found_roundtrips(self):
@@ -933,7 +936,81 @@ class TestLeafWorkBoundedBySearchBudget:
         assert result.flow is not None
 
 
-class TestReplayTerminationReasonBinding:
+class TestAggregateSearchBudgetAcrossValidation:
+    """One request performs exactly one charged search: result construction
+    and serialized re-validation must not repeat the bounded search, so the
+    total visited states stay within resource_budget.max_states (review
+    thread: PR #2223, 19-edge Z/2 bridge case previously charged 3x)."""
+
+    @staticmethod
+    def _bridge19_graph() -> LooplessMultigraph:
+        edges = []
+        for i in range(9):
+            edges.append(MultigraphEdge(edge_id=f"a{i}", left=i, right=(i + 1) % 9))
+        for i in range(9):
+            edges.append(
+                MultigraphEdge(edge_id=f"b{i}", left=9 + i, right=9 + (i + 1) % 9)
+            )
+        edges.append(MultigraphEdge(edge_id="br", left=0, right=9))
+        return LooplessMultigraph(vertex_count=18, edges=tuple(edges))
+
+    def test_construction_and_revalidation_charge_one_search(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls = {"count": 0}
+        real_search = multigraph_operations._search_flow_unbound
+
+        def counting_search(graph: object, group: object, budget: object) -> object:
+            calls["count"] += 1
+            return real_search(graph, group, budget)
+
+        monkeypatch.setattr(
+            multigraph_operations, "_search_flow_unbound", counting_search
+        )
+        result = _flow_find(
+            self._bridge19_graph(),
+            Z2,
+            resource_budget={"require_nowhere_zero": True},
+        )
+        payload = result.model_dump()
+        MultigraphFlowFindResult.model_validate(payload)
+        MultigraphFlowFindResult.model_validate(payload)
+        assert calls["count"] == 1
+        assert result.status == "EXHAUSTED"
+        assert result.states_explored <= result.resource_budget.max_states
+
+    def test_exhausted_state_counts_match_closed_form(self) -> None:
+        # b = 2 * admissible per-edge values; a completed enumeration charges
+        # b + b^2 + ... + b^d states.  These hand-computed totals guard the
+        # validator's arithmetic against drift from the kernel's charging.
+        single_edge = LooplessMultigraph(
+            vertex_count=2,
+            edges=(MultigraphEdge(edge_id="e", left=0, right=1),),
+        )
+        star = LooplessMultigraph(
+            vertex_count=4,
+            edges=(
+                MultigraphEdge(edge_id="s1", left=0, right=1),
+                MultigraphEdge(edge_id="s2", left=0, right=2),
+                MultigraphEdge(edge_id="s3", left=0, right=3),
+            ),
+        )
+        cases = [
+            (BRIDGE_GRAPH, Z3, 21_844),  # b=4, d=7: (4^8 - 4) / 3
+            (single_edge, Z2, 2),  # b=2, d=1
+            (star, Z2, 14),  # b=2, d=3: 2 + 4 + 8
+        ]
+        for graph, group, expected in cases:
+            result = _flow_find(
+                graph,
+                group,
+                resource_budget={"max_states": 1_000_000, "require_nowhere_zero": True},
+            )
+            assert result.status == "EXHAUSTED"
+            assert result.states_explored == expected
+
+
+class TestTerminationReasonBinding:
     def test_found_reason_relabeled_special_case_rejected(self) -> None:
         result = _flow_find(
             TRIANGLE, Z3, resource_budget={"require_nowhere_zero": True}
@@ -941,7 +1018,7 @@ class TestReplayTerminationReasonBinding:
         assert result.status == "FOUND"
         payload = result.model_dump()
         payload["termination_reason"] = "SPECIAL_CASE"
-        with pytest.raises(ValidationError, match="search replay"):
+        with pytest.raises(ValidationError, match="requires an edgeless"):
             MultigraphFlowFindResult.model_validate(payload)
 
     def test_empty_graph_special_case_relabeled_witness_rejected(self) -> None:
@@ -949,7 +1026,7 @@ class TestReplayTerminationReasonBinding:
         result = _flow_find(empty_graph, Z3)
         payload = result.model_dump()
         payload["termination_reason"] = "WITNESS_FOUND"
-        with pytest.raises(ValidationError, match="search replay"):
+        with pytest.raises(ValidationError, match="edgeless graph terminates"):
             MultigraphFlowFindResult.model_validate(payload)
 
 

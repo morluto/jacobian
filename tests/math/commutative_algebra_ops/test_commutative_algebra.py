@@ -16,11 +16,13 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealQuotientRequest,
     IdealRadicalMembershipRequest,
     IdealRadicalRequest,
+    IdealSaturationRequest,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
     compute_ideal_quotient,
     compute_ideal_radical,
     compute_ideal_radical_membership,
+    compute_ideal_saturation,
 )
 from jacobian.math.commutative_algebra_ops._tools import TOOLS
 from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
@@ -194,6 +196,17 @@ def test_singular_script_uses_internal_identifiers_not_caller_names() -> None:
     ).decode("ascii")
     assert "callerVariable" not in source
     assert "jv1" in source
+
+
+def test_saturation_script_saturates_by_the_whole_ideal() -> None:
+    """Supported Singular 4.4.x sat(ideal, ideal) returns the saturated ideal."""
+    source = _singular._script(
+        "saturation",
+        _ideal(("x", "y"), {(1, 1): 1}),
+        _ideal(("x", "y"), {(1, 0): 1}),
+    ).decode("ascii")
+    assert "sat(jacobian_left,jacobian_right);" in source
+    assert "jacobian_right[1]" not in source
 
 
 def test_radical_membership_uses_canonical_polynomials() -> None:
@@ -461,3 +474,38 @@ def test_ideal_quotient_by_product_equals_iterated_quotient() -> None:
     assert iterated.quotient is not None
     assert _equal(by_product.quotient, iterated.quotient)
     assert _equal(by_product.quotient, _ideal(variables, {(2, 1): 1}))
+
+
+@requires_singular
+@pytest.mark.requires_backend("singular")
+def test_ideal_saturation_advertised_example_is_exact() -> None:
+    """The published example (<xy> : <x>^infinity) must yield exactly <y>."""
+    result = compute_ideal_saturation(
+        IdealSaturationRequest(
+            ideal=_ideal(("x", "y"), {(1, 1): 1}),
+            saturation_polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
+        )
+    )
+    assert result.outcome == "COMPUTED"
+    assert result.saturation is not None
+    assert _equal(result.saturation, _ideal(("x", "y"), {(0, 1): 1}))
+    assert all(
+        _contains_product(_ideal(("x", "y"), {(1, 1): 1}), generator,
+                           _polynomial(("x", "y"), {(1, 0): 1}))
+        for generator in result.saturation.generators
+    )
+
+
+@requires_singular
+@pytest.mark.requires_backend("singular")
+def test_ideal_saturation_keeps_every_generator_of_the_result() -> None:
+    """(<xy,xz> : <x>^infinity) = <y,z> has two generators; none may be lost."""
+    result = compute_ideal_saturation(
+        IdealSaturationRequest(
+            ideal=_ideal(("x", "y", "z"), {(1, 1, 0): 1}, {(1, 0, 1): 1}),
+            saturation_polynomial=_polynomial(("x", "y", "z"), {(1, 0, 0): 1}),
+        )
+    )
+    assert result.outcome == "COMPUTED"
+    assert result.saturation is not None
+    assert _equal(result.saturation, _ideal(("x", "y", "z"), {(0, 1, 0): 1}, {(0, 0, 1): 1}))

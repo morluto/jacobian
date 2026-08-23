@@ -112,9 +112,11 @@ def _script(
         if right is None:
             raise ValueError("saturation requires a saturation polynomial ideal")
         declarations.append(_singular_ideal("jacobian_right", right))
+        # Supported Singular 4.4.x backends expose sat(ideal, ideal) -> ideal;
+        # indexing the result would truncate multi-generator saturations.
         operation_line = (
             "ideal jacobian_result=sat(jacobian_left,"
-            "jacobian_right[1]);"
+            "jacobian_right);"
         )
     else:
         if right is None:

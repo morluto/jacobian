@@ -141,7 +141,10 @@ class TestComposition:
         payload = rref_result.model_dump()
         revived = type(rref_result).model_validate(payload)
         assert revived == rref_result
-        assert compute_rank(RankRequest.model_validate({"matrix": payload["rref"]})).rank == 2
+        assert (
+            compute_rank(RankRequest.model_validate({"matrix": payload["rref"]})).rank
+            == 2
+        )
 
     def test_forged_rref_value_rejected(self) -> None:
         from jacobian.math.prime_field_matrix_ops._models import RrefResult

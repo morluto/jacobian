@@ -14,6 +14,8 @@ from jacobian.math.geometry._models import (
     CircumradiusProfileResult,
     CircumradiusTripleEntry,
     ClosedSegment2D,
+    ForbiddenPatternsRequest,
+    ForbiddenPatternsResult,
     GeometryBooleanResult,
     GeometryCircleResult,
     GeometryConvexHullResult,
@@ -477,7 +479,7 @@ def circumradius_profile(
     )
 
 
-def forbidden_patterns(request):
+def forbidden_patterns(request: ForbiddenPatternsRequest) -> ForbiddenPatternsResult:
     """Find a collinear triple or concyclic quadruple, or establish neither exists.
 
     Three points are collinear when the 2x2 cross-product determinant

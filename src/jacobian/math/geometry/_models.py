@@ -538,9 +538,7 @@ class CircumradiusTripleEntry(StrictModel):
     @model_validator(mode="after")
     def bind_collinear_to_value(self) -> Self:
         if self.collinear is (self.squared_circumradius is not None):
-            raise ValueError(
-                "exactly a collinear triple has no squared circumradius"
-            )
+            raise ValueError("exactly a collinear triple has no squared circumradius")
         if (
             self.squared_circumradius is not None
             and self.squared_circumradius.as_fraction() <= 0
@@ -608,13 +606,18 @@ def _require_replayed_circumradii(result: CircumradiusProfileResult) -> None:
         cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
         is_collinear = cross == 0
         if entry.collinear != is_collinear:
-            raise ValueError("circumradius entry collinear flag does not match the points")
+            raise ValueError(
+                "circumradius entry collinear flag does not match the points"
+            )
         if not is_collinear:
             dab = (ax - bx) ** 2 + (ay - by) ** 2
             dbc = (bx - cx) ** 2 + (by - cy) ** 2
             dac = (ax - cx) ** 2 + (ay - cy) ** 2
             expected_r2 = (dab * dbc * dac) / (4 * cross * cross)
-            if entry.squared_circumradius is None or entry.squared_circumradius.as_fraction() != expected_r2:
+            if (
+                entry.squared_circumradius is None
+                or entry.squared_circumradius.as_fraction() != expected_r2
+            ):
                 raise ValueError("squared circumradius does not match the exact value")
         elif entry.squared_circumradius is not None:
             raise ValueError("collinear entry must not have a circumradius")
@@ -736,7 +739,10 @@ def _scan_forbidden_patterns(
         )
         if determinant != 0:
             continue
-        if any(collinear(a, b, c) for a, b, c in ((i, j, k), (i, j, ell), (i, k, ell), (j, k, ell))):
+        if any(
+            collinear(a, b, c)
+            for a, b, c in ((i, j, k), (i, j, ell), (i, k, ell), (j, k, ell))
+        ):
             continue
         concyclic_quadruple = (i, j, k, ell)
         break

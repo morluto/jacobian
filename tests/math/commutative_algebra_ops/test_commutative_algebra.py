@@ -506,8 +506,7 @@ def test_saturation_result_validation_never_launches_singular(monkeypatch) -> No
         raise AssertionError("result validation must not launch Singular")
 
     monkeypatch.setattr(
-        "jacobian.math.commutative_algebra_ops._singular."
-        "run_singular_ideal_operation",
+        "jacobian.math.commutative_algebra_ops._singular.run_singular_ideal_operation",
         _fail,
     )
     validated = IdealSaturationResult.model_validate(payload)
@@ -521,3 +520,37 @@ def test_detached_saturation_payload_requires_its_request() -> None:
             saturation=_ideal(("x",), {(1,): 1}),
             backend_version="4.4.0",
         )
+
+
+def test_saturation_validation_rejects_detached_source_ideal() -> None:
+    # The reviewer's forgery: the retained request (<xy> : <x>^infinity)
+    # must reject the source ideal <xy> as its own computed saturation.
+    variables = ("x", "y")
+    request = IdealSaturationRequest(
+        ideal=_ideal(variables, {(1, 1): 1}),
+        saturation_polynomial=_polynomial(variables, {(1, 0): 1}),
+    )
+    with pytest.raises(ValidationError, match="exact saturation"):
+        IdealSaturationResult(
+            request=request,
+            outcome="COMPUTED",
+            saturation=_ideal(variables, {(1, 1): 1}),
+            backend_version="4.4.0",
+        )
+
+
+def test_saturation_validation_accepts_equivalent_generators() -> None:
+    # The defining relation is ideal equality, not generator equality: any
+    # generating set of <y> validates against the same retained request.
+    variables = ("x", "y")
+    request = IdealSaturationRequest(
+        ideal=_ideal(variables, {(1, 1): 1}),
+        saturation_polynomial=_polynomial(variables, {(1, 0): 1}),
+    )
+    validated = IdealSaturationResult(
+        request=request,
+        outcome="COMPUTED",
+        saturation=_ideal(variables, {(0, 1): 1}, {(2, 1): Fraction(1, 3)}),
+        backend_version="4.4.0",
+    )
+    assert validated.saturation is not None

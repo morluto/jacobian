@@ -118,7 +118,11 @@ class TestResultBinding:
             _point("D", "5", "1", "7", "1"),
         )
         result = forbidden_patterns(ForbiddenPatternsRequest.model_validate(config))
-        assert (result.collinear_triple.first, result.collinear_triple.second, result.collinear_triple.third) == (0, 1, 2)
+        assert (
+            result.collinear_triple.first,
+            result.collinear_triple.second,
+            result.collinear_triple.third,
+        ) == (0, 1, 2)
         payload = result.model_dump()
         payload["collinear_triple"] = {"first": 0, "second": 1, "third": 3}
         with pytest.raises(ValidationError, match="collinear witness"):
@@ -137,7 +141,11 @@ class TestResultBinding:
 class TestToolsAndExamples:
     @pytest.mark.parametrize(
         "tool",
-        [tool for tool in PROFILE_OPERATIONS if tool.operation_id.endswith("forbidden_patterns.check")],
+        [
+            tool
+            for tool in PROFILE_OPERATIONS
+            if tool.operation_id.endswith("forbidden_patterns.check")
+        ],
         ids=lambda tool: tool.operation_id,
     )
     def test_example_runs_and_reports_no_patterns(self, tool):

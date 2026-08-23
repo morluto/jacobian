@@ -219,16 +219,16 @@ class IdealSaturationRequest(StrictModel):
 
     ideal: RationalPolynomialIdeal = Field(
         description=(
-            'An ideal in at most 6 variables with at most 16 generators and '
-            '256 aggregate terms; generator total degree is at most 12 and '
-            'coefficient components are at most 128 digits.'
+            "An ideal in at most 6 variables with at most 16 generators and "
+            "256 aggregate terms; generator total degree is at most 12 and "
+            "coefficient components are at most 128 digits."
         )
     )
     saturation_polynomial: RationalPolynomial = Field(
         description=(
-            'A single polynomial d in the ideal ring, with '
-            'at most 256 terms, total degree at most 12, and coefficient '
-            'components at most 128 digits.'
+            "A single polynomial d in the ideal ring, with "
+            "at most 256 terms, total degree at most 12, and coefficient "
+            "components at most 128 digits."
         )
     )
     resource_budget: IdealComputationBudget = Field(
@@ -246,9 +246,7 @@ class IdealSaturationRequest(StrictModel):
             label="saturation polynomial",
         )
         if self.saturation_polynomial.variables != self.ideal.variables:
-            raise ValueError(
-                "saturation polynomial must use the ideal's ordered ring"
-            )
+            raise ValueError("saturation polynomial must use the ideal's ordered ring")
         if any(
             sum(term.exponents) > MAX_INPUT_EXPONENT
             for term in self.saturation_polynomial.polynomial.terms
@@ -271,21 +269,32 @@ class IdealSaturationResult(StrictModel):
 
     @model_validator(mode="after")
     def require_outcome_shape(self) -> Self:
-        # Shape-only validation: the bounded Singular call happens exactly
-        # once inside compute_ideal_saturation.  Model validation must stay
-        # free of process execution so deserialization works on hosts
-        # without Singular and never doubles the enforced wall-time budget.
+        # Computed results replay their defining relation against the
+        # retained request using the bounded independent sympy kernel; model
+        # validation never launches Singular so deserialization works on
+        # hosts without it and never doubles the enforced wall-time budget.
         if self.outcome == "COMPUTED":
             if self.saturation is None or self.backend_version is None or self.detail:
                 raise ValueError(
                     "computed saturation requires a value and backend version"
                 )
+            from jacobian.math.commutative_algebra_ops._operations import (
+                verify_saturation_relation,
+            )
+
+            verify_saturation_relation(
+                self.request.ideal,
+                self.request.saturation_polynomial,
+                self.saturation,
+            )
         elif (
             self.saturation is not None
             or self.backend_version is not None
             or not self.detail
         ):
-            raise ValueError("failed saturation computation requires only a safe detail")
+            raise ValueError(
+                "failed saturation computation requires only a safe detail"
+            )
         return self
 
 

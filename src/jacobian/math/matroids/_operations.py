@@ -11,7 +11,9 @@ from jacobian.math.matroids._models import (
 )
 
 
-def _pivot_row(augmented: list[list[int]], col: int, start: int, prime: int) -> int | None:
+def _pivot_row(
+    augmented: list[list[int]], col: int, start: int, prime: int
+) -> int | None:
     """Find the first row at or below ``start`` with a nonzero pivot column."""
     for r in range(start, len(augmented)):
         if augmented[r][col] % prime != 0:
@@ -54,13 +56,16 @@ def _gaussian_rank(matrix: list[list[int]], prime: int) -> int:
     return rank
 
 
-def _column_matrix(matroid: LinearMatroid, column_indices: list[int] | None = None) -> list[list[int]]:
+def _column_matrix(
+    matroid: LinearMatroid, column_indices: list[int] | None = None
+) -> list[list[int]]:
     """Build a column-major matrix from selected columns of the matroid."""
-    cols = column_indices if column_indices is not None else list(range(len(matroid.columns)))
-    return [
-        [matroid.columns[j][i] for j in cols]
-        for i in range(matroid.num_rows)
-    ]
+    cols = (
+        column_indices
+        if column_indices is not None
+        else list(range(len(matroid.columns)))
+    )
+    return [[matroid.columns[j][i] for j in cols] for i in range(matroid.num_rows)]
 
 
 def compute_rank(request: MatroidRankRequest) -> MatroidRankResult:
@@ -88,9 +93,7 @@ def compute_closure(request: MatroidClosureRequest) -> MatroidClosureResult:
         if i in closure:
             continue
         test_subset = sorted(closure | {i})
-        test_rank = _gaussian_rank(
-            _column_matrix(matroid, test_subset), matroid.prime
-        )
+        test_rank = _gaussian_rank(_column_matrix(matroid, test_subset), matroid.prime)
         if test_rank == subset_rank:
             closure.add(i)
 

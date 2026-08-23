@@ -26,10 +26,7 @@ class PinnedDistanceRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_admissible_points(self) -> Self:
-        keys = tuple(
-            (p.x.num, p.x.den, p.y.num, p.y.den)
-            for p in self.points
-        )
+        keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")
         # d^2 = cross(D, P-A)^2 / |D|^2 propagates coordinate heights into a
@@ -44,11 +41,16 @@ class PinnedDistanceRequest(StrictModel):
             dx = sum_heights((xs[i], xs[j]))
             dy = sum_heights((ys[i], ys[j]))
             cross = sum_heights(
-                (dx.product(sum_heights((ys[i], ay))), dy.product(sum_heights((xs[i], ax))))
+                (
+                    dx.product(sum_heights((ys[i], ay))),
+                    dy.product(sum_heights((xs[i], ax))),
+                )
             )
             norm_sq = sum_heights((dx.product(dx), dy.product(dy)))
-            if cross.product(cross).quotient(norm_sq).exceeds(
-                MAX_CANONICAL_RATIONAL_DIGITS
+            if (
+                cross.product(cross)
+                .quotient(norm_sq)
+                .exceeds(MAX_CANONICAL_RATIONAL_DIGITS)
             ):
                 raise ValueError(
                     f"pair ({i}, {j}) has a squared-distance height exceeding "
@@ -135,7 +137,9 @@ def _line_ledger(
     ay = anchor.y.as_fraction()
     pts = [(p.x.as_fraction(), p.y.as_fraction()) for p in points]
 
-    line_map: dict[tuple[str, str, str], tuple[CanonicalRational, list[tuple[int, int]]]] = {}
+    line_map: dict[
+        tuple[str, str, str], tuple[CanonicalRational, list[tuple[int, int]]]
+    ] = {}
     for i in range(len(pts)):
         for j in range(i + 1, len(pts)):
             xi, yi = pts[i]

@@ -39,6 +39,7 @@ from jacobian.math.moments_orthogonal._tools import TOOLS
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _frac(num: int, den: int) -> Fraction:
     return Fraction(num, den)
 
@@ -239,11 +240,48 @@ class TestGaussianQuadrature:
 # ---------------------------------------------------------------------------
 
 
+class TestChristoffelDarbouxResultBound:
+    """Admission must bound the exact kernel, not one maximum width."""
+
+    @staticmethod
+    def _payload(digit_base: int) -> dict:
+        alpha = tuple(
+            {"num": "1", "den": str(10**digit_base + 2 * k + 1)} for k in range(16)
+        )
+        beta = tuple(
+            {"num": "1", "den": str(10**digit_base + 2 * k + 101)} for k in range(16)
+        )
+        return {
+            "coefficients": JacobiCoefficients.model_validate(
+                {
+                    "alpha": [
+                        CanonicalRational.model_validate(value) for value in alpha
+                    ],
+                    "beta": [CanonicalRational.model_validate(value) for value in beta],
+                }
+            ),
+            "x": _cr(0, 1),
+            "y": _cr(0, 1),
+        }
+
+    def test_independent_denominator_accumulation_rejected(self) -> None:
+        # The reviewer's counterexample: sixteen ~900-digit independent
+        # denominators accumulate to a ~40k-digit exact kernel that exceeds
+        # the canonical limit and previously crashed during execution.
+        with pytest.raises(ValidationError, match="result"):
+            ChristoffelDarbouxRequest(**self._payload(899))
+
+    def test_representable_kernel_still_admitted(self) -> None:
+        # Sixteen ~300-digit independent denominators produce an exact
+        # kernel of roughly 13.5k digits: inside the canonical limit.
+        request = ChristoffelDarbouxRequest(**self._payload(300))
+        result = compute_christoffel_darboux(request)
+        assert len(result.kernel.num) > 10_000
+
+
 class TestWireAdapters:
     def test_hankel_wire(self) -> None:
-        request = HankelMatrixRequest(
-            moments=tuple(_cr(1, k) for k in range(1, 8))
-        )
+        request = HankelMatrixRequest(moments=tuple(_cr(1, k) for k in range(1, 8)))
         result = compute_hankel_matrix(request)
         assert result.dimension == 4
         assert isinstance(result, HankelMatrixResult)
@@ -266,6 +304,7 @@ class TestWireAdapters:
         )
         result = compute_jacobi_matrix(request)
         assert isinstance(result, JacobiMatrixResult)
+
     def test_christoffel_darboux_wire(self) -> None:
         request = ChristoffelDarbouxRequest(
             coefficients=JacobiCoefficients(
@@ -298,9 +337,7 @@ class TestWireAdapters:
         serialized = result.model_dump()["coefficients"]
 
         reused = JacobiMatrixRequest(coefficients=result.coefficients)
-        deserialized = JacobiMatrixRequest.model_validate(
-            {"coefficients": serialized}
-        )
+        deserialized = JacobiMatrixRequest.model_validate({"coefficients": serialized})
         kernel = ChristoffelDarbouxRequest.model_validate(
             {
                 "coefficients": serialized,
@@ -315,12 +352,9 @@ class TestWireAdapters:
         assert reused.coefficients is result.coefficients
         assert compute_jacobi_matrix(reused).coefficients == result.coefficients
         assert deserialized.coefficients == result.coefficients
+        assert compute_christoffel_darboux(kernel).coefficients == result.coefficients
         assert (
-            compute_christoffel_darboux(kernel).coefficients == result.coefficients
-        )
-        assert (
-            compute_gaussian_quadrature(quadrature).coefficients
-            == result.coefficients
+            compute_gaussian_quadrature(quadrature).coefficients == result.coefficients
         )
 
     def test_coefficients_reject_invalid_subdiagonal(self) -> None:

@@ -12,12 +12,21 @@ from jacobian.math._rational_height import RationalHeight, sum_heights
 from jacobian.math.geometry._models import RationalPoint2D
 
 
-def _displacement_height(
-    left: CanonicalRational, right: CanonicalRational
-) -> RationalHeight:
-    return sum_heights(
-        (RationalHeight.from_canonical(left), RationalHeight.from_canonical(right))
-    )
+def _inversion_height_bounds(
+    center_x: RationalHeight,
+    center_y: RationalHeight,
+    power: RationalHeight,
+    point_x: RationalHeight,
+    point_y: RationalHeight,
+) -> tuple[RationalHeight, RationalHeight]:
+    """Conservative pre-reduction height bounds for I(p)'s coordinates."""
+    dx = sum_heights((point_x, center_x))
+    dy = sum_heights((point_y, center_y))
+    norm_squared = sum_heights((dx.product(dx), dy.product(dy)))
+    scale = power.quotient(norm_squared)
+    inverted_x = sum_heights((center_x, scale.product(dx)))
+    inverted_y = sum_heights((center_y, scale.product(dy)))
+    return inverted_x, inverted_y
 
 
 def _inversion_result_heights(
@@ -25,25 +34,14 @@ def _inversion_result_heights(
     power: CanonicalRational,
     point: RationalPoint2D,
 ) -> tuple[RationalHeight, RationalHeight]:
-    """Conservative height of I(p) = c + s(p - c)/||p - c||^2 before reduction.
-
-    The admitted domain must be symmetric under unit inversion so every
-    accepted result can be consumed unchanged: inputs are admitted only within
-    half the canonical limit and estimated result heights must stay inside the
-    same half-limit domain, so I(I(p)) for an admitted p is again admitted.
-    """
-
-    dx = _displacement_height(point.x, center.x)
-    dy = _displacement_height(point.y, center.y)
-    norm_squared = sum_heights((dx.product(dx), dy.product(dy)))
-    scale = RationalHeight.from_canonical(power).quotient(norm_squared)
-    inverted_x = sum_heights(
-        (RationalHeight.from_canonical(center.x), scale.product(dx))
+    """Conservative height of I(p) = c + s(p - c)/||p - c||^2 before reduction."""
+    return _inversion_height_bounds(
+        RationalHeight.from_canonical(center.x),
+        RationalHeight.from_canonical(center.y),
+        RationalHeight.from_canonical(power),
+        RationalHeight.from_canonical(point.x),
+        RationalHeight.from_canonical(point.y),
     )
-    inverted_y = sum_heights(
-        (RationalHeight.from_canonical(center.y), scale.product(dy))
-    )
-    return inverted_x, inverted_y
 
 
 _HALF_CANONICAL_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS // 2
@@ -57,7 +55,9 @@ class CircleInversionRequest(StrictModel):
     """
 
     center: RationalPoint2D = Field(description="the inversion center")
-    power: CanonicalRational = Field(description="Positive rational inversion power (squared radius)")
+    power: CanonicalRational = Field(
+        description="Positive rational inversion power (squared radius)"
+    )
     point: RationalPoint2D = Field(description="the point to invert")
 
     @model_validator(mode="after")
@@ -98,6 +98,27 @@ class CircleInversionRequest(StrictModel):
                 "circle inversion results must stay within the "
                 f"{_HALF_CANONICAL_DIGITS}-digit reusable admission domain"
             )
+
+        # Close the domain under the returned point: feeding the exact image
+        # back into the same operation must pass this same validator.  The
+        # image heights are bounded by the estimate above and reduction only
+        # shrinks them, so re-running the estimator on those bounds decides
+        # admissibility of the involutive composition conservatively.
+        composed_x, composed_y = _inversion_height_bounds(
+            RationalHeight.from_canonical(self.center.x),
+            RationalHeight.from_canonical(self.center.y),
+            RationalHeight.from_canonical(self.power),
+            inverted_x,
+            inverted_y,
+        )
+        if composed_x.exceeds(_HALF_CANONICAL_DIGITS) or composed_y.exceeds(
+            _HALF_CANONICAL_DIGITS
+        ):
+            raise ValueError(
+                "circle inversion admission is closed under the returned "
+                "point; the composed inversion would leave the "
+                f"{_HALF_CANONICAL_DIGITS}-digit reusable admission domain"
+            )
         return self
 
 
@@ -120,9 +141,7 @@ class CircleInversionResult(CircleInversionRequest):
         expected_x = CanonicalRational.from_fraction(result[0])
         expected_y = CanonicalRational.from_fraction(result[1])
         if self.inverted_point.x != expected_x or self.inverted_point.y != expected_y:
-            raise ValueError(
-                "inverted_point must be the exact circle-inversion image"
-            )
+            raise ValueError("inverted_point must be the exact circle-inversion image")
         return self
 
 

@@ -81,7 +81,9 @@ class TestMatroidClosure:
 
     def test_closure_is_flat(self):
         """The rank of the closure equals the rank of the subset."""
-        matroid = LinearMatroid(prime=7, num_rows=3, columns=((1, 0, 0), (0, 1, 0), (1, 1, 0), (0, 0, 1)))
+        matroid = LinearMatroid(
+            prime=7, num_rows=3, columns=((1, 0, 0), (0, 1, 0), (1, 1, 0), (0, 0, 1))
+        )
         result = compute_closure(MatroidClosureRequest(matroid=matroid, subset=(0, 1)))
         # The closure should include column 2 (in span of {0,1}) but not 3
         assert result.rank == 2

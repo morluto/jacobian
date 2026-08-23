@@ -35,11 +35,6 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.DROP,
         "cheap deterministic projection of additive.representation_profile.compute",
     ),
-    OperationAdmission(
-        "additive.ordered_difference_profile.compute",
-        AdmissionDecision.KEEP,
-        "complete exact ordered-difference profile with source pairs for finite integer-vector sets",
-    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

@@ -29,19 +29,25 @@ class TestKnownAnswers:
 
     def test_unit_inversion_at_origin(self) -> None:
         # B = (4,0) -> (1/4, 0)
-        qx, qy = invert_point(Fraction(0), Fraction(0), Fraction(1), Fraction(4), Fraction(0))
+        qx, qy = invert_point(
+            Fraction(0), Fraction(0), Fraction(1), Fraction(4), Fraction(0)
+        )
         assert qx == Fraction(1, 4)
         assert qy == Fraction(0)
 
     def test_center_inversion(self) -> None:
         # C = (1,2) -> (1/5, 2/5)
-        qx, qy = invert_point(Fraction(0), Fraction(0), Fraction(1), Fraction(1), Fraction(2))
+        qx, qy = invert_point(
+            Fraction(0), Fraction(0), Fraction(1), Fraction(1), Fraction(2)
+        )
         assert qx == Fraction(1, 5)
         assert qy == Fraction(2, 5)
 
     def test_halfplane_inversion(self) -> None:
         # H = (1, 3/2) -> (4/13, 6/13)
-        qx, qy = invert_point(Fraction(0), Fraction(0), Fraction(1), Fraction(1), Fraction(3, 2))
+        qx, qy = invert_point(
+            Fraction(0), Fraction(0), Fraction(1), Fraction(1), Fraction(3, 2)
+        )
         assert qx == Fraction(4, 13)
         assert qy == Fraction(6, 13)
 
@@ -80,7 +86,9 @@ class TestInvariance:
 class TestRejection:
     def test_center_rejected(self) -> None:
         with pytest.raises(ValueError, match="center"):
-            invert_point(Fraction(0), Fraction(0), Fraction(1), Fraction(0), Fraction(0))
+            invert_point(
+                Fraction(0), Fraction(0), Fraction(1), Fraction(0), Fraction(0)
+            )
 
     def test_zero_power_rejected(self) -> None:
         with pytest.raises(ValidationError):
@@ -130,6 +138,21 @@ class TestReusableDomain:
                 center=_point("0"),
                 power={"num": "1", "den": "1"},
                 point=_point("1", format_canonical_integer(n)),
+            )
+
+    def test_admission_is_closed_under_the_returned_point(self) -> None:
+        # The reviewer's counterexample: with a 4,000-digit N the first
+        # request and its image both fit the half-limit, but re-inverting
+        # that image would exceed it under the conservative estimate.  The
+        # involutive composition must be decided at admission instead.
+        from jacobian.canonical import format_canonical_integer
+
+        n = 10**4000 + 9
+        with pytest.raises(ValidationError, match="closed under the returned point"):
+            CircleInversionRequest(
+                center=_point("0"),
+                power={"num": "1", "den": "1"},
+                point=_point(format_canonical_integer(n), "1"),
             )
 
 

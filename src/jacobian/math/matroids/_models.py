@@ -15,8 +15,7 @@ MAX_ROWS = 16
 def _require_prime(value: int) -> None:
     """Reject composite moduli: the kernel claims GF(p) Fermat inverses."""
     if value < 2 or any(
-        value % divisor == 0
-        for divisor in range(2, int(value**0.5) + 1)
+        value % divisor == 0 for divisor in range(2, int(value**0.5) + 1)
     ):
         raise ValueError("prime must be a prime field modulus")
 
@@ -30,7 +29,9 @@ class LinearMatroid(StrictModel):
 
     prime: int = Field(ge=2, le=10_000)
     num_rows: int = Field(ge=1, le=MAX_ROWS)
-    columns: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=MAX_GROUND_SIZE)
+    columns: tuple[tuple[int, ...], ...] = Field(
+        min_length=1, max_length=MAX_GROUND_SIZE
+    )
 
     @model_validator(mode="after")
     def require_valid_columns(self) -> Self:
@@ -105,7 +106,9 @@ class MatroidClosureResult(MatroidClosureRequest):
                 raise ValueError("closure indices must be in 0..n-1")
         # Replay the bounded closure invariant: closure is subset plus all
         # elements whose rank does not increase the subset's span.
-        subset_rank = _gaussian_rank(_column_matrix(self.matroid, list(self.subset)), self.matroid.prime)
+        subset_rank = _gaussian_rank(
+            _column_matrix(self.matroid, list(self.subset)), self.matroid.prime
+        )
         if self.rank != subset_rank:
             raise ValueError("rank must be the rank of the requested subset")
         # Compute expected closure
@@ -114,7 +117,9 @@ class MatroidClosureResult(MatroidClosureRequest):
             if i in expected:
                 continue
             test = sorted(expected | {i})
-            test_rank = _gaussian_rank(_column_matrix(self.matroid, test), self.matroid.prime)
+            test_rank = _gaussian_rank(
+                _column_matrix(self.matroid, test), self.matroid.prime
+            )
             if test_rank == subset_rank:
                 expected.add(i)
         if set(self.closure) != expected:

@@ -130,7 +130,8 @@ def _cohomology_profile(
 
 
 def compute_group_cohomology(request: GroupCohomologyRequest) -> GroupCohomologyResult:
-    """Compute H^n(G, GF(p)) with trivial action via the exact bar complex.
+    """Compute H^n(G, GF(p)) with trivial action via the exact unnormalized
+    inhomogeneous bar complex.
 
     The cochain groups are C^n = {functions G^n -> GF(p)} of dimension
     |G|^n (reported as ``cochain_dimension``) and the inhomogeneous bar

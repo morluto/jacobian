@@ -13,7 +13,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "group_cohomology.cohomology.compute",
         AdmissionDecision.KEEP,
-        "exact group cohomology with trivial coefficients via the normalized bar complex over GF(p)",
+        "exact group cohomology with trivial coefficients via the unnormalized inhomogeneous bar complex over GF(p)",
     ),
 )
 

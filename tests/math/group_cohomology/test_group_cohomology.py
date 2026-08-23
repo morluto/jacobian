@@ -163,6 +163,28 @@ class TestExactBarComplex:
         )
 
 
+class TestDeclarationContract:
+    """The declaration must describe the implemented complex."""
+
+    def test_description_names_unnormalized_inhomogeneous_complex(self):
+        from jacobian.math.group_cohomology._tools import TOOLS
+
+        assert len(TOOLS) == 1
+        description = TOOLS[0].description.lower()
+        assert "unnormalized inhomogeneous bar complex" in description
+        assert "the normalized bar complex" not in description
+
+    def test_reported_dimensions_match_unnormalized_construction(self):
+        """Unnormalized C^n = {functions G^n -> GF(p)} has dimension |G|^n."""
+        request = GroupCohomologyRequest(
+            group=PermutationGroup(degree=2, generators=((1, 0),)),
+            prime=2,
+            max_degree=2,
+        )
+        result = compute_group_cohomology(request)
+        assert [g.cochain_dimension for g in result.groups] == [1, 2, 4]
+
+
 class TestResultBinding:
     """Results retain their source request and replay the bar complex."""
 

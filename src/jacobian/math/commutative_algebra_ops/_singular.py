@@ -112,7 +112,7 @@ def _script(
         if right is None:
             raise ValueError("saturation requires a saturation polynomial ideal")
         declarations.append(_singular_ideal("jacobian_right", right))
-        operation_line = "ideal jacobian_result=sat(jacobian_left,jacobian_right[1]);"
+        operation_line = "ideal jacobian_result=sat(jacobian_left,jacobian_right);"
     else:
         if right is None:
             raise ValueError("quotient requires a divisor ideal")

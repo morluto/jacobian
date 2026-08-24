@@ -103,15 +103,15 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _operation(
         "number_theory.prime_affine_forms.local_factor.compute",
         "Compute one prime-affine local factor",
-        "For a finite tuple of primitive integer affine forms and one bounded "
-        "prime p, return the complete residue partition modulo p and the exact "
-        "Hardy-Littlewood local factor (1-nu_p/p)/(1-1/p)^k.",
+        "For a finite tuple of primitive affine forms and one bounded modulus "
+        "p, return the complete residue partition and the exact Hardy-Littlewood "
+        "density term (1-nu_p/p)/(1-1/p)^k.",
         PrimeTupleLocalFactorRequest,
         PrimeTupleLocalFactorResult,
         compute_local_factor,
         "number-theory",
-        "prime-tuple",
-        "local-factor",
+        "local-obstruction",
+        "hardy-littlewood",
         "exact",
         examples=(
             example(

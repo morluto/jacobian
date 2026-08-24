@@ -173,12 +173,16 @@ def _reachability_public_path_work_bound(automaton: BottomUpTreeAutomaton) -> in
 
     The MCP request boundary performs one profile for request admission, one
     for execution, and one for source-bound result replay.  Each of those
-    three invocations starts by evaluating its own execution bound, whose
-    saturation probe measures the convergence depth before any witness is
-    materialized, and evaluating the public-path bound itself runs one more
-    such probe.  The public path therefore performs four probes' worth of
-    sorting and scanning across three profiles plus three witness
-    materializations, all charged against the shared
+    three invocations sorts the transitions twice -- once inside its own
+    execution-bound evaluation, whose saturation probe measures the
+    convergence depth before any witness is materialized, and once when the
+    kernel sorts rows for its actual profile -- so together with the sort
+    performed while evaluating this very public bound the path performs seven
+    sorts in total, not one per profile.  Each invocation also runs two
+    probes' worth of scanning (its bound-evaluation probe plus its actual
+    saturation), so with the public bound's own probe the path again performs
+    seven probes' worth of scanning across three witness materializations,
+    all charged against the shared
     ``MAX_TREE_AUTOMATON_REACHABILITY_WORK`` envelope instead of escaping the
     budget.  Native calls perform one profile and are priced by
     ``_reachability_execution_work_bound`` alone.
@@ -186,7 +190,7 @@ def _reachability_public_path_work_bound(automaton: BottomUpTreeAutomaton) -> in
 
     sort_work, per_scan_work, scan_rounds = _reachability_price_components(automaton)
     witness_work = 3 * MAX_REACHABILITY_WITNESS_NODES
-    return 4 * sort_work + 7 * scan_rounds * per_scan_work + 3 * witness_work
+    return 7 * sort_work + 7 * scan_rounds * per_scan_work + 3 * witness_work
 
 
 def _transition_key(

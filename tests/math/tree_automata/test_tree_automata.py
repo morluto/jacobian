@@ -653,8 +653,8 @@ class TestValidation:
         assert per_profile <= 30_000_000
 
         public_path = _reachability_public_path_work_bound(automaton)
-        assert public_path == 4 * 983_040 + 7 * 2 * per_scan_work + 3 * 3 * 4096
-        assert public_path == 7_927_552
+        assert public_path == 7 * 983_040 + 7 * 2 * per_scan_work + 3 * 3 * 4096
+        assert public_path == 10_876_672
         assert public_path <= 30_000_000
 
         result = compute_tree_automaton_reachability(
@@ -758,9 +758,29 @@ class TestValidation:
 
         public_path = _reachability_public_path_work_bound(automaton)
         assert public_path > 3 * _reachability_execution_work_bound(automaton)
-        assert public_path == 37_989_220
+        assert public_path == 40_938_340
         assert public_path > 30_000_000
 
+        with pytest.raises(ValidationError, match="reachability work bound"):
+            TreeAutomatonReachabilityRequest(automaton=automaton)
+
+    def test_public_path_charges_all_seven_transition_sorts(self):
+        automaton = _seeded_chain_with_padded_rows(11)
+
+        _, per_scan_work, scan_rounds = _reachability_price_components(automaton)
+        assert scan_rounds == 12
+        per_profile = _reachability_execution_work_bound(automaton)
+        assert per_profile == 8_846_784
+        assert per_profile <= 30_000_000
+
+        public_path = _reachability_public_path_work_bound(automaton)
+        assert (
+            public_path == 7 * 983_040 + 7 * scan_rounds * per_scan_work + 3 * 3 * 4096
+        )
+        assert public_path == 30_957_600
+        assert public_path > 30_000_000
+
+        assert isinstance(reachable_state_profile(automaton), ReachableStateProfile)
         with pytest.raises(ValidationError, match="reachability work bound"):
             TreeAutomatonReachabilityRequest(automaton=automaton)
 
@@ -774,7 +794,7 @@ class TestValidation:
         assert per_profile <= 30_000_000
 
         public_path = _reachability_public_path_work_bound(automaton)
-        assert public_path == 33_999_444
+        assert public_path == 36_948_564
         assert public_path > 30_000_000
 
         assert isinstance(reachable_state_profile(automaton), ReachableStateProfile)

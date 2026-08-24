@@ -416,10 +416,11 @@ class FacetIncidenceRequest(StrictModel):
             "so admission requires n*C(m,d) <= "
             f"{MAX_FACET_SIGN_TESTS} candidate-side tests, where m is the number of "
             "distinct rows and every candidate is tested against all n source rows, "
-            f"in each of execution and exact result replay "
-            f"({MAX_FACET_TOTAL_SIGN_TESTS} total), and applies the cyclic-polytope "
-            "upper bound to the distinct rows to prove the complete facet and "
-            "incidence result fits its published limits."
+            "in each of execution and exact result replay "
+            f"({MAX_FACET_TOTAL_SIGN_TESTS} total). The bounded enumeration "
+            "materializes the complete profile, whose exact facet and incidence "
+            f"counts must fit the {MAX_COMPUTED_FACETS}-facet and "
+            f"{MAX_FACET_INCIDENCES}-incidence result limits."
         ),
     )
     dimension_bound: int = Field(

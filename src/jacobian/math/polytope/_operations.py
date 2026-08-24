@@ -152,9 +152,13 @@ def _require_facet_preflight(vertices: tuple[Vertex, ...], dim: int) -> None:
                 "require intrinsic affine coordinates"
             )
     # Repeated source rows create neither candidate hyperplanes nor facets,
-    # so the candidate enumeration and facet upper bound run on the
-    # distinct rows; every side test and incidence index still ranges over
-    # all source positions.
+    # so the candidate enumeration runs on the distinct rows; every side
+    # test and incidence index still ranges over all source positions. The
+    # facet and incidence result bounds cannot be derived from the row
+    # counts alone -- interior and other non-extreme rows inflate every
+    # vertex-count upper bound while contributing no facets -- so they are
+    # enforced exactly on the materialized profile this bounded
+    # enumeration produces (see ``_computed_facets_from_vertices``).
     distinct_points = _deduplicate_source_rows(points)
     candidate_count = math.comb(len(distinct_points), dim)
     side_tests = len(points) * candidate_count
@@ -163,34 +167,6 @@ def _require_facet_preflight(vertices: tuple[Vertex, ...], dim: int) -> None:
             "facet enumeration exceeds the "
             f"{MAX_FACET_SIGN_TESTS}-side-test bound "
             f"({side_tests} > {MAX_FACET_SIGN_TESTS})"
-        )
-    # McMullen's upper-bound theorem bounds the number of facets of every
-    # d-polytope with n vertices by the cyclic-polytope count below. The
-    # vertex count is the distinct source rows, and multiplying by the
-    # total row count bounds the complete source-incidence matrix before
-    # enumeration starts.
-    if dim == 1:
-        facet_upper_bound = 2
-    elif dim % 2 == 0:
-        half_dimension = dim // 2
-        facet_upper_bound = math.comb(
-            len(distinct_points) - half_dimension, half_dimension
-        ) + math.comb(len(distinct_points) - half_dimension - 1, half_dimension - 1)
-    else:
-        half_dimension = dim // 2
-        facet_upper_bound = 2 * math.comb(
-            len(distinct_points) - half_dimension - 1, half_dimension
-        )
-    if facet_upper_bound > MAX_COMPUTED_FACETS:
-        raise ValueError(
-            "facet profile can exceed the "
-            f"{MAX_COMPUTED_FACETS}-facet result bound "
-            f"({facet_upper_bound} > {MAX_COMPUTED_FACETS})"
-        )
-    if len(points) * facet_upper_bound > MAX_FACET_INCIDENCES:
-        raise ValueError(
-            "facet profile can exceed the "
-            f"{MAX_FACET_INCIDENCES}-incidence result bound"
         )
 
 

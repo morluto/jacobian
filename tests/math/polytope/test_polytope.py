@@ -10,6 +10,8 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.polytope._models import (
+    MAX_COMPUTED_FACETS,
+    MAX_FACET_INCIDENCES,
     MAX_FACET_SIGN_TESTS,
     MAX_FACET_TOTAL_SIGN_TESTS,
     MAX_FACETS,
@@ -92,6 +94,17 @@ class TestFacetIncidence:
         description = schema["properties"]["vertices"]["description"]
         assert str(MAX_FACET_SIGN_TESTS) in description
         assert str(MAX_FACET_TOTAL_SIGN_TESTS) in description
+
+    def test_schema_publishes_where_the_result_bounds_attach(self) -> None:
+        """The facet and incidence caps are enforced exactly on the
+        materialized profile of the bounded enumeration; the request schema
+        must say so rather than promise a row-count upper-bound proof that
+        no admission step performs."""
+        schema = FacetIncidenceRequest.model_json_schema()
+
+        description = schema["properties"]["vertices"]["description"]
+        assert f"{MAX_COMPUTED_FACETS}-facet" in description
+        assert f"{MAX_FACET_INCIDENCES}-incidence" in description
 
     def test_unit_square_returns_canonical_complete_source_incidences(self) -> None:
         vertices = (
@@ -303,20 +316,54 @@ class TestFacetIncidence:
         with pytest.raises(ValidationError, match="side-test bound"):
             FacetIncidenceRequest(vertices=vertices)
 
-    def test_facet_result_upper_bound_rejects_before_enumeration(self) -> None:
-        distinct = [_v(*((0, 1),) * 7)]
-        for axis in range(7):
-            unit = [(0, 1)] * 7
-            unit[axis] = (1, 1)
-            distinct.append(_v(*unit))
-            doubled = [(0, 1)] * 7
-            doubled[axis] = (2, 1)
-            distinct.append(_v(*doubled))
-        distinct.append(_v(*([(1, 2)] * 7)))
-        vertices = tuple(distinct) + (_v(*((0, 1),) * 7),) * 48
+    def test_interior_source_rows_are_admitted_and_bind_no_facet(self) -> None:
+        """Reviewer counterexample: a 7-simplex plus eight distinct strict
+        interior points (1/k, ..., 1/k) for k = 9..16 needs only
+        16*C(16,7) = 183040 candidate-side tests and its exact profile has
+        eight facets. Deduplication cannot remove interior rows, so the
+        cyclic-polytope upper bound on all distinct rows (440 > 256) must
+        not reject this safely bounded request."""
+        simplex = (
+            _v(*((0, 1) for _ in range(7))),
+            *(
+                _v(*((1 if index == axis else 0, 1) for axis in range(7)))
+                for index in range(7)
+            ),
+        )
+        unpadded = _facet_profile(simplex)
+        vertices = simplex + tuple(_v(*(((1, k),) * 7)) for k in range(9, 17))
 
-        with pytest.raises(ValidationError, match="facet result bound"):
-            FacetIncidenceRequest(vertices=vertices)
+        result = _facet_profile(vertices)
+
+        assert len(result.facets) == len(unpadded.facets) == 8
+        assert {facet.halfspace for facet in result.facets} == {
+            facet.halfspace for facet in unpadded.facets
+        }
+        assert sorted(
+            {
+                index
+                for facet in result.facets
+                for index in facet.source_vertex_indices
+            }
+        ) == list(range(8))
+
+    def test_cyclic_profile_beyond_the_facet_cap_is_rejected_after_enumeration(
+        self,
+    ) -> None:
+        """The moment-curve polytope with 15 vertices in d = 7 attains the
+        upper-bound-theorem count of 330 facets: its bounded enumeration is
+        admitted at 15*C(15,7) side tests, and the materialized profile is
+        then rejected against the published facet result limit instead of
+        any preflight row-count estimate."""
+        vertices = tuple(
+            _v(*((t**k, 1) for k in range(1, 8))) for t in range(1, 16)
+        )
+        request = FacetIncidenceRequest(vertices=vertices)
+
+        with pytest.raises(
+            ValueError, match=f"{MAX_COMPUTED_FACETS}-facet result bound"
+        ):
+            compute_facet_incidence(request)
 
     def test_padded_seven_simplex_admits_distinct_candidates_and_binds_every_row(
         self,

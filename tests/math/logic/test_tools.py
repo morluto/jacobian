@@ -695,9 +695,7 @@ def test_smt_request_admits_a_bv_named_symbol_outside_index_context_and_solves()
     assert result.model_smtlib is not None
 
 
-def test_solver_declarations_advertise_version_three_for_the_widened_envelope() -> (
-    None
-):
+def test_solver_declarations_advertise_version_three_for_the_widened_envelope() -> None:
     versions = {
         tool.operation_id: tool.version
         for tool in TOOLS
@@ -716,9 +714,7 @@ def test_smt_request_schema_publishes_the_structural_limits() -> None:
     assert (
         f"declared symbols at most {operations._MAX_SMTLIB_DECLARATIONS}" in description
     )
-    assert (
-        f"at most {operations._MAX_SMTLIB_NUMERAL_DIGITS} digits" in description
-    )
+    assert f"at most {operations._MAX_SMTLIB_NUMERAL_DIGITS} digits" in description
 
 
 def test_smt_request_rejects_more_than_the_declaration_budget() -> None:

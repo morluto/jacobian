@@ -367,6 +367,16 @@ def test_astral_scalar_symbols_round_trip_through_both_directions() -> None:
     assert inverse_row_insertion_rsk(pair) == word
 
 
+def test_comparison_bound_boundary_word_round_trips() -> None:
+    letters = ("b",) * 64 + ("a",)
+    word = FiniteWord(alphabet=("a", "b"), letters=letters)
+    pair = row_insertion_rsk(word)
+    assert pair.insertion_tableau.rows == ((1,) + (2,) * 63, (2,))
+    assert pair.recording_tableau.rows == (tuple(range(1, 65)), (65,))
+    assert pair.shape.parts == (64, 1)
+    assert inverse_row_insertion_rsk(pair) == word
+
+
 def test_rsk_request_schema_publishes_convention_and_work_envelope() -> None:
     schema = RSKWordRequest.model_json_schema()
     assert schema["properties"]["convention"]["const"] == "ROW_INSERTION_RSK_V1"
@@ -377,7 +387,7 @@ def test_rsk_request_schema_publishes_convention_and_work_envelope() -> None:
     assert "38400 UTF-8 bytes" in description
     assert "2N" in schema["description"]
     assert "4950" in schema["description"]
-    assert "six integer" in schema["description"]
+    assert "seven integer" in schema["description"]
     assert "comparisons per search" in schema["description"]
 
     inverse_schema = RSKInverseWordRequest.model_json_schema()

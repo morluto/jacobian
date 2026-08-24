@@ -226,7 +226,9 @@ def _expanded_node_count(term: Term, binding_sizes: dict[int, int]) -> int:
     """Node count of ``apply_substitution(term, ...)`` without materializing it."""
     if term.is_variable:
         return binding_sizes.get(term.symbol, 1)
-    return 1 + sum(_expanded_node_count(child, binding_sizes) for child in term.children)
+    return 1 + sum(
+        _expanded_node_count(child, binding_sizes) for child in term.children
+    )
 
 
 def _admit_critical_pair_result_envelope(rules: tuple[RewriteRule, ...]) -> int:
@@ -274,9 +276,7 @@ def _admit_critical_pair_result_envelope(rules: tuple[RewriteRule, ...]) -> int:
                     ),
                     binding_sizes,
                 )
-                remaining -= _expanded_node_count(
-                    standardized_outer.rhs, binding_sizes
-                )
+                remaining -= _expanded_node_count(standardized_outer.rhs, binding_sizes)
                 if remaining < 0:
                     raise ValueError(_RESULT_NODES_EXCEEDED)
     return MAX_CRITICAL_PAIR_RESULT_NODES - remaining

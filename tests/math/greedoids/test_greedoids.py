@@ -94,6 +94,16 @@ def test_catalog_contains_only_audited_agent_outcomes() -> None:
 
 
 class TestRecognize:
+    def test_empty_ground_with_its_empty_feasible_set_is_a_greedoid(self) -> None:
+        result = compute_recognize(
+            RecognizeRequest(system=FiniteFeasibleSetSystem(ground=(), feasible=((),)))
+        )
+
+        assert result.status == "GREEDOID"
+        assert result.rank == 0
+        assert result.bases == ((),)
+        assert result.ground_size == 0
+
     def test_two_element_antimatroid_is_greedoid(self) -> None:
         result = compute_recognize(RecognizeRequest(system=_two_element_antimatroid()))
         assert result.status == "GREEDOID"

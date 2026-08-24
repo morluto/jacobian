@@ -23,6 +23,7 @@ ROOT_MATH_DOMAINS = (
     "combinatorial_maps",
     "combinatorial_matrices",
     "combinatorics",
+    "delta_matroids",
     "diophantine_approximation",
     "finite_abelian_groups",
     "finite_fields",

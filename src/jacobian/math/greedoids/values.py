@@ -55,7 +55,7 @@ class FiniteFeasibleSetSystem(StrictModel):
     infeasibility, not unknown.
     """
 
-    ground: tuple[str, ...] = Field(min_length=1)
+    ground: tuple[str, ...] = Field()
     feasible: tuple[tuple[int, ...], ...] = Field(default=())
 
     @model_validator(mode="after")

@@ -127,7 +127,7 @@ def _generator_orbits(
 GRAPH_SYMMETRY_OPERATIONS: MathTools = (
     MathTool(
         operation_id="graph.symmetry.generator_orbits.compute",
-        version="6",
+        version="7",
         title="Exact declared graph-symmetry orbit partitions",
         description=(
             "Validate explicit color-preserving graph automorphism generators "
@@ -135,7 +135,10 @@ GRAPH_SYMMETRY_OPERATIONS: MathTools = (
             "generated subgroup. Each generator is a total vertex permutation "
             "declared as (vertex, image) pairs covering every declared vertex "
             "once in the graph's declared vertex order; generator identifiers "
-            "and declared colors must already be normalized to Unicode NFC."
+            "and declared colors must already be normalized to Unicode NFC. "
+            "The result retains its complete declared source request, so "
+            "request validation rejects any request whose complete canonical "
+            "result would exceed Jacobian's canonical output limit."
         ),
         request_type=GraphSymmetryOrbitRequest,
         result_type=GraphSymmetryOrbitResult,

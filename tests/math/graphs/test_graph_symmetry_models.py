@@ -20,7 +20,7 @@ from jacobian.math.graphs.symmetry._models import (
     GraphSymmetryOrbitRequest,
     GraphSymmetryOrbitResult,
     GraphVertexOrbit,
-    _estimate_orbit_result_wire_bytes,
+    _orbit_result_canonical_wire_bytes,
 )
 from jacobian.math.graphs.symmetry._operations import _generator_orbits
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -129,18 +129,22 @@ def test_graph_symmetry_request_admission_bounds_retained_source_output() -> Non
     The canonical colored-graph value caps every retained string at 64
     UTF-8 bytes and the operation admits at most 64 generators, so even the
     maximal request's echoed source plus priced orbit result stays inside
-    the canonical output limit while the strict estimate upper-bounds the
-    actual canonicalized wire size.
+    the canonical output limit while the wire-size function equals the
+    actual canonicalized result size.
     """
+
+    from jacobian.math.graphs.symmetry._operations import _generator_orbits
 
     payload = _wide_orbit_payload(MAX_GRAPH_SYMMETRY_GENERATORS)
     assert len(encode_strict_json(payload)) <= CanonicalLimits().max_input_bytes
 
     request = GraphSymmetryOrbitRequest.model_validate(payload)
-    encoded = canonicalize_json(request.model_dump(mode="json"))
-    assert len(encoded) <= _estimate_orbit_result_wire_bytes(request)
+    result = _generator_orbits(request)
+    encoded = canonicalize_json(result.model_dump(mode="json"))
+    assert _orbit_result_canonical_wire_bytes(request) == len(encoded)
     assert (
-        _estimate_orbit_result_wire_bytes(request) <= CanonicalLimits().max_output_bytes
+        _orbit_result_canonical_wire_bytes(request)
+        <= CanonicalLimits().max_output_bytes
     )
 
 
@@ -152,7 +156,7 @@ def test_graph_symmetry_admitted_request_result_fits_canonical_output() -> None:
 
     encoded = canonicalize_json(result.model_dump(mode="json"))
     assert len(encoded) <= CanonicalLimits().max_output_bytes
-    assert len(encoded) <= _estimate_orbit_result_wire_bytes(request)
+    assert len(encoded) == _orbit_result_canonical_wire_bytes(request)
 
 
 def test_graph_symmetry_admission_estimate_bounds_actual_result_wire() -> None:
@@ -163,7 +167,7 @@ def test_graph_symmetry_admission_estimate_bounds_actual_result_wire() -> None:
 
     actual = len(canonicalize_json(result.model_dump(mode="json")))
     assert actual > 0
-    assert _estimate_orbit_result_wire_bytes(request) >= actual
+    assert _orbit_result_canonical_wire_bytes(request) == actual
 
 
 def test_graph_symmetry_request_admits_result_near_output_limit() -> None:
@@ -181,7 +185,7 @@ def test_graph_symmetry_request_admits_result_near_output_limit() -> None:
 
     encoded = canonicalize_json(result.model_dump(mode="json"))
     assert len(encoded) <= CanonicalLimits().max_output_bytes
-    assert len(encoded) <= _estimate_orbit_result_wire_bytes(request)
+    assert len(encoded) == _orbit_result_canonical_wire_bytes(request)
 
 
 def test_transitive_action_charges_only_possible_representatives() -> None:
@@ -236,9 +240,9 @@ def test_transitive_action_charges_only_possible_representatives() -> None:
     assert result.vertex_orbit_count == 1
     assert result.edge_orbit_count == 16
     encoded = canonicalize_json(result.model_dump(mode="json"))
-    estimate = _estimate_orbit_result_wire_bytes(request)
+    estimate = _orbit_result_canonical_wire_bytes(request)
     limit = CanonicalLimits().max_output_bytes
-    assert len(encoded) <= estimate <= limit
+    assert estimate == len(encoded) <= limit
     assert limit - len(encoded) > 2 * 1024 * 1024
 
 
@@ -265,9 +269,9 @@ def test_colored_singleton_orbits_price_exact_fixed_structure() -> None:
     assert result.vertex_orbit_count == 256
     assert result.edge_orbit_count == 4096
     encoded = canonicalize_json(result.model_dump(mode="json"))
-    estimate = _estimate_orbit_result_wire_bytes(request)
+    estimate = _orbit_result_canonical_wire_bytes(request)
     limit = CanonicalLimits().max_output_bytes
-    assert len(encoded) <= estimate <= limit
+    assert estimate == len(encoded) <= limit
     assert limit - len(encoded) >= 40_000
 
 
@@ -298,10 +302,9 @@ def test_singleton_orbit_separators_price_from_computed_blocks() -> None:
     assert result.vertex_orbit_count == 256
     assert result.edge_orbit_count == 4096
     encoded = canonicalize_json(result.model_dump(mode="json"))
-    estimate = _estimate_orbit_result_wire_bytes(request)
+    estimate = _orbit_result_canonical_wire_bytes(request)
     limit = CanonicalLimits().max_output_bytes
-    assert len(encoded) <= limit
-    assert len(encoded) <= estimate <= limit
+    assert estimate == len(encoded) <= limit
 
 
 def test_graph_symmetry_estimate_bounds_heterogeneous_representatives() -> None:
@@ -328,8 +331,8 @@ def test_graph_symmetry_estimate_bounds_heterogeneous_representatives() -> None:
     result = _generator_orbits(request)
 
     actual = len(canonicalize_json(result.model_dump(mode="json")))
-    estimate = _estimate_orbit_result_wire_bytes(request)
-    assert actual <= estimate <= CanonicalLimits().max_output_bytes
+    estimate = _orbit_result_canonical_wire_bytes(request)
+    assert actual == estimate <= CanonicalLimits().max_output_bytes
 
 
 def test_graph_symmetry_request_requires_nfc_generator_identifiers() -> None:
@@ -444,7 +447,7 @@ def test_graph_symmetry_nfc_request_wire_matches_canonicalized_result() -> None:
 
     dumped = result.model_dump(mode="json")
     assert len(encode_strict_json(dumped)) == len(canonicalize_json(dumped))
-    assert _estimate_orbit_result_wire_bytes(request) >= len(canonicalize_json(dumped))
+    assert _orbit_result_canonical_wire_bytes(request) == len(canonicalize_json(dumped))
 
 
 def test_graph_symmetry_result_rejects_incomplete_orbit_partition() -> None:
@@ -674,3 +677,160 @@ def test_graph_symmetry_result_rejects_color_modes_contradicting_source() -> Non
 
     with pytest.raises(ValidationError, match="retained source vertex colors"):
         GraphSymmetryOrbitResult.model_validate(uncolored_payload)
+
+
+def test_orbit_result_wire_size_is_exact_across_partition_shapes() -> None:
+    """The wire-size function equals the canonicalized result byte for byte.
+
+    Admission prices every fixed and variable component of the retained
+    result exactly - no reserve, no per-orbit padding - so this invariant
+    must hold across singleton partitions, transitive actions, rational-key
+    labels, colored axes, and the empty graph alike.
+    """
+
+    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+
+    def den_num() -> dict[str, Any]:
+        return {
+            "graph": {"graph": {"vertices": ["den", "num"], "edges": [["den", "num"]]}},
+            "generators": [
+                {
+                    "generator_id": "identity",
+                    "mapping": [["den", "den"], ["num", "num"]],
+                }
+            ],
+        }
+
+    def empty() -> dict[str, Any]:
+        return {"graph": {"graph": {"vertices": [], "edges": []}}, "generators": []}
+
+    def mixed_orbits() -> dict[str, Any]:
+        payload = _path_request()
+        payload["generators"] = [
+            payload["generators"][0],
+            {
+                "generator_id": "identity",
+                "mapping": [["a", "a"], ["b", "b"], ["c", "c"]],
+            },
+        ]
+        return payload
+
+    def colored_singletons() -> dict[str, Any]:
+        payload = _wide_orbit_payload(14)
+        payload["graph"]["vertex_colors"] = [  # type: ignore[index]
+            "c"
+            for vertex in payload["graph"]["graph"]["vertices"]  # type: ignore[index]
+        ]
+        payload["graph"]["edge_colors"] = [  # type: ignore[index]
+            "colors"
+            for edge in payload["graph"]["graph"]["edges"]  # type: ignore[index]
+        ]
+        return payload
+
+    payloads = [
+        ("path_reflection", _path_request()),
+        ("den_num_identity", den_num()),
+        ("empty_graph", empty()),
+        ("reflection_plus_identity", mixed_orbits()),
+        ("maximal_generators", _wide_orbit_payload(MAX_GRAPH_SYMMETRY_GENERATORS)),
+        ("colored_singletons", colored_singletons()),
+    ]
+    for name, payload in payloads:
+        request = GraphSymmetryOrbitRequest.model_validate(payload)
+        result = _generator_orbits(request)
+        encoded = canonicalize_json(result.model_dump(mode="json"))
+        assert _orbit_result_canonical_wire_bytes(request) == len(encoded), name
+        assert len(encoded) <= CanonicalLimits().max_output_bytes
+
+
+def test_graph_symmetry_admits_fifteen_character_color_boundary() -> None:
+    """The stacked reviewer shape must be priced without reserve padding.
+
+    The reported boundary replaces one-character vertex colors with valid
+    15-character NFC colors on the maximal singleton payload with six-
+    character edge colors; a flat envelope reserve on top of otherwise
+    exact pricing rejected such fitting requests.
+    """
+
+    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+
+    payload = _wide_orbit_payload(14)
+    payload["graph"]["vertex_colors"] = [  # type: ignore[index]
+        "c" * 15
+        for vertex in payload["graph"]["graph"]["vertices"]  # type: ignore[index]
+    ]
+    payload["graph"]["edge_colors"] = [  # type: ignore[index]
+        "colors"
+        for edge in payload["graph"]["graph"]["edges"]  # type: ignore[index]
+    ]
+    request = GraphSymmetryOrbitRequest.model_validate(payload)
+    result = _generator_orbits(request)
+
+    assert result.vertex_orbit_count == 256
+    assert result.edge_orbit_count == 4096
+    encoded = canonicalize_json(result.model_dump(mode="json"))
+    assert _orbit_result_canonical_wire_bytes(request) == len(encoded)
+    assert len(encoded) <= CanonicalLimits().max_output_bytes
+
+
+def test_graph_symmetry_admission_flips_exactly_at_the_output_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Headroom admission must reject precisely when the true result overflows.
+
+    A flat reserve rejected requests whose exact result still fit the
+    transport envelope. With pricing exact, admission accepts when the
+    configured limit equals the complete canonical serialization and
+    rejects one byte below it.
+    """
+
+    import jacobian.math.graphs.symmetry._models as symmetry_models
+
+    request = GraphSymmetryOrbitRequest.model_validate(_wide_orbit_payload(14))
+    actual = _orbit_result_canonical_wire_bytes(request)
+
+    monkeypatch.setattr(
+        symmetry_models,
+        "CanonicalLimits",
+        lambda **kwargs: CanonicalLimits(max_output_bytes=actual),
+    )
+    assert GraphSymmetryOrbitRequest.model_validate(_wide_orbit_payload(14))
+
+    monkeypatch.setattr(
+        symmetry_models,
+        "CanonicalLimits",
+        lambda **kwargs: CanonicalLimits(max_output_bytes=actual - 1),
+    )
+    with pytest.raises(ValidationError, match="canonical output limit"):
+        GraphSymmetryOrbitRequest.model_validate(_wide_orbit_payload(14))
+
+
+def test_graph_symmetry_operation_declares_version_seven() -> None:
+    """The source-bound wire contract is not compatible with advertised v6.
+
+    v6 clients saw an object-shaped generator mapping and no required
+    ``source`` field on results; this contract requires ordered pairs and
+    binds every result to its declared source, so the declaration must
+    advertise a new version.
+    """
+
+    from jacobian.catalog.models import MathTool
+    from jacobian.math.graphs.symmetry._operations import GRAPH_SYMMETRY_OPERATIONS
+
+    (declaration,) = GRAPH_SYMMETRY_OPERATIONS
+    assert isinstance(declaration, MathTool)
+    assert declaration.version == "7"
+
+
+def test_graph_symmetry_schema_publishes_aggregate_output_envelope() -> None:
+    """math.find readers must see the aggregate retained-result bound."""
+
+    from jacobian.math.graphs.symmetry._operations import GRAPH_SYMMETRY_OPERATIONS
+
+    schema = GraphSymmetryOrbitRequest.model_json_schema()
+    assert "canonical output limit" in schema["description"]
+    assert "retains" in schema["description"]
+
+    (declaration,) = GRAPH_SYMMETRY_OPERATIONS
+    assert "canonical" in declaration.description
+    assert "output limit" in declaration.description

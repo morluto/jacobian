@@ -303,3 +303,58 @@ def test_union_closed_true_for_antimatroid() -> None:
 def test_feasible_continuations() -> None:
     cont = greedoids.feasible_continuations(_two_element_antimatroid(), frozenset({0}))
     assert set(cont) == {1}
+
+
+# ---------------------------------------------------------------------------
+# Native carrier admission
+# ---------------------------------------------------------------------------
+
+
+class TestNativeCarrierAdmission:
+    """Native entry points enforce the same envelope as their requests."""
+
+    def _over_row_budget_system(self) -> FiniteFeasibleSetSystem:
+        feasible = []
+        for mask in range(1, 4098):
+            feasible.append(tuple(i for i in range(13) if (mask >> i) & 1))
+        return FiniteFeasibleSetSystem(
+            ground=tuple(f"e{index}" for index in range(13)),
+            feasible=tuple(feasible),
+        )
+
+    def test_recognize_rejects_family_over_row_budget(self) -> None:
+        system = self._over_row_budget_system()
+        assert isinstance(system, FiniteFeasibleSetSystem)
+        with pytest.raises(ValueError, match="feasible-set count"):
+            greedoids.recognize(system)
+
+    def test_union_closed_rejects_family_over_row_budget(self) -> None:
+        with pytest.raises(ValueError, match="feasible-set count"):
+            greedoids.union_closed(self._over_row_budget_system())
+
+    def test_native_entries_reject_ground_over_budget(self) -> None:
+        system = FiniteFeasibleSetSystem(
+            ground=tuple(f"e{index}" for index in range(65)),
+            feasible=((),),
+        )
+        calls = (
+            lambda s: greedoids.recognize(s),
+            lambda s: greedoids.union_closed(s),
+            lambda s: greedoids.rank(s),
+            lambda s: greedoids.bases(s),
+            lambda s: greedoids.feasible_continuations(s, frozenset()),
+            lambda s: greedoids.basic_word_profile(s, ()),
+            lambda s: greedoids.antimatroid_to_convex_geometry(s),
+        )
+        for call in calls:
+            with pytest.raises(ValueError, match="ground size"):
+                call(system)
+
+    def test_boundary_carrier_still_recognized(self) -> None:
+        system = FiniteFeasibleSetSystem(
+            ground=tuple(f"e{index}" for index in range(64)),
+            feasible=((),),
+        )
+        result = greedoids.recognize(system)
+        assert result["status"] == "GREEDOID"
+        assert result["rank"] == 0

@@ -10,7 +10,10 @@ from jacobian.math.matrices.rational_linear._models import (
     LinearRationalSolutionResult,
     LinearRationalSystem,
 )
-from jacobian.math.optimization._models import RationalLinearProgramResult
+from jacobian.math.optimization._models import (
+    RationalLinearProgramResult,
+    StandardFormRationalLinearProgram,
+)
 
 
 def _system() -> dict[str, object]:
@@ -76,15 +79,30 @@ def test_inline_results_preserve_completed_no_candidate_outcomes() -> None:
         )
 
 
+def _linear_program() -> dict[str, object]:
+    return {
+        "variables": ["x"],
+        "objective": [_q(1)],
+        "coefficients": [[_q(1)]],
+        "rhs": [_q(1)],
+    }
+
+
 def test_linear_program_outcomes_only_carry_their_mathematical_data() -> None:
+    program = StandardFormRationalLinearProgram.model_validate(_linear_program())
+    with pytest.raises(ValidationError, match="requires a Farkas witness"):
+        RationalLinearProgramResult(status="INFEASIBLE", program=program)
     with pytest.raises(ValidationError, match="cannot carry a point"):
         RationalLinearProgramResult(
             status="INFEASIBLE",
+            program=program,
+            farkas_witness=(_q(1),),
             primal_candidate=(_q(1),),
         )
     with pytest.raises(ValidationError, match="only an optimal"):
         RationalLinearProgramResult(
             status="PRIMAL_FEASIBLE",
+            program=program,
             primal_candidate=(_q(1),),
             primal_objective=_q(1),
             primal_residuals=(_q(0),),

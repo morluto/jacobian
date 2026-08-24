@@ -55,31 +55,39 @@ def test_rational_linear_operations_return_mathematical_outcomes() -> None:
 
 def test_rational_linear_program_returns_an_optimum_not_a_certificate() -> None:
     operation = OPTIMIZATION_TOOLS[0]
-    result = operation.run(
-        RationalLinearProgramRequest.model_validate(
-            {
-                "program": {
-                    "variables": ["x"],
-                    "objective": [q(1)],
-                    "coefficients": [[q(1)]],
-                    "rhs": [q(1)],
-                }
+    request = RationalLinearProgramRequest.model_validate(
+        {
+            "program": {
+                "variables": ["x"],
+                "objective": [q(1)],
+                "coefficients": [[q(1)]],
+                "rhs": [q(1)],
             }
-        )
+        }
     )
+    result = operation.run(request)
 
     assert result.status == "OPTIMAL"
-    # Guard the public wire shape: an optimum carries exactly the primal/dual
-    # fields and no certificate, assurance, or other non-mathematical metadata.
+    assert result.program == request.program
+    # Guard the public wire shape: an optimum carries exactly the source
+    # program and the primal/dual fields, with no certificate, assurance,
+    # or other non-mathematical metadata.
     assert set(result.model_dump(mode="json")) == {
         "status",
+        "program",
         "primal_candidate",
         "dual_candidate",
         "primal_objective",
         "dual_objective",
         "primal_residuals",
         "dual_slacks",
+        "farkas_witness",
+        "feasible_point",
+        "recession_direction",
     }
+    assert result.farkas_witness is None
+    assert result.feasible_point is None
+    assert result.recession_direction is None
     assert [v.model_dump(mode="json") for v in result.primal_candidate] == [q(1)]
     assert [v.model_dump(mode="json") for v in result.dual_candidate] == [q(1)]
     assert result.primal_objective.model_dump(mode="json") == q(1)

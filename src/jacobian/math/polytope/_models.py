@@ -37,8 +37,9 @@ limit for the complete returned profile.
 MAX_FACET_SIGN_TESTS = 5_000_000
 """Maximum candidate-hyperplane/vertex side tests in one enumeration pass."""
 
-MAX_FACET_TOTAL_SIGN_TESTS = 2 * MAX_FACET_SIGN_TESTS
-"""Maximum candidate-side tests for execution and exact result replay together."""
+MAX_FACET_TOTAL_SIGN_TESTS = 3 * MAX_FACET_SIGN_TESTS
+"""Maximum candidate-side tests for request admission, execution, and exact
+result replay together."""
 
 MAX_COMPUTED_FACETS = 256
 """Maximum number of canonical facets materialized by one result."""
@@ -416,10 +417,11 @@ class FacetIncidenceRequest(StrictModel):
             "so admission requires n*C(m,d) <= "
             f"{MAX_FACET_SIGN_TESTS} candidate-side tests, where m is the number of "
             "distinct rows and every candidate is tested against all n source rows, "
-            "in each of execution and exact result replay "
-            f"({MAX_FACET_TOTAL_SIGN_TESTS} total). The bounded enumeration "
-            "materializes the complete profile, whose exact facet and incidence "
-            f"counts must fit the {MAX_COMPUTED_FACETS}-facet and "
+            "in each of request admission, execution, and exact result replay "
+            f"({MAX_FACET_TOTAL_SIGN_TESTS} total). Admission materializes the "
+            "complete bounded enumeration before accepting a request, so its exact "
+            f"facet and incidence counts are proven to fit the "
+            f"{MAX_COMPUTED_FACETS}-facet and "
             f"{MAX_FACET_INCIDENCES}-incidence result limits."
         ),
     )
@@ -446,9 +448,13 @@ class FacetIncidenceRequest(StrictModel):
                     max_digits=MAX_FACET_COORDINATE_DIGITS,
                     label="facet-profile vertex coordinate",
                 )
-        from jacobian.math.polytope._operations import _require_facet_preflight
+        from jacobian.math.polytope._operations import _computed_facets_from_vertices
 
-        _require_facet_preflight(self.vertices, dimension)
+        # Materializing the complete bounded enumeration here proves the
+        # facet and incidence result bounds during request validation, so an
+        # admitted request cannot discover an oversized profile only in the
+        # execution backend.
+        _computed_facets_from_vertices(self.vertices, dimension)
         return self
 
 

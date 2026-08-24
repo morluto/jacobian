@@ -88,7 +88,7 @@ def _facet_profile(vertices: tuple[Vertex, ...]) -> FacetIncidenceResult:
 
 
 class TestFacetIncidence:
-    def test_schema_exposes_the_execution_and_replay_budget(self) -> None:
+    def test_schema_exposes_the_admission_execution_and_replay_budget(self) -> None:
         schema = FacetIncidenceRequest.model_json_schema()
 
         description = schema["properties"]["vertices"]["description"]
@@ -97,9 +97,10 @@ class TestFacetIncidence:
 
     def test_schema_publishes_where_the_result_bounds_attach(self) -> None:
         """The facet and incidence caps are enforced exactly on the
-        materialized profile of the bounded enumeration; the request schema
-        must say so rather than promise a row-count upper-bound proof that
-        no admission step performs."""
+        materialized profile of the bounded enumeration -- which request
+        admission itself runs -- and the schema must say so rather than
+        promise a row-count upper-bound proof that no admission step
+        performs."""
         schema = FacetIncidenceRequest.model_json_schema()
 
         description = schema["properties"]["vertices"]["description"]
@@ -343,21 +344,21 @@ class TestFacetIncidence:
             {index for facet in result.facets for index in facet.source_vertex_indices}
         ) == list(range(8))
 
-    def test_cyclic_profile_beyond_the_facet_cap_is_rejected_after_enumeration(
+    def test_cyclic_profile_beyond_the_facet_cap_is_rejected_at_request_admission(
         self,
     ) -> None:
         """The moment-curve polytope with 15 vertices in d = 7 attains the
         upper-bound-theorem count of 330 facets: its bounded enumeration is
-        admitted at 15*C(15,7) side tests, and the materialized profile is
-        then rejected against the published facet result limit instead of
-        any preflight row-count estimate."""
+        within the 15*C(15,7) side-test budget, and admission materializes
+        that enumeration so the profile is rejected against the published
+        facet result limit as a typed request error -- not accepted and
+        failed only inside execution."""
         vertices = tuple(_v(*((t**k, 1) for k in range(1, 8))) for t in range(1, 16))
-        request = FacetIncidenceRequest(vertices=vertices)
 
         with pytest.raises(
-            ValueError, match=f"{MAX_COMPUTED_FACETS}-facet result bound"
+            ValidationError, match=f"{MAX_COMPUTED_FACETS}-facet result bound"
         ):
-            compute_facet_incidence(request)
+            FacetIncidenceRequest(vertices=vertices)
 
     def test_padded_seven_simplex_admits_distinct_candidates_and_binds_every_row(
         self,

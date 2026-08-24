@@ -55,8 +55,11 @@ POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "inequality as the shared half-space value plus the complete "
         "source-row incidence. For d <= 6 each row composes verbatim into "
         "polytope.volume.compute; that consumer caps dimension at 6 and "
-        "rejects d = 7 rows. The exact bounded SymPy kernel enumerates "
-        "candidates once and the source-bound result replays once.",
+        "rejects d = 7 rows. Request admission materializes the complete "
+        "bounded enumeration, enforcing the published facet and incidence "
+        "result limits before a request is accepted; the exact bounded "
+        "SymPy kernel then computes that profile and the source-bound "
+        "result replays it.",
         FacetIncidenceRequest,
         FacetIncidenceResult,
         compute_facet_incidence,

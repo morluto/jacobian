@@ -1,0 +1,156 @@
+"""Exact rational Hermitian matrices with explicit subsystem coordinates."""
+
+from __future__ import annotations
+
+from fractions import Fraction
+from itertools import product
+from math import prod
+from typing import Literal, Self
+
+from pydantic import Field, model_validator
+
+from jacobian._models import StrictModel
+from jacobian.math.matrices.values import RationalMatrix
+
+MAX_SUBSYSTEM_FACTORS = 4
+MAX_SUBSYSTEM_DIMENSION = 16
+MAX_SUBSYSTEM_LABEL_LENGTH = 64
+
+
+class MatrixSubsystem(StrictModel):
+    """One named finite subsystem in an ordered product basis."""
+
+    label: str = Field(
+        min_length=1,
+        max_length=MAX_SUBSYSTEM_LABEL_LENGTH,
+        description="Unique identifier of this subsystem within one ordered product.",
+    )
+    dimension: int = Field(
+        ge=1,
+        le=MAX_SUBSYSTEM_DIMENSION,
+        description="Dimension of this finite subsystem basis.",
+    )
+
+
+class FactorizedHermitianMatrix(StrictModel):
+    """A rational Hermitian matrix on an explicitly ordered subsystem product.
+
+    ``factors`` describes both rows and columns.  Product coordinates use the
+    lexicographic convention in which the final factor varies fastest.  Over
+    ``QQ`` Hermitian means symmetric, so no complex-conjugation convention is
+    implicit in this value.
+    """
+
+    factorized_hermitian_matrix_schema_version: Literal["1"] = "1"
+    matrix: RationalMatrix = Field(
+        description="Square symmetric rational coordinates in the declared product basis."
+    )
+    factors: tuple[MatrixSubsystem, ...] = Field(
+        max_length=MAX_SUBSYSTEM_FACTORS,
+        description=(
+            "Unique ordered subsystem factors whose dimensions multiply to the "
+            "matrix order; an empty tuple denotes the scalar 1x1 context."
+        ),
+    )
+    basis_linearization: Literal["LEXICOGRAPHIC_LAST_FACTOR_FASTEST"] = Field(
+        default="LEXICOGRAPHIC_LAST_FACTOR_FASTEST",
+        description=(
+            "Product-basis order: lexicographic coordinates with the final "
+            "factor varying fastest."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_factorized_symmetric_square_matrix(self) -> Self:
+        if len({factor.label for factor in self.factors}) != len(self.factors):
+            raise ValueError("subsystem factor labels must be unique")
+        dimension = prod((factor.dimension for factor in self.factors), start=1)
+        if dimension > MAX_SUBSYSTEM_DIMENSION:
+            raise ValueError(
+                "subsystem product dimension exceeds the "
+                f"{MAX_SUBSYSTEM_DIMENSION} bound"
+            )
+        if len(self.matrix.entries) != dimension or any(
+            len(row) != dimension for row in self.matrix.entries
+        ):
+            raise ValueError(
+                "matrix shape must equal the ordered subsystem product dimension"
+            )
+        if any(
+            self.matrix.entries[row][column] != self.matrix.entries[column][row]
+            for row in range(dimension)
+            for column in range(row)
+        ):
+            raise ValueError("a rational Hermitian matrix must be symmetric")
+        return self
+
+
+def partial_trace_entries(
+    matrix: FactorizedHermitianMatrix,
+    traced_factor_labels: tuple[str, ...],
+) -> tuple[tuple[Fraction, ...], ...]:
+    """Return the exact trace over named factors in the declared product basis."""
+
+    positions = {
+        factor.label: position for position, factor in enumerate(matrix.factors)
+    }
+    traced_positions = tuple(positions[label] for label in traced_factor_labels)
+    kept_positions = tuple(
+        position
+        for position in range(len(matrix.factors))
+        if position not in traced_positions
+    )
+    dimensions = tuple(factor.dimension for factor in matrix.factors)
+    traced_dimensions = tuple(dimensions[position] for position in traced_positions)
+    kept_dimensions = tuple(dimensions[position] for position in kept_positions)
+    source = tuple(
+        tuple(entry.as_fraction() for entry in row) for row in matrix.matrix.entries
+    )
+
+    def flat_index(coordinates: tuple[int, ...]) -> int:
+        index = 0
+        for coordinate, dimension in zip(coordinates, dimensions, strict=True):
+            index = index * dimension + coordinate
+        return index
+
+    kept_coordinates = tuple(
+        product(*(range(dimension) for dimension in kept_dimensions))
+    )
+    traced_coordinates = tuple(
+        product(*(range(dimension) for dimension in traced_dimensions))
+    )
+    rows: list[tuple[Fraction, ...]] = []
+    for row_coordinates in kept_coordinates:
+        row: list[Fraction] = []
+        for column_coordinates in kept_coordinates:
+            total = Fraction(0)
+            for trace_coordinates in traced_coordinates:
+                source_row = [0] * len(dimensions)
+                source_column = [0] * len(dimensions)
+                for position, coordinate in zip(
+                    kept_positions, row_coordinates, strict=True
+                ):
+                    source_row[position] = coordinate
+                for position, coordinate in zip(
+                    kept_positions, column_coordinates, strict=True
+                ):
+                    source_column[position] = coordinate
+                for position, coordinate in zip(
+                    traced_positions, trace_coordinates, strict=True
+                ):
+                    source_row[position] = coordinate
+                    source_column[position] = coordinate
+                total += source[flat_index(tuple(source_row))][
+                    flat_index(tuple(source_column))
+                ]
+            row.append(total)
+        rows.append(tuple(row))
+    return tuple(rows)
+
+
+__all__ = [
+    "MAX_SUBSYSTEM_DIMENSION",
+    "MAX_SUBSYSTEM_FACTORS",
+    "FactorizedHermitianMatrix",
+    "MatrixSubsystem",
+]

@@ -33,8 +33,10 @@ class DifferentialOperatorApplyRequest(StrictModel):
     iterations: StrictInt = Field(
         default=1,
         ge=0,
+        le=(1 << 53) - 1,
         description=(
-            "Finite exponent k in D^k(f). Zero returns the source unchanged. "
+            "Finite exponent k in D^k(f), inside the strict-JSON "
+            "interoperable integer range. Zero returns the source unchanged. "
             "Admission is derived per request rather than fixed: requests whose "
             "exact result needs no operator-power expansion - guaranteed "
             "annihilation, the identity operator, and one-term zeroth-order "

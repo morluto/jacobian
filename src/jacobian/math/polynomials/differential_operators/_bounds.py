@@ -743,6 +743,26 @@ def _expansion_support_candidates(
         raise ValueError(
             "differential-operator power exceeds the expanded-support budget"
         )
+    # The coarse deterministic-work gate uses conservative candidate bounds so
+    # requests whose expansion cannot fit the work budget reject before any
+    # per-pair candidate scanning runs.
+    source_terms = len(polynomial.polynomial.terms)
+    coarse_candidates = source_terms * expanded_terms
+    maximum_operator_order = max(sum(term.orders) for term in operator.terms)
+    derivative_order = min(
+        _total_degree(polynomial),
+        iterations * maximum_operator_order,
+    )
+    power_work = _operator_power_work(term_count, iterations, maximum_axis_orders)
+    derivative_work = source_terms * expanded_terms * (1 + derivative_order)
+    conversion_work = 2 * (source_terms + term_count + coarse_candidates)
+    if (
+        2 * (power_work + derivative_work) + conversion_work
+        > MAX_APPLICATION_WORK_UNITS
+    ):
+        raise ValueError(
+            "differential-operator application exceeds the deterministic work budget"
+        )
     # A powered aggregate acts on a source monomial only when every axis
     # order stays within that monomial's exponents, so the candidate support
     # counts acting aggregates per source monomial instead of treating

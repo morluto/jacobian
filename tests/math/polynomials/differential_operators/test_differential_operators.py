@@ -1474,7 +1474,7 @@ def test_signed_unit_scalars_short_circuit_by_exponent_parity() -> None:
     variables = ("x",)
     source = _polynomial(variables, {(5,): 3})
     negation = _operator(variables, {(0,): -1})
-    even_iterations = 2**1_000_000
+    even_iterations = 2**52
     odd_iterations = even_iterations + 1
 
     even = compute_differential_operator_application(
@@ -1498,6 +1498,18 @@ def test_signed_unit_scalars_short_circuit_by_exponent_parity() -> None:
     )
     assert odd.output == _polynomial(variables, {(5,): -3})
     assert odd.matches_expected is True
+
+
+def test_iterations_stay_inside_the_interoperable_integer_range() -> None:
+    schema = DifferentialOperatorApplyRequest.model_json_schema()
+    assert schema["properties"]["iterations"]["maximum"] == (1 << 53) - 1
+
+    with pytest.raises(ValidationError, match="less than or equal"):
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(("x",), {(0,): 1}),
+            operator=_operator(("x",), {(0,): 1}),
+            iterations=1 << 53,
+        )
 
 
 def test_coefficient_growth_boundary_is_admitted_then_rejected() -> None:

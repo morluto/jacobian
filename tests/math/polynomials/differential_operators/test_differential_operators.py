@@ -534,10 +534,10 @@ def test_no_growth_derivative_mixed_survival_and_annihilation_keeps_heights() ->
 
 def test_merged_unit_paths_still_gate_at_the_coefficient_budget() -> None:
     variables = ("x", "y")
-    tall = 10**32_767
+    tall = 6 * 10**32_767
 
     # Under 1 + ∂x the monomials x·y and y both contribute a unit-height
-    # copy to the output monomial y, so its merged coefficient 2·10^32767
+    # copy to the output monomial y, so its merged coefficient 12·10^32767
     # carries 32,769 digits even though each path alone preserves height.
     with pytest.raises(ValidationError, match="coefficient-digit budget"):
         DifferentialOperatorApplyRequest(

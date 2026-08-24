@@ -150,11 +150,15 @@ def _merged_unit_power_weights(
 
     weights: dict[tuple[int, ...], int] = {}
     visited = 0
+    work = 0
     frames: list[tuple[int, int, tuple[int, ...], int, int]] = [
         (0, iterations, (0,) * len(operator.variables), 0, 1)
     ]
     while frames:
         index, remaining, shift, chosen, weight = frames.pop()
+        work += 1
+        if work > ENUMERATION_WORK_CAP:
+            return None
         if index == len(operator.terms):
             if remaining:
                 continue

@@ -7,7 +7,6 @@ def test_exact_public_api_symbols() -> None:
     expected = (
         "ContainmentProfileResult",
         "IncidenceMomentComparison",
-        "IncidenceMultiplicityDifference",
         "IncidenceStructure",
         "IncidenceTradeResult",
         "check_incidence_trade",

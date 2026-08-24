@@ -275,16 +275,22 @@ class ContainmentProfileResult(StrictModel):
 
 
 class IncidenceMultiplicityDifference(StrictModel):
-    """One nonzero fixed-subset multiplicity difference between two families."""
+    """One nonzero fixed-subset multiplicity difference between two families.
+
+    Subset labels are distinct; the enclosing ``IncidenceMomentComparison``
+    owns the point-axis binding and member ordering.
+    """
 
     subset: tuple[str, ...] = Field(min_length=1, max_length=MAX_TRADE_ORDER)
     left_multiplicity: StrictInt = Field(ge=0, le=MAX_BLOCKS)
     right_multiplicity: StrictInt = Field(ge=0, le=MAX_BLOCKS)
 
     @model_validator(mode="after")
-    def require_nonzero_difference(self) -> Self:
+    def require_nonzero_difference_with_distinct_labels(self) -> Self:
         if self.left_multiplicity == self.right_multiplicity:
             raise ValueError("a sparse multiplicity difference must be nonzero")
+        if len(set(self.subset)) != len(self.subset):
+            raise ValueError("difference subsets must have distinct labels")
         return self
 
 
@@ -297,7 +303,7 @@ class IncidenceMomentComparison(StrictModel):
     not exceed its declared total, and ``left_total - right_total`` equals
     the sum of ``left_multiplicity - right_multiplicity`` over the sparse
     differences, because every omitted subset carries equal nonnegative
-    multiplicity on both sides.
+    multiplicity on both sides bounded by the omitted-subset capacity.
     """
 
     points: tuple[str, ...] = Field(min_length=1, max_length=MAX_POINTS)
@@ -350,6 +356,14 @@ class IncidenceMomentComparison(StrictModel):
         if self.left_total - self.right_total != total_difference:
             raise ValueError(
                 "moment totals must equal the sum of sparse multiplicity differences"
+            )
+        residual = self.left_total - left_subtotal
+        omitted_capacity = (
+            comb(len(self.points), self.order) - len(self.differences)
+        ) * MAX_BLOCKS
+        if residual > omitted_capacity:
+            raise ValueError(
+                "moment residual totals must not exceed the omitted-subset capacity"
             )
         return self
 

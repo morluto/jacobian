@@ -10,7 +10,6 @@ from pydantic import ValidationError
 from jacobian.math.incidence_structures import (
     ContainmentProfileResult,
     IncidenceMomentComparison,
-    IncidenceMultiplicityDifference,
     IncidenceStructure,
     IncidenceTradeResult,
     check_incidence_trade,
@@ -19,6 +18,7 @@ from jacobian.math.incidence_structures import (
 from jacobian.math.incidence_structures._models import (
     MAX_TRADE_ORDER,
     ContainmentProfileRequest,
+    IncidenceMultiplicityDifference,
     IncidenceTradeRequest,
 )
 from jacobian.math.incidence_structures._operations import compute_incidence_trade
@@ -359,6 +359,57 @@ def test_zero_residual_moment_comparison_is_accepted_standalone() -> None:
     )
 
     assert (comparison.left_total, comparison.right_total) == (2, 1)
+
+
+def test_moment_residual_at_omitted_capacity_is_accepted_standalone() -> None:
+    differences = (
+        IncidenceMultiplicityDifference(
+            subset=("a",),
+            left_multiplicity=100,
+            right_multiplicity=0,
+        ),
+    )
+
+    at_capacity = IncidenceMomentComparison(
+        points=("a", "b"),
+        order=1,
+        left_total=200,
+        right_total=100,
+        differences=differences,
+        equal=False,
+    )
+    assert (at_capacity.left_total, at_capacity.right_total) == (200, 100)
+
+    with pytest.raises(ValidationError, match="omitted-subset capacity"):
+        IncidenceMomentComparison(
+            points=("a", "b"),
+            order=1,
+            left_total=201,
+            right_total=101,
+            differences=differences,
+            equal=False,
+        )
+
+
+def test_forged_residual_totals_without_omitted_subsets_are_rejected() -> None:
+    with pytest.raises(ValidationError, match="omitted-subset capacity"):
+        IncidenceMomentComparison(
+            points=("a",),
+            order=2,
+            left_total=1,
+            right_total=1,
+            differences=(),
+            equal=True,
+        )
+
+
+def test_forged_repeated_labels_in_difference_values_are_rejected() -> None:
+    with pytest.raises(ValidationError, match="distinct labels"):
+        IncidenceMultiplicityDifference(
+            subset=("a", "a"),
+            left_multiplicity=1,
+            right_multiplicity=0,
+        )
 
 
 def test_forged_equal_totals_with_sparse_differences_are_rejected() -> None:

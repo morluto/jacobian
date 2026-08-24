@@ -3,7 +3,6 @@
 from jacobian.math.incidence_structures._models import (
     ContainmentProfileResult,
     IncidenceMomentComparison,
-    IncidenceMultiplicityDifference,
     IncidenceStructure,
     IncidenceTradeResult,
 )
@@ -15,7 +14,6 @@ from jacobian.math.incidence_structures.operations import (
 __all__ = [
     "ContainmentProfileResult",
     "IncidenceMomentComparison",
-    "IncidenceMultiplicityDifference",
     "IncidenceStructure",
     "IncidenceTradeResult",
     "check_incidence_trade",

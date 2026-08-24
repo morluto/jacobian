@@ -51,15 +51,23 @@ def _rescale_only(
 
     if not operator.terms or not polynomial.polynomial.terms:
         return False
-    return all(
-        any(
-            order > exponent
-            for order, exponent in zip(term.orders, monomial.exponents, strict=True)
-        )
-        for term in operator.terms
-        if any(term.orders)
-        for monomial in polynomial.polynomial.terms
-    )
+    work = 0
+    for term in operator.terms:
+        if not any(term.orders):
+            continue
+        for monomial in polynomial.polynomial.terms:
+            work += 1
+            if work > ENUMERATION_WORK_CAP:
+                # The scan itself must stay inside the admission envelope;
+                # falling back to the expansion regime keeps every request
+                # bounded by its declared work gate.
+                return False
+            if all(
+                order <= exponent
+                for order, exponent in zip(term.orders, monomial.exponents, strict=True)
+            ):
+                return False
+    return True
 
 
 def _total_degree(polynomial: RationalPolynomial) -> int:
@@ -430,80 +438,123 @@ def _max_coefficient_digits(polynomial: RationalPolynomial) -> int:
 _OVERFLOW_BITS = 1 << 40
 
 
+def _shift_weights(
+    operator: ConstantCoefficientDifferentialOperator,
+    iterations: int,
+    support_cap: int,
+) -> dict[tuple[int, ...], Fraction] | None:
+    """Enumerate exact rational weights per distinct shift of the power.
+
+    Weights carry operator coefficients and multinomial multiplicities
+    exactly. Returns ``None`` when enumeration exceeds ``support_cap``
+    distinct shifts or the work cap.
+    """
+
+    terms = tuple(
+        (term.orders, term.coefficient.as_fraction()) for term in operator.terms
+    )
+    if not terms:
+        return None
+    zero_shift = tuple(0 for _ in range(len(terms[0][0])))
+    weights = {zero_shift: Fraction(1)}
+    work = 1
+    for _ in range(iterations):
+        merged: dict[tuple[int, ...], Fraction] = {}
+        exhausted = False
+        for shift, weight in weights.items():
+            for orders, coefficient in terms:
+                shifted = tuple(
+                    current + order
+                    for current, order in zip(shift, orders, strict=True)
+                )
+                contribution = weight * coefficient
+                entry = merged.get(shifted)
+                merged[shifted] = (
+                    contribution if entry is None else entry + contribution
+                )
+                work += 1
+                if len(merged) > support_cap or work > ENUMERATION_WORK_CAP:
+                    exhausted = True
+                    break
+            if exhausted:
+                break
+        if exhausted:
+            return None
+        weights = merged
+    return weights
+
+
 def _per_exponent_height_bits(
     polynomial: RationalPolynomial,
     operator: ConstantCoefficientDifferentialOperator,
     iterations: int,
-    powered_orders: tuple[tuple[int, ...], ...],
+    support_cap: int,
 ) -> tuple[int, int] | None:
     """Bound output coefficient heights per colliding exponent class.
 
-    Contributions merge only when differentiated source monomials land on the
-    same output exponent, so denominators are combined per exponent class via
-    their exact least common multiple instead of one global source LCM.
-    Returns ``None`` when the accounting itself would overflow its cap, in
-    which case the caller falls back to the coarser global bound.
+    The powered operator is enumerated once with exact rational weights per
+    shift (operator coefficients and multinomial multiplicities included), so
+    no global operator LCM enters: contributions merge only when
+    differentiated source monomials land on the same output exponent, and
+    each class combines denominators through its own least common multiple.
+    Returns ``None`` when the accounting would exceed its enumeration or size
+    caps, in which case the caller falls back to the coarser global bound.
     """
 
     cap = 64 * MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS
-    op_denominator, op_numerator = _common_denominator_height(
-        term.coefficient.as_fraction() for term in operator.terms
-    )
-    op_numerator_bits = _multiplier_bit_bound(op_numerator, iterations)
-    op_denominator_bits = _multiplier_bit_bound(op_denominator, iterations)
-    multiplicity_bits = _multiplier_bit_bound(len(operator.terms), iterations)
+    weights = _shift_weights(operator, iterations, support_cap)
+    if weights is None:
+        return None
     classes: dict[tuple[int, ...], tuple[int, int, int]] = {}
-    for orders in powered_orders:
+    for shift, weight in weights.items():
+        weight_numerator = abs(weight.numerator)
+        weight_denominator = weight.denominator
+        if weight_numerator.bit_length() > cap or weight_denominator.bit_length() > cap:
+            return None
         for source_term in polynomial.polynomial.terms:
             if any(
                 order > exponent
-                for order, exponent in zip(orders, source_term.exponents, strict=True)
+                for order, exponent in zip(shift, source_term.exponents, strict=True)
             ):
                 continue
             target = tuple(
                 exponent - order
-                for exponent, order in zip(source_term.exponents, orders, strict=True)
+                for exponent, order in zip(source_term.exponents, shift, strict=True)
             )
             falling_bits = sum(
                 _multiplier_bit_bound(exponent, order)
-                for exponent, order in zip(source_term.exponents, orders, strict=True)
+                for exponent, order in zip(source_term.exponents, shift, strict=True)
             )
             fraction = source_term.coefficient.as_fraction()
+            class_denominator = weight_denominator * fraction.denominator
+            scaled_numerator = weight_numerator * fraction.numerator
             entry = classes.get(target)
             if entry is None:
-                if (
-                    fraction.denominator.bit_length() > cap
-                    or abs(fraction.numerator).bit_length() > cap
-                ):
+                if class_denominator.bit_length() > cap:
                     return None
                 classes[target] = (
-                    fraction.denominator,
-                    abs(fraction.numerator),
+                    class_denominator,
+                    abs(scaled_numerator),
                     falling_bits,
                 )
                 continue
             lcm, numerator_sum, max_falling = entry
-            new_lcm = math.lcm(lcm, fraction.denominator)
+            new_lcm = math.lcm(lcm, class_denominator)
             scaled_existing = numerator_sum * (new_lcm // lcm)
-            scaled_new = abs(fraction.numerator) * (new_lcm // fraction.denominator)
-            merged = scaled_existing + scaled_new
-            if new_lcm.bit_length() > cap or merged.bit_length() > cap:
+            scaled_new = abs(scaled_numerator) * (new_lcm // class_denominator)
+            total = scaled_existing + scaled_new
+            if new_lcm.bit_length() > cap or total.bit_length() > cap:
                 return None
             classes[target] = (
                 new_lcm,
-                merged,
+                total,
                 max(max_falling, falling_bits),
             )
     worst_numerator_bits = 0
     worst_denominator_bits = 0
     for lcm, numerator_sum, max_falling in classes.values():
-        denominator_bits = lcm.bit_length() + op_denominator_bits
-        numerator_bits = (
-            numerator_sum.bit_length()
-            + op_numerator_bits
-            + multiplicity_bits
-            + max_falling
-        )
+        denominator_bits = lcm.bit_length()
+        numerator_bits = numerator_sum.bit_length() + max_falling
         worst_numerator_bits = max(worst_numerator_bits, numerator_bits)
         worst_denominator_bits = max(worst_denominator_bits, denominator_bits)
     return worst_numerator_bits, worst_denominator_bits
@@ -514,7 +565,7 @@ def _coefficient_digit_bound(
     operator: ConstantCoefficientDifferentialOperator,
     iterations: int,
     candidate_terms: int,
-    powered_orders: tuple[tuple[int, ...], ...] | None,
+    support_cap: int,
 ) -> int:
     if iterations == 0:
         return _max_coefficient_digits(polynomial)
@@ -544,18 +595,17 @@ def _coefficient_digit_bound(
     )
     shared_denominator_bits = _multiplier_bit_bound(operator_denominator, iterations)
 
-    if powered_orders is not None:
-        per_exponent = _per_exponent_height_bits(
-            polynomial,
-            operator,
-            iterations,
-            powered_orders,
+    per_exponent = _per_exponent_height_bits(
+        polynomial,
+        operator,
+        iterations,
+        support_cap,
+    )
+    if per_exponent is not None:
+        return max(
+            _decimal_digits_from_bits(per_exponent[0]),
+            _decimal_digits_from_bits(per_exponent[1]),
         )
-        if per_exponent is not None:
-            return max(
-                _decimal_digits_from_bits(per_exponent[0]),
-                _decimal_digits_from_bits(per_exponent[1]),
-            )
 
     source_denominator, source_numerator = _common_denominator_height(
         term.coefficient.as_fraction() for term in polynomial.polynomial.terms
@@ -879,7 +929,7 @@ def validate_application_envelope(
         expanded_terms = 0
         candidate_terms = len(polynomial.polynomial.terms)
     else:
-        expanded_terms, candidate_terms, powered_orders = _expansion_support_candidates(
+        expanded_terms, candidate_terms, _ = _expansion_support_candidates(
             polynomial,
             operator,
             iterations,
@@ -907,7 +957,7 @@ def validate_application_envelope(
             operator,
             iterations,
             candidate_terms,
-            powered_orders if not rescale_only else None,
+            MAX_APPLICATION_OUTPUT_TERMS if not rescale_only else 0,
         )
     if coefficient_digits > MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS:
         raise ValueError(

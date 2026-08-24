@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Self
 
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_VERTICES = 100
 MAX_EDGES = 100
@@ -205,38 +207,46 @@ class IncidenceGraphResult(StrictModel):
 
 
 class CliqueExpansionRequest(StrictModel):
-    """Request the clique expansion (2-section) of a hypergraph."""
+    """Request the clique expansion (2-section) of a hypergraph.
+
+    The expansion is emitted as the domain-owned canonical
+    ``SimpleUndirectedGraph``, whose value requires NFC-normalized vertex
+    labels; hypergraphs whose declared labels are not NFC are outside this
+    operation's admitted domain.
+    """
 
     hypergraph: FiniteHypergraph
+
+    @model_validator(mode="after")
+    def require_nfc_vertex_labels(self) -> Self:
+        if any(
+            not unicodedata.is_normalized("NFC", vertex)
+            for vertex in self.hypergraph.vertices
+        ):
+            raise ValueError("clique expansion requires NFC-normalized vertex labels")
+        return self
 
 
 class CliqueExpansionResult(StrictModel):
     """The primal/2-section graph of a finite hypergraph.
 
-    Two distinct vertices are adjacent in the 2-section if and only if they
-    share at least one hyperedge.  ``vertices`` lists the vertices in
-    declared order; ``adjacency`` maps each vertex to the tuple of its
-    neighbours in declared vertex order; ``edges`` lists each unordered
-    adjacency pair ``(u, v)`` with ``u`` before ``v`` in declared order,
-    sorted by the first component then the second.
+    ``graph`` is the canonical :class:`SimpleUndirectedGraph` whose vertices
+    are exactly the hypergraph's declared vertex labels, in declared order,
+    and in which two distinct vertices are adjacent if and only if they
+    share at least one hyperedge.  Each edge's endpoints appear in lexical
+    order per the canonical graph value's own convention, independent of the
+    source hypergraph's declared ordering, so the value composes directly
+    with downstream graph operations without translation.  This defining
+    property is validated against the retained source hypergraph.
     """
 
     hypergraph: FiniteHypergraph
-    vertices: tuple[str, ...]
-    adjacency: tuple[tuple[str, tuple[str, ...]], ...]
-    edges: tuple[tuple[str, str], ...]
+    graph: SimpleUndirectedGraph
 
     @model_validator(mode="after")
     def bind_clique_expansion(self) -> Self:
-        from jacobian.math.hypergraphs._operations import _clique_expansion_data
+        from jacobian.math.hypergraphs._operations import _clique_expansion_graph
 
-        vertices, adjacency, edges = _clique_expansion_data(self.hypergraph)
-        if self.vertices != vertices:
-            raise ValueError("vertices must be the declared vertex list")
-        if self.adjacency != adjacency:
-            raise ValueError(
-                "adjacency must be the exact neighbour map of the 2-section"
-            )
-        if self.edges != edges:
-            raise ValueError("edges must be the exact 2-section edge list")
+        if self.graph != _clique_expansion_graph(self.hypergraph):
+            raise ValueError("graph must be the exact 2-section of the hypergraph")
         return self

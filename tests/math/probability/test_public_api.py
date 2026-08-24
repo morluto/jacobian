@@ -8,10 +8,12 @@ from jacobian.math import probability
 def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the probability public API."""
     expected = (
+        "AllTerminalReliabilityResult",
         "FiniteJointTable",
         "MutualInformationCertificate",
         "MutualInformationResult",
         "MutualInformationTerm",
+        "all_terminal_reliability",
         "mutual_information",
     )
     assert tuple(probability.__all__) == expected

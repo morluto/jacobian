@@ -157,8 +157,8 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     ),
     OperationAdmission(
         "integer.decide.powerful",
-        AdmissionDecision.DROP,
-        "ordinary arithmetic or cheap projection of a retained exact factorization/divisor result",
+        AdmissionDecision.KEEP,
+        "bounded partial-factor and rough-cofactor certificate decides 25-digit inputs without complete factorization",
     ),
     OperationAdmission(
         "integer.decide.prime",
@@ -234,6 +234,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "number_theory.ramanujan_sum.compute",
         AdmissionDecision.KEEP,
         "classical exact arithmetic function whose factorization-backed evaluation replaces a variable-length composition of divisor and Mobius calls",
+    ),
+    OperationAdmission(
+        "number_theory.friable.count.compute",
+        AdmissionDecision.KEEP,
+        "complete exact friable count with result-sensitive materialized and generated regimes, avoiding caller-side factorization of every source integer",
     ),
 )
 

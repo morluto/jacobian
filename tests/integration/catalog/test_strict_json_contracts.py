@@ -33,6 +33,13 @@ def test_large_quadratic_rational_result_survives_public_dispatch() -> None:
     }
 
 
+def test_unsafe_quadratic_global_enumeration_leaves_are_not_published() -> None:
+    catalog = Catalog.open()
+
+    assert catalog.operation("quadratic_form.representation_numbers.compute") is None
+    assert catalog.operation("quadratic_form.theta_series_prefix.compute") is None
+
+
 def test_petri_firing_reports_successor_outside_marking_envelope() -> None:
     result = invoke_operation(
         "petri_net.fire_transition.compute",

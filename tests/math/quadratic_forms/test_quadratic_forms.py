@@ -6,7 +6,6 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.catalog import Catalog
 from jacobian.math.quadratic_forms import (
     RationalCoordinateVector,
     RationalQuadraticForm,
@@ -160,9 +159,3 @@ def test_evaluation_preflights_the_aggregate_denominator() -> None:
 
     with pytest.raises(ValidationError, match="aggregate denominator"):
         EvaluationRequest.model_validate({"form": form, "vector": vector})
-
-
-def test_unsafe_global_enumeration_leaves_are_not_published() -> None:
-    catalog = Catalog.open()
-    assert catalog.operation("quadratic_form.representation_numbers.compute") is None
-    assert catalog.operation("quadratic_form.theta_series_prefix.compute") is None

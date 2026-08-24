@@ -166,6 +166,82 @@ class TestEnumeration:
         # Concepts: ({o0,o1}, {a1}), ({o0}, {a0,a1})
         assert result.count == 2
 
+    @staticmethod
+    def _contranominal(axis_size: int) -> FormalContext:
+        """The contranominal scale on n objects and n attributes: object i
+        has every attribute except i. It carries exactly 2^n concepts."""
+        n = axis_size
+        return FormalContext(
+            objects=tuple(f"o{index}" for index in range(n)),
+            attributes=tuple(f"a{index}" for index in range(n)),
+            incidence=tuple(
+                (object_index, attribute_index)
+                for object_index in range(n)
+                for attribute_index in range(n)
+                if attribute_index != object_index
+            ),
+        )
+
+    def test_contranominal_context_beyond_result_budget_is_rejected(self) -> None:
+        """A 21x21 contranominal context has exactly 2^21 concepts, beyond
+        the declared enumeration budget: admission must reject it with one
+        capped preflight instead of raising mid-enumeration."""
+        with pytest.raises(ValidationError, match="enumeration returns at most"):
+            EnumerateConceptsRequest(context=self._contranominal(21))
+
+    def test_empty_square_context_beyond_worst_case_stays_admissible(self) -> None:
+        """A 14x14 empty-incidence context has worst case 2^14 but only two
+        actual concepts, so the exact preflight must admit it and the
+        operation must return the complete family."""
+        context = FormalContext(
+            objects=tuple(f"o{index}" for index in range(14)),
+            attributes=tuple(f"a{index}" for index in range(14)),
+            incidence=(),
+        )
+        request = EnumerateConceptsRequest(context=context)
+        result = compute_enumerate_concepts(request)
+        assert result.count == 2
+
+    def test_contranominal_boundary_context_enumerates_complete_family(self) -> None:
+        """13 is the static boundary of the smaller axis (2^13 = 8192 fits
+        the budget; 2^14 does not), and the boundary context returns the
+        complete family as a typed result."""
+        result = compute_enumerate_concepts(
+            EnumerateConceptsRequest(context=self._contranominal(13))
+        )
+        assert result.count == 2**13 == 8192
+
+    def test_sparse_context_beyond_twenty_attributes_is_enumerated(self) -> None:
+        # One object with no incidences over 21 attributes carries exactly the
+        # two trivial concepts, so admission must not reject it by attribute
+        # count before considering actual enumeration work.
+        context = FormalContext(
+            objects=("o0",),
+            attributes=tuple(f"a{index}" for index in range(21)),
+            incidence=(),
+        )
+        result = compute_enumerate_concepts(EnumerateConceptsRequest(context=context))
+        assert result.count == 2
+
+    def test_attribute_fallback_boundary_is_admitted_and_rejected(self) -> None:
+        wide = FormalContext(
+            objects=("o0",),
+            attributes=tuple(f"a{index}" for index in range(64)),
+            incidence=(),
+        )
+        assert (
+            compute_enumerate_concepts(EnumerateConceptsRequest(context=wide)).count
+            == 2
+        )
+        with pytest.raises(ValidationError):
+            EnumerateConceptsRequest(
+                context=FormalContext(
+                    objects=("o0",),
+                    attributes=tuple(f"a{index}" for index in range(65)),
+                    incidence=(),
+                )
+            )
+
 
 # ---------------------------------------------------------------------------
 # Defining-equation replay (#2266)
@@ -230,37 +306,6 @@ def test_lattice_embedded_concepts_replay_defining_equations() -> None:
     # Extents are pairwise distinct, so no two concepts compare equal.
     extents = [frozenset(extent_tuple) for extent_tuple, _intent in result.concepts]
     assert len(set(extents)) == len(extents)
-
-    def test_sparse_context_beyond_twenty_attributes_is_enumerated(self) -> None:
-        # One object with no incidences over 21 attributes carries exactly the
-        # two trivial concepts, so admission must not reject it by attribute
-        # count before considering actual enumeration work.
-        context = FormalContext(
-            objects=("o0",),
-            attributes=tuple(f"a{index}" for index in range(21)),
-            incidence=(),
-        )
-        result = compute_enumerate_concepts(EnumerateConceptsRequest(context=context))
-        assert result.count == 2
-
-    def test_attribute_fallback_boundary_is_admitted_and_rejected(self) -> None:
-        wide = FormalContext(
-            objects=("o0",),
-            attributes=tuple(f"a{index}" for index in range(64)),
-            incidence=(),
-        )
-        assert (
-            compute_enumerate_concepts(EnumerateConceptsRequest(context=wide)).count
-            == 2
-        )
-        with pytest.raises(ValidationError):
-            EnumerateConceptsRequest(
-                context=FormalContext(
-                    objects=("o0",),
-                    attributes=tuple(f"a{index}" for index in range(65)),
-                    incidence=(),
-                )
-            )
 
 
 # ---------------------------------------------------------------------------

@@ -14,6 +14,7 @@ from jacobian.math.formal_power_series._models import (
     SeriesPowerRequest,
     SeriesReversionRequest,
     SeriesReversionResult,
+    TruncatedSeries,
     _SeriesAddSubtractRequest,
     _SeriesMultiplyRequest,
 )
@@ -108,6 +109,19 @@ def test_small_requests_remain_admitted() -> None:
     assert SeriesPowerRequest(series=series, exponent=3)
 
 
+def test_value_carrier_admits_compact_series_beyond_the_input_order_ceiling() -> None:
+    order = MAX_TRUNCATION_ORDER + 88
+    value = TruncatedSeries.model_validate(_series(order, [_coefficient("1")] * order))
+    assert value.truncation_order == order
+
+
+def test_operation_inputs_keep_the_shared_order_ceiling() -> None:
+    with pytest.raises(ValidationError):
+        InputTruncatedSeries.model_validate(
+            _series(MAX_TRUNCATION_ORDER + 1, [_coefficient("1")])
+        )
+
+
 def test_largest_multiplication_result_fits_shared_output_envelope() -> None:
     numerator = "9" * MAX_RATIONAL_DIGITS
     denominator = "1" + "0" * (MAX_RATIONAL_DIGITS - 1)
@@ -173,3 +187,44 @@ def test_division_result_rejects_fabricated_conclusion_with_zero_residual() -> N
 
     with pytest.raises(ValidationError, match="denominator times quotient"):
         SeriesDivideResult.model_validate(payload)
+
+
+def _zero_series_payload(order: int) -> dict[str, object]:
+    return _series(order, [_coefficient("0") for _ in range(order)])
+
+
+def test_replaying_results_reject_orders_above_the_producer_envelope() -> None:
+    order = MAX_TRUNCATION_ORDER + 1
+    zeros = [_coefficient("0") for _ in range(order)]
+    multiply_payload = {
+        "left": _zero_series_payload(order),
+        "right": _zero_series_payload(order),
+        "result": _zero_series_payload(order),
+        "convolution_ledger": zeros,
+    }
+    with pytest.raises(ValidationError, match="multiplication result replay"):
+        SeriesMultiplyResult.model_validate(multiply_payload)
+
+    reversion_residuals = tuple(_coefficient("0") for _ in range(order))
+    with pytest.raises(ValidationError, match="reversion result replay"):
+        SeriesReversionResult.model_validate(
+            {
+                "source": _zero_series_payload(order),
+                "result": _zero_series_payload(order),
+                "left_residual": reversion_residuals,
+                "right_residual": reversion_residuals,
+            }
+        )
+
+
+def test_all_zero_multiply_results_remain_representable_at_the_envelope_order() -> None:
+    order = MAX_TRUNCATION_ORDER
+    zeros = [_coefficient("0") for _ in range(order)]
+    payload = {
+        "left": _zero_series_payload(order),
+        "right": _zero_series_payload(order),
+        "result": _zero_series_payload(order),
+        "convolution_ledger": zeros,
+    }
+    verdict = SeriesMultiplyResult.model_validate(payload)
+    assert verdict.result.truncation_order == MAX_TRUNCATION_ORDER

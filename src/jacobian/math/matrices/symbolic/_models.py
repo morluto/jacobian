@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
-from itertools import combinations, permutations
+from collections import Counter
+from collections.abc import Iterable
+from itertools import combinations, permutations, product
 from typing import Any, Literal, Self
 
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.math.polynomials.values import PolynomialVariable, RationalFunction
+from jacobian.math.polynomials.values import (
+    PolynomialVariable,
+    RationalFunction,
+    SparseRationalPolynomial,
+)
 
 MAX_SYMBOLIC_MATRIX_DIMENSION = 8
 MAX_SYMBOLIC_VARIABLES = 8
@@ -25,6 +31,17 @@ def _is_polynomial_entry(value: RationalFunction) -> bool:
         and terms[0].coefficient.num == "1"
         and terms[0].coefficient.den == "1"
         and all(exponent == 0 for exponent in terms[0].exponents)
+    )
+
+
+def _is_scalar_identity(value: RationalFunction) -> bool:
+    terms = value.numerator.terms
+    return (
+        len(terms) == 1
+        and terms[0].coefficient.num == "1"
+        and terms[0].coefficient.den == "1"
+        and all(exponent == 0 for exponent in terms[0].exponents)
+        and _is_polynomial_entry(value)
     )
 
 
@@ -140,6 +157,676 @@ class SymbolicMatrix(StrictModel):
         )
         if term_count > MAX_SYMBOLIC_MATRIX_TERMS:
             raise ValueError("symbolic matrix exceeds the 512-term operation budget")
+        return self
+
+
+def _maximum_exponents(value: RationalFunction, *, numerator: bool) -> tuple[int, ...]:
+    polynomial = value.numerator if numerator else value.denominator
+    return tuple(
+        max((term.exponents[axis] for term in polynomial.terms), default=0)
+        for axis in range(len(value.variables))
+    )
+
+
+def _maximum_coefficient_digits(value: RationalFunction, *, numerator: bool) -> int:
+    polynomial = value.numerator if numerator else value.denominator
+    return max(
+        (
+            len(component.lstrip("-"))
+            for term in polynomial.terms
+            for component in (term.coefficient.num, term.coefficient.den)
+        ),
+        default=1,
+    )
+
+
+def _sum_coefficient_digit_bound(
+    *,
+    term_count: int,
+    product_coefficient_digits: int,
+    integral_coefficients: bool,
+) -> int:
+    """Bound one coefficient after collecting ``term_count`` rational products.
+
+    Integral products only add an addition carry to the collected
+    coefficient. Rational products can also multiply unrelated
+    denominators while reaching the common denominator, which the
+    conservative rational bound charges for.
+    """
+
+    if term_count <= 1:
+        return product_coefficient_digits
+    if integral_coefficients:
+        return product_coefficient_digits + len(str(term_count))
+    return term_count * product_coefficient_digits + len(str(term_count))
+
+
+def _has_integral_coefficients(value: RationalFunction) -> bool:
+    """Report whether every coefficient of both polynomial sides is an integer."""
+
+    return all(
+        term.coefficient.den == "1"
+        for polynomial in (value.numerator, value.denominator)
+        for term in polynomial.terms
+    )
+
+
+def _common_denominator_digits(
+    left_value: RationalFunction, right_value: RationalFunction
+) -> int:
+    """Coefficient digits one pair contributes to the product common denominator.
+
+    A canonical unit denominator contributes nothing: multiplying by one
+    leaves every coefficient unchanged, just as it performs no expansion
+    work.
+    """
+
+    if _is_polynomial_entry(left_value) and _is_polynomial_entry(right_value):
+        return 0
+    return _maximum_coefficient_digits(left_value, numerator=False) + (
+        _maximum_coefficient_digits(right_value, numerator=False)
+    )
+
+
+def _scalar_constant_digits(value: RationalFunction) -> int | None:
+    """Coefficient height when the value is a nonzero rational constant.
+
+    Every nonzero element of QQ is a unit of the field, so multiplying by
+    one rescales coefficients without touching support or denominators.
+    """
+
+    terms = value.numerator.terms
+    if (
+        len(terms) == 1
+        and all(exponent == 0 for exponent in terms[0].exponents)
+        and _is_polynomial_entry(value)
+    ):
+        return max(
+            len(component.lstrip("-"))
+            for component in (terms[0].coefficient.num, terms[0].coefficient.den)
+        )
+    return None
+
+
+def _polynomial_pair_exponents(
+    first: SparseRationalPolynomial, second: SparseRationalPolynomial
+) -> tuple[tuple[int, ...], ...]:
+    """Enumerate monomial exponents of every pairwise product of two polynomials."""
+
+    return tuple(
+        tuple(
+            first_exponent + second_exponent
+            for first_exponent, second_exponent in zip(
+                first_term.exponents, second_term.exponents, strict=True
+            )
+        )
+        for first_term in first.terms
+        for second_term in second.terms
+    )
+
+
+def _product_collision_counts(
+    expansions: Iterable[tuple[tuple[tuple[int, ...], ...], ...]],
+) -> Counter[tuple[int, ...]]:
+    """Count raw products landing on each collected monomial exponent."""
+
+    counts: Counter[tuple[int, ...]] = Counter()
+    for groups in expansions:
+        for chosen in product(*groups):
+            counts[tuple(map(sum, zip(*chosen, strict=True)))] += 1
+    return counts
+
+
+def _maximum_product_collisions(
+    expansions: Iterable[tuple[tuple[tuple[int, ...], ...], ...]],
+) -> int:
+    """Count raw products colliding at the most crowded exponent.
+
+    Each expansion is a finite product of monomial-exponent choices; only
+    products landing on one exponent are collected into a single coefficient,
+    so the maximum multiplicity, not the total support size, drives the
+    coefficient digit bound.
+    """
+
+    return max(_product_collision_counts(expansions).values(), default=1)
+
+
+def _polynomial_budget_violation(
+    polynomial: SparseRationalPolynomial, variable_count: int
+) -> bool:
+    """Report whether one sparse polynomial exceeds the canonical result budgets."""
+
+    return (
+        len(polynomial.terms) > MAX_SYMBOLIC_RESULT_TERMS
+        or any(
+            exponent > MAX_SYMBOLIC_RESULT_EXPONENT
+            for term in polynomial.terms
+            for exponent in term.exponents
+        )
+        or any(
+            len(component.lstrip("-")) > MAX_SYMBOLIC_RESULT_COEFFICIENT_DIGITS
+            for term in polynomial.terms
+            for component in (term.coefficient.num, term.coefficient.den)
+        )
+        or any(len(term.exponents) != variable_count for term in polynomial.terms)
+    )
+
+
+def _shared_common_denominator_bounds(
+    factors: tuple[tuple[RationalFunction, RationalFunction], ...],
+) -> tuple[int, int, tuple[int, ...], tuple[int, ...], int, bool, int, bool] | None:
+    """Return exact cell bounds for one shared product denominator, or None.
+
+    When every contributing pair ``a_i/g_i * b_i/v_i`` carries one identical
+    canonical product denominator ``d = g_i v_i``, the cell value is exactly
+    ``(sum a_i b_i) / d``. Admission collects that numerator sum exactly and
+    admits the cell only when the sum is coprime to the monic product ``d``
+    and both parts fit the canonical result budgets. The backend's reduced
+    value then equals this quotient verbatim, so the collected support and
+    height are exact bounds and no cancellation estimate is needed. A
+    nontrivial common factor, mismatched pairwise product denominators, or
+    an out-of-budget part returns None and the conservative rejection
+    applies.
+    """
+
+    from jacobian.math.polynomials._conversions import (
+        sparse_rational_polynomial_from_sympy,
+        sparse_rational_polynomial_to_sympy,
+        symbols_for_variables,
+    )
+
+    variables = factors[0][0].variables
+    if not variables:
+        return None
+    pair_denominator_terms = tuple(
+        len(left_value.denominator.terms) * len(right_value.denominator.terms)
+        for left_value, right_value in factors
+    )
+    if any(count > MAX_SYMBOLIC_RESULT_TERMS for count in pair_denominator_terms):
+        return None
+    raw_products = sum(
+        len(left_value.numerator.terms) * len(right_value.numerator.terms)
+        for left_value, right_value in factors
+    )
+    if raw_products > MAX_SYMBOLIC_MATRIX_TERMS:
+        return None
+
+    from sympy import Poly
+
+    pair_product_denominators = [
+        sparse_rational_polynomial_to_sympy(left_value.denominator, variables)
+        * sparse_rational_polynomial_to_sympy(right_value.denominator, variables)
+        for left_value, right_value in factors
+    ]
+    common_denominator = pair_product_denominators[0]
+    if any(
+        pair_denominator != common_denominator
+        for pair_denominator in pair_product_denominators[1:]
+    ):
+        return None
+
+    generators = symbols_for_variables(variables)
+    numerator_sum = Poly(0, *generators, domain="QQ")
+    for left_value, right_value in factors:
+        numerator_sum += sparse_rational_polynomial_to_sympy(
+            left_value.numerator, variables
+        ) * sparse_rational_polynomial_to_sympy(right_value.numerator, variables)
+
+    if numerator_sum.is_zero:
+        zero_exponents = (0,) * len(variables)
+        return (
+            raw_products,
+            sum(pair_denominator_terms),
+            zero_exponents,
+            zero_exponents,
+            1,
+            False,
+            1,
+            True,
+        )
+
+    numerator = sparse_rational_polynomial_from_sympy(numerator_sum, variables)
+    common = sparse_rational_polynomial_from_sympy(common_denominator, variables)
+    if _polynomial_budget_violation(numerator, len(variables)) or (
+        _polynomial_budget_violation(common, len(variables))
+    ):
+        return None
+    if not numerator_sum.gcd(common_denominator).is_one:
+        return None
+    return (
+        raw_products,
+        sum(pair_denominator_terms),
+        tuple(
+            max(term.exponents[axis] for term in numerator.terms)
+            for axis in range(len(variables))
+        ),
+        tuple(
+            max(term.exponents[axis] for term in common.terms)
+            for axis in range(len(variables))
+        ),
+        max(
+            len(component.lstrip("-"))
+            for polynomial in (numerator, common)
+            for term in polynomial.terms
+            for component in (term.coefficient.num, term.coefficient.den)
+        ),
+        False,
+        len(numerator.terms) + len(common.terms),
+        True,
+    )
+
+
+def _product_cell_bounds(
+    left: tuple[RationalFunction, ...],
+    right: tuple[RationalFunction, ...],
+    *,
+    exact_shared_bounds: bool = True,
+) -> tuple[int, int, tuple[int, ...], tuple[int, ...], int, bool, int, bool]:
+    """Return raw work bounds and cancellation-safe canonical degree bounds.
+
+    The cell is a finite sum of products ``a_i * b_i``. Each nonzero product
+    is first written over its own canonical denominator, then all products are
+    put over the product common denominator. The raw term and coefficient
+    bounds admit that expansion before SymPy receives the request. Coefficient
+    digits are bounded by the products colliding at one exponent rather than
+    by total support size. The seventh element bounds the cell's canonical
+    result support: collected numerator terms plus the retained canonical
+    denominator terms, which are exactly one for expanded cells (unit or
+    monomial) and the operand's own denominator for the verbatim or
+    scalar-scaled copy. The final flag reports a proven cancellation-free
+    shape: either the cell stays inside the     admitted cancellation domain
+    (unit denominators never cancel, and a monomial common denominator only
+    cancels by monomial factors, so the raw bounds stay valid for the
+    canonical value), or every pair carries one identical product
+    denominator whose exact collected numerator admission proved coprime to
+    the retained monic product.
+    """
+
+    factors = tuple(
+        (left_value, right_value)
+        for left_value, right_value in zip(left, right, strict=True)
+        if left_value.numerator.terms and right_value.numerator.terms
+    )
+    if not factors:
+        # The canonical zero has an empty numerator and a one-term denominator.
+        zero_exponents = (0,) * len(left[0].variables)
+        return 0, 1, zero_exponents, zero_exponents, 1, True, 1, False
+
+    if len(factors) == 1:
+        left_value, right_value = factors[0]
+        scalar_digits = 0
+        if _is_scalar_identity(right_value):
+            effective = left_value
+        elif _is_scalar_identity(left_value):
+            effective = right_value
+        else:
+            right_digits = _scalar_constant_digits(right_value)
+            left_digits = _scalar_constant_digits(left_value)
+            if right_digits is not None:
+                effective, scalar_digits = left_value, right_digits
+            elif left_digits is not None:
+                effective, scalar_digits = right_value, left_digits
+            else:
+                effective = None
+        if effective is not None:
+            # Identity multiplication returns the other canonical operand
+            # verbatim, and a nonzero rational constant only rescales its
+            # coefficients by a unit of QQ: neither can cancel or densify,
+            # so the operand shape (plus the scalar height when scaling)
+            # bounds the result exactly and no expansion occurs.
+            return (
+                len(effective.numerator.terms),
+                len(effective.denominator.terms),
+                _maximum_exponents(effective, numerator=True),
+                _maximum_exponents(effective, numerator=False),
+                max(
+                    _maximum_coefficient_digits(effective, numerator=True),
+                    _maximum_coefficient_digits(effective, numerator=False),
+                )
+                + scalar_digits,
+                True,
+                len(effective.numerator.terms) + len(effective.denominator.terms),
+                False,
+            )
+
+    return _expanded_product_cell_bounds(
+        factors, exact_shared_bounds=exact_shared_bounds
+    )
+
+
+def _expanded_product_cell_bounds(
+    factors: tuple[tuple[RationalFunction, RationalFunction], ...],
+    *,
+    exact_shared_bounds: bool = True,
+) -> tuple[int, int, tuple[int, ...], tuple[int, ...], int, bool, int, bool]:
+    """Bound a multi-factor cell by its unreduced common-denominator expansion.
+
+    Each nonzero product is first written over its own canonical denominator,
+    then all products are put over the product common denominator; the raw
+    term and coefficient bounds admit that expansion before SymPy receives
+    the request. Cells the cancellation rejection would refuse get one exact
+    second chance through ``_shared_common_denominator_bounds``. With
+    ``exact_shared_bounds=False`` that second chance is not executed: an
+    eligible cell returns the raw expansion totals the exact fallback charges
+    when it admits the cell, so callers can project the aggregate admission
+    budget without SymPy work.
+    """
+
+    integral_coefficients = all(
+        _has_integral_coefficients(left_value)
+        and _has_integral_coefficients(right_value)
+        for left_value, right_value in factors
+    )
+    unit_denominator_factors = all(
+        _is_polynomial_entry(left_value) and _is_polynomial_entry(right_value)
+        for left_value, right_value in factors
+    )
+
+    denominator_term_counts = tuple(
+        len(left_value.denominator.terms) * len(right_value.denominator.terms)
+        for left_value, right_value in factors
+    )
+    denominator_exponents = tuple(
+        tuple(
+            left_exponent + right_exponent
+            for left_exponent, right_exponent in zip(
+                _maximum_exponents(left_value, numerator=False),
+                _maximum_exponents(right_value, numerator=False),
+                strict=True,
+            )
+        )
+        for left_value, right_value in factors
+    )
+    denominator_coefficient_digits = tuple(
+        _common_denominator_digits(left_value, right_value)
+        for left_value, right_value in factors
+    )
+    denominator_terms = 1
+    for count in denominator_term_counts:
+        denominator_terms *= count
+
+    # Cells the conservative cancellation rejection would refuse get one
+    # exact second chance: when every pair's product denominators coincide,
+    # admission can collect the numerator sum and prove it coprime to the
+    # retained monic product, which fixes the canonical value verbatim.
+    if not (unit_denominator_factors or denominator_terms == 1):
+        if not exact_shared_bounds:
+            zero_exponents = (0,) * len(factors[0][0].variables)
+            return (
+                sum(
+                    len(left_value.numerator.terms) * len(right_value.numerator.terms)
+                    for left_value, right_value in factors
+                ),
+                sum(denominator_term_counts),
+                zero_exponents,
+                zero_exponents,
+                0,
+                False,
+                1,
+                True,
+            )
+        shared_bounds = _shared_common_denominator_bounds(factors)
+        if shared_bounds is not None:
+            return shared_bounds
+
+    denominator_exponent = tuple(
+        sum(exponents) for exponents in zip(*denominator_exponents, strict=True)
+    )
+    denominator_product_digits = sum(denominator_coefficient_digits)
+
+    numerator_terms = 0
+    numerator_exponent = (0,) * len(factors[0][0].variables)
+    numerator_product_digits = 1
+    for index, (left_value, right_value) in enumerate(factors):
+        numerator_term_count = len(left_value.numerator.terms) * len(
+            right_value.numerator.terms
+        )
+        for other_index, denominator_term_count in enumerate(denominator_term_counts):
+            if other_index != index:
+                numerator_term_count *= denominator_term_count
+        numerator_terms += numerator_term_count
+        numerator_exponent = tuple(
+            max(
+                accumulated_exponent,
+                left_exponent
+                + right_exponent
+                + common_denominator_exponent
+                - own_denominator_exponent,
+            )
+            for (
+                accumulated_exponent,
+                left_exponent,
+                right_exponent,
+                common_denominator_exponent,
+                own_denominator_exponent,
+            ) in zip(
+                numerator_exponent,
+                _maximum_exponents(left_value, numerator=True),
+                _maximum_exponents(right_value, numerator=True),
+                denominator_exponent,
+                denominator_exponents[index],
+                strict=True,
+            )
+        )
+        numerator_product_digits = max(
+            numerator_product_digits,
+            _maximum_coefficient_digits(left_value, numerator=True)
+            + _maximum_coefficient_digits(right_value, numerator=True)
+            + denominator_product_digits
+            - denominator_coefficient_digits[index],
+        )
+
+    # Only cells whose raw products fit the aggregate expansion budget can
+    # survive admission, so enumerating their raw products stays bounded;
+    # larger cells keep the conservative support-size estimate and are
+    # rejected by the term checks.
+    numerator_collision_count = numerator_terms
+    denominator_collision_count = denominator_terms
+    result_term_count = numerator_terms + 1
+    if (
+        numerator_terms <= MAX_SYMBOLIC_MATRIX_TERMS
+        and denominator_terms <= MAX_SYMBOLIC_MATRIX_TERMS
+    ):
+        denominator_groups = tuple(
+            _polynomial_pair_exponents(left_value.denominator, right_value.denominator)
+            for left_value, right_value in factors
+        )
+        numerator_expansions: list[tuple[tuple[tuple[int, ...], ...], ...]] = []
+        for index, (left_value, right_value) in enumerate(factors):
+            expansion: list[tuple[tuple[int, ...], ...]] = [
+                _polynomial_pair_exponents(left_value.numerator, right_value.numerator)
+            ]
+            expansion.extend(
+                group
+                for other_index, group in enumerate(denominator_groups)
+                if other_index != index
+            )
+            numerator_expansions.append(tuple(expansion))
+        denominator_collision_count = _maximum_product_collisions((denominator_groups,))
+        numerator_collisions = _product_collision_counts(numerator_expansions)
+        numerator_collision_count = max(numerator_collisions.values(), default=1)
+        result_term_count = len(numerator_collisions) + 1
+
+    maximum_coefficient_digits = max(
+        _sum_coefficient_digit_bound(
+            term_count=numerator_collision_count,
+            product_coefficient_digits=numerator_product_digits,
+            integral_coefficients=integral_coefficients,
+        ),
+        _sum_coefficient_digit_bound(
+            term_count=denominator_collision_count,
+            product_coefficient_digits=denominator_product_digits,
+            integral_coefficients=integral_coefficients,
+        ),
+    )
+    return (
+        numerator_terms,
+        denominator_terms,
+        numerator_exponent,
+        denominator_exponent,
+        maximum_coefficient_digits,
+        unit_denominator_factors,
+        result_term_count,
+        False,
+    )
+
+
+def _projected_expansion_terms(left: SymbolicMatrix, right: SymbolicMatrix) -> int:
+    """Charge every cell the raw expansion its admitted shape must spend.
+
+    A cell admitted through the exact shared-denominator fallback carries
+    exactly these raw product totals, and every other cell's cheap bounds
+    are already final, so the sum lower-bounds the aggregate expansion of
+    any request that survives admission.
+    """
+
+    projected_expansion_terms = 0
+    for left_row in left.entries:
+        for right_column in zip(*right.entries, strict=True):
+            (
+                numerator_terms,
+                denominator_terms,
+                _numerator_exponents,
+                _denominator_exponents,
+                _maximum_coefficient_digits,
+                unit_denominator_factors,
+                _result_term_count,
+                _verified_no_cancellation,
+            ) = _product_cell_bounds(left_row, right_column, exact_shared_bounds=False)
+            projected_expansion_terms += numerator_terms
+            if not unit_denominator_factors:
+                projected_expansion_terms += denominator_terms
+    return projected_expansion_terms
+
+
+def _require_symbolic_product_admission(
+    left: SymbolicMatrix,
+    right: SymbolicMatrix,
+) -> None:
+    """Prove that every exact product entry fits the canonical result value.
+
+    Cells cancel only through unit or monomial common denominators, where
+    reduction cannot grow support or coefficients, or through one identical
+    pairwise product denominator whose exact collected numerator admission
+    proved coprime to the retained monic product, where reduction cannot
+    trigger at all; anything else stays outside the admitted domain
+    because no pre-execution bound covers it. A cheap projection pass first
+    charges every cell the raw expansion the exact shared-denominator
+    admission spends when it succeeds, so a request above the aggregate
+    expansion budget is rejected before any SymPy conversion runs.
+    """
+
+    if left.variables != right.variables:
+        raise ValueError(
+            "symbolic matrix multiplication requires identical ordered field variables"
+        )
+    if len(left.entries[0]) != len(right.entries):
+        raise ValueError(
+            "symbolic matrix multiplication requires the left column count to equal "
+            "the right row count"
+        )
+
+    projected_expansion_terms = _projected_expansion_terms(left, right)
+    if projected_expansion_terms > MAX_SYMBOLIC_MATRIX_TERMS:
+        raise ValueError(
+            "symbolic matrix product exceeds the 512-term aggregate expansion budget"
+        )
+
+    aggregate_expansion_terms = 0
+    aggregate_result_terms = 0
+    for left_row in left.entries:
+        for right_column in zip(*right.entries, strict=True):
+            (
+                numerator_terms,
+                denominator_terms,
+                numerator_exponents,
+                denominator_exponents,
+                maximum_coefficient_digits,
+                unit_denominator_factors,
+                result_term_count,
+                verified_no_cancellation,
+            ) = _product_cell_bounds(left_row, right_column)
+            if result_term_count > MAX_SYMBOLIC_RESULT_TERMS:
+                # Raw scalar products are governed by the aggregate expansion
+                # budget below; this per-entry limit binds the already
+                # computed collected support of the canonical cell value.
+                raise ValueError(
+                    "symbolic matrix product exceeds the 256-term exact result budget"
+                )
+            if not (
+                unit_denominator_factors
+                or denominator_terms == 1
+                or verified_no_cancellation
+            ):
+                # Exact division by a non-monomial greatest common divisor can
+                # amplify coefficients far beyond the unreduced expansion
+                # (hidden cancellation inside the dividend), and no usable
+                # pre-execution height bound exists for that quotient. Cells
+                # whose common denominator has several terms therefore lack a
+                # coefficient bound and stay outside the admitted domain unless
+                # admission collected the shared product denominator's
+                # numerator sum and proved it coprime to the retained monic
+                # product. Unit
+                # denominators never cancel, and a monomial common denominator
+                # only loses monomial factors during cancellation (every
+                # divisor of a monomial is a monomial), so support and
+                # coefficient size stay within the raw expansion bounds.
+                raise ValueError(
+                    "symbolic matrix product cannot bound coefficient growth "
+                    "under cancellation by a multi-term denominator"
+                )
+            maximum_exponent = max(
+                (*numerator_exponents, *denominator_exponents), default=0
+            )
+            if maximum_exponent > MAX_SYMBOLIC_RESULT_EXPONENT:
+                raise ValueError(
+                    "symbolic matrix product exceeds the result exponent budget"
+                )
+            if maximum_coefficient_digits > MAX_SYMBOLIC_RESULT_COEFFICIENT_DIGITS:
+                raise ValueError(
+                    "symbolic matrix product exceeds the result coefficient budget"
+                )
+            # Unit denominators produce no denominator work at all, so the
+            # expansion charge counts only the scalar products that run.
+            aggregate_expansion_terms += numerator_terms
+            if not unit_denominator_factors:
+                aggregate_expansion_terms += denominator_terms
+            # Canonical result support is bounded separately from expansion
+            # work: every admitted cell carries exactly one canonical
+            # denominator term (unit or monomial), and cancellation in the
+            # admitted domain can only shrink collected numerator support,
+            # so result_term_count bounds the terms the returned
+            # SymbolicMatrix will validate.
+            aggregate_result_terms += result_term_count
+    if aggregate_expansion_terms > MAX_SYMBOLIC_MATRIX_TERMS:
+        raise ValueError(
+            "symbolic matrix product exceeds the 512-term aggregate expansion budget"
+        )
+    if aggregate_result_terms > MAX_SYMBOLIC_MATRIX_TERMS:
+        raise ValueError(
+            "symbolic matrix product exceeds the 512-term aggregate result budget"
+        )
+
+
+class SymbolicMatrixProductRequest(StrictModel):
+    """Two compatible symbolic matrices whose exact product is representable."""
+
+    left: SymbolicMatrix = Field(
+        description=(
+            "A nonempty symbolic matrix over QQ(t_1, ..., t_n). Its ordered "
+            "field variables must exactly match right.variables."
+        )
+    )
+    right: SymbolicMatrix = Field(
+        description=(
+            "A nonempty symbolic matrix over the same ordered field as left. "
+            "Its row count must equal left's column count."
+        )
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_exact_product(self) -> Self:
+        _require_symbolic_product_admission(self.left, self.right)
         return self
 
 

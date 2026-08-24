@@ -228,6 +228,15 @@ variables to zero. Backend generator inference, ambient rings, and automatic
 coercion are private conveniences and do not define Jacobian's public
 semantics.
 
+### Canonical-value preflight
+
+Before adding a mathematical value, search the existing `values.py`,
+`_models.py`, and native exports by semantic meaning and fields, not only by
+class name. Reuse the existing owner across requests, results, producers, and
+consumers whenever possible. If a distinct type is necessary, record the
+different parent, representation, or postcondition, and define an explicit
+typed conversion rather than relying on caller-side reconstruction.
+
 Each mathematical value has one canonical type owned by its domain. A producer
 returns that type and downstream consumers accept it unchanged. An operation
 request may contain the value alongside genuine operation parameters, but must

@@ -13,6 +13,8 @@ from jacobian.math.hypergraphs._models import (
     DualResult,
     EdgeIntersectionsRequest,
     EdgeIntersectionsResult,
+    HypergraphIndependenceRequest,
+    HypergraphIndependenceResult,
     IncidenceGraphRequest,
     IncidenceGraphResult,
     ParametersRequest,
@@ -25,6 +27,7 @@ from jacobian.math.hypergraphs._operations import (
     compute_dual,
     compute_edge_intersections,
     compute_incidence_graph,
+    compute_independence_number,
     compute_parameters,
     compute_vertex_degrees,
 )
@@ -68,6 +71,39 @@ _HYPERGRAPH = {
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    _op(
+        "hypergraph.independence_number.compute",
+        "Compute the independence number of a finite hypergraph",
+        "Compute a maximum vertex subset containing no complete hyperedge. "
+        "Return either the exact independence number and a maximizing witness, "
+        "or a source-bound feasible incumbent with sound lower and upper bounds "
+        "when the bounded exact threshold search does not finish.",
+        HypergraphIndependenceRequest,
+        HypergraphIndependenceResult,
+        compute_independence_number,
+        "combinatorics",
+        "hypergraph",
+        "independent-set",
+        "optimization",
+        "exact-or-unknown",
+        examples=(
+            example(
+                "one_forbidden_triple",
+                "Compute the independence number of one forbidden triple; "
+                "every indexed hyperedge must be nonempty.",
+                {
+                    "hypergraph": {
+                        "vertices": ["a", "b", "c"],
+                        "edges": [["triple", ["a", "b", "c"]]],
+                    },
+                    "resource_budget": {
+                        "wall_seconds": 5,
+                        "max_solver_calls": 100,
+                    },
+                },
+            ),
+        ),
+    ),
     _op(
         "hypergraph.parameters.compute",
         "Compute the basic parameters of a finite hypergraph",

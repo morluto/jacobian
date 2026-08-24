@@ -17,6 +17,8 @@ MAX_TA_ARITY = 16
 MAX_RUN_TREE_NODES = 4096
 MAX_RUN_TREE_DEPTH = 128
 MAX_TREE_AUTOMATON_WORK = 2_000_000
+MAX_REACHABILITY_WITNESS_NODES = 4096
+MAX_TREE_AUTOMATON_REACHABILITY_WORK = 30_000_000
 
 Arity = Annotated[int, Field(ge=0, le=MAX_TA_ARITY)]
 
@@ -119,6 +121,131 @@ def validate_ranked_tree(
     return node_count
 
 
+def ranked_tree_node_count(tree: RankedTree) -> int:
+    """Return the bounded number of nodes in a ranked tree independent of an alphabet."""
+
+    node_count = 0
+    stack = [(tree, 1)]
+    while stack:
+        node, depth = stack.pop()
+        node_count += 1
+        if node_count > MAX_RUN_TREE_NODES:
+            raise ValueError("tree node count exceeds bound")
+        if depth > MAX_RUN_TREE_DEPTH:
+            raise ValueError("tree depth exceeds bound")
+        stack.extend((child, depth + 1) for child in node.children)
+    return node_count
+
+
+class ReachableStateProfile(StrictModel):
+    """Exact least-fixed-point reachability profile for one NFTA.
+
+    The domain-owned canonical value returned by ``reachable_state_profile``
+    and published unchanged as the reachability operation result: every
+    state is listed exactly once as reachable or unreachable, and each
+    reachable state carries one canonical minimum-node ground-tree witness.
+    The witness is unique by construction: among every transition row
+    targeting the state whose ordered child states all carry witnesses,
+    candidates are ranked by fewest node count
+    (``1 + sum(child witness node counts)``), then by the lexicographically
+    smallest ``(symbol, child_states, target_state)`` transition with
+    ``child_states`` compared element-wise as integers, and each child's
+    witness is chosen by the same rule recursively.  Source binding replays
+    exactly this rule, so only the published witness for each state
+    validates.
+    """
+
+    automaton: BottomUpTreeAutomaton
+    reachable_states: tuple[int, ...] = Field(max_length=MAX_TA_STATES)
+    unreachable_states: tuple[int, ...] = Field(max_length=MAX_TA_STATES)
+    witnesses: tuple[tuple[int, RankedTree], ...] = Field(
+        max_length=MAX_TA_STATES,
+        description=(
+            "one canonical minimum-node (state, tree) witness per reachable "
+            "state; when several derivations tie at the minimum node count, "
+            "the witness is the unique one whose root transition "
+            "(symbol, child_states, target_state) is lexicographically "
+            "smallest, comparing child_states element-wise as integers, with "
+            "each child's witness chosen by the same rule recursively; their "
+            "node counts are bounded in aggregate by "
+            "MAX_REACHABILITY_WITNESS_NODES (4096 nodes summed over all "
+            "reachable states)"
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_profile_shape(self) -> Self:
+        state_count = self.automaton.state_count
+        for label, states in (
+            ("reachable", self.reachable_states),
+            ("unreachable", self.unreachable_states),
+        ):
+            if states != tuple(sorted(set(states))):
+                raise ValueError(f"{label} states must be unique and sorted")
+            if any(not 0 <= state < state_count for state in states):
+                raise ValueError(f"{label} state out of range")
+        if set(self.reachable_states) & set(self.unreachable_states):
+            raise ValueError("reachable and unreachable states must be disjoint")
+        if len(self.reachable_states) + len(self.unreachable_states) != state_count:
+            raise ValueError(
+                "reachable and unreachable states must partition the automaton states"
+            )
+        if tuple(state for state, _ in self.witnesses) != self.reachable_states:
+            raise ValueError(
+                "witnesses must carry exactly one entry per reachable state in order"
+            )
+        total_nodes = 0
+        for _, tree in self.witnesses:
+            total_nodes = _ranked_witness_nodes(tree, self.automaton, total_nodes)
+        if total_nodes > MAX_REACHABILITY_WITNESS_NODES:
+            raise ValueError("reachable-state witness output exceeds the node bound")
+        return self
+
+    @model_validator(mode="after")
+    def require_source_bound_profile(self) -> Self:
+        self.require_source_binding()
+        return self
+
+    def require_source_binding(self) -> None:
+        """Replay the exact least fixed point against the retained automaton.
+
+        Model validation invokes this replay automatically, so any
+        deserialized or independently supplied profile proves itself against
+        its automaton before being accepted as the declared exact result
+        type.  The producing kernel instead constructs via ``model_construct``
+        so one admitted execution performs exactly one profile; the public
+        path invokes this method once as its source-bound result replay.
+        """
+        from jacobian.math.tree_automata.operations import reachable_state_profile
+
+        if self != reachable_state_profile(self.automaton):
+            raise ValueError("reachability profile is not bound to its automaton")
+
+
+def _ranked_witness_nodes(
+    tree: RankedTree,
+    automaton: BottomUpTreeAutomaton,
+    running_total: int,
+) -> int:
+    """Return the running node total after counting one alphabet-conformant tree."""
+
+    node_count = 0
+    stack = [(tree, 1)]
+    while stack:
+        node, depth = stack.pop()
+        node_count += 1
+        if running_total + node_count > MAX_REACHABILITY_WITNESS_NODES:
+            raise ValueError("reachable-state witness output exceeds the node bound")
+        if depth > MAX_RUN_TREE_DEPTH:
+            raise ValueError("witness depth exceeds the ranked-tree bound")
+        if node.symbol >= len(automaton.arity):
+            raise ValueError("witness symbol out of the ranked alphabet")
+        if len(node.children) != automaton.arity[node.symbol]:
+            raise ValueError("every witness node must match its symbol arity")
+        stack.extend((child, depth + 1) for child in node.children)
+    return running_total + node_count
+
+
 def accepted_tree_count_work_bound(
     automaton: BottomUpTreeAutomaton,
     tree_size: int,
@@ -143,16 +270,20 @@ def accepted_tree_count_work_bound(
 
 
 __all__ = [
+    "MAX_REACHABILITY_WITNESS_NODES",
     "MAX_RUN_TREE_DEPTH",
     "MAX_RUN_TREE_NODES",
     "MAX_TA_ARITY",
     "MAX_TA_STATES",
     "MAX_TA_SYMBOLS",
     "MAX_TA_TRANSITIONS",
+    "MAX_TREE_AUTOMATON_REACHABILITY_WORK",
     "MAX_TREE_AUTOMATON_WORK",
     "BottomUpTreeAutomaton",
     "RankedTree",
+    "ReachableStateProfile",
     "TreeAutomatonTransition",
     "accepted_tree_count_work_bound",
+    "ranked_tree_node_count",
     "validate_ranked_tree",
 ]

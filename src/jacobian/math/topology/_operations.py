@@ -728,12 +728,13 @@ TOPOLOGY_OPERATIONS: tuple[TopologyOperation, ...] = (
     ),
     MathTool(
         operation_id="topology.simplicial_homology.integral.compute",
-        version="4",
+        version="5",
         title="Compute transformation-certified integral simplicial homology",
         description=(
             "Compute the free rank, torsion invariant factors, and simplex-basis "
             "cycle generators of every integral homology group, with explicit "
-            "Smith transformations and bounding chains."
+            "Smith transformations and bounding chains. Each chain group is "
+            "bounded by the certified Smith-certificate dimension."
         ),
         request_type=IntegralSimplicialHomologyRequest,
         result_type=IntegralSimplicialHomologyResult,

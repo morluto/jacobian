@@ -1,5 +1,7 @@
 """Exact bounded integral binary quadratic form operations."""
 
+from math import isqrt
+
 from jacobian.math.integral_binary_quadratic_forms._models import (
     BinaryQuadraticFormCheckRequest,
     BinaryQuadraticFormCheckResult,
@@ -8,9 +10,15 @@ from jacobian.math.integral_binary_quadratic_forms._models import (
     BinaryQuadraticFormProperEquivRequest,
     BinaryQuadraticFormReducedClassesRequest,
     BinaryQuadraticFormReduceRequest,
+    BinaryQuadraticFormRepresentation,
+    BinaryQuadraticFormRepresentationsRequest,
+    BinaryQuadraticFormRepresentationsResult,
+    PrimitivePositiveDefiniteBinaryQuadraticForm,
     ProperEquivalenceResult,
     ReducedBinaryQuadraticFormResult,
     ReducedClassesResult,
+    _require_reduced_class_search_budget,
+    _require_representation_budget,
 )
 
 
@@ -101,11 +109,11 @@ def _reduce(
     int,
     int,
     int,
-    list[tuple[int, int, int, int, int, int, int, int, int, int]],
 ]:
     """Full Gauss reduction.
 
-    Returns (ra, rb, rc, p, q, r, s, steps).
+    Returns ``(ra, rb, rc, p, q, r, s)`` where the matrix maps the source to
+    the canonical reduced form under the published substitution convention.
     """
 
     # Compose two SL_2(Z) matrices
@@ -124,15 +132,13 @@ def _reduce(
 
     cur_a, cur_b, cur_c = a, b, c
     matrix = ((1, 0), (0, 1))
-    steps: list[tuple[int, int, int, int, int, int, int, int, int, int]] = []
     max_iter = 100
     for _ in range(max_iter):
         if _check_reduced(cur_a, cur_b, cur_c):
             break
-        oa, ob, oc, p, q, r, s, na, nb, nc = _reduce_step(cur_a, cur_b, cur_c)
+        _oa, _ob, _oc, p, q, r, s, na, nb, nc = _reduce_step(cur_a, cur_b, cur_c)
         step_matrix = ((p, q), (r, s))
         matrix = compose(matrix, step_matrix)
-        steps.append((oa, ob, oc, p, q, r, s, na, nb, nc))
         cur_a, cur_b, cur_c = na, nb, nc
     else:
         raise RuntimeError("reduction did not converge")
@@ -142,7 +148,7 @@ def _reduce(
     r, s = matrix[1]
     assert p * s - q * r == 1, "reduction matrix must have det 1"
 
-    return cur_a, cur_b, cur_c, p, q, r, s, steps
+    return cur_a, cur_b, cur_c, p, q, r, s
 
 
 def compute_check(
@@ -155,33 +161,44 @@ def compute_check(
 
     if a <= 0:
         return BinaryQuadraticFormCheckResult(
+            a=a,
+            b=b,
+            c=c,
             status="NOT_IN_INITIAL_DOMAIN",
             obstruction="a<=0: form is not positive definite (a must be positive)",
         )
     if disc >= 0:
         return BinaryQuadraticFormCheckResult(
+            a=a,
+            b=b,
+            c=c,
             status="NOT_IN_INITIAL_DOMAIN",
             obstruction=f"discriminant D={disc}>=0: only negative discriminants are supported",
         )
     g = _gcd(_gcd(abs(a), abs(b)), abs(c))
     if g > 1:
         return BinaryQuadraticFormCheckResult(
+            a=a,
+            b=b,
+            c=c,
             status="NOT_IN_INITIAL_DOMAIN",
             obstruction=f"gcd(a,b,c)={g}>1: form is not primitive",
         )
     if disc % 4 not in (0, 1):
         return BinaryQuadraticFormCheckResult(
+            a=a,
+            b=b,
+            c=c,
             status="NOT_IN_INITIAL_DOMAIN",
             obstruction=f"discriminant D={disc} mod 4 = {disc % 4}: must be 0 or 1",
         )
 
     return BinaryQuadraticFormCheckResult(
-        status="PRIMITIVE_POSITIVE_DEFINITE",
         a=a,
         b=b,
         c=c,
-        discriminant=disc,
-        gram=((a, b), (b, c)),
+        status="PRIMITIVE_POSITIVE_DEFINITE",
+        form=PrimitivePositiveDefiniteBinaryQuadraticForm(a=a, b=b, c=c),
     )
 
 
@@ -190,12 +207,12 @@ def compute_evaluate(
 ) -> BinaryQuadraticFormEvaluateResult:
     """Evaluate a binary quadratic form at an integer pair."""
 
-    value = _evaluate(request.a, request.b, request.c, request.x, request.y)
+    value = _evaluate(
+        request.form.a, request.form.b, request.form.c, request.x, request.y
+    )
     primitive = _gcd(request.x, request.y) == 1
     return BinaryQuadraticFormEvaluateResult(
-        a=request.a,
-        b=request.b,
-        c=request.c,
+        form=request.form,
         x=request.x,
         y=request.y,
         value=value,
@@ -208,16 +225,11 @@ def compute_reduce(
 ) -> ReducedBinaryQuadraticFormResult:
     """Gauss-reduce a primitive positive-definite form."""
 
-    ra, rb, rc, p, q, r, s, steps = _reduce(request.a, request.b, request.c)
+    ra, rb, rc, p, q, r, s = _reduce(request.form.a, request.form.b, request.form.c)
     return ReducedBinaryQuadraticFormResult(
-        a=request.a,
-        b=request.b,
-        c=request.c,
-        reduced_a=ra,
-        reduced_b=rb,
-        reduced_c=rc,
+        form=request.form,
+        reduced_form=PrimitivePositiveDefiniteBinaryQuadraticForm(a=ra, b=rb, c=rc),
         matrix=((p, q), (r, s)),
-        steps=tuple(steps),
     )
 
 
@@ -226,25 +238,25 @@ def compute_proper_equivalence(
 ) -> ProperEquivalenceResult:
     """Decide proper (SL_2(Z)) equivalence of two forms."""
 
-    a1, b1, c1 = request.form1
-    a2, b2, c2 = request.form2
+    a1, b1, c1 = request.first.a, request.first.b, request.first.c
+    a2, b2, c2 = request.second.a, request.second.b, request.second.c
 
     disc1 = b1 * b1 - 4 * a1 * c1
     disc2 = b2 * b2 - 4 * a2 * c2
     if disc1 != disc2:
         return ProperEquivalenceResult(
-            form1=request.form1,
-            form2=request.form2,
+            first=request.first,
+            second=request.second,
             status="NOT_PROPERLY_EQUIVALENT",
         )
 
-    ra1, rb1, rc1, p1, q1, r1, s1, _ = _reduce(a1, b1, c1)
-    ra2, rb2, rc2, p2, q2, r2, s2, _ = _reduce(a2, b2, c2)
+    ra1, rb1, rc1, p1, q1, r1, s1 = _reduce(a1, b1, c1)
+    ra2, rb2, rc2, p2, q2, r2, s2 = _reduce(a2, b2, c2)
 
     if (ra1, rb1, rc1) != (ra2, rb2, rc2):
         return ProperEquivalenceResult(
-            form1=request.form1,
-            form2=request.form2,
+            first=request.first,
+            second=request.second,
             status="NOT_PROPERLY_EQUIVALENT",
         )
 
@@ -262,8 +274,8 @@ def compute_proper_equivalence(
     ws = r1 * inv_q2 + s1 * inv_s2
 
     return ProperEquivalenceResult(
-        form1=request.form1,
-        form2=request.form2,
+        first=request.first,
+        second=request.second,
         status="PROPERLY_EQUIVALENT",
         matrix=((wp, wq), (wr, ws)),
     )
@@ -282,14 +294,67 @@ def compute_reduced_classes(
     )
 
 
-def _enumerate_reduced_classes(discriminant: int) -> tuple[tuple[int, int, int], ...]:
-    """Enumerate every reduced primitive class without constructing a result."""
-    if discriminant >= -2:
-        return ()
-    if discriminant % 4 not in (0, 1):
-        return ()
+def _enumerate_representations(
+    form: PrimitivePositiveDefiniteBinaryQuadraticForm, target: int
+) -> tuple[BinaryQuadraticFormRepresentation, ...]:
+    """Enumerate every ordered signed pair satisfying ``Q(x,y) = target``.
 
-    classes: list[tuple[int, int, int]] = []
+    For a fixed ``y`` the equation is quadratic in ``x``.  Its discriminant is
+    ``4*a*target + D*y^2``; checking that exact integer square and the two
+    divisibility conditions is both complete and avoids a two-dimensional box.
+    """
+    a, b, c = form.a, form.b, form.c
+    discriminant = form.discriminant
+    rows: list[BinaryQuadraticFormRepresentation] = []
+    y_bound = _require_representation_budget(form, target)
+    for y in range(-y_bound, y_bound + 1):
+        x_discriminant = 4 * a * target + discriminant * y * y
+        if x_discriminant < 0:
+            continue
+        root = isqrt(x_discriminant)
+        if root * root != x_discriminant:
+            continue
+        numerator = -b * y
+        candidates = (
+            (numerator + root,) if root == 0 else (numerator - root, numerator + root)
+        )
+        for value in candidates:
+            if value % (2 * a) != 0:
+                continue
+            x = value // (2 * a)
+            if _evaluate(a, b, c, x, y) != target:
+                raise AssertionError("quadratic discriminant reconstruction failed")
+            rows.append(
+                BinaryQuadraticFormRepresentation(
+                    x=x,
+                    y=y,
+                    primitive=_gcd(x, y) == 1,
+                )
+            )
+    return tuple(sorted(rows, key=lambda row: (row.x, row.y)))
+
+
+def compute_representations(
+    request: BinaryQuadraticFormRepresentationsRequest,
+) -> BinaryQuadraticFormRepresentationsResult:
+    """Return all ordered signed integer representations of one target exactly."""
+    representations = _enumerate_representations(request.form, request.target)
+    return BinaryQuadraticFormRepresentationsResult(
+        form=request.form,
+        target=request.target,
+        representations=representations,
+        count=len(representations),
+        primitive_count=sum(row.primitive for row in representations),
+    )
+
+
+def _enumerate_reduced_classes(
+    discriminant: int,
+) -> tuple[PrimitivePositiveDefiniteBinaryQuadraticForm, ...]:
+    """Enumerate every reduced primitive class without constructing a result."""
+    _require_reduced_class_search_budget(discriminant)
+
+    classes: list[PrimitivePositiveDefiniteBinaryQuadraticForm] = []
     # For reduced forms: |b| <= a <= c, b^2 - 4ac = D
     # Since D < 0, we have 4ac = b^2 - D > 0, so a,c > 0
     # |b| <= a, and a <= c = (b^2 - D) / (4a)
@@ -315,7 +380,9 @@ def _enumerate_reduced_classes(discriminant: int) -> tuple[tuple[int, int, int],
             if g > 1:
                 continue
             if _check_reduced(a, b, c_val):
-                classes.append((a, b, c_val))
+                classes.append(
+                    PrimitivePositiveDefiniteBinaryQuadraticForm(a=a, b=b, c=c_val)
+                )
 
-    classes.sort()
+    classes.sort(key=lambda form: (form.a, form.b, form.c))
     return tuple(classes)

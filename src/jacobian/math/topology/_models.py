@@ -25,6 +25,7 @@ from jacobian._models import StrictModel
 from jacobian.canonical import canonicalize_json
 from jacobian.math.chain_complexes.values import ChainComplexValue
 from jacobian.math.matrices.certified_snf.values import (
+    MAX_CERTIFIED_SNF_DIMENSION,
     CertifiedIntegerMatrix,
     SmithNormalFormCertificate,
 )
@@ -37,7 +38,15 @@ MAX_TOPOLOGY_CHAIN_GROUP = 512
 MAX_INLINE_HOMOLOGY_CHAIN_GROUP = 64
 MAX_TOPOLOGY_MATRIX_CELLS = 131_072
 MAX_TOPOLOGY_PRIME = 251
-MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP = 50
+# Integral homology embeds every boundary/augmentation matrix, Smith
+# transformation, and derived coordinate matrix in ``CertifiedIntegerMatrix``,
+# whose dimension contract caps at ``MAX_CERTIFIED_SNF_DIMENSION``.  The
+# admitted chain groups therefore derive from that certificate bound; raising
+# them requires expanding the certificate contract first, not this constant
+# alone.  The total-rank and cell bounds are independent work nets over the
+# whole request (SNF cost scales with total chain size), not output-shape
+# bounds.
+MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP = MAX_CERTIFIED_SNF_DIMENSION
 MAX_INTEGRAL_HOMOLOGY_TOTAL_CHAIN_RANK = 100
 MAX_INTEGRAL_HOMOLOGY_MATRIX_CELLS = 2500
 MAX_INTEGRAL_HOMOLOGY_OUTPUT_DIGITS = 256

@@ -6,11 +6,14 @@ from jacobian.canonical import format_canonical_integer
 from jacobian.math.tree_automata._models import (
     AcceptedTreeCountRequest,
     AcceptedTreeCountResult,
+    TreeAutomatonReachabilityRequest,
     TreeRunRequest,
     TreeRunResult,
 )
 from jacobian.math.tree_automata.operations import (
+    ReachableStateProfile,
     accepted_tree_count,
+    reachable_state_profile,
     run_tree_automaton,
     tree_state_chart,
 )
@@ -19,7 +22,11 @@ from jacobian.math.tree_automata.values import (
     validate_ranked_tree,
 )
 
-__all__ = ["compute_accepted_tree_count", "compute_tree_run"]
+__all__ = [
+    "compute_accepted_tree_count",
+    "compute_tree_automaton_reachability",
+    "compute_tree_run",
+]
 
 
 def compute_tree_run(request: TreeRunRequest) -> TreeRunResult:
@@ -46,3 +53,13 @@ def compute_accepted_tree_count(
             request.automaton, request.tree_size
         ),
     )
+
+
+def compute_tree_automaton_reachability(
+    request: TreeAutomatonReachabilityRequest,
+) -> ReachableStateProfile:
+    """Compute the exact reachable-state profile with minimum tree witnesses."""
+
+    profile = reachable_state_profile(request.automaton)
+    profile.require_source_binding()
+    return profile

@@ -375,6 +375,10 @@ class GradedJacobianRankMinor(StrictModel):
     def require_square_nonzero_minor(self) -> Self:
         if len(self.row_indices) != len(self.column_indices):
             raise ValueError("rank certificate minor must be square")
+        if any(index < 0 for index in (*self.row_indices, *self.column_indices)):
+            raise ValueError(
+                "rank certificate indices must be nonnegative zero-based positions"
+            )
         if (
             tuple(sorted(set(self.row_indices))) != self.row_indices
             or tuple(sorted(set(self.column_indices))) != self.column_indices

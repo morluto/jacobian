@@ -7,7 +7,7 @@ import shutil
 import tempfile
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Literal, Self
+from typing import Annotated, Literal, NamedTuple, Self
 
 from pydantic import (
     ConfigDict,
@@ -33,6 +33,26 @@ _MAX_VARIABLES = 1_024
 _MAX_CLAUSES = 8_192
 _MAX_LITERALS = 32_768
 _MAX_SMTLIB_BYTES = 128_000
+# Structural SMT-LIB budgets, enforced before Z3 sees the source. Depth bounds
+# the recursive-descent parser's native stack per nesting level; compound terms
+# bound the assertion-DAG nodes the parser allocates and the solver preprocesses;
+# declarations bound the symbol table and the width of any returned model;
+# numeral digits bound the big-integer expansion of one literal spelling, the
+# quantity whose coefficient work measurably outgrows Z3's own timeout and
+# rlimit checks near 16k digits (4,096 keeps worst measured shapes within a
+# small multiple of the declared wall time).
+_MAX_SMTLIB_DEPTH = 512
+_MAX_SMTLIB_TERMS = 32_768
+_MAX_SMTLIB_DECLARATIONS = 4_096
+_MAX_SMTLIB_NUMERAL_DIGITS = 4_096
+# Request-scoped solver budgets beyond wall time. Z3 rlimit is a deterministic
+# work measure: identical requests cut off identically regardless of host load
+# or speed. The ceiling is orders of magnitude above admitted easy queries
+# (measured <1k units) while cutting runaway search within seconds at a
+# measured ~0.2-5M units/s across QF regimes. max_memory caps Z3's own arena so
+# exhaustion surfaces as typed UNKNOWN instead of host memory pressure.
+_SOLVER_RLIMIT = 20_000_000
+_SOLVER_MAX_MEMORY_MB = 1024
 _MAX_MODEL_BYTES = 64_000
 _MAX_LPR_STEPS = 2_048
 _MAX_LPR_CLAUSE_WIDTH = 128
@@ -55,6 +75,7 @@ _LEAN_TOOLCHAIN = "leanprover/lean4:v4.31.0"
 _SUPPORTED_SMTLIB_COMMANDS = frozenset(
     {"set-logic", "declare-const", "declare-fun", "assert", "check-sat"}
 )
+_UnknownResource = Literal["time", "work", "memory"]
 
 
 class CanonicalCnf(StrictModel):
@@ -168,12 +189,15 @@ class SatSolveResult(StrictModel):
     assignment: tuple[StrictBool, ...] | None = Field(
         default=None, max_length=_MAX_VARIABLES
     )
+    exhausted: _UnknownResource | None = Field(default=None)
     detail: str | None = Field(default=None, max_length=1_024)
 
     @model_validator(mode="after")
     def bind_assignment_to_outcome(self) -> Self:
         if (self.outcome == "SAT") != (self.assignment is not None):
             raise ValueError("only a SAT result may carry an assignment")
+        if self.exhausted is not None and self.outcome != "UNKNOWN":
+            raise ValueError("only an UNKNOWN result may name an exhausted budget")
         return self
 
 
@@ -539,6 +563,72 @@ def _top_level_smtlib_commands(source: str) -> tuple[tuple[str, ...], ...]:
     return tuple(commands)
 
 
+class _SmtLibStructure(NamedTuple):
+    """Lexical structure of one SMT-LIB source, measured without parsing it."""
+
+    max_depth: int
+    compound_terms: int
+    numeral_digits: int
+
+
+def _atom_numeral_weight(atom: str) -> int:
+    """Return the digit width of one classified numeric-literal token.
+
+    Numeral, decimal, and bit-vector spellings expand into big integers or
+    rationals inside the solver. Digits inside simple symbols are interned
+    names and carry no weight; malformed tokens remain the backend parser's
+    typed rejection.
+    """
+
+    if atom.startswith("#"):
+        return max(len(atom) - 2, 0)
+    if atom.isdigit():
+        return len(atom)
+    head, separator, tail = atom.partition(".")
+    if separator and head.isdigit() and (not tail or tail.isdigit()):
+        return len(head) + len(tail)
+    return 0
+
+
+def _smtlib_structure(source: str) -> _SmtLibStructure:
+    """Measure nesting depth, compound-term count, and numeral width lexically.
+
+    This is the same deliberately non-parsing scan used for command shape; it
+    bounds what ``z3.parse_smt2_string`` may build before that parser runs.
+    An indexed literal such as ``(_ bvN w)`` spells its value inside a simple
+    symbol, so index position decides whether ``bvN`` digits carry numeral
+    weight; elsewhere digits stay interned names.
+    """
+
+    max_depth = depth = compound_terms = numeral_digits = 0
+    indexed_depth: int | None = None
+    previous_token = ""
+    for token in _tokenize_smtlib(source):
+        if token == "(":
+            depth += 1
+            compound_terms += 1
+            if depth > max_depth:
+                max_depth = depth
+        elif token == ")":
+            if indexed_depth == depth:
+                indexed_depth = None
+            depth -= 1
+        elif previous_token == "(" and token == "_":
+            indexed_depth = depth
+        else:
+            weight = _atom_numeral_weight(token)
+            if (
+                indexed_depth is not None
+                and token.startswith("bv")
+                and token[2:].isdigit()
+            ):
+                weight = len(token) - 2
+            if weight > numeral_digits:
+                numeral_digits = weight
+        previous_token = token
+    return _SmtLibStructure(max_depth, compound_terms, numeral_digits)
+
+
 class SmtSolveRequest(StrictModel):
     logic: SmtLogic
     smtlib: str = Field(
@@ -546,7 +636,10 @@ class SmtSolveRequest(StrictModel):
         max_length=_MAX_SMTLIB_BYTES,
         description=(
             "ASCII SMT-LIB that declares logic, contains exactly one check-sat command, "
-            "and ends with that command."
+            "and ends with that command. Bounded before parsing: nesting depth at most "
+            f"{_MAX_SMTLIB_DEPTH}, compound terms at most {_MAX_SMTLIB_TERMS}, declared "
+            f"symbols at most {_MAX_SMTLIB_DECLARATIONS}, and any one numeral, decimal, "
+            f"or indexed bit-vector spelling at most {_MAX_SMTLIB_NUMERAL_DIGITS} digits."
         ),
         examples=[
             "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)"
@@ -562,7 +655,30 @@ class SmtSolveRequest(StrictModel):
             raise ValueError("SMT-LIB input must be ASCII") from exc
         if len(encoded) > _MAX_SMTLIB_BYTES:
             raise ValueError("SMT-LIB input exceeds the byte limit")
+        structure = _smtlib_structure(self.smtlib)
+        if structure.max_depth > _MAX_SMTLIB_DEPTH:
+            raise ValueError(
+                f"SMT-LIB nesting exceeds the maximum term depth of {_MAX_SMTLIB_DEPTH}"
+            )
+        if structure.compound_terms > _MAX_SMTLIB_TERMS:
+            raise ValueError(
+                f"SMT-LIB exceeds the maximum of {_MAX_SMTLIB_TERMS} compound terms"
+            )
+        if structure.numeral_digits > _MAX_SMTLIB_NUMERAL_DIGITS:
+            raise ValueError(
+                "SMT-LIB contains a numeral wider than "
+                f"{_MAX_SMTLIB_NUMERAL_DIGITS} digits"
+            )
         commands = _top_level_smtlib_commands(self.smtlib)
+        declarations = sum(
+            1
+            for command in commands
+            if command[:1] in (("declare-const",), ("declare-fun",))
+        )
+        if declarations > _MAX_SMTLIB_DECLARATIONS:
+            raise ValueError(
+                f"SMT-LIB declares more than {_MAX_SMTLIB_DECLARATIONS} symbols"
+            )
         logic_commands = tuple(
             command for command in commands if command[:1] == ("set-logic",)
         )
@@ -581,12 +697,15 @@ class SmtSolveRequest(StrictModel):
 class SmtSolveResult(StrictModel):
     outcome: Literal["SAT", "UNSAT", "UNKNOWN"]
     model_smtlib: str | None = Field(default=None, max_length=_MAX_MODEL_BYTES)
+    exhausted: _UnknownResource | None = Field(default=None)
     detail: str | None = Field(default=None, max_length=1_024)
 
     @model_validator(mode="after")
     def bind_model_to_outcome(self) -> Self:
         if (self.outcome == "SAT") != (self.model_smtlib is not None):
             raise ValueError("only a SAT result may carry a model")
+        if self.exhausted is not None and self.outcome != "UNKNOWN":
+            raise ValueError("only an UNKNOWN result may name an exhausted budget")
         return self
 
 
@@ -663,6 +782,48 @@ def check_sat_assignment(
     return SatAssignmentCheckResult(satisfies=True)
 
 
+_EXHAUSTION_DETAILS: dict[_UnknownResource, str] = {
+    "work": "the bounded solver work budget was exhausted",
+    "memory": "the bounded solver memory budget was exhausted",
+    "time": "the bounded solver time budget was exhausted",
+}
+
+
+def _classify_exhaustion(message: str) -> _UnknownResource | None:
+    """Classify one Z3 reason or exception message onto the exhausted budgets."""
+
+    lowered = message.strip().lower()
+    if "resource limit" in lowered or "canceled" in lowered:
+        return "work"
+    if "memory" in lowered:
+        return "memory"
+    if "timeout" in lowered or "time limit" in lowered:
+        return "time"
+    return None
+
+
+def _project_unknown(reason: str | None) -> tuple[_UnknownResource | None, str]:
+    """Project one Z3 unknown reason onto the typed exhausted-budget taxonomy."""
+
+    text = (reason or "").strip()
+    classified = _classify_exhaustion(text)
+    if classified is not None:
+        return classified, _EXHAUSTION_DETAILS[classified]
+    if not text:
+        return None, "the solver returned no completeness evidence"
+    return None, text[:1_024]
+
+
+def _solver_settings(timeout_ms: int) -> dict[str, int]:
+    """Return the full request-scoped Z3 budget: wall time, work, and memory."""
+
+    return {
+        "timeout": timeout_ms,
+        "rlimit": _SOLVER_RLIMIT,
+        "max_memory": _SOLVER_MAX_MEMORY_MB,
+    }
+
+
 def solve_sat(request: SatSolveRequest) -> SatSolveResult:
     """Solve one bounded canonical CNF through the maintained Z3 Python binding."""
 
@@ -670,28 +831,38 @@ def solve_sat(request: SatSolveRequest) -> SatSolveResult:
 
     variables = tuple(z3.Bool(name) for name in request.cnf.variables)
     solver = z3.Solver()
-    solver.set(timeout=request.timeout_ms)
-    for clause in request.cnf.clauses:
-        terms = tuple(
-            variables[abs(literal) - 1]
-            if literal > 0
-            else z3.Not(variables[abs(literal) - 1])
-            for literal in clause
-        )
-        solver.add(z3.Or(*terms))
-    outcome = solver.check()
-    if outcome == z3.sat:
-        model = solver.model()
-        return SatSolveResult(
-            outcome="SAT",
-            assignment=tuple(
+    solver.set(**_solver_settings(request.timeout_ms))
+    try:
+        for clause in request.cnf.clauses:
+            terms = tuple(
+                variables[abs(literal) - 1]
+                if literal > 0
+                else z3.Not(variables[abs(literal) - 1])
+                for literal in clause
+            )
+            solver.add(z3.Or(*terms))
+        outcome = solver.check()
+        if outcome == z3.sat:
+            model = solver.model()
+            assignment = tuple(
                 z3.is_true(model.eval(variable, model_completion=True))
                 for variable in variables
-            ),
-        )
-    if outcome == z3.unsat:
-        return SatSolveResult(outcome="UNSAT")
-    return SatSolveResult(outcome="UNKNOWN", detail=solver.reason_unknown())
+            )
+            return SatSolveResult(outcome="SAT", assignment=assignment)
+        if outcome == z3.unsat:
+            return SatSolveResult(outcome="UNSAT")
+    except z3.Z3Exception as exc:
+        exhausted = _classify_exhaustion(str(exc))
+        if exhausted is not None:
+            return SatSolveResult(
+                outcome="UNKNOWN",
+                exhausted=exhausted,
+                detail=_EXHAUSTION_DETAILS[exhausted],
+            )
+        detail = f"the Z3 backend failed during the bounded solve: {exc}"
+        return SatSolveResult(outcome="UNKNOWN", detail=detail[:1_024])
+    exhausted, detail = _project_unknown(solver.reason_unknown())
+    return SatSolveResult(outcome="UNKNOWN", exhausted=exhausted, detail=detail)
 
 
 def _dimacs_cnf(cnf: CanonicalCnf) -> bytes:
@@ -848,20 +1019,32 @@ def solve_smt(request: SmtSolveRequest) -> SmtSolveResult:
             "SMT-LIB input could not be parsed by the declared logic"
         ) from exc
     solver = z3.SolverFor(request.logic.value)
-    solver.set(timeout=request.timeout_ms)
-    solver.add(assertions)
-    outcome = solver.check()
-    if outcome == z3.sat:
-        model = solver.model().sexpr()
-        if len(model.encode("utf-8")) > _MAX_MODEL_BYTES:
+    solver.set(**_solver_settings(request.timeout_ms))
+    try:
+        solver.add(assertions)
+        outcome = solver.check()
+        if outcome == z3.sat:
+            model = solver.model().sexpr()
+            if len(model.encode("utf-8")) > _MAX_MODEL_BYTES:
+                return SmtSolveResult(
+                    outcome="UNKNOWN",
+                    detail="the satisfying model exceeds the bounded result limit",
+                )
+            return SmtSolveResult(outcome="SAT", model_smtlib=model)
+        if outcome == z3.unsat:
+            return SmtSolveResult(outcome="UNSAT")
+    except z3.Z3Exception as exc:
+        exhausted = _classify_exhaustion(str(exc))
+        if exhausted is not None:
             return SmtSolveResult(
                 outcome="UNKNOWN",
-                detail="the satisfying model exceeds the bounded result limit",
+                exhausted=exhausted,
+                detail=_EXHAUSTION_DETAILS[exhausted],
             )
-        return SmtSolveResult(outcome="SAT", model_smtlib=model)
-    if outcome == z3.unsat:
-        return SmtSolveResult(outcome="UNSAT")
-    return SmtSolveResult(outcome="UNKNOWN", detail=solver.reason_unknown())
+        detail = f"the Z3 backend failed during the bounded solve: {exc}"
+        return SmtSolveResult(outcome="UNKNOWN", detail=detail[:1_024])
+    exhausted, detail = _project_unknown(solver.reason_unknown())
+    return SmtSolveResult(outcome="UNKNOWN", exhausted=exhausted, detail=detail)
 
 
 def check_lean_source(request: LeanCheckRequest) -> LeanCheckResult:
@@ -1002,7 +1185,7 @@ LOGIC_OPERATIONS = (
     ),
     MathTool(
         operation_id="sat.solve",
-        version="1",
+        version="2",
         title="Solve a bounded CNF",
         description="Run the maintained Z3 Python binding on one canonical CNF.",
         request_type=SatSolveRequest,
@@ -1054,7 +1237,7 @@ LOGIC_OPERATIONS = (
     ),
     MathTool(
         operation_id="smt.solve",
-        version="1",
+        version="3",
         title="Solve a bounded SMT-LIB query",
         description="Run the maintained Z3 Python binding on one QF SMT-LIB query.",
         request_type=SmtSolveRequest,

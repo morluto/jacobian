@@ -52,21 +52,28 @@ applies. Before adopting a small fixed input cap, complete this review:
    equivalent compact representation changes the complexity class or output
    obligation. Representation is part of the admitted domain, not an adapter
    detail.
-4. Research a maintained specialist backend before writing a custom kernel or
+4. Before applying a work bound to an expanded private representation, consider
+   exact semantics-preserving presolve such as removing redundant constraints,
+   eliminating fixed variables, or selecting a simpler algorithm regime. Base
+   admission on the reduced system when that reduction is bounded and exact;
+   otherwise record why expansion-first admission remains necessary.
+5. Research a maintained specialist backend before writing a custom kernel or
    retaining a restrictive pure-Python path. FLINT, GMP, and Arb are relevant
    examples for exact integer, polynomial, matrix, and rigorous ball
    computation; they are not mandatory when another maintained backend better
    fits the operation.
-5. Define preflight admission from the selected algorithm's work,
+6. Define preflight admission from the selected algorithm's work,
    intermediate, memory, and result bounds. Large scalar inputs should remain
    admissible when those derived quantities and the returned value are small.
-6. Document any remaining fixed ceiling as a conservative fallback. State
+7. Document any remaining fixed ceiling as a conservative fallback. State
    whether it is a mathematical, representation, backend, or currently
    uninvestigated limit, and identify the evidence needed to raise it.
-7. Test accepted and rejected boundaries, algorithm or representation
-   crossover points, and realistic source-backed cases. Use defining
-   invariants or an independent oracle to show that every selected regime has
-   the same public semantics.
+8. Test accepted and rejected boundaries, algorithm or representation
+   crossover points, and realistic source-backed cases. Exercise at least one
+   motivating request through the final public boundary. Boundary-rejection
+   tests do not substitute for a realistic request inside the intended useful
+   envelope. Use defining invariants or an independent oracle to show that
+   every selected regime has the same public semantics.
 
 A timeout, cancellation, resource exhaustion, or backend `UNKNOWN` result is
 an execution outcome, never a negative mathematical conclusion. If the public

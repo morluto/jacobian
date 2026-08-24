@@ -24,3 +24,15 @@ is source-bound: only `VALID_REFUTATION` establishes UNSAT.
 contradiction; it never establishes SAT. Timeout, unavailable backend, and
 execution errors are non-conclusions. There are no CNF, model, proof, or
 solver-result URIs.
+
+## Solver budgets
+
+`smt.solve` admission bounds the source before Z3 parses it: ASCII bytes,
+nesting depth, compound terms, declared symbols, and decimal numeral width.
+Each budget names the quantity that controls parser work, solver
+preprocessing, symbol-table size, or big-integer expansion. Both solvers give
+Z3 a complete request-scoped budget: wall-clock time, a deterministic work
+limit (`rlimit`), and a memory ceiling (`max_memory`). Exhausting any of them,
+or exceeding the bounded model size, returns `UNKNOWN` with an `exhausted`
+value of `time`, `work`, or `memory` where applicable; it never raises a host
+exception or yields a mathematical conclusion.

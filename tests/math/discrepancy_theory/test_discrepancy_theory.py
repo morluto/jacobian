@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+import sys
 from fractions import Fraction
 
 import pytest
@@ -622,6 +623,107 @@ class TestDiscrepancyOptimum:
             assert result.optimal_coloring == ()
             assert result.optimal_discrepancy is None
 
+    @pytest.mark.parametrize(
+        ("milp_status", "expected_status"),
+        [
+            (1, "BUDGET_EXCEEDED"),
+            (2, "EXECUTION_FAILED"),
+            (3, "EXECUTION_FAILED"),
+            (4, "EXECUTION_FAILED"),
+        ],
+    )
+    def test_milp_statuses_map_to_distinct_typed_outcomes(
+        self,
+        milp_status: int,
+        expected_status: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from types import SimpleNamespace
+
+        def fake_milp(**_kwargs: object) -> SimpleNamespace:
+            return SimpleNamespace(status=milp_status, x=None)
+
+        monkeypatch.setattr("scipy.optimize.milp", fake_milp)
+        req = DiscrepancyOptimumRequest(
+            set_system=FiniteSetSystem(ground_set_size=2, sets=((0, 1),)),
+        )
+
+        result = compute_optimal_discrepancy(req)
+
+        assert result.status == expected_status
+        assert result.optimal_coloring == ()
+        assert result.optimal_discrepancy is None
+        assert result.set_system == req.set_system
+        assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == result
+
+    @pytest.mark.parametrize(
+        "malformed_x",
+        [
+            "nan_vector",
+            "partially_nan_vector",
+            "inf_bound",
+            "short_vector",
+            "long_vector",
+            "outside_binary_bounds",
+            "integral_outside_binary_bounds",
+        ],
+    )
+    def test_malformed_status_zero_solution_is_execution_failed(
+        self,
+        malformed_x: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A status-zero backend response with NaN, inf, a wrong-shape
+        vector, or assignments outside the binary domain must become typed
+        EXECUTION_FAILED; NaN comparisons evaluate false and thresholding
+        would otherwise coerce out-of-domain values into a coloring."""
+        from types import SimpleNamespace
+
+        import numpy as np
+
+        n = 2
+        fixtures = {
+            "nan_vector": np.array([np.nan] * (n + 1)),
+            "partially_nan_vector": np.array([0.0, np.nan, 1.0]),
+            "inf_bound": np.array([0.0, 1.0, np.inf]),
+            "short_vector": np.ones(n),
+            "long_vector": np.ones(n + 2),
+            # Fractional values outside [0, 1]: the old threshold alone
+            # coerced these into a coloring with a wrong discrepancy.
+            "outside_binary_bounds": np.array([-1.0, -1.0, 2.0]),
+            # Integral but outside [0, 1]: integrality checking alone
+            # passes; only the binary-domain check rejects them.
+            "integral_outside_binary_bounds": np.array([0.0, 2.0, -1.0]),
+        }
+
+        def fake_milp(**_kwargs: object) -> SimpleNamespace:
+            return SimpleNamespace(status=0, x=fixtures[malformed_x])
+
+        monkeypatch.setattr("scipy.optimize.milp", fake_milp)
+        req = DiscrepancyOptimumRequest(
+            set_system=FiniteSetSystem(ground_set_size=n, sets=((0, 1),)),
+        )
+
+        result = compute_optimal_discrepancy(req)
+
+        assert result.status == "EXECUTION_FAILED"
+        assert result.optimal_coloring == ()
+        assert result.optimal_discrepancy is None
+        assert result.set_system == req.set_system
+        assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == result
+
+    def test_execution_failed_result_carries_no_claim(self):
+        from pydantic import ValidationError
+
+        system = FiniteSetSystem(ground_set_size=2, sets=((0, 1),))
+        with pytest.raises(ValidationError, match="EXECUTION_FAILED"):
+            DiscrepancyOptimumResult(
+                set_system=system,
+                status="EXECUTION_FAILED",
+                optimal_coloring=(1, -1),
+                optimal_discrepancy=0,
+            )
+
     def test_budget_exceeded_result_carries_no_claim(self):
         from pydantic import ValidationError
 
@@ -693,15 +795,158 @@ class TestDiscrepancyOptimum:
             return "unknown"
 
         monkeypatch.setattr(discrepancy_models, "_feasibility_outcome", undecided)
+        payload = {
+            "set_system": {"ground_set_size": 3, "sets": [[0, 1], [1, 2], [0, 2]]},
+            "status": "OPTIMAL",
+            "optimal_coloring": [1, 1, 1],
+            "optimal_discrepancy": 2,
+        }
+        with pytest.raises(ValidationError, match="replay budget"):
+            DiscrepancyOptimumResult.model_validate(payload)
+
+    @pytest.mark.parametrize(
+        ("proof_outcome", "expected_status"),
+        [
+            ("unsat", "OPTIMAL"),
+            ("sat", "EXECUTION_FAILED"),
+            ("unknown", "BUDGET_EXCEEDED"),
+        ],
+    )
+    def test_producing_optimal_claims_require_the_exact_proof_outcome(
+        self,
+        proof_outcome: str,
+        expected_status: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """A positive incumbent may only become OPTIMAL after the exact Z3
+        feasibility check re-establishes the lower bound; any other outcome
+        downgrades the result to a claim-free status."""
+
+        def fixed_outcome(_system: object, allowed: int) -> str:
+            assert allowed == 1
+            return proof_outcome
+
+        monkeypatch.setattr(discrepancy_models, "_feasibility_outcome", fixed_outcome)
         req = DiscrepancyOptimumRequest(
             set_system=FiniteSetSystem(
                 ground_set_size=3,
                 sets=((0, 1), (1, 2), (0, 2)),
             ),
         )
-        payload = compute_optimal_discrepancy(req).model_dump()
-        with pytest.raises(ValidationError, match="replay budget"):
-            DiscrepancyOptimumResult.model_validate(payload)
+
+        result = compute_optimal_discrepancy(req)
+
+        assert result.status == expected_status
+        if expected_status == "OPTIMAL":
+            assert result.optimal_discrepancy == 2
+            assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == (
+                result
+            )
+        else:
+            assert result.optimal_coloring == ()
+            assert result.optimal_discrepancy is None
+
+    def test_proving_checker_failure_stays_typed(self, monkeypatch: pytest.MonkeyPatch):
+        """A raising proof checker must translate to the claim-free outcome,
+        never escape compute_optimal_discrepancy as a host exception."""
+
+        def broken_checker(_system: object, _allowed: int) -> str:
+            raise RuntimeError("z3 backend crashed")
+
+        monkeypatch.setattr(discrepancy_models, "_feasibility_outcome", broken_checker)
+        req = DiscrepancyOptimumRequest(
+            set_system=FiniteSetSystem(
+                ground_set_size=3,
+                sets=((0, 1), (1, 2), (0, 2)),
+            ),
+        )
+
+        result = compute_optimal_discrepancy(req)
+
+        assert result.status == "BUDGET_EXCEEDED"
+        assert result.optimal_coloring == ()
+        assert result.optimal_discrepancy is None
+
+    def test_milp_exception_becomes_execution_failed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """scipy.optimize.milp raising instead of returning must surface as
+        the typed EXECUTION_FAILED outcome, not a kernel exception."""
+
+        def exploding_milp(**_kwargs: object) -> object:
+            raise RuntimeError("HiGHS native invocation failed")
+
+        monkeypatch.setattr("scipy.optimize.milp", exploding_milp)
+        req = DiscrepancyOptimumRequest(
+            set_system=FiniteSetSystem(ground_set_size=2, sets=((0, 1),)),
+        )
+
+        result = compute_optimal_discrepancy(req)
+
+        assert result.status == "EXECUTION_FAILED"
+        assert result.optimal_coloring == ()
+        assert result.optimal_discrepancy is None
+        assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == result
+
+    @pytest.mark.parametrize(
+        "blocked_module",
+        ["numpy", "scipy.optimize"],
+    )
+    def test_backend_initialization_failure_is_execution_failed(
+        self,
+        blocked_module: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """A NumPy/SciPy ABI or dynamic-loader failure during backend
+        initialization must translate to typed EXECUTION_FAILED instead of
+        escaping compute_optimal_discrepancy as an ImportError/OSError."""
+
+        monkeypatch.setitem(sys.modules, blocked_module, None)
+        req = DiscrepancyOptimumRequest(
+            set_system=FiniteSetSystem(ground_set_size=2, sets=((0, 1),)),
+        )
+
+        result = compute_optimal_discrepancy(req)
+
+        assert result.status == "EXECUTION_FAILED"
+        assert result.optimal_coloring == ()
+        assert result.optimal_discrepancy is None
+        assert result.set_system == req.set_system
+        assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == result
+
+    def test_solver_options_carry_node_and_time_budgets(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Branch-and-bound work is capped by node_limit, not wall time alone."""
+        from types import SimpleNamespace
+
+        import numpy as np
+
+        from jacobian.math.discrepancy_theory._models import (
+            MAX_OPTIMUM_SOLVER_MILLISECONDS,
+            MAX_OPTIMUM_SOLVER_NODES,
+        )
+
+        captured: dict[str, object] = {}
+
+        def fake_milp(**kwargs: object) -> SimpleNamespace:
+            captured.update(kwargs)
+            # b = (1, 0) encodes the alternating coloring (+1, -1), whose
+            # imbalance on the single pair is 0, matching t = 0.
+            return SimpleNamespace(status=0, x=np.array([1.0, 0.0, 0.0]))
+
+        monkeypatch.setattr("scipy.optimize.milp", fake_milp)
+        req = DiscrepancyOptimumRequest(
+            set_system=FiniteSetSystem(ground_set_size=2, sets=((0, 1),)),
+        )
+
+        result = compute_optimal_discrepancy(req)
+
+        options = captured["options"]
+        assert options["node_limit"] == MAX_OPTIMUM_SOLVER_NODES
+        assert options["time_limit"] == MAX_OPTIMUM_SOLVER_MILLISECONDS / 1000
+        assert result.status == "OPTIMAL"
+        assert result.optimal_discrepancy == 0
 
     def test_easy_instance_still_proves_bounds_after_bound_check(self):
         """The bound-checking kernel still reports OPTIMAL with replay."""

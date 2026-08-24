@@ -127,11 +127,15 @@ class ConceptResult(StrictModel):
     intent: tuple[int, ...]
 
 
-# Bound the concept enumeration. NextClosure has cost proportional to the
-# number of concepts (not 2^|M|), but the number of concepts itself can be
-# exponential in the number of attributes.  We bound both the attribute count
-# and the number of concepts returned.
-MAX_CONCEPT_ATTRIBUTES = 64
+# Bound the concept enumeration by its declared output budget. NextClosure's
+# cost is proportional to the number of concepts, and that number is bounded
+# by 2^min(|objects|, |attributes|): intents biject with a closure system on
+# the attribute axis and extents with one on the object axis.  Admission is
+# therefore two-tier and result-sensitive.  When that tight worst case fits
+# MAX_CONCEPTS the request is admitted statically.  Otherwise one capped
+# NextClosure preflight — bounded by the same budget it guards — counts the
+# true family, so sparse wide or square contexts stay admissible and only
+# contexts whose actual family overflows are rejected before execution.
 MAX_CONCEPTS = 10000
 
 
@@ -141,11 +145,23 @@ class EnumerateConceptsRequest(StrictModel):
     context: FormalContext
 
     @model_validator(mode="after")
-    def require_bounded_attribute_count(self) -> Self:
-        if len(self.context.attributes) > MAX_CONCEPT_ATTRIBUTES:
-            raise ValueError(
-                f"concept enumeration supports at most {MAX_CONCEPT_ATTRIBUTES} attributes"
+    def require_bounded_concept_family(self) -> Self:
+        worst_case_concepts = 2 ** min(
+            len(self.context.objects), len(self.context.attributes)
+        )
+        if worst_case_concepts > MAX_CONCEPTS:
+            from jacobian.math.formal_concept_analysis.operations import (
+                concept_family_size_capped,
             )
+
+            family_size = concept_family_size_capped(self.context, MAX_CONCEPTS)
+            if family_size > MAX_CONCEPTS:
+                raise ValueError(
+                    f"the context carries more than {MAX_CONCEPTS} concepts "
+                    "and concept enumeration returns at most "
+                    f"{MAX_CONCEPTS}; narrow the context or split the "
+                    "enumeration"
+                )
         return self
 
 
@@ -168,7 +184,6 @@ class ConceptLatticeResult(StrictModel):
 
 __all__ = [
     "MAX_CONCEPTS",
-    "MAX_CONCEPT_ATTRIBUTES",
     "AttributeSubsetRequest",
     "ClosureResult",
     "ConceptLatticeResult",

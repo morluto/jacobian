@@ -277,6 +277,49 @@ def test_result_rejects_a_mutated_witness_or_partial_derivative() -> None:
         GradedJacobianSyzygyResult.model_validate(corrupted_map)
 
 
+def test_result_rejects_negative_rank_minor_indices() -> None:
+    """Negative minor positions must not reinterpret as Python-style offsets."""
+
+    result = compute_graded_jacobian_syzygy(
+        GradedJacobianSyzygyRequest(
+            polynomial=_sparse_polynomial(("x", "y", "z"), {(1, 1, 1): 1}),
+            max_degree=1,
+        )
+    )
+    payload = json.loads(result.model_dump_json())
+    tampered = False
+    for item in payload["degree_maps"]:
+        minor = item["rank_minor"]
+        if minor is None:
+            continue
+        tampered = True
+        minor["row_indices"] = [
+            value - item["row_count"] for value in minor["row_indices"]
+        ]
+        minor["column_indices"] = [
+            value - item["column_count"] for value in minor["column_indices"]
+        ]
+    assert tampered
+    with pytest.raises(ValidationError, match="nonnegative"):
+        GradedJacobianSyzygyResult.model_validate(payload)
+
+
+def test_replayed_results_accept_every_admitted_variable_count() -> None:
+    """Replay uses the declared variable count, not a fixed block width."""
+
+    for variables in (("x",), ("x", "y"), ("x", "y", "z", "w")):
+        source = _sparse_polynomial(
+            variables,
+            {tuple(1 if axis == 0 else 0 for axis in range(len(variables))): 1},
+        )
+        request = GradedJacobianSyzygyRequest(polynomial=source, max_degree=1)
+        result = compute_graded_jacobian_syzygy(request)
+        replayed = GradedJacobianSyzygyResult.model_validate(
+            json.loads(result.model_dump_json())
+        )
+        assert replayed == result
+
+
 def test_dimension_specific_basis_boundary_rejects_before_backend_execution() -> None:
     with pytest.raises(ValidationError, match="512-monomial"):
         GradedJacobianSyzygyRequest(

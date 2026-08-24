@@ -57,6 +57,46 @@ def _run_edge_coloring_solver(
     return "unknown", None
 
 
+def _run_k_colorability_solver(
+    graph: GraphEdgeList,
+    colors: int,
+    solver_conflicts: int,
+) -> tuple[str, tuple[int, ...] | None]:
+    """Run one bounded exact vertex-coloring SAT check.
+
+    Returns ``("sat", coloring)``, ``("unsat", None)``, or
+    ``("unknown", None)``; the coloring assigns one color in
+    ``0..colors-1`` to each vertex index ``0..vertex_count-1``.
+    Non-colorability is only ever claimed on an explicit ``unsat``; an
+    exhausted budget reports ``unknown`` so the caller returns the typed
+    incomplete outcome.
+    """
+
+    import z3
+
+    solver = z3.Solver()
+    solver.set("max_conflicts", solver_conflicts)
+    vertex_colors = [z3.Int(f"color_{vertex}") for vertex in range(graph.vertex_count)]
+    solver.add(*(z3.And(color >= 0, color < colors) for color in vertex_colors))
+    solver.add(*(vertex_colors[u] != vertex_colors[v] for u, v in graph.edges))
+    result = solver.check()
+    if result == z3.sat:
+        model = solver.model()
+        return "sat", tuple(model.eval(color).as_long() for color in vertex_colors)
+    if result == z3.unsat:
+        return "unsat", None
+    return "unknown", None
+
+
+def _is_proper_vertex_coloring(
+    graph: GraphEdgeList,
+    coloring: tuple[int, ...],
+) -> bool:
+    """Check whether a coloring assigns distinct colors to adjacent vertices."""
+
+    return all(coloring[u] != coloring[v] for u, v in graph.edges)
+
+
 def _edge_coloring_graph_schema() -> JsonSchemaValue:
     """Project the edge-coloring input bounds onto the shared graph schema."""
 
@@ -171,15 +211,103 @@ class GraphEdgeList(StrictModel):
 
 
 class KColorabilityRequest(StrictModel):
+    """Decide whether a bounded simple graph admits a proper ``k``-coloring."""
+
     graph: GraphEdgeList
     colors: int = Field(ge=1, le=64)
+    solver_conflicts: int = Field(
+        default=DEFAULT_SOLVER_CONFLICT_BUDGET,
+        ge=1,
+        le=MAX_SOLVER_CONFLICT_BUDGET,
+        description=(
+            "Request-visible SAT work budget: the exact solver is cut off "
+            "after this many conflict clauses; an exhausted budget yields "
+            "the typed SOLVER_BUDGET_EXCEEDED outcome instead of an "
+            "unbounded wait or a negative conclusion."
+        ),
+    )
 
 
 class KColorabilityResult(StrictModel):
-    colorable: bool
+    """Whether a proper ``k``-coloring exists, with one coloring witness."""
+
+    graph: GraphEdgeList
+    colors: int = Field(ge=1, le=64)
+    solver_conflicts: int = Field(
+        default=DEFAULT_SOLVER_CONFLICT_BUDGET,
+        ge=1,
+        le=MAX_SOLVER_CONFLICT_BUDGET,
+    )
+    status: Literal["DECIDED", "SOLVER_BUDGET_EXCEEDED"] = "DECIDED"
+    colorable: bool | None = None
     coloring: tuple[int, ...] | None = None
     vertex_count: int = Field(ge=1, le=64)
-    colors: int = Field(ge=1, le=64)
+
+    @model_validator(mode="after")
+    def require_claim_consistency(self) -> Self:
+        if self.vertex_count != self.graph.vertex_count:
+            raise ValueError("vertex_count must equal the graph's vertex count")
+        if self.status == "SOLVER_BUDGET_EXCEEDED":
+            _require_k_colorability_budget_exceeded_shape(self)
+            return self
+        if self.colorable is None:
+            raise ValueError("a decided result must claim colorable true or false")
+        if self.colorable:
+            _require_k_colorability_positive_witness(self)
+        else:
+            _require_k_colorability_negative_replay(self)
+        return self
+
+
+def _require_k_colorability_budget_exceeded_shape(
+    result: KColorabilityResult,
+) -> None:
+    """A budget-exceeded outcome carries no claim and must replay unknown."""
+
+    if result.colorable is not None or result.coloring is not None:
+        raise ValueError("a budget-exceeded outcome carries no colorability claim")
+    if not result.graph.edges:
+        raise ValueError("empty graph is decided colorable without any search")
+    if (
+        _run_k_colorability_solver(
+            result.graph, result.colors, result.solver_conflicts
+        )[0]
+        != "unknown"
+    ):
+        raise ValueError(
+            "claimed solver-budget exceedance is not reproduced by the bounded replay"
+        )
+
+
+def _require_k_colorability_positive_witness(result: KColorabilityResult) -> None:
+    """A colorable claim must carry a proper source-bound witness."""
+
+    if result.coloring is None:
+        raise ValueError("a colorable result must carry a coloring witness")
+    if len(result.coloring) != result.graph.vertex_count:
+        raise ValueError("coloring must assign one color per vertex")
+    if any(not 0 <= color < result.colors for color in result.coloring):
+        raise ValueError("coloring values must be in 0..colors-1")
+    if not _is_proper_vertex_coloring(result.graph, result.coloring):
+        raise ValueError("coloring witness must be a proper vertex coloring")
+
+
+def _require_k_colorability_negative_replay(result: KColorabilityResult) -> None:
+    """Replay non-colorability; only an explicit unsat may support it."""
+
+    if result.coloring is not None:
+        raise ValueError("a non-colorable result must not carry a coloring")
+    if not result.graph.edges:
+        raise ValueError("empty graph is k-colorable but result claims not colorable")
+    if (
+        _run_k_colorability_solver(
+            result.graph, result.colors, result.solver_conflicts
+        )[0]
+        != "unsat"
+    ):
+        raise ValueError(
+            "graph is k-colorable or undecided but result claims not colorable"
+        )
 
 
 class MaximalIndependentSetRequest(StrictModel):

@@ -9,13 +9,16 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.tree_automata._models import (
     AcceptedTreeCountRequest,
     AcceptedTreeCountResult,
+    TreeAutomatonReachabilityRequest,
     TreeRunRequest,
     TreeRunResult,
 )
 from jacobian.math.tree_automata._operations import (
     compute_accepted_tree_count,
+    compute_tree_automaton_reachability,
     compute_tree_run,
 )
+from jacobian.math.tree_automata.values import ReachableStateProfile
 
 
 def _op[
@@ -71,6 +74,38 @@ _RUN_EXAMPLE = {
 }
 
 TREE_AUTOMATA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
+    _op(
+        "tree_automaton.states.reachable.compute",
+        "Compute bottom-up tree-automaton reachable states",
+        "Return the complete least-fixed-point set of states reachable by a "
+        "finite ground ranked tree, its complement, and one canonical "
+        "minimum-node witness tree per reachable state. A transition is "
+        "enabled only when all of its ordered child states are reachable. "
+        "When several derivations tie at the minimum node count, each state's "
+        "witness is the unique one whose root transition (symbol, "
+        "child_states, target_state) is lexicographically smallest, comparing "
+        "child_states element-wise as integers, with each child witness "
+        "chosen by the same rule recursively.",
+        TreeAutomatonReachabilityRequest,
+        ReachableStateProfile,
+        compute_tree_automaton_reachability,
+        "tree-automata",
+        "reachability",
+        "fixed-point",
+        "exact",
+        examples=(
+            example(
+                "leaf_seed_and_binary_extension",
+                "Find states generated from a leaf and a binary "
+                "constructor; every transition's symbol must index the "
+                "ranked alphabet and its child_states count must equal "
+                "arity[symbol].",
+                {
+                    "automaton": _RUN_EXAMPLE["automaton"],
+                },
+            ),
+        ),
+    ),
     _op(
         "tree_automaton.run.compute",
         "Run a bottom-up tree automaton on a ranked tree",

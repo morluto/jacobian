@@ -38,14 +38,26 @@ another operation, serialize the producer result and pass its canonical value
 unchanged through the consumer's typed payload. The test should fail if a caller
 would have to reconstruct mathematical context or translate between parallel
 representations.
+When an operation is added or changed because of a source-backed gap, preserve
+at least one minimally reduced motivating request as a behavioral regression.
+Run it through the final public request model and operation, and assert both
+admission and the typed mathematical result. A smaller happy-path example does
+not replace the request that established the need.
 Include the degenerate producer case most likely to erase ambient information,
 such as an empty basis, zero-row matrix, empty trace, or zero count. For
 source-bound decisions, mutate the source and conclusion independently and
 require result validation to reject both forgeries.
 
-Use property tests for canonicalization and algebraic invariants when they
-state the contract more directly than examples. Use maintained libraries in
-their owning domain tests rather than mocking their algorithms. A timeout,
+Center correctness tests on regression evidence when fixing a concrete
+regression, defining identities, consistency checks, and property-based tests
+against actual symbolic or mathematical behavior. Use maintained libraries in
+their owning domain tests rather than mocking their algorithms. Exercise real
+mathematical and numerical assertions at public typed interfaces with
+deterministic or replayable inputs; keep fixtures sparse and name the evidence
+each one contributes. Do not monkeypatch or use test fakes for mathematical
+values, validators, serializers, or backend correctness. Keep
+unavailable-environment and transport-failure tests in separate boundary
+cases; they must not stand in for mathematical correctness. A timeout,
 cancellation, unavailable external executable, or solver `UNKNOWN` is never a
 positive mathematical conclusion.
 
@@ -109,6 +121,12 @@ insufficient when correctness concerns a set, partition, or family of canonical
 representatives: compare the exact objects or their declared equivalence class.
 For example, two tree generators can return the same count while duplicating
 one representative and omitting another.
+
+Accepted and rejected boundary cases prove that a stated envelope is enforced;
+they do not prove that the envelope admits realistic work. Pair boundary tests
+with a source-backed accepted case even when its public dimensions are small.
+A compact request can still be the decisive scale fixture when private
+normalization, expansion, or backend representation makes it expensive.
 
 Use a source-backed reference fixture when a standard example helps fix
 terminology, normalization, or another convention-sensitive output. Cite the

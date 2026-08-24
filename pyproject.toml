@@ -21,6 +21,7 @@ dependencies = [
     "pydantic>=2.12,<3",
     "python-flint==0.9.0",
     "rfc8785==0.1.4",
+    "scipy==1.16.1",
     "sympy==1.14.0",
     "typer>=0.20,<1",
     "z3-solver==5.1.0.0",
@@ -186,7 +187,9 @@ known_first_party = ["jacobian"]
 # exactly pinned MCP transport; deploy/ is not part of the Python wheel.
 # The Harbor manifest writer is repository tooling and uses the direct dev-only
 # tomli-w dependency; it is intentionally absent from the runtime wheel.
-per_rule_ignores = { "DEP001" = ["harbor"], "DEP002" = ["python-flint"], "DEP003" = ["httpx2"], "DEP004" = ["jsonschema", "tomli_w"] }
+# numpy arrives transitively with the exactly pinned scipy (HiGHS) wheel;
+# kernels import it directly for MILP matrix construction.
+per_rule_ignores = { "DEP001" = ["harbor"], "DEP002" = ["python-flint"], "DEP003" = ["httpx2", "numpy"], "DEP004" = ["jsonschema", "tomli_w"] }
 
 [tool.importlinter]
 root_package = "jacobian"

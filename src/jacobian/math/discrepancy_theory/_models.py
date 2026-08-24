@@ -13,11 +13,22 @@ from jacobian._models import StrictModel
 
 MAX_GROUND_SET = 64
 MAX_SETS = 1_000
-# The optimum operation encodes minimum-discrepancy search as an exact
-# integer program (Z3 Optimize over {±1} variables with one shared
-# objective D); a sat answer is a proven optimum, and an exhausted budget
-# returns BUDGET_EXCEEDED without any mathematical claim.
+# The optimum operation pairs two maintained backends: a bounded
+# scipy.optimize.milp (HiGHS) search produces the incumbent coloring, and the
+# minimality of any positive claimed optimum is re-established exactly by one
+# Z3 pseudo-boolean feasibility check at D-1 before OPTIMAL may carry it.
+# Exhausted budgets return BUDGET_EXCEEDED without any mathematical claim.
 MAX_OPTIMUM_SOLVER_MILLISECONDS = 30_000
+# The node limit bounds HiGHS' branch-and-bound tree retention independently
+# of wall clock: an admitted hard 64-variable instance can otherwise expand
+# and retain an arbitrary portion of its ~2^64 search tree before the timer
+# fires. Exhausting either limit yields the claim-free outcome; neither limit
+# stands in for a mathematical bound on the optimum itself.
+MAX_OPTIMUM_SOLVER_NODES = 1_000_000
+# The exact proof check runs under its own explicit budget so one request's
+# total solver work stays bounded; exhaustion reports unknown, which the
+# producing path maps to BUDGET_EXCEEDED and replay rejects fail-closed.
+MAX_OPTIMUM_PROOF_MILLISECONDS = 10_000
 
 MAX_ROUNDING_COORDINATES = 512
 MAX_ROUNDING_ROWS = 512
@@ -333,8 +344,9 @@ class FiniteSetSystem(StrictModel):
                 "A finite ground set of size `ground_set_size` and up to "
                 f"{MAX_SETS} subsets given as strictly increasing index tuples. "
                 f"The optimum operation admits ground sets up to {MAX_GROUND_SET} "
-                "elements and encodes the minimum-discrepancy search as an exact "
-                "integer program; the solver budget bounds each request."
+                "elements and pairs a bounded HiGHS MILP incumbent search with "
+                "an exact pseudo-boolean optimality proof; the combined solver "
+                "budget bounds each request."
             )
         }
     )
@@ -389,31 +401,41 @@ class DiscrepancyOptimumRequest(StrictModel):
 def _feasibility_outcome(
     set_system: FiniteSetSystem, allowed: int
 ) -> Literal["sat", "unsat", "unknown"]:
-    """Run one bounded exact feasibility check for imbalance at most ``allowed``.
+    """Decide exactly whether a coloring with imbalance at most ``allowed`` exists.
 
-    Mirrors the optimum program's constraints with a fixed target instead of
-    a minimized objective. Only an explicit ``unsat`` may support a lower
-    bound; an exhausted budget reports ``unknown`` so validation fails
-    closed rather than accepting an unproven claim.
+    One pseudo-boolean satisfiability check over the binary color bits with
+    the maintained Z3 backend: ``unsat`` is an exact infeasibility proof and
+    is the only outcome that may support a lower bound; ``sat`` supplies a
+    witness; an exhausted proof budget, unavailable backend, or backend
+    failure reports ``unknown`` so validation fails closed rather than
+    accepting an unproven claim.
     """
 
-    import z3  # type: ignore[import-untyped]
+    n = set_system.ground_set_size
+    if n == 0:
+        return "sat" if allowed >= 0 else "unsat"
+    if allowed < 0:
+        return "unsat"
 
-    solver = z3.Solver()
-    solver.set("timeout", MAX_OPTIMUM_SOLVER_MILLISECONDS)
-    variables = [z3.Int(f"x_{index}") for index in range(set_system.ground_set_size)]
-    solver.add(*(z3.Or(value == 1, value == -1) for value in variables))
-    for subset in set_system.sets:
-        signed_sum = (
-            z3.Sum([variables[element] for element in subset])
-            if subset
-            else z3.IntVal(0)
-        )
-        solver.add(signed_sum <= allowed, -signed_sum <= allowed)
-    outcome = solver.check()
-    if outcome == z3.sat:
+    try:
+        import z3  # type: ignore[import-untyped]
+
+        solver = z3.Solver()
+        solver.set(timeout=max(1, MAX_OPTIMUM_PROOF_MILLISECONDS))
+        bits = [z3.Bool(f"b_{index}") for index in range(n)]
+        signed_sums = [
+            z3.Sum([z3.If(bits[element], 1, -1) for element in subset])
+            for subset in set_system.sets
+        ]
+        for signed_sum in signed_sums:
+            solver.add(signed_sum <= allowed)
+            solver.add(signed_sum >= -allowed)
+        status = solver.check()
+    except Exception:
+        return "unknown"
+    if status == z3.sat:
         return "sat"
-    if outcome == z3.unsat:
+    if status == z3.unsat:
         return "unsat"
     return "unknown"
 
@@ -432,16 +454,16 @@ class DiscrepancyOptimumResult(StrictModel):
     """
 
     set_system: FiniteSetSystem
-    status: Literal["OPTIMAL", "BUDGET_EXCEEDED"]
+    status: Literal["OPTIMAL", "BUDGET_EXCEEDED", "EXECUTION_FAILED"]
     optimal_coloring: tuple[int, ...] = Field(default=())
     optimal_discrepancy: int | None = Field(default=None, ge=0, strict=True)
 
     @model_validator(mode="after")
     def bind_optimal_coloring(self) -> Self:
-        if self.status == "BUDGET_EXCEEDED":
+        if self.status in ("BUDGET_EXCEEDED", "EXECUTION_FAILED"):
             if self.optimal_coloring or self.optimal_discrepancy is not None:
                 raise ValueError(
-                    "a BUDGET_EXCEEDED result must not carry a coloring or optimum"
+                    f"a {self.status} result must not carry a coloring or optimum"
                 )
             return self
         if self.optimal_discrepancy is None:
@@ -489,7 +511,7 @@ def _proven_optimal_result(
     optimal_coloring: tuple[int, ...],
     optimal_discrepancy: int,
 ) -> DiscrepancyOptimumResult:
-    """Build a proven-optimal result from one producing Optimize solve.
+    """Build a proven-optimal result after one producing incumbent solve.
 
     Direct construction from the producing solve skips result replay so one
     declared budget covers all solver work; independently supplied results
@@ -516,6 +538,22 @@ def _budget_exceeded_result(set_system: FiniteSetSystem) -> DiscrepancyOptimumRe
     return DiscrepancyOptimumResult.model_construct(
         set_system=set_system,
         status="BUDGET_EXCEEDED",
+        optimal_coloring=(),
+        optimal_discrepancy=None,
+    )
+
+
+def _execution_failed_result(set_system: FiniteSetSystem) -> DiscrepancyOptimumResult:
+    """Build the typed non-mathematical outcome from a backend failure.
+
+    Same claim-free shape as ``_budget_exceeded_result``: the producing
+    solve's answer is carried unclaimed and replay stays reserved for
+    independently supplied results via ``bind_optimal_coloring``.
+    """
+
+    return DiscrepancyOptimumResult.model_construct(
+        set_system=set_system,
+        status="EXECUTION_FAILED",
         optimal_coloring=(),
         optimal_discrepancy=None,
     )

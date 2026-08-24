@@ -8,6 +8,7 @@ from jacobian.math.matrices.symbolic import (
     symbolic_characteristic_polynomial,
     symbolic_determinant,
     symbolic_eigenvalues,
+    symbolic_matrix_multiply,
     symbolic_rank,
 )
 from jacobian.math.matrices.symbolic._models import (
@@ -18,6 +19,8 @@ from jacobian.math.matrices.symbolic._models import (
     SymbolicEigenvaluesResult,
     SymbolicLinearSystemRequest,
     SymbolicLinearSystemResult,
+    SymbolicMatrix,
+    SymbolicMatrixProductRequest,
     SymbolicMatrixRequest,
     SymbolicRankResult,
 )
@@ -41,6 +44,14 @@ def compute_symbolic_rank(
         request.matrix.variables,
     )
     return SymbolicRankResult(rank=rank, pivot_columns=pivot_columns)
+
+
+def compute_symbolic_matrix_product(
+    request: SymbolicMatrixProductRequest,
+) -> SymbolicMatrix:
+    """Compute one exact symbolic matrix product."""
+
+    return symbolic_matrix_multiply(request.left, request.right)
 
 
 def compute_symbolic_characteristic_polynomial(

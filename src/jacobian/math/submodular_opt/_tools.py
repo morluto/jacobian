@@ -81,7 +81,10 @@ SUBMODULAR_OPT_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "combinatorics.set_function.monotonicity",
         "Check monotonicity of a set function",
-        "Check if a set function is monotone non-decreasing.",
+        "Check if a set function is monotone non-decreasing by scanning every "
+        "covering relation. Scan admission bounds each table value to 128 "
+        "numerator/denominator digits and the complete 2^n table to the 9 MiB "
+        "transport envelope; ground sets up to 16 elements.",
         MonotonicityCheckRequest,
         MonotonicityCheckResult,
         check_monotonicity,
@@ -89,6 +92,7 @@ SUBMODULAR_OPT_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "set-function",
         "monotonicity",
         "exact",
+        version="2",
         examples=(
             example(
                 "monotone_check",
@@ -110,7 +114,11 @@ SUBMODULAR_OPT_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "combinatorics.set_function.submodularity",
         "Check submodularity of a set function",
-        "Check if a set function is submodular.",
+        "Check if a set function is submodular via the exact local "
+        "characterization f(S+i)+f(S+j) >= f(S)+f(S+{i,j}) over all pairs. Scan "
+        "admission bounds each table value to 128 numerator/denominator digits "
+        "and the complete 2^n table to the 9 MiB transport envelope; ground "
+        "sets up to 16 elements.",
         SubmodularityCheckRequest,
         SubmodularityCheckResult,
         check_submodularity,
@@ -118,6 +126,7 @@ SUBMODULAR_OPT_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "set-function",
         "submodularity",
         "exact",
+        version="2",
         examples=(
             example(
                 "submodular_check",

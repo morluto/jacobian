@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import math
 from fractions import Fraction
+from typing import Any
 
 from sympy import ZZ
 from sympy.polys.matrices import DomainMatrix
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.discrepancy_theory import _models as discrepancy_models
 from jacobian.math.discrepancy_theory._models import (
     MAX_OPTIMUM_SOLVER_MILLISECONDS,
+    MAX_OPTIMUM_SOLVER_NODES,
     MAX_ROUNDING_INTERMEDIATE_DIGITS,
     DiscrepancyEvalRequest,
     DiscrepancyEvalResult,
@@ -21,6 +24,7 @@ from jacobian.math.discrepancy_theory._models import (
     HardConstraintRowLedger,
     MonitoredColumnLedger,
     _budget_exceeded_result,
+    _execution_failed_result,
     _proven_optimal_result,
 )
 
@@ -220,18 +224,29 @@ def compute_discrepancy(request: DiscrepancyEvalRequest) -> DiscrepancyEvalResul
 def compute_optimal_discrepancy(
     request: DiscrepancyOptimumRequest,
 ) -> DiscrepancyOptimumResult:
-    """Minimize the maximum imbalance via an exact integer program.
+    """Minimize the maximum imbalance via a bounded incumbent search plus proof.
 
-    Variables ``x_u in {-1, +1}`` and a shared nonnegative integer ``D``
-    with ``D >= |sum_{u in S} x_u|`` for every set ``S``.  A sat answer is
-    only trusted as OPTIMAL when Z3's objective handle proves it: its
-    lower and upper bounds must coincide with each other, with the model's
-    objective value, and with an independent Python replay of the
-    coloring's exact maximum imbalance.  An incumbent found after an
-    exhausted budget has open bounds and is reported as
-    ``BUDGET_EXCEEDED`` with no mathematical claim; likewise any
-    non-sat outcome.  The empty ground set has the single empty coloring
-    with discrepancy zero.
+    Binary variables ``b_u in {0, 1}`` encode the coloring ``x_u = 2 b_u -1``
+    and one continuous bound ``t`` satisfies, per set ``S`` of size ``k``::
+
+        2 sum(b[u] for u in S) - t <= k
+        -2 sum(b[u] for u in S) - t <= -k
+
+    A time- and node-bounded HiGHS MILP through ``scipy.optimize.milp``
+    produces the incumbent. The returned coloring is integrality-checked,
+    checked against its binary domain before rounding, and its discrepancy is
+    recomputed exactly with Python integers, so floating-point solver
+    internals can never surface as a mathematical value. A positive optimum
+    is carried by OPTIMAL only after the exact Z3 pseudo-boolean feasibility
+    check proves no coloring attains one less; a witness for that smaller
+    bound yields EXECUTION_FAILED and an exhausted or unavailable proof
+    yields BUDGET_EXCEEDED. Zero is definitional. A solver limit produces
+    BUDGET_EXCEEDED; any other nonzero status, a non-integral or out-of-domain
+    assignment, an objective/replay disagreement, or a failing backend call
+    (failed NumPy/SciPy initialization included) produces the distinct
+    non-mathematical EXECUTION_FAILED outcome. Neither carries a coloring or
+    any claim. The empty ground set has the single empty coloring with
+    discrepancy zero.
     """
     n = request.set_system.ground_set_size
     sets = request.set_system.sets
@@ -239,55 +254,115 @@ def compute_optimal_discrepancy(
     if n == 0:
         return _proven_optimal_result(request.set_system, (), 0)
 
-    import z3  # type: ignore[import-untyped]
+    variable_count = n + 1
 
-    optimizer = z3.Optimize()
-    optimizer.set("timeout", MAX_OPTIMUM_SOLVER_MILLISECONDS)
-    variables = [z3.Int(f"x_{index}") for index in range(n)]
-    optimizer.add(*(z3.Or(value == 1, value == -1) for value in variables))
-    objective = z3.Int("D")
-    optimizer.add(objective >= 0)
-    for subset in sets:
-        signed_sum = (
-            z3.Sum([variables[element] for element in subset])
-            if subset
-            else z3.IntVal(0)
+    try:
+        import numpy as np
+        from scipy.optimize import (  # type: ignore[import-untyped]
+            Bounds,
+            LinearConstraint,
+            milp,
         )
-        optimizer.add(objective >= signed_sum, objective >= -signed_sum)
-    objective_handle = optimizer.minimize(objective)
 
-    def _bound_digits(expression: object) -> int | None:
-        """Return the integer value of a numeral bound, or None if open."""
+        objective = np.zeros(variable_count)
+        objective[-1] = 1.0
+        integrality = np.zeros(variable_count)
+        integrality[:n] = 1
+        lower = np.zeros(variable_count)
+        upper = np.full(variable_count, np.inf)
+        upper[:n] = 1.0
 
-        as_long = getattr(expression, "as_long", None)
-        if callable(as_long):
-            try:
-                return int(as_long())
-            except Exception:
-                return None
-        return None
+        rows: list[np.ndarray] = []
+        bounds_upper: list[float] = []
+        for subset in sets:
+            size = len(subset)
+            plus_row = np.zeros(variable_count)
+            minus_row = np.zeros(variable_count)
+            for element in subset:
+                plus_row[element] = 2.0
+                minus_row[element] = -2.0
+            plus_row[-1] = -1.0
+            minus_row[-1] = -1.0
+            rows.append(plus_row)
+            bounds_upper.append(float(size))
+            rows.append(minus_row)
+            bounds_upper.append(float(-size))
 
-    outcome = optimizer.check()
-    if outcome != z3.sat:
+        constraints = None
+        if rows:
+            matrix = np.array(rows)
+            constraints = LinearConstraint(
+                matrix,
+                np.full(matrix.shape[0], -np.inf),
+                np.array(bounds_upper),
+            )
+
+        result = milp(
+            c=objective,
+            constraints=constraints,
+            integrality=integrality,
+            bounds=Bounds(lower, upper),
+            options={
+                "mip_rel_gap": 0,
+                "time_limit": MAX_OPTIMUM_SOLVER_MILLISECONDS / 1000,
+                "node_limit": MAX_OPTIMUM_SOLVER_NODES,
+            },
+        )
+    except Exception:
+        # Backend initialization, program construction, and the solve are one
+        # bounded external call: an ABI/loader, native, or raised failure
+        # there is transport, not mathematics, so report the typed claim-free
+        # outcome instead of escaping the kernel.
+        return _execution_failed_result(request.set_system)
+    if result.status == 1:
         return _budget_exceeded_result(request.set_system)
-    model = optimizer.model()
-    coloring = tuple(int(model.evaluate(variable).as_long()) for variable in variables)
-    model_objective = int(model.evaluate(objective).as_long())
-    lower_bound = _bound_digits(optimizer.lower(objective_handle))
-    upper_bound = _bound_digits(optimizer.upper(objective_handle))
-    replayed_optimum = max(
+    if result.status != 0 or result.x is None:
+        return _execution_failed_result(request.set_system)
+    return _incumbent_outcome(request, result, variable_count)
+
+
+def _incumbent_outcome(
+    request: DiscrepancyOptimumRequest,
+    result: Any,
+    variable_count: int,
+) -> DiscrepancyOptimumResult:
+    """Validate one status-zero solve and gate OPTIMAL on the exact proof."""
+
+    import numpy as np
+
+    sets = request.set_system.sets
+    n = request.set_system.ground_set_size
+    if result.x.shape != (variable_count,) or not bool(np.all(np.isfinite(result.x))):
+        return _execution_failed_result(request.set_system)
+
+    raw_assignment = result.x[:n]
+    if float(np.max(np.abs(raw_assignment - np.round(raw_assignment)))) > 1e-6:
+        return _execution_failed_result(request.set_system)
+    if bool(np.any(raw_assignment < -1e-6) or np.any(raw_assignment > 1 + 1e-6)):
+        return _execution_failed_result(request.set_system)
+    coloring = tuple(1 if value > 0.5 else -1 for value in raw_assignment)
+
+    # Bind the claimed optimum to an exact integer recomputation so no
+    # floating-point objective value reaches the public contract.
+    recomputed = max(
         (abs(sum(coloring[element] for element in subset)) for subset in sets),
         default=0,
     )
-    proven = (
-        lower_bound is not None
-        and upper_bound is not None
-        and lower_bound == upper_bound == model_objective == replayed_optimum
-    )
-    if not proven:
+    solved_bound = float(result.x[-1])
+    if abs(solved_bound - recomputed) > 1e-6:
+        return _execution_failed_result(request.set_system)
+    if recomputed == 0:
+        return _proven_optimal_result(request.set_system, coloring, recomputed)
+    try:
+        outcome = discrepancy_models._feasibility_outcome(
+            request.set_system, recomputed - 1
+        )
+    except Exception:
+        # An unavailable exact proof cannot back the OPTIMAL claim; report
+        # the claim-free outcome instead of escaping the kernel.
         return _budget_exceeded_result(request.set_system)
-    return _proven_optimal_result(
-        request.set_system,
-        coloring,
-        model_objective,
-    )
+    if outcome == "unsat":
+        return _proven_optimal_result(request.set_system, coloring, recomputed)
+    if outcome == "sat":
+        return _execution_failed_result(request.set_system)
+    return _budget_exceeded_result(request.set_system)

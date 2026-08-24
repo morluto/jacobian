@@ -21,7 +21,12 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "incidence.containment_profiles.compute",
         AdmissionDecision.KEEP,
-        "t-subset containment multiplicity profiles with histogram",
+        "source-bound complete t-subset containment multiplicities with exact totals and zero convention",
+    ),
+    OperationAdmission(
+        "incidence.trade.check",
+        AdmissionDecision.KEEP,
+        "exact through-order comparison of two indexed block families with sparse differences and zeroth block-count difference",
     ),
     OperationAdmission(
         "incidence.intersections.compute",

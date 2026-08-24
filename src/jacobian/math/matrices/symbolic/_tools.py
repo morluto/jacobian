@@ -14,6 +14,8 @@ from jacobian.math.matrices.symbolic._models import (
     SymbolicEigenvaluesResult,
     SymbolicLinearSystemRequest,
     SymbolicLinearSystemResult,
+    SymbolicMatrix,
+    SymbolicMatrixProductRequest,
     SymbolicMatrixRequest,
     SymbolicRankResult,
 )
@@ -22,6 +24,7 @@ from jacobian.math.matrices.symbolic._operations import (
     compute_symbolic_determinant,
     compute_symbolic_eigenvalues,
     compute_symbolic_linear_system,
+    compute_symbolic_matrix_product,
     compute_symbolic_rank,
 )
 
@@ -124,6 +127,30 @@ _LINEAR_SYSTEM_EXAMPLE = example(
 )
 
 
+_SYMBOLIC_PRODUCT_EXAMPLE = example(
+    "symbolic_matrix_product",
+    "Multiply [[a, b]] by the column [[1], [1]] over QQ(a, b); both matrices must use the same ordered field and compatible inner dimension.",
+    {
+        "left": {
+            "variables": ["a", "b"],
+            "entries": [
+                [
+                    _rational_function(("a", "b"), (1, (1, 0))),
+                    _rational_function(("a", "b"), (1, (0, 1))),
+                ]
+            ],
+        },
+        "right": {
+            "variables": ["a", "b"],
+            "entries": [
+                [_rational_function(("a", "b"), (1, (0, 0)))],
+                [_rational_function(("a", "b"), (1, (0, 0)))],
+            ],
+        },
+    },
+)
+
+
 SYMBOLIC_MATRIX_OPERATIONS = (
     symbolic_matrix_operation(
         "matrix.symbolic.determinant.compute",
@@ -169,6 +196,28 @@ SYMBOLIC_MATRIX_OPERATIONS = (
                 },
             ),
         ),
+    ),
+    symbolic_matrix_operation(
+        "matrix.symbolic.multiply.compute",
+        "Multiply exact symbolic matrices over QQ(t_1, ..., t_n)",
+        (
+            "Compute the row-by-column product of two compatible symbolic matrices "
+            "over one explicitly ordered rational-function field. Every product "
+            "entry is returned as a canonical reduced rational function; admission "
+            "bounds unreduced expansion plus cancellation-safe canonical and "
+            "aggregate support, exponents, coefficients, and result before SymPy "
+            "multiplication."
+        ),
+        SymbolicMatrixProductRequest,
+        SymbolicMatrix,
+        compute_symbolic_matrix_product,
+        "matrix",
+        "symbolic",
+        "matrix-multiplication",
+        "product",
+        "rational-function-field",
+        "exact",
+        examples=(_SYMBOLIC_PRODUCT_EXAMPLE,),
     ),
     symbolic_matrix_operation(
         "matrix.symbolic.characteristic_polynomial.compute",

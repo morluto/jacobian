@@ -20,6 +20,25 @@ MAX_RATIONAL_DIGITS = 256
 MAX_RESULT_RATIONAL_DIGITS = 4_096
 MAX_POWER_EXPONENT = 1_000
 
+# Truncation sources are admitted through the widest carrier canonical
+# values can carry: formal-series results keep the 512-order input
+# envelope, and level-one modular q-expansion replay admits E4/E6
+# expansions up to order 25280 under its own 4,000,000 work-term budget
+# (p * isqrt(p)).  Request admission still materializes and
+# height-validates every source coefficient before the prefix is read,
+# so this ceiling bounds that linear admission work while
+# producer-to-truncate composition stays closed over every representable
+# expansion.
+MAX_TRUNCATE_SOURCE_ORDER = 25_280
+
+# Replaying result validators recompute their defining invariants during
+# deserialization at quadratic or cubic cost in the claimed order.  Every
+# producer of these results emits order equal to its admitted request
+# inputs, which cap at MAX_TRUNCATION_ORDER, so payloads claiming larger
+# orders are outside the representable result envelope and must be
+# rejected before any replay work starts.
+MAX_RESULT_REPLAY_ORDER = MAX_TRUNCATION_ORDER
+
 CoefficientHeight = RationalHeight | None
 
 
@@ -132,6 +151,14 @@ def _require_height(height: RationalHeight, operation: str) -> None:
         raise ValueError(
             f"{operation} coefficient growth exceeds the "
             f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound"
+        )
+
+
+def _require_replay_order(order: int, operation: str) -> None:
+    if order > MAX_RESULT_REPLAY_ORDER:
+        raise ValueError(
+            f"{operation} result replay exceeds the "
+            f"{MAX_RESULT_REPLAY_ORDER}-order replay envelope"
         )
 
 
@@ -254,7 +281,6 @@ class TruncatedSeries(StrictModel):
     variable: Variable = Field(description="The single formal variable.")
     truncation_order: StrictInt = Field(
         ge=1,
-        le=MAX_TRUNCATION_ORDER,
         description="Truncation order N (coefficients a_0..a_{N-1}).",
     )
     coefficients: tuple[CanonicalRational, ...] = Field(
@@ -277,7 +303,21 @@ class TruncatedSeries(StrictModel):
 
 
 class InputTruncatedSeries(TruncatedSeries):
-    """A truncated series admitted as an operation input."""
+    """A truncated series admitted as an operation input.
+
+    Operation kernels do work that grows with the truncation order, so the
+    input envelope keeps the shared order ceiling that the pure value carrier
+    does not impose.
+    """
+
+    truncation_order: StrictInt = Field(
+        ge=1,
+        le=MAX_TRUNCATION_ORDER,
+        description=(
+            "Truncation order N (coefficients a_0..a_{N-1}); bounded because "
+            "operation work scales with N."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_input_digit_bound(self) -> Self:
@@ -288,6 +328,41 @@ class InputTruncatedSeries(TruncatedSeries):
                 label="input coefficient",
             )
         return self
+
+
+def as_input_series(series: TruncatedSeries) -> InputTruncatedSeries:
+    """Re-admit one carrier value through the bounded operation input envelope.
+
+    Native callers pass the shared carrier directly, so the native execution
+    path proves the same truncation-order and input-digit admission that wire
+    requests prove before any kernel work starts.
+    """
+    return InputTruncatedSeries(
+        variable=series.variable,
+        truncation_order=series.truncation_order,
+        coefficients=series.coefficients,
+    )
+
+
+class TruncateSourceSeries(TruncatedSeries):
+    """A truncated series admitted as a truncation source.
+
+    Request admission materializes and height-validates every source
+    coefficient before only the requested prefix is read, so admission work
+    and memory scale with the source order.  The order ceiling admits every
+    carrier current producers emit while bounding that admission; the kernel
+    itself still touches only the first ``target_order`` coefficients.
+    """
+
+    truncation_order: StrictInt = Field(
+        ge=1,
+        le=MAX_TRUNCATE_SOURCE_ORDER,
+        description=(
+            "Source truncation order N (coefficients a_0..a_{N-1}); bounded "
+            "because request admission validates all N coefficients before "
+            "the prefix is read."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -332,8 +407,25 @@ class _SeriesMultiplyRequest(_SeriesPairRequest):
         return self
 
 
-class _SeriesIdentityCheckRequest(_SeriesMultiplyRequest):
-    pass
+class _SeriesIdentityCheckRequest(_SeriesPairRequest):
+    """Admit one identity check through its own linear work envelope.
+
+    The kernel compares N coefficient pairs and emits at most one pairwise
+    difference ``a_i - b_i``, so admission charges the coefficientwise
+    comparison and bounds that difference height; it never charges the
+    unrelated Cauchy-convolution growth that multiplication must preflight.
+    """
+
+    @model_validator(mode="after")
+    def require_bounded_difference_height(self) -> Self:
+        for left, right in zip(
+            self.left.coefficients, self.right.coefficients, strict=True
+        ):
+            _require_height(
+                sum_heights((_height(left), _height(right))),
+                "difference",
+            )
+        return self
 
 
 class SeriesDivideRequest(_SeriesPairRequest):
@@ -389,6 +481,7 @@ class SeriesMultiplyResult(StrictModel):
 
     @model_validator(mode="after")
     def require_exact_convolution_ledger(self) -> Self:
+        _require_replay_order(self.result.truncation_order, "multiplication")
         expected = _convolution_coefficients(self.left, self.right)
         if _fraction_coefficients(self.result) != expected:
             raise ValueError("result must equal the source convolution")
@@ -506,6 +599,7 @@ class SeriesInverseResult(StrictModel):
 
     @model_validator(mode="after")
     def require_inverse_identity(self) -> Self:
+        _require_replay_order(self.result.truncation_order, "inverse")
         _require_zero_residual(
             self.residual_coefficients,
             self.result.truncation_order,
@@ -540,6 +634,7 @@ class SeriesDivideResult(StrictModel):
 
     @model_validator(mode="after")
     def require_division_identity(self) -> Self:
+        _require_replay_order(self.quotient.truncation_order, "division")
         _require_zero_residual(
             self.residual_coefficients,
             self.quotient.truncation_order,
@@ -668,6 +763,7 @@ class SeriesReversionResult(StrictModel):
     @model_validator(mode="after")
     def require_zero_residuals(self) -> Self:
         order = self.result.truncation_order
+        _require_replay_order(order, "reversion")
         _require_zero_residual(self.left_residual, order, "left reversion")
         _require_zero_residual(self.right_residual, order, "right reversion")
         identity = tuple(Fraction(int(index == 1)) for index in range(order))
@@ -731,7 +827,14 @@ class SeriesIntegralResult(StrictModel):
 
 
 class SeriesTruncateRequest(StrictModel):
-    series: InputTruncatedSeries
+    """Extract a prefix of at most the public order bound from one series."""
+
+    series: TruncateSourceSeries = Field(
+        description=(
+            "Source series whose every coefficient request admission "
+            "validates before only the first target_order entries are read."
+        ),
+    )
     target_order: StrictInt = Field(ge=1)
 
     @model_validator(mode="after")

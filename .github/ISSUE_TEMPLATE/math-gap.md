@@ -11,6 +11,18 @@ assignees: []
 ## Missing mathematical result
 <!-- State the result the agent could not obtain. No API proposal here yet. -->
 
+## Operation failure record (when an existing operation was attempted)
+<!--
+Preserve the exact evidence rather than only summarizing the failure. Write
+"not retained" for unavailable fields instead of reconstructing them later.
+-->
+- Operation ID and version:
+- Exact request or minimal reproducible fixture:
+- Runtime and catalog revision:
+- Exact typed result, validation error, or transport error:
+- Timeout owner, configured deadline, and observed elapsed time (if applicable):
+- Replay outcome on current main:
+
 ## Bespoke escape used
 <!-- What custom code, external library call, solver encoding, or manual work was needed? -->
 

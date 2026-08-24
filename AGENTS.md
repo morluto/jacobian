@@ -101,6 +101,10 @@ public request
 - Each mathematical value has one domain-owned canonical type. Producers return
   that type and consumers accept it unchanged, including for empty and
   degenerate values; operation-specific models must not recreate it.
+- Before adding a mathematical value, search for an existing owner by meaning
+  and fields, not just by class name. Reuse it whenever possible. If a new
+  type is necessary, document the distinction, define an explicit conversion,
+  and test serialized producer-consumer composition.
 - Backends never define the accepted public domain through runtime exceptions.
 - Intentional changes of ring, field, parent, or axis require explicit typed
   maps; implicit coercion is forbidden.
@@ -196,6 +200,15 @@ partitioning must not introduce kernel-owned durable state.
   and encode that domain in the request model before invocation.
 - For every exact decomposition, certificate, or authoritative derived value,
   state its reconstruction or defining invariant and test that invariant.
+- Center correctness tests on regression evidence when fixing a concrete
+  regression, defining identities, consistency checks, and property-based
+  tests against actual symbolic or mathematical behavior. Use real
+  mathematical and numerical assertions at public typed interfaces with
+  deterministic or replayable inputs; keep fixtures sparse and name the
+  evidence each one contributes. Do not monkeypatch or use test fakes for
+  mathematical values, validators, serializers, or backend correctness.
+  Isolate unavailable-environment or transport-failure tests separately; they
+  must not stand in for mathematical correctness.
 - Keep mathematical results separate from transport failures. Timeout,
   incompleteness, unavailable execution, and missing witnesses do not establish
   mathematical conclusions. Follow the

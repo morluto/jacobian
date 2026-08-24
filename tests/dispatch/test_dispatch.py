@@ -57,6 +57,29 @@ def test_invoke_operation_runs_determinant_directly() -> None:
     assert result.output["method"] == "FRACTION_FREE_BAREISS"
 
 
+def test_invoke_operation_wraps_den_num_orbit_result() -> None:
+    """Vertex labels spelling the canonical rational keys must still wrap."""
+
+    result = invoke_operation(
+        "graph.symmetry.generator_orbits.compute",
+        {
+            "graph": {
+                "graph": {"vertices": ["den", "num"], "edges": [["den", "num"]]},
+            },
+            "generators": [
+                {
+                    "generator_id": "identity",
+                    "mapping": [["den", "den"], ["num", "num"]],
+                }
+            ],
+        },
+        Catalog.open(),
+    )
+    assert result.operation_id == "graph.symmetry.generator_orbits.compute"
+    assert result.output["vertex_orbit_count"] == 2
+    assert result.output["edge_orbit_count"] == 1
+
+
 def test_invoke_operation_reports_unknown_id() -> None:
     catalog = Catalog.open()
     with pytest.raises(ValueError, match="unknown operation"):

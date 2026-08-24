@@ -28,7 +28,7 @@ Jacobian 是一个 MCP 服务器，为 AI 智能体提供一套可搜索、类�
 
 ## 快速开始
 
-用一条命令为你的智能体配好 Jacobian，需要 Node.js 18+ 和 `uvx` 在 `PATH` 中：
+用一条命令为你的智能体配好 Jacobian，需要 Node.js 20.17+、22.13+ 或 23.5+，并确保 `uvx` 在 `PATH` 中：
 
 ```sh
 npx jacobian@latest setup

@@ -13,7 +13,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "number_theory.binary_quadratic_form.check",
         AdmissionDecision.KEEP,
-        "exact primitive positive-definite form check with discriminant and Gram",
+        "exact primitive positive-definite form check returning the canonical form value",
     ),
     OperationAdmission(
         "number_theory.binary_quadratic_form.evaluate",
@@ -23,12 +23,17 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "number_theory.binary_quadratic_form.reduce",
         AdmissionDecision.KEEP,
-        "exact Gauss reduction with SL_2(Z) witness and step ledger",
+        "exact Gauss reduction with one replayable SL_2(Z) witness",
     ),
     OperationAdmission(
         "number_theory.binary_quadratic_form.proper_equivalence.decide",
         AdmissionDecision.KEEP,
         "exact proper equivalence decision via canonical reduced representative",
+    ),
+    OperationAdmission(
+        "number_theory.binary_quadratic_form.representations.compute",
+        AdmissionDecision.KEEP,
+        "complete ordered signed representation set with a discriminant-derived finite search bound",
     ),
     OperationAdmission(
         "number_theory.binary_quadratic_form.reduced_classes.compute",

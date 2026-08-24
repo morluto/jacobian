@@ -11,6 +11,13 @@ from jacobian.math.polytope._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "polytope.facets.compute",
+        AdmissionDecision.KEEP,
+        "distinct exact bounded source-bound value: complete canonical facet "
+        "incidences are reusable by face, duality, and local-polytope operations "
+        "and cannot be recovered from a volume or one-point separation result",
+    ),
+    OperationAdmission(
         "polytope.volume.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value with material "

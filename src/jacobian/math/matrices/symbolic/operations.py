@@ -9,6 +9,10 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from jacobian.math.matrices.symbolic._models import (
+    SymbolicMatrix,
+    _require_symbolic_product_admission,
+)
 from jacobian.math.polynomials._conversions import (
     rational_function_from_sympy,
     rational_function_to_sympy,
@@ -21,6 +25,7 @@ __all__ = [
     "SystemClassification",
     "symbolic_determinant",
     "symbolic_linear_system_solve",
+    "symbolic_matrix_multiply",
     "symbolic_rank",
 ]
 
@@ -63,6 +68,31 @@ def symbolic_rank(
     matrix = _matrix_from_values(entries)
     _, pivots = matrix.rref()
     return len(pivots), tuple(int(c) for c in pivots)
+
+
+def symbolic_matrix_multiply(
+    left: SymbolicMatrix,
+    right: SymbolicMatrix,
+) -> SymbolicMatrix:
+    """Return the exact product of compatible symbolic matrices.
+
+    Native callers supply domain-owned ``SymbolicMatrix`` values. Their
+    complete work and result admission is replayed before the private SymPy
+    matrix multiplication runs.
+    """
+
+    _require_symbolic_product_admission(left, right)
+    product = _matrix_from_values(left.entries) * _matrix_from_values(right.entries)
+    return SymbolicMatrix(
+        variables=left.variables,
+        entries=tuple(
+            tuple(
+                rational_function_from_sympy(product[row, column], left.variables)
+                for column in range(product.cols)
+            )
+            for row in range(product.rows)
+        ),
+    )
 
 
 def symbolic_characteristic_polynomial(

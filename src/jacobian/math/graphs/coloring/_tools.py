@@ -135,7 +135,12 @@ GRAPH_COLORING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     graph_coloring_operation(
         "graph.coloring.k_colorability.decide",
         "Decide k-colorability of a graph",
-        "Decide whether a simple undirected graph admits a proper k-coloring and return a coloring if one exists, using a Z3 SAT encoding.",
+        "Decide whether a simple undirected graph admits a proper "
+        "k-coloring and return one proper coloring when it exists, using a "
+        "Z3 SAT encoding bounded by the request-visible solver_conflicts "
+        "budget. Colorability is claimed only on an explicit satisfying or "
+        "unsatisfiable outcome; an exhausted budget yields "
+        "SOLVER_BUDGET_EXCEEDED with no colorability claim.",
         KColorabilityRequest,
         KColorabilityResult,
         compute_k_colorability,
@@ -143,6 +148,7 @@ GRAPH_COLORING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "coloring",
         "k-colorability",
         "exact",
+        version="2",
         examples=(
             example(
                 "triangle_3_colorable",

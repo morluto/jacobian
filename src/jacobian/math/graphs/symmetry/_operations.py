@@ -61,18 +61,36 @@ def _edge_orbits(
     )
 
 
+def _declared_orbit_partitions(
+    request: GraphSymmetryOrbitRequest,
+) -> tuple[
+    tuple[tuple[str, ...], ...],
+    tuple[tuple[tuple[str, str], ...], ...],
+]:
+    """Canonical vertex and edge orbit members of the declared generators.
+
+    Shared by execution and result-model validation so both replay the exact
+    same orbit computation on the retained source action.
+    """
+    vertices = tuple(sorted(request.graph.graph.vertices))
+    edges = tuple(sorted(request.graph.graph.edges))
+    vertex_actions = tuple(dict(generator.mapping) for generator in request.generators)
+    edge_actions = tuple(
+        {edge: _canonical_edge(mapping[edge[0]], mapping[edge[1]]) for edge in edges}
+        for mapping in vertex_actions
+    )
+    return (
+        _vertex_orbits(vertices, vertex_actions),
+        _edge_orbits(edges, edge_actions),
+    )
+
+
 def _generator_orbits(
     request: GraphSymmetryOrbitRequest,
 ) -> GraphSymmetryOrbitResult:
     vertices = tuple(sorted(request.graph.graph.vertices))
     edges = tuple(sorted(request.graph.graph.edges))
-    vertex_actions = tuple(generator.mapping for generator in request.generators)
-    edge_actions = tuple(
-        {edge: _canonical_edge(mapping[edge[0]], mapping[edge[1]]) for edge in edges}
-        for mapping in vertex_actions
-    )
-    vertex_orbit_members = _vertex_orbits(vertices, vertex_actions)
-    edge_orbit_members = _edge_orbits(edges, edge_actions)
+    vertex_orbit_members, edge_orbit_members = _declared_orbit_partitions(request)
     vertex_orbits = tuple(
         GraphVertexOrbit(
             orbit_index=index,
@@ -90,6 +108,7 @@ def _generator_orbits(
         for index, members in enumerate(edge_orbit_members)
     )
     return GraphSymmetryOrbitResult(
+        source=request,
         vertices=vertices,
         edges=edges,
         generator_ids=tuple(
@@ -108,11 +127,18 @@ def _generator_orbits(
 GRAPH_SYMMETRY_OPERATIONS: MathTools = (
     MathTool(
         operation_id="graph.symmetry.generator_orbits.compute",
-        version="6",
+        version="7",
         title="Exact declared graph-symmetry orbit partitions",
         description=(
-            "Validate explicit color-preserving graph automorphism generators and "
-            "compute the complete vertex and edge orbits of their generated subgroup."
+            "Validate explicit color-preserving graph automorphism generators "
+            "and compute the complete vertex and edge orbits of their "
+            "generated subgroup. Each generator is a total vertex permutation "
+            "declared as (vertex, image) pairs covering every declared vertex "
+            "once in the graph's declared vertex order; generator identifiers "
+            "and declared colors must already be normalized to Unicode NFC. "
+            "The result retains its complete declared source request, so "
+            "request validation rejects any request whose complete canonical "
+            "result would exceed Jacobian's canonical output limit."
         ),
         request_type=GraphSymmetryOrbitRequest,
         result_type=GraphSymmetryOrbitResult,
@@ -145,11 +171,11 @@ GRAPH_SYMMETRY_OPERATIONS: MathTools = (
                     "generators": [
                         {
                             "generator_id": "reflection",
-                            "mapping": {
-                                "a": "c",
-                                "b": "b",
-                                "c": "a",
-                            },
+                            "mapping": [
+                                ["a", "c"],
+                                ["b", "b"],
+                                ["c", "a"],
+                            ],
                         }
                     ],
                 },

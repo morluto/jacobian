@@ -6,7 +6,7 @@ from typing import Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 
 # The checks run the local characterizations: monotonicity scans n*2^n
@@ -17,9 +17,29 @@ from jacobian._models import StrictModel
 # n <= 17; 16 keeps the worst-case full-scan work (~8M exact pair checks)
 # comfortably inside the synchronous envelope.  The per-request byte
 # preflight below is the binding, result-sensitive guard.
+#
+# Scan work also scales with coefficient height: every inequality subtracts
+# and compares exact Fractions.  The two check requests therefore bound each
+# value to 128 numerator/denominator digits, keeping every one of the ~8M
+# comparisons on small big-ints so the documented seconds-scale envelope
+# holds.  This is scan-specific admission: the shared entry type stays at
+# the canonical ceiling so the single-lookup evaluator can return any exact
+# representable value.
 MAX_GROUND_SET = 16
 _MAX_TABLE_WIRE_BYTES = 9 * 1024 * 1024
 _ENTRY_OVERHEAD_BYTES = 25
+MAX_SUBMODULAR_SCAN_VALUE_DIGITS = 128
+
+
+def _require_scan_value_height(function: SetFunction) -> None:
+    """Bound value heights for the millions-of-comparisons scan kernels."""
+
+    for entry in function.entries:
+        require_bounded_rational(
+            entry.value,
+            max_digits=MAX_SUBMODULAR_SCAN_VALUE_DIGITS,
+            label="set-function scan value",
+        )
 
 
 class SetFunctionEntry(StrictModel):
@@ -101,6 +121,11 @@ class MonotonicityCheckRequest(StrictModel):
 
     function: SetFunction
 
+    @model_validator(mode="after")
+    def require_bounded_scan_height(self) -> Self:
+        _require_scan_value_height(self.function)
+        return self
+
 
 class MonotonicityCheckResult(StrictModel):
     """Whether the function is monotone non-decreasing."""
@@ -113,6 +138,11 @@ class SubmodularityCheckRequest(StrictModel):
     """Check if a set function is submodular."""
 
     function: SetFunction
+
+    @model_validator(mode="after")
+    def require_bounded_scan_height(self) -> Self:
+        _require_scan_value_height(self.function)
+        return self
 
 
 class SubmodularityCheckResult(StrictModel):

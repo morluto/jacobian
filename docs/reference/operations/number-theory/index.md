@@ -1,5 +1,7 @@
 # Number theory operations
 
+- [Level-one named modular-form q-expansions](modular-forms-level-one-q-expansions.md)
+
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
 Number-theory operations are direct bounded computations over canonical integer

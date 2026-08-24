@@ -1,7 +1,6 @@
 """Exact incidence structure operations."""
 
 from collections.abc import Callable
-from itertools import combinations
 
 from jacobian.math.incidence_structures._models import (
     ComplementRequest,
@@ -18,12 +17,18 @@ from jacobian.math.incidence_structures._models import (
     IncidenceMatrixRequest,
     IncidenceMatrixResult,
     IncidenceStructure,
+    IncidenceTradeRequest,
+    IncidenceTradeResult,
     IntersectionsRequest,
     IntersectionsResult,
     LeviGraphRequest,
     LeviGraphResult,
     RestrictionRequest,
     RestrictionResult,
+)
+from jacobian.math.incidence_structures.operations import (
+    check_incidence_trade,
+    containment_profile,
 )
 
 
@@ -81,42 +86,13 @@ def compute_containment_profile(
     request: ContainmentProfileRequest,
 ) -> ContainmentProfileResult:
     """Compute t-subset containment multiplicity profiles."""
-    inc = request.incidence
-    points = inc.points
-    blocks = [set(block) for block in inc.blocks]
-    t = request.t
+    return containment_profile(request.incidence, request.t)
 
-    subsets = list(combinations(points, t))
 
-    counts: dict[tuple[str, ...], int] = {}
-    for subset in subsets:
-        s_set = set(subset)
-        count = sum(1 for block in blocks if s_set <= block)
-        counts[subset] = count
+def compute_incidence_trade(request: IncidenceTradeRequest) -> IncidenceTradeResult:
+    """Compare two indexed block families through a positive subset order."""
 
-    subset_profile = tuple((subset, counts[subset]) for subset in subsets)
-
-    histogram_dict: dict[int, int] = {}
-    for count in counts.values():
-        histogram_dict[count] = histogram_dict.get(count, 0) + 1
-
-    histogram = tuple(sorted(histogram_dict.items()))
-    values = [counts[s] for s in subsets]
-    min_mult = min(values) if values else 0
-    max_mult = max(values) if values else 0
-    is_constant = min_mult == max_mult
-
-    constant_lambda = min_mult if is_constant else None
-
-    return ContainmentProfileResult(
-        t=t,
-        subset_profile=subset_profile,
-        histogram=histogram,
-        min_multiplicity=min_mult,
-        max_multiplicity=max_mult,
-        is_constant=is_constant,
-        constant_lambda=constant_lambda,
-    )
+    return check_incidence_trade(request.left, request.right, request.max_order)
 
 
 def compute_intersections(request: IntersectionsRequest) -> IntersectionsResult:

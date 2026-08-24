@@ -320,7 +320,10 @@ def test_moment_totals_bind_to_sparse_differences() -> None:
     assert not comparison.equal
     assert (comparison.left_total, comparison.right_total) == (3, 3)
     assert tuple(
-        (difference.subset, difference.left_multiplicity - difference.right_multiplicity)
+        (
+            difference.subset,
+            difference.left_multiplicity - difference.right_multiplicity,
+        )
         for difference in comparison.differences
     ) == ((("a",), -1), (("b",), 1))
 

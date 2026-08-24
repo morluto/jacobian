@@ -115,38 +115,46 @@ def compute_edge_disjoint_paths(
 def compute_min_cost_flow(request: MinCostFlowRequest) -> MinCostFlowResult:
     """Compute minimum-cost flow with demands using exact integer arithmetic.
 
-    All rational capacities and costs are scaled to integers by a common
-    denominator before calling NetworkX's network simplex.  The integer
-    results are then divided back to exact rationals.
+    Rational capacities, demands, and costs are scaled to integers by two
+    derived scales before calling NetworkX's network simplex: the flow scale
+    ``F`` (the LCM of the capacity denominators) makes every capacity and
+    demand an exact integer, and the cost scale ``C`` (the LCM of the cost
+    denominators) makes every per-unit cost an exact integer.  A backend flow
+    of ``f'`` is therefore ``f'/F`` units of source flow and a backend
+    objective of ``o'`` satisfies ``o' = F * C * total_cost``, so both are
+    divided back exactly.  The request model bounds the derived scales before
+    any backend graph is built.
     """
     edges = request.graph.edges
-    capacities = [e.capacity.as_fraction() for e in edges]
-    costs = [e.cost.as_fraction() for e in edges]
 
-    # Compute the least common multiple of all denominators so that
-    # scaling produces integers.
-    from math import lcm
+    from jacobian.math.graphs.flow._models import _bounded_denominator_scale
 
-    scale = 1
-    for frac in capacities + costs:
-        scale = lcm(scale, frac.denominator)
+    flow_scale = _bounded_denominator_scale(
+        tuple(edge.capacity.as_integer_ratio()[1] for edge in edges), "capacity"
+    )
+    cost_scale = _bounded_denominator_scale(
+        tuple(edge.cost.as_integer_ratio()[1] for edge in edges), "cost"
+    )
 
-    # Build graph with integer capacities and costs.
     g: nx.DiGraph[Any] = nx.DiGraph()
     g.add_nodes_from(range(request.graph.vertex_count))
     for node in range(request.graph.vertex_count):
-        g.nodes[node]["demand"] = request.demands[node]
-    for edge, cap, cost in zip(edges, capacities, costs, strict=True):
+        g.nodes[node]["demand"] = request.demands[node] * flow_scale
+    for edge in edges:
+        capacity_num, capacity_den = edge.capacity.as_integer_ratio()
+        cost_num, cost_den = edge.cost.as_integer_ratio()
         g.add_edge(
             edge.source,
             edge.target,
-            capacity=int(cap * scale),
-            weight=int(cost * scale),
+            capacity=capacity_num * (flow_scale // capacity_den),
+            weight=cost_num * (cost_scale // cost_den),
         )
     try:
         flow_cost_int, flow_dict = nx.network_simplex(g)
     except (nx.NetworkXUnfeasible, nx.NetworkXError):
         return MinCostFlowResult(
+            graph=request.graph,
+            demands=request.demands,
             total_cost=_rational(0),
             feasible=False,
             flow_edges=(),
@@ -160,14 +168,16 @@ def compute_min_cost_flow(request: MinCostFlowRequest) -> MinCostFlowResult:
                     FlowEdgeResult(
                         source=source_node,
                         target=target_node,
-                        flow=_rational(int(flow_amount)),
+                        flow=_rational(Fraction(int(flow_amount), flow_scale)),
                     )
                 )
-    # The integer flow cost is sum(scaled_weight * flow) = sum((cost * scale) * flow)
-    # = scale * sum(cost * flow) = scale * total_cost.
-    # Therefore total_cost = flow_cost_int / scale.
-    total_cost = Fraction(int(flow_cost_int), scale)
+    # A backend objective is sum(cost * cost_scale * flow * flow_scale)
+    # over the returned source-unit flows, so the exact public objective
+    # divides it by both scales.
+    total_cost = Fraction(int(flow_cost_int), flow_scale * cost_scale)
     return MinCostFlowResult(
+        graph=request.graph,
+        demands=request.demands,
         total_cost=_rational(total_cost),
         feasible=True,
         flow_edges=tuple(flow_edges),

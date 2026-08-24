@@ -39,6 +39,39 @@ class ChromaticGraph(StrictModel):
         return self
 
 
+class PolynomialTimeGraph(StrictModel):
+    """A bounded simple undirected graph for polynomial-time invariants.
+
+    Mirrors :class:`ChromaticGraph` validation but with a larger envelope
+    (256 vertices, 32640 edges = 256*255/2) suitable for NetworkX
+    polynomial-time operations such as girth, edge/vertex connectivity,
+    Eulerian check, spanning-tree count, maximum matching, k-core, and
+    distance matrix. NP-hard Z3 operations continue to use
+    :class:`ChromaticGraph` (32 vertices) or their own tighter budgets.
+    """
+
+    graph_schema_version: Literal["1"] = "1"
+    vertices: tuple[GraphVertex, ...] = Field(max_length=256)
+    edges: tuple[tuple[GraphVertex, GraphVertex], ...] = Field(max_length=32640)
+
+    @model_validator(mode="after")
+    def require_simple_graph(self) -> Self:
+        vertex_set = set(self.vertices)
+        if len(vertex_set) != len(self.vertices):
+            raise ValueError("graph vertices must be unique")
+        normalized_edges = {tuple(sorted((left, right))) for left, right in self.edges}
+        if any(left == right for left, right in self.edges):
+            raise ValueError("graph edges must not contain self-loops")
+        if any(
+            left not in vertex_set or right not in vertex_set
+            for left, right in self.edges
+        ):
+            raise ValueError("graph edges must reference declared vertices")
+        if len(normalized_edges) != len(self.edges):
+            raise ValueError("graph edges must be unique ignoring orientation")
+        return self
+
+
 class ChromaticNumberBudget(StrictModel):
     """Total wall-clock budget for the bounded coloring search."""
 

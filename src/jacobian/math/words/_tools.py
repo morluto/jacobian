@@ -11,11 +11,20 @@ from jacobian.math.words._models import (
     IncidenceMatrixResult,
     PeriodsRequest,
     PeriodsResult,
+    SubstitutionDependencyGraphRequest,
+    SubstitutionDependencyGraphResult,
+    SubstitutionFixedPointPrefixRequest,
+    SubstitutionFixedPointPrefixResult,
+    SubstitutionPrimitivityProfileRequest,
+    SubstitutionPrimitivityProfileResult,
 )
 from jacobian.math.words._operations import (
     compute_factors_length,
     compute_incidence_matrix,
     compute_periods,
+    compute_substitution_dependency_graph,
+    compute_substitution_fixed_point_prefix,
+    compute_substitution_primitivity_profile,
 )
 
 WORDS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
@@ -93,6 +102,130 @@ WORDS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                         "target_alphabet": ["a", "b"],
                         "images": [["a", "b"], ["a"]],
                     }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="substitution.dependency_graph.compute",
+        version="1",
+        title="Compute a substitution dependency graph",
+        description=(
+            "Return every letter dependency a→b, with all zero-based positions "
+            "where b occurs in the image of a."
+        ),
+        request_type=SubstitutionDependencyGraphRequest,
+        result_type=SubstitutionDependencyGraphResult,
+        run=compute_substitution_dependency_graph,
+        tags=("combinatorics", "words", "substitution", "graph", "exact"),
+        examples=(
+            example(
+                "fibonacci_dependencies",
+                "Compute the dependency graph of the Fibonacci substitution.",
+                {
+                    "substitution": {
+                        "morphism": {
+                            "source_alphabet": ["0", "1"],
+                            "target_alphabet": ["0", "1"],
+                            "images": [["0", "1"], ["0"]],
+                        }
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="substitution.primitivity_profile.compute",
+        version="1",
+        title="Compute a substitution primitivity profile",
+        description=(
+            "Decide whether a substitution dependency graph is primitive, "
+            "returning its least positive Boolean power or an exact graph obstruction."
+        ),
+        request_type=SubstitutionPrimitivityProfileRequest,
+        result_type=SubstitutionPrimitivityProfileResult,
+        run=compute_substitution_primitivity_profile,
+        tags=(
+            "combinatorics",
+            "words",
+            "substitution",
+            "matrix",
+            "primitivity",
+            "exact",
+        ),
+        examples=(
+            example(
+                "fibonacci_primitivity",
+                "Prove the Fibonacci substitution primitive from its dependency graph.",
+                {
+                    "dependency_graph": {
+                        "substitution": {
+                            "morphism": {
+                                "source_alphabet": ["0", "1"],
+                                "target_alphabet": ["0", "1"],
+                                "images": [["0", "1"], ["0"]],
+                            }
+                        },
+                        "edges": [
+                            {
+                                "source": "0",
+                                "target": "0",
+                                "multiplicity": 1,
+                                "positions": [0],
+                            },
+                            {
+                                "source": "0",
+                                "target": "1",
+                                "multiplicity": 1,
+                                "positions": [1],
+                            },
+                            {
+                                "source": "1",
+                                "target": "0",
+                                "multiplicity": 1,
+                                "positions": [0],
+                            },
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="substitution.fixed_point_prefix.compute",
+        version="1",
+        title="Compute a substitution fixed-point prefix",
+        description=(
+            "Return the requested finite prefix of a certified prolongable growing "
+            "substitution fixed point from the least sufficient iterate, after "
+            "bounding source size, generation work, and serialized output."
+        ),
+        request_type=SubstitutionFixedPointPrefixRequest,
+        result_type=SubstitutionFixedPointPrefixResult,
+        run=compute_substitution_fixed_point_prefix,
+        tags=(
+            "combinatorics",
+            "words",
+            "substitution",
+            "fixed-point",
+            "exact",
+        ),
+        examples=(
+            example(
+                "fibonacci_prefix",
+                "Compute eight letters of the Fibonacci fixed point.",
+                {
+                    "source": {
+                        "substitution": {
+                            "morphism": {
+                                "source_alphabet": ["0", "1"],
+                                "target_alphabet": ["0", "1"],
+                                "images": [["0", "1"], ["0"]],
+                            }
+                        },
+                        "seed": "0",
+                    },
+                    "prefix_length": 8,
                 },
             ),
         ),

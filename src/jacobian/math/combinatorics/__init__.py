@@ -1,5 +1,14 @@
 """Provider-independent exact combinatorics values and functions."""
 
+from jacobian.math.combinatorics.exact_cover import (
+    ExactCoverItemMultiplicity,
+    ExactCoverRow,
+    ExactCoverSearchStatus,
+    GeneralizedExactCoverInstance,
+    GeneralizedExactCoverRequest,
+    GeneralizedExactCoverResult,
+    find_generalized_exact_cover,
+)
 from jacobian.math.combinatorics.operations import (
     bell_number,
     bernoulli_number,
@@ -22,6 +31,12 @@ from jacobian.math.combinatorics.recurrence_tables import (
 )
 
 __all__ = [
+    "ExactCoverItemMultiplicity",
+    "ExactCoverRow",
+    "ExactCoverSearchStatus",
+    "GeneralizedExactCoverInstance",
+    "GeneralizedExactCoverRequest",
+    "GeneralizedExactCoverResult",
     "IndexedRecurrenceResidual",
     "PolynomialCoefficientRecurrenceTableRequest",
     "PolynomialCoefficientRecurrenceTableResult",
@@ -31,6 +46,7 @@ __all__ = [
     "derangement_number",
     "double_factorial",
     "fibonacci_number",
+    "find_generalized_exact_cover",
     "integer_partitions",
     "lucas_number",
     "motzkin_number",

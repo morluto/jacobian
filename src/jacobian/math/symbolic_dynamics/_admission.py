@@ -11,6 +11,11 @@ from jacobian.math.symbolic_dynamics._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "symbolic_dynamics.artin_mazur_zeta.compute",
+        AdmissionDecision.KEEP,
+        "exact rational dynamical invariant with periodic-point replay",
+    ),
+    OperationAdmission(
         "symbolic_dynamics.block_language.compute",
         AdmissionDecision.KEEP,
         "complete occurring-block language of a bounded shift presentation",

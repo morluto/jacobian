@@ -10,8 +10,8 @@ from pydantic import Field, StrictInt, model_validator
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 
-_MAX_DISCRIMINANT = 10_000
-_MAX_TERMS = 500
+_MAX_DISCRIMINANT = 1_000_000
+_MAX_TERMS = 5_000
 
 
 def _is_square_free(value: int) -> bool:

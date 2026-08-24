@@ -45,6 +45,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "exact concept lattice with partial order, cover relation, top, and bottom",
     ),
+    OperationAdmission(
+        "implication_system.closure.compute",
+        AdmissionDecision.KEEP,
+        "exact least fixed point and replayable lineage under a bounded finite implication presentation",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

@@ -59,6 +59,7 @@ def test_catalog_contains_only_audited_agent_outcomes() -> None:
         "formal_context.concept.from_attributes.compute",
         "formal_context.concepts.enumerate.compute",
         "formal_context.concept_lattice.compute",
+        "implication_system.closure.compute",
     }
 
 

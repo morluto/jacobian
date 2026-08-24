@@ -7,7 +7,10 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from fractions import Fraction
 
-from jacobian._exact import require_bounded_rational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    require_bounded_rational,
+)
 from jacobian.math.polynomials.differential_operators.values import (
     ConstantCoefficientDifferentialOperator,
 )
@@ -18,8 +21,6 @@ from jacobian.math.polynomials.values import (
     require_polynomial_budget,
 )
 
-MAX_APPLICATION_ITERATIONS = 4_096
-MAX_APPLICATION_INPUT_COEFFICIENT_DIGITS = 256
 MAX_APPLICATION_OPERATOR_COEFFICIENT_DIGITS = 256
 MAX_APPLICATION_OUTPUT_TERMS = 4_096
 MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS = 32_768
@@ -328,17 +329,17 @@ def _require_expansion_operator(
 def _require_expansion_source(polynomial: RationalPolynomial) -> None:
     """Bound the source against the kernel's derivative-expansion input regime.
 
-    Derivative work, coefficient growth, and exact output size are derived
-    from the source's actual support, exponents, and coefficients downstream;
-    input admission follows the shared canonical polynomial representation
-    while the input coefficient height stays capped here.
+    Derivative work, coefficient growth, exact output support, and serialized
+    size are derived from the source's actual support, exponents, and
+    coefficients downstream; this check enforces only the shared canonical
+    polynomial representation.
     """
 
     require_polynomial_budget(
         polynomial,
         maximum_terms=MAX_POLYNOMIAL_TERMS,
         maximum_exponent=MAX_POLYNOMIAL_EXPONENT,
-        maximum_coefficient_digits=MAX_APPLICATION_INPUT_COEFFICIENT_DIGITS,
+        maximum_coefficient_digits=MAX_CANONICAL_RATIONAL_DIGITS,
         label="differential-operator source polynomial",
     )
 
@@ -429,10 +430,6 @@ def validate_application_envelope(
     if scalar_action:
         _require_nonexpanding_output(polynomial, expected)
     else:
-        if iterations > MAX_APPLICATION_ITERATIONS:
-            raise ValueError(
-                "differential-operator iterations exceed the operation limit"
-            )
         _require_expansion_operator(operator)
         _require_expansion_source(polynomial)
     _require_expected_output(expected)
@@ -514,8 +511,6 @@ def validate_application_envelope(
 
 
 __all__ = [
-    "MAX_APPLICATION_INPUT_COEFFICIENT_DIGITS",
-    "MAX_APPLICATION_ITERATIONS",
     "MAX_APPLICATION_OPERATOR_COEFFICIENT_DIGITS",
     "MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS",
     "MAX_APPLICATION_OUTPUT_TERMS",

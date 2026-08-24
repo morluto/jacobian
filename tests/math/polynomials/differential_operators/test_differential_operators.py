@@ -14,7 +14,6 @@ from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
 from jacobian.math.polynomials._conversions import rational_polynomial_from_sympy
 from jacobian.math.polynomials.differential_operators._bounds import (
-    MAX_APPLICATION_ITERATIONS,
     MAX_APPLICATION_RESULT_BYTES,
 )
 from jacobian.math.polynomials.differential_operators._models import (
@@ -167,16 +166,16 @@ def test_positive_order_short_circuits_a_large_vanishing_iterate() -> None:
     output = apply_constant_coefficient_differential_operator(
         source,
         operator,
-        iterations=MAX_APPLICATION_ITERATIONS,
+        iterations=4_096,
     )
 
     assert output == _polynomial(variables, {})
 
 
-def test_iteration_cap_admits_non_expanding_requests_beyond_the_limit() -> None:
+def test_non_expanding_requests_are_admitted_at_any_iteration_count() -> None:
     variables = ("x", "y")
     zero_operator = _operator(variables, {})
-    tall_iterations = MAX_APPLICATION_ITERATIONS + 1
+    tall_iterations = 4_097
 
     request = DifferentialOperatorApplyRequest(
         polynomial=_polynomial(variables, {(1, 1): 1}),
@@ -194,11 +193,11 @@ def test_iteration_cap_admits_non_expanding_requests_beyond_the_limit() -> None:
     ) == _polynomial(variables, {})
 
 
-def test_iteration_cap_gates_only_operator_power_expansion() -> None:
+def test_expanding_iterates_gate_on_derived_support_and_growth() -> None:
     variables = ("x",)
     scaling = _operator(variables, {(0,): 2})
     source = _polynomial(variables, {(3,): 1})
-    tall_iterations = MAX_APPLICATION_ITERATIONS + 1
+    tall_iterations = 4_097
 
     scaled = DifferentialOperatorApplyRequest(
         polynomial=source,
@@ -211,11 +210,17 @@ def test_iteration_cap_gates_only_operator_power_expansion() -> None:
     )
 
     expanding = _operator(variables, {(1,): 1, (0,): 1})
-    with pytest.raises(ValidationError, match="operation limit"):
+    with pytest.raises(ValidationError, match="expanded-support budget"):
         DifferentialOperatorApplyRequest(
             polynomial=source,
             operator=expanding,
             iterations=tall_iterations,
+        )
+    with pytest.raises(ValidationError, match="expanded-support budget"):
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=expanding,
+            iterations=10**12,
         )
     with pytest.raises(ValueError, match="nonnegative"):
         apply_constant_coefficient_differential_operator(
@@ -223,6 +228,38 @@ def test_iteration_cap_gates_only_operator_power_expansion() -> None:
             expanding,
             iterations=-1,
         )
+
+
+def test_tall_expanding_iterates_are_admitted_by_derived_budgets() -> None:
+    derivative = _operator(("x",), {(1,): 1})
+
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(("x",), {(5_000,): 1}),
+            operator=derivative,
+            iterations=4_097,
+            expected=_polynomial(("x",), {(903,): math.perm(5_000, 4_097)}),
+        )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.output == _polynomial(("x",), {(903,): math.perm(5_000, 4_097)})
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    assert replayed == result
+
+    annihilated = DifferentialOperatorApplyRequest(
+        polynomial=_polynomial(("x",), {(5_000,): 1}),
+        operator=derivative,
+        iterations=10**12,
+    )
+    assert annihilated.iterations == 10**12
+    assert compute_differential_operator_application(annihilated).output == _polynomial(
+        ("x",),
+        {},
+    )
 
 
 def test_scalar_iterate_growth_is_bounded_by_the_coefficient_budget() -> None:
@@ -494,7 +531,7 @@ def test_guaranteed_zero_admits_sources_beyond_expansion_caps() -> None:
     assert tall_vanished == _polynomial(("x",), {})
 
 
-def test_input_digit_budget_only_gates_paths_that_expand() -> None:
+def test_tall_source_coefficients_are_admitted_by_derived_growth() -> None:
     variables = ("x",)
     coefficient = CanonicalRational(num=str(10**300 - 1), den="1")
     source = RationalPolynomial(
@@ -540,21 +577,55 @@ def test_input_digit_budget_only_gates_paths_that_expand() -> None:
             )
         ),
     )
-    with pytest.raises(ValueError, match="256-digit bound"):
-        apply_constant_coefficient_differential_operator(
-            RationalPolynomial(
+    differentiated = apply_constant_coefficient_differential_operator(
+        RationalPolynomial(
+            variables=variables,
+            polynomial=SparseRationalPolynomial(
+                terms=(
+                    RationalPolynomialTerm(
+                        coefficient=coefficient,
+                        exponents=(5,),
+                    ),
+                )
+            ),
+        ),
+        _operator(variables, {(1,): 1}),
+        iterations=1,
+    )
+    assert differentiated == _polynomial(
+        variables,
+        {(4,): 5 * (10**300 - 1)},
+    )
+
+    reviewer = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=RationalPolynomial(
                 variables=variables,
                 polynomial=SparseRationalPolynomial(
                     terms=(
                         RationalPolynomialTerm(
-                            coefficient=coefficient,
-                            exponents=(5,),
+                            coefficient=CanonicalRational(num="1" + "0" * 299, den="1"),
+                            exponents=(1,),
                         ),
                     )
                 ),
             ),
-            _operator(variables, {(1,): 1}),
+            operator=_operator(variables, {(1,): 1}),
             iterations=1,
+            expected=_polynomial(variables, {(0,): 10**299}),
+        )
+    )
+    assert reviewer.output == _polynomial(variables, {(0,): 10**299})
+    assert reviewer.matches_expected is True
+
+    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(
+                variables,
+                {(32_768,): 10**32_000},
+            ),
+            operator=_operator(variables, {(1,): 1}),
+            iterations=200,
         )
 
 

@@ -35,10 +35,12 @@ class DifferentialOperatorApplyRequest(StrictModel):
         ge=0,
         description=(
             "Finite exponent k in D^k(f). Zero returns the source unchanged. "
-            "Requests whose exact result needs no operator-power expansion - "
-            "guaranteed annihilation, the identity operator, and one-term "
-            "zeroth-order pure-scaling operators - are admitted at any k; every "
-            "other request requires k <= 4096."
+            "Admission is derived per request rather than fixed: requests whose "
+            "exact result needs no operator-power expansion - guaranteed "
+            "annihilation, the identity operator, and one-term zeroth-order "
+            "pure-scaling operators - are admitted at any k, and expanding "
+            "requests are bounded by the derived expanded-support, work, "
+            "coefficient-growth, and serialized-size budgets."
         ),
         examples=[2],
     )

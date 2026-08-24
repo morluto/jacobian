@@ -469,6 +469,41 @@ class TestEuclideanTriangulation:
             Fraction(scale * scale + 1),
         )
 
+    def test_request_rejects_unrepresentable_squared_lengths_at_admission(
+        self,
+    ) -> None:
+        scale = 10**20000
+        with pytest.raises(ValidationError, match="32768-digit rational limit"):
+            _request(
+                (
+                    _point(0, 0),
+                    _big_point(scale, 0),
+                    _big_point(scale, 1),
+                    _point(0, 1),
+                )
+            )
+
+    def test_request_admits_squared_lengths_inside_the_canonical_rational_cap(
+        self,
+    ) -> None:
+        scale = 10**9000
+        result = minimum_euclidean_weight_triangulation(
+            _request(
+                (
+                    _point(0, 0),
+                    _big_point(scale, 0),
+                    _big_point(scale, 1),
+                    _point(0, 1),
+                )
+            )
+        )
+
+        assert result.status == "CERTIFIED_OPTIMUM"
+        assert result.optimum is not None
+        assert tuple(term.as_fraction() for term in result.optimum.squared_lengths) == (
+            Fraction(scale * scale + 1),
+        )
+
     def test_request_rejects_extent_beyond_the_derived_output_bound(self) -> None:
         spread = 10**90
         with pytest.raises(ValidationError, match="character output bound"):

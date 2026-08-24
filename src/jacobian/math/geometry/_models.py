@@ -8,7 +8,11 @@ from typing import Literal, Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 
@@ -865,6 +869,9 @@ def _require_euclidean_triangulation_envelope(
     ``(n - 1)(n - 2)/2`` states, so the conservative serialized-expression
     estimate below bounds every retained exact sum before Arb is invoked;
     each raw input coordinate stays inside the shared canonical rational cap.
+    Every candidate diagonal's exact squared length is also checked against
+    the canonical rational cap, because the aggregate serialized estimate
+    alone admits sources whose derived values cannot be represented at all.
     """
 
     points = tuple(_point_key(point) for point in polygon.points)
@@ -895,6 +902,23 @@ def _require_euclidean_triangulation_envelope(
         raise ValueError("Euclidean triangulation requires strict CCW convexity")
     if not _is_simple_ring(polygon.points):
         raise ValueError("Euclidean triangulation requires a simple ring")
+    for first in range(count - 2):
+        for second in range(first + 2, count):
+            if (first, second) == (0, count - 1):
+                continue
+            squared = _euclidean_squared_length(points, first, second)
+            numerator = format_canonical_integer(squared.numerator)
+            denominator = format_canonical_integer(squared.denominator)
+            if (
+                len(numerator) > MAX_CANONICAL_RATIONAL_DIGITS
+                or len(denominator) > MAX_CANONICAL_RATIONAL_DIGITS
+            ):
+                digits = max(len(numerator), len(denominator))
+                raise ValueError(
+                    "Euclidean triangulation diagonal squared length carries "
+                    f"{digits} digits, exceeding the canonical "
+                    f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit rational limit"
+                )
     states = (count - 1) * (count - 2) // 2
     term_chars = 2 * (4 * difference_digits + 1) + 128
     estimated_chars = states * (count - 3) * term_chars

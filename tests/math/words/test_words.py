@@ -10,17 +10,23 @@ from pydantic import ValidationError
 
 from jacobian.math.words import (
     FiniteWord,
+    ProlongableSubstitution,
+    Substitution,
+    SubstitutionDependencyGraph,
     WordMorphism,
     apply_morphism,
     compose_morphisms,
     conjugates,
     factor_occurrences,
     factors_of_length,
+    fixed_point_prefix,
     incidence_matrix,
     parikh_vector,
     periods,
     prefix_function,
     primitive_root,
+    substitution_dependency_graph,
+    substitution_primitivity_profile,
 )
 from jacobian.math.words._models import (
     FactorsLengthRequest,
@@ -29,11 +35,20 @@ from jacobian.math.words._models import (
     IncidenceMatrixResult,
     PeriodsRequest,
     PeriodsResult,
+    SubstitutionDependencyGraphRequest,
+    SubstitutionDependencyGraphResult,
+    SubstitutionFixedPointPrefixRequest,
+    SubstitutionFixedPointPrefixResult,
+    SubstitutionPrimitivityProfileRequest,
+    SubstitutionPrimitivityProfileResult,
 )
 from jacobian.math.words._operations import (
     compute_factors_length,
     compute_incidence_matrix,
     compute_periods,
+    compute_substitution_dependency_graph,
+    compute_substitution_fixed_point_prefix,
+    compute_substitution_primitivity_profile,
 )
 from jacobian.math.words._tools import TOOLS
 
@@ -42,11 +57,27 @@ def _word(letters: str, alphabet: tuple[str, ...] = ("a", "b")) -> FiniteWord:
     return FiniteWord(alphabet=alphabet, letters=tuple(letters))
 
 
-def test_public_catalog_surface_is_the_audited_three_operations() -> None:
+def _substitution(
+    images: tuple[tuple[str, ...], ...],
+    alphabet: tuple[str, ...] = ("0", "1"),
+) -> Substitution:
+    return Substitution(
+        morphism=WordMorphism(
+            source_alphabet=alphabet,
+            target_alphabet=alphabet,
+            images=images,
+        )
+    )
+
+
+def test_public_catalog_surface_is_the_audited_operations() -> None:
     assert tuple(tool.operation_id for tool in TOOLS) == (
         "word.factors.length.compute",
         "word.periods.compute",
         "word_morphism.incidence_matrix.compute",
+        "substitution.dependency_graph.compute",
+        "substitution.primitivity_profile.compute",
+        "substitution.fixed_point_prefix.compute",
     )
 
 
@@ -117,6 +148,357 @@ def test_fibonacci_incidence_matrix_and_binding() -> None:
     payload["matrix"] = ((1, 0), (1, 1))
     with pytest.raises(ValidationError, match="not bound"):
         IncidenceMatrixResult.model_validate(payload)
+
+
+def test_substitution_requires_an_endomorphism() -> None:
+    with pytest.raises(ValidationError, match="identical source and target"):
+        Substitution(
+            morphism=WordMorphism(
+                source_alphabet=("a",),
+                target_alphabet=("b",),
+                images=(("b",),),
+            )
+        )
+
+
+def test_fibonacci_dependency_graph_retains_positions_and_source() -> None:
+    fibonacci = _substitution((("0", "1"), ("0",)))
+    result = compute_substitution_dependency_graph(
+        SubstitutionDependencyGraphRequest(substitution=fibonacci)
+    )
+    assert tuple(
+        (edge.source, edge.target, edge.multiplicity, edge.positions)
+        for edge in result.graph.edges
+    ) == (
+        ("0", "0", 1, (0,)),
+        ("0", "1", 1, (1,)),
+        ("1", "0", 1, (0,)),
+    )
+    assert result.complete is True
+
+    payload = result.model_dump()
+    payload["graph"]["edges"][0]["positions"] = (1,)
+    with pytest.raises(ValidationError, match="not bound"):
+        SubstitutionDependencyGraphResult.model_validate(payload)
+
+
+def test_dependency_graph_output_budget_is_admitted_before_enumeration() -> None:
+    at_limit = _substitution((("0",) * 5_000, ("1",) * 5_000))
+    request = SubstitutionDependencyGraphRequest(substitution=at_limit)
+    assert sum(len(image) for image in request.substitution.morphism.images) == 10_000
+    result = compute_substitution_dependency_graph(request)
+    assert tuple(edge.multiplicity for edge in result.graph.edges) == (5_000, 5_000)
+
+    above_limit = _substitution((("0",) * 5_001, ("1",) * 5_000))
+    with pytest.raises(ValidationError, match="aggregate bound"):
+        SubstitutionDependencyGraphRequest(substitution=above_limit)
+    with pytest.raises(ValidationError, match="aggregate bound"):
+        SubstitutionDependencyGraph(substitution=above_limit, edges=())
+    with pytest.raises(ValueError, match="aggregate bound"):
+        substitution_dependency_graph(above_limit)
+    with pytest.raises(ValidationError, match="aggregate bound"):
+        SubstitutionPrimitivityProfileRequest.model_validate(
+            {
+                "dependency_graph": {
+                    "substitution": above_limit.model_dump(),
+                    "edges": (),
+                }
+            }
+        )
+    unchecked_graph = SubstitutionDependencyGraph.model_construct(
+        substitution=above_limit,
+        edges=(),
+    )
+    with pytest.raises(ValidationError, match="aggregate bound"):
+        SubstitutionPrimitivityProfileRequest(dependency_graph=unchecked_graph)
+    with pytest.raises(ValueError, match="aggregate bound"):
+        substitution_primitivity_profile(unchecked_graph)
+
+
+def test_primitivity_profile_distinguishes_positive_reducible_and_periodic() -> None:
+    fibonacci_graph = substitution_dependency_graph(_substitution((("0", "1"), ("0",))))
+    fibonacci = compute_substitution_primitivity_profile(
+        SubstitutionPrimitivityProfileRequest(dependency_graph=fibonacci_graph)
+    )
+    assert "incidence_matrix" not in fibonacci.model_dump()
+    assert fibonacci.strongly_connected_components == (("0", "1"),)
+    assert fibonacci.primitive is True
+    assert fibonacci.least_positive_power == 2
+    assert fibonacci.exponent_upper_bound == 2
+    assert fibonacci.obstruction == "NONE"
+
+    reducible_graph = substitution_dependency_graph(_substitution((("0", "1"), ("1",))))
+    reducible = substitution_primitivity_profile(reducible_graph)
+    assert reducible.strongly_connected_components == (("0",), ("1",))
+    assert reducible.irreducible is False
+    assert reducible.aperiodic is None
+    assert reducible.primitive is False
+    assert reducible.obstruction == "REDUCIBLE_DEPENDENCY_GRAPH"
+
+    periodic_graph = substitution_dependency_graph(_substitution((("1",), ("0",))))
+    periodic = substitution_primitivity_profile(periodic_graph)
+    assert periodic.strongly_connected_components == (("0", "1"),)
+    assert periodic.irreducible is True
+    assert periodic.aperiodic is False
+    assert periodic.primitive is False
+    assert periodic.obstruction == "PERIODIC_DEPENDENCY_GRAPH"
+
+
+def test_primitivity_result_replay_rejects_mutation() -> None:
+    graph = substitution_dependency_graph(_substitution((("0", "1"), ("0",))))
+    result = compute_substitution_primitivity_profile(
+        SubstitutionPrimitivityProfileRequest(dependency_graph=graph)
+    )
+    payload = result.model_dump()
+    payload["least_positive_power"] = 1
+    with pytest.raises(ValidationError, match="not bound"):
+        SubstitutionPrimitivityProfileResult.model_validate(payload)
+
+
+def test_fixed_point_prefix_uses_the_least_sufficient_iterate() -> None:
+    fibonacci = ProlongableSubstitution(
+        substitution=_substitution((("0", "1"), ("0",))), seed="0"
+    )
+    result = compute_substitution_fixed_point_prefix(
+        SubstitutionFixedPointPrefixRequest(source=fibonacci, prefix_length=8)
+    )
+    assert result.prefix.letters == tuple("01001010")
+    assert result.least_iterate_depth == 4
+    assert result.retained_prefix_lengths == (1, 2, 3, 5, 8)
+
+    reapplied = apply_morphism(fibonacci.substitution.morphism, result.prefix)
+    assert reapplied.letters[:8] == result.prefix.letters
+
+    payload = result.model_dump()
+    payload["prefix"]["letters"] = (*payload["prefix"]["letters"][:-1], "1")
+    with pytest.raises(ValidationError, match="not bound"):
+        SubstitutionFixedPointPrefixResult.model_validate(payload)
+
+
+def test_fixed_point_prefix_empty_and_length_boundaries() -> None:
+    doubling = ProlongableSubstitution(
+        substitution=_substitution((("0", "0"),), ("0",)), seed="0"
+    )
+    empty = fixed_point_prefix(doubling, 0)
+    assert empty.prefix.letters == ()
+    assert empty.least_iterate_depth == 0
+    assert empty.retained_prefix_lengths == (0,)
+
+    boundary = compute_substitution_fixed_point_prefix(
+        SubstitutionFixedPointPrefixRequest(source=doubling, prefix_length=500)
+    )
+    assert len(boundary.prefix.letters) == 500
+    with pytest.raises(ValidationError, match="less than or equal to 500"):
+        SubstitutionFixedPointPrefixRequest(source=doubling, prefix_length=501)
+    with pytest.raises(ValueError, match="prefix length"):
+        fixed_point_prefix(doubling, 501)
+
+
+def test_fixed_point_source_and_result_envelopes_cover_exact_boundaries() -> None:
+    source_boundary = ProlongableSubstitution(
+        substitution=_substitution(
+            (("0",) * 10_000, ("1",) * 10_000),
+        ),
+        seed="0",
+    )
+    assert (
+        sum(len(image) for image in source_boundary.substitution.morphism.images)
+        == 20_000
+    )
+    assert fixed_point_prefix(source_boundary, 1).prefix.letters == ("0",)
+    accepted = compute_substitution_fixed_point_prefix(
+        SubstitutionFixedPointPrefixRequest(
+            source=source_boundary,
+            prefix_length=1,
+        )
+    )
+    assert accepted.prefix.letters == ("0",)
+
+    over_limit_source = {
+        "substitution": {
+            "morphism": {
+                "source_alphabet": ["0", "1", "2", "3"],
+                "target_alphabet": ["0", "1", "2", "3"],
+                # The seed suffix eventually erases.  The public source limit
+                # must reject this payload before prolongability analyzes that.
+                "images": [
+                    ["0", *("1",) * 9_999],
+                    [],
+                    ["2"] * 10_000,
+                    ["3"],
+                ],
+            }
+        },
+        "seed": "0",
+    }
+    with pytest.raises(ValidationError, match="source exceeds"):
+        ProlongableSubstitution.model_validate(over_limit_source)
+    with pytest.raises(ValidationError, match="source exceeds"):
+        SubstitutionFixedPointPrefixRequest.model_validate(
+            {"source": over_limit_source, "prefix_length": 1}
+        )
+
+    accepted_symbol = "x" * 45
+    byte_boundary = ProlongableSubstitution(
+        substitution=_substitution(((accepted_symbol,) * 10_000,), (accepted_symbol,)),
+        seed=accepted_symbol,
+    )
+    byte_result = compute_substitution_fixed_point_prefix(
+        SubstitutionFixedPointPrefixRequest(
+            source=byte_boundary,
+            prefix_length=500,
+        )
+    )
+    assert len(byte_result.prefix.letters) == 500
+
+    rejected_symbol = "x" * 46
+    byte_above = ProlongableSubstitution(
+        substitution=_substitution(((rejected_symbol,) * 10_000,), (rejected_symbol,)),
+        seed=rejected_symbol,
+    )
+    with pytest.raises(ValidationError, match="result exceeds the byte bound"):
+        SubstitutionFixedPointPrefixRequest(source=byte_above, prefix_length=500)
+
+
+def test_fixed_point_generation_caps_the_intermediate_prefix() -> None:
+    source = ProlongableSubstitution(
+        substitution=_substitution(
+            (("a",) + ("b",) * 498, ("b",) * 10_000),
+            ("a", "b"),
+        ),
+        seed="a",
+    )
+    uncapped_second_length = 499 + 498 * 10_000
+    assert uncapped_second_length > 4_000_000
+
+    result = compute_substitution_fixed_point_prefix(
+        SubstitutionFixedPointPrefixRequest(source=source, prefix_length=500)
+    )
+    assert result.retained_prefix_lengths == (1, 499, 500)
+    assert len(result.prefix.letters) == 500
+
+
+def test_prolongability_rejects_mortal_nongrowing_and_wrong_seed_images() -> None:
+    with pytest.raises(ValidationError, match="eventually erase"):
+        ProlongableSubstitution(substitution=_substitution((("0", "1"), ())), seed="0")
+    with pytest.raises(ValidationError, match="growing suffix"):
+        ProlongableSubstitution(substitution=_substitution((("0",), ("1",))), seed="0")
+    with pytest.raises(ValidationError, match="begin with the seed"):
+        ProlongableSubstitution(
+            substitution=_substitution((("1", "0"), ("1",))), seed="0"
+        )
+
+
+def test_prolongability_allows_erasing_outside_the_growing_seed_orbit() -> None:
+    source = ProlongableSubstitution(
+        substitution=_substitution((("0", "0"), ())), seed="0"
+    )
+    assert fixed_point_prefix(source, 8).prefix.letters == ("0",) * 8
+
+
+def test_alphabet_relabelling_preserves_primitivity_and_prefix_transport() -> None:
+    binary = _substitution((("0", "1"), ("0",)))
+    relabelled = _substitution((("b", "a"), ("b",)), ("b", "a"))
+    binary_profile = substitution_primitivity_profile(
+        substitution_dependency_graph(binary)
+    )
+    relabelled_profile = substitution_primitivity_profile(
+        substitution_dependency_graph(relabelled)
+    )
+    assert relabelled_profile.primitive is binary_profile.primitive
+    assert (
+        relabelled_profile.least_positive_power == binary_profile.least_positive_power
+    )
+
+    binary_prefix = fixed_point_prefix(
+        ProlongableSubstitution(substitution=binary, seed="0"), 20
+    ).prefix.letters
+    relabelled_prefix = fixed_point_prefix(
+        ProlongableSubstitution(substitution=relabelled, seed="b"), 20
+    ).prefix.letters
+    assert relabelled_prefix == tuple(
+        {"0": "b", "1": "a"}[letter] for letter in binary_prefix
+    )
+
+
+def test_all_small_dependency_graphs_match_integer_power_oracle() -> None:
+    for order in range(1, 4):
+        alphabet = tuple(str(index) for index in range(order))
+        bound = 1 if order == 1 else (order - 1) ** 2 + 1
+        for cells in itertools.product((0, 1), repeat=order * order):
+            rows = tuple(
+                tuple(cells[source * order + target] for target in range(order))
+                for source in range(order)
+            )
+            substitution = _substitution(
+                tuple(
+                    tuple(
+                        alphabet[target]
+                        for target in range(order)
+                        if rows[source][target]
+                    )
+                    for source in range(order)
+                ),
+                alphabet,
+            )
+            profile = substitution_primitivity_profile(
+                substitution_dependency_graph(substitution)
+            )
+
+            power = rows
+            expected_exponent = None
+            for exponent in range(1, bound + 1):
+                if all(entry > 0 for row in power for entry in row):
+                    expected_exponent = exponent
+                    break
+                power = tuple(
+                    tuple(
+                        sum(power[i][k] * rows[k][j] for k in range(order))
+                        for j in range(order)
+                    )
+                    for i in range(order)
+                )
+            assert profile.least_positive_power == expected_exponent
+            assert profile.primitive is (expected_exponent is not None)
+
+
+def test_primitivity_alphabet_boundary_is_complete() -> None:
+    alphabet = tuple(f"x{index}" for index in range(50))
+    identity = _substitution(tuple((symbol,) for symbol in alphabet), alphabet)
+    result = compute_substitution_primitivity_profile(
+        SubstitutionPrimitivityProfileRequest(
+            dependency_graph=substitution_dependency_graph(identity)
+        )
+    )
+    assert result.exponent_upper_bound == 2_402
+    assert result.primitive is False
+    assert result.obstruction == "REDUCIBLE_DEPENDENCY_GRAPH"
+
+    oversized = tuple(f"x{index}" for index in range(51))
+    with pytest.raises(ValidationError, match="at most 50 items"):
+        WordMorphism(
+            source_alphabet=oversized,
+            target_alphabet=oversized,
+            images=tuple((symbol,) for symbol in oversized),
+        )
+
+
+def test_one_image_mutation_changes_graph_primitivity_and_prefix() -> None:
+    fibonacci = _substitution((("0", "1"), ("0",)))
+    mutated = _substitution((("0", "0"), ("0",)))
+    fibonacci_graph = substitution_dependency_graph(fibonacci)
+    mutated_graph = substitution_dependency_graph(mutated)
+    assert mutated_graph != fibonacci_graph
+    assert substitution_primitivity_profile(fibonacci_graph).primitive is True
+    assert substitution_primitivity_profile(mutated_graph).primitive is False
+
+    fibonacci_prefix = fixed_point_prefix(
+        ProlongableSubstitution(substitution=fibonacci, seed="0"), 8
+    )
+    mutated_prefix = fixed_point_prefix(
+        ProlongableSubstitution(substitution=mutated, seed="0"), 8
+    )
+    assert fibonacci_prefix.prefix != mutated_prefix.prefix
 
 
 def test_native_word_operations_are_exact_and_use_declared_order() -> None:

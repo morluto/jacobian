@@ -43,7 +43,7 @@ class SchurExpansionRequest(StrictModel):
     Preconditions published through this schema: ``variables`` and ``point``
     must have equal lengths in ``[1, 20]``, variable names must be distinct,
     each coordinate satisfies ``abs(coordinate) <= 999999``, and the partition
-    total size is capped at 100.
+    total size is capped at 500.
     """
 
     partition: IntegerPartition = Field(

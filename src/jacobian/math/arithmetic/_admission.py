@@ -11,6 +11,11 @@ from jacobian.math.arithmetic._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "arithmetic.real_quadratic.embeddings.compute",
+        AdmissionDecision.KEEP,
+        "complete exact embedding profile with source-bound images, trace, and norm",
+    ),
+    OperationAdmission(
         "arithmetic.real_quadratic.order.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",

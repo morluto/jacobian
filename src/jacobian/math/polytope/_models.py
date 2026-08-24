@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Iterator, Sequence
 from fractions import Fraction
-from typing import Annotated, Self
+from typing import Annotated, Any, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
@@ -562,19 +562,19 @@ class PolytopeSupportRequest(StrictModel):
 
         if not isinstance(data, dict):
             return data
-        data = _tuple_canonical_containers(data)
-        for vertex in _iter_raw_entries(data.get("polytope"), "vertices"):
+        canonical: Any = _tuple_canonical_containers(data)
+        for vertex in _iter_raw_entries(canonical.get("polytope"), "vertices"):
             for component in _iter_raw_entries(vertex, "coordinates"):
                 _require_raw_component_within_support_envelope(
                     component,
                     "polytope vertex coordinate",
                 )
-        for component in _iter_raw_entries(data.get("covector"), "components"):
+        for component in _iter_raw_entries(canonical.get("covector"), "components"):
             _require_raw_component_within_support_envelope(
                 component,
                 "covector component",
             )
-        return data
+        return canonical
 
     @model_validator(mode="after")
     def require_common_coordinate_space(self) -> Self:
@@ -628,7 +628,7 @@ def _canonical_v_polytope_vertices(polytope: RationalVPolytope) -> tuple[Vertex,
     return tuple(Vertex(coordinates=vertex.coordinates) for vertex in polytope.vertices)
 
 
-def _tuple_canonical_containers(value: object) -> object:
+def _tuple_canonical_containers(value: Any) -> Any:
     """Return raw JSON payloads with every sequence materialized as a tuple.
 
     Dispatch parses each request through strict JSON validation, so a

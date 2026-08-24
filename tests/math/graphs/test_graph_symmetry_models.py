@@ -224,6 +224,34 @@ def test_transitive_action_charges_only_possible_representatives() -> None:
     assert limit - len(encoded) > 2 * 1024 * 1024
 
 
+def test_colored_singleton_orbits_price_exact_fixed_structure() -> None:
+    """One-character colors on every maximal vertex must stay admitted.
+
+    Charging a flat 64-byte structure per singleton orbit priced 256 vertex
+    plus 4,096 edge singleton orbits far above their exact wire structure,
+    inflating the estimate past the canonical output limit even though the
+    exact result keeps over 40 KiB of headroom, so this boundary case pins
+    per-orbit pricing at each index's digit width and separators.
+    """
+
+    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+
+    payload = _wide_orbit_payload(14)
+    payload["vertex_colors"] = [
+        {"vertex": vertex, "color": "c"} for vertex in payload["graph"]["vertices"]
+    ]
+    request = GraphSymmetryOrbitRequest.model_validate(payload)
+    result = _generator_orbits(request)
+
+    assert result.vertex_orbit_count == 256
+    assert result.edge_orbit_count == 4096
+    encoded = canonicalize_json(result.model_dump(mode="json"))
+    estimate = _estimate_orbit_result_wire_bytes(request)
+    limit = CanonicalLimits().max_output_bytes
+    assert len(encoded) <= estimate <= limit
+    assert limit - len(encoded) >= 40_000
+
+
 def test_graph_symmetry_estimate_bounds_heterogeneous_representatives() -> None:
     """One large label among tiny ones must not inflate the estimate by a maximum."""
 

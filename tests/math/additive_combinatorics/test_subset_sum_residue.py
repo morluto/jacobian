@@ -22,6 +22,9 @@ from jacobian.math.additive_combinatorics._subset_sum_residue import (
     SubsetSumResidueProfileResult,
     compute_subset_sum_residue_profile,
 )
+from jacobian.math.additive_combinatorics.values import (
+    MAX_INDEXED_INTEGER_SEQUENCE_ITEMS,
+)
 
 
 def _request(
@@ -317,11 +320,11 @@ def test_request_bounds_raw_source_before_nested_parsing() -> None:
         )
 
 
-def test_source_schema_admits_the_advertised_residue_envelope() -> None:
+def test_source_schema_admits_the_advertised_shared_envelope() -> None:
     schema = SubsetSumResidueProfileRequest.model_json_schema()
     items_schema = schema["$defs"]["IndexedIntegerSequence"]["properties"]["items"]
 
-    assert items_schema["maxItems"] == MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS - 1
+    assert items_schema["maxItems"] == MAX_INDEXED_INTEGER_SEQUENCE_ITEMS
     assert (
         items_schema["items"]["maxLength"]
         == MAX_RESIDUE_PROFILE_INPUT_INTEGER_DIGITS + 1

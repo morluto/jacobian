@@ -13,7 +13,10 @@ from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.additive_combinatorics._subset_sum_target_kernel import (
     _solve_subset_sum_target,
 )
-from jacobian.math.additive_combinatorics.values import IndexSubset
+from jacobian.math.additive_combinatorics.values import (
+    IndexedIntegerSequence,
+    IndexSubset,
+)
 
 MAX_SUBSET_SUM_INTEGER_DIGITS = 256
 MAX_SUBSET_SUM_REACHABLE_STATES = 65_536
@@ -22,35 +25,10 @@ MAX_SUBSET_SUM_TOTAL_TRANSITIONS = 2 * MAX_SUBSET_SUM_TRANSITIONS_PER_PASS
 MAX_SUBSET_SUM_SOURCE_WIRE_BYTES = 4 * 1024 * 1024
 MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS = 262
 
-_SubsetSumTargetItem = Annotated[
-    str,
-    StringConstraints(
-        pattern=r"^(?:0|-?[1-9][0-9]*)$",
-        max_length=MAX_SUBSET_SUM_INTEGER_DIGITS + 1,
-        strict=True,
-    ),
+_SubsetSumTargetScalar = Annotated[
+    CanonicalInteger,
+    StringConstraints(max_length=MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS + 1),
 ]
-
-
-class SubsetSumTargetSource(StrictModel):
-    """The materialized indexed integers one exact target search selects from.
-
-    Equal values and zeros remain distinct selectable positions in listed
-    order. The item count follows this operation's transition budget rather
-    than the shared profile source ceiling.
-    """
-
-    items: tuple[_SubsetSumTargetItem, ...] = Field(
-        max_length=MAX_SUBSET_SUM_TRANSITIONS_PER_PASS,
-        description=(
-            "An ordered tuple of at most "
-            f"{MAX_SUBSET_SUM_TRANSITIONS_PER_PASS:,} canonical integers, each "
-            f"with at most {MAX_SUBSET_SUM_INTEGER_DIGITS} digits excluding its "
-            "optional sign; the retained request also enforces a 4 MiB wire "
-            "bound across the whole source."
-        ),
-        examples=[("1", "1", "3")],
-    )
 
 
 def _require_integer_digits(value: str, label: str, maximum_digits: int) -> None:
@@ -84,7 +62,7 @@ def _require_target_within_subset_sum_width(
 def _raw_source_item_count(source: object) -> int | None:
     """Bound one raw source before Pydantic parses its canonical integers."""
 
-    if isinstance(source, SubsetSumTargetSource):
+    if isinstance(source, IndexedIntegerSequence):
         values: list[object] | tuple[object, ...] = source.items
     elif isinstance(source, Mapping):
         raw_values = source.get("items")
@@ -127,10 +105,11 @@ def _require_admitted_work(
     stops at the first source prefix whose canonical witness resolves the
     target. A resolved request is bounded only by the work through that
     prefix, because every witness inside a resolving prefix carries a
-    strictly smaller incidence mask than any witness of the later expansion.
-    A request the prefix replay never resolves must fit the exhaustive
-    reachable-state and transition bounds across the whole source before
-    execution.
+    strictly smaller incidence mask than any witness of the later expansion;
+    the resolving scan itself is charged before its prefix is accepted, so
+    the charged work includes every scanned state. A request the prefix
+    replay never resolves must fit the exhaustive reachable-state and
+    transition bounds across the whole source before execution.
     """
 
     states: set[int] = {0} if allow_empty_subset else set()
@@ -141,9 +120,6 @@ def _require_admitted_work(
     for value in values:
         if not allow_empty_subset and value == target:
             return
-        if any(subtotal + value == target for subtotal in states):
-            return
-
         transitions += len(states) + (0 if allow_empty_subset else 1)
         if transitions > MAX_SUBSET_SUM_TRANSITIONS_PER_PASS:
             raise ValueError(
@@ -151,6 +127,8 @@ def _require_admitted_work(
                 f"{MAX_SUBSET_SUM_TOTAL_TRANSITIONS:,}-transition complete-call "
                 "bound across computation and source-binding replay"
             )
+        if any(subtotal + value == target for subtotal in states):
+            return
 
         grown = {subtotal + value for subtotal in states}
         if not allow_empty_subset and value not in states:
@@ -166,13 +144,16 @@ def _require_admitted_work(
 class SubsetSumTargetRequest(StrictModel):
     """One bounded indexed integer sequence and exact target."""
 
-    source: SubsetSumTargetSource = Field(
+    source: IndexedIntegerSequence = Field(
         description=(
-            "The materialized indexed integers available for selection; every "
-            "item has at most 256 digits and the retained source has a 4 MiB wire bound."
+            "The materialized indexed integers available for selection; "
+            "request admission bounds this operation to at most "
+            f"{MAX_SUBSET_SUM_TRANSITIONS_PER_PASS:,} items of at most "
+            f"{MAX_SUBSET_SUM_INTEGER_DIGITS} digits each with a 4 MiB wire "
+            "bound across the whole source."
         )
     )
-    target: CanonicalInteger = Field(
+    target: _SubsetSumTargetScalar = Field(
         description=(
             "The canonical signed decimal sum to decide exactly; its digit "
             "width must fit the attainable subset-sum width derived from this "
@@ -224,6 +205,9 @@ class SubsetSumTargetRequest(StrictModel):
         if source_wire_bound > MAX_SUBSET_SUM_SOURCE_WIRE_BYTES:
             raise ValueError("subset-sum source exceeds the 4 MiB wire-size bound")
 
+        for value in self.source.items:
+            _require_integer_digits(value, "source item", MAX_SUBSET_SUM_INTEGER_DIGITS)
+
         values = tuple(parse_canonical_integer(value) for value in self.source.items)
         target = parse_canonical_integer(self.target)
         _require_target_within_subset_sum_width(self.target, values)
@@ -238,8 +222,8 @@ class SubsetSumTargetRequest(StrictModel):
 class SubsetSumTargetResult(StrictModel):
     """An exact source-bound target decision with its canonical witness."""
 
-    source: SubsetSumTargetSource
-    target: CanonicalInteger
+    source: IndexedIntegerSequence
+    target: _SubsetSumTargetScalar
     allow_empty_subset: StrictBool
     status: Literal["ATTAINED", "NOT_ATTAINED"] = Field(
         description="The complete exact decision inside the admitted search envelope."

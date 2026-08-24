@@ -27,6 +27,7 @@ from jacobian.math.additive_combinatorics.operations import (
     MAX_SUBSET_SUM_PROFILE_RESULT_BYTES,
 )
 from jacobian.math.additive_combinatorics.values import (
+    MAX_INDEXED_INTEGER_SEQUENCE_ITEMS,
     MAX_SUBSET_SUM_ITEM_DIGITS,
     MAX_SUBSET_SUM_ITEMS,
     MAX_SUBSET_SUM_SUM_DIGITS,
@@ -212,9 +213,17 @@ def test_source_digit_bound_is_enforced_before_integer_conversion() -> None:
     assert error.value.errors()[0]["type"] == "string_too_long"
 
 
-def test_source_item_count_bound_is_enforced_by_schema() -> None:
-    with pytest.raises(ValidationError, match=f"at most {MAX_SUBSET_SUM_ITEMS} items"):
-        IndexedIntegerSequence(items=("0",) * (MAX_SUBSET_SUM_ITEMS + 1))
+def test_source_item_count_bound_is_enforced_by_admission() -> None:
+    widened = IndexedIntegerSequence(items=("0",) * (MAX_SUBSET_SUM_ITEMS + 1))
+    assert len(widened.items) == MAX_SUBSET_SUM_ITEMS + 1
+
+    with pytest.raises(
+        ValidationError, match=f"{MAX_SUBSET_SUM_ITEMS:,}-item profile bound"
+    ):
+        SubsetSumProfileRequest(source=widened)
+
+    with pytest.raises(ValidationError, match="at most 500000 items"):
+        IndexedIntegerSequence(items=("0",) * (500_000 + 1))
 
 
 @pytest.mark.parametrize(
@@ -241,7 +250,7 @@ def test_request_schema_exposes_source_shape_and_character_bounds() -> None:
     items_schema = source_schema["properties"]["items"]
     source_description = schema["properties"]["source"]["description"]
 
-    assert items_schema["maxItems"] == MAX_SUBSET_SUM_ITEMS
+    assert items_schema["maxItems"] == MAX_INDEXED_INTEGER_SEQUENCE_ITEMS
     assert items_schema["items"]["maxLength"] == MAX_SUBSET_SUM_ITEM_DIGITS + 1
     assert "4*n*S" in source_description
     assert "4,000,000" in source_description

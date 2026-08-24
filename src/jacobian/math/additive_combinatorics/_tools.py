@@ -196,7 +196,7 @@ ADDITIVE_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 (
                     "Compute all subset sums of the two indexed values [1,1], "
                     "giving multiplicities 1,2,1 at sums 0,1,2; input items must "
-                    "be canonical integers inside the schema-visible "
+                    "be canonical integers inside the "
                     f"{MAX_SUBSET_SUM_ITEMS:,}-item, "
                     f"{MAX_SUBSET_SUM_ITEM_DIGITS:,}-digit, "
                     f"{MAX_SUBSET_SUM_PROFILE_ENTRIES:,}-row, "

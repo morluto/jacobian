@@ -11,6 +11,7 @@ from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 
 MAX_SUBSET_SUM_ITEMS = 4_095
+MAX_INDEXED_INTEGER_SEQUENCE_ITEMS = 500_000
 MAX_SUBSET_SUM_ITEM_DIGITS = 32_768
 MAX_SUBSET_SUM_SUM_DIGITS = MAX_SUBSET_SUM_ITEM_DIGITS + len(str(MAX_SUBSET_SUM_ITEMS))
 MAX_SUBSET_SUM_MULTIPLICITY_DIGITS = len(str(1 << MAX_SUBSET_SUM_ITEMS))
@@ -49,15 +50,18 @@ class IndexedIntegerSequence(StrictModel):
 
     Equal values and zeros are intentionally retained as separate positions.
     The listed order is the stable index axis used by subset witnesses and
-    other downstream indexed operations.
+    other downstream indexed operations. The item ceiling is the widest
+    consumer envelope; each consuming operation enforces its own tighter
+    item-count and work bounds in request-level admission.
     """
 
     items: tuple[IndexedInteger, ...] = Field(
-        max_length=MAX_SUBSET_SUM_ITEMS,
+        max_length=MAX_INDEXED_INTEGER_SEQUENCE_ITEMS,
         description=(
-            f"An ordered tuple of at most {MAX_SUBSET_SUM_ITEMS:,} canonical "
-            "integers. Repeated values and zeros remain distinct indexed items; "
-            f"each integer has at most {MAX_SUBSET_SUM_ITEM_DIGITS:,} decimal "
+            f"An ordered tuple of at most "
+            f"{MAX_INDEXED_INTEGER_SEQUENCE_ITEMS:,} canonical integers. "
+            "Repeated values and zeros remain distinct indexed items; each "
+            f"integer has at most {MAX_SUBSET_SUM_ITEM_DIGITS:,} decimal "
             "digits, excluding its optional sign."
         ),
         examples=[("1", "1", "3")],

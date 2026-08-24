@@ -791,8 +791,13 @@ def _validate_virtual_pairs(
             separated_pairs.add(separator)
         if left_node == right_node:
             raise ValueError("paired virtual edges must join distinct SPQR nodes")
+        tree_edge = (min(left_node, right_node), max(left_node, right_node))
+        if tree_edge in derived_tree:
+            raise ValueError(
+                "an SPQR tree edge must be glued by exactly one virtual-edge pair"
+            )
         pair_edges.update((left_id, right_id))
-        derived_tree.add((min(left_node, right_node), max(left_node, right_node)))
+        derived_tree.add(tree_edge)
     all_virtual = {
         edge_id
         for edge_id, (_, node, _) in edge_locations.items()

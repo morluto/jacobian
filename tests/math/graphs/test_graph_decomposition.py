@@ -744,6 +744,58 @@ class TestSPQRTree:
         with pytest.raises(ValidationError, match="Q skeleton"):
             SPQRTreeResult.model_validate(malformed)
 
+    def test_replay_rejects_duplicate_virtual_pair_on_one_tree_edge(self) -> None:
+        """Two K4 blocks glued along {0,1}: one tree adjacency, one gluing pair."""
+        edges = [
+            (0, 1),
+            (0, 2),
+            (0, 3),
+            (1, 2),
+            (1, 3),
+            (2, 3),
+            (0, 4),
+            (0, 5),
+            (1, 4),
+            (1, 5),
+            (4, 5),
+        ]
+        genuine = _spqr_tree({"vertex_count": 6, "edges": edges})
+        assert genuine.status == "SPQR_TREE"
+        kinds = {node.node_id: node.kind for node in genuine.nodes}
+        p_id = next(node_id for node_id, kind in kinds.items() if kind == "P_NODE")
+        r_id = next(node_id for node_id, kind in kinds.items() if kind == "R_NODE")
+        locations = {
+            edge.edge_id: node.node_id
+            for node in genuine.nodes
+            for edge in node.graph.edges
+        }
+        pair = next(
+            (left, right)
+            for left, right in genuine.virtual_edge_pairs
+            if {kinds[locations[left]], kinds[locations[right]]}
+            == {"P_NODE", "R_NODE"}
+        )
+        assert {locations[side] for side in pair} == {p_id, r_id}
+        malformed = genuine.model_dump(mode="json")
+        for node in malformed["nodes"]:
+            if node["node_id"] not in (p_id, r_id):
+                continue
+            extra_id = f"virtual:forged-{node['node_id']}"
+            glued = [
+                edge
+                for edge in node["graph"]["edges"]
+                if edge["edge_id"] in (pair[0], pair[1])
+            ]
+            assert len(glued) == 1
+            node["graph"]["edges"].append({**glued[0], "edge_id": extra_id})
+            node["virtual_edge_ids"] = [*node["virtual_edge_ids"], extra_id]
+        malformed["virtual_edge_pairs"] = [
+            *malformed["virtual_edge_pairs"],
+            [f"virtual:forged-{p_id}", f"virtual:forged-{r_id}"],
+        ]
+        with pytest.raises(ValidationError, match="exactly one virtual-edge pair"):
+            SPQRTreeResult.model_validate(malformed)
+
     def test_request_admits_complete_graphs_on_the_declared_vertex_axis(self) -> None:
         k33_edges = [(i, j) for i in range(33) for j in range(i + 1, 33)]
         result = _spqr_tree({"vertex_count": 33, "edges": k33_edges})

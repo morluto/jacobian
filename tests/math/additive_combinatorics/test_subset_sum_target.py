@@ -4,7 +4,7 @@ from itertools import permutations, product
 from typing import cast
 
 import pytest
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from jacobian.catalog.models import MathTool
 from jacobian.math.additive_combinatorics import (
@@ -23,6 +23,7 @@ from jacobian.math.additive_combinatorics._subset_sum_target import (
     MAX_SUBSET_SUM_TRANSITIONS_PER_PASS,
     SubsetSumTargetRequest,
     SubsetSumTargetResult,
+    _SubsetSumTargetScalar,
 )
 from jacobian.math.additive_combinatorics._subset_sum_target_kernel import (
     _solve_subset_sum_target,
@@ -245,16 +246,16 @@ def test_request_rejects_immediately_above_each_search_bound() -> None:
             target="0",
             allow_empty_subset=False,
         )
-    with pytest.raises(ValidationError, match="attainable"):
-        SubsetSumTargetRequest(
-            source={"items": []},
-            target="1" + "0" * 256,
-            allow_empty_subset=False,
-        )
     with pytest.raises(ValidationError, match="262-digit"):
         SubsetSumTargetRequest(
             source={"items": ["-" + "9" * 256]},
             target="-" + "9" * 263,
+            allow_empty_subset=True,
+        )
+    with pytest.raises(ValidationError, match="262-digit"):
+        SubsetSumTargetRequest(
+            source={"items": ["-" + "9" * 256]},
+            target="9" * 263,
             allow_empty_subset=True,
         )
 
@@ -439,20 +440,29 @@ def test_request_accepts_targets_at_the_derived_subset_sum_width() -> None:
     assert same_width.status == "NOT_ATTAINED"
 
 
-def test_request_rejects_targets_beyond_the_derived_subset_sum_width() -> None:
-    with pytest.raises(ValidationError, match="attainable"):
-        SubsetSumTargetRequest(
-            source={"items": ["5"]},
-            target="99",
-            allow_empty_subset=True,
-        )
+def test_request_resolves_targets_beyond_the_derived_subset_sum_width() -> None:
+    # Source (5,) attains [0, 5]; target 99 lies outside with more digits
+    # than either endpoint, so admission resolves it exactly without any
+    # source-sensitive width restriction or state expansion.
+    beyond = _operation().run(_request((5,), 99, allow_empty_subset=True))
+    assert beyond.status == "NOT_ATTAINED"
+    assert beyond.witness is None
+    assert beyond.reconstructed_sum is None
 
-    with pytest.raises(ValidationError, match="1-digit attainable"):
+    replayed = SubsetSumTargetResult.model_validate_json(beyond.model_dump_json())
+    assert replayed == beyond
+
+    empty = _operation().run(_request((), 10, allow_empty_subset=True))
+    assert empty.status == "NOT_ATTAINED"
+
+    wide = _operation().run(
         SubsetSumTargetRequest(
             source={"items": []},
-            target="10",
-            allow_empty_subset=True,
+            target="1" + "0" * 256,
+            allow_empty_subset=False,
         )
+    )
+    assert wide.status == "NOT_ATTAINED"
 
 
 def test_resolved_empty_witness_skips_state_expansion_admission() -> None:
@@ -585,7 +595,26 @@ def test_schema_publishes_enforced_target_and_source_bounds() -> None:
 
     target_schema = schema["properties"]["target"]
     assert target_schema["maxLength"] == MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS + 1
-    assert target_schema["pattern"] == r"^(?:0|-?[1-9][0-9]*)$"
+    assert target_schema["pattern"] == (
+        rf"^(?:0|-?[1-9][0-9]{{0,{MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS - 1}}})$"
+    )
 
     items_schema = schema["$defs"]["IndexedIntegerSequence"]["properties"]["items"]
     assert items_schema["maxItems"] == 500_000
+
+
+def test_target_scalar_pattern_encodes_the_absolute_digit_ceiling() -> None:
+    adapter = TypeAdapter(_SubsetSumTargetScalar)
+
+    assert adapter.validate_python("9" * 262) == "9" * 262
+    # Only a negative 262-digit value needs the extra sign character.
+    assert adapter.validate_python("-" + "9" * 262) == "-" + "9" * 262
+
+    with pytest.raises(ValidationError):
+        adapter.validate_python("9" * 263)
+    with pytest.raises(ValidationError):
+        adapter.validate_python("-" + "9" * 263)
+    with pytest.raises(ValidationError):
+        adapter.validate_python("0" * 262)
+    with pytest.raises(ValidationError):
+        adapter.validate_python("0" + "9" * 261)

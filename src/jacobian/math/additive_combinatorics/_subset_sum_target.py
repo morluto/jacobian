@@ -35,37 +35,24 @@ MAX_SUBSET_SUM_SOURCE_WIRE_BYTES = 4 * 1024 * 1024
 MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS = 262
 
 _SubsetSumTargetScalar = Annotated[
-    CanonicalInteger,
-    StringConstraints(max_length=MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS + 1),
+    str,
+    StringConstraints(
+        pattern=rf"^(?:0|-?[1-9][0-9]{{0,{MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS - 1}}})$",
+        strict=True,
+        max_length=MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS + 1,
+    ),
 ]
+"""Canonical signed integer whose magnitude carries at most 262 digits.
+
+The absolute digit ceiling is published as a JSON Schema ``pattern``, so
+schema-driven clients see the enforced domain; only a negative 262-digit
+value needs the extra sign character of ``maxLength``.
+"""
 
 
 def _require_integer_digits(value: str, label: str, maximum_digits: int) -> None:
     if len(value.lstrip("-")) > maximum_digits:
         raise ValueError(f"{label} exceeds the {maximum_digits}-digit bound")
-
-
-def _require_target_within_subset_sum_width(
-    target: str,
-    values: tuple[int, ...],
-) -> None:
-    """Bound the target by the widest subset sum the parsed source can attain.
-
-    Every subset sum lies in ``[negative_span, positive_span]``, so its
-    canonical width never exceeds the wider endpoint of that attained range.
-    """
-
-    positive_span = sum(value for value in values if value > 0)
-    negative_span = sum(value for value in values if value < 0)
-    attainable_width = max(
-        len(format_canonical_integer(positive_span).lstrip("-")),
-        len(format_canonical_integer(negative_span).lstrip("-")),
-    )
-    if len(target.lstrip("-")) > attainable_width:
-        raise ValueError(
-            f"target exceeds the {attainable_width}-digit attainable "
-            "subset-sum width bound"
-        )
 
 
 def _raw_source_item_count(source: object) -> int | None:
@@ -189,9 +176,10 @@ class SubsetSumTargetRequest(StrictModel):
     )
     target: _SubsetSumTargetScalar = Field(
         description=(
-            "The canonical signed decimal sum to decide exactly; its digit "
-            "width must fit the attainable subset-sum width derived from this "
-            "source, which stays at most 262 digits for every admitted source."
+            "The canonical signed decimal sum to decide exactly; its "
+            f"magnitude carries at most {MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS} "
+            "digits, and a value outside this source's attained subset-sum "
+            "interval is decided exactly as unattained without expansion."
         )
     )
     allow_empty_subset: StrictBool = Field(
@@ -244,7 +232,6 @@ class SubsetSumTargetRequest(StrictModel):
 
         values = tuple(parse_canonical_integer(value) for value in self.source.items)
         target = parse_canonical_integer(self.target)
-        _require_target_within_subset_sum_width(self.target, values)
         _require_admitted_work(
             values,
             target,

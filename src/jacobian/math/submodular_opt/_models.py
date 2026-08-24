@@ -6,7 +6,7 @@ from typing import Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 
 # The checks run the local characterizations: monotonicity scans n*2^n
@@ -17,16 +17,9 @@ from jacobian._models import StrictModel
 # n <= 17; 16 keeps the worst-case full-scan work (~8M exact pair checks)
 # comfortably inside the synchronous envelope.  The per-request byte
 # preflight below is the binding, result-sensitive guard.
-#
-# Scan work also scales with coefficient height: every inequality subtracts
-# and compares exact Fractions.  Bounding each value's numerator/denominator
-# to 128 digits keeps every one of the ~8M comparisons on small big-ints
-# (well under a microsecond), so the documented seconds-scale envelope holds
-# even for the widest admitted table.
 MAX_GROUND_SET = 16
 _MAX_TABLE_WIRE_BYTES = 9 * 1024 * 1024
 _ENTRY_OVERHEAD_BYTES = 25
-MAX_SUBMODULAR_VALUE_DIGITS = 128
 
 
 class SetFunctionEntry(StrictModel):
@@ -34,15 +27,6 @@ class SetFunctionEntry(StrictModel):
 
     subset: tuple[int, ...] = Field(default=())
     value: CanonicalRational
-
-    @model_validator(mode="after")
-    def require_bounded_height(self) -> Self:
-        require_bounded_rational(
-            self.value,
-            max_digits=MAX_SUBMODULAR_VALUE_DIGITS,
-            label="set-function value",
-        )
-        return self
 
 
 class SetFunction(StrictModel):

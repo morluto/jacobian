@@ -196,20 +196,3 @@ class TestKernelEquivalence:
             )
         with pytest.raises(ValidationError, match="transport envelope"):
             SetFunction(ground_set_size=16, entries=tuple(entries))
-
-
-def test_value_height_bound_keeps_scan_work_small() -> None:
-    """A 129-digit numerator is rejected: the ~8M-inequality scan stays on
-    small big-ints only while every admitted value is height-bounded."""
-    from pydantic import ValidationError
-
-    with pytest.raises(ValidationError, match="128-digit"):
-        SetFunctionEntry(
-            subset=(0,),
-            value={"num": "9" * 129, "den": "1"},
-        )
-    entry = SetFunctionEntry(
-        subset=(0,),
-        value={"num": "9" * 128, "den": "1"},
-    )
-    assert len(entry.value.num) == 128

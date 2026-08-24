@@ -176,7 +176,9 @@ def test_symbols_admit_only_unicode_scalar_strings(symbol: str) -> None:
     with pytest.raises(ValidationError):
         FiniteWord(alphabet=(symbol,), letters=())
     with pytest.raises(ValidationError):
-        WordMorphism(source_alphabet=("a",), target_alphabet=(symbol,), images=(("a",),))
+        WordMorphism(
+            source_alphabet=("a",), target_alphabet=(symbol,), images=(("a",),)
+        )
 
 
 def test_random_words_match_independent_factor_and_period_oracles() -> None:

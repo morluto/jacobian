@@ -12,7 +12,7 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.math import _singular as shared_singular
-from jacobian.math.polynomials.maps import RationalPolynomialMap, _operations, _singular
+from jacobian.math.polynomials.maps import RationalPolynomialMap, _operations
 from jacobian.math.polynomials.maps._models import (
     GenericDegreeRequest,
     GenericDegreeResult,
@@ -93,9 +93,9 @@ def test_operation_is_one_admitted_atomic_generic_fiber_computation() -> None:
     assert {"method", "backend_version"}.isdisjoint(
         GenericDegreeResult.model_json_schema()["properties"]
     )
-    assert "singular" not in json.dumps(
-        GenericDegreeRequest.model_json_schema()
-    ).lower()
+    assert (
+        "singular" not in json.dumps(GenericDegreeRequest.model_json_schema()).lower()
+    )
     assert "singular" not in operation.description.lower()
 
 
@@ -339,9 +339,10 @@ def test_branch_specialization_does_not_replace_generic_degree(
     standard_monomials = (sympy.Integer(1), x)
 
     assert {polynomial.as_expr() for polynomial in special_fiber.polys} == {x**2, y}
-    assert tuple(
-        special_fiber.reduce(monomial)[1] for monomial in standard_monomials
-    ) == standard_monomials
+    assert (
+        tuple(special_fiber.reduce(monomial)[1] for monomial in standard_monomials)
+        == standard_monomials
+    )
     assert special_fiber.reduce(x**2)[1] == 0
     assert sympy.Poly(x**2, x, domain=sympy.QQ).sqf_part().degree() == 1
     assert len(standard_monomials) == 2

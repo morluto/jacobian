@@ -254,9 +254,9 @@ def test_invocation_is_hermetic_and_version_precedes_algebra(
         "END",
     )
     body = (
-            "import sys\n"
-            "required={'-q','-t','--no-rc','--no-shell','--no-stdlib'}\n"
-            "if not required.issubset(sys.argv): raise SystemExit(7)\n"
+        "import sys\n"
+        "required={'-q','-t','--no-rc','--no-shell','--no-stdlib'}\n"
+        "if not required.issubset(sys.argv): raise SystemExit(7)\n"
         f"print({chr(10).join(records)!r})"
     )
     executable = _executable(tmp_path, body)
@@ -270,10 +270,14 @@ def test_invocation_is_hermetic_and_version_precedes_algebra(
     )
 
     assert result.outcome == "COMPUTED"
-    source = __import__(
-        "jacobian.math.commutative_algebra_ops._singular",
-        fromlist=["_script"],
-    )._script("radical", _ideal(), None).decode("ascii")
+    source = (
+        __import__(
+            "jacobian.math.commutative_algebra_ops._singular",
+            fromlist=["_script"],
+        )
+        ._script("radical", _ideal(), None)
+        .decode("ascii")
+    )
     assert source.index('system("version")') < source.index('LIB "primdec.lib"')
 
 

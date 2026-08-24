@@ -17,12 +17,12 @@ from jacobian.math.polynomials.maps._models import (
     GenericDegreeRequest,
 )
 from jacobian.math.polynomials.maps._operations import compute_generic_degree
-from jacobian.process import bounded_process_cancellation
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
+from jacobian.process import bounded_process_cancellation
 
 
 def _map() -> RationalPolynomialMap:
@@ -145,9 +145,9 @@ def test_invocation_disables_ambient_startup_shell_and_standard_library(
         "END",
     )
     body = (
-            "import sys\n"
-            "required={'-q','-t','--no-rc','--no-shell','--no-stdlib'}\n"
-            "if not required.issubset(sys.argv): raise SystemExit(7)\n"
+        "import sys\n"
+        "required={'-q','-t','--no-rc','--no-shell','--no-stdlib'}\n"
+        "if not required.issubset(sys.argv): raise SystemExit(7)\n"
         f"print({chr(10).join(records)!r})"
     )
     executable = _executable(tmp_path, body)

@@ -35,6 +35,10 @@ from jacobian.process import (
 
 _PROTOCOL_HEADER = "JACOBIAN_SINGULAR_IDEAL_V1"
 _COEFFICIENT = re.compile(r"^(0|-?[1-9][0-9]*)(?:/([1-9][0-9]*))?$")
+_SUPPORTED_VERSION_MIN = 44000
+_SUPPORTED_VERSION_MAX = 45000
+_STDOUT_LIMIT = 512 * 1024
+_STDERR_LIMIT = 64 * 1024
 
 SingularOperation = Literal["radical", "quotient", "saturation"]
 SingularOutcome = Literal[
@@ -382,7 +386,7 @@ def _parse_verification_verdict(output: bytes) -> SaturationVerificationVerdict:
         text = output.decode("ascii")
     except UnicodeDecodeError:
         return "ERROR"
-    lines = _ProtocolReader(text.splitlines())
+    lines = SingularProtocolReader(text.splitlines())
     try:
         lines.expect(_PROTOCOL_HEADER)
         version_number = int(lines.pop())

@@ -41,10 +41,7 @@ def compute_generic_degree(request: GenericDegreeRequest) -> GenericDegreeResult
             source=request.polynomial_map,
             detail=backend.detail,
         )
-    if (
-        backend.certificate is None
-        or backend.dimension is None
-    ):
+    if backend.certificate is None or backend.dimension is None:
         return GenericDegreeResult(
             outcome="ERROR",
             source=request.polynomial_map,

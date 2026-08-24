@@ -993,6 +993,30 @@ class TestNativeApi:
         )
         assert degenerate == CanonicalRational(num="2", den="1")
 
+    def test_kernel_accepts_the_canonical_v_polytope_value(self) -> None:
+        from fractions import Fraction
+
+        from jacobian.math.polytope import convex_hull_volume
+
+        value = convex_hull_volume(_canonical_square())
+
+        assert value == CanonicalRational(num="1", den="1")
+        assert value == convex_hull_volume(
+            (
+                (Fraction(0), Fraction(0)),
+                (Fraction(1), Fraction(0)),
+                (Fraction(0), Fraction(1)),
+                (Fraction(1), Fraction(1)),
+            )
+        )
+
+    def test_kernel_accepts_a_support_result_source(self) -> None:
+        from jacobian.math.polytope import convex_hull_volume
+
+        assert convex_hull_volume(_support_square_result().polytope) == (
+            CanonicalRational(num="1", den="1")
+        )
+
 
 class TestTriangulationWideDenominatorBound:
     def test_eight_prime_polygon_denominator_sum_rejected(self):
@@ -1686,3 +1710,145 @@ class TestCanonicalVPolytopeComposition:
         )
 
         assert "RationalVPolytope" in operation.description
+
+
+class TestCanonicalVPolytopeFacetComposition:
+    """The canonical labelled V-polytope value must also compose into the
+    facet request unchanged (review thread: support results produce
+    RationalVPolytope, and facets is the other V-representation
+    consumer)."""
+
+    def test_support_result_polytope_feeds_facets_unchanged(self) -> None:
+        result = _support_square_result()
+        composed = compute_facet_incidence(
+            FacetIncidenceRequest(vertices=result.polytope)
+        )
+
+        assert composed.vertices == _plain_vertices(result.polytope)
+        assert composed.dimension == 2
+        assert composed == compute_facet_incidence(
+            FacetIncidenceRequest(vertices=_plain_vertices(result.polytope))
+        )
+
+    def test_serialized_canonical_value_composes_like_the_typed_value(self) -> None:
+        polytope = _support_square_result().polytope
+        request = FacetIncidenceRequest.model_validate(
+            {"vertices": polytope.model_dump(mode="json")}
+        )
+
+        assert request.vertices == _plain_vertices(polytope)
+
+    def test_forged_serialized_value_rejected_by_defining_invariant(self) -> None:
+        payload = self._forged_serialized_square()
+
+        with pytest.raises(ValidationError, match="exact extreme vertices"):
+            FacetIncidenceRequest.model_validate({"vertices": payload})
+
+    def test_outer_extra_field_rejects_before_the_hull_replay(self) -> None:
+        with pytest.raises(ValidationError, match="unexpected fields"):
+            FacetIncidenceRequest.model_validate(
+                {
+                    "vertices": self._forged_serialized_square(),
+                    "purpose": "facets",
+                }
+            )
+
+    def test_outer_dimension_bound_type_rejects_before_the_hull_replay(self) -> None:
+        for raw_bound in ("wide", None, "7", 2.0):
+            with pytest.raises(
+                ValidationError,
+                match="dimension_bound must be an integer between 1 and 7",
+            ):
+                FacetIncidenceRequest.model_validate(
+                    {
+                        "vertices": self._forged_serialized_square(),
+                        "dimension_bound": raw_bound,
+                    }
+                )
+
+    def test_outer_dimension_bound_value_rejects_before_the_hull_replay(self) -> None:
+        with pytest.raises(ValidationError, match="exceeds the dimension bound"):
+            FacetIncidenceRequest.model_validate(
+                {"vertices": _cube().model_dump(mode="json"), "dimension_bound": 2}
+            )
+
+    def test_canonical_value_still_respects_dimension_bound(self) -> None:
+        with pytest.raises(ValueError, match="exceeds the dimension bound"):
+            FacetIncidenceRequest(vertices=_cube(), dimension_bound=2)
+
+    def test_schema_publishes_canonical_v_polytope_acceptance(self) -> None:
+        schema = FacetIncidenceRequest.model_json_schema()
+        description = schema["properties"]["vertices"]["description"]
+
+        assert "RationalVPolytope" in description
+        assert "space" in description
+
+    def test_schema_advertises_the_canonical_object_alternative(self) -> None:
+        """A schema-constrained client must be able to submit the serialized
+        ``RationalVPolytope`` produced by a support result without leaving
+        the published contract."""
+        schema = FacetIncidenceRequest.model_json_schema()
+        alternatives = schema["properties"]["vertices"]["anyOf"]
+        refs = {alternative.get("$ref") for alternative in alternatives}
+        arrays = [
+            alternative
+            for alternative in alternatives
+            if alternative.get("type") == "array"
+        ]
+
+        assert len(arrays) == 1
+        assert arrays[0]["items"]["$ref"] == "#/$defs/Vertex"
+        assert arrays[0]["minItems"] == 2
+        assert arrays[0]["maxItems"] == 64
+        assert "#/$defs/RationalVPolytope" in refs
+        assert "RationalVPolytope" in schema["$defs"]
+
+    def test_operation_description_publishes_canonical_acceptance(self) -> None:
+        from jacobian.math.polytope._tools import POLYTOPE_OPERATIONS
+
+        operation = next(
+            tool
+            for tool in POLYTOPE_OPERATIONS
+            if tool.operation_id == "polytope.facets.compute"
+        )
+
+        assert "RationalVPolytope" in operation.description
+
+    def _forged_serialized_square(self) -> dict:
+        payload = _support_square_result().polytope.model_dump(mode="json")
+        payload["vertices"].insert(
+            2,
+            {
+                "vertex_id": "middle",
+                "coordinates": [{"num": "1", "den": "2"}, {"num": "0", "den": "1"}],
+            },
+        )
+        return payload
+
+
+class TestUnicodeScalarLabels:
+    """Every accepted canonical value must cross the strict JSON
+    serialization boundary, so labels carrying unpaired surrogates — code
+    points RFC 8785 cannot encode — are rejected during validation."""
+
+    def test_scalar_grammar_rejects_surrogates(self) -> None:
+        from jacobian.math.polytope._models import _require_unicode_scalar_label
+
+        with pytest.raises(ValueError, match="only Unicode scalar"):
+            _require_unicode_scalar_label("x\ud800")
+
+    def test_surrogate_axis_label_is_rejected(self) -> None:
+        with pytest.raises(ValidationError, match=r"[Uu]nicode"):
+            RationalCoordinateSpace(axes=("x\ud800",))
+
+    def test_surrogate_vertex_id_is_rejected(self) -> None:
+        with pytest.raises(ValidationError, match=r"[Uu]nicode"):
+            RationalPolytopeVertex(vertex_id="v\udfff", coordinates=(_cr0(),))
+
+    def test_astral_axis_label_is_admitted_and_encodes_strictly(self) -> None:
+        from jacobian.canonical import CanonicalLimits, encode_strict_json
+
+        space = RationalCoordinateSpace(axes=("\U0001d400", "\U0001d401"))
+
+        assert space.axes == ("\U0001d400", "\U0001d401")
+        encode_strict_json(space.model_dump(mode="json"), limits=CanonicalLimits())

@@ -1076,3 +1076,37 @@ def test_support_example_teaches_common_space_precondition() -> None:
     (only_example,) = support_tool.examples
 
     assert "identical to the polytope's" in only_example.description
+
+
+def test_surrogate_axis_label_rejected_before_hull_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A lone surrogate axis label cannot cross strict JSON serialization,
+    so the request must fail on label validation before the exact
+    extremality proof runs."""
+    _forbid_extremality_proof(monkeypatch)
+    payload = _square_payload()
+    payload["polytope"]["space"]["axes"] = ["x\ud800", "y"]
+    payload["covector"]["space"]["axes"] = ["x\ud800", "y"]
+
+    with pytest.raises(ValidationError, match=r"[Uu]nicode"):
+        PolytopeSupportRequest.model_validate(payload)
+
+
+def test_surrogate_vertex_id_rejected_before_hull_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _forbid_extremality_proof(monkeypatch)
+    payload = _square_payload()
+    payload["polytope"]["vertices"][1]["vertex_id"] = "br\ud800"
+
+    with pytest.raises(ValidationError, match=r"[Uu]nicode"):
+        PolytopeSupportRequest.model_validate(payload)
+
+
+def test_accepted_result_encodes_strict_json(square_result) -> None:
+    """Every accepted canonical result crosses the supported serialization
+    boundary unchanged."""
+    from jacobian.canonical import CanonicalLimits, encode_strict_json
+
+    encode_strict_json(square_result.model_dump(mode="json"), limits=CanonicalLimits())

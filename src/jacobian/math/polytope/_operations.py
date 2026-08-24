@@ -264,10 +264,12 @@ def compute_facet_incidence(
 ) -> FacetIncidenceResult:
     """Compute the complete canonical facet-incidence profile of ``conv(V)``."""
 
-    dimension = len(request.vertices[0].coordinates)
-    facets = _computed_facets_from_vertices(request.vertices, dimension)
+    vertices = request.vertices
+    assert isinstance(vertices, tuple)  # projected by the request validator
+    dimension = len(vertices[0].coordinates)
+    facets = _computed_facets_from_vertices(vertices, dimension)
     return FacetIncidenceResult(
-        vertices=request.vertices,
+        vertices=vertices,
         dimension=dimension,
         facets=facets,
     )

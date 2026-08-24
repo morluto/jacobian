@@ -44,12 +44,15 @@ def polytope_support(
 
 
 def convex_hull_volume(
-    vertices: tuple[Sequence[Fraction], ...],
+    vertices: RationalVPolytope | tuple[Sequence[Fraction], ...],
 ) -> CanonicalRational:
     """Return the exact rational volume of the convex hull of rational points.
 
-    Accepts mathematical values — a non-empty tuple of rational coordinate
-    tuples sharing one ambient dimension — and returns the canonical exact
+    Accepts mathematical values: either the domain's canonical labelled
+    :class:`RationalVPolytope` (for example the ``polytope`` of a
+    ``polytope_support`` result, whose ordered coordinate axis fixes each
+    vertex's component order) or a non-empty tuple of rational coordinate
+    tuples sharing one ambient dimension.  Returns the canonical exact
     volume.  Degenerate inputs with fewer than ``dim + 1`` distinct points
     have exact volume zero.
 
@@ -61,27 +64,34 @@ def convex_hull_volume(
     combinatorial work bound.
     """
 
-    if not vertices:
-        raise ValueError("`vertices` must be non-empty")
-    dim = len(vertices[0])
-    if any(len(vertex) != dim for vertex in vertices):
-        raise ValueError("all vertices must share one dimension")
-
     from jacobian.canonical import format_canonical_integer
     from jacobian.math.polytope._models import (
         COORDINATE_DIGITS,
         MAX_DIMENSION,
         MAX_VERTICES,
+        _canonical_v_polytope_vertices,
         require_volume_components_within_result_bound,
     )
 
+    if isinstance(vertices, RationalVPolytope):
+        normalized = tuple(
+            tuple(Fraction(*c.as_integer_ratio()) for c in vertex.coordinates)
+            for vertex in _canonical_v_polytope_vertices(vertices)
+        )
+    else:
+        if not vertices:
+            raise ValueError("`vertices` must be non-empty")
+        if any(len(vertex) != len(vertices[0]) for vertex in vertices):
+            raise ValueError("all vertices must share one dimension")
+        normalized = tuple(tuple(Fraction(c) for c in vertex) for vertex in vertices)
+
+    dim = len(normalized[0])
     if not 1 <= dim <= MAX_DIMENSION:
         raise ValueError(
             f"ambient dimension {dim} exceeds the {MAX_DIMENSION}-dimension bound"
         )
-    if len(vertices) > MAX_VERTICES:
+    if len(normalized) > MAX_VERTICES:
         raise ValueError(f"`vertices` exceeds the {MAX_VERTICES}-vertex bound")
-    normalized = tuple(tuple(Fraction(c) for c in vertex) for vertex in vertices)
     for vertex in normalized:
         for coord in vertex:
             num_digits = len(format_canonical_integer(abs(coord.numerator)))

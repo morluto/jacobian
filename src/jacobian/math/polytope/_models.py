@@ -8,6 +8,7 @@ from fractions import Fraction
 from typing import Annotated, Any, Self
 
 from pydantic import (
+    AfterValidator,
     ConfigDict,
     Field,
     StringConstraints,
@@ -135,11 +136,31 @@ remaining vertices against its supporting hyperplane. Admission charges the
 complete product ``C(n,d) * (n-d)`` before materializing either family.
 """
 
+
+def _require_unicode_scalar_label(value: str) -> str:
+    """Reject labels carrying code points strict JSON cannot encode.
+
+    Unpaired surrogates are not Unicode scalar values, so RFC 8785
+    serialization of an accepted value containing one would fail at the
+    supported transport boundary; they are outside the admitted label
+    domain.
+    """
+
+    if any(0xD800 <= ord(character) <= 0xDFFF for character in value):
+        raise ValueError("labels must contain only Unicode scalar values")
+    return value
+
+
 CoordinateAxis = Annotated[
     str,
     StringConstraints(min_length=1, max_length=64, strict=True),
+    AfterValidator(_require_unicode_scalar_label),
 ]
-"""One coordinate identifier in an ordered labelled rational space."""
+"""One coordinate identifier in an ordered labelled rational space.
+
+Axis labels must be Unicode scalar strings: unpaired surrogates cannot be
+encoded by the domain's strict JSON transport.
+"""
 
 
 def _rational_pq(value: object) -> tuple[int, int]:
@@ -311,6 +332,8 @@ def _require_raw_coordinate_space(value: object, label: str) -> tuple[str, ...]:
         raise ValueError(f"{label} space must declare at most {MAX_DIMENSION} axes")
     if any(not isinstance(axis, str) or not 1 <= len(axis) <= 64 for axis in axes):
         raise ValueError(f"{label} space axes must be short string labels")
+    for axis in axes:
+        _require_unicode_scalar_label(axis)
     if len(set(axes)) != len(axes):
         raise ValueError("coordinate axes must be unique")
     return tuple(axes)
@@ -780,14 +803,28 @@ class FacetIncidenceResult(StrictModel):
         return self
 
 
-class FacetIncidenceRequest(StrictModel):
-    """A full-dimensional bounded rational V-representation for facet enumeration."""
+FacetVertexTuple = Annotated[
+    tuple[Vertex, ...],
+    Field(min_length=2, max_length=MAX_VERTICES),
+]
 
-    vertices: tuple[Vertex, ...] = Field(
-        min_length=2,
-        max_length=MAX_VERTICES,
+
+class FacetIncidenceRequest(StrictModel):
+    """A full-dimensional bounded rational V-representation for facet enumeration.
+
+    The representation is given either as bare coordinate vertices or
+    unchanged as the domain's canonical labelled ``RationalVPolytope``
+    value (for example the ``polytope`` of a support result), constructed
+    or serialized.
+    """
+
+    vertices: FacetVertexTuple | RationalVPolytope = Field(
         description=(
-            "Ordered rational V-representation. The points must affinely span their "
+            "Ordered rational V-representation: bare coordinate vertices or "
+            "one canonical labelled ``RationalVPolytope`` value (its "
+            "serialized ``space``/``vertices`` shape is accepted too), such "
+            "as the ``polytope`` of a support result. The points must "
+            "affinely span their "
             "ambient dimension; lower-dimensional hulls are rejected because this "
             "operation returns ambient codimension-one facets. Repeated source rows "
             "are retained for incidence binding but create no candidate hyperplanes "
@@ -812,16 +849,66 @@ class FacetIncidenceRequest(StrictModel):
         description="Maximum admitted ambient dimension for this facet profile.",
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def accept_canonical_v_polytope_value(cls, data: object) -> object:
+        """Project the canonical labelled V-polytope onto bare vertices.
+
+        Support results carry ``RationalVPolytope`` as the domain's
+        canonical V-representation, so composing one into a facet request
+        must not force callers to discard the labelled space and rebuild
+        every vertex. Both the constructed value and its serialized
+        ``space``/``vertices`` shape are accepted unchanged and mapped
+        positionally (the labelled axis fixes the coordinate order) before
+        ordinary validation, so admission and the kernel see exactly the
+        declared V-representation; a serialized value is re-validated as
+        the canonical type first.  Reconstructing that type replays its
+        exact extremality proof, so every cheap outer field — the closed
+        field set and the whole published ``dimension_bound`` schema — is
+        preflighted first: an already-invalid request must fail before any
+        hull replay runs.
+        """
+
+        if not isinstance(data, dict):
+            return data
+        value = data.get("vertices")
+        carries_v_polytope = isinstance(value, RationalVPolytope) or (
+            isinstance(value, dict) and set(value) == {"space", "vertices"}
+        )
+        if carries_v_polytope:
+            unknown_fields = set(data) - {"vertices", "dimension_bound"}
+            if unknown_fields:
+                raise ValueError(
+                    "unexpected fields for a facet incidence request: "
+                    f"{sorted(unknown_fields)}"
+                )
+            axis_count = _v_polytope_axis_count(value)
+            if axis_count is not None:
+                _require_projected_dimension_bound(
+                    axis_count,
+                    data.get("dimension_bound", MAX_FACET_DIMENSION),
+                    _FACET_DIMENSION_BOUND_ADAPTER,
+                    MAX_FACET_DIMENSION,
+                )
+        if isinstance(value, RationalVPolytope):
+            return {**data, "vertices": _canonical_v_polytope_vertices(value)}
+        if isinstance(value, dict) and set(value) == {"space", "vertices"}:
+            canonical = RationalVPolytope.model_validate(value)
+            return {**data, "vertices": _canonical_v_polytope_vertices(canonical)}
+        return _tuple_canonical_containers(data)
+
     @model_validator(mode="after")
     def require_admissible_full_dimensional_profile(self) -> Self:
-        dimension = len(self.vertices[0].coordinates)
+        vertices = self.vertices
+        assert isinstance(vertices, tuple)  # projected by the before-validator
+        dimension = len(vertices[0].coordinates)
         if dimension > self.dimension_bound:
             raise ValueError(
                 f"dimension {dimension} exceeds the dimension bound {self.dimension_bound}"
             )
-        if any(len(vertex.coordinates) != dimension for vertex in self.vertices):
+        if any(len(vertex.coordinates) != dimension for vertex in vertices):
             raise ValueError("all vertices must share one dimension")
-        for vertex in self.vertices:
+        for vertex in vertices:
             for coordinate in vertex.coordinates:
                 require_bounded_rational(
                     coordinate,
@@ -834,8 +921,17 @@ class FacetIncidenceRequest(StrictModel):
         # facet and incidence result bounds during request validation, so an
         # admitted request cannot discover an oversized profile only in the
         # execution backend.
-        _computed_facets_from_vertices(self.vertices, dimension)
+        _computed_facets_from_vertices(vertices, dimension)
         return self
+
+
+_FACET_DIMENSION_BOUND_ADAPTER: TypeAdapter[int] = TypeAdapter(
+    Annotated[
+        int,
+        *FacetIncidenceRequest.model_fields["dimension_bound"].metadata,
+    ],
+    config=ConfigDict(strict=True),
+)
 
 
 class RationalCoordinateSpace(StrictModel):
@@ -857,7 +953,10 @@ class RationalCoordinateSpace(StrictModel):
 class RationalPolytopeVertex(StrictModel):
     """A labelled exact vertex in a rational coordinate space."""
 
-    vertex_id: str = Field(min_length=1, max_length=64)
+    vertex_id: Annotated[str, AfterValidator(_require_unicode_scalar_label)] = Field(
+        min_length=1,
+        max_length=64,
+    )
     coordinates: tuple[CanonicalRational, ...] = Field(
         min_length=1,
         max_length=MAX_DIMENSION,
@@ -1138,7 +1237,7 @@ class PolytopeSupportResult(StrictModel):
 
 
 def _canonical_v_polytope_vertices(polytope: RationalVPolytope) -> tuple[Vertex, ...]:
-    """Map the labelled canonical V-polytope onto bare volume vertices.
+    """Map the labelled canonical V-polytope onto bare vertices.
 
     The labelled coordinate space fixes the axis order, so vertex
     coordinates are carried over positionally and unchanged.
@@ -1165,14 +1264,20 @@ def _v_polytope_axis_count(value: object) -> int | None:
     return None
 
 
-def _require_projected_dimension_bound(dimension: int, dimension_bound: object) -> None:
+def _require_projected_dimension_bound(
+    dimension: int,
+    dimension_bound: object,
+    bound_adapter: TypeAdapter[int],
+    upper_bound: int,
+) -> None:
     """Reject a V-polytope outside the published bound before hull replay.
 
-    The raw bound is measured with the ``dimension_bound`` field's own
-    schema, derived from its declaration so the constraint range cannot
-    drift, under the strict validation boundary every ``math.run`` request
-    passes through: an integer within ``[1, MAX_DIMENSION]`` bounds the
-    comparison exactly as the outer model would, while strings, floats,
+    The raw bound is measured with the consumer's own ``dimension_bound``
+    field schema, derived from its declaration so the constraint range
+    cannot drift, under the strict validation boundary every ``math.run``
+    request passes through: an integer within ``[1, upper_bound]`` bounds
+    the comparison exactly as the outer model would, while strings,
+    floats,
     booleans, null, and out-of-range values — all rejected by strict
     dispatch after the proof would already have run — are rejected here,
     before the canonical reconstruction replays the exact extremality
@@ -1181,13 +1286,13 @@ def _require_projected_dimension_bound(dimension: int, dimension_bound: object) 
 
     if dimension_bound is None:
         raise ValueError(
-            f"dimension_bound must be an integer between 1 and {MAX_DIMENSION}"
+            f"dimension_bound must be an integer between 1 and {upper_bound}"
         )
     try:
-        bound: int = _DIMENSION_BOUND_ADAPTER.validate_python(dimension_bound)
+        bound: int = bound_adapter.validate_python(dimension_bound)
     except ValidationError as exc:
         raise ValueError(
-            f"dimension_bound must be an integer between 1 and {MAX_DIMENSION}"
+            f"dimension_bound must be an integer between 1 and {upper_bound}"
         ) from exc
     if dimension > bound:
         raise ValueError(f"dimension {dimension} exceeds the dimension bound {bound}")
@@ -1323,7 +1428,10 @@ class PolytopeVolumeRequest(StrictModel):
             axis_count = _v_polytope_axis_count(value)
             if axis_count is not None:
                 _require_projected_dimension_bound(
-                    axis_count, data.get("dimension_bound", MAX_DIMENSION)
+                    axis_count,
+                    data.get("dimension_bound", MAX_DIMENSION),
+                    _DIMENSION_BOUND_ADAPTER,
+                    MAX_DIMENSION,
                 )
         if isinstance(value, RationalVPolytope):
             return {**data, "vertices": _canonical_v_polytope_vertices(value)}

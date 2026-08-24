@@ -120,7 +120,9 @@ POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "polytope.facets.compute",
         "Compute the complete exact facet-incidence profile of a rational polytope",
         "Compute every maximal supporting facet of the convex hull of an ordered "
-        "rational V-representation (d <= 7); lower-dimensional hulls are "
+        "rational V-representation — bare vertices or an unchanged labelled "
+        "``RationalVPolytope`` value such as a support result's ``polytope`` "
+        "(d <= 7); lower-dimensional hulls are "
         "rejected. Each facet returns its canonical primitive supporting "
         "inequality as the shared half-space value plus the complete "
         "source-row incidence. For d <= 6 each row composes verbatim into "

@@ -195,9 +195,7 @@ def test_narrowed_replay_allowance_reaches_the_bounded_process(
     assert seen["cpu_seconds"] == 7
 
 
-def _family_records(
-    component_generator_counts: list[int], exponents: str = "0"
-) -> str:
+def _family_records(component_generator_counts: list[int], exponents: str = "0") -> str:
     lines = [
         "JACOBIAN_SINGULAR_IDEAL_V1",
         "44000",
@@ -252,7 +250,8 @@ def test_family_at_the_aggregate_generator_limit_with_placeholders_is_accepted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     executable = _executable(
-        tmp_path, f"print({_family_records([0, 8, 8, 8, 8, 8, 8, 8, 7], _EIGHT_EXPONENTS)!r})"
+        tmp_path,
+        f"print({_family_records([0, 8, 8, 8, 8, 8, 8, 8, 7], _EIGHT_EXPONENTS)!r})",
     )
     _select_executable(monkeypatch, executable)
 
@@ -292,7 +291,7 @@ def test_component_wider_than_the_ring_presentation_bound_is_a_result_limit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    executable = _executable(tmp_path, f"print({_family_records([3], "0,0")!r})")
+    executable = _executable(tmp_path, f"print({_family_records([3], '0,0')!r})")
     _select_executable(monkeypatch, executable)
 
     variables = ("x", "y")
@@ -323,7 +322,7 @@ def test_component_at_the_ring_presentation_bound_is_accepted(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    executable = _executable(tmp_path, f"print({_family_records([2, 2], "0,0")!r})")
+    executable = _executable(tmp_path, f"print({_family_records([2, 2], '0,0')!r})")
     _select_executable(monkeypatch, executable)
 
     variables = ("x", "y")
@@ -662,7 +661,9 @@ def test_verification_narrows_the_allowance_like_the_producing_pass(
     )
 
     verdict = run_singular_minimal_primes_verification(
-        _ideal(), (_ideal(),), IdealComputationBudget(wall_seconds=60),
+        _ideal(),
+        (_ideal(),),
+        IdealComputationBudget(wall_seconds=60),
         wall_seconds=6.75,
     )
 

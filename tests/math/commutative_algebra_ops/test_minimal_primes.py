@@ -340,7 +340,10 @@ def test_external_family_must_respect_the_presentation_and_term_envelopes() -> N
     wide = (
         _ideal(
             variables,
-            *(_poly(variables, (1, 1, (index, 0, 0, 0, 0, 0, 0, 0))) for index in range(9)),
+            *(
+                _poly(variables, (1, 1, (index, 0, 0, 0, 0, 0, 0, 0)))
+                for index in range(9)
+            ),
         ),
     )
     with pytest.raises(ValueError, match="canonical 8-generator presentation"):
@@ -547,9 +550,7 @@ def test_unit_and_zero_degenerate_sources_admit_their_exact_families() -> None:
     assert len(constant.ideal.generators) == 7
 
     dropped = IdealMinimalPrimesRequest(
-        ideal=_ideal(
-            ("x", "y"), _poly(("x", "y")), _poly(("x", "y"), (1, 1, (1, 1)))
-        )
+        ideal=_ideal(("x", "y"), _poly(("x", "y")), _poly(("x", "y"), (1, 1, (1, 1))))
     )
     assert len(dropped.ideal.generators) == 2
 

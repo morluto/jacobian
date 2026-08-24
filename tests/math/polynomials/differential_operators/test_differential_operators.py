@@ -1623,6 +1623,39 @@ def test_weight_enumeration_aborts_before_huge_powers_materialize() -> None:
         )
 
 
+def test_annihilating_rescale_scan_follows_the_request_work_budget() -> None:
+    variables = tuple("abcdefgh")
+    terms = {(0,) * len(variables): 1}
+    terms.update(
+        {(order,) + (0,) * (len(variables) - 1): 1 for order in range(2, 1_002)}
+    )
+    operator = _operator(variables, terms)
+    source = _polynomial(
+        variables,
+        {
+            tuple((index >> shift) & 1 for shift in reversed(range(8))): 1
+            for index in range(256)
+        },
+    )
+
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=operator,
+            iterations=1,
+            expected=source,
+        )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.output == source
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    assert replayed == result
+
+
 def test_rescale_scaling_reduces_against_source_denominators() -> None:
     variables = ("x",)
     numerator_n = "1" + "0" * 19999 + "1"

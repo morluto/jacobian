@@ -41,12 +41,16 @@ class ApplicationEnvelope:
 def _rescale_only(
     polynomial: RationalPolynomial,
     operator: ConstantCoefficientDifferentialOperator,
+    work_cap: int,
 ) -> bool:
     """Recognize requests whose only acting aggregate is the identity order.
 
     Every nonzero-order operator term must annihilate every source monomial,
     so the powered operator's action collapses to rescaling the source by
-    the zero-order coefficient raised to the iteration count.
+    the zero-order coefficient raised to the iteration count. The pairwise
+    annihilation scan is charged against the request's declared deterministic
+    work budget; exceeding that budget conservatively reports the expanding
+    regime instead of trusting a partial scan.
     """
 
     if not operator.terms or not polynomial.polynomial.terms:
@@ -57,10 +61,7 @@ def _rescale_only(
             continue
         for monomial in polynomial.polynomial.terms:
             work += 1
-            if work > ENUMERATION_WORK_CAP:
-                # The scan itself must stay inside the admission envelope;
-                # falling back to the expansion regime keeps every request
-                # bounded by its declared work gate.
+            if work > work_cap:
                 return False
             if all(
                 order <= exponent
@@ -1044,7 +1045,7 @@ def validate_application_envelope(
     # identity aggregate acts, so the power collapses to rescaling and the
     # unreachable expansion does not narrow the domain.
     scalar_action = _is_scalar_operator(operator)
-    rescale_only = _rescale_only(polynomial, operator)
+    rescale_only = _rescale_only(polynomial, operator, MAX_APPLICATION_WORK_UNITS)
     if scalar_action or rescale_only:
         _require_nonexpanding_output(polynomial, expected)
     else:

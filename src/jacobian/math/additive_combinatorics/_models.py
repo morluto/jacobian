@@ -11,6 +11,7 @@ from pydantic import Field, StringConstraints, model_validator
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.math.additive_combinatorics import _multiset_sum
 from jacobian.math.additive_combinatorics.operations import (
     MAX_SUBSET_SUM_DP_TRANSITIONS,
     MAX_SUBSET_SUM_PROFILE_RESULT_BYTES,
@@ -21,10 +22,20 @@ from jacobian.math.additive_combinatorics.values import (
     IndexedIntegerSequence,
 )
 
+# This conservative materialized-axis cap bounds source parsing and binomial
+# preflight. Operation-specific work and result bounds impose the sharper
+# execution envelope; binary Cartesian operations retain their pair cap below.
 _MAX_SET_SIZE = 4096
+_MAX_CARTESIAN_PAIR_COUNT = 256 * 256
 _MAX_RESULT_SIZE = _MAX_SET_SIZE * _MAX_SET_SIZE
 _MAX_DIMENSION = 8
 _MAX_COORDINATE_DIGITS = 6
+_MAX_MULTISET_SUM_ELEMENT_DIGITS = _multiset_sum.MAX_ELEMENT_DIGITS
+_MAX_MULTISET_SUM_ARITY = _multiset_sum.MAX_ARITY
+_MAX_MULTISET_SUM_ENUMERATION_WORK = _multiset_sum.MAX_ENUMERATION_WORK
+_MAX_MULTISET_SUM_INTEGER_LENGTH = _multiset_sum.MAX_INTEGER_LENGTH
+_MAX_MULTISET_SUM_RESULT_DIGITS = _multiset_sum.MAX_RESULT_DIGITS
+_MAX_MULTISET_SUM_SUPPORT_SIZE = _multiset_sum.MAX_SUPPORT_SIZE
 
 # One serialized ordered-difference entry carries an eight-coordinate signed
 # difference, a multiplicity, and one index pair, which stays under 256
@@ -52,6 +63,15 @@ CanonicalVectorCoordinate = Annotated[
     StringConstraints(
         pattern=r"^(?:0|-?[1-9][0-9]*)$",
         max_length=_MAX_VECTOR_COORDINATE_LENGTH,
+        strict=True,
+    ),
+]
+
+CanonicalMultisetSumBound = Annotated[
+    str,
+    StringConstraints(
+        pattern=r"^(?:0|-?[1-9][0-9]*)$",
+        max_length=_MAX_MULTISET_SUM_INTEGER_LENGTH,
         strict=True,
     ),
 ]
@@ -270,6 +290,18 @@ class FiniteIntegerSet(StrictModel):
         return self
 
 
+def _require_bounded_cartesian_product(
+    left: FiniteIntegerSet,
+    right: FiniteIntegerSet,
+) -> None:
+    pair_count = len(left.elements) * len(right.elements)
+    if pair_count > _MAX_CARTESIAN_PAIR_COUNT:
+        raise ValueError(
+            f"Cartesian product has {pair_count} pairs, exceeding the "
+            f"{_MAX_CARTESIAN_PAIR_COUNT}-pair bound"
+        )
+
+
 class FiniteCyclicGroup(StrictModel):
     """The cyclic group ``Z_n`` carrying a direct-sum/tiling predicate."""
 
@@ -288,10 +320,18 @@ class FiniteCyclicGroup(StrictModel):
 
 
 class RepresentationProfileRequest(StrictModel):
-    """Compute ``r_{A+B}(x)`` for every sum ``x`` of two finite integer sets."""
+    """Compute ``r_{A+B}(x)`` for every sum ``x`` of two finite integer sets.
+
+    The complete Cartesian product contains at most 65,536 source pairs.
+    """
 
     left: FiniteIntegerSet
     right: FiniteIntegerSet
+
+    @model_validator(mode="after")
+    def require_bounded_cartesian_product(self) -> Self:
+        _require_bounded_cartesian_product(self.left, self.right)
+        return self
 
 
 class RepresentationProfileEntry(StrictModel):
@@ -315,6 +355,178 @@ class RepresentationProfileResult(StrictModel):
             )
         if any(entry.multiplicity <= 0 for entry in self.entries):
             raise ValueError("representation multiplicities must be positive")
+        return self
+
+
+# ---------------------------------------------------------------------------
+# Fixed-arity unordered multiset-sum representation profile
+# ---------------------------------------------------------------------------
+
+
+class MultisetSumWindow(StrictModel):
+    """One closed integer interval restricting a complete sum profile."""
+
+    lower: CanonicalMultisetSumBound = Field(
+        description=(
+            "Canonical lower endpoint of the closed sum window, carrying at "
+            f"most {_MAX_MULTISET_SUM_RESULT_DIGITS} digits plus an optional sign."
+        ),
+        examples=["0"],
+    )
+    upper: CanonicalMultisetSumBound = Field(
+        description=(
+            "Canonical upper endpoint of the closed sum window, carrying at "
+            f"most {_MAX_MULTISET_SUM_RESULT_DIGITS} digits plus an optional sign; "
+            "it must be at least lower."
+        ),
+        examples=["10"],
+    )
+
+    @model_validator(mode="after")
+    def require_nondecreasing_endpoints(self) -> Self:
+        if any(
+            len(endpoint.lstrip("-")) > _MAX_MULTISET_SUM_RESULT_DIGITS
+            for endpoint in (self.lower, self.upper)
+        ):
+            raise ValueError(
+                "sum window endpoints must carry at most "
+                f"{_MAX_MULTISET_SUM_RESULT_DIGITS} digits"
+            )
+        lower, upper = self.as_integer_bounds()
+        if lower > upper:
+            raise ValueError("sum window lower endpoint must not exceed upper")
+        return self
+
+    def as_integer_bounds(self) -> tuple[int, int]:
+        return (
+            parse_canonical_integer(self.lower),
+            parse_canonical_integer(self.upper),
+        )
+
+
+def _multiset_sum_source_values(source: FiniteIntegerSet) -> tuple[int, ...]:
+    for element in source.elements:
+        if len(element.lstrip("-")) > _MAX_MULTISET_SUM_ELEMENT_DIGITS:
+            raise ValueError(
+                "multiset-sum source elements must carry at most "
+                f"{_MAX_MULTISET_SUM_ELEMENT_DIGITS} digits"
+            )
+    values = tuple(parse_canonical_integer(element) for element in source.elements)
+    if values != tuple(sorted(values)):
+        raise ValueError(
+            "multiset-sum source elements must be in strictly increasing numeric order"
+        )
+    return values
+
+
+_MULTISET_SUM_SOURCE_DESCRIPTION = (
+    f"A materialized finite set of at most {_MAX_SET_SIZE} distinct canonical "
+    "integers in strictly increasing numeric order; each element carries at "
+    f"most {_MAX_MULTISET_SUM_ELEMENT_DIGITS} digits."
+)
+
+
+class MultisetSumRepresentationProfileRequest(StrictModel):
+    """Compute one complete fixed-arity unordered multiset-sum profile.
+
+    ``source`` is a materialized finite set in strictly increasing numeric order.
+    The operation inspects every nondecreasing source-index tuple of length
+    ``arity``. With a window, completeness and missing-row-as-zero semantics are
+    restricted to that closed interval; without one, every attainable sum is
+    returned. Admission bounds candidate enumeration, bigint growth, and the
+    worst-case exact support before execution.
+    """
+
+    source: FiniteIntegerSet = Field(
+        description=_MULTISET_SUM_SOURCE_DESCRIPTION,
+        examples=[{"elements": ["0", "1", "2"]}],
+    )
+    arity: int = Field(
+        ge=0,
+        le=_MAX_MULTISET_SUM_ARITY,
+        description=(
+            f"Nonnegative multiset arity carrying at most "
+            f"{_multiset_sum.MAX_ARITY_DIGITS} decimal digits. Arity zero has "
+            "one empty multiset with sum zero, including when the source is "
+            "empty; admission derives the accepted envelope from candidate "
+            "work and predicted support rather than from this magnitude."
+        ),
+        examples=[2],
+    )
+    window: MultisetSumWindow | None = Field(
+        default=None,
+        description=(
+            "Optional closed sum interval. Null requests the complete profile; "
+            "a window returns every and only attainable sum inside that interval."
+        ),
+        examples=[None, {"lower": "0", "upper": "10"}],
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_complete_enumeration(self) -> Self:
+        values = _multiset_sum_source_values(self.source)
+        candidate_count = _multiset_sum.candidate_count(len(values), self.arity)
+        bounds = self.window.as_integer_bounds() if self.window is not None else None
+        work = _multiset_sum.enumeration_work(
+            values, self.arity, bounds, candidate_count
+        )
+        if work > _MAX_MULTISET_SUM_ENUMERATION_WORK:
+            raise ValueError(
+                f"multiset-sum enumeration requires {work} coordinate steps, "
+                f"exceeding the {_MAX_MULTISET_SUM_ENUMERATION_WORK}-step bound"
+            )
+        support_bound = _multiset_sum.support_bound(
+            values, self.arity, bounds, candidate_count
+        )
+        if support_bound > _MAX_MULTISET_SUM_SUPPORT_SIZE:
+            raise ValueError(
+                f"multiset-sum profile may contain {support_bound} rows, exceeding "
+                f"the {_MAX_MULTISET_SUM_SUPPORT_SIZE}-row result bound; supply a "
+                "narrower closed sum window"
+            )
+        return self
+
+
+class MultisetSumRepresentationProfileResult(StrictModel):
+    """Source-bound exact multiplicities for one complete sum scope.
+
+    For each row ``s -> m``, ``m`` is the number of nondecreasing source-index
+    tuples of the declared arity summing to ``s``. The retained source, arity,
+    and optional window determine the complete candidate family and are replayed
+    during result validation. A missing row means zero only inside the declared
+    window, or globally when ``window`` is null.
+    """
+
+    source: FiniteIntegerSet = Field(description=_MULTISET_SUM_SOURCE_DESCRIPTION)
+    arity: int = Field(ge=0, le=_MAX_MULTISET_SUM_ARITY)
+    window: MultisetSumWindow | None = None
+    entries: tuple[RepresentationProfileEntry, ...] = Field(
+        default=(), max_length=_MAX_MULTISET_SUM_SUPPORT_SIZE
+    )
+
+    @model_validator(mode="after")
+    def replay_complete_profile(self) -> Self:
+        request = MultisetSumRepresentationProfileRequest(
+            source=self.source,
+            arity=self.arity,
+            window=self.window,
+        )
+        values = _multiset_sum_source_values(request.source)
+        bounds = (
+            request.window.as_integer_bounds() if request.window is not None else None
+        )
+        expected_counts = _multiset_sum.count_sums(values, request.arity, bounds)
+        expected_entries = tuple(
+            RepresentationProfileEntry(
+                sum=format_canonical_integer(value),
+                multiplicity=expected_counts[value],
+            )
+            for value in sorted(expected_counts)
+        )
+        if self.entries != expected_entries:
+            raise ValueError(
+                "entries must equal the exact source-bound multiset-sum profile"
+            )
         return self
 
 
@@ -357,10 +569,18 @@ class SubsetSumProfileRequest(StrictModel):
 
 
 class AdditiveEnergyRequest(StrictModel):
-    """Compute the additive energy ``E(A, B) = sum_x r_{A+B}(x)^2``."""
+    """Compute the additive energy ``E(A, B) = sum_x r_{A+B}(x)^2``.
+
+    The complete Cartesian product contains at most 65,536 source pairs.
+    """
 
     left: FiniteIntegerSet
     right: FiniteIntegerSet
+
+    @model_validator(mode="after")
+    def require_bounded_cartesian_product(self) -> Self:
+        _require_bounded_cartesian_product(self.left, self.right)
+        return self
 
 
 class AdditiveEnergyResult(StrictModel):
@@ -389,10 +609,18 @@ class AdditiveEnergyResult(StrictModel):
 
 
 class SumsetCardinalityRequest(StrictModel):
-    """Compute ``|A + B|`` (the support cardinality of ``r_{A+B}``)."""
+    """Compute ``|A + B|`` (the support cardinality of ``r_{A+B}``).
+
+    The complete Cartesian product contains at most 65,536 source pairs.
+    """
 
     left: FiniteIntegerSet
     right: FiniteIntegerSet
+
+    @model_validator(mode="after")
+    def require_bounded_cartesian_product(self) -> Self:
+        _require_bounded_cartesian_product(self.left, self.right)
+        return self
 
 
 class SumsetCardinalityResult(StrictModel):
@@ -417,11 +645,19 @@ class SumsetCardinalityResult(StrictModel):
 
 
 class DirectSumPredicateRequest(StrictModel):
-    """Decide whether ``A (\\oplus) B = Z_n`` inside a finite cyclic group."""
+    """Decide whether ``A (\\oplus) B = Z_n`` inside a finite cyclic group.
+
+    The complete Cartesian product contains at most 65,536 source pairs.
+    """
 
     modulus: int = Field(gt=1, le=_MAX_RESULT_SIZE)
     left: FiniteIntegerSet
     right: FiniteIntegerSet
+
+    @model_validator(mode="after")
+    def require_bounded_cartesian_product(self) -> Self:
+        _require_bounded_cartesian_product(self.left, self.right)
+        return self
 
 
 class DirectSumPredicateResult(StrictModel):
@@ -451,6 +687,9 @@ __all__ = [
     "DirectSumPredicateResult",
     "FiniteCyclicGroup",
     "FiniteIntegerSet",
+    "MultisetSumRepresentationProfileRequest",
+    "MultisetSumRepresentationProfileResult",
+    "MultisetSumWindow",
     "OrderedDifferenceEntry",
     "OrderedDifferencePair",
     "OrderedDifferenceProfileRequest",

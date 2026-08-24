@@ -12,6 +12,8 @@ from jacobian.math.additive_combinatorics._models import (
     AdditiveEnergyResult,
     DirectSumPredicateRequest,
     DirectSumPredicateResult,
+    MultisetSumRepresentationProfileRequest,
+    MultisetSumRepresentationProfileResult,
     OrderedDifferenceProfileRequest,
     OrderedDifferenceProfileResult,
     RepresentationProfileRequest,
@@ -22,17 +24,29 @@ from jacobian.math.additive_combinatorics._models import (
 )
 from jacobian.math.additive_combinatorics._operations import (
     compute_additive_energy,
+    compute_multiset_sum_representation_profile,
     compute_ordered_difference_profile,
     compute_representation_profile,
     compute_subset_sum_profile,
     compute_sumset_cardinality,
     decide_direct_sum_predicate,
 )
+from jacobian.math.additive_combinatorics._subset_sum_residue import (
+    MAX_RESIDUE_PROFILE_DP_CELLS,
+    MAX_RESIDUE_PROFILE_MODULUS,
+    MAX_RESIDUE_PROFILE_TOTAL_DP_CELLS,
+    MAX_RESIDUE_PROFILE_WITNESS_INDEX_SLOTS,
+    SubsetSumResidueProfileRequest,
+    SubsetSumResidueProfileResult,
+    compute_subset_sum_residue_profile,
+)
 from jacobian.math.additive_combinatorics.operations import (
     MAX_SUBSET_SUM_DP_TRANSITIONS,
     MAX_SUBSET_SUM_PROFILE_RESULT_BYTES,
 )
 from jacobian.math.additive_combinatorics.values import (
+    MAX_SUBSET_SUM_ITEM_DIGITS,
+    MAX_SUBSET_SUM_ITEMS,
     MAX_SUBSET_SUM_PROFILE_ENTRIES,
     SubsetSumProfile,
 )
@@ -70,6 +84,11 @@ def additive_combinatorics_operation[
 _REPRESENTATION_PROFILE_EXAMPLE: dict[str, Any] = {
     "left": {"elements": ["1", "2"]},
     "right": {"elements": ["3", "4"]},
+}
+
+_MULTISET_SUM_PROFILE_EXAMPLE: dict[str, Any] = {
+    "source": {"elements": ["0", "1", "2"]},
+    "arity": 2,
 }
 
 _SUBSET_SUM_PROFILE_EXAMPLE: dict[str, Any] = {
@@ -125,6 +144,33 @@ ADDITIVE_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     additive_combinatorics_operation(
+        "additive.multiset_sum.representation_profile.compute",
+        "Compute a fixed-arity unordered multiset-sum profile",
+        "Given a canonical finite integer source A and arity k, return the exact "
+        "multiplicity of every sum of a nondecreasing k-tuple of source indices, "
+        "with repetition allowed. An optional closed sum window returns the "
+        "complete profile only inside that interval. Admission bounds complete "
+        "materialized enumeration and worst-case serialized support before "
+        "execution; the result retains and replays its source, arity, and scope.",
+        MultisetSumRepresentationProfileRequest,
+        MultisetSumRepresentationProfileResult,
+        compute_multiset_sum_representation_profile,
+        "additive-combinatorics",
+        "multiset-sum",
+        "representation-profile",
+        "exact",
+        examples=(
+            example(
+                "three_element_pair_multisums",
+                "Compute all unordered two-term sums from {0,1,2}, including "
+                "repeated source elements; the source must be distinct, strictly "
+                "increasing, and bounded, and omitting the window requests the "
+                "complete profile.",
+                _MULTISET_SUM_PROFILE_EXAMPLE,
+            ),
+        ),
+    ),
+    additive_combinatorics_operation(
         "additive.subset_sum.profile.compute",
         "Compute a complete indexed subset-sum multiplicity profile",
         "Given one finite indexed integer sequence, return the exact number of "
@@ -149,8 +195,10 @@ ADDITIVE_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 (
                     "Compute all subset sums of the two indexed values [1,1], "
                     "giving multiplicities 1,2,1 at sums 0,1,2; input items must "
-                    "be canonical integers inside the schema-visible 256-item, "
-                    f"256-digit, {MAX_SUBSET_SUM_PROFILE_ENTRIES:,}-row, "
+                    "be canonical integers inside the schema-visible "
+                    f"{MAX_SUBSET_SUM_ITEMS:,}-item, "
+                    f"{MAX_SUBSET_SUM_ITEM_DIGITS:,}-digit, "
+                    f"{MAX_SUBSET_SUM_PROFILE_ENTRIES:,}-row, "
                     f"{MAX_SUBSET_SUM_DP_TRANSITIONS:,}-transition, and "
                     f"{MAX_SUBSET_SUM_PROFILE_RESULT_BYTES // (1024 * 1024)} MiB "
                     "profile bounds."
@@ -265,6 +313,47 @@ ADDITIVE_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                             {"coordinates": ["0", "1"]},
                         ]
                     }
+                },
+            ),
+        ),
+    ),
+    additive_combinatorics_operation(
+        "additive.subset_sum.residue_profile.compute",
+        "Compute an exact modular subset-sum profile",
+        (
+            "Given a materialized indexed integer tuple and a positive modulus m, "
+            "return the exact number of permitted index subsets in every residue "
+            "class of Z/mZ. Repeated values and zeros remain distinct positions; "
+            "the empty-subset convention is explicit. Optional witnesses are "
+            "canonical by minimizing sum(2**i for i in I). Computation and "
+            "source-binding replay visit at most "
+            f"{MAX_RESIDUE_PROFILE_TOTAL_DP_CELLS:,} item-residue cells "
+            f"({MAX_RESIDUE_PROFILE_DP_CELLS:,} per pass), with modulus at most "
+            f"{MAX_RESIDUE_PROFILE_MODULUS:,} and at most "
+            f"{MAX_RESIDUE_PROFILE_WITNESS_INDEX_SLOTS:,} witness index slots."
+        ),
+        SubsetSumResidueProfileRequest,
+        SubsetSumResidueProfileResult,
+        compute_subset_sum_residue_profile,
+        "additive-combinatorics",
+        "subset-sum",
+        "modular-arithmetic",
+        "multiplicity-profile",
+        "exact",
+        examples=(
+            example(
+                "nonempty_subsets_modulo_five",
+                (
+                    "Count all nonempty index subsets of (2,3) in every residue "
+                    "class modulo 5 and return canonical witnesses; the modulus "
+                    "must be positive and the derived DP, bigint, witness, input, "
+                    "and exact-result bounds must be admitted before execution."
+                ),
+                {
+                    "source": {"items": ["2", "3"]},
+                    "modulus": 5,
+                    "include_empty_subset": False,
+                    "include_witnesses": True,
                 },
             ),
         ),

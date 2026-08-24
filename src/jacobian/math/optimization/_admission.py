@@ -15,6 +15,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "distinct exact source-bound standard-form LP outcome with replayable optimality, Farkas, or recession witnesses",
     ),
+    OperationAdmission(
+        "optimization.linear.rational_general_optimum.compute",
+        AdmissionDecision.KEEP,
+        "distinct original-coordinate rational LP outcome for named inequalities, closed bounds, and free variables with source-replayed certificates",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

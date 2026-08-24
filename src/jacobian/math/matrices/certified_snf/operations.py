@@ -114,6 +114,26 @@ def inverse_unimodular(matrix: Matrix) -> Matrix:
     return [[int(value) for value in row] for row in numerator.to_Matrix().tolist()]
 
 
+def matrix_determinant(matrix: Matrix) -> int:
+    """Exact determinant of one square integer matrix with SymPy over ``ZZ``."""
+
+    size = len(matrix)
+    if any(len(row) != size for row in matrix):
+        raise ValueError("determinant requires a square integer matrix")
+    if size == 0:
+        return 1
+
+    from sympy import ZZ
+    from sympy.polys.matrices import DomainMatrix
+
+    domain_matrix = DomainMatrix(
+        [[ZZ(value) for value in row] for row in matrix],
+        (size, size),
+        ZZ,
+    )
+    return int(domain_matrix.det())
+
+
 def smith_reduce(
     source: Matrix,
     *,
@@ -247,6 +267,7 @@ __all__ = [
     "identity_matrix",
     "inverse_unimodular",
     "matrix_columns",
+    "matrix_determinant",
     "matrix_multiply",
     "matrix_shape",
     "matrix_vector_multiply",

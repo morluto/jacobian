@@ -97,6 +97,24 @@ class TestReachability:
         assert result.source == 1
         assert result.reachable == (1, 2)
 
+    def test_edgeless_graph_reaches_only_the_source(self) -> None:
+        """An edgeless directed graph is a valid degenerate input."""
+        result = _reachability(
+            {"vertex_count": 2, "edges": []},
+            1,
+        )
+        assert result.reachable == (1,)
+        assert result.unreachable == (0,)
+
+    def test_reachability_above_the_shared_vertex_cap(self) -> None:
+        """Vertex counts above 64 stay admitted with sources past index 63."""
+        result = _reachability(
+            {"vertex_count": 100, "edges": [[63, 64], [64, 99]]},
+            63,
+        )
+        assert result.reachable == (63, 64, 99)
+        assert len(result.unreachable) == 97
+
 
 class TestReachabilityContract:
     def test_rejects_self_loop(self) -> None:
@@ -121,6 +139,12 @@ class TestReachabilityContract:
         with pytest.raises(ValidationError, match="source must be"):
             ReachabilityRequest.model_validate(
                 {"graph": {"vertex_count": 2, "edges": [[0, 1]]}, "source": 5}
+            )
+
+    def test_rejects_vertex_count_above_the_conservative_fallback(self) -> None:
+        with pytest.raises(ValidationError):
+            ReachabilityRequest.model_validate(
+                {"graph": {"vertex_count": 257, "edges": []}, "source": 0}
             )
 
 

@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math.finite_game_theory.values import DeterministicTerminalGame
 
 MAX_PLAYERS = 10
 MAX_STRATEGIES = 50
@@ -62,8 +63,20 @@ class NashEquilibriumResult(StrictModel):
     value: CanonicalRational
 
 
+class DeterministicTerminalGameRequest(StrictModel):
+    """Solve every position of one complete deterministic terminal game."""
+
+    game: DeterministicTerminalGame = Field(
+        description=(
+            "Materialized owned arena with exact terminal and infinite-play "
+            "payoffs; every nonterminal must have an outgoing move."
+        )
+    )
+
+
 __all__ = [
     "BestResponseResult",
+    "DeterministicTerminalGameRequest",
     "NashEquilibriumResult",
     "PayoffMatrix",
     "ZeroSumGameRequest",

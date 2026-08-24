@@ -11,11 +11,14 @@ from jacobian.math.polynomials.maps._models import (
     CompositionResult,
     EvalRequest,
     EvalResult,
+    GenericDegreeRequest,
+    GenericDegreeResult,
     JacobianRequest,
     JacobianResult,
 )
 from jacobian.math.polynomials.maps._operations import (
     compose_polynomials,
+    compute_generic_degree,
     compute_jacobian,
     evaluate_polynomial,
 )
@@ -86,6 +89,39 @@ def _op[
 
 
 POLYNOMIAL_MAP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
+    _op(
+        "polynomial.map.generic_degree.compute",
+        "Compute the exact generic degree of a polynomial map",
+        "Classify the generic scheme-theoretic fiber of a bounded polynomial "
+        "map over QQ and, when it is finite, return its exact quotient dimension "
+        "with source-bound Groebner evidence. This computes over the generic "
+        "target function field and never infers degree from a sampled fiber.",
+        GenericDegreeRequest,
+        GenericDegreeResult,
+        compute_generic_degree,
+        "polynomial",
+        "algebraic-geometry",
+        "generic-fiber",
+        "exact",
+        examples=(
+            example(
+                "quadratic_generic_degree",
+                "Compute generic degree 2 for (x, y) -> (x^2, y); every map "
+                "component must use the complete ordered source axis.",
+                {
+                    "polynomial_map": {
+                        "polynomial_map_schema_version": "1",
+                        "input_variables": ["x", "y"],
+                        "output_polynomials": [
+                            _bivariate_polynomial((1, (2, 0))),
+                            _bivariate_polynomial((1, (0, 1))),
+                        ],
+                    }
+                },
+            ),
+        ),
+        version="1",
+    ),
     _op(
         "polynomial.map.evaluate",
         "Evaluate a polynomial at a rational point",

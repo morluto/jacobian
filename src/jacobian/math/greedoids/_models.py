@@ -9,11 +9,40 @@ from pydantic import Field, model_validator
 from jacobian._models import StrictModel
 from jacobian.math.greedoids.values import FiniteFeasibleSetSystem
 
+MAX_GROUND_SIZE = 64
+"""Schema-visible cap on ground-set cardinality for greedoid requests."""
+
+MAX_FEASIBLE_COUNT = 4096
+"""Schema-visible cap on feasible-row count for greedoid requests."""
+
+
+def require_bounded_carrier(system: FiniteFeasibleSetSystem) -> None:
+    """Bound the greedoid execution envelope before any kernel expands.
+
+    The shared carrier is structural only; these operation-owned ceilings
+    control the ordered-pair and family-scan work of the greedoid kernels.
+    """
+
+    if len(system.ground) > MAX_GROUND_SIZE:
+        raise ValueError(
+            f"ground size exceeds the bounded budget of {MAX_GROUND_SIZE} elements"
+        )
+    if len(system.feasible) > MAX_FEASIBLE_COUNT:
+        raise ValueError(
+            f"feasible-set count exceeds the bounded budget of "
+            f"{MAX_FEASIBLE_COUNT} rows"
+        )
+
 
 class RecognizeRequest(StrictModel):
     """Recognize a feasible-set family as a greedoid."""
 
     system: FiniteFeasibleSetSystem
+
+    @model_validator(mode="after")
+    def require_bounded_system(self) -> Self:
+        require_bounded_carrier(self.system)
+        return self
 
 
 class RecognizeResult(StrictModel):
@@ -49,6 +78,7 @@ class RankRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_subset(self) -> Self:
+        require_bounded_carrier(self.system)
         if self.subset is not None:
             n = len(self.system.ground)
             if len(set(self.subset)) != len(self.subset):
@@ -73,6 +103,7 @@ class BasesRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_subset(self) -> Self:
+        require_bounded_carrier(self.system)
         if self.subset is not None:
             n = len(self.system.ground)
             if len(set(self.subset)) != len(self.subset):
@@ -94,6 +125,11 @@ class BasicWordProfileRequest(StrictModel):
 
     system: FiniteFeasibleSetSystem
     word: tuple[int, ...] = Field(default=())
+
+    @model_validator(mode="after")
+    def require_bounded_system(self) -> Self:
+        require_bounded_carrier(self.system)
+        return self
 
 
 class BasicWordProfileResult(StrictModel):
@@ -118,6 +154,11 @@ class ConvexGeometryRequest(StrictModel):
     """Compute the complementary closed-set family of a full-support antimatroid."""
 
     system: FiniteFeasibleSetSystem
+
+    @model_validator(mode="after")
+    def require_bounded_system(self) -> Self:
+        require_bounded_carrier(self.system)
+        return self
 
 
 class ConvexGeometryResult(StrictModel):

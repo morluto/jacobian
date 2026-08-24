@@ -2,28 +2,19 @@
 
 from __future__ import annotations
 
-import unicodedata
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits, encode_strict_json
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import ColoredUndirectedGraph
 
 MAX_GRAPH_SYMMETRY_VERTICES = 256
 MAX_GRAPH_SYMMETRY_EDGES = 4_096
 MAX_GRAPH_SYMMETRY_GENERATORS = 64
+_UNCOLORED = "__UNCOLORED__"
 
 GraphSymmetryLabel = Annotated[str, Field(min_length=1, max_length=64)]
-GraphSymmetryColor = Annotated[
-    str,
-    Field(
-        min_length=1,
-        max_length=128,
-        description="Declared color label; must already be normalized to Unicode NFC.",
-    ),
-]
 GraphSymmetryEdge = tuple[GraphSymmetryLabel, GraphSymmetryLabel]
 
 
@@ -32,74 +23,10 @@ def _canonical_edge(left: str, right: str) -> tuple[str, str]:
 
 
 class GraphAutomorphismGenerator(StrictModel):
-    generator_id: GraphSymmetryLabel = Field(
-        description=(
-            "Unique identifier of this declared generator; must already be "
-            "normalized to Unicode NFC."
-        )
+    generator_id: GraphSymmetryLabel
+    mapping: dict[GraphSymmetryLabel, GraphSymmetryLabel] = Field(
+        max_length=MAX_GRAPH_SYMMETRY_VERTICES
     )
-    mapping: tuple[tuple[GraphSymmetryLabel, GraphSymmetryLabel], ...] = Field(
-        max_length=MAX_GRAPH_SYMMETRY_VERTICES,
-        description=(
-            "Total vertex permutation as (vertex, image) pairs covering every "
-            "declared vertex exactly once in the graph's declared vertex "
-            "order; labels must already be normalized to Unicode NFC."
-        ),
-    )
-
-
-class GraphVertexColor(StrictModel):
-    vertex: GraphSymmetryLabel
-    color: GraphSymmetryColor
-
-
-class GraphEdgeColor(StrictModel):
-    edge: GraphSymmetryEdge
-    color: GraphSymmetryColor
-
-    @model_validator(mode="after")
-    def require_canonical_edge(self) -> Self:
-        if self.edge[0] >= self.edge[1]:
-            raise ValueError("colored graph edges must use canonical endpoint order")
-        return self
-
-
-def _validate_graph_symmetry_bounds_and_colors(
-    vertices: tuple[GraphSymmetryLabel, ...],
-    edges: tuple[GraphSymmetryEdge, ...],
-    generators: tuple[GraphAutomorphismGenerator, ...],
-    vertex_colors: tuple[GraphVertexColor, ...],
-    edge_colors: tuple[GraphEdgeColor, ...],
-) -> None:
-    if len(vertices) > MAX_GRAPH_SYMMETRY_VERTICES:
-        raise ValueError(
-            f"graph symmetry exceeds the {MAX_GRAPH_SYMMETRY_VERTICES}-vertex bound"
-        )
-    if len(edges) > MAX_GRAPH_SYMMETRY_EDGES:
-        raise ValueError(
-            f"graph symmetry exceeds the {MAX_GRAPH_SYMMETRY_EDGES}-edge bound"
-        )
-    if any(not vertex or len(vertex) > 64 for vertex in vertices):
-        raise ValueError("graph symmetry vertex labels must contain 1-64 characters")
-    generator_ids = tuple(generator.generator_id for generator in generators)
-    if len(set(generator_ids)) != len(generator_ids):
-        raise ValueError("graph symmetry generator identifiers must be unique")
-    if any(
-        not unicodedata.is_normalized("NFC", generator_id)
-        for generator_id in generator_ids
-    ):
-        raise ValueError("graph symmetry generator identifiers must use Unicode NFC")
-
-    if vertex_colors and tuple(item.vertex for item in vertex_colors) != vertices:
-        raise ValueError(
-            "vertex colors must cover vertices in the graph's declared order"
-        )
-    if edge_colors and tuple(item.edge for item in edge_colors) != edges:
-        raise ValueError("edge colors must cover edges in the graph's declared order")
-    if any(not unicodedata.is_normalized("NFC", item.color) for item in vertex_colors):
-        raise ValueError("graph symmetry vertex colors must use Unicode NFC")
-    if any(not unicodedata.is_normalized("NFC", item.color) for item in edge_colors):
-        raise ValueError("graph symmetry edge colors must use Unicode NFC")
 
 
 def _validate_automorphism_generator(
@@ -108,18 +35,13 @@ def _validate_automorphism_generator(
     edges: tuple[GraphSymmetryEdge, ...],
     vertex_set: set[GraphSymmetryLabel],
     edge_set: set[GraphSymmetryEdge],
-    vertex_colors: dict[GraphSymmetryLabel, GraphSymmetryColor],
-    edge_colors: dict[GraphSymmetryEdge, GraphSymmetryColor],
+    vertex_colors: dict[GraphSymmetryLabel, str],
+    edge_colors: dict[GraphSymmetryEdge, str],
 ) -> None:
-    mapping = dict(generator.mapping)
-    if (
-        tuple(vertex for vertex, _ in generator.mapping) != vertices
-        or set(mapping.values()) != vertex_set
-    ):
+    mapping = generator.mapping
+    if set(mapping) != vertex_set or set(mapping.values()) != vertex_set:
         raise ValueError(
-            "every graph symmetry generator must be a total vertex permutation "
-            "declared as one (vertex, image) pair per declared vertex in the "
-            "graph's declared vertex order"
+            "every graph symmetry generator must be a total vertex permutation"
         )
     if any(
         vertex_colors[vertex] != vertex_colors[mapping[vertex]] for vertex in vertices
@@ -142,92 +64,10 @@ def _validate_automorphism_generator(
         raise ValueError("graph symmetry generators must preserve declared edge colors")
 
 
-_RESULT_ENVELOPE_RESERVE_BYTES = 2_048
-_ORBIT_OBJECT_FIXED_WIRE_BYTES = 47
-
-
-def _estimate_orbit_result_wire_bytes(request: GraphSymmetryOrbitRequest) -> int:
-    """Upper-bound the canonical wire size of this request's orbit result.
-
-    The result echoes its complete declared source action and repeats every
-    vertex label once (the ``vertices`` field plus the vertex-orbit members)
-    and every canonical edge once (the ``edges`` field plus the edge-orbit
-    members) beyond that echo. Orbit representatives are drawn from those
-    same declared labels and pairs, and the declared action fixes exactly
-    which elements can be representatives: the union components of the
-    declared generator mappings are the generated subgroup's orbits, so
-    admission prices one representative per computed orbit instead of
-    re-charging the complete graph. Every retained string is Unicode NFC -
-    vertices through the canonical graph value, generator identifiers and
-    colors through request admission - so these strict-JSON measurements
-    equal their canonicalized sizes. Each orbit object contributes its exact
-    fixed wire structure - the ``orbit_index``, ``representative``, and
-    ``members`` keys with their punctuation, that orbit index's digit width,
-    and one separating comma - so singleton-orbit results carry no per-orbit
-    padding beyond the representatives they must retain. The bound also
-    charges two member separators per declared vertex or edge (one for each
-    repetition beyond the echo), each retained generator identifier, and the
-    envelope reserve, so every accepted request serializes inside the
-    canonical output limit.
-    """
-    from jacobian.math.graphs.symmetry._operations import _declared_orbit_partitions
-
-    vertex_label_bytes = [
-        len(encode_strict_json(vertex)) for vertex in request.graph.vertices
-    ]
-    edge_pair_bytes = [
-        len(encode_strict_json(left)) + len(encode_strict_json(right)) + 3
-        for left, right in request.graph.edges
-    ]
-    declared_vertex_members, declared_edge_members = _declared_orbit_partitions(request)
-    representative_bytes = sum(
-        len(encode_strict_json(representative))
-        for representative in (members[0] for members in declared_vertex_members)
-    ) + sum(
-        len(encode_strict_json(left)) + len(encode_strict_json(right)) + 3
-        for left, right in (members[0] for members in declared_edge_members)
-    )
-    vertex_orbit_count = len(declared_vertex_members)
-    edge_orbit_count = len(declared_edge_members)
-    return (
-        len(encode_strict_json(request.model_dump(mode="json")))
-        + 2 * sum(vertex_label_bytes)
-        + 2 * sum(edge_pair_bytes)
-        + 2 * (len(vertex_label_bytes) + len(edge_pair_bytes))
-        + (vertex_orbit_count + edge_orbit_count) * (_ORBIT_OBJECT_FIXED_WIRE_BYTES + 1)
-        + sum(len(str(index)) for index in range(vertex_orbit_count))
-        + sum(len(str(index)) for index in range(edge_orbit_count))
-        + representative_bytes
-        + sum(
-            len(encode_strict_json(generator.generator_id)) + 4
-            for generator in request.generators
-        )
-        + _RESULT_ENVELOPE_RESERVE_BYTES
-    )
-
-
-def _require_result_output_headroom(request: GraphSymmetryOrbitRequest) -> None:
-    output_limit = CanonicalLimits().max_output_bytes
-    if _estimate_orbit_result_wire_bytes(request) > output_limit:
-        raise ValueError(
-            "the graph symmetry orbit result retains its declared source and "
-            f"would exceed the {output_limit}-byte canonical output limit; "
-            "shorten vertex labels or shrink the graph"
-        )
-
-
 class GraphSymmetryOrbitRequest(StrictModel):
-    graph: SimpleUndirectedGraph
+    graph: ColoredUndirectedGraph
     generators: tuple[GraphAutomorphismGenerator, ...] = Field(
         max_length=MAX_GRAPH_SYMMETRY_GENERATORS
-    )
-    vertex_colors: tuple[GraphVertexColor, ...] = Field(
-        default=(),
-        max_length=MAX_GRAPH_SYMMETRY_VERTICES,
-    )
-    edge_colors: tuple[GraphEdgeColor, ...] = Field(
-        default=(),
-        max_length=MAX_GRAPH_SYMMETRY_EDGES,
     )
     action: Literal["DECLARED_AUTOMORPHISM_GENERATORS"] = (
         "DECLARED_AUTOMORPHISM_GENERATORS"
@@ -235,27 +75,32 @@ class GraphSymmetryOrbitRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_color_preserving_automorphisms(self) -> Self:
-        vertices = self.graph.vertices
-        edges = self.graph.edges
-        _validate_graph_symmetry_bounds_and_colors(
-            vertices,
-            edges,
-            self.generators,
-            self.vertex_colors,
-            self.edge_colors,
-        )
+        vertices = self.graph.graph.vertices
+        edges = self.graph.graph.edges
+        if len(vertices) > MAX_GRAPH_SYMMETRY_VERTICES:
+            raise ValueError(
+                f"graph symmetry exceeds the {MAX_GRAPH_SYMMETRY_VERTICES}-vertex bound"
+            )
+        if len(edges) > MAX_GRAPH_SYMMETRY_EDGES:
+            raise ValueError(
+                f"graph symmetry exceeds the {MAX_GRAPH_SYMMETRY_EDGES}-edge bound"
+            )
+
+        generator_ids = tuple(generator.generator_id for generator in self.generators)
+        if len(set(generator_ids)) != len(generator_ids):
+            raise ValueError("graph symmetry generator identifiers must be unique")
 
         vertex_set = set(vertices)
         edge_set = set(edges)
         vertex_colors = (
-            {item.vertex: item.color for item in self.vertex_colors}
-            if self.vertex_colors
-            else dict.fromkeys(vertices, "__UNCOLORED__")
+            dict(zip(vertices, self.graph.vertex_colors, strict=True))
+            if self.graph.vertex_colors
+            else dict.fromkeys(vertices, _UNCOLORED)
         )
         edge_colors = (
-            {item.edge: item.color for item in self.edge_colors}
-            if self.edge_colors
-            else dict.fromkeys(edges, "__UNCOLORED__")
+            dict(zip(edges, self.graph.edge_colors, strict=True))
+            if self.graph.edge_colors
+            else dict.fromkeys(edges, _UNCOLORED)
         )
         for generator in self.generators:
             _validate_automorphism_generator(
@@ -267,11 +112,6 @@ class GraphSymmetryOrbitRequest(StrictModel):
                 vertex_colors,
                 edge_colors,
             )
-        return self
-
-    @model_validator(mode="after")
-    def require_result_within_canonical_output_limit(self) -> Self:
-        _require_result_output_headroom(self)
         return self
 
 
@@ -315,17 +155,6 @@ class GraphEdgeOrbit(StrictModel):
 
 
 class GraphSymmetryOrbitResult(StrictModel):
-    """Complete vertex and edge orbits of one declared generated subgroup.
-
-    The result retains its complete declared source action - the canonical
-    graph, the generator mappings, and the declared colors - through the
-    domain-owned request value. Validation binds every claim to that source:
-    the retained graph and generators must equal it, the color modes must
-    match its declared colors, and both returned partitions must equal a
-    replay of the exact orbits of the declared generators.
-    """
-
-    source: GraphSymmetryOrbitRequest
     vertices: tuple[GraphSymmetryLabel, ...] = Field(
         max_length=MAX_GRAPH_SYMMETRY_VERTICES
     )
@@ -375,29 +204,6 @@ class GraphSymmetryOrbitResult(StrictModel):
             raise ValueError(
                 "result generator identifiers must be unique and canonical"
             )
-        declared_generator_ids = tuple(
-            sorted(generator.generator_id for generator in self.source.generators)
-        )
-        if (
-            self.vertices != tuple(sorted(self.source.graph.vertices))
-            or self.edges != tuple(sorted(self.source.graph.edges))
-            or self.generator_ids != declared_generator_ids
-        ):
-            raise ValueError(
-                "result graph and generators must equal the retained source action"
-            )
-        if self.vertex_color_mode != (
-            "DECLARED" if self.source.vertex_colors else "UNCOLORED"
-        ):
-            raise ValueError(
-                "vertex color mode must match the retained source vertex colors"
-            )
-        if self.edge_color_mode != (
-            "DECLARED" if self.source.edge_colors else "UNCOLORED"
-        ):
-            raise ValueError(
-                "edge color mode must match the retained source edge colors"
-            )
         vertex_members = tuple(
             member for orbit in self.vertex_orbits for member in orbit.members
         )
@@ -426,23 +232,6 @@ class GraphSymmetryOrbitResult(StrictModel):
             or set(edge_members) != set(self.edges)
         ):
             raise ValueError("edge orbits must be a complete canonical edge partition")
-        from jacobian.math.graphs.symmetry._operations import _declared_orbit_partitions
-
-        expected_vertex_members, expected_edge_members = _declared_orbit_partitions(
-            self.source
-        )
-        if tuple(orbit.members for orbit in self.vertex_orbits) != (
-            expected_vertex_members
-        ):
-            raise ValueError(
-                "vertex orbits must be the exact orbits of the declared generators"
-            )
-        if tuple(orbit.members for orbit in self.edge_orbits) != (
-            expected_edge_members
-        ):
-            raise ValueError(
-                "edge orbits must be the exact orbits of the declared generators"
-            )
         return self
 
 
@@ -451,10 +240,8 @@ __all__ = [
     "MAX_GRAPH_SYMMETRY_GENERATORS",
     "MAX_GRAPH_SYMMETRY_VERTICES",
     "GraphAutomorphismGenerator",
-    "GraphEdgeColor",
     "GraphEdgeOrbit",
     "GraphSymmetryOrbitRequest",
     "GraphSymmetryOrbitResult",
-    "GraphVertexColor",
     "GraphVertexOrbit",
 ]

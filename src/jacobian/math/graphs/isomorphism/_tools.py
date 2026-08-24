@@ -7,10 +7,13 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.isomorphism._models import (
+    ColoredGraphCanonicalizationRequest,
+    ColoredGraphCanonicalizationResult,
     GraphIsomorphismRequest,
     GraphIsomorphismResult,
 )
 from jacobian.math.graphs.isomorphism._operations import (
+    compute_colored_graph_canonicalization,
     decide_graph_isomorphism,
 )
 
@@ -88,6 +91,45 @@ GRAPH_ISOMORPHISM_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                         "directed": False,
                         "edges": [[0, 1], [0, 2], [0, 3]],
                     },
+                },
+            ),
+        ),
+    ),
+    graph_isomorphism_operation(
+        "graph.isomorphism.canonicalize.compute",
+        "Canonicalize a bounded colored graph under isomorphism",
+        "Return the exact canonical colored graph and an explicit "
+        "source-to-canonical relabeling. Vertex and edge color names are "
+        "preserved exactly; exhaustive color-class permutation work and the "
+        "source-bound result size are admitted before execution.",
+        ColoredGraphCanonicalizationRequest,
+        ColoredGraphCanonicalizationResult,
+        compute_colored_graph_canonicalization,
+        "graph",
+        "isomorphism",
+        "canonical-form",
+        "vertex-color",
+        "edge-color",
+        "exact",
+        "bounded",
+        examples=(
+            example(
+                "colored_path",
+                "Canonicalize a vertex- and edge-colored four-vertex path and return its source-to-canonical relabeling; each edge must use left < right and every nonempty color axis must align with the graph's authoritative axis.",
+                {
+                    "colored_graph": {
+                        "graph": {
+                            "vertices": ["a", "b", "c", "d"],
+                            "edges": [["a", "b"], ["b", "c"], ["c", "d"]],
+                        },
+                        "vertex_colors": [
+                            "endpoint",
+                            "middle",
+                            "middle",
+                            "endpoint",
+                        ],
+                        "edge_colors": ["outer", "middle", "outer"],
+                    }
                 },
             ),
         ),

@@ -73,6 +73,7 @@ GRAPH_SPECTRAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
+        version="2",
     ),
     graph_spectral_operation(
         "graph.spectrum.laplacian.compute",
@@ -98,6 +99,7 @@ GRAPH_SPECTRAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
+        version="2",
     ),
     graph_spectral_operation(
         "graph.spectrum.adjacency.characteristic_polynomial.compute",

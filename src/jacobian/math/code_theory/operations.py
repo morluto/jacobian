@@ -36,6 +36,11 @@ def _codewords(
 
 
 def minimum_distance(generator_matrix: GeneratorMatrix, field_order: int) -> int:
+    """Return the exact minimum nonzero codeword weight.
+
+    For the zero code (rank 0) no nonzero codeword exists; the code
+    length is returned by the empty-code convention.
+    """
     from jacobian.math.code_theory._models import LinearCodeRequest
 
     request = LinearCodeRequest(

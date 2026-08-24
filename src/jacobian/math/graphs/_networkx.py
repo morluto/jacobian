@@ -14,8 +14,8 @@ def simple_graph(graph: nx.Graph[Any]) -> nx.Graph[Any]:
         raise TypeError("graph must be a NetworkX Graph")
     if graph.is_directed() or graph.is_multigraph():
         raise ValueError("graph must be undirected and simple")
-    if graph.number_of_nodes() > 32:
-        raise ValueError("graph may contain at most 32 vertices")
+    if graph.number_of_nodes() > 256:
+        raise ValueError("graph may contain at most 256 vertices")
     if nx.number_of_selfloops(graph):
         raise ValueError("graph must not contain self-loops")
     return graph
@@ -52,8 +52,8 @@ def strongly_connected_components(
         raise TypeError("graph must be a NetworkX DiGraph")
     if not graph.is_directed() or graph.is_multigraph():
         raise ValueError("graph must be directed and simple")
-    if graph.number_of_nodes() > 32:
-        raise ValueError("graph may contain at most 32 vertices")
+    if graph.number_of_nodes() > 256:
+        raise ValueError("graph may contain at most 256 vertices")
     return tuple(
         frozenset(component) for component in nx.strongly_connected_components(graph)
     )

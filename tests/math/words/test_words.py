@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+import json
 import random
 
 import pytest
@@ -79,6 +80,19 @@ def test_public_catalog_surface_is_the_audited_operations() -> None:
         "substitution.primitivity_profile.compute",
         "substitution.fixed_point_prefix.compute",
     )
+
+
+def test_narrowed_scalar_symbol_contract_is_published_as_version_two() -> None:
+    tools = {tool.operation_id: tool for tool in TOOLS}
+    for operation_id, tool in tools.items():
+        # The shared Symbol type now rejects lone surrogates, which narrows
+        # every v1 request alphabet; the change is a versioned contract bump.
+        assert tool.version == "2", operation_id
+
+    periods = tools["word.periods.compute"]
+    surrogate = json.loads('{"alphabet": ["\\ud800"], "letters": ["\\ud800"]}')
+    with pytest.raises(ValidationError):
+        periods.request_type.model_validate(surrogate)
 
 
 def test_factor_result_is_complete_and_bound_to_the_request() -> None:
@@ -550,6 +564,16 @@ def test_value_models_reject_ambiguous_or_unbounded_inputs() -> None:
         apply_morphism(
             expanding,
             FiniteWord(alphabet=("a",), letters=("a",) * 500),
+        )
+
+
+@pytest.mark.parametrize("symbol", ["\ud800", "\udfff", "a\ud800b"])
+def test_symbols_admit_only_unicode_scalar_strings(symbol: str) -> None:
+    with pytest.raises(ValidationError):
+        FiniteWord(alphabet=(symbol,), letters=())
+    with pytest.raises(ValidationError):
+        WordMorphism(
+            source_alphabet=("a",), target_alphabet=(symbol,), images=(("a",),)
         )
 
 

@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from jacobian.math.impartial_games import (
     GameMove,
     ImpartialGame,
+    NimPosition,
     birthdays,
     grundy_classes,
     grundy_table,
@@ -172,11 +173,14 @@ class TestNativePortfolio:
 
     def test_nim_helpers_are_exact_and_bounded(self) -> None:
         assert mex((0, 1, 1, 3)) == 2
-        assert nim_sum((3, 4, 5)) == 2
-        assert nim_options((2,)) == ((0,), (1,))
+        assert nim_sum(NimPosition(heaps=(3, 4, 5))) == 2
+        assert tuple(
+            option.resulting_position.heaps
+            for option in nim_options(NimPosition(heaps=(2,)))
+        ) == ((0,), (1,))
 
-        with pytest.raises(ValueError, match="output bound"):
-            nim_options((5001,))
+        with pytest.raises(ValidationError, match="less than or equal to 10000"):
+            NimPosition(heaps=(10_001,))
 
     def test_subtraction_dag_fails_closed_at_move_bound(self) -> None:
         with pytest.raises(ValueError, match="move bound"):
@@ -188,6 +192,7 @@ class TestNativePortfolio:
             "game.impartial.grundy_table.compute",
             "game.subtraction.grundy_prefix.compute",
             "game.nim.nim_sum.compute",
+            "game.nim.options.compute",
             "game.impartial.outcome_profile.compute",
             "game.impartial.disjunctive_sum.compute",
         }

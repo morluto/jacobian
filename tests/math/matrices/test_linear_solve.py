@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import copy
+
 import pytest
 import sympy
 from pydantic import ValidationError
 
 from jacobian.math.matrices._operation_models import (
     RationalLinearSolveRequest,
+    RationalLinearSolveResult,
 )
 from jacobian.math.matrices._operations import compute_rational_linear_solve
 
@@ -99,3 +102,203 @@ def test_singular_inverse_rejected() -> None:
         NonsingularIntegerMatrixRequest.model_validate(
             {"matrix": {"entries": [["1", "2"], ["2", "4"]]}}
         )
+
+
+def _mutable(dumped: dict) -> dict:
+    """JSON round-trip so nested tuple payloads become mutable lists."""
+    import json
+
+    return json.loads(json.dumps(dumped))
+
+
+def test_results_retain_their_source_system() -> None:
+    """Every outcome retains the exact coefficient matrix and right-hand side."""
+
+    cases = (
+        (_matrix([["1", "0"], ["0", "1"]]), _rhs("2", "3"), "UNIQUE"),
+        (_matrix([["1", "1"], ["1", "1"]]), _rhs("0", "1"), "INCONSISTENT"),
+        (_matrix([["1", "1"], ["1", "1"]]), _rhs("1", "1"), "NON_UNIQUE"),
+    )
+    for entries, rhs, outcome in cases:
+        request = RationalLinearSolveRequest.model_validate(
+            {"matrix": {"entries": entries}, "rhs": rhs}
+        )
+        result = compute_rational_linear_solve(request)
+        assert result.outcome == outcome
+        assert result.matrix == request.matrix
+        assert result.rhs == request.rhs
+        assert (
+            RationalLinearSolveResult.model_validate_json(result.model_dump_json())
+            == result
+        )
+
+
+def test_unique_result_rejects_forged_solution_mutations() -> None:
+    """A mutated solution coordinate fails the A x = b replay."""
+
+    request = RationalLinearSolveRequest.model_validate(
+        {
+            "matrix": {"entries": _matrix([["2", "0"], ["0", "3"]])},
+            "rhs": _rhs("2", "3"),
+        }
+    )
+    dumped = _mutable(compute_rational_linear_solve(request).model_dump())
+
+    forged_coordinate = copy.deepcopy(dumped)
+    forged_coordinate["solution"][1] = {"num": "4", "den": "1"}
+    with pytest.raises(ValidationError, match="A x = b"):
+        RationalLinearSolveResult.model_validate(forged_coordinate)
+
+    forged_length = copy.deepcopy(dumped)
+    forged_length["solution"] = [
+        {"num": "1", "den": "1"},
+        {"num": "1", "den": "1"},
+        {"num": "1", "den": "1"},
+    ]
+    with pytest.raises(ValidationError):
+        RationalLinearSolveResult.model_validate(forged_length)
+
+    missing_solution = copy.deepcopy(dumped)
+    missing_solution["solution"] = None
+    with pytest.raises(ValidationError, match="populate the solution field"):
+        RationalLinearSolveResult.model_validate(missing_solution)
+
+
+def test_results_reject_outcome_and_source_mutations() -> None:
+    """Outcome flips and source edits fail the classification replay."""
+
+    inconsistent_request = RationalLinearSolveRequest.model_validate(
+        {
+            "matrix": {"entries": _matrix([["1", "1"], ["1", "1"]])},
+            "rhs": _rhs("0", "1"),
+        }
+    )
+    inconsistent = _mutable(
+        compute_rational_linear_solve(inconsistent_request).model_dump()
+    )
+
+    flipped_non_unique = copy.deepcopy(inconsistent)
+    flipped_non_unique["outcome"] = "NON_UNIQUE"
+    with pytest.raises(ValidationError, match="consistent, rank-deficient"):
+        RationalLinearSolveResult.model_validate(flipped_non_unique)
+
+    flipped_unique = copy.deepcopy(inconsistent)
+    flipped_unique["outcome"] = "UNIQUE"
+    with pytest.raises(ValidationError, match="populate the solution field"):
+        RationalLinearSolveResult.model_validate(flipped_unique)
+
+    feasible_source = copy.deepcopy(inconsistent)
+    feasible_source["rhs"] = _rhs("0", "0")
+    with pytest.raises(ValidationError, match="rank\\(A\\) < rank"):
+        RationalLinearSolveResult.model_validate(feasible_source)
+
+    nonsingular_source = copy.deepcopy(inconsistent)
+    nonsingular_source["matrix"]["entries"] = _matrix([["1", "0"], ["0", "1"]])
+    with pytest.raises(ValidationError, match="rank\\(A\\) < rank"):
+        RationalLinearSolveResult.model_validate(nonsingular_source)
+
+    nonunique_request = RationalLinearSolveRequest.model_validate(
+        {
+            "matrix": {"entries": _matrix([["1", "1"], ["1", "1"]])},
+            "rhs": _rhs("1", "1"),
+        }
+    )
+    non_unique = _mutable(compute_rational_linear_solve(nonunique_request).model_dump())
+
+    flipped_inconsistent = copy.deepcopy(non_unique)
+    flipped_inconsistent["outcome"] = "INCONSISTENT"
+    with pytest.raises(ValidationError, match="rank\\(A\\) < rank"):
+        RationalLinearSolveResult.model_validate(flipped_inconsistent)
+
+    singular_to_nonsingular = copy.deepcopy(non_unique)
+    singular_to_nonsingular["matrix"]["entries"] = _matrix([["1", "0"], ["0", "1"]])
+    singular_to_nonsingular["rhs"] = _rhs("1", "1")
+    with pytest.raises(ValidationError, match="consistent, rank-deficient"):
+        RationalLinearSolveResult.model_validate(singular_to_nonsingular)
+
+    unique_request = RationalLinearSolveRequest.model_validate(
+        {
+            "matrix": {"entries": _matrix([["2", "0"], ["0", "3"]])},
+            "rhs": _rhs("2", "3"),
+        }
+    )
+    unique = _mutable(compute_rational_linear_solve(unique_request).model_dump())
+
+    foreign_rhs = copy.deepcopy(unique)
+    foreign_rhs["rhs"] = _rhs("2", "4")
+    with pytest.raises(ValidationError, match="A x = b"):
+        RationalLinearSolveResult.model_validate(foreign_rhs)
+
+    # A singular source whose claimed solution still satisfies A x = b
+    # exactly: only the nonsingularity replay can reject this forgery.
+    singular_source = {
+        "matrix": {"entries": _matrix([["1", "1"], ["2", "2"]])},
+        "rhs": _rhs("2", "4"),
+        "outcome": "UNIQUE",
+        "solution": [{"num": "1", "den": "1"}, {"num": "1", "den": "1"}],
+    }
+    with pytest.raises(ValidationError, match="nonsingular"):
+        RationalLinearSolveResult.model_validate(singular_source)
+
+
+def test_serialized_results_round_trip_through_the_wire_shape() -> None:
+    """Producer output validates through a JSON round trip on every outcome."""
+
+    requests = (
+        RationalLinearSolveRequest.model_validate(
+            {
+                "matrix": {
+                    "entries": [
+                        [{"num": "1", "den": "2"}, {"num": "0", "den": "1"}],
+                        [{"num": "0", "den": "1"}, {"num": "1", "den": "3"}],
+                    ]
+                },
+                "rhs": [{"num": "1", "den": "2"}, {"num": "-5", "den": "3"}],
+            }
+        ),
+        RationalLinearSolveRequest.model_validate(
+            {
+                "matrix": {
+                    "entries": _matrix(
+                        [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"]]
+                    )
+                },
+                "rhs": _rhs("1", "1", "1"),
+            }
+        ),
+    )
+    for request in requests:
+        result = compute_rational_linear_solve(request)
+        restored = RationalLinearSolveResult.model_validate(result.model_dump())
+        assert restored == result
+        assert restored.convention == "LINEAR_SYSTEM_CLASSIFICATION_OVER_QQ"
+
+
+def test_result_reapplies_source_admission_before_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A relayed source outside the work envelope is rejected before replay."""
+
+    import jacobian.math.matrices._operations as operations
+
+    def fail_if_called(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("rank replay ran on an unadmitted source system")
+
+    monkeypatch.setattr(operations, "_system_rank_replay", fail_if_called)
+    unadmitted = {
+        "matrix": {
+            "entries": [
+                [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
+                [{"num": "0", "den": "1"}, {"num": "9" * 257, "den": "1"}],
+            ]
+        },
+        "rhs": _rhs("1", "1"),
+        "outcome": "INCONSISTENT",
+    }
+    with pytest.raises(ValidationError, match="limited to 256"):
+        RationalLinearSolveResult.model_validate(unadmitted)
+
+    non_square = dict(unadmitted)
+    non_square["matrix"] = {"entries": [[{"num": "1", "den": "1"}]]}
+    with pytest.raises(ValidationError, match="square matrix"):
+        RationalLinearSolveResult.model_validate(non_square)

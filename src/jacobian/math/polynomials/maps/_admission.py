@@ -21,6 +21,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "ordinary polynomial projection or composition better expressed through the native SymPy-valued API",
     ),
     OperationAdmission(
+        "polynomial.map.generic_degree.compute",
+        AdmissionDecision.KEEP,
+        "distinct exact bounded generic-fiber invariant with source-bound quotient evidence",
+    ),
+    OperationAdmission(
         "polynomial.map.jacobian",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",

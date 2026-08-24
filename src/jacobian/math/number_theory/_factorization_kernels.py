@@ -116,23 +116,31 @@ def factorize_certified(
 # ---------------------------------------------------------------------------
 
 
+def _replayed_divisors(value: int, *, proper: bool) -> tuple[str, ...]:
+    from sympy import divisors
+
+    return tuple(str(item) for item in divisors(abs(value), proper=proper))
+
+
 def enumerate_divisors(request: FactorizationRequest) -> DivisorListResult:
-    from sympy import divisors
-
-    value = int(request.value)
-    if value == 0:
-        raise ValueError("zero has infinitely many divisors")
-    return DivisorListResult(divisors=tuple(str(item) for item in divisors(abs(value))))
-
-
-def enumerate_proper_divisors(request: FactorizationRequest) -> DivisorListResult:
-    from sympy import divisors
-
     value = int(request.value)
     if value == 0:
         raise ValueError("zero has infinitely many divisors")
     return DivisorListResult(
-        divisors=tuple(str(item) for item in divisors(abs(value), proper=True))
+        value=request.value,
+        divisors=_replayed_divisors(value, proper=False),
+        convention="ALL_POSITIVE_DIVISORS",
+    )
+
+
+def enumerate_proper_divisors(request: FactorizationRequest) -> DivisorListResult:
+    value = int(request.value)
+    if value == 0:
+        raise ValueError("zero has infinitely many divisors")
+    return DivisorListResult(
+        value=request.value,
+        divisors=_replayed_divisors(value, proper=True),
+        convention="PROPER_DIVISORS",
     )
 
 
@@ -143,10 +151,11 @@ def factorize_primes(request: FactorizationRequest) -> PrimeFactorizationResult:
     if value == 0:
         raise ValueError("zero has no finite prime factorization")
     return PrimeFactorizationResult(
+        value=request.value,
         factors=tuple(
             PrimePower(prime=str(prime), power=int(power))
             for prime, power in sorted(factorint(abs(value)).items())
-        )
+        ),
     )
 
 

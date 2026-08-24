@@ -11,9 +11,12 @@ from jacobian.math.discrepancy_theory._models import (
     DiscrepancyEvalResult,
     DiscrepancyOptimumRequest,
     DiscrepancyOptimumResult,
+    HardConstraintRoundingRequest,
+    HardConstraintRoundingResult,
 )
 from jacobian.math.discrepancy_theory._operations import (
     compute_discrepancy,
+    compute_hard_constraint_rounding,
     compute_optimal_discrepancy,
 )
 
@@ -47,6 +50,49 @@ def discrepancy_theory_operation[
 
 DISCREPANCY_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     discrepancy_theory_operation(
+        "discrepancy.hard_constraint_round.compute",
+        "Round a rational vector under hard cardinality constraints",
+        "Compute a deterministic exact binary rounding that preserves every "
+        "disjoint integral hard-row sum and bounds every monitored zero-one "
+        "column's rounded-minus-source error by 4d, where d is the maximum "
+        "source column incidence of one coordinate.",
+        HardConstraintRoundingRequest,
+        HardConstraintRoundingResult,
+        compute_hard_constraint_rounding,
+        "discrepancy",
+        "rounding",
+        "set-system",
+        "hard-constraint",
+        "exact",
+        examples=(
+            example(
+                "two_hard_rows",
+                "Round four half-integral coordinates while preserving two "
+                "row sums and ledgering two monitored-column errors; rows must "
+                "partition the coordinate axis and have integral source sums.",
+                {
+                    "source": {
+                        "coordinate_labels": ["a", "b", "c", "d"],
+                        "values": [
+                            {"num": "1", "den": "2"},
+                            {"num": "1", "den": "2"},
+                            {"num": "1", "den": "2"},
+                            {"num": "1", "den": "2"},
+                        ],
+                        "rows": [
+                            {"label": "left", "coordinates": [0, 1]},
+                            {"label": "right", "coordinates": [2, 3]},
+                        ],
+                        "columns": [
+                            {"label": "diagonal", "coordinates": [0, 2]},
+                            {"label": "off_diagonal", "coordinates": [1, 3]},
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
+    discrepancy_theory_operation(
         "discrepancy.theory.eval.compute",
         "Evaluate the discrepancy of a coloring on a finite set system",
         "Compute the signed sum on every set and the maximum absolute "
@@ -74,8 +120,11 @@ DISCREPANCY_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     discrepancy_theory_operation(
         "discrepancy.theory.optimum.compute",
         "Search for a coloring minimizing maximum discrepancy",
-        "Search over all 2^n colorings (bounded n <= 20) of a finite set "
-        "system to find the coloring with minimum maximum discrepancy.",
+        "Minimize the maximum absolute set imbalance over all +1/-1 "
+        "colorings of a finite set system by solving an exact integer "
+        "program under a fixed solver budget; OPTIMAL carries one witnessing "
+        "coloring attaining the proven minimum, BUDGET_EXCEEDED makes no "
+        "mathematical claim.",
         DiscrepancyOptimumRequest,
         DiscrepancyOptimumResult,
         compute_optimal_discrepancy,
@@ -83,6 +132,7 @@ DISCREPANCY_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "set-system",
         "combinatorial-search",
         "exact",
+        version="2",
         examples=(
             example(
                 "three_element_optimum",

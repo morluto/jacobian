@@ -1447,6 +1447,60 @@ class TestDeepTermTraversal:
             result
         )
 
+    def test_composed_mgu_binding_depth_is_transport_bounded(self):
+        # Unifying f(x, y) with f(u^16(y), u^16(c)) keeps every input path
+        # inside 31 nodes, but the idempotent MGU composes x -> u^32(c),
+        # whose 33-node path strict JSON transport cannot carry, so
+        # admission must reject the request before execution instead of
+        # letting result canonicalization fail afterwards.
+        left = _app(0, _var(0), _var(1))
+        right = _app(0, _chain_unary(1, 16, _var(1)), _chain_unary(1, 16, _app(2)))
+        assert _term_depth(left) <= MAX_TERM_DEPTH
+        assert _term_depth(right) <= MAX_TERM_DEPTH
+        mgu = unify(left, right)
+        assert mgu is not None
+        assert _term_depth(mgu[1]) == MAX_TERM_DEPTH - 14
+        assert _term_depth(mgu[0]) == 2 * MAX_TERM_DEPTH - 29
+        with pytest.raises(ValidationError, match="transport-safe"):
+            UnificationRequest(signature={"arities": [2, 1, 0]}, left=left, right=right)
+        payload = {
+            "signature": {"arities": [2, 1, 0]},
+            "left": left.model_dump(mode="json"),
+            "right": right.model_dump(mode="json"),
+        }
+        encoded = encode_strict_json(payload)
+        with pytest.raises(ValidationError, match="transport-safe"):
+            UnificationRequest.model_validate_json(encoded)
+        with pytest.raises(ValidationError, match="transport-safe"):
+            UnificationResult(
+                signature={"arities": [2, 1, 0]},
+                left=left,
+                right=right,
+                unified=True,
+                substitution=mgu,
+            )
+
+    def test_boundary_composed_mgu_admits_and_transports(self):
+        # With u^15 chains every composed binding stays exactly within the
+        # envelope: x binds to u^30(c), whose 31-node path equals
+        # MAX_TERM_DEPTH, so the request computes a typed idempotent MGU
+        # that replays and round-trips.
+        left = _app(0, _var(0), _var(1))
+        right = _app(0, _chain_unary(1, 15, _var(1)), _chain_unary(1, 15, _app(2)))
+        result = compute_unification(
+            UnificationRequest(signature={"arities": [2, 1, 0]}, left=left, right=right)
+        )
+        assert result.unified
+        assert result.substitution[1] == _chain_unary(1, 15, _app(2))
+        assert _term_depth(result.substitution[1]) == MAX_TERM_DEPTH - 15
+        assert _term_depth(result.substitution[0]) == MAX_TERM_DEPTH
+        assert apply_substitution(left, result.substitution) == apply_substitution(
+            right, result.substitution
+        )
+        assert UnificationResult.model_validate_json(result.model_dump_json()) == (
+            result
+        )
+
     def test_deep_unification_and_matching_stay_typed(self):
         def chain(length: int) -> Term:
             term = _var(7)

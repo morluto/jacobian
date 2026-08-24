@@ -131,6 +131,9 @@ class UnificationRequest(StrictModel):
         self.signature.validate_term(self.left)
         self.signature.validate_term(self.right)
         _require_transport_safe_depth(self.left, self.right)
+        expected = unify(self.left, self.right)
+        if expected is not None:
+            _require_transport_safe_depth(*expected.values())
         return self
 
 

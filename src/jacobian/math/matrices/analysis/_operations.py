@@ -127,6 +127,26 @@ def _build_matrix(request: SymmetricMatrixRequest) -> list[list[Fraction]]:
     return mat
 
 
+def _rational_matrix(matrix: list[list[Fraction]]) -> RationalMatrix:
+    """Convert a dense Fraction matrix into the domain's canonical value."""
+    return RationalMatrix(
+        entries=tuple(
+            tuple(CanonicalRational.from_fraction(value) for value in row)
+            for row in matrix
+        )
+    )
+
+
+def _canonical_source_matrix(request: SymmetricMatrixRequest) -> RationalMatrix:
+    """Normalize the sparse symmetric request into the canonical dense value."""
+    return _rational_matrix(_build_matrix(request))
+
+
+def _dense_fractions(matrix: RationalMatrix) -> list[list[Fraction]]:
+    """Convert a canonical rational matrix into dense Fractions."""
+    return [[entry.as_fraction() for entry in row] for row in matrix.entries]
+
+
 def _swap_symmetric(matrix: list[list[Fraction]], left: int, right: int) -> None:
     if left == right:
         return
@@ -235,27 +255,30 @@ def _symmetric_inertia(matrix: list[list[Fraction]]) -> tuple[int, int, int]:
     return n_pos, n_neg, n_zero
 
 
+def _definiteness_label(n_pos: int, n_neg: int, n_zero: int) -> str:
+    """Return the definiteness label implied by one inertia triple."""
+    if n_zero == 0:
+        if n_neg == 0:
+            return "positive_definite"
+        if n_pos == 0:
+            return "negative_definite"
+        return "indefinite"
+    if n_neg == 0:
+        return "positive_semidefinite"
+    if n_pos == 0:
+        return "negative_semidefinite"
+    return "indefinite"
+
+
 def compute_inertia(request: SymmetricMatrixRequest) -> InertiaResult:
     """Compute the Sylvester inertia of a symmetric rational matrix."""
     n_pos, n_neg, n_zero = _symmetric_inertia(_build_matrix(request))
-    if n_zero == 0:
-        if n_neg == 0:
-            definiteness = "positive_definite"
-        elif n_pos == 0:
-            definiteness = "negative_definite"
-        else:
-            definiteness = "indefinite"
-    elif n_neg == 0:
-        definiteness = "positive_semidefinite"
-    elif n_pos == 0:
-        definiteness = "negative_semidefinite"
-    else:
-        definiteness = "indefinite"
     return InertiaResult(
+        matrix=_canonical_source_matrix(request),
         n_positive=n_pos,
         n_negative=n_neg,
         n_zero=n_zero,
-        definiteness=definiteness,
+        definiteness=_definiteness_label(n_pos, n_neg, n_zero),
     )
 
 

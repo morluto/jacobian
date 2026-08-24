@@ -8,13 +8,16 @@ from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.finite_game_theory._models import (
     BestResponseResult,
+    DeterministicTerminalGameRequest,
     NashEquilibriumResult,
     ZeroSumGameRequest,
 )
 from jacobian.math.finite_game_theory._operations import (
     compute_best_response,
+    compute_deterministic_terminal_game,
     compute_nash_equilibrium,
 )
+from jacobian.math.finite_game_theory.values import DeterministicTerminalGameSolution
 
 
 def _op[
@@ -55,6 +58,34 @@ GAME_EXAMPLE = {
             {"num": "2", "den": "1"},
         ],
     },
+}
+
+DETERMINISTIC_TERMINAL_GAME_EXAMPLE = {
+    "game": {
+        "positions": [
+            {"label": "s", "owner": "MIN"},
+            {"label": "u", "owner": "MAX"},
+            {"label": "v", "owner": "MIN"},
+            {
+                "label": "t1",
+                "owner": "TERMINAL",
+                "payoff": {"num": "1", "den": "1"},
+            },
+            {
+                "label": "t2",
+                "owner": "TERMINAL",
+                "payoff": {"num": "2", "den": "1"},
+            },
+        ],
+        "moves": [
+            {"source": "s", "target": "u"},
+            {"source": "s", "target": "v"},
+            {"source": "u", "target": "u"},
+            {"source": "u", "target": "t1"},
+            {"source": "v", "target": "t2"},
+        ],
+        "draw_payoff": {"num": "0", "den": "1"},
+    }
 }
 
 
@@ -100,6 +131,31 @@ FINITE_GAME_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
         version="2",
+    ),
+    _op(
+        "game.deterministic_terminal.solve",
+        "Solve a finite deterministic terminal-payoff game",
+        "Compute every position's exact minimax payoff and one canonical "
+        "optimal stationary strategy for each player in a materialized finite "
+        "turn-based arena. Terminal positions carry exact rational payoffs to "
+        "MAX, and every infinite play has the declared draw payoff.",
+        DeterministicTerminalGameRequest,
+        DeterministicTerminalGameSolution,
+        compute_deterministic_terminal_game,
+        "game-theory",
+        "deterministic-game",
+        "terminal-payoff",
+        "stationary-strategy",
+        "exact",
+        examples=(
+            example(
+                "owned_cycle_and_two_terminals",
+                "Solve every position of an owned cyclic arena; positions must "
+                "partition into MAX, MIN, and terminal owners, every nonterminal "
+                "must have a move, and moves must use declared-position order.",
+                DETERMINISTIC_TERMINAL_GAME_EXAMPLE,
+            ),
+        ),
     ),
 )
 

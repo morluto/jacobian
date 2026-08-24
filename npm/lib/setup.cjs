@@ -12,6 +12,9 @@ const { applyEdits, modify, parse, printParseErrorCode } = require("jsonc-parser
 const SERVER_NAME = "jacobian";
 const MANAGED_SETUP_ARGUMENT = "--managed-by-setup";
 const TOML_MARKER = "# Managed by Jacobian setup.";
+const SKILL_MARKER = "<!-- Managed by Jacobian setup. -->";
+const SKILL_NAME = "jacobian-math";
+const BUNDLED_SKILL_PATH = path.join(__dirname, "..", "skill", SKILL_NAME, "SKILL.md");
 const MAX_CONFIG_BYTES = 8 * 1024 * 1024;
 
 const CLIENTS = [
@@ -21,6 +24,7 @@ const CLIENTS = [
     kind: "json",
     section: "mcpServers",
     paths: [".claude.json"],
+    skillPath: ".claude/skills/jacobian-math/SKILL.md",
     detected: (home) => [".claude", ".claude.json"].some((entry) => exists(path.join(home, entry))),
   },
   {
@@ -34,6 +38,7 @@ const CLIENTS = [
       ".config/opencode/.opencode.json",
       ".config/opencode/.opencode.jsonc",
     ],
+    skillPath: ".agents/skills/jacobian-math/SKILL.md",
     detected: (home) => exists(path.join(home, ".config/opencode")),
   },
   {
@@ -41,6 +46,7 @@ const CLIENTS = [
     displayName: "Codex",
     kind: "toml",
     paths: [".codex/config.toml"],
+    skillPath: ".agents/skills/jacobian-math/SKILL.md",
     detected: (home) => exists(path.join(home, ".codex")),
   },
   {
@@ -49,6 +55,7 @@ const CLIENTS = [
     kind: "json",
     section: "mcpServers",
     paths: [".cursor/mcp.json"],
+    skillPath: ".cursor/skills/jacobian-math/SKILL.md",
     detected: (home) => exists(path.join(home, ".cursor")),
   },
   {
@@ -57,6 +64,7 @@ const CLIENTS = [
     kind: "json",
     section: "mcpServers",
     paths: [".gemini/settings.json"],
+    skillPath: ".gemini/skills/jacobian-math/SKILL.md",
     detected: (home) => exists(path.join(home, ".gemini")),
   },
   {
@@ -65,6 +73,7 @@ const CLIENTS = [
     kind: "json",
     section: "mcpServers",
     paths: [".gemini/config/mcp_config.json"],
+    skillPath: ".agent/skills/jacobian-math/SKILL.md",
     detected: (home) =>
       [".gemini/antigravity", ".agent"].some((entry) => exists(path.join(home, entry))),
   },
@@ -96,9 +105,9 @@ Options:
   --json                 Emit the resolved report as JSON (requires explicit selection).
   -h, --help             Show this help.
 
-Setup never installs Node.js, uv, Python, or an MCP client. It writes only the
-selected client configuration entries, which launch the exact npm version that
-performed setup.\n`;
+Setup never installs Node.js, uv, Python, or an MCP client. It writes the
+selected client configuration entries and the Jacobian skill, both from the
+exact npm version that performed setup.\n`;
 }
 
 function parseArgs(args) {
@@ -312,6 +321,8 @@ async function buildPlan(clientIds, home, version, force) {
   const detected = detectClients(home);
   const runtime = launcher(version);
   const plan = [];
+  const skillSource = await fs.readFile(BUNDLED_SKILL_PATH, "utf8");
+  const skillPlans = new Map();
   for (const clientId of clientIds) {
     const client = CLIENTS.find((candidate) => candidate.id === clientId);
     const filePath = choosePath(client, home);
@@ -320,12 +331,30 @@ async function buildPlan(clientIds, home, version, force) {
       client.kind === "toml"
         ? planTomlEdit(filePath, original, runtime, force)
         : planJsonEdit(client, filePath, original, runtime, force);
+    const skillPath = path.join(home, client.skillPath);
+    let skill = skillPlans.get(skillPath);
+    if (!skill) {
+      const skillOriginal = await readOptional(skillPath);
+      if (skillOriginal !== null && !skillOriginal.includes(SKILL_MARKER) && !force) {
+        throw new SetupError(
+          `refusing to replace an unmanaged Jacobian skill at ${skillPath}; review it, then retry with --force`,
+        );
+      }
+      skill = {
+        path: skillPath,
+        original: skillOriginal,
+        updated: skillOriginal === skillSource ? null : skillSource,
+        action: skillOriginal === skillSource ? "already current" : skillOriginal === null ? "create" : "update",
+      };
+      skillPlans.set(skillPath, skill);
+    }
     plan.push({
       client,
       path: filePath,
       original,
       ...change,
       detected: detected.has(client.id),
+      skill,
     });
   }
   return { plan, runtime, detected };
@@ -350,8 +379,17 @@ async function restore(filePath, original) {
 
 async function applyPlan(plan) {
   const applied = [];
+  const changes = [];
+  const seenPaths = new Set();
+  for (const entry of plan) {
+    for (const change of [entry, entry.skill]) {
+      if (seenPaths.has(change.path)) continue;
+      seenPaths.add(change.path);
+      changes.push(change);
+    }
+  }
   try {
-    for (const entry of plan) {
+    for (const entry of changes) {
       if (entry.updated === null) continue;
       const current = await readOptional(entry.path);
       if (current !== entry.original) {
@@ -374,7 +412,7 @@ async function applyPlan(plan) {
     }
     throw error;
   }
-  for (const entry of plan) {
+  for (const entry of changes) {
     if (entry.updated !== null && (await readOptional(entry.path)) !== entry.updated) {
       throw new SetupError(`could not verify configuration after write: ${entry.path}`);
     }
@@ -390,7 +428,9 @@ function renderPreflight(plan, runtime, force) {
   lines.push("", "  Launcher");
   lines.push(`    ${runtime.command} ${runtime.args.join(" ")}`);
   lines.push("    Exact package version is pinned; first client start may use npm and uv caches.");
-  lines.push("", "  Setup writes only the selected client configuration entries.");
+  lines.push("", "  Skill");
+  for (const entry of plan) lines.push(`    ${entry.client.displayName}: ${entry.skill.path} — ${entry.skill.action}`);
+  lines.push("", "  Setup writes the selected client configuration entries and Jacobian skill.");
   lines.push("  It does not install or update uv, Python, Node.js, or any agent.");
   if (force) lines.push("  Explicit override: an unmanaged Jacobian entry may be replaced.");
   return lines.join("\n");
@@ -409,6 +449,8 @@ function report({ plan, runtime, dryRun, cancelled, force }) {
       detected: entry.detected,
       path: entry.path,
       action: entry.action,
+      skill_path: entry.skill.path,
+      skill_action: entry.skill.action,
     })),
   };
 }
@@ -427,7 +469,7 @@ function printReport(value, json) {
     return;
   }
   const names = value.clients.map((client) => client.display_name).join(", ");
-  console.log(`◆ Jacobian is configured for ${names}.`);
+  console.log(`◆ Jacobian MCP and skill are configured for ${names}.`);
   console.log("  Restart or reload those clients, then use math.find to discover an operation.");
 }
 

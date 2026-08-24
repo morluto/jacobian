@@ -11,6 +11,10 @@ from jacobian.math.hypergraphs._models import (
     CliqueExpansionResult,
     DualRequest,
     DualResult,
+    EdgeIntersectionsRequest,
+    EdgeIntersectionsResult,
+    HypergraphIndependenceRequest,
+    HypergraphIndependenceResult,
     IncidenceGraphRequest,
     IncidenceGraphResult,
     ParametersRequest,
@@ -21,7 +25,9 @@ from jacobian.math.hypergraphs._models import (
 from jacobian.math.hypergraphs._operations import (
     compute_clique_expansion,
     compute_dual,
+    compute_edge_intersections,
     compute_incidence_graph,
+    compute_independence_number,
     compute_parameters,
     compute_vertex_degrees,
 )
@@ -66,6 +72,39 @@ _HYPERGRAPH = {
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
+        "hypergraph.independence_number.compute",
+        "Compute the independence number of a finite hypergraph",
+        "Compute a maximum vertex subset containing no complete hyperedge. "
+        "Return either the exact independence number and a maximizing witness, "
+        "or a source-bound feasible incumbent with sound lower and upper bounds "
+        "when the bounded exact threshold search does not finish.",
+        HypergraphIndependenceRequest,
+        HypergraphIndependenceResult,
+        compute_independence_number,
+        "combinatorics",
+        "hypergraph",
+        "independent-set",
+        "optimization",
+        "exact-or-unknown",
+        examples=(
+            example(
+                "one_forbidden_triple",
+                "Compute the independence number of one forbidden triple; "
+                "every indexed hyperedge must be nonempty.",
+                {
+                    "hypergraph": {
+                        "vertices": ["a", "b", "c"],
+                        "edges": [["triple", ["a", "b", "c"]]],
+                    },
+                    "resource_budget": {
+                        "wall_seconds": 5,
+                        "max_solver_calls": 100,
+                    },
+                },
+            ),
+        ),
+    ),
+    _op(
         "hypergraph.parameters.compute",
         "Compute the basic parameters of a finite hypergraph",
         "Compute the vertex count, edge count, rank, corank, uniform "
@@ -99,6 +138,30 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "vertex_degrees_of_4_vertex_hypergraph",
                 "Compute the vertex-degree map of a 4-vertex hypergraph.",
+                {"hypergraph": _HYPERGRAPH},
+            ),
+        ),
+    ),
+    _op(
+        "hypergraph.edge_intersections.compute",
+        "Compute indexed hypergraph edge-intersection profiles",
+        "Return the exact intersection of every unordered pair of distinct "
+        "indexed edges, the complete size histogram, maximum intersection, "
+        "and linearity with the first canonical violating pair.",
+        EdgeIntersectionsRequest,
+        EdgeIntersectionsResult,
+        compute_edge_intersections,
+        "combinatorics",
+        "hypergraph",
+        "intersection",
+        "linearity",
+        "exact",
+        examples=(
+            example(
+                "edge_intersections_of_4_vertex_hypergraph",
+                "Compute every indexed edge-pair intersection and the linearity "
+                "profile of a 4-vertex, 3-edge hypergraph; the complete "
+                "worst-case intersection ledger must fit the advertised bounds.",
                 {"hypergraph": _HYPERGRAPH},
             ),
         ),

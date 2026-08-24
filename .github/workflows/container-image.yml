@@ -31,7 +31,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
       - id: version
         name: Read Jacobian package version
         run: echo "value=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')" >> "$GITHUB_OUTPUT"
@@ -41,12 +41,27 @@ jobs:
           context: .
           platforms: ${{ env.PLATFORM }}
           push: false
+          load: true
+          tags: jacobian:pull-request
           build-args: |
             JACOBIAN_REVISION=${{ github.sha }}
             JACOBIAN_VERSION=${{ steps.version.outputs.value }}
             JACOBIAN_SOURCE_DIRTY=false
           cache-from: type=gha,scope=jacobian-container
           cache-to: type=gha,mode=max,scope=jacobian-container
+      - name: Replay a Cake LPR refutation in the image
+        env:
+          VALID_REQUEST: >-
+            {"cnf":{"variables":["x"],"clauses":[[-1],[1]]},"refutation":{"profile":"LPR_ASCII_V1","steps":[{"kind":"addition","clause_id":3,"clause":[],"at_hint_clause_ids":[1,2],"propagation_hints":[]}]}}
+          INVALID_REQUEST: >-
+            {"cnf":{"variables":["x"],"clauses":[[-1],[1]]},"refutation":{"profile":"LPR_ASCII_V1","steps":[]}}
+        run: |
+          docker run --rm --entrypoint uv jacobian:pull-request \
+            run --no-sync jacobian run sat.refutation.check --json "$VALID_REQUEST" \
+            | jq -e '.output.outcome == "VALID_REFUTATION"'
+          docker run --rm --entrypoint uv jacobian:pull-request \
+            run --no-sync jacobian run sat.refutation.check --json "$INVALID_REQUEST" \
+            | jq -e '.output.outcome == "INVALID_REFUTATION"'
 
   publish:
     name: Publish container image
@@ -60,7 +75,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
       - name: Log in to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:

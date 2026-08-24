@@ -27,6 +27,7 @@
   "files": [
     "bin",
     "lib",
+    "skill",
     "README.md"
   ]
 }

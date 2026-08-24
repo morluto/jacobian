@@ -9,6 +9,12 @@ from jacobian.math.hypergraphs._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "hypergraph.independence_number.compute",
+        AdmissionDecision.KEEP,
+        "distinct source-bound exact-or-unknown maximum subset invariant that "
+        "cannot be recovered from clique or incidence graph transforms",
+    ),
+    OperationAdmission(
         "hypergraph.parameters.compute",
         AdmissionDecision.KEEP,
         "exact vertex count, edge count, rank, corank, uniform size, and "
@@ -18,6 +24,13 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "hypergraph.vertex_degrees.compute",
         AdmissionDecision.KEEP,
         "exact vertex-degree map and degree histogram of a finite hypergraph",
+    ),
+    OperationAdmission(
+        "hypergraph.edge_intersections.compute",
+        AdmissionDecision.KEEP,
+        "complete exact source-bound indexed edge-pair intersection ledger, size "
+        "histogram, and canonical linearity violation with material reliability "
+        "leverage over caller-authored pair enumeration",
     ),
     OperationAdmission(
         "hypergraph.dual.compute",

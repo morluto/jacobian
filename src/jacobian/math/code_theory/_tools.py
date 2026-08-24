@@ -63,6 +63,7 @@ CODE_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "code",
         "minimum-distance",
         "exact",
+        version="2",
         examples=(
             example(
                 "binary_repetition_code",
@@ -81,6 +82,7 @@ CODE_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "code",
         "weight-distribution",
         "exact",
+        version="2",
         examples=(
             example(
                 "binary_repetition_code",
@@ -99,6 +101,7 @@ CODE_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "code",
         "covering-radius",
         "exact",
+        version="2",
         examples=(
             example(
                 "binary_repetition_code",

@@ -7,6 +7,7 @@ import copy
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian.math.matrices._operation_models import (
     MatrixRankRequest,
     MatrixRankResult,
@@ -19,7 +20,7 @@ from jacobian.math.matrices._operations import (
     compute_rank,
     compute_rref,
 )
-from jacobian.math.matrices.values import RationalMatrix
+from jacobian.math.matrices.values import MAX_MATRIX_DIMENSION, RationalMatrix
 
 
 def _matrix(rows: list[list[str]]) -> RationalMatrix:
@@ -209,3 +210,44 @@ def test_producer_to_serialized_interoperability() -> None:
     assert rref.rank == rank.rank == nullspace.rank == 2
     assert list(rref.pivot_columns) == list(rank.pivot_columns)
     assert list(rref.free_columns) == list(nullspace.free_columns)
+
+
+def _identity_entries(size: int) -> tuple[tuple[CanonicalRational, ...], ...]:
+    one = CanonicalRational(num="1", den="1")
+    zero = CanonicalRational(num="0", den="1")
+    return tuple(
+        tuple(one if index == column else zero for column in range(size))
+        for index in range(size)
+    )
+
+
+def test_request_admission_rejects_matrices_above_the_computation_dimension() -> None:
+    oversized = RationalMatrix(entries=_identity_entries(MAX_MATRIX_DIMENSION + 1))
+    with pytest.raises(ValidationError, match="rows and columns"):
+        RationalMatrixRequest(matrix=oversized)
+    with pytest.raises(ValidationError, match="rows and columns"):
+        MatrixRankRequest(matrix=oversized)
+
+
+def test_request_admission_rejects_one_oversized_axis() -> None:
+    tall = RationalMatrix(
+        entries=tuple(
+            tuple(
+                CanonicalRational(num=str(column + 1), den="1") for column in range(2)
+            )
+            for _ in range(MAX_MATRIX_DIMENSION + 1)
+        )
+    )
+    with pytest.raises(ValidationError, match="rows and columns"):
+        RationalMatrixRequest(matrix=tall)
+    with pytest.raises(ValidationError, match="rows and columns"):
+        MatrixRankRequest(matrix=tall)
+
+
+def test_request_admission_keeps_the_boundary_computation_dimension() -> None:
+    boundary = RationalMatrix(entries=_identity_entries(MAX_MATRIX_DIMENSION))
+    request = MatrixRankRequest(matrix=boundary)
+    rank = compute_rank(request)
+    assert rank.rank == MAX_MATRIX_DIMENSION
+    assert len(rank.pivot_columns) == MAX_MATRIX_DIMENSION
+    assert rank.matrix == boundary

@@ -71,6 +71,7 @@ TOOLS: MathTools = (
                 },
             ),
         ),
+        version="2",
     ),
     canonical_form_operation(
         "matrix.rational_canonical_form.compute",
@@ -98,6 +99,7 @@ TOOLS: MathTools = (
                 },
             ),
         ),
+        version="2",
     ),
     canonical_form_operation(
         "matrix.primary_decomposition.compute",
@@ -124,6 +126,7 @@ TOOLS: MathTools = (
                 },
             ),
         ),
+        version="2",
     ),
 )
 

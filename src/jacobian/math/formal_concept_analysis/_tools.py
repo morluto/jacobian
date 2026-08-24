@@ -12,8 +12,10 @@ from jacobian.math.formal_concept_analysis._models import (
     ConceptLatticeResult,
     ConceptResult,
     DerivationResult,
+    DuquenneGuiguesBasisRequest,
     EnumerateConceptsRequest,
     EnumerateConceptsResult,
+    ImplicationClosureRequest,
     ObjectSubsetRequest,
 )
 from jacobian.math.formal_concept_analysis._operations import (
@@ -21,10 +23,16 @@ from jacobian.math.formal_concept_analysis._operations import (
     compute_concept_from_attributes,
     compute_concept_from_objects,
     compute_concept_lattice,
+    compute_duquenne_guigues_basis,
     compute_enumerate_concepts,
+    compute_implication_closure,
     compute_object_closure,
     compute_object_derivation,
 )
+from jacobian.math.formal_concept_analysis.basis import (
+    CanonicalImplicationBasisResult,
+)
+from jacobian.math.formal_concept_analysis.values import ImplicationClosureResult
 
 
 def _op[
@@ -195,6 +203,66 @@ FORMAL_CONCEPT_ANALYSIS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "concept_lattice",
                 "Concept lattice of a 2x2 context.",
                 {"context": _CONTEXT},
+            ),
+        ),
+    ),
+    _op(
+        "formal_context.duquenne_guigues_basis.compute",
+        "Compute the exact Duquenne-Guigues implication basis",
+        "Return every pseudo-intent and its context closure, the complete "
+        "canonical implication system, an exhaustive subset-closure matrix, "
+        "explicit source-coordinate binding, and exact work/output accounting. "
+        "The complete producer and independent replay are admitted before "
+        "enumeration; there is no partial-result branch.",
+        DuquenneGuiguesBasisRequest,
+        CanonicalImplicationBasisResult,
+        compute_duquenne_guigues_basis,
+        "formal-concept-analysis",
+        "implication-system",
+        "canonical-basis",
+        "exact",
+        examples=(
+            example(
+                "empty_premise_canonical_basis",
+                "Compute the basis of a context whose empty-set closure is nonempty.",
+                {
+                    "context": {
+                        "objects": ["g0", "g1"],
+                        "attributes": ["always", "sometimes"],
+                        "incidence": [[0, 0], [1, 0]],
+                    }
+                },
+            ),
+        ),
+    ),
+    _op(
+        "implication_system.closure.compute",
+        "Compute closure under a finite attribute implication system",
+        "Return the unique least superset of a seed that satisfies every finite "
+        "attribute implication, together with the first canonical derivation of "
+        "each added attribute and exact canonical lineage-replay work.",
+        ImplicationClosureRequest,
+        ImplicationClosureResult,
+        compute_implication_closure,
+        "formal-concept-analysis",
+        "implication-system",
+        "closure",
+        "exact",
+        examples=(
+            example(
+                "two_round_implication_closure",
+                "Close {has_wings} through has_wings -> flies -> is_mobile; "
+                "all rule and seed indices must refer to the declared attribute axis.",
+                {
+                    "system": {
+                        "attributes": ["has_wings", "flies", "is_mobile"],
+                        "implications": [
+                            {"premise": [0], "conclusion": [1]},
+                            {"premise": [1], "conclusion": [2]},
+                        ],
+                    },
+                    "seed": [0],
+                },
             ),
         ),
     ),

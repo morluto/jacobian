@@ -12,7 +12,7 @@ from jacobian.math.graphs.independence import (
 
 INDEPENDENCE_NUMBER_OPERATION = MathTool(
     operation_id="graph.invariant.independence_number.compute",
-    version="2",
+    version="3",
     title="Independence number",
     description=(
         "Compute a maximum independent set (independence number) through order "

@@ -30,7 +30,7 @@ from jacobian.math.words._operations import (
 WORDS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="word.factors.length.compute",
-        version="1",
+        version="2",
         title="Compute all factors of one length",
         description=(
             "Enumerate every distinct contiguous factor of the requested length, "
@@ -56,7 +56,7 @@ WORDS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="word.periods.compute",
-        version="1",
+        version="2",
         title="Compute all periods of a word",
         description=(
             "Return every positive overlap period and decide whether the word is "
@@ -82,7 +82,7 @@ WORDS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="word_morphism.incidence_matrix.compute",
-        version="1",
+        version="2",
         title="Compute a word-morphism incidence matrix",
         description=(
             "Compute the exact matrix whose target-symbol rows and source-symbol "
@@ -108,7 +108,7 @@ WORDS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="substitution.dependency_graph.compute",
-        version="1",
+        version="2",
         title="Compute a substitution dependency graph",
         description=(
             "Return every letter dependency a→b, with all zero-based positions "
@@ -136,7 +136,7 @@ WORDS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="substitution.primitivity_profile.compute",
-        version="1",
+        version="2",
         title="Compute a substitution primitivity profile",
         description=(
             "Decide whether a substitution dependency graph is primitive, "
@@ -193,7 +193,7 @@ WORDS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="substitution.fixed_point_prefix.compute",
-        version="1",
+        version="2",
         title="Compute a substitution fixed-point prefix",
         description=(
             "Return the requested finite prefix of a certified prolongable growing "

@@ -214,6 +214,9 @@ test("setup dry-run emits a pinned, non-mutating Codex plan", async () => {
     await assert.rejects(readFile(join(env.HOME, ".codex", "config.toml")), {
       code: "ENOENT",
     });
+    await assert.rejects(readFile(join(env.HOME, ".agents", "skills", "jacobian-math", "SKILL.md")), {
+      code: "ENOENT",
+    });
   } finally {
     await rm(base, { recursive: true, force: true });
   }
@@ -265,10 +268,25 @@ test("setup configures every supported client and preserves unrelated configurat
       cwd: ".",
       enabled: true,
     });
+    const universalSkill = await readFile(
+      join(env.HOME, ".agents", "skills", "jacobian-math", "SKILL.md"),
+      "utf8",
+    );
+    assert.match(universalSkill, /^---\nname: jacobian-math\n/);
+    assert.match(universalSkill, /<!-- Managed by Jacobian setup\. -->/);
+    for (const relative of [
+      ".claude/skills/jacobian-math/SKILL.md",
+      ".cursor/skills/jacobian-math/SKILL.md",
+      ".gemini/skills/jacobian-math/SKILL.md",
+      ".agent/skills/jacobian-math/SKILL.md",
+    ]) {
+      assert.equal(await readFile(join(env.HOME, relative), "utf8"), universalSkill);
+    }
 
     const repeat = runCarrier(["setup", "--codex", "--dry-run", "--json"], env);
     assert.equal(repeat.status, 0, repeat.stderr);
     assert.equal(JSON.parse(repeat.stdout).clients[0].action, "already current");
+    assert.equal(JSON.parse(repeat.stdout).clients[0].skill_action, "already current");
   } finally {
     await rm(base, { recursive: true, force: true });
   }
@@ -289,6 +307,23 @@ test("setup protects an unmanaged Jacobian registration", async () => {
     assert.equal(result.status, 1);
     assert.match(result.stderr, /refusing to replace an unmanaged Jacobian entry/);
     assert.equal(await readFile(configPath, "utf8"), original);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup protects an unmanaged Jacobian skill", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-skill-conflict-"));
+  try {
+    const env = await setupEnvironment(base);
+    const skillPath = join(env.HOME, ".agents", "skills", "jacobian-math", "SKILL.md");
+    await mkdir(dirname(skillPath), { recursive: true });
+    await writeFile(skillPath, "user-owned skill\n", "utf8");
+
+    const result = runCarrier(["setup", "--codex", "--dry-run", "--json"], env);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /refusing to replace an unmanaged Jacobian skill/);
+    assert.equal(await readFile(skillPath, "utf8"), "user-owned skill\n");
   } finally {
     await rm(base, { recursive: true, force: true });
   }
@@ -335,7 +370,7 @@ test("package metadata carries setup dependencies and packs the setup adapter", 
     "jsonc-parser": "^3.3.1",
   });
   assert.equal(packageMetadata.bundleDependencies, undefined);
-  assert.deepEqual(packageMetadata.files, ["bin", "lib", "README.md"]);
+  assert.deepEqual(packageMetadata.files, ["bin", "lib", "skill", "README.md"]);
   assert.deepEqual(Object.keys(packageMetadata.bin), ["jacobian"]);
 
   const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-pack-"));
@@ -358,6 +393,7 @@ test("package metadata carries setup dependencies and packs the setup adapter", 
     const entries = JSON.parse(list.stdout)[0].files.map((file) => file.path);
     assert.ok(entries.includes("bin/jacobian.cjs"));
     assert.ok(entries.includes("lib/setup.cjs"));
+    assert.ok(entries.includes("skill/jacobian-math/SKILL.md"));
     assert.ok(entries.includes("README.md"));
     assert.ok(!entries.some((path) => path.startsWith("install.sh")));
     assert.ok(tarball.length > 0);

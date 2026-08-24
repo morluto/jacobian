@@ -7,9 +7,16 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.plane_algebraic_curves._conic import (
+    ConicParametrizationData,
+    validate_rational_conic_request,
+    validate_rational_conic_result_identities,
+)
 from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
+from jacobian.math.polynomials.maps._models import VariablePoint
 from jacobian.math.polynomials.values import (
     PolynomialVariable,
+    RationalFunction,
     RationalPolynomial,
     require_polynomial_budget,
 )
@@ -82,6 +89,47 @@ class AffineChartRequest(StrictModel):
         return self
 
 
+class RationalConicParametrizationRequest(StrictModel):
+    """A smooth affine rational conic with one supplied rational point."""
+
+    polynomial: RationalPolynomial = Field(
+        description=(
+            "A total-degree-two polynomial in exactly two ordered variables over "
+            "QQ whose projective closure is smooth. Coefficients have at most "
+            "128 digits."
+        )
+    )
+    point: VariablePoint = Field(
+        description=(
+            "A checked rational point on the conic whose complete ordered axis "
+            "must exactly match the polynomial variables; each component has at "
+            "most 128 digits."
+        ),
+        examples=[
+            {
+                "variables": ["x", "y"],
+                "values": [
+                    {"num": "1", "den": "1"},
+                    {"num": "0", "den": "1"},
+                ],
+            }
+        ],
+    )
+    parameter: PolynomialVariable = Field(
+        default="t",
+        description=(
+            "The rational-function parameter variable; it must differ from both "
+            "source variables."
+        ),
+        examples=["t"],
+    )
+
+    @model_validator(mode="after")
+    def require_smooth_conic_with_admitted_output(self) -> Self:
+        validate_rational_conic_request(self.polynomial, self.point, self.parameter)
+        return self
+
+
 class AffineCurveResult(StrictModel):
     is_valid: bool
     degree: int = Field(ge=0, le=_MAX_EXPONENT)
@@ -98,6 +146,61 @@ class AffineChartResult(StrictModel):
     method: Literal["DEHOMOGENIZATION"] = "DEHOMOGENIZATION"
 
 
+class RationalConicParametrizationResult(StrictModel):
+    """A source-bound affine chart of a smooth projective rational conic."""
+
+    source_polynomial: RationalPolynomial
+    exceptional_point: VariablePoint = Field(
+        description=(
+            "The supplied source point, omitted by the finite affine parameter "
+            "chart and attained at projective parameter infinity."
+        )
+    )
+    parameter: PolynomialVariable
+    coordinates: tuple[RationalFunction, RationalFunction] = Field(
+        description=(
+            "Canonical coordinate functions in source-variable order. For every "
+            "finite parameter outside finite_parameter_denominator=0 they give "
+            "an affine point on the source conic."
+        )
+    )
+    inverse_parameter: RationalFunction = Field(
+        description=(
+            "The inverse rational parameter in the two source variables. Its "
+            "denominator-nonzero chart is the conic minus exceptional_point."
+        )
+    )
+    finite_parameter_denominator: RationalPolynomial = Field(
+        description=(
+            "The monic quadratic whose finite zeros map to points of the "
+            "projective closure outside the source affine chart."
+        )
+    )
+    exceptional_parameter: Literal["PROJECTIVE_INFINITY"] = "PROJECTIVE_INFINITY"
+    normalization: Literal["GRADIENT_ORTHOGONAL_LINE_PENCIL"] = (
+        "GRADIENT_ORTHOGONAL_LINE_PENCIL"
+    )
+
+    @model_validator(mode="after")
+    def replay_defining_identities(self) -> Self:
+        validate_rational_conic_request(
+            self.source_polynomial,
+            self.exceptional_point,
+            self.parameter,
+        )
+        validate_rational_conic_result_identities(
+            self.source_polynomial,
+            self.exceptional_point,
+            self.parameter,
+            ConicParametrizationData(
+                coordinates=self.coordinates,
+                inverse_parameter=self.inverse_parameter,
+                finite_parameter_denominator=self.finite_parameter_denominator,
+            ),
+        )
+        return self
+
+
 __all__ = [
     "MAX_VARS",
     "AffineChartRequest",
@@ -106,4 +209,6 @@ __all__ = [
     "AffineCurveResult",
     "ProjectiveClosureRequest",
     "ProjectiveClosureResult",
+    "RationalConicParametrizationRequest",
+    "RationalConicParametrizationResult",
 ]

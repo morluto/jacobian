@@ -6,14 +6,30 @@ from jacobian.math.hypergraphs._models import (
     CliqueExpansionResult,
     DualRequest,
     DualResult,
+    EdgeIntersectionEntry,
+    EdgeIntersectionsRequest,
+    EdgeIntersectionsResult,
     FiniteHypergraph,
+    HypergraphIndependenceRequest,
+    HypergraphIndependenceResult,
     IncidenceGraphRequest,
     IncidenceGraphResult,
     ParametersRequest,
     ParametersResult,
     VertexDegreesRequest,
     VertexDegreesResult,
+    _require_edge_intersection_preflight,
 )
+
+
+def compute_independence_number(
+    request: HypergraphIndependenceRequest,
+) -> HypergraphIndependenceResult:
+    """Return an exact optimum or source-bound incumbent and sound bounds."""
+
+    from jacobian.math.hypergraphs import _independence_z3
+
+    return _independence_z3.solve_independence_number(request)
 
 
 def _canonical_edges(
@@ -68,6 +84,57 @@ def _vertex_degrees_data(
         histogram_map[count] = histogram_map.get(count, 0) + 1
     histogram = tuple(sorted(histogram_map.items()))
     return degree_map, histogram
+
+
+def _edge_intersections_data(
+    hypergraph: FiniteHypergraph,
+) -> tuple[
+    tuple[EdgeIntersectionEntry, ...],
+    tuple[tuple[int, int], ...],
+    int,
+    int,
+    bool,
+    EdgeIntersectionEntry | None,
+]:
+    """Compute the complete canonical indexed edge-pair intersection ledger."""
+
+    edges = _canonical_edges(hypergraph)
+    member_sets = tuple(frozenset(members) for _, members in edges)
+    entries: list[EdgeIntersectionEntry] = []
+    histogram_counts: dict[int, int] = {}
+    maximum_intersection_size = 0
+    first_linearity_violation: EdgeIntersectionEntry | None = None
+
+    for left in range(len(edges)):
+        for right in range(left + 1, len(edges)):
+            intersection = tuple(sorted(member_sets[left] & member_sets[right]))
+            intersection_size = len(intersection)
+            entry = EdgeIntersectionEntry(
+                left_edge_id=edges[left][0],
+                right_edge_id=edges[right][0],
+                intersection=intersection,
+                intersection_size=intersection_size,
+            )
+            entries.append(entry)
+            histogram_counts[intersection_size] = (
+                histogram_counts.get(intersection_size, 0) + 1
+            )
+            maximum_intersection_size = max(
+                maximum_intersection_size, intersection_size
+            )
+            if first_linearity_violation is None and intersection_size > 1:
+                first_linearity_violation = entry
+
+    pair_intersections = tuple(entries)
+    histogram = tuple(sorted(histogram_counts.items()))
+    return (
+        pair_intersections,
+        histogram,
+        len(pair_intersections),
+        maximum_intersection_size,
+        first_linearity_violation is None,
+        first_linearity_violation,
+    )
 
 
 def _dual_data(hypergraph: FiniteHypergraph) -> FiniteHypergraph:
@@ -178,6 +245,39 @@ def compute_vertex_degrees(request: VertexDegreesRequest) -> VertexDegreesResult
         degrees=degrees,
         histogram=histogram,
     )
+
+
+def edge_intersections(
+    hypergraph: FiniteHypergraph,
+) -> EdgeIntersectionsResult:
+    """Return every indexed edge-pair intersection and the linearity profile."""
+
+    _require_edge_intersection_preflight(hypergraph)
+    (
+        pair_intersections,
+        histogram,
+        pair_count,
+        maximum_intersection_size,
+        is_linear,
+        first_linearity_violation,
+    ) = _edge_intersections_data(hypergraph)
+    return EdgeIntersectionsResult(
+        hypergraph=hypergraph,
+        pair_intersections=pair_intersections,
+        pair_count=pair_count,
+        histogram=histogram,
+        maximum_intersection_size=maximum_intersection_size,
+        is_linear=is_linear,
+        first_linearity_violation=first_linearity_violation,
+    )
+
+
+def compute_edge_intersections(
+    request: EdgeIntersectionsRequest,
+) -> EdgeIntersectionsResult:
+    """Compute the complete indexed edge-intersection profile."""
+
+    return edge_intersections(request.hypergraph)
 
 
 def compute_dual(request: DualRequest) -> DualResult:

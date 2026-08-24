@@ -23,7 +23,7 @@ dependencies = [
     "rfc8785==0.1.4",
     "sympy==1.14.0",
     "typer>=0.20,<1",
-    "z3-solver==5.0.0.0",
+    "z3-solver==5.1.0.0",
 ]
 
 [project.scripts]
@@ -48,7 +48,7 @@ dev-core = [
     "pytest-split==0.11.0",
     "pytest-timeout>=2.4,<3",
     "pytest-xdist>=3.6,<4",
-    "ruff==0.16.3",  # pinned to match .pre-commit-config.yaml rev
+    "ruff==0.16.4",  # pinned to match .pre-commit-config.yaml rev
     "tomli-w==1.2.0",
     "types-jsonschema>=4.23,<5",
     "types-networkx>=3.4,<4",
@@ -210,10 +210,14 @@ ignore_imports = [
     "jacobian.math.** -> jacobian.catalog.admission",
     # The logic domain launches bounded external solvers via jacobian.process.
     "jacobian.math.logic._operations -> jacobian.process",
+    # Private exact-algebra adapters share one bounded Singular process owner.
+    "jacobian.math._singular -> jacobian.process",
     # General ideal radical/quotient run in a bounded one-shot Singular process.
     "jacobian.math.commutative_algebra_ops._singular -> jacobian.process",
     # Exact multivariate factorization runs in a bounded killable worker.
     "jacobian.math.polynomials.multivariate._factor_backend -> jacobian.process",
+    # Generic-fiber certificate replay runs in a bounded killable worker.
+    "jacobian.math.polynomials.maps._replay -> jacobian.process",
 ]
 
 [[tool.importlinter.contracts]]

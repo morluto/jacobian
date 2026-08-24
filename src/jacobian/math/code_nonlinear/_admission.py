@@ -18,7 +18,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "code.nonlinear.constant_weight.compute",
         AdmissionDecision.KEEP,
-        "exact generation of all constant-weight binary words",
+        "exact generation of all constant-weight binary words; re-admitted for the "
+        "narrowed binomial envelope: ConstantWeightRequest bounds the admitted candidate "
+        "space to C(length, weight) <= 4096 (rejected before enumeration otherwise), so "
+        "the materialized output is at most 4,096 words of length <= 64 and admitted work "
+        "is one O(length) bit-write pass per word with no intermediate beyond a single word",
     ),
     OperationAdmission(
         "code.binary.word_distance.compute",

@@ -107,7 +107,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "a2_weyl_group_order",
-                "Compute the order of the A2 Weyl group, which is 6.",
+                "Compute the order of the A2 Weyl group, which is 6; "
+                "the matrix must be a finite-type generalized Cartan "
+                "matrix of rank at most 8.",
                 {"matrix": _A2["matrix"]},
             ),
         ),

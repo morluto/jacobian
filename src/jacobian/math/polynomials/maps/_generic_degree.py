@@ -319,13 +319,11 @@ def enumerate_standard_monomials(
         raise GenericFiberReplayLimitError(str(exc)) from exc
 
 
-def validate_generic_fiber_certificate(
+def _materialize_certificate(
     source: RationalPolynomialMap,
     certificate: GenericFiberCertificate,
-) -> tuple[MathematicalOutcome, int | None]:
-    """Replay the generic-fiber ideal, Gröbner basis, and quotient dimension."""
-
-    from sympy import Dummy
+) -> tuple[Any, tuple[Any, ...], tuple[Any, ...], tuple[Any, ...]]:
+    """Check the certificate skeleton against its source and materialize it."""
 
     expected_parameters = tuple(
         f"t{index + 1}" for index in range(len(source.output_polynomials))
@@ -340,6 +338,8 @@ def validate_generic_fiber_certificate(
         raise ValueError(
             "generic-fiber transformation rows must match source generators"
         )
+
+    from sympy import Dummy
 
     parameter_symbols = tuple(
         Dummy(f"target_{index + 1}")
@@ -374,15 +374,19 @@ def validate_generic_fiber_certificate(
         raise GenericFiberReplayLimitError(
             "generic-fiber reconstruction exceeds the declared replay-product bound"
         )
+    return ring, basis, transformation, source_generators
 
-    budget = _ReplayBudget()
-    leading_exponents = _require_reduced_monic_basis(basis)
-    _require_buchberger_criterion(basis, leading_exponents, budget=budget)
-    if any(
-        not _reduce(generator, basis, budget=budget).is_zero
-        for generator in source_generators
-    ):
-        raise ValueError("source generic-fiber generators do not reduce to zero")
+
+def _require_reconstruction(
+    ring: Any,
+    basis: tuple[Any, ...],
+    transformation: tuple[Any, ...],
+    source_generators: tuple[Any, ...],
+    *,
+    budget: _ReplayBudget,
+) -> None:
+    """Verify ``basis = source_generators * basis_from_source`` exactly."""
+
     zero = ring.zero
     for column, polynomial in enumerate(basis):
         reconstructed = zero
@@ -396,6 +400,58 @@ def validate_generic_fiber_certificate(
             raise ValueError(
                 "generic-fiber basis does not reconstruct from the source generators"
             )
+
+
+def require_certificate_reconstructs_from_source(
+    source: RationalPolynomialMap,
+    certificate: GenericFiberCertificate,
+) -> None:
+    """Bind one certificate to its stated source map within declared bounds.
+
+    Raises unless ``basis[j]`` equals the exact combination of this source's
+    generic-fiber generators named by ``basis_from_source[:, j]``, so evidence
+    computed for one map cannot be presented against another.
+    """
+
+    ring, basis, transformation, source_generators = _materialize_certificate(
+        source,
+        certificate,
+    )
+    _require_reconstruction(
+        ring,
+        basis,
+        transformation,
+        source_generators,
+        budget=_ReplayBudget(),
+    )
+
+
+def validate_generic_fiber_certificate(
+    source: RationalPolynomialMap,
+    certificate: GenericFiberCertificate,
+) -> tuple[MathematicalOutcome, int | None]:
+    """Replay the generic-fiber ideal, Gröbner basis, and quotient dimension."""
+
+    ring, basis, transformation, source_generators = _materialize_certificate(
+        source,
+        certificate,
+    )
+
+    budget = _ReplayBudget()
+    leading_exponents = _require_reduced_monic_basis(basis)
+    _require_buchberger_criterion(basis, leading_exponents, budget=budget)
+    if any(
+        not _reduce(generator, basis, budget=budget).is_zero
+        for generator in source_generators
+    ):
+        raise ValueError("source generic-fiber generators do not reduce to zero")
+    _require_reconstruction(
+        ring,
+        basis,
+        transformation,
+        source_generators,
+        budget=budget,
+    )
 
     zero_exponents = (0,) * len(ring.gens)
     if leading_exponents == (zero_exponents,):
@@ -422,5 +478,6 @@ def validate_generic_fiber_certificate(
 __all__ = [
     "GenericFiberReplayLimitError",
     "enumerate_standard_monomials",
+    "require_certificate_reconstructs_from_source",
     "validate_generic_fiber_certificate",
 ]

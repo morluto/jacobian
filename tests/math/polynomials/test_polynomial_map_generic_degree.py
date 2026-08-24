@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import shutil
 from fractions import Fraction
+from typing import Any
 
 import pytest
 import sympy
@@ -20,9 +21,11 @@ from jacobian.math.polynomials.maps import (
 from jacobian.math.polynomials.maps._generic_degree import (
     GenericFiberReplayLimitError,
     enumerate_standard_monomials,
+    require_certificate_reconstructs_from_source,
     validate_generic_fiber_certificate,
 )
 from jacobian.math.polynomials.maps._models import (
+    GenericDegreeComputationBudget,
     GenericDegreeRequest,
     GenericDegreeResult,
     GenericFiberCertificate,
@@ -30,6 +33,7 @@ from jacobian.math.polynomials.maps._models import (
     GenericFiberTerm,
 )
 from jacobian.math.polynomials.maps._operations import compute_generic_degree
+from jacobian.math.polynomials.maps._replay import CertificateReplayResult
 from jacobian.math.polynomials.maps._singular import SingularGenericFiberResult
 from jacobian.math.polynomials.maps._tools import TOOLS
 from jacobian.math.polynomials.values import (
@@ -587,3 +591,164 @@ def test_source_names_cannot_collide_with_generic_target_parameters() -> None:
     assert result.evidence is not None
     assert result.evidence.source_variable_order == ("t1",)
     assert result.evidence.target_parameters == ("t1",)
+
+
+def _power_map_result(power: int) -> GenericDegreeResult:
+    empty = _fiber_polynomial(())
+    unit = _fiber_polynomial((((0, 0), _generic_fiber_coefficient((0, 0))),))
+    y_minus_t2 = _fiber_polynomial(
+        (
+            ((0, 1), _generic_fiber_coefficient((0, 0))),
+            ((0, 0), _generic_fiber_coefficient((0, 1), -1)),
+        )
+    )
+    x_power_minus_t1 = _fiber_polynomial(
+        (
+            ((power, 0), _generic_fiber_coefficient((0, 0))),
+            ((0, 0), _generic_fiber_coefficient((1, 0), -1)),
+        )
+    )
+    return GenericDegreeResult(
+        outcome="GENERICALLY_FINITE",
+        source=_map(("x", "y"), {(power, 0): 1}, {(0, 1): 1}),
+        degree=power,
+        evidence=GenericFiberCertificate(
+            target_parameters=("t1", "t2"),
+            source_variable_order=("x", "y"),
+            basis=(y_minus_t2, x_power_minus_t1),
+            basis_from_source=((empty, unit), (unit, empty)),
+            standard_monomials=tuple((index, 0) for index in range(power)),
+        ),
+    )
+
+
+def test_consistent_results_replay_at_the_result_boundary() -> None:
+    for power in (2, 3):
+        result = _power_map_result(power)
+        require_certificate_reconstructs_from_source(result.source, result.evidence)
+        replayed = GenericDegreeResult.model_validate(result.model_dump(mode="json"))
+
+        assert replayed == result
+
+
+def test_serialized_evidence_cannot_be_presented_against_a_different_source() -> None:
+    result = _power_map_result(3)
+    forged = result.model_dump(mode="json")
+    forged["source"] = _power_map_result(2).source.model_dump(mode="json")
+
+    with pytest.raises(ValidationError, match="reconstruct"):
+        GenericDegreeResult.model_validate(forged)
+    with pytest.raises(ValueError, match="reconstruct"):
+        require_certificate_reconstructs_from_source(
+            _power_map_result(2).source,
+            result.evidence,
+        )
+
+
+def test_serialized_coefficient_support_is_counted_before_nested_construction() -> None:
+    nested_terms = [
+        {"coefficient": {"num": "1", "den": "1"}, "exponents": [index, 0]}
+        for index in range(3)
+    ]
+    polynomial = {
+        "terms": [
+            {
+                "coefficient": {
+                    "numerator": {"terms": nested_terms},
+                    "denominator": {"terms": nested_terms},
+                },
+                "source_exponents": [1999 - index],
+            }
+            for index in range(2000)
+        ],
+    }
+    payload: dict[str, Any] = {
+        "target_parameters": ["t1", "t2"],
+        "source_variable_order": ["x", "y"],
+        "monomial_order": "LEX",
+        "basis": [polynomial],
+        "basis_from_source": [[polynomial]],
+        "standard_monomials": [],
+    }
+
+    with pytest.raises(ValidationError, match="coefficient support"):
+        GenericFiberCertificate.model_validate(payload)
+
+
+def test_replay_receives_only_the_remaining_declared_wall_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: dict[str, int] = {}
+    readings = [1000.0, 1030.0]
+
+    def fake_monotonic() -> float:
+        return readings.pop(0) if len(readings) > 1 else readings[0]
+
+    def fake_backend(*_args: object) -> SingularGenericFiberResult:
+        return SingularGenericFiberResult(
+            outcome="COMPUTED",
+            certificate=_identity_certificate(),
+            dimension=0,
+            vector_dimension=1,
+            backend_version="4.4.1",
+        )
+
+    def fake_replay(*_args: object, wall_seconds: int) -> CertificateReplayResult:
+        observed["wall_seconds"] = wall_seconds
+        return CertificateReplayResult(
+            status="COMPUTED",
+            outcome="GENERICALLY_FINITE",
+            degree=1,
+        )
+
+    monkeypatch.setattr(_operations.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(_operations, "run_singular_generic_fiber", fake_backend)
+    monkeypatch.setattr(_operations, "run_bounded_certificate_replay", fake_replay)
+
+    result = compute_generic_degree(
+        GenericDegreeRequest(
+            polynomial_map=_identity_source(),
+            resource_budget=GenericDegreeComputationBudget(wall_seconds=60),
+        )
+    )
+
+    assert observed["wall_seconds"] == 30
+    assert result.outcome == "GENERICALLY_FINITE"
+    assert result.degree == 1
+
+
+def test_exhausted_envelope_reports_timeout_without_replaying(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    readings = [1000.0, 1075.0]
+
+    def fake_monotonic() -> float:
+        return readings.pop(0) if len(readings) > 1 else readings[0]
+
+    def fail_replay(*_args: object, **_kwargs: object) -> CertificateReplayResult:
+        raise AssertionError("certificate replay must not run without budget")
+
+    monkeypatch.setattr(_operations.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(
+        _operations,
+        "run_singular_generic_fiber",
+        lambda *_args: SingularGenericFiberResult(
+            outcome="COMPUTED",
+            certificate=_identity_certificate(),
+            dimension=0,
+            vector_dimension=1,
+            backend_version="4.4.1",
+        ),
+    )
+    monkeypatch.setattr(_operations, "run_bounded_certificate_replay", fail_replay)
+
+    result = compute_generic_degree(
+        GenericDegreeRequest(
+            polynomial_map=_identity_source(),
+            resource_budget=GenericDegreeComputationBudget(wall_seconds=60),
+        )
+    )
+
+    assert result.outcome == "TIMEOUT"
+    assert result.degree is None
+    assert result.evidence is None

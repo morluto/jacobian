@@ -341,8 +341,11 @@ def _serialized_term_support(term: Any) -> int | None:
         )
     if not isinstance(term, Mapping):
         return None
-    numerator = term.get("numerator")
-    denominator = term.get("denominator")
+    coefficient = term.get("coefficient")
+    if not isinstance(coefficient, Mapping):
+        return None
+    numerator = coefficient.get("numerator")
+    denominator = coefficient.get("denominator")
     if not isinstance(numerator, Mapping) or not isinstance(denominator, Mapping):
         return None
     numerator_terms = numerator.get("terms")
@@ -515,12 +518,27 @@ def _is_unit_generic_fiber_basis(certificate: GenericFiberCertificate) -> bool:
     )
 
 
+def _require_source_bound_evidence(
+    source: RationalPolynomialMap,
+    evidence: GenericFiberCertificate,
+) -> None:
+    """Reject evidence that does not reconstruct from its stated source map."""
+
+    from jacobian.math.polynomials.maps._generic_degree import (
+        require_certificate_reconstructs_from_source,
+    )
+
+    require_certificate_reconstructs_from_source(source, evidence)
+
+
 class GenericDegreeResult(StrictModel):
     """An exact source-bound generic-fiber conclusion or operational failure.
 
-    The declared outcome must agree with the evidence shape; the full exact
-    Gröbner replay of the evidence runs behind the bounded process boundary in
-    the owning operation.
+    The declared outcome must agree with the evidence shape, and validation
+    replays the exact source/evidence reconstruction identity, so serialized
+    results cannot bind evidence to a different source. The full Gröbner
+    replay of freshly computed evidence runs behind the bounded process
+    boundary in the owning operation.
     """
 
     outcome: GenericDegreeOutcome
@@ -547,6 +565,7 @@ class GenericDegreeResult(StrictModel):
             raise ValueError(
                 "mathematical generic-degree outcomes require exact evidence"
             )
+        _require_source_bound_evidence(self.source, self.evidence)
         unit_basis = _is_unit_generic_fiber_basis(self.evidence)
         if self.outcome == "GENERICALLY_FINITE":
             if (

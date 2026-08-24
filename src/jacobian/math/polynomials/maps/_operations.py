@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 import sympy
 from pydantic import ValidationError
 
@@ -45,6 +47,7 @@ _REPLAY_FAILURE_OUTCOMES: dict[str, tuple[GenericDegreeOutcome, str]] = {
 def compute_generic_degree(request: GenericDegreeRequest) -> GenericDegreeResult:
     """Compute the exact degree of the map's generic scheme-theoretic fiber."""
 
+    deadline = time.monotonic() + request.resource_budget.wall_seconds
     backend = run_singular_generic_fiber(
         request.polynomial_map,
         request.resource_budget,
@@ -80,10 +83,19 @@ def compute_generic_degree(request: GenericDegreeRequest) -> GenericDegreeResult
     else:
         mathematical_outcome = "DOMINANT_NOT_GENERICALLY_FINITE"
         degree = None
+    remaining_seconds = int(deadline - time.monotonic())
+    if remaining_seconds < 1:
+        return GenericDegreeResult(
+            outcome="TIMEOUT",
+            source=request.polynomial_map,
+            detail=(
+                "The declared wall-time envelope expired before certificate replay."
+            ),
+        )
     replay = run_bounded_certificate_replay(
         request.polynomial_map,
         backend.certificate,
-        wall_seconds=request.resource_budget.wall_seconds,
+        wall_seconds=remaining_seconds,
     )
     if replay.status != "COMPUTED":
         outcome, default_detail = _REPLAY_FAILURE_OUTCOMES[replay.status]

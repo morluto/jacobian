@@ -266,3 +266,27 @@ def test_native_ramanujan_sum_bounds_factorization_work() -> None:
     with pytest.raises(ValueError, match=r"at most 12"):
         ramanujan_sum(10**12, 1)
     assert ramanujan_sum(549755813888, 274877906944) == -274877906944
+
+
+def test_native_ramanujan_sum_bounds_frequency_magnitude() -> None:
+    # Reported failure mode: the native entry point must enforce the same
+    # 256-character frequency envelope as the wire request before any
+    # factorization or modular reduction.
+    with pytest.raises(ValueError, match="at most 256"):
+        ramanujan_sum(4, 10**256)
+    with pytest.raises(ValueError, match="at most 256"):
+        ramanujan_sum(4, -(10**255))
+    with pytest.raises(ValueError, match="at most 256"):
+        ramanujan_sum(0, 10**256)
+
+    assert ramanujan_sum(4, 10**256 - 2) == -2
+    assert ramanujan_sum(4, -(10**255 - 2)) == -2
+    assert ramanujan_sum(4, 10**256 - 1) == 0
+
+
+def test_native_frequency_bound_matches_wire_admission() -> None:
+    for modulus, frequency in (("4", str(10**256 - 2)), ("1", "9" * 256)):
+        request = RamanujanSumRequest(modulus=modulus, frequency=frequency)
+        assert RAMANUJAN_SUM_OPERATION.run(request).value == str(
+            ramanujan_sum(int(modulus), int(frequency))
+        )

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import SupportsIndex
 
+from jacobian.math.number_theory._models import _MAX_INTEGER_LENGTH
+
 __all__ = ["ramanujan_sum"]
 
 # SymPy factors the modulus once and the frequency only participates in
@@ -21,13 +23,23 @@ def ramanujan_sum(modulus: SupportsIndex, frequency: SupportsIndex) -> int:
     are evaluated multiplicatively from their prime-power factorization, so
     no approximate roots of unity or reduced-residue enumeration is involved.
     A positive modulus must have at most 12 decimal digits so that the
-    factorization work stays bounded for every entry point.
+    factorization work stays bounded, and the frequency must fit the same
+    256-character canonical integer envelope as the wire request, so every
+    entry point performs deterministic bounded modular work.
     """
 
     q = modulus.__index__()
     n = frequency.__index__()
     if q < 0:
         raise ValueError("a Ramanujan-sum modulus must be nonnegative")
+    # Character-length parity with the wire contract: positive frequencies
+    # carry at most 256 digits and negative frequencies at most 255 plus one
+    # sign character, checked via magnitudes without materializing digits.
+    if n >= 10**_MAX_INTEGER_LENGTH or n <= -(10 ** (_MAX_INTEGER_LENGTH - 1)):
+        raise ValueError(
+            "a Ramanujan-sum frequency must carry at most "
+            f"{_MAX_INTEGER_LENGTH} characters"
+        )
     if q == 0:
         return 0
     if q >= 10**_MAX_MODULUS_DIGITS:

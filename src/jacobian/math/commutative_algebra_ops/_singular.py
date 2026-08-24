@@ -356,6 +356,45 @@ def _ideal_key(ideal: RationalPolynomialIdeal) -> str:
     return ideal.model_dump_json()
 
 
+def _minimal_primes_stdout_limit(
+    source_ideal: RationalPolynomialIdeal,
+    budget: IdealComputationBudget,
+) -> int:
+    """Size the capture ceiling from the admitted exact-result envelope.
+
+    Every family the decoder can admit fits inside these protocol bytes: at
+    most ``budget.maximum_output_terms`` term records, each carrying a
+    canonical rational with a signed numerator and denominator of up to
+    ``MAX_CANONICAL_RATIONAL_DIGITS`` digits apiece plus one exponent field
+    of up to ``len(str(MAX_POLYNOMIAL_EXPONENT))`` digits per ring variable;
+    at most ``budget.maximum_output_generators`` generator marker pairs
+    across at most that many components with their count lines; and the
+    fixed version, top-level count, and end scaffolding. A capture limit
+    derived from this admitted envelope lets every admitted result reach
+    ``_parse_minimal_primes_output`` intact, while any output above it could
+    not decode into an admitted result anyway, so killing the child there
+    still reports a true result-bound violation.
+    """
+
+    coefficient_width = (
+        1 + MAX_CANONICAL_RATIONAL_DIGITS + 1 + MAX_CANONICAL_RATIONAL_DIGITS
+    )
+    variable_count = len(source_ideal.variables)
+    exponent_width = variable_count * len(str(MAX_POLYNOMIAL_EXPONENT)) + max(
+        variable_count - 1, 0
+    )
+    term_record = coefficient_width + 1 + exponent_width + 1
+    generator_scaffolding = len("GENERATOR\n") + len("END_GENERATOR\n")
+    component_scaffolding = len("COMPONENT\n") + 3 + len("END_COMPONENT\n")
+    scaffolding = len(_PROTOCOL_HEADER) + 1 + 8 + 3 + len("END\n")
+    return (
+        budget.maximum_output_terms * term_record
+        + budget.maximum_output_generators
+        * (generator_scaffolding + component_scaffolding)
+        + scaffolding
+    )
+
+
 def _format_version(version_number: int) -> str:
     major, remainder = divmod(version_number, 10_000)
     minor, patch_code = divmod(remainder, 1_000)
@@ -546,7 +585,7 @@ def run_singular_minimal_primes(
                 input_bytes=_minimal_primes_script(source_ideal),
                 timeout_seconds=allowance,
                 environment=worker_environment(locale="C.UTF-8"),
-                stdout_limit=_STDOUT_LIMIT,
+                stdout_limit=_minimal_primes_stdout_limit(source_ideal, budget),
                 stderr_limit=_STDERR_LIMIT,
                 resource_limits=ProcessResourceLimits(
                     cpu_seconds=math.ceil(allowance),

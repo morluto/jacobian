@@ -13,9 +13,10 @@ from pathlib import Path
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.commutative_algebra_ops._models import IdealComputationBudget
 from jacobian.math.commutative_algebra_ops._singular import (
+    _minimal_primes_stdout_limit,
     run_singular_ideal_operation,
     run_singular_minimal_primes,
     run_singular_minimal_primes_verification,
@@ -792,6 +793,61 @@ def test_large_canonical_coefficients_decode_without_the_digit_cap(
     assert result.components is not None
     coefficient = result.components[0].generators[0].polynomial.terms[0].coefficient
     assert coefficient == CanonicalRational.from_fraction(Fraction(10**5000, 3))
+
+
+def test_near_envelope_high_digit_family_decodes_fully(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An admitted family may encode above any fixed capture cap.
+
+    Sixteen terms whose canonical coefficient components approach the
+    accepted 32,768-digit representation limit encode to roughly 1 MiB of
+    protocol — over the former 512 KiB ceiling yet far inside the admitted
+    64-generator/1,024-term envelope — so the producing pass sizes its
+    capture allowance from the admitted envelope and decodes the complete
+    family instead of reporting LIMIT_EXCEEDED.
+    """
+
+    numerator = "9" * 32_000
+    denominator = "9" * 31_999 + "8"
+    records = ["JACOBIAN_SINGULAR_IDEAL_V1", "44000", "1", "COMPONENT", "16"]
+    for exponent in range(16):
+        term = f"{numerator}/{denominator}|{exponent}," + ",".join(
+            "0" for _ in range(7)
+        )
+        records.extend(("GENERATOR", term, "END_GENERATOR"))
+    records.extend(("END_COMPONENT", "END"))
+    protocol = "\n".join(records) + "\n"
+    encoded = protocol.encode("ascii")
+    assert len(encoded) > 512 * 1024
+
+    executable = _executable(tmp_path, f"import sys; sys.stdout.write({protocol!r})")
+    _select_executable(monkeypatch, executable)
+    budget = IdealComputationBudget()
+
+    result = run_singular_minimal_primes(_eight_var_ideal(), budget)
+
+    assert len(encoded) <= _minimal_primes_stdout_limit(_eight_var_ideal(), budget)
+    assert result.outcome == "COMPUTED"
+    assert result.components is not None
+    assert len(result.components) == 1
+    generators = result.components[0].generators
+    assert len(generators) == 16
+    expected = CanonicalRational.from_fraction(
+        Fraction(
+            parse_canonical_integer(numerator),
+            parse_canonical_integer(denominator),
+        )
+    )
+    assert [
+        generator.polynomial.terms[0].exponents[0] for generator in generators
+    ] == list(range(16))
+    assert all(len(generator.polynomial.terms) == 1 for generator in generators)
+    assert all(
+        generator.polynomial.terms[0].coefficient == expected
+        for generator in generators
+    )
 
 
 def test_stderr_on_zero_exit_fails_closed(

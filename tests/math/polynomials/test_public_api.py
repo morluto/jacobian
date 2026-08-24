@@ -298,9 +298,7 @@ def _sparse_polynomial(variables: tuple[str, ...], terms: dict[tuple[int, ...], 
     )
 
 
-def _source_bound_result_cases() -> tuple[
-    tuple[Callable[[Any], Any], type, type], ...
-]:
+def _source_bound_result_cases() -> tuple[tuple[Callable[[Any], Any], type, type], ...]:
     from jacobian.math.polynomials._models import (
         PolynomialFactorizationResult,
         PolynomialFactorRequest,
@@ -416,9 +414,7 @@ def test_factorization_replays_at_the_request_degree_cap() -> None:
         for record in result.factors
     ]
     assert records == [(x + 1, 127)]
-    assert (
-        PolynomialFactorizationResult.model_validate(result.model_dump()) == result
-    )
+    assert PolynomialFactorizationResult.model_validate(result.model_dump()) == result
 
 
 def test_square_free_replays_at_the_multiplicity_cap() -> None:

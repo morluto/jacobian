@@ -24,6 +24,7 @@ ROOT_MATH_DOMAINS = (
     "combinatorial_matrices",
     "combinatorics",
     "diophantine_approximation",
+    "dirichlet_characters",
     "finite_abelian_groups",
     "finite_fields",
     "finite_metric_spaces",

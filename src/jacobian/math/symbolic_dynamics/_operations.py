@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.symbolic_dynamics._models import (
+    ArtinMazurZetaReplayRow,
+    ArtinMazurZetaRequest,
+    ArtinMazurZetaResult,
     BlockLanguageRequest,
     BlockLanguageResult,
     FiniteTypeShiftRequest,
@@ -14,12 +17,36 @@ from jacobian.math.symbolic_dynamics._models import (
     PeriodicPointProfileResult,
 )
 from jacobian.math.symbolic_dynamics.operations import (
+    artin_mazur_zeta,
     block_language,
     finite_type_presentation,
     higher_block_presentation,
     normalize_forbidden_blocks,
     periodic_point_profile,
 )
+
+
+def compute_artin_mazur_zeta(
+    request: ArtinMazurZetaRequest,
+) -> ArtinMazurZetaResult:
+    determinant, zeta, coefficients = artin_mazur_zeta(
+        request.shift, request.replay_period
+    )
+    return ArtinMazurZetaResult(
+        **request.model_dump(),
+        determinant_polynomial=determinant,
+        zeta_function=zeta,
+        replay=tuple(
+            ArtinMazurZetaReplayRow(
+                period=period,
+                trace_fixed_points=format_canonical_integer(coefficient),
+                logarithmic_derivative_coefficient=format_canonical_integer(
+                    coefficient
+                ),
+            )
+            for period, coefficient in enumerate(coefficients, 1)
+        ),
+    )
 
 
 def construct_finite_type_shift(
@@ -65,6 +92,7 @@ def compute_higher_block(request: HigherBlockRequest) -> HigherBlockResult:
 
 
 __all__ = [
+    "compute_artin_mazur_zeta",
     "compute_block_language",
     "compute_higher_block",
     "compute_periodic_point_profile",

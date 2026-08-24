@@ -51,17 +51,43 @@ def _require_positive_bounded_generators(generators: tuple[str, ...]) -> None:
 
 
 def _require_minimal_generators(generators: tuple[str, ...]) -> tuple[int, ...]:
+    """Normalize a valid presentation to its increasing minimal atom axis."""
+
+    _require_positive_bounded_generators(generators)
+    values = tuple(sorted({parse_canonical_integer(value) for value in generators}))
+    return minimal_generating_system(values)
+
+
+def _require_canonical_minimal_axis(
+    generators: tuple[str, ...],
+) -> tuple[int, ...]:
+    """Reject results whose coordinate axis is not the semigroup's atom axis."""
+
     _require_positive_bounded_generators(generators)
     values = tuple(parse_canonical_integer(value) for value in generators)
-    if values != tuple(sorted(set(values))):
-        raise ValueError("generators must be distinct and strictly increasing")
-    minimal = minimal_generating_system(values)
-    if values != minimal:
+    if values != _require_minimal_generators(generators):
         raise ValueError(
-            "generators must be the minimal generating system; "
-            f"expected {list(minimal)}"
+            "minimal_generators must use the canonical minimal generator axis"
         )
     return values
+
+
+def _summary_invariants(
+    generators: tuple[int, ...],
+) -> tuple[int, int, int, int, int, tuple[int, ...]]:
+    """Replay the exact numerical-semigroup summary from its atom axis."""
+
+    apery = apery_set(generators)
+    conductor = max(apery) - generators[0] + 1
+    gaps = tuple(value for value in range(1, conductor) if not belongs(value, apery))
+    return (
+        generators[0],
+        len(generators),
+        conductor - 1,
+        conductor,
+        len(gaps),
+        gaps,
+    )
 
 
 def _require_bounded_value(value: str) -> int:
@@ -227,13 +253,42 @@ class NumericalSemigroupSummaryRequest(StrictModel):
 class NumericalSemigroupSummaryResult(StrictModel):
     """Summary of a numerical semigroup."""
 
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     multiplicity: CanonicalInteger
     embedding_dimension: int = Field(ge=1)
     frobenius_number: str
     conductor: str
     genus: int = Field(ge=0)
     gaps: tuple[CanonicalInteger, ...]
+
+    @model_validator(mode="after")
+    def require_exact_summary(self) -> Self:
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
+        (
+            multiplicity,
+            embedding_dimension,
+            frobenius_number,
+            conductor,
+            genus,
+            gaps,
+        ) = _summary_invariants(generators)
+        if parse_canonical_integer(self.multiplicity) != multiplicity:
+            raise ValueError("multiplicity does not match the minimal generators")
+        if self.embedding_dimension != embedding_dimension:
+            raise ValueError(
+                "embedding_dimension does not match the minimal generators"
+            )
+        if parse_canonical_integer(self.frobenius_number) != frobenius_number:
+            raise ValueError("frobenius_number does not match the minimal generators")
+        if parse_canonical_integer(self.conductor) != conductor:
+            raise ValueError("conductor does not match the minimal generators")
+        if self.genus != genus:
+            raise ValueError("genus does not match the minimal generators")
+        if tuple(map(parse_canonical_integer, self.gaps)) != gaps:
+            raise ValueError("gaps do not match the minimal generators")
+        return self
 
 
 class SemigroupMembershipRequest(StrictModel):
@@ -268,7 +323,13 @@ class FactorizationComputeRequest(StrictModel):
     """Compute the complete factorization family Z(s) for one element."""
 
     generators: tuple[CanonicalInteger, ...] = Field(
-        min_length=1, max_length=MAX_GENERATORS
+        min_length=1,
+        max_length=MAX_GENERATORS,
+        description=(
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; returned "
+            "coordinates use its increasing minimal generator axis."
+        ),
     )
     value: CanonicalInteger
 
@@ -286,13 +347,15 @@ class FactorizationComputeResult(StrictModel):
     """Complete factorization family Z(s) for one element."""
 
     value: CanonicalInteger
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     in_semigroup: bool
     factorizations: tuple[tuple[int, ...], ...]
 
     @model_validator(mode="after")
     def require_exact_family(self) -> Self:
-        generators = tuple(map(parse_canonical_integer, self.minimal_generators))
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
         value = parse_canonical_integer(self.value)
         if self.in_semigroup != bool(self.factorizations):
             raise ValueError("membership must agree with the factorization family")
@@ -304,7 +367,13 @@ class FactorizationLengthsComputeRequest(StrictModel):
     """Compute the complete sorted length set of one element."""
 
     generators: tuple[CanonicalInteger, ...] = Field(
-        min_length=1, max_length=MAX_GENERATORS
+        min_length=1,
+        max_length=MAX_GENERATORS,
+        description=(
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; factorization "
+            "lengths use its increasing minimal generator axis."
+        ),
     )
     value: CanonicalInteger
 
@@ -319,13 +388,15 @@ class FactorizationLengthsComputeResult(StrictModel):
     """Sorted length set of one element."""
 
     value: CanonicalInteger
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     in_semigroup: bool
     lengths: tuple[int, ...]
 
     @model_validator(mode="after")
     def require_length_set(self) -> Self:
-        generators = tuple(map(parse_canonical_integer, self.minimal_generators))
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
         value = parse_canonical_integer(self.value)
         if self.in_semigroup != bool(self.lengths):
             raise ValueError("membership must agree with the factorization lengths")
@@ -342,7 +413,14 @@ class FactorizationDistanceRequest(StrictModel):
     """Distance between two factorizations of the same element."""
 
     generators: tuple[CanonicalInteger, ...] = Field(
-        min_length=1, max_length=MAX_GENERATORS
+        min_length=1,
+        max_length=MAX_GENERATORS,
+        description=(
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant, but both "
+            "factorization coordinate tuples must use its increasing minimal "
+            "generator axis."
+        ),
     )
     value: CanonicalInteger
     first: tuple[int, ...] = Field(min_length=1)
@@ -384,7 +462,13 @@ class FactorizationGraphComputeRequest(StrictModel):
     """Compute the standard factorization graph of one element."""
 
     generators: tuple[CanonicalInteger, ...] = Field(
-        min_length=1, max_length=MAX_GENERATORS
+        min_length=1,
+        max_length=MAX_GENERATORS,
+        description=(
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; graph vertices use "
+            "its increasing minimal generator axis."
+        ),
     )
     value: CanonicalInteger
 
@@ -402,7 +486,9 @@ class FactorizationGraphComputeResult(StrictModel):
     """Standard factorization graph with connected components."""
 
     value: CanonicalInteger
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     in_semigroup: bool
     factorizations: tuple[tuple[int, ...], ...]
     edges: tuple[tuple[int, int], ...]
@@ -411,7 +497,7 @@ class FactorizationGraphComputeResult(StrictModel):
 
     @model_validator(mode="after")
     def require_graph_partition(self) -> Self:
-        generators = tuple(map(parse_canonical_integer, self.minimal_generators))
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
         value = parse_canonical_integer(self.value)
         vertex_count = len(self.factorizations)
         if self.in_semigroup != bool(self.factorizations):
@@ -441,7 +527,13 @@ class ElementDeltaSetRequest(StrictModel):
     """Delta set of one element in a numerical semigroup."""
 
     generators: tuple[CanonicalInteger, ...] = Field(
-        min_length=1, max_length=MAX_GENERATORS
+        min_length=1,
+        max_length=MAX_GENERATORS,
+        description=(
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; factorization "
+            "lengths use its increasing minimal generator axis."
+        ),
     )
     value: CanonicalInteger
 
@@ -457,13 +549,15 @@ class ElementDeltaSetResult(StrictModel):
     """Delta set of one element."""
 
     value: CanonicalInteger
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     factorization_lengths: tuple[int, ...]
     delta_set: tuple[int, ...]
 
     @model_validator(mode="after")
     def require_set_semantics(self) -> Self:
-        generators = tuple(map(parse_canonical_integer, self.minimal_generators))
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
         value = parse_canonical_integer(self.value)
         expected_lengths = factorization_lengths(generators, value)
         if self.factorization_lengths != expected_lengths:
@@ -487,8 +581,9 @@ class ElementElasticityRequest(StrictModel):
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
-            f"Distinct, strictly increasing minimal generators, each at most "
-            f"{MAX_GENERATOR}."
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; results use its "
+            "increasing minimal generator axis."
         ),
     )
     value: CanonicalInteger = Field(
@@ -509,14 +604,16 @@ class ElementElasticityResult(StrictModel):
     """Elasticity of one element."""
 
     value: CanonicalInteger
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     minimum_length: int = Field(ge=1)
     maximum_length: int = Field(ge=1)
     elasticity: str
 
     @model_validator(mode="after")
     def require_length_ratio(self) -> Self:
-        generators = tuple(map(parse_canonical_integer, self.minimal_generators))
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
         expected_extrema = factorization_length_extrema(
             generators, parse_canonical_integer(self.value)
         )
@@ -533,7 +630,13 @@ class ElementCatenaryDegreeRequest(StrictModel):
     """Catenary degree of one element in a numerical semigroup."""
 
     generators: tuple[CanonicalInteger, ...] = Field(
-        min_length=1, max_length=MAX_GENERATORS
+        min_length=1,
+        max_length=MAX_GENERATORS,
+        description=(
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; factorization "
+            "coordinates use its increasing minimal generator axis."
+        ),
     )
     value: CanonicalInteger
 
@@ -552,13 +655,15 @@ class ElementCatenaryDegreeResult(StrictModel):
     """Catenary degree of one element."""
 
     value: CanonicalInteger
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     factorization_count: int = Field(ge=1)
     catenary_degree: int = Field(ge=0)
 
     @model_validator(mode="after")
     def require_exact_degree(self) -> Self:
-        generators = tuple(map(parse_canonical_integer, self.minimal_generators))
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
         family = factorizations(generators, parse_canonical_integer(self.value))
         if self.factorization_count != len(family):
             raise ValueError("factorization_count does not match the element")
@@ -571,7 +676,13 @@ class BettiElementsRequest(StrictModel):
     """Betti elements of a numerical semigroup."""
 
     generators: tuple[CanonicalInteger, ...] = Field(
-        min_length=1, max_length=MAX_GENERATORS
+        min_length=1,
+        max_length=MAX_GENERATORS,
+        description=(
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; derived data uses "
+            "its increasing minimal generator axis."
+        ),
     )
 
     @model_validator(mode="after")
@@ -584,14 +695,16 @@ class BettiElementsRequest(StrictModel):
 class BettiElementsResult(StrictModel):
     """Betti elements of a semigroup."""
 
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     apery_set: tuple[CanonicalInteger, ...]
     candidate_count: int = Field(ge=0)
     betti_elements: tuple[CanonicalInteger, ...]
 
     @model_validator(mode="after")
     def require_complete_betti_data(self) -> Self:
-        generators = tuple(map(parse_canonical_integer, self.minimal_generators))
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
         apery, candidates, disconnected = betti_data(generators)
         if tuple(map(parse_canonical_integer, self.apery_set)) != apery:
             raise ValueError("apery_set does not match the minimal generators")
@@ -608,7 +721,13 @@ class MinimalPresentationRequest(StrictModel):
     """One minimal presentation of a numerical semigroup."""
 
     generators: tuple[CanonicalInteger, ...] = Field(
-        min_length=1, max_length=MAX_GENERATORS
+        min_length=1,
+        max_length=MAX_GENERATORS,
+        description=(
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; returned relations "
+            "use its increasing minimal generator axis."
+        ),
     )
 
     @model_validator(mode="after")
@@ -638,13 +757,15 @@ class MinimalPresentationRelation(StrictModel):
 class MinimalPresentationResult(StrictModel):
     """One minimal presentation of the semigroup."""
 
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     betti_elements: tuple[CanonicalInteger, ...]
     relations: tuple[MinimalPresentationRelation, ...]
 
     @model_validator(mode="after")
     def require_minimal_relation_counts(self) -> Self:
-        generators = tuple(map(parse_canonical_integer, self.minimal_generators))
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
         _, _, disconnected = betti_data(generators)
         if tuple(map(parse_canonical_integer, self.betti_elements)) != tuple(
             disconnected
@@ -693,7 +814,13 @@ class PresentationBinomialsRequest(StrictModel):
     """Convert a minimal presentation to sparse binomial form."""
 
     generators: tuple[CanonicalInteger, ...] = Field(
-        min_length=1, max_length=MAX_GENERATORS
+        min_length=1,
+        max_length=MAX_GENERATORS,
+        description=(
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; relation "
+            "coordinates must use its increasing minimal generator axis."
+        ),
     )
     relations: tuple[MinimalPresentationRelation, ...]
 
@@ -736,15 +863,54 @@ class PresentationBinomial(StrictModel):
 class PresentationBinomialsResult(StrictModel):
     """Presentation converted to sparse binomials."""
 
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     binomials: tuple[PresentationBinomial, ...]
+
+    @model_validator(mode="after")
+    def require_canonical_axis_and_homogeneous_binomials(self) -> Self:
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
+        for binomial in self.binomials:
+            if len(binomial.left_exponents) != len(generators) or len(
+                binomial.right_exponents
+            ) != len(generators):
+                raise ValueError(
+                    "binomial exponents must match the minimal generator axis"
+                )
+            if any(
+                exponent < 0
+                for exponent in (*binomial.left_exponents, *binomial.right_exponents)
+            ):
+                raise ValueError("binomial exponents must be non-negative")
+            left_degree = sum(
+                exponent * generator
+                for exponent, generator in zip(
+                    binomial.left_exponents, generators, strict=True
+                )
+            )
+            right_degree = sum(
+                exponent * generator
+                for exponent, generator in zip(
+                    binomial.right_exponents, generators, strict=True
+                )
+            )
+            if left_degree != right_degree:
+                raise ValueError("binomial terms must have the same semigroup degree")
+        return self
 
 
 class DeltaSetRequest(StrictModel):
     """Global delta set of a numerical semigroup."""
 
     generators: tuple[CanonicalInteger, ...] = Field(
-        min_length=1, max_length=MAX_GENERATORS
+        min_length=1,
+        max_length=MAX_GENERATORS,
+        description=(
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; the complete delta "
+            "set uses its increasing minimal generator axis."
+        ),
     )
 
     @model_validator(mode="after")
@@ -757,7 +923,9 @@ class DeltaSetRequest(StrictModel):
 class DeltaSetResult(StrictModel):
     """Global delta set of the semigroup."""
 
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     delta_set: tuple[int, ...]
     periodicity_bound: int = Field(ge=0)
     checked_through: int = Field(ge=0)
@@ -767,7 +935,7 @@ class DeltaSetResult(StrictModel):
 
     @model_validator(mode="after")
     def require_set_semantics(self) -> Self:
-        generators = tuple(map(parse_canonical_integer, self.minimal_generators))
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
         if self.delta_set != tuple(sorted(set(self.delta_set))):
             raise ValueError("delta_set must be strictly increasing and duplicate-free")
         if any(delta <= 0 for delta in self.delta_set):
@@ -787,8 +955,9 @@ class ElasticityRequest(StrictModel):
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
-            f"Distinct, strictly increasing minimal generators, each at most "
-            f"{MAX_GENERATOR}."
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; the ratio uses its "
+            "increasing minimal generator axis."
         ),
     )
 
@@ -821,7 +990,13 @@ class CatenaryDegreeRequest(StrictModel):
     """Global catenary degree of a numerical semigroup."""
 
     generators: tuple[CanonicalInteger, ...] = Field(
-        min_length=1, max_length=MAX_GENERATORS
+        min_length=1,
+        max_length=MAX_GENERATORS,
+        description=(
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; factorization "
+            "coordinates use its increasing minimal generator axis."
+        ),
     )
 
     @model_validator(mode="after")
@@ -841,14 +1016,16 @@ class BettiCatenaryDegree(StrictModel):
 class CatenaryDegreeResult(StrictModel):
     """Global catenary degree of the semigroup."""
 
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     catenary_degree: int = Field(ge=0)
     betti_degrees: tuple[BettiCatenaryDegree, ...]
     witness_betti_elements: tuple[CanonicalInteger, ...]
 
     @model_validator(mode="after")
     def require_maximizing_witnesses(self) -> Self:
-        generators = tuple(map(parse_canonical_integer, self.minimal_generators))
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
         _, _, disconnected = betti_data(generators)
         expected_records = tuple(
             BettiCatenaryDegree(

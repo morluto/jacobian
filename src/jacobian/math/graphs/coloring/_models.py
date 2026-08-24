@@ -10,10 +10,16 @@ from pydantic.json_schema import JsonSchemaValue
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
-MAX_EDGE_COLORING_VERTICES = 20
+MAX_EDGE_COLORING_VERTICES = 64
 MAX_EDGE_COLORING_EDGES = (
     MAX_EDGE_COLORING_VERTICES * (MAX_EDGE_COLORING_VERTICES - 1) // 2
 )
+# Polynomial-time checks (independent_set.maximal, edge_coloring.check) scale
+# as O(V+E) and O(E^2) respectively and can use the full SimpleGraph limit
+# of 64 vertices (SimpleUndirectedGraph max 256 is a future step). SAT-based
+# operations (k_colorability.decide, edge_coloring.k_decide) use the same
+# 64-vertex envelope but remain bounded by the explicit solver conflict
+# budget (MAX_SOLVER_CONFLICT_BUDGET) per request.
 DEFAULT_SOLVER_CONFLICT_BUDGET = 100_000
 """Default request-visible SAT conflict budget for one colorability decision."""
 
@@ -140,11 +146,13 @@ def _require_conflicting_pair(
 class GraphEdgeList(StrictModel):
     """A simple undirected graph given by an edge list."""
 
-    # Exact SAT instances are deliberately kept small enough for one direct
-    # solver call in the stateless server.
-    vertex_count: int = Field(ge=1, le=20)
+    # SAT instances are bounded by the explicit solver conflict budget but
+    # capped at 64 vertices for one direct stateless call; polynomial-time
+    # checks (maximal independent set) use the same envelope and run in
+    # O(V+E).
+    vertex_count: int = Field(ge=1, le=64)
     edges: tuple[tuple[int, int], ...] = Field(
-        max_length=512,
+        max_length=MAX_EDGE_COLORING_EDGES,
     )
 
     @model_validator(mode="after")
@@ -164,21 +172,21 @@ class GraphEdgeList(StrictModel):
 
 class KColorabilityRequest(StrictModel):
     graph: GraphEdgeList
-    colors: int = Field(ge=1, le=20)
+    colors: int = Field(ge=1, le=64)
 
 
 class KColorabilityResult(StrictModel):
     colorable: bool
     coloring: tuple[int, ...] | None = None
-    vertex_count: int = Field(ge=1, le=20)
-    colors: int = Field(ge=1, le=20)
+    vertex_count: int = Field(ge=1, le=64)
+    colors: int = Field(ge=1, le=64)
 
 
 class MaximalIndependentSetRequest(StrictModel):
     """One canonical candidate set in a bounded simple graph."""
 
     graph: GraphEdgeList
-    candidate_set: tuple[int, ...] = Field(max_length=20)
+    candidate_set: tuple[int, ...] = Field(max_length=64)
 
     @model_validator(mode="after")
     def require_canonical_candidate_set(self) -> Self:
@@ -242,7 +250,7 @@ class EdgeColoringAssignment(StrictModel):
     """
 
     graph: EdgeColoringGraph
-    colors: StrictInt = Field(ge=1, le=20)
+    colors: StrictInt = Field(ge=1, le=64)
     coloring: tuple[StrictInt, ...] = Field(
         max_length=MAX_EDGE_COLORING_EDGES,
         description=(
@@ -357,7 +365,7 @@ class EdgeKColorabilityRequest(StrictModel):
     """Decide whether a simple graph admits a proper ``k``-edge-coloring."""
 
     graph: EdgeColoringGraph
-    colors: StrictInt = Field(ge=1, le=20)
+    colors: StrictInt = Field(ge=1, le=64)
     solver_conflicts: StrictInt = Field(
         default=DEFAULT_SOLVER_CONFLICT_BUDGET,
         ge=1,
@@ -380,7 +388,7 @@ class EdgeKColorabilityResult(StrictModel):
     """Whether a proper ``k``-edge-coloring exists, with one coloring witness."""
 
     graph: SimpleUndirectedGraph
-    colors: StrictInt = Field(ge=1, le=20)
+    colors: StrictInt = Field(ge=1, le=64)
     solver_conflicts: StrictInt = Field(
         default=DEFAULT_SOLVER_CONFLICT_BUDGET,
         ge=1,

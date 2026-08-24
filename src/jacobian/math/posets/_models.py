@@ -14,7 +14,7 @@ from jacobian.canonical import canonicalize_json
 
 MAX_POSET_ELEMENTS = 64
 MAX_POSET_RELATIONS = MAX_POSET_ELEMENTS * MAX_POSET_ELEMENTS
-MAX_LINEAR_EXTENSION_ELEMENTS = 14
+MAX_LINEAR_EXTENSION_ELEMENTS = 20
 
 ElementLabel = Annotated[
     str,

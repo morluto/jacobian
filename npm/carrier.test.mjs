@@ -331,7 +331,7 @@ test("npm and Python packages publish the same release version", async () => {
 test("package metadata carries setup dependencies and packs the setup adapter", async () => {
   assert.deepEqual(packageMetadata.dependencies, {
     "@iarna/toml": "^2.2.5",
-    "@inquirer/prompts": "^7.2.1",
+    "@inquirer/prompts": "^8.6.0",
     "jsonc-parser": "^3.3.1",
   });
   assert.equal(packageMetadata.bundleDependencies, undefined);

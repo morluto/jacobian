@@ -426,14 +426,16 @@ def _normalize_closed_expression(
         candidate = expression
 
     child_values = tuple(closed_value_by_id[child.get_id()] for child in children)
-    candidate, folded_coefficient, folded_dependent, folded_offset = _fold_scaled_product(
-        candidate,
-        children,
-        normalized_children,
-        child_values,
-        scalar_by_id=scalar_by_id,
-        offset_by_id=offset_by_id,
-        residual_by_id=residual_by_id,
+    candidate, folded_coefficient, folded_dependent, folded_offset = (
+        _fold_scaled_product(
+            candidate,
+            children,
+            normalized_children,
+            child_values,
+            scalar_by_id=scalar_by_id,
+            offset_by_id=offset_by_id,
+            residual_by_id=residual_by_id,
+        )
     )
 
     closed_value = _evaluate_closed_arithmetic(candidate.decl().kind(), child_values)
@@ -441,9 +443,7 @@ def _normalize_closed_expression(
         candidate = _exact_arithmetic_value(closed_value, template=candidate)
 
     scalar = closed_value if closed_value is not None else folded_coefficient
-    offset: Fraction | None = (
-        Fraction(0) if closed_value is not None else folded_offset
-    )
+    offset: Fraction | None = Fraction(0) if closed_value is not None else folded_offset
     if scalar is None:
         scalar, offset = _wrapped_linear_scalar(
             candidate,

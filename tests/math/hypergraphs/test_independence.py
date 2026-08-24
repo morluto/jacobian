@@ -433,6 +433,74 @@ def test_producer_does_not_repeat_an_established_upper_bound(
     assert result.lower_bound == result.upper_bound == 2
 
 
+def test_produced_result_satisfies_the_full_independent_validator() -> None:
+    result = _compute(
+        {
+            "vertices": ["a", "b", "c"],
+            "edges": [["triple", ["a", "b", "c"]]],
+        }
+    )
+    assert HypergraphIndependenceResult.model_validate(result.model_dump(mode="json"))
+
+
+def test_producer_rejects_infeasible_backend_witness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.hypergraphs import _independence_z3
+
+    def regressed(*_args: object) -> object:
+        return z3.sat, ("a", "b", "c"), ""
+
+    monkeypatch.setattr(_independence_z3, "_check_threshold", regressed)
+    with pytest.raises(ValidationError, match="no complete hyperedge"):
+        _compute(
+            {
+                "vertices": ["a", "b", "c"],
+                "edges": [["triple", ["a", "b", "c"]]],
+            }
+        )
+
+
+def test_producer_rejects_forged_optimum_below_greedy_incumbent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.hypergraphs import _independence_z3
+
+    def regressed(*_args: object) -> object:
+        return z3.sat, ("a",), ""
+
+    monkeypatch.setattr(_independence_z3, "_check_threshold", regressed)
+    with pytest.raises(ValidationError, match="below a feasible witness"):
+        _compute(
+            {
+                "vertices": ["a", "b", "c"],
+                "edges": [["triple", ["a", "b", "c"]]],
+            }
+        )
+
+
+def test_producer_rejects_solver_calls_inconsistent_with_established_bounds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.hypergraphs import _independence_z3
+
+    def regressed(*_args: object) -> object:
+        return z3.sat, ("b", "c"), ""
+
+    monkeypatch.setattr(_independence_z3, "_check_threshold", regressed)
+    with pytest.raises(ValidationError, match="descending thresholds"):
+        _compute(
+            {
+                "vertices": ["a", "b", "c", "d"],
+                "edges": [
+                    ["ab", ["a", "b"]],
+                    ["ac", ["a", "c"]],
+                    ["ad", ["a", "d"]],
+                ],
+            }
+        )
+
+
 def test_backend_witness_choice_is_repeatable() -> None:
     source = {
         "vertices": ["a", "b", "c", "d"],

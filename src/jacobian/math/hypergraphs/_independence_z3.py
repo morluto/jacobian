@@ -8,6 +8,7 @@ from typing import Any
 import z3  # type: ignore[import-untyped]
 
 from jacobian.math.hypergraphs._models import (
+    _PRODUCER_ESTABLISHED_BOUNDS,
     FiniteHypergraph,
     HypergraphIndependenceRequest,
     HypergraphIndependenceResult,
@@ -92,24 +93,29 @@ def _result(
     termination_reason: HypergraphIndependenceTermination,
     detail: str,
 ) -> HypergraphIndependenceResult:
-    # The threshold search has already established every produced bound. Avoid
-    # spending a second wall-time budget replaying the same query inside this
-    # call; independently supplied results still execute the bounded validator.
-    return HypergraphIndependenceResult.model_construct(
-        result_schema_version="1",
-        hypergraph=request.hypergraph,
-        hypergraph_digest=_hypergraph_digest(request.hypergraph),
-        resource_budget=request.resource_budget,
-        status=status,
-        independence_number=independence_number,
-        incumbent_vertices=incumbent,
-        lower_bound=len(incumbent),
-        upper_bound=upper_bound,
-        solver_calls=solver_calls,
-        wall_budget_exhausted=wall_budget_exhausted,
-        termination_reason=termination_reason,
-        detail=detail,
-        convention="MAXIMUM_NO_COMPLETE_HYPEREDGE_VERTEX_SUBSET",
+    # This call's own threshold search already established every reported
+    # bound, so construction runs the complete field and model validation and
+    # uses an internal context key to skip only the duplicate upper-bound
+    # solver replay. Independently supplied results never carry that key and
+    # still execute the bounded replay validator.
+    return HypergraphIndependenceResult.model_validate(
+        {
+            "result_schema_version": "1",
+            "hypergraph": request.hypergraph,
+            "hypergraph_digest": _hypergraph_digest(request.hypergraph),
+            "resource_budget": request.resource_budget,
+            "status": status,
+            "independence_number": independence_number,
+            "incumbent_vertices": incumbent,
+            "lower_bound": len(incumbent),
+            "upper_bound": upper_bound,
+            "solver_calls": solver_calls,
+            "wall_budget_exhausted": wall_budget_exhausted,
+            "termination_reason": termination_reason,
+            "detail": detail,
+            "convention": "MAXIMUM_NO_COMPLETE_HYPEREDGE_VERTEX_SUBSET",
+        },
+        context={_PRODUCER_ESTABLISHED_BOUNDS: True},
     )
 
 

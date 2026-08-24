@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, StrictBool, StrictInt, model_validator
+from pydantic import (
+    Field,
+    StrictBool,
+    StrictInt,
+    ValidationInfo,
+    model_validator,
+)
 
 from jacobian._digest import Sha256Digest
 from jacobian._models import StrictModel
@@ -134,6 +140,14 @@ class HypergraphIndependenceRequest(StrictModel):
         return self
 
 
+# Internal-only validation-context key. The producer-side constructor in
+# ``_independence_z3`` sets it after its own threshold search has proved every
+# reported bound within the same bounded call, skipping only the duplicate
+# upper-bound solver replay during construction. Independently supplied results
+# never carry this key and always execute the bounded replay.
+_PRODUCER_ESTABLISHED_BOUNDS = "producer_established_bounds"
+
+
 class HypergraphIndependenceResult(StrictModel):
     """Exact optimum or sound incumbent and bounds for one source hypergraph."""
 
@@ -178,13 +192,14 @@ class HypergraphIndependenceResult(StrictModel):
         return self
 
     @model_validator(mode="after")
-    def bind_bounds_to_source(self) -> Self:
+    def bind_bounds_to_source(self, info: ValidationInfo) -> Self:
         initial_upper = _independence_upper_bound(self.hypergraph)
         if self.solver_calls > self.resource_budget.max_solver_calls:
             raise ValueError("solver calls must fit the submitted call budget")
         if not self.lower_bound <= self.upper_bound <= initial_upper:
             raise ValueError("independence-number bounds must lie in the source range")
-        if self.upper_bound < initial_upper:
+        producer_established = (info.context or {}).get(_PRODUCER_ESTABLISHED_BOUNDS)
+        if self.upper_bound < initial_upper and not producer_established:
             from jacobian.math.hypergraphs import _independence_z3
 
             if not _independence_z3.verify_upper_bound(

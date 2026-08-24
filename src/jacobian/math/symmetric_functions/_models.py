@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, WithJsonSchema, model_validator
+from pydantic.json_schema import JsonSchemaValue
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
-from jacobian.math.symmetric_functions.values import IntegerPartition
+from jacobian.math.symmetric_functions.values import (
+    MAX_PARTITION_SIZE,
+    IntegerPartition,
+)
 
 _MAX_POINT_COORDINATE_DIGITS = 6
 _MAX_POINT_COORDINATE_ABS = 10**_MAX_POINT_COORDINATE_DIGITS - 1
@@ -29,6 +33,21 @@ PointCoordinate = Annotated[
 """One bounded evaluation coordinate: ``abs(value) <= 10**6 - 1``."""
 
 
+def _schur_partition_schema() -> JsonSchemaValue:
+    """Project the Jacobi-Trudi part bound onto the shared partition schema."""
+
+    schema = IntegerPartition.model_json_schema()
+    schema["properties"]["parts"].update(
+        maxItems=_MAX_SCHUR_PARTITION_LENGTH,
+        description=(
+            "Positive weakly-decreasing parts with a total size (sum) of at "
+            f"most {MAX_PARTITION_SIZE}; at most {_MAX_SCHUR_PARTITION_LENGTH} "
+            "parts for this operation."
+        ),
+    )
+    return schema
+
+
 class PartitionRequest(StrictModel):
     partition: IntegerPartition
 
@@ -46,10 +65,14 @@ class SchurExpansionRequest(StrictModel):
     total size is capped at 500.
     """
 
-    partition: IntegerPartition = Field(
+    partition: Annotated[
+        IntegerPartition,
+        WithJsonSchema(_schur_partition_schema()),
+    ] = Field(
         description=(
-            "A canonical partition of size at most 100 and length at most 50 "
-            "for the admitted Jacobi-Trudi determinant."
+            "A canonical partition of total size at most "
+            f"{MAX_PARTITION_SIZE} with at most {_MAX_SCHUR_PARTITION_LENGTH} "
+            "parts for the admitted Jacobi-Trudi determinant."
         )
     )
     variables: tuple[str, ...] = Field(

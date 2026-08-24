@@ -140,11 +140,14 @@ def test_request_schema_publishes_schur_invariants() -> None:
     assert point["items"]["minimum"] == -999_999
     assert point["items"]["maximum"] == 999_999
     assert "decimal digits" in point["items"]["description"]
-    partition = schema["$defs"]["IntegerPartition"]["properties"]["parts"]
+    partition = schema["properties"]["partition"]
+    assert partition["title"] == "IntegerPartition"
     assert "500" in partition["description"]
-    assert schema["$defs"]["IntegerPartition"]["properties"]["parts"]["maxItems"] == 200
-    assert "500" in schema["$defs"]["IntegerPartition"]["description"]
-    assert "length at most 50" in schema["properties"]["partition"]["description"]
+    assert "at most 50" in partition["description"]
+    parts = partition["properties"]["parts"]
+    assert parts["maxItems"] == 50
+    assert "at most 50" in parts["description"]
+    assert "500" in parts["description"]
 
 
 def test_schur_rejects_coordinate_exceeding_digit_bound() -> None:
@@ -177,3 +180,13 @@ def test_schur_request_retains_its_operation_specific_length_bound() -> None:
             variables=("x",),
             point=(1,),
         )
+
+
+def test_schur_accepts_boundary_partition_length() -> None:
+    request = SchurExpansionRequest(
+        partition=IntegerPartition(parts=(1,) * 50),
+        variables=("x",),
+        point=(0,),
+    )
+    assert isinstance(request.partition, IntegerPartition)
+    assert compute_schur_evaluation(request).value == "0"

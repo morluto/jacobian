@@ -791,6 +791,7 @@ def _signed_sum_envelope(
         default=0,
     )
     numerator_digits = widest_numerator + len(str(len(envelopes)))
+    pairs = None
     shared = _shared_denominator_of_pairs(envelopes)
     if shared is not None:
         lifted: list[set[Fraction]] = []
@@ -808,14 +809,20 @@ def _signed_sum_envelope(
                 break
         else:
             pairs = _capped_pairs(
-                {(abs(value.numerator), value.denominator) for value in totals}
+                {
+                    (
+                        abs((total / shared).numerator),
+                        (total / shared).denominator,
+                    )
+                    for total in totals
+                }
             )
             common_denominator = _pairs_common_denominator(pairs)
             if common_denominator is not None:
                 denominator_digits = min(
                     denominator_digits, len(str(common_denominator))
                 )
-            widest_merged = max(abs(value.numerator) for value in totals)
+            widest_merged = max(abs((total / shared).numerator) for total in totals)
             numerator_digits = min(numerator_digits, len(str(widest_merged)))
     else:
         pairs = None

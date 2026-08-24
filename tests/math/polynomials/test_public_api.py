@@ -390,8 +390,9 @@ def test_source_bound_results_reject_combinatorial_replay_claims() -> None:
     """Forged factor records are rejected without expanding their product.
 
     The claimed factor is a dense-box multivariate sum within the shared wire
-    limits whose multiplicity-64 power cannot be expanded; validation must
-    reject it at the first inexact division instead.
+    limits whose multiplicity-64 power densifies past the shared
+    representation envelope; bounded prefix-product reconstruction counts its
+    exact work and stops typedly at the envelope instead of materializing it.
     """
 
     from pydantic import ValidationError
@@ -402,12 +403,15 @@ def test_source_bound_results_reject_combinatorial_replay_claims() -> None:
         forged = _forged_monster_payload(produced.model_dump())
         # The factorization contract is univariate, so a forged QQ[x, y]
         # source is rejected by the semantic-domain check before any replay
-        # work; square-free decomposition admits several variables and must
-        # still stop the monster at the first inexact division.
+        # work; square-free decomposition admits several variables, and the
+        # monster's multiplicity-64 power densifies past the shared
+        # representation envelope during bounded prefix-product
+        # reconstruction, so the envelope guard rejects the claim before
+        # any comparison could authenticate it.
         expected = (
             "one variable over QQ"
             if "Factorization" in result_model.__name__
-            else "must reconstruct"
+            else "representation envelope"
         )
         with pytest.raises(ValidationError, match=expected):
             result_model.model_validate(forged)
@@ -511,13 +515,17 @@ def test_square_free_replays_at_the_multiplicity_cap() -> None:
     )
 
 
-def test_result_models_parse_coefficients_above_int_str_limit() -> None:
-    """Coefficients past CPython's 4,300-digit int-str limit replay exactly.
+def test_result_models_bind_sources_to_request_coefficient_budgets() -> None:
+    """Retained sources answer to the same coefficient budget as requests.
 
-    ``CanonicalRational`` admits up to 32,768 digits through the chunked
-    canonical parser; the replay must convert it via ``as_fraction`` rather
-    than a direct ``int(...)`` cast.
+    Both originating request models admit only the default 256-digit
+    polynomial coefficients, so an authored or deserialized result whose
+    retained source carries more digits must be rejected at admission
+    before any replay work instead of widening the operation's established
+    work envelope; sources within the budget round-trip exactly.
     """
+
+    from pydantic import ValidationError
 
     from jacobian._exact import CanonicalRational
     from jacobian.math.polynomials._models import (
@@ -525,17 +533,23 @@ def test_result_models_parse_coefficients_above_int_str_limit() -> None:
         PolynomialSquareFreeDecompositionResult,
     )
 
-    digits = 5_000
-    assert digits > 4_300
-    source = _univariate("x", {0: "9" * digits})
     models = (
         PolynomialFactorizationResult,
         PolynomialSquareFreeDecompositionResult,
     )
     for model in models:
+        source = _univariate("x", {0: "9" * 257})
+        with pytest.raises(ValidationError):
+            model(
+                polynomial=source,
+                coefficient=CanonicalRational(num="9" * 257, den="1"),
+                factors=(),
+                reconstructed=source,
+            )
+        source = _univariate("x", {0: "9" * 256})
         result = model(
             polynomial=source,
-            coefficient=CanonicalRational(num="9" * digits, den="1"),
+            coefficient=CanonicalRational(num="9" * 256, den="1"),
             factors=(),
             reconstructed=source,
         )
@@ -1013,5 +1027,199 @@ def test_factorization_replay_requires_canonical_irreducible_records() -> None:
             polynomial=source,
             coefficient=CanonicalRational(num="1", den="1"),
             factors=(PolynomialIrreducibleFactor(factor=source, multiplicity=1),),
+            reconstructed=source,
+        )
+
+
+def _difference_product(variables: tuple[str, ...], exponent: int) -> Any:
+    """``prod(v_i ** exponent - 1)`` as a wire value with descending terms."""
+
+    import itertools
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.polynomials.values import (
+        RationalPolynomial,
+        RationalPolynomialTerm,
+        SparseRationalPolynomial,
+    )
+
+    terms = {}
+    for mask in itertools.product((False, True), repeat=len(variables)):
+        exponents = tuple(exponent if selected else 0 for selected in mask)
+        terms[exponents] = "-1" if sum(mask) % 2 else "1"
+    return RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=c, den="1"), exponents=e
+                )
+                for e, c in sorted(terms.items(), reverse=True)
+            )
+        ),
+    )
+
+
+def test_square_free_replay_never_recomputes_unrepresentable_decompositions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validation rejects claims without materializing the true decomposition.
+
+    The five-variable source ``prod((x_i^63 - 1)(x_i - 1))`` holds exactly
+    1,024 terms inside the request envelope, yet its canonical
+    multiplicity-one part ``prod(1 + x_i + ... + x_i^62)`` carries ``63^5``
+    terms — far beyond any representable bound.  A forged or deserialized
+    result over this source must therefore be rejected by bounded checks on
+    the claimed records alone; no backend decomposition may run at all.
+    """
+
+    from pydantic import ValidationError
+    from sympy import Poly, symbols
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.polynomials._models import (
+        PolynomialSquareFreeDecompositionResult,
+    )
+
+    variables = tuple(f"x{index}" for index in range(1, 6))
+    generators = symbols(",".join(variables))
+    source_expr = Poly(1, *generators, domain="QQ")
+    for symbol in generators:
+        source_expr *= (symbol**63 - 1) * (symbol - 1)
+    assert len(source_expr.terms()) == 1024
+    source = _sparse_polynomial(
+        variables,
+        {monom: str(int(coeff)) for monom, coeff in source_expr.terms()},
+    )
+
+    def fail_decomposition(self):
+        raise AssertionError("replay must not recompute any decomposition")
+
+    monkeypatch.setattr(Poly, "sqf_list", fail_decomposition)
+    monkeypatch.setattr(Poly, "factor_list", fail_decomposition)
+    with pytest.raises(ValidationError, match="must reconstruct"):
+        PolynomialSquareFreeDecompositionResult(
+            polynomial=source,
+            coefficient=CanonicalRational(num="1", den="1"),
+            factors=(),
+            reconstructed=source,
+        )
+
+
+def test_square_free_operation_admits_envelope_scale_parts() -> None:
+    """A 16-term admitted request yields its 3,969-term square-free part.
+
+    For ``((x^63 - 1)(x - 1))((y^63 - 1)(y - 1))`` the multiplicity-one
+    part ``((x^63 - 1)/(x - 1))((y^63 - 1)/(y - 1))`` holds 3,969 terms —
+    inside the shared representation envelope and emitted by the backend —
+    so an accepted request form of this decomposition must validate and
+    round-trip instead of being rejected for its part size.
+    """
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.polynomials._models import (
+        PolynomialSquareFreeDecompositionResult,
+        PolynomialSquareFreeFactor,
+    )
+
+    geometric = _sparse_polynomial(
+        ("x", "y"),
+        {(a, b): "1" for a in range(63) for b in range(63)},
+    )
+    assert len(geometric.polynomial.terms) == 3_969
+    # (x^64 - x^63 - x + 1)(y^64 - y^63 - y + 1), 16 terms, exponents <= 64.
+    one_dimension = {0: 1, 1: -1, 63: -1, 64: 1}
+    accumulated: dict[tuple[int, int], int] = {(0, 0): 1}
+    for axis in (0, 1):
+        shifted: dict[tuple[int, int], int] = {}
+        for exps, coeff in accumulated.items():
+            for degree, factor_coefficient in one_dimension.items():
+                target = list(exps)
+                target[axis] += degree
+                key = tuple(target)
+                shifted[key] = shifted.get(key, 0) + coeff * factor_coefficient
+        accumulated = {exps: c for exps, c in shifted.items() if c}
+    assert len(accumulated) == 16
+    source = _sparse_polynomial(
+        ("x", "y"),
+        {exps: str(c) for exps, c in sorted(accumulated.items(), reverse=True)},
+    )
+    result = PolynomialSquareFreeDecompositionResult(
+        polynomial=source,
+        coefficient=CanonicalRational(num="1", den="1"),
+        factors=(
+            PolynomialSquareFreeFactor(factor=geometric, multiplicity=1),
+            PolynomialSquareFreeFactor(
+                factor=_sparse_polynomial(
+                    ("x", "y"),
+                    {(1, 1): "1", (1, 0): "-1", (0, 1): "-1", (0, 0): "1"},
+                ),
+                multiplicity=2,
+            ),
+        ),
+        reconstructed=source,
+    )
+    assert (
+        PolynomialSquareFreeDecompositionResult.model_validate(result.model_dump())
+        == result
+    )
+
+
+def test_factorization_replay_rejects_split_duplicate_records() -> None:
+    """Two identical records never equal one multiplicity-2 record.
+
+    ``(x - 1)^2`` claimed as two separate multiplicity-1 records of the
+    same factor reconstructs exactly, but the canonical irreducible
+    factorization lists one record; repeating a factor key is rejected.
+    """
+
+    from pydantic import ValidationError
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.polynomials._models import (
+        PolynomialFactorizationResult,
+        PolynomialIrreducibleFactor,
+    )
+
+    factor = _univariate("x", {1: "1", 0: "-1"})
+    source = _univariate("x", {2: "1", 1: "-2", 0: "1"})
+    with pytest.raises(ValidationError, match="must reconstruct"):
+        PolynomialFactorizationResult(
+            polynomial=source,
+            coefficient=CanonicalRational(num="1", den="1"),
+            factors=(
+                PolynomialIrreducibleFactor(factor=factor, multiplicity=1),
+                PolynomialIrreducibleFactor(factor=factor, multiplicity=1),
+            ),
+            reconstructed=source,
+        )
+
+
+def test_square_free_replay_rejects_repeated_part_keys() -> None:
+    """The same part listed at two multiplicities is not a decomposition.
+
+    ``(x - 1)^3`` claimed as ``(x - 1)`` at multiplicities 1 and 2
+    reconstructs exactly, but the parts overlap, so the repeated key is
+    rejected before any coprimality work.
+    """
+
+    from pydantic import ValidationError
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.polynomials._models import (
+        PolynomialSquareFreeDecompositionResult,
+        PolynomialSquareFreeFactor,
+    )
+
+    factor = _univariate("x", {1: "1", 0: "-1"})
+    source = _univariate("x", {3: "1", 2: "-3", 1: "3", 0: "-1"})
+    with pytest.raises(ValidationError, match="must reconstruct"):
+        PolynomialSquareFreeDecompositionResult(
+            polynomial=source,
+            coefficient=CanonicalRational(num="1", den="1"),
+            factors=(
+                PolynomialSquareFreeFactor(factor=factor, multiplicity=1),
+                PolynomialSquareFreeFactor(factor=factor, multiplicity=2),
+            ),
             reconstructed=source,
         )

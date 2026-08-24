@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -24,6 +23,7 @@ from jacobian.math.polynomials.values import (
 _MAX_COEFFICIENT_DIGITS = 256
 _MAX_GCD_TERMS = 1024
 _MAX_INVARIANT_TERMS = 256
+_MAX_REPLAY_WORK = 1 << 24
 _MAX_GCD_DEGREE = 500
 _MAX_ELIMINATION_DEGREE_SUM = 128
 _MAX_DISCRIMINANT_DEGREE = 64
@@ -186,13 +186,12 @@ class PolynomialSquareFreeDecompositionResult(StrictModel):
     Retains the canonical source polynomial so validation replays
     ``reconstructed = polynomial`` and authenticates the defining relation
     ``polynomial = coefficient * product(factor^multiplicity)`` together
-    with the uniqueness of the monic square-free parts: an exact product
-    at distinct multiplicities does not force pairwise-coprime square-free
-    factors, so validation recomputes the canonical monic decomposition of
-    the retained source with the same bounded backend invocation the
-    operation itself performs and compares the coefficient and the
-    multiplicity-weighted monic records against the claim for every ring
-    arity. Neither arity materializes a claimed product intermediate.
+    with everything that makes the records THE monic square-free
+    decomposition — pairwise-coprime square-free parts, distinct
+    multiplicities, monic records — by exact bounded checks on the claimed
+    records alone.  Over ``QQ`` these properties admit exactly one
+    decomposition, so no backend recomputation of the source's (possibly
+    unrepresentable) true decomposition is ever needed.
     """
 
     polynomial: RationalPolynomial
@@ -205,9 +204,6 @@ class PolynomialSquareFreeDecompositionResult(StrictModel):
     def require_canonical_factor_records(self) -> Self:
         from jacobian.math.polynomials._conversions import (
             rational_polynomial_to_sympy,
-        )
-        from jacobian.math.polynomials._sympy import (
-            polynomial_square_free_decomposition,
         )
 
         multiplicities = tuple(factor.multiplicity for factor in self.factors)
@@ -224,14 +220,12 @@ class PolynomialSquareFreeDecompositionResult(StrictModel):
             self.polynomial,
             maximum_terms=_MAX_GCD_TERMS,
             maximum_exponent=_MAX_SQUARE_FREE_EXPONENT,
-            maximum_coefficient_digits=MAX_CANONICAL_RATIONAL_DIGITS,
             label="retained source polynomial",
         )
         require_polynomial_budget(
             self.reconstructed,
             maximum_terms=_MAX_GCD_TERMS,
             maximum_exponent=_MAX_SQUARE_FREE_EXPONENT,
-            maximum_coefficient_digits=MAX_CANONICAL_RATIONAL_DIGITS,
             label="reconstructed polynomial",
         )
         source = rational_polynomial_to_sympy(self.polynomial)
@@ -247,7 +241,7 @@ class PolynomialSquareFreeDecompositionResult(StrictModel):
             ),
             label="square-free",
             maximum_exponent=_MAX_SQUARE_FREE_EXPONENT,
-            replay_decomposition=polynomial_square_free_decomposition,
+            require_square_free_parts=True,
         )
         return self
 
@@ -280,15 +274,14 @@ class PolynomialFactorizationResult(StrictModel):
     Retains the canonical source polynomial so validation replays the
     defining relations ``reconstructed = polynomial`` and
     ``polynomial = coefficient * product(factor^multiplicity)`` together
-    with the uniqueness of the content-and-monic-irreducibles
-    normalization: an exact product does not force irreducible records, so
-    validation recomputes the canonical factorization of the retained
-    source with the same bounded backend invocation the operation itself
-    performs and compares the coefficient and the multiplicity-weighted
-    monic records against the claim.  The literal
+    with everything that makes the records THE content-and-monic-
+    irreducibles factorization — monic distinct irreducible records under
+    canonical ordering — by exact bounded checks on the claimed records
+    alone.  Over ``QQ`` these properties admit exactly one factorization,
+    so no backend recomputation of the retained source's true
+    factorization is ever needed.  The literal
     ``product_reconstruction = EXACT`` label is derived from that replay,
-    never accepted as evidence; no claimed product intermediate is ever
-    materialized.
+    never accepted as evidence.
     """
 
     polynomial: RationalPolynomial
@@ -305,7 +298,6 @@ class PolynomialFactorizationResult(StrictModel):
         from jacobian.math.polynomials._conversions import (
             rational_polynomial_to_sympy,
         )
-        from jacobian.math.polynomials._sympy import polynomial_factorization
 
         if len(self.polynomial.variables) != 1:
             raise ValueError("factorization currently supports one variable over QQ")
@@ -346,14 +338,12 @@ class PolynomialFactorizationResult(StrictModel):
             self.polynomial,
             maximum_terms=_MAX_GCD_TERMS,
             maximum_exponent=_MAX_GCD_DEGREE,
-            maximum_coefficient_digits=MAX_CANONICAL_RATIONAL_DIGITS,
             label="retained source polynomial",
         )
         require_polynomial_budget(
             self.reconstructed,
             maximum_terms=_MAX_GCD_TERMS,
             maximum_exponent=_MAX_GCD_DEGREE,
-            maximum_coefficient_digits=MAX_CANONICAL_RATIONAL_DIGITS,
             label="reconstructed polynomial",
         )
         source = rational_polynomial_to_sympy(self.polynomial)
@@ -368,7 +358,7 @@ class PolynomialFactorizationResult(StrictModel):
             ),
             label="irreducible",
             maximum_exponent=_MAX_GCD_DEGREE,
-            replay_decomposition=polynomial_factorization,
+            require_square_free_parts=False,
         )
         return self
 
@@ -383,6 +373,105 @@ def _canonical_poly_key(polynomial: Any) -> Any:
     )
 
 
+def _require_bounded_replay_step(
+    accumulated: Any, base: Any, work: int, *, label: str
+) -> tuple[Any, int]:
+    """Multiply one reconstruction step under proven work and support caps.
+
+    The exact sparse product costs ``len(accumulated) * len(base)``
+    monomial multiplications, counted before the backend runs; the running
+    count is capped by ``_MAX_REPLAY_WORK`` and the product's support by the
+    shared representation envelope.  For an authentic claim every prefix
+    product divides the retained source, so a guard trip proves the claim
+    cannot be authenticated within the representation envelope rather than
+    asserting a mathematical mismatch.
+    """
+
+    work += len(accumulated.terms()) * len(base.terms())
+    if work > _MAX_REPLAY_WORK:
+        raise ValueError(
+            f"{label} factor replay exceeds the "
+            f"{_MAX_REPLAY_WORK}-operation reconstruction budget"
+        )
+    candidate = accumulated * base
+    if len(candidate.terms()) > MAX_POLYNOMIAL_TERMS:
+        raise ValueError(
+            f"{label} factor reconstruction leaves the "
+            f"{MAX_POLYNOMIAL_TERMS}-term representation envelope"
+        )
+    return candidate, work
+
+
+def _validated_replay_records(
+    factors: tuple[PolynomialSquareFreeFactor, ...]
+    | tuple[PolynomialIrreducibleFactor, ...],
+    *,
+    mismatch_message: str,
+    label: str,
+    maximum_exponent: int,
+) -> list[tuple[Any, int]]:
+    """Budget, convert, and canonically deduplicate the claimed records.
+
+    Every record must sit inside the shared representation envelope, be
+    non-constant and monic, and carry a factor polynomial not listed by any
+    other record; canonical decompositions never repeat a factor.
+    """
+
+    from jacobian.math.polynomials._conversions import (
+        rational_polynomial_to_sympy,
+    )
+
+    claimed: list[tuple[Any, int]] = []
+    seen: set[Any] = set()
+    for record in factors:
+        require_polynomial_budget(
+            record.factor,
+            maximum_terms=MAX_POLYNOMIAL_TERMS,
+            maximum_exponent=maximum_exponent,
+            label=f"{label} factor",
+        )
+        if _polynomial_total_degree(record.factor) == 0:
+            raise ValueError(f"{label} factor must be non-constant")
+        base = rational_polynomial_to_sympy(record.factor)
+        if base.LC() != 1:
+            raise ValueError(mismatch_message)
+        key = _canonical_poly_key(base)
+        if key in seen:
+            raise ValueError(mismatch_message)
+        seen.add(key)
+        claimed.append((base, record.multiplicity))
+    return claimed
+
+
+def _require_disjoint_square_free_parts(
+    claimed: list[tuple[Any, int]], *, mismatch_message: str
+) -> None:
+    """Reject parts that are not square-free or not pairwise coprime.
+
+    A part fails square-freeness exactly when some irreducible divides it
+    together with every nonzero formal partial derivative; two distinct
+    parts fail coprimeness exactly when their GCD leaves one variable's
+    degree.  Both predicates operate only on the already-admitted claimed
+    records.
+    """
+
+    for base, _ in claimed:
+        derivative_gcd = None
+        for generator in base.gens:
+            partial = base.diff(generator)
+            if partial.is_zero:
+                continue
+            derivative_gcd = (
+                partial if derivative_gcd is None else derivative_gcd.gcd(partial)
+            )
+        if derivative_gcd is not None and not base.gcd(derivative_gcd).is_one:
+            raise ValueError(mismatch_message)
+    for index, (base, _) in enumerate(claimed):
+        for other, _ in claimed[index + 1 :]:
+            if not base.gcd(other).is_one:
+                raise ValueError(mismatch_message)
+
+
 def _verify_exact_factor_product(
     source: Any,
     factors: tuple[PolynomialSquareFreeFactor, ...]
@@ -392,69 +481,63 @@ def _verify_exact_factor_product(
     mismatch_message: str,
     label: str,
     maximum_exponent: int,
-    replay_decomposition: Callable[[Any], tuple[Any, tuple[tuple[Any, int], ...], Any]],
+    require_square_free_parts: bool,
 ) -> None:
-    """Replay ``coefficient * product(factor ** multiplicity) == source``.
+    """Authenticate the claimed records as the unique canonical decomposition.
 
-    Over ``QQ`` (characteristic zero) both the content-and-monic-irreducibles
-    factorization and the monic square-free decomposition are unique, so the
-    defining product identity holds exactly when the claimed content and the
-    claimed multiplicity-weighted monic factor records equal the ones the
-    maintained backend re-derives from the retained source polynomial: the
-    replay invokes the same bounded decomposition entry points the producing
-    operation itself ran on this identical admitted source envelope and
-    compares content and records.  No lane ever divides or forms a claimed
-    product, quotient, or power, so no claim can force quotient expansion.
+    Over ``QQ`` (characteristic zero) a decomposition with the following
+    exactly-certified properties exists only as THE canonical form of the
+    retained source polynomial — the content-and-monic-irreducibles
+    factorization when ``require_square_free_parts`` is false, the monic
+    square-free decomposition otherwise:
 
-    Verifying only the product is not enough to authenticate either
-    contract.  A product-exact claim whose parts overlap — ``(x - 1)`` and
-    ``((x - 1)(x + 1))**2`` against ``(x - 1)**3(x + 1)**2`` — survives
-    every exact division at distinct multiplicities while grouping
-    irreducibles into parts that are neither pairwise coprime nor the
-    square-free decomposition, and a single reducible record such as
-    ``x**2 - 1`` reconstructs ``x**2 - 1`` without being an irreducible
-    factorization.  Division-based lanes also cannot be bounded in general
-    no matter how they are preflighted: the exact quotient of two admitted
-    sparse sources can densify combinatorially beyond the representation
-    envelope, and an inexact division builds partial quotients unconstrained
-    by any per-variable degree box before it discovers non-divisibility.
-    Canonical recomparison rejects all of these typedly with zero divisions.
+    1. every record is monic, budgeted, non-constant, and distinct;
+    2. square-free results carry pairwise-coprime square-free parts;
+    3. irreducible-factorization records each satisfy ``is_irreducible``;
+    4. ``coefficient * product(record ** multiplicity) == source`` exactly.
+
+    Uniqueness makes these checks equivalent to equality with the recomputed
+    canonical decomposition while never invoking a factorization backend:
+    recomputing the true decomposition of an admitted source can itself be
+    unrepresentable (the multiplicity-one part of
+    ``prod((x_i^63 - 1)(x_i - 1))`` holds ``63^5`` terms inside a 1,024-term
+    request envelope), so validation must not materialize it to compare.
+    Every operation here touches only the claimed records or prefix products
+    of them; for an authentic claim each prefix divides the retained source,
+    the exact sparse multiplication cost is counted before it runs against a
+    total work budget, and any support beyond the shared representation
+    envelope rejects typedly instead of materializing.
     """
 
-    from sympy import Rational
-
-    from jacobian.math.polynomials._conversions import (
-        rational_polynomial_to_sympy,
-    )
+    from sympy import Poly, Rational
 
     if coefficient.as_fraction() == 0 and factors:
         raise ValueError("results with zero content retain no factors")
-    for record in factors:
-        require_polynomial_budget(
-            record.factor,
-            maximum_terms=_MAX_GCD_TERMS,
-            maximum_exponent=maximum_exponent,
-            maximum_coefficient_digits=MAX_CANONICAL_RATIONAL_DIGITS,
-            label=f"{label} factor",
-        )
-        if _polynomial_total_degree(record.factor) == 0:
-            raise ValueError(f"{label} factor must be non-constant")
-    try:
-        replayed_coefficient, replayed_factors, _ = replay_decomposition(source)
-    except Exception as exc:  # pragma: no cover - defensive
-        raise ValueError(f"invalid {label} factor replay") from exc
-    if Rational(*coefficient.as_integer_ratio()) != replayed_coefficient:
+    claimed = _validated_replay_records(
+        factors,
+        mismatch_message=mismatch_message,
+        label=label,
+        maximum_exponent=maximum_exponent,
+    )
+    accumulated = Poly(
+        Rational(*coefficient.as_integer_ratio()),
+        *source.gens,
+        domain=source.domain,
+    )
+    work = 0
+    for base, multiplicity in claimed:
+        for _ in range(multiplicity):
+            accumulated, work = _require_bounded_replay_step(
+                accumulated, base, work, label=label
+            )
+    if accumulated != source:
         raise ValueError(mismatch_message)
-    claimed: dict[Any, int] = {}
-    for record in factors:
-        key = _canonical_poly_key(rational_polynomial_to_sympy(record.factor))
-        claimed[key] = claimed.get(key, 0) + record.multiplicity
-    replayed: dict[Any, int] = {}
-    for factor, multiplicity in replayed_factors:
-        key = _canonical_poly_key(factor)
-        replayed[key] = replayed.get(key, 0) + multiplicity
-    if claimed != replayed:
-        raise ValueError(mismatch_message)
+    if require_square_free_parts:
+        _require_disjoint_square_free_parts(claimed, mismatch_message=mismatch_message)
+        return
+    for base, _ in claimed:
+        if not base.is_irreducible:
+            raise ValueError(mismatch_message)
 
 
 class PolynomialGroebnerBudget(StrictModel):

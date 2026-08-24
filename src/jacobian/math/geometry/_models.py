@@ -881,8 +881,8 @@ def _require_euclidean_triangulation_envelope(
                 delta = right - left
                 difference_digits = max(
                     difference_digits,
-                    len(str(abs(delta.numerator))),
-                    len(str(delta.denominator)),
+                    len(format_canonical_integer(abs(delta.numerator))),
+                    len(format_canonical_integer(delta.denominator)),
                 )
     turns = tuple(
         _cross(

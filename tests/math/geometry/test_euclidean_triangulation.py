@@ -7,6 +7,7 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.geometry._euclidean_triangulation import (
     minimum_euclidean_weight_triangulation,
 )
@@ -21,6 +22,13 @@ def _point(x: int, y: int) -> dict[str, dict[str, str]]:
     return {
         "x": {"num": str(x), "den": "1"},
         "y": {"num": str(y), "den": "1"},
+    }
+
+
+def _big_point(x: int, y: int) -> dict[str, dict[str, str]]:
+    return {
+        "x": {"num": format_canonical_integer(x), "den": "1"},
+        "y": {"num": format_canonical_integer(y), "den": "1"},
     }
 
 
@@ -436,6 +444,30 @@ class TestEuclideanTriangulation:
         assert tuple(
             term.as_fraction() for term in shifted.optimum.squared_lengths
         ) == (Fraction(2),)
+
+    def test_request_admits_a_square_scaled_past_the_integer_string_limit(
+        self,
+    ) -> None:
+        scale = 10**5000
+        result = minimum_euclidean_weight_triangulation(
+            _request(
+                (
+                    _point(0, 0),
+                    _big_point(scale, 0),
+                    _big_point(scale, 1),
+                    _point(0, 1),
+                )
+            )
+        )
+
+        assert result.status == "CERTIFIED_OPTIMUM"
+        assert result.optimum is not None
+        assert tuple((edge.first, edge.second) for edge in result.diagonals) == (
+            (1, 3),
+        )
+        assert tuple(term.as_fraction() for term in result.optimum.squared_lengths) == (
+            Fraction(scale * scale + 1),
+        )
 
     def test_request_rejects_extent_beyond_the_derived_output_bound(self) -> None:
         spread = 10**90

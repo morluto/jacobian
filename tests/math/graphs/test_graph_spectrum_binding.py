@@ -1,0 +1,145 @@
+"""Regression tests binding graph-spectrum results to their source graph."""
+
+from __future__ import annotations
+
+import copy
+
+import pytest
+from pydantic import ValidationError
+
+from jacobian.math.graphs.spectral._models import (
+    GraphEdgeList,
+    GraphSpectrumRequest,
+    GraphSpectrumResult,
+)
+from jacobian.math.graphs.spectral._operations import (
+    compute_adjacency_spectrum,
+    compute_laplacian_spectrum,
+)
+
+
+def _graph(vertex_count: int, edges: tuple[tuple[int, int], ...]) -> GraphEdgeList:
+    return GraphEdgeList(vertex_count=vertex_count, edges=edges)
+
+
+def test_producer_spectra_retain_source_and_replay() -> None:
+    path = _graph(3, ((0, 1), (1, 2)))
+
+    adjacency = compute_adjacency_spectrum(GraphSpectrumRequest(graph=path))
+    assert adjacency.graph == path
+    assert adjacency.matrix_convention == "ADJACENCY"
+    assert set(adjacency.eigenvalues) == {"-sqrt(2)", "0", "sqrt(2)"}
+    assert adjacency.multiplicities == (1, 1, 1)
+    assert GraphSpectrumResult.model_validate(adjacency.model_dump()) == adjacency
+
+    laplacian = compute_laplacian_spectrum(GraphSpectrumRequest(graph=path))
+    assert laplacian.matrix_convention == "LAPLACIAN"
+    assert set(laplacian.eigenvalues) == {"0", "1", "3"}
+    assert GraphSpectrumResult.model_validate(laplacian.model_dump()) == laplacian
+
+
+def test_structural_constraints_reject_forged_payloads() -> None:
+    path = _graph(3, ((0, 1), (1, 2)))
+    adjacency = compute_adjacency_spectrum(GraphSpectrumRequest(graph=path))
+    dumped = adjacency.model_dump()
+
+    length_mismatch = copy.deepcopy(dumped)
+    length_mismatch["multiplicities"] = [1, 1]
+    with pytest.raises(ValidationError, match="equal length"):
+        GraphSpectrumResult.model_validate(length_mismatch)
+
+    negative_multiplicity = copy.deepcopy(dumped)
+    negative_multiplicity["multiplicities"] = [1, -7, 1]
+    with pytest.raises(ValidationError, match="positive"):
+        GraphSpectrumResult.model_validate(negative_multiplicity)
+
+    zero_multiplicity = copy.deepcopy(dumped)
+    zero_multiplicity["multiplicities"] = [0, 2, 1]
+    with pytest.raises(ValidationError, match="positive"):
+        GraphSpectrumResult.model_validate(zero_multiplicity)
+
+    wrong_total = copy.deepcopy(dumped)
+    wrong_total["multiplicities"] = [1, 1, 2]
+    with pytest.raises(ValidationError, match="sum to the graph order"):
+        GraphSpectrumResult.model_validate(wrong_total)
+
+    arbitrary_string = copy.deepcopy(dumped)
+    arbitrary_string["eigenvalues"] = ["banana", "0", "sqrt(2)"]
+    with pytest.raises(ValidationError, match="exact spectrum"):
+        GraphSpectrumResult.model_validate(arbitrary_string)
+
+    forged_value = copy.deepcopy(dumped)
+    forged_value["eigenvalues"] = ["-1", "0", "sqrt(5)"]
+    with pytest.raises(ValidationError, match="exact spectrum"):
+        GraphSpectrumResult.model_validate(forged_value)
+
+    foreign_source = copy.deepcopy(dumped)
+    foreign_source["graph"] = {"vertex_count": 3, "edges": [[0, 1]]}
+    with pytest.raises(ValidationError, match="source graph"):
+        GraphSpectrumResult.model_validate(foreign_source)
+
+    swapped_convention = copy.deepcopy(dumped)
+    swapped_convention["matrix_convention"] = "LAPLACIAN"
+    with pytest.raises(ValidationError, match="exact spectrum"):
+        GraphSpectrumResult.model_validate(swapped_convention)
+
+
+def test_degenerate_and_repeated_spectra_stay_exact() -> None:
+    empty = compute_adjacency_spectrum(GraphSpectrumRequest(graph=_graph(2, ())))
+    assert empty.eigenvalues == ("0",)
+    assert empty.multiplicities == (2,)
+    assert GraphSpectrumResult.model_validate(empty.model_dump()) == empty
+
+    complete = compute_adjacency_spectrum(
+        GraphSpectrumRequest(
+            graph=_graph(4, ((0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)))
+        )
+    )
+    assert dict(zip(complete.eigenvalues, complete.multiplicities, strict=True)) == {
+        "-1": 3,
+        "3": 1,
+    }
+
+    laplacian_complete = compute_laplacian_spectrum(
+        GraphSpectrumRequest(
+            graph=_graph(4, ((0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)))
+        )
+    )
+    assert dict(
+        zip(
+            laplacian_complete.eigenvalues,
+            laplacian_complete.multiplicities,
+            strict=True,
+        )
+    ) == {
+        "0": 1,
+        "4": 3,
+    }
+
+
+def test_spectrum_reconstructs_the_characteristic_polynomial() -> None:
+    """The spectrum factorization matches the source-bound charpoly producer."""
+
+    from sympy import Poly, symbols, together
+
+    from jacobian.math.graphs.spectral._operations import (
+        compute_adjacency_characteristic_polynomial,
+    )
+    from jacobian.math.graphs.spectral.operations import _adjacency_matrix
+    from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
+
+    x = symbols("x")
+    path = _graph(4, ((0, 1), (1, 2), (2, 3)))
+    request = GraphSpectrumRequest(graph=path)
+    spectrum = compute_adjacency_spectrum(request)
+    charpoly_result = compute_adjacency_characteristic_polynomial(request)
+    expected = Poly(
+        rational_polynomial_to_sympy(charpoly_result.polynomial).as_expr(), x
+    )
+
+    factors = 1
+    for value, multiplicity in _adjacency_matrix(path).eigenvals().items():
+        factors *= (x - value) ** multiplicity
+    claimed = together(factors.expand())
+    assert together(expected.as_expr() - claimed) == 0
+    assert sum(spectrum.multiplicities) == path.vertex_count

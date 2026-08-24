@@ -18,6 +18,8 @@ from jacobian.math.graphs.spectral._models import (
 def compute_adjacency_spectrum(request: GraphSpectrumRequest) -> GraphSpectrumResult:
     result = adjacency_spectrum(request.graph)
     return GraphSpectrumResult(
+        graph=request.graph,
+        matrix_convention="ADJACENCY",
         eigenvalues=tuple(v for v, _ in result),
         multiplicities=tuple(m for _, m in result),
     )
@@ -26,6 +28,8 @@ def compute_adjacency_spectrum(request: GraphSpectrumRequest) -> GraphSpectrumRe
 def compute_laplacian_spectrum(request: GraphSpectrumRequest) -> GraphSpectrumResult:
     result = laplacian_spectrum(request.graph)
     return GraphSpectrumResult(
+        graph=request.graph,
+        matrix_convention="LAPLACIAN",
         eigenvalues=tuple(v for v, _ in result),
         multiplicities=tuple(m for _, m in result),
     )

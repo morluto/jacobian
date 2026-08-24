@@ -178,6 +178,7 @@ POLYNOMIAL_INVARIANT_OPERATIONS = (
         "polynomial",
         "square-free",
         "multiplicity",
+        version="3",
         examples=(
             example(
                 "square_free_x2_minus_one",
@@ -218,6 +219,7 @@ POLYNOMIAL_INVARIANT_OPERATIONS = (
         "polynomial",
         "factorization",
         "exact-computation",
+        version="3",
         examples=(
             example(
                 "factor_x_squared_minus_one",

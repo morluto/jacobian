@@ -39,9 +39,7 @@ MAX_GENERIC_FIBER_CERTIFICATE_TERMS = 4_096
 MAX_GENERIC_FIBER_COEFFICIENT_TERMS = 16_384
 MAX_GENERIC_FIBER_STANDARD_MONOMIALS = 512
 MAX_GENERIC_FIBER_CERTIFICATE_SOURCE_EXPONENT = MAX_POLYNOMIAL_EXPONENT
-MAX_GENERIC_FIBER_STANDARD_MONOMIAL_EXPONENT = (
-    MAX_GENERIC_FIBER_STANDARD_MONOMIALS - 1
-)
+MAX_GENERIC_FIBER_STANDARD_MONOMIAL_EXPONENT = MAX_GENERIC_FIBER_STANDARD_MONOMIALS - 1
 MAX_GENERIC_FIBER_REPLAY_PRODUCTS = 262_144
 MAX_GENERIC_FIBER_REPLAY_SOURCE_PRODUCTS = 262_144
 MAX_GENERIC_FIBER_REPLAY_COEFFICIENT_OPERATIONS = 1_048_576
@@ -338,9 +336,8 @@ def _serialized_term_support(term: Any) -> int | None:
     """Count one serialized term's coefficient support, or ``None`` if malformed."""
 
     if isinstance(term, GenericFiberTerm):
-        return (
-            len(term.coefficient.numerator.terms)
-            + len(term.coefficient.denominator.terms)
+        return len(term.coefficient.numerator.terms) + len(
+            term.coefficient.denominator.terms
         )
     if not isinstance(term, Mapping):
         return None

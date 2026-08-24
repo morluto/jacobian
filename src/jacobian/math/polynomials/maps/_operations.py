@@ -96,9 +96,7 @@ def compute_generic_degree(request: GenericDegreeRequest) -> GenericDegreeResult
         return GenericDegreeResult(
             outcome="ERROR",
             source=request.polynomial_map,
-            detail=(
-                "Singular metadata disagree with the exact certificate replay."
-            ),
+            detail=("Singular metadata disagree with the exact certificate replay."),
         )
     try:
         return GenericDegreeResult(

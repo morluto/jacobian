@@ -49,7 +49,10 @@ class _ReplayBudget:
 
     def charge_coefficient_operations(self, operations: int) -> None:
         self.coefficient_operations += operations
-        if self.coefficient_operations > MAX_GENERIC_FIBER_REPLAY_COEFFICIENT_OPERATIONS:
+        if (
+            self.coefficient_operations
+            > MAX_GENERIC_FIBER_REPLAY_COEFFICIENT_OPERATIONS
+        ):
             raise GenericFiberReplayLimitError(
                 "generic-fiber replay exceeds the declared coefficient-operation bound"
             )
@@ -117,9 +120,7 @@ def _fraction_field_element(
             return parameter_ring.zero
         return parameter_ring.from_dict(
             {
-                tuple(term.exponents): Fraction(
-                    *term.coefficient.as_integer_ratio()
-                )
+                tuple(term.exponents): Fraction(*term.coefficient.as_integer_ratio())
                 for term in terms
             }
         )
@@ -166,9 +167,7 @@ def _source_generators(
             exponents = tuple(term.exponents[index] for index in permutation)
             terms[exponents] = Fraction(*term.coefficient.as_integer_ratio())
         generator = ring.from_dict(terms)
-        generators.append(
-            generator - ring.from_dict({zero_exponents: field.gens[row]})
-        )
+        generators.append(generator - ring.from_dict({zero_exponents: field.gens[row]}))
     return tuple(generators)
 
 

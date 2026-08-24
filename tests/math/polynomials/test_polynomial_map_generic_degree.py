@@ -479,8 +479,7 @@ def test_standard_monomial_enumeration_admits_the_sparse_leading_ideal() -> None
     assert monomials == tuple(sorted(monomials))
     assert all(
         not all(
-            bound <= exponent
-            for bound, exponent in zip(lead, monomial, strict=True)
+            bound <= exponent for bound, exponent in zip(lead, monomial, strict=True)
         )
         for lead in leading
         for monomial in monomials

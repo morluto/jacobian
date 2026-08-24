@@ -31,6 +31,7 @@ __all__ = [
 ]
 
 _RESULT_NODES_EXCEEDED = "critical-pair result nodes exceed the supported bound"
+_CRITICAL_PAIR_PROFILE_FIXED_NODES = 384
 
 
 def _variables(term: Term) -> set[int]:
@@ -116,13 +117,15 @@ def _unify(
             if budget is not None:
                 budget.charge(equation_right)
             binding = {equation_left.symbol: equation_right}
-            substitution = {
-                variable: _apply_recursive_substitution(term, binding)
-                for variable, term in substitution.items()
-            }
-            if budget is not None:
-                for bound in substitution.values():
-                    budget.charge(bound)
+            binding_sizes = {equation_left.symbol: _term_node_count(equation_right)}
+            expanded_substitution: dict[int, Term] = {}
+            for variable, bound in substitution.items():
+                if budget is not None:
+                    budget.charge_nodes(_expanded_node_count(bound, binding_sizes))
+                expanded_substitution[variable] = _apply_recursive_substitution(
+                    bound, binding
+                )
+            substitution = expanded_substitution
             substitution[equation_left.symbol] = equation_right
             continue
         if (
@@ -200,7 +203,9 @@ class _MaterializationBudget:
 
     Charges count materialization events, so they upper-bound both the
     unification work performed and the distinct nodes any produced binding
-    contributes to a result.
+    contributes to a result. Growth is predicted and charged before the
+    corresponding terms are constructed, so an exceeded allowance is always
+    detected before its allocation.
     """
 
     __slots__ = ("remaining",)
@@ -208,10 +213,13 @@ class _MaterializationBudget:
     def __init__(self, remaining: int) -> None:
         self.remaining = remaining
 
-    def charge(self, term: Term) -> None:
-        self.remaining -= _term_node_count(term)
+    def charge_nodes(self, count: int) -> None:
+        self.remaining -= count
         if self.remaining < 0:
             raise _ResultEnvelopeError
+
+    def charge(self, term: Term) -> None:
+        self.charge_nodes(_term_node_count(term))
 
 
 def _require_bounded_variable_ids(term: Term) -> None:
@@ -231,18 +239,32 @@ def _expanded_node_count(term: Term, binding_sizes: dict[int, int]) -> int:
 
 
 def _admit_critical_pair_result_envelope(rules: tuple[RewriteRule, ...]) -> int:
-    """Charge every materialized overlap object against the result envelope.
+    """Charge every retained result object against the result envelope.
+
+    The result serializes the source rules beside the overlap profile, so the
+    retained source terms and the fixed profile scaffold are charged before
+    any overlap work: every source term node is charged exactly once, and
+    ``_CRITICAL_PAIR_PROFILE_FIXED_NODES`` covers the shape-fixed scaffolding
+    of a full candidate ledger and pair family (row framing, positions,
+    renaming entries, and substitution keys). A zero-candidate system
+    therefore still pays for the rules its result echoes.
 
     Binding growth is dependency-driven: a chained idempotent MGU expands
     exponentially in its binding depth, so no product of rule-side caps bounds
     the materialized substitution or its reducts. Each candidate is therefore
     standardized apart and unified exactly as execution will, under the shared
     remaining node allowance and with every materialized term charged; reduct
-    sizes are then computed exactly from the substitution. Failed unifications
-    keep their committed charges against the shared allowance. Returns the
-    total charged nodes and raises when the envelope is exceeded.
+    sizes are then computed exactly from the substitution, whose retained
+    bindings are charged once more as serialized certificate content. Failed
+    unifications keep their committed charges against the shared allowance.
+    Returns the total charged nodes and raises when the envelope is exceeded.
     """
-    remaining = MAX_CRITICAL_PAIR_RESULT_NODES
+    remaining = MAX_CRITICAL_PAIR_RESULT_NODES - _CRITICAL_PAIR_PROFILE_FIXED_NODES
+    for rule in rules:
+        remaining -= _term_node_count(rule.lhs)
+        remaining -= _term_node_count(rule.rhs)
+    if remaining < 0:
+        raise ValueError(_RESULT_NODES_EXCEEDED)
     for outer_index, outer in enumerate(rules):
         for position in _nonvariable_positions(outer.lhs):
             for inner_index, inner in enumerate(rules):
@@ -270,6 +292,8 @@ def _admit_critical_pair_result_envelope(rules: tuple[RewriteRule, ...]) -> int:
                     variable: _term_node_count(binding)
                     for variable, binding in substitution.items()
                 }
+                for bound in substitution.values():
+                    remaining -= _term_node_count(bound)
                 remaining -= _expanded_node_count(
                     _replace_at_position(
                         standardized_outer.lhs, position, standardized_inner.rhs

@@ -28,6 +28,7 @@ from jacobian.math.term_rewriting.operations import (
     _MaterializationBudget,
     _nonvariable_positions,
     _replace_at_position,
+    _ResultEnvelopeError,
     _standardize_apart,
     _term_node_count,
     _unify,
@@ -57,6 +58,13 @@ def _var(symbol: int) -> Term:
 
 def _app(symbol: int, *children: Term) -> Term:
     return Term(is_variable=False, symbol=symbol, children=tuple(children))
+
+
+def _complete_tree(symbol: int, leaf: Term, branching: int, depth: int) -> Term:
+    result = leaf
+    for _ in range(depth):
+        result = _app(symbol, *([result] * branching))
+    return result
 
 
 def _chained_overlap_witness(
@@ -498,6 +506,38 @@ class TestCriticalPairs:
             "max_variable_id": 999_999,
         }
 
+    def test_retained_rules_pay_for_the_result_envelope_without_overlaps(self):
+        # f(x) -> R excludes its single tautological root overlap, so the
+        # overlap ledger is empty and only the retained rules carry the
+        # envelope cost of the result.
+        signature = term_rewriting.RankedSignature(arities=(1, 16))
+        rule = RewriteRule(
+            lhs=_app(0, _var(0)),
+            rhs=_complete_tree(1, _var(0), 16, 4),
+        )
+        assert _term_node_count(rule.rhs) > MAX_CRITICAL_PAIR_RESULT_NODES
+        assert len(_nonvariable_positions(rule.lhs)) == 1
+        with pytest.raises(ValidationError, match="result nodes"):
+            CriticalPairsRequest(signature=signature, rules=(rule,))
+        with pytest.raises(ValueError, match="result nodes"):
+            critical_pairs(signature, (rule,))
+
+    def test_large_retained_rules_admit_within_the_shared_envelope(self):
+        signature = term_rewriting.RankedSignature(arities=(1, 15))
+        rule = RewriteRule(
+            lhs=_app(0, _var(0)),
+            rhs=_complete_tree(1, _var(0), 15, 3),
+        )
+        assert _term_node_count(rule.rhs) < MAX_CRITICAL_PAIR_RESULT_NODES
+        result = compute_critical_pairs(
+            CriticalPairsRequest(signature=signature, rules=(rule,))
+        )
+        assert result.profile.candidates == ()
+        assert result.profile.pairs == ()
+        assert (
+            CriticalPairsResult.model_validate_json(result.model_dump_json()) == result
+        )
+
     def test_result_replays_exact_critical_pair_family(self):
         rules = (
             RewriteRule(lhs=_app(0, _app(1, _var(0))), rhs=_var(0)),
@@ -681,6 +721,36 @@ class TestCriticalPairs:
             CriticalPairsRequest(signature=signature, rules=rules)
         with pytest.raises(ValueError, match="result nodes"):
             critical_pairs(signature, rules)
+
+    def test_deep_chained_binding_growth_is_preflight_bounded(self):
+        signature, outer_rule, inner_rule = _chained_overlap_witness(9)
+        rules = (outer_rule, inner_rule)
+        candidates = len(rules) * sum(
+            len(_nonvariable_positions(rule.lhs)) for rule in rules
+        ) - len(rules)
+        assert 0 < candidates <= MAX_CRITICAL_PAIR_CANDIDATES
+        with pytest.raises(ValidationError, match="result nodes"):
+            CriticalPairsRequest(signature=signature, rules=rules)
+        with pytest.raises(ValueError, match="result nodes"):
+            critical_pairs(signature, rules)
+
+    def test_budgeted_unification_charges_exactly_the_materialized_sizes(self):
+        for depth in range(1, 6):
+            _, outer_rule, inner_rule = _chained_overlap_witness(depth)
+            standardized_outer, standardized_inner, _, _ = _standardize_apart(
+                outer_rule, inner_rule
+            )
+            inner_lhs = standardized_inner.lhs
+            overlap = term_at_position(standardized_outer.lhs, ())
+            expected = unify(inner_lhs, overlap)
+            assert expected is not None
+            budget = _MaterializationBudget(MAX_CRITICAL_PAIR_RESULT_NODES)
+            assert _unify(inner_lhs, overlap, budget) == expected
+            spent = MAX_CRITICAL_PAIR_RESULT_NODES - budget.remaining
+            tight = _MaterializationBudget(spent)
+            assert _unify(inner_lhs, overlap, tight) == expected
+            with pytest.raises(_ResultEnvelopeError):
+                _unify(inner_lhs, overlap, _MaterializationBudget(spent - 1))
 
 
 class TestValidation:

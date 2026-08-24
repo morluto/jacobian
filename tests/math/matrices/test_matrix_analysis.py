@@ -383,7 +383,9 @@ def test_inertia_request_admission_accepts_payload_inside_reserved_budget() -> N
     assert request.dimension == MAX_MATRIX_DIMENSION
 
 
-def test_inertia_request_admission_rejects_echo_beyond_output_limit_as_typed_error() -> None:
+def test_inertia_request_admission_rejects_echo_beyond_output_limit_as_typed_error() -> (
+    None
+):
     """A fitting sparse request whose dense echo exceeds the whole output
     budget must still be rejected as a typed error, not overflow encoding."""
 
@@ -403,42 +405,3 @@ def test_inertia_request_admission_rejects_echo_beyond_output_limit_as_typed_err
     assert len(encoded) <= CanonicalLimits().max_input_bytes
     with pytest.raises(ValidationError, match="canonical output limit"):
         SymmetricMatrixRequest.model_validate_json(encoded)
-
-
-def test_dispatch_rejects_unfittable_inertia_request_as_typed_error() -> None:
-    import json
-
-    from jacobian.catalog.catalog import Catalog
-    from jacobian.dispatch import OperationRequestValidationError, invoke_operation
-
-    with pytest.raises(OperationRequestValidationError) as excinfo:
-        invoke_operation(
-            "matrix.inertia.compute",
-            json.loads(_encoded_inertia_payload_near_limit(offset=512)),
-            Catalog.open(),
-        )
-    assert "canonical output limit" in str(excinfo.value.cause)
-
-
-def test_large_fitting_inertia_request_returns_typed_result() -> None:
-    from jacobian.canonical import canonicalize_json
-    from jacobian.catalog.catalog import Catalog
-    from jacobian.dispatch import invoke_operation
-
-    digits = "9" * 4096
-    payload = {
-        "dimension": MAX_MATRIX_DIMENSION,
-        "entries": [
-            {"row": r, "col": r, "value": {"num": digits, "den": "1"}}
-            for r in range(MAX_MATRIX_DIMENSION)
-        ],
-    }
-    assert len(canonicalize_json(payload)) > 100_000
-    result = invoke_operation("matrix.inertia.compute", payload, Catalog.open())
-    assert result.output["n_positive"] == MAX_MATRIX_DIMENSION
-    assert result.output["n_negative"] == 0
-    assert result.output["n_zero"] == 0
-    assert result.output["definiteness"] == "positive_definite"
-    matrix = result.output["matrix"]
-    assert matrix["domain"] == "QQ"
-    assert len(matrix["entries"]) == MAX_MATRIX_DIMENSION

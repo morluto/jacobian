@@ -261,9 +261,7 @@ class SymmetricMatrixRequest(StrictModel):
         source = _canonical_source_matrix(self)
         output_limit = CanonicalLimits().max_output_bytes
         try:
-            retained_bytes = len(
-                encode_strict_json(source.model_dump(mode="json"))
-            )
+            retained_bytes = len(encode_strict_json(source.model_dump(mode="json")))
         except CanonicalizationError:
             retained_bytes = output_limit + 1
         if retained_bytes + _RESULT_ENVELOPE_RESERVE_BYTES > output_limit:

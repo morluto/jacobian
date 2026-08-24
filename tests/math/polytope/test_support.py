@@ -17,6 +17,7 @@ from jacobian.math.polytope import (
 )
 from jacobian.math.polytope import _operations as polytope_operations
 from jacobian.math.polytope._models import (
+    MAX_EXTREMALITY_HEIGHT_WORK,
     MAX_SUPPORT_COMPONENT_DIGITS,
     PolytopeSupportRequest,
 )
@@ -1041,6 +1042,81 @@ def test_extremality_budget_bounds_are_enforced_before_exact_conversion(
         )
 
 
+def test_extremality_height_work_bound_is_enforced_before_exact_conversion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A vertex family with admitted counts but canonical-limit heights is
+    rejected before any conversion: exact determinant work grows as
+    orientation_tests * height^2, so counts alone cannot bound the proof."""
+
+    def unexpected_conversion(polytope: object) -> None:
+        raise AssertionError("exact conversion ran before the height-work gate")
+
+    monkeypatch.setattr(
+        polytope_operations, "_support_sympy_points", unexpected_conversion
+    )
+
+    four_axes = ("w", "x", "y", "z")
+    digits = 32_768  # the canonical rational limit: counts pass, work does not
+    vertices_12_by_4 = tuple(
+        RationalPolytopeVertex(
+            vertex_id=f"v{index:02d}",
+            coordinates=tuple(
+                CanonicalRational(num="9" * (digits - 2) + f"{index:02d}", den="1")
+                for _ in range(4)
+            ),
+        )
+        for index in range(12)
+    )
+
+    with pytest.raises(ValidationError, match="height-work bound"):
+        RationalVPolytope(
+            space=RationalCoordinateSpace(axes=four_axes),
+            vertices=vertices_12_by_4,
+        )
+
+
+def test_extremality_height_work_grades_admission_by_coordinate_height() -> None:
+    """At a height the count gates alone would admit freely, only families
+    whose orientation-test count fits the coupled budget still validate:
+    the same near-threshold height admits a 3-vertex triangle and rejects a
+    6-vertex dim-3 family just past ``MAX_EXTREMALITY_HEIGHT_WORK``."""
+
+    threshold_digits = 18_257  # 3 * 18_257^2 <= MAX < 60 * 18_258^2
+    big = CanonicalRational(num="9" * threshold_digits, den="1")
+    zero = CanonicalRational(num="0", den="1")
+    triangle = RationalVPolytope(
+        space=RationalCoordinateSpace(axes=("x", "y")),
+        vertices=(
+            RationalPolytopeVertex(vertex_id="origin", coordinates=(zero, zero)),
+            RationalPolytopeVertex(vertex_id="right", coordinates=(big, zero)),
+            RationalPolytopeVertex(vertex_id="top", coordinates=(zero, big)),
+        ),
+    )
+    assert len(triangle.vertices[1].coordinates[0].num) == threshold_digits
+
+    def unexpected_conversion(polytope: object) -> None:
+        raise AssertionError("exact conversion ran before the height-work gate")
+
+    over_digits = threshold_digits + 1
+    vertices_over = tuple(
+        RationalPolytopeVertex(
+            vertex_id=f"v{index:02d}",
+            coordinates=tuple(
+                CanonicalRational(num="9" * (over_digits - 2) + f"{index:02d}", den="1")
+                for _ in range(3)
+            ),
+        )
+        for index in range(6)
+    )
+    with pytest.raises(ValidationError, match="height-work bound") as exc_info:
+        RationalVPolytope(
+            space=RationalCoordinateSpace(axes=("x", "y", "z")),
+            vertices=vertices_over,
+        )
+    assert str(MAX_EXTREMALITY_HEIGHT_WORK) in str(exc_info.value)
+
+
 def test_support_schema_publishes_component_and_hull_work_bounds() -> None:
     schema = PolytopeSupportRequest.model_json_schema()
     vertex_description = schema["$defs"]["RationalVPolytope"]["properties"]["vertices"][
@@ -1053,6 +1129,7 @@ def test_support_schema_publishes_component_and_hull_work_bounds() -> None:
         assert str(MAX_SUPPORT_COMPONENT_DIGITS) in description
     assert "C(n,d)" in vertex_description
     assert "orientation tests" in vertex_description
+    assert str(MAX_EXTREMALITY_HEIGHT_WORK) in vertex_description
 
 
 def test_support_schema_publishes_common_space_requirement() -> None:

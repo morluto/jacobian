@@ -136,6 +136,25 @@ remaining vertices against its supporting hyperplane. Admission charges the
 complete product ``C(n,d) * (n-d)`` before materializing either family.
 """
 
+MAX_EXTREMALITY_HEIGHT_WORK = 20_000_000_000
+"""Ceiling coupling extremality-proof work with coordinate height.
+
+The V-polytope extremality proof evaluates ``T = C(n, d) * (n - d)``
+orientation determinants on ``(d+1) x (d+1)`` rational matrices. With ``D``
+the largest decimal digit count over every reduced numerator and denominator,
+clearing each row's denominators bounds matrix entries by ``(d + 2) * D``
+digits, Hadamard's bound bounds every fraction-free elimination intermediate
+by ``(d + 1) * (d + 2) * D`` digits, and the elimination performs
+``O((d + 1)^3)`` multiplications of such operands. With ``d <= MAX_DIMENSION``
+fixed, one orientation test therefore costs ``Theta(D^2)`` limb operations,
+and the complete proof ``T * D^2`` up to constants absorbed by this ceiling.
+The ceiling is calibrated above the worst work the published operation
+envelopes admit (the support regime: 500,000 tests at 150 digits gives
+1.125e10), so values inside those envelopes validate unchanged while larger
+heights grade the admitted test count down proportionally — 19,073 tests at
+1,024 digits, 18 at the 32,768-digit canonical limit.
+"""
+
 
 def _require_unicode_scalar_label(value: str) -> str:
     """Reject labels carrying code points strict JSON cannot encode.
@@ -1017,8 +1036,12 @@ class RationalVPolytope(StrictModel):
         description=(
             "Complete irredundant vertex family, ordered strictly by vertex_id. "
             "The exact extremality proof requires C(n,d) <= "
-            f"{MAX_SUPPORT_VERTEX_SUBSETS} candidate subfacets and C(n,d) * "
-            f"(n-d) <= {MAX_SUPPORT_ORIENTATION_TESTS} orientation tests."
+            f"{MAX_SUPPORT_VERTEX_SUBSETS} candidate subfacets, C(n,d) * "
+            f"(n-d) <= {MAX_SUPPORT_ORIENTATION_TESTS} orientation tests, and "
+            f"C(n,d) * (n-d) * D^2 <= {MAX_EXTREMALITY_HEIGHT_WORK}, where D is "
+            "the largest reduced numerator/denominator digit count across all "
+            "vertex coordinates (exact determinant work grows quadratically "
+            "with coordinate height)."
         ),
     )
 
@@ -1714,6 +1737,7 @@ __all__ = [
     "MAX_BOUNDEDNESS_COMBINATIONS",
     "MAX_COMPUTED_FACETS",
     "MAX_DIMENSION",
+    "MAX_EXTREMALITY_HEIGHT_WORK",
     "MAX_FACETS",
     "MAX_FACET_COORDINATE_DIGITS",
     "MAX_FACET_DIMENSION",

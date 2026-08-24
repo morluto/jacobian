@@ -36,6 +36,7 @@ from jacobian.canonical import format_canonical_integer
 from jacobian.math.polytope._models import (
     MAX_BOUNDEDNESS_COMBINATIONS,
     MAX_COMPUTED_FACETS,
+    MAX_EXTREMALITY_HEIGHT_WORK,
     MAX_FACET_INCIDENCES,
     MAX_FACET_SIGN_TESTS,
     MAX_HULL_SUBFACETS,
@@ -585,9 +586,14 @@ def require_full_dimensional_extreme_vertices(polytope: RationalVPolytope) -> No
     has established that its labelled generators are exactly the polytope's
     vertices.  The existing hull-facet code gives the latter proof by the
     active-normal rank characterization of extreme vertices.  The published
-    subfacet and orientation-test budgets depend only on the vertex count
-    and dimension, so they are enforced before any canonical coordinate is
-    converted or any exact linear algebra runs.
+    budgets are enforced from typed counts and reduced-component digit
+    lengths before any canonical coordinate is converted or any exact linear
+    algebra runs: the subfacet and orientation-test bounds depend only on
+    the vertex count and dimension, and the height-work bound couples those
+    test counts with the operand heights because one orientation determinant
+    costs ``Theta(D^2)`` limb operations at reduced-component height ``D``
+    (see ``MAX_EXTREMALITY_HEIGHT_WORK``), so all three together bound the
+    proof's exact work across the whole canonical coordinate domain.
     """
 
     dimension = len(polytope.space.axes)
@@ -603,6 +609,17 @@ def require_full_dimensional_extreme_vertices(polytope: RationalVPolytope) -> No
         raise ValueError(
             "V-polytope extremality proof exceeds the orientation-test bound "
             f"({orientation_tests} > {MAX_SUPPORT_ORIENTATION_TESTS})"
+        )
+    component_digits = max(
+        max(len(coordinate.num.lstrip("-")), len(coordinate.den.lstrip("-")))
+        for vertex in polytope.vertices
+        for coordinate in vertex.coordinates
+    )
+    height_work = orientation_tests * component_digits**2
+    if height_work > MAX_EXTREMALITY_HEIGHT_WORK:
+        raise ValueError(
+            "V-polytope extremality proof exceeds the height-work bound "
+            f"({height_work} > {MAX_EXTREMALITY_HEIGHT_WORK})"
         )
     points = _support_sympy_points(polytope)
     differences = [

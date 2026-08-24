@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import shutil
 import sys
 from dataclasses import dataclass
@@ -127,7 +128,7 @@ def run_bounded_certificate_replay(
     source: RationalPolynomialMap,
     certificate: GenericFiberCertificate,
     *,
-    wall_seconds: int,
+    wall_seconds: float,
 ) -> CertificateReplayResult:
     """Replay one exact certificate inside a killable bounded worker process."""
 
@@ -149,7 +150,7 @@ def run_bounded_certificate_replay(
             stdout_limit=_REPLAY_STDOUT_LIMIT,
             stderr_limit=_REPLAY_STDERR_LIMIT,
             resource_limits=ProcessResourceLimits(
-                cpu_seconds=wall_seconds,
+                cpu_seconds=max(1, math.ceil(wall_seconds)),
                 address_space_bytes=_REPLAY_ADDRESS_SPACE_BYTES,
                 file_size_bytes=_REPLAY_FILE_SIZE_BYTES,
             ),

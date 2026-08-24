@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -324,6 +325,75 @@ def test_heavy_certificate_replay_is_killably_bounded(
             backend_version="4.4.1",
         ),
     )
+
+    result = compute_generic_degree(
+        GenericDegreeRequest(
+            polynomial_map=_two_variable_map(),
+            resource_budget=GenericDegreeComputationBudget(wall_seconds=1),
+        )
+    )
+
+    assert result.outcome == "TIMEOUT"
+    assert result.detail == "Certificate replay exceeded the declared wall-time limit."
+    assert result.degree is None
+    assert result.evidence is None
+
+
+def test_one_second_budget_still_replays_a_light_certificate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    records = (
+        "JACOBIAN_SINGULAR_GENERIC_FIBER_V1",
+        "44105",
+        "0",
+        "1",
+        "1",
+        "1",
+        "POLYNOMIAL",
+        "1",
+        "1",
+        "1",
+        "0",
+        "(-jtp1)",
+        "1",
+        "END_POLYNOMIAL",
+        "POLYNOMIAL",
+        "0",
+        "1",
+        "1",
+        "END_POLYNOMIAL",
+        "END",
+    )
+    executable = _executable(tmp_path, f"print({chr(10).join(records)!r})")
+    _select_executable(monkeypatch, executable)
+
+    result = compute_generic_degree(
+        GenericDegreeRequest(
+            polynomial_map=_map(),
+            resource_budget=GenericDegreeComputationBudget(wall_seconds=1),
+        )
+    )
+
+    assert result.outcome == "GENERICALLY_FINITE"
+    assert result.degree == 1
+    assert result.evidence is not None
+
+
+def test_expired_deadline_after_the_backend_still_reports_pre_replay_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def slow_backend(*_args):
+        time.sleep(1.5)
+        return _singular.SingularGenericFiberResult(
+            outcome="COMPUTED",
+            certificate=_stripe_certificate(),
+            dimension=0,
+            vector_dimension=3,
+            backend_version="4.4.1",
+        )
+
+    monkeypatch.setattr(_operations, "run_singular_generic_fiber", slow_backend)
 
     result = compute_generic_degree(
         GenericDegreeRequest(

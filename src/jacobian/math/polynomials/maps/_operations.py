@@ -82,8 +82,8 @@ def compute_generic_degree(request: GenericDegreeRequest) -> GenericDegreeResult
     else:
         mathematical_outcome = "DOMINANT_NOT_GENERICALLY_FINITE"
         degree = None
-    remaining_seconds = int(deadline - time.monotonic())
-    if remaining_seconds < 1:
+    remaining_seconds = deadline - time.monotonic()
+    if remaining_seconds <= 0:
         return GenericDegreeResult(
             outcome="TIMEOUT",
             source=request.polynomial_map,

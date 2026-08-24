@@ -13,12 +13,12 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "code.nonlinear.distance_profile.compute",
         AdmissionDecision.KEEP,
-        "exact minimum Hamming distance and weight profile by brute-force enumeration",
+        "exact source-bound minimum Hamming distance and weight profile",
     ),
     OperationAdmission(
         "code.nonlinear.constant_weight.compute",
         AdmissionDecision.KEEP,
-        "exact generation of all constant-weight binary words",
+        "exact bounded generation of the canonical constant-weight binary code",
     ),
     OperationAdmission(
         "code.binary.word_distance.compute",
@@ -28,17 +28,17 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "code.binary.explicit.profile.compute",
         AdmissionDecision.KEEP,
-        "exact complete distance profile with histogram and extremal witnesses",
+        "exact source-replayed distance profile under derived pair-work and result bounds",
     ),
     OperationAdmission(
         "code.binary.constant_weight.profile.compute",
         AdmissionDecision.KEEP,
-        "exact profile of a constant-weight binary code with support-intersection distances",
+        "exact source-replayed distance and intersection profile under derived bounds",
     ),
     OperationAdmission(
         "code.binary.explicit.to_set_system.compute",
         AdmissionDecision.NATIVE_ONLY,
-        "trivial projection enumerating support indices already supplied by caller",
+        "source-bound projection to the complete coordinate axis and support blocks",
         native_symbol="jacobian.math.code_nonlinear.to_set_system",
     ),
 )

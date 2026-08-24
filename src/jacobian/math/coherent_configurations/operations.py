@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
 from .values import (
@@ -58,6 +59,12 @@ def _source_bytes(source: CoherentConfigurationInput) -> int:
     return len(source.model_dump_json().encode("utf-8"))
 
 
+def _json_string_byte_bound(value: str) -> int:
+    """Conservatively bound one JSON string scalar, including escapes."""
+
+    return len(json.dumps(value, ensure_ascii=True).encode("utf-8"))
+
+
 def _estimate_result_bytes(source: CoherentConfigurationInput) -> int:
     """Bound the full wire result before materializing its cubic tensor.
 
@@ -68,8 +75,10 @@ def _estimate_result_bytes(source: CoherentConfigurationInput) -> int:
     """
 
     source_bytes = _source_bytes(source)
-    relation_id_bytes = max(len(value.encode("utf-8")) for value in source.relation_ids)
-    point_bytes = max(len(value.encode("utf-8")) for value in source.points)
+    relation_id_bytes = max(
+        _json_string_byte_bound(value) for value in source.relation_ids
+    )
+    point_bytes = max(_json_string_byte_bound(value) for value in source.points)
     relation_count = len(source.relation_ids)
     point_count = len(source.points)
     tensor_entry_bytes = 3 * relation_id_bytes + 128

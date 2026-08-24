@@ -77,6 +77,17 @@ def _thin_four_point_configuration(
     }
 
 
+def _escaped_thin_four_point_configuration() -> dict[str, object]:
+    relation_ids = [f"{index:02d}" + '"' * 30 for index in range(16)]
+    return {
+        "points": ["a", "b", "c", "d"],
+        "relation_ids": relation_ids,
+        "relation_matrix": [
+            [relation_ids[4 * left + right] for right in range(4)] for left in range(4)
+        ],
+    }
+
+
 def _cyclic_twelve_configuration() -> dict[str, object]:
     points = [f"p{index:02d}" for index in range(12)]
     relation_ids = [f"d{index:02d}" for index in range(12)]
@@ -246,6 +257,21 @@ def test_utf8_label_byte_bounds_apply_to_direct_and_json_requests() -> None:
             Catalog.open(),
         )
     assert "relation_ids must not exceed" in str(error.value.errors())
+
+
+def test_escaped_result_over_budget_is_rejected_at_both_request_boundaries() -> None:
+    payload = _escaped_thin_four_point_configuration()
+
+    with pytest.raises(ValidationError, match="result exceeds the byte budget"):
+        _request(payload)
+
+    with pytest.raises(OperationRequestValidationError) as error:
+        invoke_operation(
+            "coherent_configuration.analyze.compute",
+            {"configuration": payload},
+            Catalog.open(),
+        )
+    assert "result exceeds the byte budget" in str(error.value.errors())
 
 
 def test_maximum_relation_tensor_stays_inside_admitted_result_envelope() -> None:

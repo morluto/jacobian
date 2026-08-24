@@ -42,6 +42,14 @@ def reachable_state_profile(
     This is least-fixed-point reachability over transition hyperedges: a row
     becomes usable only after every child state has a witness.  It is not graph
     reachability over state vertices.
+
+    The canonical witness of one state is the unique ground tree chosen by
+    taking, among every transition row targeting the state whose ordered child
+    states all have witnesses, the candidates' fewest node count
+    (``1 + sum(child witness node counts)``) and breaking ties by the
+    lexicographically smallest ``(symbol, child_states, target_state)``
+    transition, comparing ``child_states`` element-wise as integers; each
+    child's witness satisfies the same rule recursively.
     """
 
     if _reachability_execution_work_bound(automaton) > (
@@ -49,26 +57,8 @@ def reachable_state_profile(
     ):
         raise ValueError("tree automaton reachability work bound exceeded")
 
-    choices: list[_WitnessChoice | None] = [None] * automaton.state_count
     transitions = tuple(sorted(automaton.transitions, key=_transition_key))
-    for _ in range(automaton.state_count + 1):
-        next_choices = choices.copy()
-        for transition in transitions:
-            child_choices = tuple(choices[state] for state in transition.child_states)
-            if any(choice is None for choice in child_choices):
-                continue
-            node_count = 1 + sum(
-                choice.node_count for choice in child_choices if choice is not None
-            )
-            candidate = _WitnessChoice(node_count, transition)
-            current = next_choices[transition.target_state]
-            if current is None or _witness_key(candidate) < _witness_key(current):
-                next_choices[transition.target_state] = candidate
-        if next_choices == choices:
-            break
-        choices = next_choices
-    else:  # pragma: no cover - the finite state bound proves convergence above.
-        raise RuntimeError("tree automaton reachability did not reach a fixed point")
+    choices, _scans = _saturate_choices(transitions, automaton.state_count)
 
     reachable_choices = tuple(
         (state, choice) for state, choice in enumerate(choices) if choice is not None
@@ -90,26 +80,46 @@ def reachable_state_profile(
     )
 
 
-def _constructible_state_count(automaton: BottomUpTreeAutomaton) -> int:
-    """Count states with at least one derivation from the nullary-seeded set."""
+def _saturate_choices(
+    transitions: tuple[TreeAutomatonTransition, ...],
+    state_count: int,
+) -> tuple[list[_WitnessChoice | None], int]:
+    """Run the least-fixed-point saturation and return (choices, scan count).
 
-    known: set[int] = set()
-    while True:
-        grown = set(known)
-        for row in automaton.transitions:
-            if row.target_state not in grown and all(
-                state in known for state in row.child_states
-            ):
-                grown.add(row.target_state)
-        if len(grown) == len(known):
-            return len(known)
-        known = grown
+    This is the single shared kernel loop: ``reachable_state_profile`` uses the
+    returned choices to build witnesses, and work admission uses the returned
+    scan count as the exact measured convergence depth of one profile, so the
+    priced quantity and the executed quantity cannot drift apart.
+    """
+
+    choices: list[_WitnessChoice | None] = [None] * state_count
+    scans = 0
+    for _ in range(state_count + 1):
+        scans += 1
+        next_choices = choices.copy()
+        for transition in transitions:
+            child_choices = tuple(choices[state] for state in transition.child_states)
+            if any(choice is None for choice in child_choices):
+                continue
+            node_count = 1 + sum(
+                choice.node_count for choice in child_choices if choice is not None
+            )
+            candidate = _WitnessChoice(node_count, transition)
+            current = next_choices[transition.target_state]
+            if current is None or _witness_key(candidate) < _witness_key(current):
+                next_choices[transition.target_state] = candidate
+        if next_choices == choices:
+            return choices, scans
+        choices = next_choices
+    raise RuntimeError(  # pragma: no cover - finite state bound proves convergence.
+        "tree automaton reachability did not reach a fixed point"
+    )
 
 
 def _reachability_price_components(
     automaton: BottomUpTreeAutomaton,
-) -> tuple[int, int, int, int]:
-    """Return (sort work, per-scan work, scan rounds, admission closure res cans)."""
+) -> tuple[int, int, int]:
+    """Return (sort work, per-scan work, measured saturation scan rounds)."""
 
     transition_count = len(automaton.transitions)
     maximum_arity = max(
@@ -120,33 +130,32 @@ def _reachability_price_components(
     per_scan_work = 2 * automaton.state_count + sum(
         6 + 4 * len(row.child_states) for row in automaton.transitions
     )
-    if any(not row.child_states for row in automaton.transitions):
-        constructible = _constructible_state_count(automaton)
-        scan_rounds = 2 * (constructible + 1)
-        closure_rescans = constructible + 1
-    else:
-        scan_rounds = 1
-        closure_rescans = 0
-    return sort_work, per_scan_work, scan_rounds, closure_rescans
+    sorted_transitions = tuple(sorted(automaton.transitions, key=_transition_key))
+    _, scan_rounds = _saturate_choices(sorted_transitions, automaton.state_count)
+    return sort_work, per_scan_work, scan_rounds
 
 
 def _reachability_execution_work_bound(automaton: BottomUpTreeAutomaton) -> int:
     """Conservatively bound one native reachability profile's execution work.
 
-    Each profile sorts transition rows, runs one constructible-state closure
-    prepass plus its saturation scans, and materializes then recounts at
-    most the admitted witness nodes.  A scan round repeats only when the previous
-    round defined or improved a choice, so an automaton without nullary
-    transitions is immediately stable and pays exactly one scan: no row can
-    fire before any state has a witness.  When nullary transitions seed the
-    fixed point, a minimum-node witness never repeats a state along a
-    root-to-leaf path -- substituting the higher occurrence of a repeated
-    state for the lower one would strictly shrink the tree while preserving
-    the derived state -- so every witness height is bounded by the number of
-    states constructible from the nullary seeds, and the scans stabilize
-    within that count plus one confirmation round.  Admission prices the
-    closure prepass and the saturation scans together at the same per-scan
-    cost.  Every row scan visits its child-state tuple independently to
+    Each call first evaluates this very bound, which prices one saturation
+    probe: the shared kernel loop run once over sorted rows to measure the
+    exact number of scan rounds the fixed point needs.  The probe is the same
+    code path the profile executes, so the measured round count equals the
+    profile's actual convergence depth by construction rather than by estimate;
+    it replaces the former worst-case charge of two rounds per constructible
+    state, which rejected automata whose nullary seeds saturate immediately.
+    The probe itself always terminates inside the input schema alone: a scan
+    round repeats only when some choice was defined or improved, a
+    minimum-node witness never repeats a state along a root-to-leaf path
+    (substituting the higher occurrence of a repeated state for the lower one
+    would strictly shrink the tree while preserving the derived state), so the
+    witness heights -- and hence the rounds -- stay within ``state_count + 1``
+    no matter which automaton the request model admitted.  One native call
+    then executes the profile once more (sorting plus the measured scans) and
+    materializes then recounts at most the admitted witness nodes, so the
+    bound charges two probes' worth of sorting and scanning plus witness
+    work.  Every row scan visits its child-state tuple independently to
     construct the lookup tuple, test that all children are known, add their
     node counts, and compare an equal-size candidate's canonical transition
     key.
@@ -154,32 +163,30 @@ def _reachability_execution_work_bound(automaton: BottomUpTreeAutomaton) -> int:
     Native callers perform exactly one profile per call.
     """
 
-    sort_work, per_scan_work, scan_rounds, _ = _reachability_price_components(automaton)
+    sort_work, per_scan_work, scan_rounds = _reachability_price_components(automaton)
     witness_work = 3 * MAX_REACHABILITY_WITNESS_NODES
-    return sort_work + scan_rounds * per_scan_work + witness_work
+    return 2 * sort_work + 2 * scan_rounds * per_scan_work + witness_work
 
 
 def _reachability_public_path_work_bound(automaton: BottomUpTreeAutomaton) -> int:
     """Price the public path's admission evaluation plus its three profiles.
 
     The MCP request boundary performs one profile for request admission, one
-    for execution, and one for source-bound result replay, so it admits the
-    shared ``MAX_TREE_AUTOMATON_REACHABILITY_WORK`` envelope only when three
-    single-profile executions fit inside it.  Evaluating that admission bound
-    itself already runs the constructible-state closure prepass once, and the
-    closure stabilizes within ``constructible + 1`` whole-set rescans at the
-    same per-scan cost as a saturation scan, so that first evaluation is
-    charged on top of the three executions instead of escaping the budget.
-    Native calls perform one profile and are priced by
+    for execution, and one for source-bound result replay.  Each of those
+    three invocations starts by evaluating its own execution bound, whose
+    saturation probe measures the convergence depth before any witness is
+    materialized, and evaluating the public-path bound itself runs one more
+    such probe.  The public path therefore performs four probes' worth of
+    sorting and scanning across three profiles plus three witness
+    materializations, all charged against the shared
+    ``MAX_TREE_AUTOMATON_REACHABILITY_WORK`` envelope instead of escaping the
+    budget.  Native calls perform one profile and are priced by
     ``_reachability_execution_work_bound`` alone.
     """
 
-    sort_work, per_scan_work, scan_rounds, closure_rescans = (
-        _reachability_price_components(automaton)
-    )
+    sort_work, per_scan_work, scan_rounds = _reachability_price_components(automaton)
     witness_work = 3 * MAX_REACHABILITY_WITNESS_NODES
-    one_profile = sort_work + scan_rounds * per_scan_work + witness_work
-    return 3 * one_profile + closure_rescans * per_scan_work
+    return 4 * sort_work + 7 * scan_rounds * per_scan_work + 3 * witness_work
 
 
 def _transition_key(

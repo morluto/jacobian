@@ -19,9 +19,10 @@ from jacobian.math.tree_automata._operations import (
     compute_tree_automaton_reachability,
     compute_tree_run,
 )
+from jacobian.math.tree_automata._tools import TREE_AUTOMATA_OPERATIONS
 from jacobian.math.tree_automata.operations import (
-    _constructible_state_count,
     _reachability_execution_work_bound,
+    _reachability_price_components,
     _reachability_public_path_work_bound,
     accepted_tree_count,
     run_tree_automaton,
@@ -84,6 +85,41 @@ def _seeded_chain_with_padded_rows(chain_states: int) -> BottomUpTreeAutomaton:
     return BottomUpTreeAutomaton(
         state_count=64,
         arity=(1, 0, 16),
+        transitions=tuple(transitions),
+        final_states=(),
+    )
+
+
+def _nullary_saturated_with_wide_rows() -> BottomUpTreeAutomaton:
+    """64 nullary seeds padded to 4096 rows by wide rows over seeded states.
+
+    Every state gains a one-node witness in the first scan and no wide row
+    improves anything afterwards, so saturation stabilizes after exactly two
+    scans regardless of the number of constructible states.
+    """
+    transitions = [
+        *(
+            TreeAutomatonTransition(symbol=0, child_states=(), target_state=state)
+            for state in range(32)
+        ),
+        *(
+            TreeAutomatonTransition(symbol=2, child_states=(), target_state=state)
+            for state in range(32, 64)
+        ),
+        *(
+            TreeAutomatonTransition(
+                symbol=1,
+                child_states=tuple(
+                    (index // 64**position) % 64 for position in range(16)
+                ),
+                target_state=index % 64,
+            )
+            for index in range(4032)
+        ),
+    ]
+    return BottomUpTreeAutomaton(
+        state_count=64,
+        arity=(0, 16, 0),
         transitions=tuple(transitions),
         final_states=(),
     )
@@ -389,6 +425,70 @@ class TestReachableStates:
         )
         assert tuple(tree.symbol for _, tree in result.witnesses) == (0, 2, 0)
 
+    def test_equal_node_tie_breaks_by_smallest_root_symbol(self):
+        automaton = BottomUpTreeAutomaton(
+            state_count=2,
+            arity=(0, 0),
+            transitions=(
+                TreeAutomatonTransition(symbol=1, child_states=(), target_state=0),
+                TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
+                TreeAutomatonTransition(symbol=0, child_states=(), target_state=1),
+            ),
+            final_states=(),
+        )
+
+        result = compute_tree_automaton_reachability(
+            TreeAutomatonReachabilityRequest(automaton=automaton)
+        )
+
+        assert result.witnesses[0][1] == RankedTree(symbol=0)
+        assert result.witnesses[1][1] == RankedTree(symbol=0)
+
+        forged_payload = result.model_dump()
+        forged_payload["witnesses"] = [[0, {"symbol": 1, "children": []}], [1, _leaf()]]
+        with pytest.raises(ValidationError, match="not bound"):
+            ReachableStateProfile.model_validate(forged_payload)
+
+    def test_equal_node_tie_breaks_by_smallest_child_state_tuple(self):
+        automaton = BottomUpTreeAutomaton(
+            state_count=3,
+            arity=(0, 2),
+            transitions=(
+                TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
+                TreeAutomatonTransition(symbol=0, child_states=(), target_state=1),
+                TreeAutomatonTransition(symbol=1, child_states=(1, 0), target_state=2),
+                TreeAutomatonTransition(symbol=1, child_states=(0, 1), target_state=2),
+            ),
+            final_states=(),
+        )
+
+        result = compute_tree_automaton_reachability(
+            TreeAutomatonReachabilityRequest(automaton=automaton)
+        )
+
+        # Both arity-2 rows derive state 2 with three nodes; (0, 1) < (1, 0).
+        assert result.witnesses[2][1] == RankedTree(
+            symbol=1,
+            children=(RankedTree(symbol=0), RankedTree(symbol=0)),
+        )
+
+    def test_witness_schema_publishes_canonical_tie_break(self):
+        witnesses_description = ReachableStateProfile.model_json_schema()["properties"][
+            "witnesses"
+        ]["description"]
+
+        assert "(symbol, child_states, target_state)" in witnesses_description
+        assert "lexicographically smallest" in witnesses_description
+        assert "recursively" in witnesses_description
+
+        reachability_tool = next(
+            tool
+            for tool in TREE_AUTOMATA_OPERATIONS
+            if tool.operation_id == "tree_automaton.states.reachable.compute"
+        )
+        assert "lexicographically smallest" in reachability_tool.description
+        assert "(symbol, child_states, target_state)" in reachability_tool.description
+
     def test_result_rejects_forged_reachable_states(self):
         automaton = _simple_automaton()
         result = compute_tree_automaton_reachability(
@@ -541,47 +641,38 @@ class TestValidation:
         assert profile.reachable_states == (0,)
         assert profile.unreachable_states == tuple(range(1, 64))
 
-    def test_constructible_state_count_known_answers(self):
-        def automaton_for(transitions, state_count, arity):
-            return BottomUpTreeAutomaton(
-                state_count=state_count,
-                arity=arity,
-                transitions=transitions,
-                final_states=(),
-            )
+    def test_two_scan_saturation_is_admitted_beyond_constructible_state_count(self):
+        automaton = _nullary_saturated_with_wide_rows()
 
-        no_nullary = automaton_for(
-            (TreeAutomatonTransition(symbol=0, child_states=(0,), target_state=1),),
-            2,
-            (1,),
-        )
-        seeded_chain = automaton_for(
-            (
-                TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
-                TreeAutomatonTransition(symbol=1, child_states=(0,), target_state=1),
-                TreeAutomatonTransition(symbol=1, child_states=(1,), target_state=2),
-                TreeAutomatonTransition(symbol=1, child_states=(5,), target_state=4),
-            ),
-            6,
-            (0, 1),
-        )
-        diamond = automaton_for(
-            (
-                TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
-                TreeAutomatonTransition(symbol=1, child_states=(0,), target_state=1),
-                TreeAutomatonTransition(symbol=1, child_states=(0,), target_state=2),
-                TreeAutomatonTransition(symbol=2, child_states=(1, 2), target_state=3),
-                TreeAutomatonTransition(symbol=2, child_states=(3, 3), target_state=4),
-            ),
-            5,
-            (0, 1, 2),
+        _, per_scan_work, scan_rounds = _reachability_price_components(automaton)
+        assert scan_rounds == 2
+
+        per_profile = _reachability_execution_work_bound(automaton)
+        assert per_profile == 2 * 983_040 + 2 * 2 * per_scan_work + 3 * 4096
+        assert per_profile == 3_109_376
+        assert per_profile <= 30_000_000
+
+        public_path = _reachability_public_path_work_bound(automaton)
+        assert public_path == 4 * 983_040 + 7 * 2 * per_scan_work + 3 * 3 * 4096
+        assert public_path == 7_927_552
+        assert public_path <= 30_000_000
+
+        result = compute_tree_automaton_reachability(
+            TreeAutomatonReachabilityRequest(automaton=automaton)
         )
 
-        assert _constructible_state_count(no_nullary) == 0
-        assert _constructible_state_count(seeded_chain) == 3
-        assert _constructible_state_count(diamond) == 5
+        assert result.reachable_states == tuple(range(64))
+        assert result.unreachable_states == ()
+        assert (
+            tuple(ranked_tree_node_count(tree) for _, tree in result.witnesses)
+            == (1,) * 64
+        )
 
-    def test_improvement_lag_stabilizes_within_constructible_saturation_bound(self):
+        profile = reachable_state_profile(automaton)
+        assert isinstance(profile, ReachableStateProfile)
+        assert profile.reachable_states == tuple(range(64))
+
+    def test_improvement_lag_stabilizes_within_measured_convergence_bound(self):
         transitions = [
             TreeAutomatonTransition(symbol=0, child_states=(), target_state=0)
         ]
@@ -647,11 +738,13 @@ class TestValidation:
         with pytest.raises(ValidationError, match="reachability work bound"):
             TreeAutomatonReachabilityRequest(automaton=automaton)
 
-    def test_native_profile_prices_one_profile_within_shared_envelope(self):
+    def test_native_profile_prices_measured_convergence_within_shared_envelope(self):
         automaton = _seeded_chain_with_padded_rows(16)
 
+        _, _, scan_rounds = _reachability_price_components(automaton)
+        assert scan_rounds == 17
         per_profile = _reachability_execution_work_bound(automaton)
-        assert per_profile == 10_715_384
+        assert per_profile == 11_698_424
         assert per_profile <= 30_000_000
 
         profile = reachable_state_profile(automaton)
@@ -665,21 +758,23 @@ class TestValidation:
 
         public_path = _reachability_public_path_work_bound(automaton)
         assert public_path > 3 * _reachability_execution_work_bound(automaton)
-        assert public_path == 37_006_180
+        assert public_path == 37_989_220
         assert public_path > 30_000_000
 
         with pytest.raises(ValidationError, match="reachability work bound"):
             TreeAutomatonReachabilityRequest(automaton=automaton)
 
-    def test_admission_closure_is_charged_against_shared_envelope(self):
+    def test_admission_probes_are_charged_against_shared_envelope(self):
         automaton = _seeded_chain_with_padded_rows(14)
 
+        _, _, scan_rounds = _reachability_price_components(automaton)
+        assert scan_rounds == 15
         per_profile = _reachability_execution_work_bound(automaton)
-        assert per_profile == 9_575_448
-        assert 3 * per_profile <= 30_000_000
+        assert per_profile == 10_558_488
+        assert per_profile <= 30_000_000
 
         public_path = _reachability_public_path_work_bound(automaton)
-        assert public_path == 33_016_404
+        assert public_path == 33_999_444
         assert public_path > 30_000_000
 
         assert isinstance(reachable_state_profile(automaton), ReachableStateProfile)

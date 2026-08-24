@@ -144,6 +144,15 @@ class ReachableStateProfile(StrictModel):
     and published unchanged as the reachability operation result: every
     state is listed exactly once as reachable or unreachable, and each
     reachable state carries one canonical minimum-node ground-tree witness.
+    The witness is unique by construction: among every transition row
+    targeting the state whose ordered child states all carry witnesses,
+    candidates are ranked by fewest node count
+    (``1 + sum(child witness node counts)``), then by the lexicographically
+    smallest ``(symbol, child_states, target_state)`` transition with
+    ``child_states`` compared element-wise as integers, and each child's
+    witness is chosen by the same rule recursively.  Source binding replays
+    exactly this rule, so only the published witness for each state
+    validates.
     """
 
     automaton: BottomUpTreeAutomaton
@@ -153,7 +162,12 @@ class ReachableStateProfile(StrictModel):
         max_length=MAX_TA_STATES,
         description=(
             "one canonical minimum-node (state, tree) witness per reachable "
-            "state; their node counts are bounded in aggregate by "
+            "state; when several derivations tie at the minimum node count, "
+            "the witness is the unique one whose root transition "
+            "(symbol, child_states, target_state) is lexicographically "
+            "smallest, comparing child_states element-wise as integers, with "
+            "each child's witness chosen by the same rule recursively; their "
+            "node counts are bounded in aggregate by "
             "MAX_REACHABILITY_WITNESS_NODES (4096 nodes summed over all "
             "reachable states)"
         ),

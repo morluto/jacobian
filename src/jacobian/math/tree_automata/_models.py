@@ -98,18 +98,19 @@ class TreeAutomatonReachabilityRequest(StrictModel):
     validation enforces before execution:
 
     - ``MAX_TREE_AUTOMATON_REACHABILITY_WORK`` (30,000,000 units) prices one
-      profile's transition sorting, constructible-state closure prepass plus
-      saturation scans over every transition row, and witness materialization
-      and recount, multiplied across the three public-path invocations of the
-      profile (request admission, execution, and source-bound result replay)
-      together with the constructible-state closure that request admission
-      itself evaluates.
+      profile's transition sorting, saturation scans measured to their exact
+      convergence depth by a shared-code-path probe, and witness
+      materialization and recount, multiplied across the three public-path
+      invocations of the profile (request admission, execution, and
+      source-bound result replay) together with the convergence probes that
+      work admission itself evaluates.  The probe always terminates within
+      ``state_count + 1`` rounds for any schema-valid automaton.
     - ``MAX_REACHABILITY_WITNESS_NODES`` (4096 nodes) bounds the total node
       count summed over the minimum witnesses of all reachable states: it is
       an aggregate output limit across states, not a per-witness limit.
 
     Adjust either quantity by shrinking the automaton (fewer or cheaper
-    transition rows, fewer constructible states, smaller witnesses).
+    transition rows, shallower witness-dependency chains, smaller witnesses).
     """
 
     automaton: BottomUpTreeAutomaton = Field(
@@ -120,7 +121,7 @@ class TreeAutomatonReachabilityRequest(StrictModel):
             "reachability work envelope (MAX_TREE_AUTOMATON_REACHABILITY_"
             "WORK = 30,000,000 units, priced across request admission, "
             "execution, and source-bound result replay together with "
-            "request admission's own constructible-state closure) or the "
+            "request admission's own saturation convergence probes) or the "
             "aggregate witness output envelope (MAX_REACHABILITY_WITNESS_"
             "NODES = 4096 nodes summed across every reachable state's "
             "minimum witness) is exceeded"

@@ -80,7 +80,12 @@ TREE_AUTOMATA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "Return the complete least-fixed-point set of states reachable by a "
         "finite ground ranked tree, its complement, and one canonical "
         "minimum-node witness tree per reachable state. A transition is "
-        "enabled only when all of its ordered child states are reachable.",
+        "enabled only when all of its ordered child states are reachable. "
+        "When several derivations tie at the minimum node count, each state's "
+        "witness is the unique one whose root transition (symbol, "
+        "child_states, target_state) is lexicographically smallest, comparing "
+        "child_states element-wise as integers, with each child witness "
+        "chosen by the same rule recursively.",
         TreeAutomatonReachabilityRequest,
         ReachableStateProfile,
         compute_tree_automaton_reachability,

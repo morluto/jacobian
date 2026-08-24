@@ -7,6 +7,7 @@ import sympy
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.plane_algebraic_curves import _conic
 from jacobian.math.plane_algebraic_curves._conic import MAX_CONIC_INPUT_DIGITS
 from jacobian.math.plane_algebraic_curves._models import (
     AffineChartRequest,
@@ -422,6 +423,59 @@ def test_normalized_result_height_boundary_is_accepted_then_rejected() -> None:
                 (_rational(rejected_x), _rational(rejected_x**2)),
             ),
         )
+
+
+def test_request_admission_completes_before_any_backend_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _ForbiddenSympy:
+        def __getattr__(self, name: str) -> object:
+            raise AssertionError("request admission must not enter SymPy")
+
+    monkeypatch.setattr(_conic, "sympy", _ForbiddenSympy())
+    source = _polynomial(("x", "y"), (-1, (2, 0)), (1, (0, 1)))
+
+    accepted_x = 10**31
+    request = RationalConicParametrizationRequest(
+        polynomial=source,
+        point=_point(("x", "y"), (_rational(accepted_x), _rational(accepted_x**2))),
+    )
+    assert request.parameter == "t"
+
+    rejected_x = 10**32
+    with pytest.raises(ValidationError, match=r"output exceeds.*128-digit"):
+        RationalConicParametrizationRequest(
+            polynomial=source,
+            point=_point(
+                ("x", "y"),
+                (_rational(rejected_x), _rational(rejected_x**2)),
+            ),
+        )
+
+
+def test_exact_preflight_admits_rational_point_on_hyperbola() -> None:
+    source = _polynomial(("x", "y"), (1, (1, 1)), (-1, (0, 0)))
+    point = (_rational(1, 3), _rational(3))
+    result = _parametrize(source, point)
+    coordinate_expressions = tuple(
+        rational_function_to_sympy(coordinate) for coordinate in result.coordinates
+    )
+    substitutions = dict(
+        zip(
+            symbols_for_variables(result.source_polynomial.variables),
+            coordinate_expressions,
+            strict=True,
+        )
+    )
+
+    assert (
+        sympy.cancel(
+            rational_polynomial_to_sympy(source)
+            .as_expr()
+            .subs(substitutions, simultaneous=True)
+        )
+        == 0
+    )
 
 
 def test_result_rejects_independently_forged_source_point_and_coordinates() -> None:

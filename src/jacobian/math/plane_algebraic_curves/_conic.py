@@ -344,26 +344,40 @@ def _require_smooth_conic_and_point(
     polynomial: RationalPolynomial,
     point: VariablePoint,
 ) -> None:
-    source, point_values, gradient, quadratic = _source_data(polynomial, point)
-    if source.total_degree() != 2:
+    # Exact preflight on the already bounded canonical coefficients; the
+    # backend is entered only after every admission check has passed.
+    coefficients = _source_coefficients(polynomial)
+    zero = Fraction(0)
+    a = coefficients.get((2, 0), zero)
+    b = coefficients.get((1, 1), zero)
+    c = coefficients.get((0, 2), zero)
+    d = coefficients.get((1, 0), zero)
+    e = coefficients.get((0, 1), zero)
+    constant = coefficients.get((0, 0), zero)
+    total_degree = max(
+        (sum(term.exponents) for term in polynomial.polynomial.terms),
+        default=0,
+    )
+    if total_degree != 2:
         raise ValueError("rational conic polynomial must have total degree exactly two")
-    if source.eval(dict(zip(source.gens, point_values, strict=True))) != 0:
+    px, py = (value.as_fraction() for value in point.values)
+    if a * px * px + b * px * py + c * py * py + d * px + e * py + constant != 0:
         raise ValueError("supplied rational point must lie on the conic")
 
-    a, b, c = quadratic
-    d = _coefficient(source, (1, 0))
-    e = _coefficient(source, (0, 1))
-    constant = _coefficient(source, (0, 0))
-    twice_projective_matrix = sympy.Matrix(
-        (
-            (2 * a, b, d),
-            (b, 2 * c, e),
-            (d, e, 2 * constant),
-        )
+    gradient = (2 * a * px + b * py + d, b * px + 2 * c * py + e)
+    # Closed-form determinant of the twice-projective symmetric matrix
+    # ((2a, b, d), (b, 2c, e), (d, e, 2*constant)); nonzero exactly for a
+    # smooth irreducible projective conic.
+    determinant = (
+        8 * a * c * constant
+        + 2 * b * d * e
+        - 2 * c * d * d
+        - 2 * b * b * constant
+        - 2 * a * e * e
     )
-    if twice_projective_matrix.det() == 0:
+    if determinant == 0:
         raise ValueError("projective closure must be a smooth irreducible conic")
-    if gradient == (0, 0):
+    if gradient == (zero, zero):
         raise ValueError("supplied point must be smooth on the affine conic")
 
 

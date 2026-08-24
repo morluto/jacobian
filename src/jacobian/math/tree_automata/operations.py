@@ -105,17 +105,42 @@ def reachable_state_profile(
     )
 
 
+def _constructible_state_count(automaton: BottomUpTreeAutomaton) -> int:
+    """Count states with at least one derivation from the nullary-seeded set."""
+
+    known: set[int] = set()
+    while True:
+        grown = set(known)
+        for row in automaton.transitions:
+            if row.target_state not in grown and all(
+                state in known for state in row.child_states
+            ):
+                grown.add(row.target_state)
+        if len(grown) == len(known):
+            return len(known)
+        known = grown
+
+
 def _reachability_execution_work_bound(automaton: BottomUpTreeAutomaton) -> int:
     """Conservatively bound admission, execution, and source-bound replay.
 
-    Each profile sorts transition rows, makes at most ``|Q| + 1`` simultaneous
-    scans, and materializes then recounts at most the admitted witness nodes.
-    A scan round repeats only when the previous round defined or improved a
-    choice, so an automaton without nullary transitions is immediately stable
-    and pays exactly one scan: no row can fire before any state has a witness.
-    Every row scan visits its child-state tuple independently to construct the
-    lookup tuple, test that all children are known, add their node counts, and
-    compare an equal-size candidate's canonical transition key.
+    Each profile sorts transition rows, runs one constructible-state closure
+    prepass plus its saturation scans, and materializes then recounts at most
+    the admitted witness nodes.  A scan round repeats only when the previous
+    round defined or improved a choice, so an automaton without nullary
+    transitions is immediately stable and pays exactly one scan: no row can
+    fire before any state has a witness.  When nullary transitions seed the
+    fixed point, a minimum-node witness never repeats a state along a
+    root-to-leaf path -- substituting the higher occurrence of a repeated
+    state for the lower one would strictly shrink the tree while preserving
+    the derived state -- so every witness height is bounded by the number of
+    states constructible from the nullary seeds, and the scans stabilize
+    within that count plus one confirmation round.  Admission prices the
+    closure prepass and the saturation scans together at the same per-scan
+    cost.  Every row scan visits its child-state tuple independently to
+    construct the lookup tuple, test that all children are known, add their
+    node counts, and compare an equal-size candidate's canonical transition
+    key.
     The public path performs that profile once for request admission, once for
     execution, and once for result replay.
     """
@@ -126,11 +151,10 @@ def _reachability_execution_work_bound(automaton: BottomUpTreeAutomaton) -> int:
     )
     sort_rounds = max(1, (transition_count - 1).bit_length())
     sort_work = transition_count * sort_rounds * (4 + maximum_arity)
-    scan_rounds = (
-        automaton.state_count + 1
-        if any(not row.child_states for row in automaton.transitions)
-        else 1
-    )
+    if any(not row.child_states for row in automaton.transitions):
+        scan_rounds = 2 * (_constructible_state_count(automaton) + 1)
+    else:
+        scan_rounds = 1
     scan_work = scan_rounds * (
         2 * automaton.state_count
         + sum(6 + 4 * len(row.child_states) for row in automaton.transitions)

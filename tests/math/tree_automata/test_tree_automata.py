@@ -12,6 +12,7 @@ from jacobian.math.tree_automata import (
 from jacobian.math.tree_automata._models import (
     AcceptedTreeCountRequest,
     TreeAutomatonReachabilityRequest,
+    TreeAutomatonReachabilityResult,
     TreeRunRequest,
 )
 from jacobian.math.tree_automata._operations import (
@@ -20,6 +21,7 @@ from jacobian.math.tree_automata._operations import (
     compute_tree_run,
 )
 from jacobian.math.tree_automata.operations import (
+    _constructible_state_count,
     accepted_tree_count,
     run_tree_automaton,
 )
@@ -416,7 +418,7 @@ class TestValidation:
         assert profile.unreachable_states == tuple(range(64))
         assert profile.witnesses == ()
 
-    def test_reachability_rejects_child_slot_scans_beyond_work_bound(self):
+    def test_nullary_seeded_child_slot_scans_admit_saturated_profile(self):
         automaton = BottomUpTreeAutomaton(
             state_count=64,
             arity=(16, 0),
@@ -436,8 +438,146 @@ class TestValidation:
             final_states=(),
         )
 
+        result = compute_tree_automaton_reachability(
+            TreeAutomatonReachabilityRequest(automaton=automaton)
+        )
+        profile = reachable_state_profile(automaton)
+
+        assert result.reachable_states == (0,)
+        assert result.unreachable_states == tuple(range(1, 64))
+        assert tuple(witness.node_count for witness in result.witnesses) == (1,)
+        assert isinstance(profile, ReachableStateProfile)
+        assert profile.automaton == automaton
+        assert profile.reachable_states == (0,)
+        assert profile.unreachable_states == tuple(range(1, 64))
+
+    def test_constructible_state_count_known_answers(self):
+        def automaton_for(transitions, state_count, arity):
+            return BottomUpTreeAutomaton(
+                state_count=state_count,
+                arity=arity,
+                transitions=transitions,
+                final_states=(),
+            )
+
+        no_nullary = automaton_for(
+            (
+                TreeAutomatonTransition(symbol=0, child_states=(0,), target_state=1),
+            ),
+            2,
+            (1,),
+        )
+        seeded_chain = automaton_for(
+            (
+                TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
+                TreeAutomatonTransition(symbol=1, child_states=(0,), target_state=1),
+                TreeAutomatonTransition(symbol=1, child_states=(1,), target_state=2),
+                TreeAutomatonTransition(symbol=1, child_states=(5,), target_state=4),
+            ),
+            6,
+            (0, 1),
+        )
+        diamond = automaton_for(
+            (
+                TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
+                TreeAutomatonTransition(symbol=1, child_states=(0,), target_state=1),
+                TreeAutomatonTransition(symbol=1, child_states=(0,), target_state=2),
+                TreeAutomatonTransition(symbol=2, child_states=(1, 2), target_state=3),
+                TreeAutomatonTransition(symbol=2, child_states=(3, 3), target_state=4),
+            ),
+            5,
+            (0, 1, 2),
+        )
+
+        assert _constructible_state_count(no_nullary) == 0
+        assert _constructible_state_count(seeded_chain) == 3
+        assert _constructible_state_count(diamond) == 5
+
+    def test_improvement_lag_stabilizes_within_constructible_saturation_bound(self):
+        transitions = [
+            TreeAutomatonTransition(symbol=0, child_states=(), target_state=0)
+        ]
+        for state in range(1, 13):
+            transitions.append(
+                TreeAutomatonTransition(
+                    symbol=1,
+                    child_states=(0,) * 16,
+                    target_state=state,
+                )
+            )
+            transitions.append(
+                TreeAutomatonTransition(
+                    symbol=2,
+                    child_states=(state - 1,),
+                    target_state=state,
+                )
+            )
+        automaton = BottomUpTreeAutomaton(
+            state_count=13,
+            arity=(0, 16, 1),
+            transitions=tuple(transitions),
+            final_states=(),
+        )
+
+        result = compute_tree_automaton_reachability(
+            TreeAutomatonReachabilityRequest(automaton=automaton)
+        )
+
+        assert result.reachable_states == tuple(range(13))
+        assert tuple(witness.node_count for witness in result.witnesses) == tuple(
+            range(1, 14)
+        )
+
+    def test_reachability_rejects_seeded_deep_chain_scans_beyond_work_bound(self):
+        automaton = BottomUpTreeAutomaton(
+            state_count=64,
+            arity=(16, 1, 0),
+            transitions=(
+                TreeAutomatonTransition(symbol=2, child_states=(), target_state=0),
+                *tuple(
+                    TreeAutomatonTransition(
+                        symbol=1,
+                        child_states=(state,),
+                        target_state=state + 1,
+                    )
+                    for state in range(63)
+                ),
+                *tuple(
+                    TreeAutomatonTransition(
+                        symbol=0,
+                        child_states=tuple(
+                            (index // 64**position) % 64 for position in range(16)
+                        ),
+                        target_state=index % 64,
+                    )
+                    for index in range(4032)
+                ),
+            ),
+            final_states=(),
+        )
+
         with pytest.raises(ValidationError, match="reachability work bound"):
             TreeAutomatonReachabilityRequest(automaton=automaton)
+
+    def test_reachability_schema_publishes_coupled_admission_envelope(self):
+        request_schema = TreeAutomatonReachabilityRequest.model_json_schema()
+        result_schema = TreeAutomatonReachabilityResult.model_json_schema()
+
+        request_description = request_schema["description"]
+        assert "MAX_TREE_AUTOMATON_REACHABILITY_WORK" in request_description
+        assert "30,000,000" in request_description
+        assert "MAX_REACHABILITY_WITNESS_NODES" in request_description
+        assert "4096" in request_description
+        assert "summed" in request_description
+
+        automaton_description = request_schema["properties"]["automaton"][
+            "description"
+        ]
+        assert "30,000,000 units" in automaton_description
+        assert "summed" in automaton_description
+
+        witnesses_description = result_schema["properties"]["witnesses"]["description"]
+        assert "4096 nodes summed over all reachable states" in witnesses_description
 
     def test_reachability_rejects_materialized_witnesses_beyond_output_bound(self):
         transitions = [

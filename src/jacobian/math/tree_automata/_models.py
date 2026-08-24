@@ -107,9 +107,35 @@ class ReachableStateWitness(StrictModel):
 
 
 class TreeAutomatonReachabilityRequest(StrictModel):
-    """Compute ground-tree reachable states through bottom-up hyperedges."""
+    """Compute ground-tree reachable states through bottom-up hyperedges.
 
-    automaton: BottomUpTreeAutomaton
+    A schema-valid automaton can still exceed two coupled work envelopes that
+    validation enforces before execution:
+
+    - ``MAX_TREE_AUTOMATON_REACHABILITY_WORK`` (30,000,000 units) prices
+      transition sorting, one constructible-state closure prepass plus the
+      saturation scans over every transition row, and witness materialization
+      and recount, multiplied across request admission, execution, and
+      source-bound result replay.
+    - ``MAX_REACHABILITY_WITNESS_NODES`` (4096 nodes) bounds the total node
+      count summed over the minimum witnesses of all reachable states: it is
+      an aggregate output limit across states, not a per-witness limit.
+
+    Adjust either quantity by shrinking the automaton (fewer or cheaper
+    transition rows, fewer constructible states, smaller witnesses).
+    """
+
+    automaton: BottomUpTreeAutomaton = Field(
+        description=(
+            "nondeterministic bottom-up tree automaton with at most 64 "
+            "states, 32 ranked symbols, and 4096 unique transitions. "
+            "Requests are additionally rejected when the coupled "
+            "reachability work envelope (MAX_TREE_AUTOMATON_REACHABILITY_"
+            "WORK = 30,000,000 units) or the aggregate witness output "
+            "envelope (MAX_REACHABILITY_WITNESS_NODES = 4096 nodes summed "
+            "across every reachable state's minimum witness) is exceeded"
+        ),
+    )
 
     @model_validator(mode="after")
     def require_bounded_witness_profile(self) -> Self:
@@ -125,7 +151,15 @@ class TreeAutomatonReachabilityResult(StrictModel):
     automaton: BottomUpTreeAutomaton
     reachable_states: tuple[int, ...] = Field(max_length=64)
     unreachable_states: tuple[int, ...] = Field(max_length=64)
-    witnesses: tuple[ReachableStateWitness, ...] = Field(max_length=64)
+    witnesses: tuple[ReachableStateWitness, ...] = Field(
+        max_length=64,
+        description=(
+            "one canonical minimum-node witness per reachable state; their "
+            "node counts are bounded in aggregate by "
+            "MAX_REACHABILITY_WITNESS_NODES (4096 nodes summed over all "
+            "reachable states)"
+        ),
+    )
 
     @model_validator(mode="after")
     def require_source_bound_profile(self) -> Self:

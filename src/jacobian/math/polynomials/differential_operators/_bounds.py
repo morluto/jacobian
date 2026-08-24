@@ -69,8 +69,7 @@ def _guaranteed_zero(
         min(term.orders[axis] for term in operator.terms) for axis in axes
     ]
     if any(
-        iterations * minimum_axis_orders[axis] > exponent_bounds[axis]
-        for axis in axes
+        iterations * minimum_axis_orders[axis] > exponent_bounds[axis] for axis in axes
     ):
         return True
     minimum_total_order = min(sum(term.orders) for term in operator.terms)

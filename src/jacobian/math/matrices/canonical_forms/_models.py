@@ -318,11 +318,7 @@ def _general_result_component_bounds(
         )
         term_height = _capped_multiply(term_height, matrix_power_height)
         work_numerator_bound = _capped_add(work_numerator_bound, term_height)
-        if (
-            exponent
-            and longest_walk is not None
-            and exponent > longest_walk
-        ):
+        if exponent and longest_walk is not None and exponent > longest_walk:
             continue
         if exponent:
             live_nonconstant_power = True
@@ -369,12 +365,12 @@ def _require_matrix_polynomial_output_budget(
     coefficients = _coefficient_ratios(polynomial)
     matrix_is_zero = all(entry.num == "0" for row in matrix.entries for entry in row)
     if degree <= 1 or matrix_is_zero:
-        component_bounds, maximum_arithmetic_digits = (
-            _linear_result_component_bounds(matrix, coefficients)
+        component_bounds, maximum_arithmetic_digits = _linear_result_component_bounds(
+            matrix, coefficients
         )
     else:
-        component_bounds, maximum_arithmetic_digits = (
-            _general_result_component_bounds(matrix, polynomial, degree)
+        component_bounds, maximum_arithmetic_digits = _general_result_component_bounds(
+            matrix, polynomial, degree
         )
     if any(
         numerator_digits > MAX_CANONICAL_RATIONAL_DIGITS

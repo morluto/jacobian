@@ -2,6 +2,8 @@
 
 from jacobian.math.matrices.canonical_forms._models import (
     InvariantFactorEntry,
+    MatrixPolynomialEvaluationRequest,
+    MatrixPolynomialEvaluationResult,
     MinimalPolynomialResult,
     MonicPolynomial,
     PrimaryDecompositionResult,
@@ -17,6 +19,8 @@ from jacobian.math.matrices.canonical_forms.operations import (
 
 __all__ = [
     "InvariantFactorEntry",
+    "MatrixPolynomialEvaluationRequest",
+    "MatrixPolynomialEvaluationResult",
     "MinimalPolynomialResult",
     "MonicPolynomial",
     "PrimaryDecompositionResult",

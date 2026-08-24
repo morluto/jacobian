@@ -67,6 +67,31 @@ def characteristic_polynomial(entries: RationalEntries) -> CoefficientList:
     return _coefficients(Poly(charpoly.as_expr(), x))
 
 
+def _evaluate_polynomial(
+    entries: RationalEntries,
+    coefficients: Sequence[Fraction],
+) -> tuple[tuple[Fraction, ...], ...]:
+    """Return ``f(A)`` for increasing-degree coefficients by exact Horner evaluation."""
+
+    from sympy import Rational, eye, zeros
+
+    dimension = _square_dimension(entries)
+    matrix = _sympy_matrix(entries)
+    identity = eye(dimension)
+    if not coefficients:
+        result = zeros(dimension)
+    else:
+        leading = coefficients[-1]
+        result = Rational(leading.numerator, leading.denominator) * identity
+        for coefficient in reversed(coefficients[:-1]):
+            scalar = Rational(coefficient.numerator, coefficient.denominator)
+            result = result * matrix + scalar * identity
+    return tuple(
+        tuple(_to_fraction(result[row, column]) for column in range(dimension))
+        for row in range(dimension)
+    )
+
+
 def minimal_polynomial(entries: RationalEntries) -> CoefficientList:
     """Compute the minimal polynomial via the Krylov/nullspace method.
 

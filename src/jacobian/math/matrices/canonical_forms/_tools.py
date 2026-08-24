@@ -6,12 +6,15 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.matrices.canonical_forms._models import (
+    MatrixPolynomialEvaluationRequest,
+    MatrixPolynomialEvaluationResult,
     MinimalPolynomialResult,
     PrimaryDecompositionResult,
     RationalCanonicalFormResult,
     SquareMatrixRequest,
 )
 from jacobian.math.matrices.canonical_forms._operations import (
+    compute_matrix_polynomial_evaluation,
     compute_minimal_polynomial,
     compute_primary_decomposition,
     compute_rational_canonical_form,
@@ -46,6 +49,57 @@ def canonical_form_operation[
 
 
 TOOLS: MathTools = (
+    canonical_form_operation(
+        "matrix.polynomial.evaluate.compute",
+        "Evaluate an exact rational polynomial at a square matrix",
+        "Compute f(A) over QQ by bounded exact Horner evaluation. The result "
+        "retains the source matrix and canonical one-variable rational polynomial "
+        "and independently replays the defining evaluation.",
+        MatrixPolynomialEvaluationRequest,
+        MatrixPolynomialEvaluationResult,
+        compute_matrix_polynomial_evaluation,
+        "matrix",
+        "polynomial",
+        "functional-calculus",
+        "exact",
+        examples=(
+            example(
+                "rotation_annihilator",
+                "Evaluate t^2 + 1 at the rational quarter-turn matrix, obtaining "
+                "the zero matrix; the matrix must be square and the polynomial "
+                "must declare exactly one variable over QQ.",
+                {
+                    "matrix": {
+                        "entries": [
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "-1", "den": "1"},
+                            ],
+                            [
+                                {"num": "1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                        ]
+                    },
+                    "polynomial": {
+                        "variables": ["t"],
+                        "polynomial": {
+                            "terms": [
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [2],
+                                },
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [0],
+                                },
+                            ]
+                        },
+                    },
+                },
+            ),
+        ),
+    ),
     canonical_form_operation(
         "matrix.minimal_polynomial.compute",
         "Compute the exact minimal polynomial of a square rational matrix",

@@ -16,6 +16,13 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
     OperationAdmission(
+        "matrix.polynomial.evaluate.compute",
+        AdmissionDecision.KEEP,
+        "exact polynomial functional calculus is a reusable matrix map and the "
+        "source-bound result supplies material reconstruction leverage beyond "
+        "scalar polynomial evaluation or caller-authored matrix products",
+    ),
+    OperationAdmission(
         "matrix.primary_decomposition.compute",
         AdmissionDecision.KEEP,
         "reusable typed mathematical construction or transformation with a distinct discovery intent",

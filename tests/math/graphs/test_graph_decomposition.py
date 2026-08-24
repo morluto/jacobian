@@ -772,8 +772,7 @@ class TestSPQRTree:
         pair = next(
             (left, right)
             for left, right in genuine.virtual_edge_pairs
-            if {kinds[locations[left]], kinds[locations[right]]}
-            == {"P_NODE", "R_NODE"}
+            if {kinds[locations[left]], kinds[locations[right]]} == {"P_NODE", "R_NODE"}
         )
         assert {locations[side] for side in pair} == {p_id, r_id}
         malformed = genuine.model_dump(mode="json")

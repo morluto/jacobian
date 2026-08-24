@@ -12,15 +12,28 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.math import _singular as shared_singular
-from jacobian.math.polynomials.maps import RationalPolynomialMap, _operations, _singular
+from jacobian.math.polynomials.maps import (
+    RationalPolynomialMap,
+    _generic_degree,
+    _operations,
+)
+from jacobian.math.polynomials.maps._generic_degree import (
+    GenericFiberReplayLimitError,
+    enumerate_standard_monomials,
+    validate_generic_fiber_certificate,
+)
 from jacobian.math.polynomials.maps._models import (
     GenericDegreeRequest,
     GenericDegreeResult,
+    GenericFiberCertificate,
+    GenericFiberPolynomial,
+    GenericFiberTerm,
 )
 from jacobian.math.polynomials.maps._operations import compute_generic_degree
 from jacobian.math.polynomials.maps._singular import SingularGenericFiberResult
 from jacobian.math.polynomials.maps._tools import TOOLS
 from jacobian.math.polynomials.values import (
+    RationalFunction,
     RationalPolynomial,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
@@ -60,6 +73,71 @@ def _map(
 
 def _compute(polynomial_map: RationalPolynomialMap) -> GenericDegreeResult:
     return compute_generic_degree(GenericDegreeRequest(polynomial_map=polynomial_map))
+
+
+def _generic_fiber_coefficient(
+    exponents: tuple[int, int],
+    numerator: int = 1,
+) -> RationalFunction:
+    one = SparseRationalPolynomial(
+        terms=(
+            RationalPolynomialTerm(
+                coefficient=CanonicalRational.from_fraction(Fraction(1)),
+                exponents=(0, 0),
+            ),
+        )
+    )
+    return RationalFunction(
+        variables=("t1", "t2"),
+        numerator=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational.from_fraction(Fraction(numerator)),
+                    exponents=exponents,
+                ),
+            )
+        ),
+        denominator=one,
+    )
+
+
+def _fiber_polynomial(
+    terms: tuple[tuple[tuple[int, int], RationalFunction], ...],
+) -> GenericFiberPolynomial:
+    return GenericFiberPolynomial(
+        terms=tuple(
+            GenericFiberTerm(coefficient=coefficient, source_exponents=exponents)
+            for exponents, coefficient in terms
+        )
+    )
+
+
+def _identity_certificate() -> GenericFiberCertificate:
+    empty = _fiber_polynomial(())
+    unit = _fiber_polynomial((((0, 0), _generic_fiber_coefficient((0, 0))),))
+    y_minus_t2 = _fiber_polynomial(
+        (
+            ((0, 1), _generic_fiber_coefficient((0, 0))),
+            ((0, 0), _generic_fiber_coefficient((0, 1), -1)),
+        )
+    )
+    x_minus_t1 = _fiber_polynomial(
+        (
+            ((1, 0), _generic_fiber_coefficient((0, 0))),
+            ((0, 0), _generic_fiber_coefficient((1, 0), -1)),
+        )
+    )
+    return GenericFiberCertificate(
+        target_parameters=("t1", "t2"),
+        source_variable_order=("x", "y"),
+        basis=(y_minus_t2, x_minus_t1),
+        basis_from_source=((empty, unit), (unit, empty)),
+        standard_monomials=((0, 0),),
+    )
+
+
+def _identity_source() -> RationalPolynomialMap:
+    return _map(("x", "y"), {(1, 0): 1}, {(0, 1): 1})
 
 
 requires_singular = pytest.mark.skipif(
@@ -390,20 +468,114 @@ def test_result_round_trip_preserves_axes_and_evidence(
     assert replayed.source.input_variables == ("x", "y")
 
 
-def test_forged_degree_and_source_are_rejected(
-    quadratic_result: GenericDegreeResult,
-) -> None:
-    forged_degree = quadratic_result.model_dump(mode="json")
-    forged_degree["degree"] = 1
-    with pytest.raises(ValidationError, match="does not match"):
-        GenericDegreeResult.model_validate(forged_degree)
+def test_standard_monomial_enumeration_admits_the_sparse_leading_ideal() -> None:
+    leading = ((64, 0), (1, 1), (0, 64))
 
-    forged_source = quadratic_result.model_dump(mode="json")
-    forged_source["source"]["output_polynomials"][0]["polynomial"]["terms"][0][
-        "coefficient"
-    ]["num"] = "3"
-    with pytest.raises(ValidationError, match=r"source|reconstruct|reduce"):
-        GenericDegreeResult.model_validate(forged_source)
+    monomials = enumerate_standard_monomials(leading)
+
+    assert monomials is not None
+    assert len(monomials) == 127
+    assert monomials == tuple(sorted(monomials))
+    assert all(
+        not all(
+            bound <= exponent
+            for bound, exponent in zip(lead, monomial, strict=True)
+        )
+        for lead in leading
+        for monomial in monomials
+    )
+    members = set(monomials)
+    assert all(
+        tuple(
+            exponent - 1 if index == variable else exponent
+            for index, exponent in enumerate(monomial)
+        )
+        in members
+        for monomial in monomials
+        for variable in range(2)
+        if monomial[variable]
+    )
+
+
+def test_standard_monomial_enumeration_rejects_unbounded_quotients() -> None:
+    with pytest.raises(GenericFiberReplayLimitError, match="standard-monomial bound"):
+        enumerate_standard_monomials(((23, 0), (0, 23)))
+    with pytest.raises(GenericFiberReplayLimitError, match="standard-monomial bound"):
+        enumerate_standard_monomials(((512, 0), (0, 512)))
+    assert enumerate_standard_monomials(((1, 1), (2, 1))) is None
+
+
+def test_certificate_replay_known_answer() -> None:
+    outcome, degree = validate_generic_fiber_certificate(
+        _identity_source(),
+        _identity_certificate(),
+    )
+
+    assert outcome == "GENERICALLY_FINITE"
+    assert degree == 1
+
+
+@pytest.mark.parametrize(
+    ("constant", "message"),
+    (
+        ("MAX_GENERIC_FIBER_REPLAY_REDUCTION_STEPS", "reduction-step"),
+        ("MAX_GENERIC_FIBER_REPLAY_COEFFICIENT_OPERATIONS", "coefficient-operation"),
+        ("MAX_GENERIC_FIBER_REPLAY_COEFFICIENT_PRODUCTS", "coefficient-product"),
+    ),
+    ids=("reduction-steps", "coefficient-operations", "coefficient-products"),
+)
+def test_declared_replay_limits_are_consulted_during_replay(
+    constant: str,
+    message: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_generic_degree, constant, 0)
+
+    with pytest.raises(GenericFiberReplayLimitError, match=message):
+        validate_generic_fiber_certificate(
+            _identity_source(),
+            _identity_certificate(),
+        )
+
+
+def test_forged_degree_is_rejected_by_the_result_contract() -> None:
+    result = GenericDegreeResult(
+        outcome="GENERICALLY_FINITE",
+        source=_identity_source(),
+        degree=1,
+        evidence=_identity_certificate(),
+    )
+    forged = result.model_dump(mode="json")
+    forged["degree"] = 2
+
+    with pytest.raises(ValidationError, match="does not match"):
+        GenericDegreeResult.model_validate(forged)
+
+
+def test_forged_source_evidence_fails_closed_at_the_operation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        _operations,
+        "run_singular_generic_fiber",
+        lambda *_args: SingularGenericFiberResult(
+            outcome="COMPUTED",
+            certificate=_identity_certificate(),
+            dimension=0,
+            vector_dimension=1,
+            backend_version="4.4.1",
+        ),
+    )
+
+    result = compute_generic_degree(
+        GenericDegreeRequest(
+            polynomial_map=_map(("x", "y"), {(2, 0): 1}, {(0, 1): 1}),
+        )
+    )
+
+    assert result.outcome == "ERROR"
+    assert result.degree is None
+    assert result.evidence is None
 
 
 @requires_singular

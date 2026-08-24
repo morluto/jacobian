@@ -20,6 +20,7 @@ _EXTERNAL_OPERATION_OWNERS = frozenset(
         _PROCESS_OWNER,
         PurePosixPath("src/jacobian/math/_singular.py"),
         PurePosixPath("src/jacobian/math/logic/_operations.py"),
+        PurePosixPath("src/jacobian/math/polynomials/maps/_replay.py"),
     }
 )
 _GENERATED_DIRECTORIES = frozenset(

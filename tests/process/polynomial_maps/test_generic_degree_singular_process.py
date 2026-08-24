@@ -11,18 +11,26 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.math import _singular as shared_singular
-from jacobian.math.polynomials.maps import RationalPolynomialMap, _singular
+from jacobian.math.polynomials.maps import (
+    RationalPolynomialMap,
+    _operations,
+    _singular,
+)
 from jacobian.math.polynomials.maps._models import (
     GenericDegreeComputationBudget,
     GenericDegreeRequest,
+    GenericFiberCertificate,
+    GenericFiberPolynomial,
+    GenericFiberTerm,
 )
 from jacobian.math.polynomials.maps._operations import compute_generic_degree
-from jacobian.process import bounded_process_cancellation
 from jacobian.math.polynomials.values import (
+    RationalFunction,
     RationalPolynomial,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
+from jacobian.process import bounded_process_cancellation
 
 
 def _map() -> RationalPolynomialMap:
@@ -249,6 +257,85 @@ def test_standard_monomial_candidates_are_distinct_from_returned_monomials(
     assert backend.vector_dimension == 127
     assert backend.certificate is not None
     assert len(backend.certificate.standard_monomials) == 127
+
+
+def _stripe_certificate() -> GenericFiberCertificate:
+    """A structurally admitted certificate whose replay is genuinely heavy."""
+
+    coefficient = RationalFunction(
+        variables=("t1", "t2"),
+        numerator=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num="1", den="1"),
+                    exponents=(0, 0),
+                ),
+            )
+        ),
+        denominator=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num="1", den="1"),
+                    exponents=(0, 0),
+                ),
+            )
+        ),
+    )
+    basis = []
+    for stripe in range(16):
+        constant = 256 * stripe + 300
+        basis.append(
+            GenericFiberPolynomial(
+                terms=tuple(
+                    GenericFiberTerm(
+                        coefficient=coefficient,
+                        source_exponents=(offset, constant - offset),
+                    )
+                    for offset in sorted(range(240), reverse=True)
+                )
+            )
+        )
+    unit = GenericFiberPolynomial(
+        terms=(GenericFiberTerm(coefficient=coefficient, source_exponents=(0, 0)),)
+    )
+    empty = GenericFiberPolynomial()
+    return GenericFiberCertificate(
+        target_parameters=("t1", "t2"),
+        source_variable_order=("x", "y"),
+        basis=tuple(basis),
+        basis_from_source=(
+            tuple(unit if column % 2 == 0 else empty for column in range(16)),
+            tuple(unit if column % 2 == 1 else empty for column in range(16)),
+        ),
+    )
+
+
+def test_heavy_certificate_replay_is_killably_bounded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        _operations,
+        "run_singular_generic_fiber",
+        lambda *_args: _singular.SingularGenericFiberResult(
+            outcome="COMPUTED",
+            certificate=_stripe_certificate(),
+            dimension=1,
+            vector_dimension=None,
+            backend_version="4.4.1",
+        ),
+    )
+
+    result = compute_generic_degree(
+        GenericDegreeRequest(
+            polynomial_map=_two_variable_map(),
+            resource_budget=GenericDegreeComputationBudget(wall_seconds=1),
+        )
+    )
+
+    assert result.outcome == "TIMEOUT"
+    assert result.detail == "Certificate replay exceeded the declared wall-time limit."
+    assert result.degree is None
+    assert result.evidence is None
 
 
 @pytest.mark.parametrize(

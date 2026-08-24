@@ -280,13 +280,24 @@ def test_result_rejects_a_mutated_witness_or_partial_derivative() -> None:
 def test_dimension_specific_basis_boundary_rejects_before_backend_execution() -> None:
     with pytest.raises(ValidationError, match="512-monomial"):
         GradedJacobianSyzygyRequest(
-            polynomial=_sparse_polynomial(("x", "y", "z", "w"), {(11, 0, 0, 0): 1}),
+            polynomial=_sparse_polynomial(
+                ("x", "y", "z", "w"),
+                {
+                    (11, 0, 0, 0): 1,
+                    (0, 11, 0, 0): 1,
+                    (0, 0, 11, 0): 1,
+                    (0, 0, 0, 11): 1,
+                },
+            ),
             max_degree=3,
         )
 
     with pytest.raises(ValidationError, match="15000000-update"):
         GradedJacobianSyzygyRequest(
-            polynomial=_sparse_polynomial(("x", "y", "z", "w"), {(9, 0, 0, 0): 1}),
+            polynomial=_sparse_polynomial(
+                ("x", "y", "z", "w"),
+                {(9, 0, 0, 0): 1, (0, 9, 0, 0): 1, (0, 0, 9, 0): 1, (0, 0, 0, 9): 1},
+            ),
             max_degree=4,
         )
 
@@ -302,3 +313,78 @@ def test_syzygy_kernel_rejects_an_incomplete_linear_factor_request() -> None:
 
     with pytest.raises(ValueError, match="linear-factor input is incomplete"):
         compute_graded_jacobian_syzygy(request)
+
+
+def test_zero_partial_derivatives_admit_the_forced_degree_zero_kernel() -> None:
+    request = GradedJacobianSyzygyRequest(
+        polynomial=_sparse_polynomial(("a", "b", "c", "d", "e"), {(1, 0, 0, 0, 0): 1}),
+    )
+
+    assert request.max_degree == 6
+    result = compute_graded_jacobian_syzygy(request)
+
+    assert result.status == "FOUND"
+    assert result.first_syzygy_degree == 0
+    assert result.searched_through_degree == 0
+    assert [
+        (item.row_count, item.column_count, item.rank, item.nullity)
+        for item in result.degree_maps
+    ] == [(1, 5, 1, 4)]
+    assert (
+        GradedJacobianSyzygyResult.model_validate(result.model_dump(mode="python"))
+        == result
+    )
+
+
+def test_default_bound_admits_eight_variables_when_the_kernel_is_forced() -> None:
+    request = GradedJacobianSyzygyRequest(
+        polynomial=_sparse_polynomial(
+            ("a", "b", "c", "d", "e", "f", "g", "h"),
+            {(1, 0, 0, 0, 0, 0, 0, 0): 1},
+        ),
+        max_degree=8,
+    )
+    result = compute_graded_jacobian_syzygy(request)
+
+    assert result.first_syzygy_degree == 0
+    assert [item.column_count for item in result.degree_maps] == [8]
+
+
+def test_dependent_gradient_without_zero_partials_stops_at_degree_zero() -> None:
+    result = compute_graded_jacobian_syzygy(
+        GradedJacobianSyzygyRequest(
+            polynomial=_sparse_polynomial(
+                ("x", "y", "z"),
+                {(2, 0, 2): 1, (1, 1, 2): -2, (0, 2, 2): 1},
+            ),
+            max_degree=6,
+        )
+    )
+
+    assert result.status == "FOUND"
+    assert result.first_syzygy_degree == 0
+    assert len(result.degree_maps) == 1
+    witness = result.kernel_witness
+    assert witness is not None
+    assert len(witness.multipliers) == 3
+
+
+def test_result_rejects_labelled_provenance_off_three_variables() -> None:
+    for variables in (("x",), ("x", "y"), ("x", "y", "z", "w")):
+        source = _sparse_polynomial(
+            variables,
+            {tuple(1 if index == 0 else 0 for index in range(len(variables))): 1},
+        )
+        produced = compute_graded_jacobian_syzygy_coefficients(
+            GradedJacobianSyzygyCoefficientRequest(
+                polynomial=source,
+                max_degree=1,
+                coefficient_map_detail="SPARSE_ENTRIES",
+            )
+        )
+        payload = json.loads(produced.model_dump_json())
+        assert GradedJacobianSyzygyResult.model_validate(payload) == produced
+
+        payload["source_kind"] = "LABELLED_LINEAR_FACTOR_PRODUCT"
+        with pytest.raises(ValidationError, match="requires exactly three variables"):
+            GradedJacobianSyzygyResult.model_validate(payload)

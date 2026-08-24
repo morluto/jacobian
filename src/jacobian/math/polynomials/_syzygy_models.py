@@ -190,6 +190,66 @@ def _multiply_terms(
     }
 
 
+def _expanded_source_terms(
+    polynomial: RationalPolynomial | None,
+    linear_factors: tuple[RationalProjectiveLine, ...] | None,
+) -> dict[tuple[int, ...], Fraction]:
+    if polynomial is not None:
+        return _polynomial_terms(polynomial)
+    if linear_factors is None:
+        raise ValueError("labelled linear factors are required")
+    terms: dict[tuple[int, ...], Fraction] = {(0, 0, 0): Fraction(1)}
+    for factor in linear_factors:
+        terms = _multiply_terms(
+            terms,
+            {
+                tuple(1 if axis == position else 0 for axis in range(3)): (
+                    coefficient.as_fraction()
+                )
+                for position, coefficient in enumerate(factor.coefficients)
+            },
+        )
+    return terms
+
+
+def _degree_zero_kernel_is_forced(
+    *, variable_count: int, source_terms: dict[tuple[int, ...], Fraction]
+) -> bool:
+    """Decide whether the degree-zero Jacobian map provably has nonzero nullity.
+
+    Every degree-zero column is exactly one partial derivative's coefficient
+    vector, so the map's exact rank follows from the admitted request alone.
+    Rank below the variable count forces the first kernel at degree zero, and
+    execution then breaks before constructing any later map.
+    """
+
+    partials = tuple(
+        _partial_derivative_terms(source_terms, variable)
+        for variable in range(variable_count)
+    )
+    pivot_rows: list[tuple[int, list[Fraction]]] = []
+    for exponents in sorted({key for partial in partials for key in partial}):
+        row = [partial.get(exponents, Fraction(0)) for partial in partials]
+        for leading_column, pivot_row in pivot_rows:
+            factor = row[leading_column]
+            if not factor:
+                continue
+            row = [
+                value - factor * pivot_value
+                for value, pivot_value in zip(row, pivot_row, strict=True)
+            ]
+        new_leading_column = next(
+            (column for column, value in enumerate(row) if value), None
+        )
+        if new_leading_column is None:
+            continue
+        scale = row[new_leading_column]
+        pivot_rows.append((new_leading_column, [value / scale for value in row]))
+        if len(pivot_rows) == variable_count:
+            return False
+    return True
+
+
 class GradedJacobianSyzygyRequestBase(StrictModel):
     """Search the homogeneous Jacobian map through one explicit degree bound."""
 
@@ -259,10 +319,23 @@ class GradedJacobianSyzygyRequestBase(StrictModel):
             + _decimal_log_upper(_basis_size(3, source_degree))
             + _decimal_log_upper(source_degree)
         )
+        # Execution stops at the first non-injective map, so admission charges
+        # only degrees a run can actually reach. The degree-zero rank is exact
+        # and cheap from the request alone; later degrees stay fully budgeted.
+        budgeted_max_degree = (
+            0
+            if _degree_zero_kernel_is_forced(
+                variable_count=len(variables),
+                source_terms=_expanded_source_terms(
+                    self.polynomial, self.linear_factors
+                ),
+            )
+            else self.max_degree
+        )
         _require_coefficient_map_budget(
             variable_count=len(variables),
             source_degree=source_degree,
-            max_degree=self.max_degree,
+            max_degree=budgeted_max_degree,
             coefficient_map_detail=self.coefficient_map_detail,
             entry_coefficient_digits=entry_coefficient_digits,
         )
@@ -468,6 +541,10 @@ def _validate_result_source_and_partials(result: GradedJacobianSyzygyResult) -> 
     variable_count = len(result.variables)
     if len(set(result.variables)) != variable_count:
         raise ValueError("result variable order must be unique")
+    if result.source_kind == "LABELLED_LINEAR_FACTOR_PRODUCT" and variable_count != 3:
+        raise ValueError(
+            "labelled linear-factor provenance requires exactly three variables"
+        )
     if result.expanded_polynomial.variables != result.variables:
         raise ValueError("expanded source must use the declared variable order")
     source_terms = _polynomial_terms(result.expanded_polynomial)

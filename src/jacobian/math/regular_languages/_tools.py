@@ -13,12 +13,15 @@ from jacobian.math.regular_languages._models import (
     CountResult,
     RunRequest,
     RunResult,
+    TransitionParikhProfileRequest,
 )
 from jacobian.math.regular_languages._operations import (
     compute_complement,
     compute_count,
     compute_run,
+    compute_transition_parikh_profile,
 )
+from jacobian.math.regular_languages.values import TransitionParikhProfile
 
 
 def rl_operation[RequestT: StrictModel, ResultT: StrictModel](
@@ -60,8 +63,46 @@ _DFA_EXAMPLE = {
     },
 }
 
+_TRANSITION_PROFILE_EXAMPLE = {
+    "automaton": {
+        "state_count": 1,
+        "alphabet_size": 2,
+        "transitions": [
+            {"transition_id": 0, "source": 0, "symbol": 0, "target": 0},
+            {"transition_id": 1, "source": 0, "symbol": 1, "target": 0},
+        ],
+    },
+    "source_state": 0,
+    "target_state": 0,
+    "path_length": 2,
+}
+
 
 REGULAR_LANGUAGE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
+    rl_operation(
+        "automaton.path.transition_parikh_profile.compute",
+        "Compute a transition-Parikh profile for fixed-length automaton paths",
+        "Return the complete exact histogram from transition-use vectors to path "
+        "multiplicities for one source, target, and exact length. Coordinates use "
+        "the automaton's stable transition-ID axis; requests above the derived "
+        "work or result envelope are rejected before the sparse recurrence runs.",
+        TransitionParikhProfileRequest,
+        TransitionParikhProfile,
+        compute_transition_parikh_profile,
+        "automata",
+        "paths",
+        "parikh",
+        "exact",
+        "complete",
+        examples=(
+            example(
+                "two_loop_transition_histogram",
+                "Compute all length-two loop paths and group them by transition "
+                "counts; transition IDs must be the contiguous ordered axis.",
+                _TRANSITION_PROFILE_EXAMPLE,
+            ),
+        ),
+    ),
     rl_operation(
         "regular_language.run.check",
         "Check if a word is accepted by a DFA",

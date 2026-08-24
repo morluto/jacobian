@@ -15,6 +15,7 @@ from jacobian.math.matrices.symbolic._models import (
     SymbolicDeterminantRequest,
     SymbolicDeterminantResult,
     SymbolicEigenvaluesResult,
+    SymbolicLinearSystemRequest,
     SymbolicMatrix,
     SymbolicMatrixRequest,
     SymbolicRankResult,
@@ -270,6 +271,7 @@ def test_symbolic_descriptors_publish_operation_specific_boundaries() -> None:
         "matrix.symbolic.rank.compute": SymbolicMatrixRequest,
         "matrix.symbolic.characteristic_polynomial.compute": SymbolicCharacteristicPolynomialRequest,
         "matrix.symbolic.eigenvalues.compute": SymbolicCharacteristicPolynomialRequest,
+        "matrix.symbolic.linear_system.solve": SymbolicLinearSystemRequest,
     }
 
 

@@ -732,7 +732,7 @@ def _validate_spqr_tree(result: SPQRTreeResult) -> None:
     )
     if result.source_vertex_incidence != expected_incidence:
         raise ValueError("source vertex incidence must match the skeleton carriers")
-    derived_tree = _validate_virtual_pairs(result, edge_locations)
+    derived_tree = _validate_virtual_pairs(result, edge_locations, source_value)
     if tuple(sorted(derived_tree)) != result.tree_edges:
         raise ValueError("SPQR tree edges must be induced by virtual-edge pairs")
     _validate_normalized_tree(nodes, result.tree_edges)
@@ -757,9 +757,11 @@ def _collect_spqr_edges(
 def _validate_virtual_pairs(
     result: SPQRTreeResult,
     edge_locations: dict[str, tuple[str, SPQRSkeleton, MultigraphEdge]],
+    source_value: nx.Graph[int],
 ) -> set[tuple[str, str]]:
     pair_edges: set[str] = set()
     derived_tree: set[tuple[str, str]] = set()
+    separated_pairs: set[tuple[int, int]] = set()
     for left_id, right_id in result.virtual_edge_pairs:
         if left_id == right_id or left_id in pair_edges or right_id in pair_edges:
             raise ValueError("virtual edges must occur in exactly one distinct pair")
@@ -773,12 +775,20 @@ def _validate_virtual_pairs(
             or right_id not in right_skeleton.virtual_edge_ids
         ):
             raise ValueError("only virtual skeleton edges may be paired")
-        if _global_endpoints(left_skeleton, left) != _global_endpoints(
-            right_skeleton, right
-        ):
+        separator = _global_endpoints(left_skeleton, left)
+        if separator != _global_endpoints(right_skeleton, right):
             raise ValueError(
                 "paired virtual edges must share their separator endpoints"
             )
+        if separator not in separated_pairs:
+            remaining = source_value.copy()
+            remaining.remove_nodes_from(separator)
+            if nx.is_connected(remaining):
+                raise ValueError(
+                    "paired virtual edges must represent a genuine separation"
+                    " pair of the source graph"
+                )
+            separated_pairs.add(separator)
         if left_node == right_node:
             raise ValueError("paired virtual edges must join distinct SPQR nodes")
         pair_edges.update((left_id, right_id))
@@ -834,6 +844,12 @@ def _validate_negative_spqr_result(result: SPQRTreeResult) -> None:
         if len(result.witness_vertices) != 2:
             raise ValueError("disconnectedness requires two concrete vertices")
         left, right = result.witness_vertices
+        if not (
+            0 <= left < graph.vertex_count and 0 <= right < graph.vertex_count
+        ):
+            raise ValueError(
+                "disconnectedness witness vertices must name source vertices"
+            )
         if left == right or nx.has_path(value, left, right):
             raise ValueError("disconnectedness witness vertices must be disconnected")
         return

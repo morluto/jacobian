@@ -15,6 +15,7 @@ from jacobian.math.graphs.decomposition._models import (
     BridgeBlockResult,
     EarDecompositionRequest,
     EarDecompositionResult,
+    SPQRSkeleton,
     SPQRTreeRequest,
     SPQRTreeResult,
     UndirectedGraph,
@@ -26,7 +27,7 @@ from jacobian.math.graphs.decomposition._operations import (
     compute_ear_decomposition,
     compute_spqr_tree,
 )
-from jacobian.math.graphs.multigraph._models import LooplessMultigraph
+from jacobian.math.graphs.multigraph._models import LooplessMultigraph, MultigraphEdge
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -606,6 +607,121 @@ class TestSPQRTree:
         )
         with pytest.raises(ValidationError, match="at least one skeleton"):
             SPQRTreeResult.model_validate(forged.model_dump(mode="json"))
+
+    def test_negative_replay_rejects_witnesses_absent_from_source(self) -> None:
+        k4 = {"vertex_count": 4, "edges": [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]}
+        with pytest.raises(ValidationError, match="articulation witness"):
+            SPQRTreeResult.model_validate(
+                {
+                    "source_graph": k4,
+                    "status": "NOT_BICONNECTED",
+                    "witness_kind": "ARTICULATION",
+                    "witness_vertices": [0],
+                }
+            )
+        with pytest.raises(ValidationError, match="name source vertices"):
+            SPQRTreeResult.model_validate(
+                {
+                    "source_graph": {"vertex_count": 2, "edges": [[0, 1]]},
+                    "status": "NOT_BICONNECTED",
+                    "witness_kind": "DISCONNECTED",
+                    "witness_vertices": [0, 99],
+                }
+            )
+        with pytest.raises(ValidationError, match="name source vertices"):
+            SPQRTreeResult.model_validate(
+                {
+                    "source_graph": {"vertex_count": 2, "edges": [[0, 1]]},
+                    "status": "NOT_BICONNECTED",
+                    "witness_kind": "DISCONNECTED",
+                    "witness_vertices": [0, -1],
+                }
+            )
+
+    def test_replay_rejects_virtual_pair_without_genuine_separation(self) -> None:
+        """A forged R+Q split of K5 must fail even though every edge maps."""
+        k5_edges = [(i, j) for i in range(5) for j in range(i + 1, 5)]
+        genuine = _spqr_tree({"vertex_count": 5, "edges": k5_edges})
+        assert [node.kind for node in genuine.nodes] == ["R_NODE"]
+        rigid = genuine.nodes[0]
+        moved = (3, 4)
+        kept_sources = [e for e in rigid.real_edge_sources if e[1] != moved]
+        kept_edges = [
+            e
+            for e in rigid.graph.edges
+            if (rigid.vertices[e.left], rigid.vertices[e.right]) != moved
+        ]
+        positions = {vertex: index for index, vertex in enumerate(rigid.vertices)}
+        forged_rigid = SPQRSkeleton(
+            node_id=rigid.node_id,
+            kind="R_NODE",
+            vertices=tuple(rigid.vertices),
+            graph=LooplessMultigraph(
+                vertex_count=len(rigid.vertices),
+                edges=(
+                    *kept_edges,
+                    MultigraphEdge(
+                        edge_id="virtual:forged", left=positions[3], right=positions[4]
+                    ),
+                ),
+            ),
+            real_edge_sources=tuple(kept_sources),
+            virtual_edge_ids=("virtual:forged",),
+        )
+        forged_bridge = SPQRSkeleton(
+            node_id="node:forged",
+            kind="Q_NODE",
+            vertices=(3, 4),
+            graph=LooplessMultigraph(
+                vertex_count=2,
+                edges=(
+                    MultigraphEdge(edge_id="real:3:4", left=0, right=1),
+                    MultigraphEdge(edge_id="virtual:forged-mate", left=0, right=1),
+                ),
+            ),
+            real_edge_sources=(("real:3:4", (3, 4)),),
+            virtual_edge_ids=("virtual:forged-mate",),
+        )
+        owners = tuple(
+            sorted(
+                (source, skeleton.node_id, edge_id)
+                for skeleton in (forged_rigid, forged_bridge)
+                for edge_id, source in skeleton.real_edge_sources
+            )
+        )
+        incidence = tuple(
+            (
+                vertex,
+                tuple(
+                    skeleton.node_id
+                    for skeleton in sorted(
+                        (forged_rigid, forged_bridge), key=lambda s: s.node_id
+                    )
+                    if vertex in skeleton.vertices
+                ),
+            )
+            for vertex in range(5)
+        )
+        with pytest.raises(ValidationError, match="genuine separation pair"):
+            SPQRTreeResult(
+                source_graph=genuine.source_graph,
+                status="SPQR_TREE",
+                nodes=(forged_rigid, forged_bridge),
+                tree_edges=(tuple(sorted(("node:forged", rigid.node_id))),),
+                virtual_edge_pairs=(("virtual:forged", "virtual:forged-mate"),),
+                source_vertex_incidence=incidence,
+                source_edge_owners=owners,
+            )
+
+    def test_request_admits_complete_graphs_on_the_declared_vertex_axis(self) -> None:
+        k33_edges = [(i, j) for i in range(33) for j in range(i + 1, 33)]
+        result = _spqr_tree({"vertex_count": 33, "edges": k33_edges})
+        assert result.status == "SPQR_TREE"
+        assert [node.kind for node in result.nodes] == ["R_NODE"]
+        assert len(result.nodes[0].graph.edges) == len(k33_edges) == 528
+        assert len(result.source_edge_owners) == 528
+        replayed = SPQRTreeResult.model_validate(result.model_dump(mode="json"))
+        assert replayed == result
 
     def test_result_deserialization_round_trips_genuine_decomposition(self) -> None:
         result = _spqr_tree(

@@ -2,8 +2,9 @@
 
 All operations in this module act on an undirected simple graph supplied as
 a vertex count and a tuple of ``(source, target)`` integer edges.  Vertices
-are labelled ``0..vertex_count-1``; the maximum vertex count is 64 and the
-maximum edge count is 512, matching the rest of the graph domains.
+are labelled ``0..vertex_count-1``; the vertex axis holds at most 64
+vertices, so a simple graph admits up to ``C(64, 2) = 2016`` edges, matching
+the shared multigraph carrier bounds.
 """
 
 from __future__ import annotations
@@ -13,14 +14,18 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.math.graphs.multigraph._models import LooplessMultigraph
+from jacobian.math.graphs.multigraph._models import MAX_EDGES, LooplessMultigraph
 
 
 class UndirectedGraph(StrictModel):
-    """A simple undirected graph for decomposition operations."""
+    """A simple undirected graph for decomposition operations.
+
+    The declared vertex axis bounds admission: at most 64 vertices, hence at
+    most ``C(64, 2) = 2016`` distinct undirected edges.
+    """
 
     vertex_count: int = Field(ge=1, le=64)
-    edges: tuple[tuple[int, int], ...] = Field(min_length=0, max_length=512)
+    edges: tuple[tuple[int, int], ...] = Field(min_length=0, max_length=MAX_EDGES)
 
     @model_validator(mode="after")
     def require_valid_edges(self) -> Self:
@@ -125,6 +130,9 @@ class SPQRTreeRequest(StrictModel):
     The positive branch uses the convention that a source graph must be
     connected, biconnected, and have at least three vertices.  Other inputs
     return a concrete ``NOT_BICONNECTED`` witness rather than an empty tree.
+    Work admission follows from that convention: the split search enumerates
+    at most ``C(vertex_count, 2)`` candidate separation pairs over a graph of
+    at most ``C(64, 2) = 2016`` edges.
     """
 
     graph: UndirectedGraph = Field(
@@ -186,7 +194,7 @@ class SPQRTreeResult(StrictModel):
         default=(), max_length=64
     )
     source_edge_owners: tuple[tuple[tuple[int, int], str, str], ...] = Field(
-        default=(), max_length=512
+        default=(), max_length=MAX_EDGES
     )
     convention: Literal["JACOBIAN_NORMALIZED_FULL_SPQR_V1"] = (
         "JACOBIAN_NORMALIZED_FULL_SPQR_V1"

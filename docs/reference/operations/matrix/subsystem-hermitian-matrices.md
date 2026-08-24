@@ -20,13 +20,19 @@ The bounded operations consume and produce this value directly:
   binding. Its result retains both sources, their exact difference, inertia,
   and a rational negative quadratic witness when the order fails.
 
-The admitted product dimension is at most 16, with at most four factors. A
-Kronecker operand component has at most 128 decimal digits and the product
-preflight proves every resulting component has at most 256. Partial trace
-accepts those produced components subject to its traced common-denominator
-sum bound. PSD order accepts components up to 256 digits only when its
-dimension-sensitive `right - left` and replayable-witness bounds also fit; a
-large product therefore does not imply that every downstream decision fits in
-one bounded call. The kernels are exact rational computations; they do not use
-floating-point matrix predicates or a tensor registry. The catalog schemas and
-invocation examples are authoritative for wire shapes.
+The admitted product dimension is at most 16, with at most four factors.
+Kronecker admission couples the two operands rather than fixing per-operand
+ceilings: preflight bounds every product component by the larger of
+`left_num + right_num` and `left_den + right_den` decimal digits against a
+combined 256-digit envelope, so one 200-digit operand paired with a one-digit
+operand fits while two moderately wide operands may not. Partial trace accepts
+those produced components subject to its traced common-denominator sum bound
+of 4,098 digits. PSD order likewise has no fixed component ceiling: it admits
+operands whose derived `right - left` component bound stays within 513 digits
+and whose dimension-scaled replayable-witness bound stays within the canonical
+rational limit, so operands above 256 digits are accepted whenever those
+derived bounds fit. A large Kronecker product therefore does not imply that
+every downstream decision fits in one bounded call. The kernels are exact
+rational computations; they do not use floating-point matrix predicates or a
+tensor registry. The catalog schemas and invocation examples are authoritative
+for wire shapes.

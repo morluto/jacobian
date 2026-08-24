@@ -251,6 +251,40 @@ def test_operation_input_digits_are_checked_before_exact_backend_work() -> None:
         PsdOrderRequest(left=source, right=source)
 
 
+def test_psd_order_result_admits_retained_sources_before_inertia_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.matrices.subsystems import _models
+
+    q = MatrixSubsystem(label="q", dimension=2)
+    zero = _matrix([[0, 0], [0, 0]], (q,))
+    positive = _matrix([[1, 0], [0, 2]], (q,))
+    accepted = psd_order(zero, positive)
+    assert PsdOrderResult.model_validate(accepted.model_dump(mode="python")) == accepted
+
+    large = 10**257
+    wide = _matrix(
+        [[Fraction(1, large), 0], [0, Fraction(1, large)]],
+        (q,),
+    )
+    forged = accepted.model_dump(mode="python")
+    forged["left"] = wide
+    forged["right"] = wide
+    forged["difference"] = zero
+    forged["inertia"] = {"n_positive": 0, "n_negative": 0, "n_zero": 2}
+    replayed: list[object] = []
+    real_inertia = _models.symmetric_inertia
+
+    def counted(matrix: object) -> tuple[int, int, int]:
+        replayed.append(matrix)
+        return real_inertia(matrix)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(_models, "symmetric_inertia", counted)
+    with pytest.raises(ValidationError, match="513"):
+        PsdOrderResult.model_validate(forged)
+    assert replayed == []
+
+
 def test_kronecker_product_replays_through_trace_and_psd_order_at_derived_bound() -> (
     None
 ):

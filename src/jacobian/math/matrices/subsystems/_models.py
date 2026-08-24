@@ -66,11 +66,60 @@ def _psd_witness_digit_bound(
     return 3 * dimension * dimension * difference_component_digits
 
 
+def _require_psd_pair_admission(
+    left: FactorizedHermitianMatrix,
+    right: FactorizedHermitianMatrix,
+) -> None:
+    """Admit one ordered pair through the coupled PSD digit envelopes."""
+
+    left_numerator, left_denominator = _component_digits(left)
+    right_numerator, right_denominator = _component_digits(right)
+    if left.factors != right.factors:
+        raise ValueError(
+            "PSD order requires exactly equal subsystem labels, dimensions, and "
+            "basis linearization"
+        )
+    difference_component_digits = max(
+        left_numerator + right_denominator + 1,
+        right_numerator + left_denominator + 1,
+        left_denominator + right_denominator,
+    )
+    if difference_component_digits > MAX_PSD_DIFFERENCE_COMPONENT_DIGITS:
+        raise ValueError(
+            "PSD-order difference growth exceeds the "
+            f"{MAX_PSD_DIFFERENCE_COMPONENT_DIGITS}-digit result bound"
+        )
+    if (
+        _psd_witness_digit_bound(
+            left,
+            difference_component_digits=difference_component_digits,
+        )
+        > MAX_CANONICAL_RATIONAL_DIGITS
+    ):
+        raise ValueError(
+            "PSD-order witness growth exceeds the canonical rational component bound"
+        )
+
+
 class SubsystemKroneckerProductRequest(StrictModel):
     """Two factorized rational Hermitian matrices for one product."""
 
-    left: FactorizedHermitianMatrix
-    right: FactorizedHermitianMatrix
+    left: FactorizedHermitianMatrix = Field(
+        description=(
+            "First operand; no fixed per-operand digit ceiling applies. "
+            "Admission couples both operands through max(left numerator + "
+            "right numerator, left denominator + right denominator) decimal "
+            "digits, bounded by the 256-digit product component envelope."
+        ),
+    )
+    right: FactorizedHermitianMatrix = Field(
+        description=(
+            "Second operand; no fixed per-operand digit ceiling applies. "
+            "Admission couples both operands through max(left numerator + "
+            "right numerator, left denominator + right denominator) decimal "
+            "digits, bounded by the 256-digit product component envelope."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_product_envelope(self) -> Self:
@@ -223,38 +272,24 @@ class NegativeQuadraticWitness(StrictModel):
 class PsdOrderRequest(StrictModel):
     """Decide whether ``left <= right`` for one factorized rational basis."""
 
-    left: FactorizedHermitianMatrix
-    right: FactorizedHermitianMatrix
+    left: FactorizedHermitianMatrix = Field(
+        description=(
+            "First operand; admission couples both operands through the "
+            "derived right-minus-left component bound (513 digits) and the "
+            "dimension-scaled witness bound, not a fixed per-operand ceiling."
+        ),
+    )
+    right: FactorizedHermitianMatrix = Field(
+        description=(
+            "Second operand; admission couples both operands through the "
+            "derived right-minus-left component bound (513 digits) and the "
+            "dimension-scaled witness bound, not a fixed per-operand ceiling."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_common_axis_bound_source(self) -> Self:
-        left_numerator, left_denominator = _component_digits(self.left)
-        right_numerator, right_denominator = _component_digits(self.right)
-        if self.left.factors != self.right.factors:
-            raise ValueError(
-                "PSD order requires exactly equal subsystem labels, dimensions, and "
-                "basis linearization"
-            )
-        difference_component_digits = max(
-            left_numerator + right_denominator + 1,
-            right_numerator + left_denominator + 1,
-            left_denominator + right_denominator,
-        )
-        if difference_component_digits > MAX_PSD_DIFFERENCE_COMPONENT_DIGITS:
-            raise ValueError(
-                "PSD-order difference growth exceeds the "
-                f"{MAX_PSD_DIFFERENCE_COMPONENT_DIGITS}-digit result bound"
-            )
-        if (
-            _psd_witness_digit_bound(
-                self.left,
-                difference_component_digits=difference_component_digits,
-            )
-            > MAX_CANONICAL_RATIONAL_DIGITS
-        ):
-            raise ValueError(
-                "PSD-order witness growth exceeds the canonical rational component bound"
-            )
+        _require_psd_pair_admission(self.left, self.right)
         return self
 
 
@@ -280,6 +315,7 @@ class PsdOrderResult(StrictModel):
             raise ValueError(
                 "PSD-order result matrices must share exactly one axis bound"
             )
+        _require_psd_pair_admission(self.left, self.right)
         dimension = len(self.left.matrix.entries)
         if (
             self.inertia.n_positive + self.inertia.n_negative + self.inertia.n_zero

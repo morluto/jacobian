@@ -23,7 +23,7 @@ dependencies = [
     "rfc8785==0.1.4",
     "sympy==1.14.0",
     "typer>=0.20,<1",
-    "z3-solver==5.0.0.0",
+    "z3-solver==5.1.0.0",
 ]
 
 [project.scripts]

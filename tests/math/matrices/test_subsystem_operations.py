@@ -430,10 +430,10 @@ def test_partial_trace_work_envelope_rejects_one_step_above_the_contracted_bound
 
     q = MatrixSubsystem(label="q", dimension=4)
     rejected_denominators = (
-        10**4097 + 3,
-        10**4097 + 5,
-        10**4097 + 11,
-        10**4097 + 13,
+        10**4099 - 3,
+        10**4099 - 5,
+        10**4099 - 11,
+        10**4099 - 13,
     )
     source = _matrix(
         [
@@ -457,6 +457,44 @@ def test_partial_trace_work_envelope_rejects_one_step_above_the_contracted_bound
     with pytest.raises(ValidationError, match="intermediate bound"):
         SubsystemPartialTraceRequest(matrix=source, traced_factor_labels=("q",))
     assert contracted == []
+
+
+def test_partial_trace_admits_cancelling_pairs_and_rereads_its_emitted_factor() -> None:
+    a = MatrixSubsystem(label="a", dimension=1)
+    r = MatrixSubsystem(label="r", dimension=16)
+    denominators = tuple(10**2049 + offset for offset in (3, 5, 11, 13, 19, 21, 27, 29))
+    diagonal = [
+        entry
+        for denominator in denominators
+        for entry in (Fraction(1, denominator), Fraction(-1, denominator))
+    ]
+    assert len(str(denominators[0])) == 2050
+    source = _matrix(
+        [
+            [diagonal[row] if row == column else 0 for column in range(16)]
+            for row in range(16)
+        ],
+        (a, r),
+    )
+
+    reduced = partial_trace(source, ("a",))
+    assert reduced.factors == (r,)
+    assert _entries(reduced) == tuple(
+        tuple(diagonal[row] if row == column else Fraction(0) for column in range(16))
+        for row in range(16)
+    )
+
+    wire = compute_partial_trace(
+        SubsystemPartialTraceRequest(matrix=source, traced_factor_labels=("a",))
+    )
+    replayed = SubsystemPartialTraceResult.model_validate(
+        wire.model_dump(mode="python")
+    )
+    assert replayed == wire
+
+    final = partial_trace(reduced, ("r",))
+    assert final.factors == ()
+    assert _entries(final) == ((Fraction(0),),)
 
 
 def test_partial_trace_schema_describes_the_coupled_trace_envelopes() -> None:
@@ -543,13 +581,52 @@ def test_psd_order_agrees_with_the_two_by_two_principal_minor_criterion() -> Non
 
 def test_operation_input_digits_are_checked_before_exact_backend_work() -> None:
     q = MatrixSubsystem(label="q", dimension=2)
-    large = 10**257
+    first = Fraction(1, 10**257)
+    second = Fraction(1, 10**257 + 21)
     source = _matrix(
-        [[Fraction(1, large), 0], [0, Fraction(1, large)]],
+        [[first, 0], [0, first]],
+        (q,),
+    )
+    other = _matrix(
+        [[second, 0], [0, second]],
         (q,),
     )
     with pytest.raises(ValidationError, match="513"):
-        PsdOrderRequest(left=source, right=source)
+        PsdOrderRequest(left=source, right=other)
+
+
+def test_psd_order_admits_identical_operands_before_witness_growth() -> None:
+    q = MatrixSubsystem(label="q", dimension=4)
+    r = MatrixSubsystem(label="r", dimension=4)
+    left_value = Fraction(1, 10**127 + 159)
+    right_value = Fraction(1, 10**127 + 197)
+
+    def scaled(value: Fraction, factor: MatrixSubsystem) -> FactorizedHermitianMatrix:
+        return _matrix(
+            [
+                [value if row == column else 0 for column in range(4)]
+                for row in range(4)
+            ],
+            (factor,),
+        )
+
+    operand = compute_kronecker_product(
+        SubsystemKroneckerProductRequest(
+            left=scaled(left_value, q),
+            right=scaled(right_value, r),
+        )
+    ).product
+    assert len(operand.matrix.entries[0][0].den) == 255
+
+    ordered = decide_psd_order(PsdOrderRequest(left=operand, right=operand))
+    assert ordered.is_less_or_equal is True
+    assert (ordered.inertia.n_positive, ordered.inertia.n_negative) == (0, 0)
+    assert ordered.inertia.n_zero == 16
+    assert ordered.negative_witness is None
+    assert _entries(ordered.difference) == tuple(
+        tuple(Fraction(0) for _ in range(16)) for _ in range(16)
+    )
+    assert PsdOrderResult.model_validate(ordered.model_dump(mode="python")) == ordered
 
 
 def test_kronecker_product_schema_describes_the_exact_product_component_envelope() -> (
@@ -590,14 +667,19 @@ def test_psd_order_result_admits_retained_sources_before_inertia_replay(
     accepted = psd_order(zero, positive)
     assert PsdOrderResult.model_validate(accepted.model_dump(mode="python")) == accepted
 
-    large = 10**257
-    wide = _matrix(
-        [[Fraction(1, large), 0], [0, Fraction(1, large)]],
+    large_first = Fraction(1, 10**257)
+    large_second = Fraction(1, 10**257 + 21)
+    wide_left = _matrix(
+        [[large_first, 0], [0, large_first]],
+        (q,),
+    )
+    wide_right = _matrix(
+        [[large_second, 0], [0, large_second]],
         (q,),
     )
     forged = accepted.model_dump(mode="python")
-    forged["left"] = wide
-    forged["right"] = wide
+    forged["left"] = wide_left
+    forged["right"] = wide_right
     forged["difference"] = zero
     forged["inertia"] = {"n_positive": 0, "n_negative": 0, "n_zero": 2}
     replayed: list[object] = []
@@ -649,27 +731,33 @@ def test_psd_order_rejects_a_large_product_before_witness_expansion() -> None:
     r = MatrixSubsystem(label="r", dimension=4)
     left_value = Fraction(1, 10**127 + 159)
     right_value = Fraction(1, 10**127 + 197)
-    left = _matrix(
-        [
-            [left_value if row == column else 0 for column in range(4)]
-            for row in range(4)
-        ],
-        (q,),
-    )
-    right = _matrix(
-        [
-            [right_value if row == column else 0 for column in range(4)]
-            for row in range(4)
-        ],
-        (r,),
-    )
-    product_matrix = compute_kronecker_product(
-        SubsystemKroneckerProductRequest(left=left, right=right)
+    third_value = Fraction(1, 10**127 + 211)
+
+    def scaled(value: Fraction, factor: MatrixSubsystem) -> FactorizedHermitianMatrix:
+        return _matrix(
+            [
+                [value if row == column else 0 for column in range(4)]
+                for row in range(4)
+            ],
+            (factor,),
+        )
+
+    left_product = compute_kronecker_product(
+        SubsystemKroneckerProductRequest(
+            left=scaled(left_value, q),
+            right=scaled(right_value, r),
+        )
     ).product
-    assert len(product_matrix.matrix.entries[0][0].den) == 255
+    right_product = compute_kronecker_product(
+        SubsystemKroneckerProductRequest(
+            left=scaled(left_value, q),
+            right=scaled(third_value, r),
+        )
+    ).product
+    assert len(left_product.matrix.entries[0][0].den) == 255
 
     with pytest.raises(ValidationError, match="witness growth"):
-        PsdOrderRequest(left=product_matrix, right=product_matrix)
+        PsdOrderRequest(left=left_product, right=right_product)
 
 
 def test_partial_trace_readmits_its_emitted_values_across_sequential_traces() -> None:

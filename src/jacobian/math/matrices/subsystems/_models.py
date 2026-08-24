@@ -9,6 +9,7 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math._exact_linear_algebra import symmetric_inertia
 from jacobian.math.matrices.subsystems.values import (
     MAX_SUBSYSTEM_DIMENSION,
@@ -33,9 +34,17 @@ def _component_digits(matrix: FactorizedHermitianMatrix) -> tuple[int, int]:
 
 
 def _fraction_component_digits(value: Fraction) -> tuple[int, int]:
-    """Count one exact fraction's signed-numerator and denominator digits."""
+    """Count one exact fraction's signed-numerator and denominator digits.
 
-    return len(str(abs(value.numerator))), len(str(value.denominator))
+    Formatting goes through the canonical chunked formatter so measured
+    intermediates wider than Python's integer-string conversion limit stay
+    countable instead of raising a host exception.
+    """
+
+    return (
+        len(format_canonical_integer(abs(value.numerator))),
+        len(format_canonical_integer(value.denominator)),
+    )
 
 
 def _entry_fractions(
@@ -50,33 +59,30 @@ def _require_trace_work_envelope(
     matrix: FactorizedHermitianMatrix,
     traced_factor_labels: tuple[str, ...],
 ) -> None:
-    """Bound contraction intermediates from the terms each cell actually folds.
+    """Bound contraction intermediates by replaying each cell's exact fold.
 
-    ``Fraction`` folds reduce between additions, so one contracted cell's
-    running denominator always divides the least common multiple of its folded
-    denominators -- at most the digit sum over that cell's distinct denominator
-    values -- while its running numerator gains at most the decimal width of
-    the fold count over that cell's widest folded numerator.  Charging each
-    contracted output cell for its own components, with shared denominators
-    counted once, bounds every unreduced intermediate exactly where it arises
-    and keeps emitted canonical values usable by this consumer, instead of
-    charging every cell for the globally largest components.
+    ``Fraction`` folds reduce between additions, and cancellation inside a
+    cell can collapse the running value below any aggregate of its input
+    widths -- adjacent pairs ``1/d, -1/d`` over distinct denominators never
+    widen past one denominator even though their digit sum grows with the
+    cell -- so no per-input estimate bounds every fold safely.  Admission
+    therefore replays each contracted cell's exact kernel fold -- the same
+    terms in the :func:`partial_trace_source_index_groups` order that
+    :func:`partial_trace_entries` accumulates -- and charges the widest
+    signed-numerator or denominator width among that cell's running reduced
+    intermediates.  Measuring the real arithmetic keeps cancelling folds
+    admissible while any genuinely growing intermediate is rejected before
+    the operation runs.
     """
 
     for group in partial_trace_source_index_groups(matrix, traced_factor_labels):
-        entries = [matrix.matrix.entries[row][column] for row, column in group]
-        fold_digits = len(str(len(entries)))
-        numerator_digits = max(
-            (len(entry.num.lstrip("-")) for entry in entries),
-            default=1,
-        )
-        denominator_digits = sum(
-            len(denominator) for denominator in {entry.den for entry in entries}
-        )
-        if (
-            fold_digits + numerator_digits + denominator_digits
-            > MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS
-        ):
+        running = Fraction(0)
+        widest = max(_fraction_component_digits(running))
+        for row, column in group:
+            running += matrix.matrix.entries[row][column].as_fraction()
+            numerator_digits, denominator_digits = _fraction_component_digits(running)
+            widest = max(widest, numerator_digits, denominator_digits)
+        if widest > MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS:
             raise ValueError(
                 "partial-trace contraction work exceeds the "
                 f"{MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS}-digit intermediate bound"
@@ -132,8 +138,17 @@ def _require_psd_pair_admission(
     left: FactorizedHermitianMatrix,
     right: FactorizedHermitianMatrix,
 ) -> None:
-    """Admit one ordered pair through the coupled PSD digit envelopes."""
+    """Admit one ordered pair through the coupled PSD digit envelopes.
 
+    Identical operands are admitted directly: canonical entries make
+    structural equality exact, so ``right - left`` is the zero matrix whose
+    components fit trivially and no vector can produce a negative quadratic
+    value.  Distinct pairs go through the coupled difference and witness
+    bounds unchanged.
+    """
+
+    if left == right:
+        return
     left_numerator, left_denominator = _component_digits(left)
     right_numerator, right_denominator = _component_digits(right)
     if left.factors != right.factors:
@@ -346,14 +361,18 @@ class PsdOrderRequest(StrictModel):
         description=(
             "First operand; admission couples both operands through the "
             "derived right-minus-left component bound (513 digits) and the "
-            "dimension-scaled witness bound, not a fixed per-operand ceiling."
+            "dimension-scaled witness bound, not a fixed per-operand ceiling. "
+            "Identical operands are admitted directly because their exact "
+            "difference is the zero matrix."
         ),
     )
     right: FactorizedHermitianMatrix = Field(
         description=(
             "Second operand; admission couples both operands through the "
             "derived right-minus-left component bound (513 digits) and the "
-            "dimension-scaled witness bound, not a fixed per-operand ceiling."
+            "dimension-scaled witness bound, not a fixed per-operand ceiling. "
+            "Identical operands are admitted directly because their exact "
+            "difference is the zero matrix."
         ),
     )
 

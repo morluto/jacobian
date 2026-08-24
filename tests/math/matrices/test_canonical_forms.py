@@ -554,6 +554,61 @@ def test_rational_canonical_form_rejects_source_mutation() -> None:
         )
 
 
+def _nilpotent_jordan_blocks(block_size: int) -> SquareMatrixRequest:
+    """Direct sum of two nilpotent Jordan blocks J_block_size(0)."""
+    dimension = 2 * block_size
+    values = [[R.from_fraction(Fraction(0))] * dimension for _ in range(dimension)]
+    for start in (0, block_size):
+        for offset in range(block_size - 1):
+            values[start + offset][start + offset + 1] = R.from_fraction(Fraction(1))
+    return SquareMatrixRequest(
+        matrix=RationalMatrix(entries=tuple(tuple(row) for row in values))
+    )
+
+
+def test_rational_canonical_form_j3_plus_j3_has_two_x_cubed_factors() -> None:
+    """J3(0) + J3(0) has exact invariant factors (x^3, x^3)."""
+    result = compute_rational_canonical_form(_nilpotent_jordan_blocks(3))
+    assert len(result.invariant_factors) == 2
+    for entry in result.invariant_factors:
+        assert entry.block_size == 3
+        assert _coeffs(entry.factor) == [
+            Fraction(0),
+            Fraction(0),
+            Fraction(0),
+            Fraction(1),
+        ]
+    assert _coeffs(result.minimal_polynomial) == [
+        Fraction(0),
+        Fraction(0),
+        Fraction(0),
+        Fraction(1),
+    ]
+    assert _coeffs(result.characteristic_polynomial) == [Fraction(0)] * 6 + [
+        Fraction(1)
+    ]
+
+
+def test_rational_canonical_form_rejects_relationally_consistent_tuple() -> None:
+    """(x, x^2, x^3) satisfies degree, divisibility, product, and
+    last-factor checks against J3(0) + J3(0) yet is not the exact
+    invariant-factor tuple (x^3, x^3); validation must bind the tuple."""
+    result = compute_rational_canonical_form(_nilpotent_jordan_blocks(3))
+    forged = (
+        InvariantFactorEntry(factor=_mono(0, 1), block_size=1),
+        InvariantFactorEntry(factor=_mono(0, 0, 1), block_size=2),
+        InvariantFactorEntry(factor=_mono(0, 0, 0, 1), block_size=3),
+    )
+    with pytest.raises(ValidationError, match="exact invariant factors"):
+        RationalCanonicalFormResult(
+            matrix=result.matrix,
+            invariant_factors=forged,
+            characteristic_polynomial=result.characteristic_polynomial,
+            minimal_polynomial=result.minimal_polynomial,
+            total_block_size=6,
+        )
+
+
 def test_primary_decomposition_rejects_reducible_component() -> None:
     """t^2 - t factors over QQ, so it is not one irreducible-power component."""
     req = _diagonal("0", "1")

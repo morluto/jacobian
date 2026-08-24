@@ -122,8 +122,9 @@ class RationalCanonicalFormResult(StrictModel):
     Retains the source matrix so validation replays the invariant-factor
     relations: each block size equals its factor's degree, sizes total the
     matrix dimension, factors divide successively, their product equals the
-    characteristic polynomial of the retained matrix, and the last factor
-    is that matrix's minimal polynomial.
+    characteristic polynomial of the retained matrix, the last factor
+    is that matrix's minimal polynomial, and the claimed tuple equals the
+    exact invariant-factor tuple re-derived from the retained matrix.
     """
 
     matrix: SquareMatrixRequest
@@ -143,6 +144,9 @@ class RationalCanonicalFormResult(StrictModel):
         )
         from jacobian.math.matrices.canonical_forms.operations import (
             characteristic_polynomial as replay_characteristic,
+        )
+        from jacobian.math.matrices.canonical_forms.operations import (
+            invariant_factors as replay_invariant_factors,
         )
         from jacobian.math.matrices.canonical_forms.operations import (
             minimal_polynomial as replay_minimal,
@@ -192,6 +196,13 @@ class RationalCanonicalFormResult(StrictModel):
         minimal = _poly_from_monic(self.minimal_polynomial)
         if last_factor.as_expr() != minimal.as_expr():
             raise ValueError("the final invariant factor is the minimal polynomial")
+        if tuple(
+            _coefficients_of(entry.factor) for entry in self.invariant_factors
+        ) != tuple(replay_invariant_factors(entries)):
+            raise ValueError(
+                "invariant factors must be the exact invariant factors of "
+                "the retained matrix"
+            )
         return self
 
 

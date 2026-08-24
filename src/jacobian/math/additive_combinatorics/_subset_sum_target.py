@@ -83,9 +83,7 @@ def _raw_source_item_count(source: object) -> int | None:
             continue
         digit_count = len(value) - value.startswith("-")
         if digit_count > MAX_SUBSET_SUM_INTEGER_DIGITS:
-            _require_integer_digits(
-                value, "source item", MAX_SUBSET_SUM_INTEGER_DIGITS
-            )
+            _require_integer_digits(value, "source item", MAX_SUBSET_SUM_INTEGER_DIGITS)
         source_wire_bound += len(value) + 4
         if source_wire_bound > MAX_SUBSET_SUM_SOURCE_WIRE_BYTES:
             raise ValueError("subset-sum source exceeds the 4 MiB wire-size bound")
@@ -179,9 +177,7 @@ class SubsetSumTargetRequest(StrictModel):
     @model_validator(mode="after")
     def require_bounded_exact_search(self) -> Self:
         for value in self.source.items:
-            _require_integer_digits(
-                value, "source item", MAX_SUBSET_SUM_INTEGER_DIGITS
-            )
+            _require_integer_digits(value, "source item", MAX_SUBSET_SUM_INTEGER_DIGITS)
 
         # Exact ASCII digits plus conservative JSON string/container overhead.
         # Retaining this source and a maximal 65,536-index witness stays below

@@ -20,6 +20,8 @@ from jacobian.math.term_rewriting.operations import (
 from jacobian.math.term_rewriting.values import (
     MAX_CRITICAL_PAIR_RULES,
     MAX_RULES,
+    MAX_TERM_DEPTH,
+    MAX_VARIABLE_LABEL,
     CriticalPairProfile,
     RankedSignature,
     RewriteApplication,
@@ -27,6 +29,27 @@ from jacobian.math.term_rewriting.values import (
     Substitution,
     Term,
 )
+
+
+def _require_transport_safe_depth(*terms: Term) -> None:
+    """Reject term paths deeper than strict JSON transport can carry.
+
+    The shared canonical profile caps JSON nesting at 64 levels and each
+    serialized term node costs one object level plus one ``children`` array
+    level inside a request, so any root-to-leaf path carries at most
+    ``MAX_TERM_DEPTH`` nodes. Wire contracts enforce this iteratively so
+    rejection stays typed instead of surfacing as a transport failure after
+    schema admission.
+    """
+    stack = [(term, 1) for term in terms]
+    while stack:
+        current, depth = stack.pop()
+        if depth > MAX_TERM_DEPTH:
+            raise ValueError(
+                "term depth exceeds the transport-safe bound; any "
+                f"root-to-leaf path carries at most {MAX_TERM_DEPTH} nodes"
+            )
+        stack.extend((child, depth + 1) for child in current.children)
 
 
 class SubstitutionRequest(StrictModel):
@@ -41,6 +64,7 @@ class SubstitutionRequest(StrictModel):
         self.signature.validate_term(self.term)
         for replacement in self.substitution.mapping.values():
             self.signature.validate_term(replacement)
+        _require_transport_safe_depth(self.term, *self.substitution.mapping.values())
         return self
 
 
@@ -68,6 +92,7 @@ class MatchingRequest(StrictModel):
     def require_signature(self) -> Self:
         self.signature.validate_term(self.pattern)
         self.signature.validate_term(self.subject)
+        _require_transport_safe_depth(self.pattern, self.subject)
         return self
 
 
@@ -100,6 +125,7 @@ class UnificationRequest(StrictModel):
     def require_signature(self) -> Self:
         self.signature.validate_term(self.left)
         self.signature.validate_term(self.right)
+        _require_transport_safe_depth(self.left, self.right)
         return self
 
 
@@ -147,6 +173,9 @@ class RewriteStepRequest(StrictModel):
         for rule in self.rules:
             self.signature.validate_term(rule.lhs)
             self.signature.validate_term(rule.rhs)
+        _require_transport_safe_depth(
+            self.term, *(side for rule in self.rules for side in (rule.lhs, rule.rhs))
+        )
         if self.selection is None:
             return self
         if self.selection.rule_index >= len(self.rules):
@@ -171,6 +200,10 @@ class RewriteStepResult(StrictModel):
         for rule in self.rules:
             self.signature.validate_term(rule.lhs)
             self.signature.validate_term(rule.rhs)
+        _require_transport_safe_depth(
+            self.source_term,
+            *(side for rule in self.rules for side in (rule.lhs, rule.rhs)),
+        )
         if self.selection is None:
             expected = rewrite_steps(self.source_term, self.rules)
             expected_scope = "ALL_APPLICABLE_STEPS"
@@ -205,6 +238,9 @@ class NormalFormRequest(StrictModel):
         for rule in self.rules:
             self.signature.validate_term(rule.lhs)
             self.signature.validate_term(rule.rhs)
+        _require_transport_safe_depth(
+            self.term, *(side for rule in self.rules for side in (rule.lhs, rule.rhs))
+        )
         return self
 
 
@@ -227,6 +263,10 @@ class NormalFormResult(StrictModel):
         for rule in self.rules:
             self.signature.validate_term(rule.lhs)
             self.signature.validate_term(rule.rhs)
+        _require_transport_safe_depth(
+            self.source_term,
+            *(side for rule in self.rules for side in (rule.lhs, rule.rhs)),
+        )
         term, status, steps, next_step = normal_form(
             self.source_term, self.rules, self.max_steps
         )
@@ -253,17 +293,22 @@ class CriticalPairsRequest(StrictModel):
         max_length=MAX_CRITICAL_PAIR_RULES,
         description=(
             "Duplicate-free ordered rules, possibly empty. Variable labels "
-            "may use any non-negative integer; their serialized width is "
-            "charged against the byte bound. The complete ordered "
-            "nonvariable overlap ledger has at most 32 candidates. The "
-            "materialized replay work, the retained result, and its exact "
-            "replay are bounded by 42752 structural nodes and 4MiB."
+            "are non-negative integers up to the interoperable JSON integer "
+            "maximum published as the term symbol maximum; their serialized "
+            "width is charged against the byte bound. Terms carry at most "
+            "31 nodes on any root-to-leaf path, the deepest chain strict "
+            "JSON transport accepts. The complete ordered nonvariable "
+            "overlap ledger has at most 32 candidates. The materialized "
+            "replay work, the retained result, and its exact replay are "
+            "bounded by 42752 structural nodes and 4MiB."
         ),
         json_schema_extra={
             "x-jacobian-bounds": {
                 "max_overlap_candidates": 32,
                 "max_result_nodes": 42752,
                 "max_result_bytes": 4194304,
+                "max_variable_label": MAX_VARIABLE_LABEL,
+                "max_term_depth": MAX_TERM_DEPTH,
             }
         },
     )
@@ -271,6 +316,9 @@ class CriticalPairsRequest(StrictModel):
     @model_validator(mode="after")
     def require_bounded_critical_pair_source(self) -> Self:
         _validate_critical_pair_source(self.signature, self.rules)
+        _require_transport_safe_depth(
+            *(side for rule in self.rules for side in (rule.lhs, rule.rhs))
+        )
         return self
 
 

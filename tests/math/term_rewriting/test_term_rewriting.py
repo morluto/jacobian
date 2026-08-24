@@ -5,6 +5,7 @@ import tracemalloc
 import pytest
 from pydantic import ValidationError
 
+from jacobian.dispatch import parse_operation_input
 from jacobian.math import term_rewriting
 from jacobian.math.term_rewriting import operations as operations_module
 from jacobian.math.term_rewriting._models import (
@@ -49,6 +50,8 @@ from jacobian.math.term_rewriting.values import (
     MAX_CRITICAL_PAIR_CANDIDATES,
     MAX_CRITICAL_PAIR_RESULT_BYTES,
     MAX_CRITICAL_PAIR_RESULT_NODES,
+    MAX_TERM_DEPTH,
+    MAX_VARIABLE_LABEL,
     RankedSignature,
     RewriteRule,
     Term,
@@ -569,7 +572,13 @@ class TestCriticalPairs:
             "max_overlap_candidates": 32,
             "max_result_bytes": 4 * 1024 * 1024,
             "max_result_nodes": 42_752,
+            "max_term_depth": MAX_TERM_DEPTH,
+            "max_variable_label": MAX_VARIABLE_LABEL,
         }
+        symbol = CriticalPairsRequest.model_json_schema()["$defs"]["Term"][
+            "properties"
+        ]["symbol"]
+        assert symbol["maximum"] == MAX_VARIABLE_LABEL
 
     def test_retained_rules_pay_for_the_result_envelope_without_overlaps(self):
         # f(x) -> R excludes its single tautological root overlap, so the
@@ -754,26 +763,36 @@ class TestCriticalPairs:
         )
 
     def test_label_serialization_width_is_charged_against_the_byte_bound(self):
-        # One rule shaped as an arity-16 bush repeats its wide-label leaves
-        # across the echo and every renaming key; labels wider than the
-        # six-digit baseline push the serialized result past the byte bound
-        # while a narrower family still admits.
-        def bushy_rule(label: int) -> RewriteRule:
-            leaves = [_var(label + index) for index in range(256)]
-            middle = tuple(
-                _app(1, *leaves[slot * 16 : (slot + 1) * 16]) for slot in range(16)
-            )
-            bush = _app(0, *middle)
-            return RewriteRule(lhs=bush, rhs=bush)
+        # Six bush rules repeat their wide-label leaves across the echoed
+        # source. Labels stay inside the interoperable integer maximum, so
+        # sixteen-digit labels push the serialized result past the byte
+        # bound while a baseline-width family of the same shape still admits.
+        def wide_bush(label: int) -> tuple[RewriteRule, ...]:
+            def bush() -> Term:
+                inner = _app(6, *([_var(label)] * 16))
+                middle = _app(6, *([inner] * 16))
+                return _app(6, *([middle] * 16))
 
-        assert _term_node_count(bushy_rule(10**95).lhs) == 273
-        signature = term_rewriting.RankedSignature(arities=(16, 16))
-        admitted = critical_pairs(signature, (bushy_rule(10**95),))
-        assert admitted.pairs == ()
+            return tuple(
+                RewriteRule(lhs=_app(root, _var(label)), rhs=bush())
+                for root in range(6)
+            )
+
+        signature = term_rewriting.RankedSignature(arities=tuple([1] * 6 + [16]))
+        result = compute_critical_pairs(
+            CriticalPairsRequest(signature=signature, rules=wide_bush(123_456))
+        )
+        assert len(result.profile.candidates) == 30
+        assert all(not candidate.unifiable for candidate in result.profile.candidates)
+        assert result.profile.pairs == ()
+        assert CriticalPairsResult.model_validate_json(result.model_dump_json()) == (
+            result
+        )
+        widest = MAX_VARIABLE_LABEL
         with pytest.raises(ValidationError, match="result bytes"):
-            CriticalPairsRequest(signature=signature, rules=(bushy_rule(10**106),))
+            CriticalPairsRequest(signature=signature, rules=wide_bush(widest))
         with pytest.raises(ValueError, match="result bytes"):
-            critical_pairs(signature, (bushy_rule(10**106),))
+            critical_pairs(signature, wide_bush(widest))
 
     @pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
     def test_chained_binding_family_admits_and_replays_within_envelope(
@@ -1112,8 +1131,10 @@ class TestDeepTermTraversal:
     def test_deep_rule_source_returns_a_profile_not_a_recursion_error(self):
         # A schema-valid 1200-deep unary right side stays far below the node
         # envelope and its single rule excludes its tautological root
-        # overlap, so source validation must traverse iteratively and return
-        # the empty profile instead of raising RecursionError.
+        # overlap, so kernel traversal must stay iterative and return the
+        # empty profile instead of raising RecursionError. The wire contract
+        # separately rejects the same source with a typed depth error,
+        # because strict JSON transport cannot carry a chain that deep.
         def deep_rule() -> RewriteRule:
             rhs = _var(0)
             for _ in range(1200):
@@ -1125,11 +1146,125 @@ class TestDeepTermTraversal:
         profile = critical_pairs(RankedSignature(arities=(1,)), (rule,))
         assert profile.candidates == ()
         assert profile.pairs == ()
-        result = compute_critical_pairs(
+        with pytest.raises(ValidationError, match="transport-safe"):
             CriticalPairsRequest(signature={"arities": [1]}, rules=(rule,))
+
+    def test_transport_depth_boundary_admits_the_deepest_unary_chain(self):
+        # f^30(x) -> x is the deepest rule strict JSON transport carries:
+        # each unary node costs one object level plus one children array
+        # level inside the request. It must parse end-to-end through math.run
+        # input parsing and replay as a complete profile.
+        def unary_chain(function_nodes: int) -> Term:
+            term = _var(0)
+            for _ in range(function_nodes):
+                term = _app(0, term)
+            return term
+
+        payload = {
+            "signature": {"arities": [1]},
+            "rules": [
+                {
+                    "lhs": unary_chain(30).model_dump(mode="json"),
+                    "rhs": {"is_variable": True, "symbol": 0},
+                }
+            ],
+        }
+        request = parse_operation_input(CriticalPairsRequest, payload)
+        result = compute_critical_pairs(request)
+        assert len(result.profile.candidates) == 29
+        assert all(candidate.unifiable for candidate in result.profile.candidates)
+        assert CriticalPairsResult.model_validate_json(result.model_dump_json()) == (
+            result
         )
+
+    def test_transport_depth_boundary_rejects_one_deeper_node_typed(self):
+        # One more unary node exceeds MAX_TERM_DEPTH; direct model
+        # construction fails with the typed depth error instead of relying
+        # on the shared JSON transport limit to reject the payload later.
+        def unary_chain(function_nodes: int) -> Term:
+            term = _var(0)
+            for _ in range(function_nodes):
+                term = _app(0, term)
+            return term
+
+        lhs = unary_chain(MAX_TERM_DEPTH)
+        with pytest.raises(ValidationError, match="transport-safe"):
+            CriticalPairsRequest.model_validate(
+                {
+                    "signature": {"arities": [1]},
+                    "rules": [
+                        {
+                            "lhs": lhs.model_dump(),
+                            "rhs": {"is_variable": True, "symbol": 0},
+                        }
+                    ],
+                }
+            )
+        request = CriticalPairsRequest(
+            signature={"arities": [1]},
+            rules=(RewriteRule(lhs=unary_chain(MAX_TERM_DEPTH - 1), rhs=_var(0)),),
+        )
+        assert len(request.rules) == 1
+
+    def test_variable_label_bound_is_the_interoperable_integer_maximum(self):
+        # The widest interoperable label admits through math.run input
+        # parsing; one beyond it is rejected by the symbol bound itself.
+        widest = MAX_VARIABLE_LABEL
+        payload = {
+            "signature": {"arities": [1]},
+            "rules": [
+                {
+                    "lhs": {
+                        "is_variable": False,
+                        "symbol": 0,
+                        "children": [{"is_variable": True, "symbol": widest}],
+                    },
+                    "rhs": {"is_variable": True, "symbol": widest},
+                }
+            ],
+        }
+        request = parse_operation_input(CriticalPairsRequest, payload)
+        result = compute_critical_pairs(request)
         assert result.profile.candidates == ()
         assert result.profile.pairs == ()
+        with pytest.raises(ValidationError, match=str(widest)):
+            CriticalPairsRequest.model_validate(
+                {
+                    "signature": {"arities": [1]},
+                    "rules": [
+                        {
+                            "lhs": {
+                                "is_variable": False,
+                                "symbol": 0,
+                                "children": [
+                                    {"is_variable": True, "symbol": widest + 1}
+                                ],
+                            },
+                            "rhs": {"is_variable": True, "symbol": widest + 1},
+                        }
+                    ],
+                }
+            )
+
+    def test_substitution_labels_share_the_interoperable_bound(self):
+        # Substitution keys travel as JSON object keys, which bypasses the
+        # integer-range check on values, so the model owns the same label
+        # bound for them.
+        def substitution_payload(key: int) -> dict:
+            return {
+                "signature": {"arities": [0]},
+                "term": {"is_variable": False, "symbol": 0},
+                "substitution": {"mapping": {key: {"is_variable": True, "symbol": 0}}},
+            }
+
+        admitted = SubstitutionRequest.model_validate(
+            substitution_payload(MAX_VARIABLE_LABEL)
+        )
+        assert MAX_VARIABLE_LABEL in admitted.substitution.mapping
+        with pytest.raises(ValidationError, match="within the supported bound"):
+            SubstitutionRequest.model_validate(
+                substitution_payload(MAX_VARIABLE_LABEL + 1)
+            )
 
     def test_deep_unification_and_matching_stay_typed(self):
         def chain(length: int) -> Term:

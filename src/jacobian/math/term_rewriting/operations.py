@@ -312,12 +312,13 @@ def _variable_label_bytes(rules: tuple[RewriteRule, ...]) -> int:
     """Serialized-byte overhead for variable labels wider than the baseline.
 
     Variable labels never change the mathematical work, so admission charges
-    their serialized width instead of capping IDs. The per-node byte cost
-    already absorbs the baseline label width; labels wider than
-    ``_VARIABLE_LABEL_BASE_WIDTH`` digits appear in the echoed source rules
-    and in the original-ID renaming keys of every candidate row and pair, so
-    their count is upper-bounded by the source variable nodes times one echo
-    plus two full ledgers.
+    their serialized width; the label maximum itself is the interoperable
+    JSON integer range, a transport boundary rather than a work bound. The
+    per-node byte cost already absorbs the baseline label width; labels
+    wider than ``_VARIABLE_LABEL_BASE_WIDTH`` digits appear in the echoed
+    source rules and in the original-ID renaming keys of every candidate row
+    and pair, so their count is upper-bounded by the source variable nodes
+    times one echo plus two full ledgers.
     """
     widest = 0
     variable_nodes = 0

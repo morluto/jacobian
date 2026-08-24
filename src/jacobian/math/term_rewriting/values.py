@@ -12,6 +12,8 @@ MAX_TERMS = 32
 MAX_SYMBOLS = 64
 MAX_ARITY = 16
 MAX_RULES = 64
+MAX_VARIABLE_LABEL = (1 << 53) - 1
+MAX_TERM_DEPTH = 31
 MAX_CRITICAL_PAIR_RULES = 8
 MAX_CRITICAL_PAIR_CANDIDATES = 32
 MAX_CRITICAL_PAIR_RESULT_NODES = 42_752
@@ -58,11 +60,15 @@ class Term(StrictModel):
 
     A term is either a variable (``is_variable=True``) or a function
     application (``symbol`` applied to ``children``, which are themselves
-    terms).
+    terms). Variable labels share ``symbol`` and are bounded by the
+    interoperable JSON integer range, so every admitted term carries through
+    strict JSON transport; wire contracts additionally bound every
+    root-to-leaf path to ``MAX_TERM_DEPTH`` nodes, the deepest serialized
+    chain that transport accepts.
     """
 
     is_variable: bool = False
-    symbol: int = Field(ge=0)
+    symbol: int = Field(ge=0, le=MAX_VARIABLE_LABEL)
     children: tuple[Term, ...] = Field(default=())
 
     @model_validator(mode="after")
@@ -145,6 +151,14 @@ class Substitution(StrictModel):
 
     mapping: dict[int, Term] = Field(default_factory=dict)
 
+    @model_validator(mode="after")
+    def require_bounded_labels(self) -> Self:
+        if any(not 0 <= key <= MAX_VARIABLE_LABEL for key in self.mapping):
+            raise ValueError(
+                "substitution variable labels must be within the supported bound"
+            )
+        return self
+
 
 __all__ = [
     "MAX_ARITY",
@@ -152,9 +166,10 @@ __all__ = [
     "MAX_CRITICAL_PAIR_RESULT_BYTES",
     "MAX_CRITICAL_PAIR_RESULT_NODES",
     "MAX_CRITICAL_PAIR_RULES",
-    "MAX_RULES",
     "MAX_SYMBOLS",
     "MAX_TERMS",
+    "MAX_TERM_DEPTH",
+    "MAX_VARIABLE_LABEL",
     "CriticalOverlapCandidate",
     "CriticalPair",
     "CriticalPairProfile",

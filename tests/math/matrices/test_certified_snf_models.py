@@ -102,3 +102,176 @@ def test_zero_dimensional_matrices_remain_explicit_for_chain_boundaries() -> Non
 
     assert matrix.entries == ()
     assert matrix.column_count == 3
+
+
+def _certified_matrix(entries: list[list[int | str]]) -> CertifiedIntegerMatrix:
+    return CertifiedIntegerMatrix.model_validate(_matrix(entries))
+
+
+def _certificate_kwargs(**overrides: object) -> dict[str, object]:
+    values: dict[str, object] = {
+        "source": _certified_matrix([[2]]),
+        "diagonal": _certified_matrix([[2]]),
+        "left_transformation": _certified_matrix([[1]]),
+        "right_transformation": _certified_matrix([[1]]),
+        "rank": 1,
+        "invariant_factors": ("2",),
+        "left_determinant": "1",
+        "right_determinant": "1",
+    }
+    values.update(overrides)
+    return values
+
+
+def test_certificate_contract_replays_the_exact_transformation_relation() -> None:
+    with pytest.raises(ValidationError, match="must replay"):
+        SmithNormalFormCertificate(
+            **_certificate_kwargs(
+                left_transformation=_certified_matrix([[2]]),
+            )
+        )
+
+
+def test_certificate_contract_replays_declared_determinant_signs() -> None:
+    permutation = _certified_matrix([[0, 1], [1, 0]])
+    identity = _certified_matrix([[1, 0], [0, 1]])
+
+    certificate = SmithNormalFormCertificate(
+        **_certificate_kwargs(
+            source=permutation,
+            diagonal=identity,
+            left_transformation=permutation,
+            right_transformation=identity,
+            rank=2,
+            invariant_factors=("1", "1"),
+            left_determinant="-1",
+        )
+    )
+
+    assert certificate.left_determinant == "-1"
+    with pytest.raises(ValidationError, match="left transformation determinant"):
+        SmithNormalFormCertificate(
+            **_certificate_kwargs(
+                source=permutation,
+                diagonal=identity,
+                left_transformation=permutation,
+                right_transformation=identity,
+                rank=2,
+                invariant_factors=("1", "1"),
+                left_determinant="1",
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("source", _certified_matrix([[4]])),
+        ("diagonal", _certified_matrix([[4]])),
+        ("left_transformation", _certified_matrix([[-1]])),
+        ("right_transformation", _certified_matrix([[3]])),
+        ("rank", 0),
+        ("invariant_factors", ("4",)),
+        ("left_determinant", "-1"),
+        ("right_determinant", "-1"),
+    ],
+)
+def test_certificate_contract_fails_closed_on_any_field_mutation(
+    field: str,
+    value: object,
+) -> None:
+    SmithNormalFormCertificate(**_certificate_kwargs())
+
+    with pytest.raises(ValidationError):
+        SmithNormalFormCertificate(**_certificate_kwargs(**{field: value}))
+
+
+def test_certificate_contract_replays_rectangular_sources() -> None:
+    certificate = SmithNormalFormCertificate(
+        **_certificate_kwargs(
+            source=_certified_matrix([[2, 6]]),
+            diagonal=_certified_matrix([[2, 0]]),
+            right_transformation=_certified_matrix([[1, -3], [0, 1]]),
+        )
+    )
+
+    assert certificate.rank == 1
+    with pytest.raises(ValidationError):
+        SmithNormalFormCertificate(
+            **_certificate_kwargs(
+                source=_certified_matrix([[2, 6]]),
+                diagonal=_certified_matrix([[2, 0]]),
+                right_transformation=_certified_matrix([[1, -6], [0, 1]]),
+            )
+        )
+
+
+def test_certificate_contract_replays_rank_deficient_sources() -> None:
+    certificate = SmithNormalFormCertificate(
+        **_certificate_kwargs(
+            source=_certified_matrix([[2, 4], [0, 0]]),
+            diagonal=_certified_matrix([[2, 0], [0, 0]]),
+            left_transformation=_certified_matrix([[1, 0], [0, 1]]),
+            right_transformation=_certified_matrix([[1, -2], [0, 1]]),
+        )
+    )
+
+    assert certificate.rank == 1
+    with pytest.raises(ValidationError):
+        SmithNormalFormCertificate(
+            **_certificate_kwargs(
+                source=_certified_matrix([[2, 4], [0, 0]]),
+                diagonal=_certified_matrix([[2, 0], [0, 2]]),
+                left_transformation=_certified_matrix([[1, 0], [0, 1]]),
+                right_transformation=_certified_matrix([[1, -2], [0, 1]]),
+                rank=2,
+                invariant_factors=("2", "2"),
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    ("rows", "columns"),
+    [(0, 3), (2, 0)],
+)
+def test_certificate_contract_replays_zero_dimensional_boundaries(
+    rows: int,
+    columns: int,
+) -> None:
+    def square_identity(size: int) -> CertifiedIntegerMatrix:
+        return CertifiedIntegerMatrix.model_validate(
+            _matrix(
+                [
+                    [1 if row == column else 0 for column in range(size)]
+                    for row in range(size)
+                ]
+            )
+        )
+
+    empty_source = CertifiedIntegerMatrix(
+        row_count=rows,
+        column_count=columns,
+        entries=tuple(() for _ in range(rows)),
+    )
+    kwargs = _certificate_kwargs(
+        source=empty_source,
+        diagonal=empty_source,
+        left_transformation=(
+            square_identity(rows)
+            if rows
+            else CertifiedIntegerMatrix(row_count=0, column_count=0)
+        ),
+        right_transformation=(
+            square_identity(columns)
+            if columns
+            else CertifiedIntegerMatrix(row_count=0, column_count=0)
+        ),
+        rank=0,
+        invariant_factors=(),
+    )
+
+    certificate = SmithNormalFormCertificate(**kwargs)
+
+    assert certificate.rank == 0
+    with pytest.raises(ValidationError, match="determinant"):
+        SmithNormalFormCertificate(**{**kwargs, "left_determinant": "-1"})

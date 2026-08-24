@@ -20,8 +20,7 @@ def test_nonnegative_integer_list_accepts_canonical_values_beyond_python_limit()
 
 def test_smith_certificate_validates_large_canonical_invariant_factor() -> None:
     factor = "1" + ("0" * 5_000)
-    source = CertifiedIntegerMatrix(row_count=1, column_count=1, entries=(("0",),))
-    diagonal = CertifiedIntegerMatrix(
+    source = CertifiedIntegerMatrix(
         row_count=1,
         column_count=1,
         entries=((factor,),),
@@ -30,7 +29,7 @@ def test_smith_certificate_validates_large_canonical_invariant_factor() -> None:
 
     certificate = SmithNormalFormCertificate(
         source=source,
-        diagonal=diagonal,
+        diagonal=source,
         left_transformation=identity,
         right_transformation=identity,
         rank=1,

@@ -54,9 +54,11 @@ class GraphSpectrumResult(StrictModel):
     the canonical exact SymPy rendering (over the algebraic closure of QQ,
     never a float) of one distinct eigenvalue; multiplicities are positive
     and sum to the graph order, so the claimed spectrum reconstructs
-    ``det(xI - A)`` exactly.  Pair order carries no mathematical meaning:
-    validation compares ``(eigenvalue, multiplicity)`` pairs as a multiset
-    rather than by backend iteration order.
+    ``det(xI - M)`` exactly, where ``M`` is the adjacency matrix A for
+    ``matrix_convention="ADJACENCY"`` and the Laplacian matrix L for
+    ``matrix_convention="LAPLACIAN"``.  Pair order carries no mathematical
+    meaning: validation compares ``(eigenvalue, multiplicity)`` pairs as a
+    multiset rather than by backend iteration order.
     """
 
     graph: GraphEdgeList

@@ -166,6 +166,32 @@ def test_degenerate_and_repeated_spectra_stay_exact() -> None:
     }
 
 
+def test_v2_spectrum_operations_are_readmitted_with_source_bound_rationale() -> None:
+    """The materially changed v2 contracts carry fresh owner-local decisions."""
+
+    from jacobian.catalog.admission import AdmissionDecision
+    from jacobian.math.graphs.spectral._admission import ADMISSIONS
+
+    records = {
+        record.operation_id: record
+        for record in ADMISSIONS
+        if record.operation_id
+        in (
+            "graph.spectrum.adjacency.compute",
+            "graph.spectrum.laplacian.compute",
+        )
+    }
+    assert set(records) == {
+        "graph.spectrum.adjacency.compute",
+        "graph.spectrum.laplacian.compute",
+    }
+    for operation_id, record in sorted(records.items()):
+        assert record.decision is AdmissionDecision.KEEP, operation_id
+        rationale = record.rationale.lower()
+        assert "source graph" in rationale, operation_id
+        assert "replay" in rationale, operation_id
+
+
 def test_spectrum_reconstructs_the_characteristic_polynomial() -> None:
     """The spectrum factorization matches the source-bound charpoly producer."""
 

@@ -409,6 +409,80 @@ def test_backend_value_error_has_a_typed_nonconclusion(
     assert result.domain_failure is None
 
 
+def test_backend_error_result_round_trips_when_the_failure_does_not_recur(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.analysis._operations as operations
+
+    original = operations._evaluate_box_expression
+    calls = 0
+
+    def transient_then_original(*args: Any, **kwargs: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise ValueError("transient backend rejection")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(operations, "_evaluate_box_expression", transient_then_original)
+    result = _run(
+        {"op": "exp", "children": [_var("x")]},
+        (("x", Fraction(0), Fraction(1)),),
+    )
+    assert result.status == "BACKEND_ERROR"
+
+    assert (
+        IntervalExpressionBoxEnclosureResult.model_validate(result.model_dump())
+        == result
+    )
+    assert IntervalExpressionBoxEnclosureResult.model_validate_json(
+        result.model_dump_json()
+    )
+    assert calls == 1
+
+
+@pytest.mark.parametrize(
+    ("field", "payload_patch"),
+    [
+        (
+            "endpoints",
+            {
+                "lower": {"mantissa": "0", "exponent": 0},
+                "upper": {"mantissa": "1", "exponent": 0},
+            },
+        ),
+        (
+            "domain_failure",
+            {
+                "domain_failure": {
+                    "node_path": [],
+                    "operation": "log",
+                    "reason": "LOG_ARGUMENT_NOT_STRICTLY_POSITIVE",
+                },
+            },
+        ),
+    ],
+)
+def test_backend_error_payload_cannot_smuggle_conclusion_evidence(
+    field: str, payload_patch: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import jacobian.math.analysis._operations as operations
+
+    def fail(*args: Any, **kwargs: Any) -> Any:
+        raise ValueError("synthetic backend rejection")
+
+    monkeypatch.setattr(operations, "_evaluate_box_expression", fail)
+    result = _run(
+        {"op": "exp", "children": [_var("x")]},
+        (("x", Fraction(1), Fraction(2)),),
+    )
+    assert result.status == "BACKEND_ERROR"
+    payload = {**deepcopy(result.model_dump()), **payload_patch}
+
+    with pytest.raises(ValidationError):
+        IntervalExpressionBoxEnclosureResult.model_validate(payload)
+
+
 @pytest.mark.parametrize(
     ("payload", "message"),
     [

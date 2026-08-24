@@ -716,6 +716,10 @@ class IntervalExpressionBoxEnclosureResult(IntervalExpressionBoxEnclosureRequest
 
     For ``ENCLOSED``, every defined real source-box value lies between the two
     exact dyadic endpoints.  Full validation recomputes that canonical claim.
+    ``DOMAIN_UNPROVEN`` replays its deterministic first-obstruction evidence.
+    ``BACKEND_ERROR`` asserts no enclosure conclusion at all, so it is
+    validated structurally: rerunning Arb would reject the operation's own
+    serialized result whenever a transient backend condition does not recur.
     """
 
     status: IntervalExpressionBoxEnclosureStatus
@@ -742,6 +746,8 @@ class IntervalExpressionBoxEnclosureResult(IntervalExpressionBoxEnclosureRequest
                 raise ValueError(
                     "domain-failure evidence must agree with DOMAIN_UNPROVEN status"
                 )
+            if self.status == "BACKEND_ERROR":
+                return self
 
         from jacobian.math.analysis._operations import _box_expression_enclosure
 

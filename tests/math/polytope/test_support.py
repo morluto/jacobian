@@ -336,6 +336,23 @@ def test_request_preflights_oversized_covector_payload_before_nested_parsing(
         PolytopeSupportRequest.model_validate(payload)
 
 
+def test_request_rejects_forbidden_extra_field_before_hull_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A forbidden outer field is rejected before the valid V-polytope
+    pays its exact extremality proof."""
+
+    _forbid_extremality_proof(monkeypatch)
+    payload = _square_payload()
+    payload["junk"] = 1
+
+    with pytest.raises(
+        ValidationError,
+        match="unexpected fields for a polytope support request",
+    ):
+        PolytopeSupportRequest.model_validate(payload)
+
+
 def test_request_preflights_missing_covector_before_hull_proof(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

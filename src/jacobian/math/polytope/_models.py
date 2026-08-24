@@ -366,6 +366,27 @@ def _require_raw_exposed_face_vertex(
     )
 
 
+def _require_raw_support_request_shape(canonical: Any) -> None:
+    """Gate the request's closed field set before V-polytope parsing.
+
+    Pydantic reports forbidden extra fields only after every declared
+    field has been parsed and aggregated, so a raw payload with a valid
+    near-limit source pays the exact hull proof before ``StrictModel``
+    rejects the extra key. Only the published ``{polytope, covector}``
+    field set is mirrored here, with the accept/reject boundary ordinary
+    validation enforces.
+    """
+
+    if not isinstance(canonical, dict):
+        return
+    unknown_fields = set(canonical) - {"polytope", "covector"}
+    if unknown_fields:
+        raise ValueError(
+            "unexpected fields for a polytope support request: "
+            f"{sorted(unknown_fields)}"
+        )
+
+
 def _require_raw_support_conclusions_admissible(canonical: Any) -> None:
     """Gate the outer shape and conclusion fields of a raw support result.
 
@@ -811,10 +832,15 @@ class PolytopeSupportRequest(StrictModel):
         preflight measures only the authored reduced components of the raw
         payload — dict or already-built values alike — so even a rejected
         request stays inside the advertised execution envelope; the
-        canonical V-polytope value's broader domain is unchanged.
+        canonical V-polytope value's broader domain is unchanged. The
+        request's closed outer field set is preflighted first for the same
+        reason: forbidden extras are reported by ``StrictModel`` only
+        after every declared field has been parsed.
         """
 
-        return _preflight_raw_support_components(data)
+        canonical = _preflight_raw_support_components(data)
+        _require_raw_support_request_shape(canonical)
+        return canonical
 
     @model_validator(mode="after")
     def require_common_coordinate_space(self) -> Self:

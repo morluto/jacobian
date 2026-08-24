@@ -188,17 +188,3 @@ __all__ = [
     "SubsetSumProfileEntry",
 ]
 
-
-class IndexSubset(StrictModel):
-    """A finite subset of nonnegative indices in canonical increasing order."""
-
-    indices: tuple[Annotated[StrictInt, Field(ge=0)], ...] = Field(
-        description="Strictly increasing nonnegative indices.",
-        examples=[(0, 2)],
-    )
-
-    @model_validator(mode="after")
-    def require_strictly_increasing_indices(self) -> Self:
-        if any(left >= right for left, right in pairwise(self.indices)):
-            raise ValueError("subset indices must be strictly increasing")
-        return self

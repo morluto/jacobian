@@ -390,6 +390,90 @@ def test_convergent_result_rejects_mutations() -> None:
         ConvergentResult.model_validate(count_mismatch)
 
 
+def test_results_reject_non_squarefree_discriminant() -> None:
+    """Results satisfy the same squarefree source domain as their requests.
+
+    The forged payloads below carry the genuine canonical expansion and
+    convergents of sqrt(8), so only the squarefree predicate can reject them.
+    """
+    from jacobian.math.diophantine_approximation._models import (
+        ContinuedFractionResult,
+        ConvergentResult,
+        PellEquationResult,
+    )
+
+    # sqrt(8) = [2; overline{1, 4}] with convergents 2/1, 3/1, 14/5, 17/6.
+    sqrt8_cf = {
+        "discriminant": 8,
+        "term_count": 5,
+        "coefficients": (2, 1, 4, 1, 4),
+        "preperiod_length": 1,
+        "period_length": 2,
+    }
+    with pytest.raises(ValidationError, match="squarefree"):
+        ContinuedFractionResult.model_validate(sqrt8_cf)
+
+    sqrt8_convergents = {
+        "discriminant": 8,
+        "convergent_count": 4,
+        "convergents": [
+            {"index": 0, "numerator": "2", "denominator": "1"},
+            {"index": 1, "numerator": "3", "denominator": "1"},
+            {"index": 2, "numerator": "14", "denominator": "5"},
+            {"index": 3, "numerator": "17", "denominator": "6"},
+        ],
+    }
+    with pytest.raises(ValidationError, match="squarefree"):
+        ConvergentResult.model_validate(sqrt8_convergents)
+
+    with pytest.raises(ValidationError, match="squarefree"):
+        PellEquationResult(discriminant=8, x="3", y="1")
+
+    with pytest.raises(ValidationError, match="squarefree"):
+        PellEquationResult(discriminant=9, x="3", y="1")
+
+
+def test_convergent_result_rejects_oversized_components_before_bigint_work() -> None:
+    """Forged long canonical strings die on the digit bound, before parsing/gcd.
+
+    With convergent_count=4 the derived cap is len(str(201**4)) == 10 digits,
+    so a 100,000-digit numerator is rejected by string length alone; matching
+    the digit-bound message proves the gate ran instead of the gcd/replay work.
+    """
+    from jacobian.math.diophantine_approximation._models import ConvergentResult
+
+    result = compute_convergents(
+        ConvergentRequest(discriminant=2, convergent_count=4)
+    ).model_dump()
+
+    long_numerator = dict(result)
+    long_numerator["convergents"] = [dict(item) for item in result["convergents"]]
+    long_numerator["convergents"][3]["numerator"] = "9" * 100_000
+    with pytest.raises(ValidationError, match=r"10-digit bound"):
+        ConvergentResult.model_validate(long_numerator)
+
+    long_denominator = dict(result)
+    long_denominator["convergents"] = [dict(item) for item in result["convergents"]]
+    long_denominator["convergents"][3]["denominator"] = "7" * 100_000
+    with pytest.raises(ValidationError, match=r"10-digit bound"):
+        ConvergentResult.model_validate(long_denominator)
+
+
+def test_convergent_digit_bound_admits_full_envelope() -> None:
+    """Legitimate output across the admitted envelope stays inside the bound."""
+    from jacobian.math.diophantine_approximation._models import ConvergentResult
+
+    result = compute_convergents(
+        ConvergentRequest(discriminant=9949, convergent_count=500)
+    )
+    assert ConvergentResult.model_validate(result.model_dump()) == result
+    widest = max(
+        max(len(c.numerator.lstrip("-")), len(c.denominator.lstrip("-")))
+        for c in result.convergents
+    )
+    assert widest > 100
+
+
 def test_producer_to_convergent_composition() -> None:
     """The CF coefficient stream composes into the serialized convergents."""
 

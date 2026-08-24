@@ -18,6 +18,22 @@ def _is_square_free(value: int) -> bool:
     return all(value % (divisor * divisor) for divisor in range(2, isqrt(value) + 1))
 
 
+def _convergent_component_digit_cap(count: int) -> int:
+    """Conservative decimal-digit bound for any sqrt(D) convergent component.
+
+    Every partial quotient of ``sqrt(D)`` after the initial term is at most
+    ``2 * isqrt(D)``, so with ``D <= _MAX_DISCRIMINANT`` every coefficient is
+    at most ``2 * isqrt(_MAX_DISCRIMINANT)`` and each continuant grows by a
+    factor below ``2 * isqrt(_MAX_DISCRIMINANT) + 1`` per step.  Components of
+    convergents with index ``< count`` therefore stay strictly below
+    ``(2 * isqrt(_MAX_DISCRIMINANT) + 1) ** count``, which this returns as an
+    exact digit count so oversized canonical strings are rejected by length
+    before any bigint work.
+    """
+    growth = 2 * isqrt(_MAX_DISCRIMINANT) + 1
+    return len(str(growth**count))
+
+
 class SquarefreeRequest(StrictModel):
     """One positive squarefree integer D for sqrt(D) operations."""
 
@@ -60,6 +76,12 @@ class ContinuedFractionResult(StrictModel):
     preperiod_length: StrictInt = Field(ge=1)
     period_length: StrictInt = Field(ge=1)
     method: Literal["SYMPY_CONTINUED_FRACTION"] = "SYMPY_CONTINUED_FRACTION"
+
+    @model_validator(mode="after")
+    def require_squarefree(self) -> Self:
+        if not _is_square_free(self.discriminant):
+            raise ValueError("discriminant must be squarefree")
+        return self
 
     @model_validator(mode="after")
     def require_source_expansion(self) -> Self:
@@ -113,7 +135,9 @@ class ConvergentResult(StrictModel):
     recurrence from the canonical coefficient stream of the same ``sqrt(D)``:
     indices are contiguous from zero, denominators are positive, each
     numerator/denominator pair is reduced, and adjacent pairs satisfy
-    ``p_n q_{n-1} - p_{n-1} q_n = (-1)^(n+1)``.
+    ``p_n q_{n-1} - p_{n-1} q_n = (-1)^(n+1)``.  Canonical numerators and
+    denominators carry no more digits than the geometric bound implied by
+    the admitted discriminant/count envelope.
     """
 
     discriminant: StrictInt = Field(ge=2, le=_MAX_DISCRIMINANT)
@@ -122,6 +146,12 @@ class ConvergentResult(StrictModel):
         min_length=1, max_length=_MAX_TERMS
     )
     method: Literal["CONTINUED_FRACTION_RECURSION"] = "CONTINUED_FRACTION_RECURSION"
+
+    @model_validator(mode="after")
+    def require_squarefree(self) -> Self:
+        if not _is_square_free(self.discriminant):
+            raise ValueError("discriminant must be squarefree")
+        return self
 
     @model_validator(mode="after")
     def require_source_convergents(self) -> Self:
@@ -139,7 +169,16 @@ class ConvergentResult(StrictModel):
             range(len(self.convergents))
         ):
             raise ValueError("convergent indices must be contiguous starting at zero")
+        digit_cap = _convergent_component_digit_cap(self.convergent_count)
         for value in self.convergents:
+            if (
+                len(value.numerator.lstrip("-")) > digit_cap
+                or len(value.denominator.lstrip("-")) > digit_cap
+            ):
+                raise ValueError(
+                    "convergent numerators/denominators exceed the "
+                    f"{digit_cap}-digit bound implied by the admitted request"
+                )
             numerator = parse_canonical_integer(value.numerator)
             denominator = parse_canonical_integer(value.denominator)
             if denominator <= 0:
@@ -188,6 +227,12 @@ class PellEquationResult(StrictModel):
     x: CanonicalInteger
     y: CanonicalInteger
     method: Literal["CONTINUED_FRACTION_CONVERGENTS"] = "CONTINUED_FRACTION_CONVERGENTS"
+
+    @model_validator(mode="after")
+    def require_squarefree(self) -> Self:
+        if not _is_square_free(self.discriminant):
+            raise ValueError("discriminant must be squarefree")
+        return self
 
 
 __all__ = [

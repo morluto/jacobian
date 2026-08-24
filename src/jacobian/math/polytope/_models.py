@@ -8,6 +8,7 @@ from fractions import Fraction
 from typing import Annotated, Any, Self
 
 from pydantic import (
+    ConfigDict,
     Field,
     StringConstraints,
     TypeAdapter,
@@ -915,12 +916,14 @@ def _require_projected_dimension_bound(dimension: int, dimension_bound: object) 
     """Reject a V-polytope outside the published bound before hull replay.
 
     The raw bound is measured with the ``dimension_bound`` field's own
-    schema, derived from its declaration so the accepted coercion domain
-    cannot drift: malformed, null, and out-of-range values are rejected
-    here with the accept/reject boundary ordinary field validation
-    enforces, before the canonical reconstruction replays the exact
-    extremality proof, while a coercible raw value is compared through
-    its coerced integer exactly as the outer model would.
+    schema, derived from its declaration so the constraint range cannot
+    drift, under the strict validation boundary every ``math.run`` request
+    passes through: an integer within ``[1, MAX_DIMENSION]`` bounds the
+    comparison exactly as the outer model would, while strings, floats,
+    booleans, null, and out-of-range values — all rejected by strict
+    dispatch after the proof would already have run — are rejected here,
+    before the canonical reconstruction replays the exact extremality
+    proof.
     """
 
     if dimension_bound is None:
@@ -1095,7 +1098,8 @@ class PolytopeVolumeRequest(StrictModel):
 
 
 _DIMENSION_BOUND_ADAPTER: TypeAdapter[int] = TypeAdapter(
-    Annotated[int, *PolytopeVolumeRequest.model_fields["dimension_bound"].metadata]
+    Annotated[int, *PolytopeVolumeRequest.model_fields["dimension_bound"].metadata],
+    config=ConfigDict(strict=True),
 )
 
 

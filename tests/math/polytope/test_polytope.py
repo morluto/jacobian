@@ -1177,18 +1177,31 @@ class TestCanonicalVPolytopeComposition:
                 }
             )
 
-    def test_coercible_dimension_bound_compares_through_its_integer(self) -> None:
-        """A raw bound inside the field's coercion domain is admitted and
-        compared exactly as the outer model would coerce it."""
-        admitted = PolytopeVolumeRequest.model_validate(
-            {"vertices": _cube().model_dump(mode="json"), "dimension_bound": "3"}
-        )
-
-        assert admitted.dimension_bound == 3
-        assert admitted.vertices == _plain_vertices(_cube())
-        with pytest.raises(ValidationError, match="exceeds the dimension bound 2"):
+    def test_numeric_string_dimension_bound_rejects_before_the_hull_replay(
+        self,
+    ) -> None:
+        """Dispatch validates strictly, so a numeric-string bound is
+        inadmissible on the wire; the preflight rejects it under the same
+        strictness before any hull replay can run."""
+        with pytest.raises(
+            ValidationError,
+            match="dimension_bound must be an integer between 1 and 6",
+        ):
             PolytopeVolumeRequest.model_validate(
-                {"vertices": _cube().model_dump(mode="json"), "dimension_bound": "2"}
+                {
+                    "vertices": self._forged_serialized_square(),
+                    "dimension_bound": "6",
+                }
+            )
+        with pytest.raises(
+            ValidationError,
+            match="dimension_bound must be an integer between 1 and 6",
+        ):
+            PolytopeVolumeRequest.model_validate(
+                {
+                    "vertices": _cube().model_dump(mode="json"),
+                    "dimension_bound": "3",
+                }
             )
 
     def test_canonical_value_still_respects_dimension_bound(self) -> None:

@@ -338,9 +338,7 @@ def _product_cell_bounds(
             _polynomial_pair_exponents(left_value.denominator, right_value.denominator)
             for left_value, right_value in factors
         )
-        numerator_expansions: list[
-            tuple[tuple[tuple[int, ...], ...], ...]
-        ] = []
+        numerator_expansions: list[tuple[tuple[tuple[int, ...], ...], ...]] = []
         for index, (left_value, right_value) in enumerate(factors):
             expansion: list[tuple[tuple[int, ...], ...]] = [
                 _polynomial_pair_exponents(left_value.numerator, right_value.numerator)
@@ -351,9 +349,7 @@ def _product_cell_bounds(
                 if other_index != index
             )
             numerator_expansions.append(tuple(expansion))
-        denominator_collision_count = _maximum_product_collisions(
-            (denominator_groups,)
-        )
+        denominator_collision_count = _maximum_product_collisions((denominator_groups,))
         numerator_collision_count = _maximum_product_collisions(numerator_expansions)
 
     maximum_coefficient_digits = max(
@@ -409,9 +405,7 @@ def _require_symbolic_product_admission(
                 raise ValueError(
                     "symbolic matrix product exceeds the 256-term exact result budget"
                 )
-            if all(
-                _is_polynomial_entry(value) for value in (*left_row, *right_column)
-            ):
+            if all(_is_polynomial_entry(value) for value in (*left_row, *right_column)):
                 # Unit denominators cannot cancel against the collected
                 # numerator, so support can only shrink below the raw
                 # expansion already bounded above.

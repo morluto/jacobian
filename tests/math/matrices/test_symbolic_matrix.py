@@ -335,7 +335,9 @@ def test_symbolic_matrix_product_rejects_exponent_growth_before_kernel() -> None
         _product_request(((x_to_64,),), ((x,),), variables)
 
 
-def test_symbolic_matrix_product_admits_scalar_identity_with_large_coefficients() -> None:
+def test_symbolic_matrix_product_admits_scalar_identity_with_large_coefficients() -> (
+    None
+):
     variables = ("x",)
     large = _rf(variables, (10**63, 1, (1,)), (1, 1, (0,)))
     one = _rf(variables, (1, 1, (0,)))

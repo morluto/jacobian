@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -173,6 +174,14 @@ class PolynomialSquareFreeFactor(StrictModel):
 
 
 class PolynomialSquareFreeDecompositionResult(StrictModel):
+    """The square-free decomposition bound to its source polynomial.
+
+    Retains the canonical source polynomial so validation replays
+    ``reconstructed = polynomial`` and the exact product of the content and
+    multiplicity-weighted monic factors against it.
+    """
+
+    polynomial: RationalPolynomial
     coefficient: CanonicalRational
     factors: tuple[PolynomialSquareFreeFactor, ...] = Field(max_length=64)
     reconstructed: RationalPolynomial
@@ -180,6 +189,10 @@ class PolynomialSquareFreeDecompositionResult(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_factor_records(self) -> Self:
+        from jacobian.math.polynomials._conversions import (
+            rational_polynomial_to_sympy,
+        )
+
         multiplicities = tuple(factor.multiplicity for factor in self.factors)
         if multiplicities != tuple(sorted(multiplicities)):
             raise ValueError("square-free factors must be ordered by multiplicity")
@@ -190,6 +203,21 @@ class PolynomialSquareFreeDecompositionResult(StrictModel):
             for factor in self.factors
         ):
             raise ValueError("square-free factors must use the source ring")
+        source = rational_polynomial_to_sympy(self.polynomial)
+        if rational_polynomial_to_sympy(self.reconstructed) != source:
+            raise ValueError("reconstructed must equal the retained source polynomial")
+        product = source * 0 + 1
+        for factor in self.factors:
+            product = (
+                product
+                * rational_polynomial_to_sympy(factor.factor) ** factor.multiplicity
+            )
+        coefficient = Fraction(int(self.coefficient.num), int(self.coefficient.den))
+        if product * coefficient != source:
+            raise ValueError(
+                "square-free factors must reconstruct the retained source "
+                "polynomial exactly"
+            )
         return self
 
 
@@ -216,6 +244,17 @@ class PolynomialIrreducibleFactor(StrictModel):
 
 
 class PolynomialFactorizationResult(StrictModel):
+    """The exact univariate factorization bound to its source polynomial.
+
+    Retains the canonical source polynomial so validation replays the
+    defining relations ``reconstructed = polynomial`` and
+    ``polynomial = coefficient * product(factor^multiplicity)`` by exact
+    expansion; the literal ``product_reconstruction = EXACT`` label is
+    derived from that replay, never accepted as evidence.  Content-and-
+    monic-irreducibles normalization and canonical factor ordering remain.
+    """
+
+    polynomial: RationalPolynomial
     coefficient: CanonicalRational
     factors: tuple[PolynomialIrreducibleFactor, ...] = Field(max_length=64)
     reconstructed: RationalPolynomial
@@ -226,6 +265,10 @@ class PolynomialFactorizationResult(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_irreducible_records(self) -> Self:
+        from jacobian.math.polynomials._conversions import (
+            rational_polynomial_to_sympy,
+        )
+
         if any(
             factor.factor.variables != self.reconstructed.variables
             for factor in self.factors
@@ -258,6 +301,20 @@ class PolynomialFactorizationResult(StrictModel):
             raise ValueError(
                 "irreducible factors must be ordered by multiplicity, degree, "
                 "and sparse term fingerprint"
+            )
+        source = rational_polynomial_to_sympy(self.polynomial)
+        if rational_polynomial_to_sympy(self.reconstructed) != source:
+            raise ValueError("reconstructed must equal the retained source polynomial")
+        product = source * 0 + 1
+        for record in self.factors:
+            product = (
+                product
+                * rational_polynomial_to_sympy(record.factor) ** record.multiplicity
+            )
+        coefficient = Fraction(int(self.coefficient.num), int(self.coefficient.den))
+        if product * coefficient != source:
+            raise ValueError(
+                "factorization must reconstruct the retained source polynomial exactly"
             )
         return self
 

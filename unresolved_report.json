@@ -1,0 +1,943 @@
+[
+ {
+  "pr": 2436,
+  "title": "Replace invalid Weyl data with exact group orders",
+  "branch": "fix/weyl-group-order-1776",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bkBt8",
+    "path": "src/jacobian/math/root_systems/_tools.py",
+    "line": 110,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  State the matrix precondition in the example**\n\nWhen an agent copies and adapts this catalog example, the description does not explain that `matrix` must be a finite-type generalized Cartan matrix of rank at most 8, so the validator-owned constraints are discoverable only through rejected calls. The repository's operation-library contract requires each invocation example to state the important precondition th"
+   }
+  ]
+ },
+ {
+  "pr": 2435,
+  "title": "Add finite delta-matroid recognition",
+  "branch": "feat/delta-matroid-construction-1954",
+  "count": 2,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bkBgK",
+    "path": "src/jacobian/math/delta_matroids/values.py",
+    "line": 94,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Admit sparse delta-matroids above 16 ground elements**\n\nFor a family such as 17 short ground labels with `feasible=((),)`, the complete exchange candidate space is zero, memberships and output are tiny, and the kernel is bounded, yet this fixed check rejects it before the result-sensitive budgets run. Ground size does not independently control the work for a materialized sparse family, so replace this coarse "
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bkBgO",
+    "path": "src/jacobian/math/delta_matroids/_models.py",
+    "line": 27,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Expose the admission envelope in the request schema**\n\nIn the exported `math.find` schema, `system` only references `FiniteFeasibleSetSystem`; the delta-specific limits of 16 ground elements, 128 rows, 1,024 memberships, 2,048 label bytes, and 250,000 candidate checks exist solely in this validator, while neither the field metadata nor the example states them. Consequently an agent can form a schema-valid req"
+   }
+  ]
+ },
+ {
+  "pr": 2434,
+  "title": "feat(logic): check bounded LPR refutations",
+  "branch": "feat/sat-refutation-1654",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bkBgk",
+    "path": "src/jacobian/math/logic/_operations.py",
+    "line": 212,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Admit sparse LPR clause IDs**\n\nRemove the `m + step_count` ceiling from clause identifiers (and the equivalent ceiling on propagation-hint identifiers). LPR IDs are labels rather than dense indexes, so a valid bounded proof that preserves a solver-assigned ID such as 50,000 is rejected before replay even when it contains only one addition and remains within every step, work, and result-size budget. Bound the "
+   }
+  ]
+ },
+ {
+  "pr": 2433,
+  "title": "fix(math): bind inertia results to their source matrix and validate labels against counts",
+  "branch": "fix/inertia-source-binding-2297",
+  "count": 2,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bkBs4",
+    "path": "src/jacobian/math/matrices/analysis/_models.py",
+    "line": 54,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Reserve output space before retaining the source matrix**\n\nReject or further bound requests whose retained matrix cannot fit in the result envelope. An accepted payload can be just under the canonical 10 MiB limit (for example, 325 distinct entries with canonical numerators near the 32,768-digit limit), but adding `matrix` plus the inertia fields pushes `OperationResult.output` over the same limit; `Operation"
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bkBs7",
+    "path": "jacobian_scale_audit_report.md",
+    "line": 67,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Treat rank 8 as an execution cap, not a mathematical boundary**\n\nCorrect this classification: finite crystallographic root systems are not mathematically bounded to rank 8, since the classical families such as A_n, B_n, C_n, and D_n exist at arbitrarily large rank. The implementation comment in `src/jacobian/math/root_systems/_cartan.py:10` only identifies E8 as maximal among systems already restricted to ran"
+   }
+  ]
+ },
+ {
+  "pr": 2432,
+  "title": "Add exact multicommodity-flow profiles",
+  "branch": "feat/multicommodity-flow-check-1710",
+  "count": 2,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bkAlG",
+    "path": "src/jacobian/math/graphs/multicommodity_flow/_operations.py",
+    "line": 13,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Accept the flow value in the native profile API**\n\nBecause `compute_multicommodity_flow_profile` is exported through the package's `__all__`, it is a supported native API, but this signature forces native callers to construct the MCP-specific `MulticommodityFlowProfileRequest` wrapper instead of composing a `MulticommodityFlow` directly. Keep the request-taking adapter private for `MathTool.run` and expose a "
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bkAlQ",
+    "path": "src/jacobian/math/graphs/multicommodity_flow/_kernel.py",
+    "line": 121,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Count only comparisons the kernel actually executes**\n\nWhen a flow violates conservation, the `all(...)` expression short-circuits at the first mismatching divergence, but this ledger always charges every divergence cell; similarly, after a positive load on a zero-capacity edge sets `congestion` to `None`, later positive-capacity edges skip the running-maximum comparison even though three comparisons are stil"
+   }
+  ]
+ },
+ {
+  "pr": 2423,
+  "title": "Add exact real-quadratic embedding profiles",
+  "branch": "feat/real-quadratic-embeddings-1689",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj-M7",
+    "path": "src/jacobian/math/arithmetic/_admission.py",
+    "line": 15,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Classify the embedding projection as native-only**\n\nWhen the catalog is constructed, this `KEEP` decision publishes an operation whose entire computation is the direct coefficient projections `b -> -b`, `trace = 2a`, and `norm = a\u00b2-db\u00b2`. That supplies no material computation or reliability leverage over ordinary model-authored Python and conflicts with admission gates 6\u20137 in `docs/reference/public-operation-a"
+   }
+  ]
+ },
+ {
+  "pr": 2417,
+  "title": "fix(graphs): source-bind and structurally validate graph-spectrum results",
+  "branch": "fix/graph-spectrum-source-binding-2296",
+  "count": 2,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj-nR",
+    "path": "src/jacobian/math/graphs/spectral/_models.py",
+    "line": 90,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Compare spectrum pairs independently of backend order**\n\nWhen a valid spectrum is serialized with its `(eigenvalue, multiplicity)` pairs in a different order\u2014for example, by permuting the three P3 pairs\u2014it still reconstructs the same characteristic polynomial, but this tuple-by-tuple comparison rejects it. `eigenvals()` iteration order is backend presentation, and neither this schema nor the model contract de"
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bj-nU",
+    "path": "src/jacobian/math/graphs/spectral/_models.py",
+    "line": 61,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Bump versions for the breaking output contract**\n\nAdding the required `graph` and `matrix_convention` fields materially changes the output JSON of both public spectrum operation IDs, but their declarations in `_tools.py` still omit `version=` and therefore continue reporting version `1`. Clients that key decoding or cached descriptors by `operation_id` plus `operation_version` consequently see two incompatibl"
+   }
+  ]
+ },
+ {
+  "pr": 2413,
+  "title": "Compute bounded term-rewriting critical pairs",
+  "branch": "feat/term-rewriting-critical-pairs-1921",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj_Tl",
+    "path": "src/jacobian/math/term_rewriting/operations.py",
+    "line": 193,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Bound exponential substitution expansion before admission**\n\nThis quadratic `pair_nodes` estimate is not an upper bound for the materialized idempotent MGU or reducts. For example, two admitted 16-node left sides under a common 6-ary root can alternate equations `a1=F(b2,b2,b2)`, `b2=F(a3,a3,a3)`, \u2026 for six levels; the resulting binding for `a1` alone has 1,093 nodes, and an admitted 16-node RHS that repeats "
+   }
+  ]
+ },
+ {
+  "pr": 2411,
+  "title": "Compute reachable tree-automaton states",
+  "branch": "feat/tree-automaton-state-reachability-1922",
+  "count": 2,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj6HN",
+    "path": "src/jacobian/math/tree_automata/operations.py",
+    "line": 47,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Expose reachability through the native tree-automata API**\n\nWhen callers compose this computation through native Python, the only kernel is underscored and absent from both `operations.__all__` and `jacobian.math.tree_automata.__all__`, so the new operation is unavailable on the supported native surface, unlike this domain's existing run and count operations. Promote a direct function returning a canonical do"
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bj-QG",
+    "path": "src/jacobian/math/tree_automata/operations.py",
+    "line": 58,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Admit immediately stable reachability instances**\n\nFor an automaton with no nullary transition, `choices` remains empty and the loop reaches its fixed point after one scan, but this precheck always prices `state_count + 1` scans. Consequently, the 64-state/4096-row/arity-16 input added in `test_reachability_rejects_child_slot_scans_beyond_work_bound` is rejected despite having an empty output and requiring we"
+   }
+  ]
+ },
+ {
+  "pr": 2408,
+  "title": "feat(graphs): add replayable SPQR decomposition",
+  "branch": "feat/spqr-ogdf-adapter-2264",
+  "count": 3,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj6qi",
+    "path": "src/jacobian/math/graphs/decomposition/_models.py",
+    "line": 209,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Reject empty positive SPQR results**\n\nWhen an SPQR result is reconstructed from serialized or caller-supplied data, `SPQRTreeResult(source_graph=K4, status=\"SPQR_TREE\")` validates with no nodes or source-edge owners. The private `_validate_spqr_tree` is called only by the producer, so result-model validation does not prevent a corrupted or forged payload from masquerading as the exact replayable decomposition"
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bj_Qa",
+    "path": "src/jacobian/math/graphs/decomposition/_models.py",
+    "line": 199,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Validate negative SPQR witnesses against the source**\n\nFor caller-supplied or deserialized results, this validator checks only that a witness is present, so `status=\"NOT_BICONNECTED\", witness_kind=\"ARTICULATION\", witness_vertices=(0,)` validates even when `source_graph` is K4, where vertex 0 is not an articulation point. The same problem permits false `DISCONNECTED` and `MINIMUM_SIZE` conclusions; validate ea"
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bj_Qc",
+    "path": "src/jacobian/math/graphs/decomposition/_models.py",
+    "line": 130,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Replace the inherited edge cap with SPQR work admission**\n\nReusing `UndirectedGraph` imposes its fixed 512-edge ceiling on this operation, creating an arbitrary cliff where K32 (496 edges) is accepted but K33 (528 edges) is rejected even though both produce one R skeleton and the pair enumeration grows only from 496 to 528 candidate pairs. The new result fields repeat the same coarse ceiling for ownership, so"
+   }
+  ]
+ },
+ {
+  "pr": 2404,
+  "title": "fix(graphs): bind independence-number results to their source graph",
+  "branch": "fix/independence-source-binding-2295",
+  "count": 2,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj4Xg",
+    "path": "src/jacobian/math/graphs/independence.py",
+    "line": 92,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Reject source-bound false optima**\n\nFor an authored or replayed `EXACT` result, these checks prove only that the witness is feasible, not that it is maximum. For example, the path `a-b-c` with witness `(\"a\",)`, `optimum_value = incumbent_value = lower_bound = upper_bound = 1`, and `termination_reason = \"OPTIMUM_ESTABLISHED\"` passes validation even though its independence number is 2; similarly, removing edges"
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bj-M1",
+    "path": "src/jacobian/math/graphs/independence.py",
+    "line": 67,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Bump the result and operation contract versions**\n\nWhen a caller revalidates a persisted result or caches the catalog schema by operation version, this newly required `graph` field makes the old payload incompatible even though `result_schema_version` remains `\"1\"` and `INDEPENDENCE_NUMBER_OPERATION.version` remains `\"2\"`. Dispatch therefore labels both the old and new output shapes with the same version, lea"
+   }
+  ]
+ },
+ {
+  "pr": 2402,
+  "title": "feat(matrices): add axis-bound subsystem operations",
+  "branch": "feat/multilinear-algebra-963",
+  "count": 2,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj3te",
+    "path": "src/jacobian/math/matrices/subsystems/_models.py",
+    "line": 24,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Admit values emitted by subsystem producers**\n\nWith a 2\u00d72-factor diagonal source containing `1/(10^255+19)` and `1/(10^255+21)` in the two entries contracted by the first trace, the accepted trace produces a reduced component with a 511-digit denominator; passing that returned `FactorizedHermitianMatrix` unchanged into a second partial trace is then rejected by the 256-digit input cap, even though tracing bot"
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bj_dN",
+    "path": "src/jacobian/math/matrices/subsystems/operations.py",
+    "line": 129,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Avoid reparsing validated requests in native functions**\n\nWhen these operations are invoked through `math.run`, `_operations.py` has already received a parsed request, but each native function constructs the same Pydantic request again here (and at lines 151 and 188), rerunning the complete admission validators and their matrix digit/growth scans. This violates the required parse-once execution path; put the "
+   }
+  ]
+ },
+ {
+  "pr": 2401,
+  "title": "Multiply exact symbolic matrices over rational functions",
+  "branch": "feat/symbolic-matrix-multiply-967",
+  "count": 2,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj3nI",
+    "path": "src/jacobian/math/matrices/symbolic/_models.py",
+    "line": 288,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Count coefficient collisions instead of all numerator terms**\n\nFor a 1\u00d71 product such as `(10^63*x + 1) * 1`, `numerator_terms` is 2, so the coefficient estimate treats both distinct monomials as if they were collected into one coefficient and rejects the request with a 131-digit estimate. The exact result is unchanged, has two terms, and its largest coefficient has only 64 digits. Track the maximum number of"
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bj3nN",
+    "path": "src/jacobian/math/matrices/symbolic/_models.py",
+    "line": 339,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Avoid dense-box rejection when cancellation cannot occur**\n\nWhen two 1\u00d71 polynomial matrices containing `x^16*y^16` are multiplied, this converts the exact product degree `(32, 32)` into a 1,089-term dense-box bound and rejects it, even though the result is the single monomial `x^32*y^32` and both denominators are one, so cancellation cannot densify anything. Apply the monomial-box fallback only where a nontr"
+   }
+  ]
+ },
+ {
+  "pr": 2398,
+  "title": "Enclose expression second jets over rational boxes",
+  "branch": "feat/expression-derivatives-2316",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj-yB",
+    "path": "src/jacobian/math/analysis/_models.py",
+    "line": 681,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Derive the dimension limit from actual jet work**\n\nA four-variable linear expression such as `a+b+c+d` is rejected here even though its 15 value/gradient/Hessian intervals and trivial arithmetic are smaller than many admitted three-variable, 64-node division trees. Because admission later computes only the constant proxy `node_count * 128`, neither dimension-dependent jet work nor result size controls this re"
+   }
+  ]
+ },
+ {
+  "pr": 2397,
+  "title": "feat(commutative-algebra): compute rational ideal minimal primes",
+  "branch": "feat/rational-ideal-minimal-primes-2254",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj2ZP",
+    "path": "src/jacobian/math/commutative_algebra_ops/_operations.py",
+    "line": 438,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Charge the replay to the same request deadline**\n\nWhen the first `minAssGTZE` pass succeeds near `resource_budget.wall_seconds`, this replay starts with a fresh full timeout, so one `math.run` may consume almost twice the requested wall budget\u2014up to 120 seconds\u2014and exceed an enclosing MCP deadline despite each child staying within its individual limit. Use one operation-level deadline and pass only the remain"
+   }
+  ]
+ },
+ {
+  "pr": 2396,
+  "title": "Bind nonlinear binary-code profiles to explicit codes",
+  "branch": "fix/nonlinear-code-profiles-1785",
+  "count": 2,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj3AB",
+    "path": "src/jacobian/math/code_nonlinear/values.py",
+    "line": 54,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Bound codeword containers before nested validation**\n\nFor malformed inputs, neither the outer `codewords` tuple nor each `BinaryWord` has a pre-validation length limit, while the 524,288-bit check runs only after Pydantic has converted every supplied bit and word. A request such as `length: 0` with millions of empty words, or a short declared length with one enormous word, can therefore consume memory and CPU"
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bj-u8",
+    "path": "src/jacobian/math/code_nonlinear/_models.py",
+    "line": 145,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Bump the word-distance contract version**\n\nThe accepted word length changes from 16 to 524,288 here, and the request/result schemas also gain strict bit and coordinate constraints, but `code.binary.word_distance.compute` still defaults to version `\"1\"` in `_tools.py`. Clients that use the advertised operation version to identify or cache schemas will therefore treat this incompatible contract as the old one; "
+   }
+  ]
+ },
+ {
+  "pr": 2395,
+  "title": "Normalize numerical-semigroup generator presentations",
+  "branch": "fix/numerical-semigroup-generator-normalization-1906",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj-1u",
+    "path": "src/jacobian/math/numerical_semigroups/_models.py",
+    "line": 331,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  State the per-generator ceiling in request schemas**\n\nFor a valid gcd-one presentation containing a generator above 500, such as `(\"2\", \"501\")`, the new schema description says that positive gcd-one generators are accepted, while `_require_positive_bounded_generators` rejects the request. The same omission appears in most newly added generator descriptions and in the broadened operation text, so `math.find` u"
+   }
+  ]
+ },
+ {
+  "pr": 2394,
+  "title": "feat(math): add exact spectra over real quadratic fields",
+  "branch": "feat/quadratic-spectra-939",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj_8L",
+    "path": "src/jacobian/math/matrices/quadratic_spectral/operations.py",
+    "line": 686,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Represent zero matrices without picking one semidefinite sign**\n\nFor an all-zero admitted matrix, `(positive, negative, zero)` is `(0, 0, n)`, so this branch reports only `positive_semidefinite`, although the matrix is equally negative semidefinite. Because `definiteness` is presented as an exhaustive classification, downstream consumers checking for `negative_semidefinite` receive a false negative; add an ex"
+   }
+  ]
+ },
+ {
+  "pr": 2393,
+  "title": "Generalize graded Jacobian syzygy operations",
+  "branch": "feat/graded-jacobian-syzygies-921",
+  "count": 2,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj0Nh",
+    "path": "src/jacobian/math/polynomials/_syzygy_models.py",
+    "line": 103,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Budget only maps reachable before a forced kernel**\n\nFor newly supported higher-dimensional inputs, charging every degree through `max_degree` rejects requests whose execution is guaranteed to stop immediately. For example, the homogeneous polynomial `h=x` in five declared variables with the default `max_degree=6` is rejected when the loop reaches degree 5 because it predicts 630 columns, although the degree-"
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bkAgk",
+    "path": "src/jacobian/math/polynomials/_syzygy_models.py",
+    "line": 427,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Reject labelled provenance on non-three-variable results**\n\nFor any newly supported result with 1\u20132 or 4\u20138 variables, changing only `source_kind` to `LABELLED_LINEAR_FACTOR_PRODUCT` still passes `GradedJacobianSyzygyResult.model_validate`, even though the request contract and kernel restrict labelled factors to exactly three variables. The result validator never relates this provenance field to `variable_coun"
+   }
+  ]
+ },
+ {
+  "pr": 2392,
+  "title": "feat(geometry): certify Euclidean polygon triangulations",
+  "branch": "feat/euclidean-polygon-triangulation-945",
+  "count": 2,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bjyi-",
+    "path": "src/jacobian/math/geometry/_models.py",
+    "line": 888,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Reject self-intersecting rings before triangulation**\n\nThe consecutive-turn check is not sufficient to establish convexity unless the ring is also known to be simple. For example, the rational pentagram `(0,3), (-2,-3), (3,1), (-3,1), (2,-3)` has every checked turn positive but has multiple crossing nonadjacent edges, so this request is accepted and the DP can certify an abstract index triangulation whose tri"
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bjyjA",
+    "path": "src/jacobian/math/geometry/_models.py",
+    "line": 1055,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Bind unresolved comparisons to the source recurrence**\n\nWhen `status` is `COMPARISON_UNRESOLVED`, validation only checks that the field exists and that the certified-only collections are empty; it never checks that the span and splits are valid for this polygon, that the two expressions equal the corresponding DP candidates, that Arb actually leaves their order unresolved, or that this is the first unresolved"
+   }
+  ]
+ },
+ {
+  "pr": 2390,
+  "title": "Add exact rational polytope support",
+  "branch": "feat/rational-polytope-support-1791",
+  "count": 2,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bjyrP",
+    "path": "src/jacobian/math/polytope/_models.py",
+    "line": 355,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Keep support limits out of canonical polytope values**\n\nWhen a rational polytope has a coordinate with 151\u201332,768 digits, this exported canonical value rejects it because `RationalPolytopeVertex` embeds the support operation's 150-digit execution envelope in its coordinate type; `RationalCovector` does the same. Consequently, producers and other consumers cannot represent or exchange otherwise valid canonical"
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bj_Gz",
+    "path": "src/jacobian/math/polytope/_models.py",
+    "line": 514,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Publish the common-space constraint**\n\nWhen an agent supplies a covector with the correct dimension but different axis labels or ordering, both nested values satisfy the exported JSON Schema and this equality rule is revealed only by a rejected call; neither the request description nor its fields state that the two serialized `space` values must be identical, and the example description does not teach that pr"
+   }
+  ]
+ },
+ {
+  "pr": 2389,
+  "title": "Add exact directed bond connection probabilities",
+  "branch": "feat/directed-bond-reliability-1688",
+  "count": 3,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bjyyT",
+    "path": "src/jacobian/math/probability/_models.py",
+    "line": 514,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Admit sparse graphs above 16 vertices**\n\nRemove the unconditional vertex ceiling and rely on the derived work budget below: for example, a 17-vertex graph with one arc is valid for the existing `DirectedGraph` contract and requires only `2 * 2 * (4 + 34) = 152` logical visits, far below the configured 655,360 budget, but this check rejects it. This unnecessarily excludes useful sparse graphs even when work, i"
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bjyyX",
+    "path": "src/jacobian/math/probability/_models.py",
+    "line": 654,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Support the edgeless directed-graph case**\n\nAllow zero arc-probability rows and the corresponding edgeless `DirectedGraph`: with two distinct terminals, directed bond connection remains well-defined and has probability zero, yet `DirectedGraph.edges` and this field both require at least one item despite the public contract advertising \u201cat most 12 arcs.\u201d The kernel and result bounds also need to handle `arc_co"
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bkAPX",
+    "path": "src/jacobian/math/probability/_models.py",
+    "line": 577,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Bound numerator bytes across actual subsets**\n\nFor a 12-arc chain where every probability is `(D-1)/D` and `D` is the 90-digit all-9 integer, each closed factor has numerator `1`, but this `max` charges all 4,096 states as though every factor used the 90-digit numerator. The resulting estimate is 9,458,578 bytes and rejects the request, although the complete canonical result is only about 7,227,660 bytes. Sin"
+   }
+  ]
+ },
+ {
+  "pr": 2387,
+  "title": "Add exact principal Dirichlet character values",
+  "branch": "feat/dirichlet-principal-1773",
+  "count": 2,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bjvlF",
+    "path": "src/jacobian/math/dirichlet_characters/_models.py",
+    "line": 21,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Count integer digits without the minus sign**\n\nFor negative inputs at the advertised boundary, `max_length=MAX_INTEGER_DIGITS` counts the leading `-`, so a 256-digit positive integer is accepted while the corresponding 256-digit negative integer is rejected as 257 characters. Since the constant defines a digit bound and the grammar treats the sign separately, apply the bound to `integer.lstrip(\"-\")` (or other"
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bj-dq",
+    "path": "src/jacobian/math/dirichlet_characters/_admission.py",
+    "line": 20,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Keep character-table lookup out of the public catalog**\n\nClassify this candidate as `NATIVE_ONLY` with `native_symbol=\"jacobian.math.dirichlet_characters.principal_dirichlet_character_value\"`. The reviewed kernel only evaluates `character.values[integer % character.modulus]`, so it is a cheap deterministic projection of the complete table returned by `dirichlet_character.principal.compute`, not a separate ope"
+   }
+  ]
+ },
+ {
+  "pr": 2386,
+  "title": "feat(polytope): compute exact rational facet incidences",
+  "branch": "investigate/facet-incidence-1249",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bjwNe",
+    "path": "src/jacobian/math/polytope/_operations.py",
+    "line": 142,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Deduplicate points before charging facet enumeration**\n\nWhen a full-dimensional V-representation contains repeated source rows, this charges `C(n,d)` using every row even though duplicates create neither candidate hyperplanes nor facets. For example, a 7-simplex padded to 64 rows by repeating the origin is rejected here, although enumeration over its eight distinct points requires only eight candidates, testi"
+   }
+  ]
+ },
+ {
+  "pr": 2385,
+  "title": "Evaluate rational polynomials on matrices",
+  "branch": "feat/matrix-polynomial-evaluation-1801",
+  "count": 2,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj_gZ",
+    "path": "src/jacobian/math/matrices/canonical_forms/_models.py",
+    "line": 155,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Cancel rational factors before enforcing digit bounds**\n\nFor a 1\u00d71 linear request with coefficient `a/b` and matrix entry `b/a`, where `a` and `b` are coprime 20,000-digit integers, the exact value is `1`, but these lines multiply the unreduced components into 40,000-digit bounds and reject the request as exceeding the 32,768-digit result limit. Cross-cancel the rational factors before applying the cap so sma"
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bj_gb",
+    "path": "src/jacobian/math/matrices/canonical_forms/_models.py",
+    "line": 324,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Publish the coupled Horner work constraint in the schema**\n\nThe schema describes matrices through order 32 and a polynomial using the shared exponent range, but it does not expose the validator-owned constraint `2 * degree * dimension^3 <= 4,000,000`. Consequently, an order-32 matrix with a degree-62 polynomial appears valid from `math.find` yet is rejected only when run, and callers cannot infer the permitte"
+   }
+  ]
+ },
+ {
+  "pr": 2384,
+  "title": "fix(code): source-bind linear-code invariant results and replay exact claims",
+  "branch": "fix/code-theory-source-binding-2309",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bjsdz",
+    "path": "src/jacobian/math/code_theory/_models.py",
+    "line": 95,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Bump versions for the expanded result schemas**\n\nAdding the required `request` field changes the wire format of this result, and the same change affects the weight-distribution and covering-radius results, but all three declarations in `_tools.py` still publish the default version `\"1\"`. Clients that cache or select schemas by `(operation_id, operation_version)` will therefore receive an incompatible output u"
+   }
+  ]
+ },
+ {
+  "pr": 2380,
+  "title": "Compute exact all-terminal graph reliability",
+  "branch": "feat/all-terminal-reliability-1248-clean",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bjpus",
+    "path": "src/jacobian/math/probability/all_terminal_reliability.py",
+    "line": null,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Defer the NetworkX import until kernel execution**\n\nWhen callers import `jacobian.math`, that package eagerly imports `probability`, whose new public export imports this module and immediately loads NetworkX here. This breaks the established import-isolation assertion in `tests/process/public_api/test_import_isolation.py:38-42`, even when no graph-reliability function is called; import NetworkX inside the pri"
+   }
+  ]
+ },
+ {
+  "pr": 2379,
+  "title": "Check rational LOG and SQRT point enclosures independently",
+  "branch": "feat/point-enclosure-check-1245",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj_0F",
+    "path": "src/jacobian/math/analysis/_models.py",
+    "line": 325,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Reuse a canonical enclosure value across both operations**\n\nWhen a caller composes `analysis.real_function.point_enclosure.compute` with this checker, the serialized `ArbPointEnclosureResult` cannot be supplied here because `StrictModel` rejects producer-only fields such as `status`, `relative_accuracy_bits`, `exact`, and `detail`; instead, the caller must strip those fields and reconstruct the function, argu"
+   }
+  ]
+ },
+ {
+  "pr": 2378,
+  "title": "feat(polynomial-maps): compute exact generic degrees",
+  "branch": "feat/rational-map-generic-degree-2286",
+  "count": 2,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bjlTZ",
+    "path": "src/jacobian/math/polynomials/maps/_models.py",
+    "line": 49,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Admit the sparse leading-ideal fixture**\n\nWith the leading exponents `(64, 0)`, `(1, 1)`, and `(0, 64)` exercised by `tests/process/polynomial_maps/test_generic_degree_singular_process.py:223-251`, `_standard_monomials` multiplies the pure-power bounds to 4096, but this constant permits only 1537 candidates, so it raises `GenericFiberReplayLimitError` before producing the expected 127 standard monomials. Cons"
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bj_EQ",
+    "path": "src/jacobian/math/polynomials/maps/_generic_degree.py",
+    "line": 334,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Bound certificate replay before running SymPy reductions**\n\nWhen Singular returns an admitted certificate near the 32-basis/4096-term limits, these calls run Buchberger and normal-form reductions in the parent process without bounding reduction steps or intermediate coefficient growth. The preceding check only counts source-generator \u00d7 lift input-term pairs, while the declared `MAX_GENERIC_FIBER_REPLAY_REDUCT"
+   }
+  ]
+ },
+ {
+  "pr": 2374,
+  "title": "fix(math): replay sqrt continued-fraction and convergent results against the request",
+  "branch": "fix/sqrt-cf-replay-2313",
+  "count": 2,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bjjo1",
+    "path": "src/jacobian/math/diophantine_approximation/_models.py",
+    "line": 71,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Enforce the request's squarefree domain during replay**\n\nWhen a serialized result is authored for a nonsquare, non-squarefree discriminant such as `8`, this validator computes the valid expansion and accepts it even though `ContinuedFractionRequest(discriminant=8, ...)` rejects the same source; `ConvergentResult` has the identical gap. Consequently these newly source-bound models still validate results that c"
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bjjo2",
+    "path": "src/jacobian/math/diophantine_approximation/_models.py",
+    "line": 148,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Bound canonical integers before parsing forged convergents**\n\nWhen a downstream consumer revalidates a malformed serialized result containing very long canonical numerator or denominator strings, `CanonicalInteger` imposes no length bound and this loop converts every value to an arbitrary-size Python integer and computes a gcd before the recurrence can reject it. Because `parse_canonical_integer` deliberately"
+   }
+  ]
+ },
+ {
+  "pr": 2373,
+  "title": "feat(number-theory): add bounded prime affine tuple operations",
+  "branch": "feat/prime-affine-tuples-1911",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj_J5",
+    "path": "src/jacobian/math/prime_affine_forms/_models.py",
+    "line": 967,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Preflight the translated tuple's aggregate digit bound**\n\nWhen a source contains many forms, this validates each translated constant separately but never checks the `PrimeAffineTuple` aggregate limit. For example, 512 primitive forms with distinct 128-digit coefficients and constant `1`, translated by a 64-digit shift, pass this request validator because every new constant remains below 256 digits; however, t"
+   }
+  ]
+ },
+ {
+  "pr": 2372,
+  "title": "feat(fca): compute Duquenne-Guigues implication bases",
+  "branch": "feat/duquenne-guigues-basis-2268",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj-70",
+    "path": "src/jacobian/math/formal_concept_analysis/basis.py",
+    "line": 159,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Replace the eight-attribute cap with work-based admission**\n\nFor every context with 9\u201364 attributes, this branch rejects before considering its actual work or result size; for example, a nine-attribute contranominal context has an empty basis and a small, tractable 512-state closure matrix, yet is rejected solely because `attribute_count > 8`. Use an operation-specific work/output envelope (and scalable resul"
+   }
+  ]
+ },
+ {
+  "pr": 2370,
+  "title": "Add finite-coset crossed-product multiplication",
+  "branch": "feat/finite-coset-crossed-product-959",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj_IT",
+    "path": "src/jacobian/math/crossed_products/__init__.py",
+    "line": 14,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Export crossed_products from the root math namespace**\n\nRegister this new native domain in `src/jacobian/math/__init__.py` and the corresponding `ROOT_MATH_DOMAINS` contract. As written, a fresh `from jacobian import math` does not expose `math.crossed_products`, and wildcard imports omit it, despite this module declaring a supported native API; the owner-local test bypasses that root contract by importing th"
+   }
+  ]
+ },
+ {
+  "pr": 2369,
+  "title": "Add exact finite-Abelian spectral-pair decisions",
+  "branch": "feat/finite-abelian-spectral-pair-960",
+  "count": 3,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bjgxy",
+    "path": "src/jacobian/math/finite_abelian_groups.py",
+    "line": 398,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Let derived budgets admit exponent 65**\n\nFor an equal-size two-element pair in `Z/65` (for example, points and frequencies `[(0,), (1,)]`), this unconditional cap rejects the request before the result-sensitive checks, even though its computed bounds all fit: 4 character terms, 2 reductions, 304,920 dense ops, degree 48, 49-bit cyclotomic coefficients, 138-bit construction intermediates, and an 835-bit remain"
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bkAJ0",
+    "path": "src/jacobian/math/finite_abelian_groups.py",
+    "line": 74,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Admit trivial decisions beyond the group-order cap**\n\nFor a singleton pair in `Z/4097`, this validator rejects the group even though `_spectral_pair_work` explicitly performs no cyclotomic reduction and the returned result is tiny; the kernel never enumerates the ambient group. The same cap also excludes equal-size inputs in groups such as `(64, 64, 2)` whose exponent, character work, intermediates, and resul"
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bkAJ2",
+    "path": "src/jacobian/math/finite_abelian_groups.py",
+    "line": 149,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Apply the set-size cap only to reduction paths**\n\nA request in `Z/128` with the 65 distinct points `(0,)` through `(64,)` and the single frequency `(0,)` is rejected here before the cardinality-mismatch branch can return its exact negative decision. That branch performs no cyclotomic work, and this source's predicted result is only a few kilobytes, so the 64-row ceiling is unrelated to either work or output. "
+   }
+  ]
+ },
+ {
+  "pr": 2368,
+  "title": "feat(graph): canonicalize bounded colored graphs",
+  "branch": "feat/colored-graph-canonicalization-2231",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bjfqV",
+    "path": "src/jacobian/math/graphs/isomorphism/_operations.py",
+    "line": 76,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Keep the catalog adapter on the single-parse path**\n\nFor every `math.run` invocation, dispatch has already parsed and admitted the `ColoredGraphCanonicalizationRequest`, but this adapter forwards its graph to `canonicalize_colored_graph`, which constructs and validates another request in `operations.py`. This repeats the result-size relabeling/serialization preflight for every public call and bypasses the rep"
+   }
+  ]
+ },
+ {
+  "pr": 2367,
+  "title": "Add exact Hermite reduction for rational functions",
+  "branch": "feat/rational-hermite-reduction-1904",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bkAqv",
+    "path": "src/jacobian/math/polynomials/rational_functions/_tools.py",
+    "line": 36,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  State the example's input preconditions**\n\nFor agents inspecting this newly published operation, the example description only states the computation, while the repository's operation contract requires it also to state the important validity precondition. Here that should identify the canonical univariate `QQ(x)` representation and its tight degree/coefficient envelope; omitting it makes callers infer which pa"
+   }
+  ]
+ },
+ {
+  "pr": 2366,
+  "title": "Add exact word RSK correspondence and inverse",
+  "branch": "feat/rsk-word-correspondence-1769",
+  "count": 2,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bjf6_",
+    "path": "src/jacobian/math/algebraic_combinatorics/_rsk.py",
+    "line": 23,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Reject unencodable alphabet symbols before inverse execution**\n\nWhen an inverse pair uses a lone surrogate such as `\"\\ud800\"` as an alphabet symbol, `RSKTableauPair` and `RSKInverseWordRequest` accept it because `Symbol` only enforces string length, but the forward replay reaches this UTF-8 encoding and raises `UnicodeEncodeError` instead of returning a typed result. This is reachable through the native API a"
+   },
+   {
+    "id": "PRRT_kwDOThEfjc6bkAq3",
+    "path": "src/jacobian/math/algebraic_combinatorics/_rsk.py",
+    "line": 30,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Replace the fixed word-length cap with derived admission**\n\nFor `alphabet=(\"a\",)` and `letters=(\"a\",) * 51`, this line rejects the request even though its symbol payload is only 52 UTF-8 bytes, insertion needs only 50 one-row searches, and each resulting tableau has 51 cells\u2014within the canonical tableau's 100-cell bound. The fixed `N=50` ceiling therefore excludes a materially larger safe regime without using"
+   }
+  ]
+ },
+ {
+  "pr": 2364,
+  "title": "feat(logic): add bounded source-indexed SMT UNSAT cores",
+  "branch": "feat/smt-unsat-core-2273",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bkBDH",
+    "path": "src/jacobian/math/logic/_unsat_core.py",
+    "line": 359,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Fold nested coefficients before enforcing the digit bound**\n\nA nested linear term such as `(* A (* A x))`, with each `A` a 256-digit numeral, is accepted because each invocation sees only one closed factor and independently validates `A`; the combined coefficient `A\u00b2` can have 512 digits and is never checked. Repeating this nesting permits materially larger coefficients than the advertised normalized-coeffici"
+   }
+  ]
+ },
+ {
+  "pr": 2362,
+  "title": "Add rational-box expression enclosure",
+  "branch": "feat/expression-box-enclosure-2303",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bjdbB",
+    "path": "src/jacobian/math/analysis/_models.py",
+    "line": 753,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Do not replay transient backend errors**\n\nWhen the initial evaluation returns `BACKEND_ERROR` because Arb raises one of the caught exceptions, validating the emitted result later reruns Arb; if the transient failure does not recur, the replay produces `ENCLOSED` and rejects the operation's own serialized result as invalid. This makes backend-error results impossible to reliably round-trip or compose through t"
+   }
+  ]
+ },
+ {
+  "pr": 2360,
+  "title": "fix(math): bind divisor and prime-factorization results to their source",
+  "branch": "fix/number-theory-source-binding-2311",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bjb2O",
+    "path": "src/jacobian/math/number_theory/_models.py",
+    "line": 463,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Bump operation versions for the new wire shape**\n\nWhen a client uses `operation_version` to identify or cache result contracts, these newly required `value` fields\u2014and the divisor `convention` field\u2014change the public output schema incompatibly, but all three declarations in `_factorization.py` still inherit `_operation`'s existing version `\"2\"`. Consequently `integer.compute.divisors`, `integer.compute.proper"
+   }
+  ]
+ },
+ {
+  "pr": 2353,
+  "title": "feat(math): add multivariate subresultant sequences",
+  "branch": "feat/polynomial-subresultants-2259",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bkASs",
+    "path": "src/jacobian/math/polynomials/multivariate/_models.py",
+    "line": 278,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Bound coefficient-ring powers before admitting the PRS**\n\nFor inputs with an abnormal main-variable degree drop and a nonscalar coefficient-ring scaling factor, SymPy's Brown kernel materializes powers such as `c**d`. The support of these intermediate powers is not bounded by `maximum_support`, which only bounds coefficients of the formal returned subresultants, so the assertion that every product expands at "
+   }
+  ]
+ },
+ {
+  "pr": 2351,
+  "title": "feat(math): add exact periodic congruence-union profiles",
+  "branch": "feat/periodic-union-2306",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj_-Q",
+    "path": "src/jacobian/math/number_theory/_periodic_union.py",
+    "line": 158,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Reject oversized families before normalizing them**\n\nWhen a caller supplies more than 64 subsets whose residue lists are empty or collectively remain below 32,768 entries, this pre-validator traverses and copies the entire family before Pydantic applies the field's `max_length=64`. Consequently, a malformed public request can make validation consume memory and time proportional to an arbitrarily large family "
+   }
+  ]
+ },
+ {
+  "pr": 2350,
+  "title": "feat(math): add complete canonical Nim option families",
+  "branch": "feat/nim-options-1907",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj_IJ",
+    "path": "src/jacobian/math/impartial_games/values.py",
+    "line": 123,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Bind each NimOption to its source position**\n\nBecause `NimOption` is exported as a canonical value, this validator accepts objects that are not legal Nim moves\u2014for example, source index `(49,)`, source size `2`, replacement size `1`, and an empty resulting position\u2014because it never checks the indices against a source or reconstructs the resulting position. Include the source position in the value and validate"
+   }
+  ]
+ },
+ {
+  "pr": 2346,
+  "title": "feat(math): add exact rational conic parametrization",
+  "branch": "feat/rational-conic-parametrization-2257",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bkBY3",
+    "path": "src/jacobian/math/plane_algebraic_curves/_conic.py",
+    "line": 387,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Complete admission before entering SymPy**\n\nFor requests whose normalized output exceeds the result bound, `_require_smooth_conic_and_point` still converts the input to SymPy and computes the determinant before `_require_work_and_result_bounds` rejects it. This makes backend behavior part of request admission and reverses the required preflight boundary; perform the point and smoothness checks with the alread"
+   }
+  ]
+ },
+ {
+  "pr": 2344,
+  "title": "feat(automata): compute exact transition-Parikh profiles",
+  "branch": "feat/transition-parikh-profile-2301",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bkA1C",
+    "path": "tests/math/regular_languages/test_transition_parikh_profile.py",
+    "line": 510,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Use the actual coordinate-bound crossover**\n\nThis test always fails in the regular-language owner lane because the 159-transition request is accepted: at length 2, `layer_cell_bound` is `C(160, 2) = 12,720`, so the implementation charges only `12,720 * 159 = 2,022,480` coordinates, below the 4,000,000 limit; its vector-update work is also only 4,044,960, and the unreachable target makes the result-cell bound "
+   }
+  ]
+ },
+ {
+  "pr": 2342,
+  "title": "feat(math): add exact multivariate differential-operator application",
+  "branch": "feat/multivariate-differential-operator-1177",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bkAQ1",
+    "path": "src/jacobian/math/polynomials/differential_operators/_bounds.py",
+    "line": 300,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Move degenerate shortcuts before kernel-specific source caps**\n\nFor `iterations=0`, a canonical one-term polynomial such as `x^129` is rejected by `_require_application_inputs` before the identity case is recognized, even though the operation would only return that small source unchanged; the same ordering rejects cheaply guaranteed-zero applications whose sources exceed the 128-degree or 512-term kernel caps"
+   }
+  ]
+ },
+ {
+  "pr": 2340,
+  "title": "feat(hypergraphs): add bounded independence-number search",
+  "branch": "feat/hypergraph-independence-number-2282",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj_nY",
+    "path": "src/jacobian/math/hypergraphs/_independence_z3.py",
+    "line": 98,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Validate backend results before returning them**\n\nIf `_check_threshold` ever produces a malformed candidate\u2014for example after a backend or adapter regression\u2014`model_construct` bypasses every field and model validator, not only the expensive upper-bound replay. Since dispatch serializes the returned instance directly, an infeasible witness or inconsistent exact/unknown evidence can escape through `math.run`; p"
+   }
+  ]
+ },
+ {
+  "pr": 2339,
+  "title": "feat(incidence): compare exact finite trade moments",
+  "branch": "feat/incidence-moments-942",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj__O",
+    "path": "src/jacobian/math/incidence_structures/_models.py",
+    "line": 22,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Admit safe higher trade orders**\n\nFor small families where third- or higher-order profiles fit all existing subset, work, and output budgets\u2014for example, two families on three points with `max_order=3`\u2014this fixed ceiling rejects an otherwise bounded exact comparison, even though the same kernel already computes containment profiles through order 10. Derive the admitted order from the existing result-sensitive"
+   }
+  ]
+ },
+ {
+  "pr": 2338,
+  "title": "feat(math): compute fixed-arity multiset-sum profiles",
+  "branch": "feat/fixed-arity-multiset-sum-2290",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bkAiU",
+    "path": "src/jacobian/math/additive_combinatorics/_multiset_sum.py",
+    "line": 13,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Derive the arity limit from actual result growth**\n\nFor a singleton source such as `{\"elements\":[\"0\"]}`, arity 10,000,000 still has exactly one candidate, one coordinate step, and the single result `0`, but this fixed ceiling rejects it before the existing work and support preflights run. The worst-case digit argument does not apply to these compact cases, so admission should derive the safe arity from candid"
+   }
+  ]
+ },
+ {
+  "pr": 2333,
+  "title": "feat(math): compute exact rational box-union volumes",
+  "branch": "feat/rational-box-union-911",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj_65",
+    "path": "src/jacobian/math/geometry/boxes/_operations.py",
+    "line": 18,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Accept canonical boxes in the native volume API**\n\nWhen Python callers use the newly exported `compute_box_union_volume`, they must construct the MCP-specific `BoxUnionVolumeRequest` wrapper rather than pass the canonical `RationalAxisAlignedBox` family directly. This couples the claimed native API to the wire request/execution-envelope model and prevents value-oriented composition; keep this function value-o"
+   }
+  ]
+ },
+ {
+  "pr": 2324,
+  "title": "feat(math): compute linear-code received-word profiles",
+  "branch": "feat/received-word-profile-2304",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bkANE",
+    "path": "src/jacobian/math/code_linear/_models.py",
+    "line": 382,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Accept the canonical encoder in code consumers**\n\nThe earlier producer-to-profile issue is fixed, but the final tree still makes `PunctureRequest` recreate a code from separate `field_order`, `generator_matrix`, and `coordinate_axis` fields. Consequently, a serialized `FromGeneratorResult.encoder`, dual encoder, or previous puncture/shorten encoder cannot be supplied unchanged to this consumer\u2014the caller must"
+   }
+  ]
+ },
+ {
+  "pr": 2322,
+  "title": "feat(number-theory): compute exact Ramanujan sums",
+  "branch": "feat/ramanujan-sum-2314",
+  "count": 1,
+  "threads": [
+   {
+    "id": "PRRT_kwDOThEfjc6bj6M2",
+    "path": "src/jacobian/math/number_theory/_ramanujan_sum.py",
+    "line": 55,
+    "author": "chatgpt-codex-connector",
+    "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Reject negative-zero frequencies**\n\n`RamanujanSumRequest(modulus=\"4\", frequency=\"-0\")` still validates because `BoundedInteger` admits `\"-0\"`, and the operation then echoes that spelling into the source-bound result. Thus mathematically identical zero frequencies can have distinct serialized identities despite this field and the example claiming a canonical signed integer; the result-only correction does not "
+   }
+  ]
+ }
+]

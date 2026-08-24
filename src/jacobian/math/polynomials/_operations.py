@@ -136,6 +136,7 @@ def polynomial_square_free_decomposition(
         for factor, multiplicity in sorted(canonical_factors, key=lambda item: item[1])
     )
     return PolynomialSquareFreeDecompositionResult(
+        polynomial=request.polynomial,
         coefficient=rational_from_sympy(coefficient),
         factors=factors,
         reconstructed=_result_polynomial(reconstructed, request.polynomial.variables),
@@ -176,6 +177,7 @@ def polynomial_factorization(
         )
     )
     return PolynomialFactorizationResult(
+        polynomial=request.polynomial,
         coefficient=rational_from_sympy(coefficient),
         factors=factors,
         reconstructed=_result_polynomial(reconstructed, request.polynomial.variables),

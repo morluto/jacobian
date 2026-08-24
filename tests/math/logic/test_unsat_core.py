@@ -796,18 +796,45 @@ def test_request_bounds_division_of_formless_ite_branch_denominator_digits() -> 
 
 
 def test_request_bounds_formless_ite_sum_denominator_digits() -> None:
-    digits = "9" * 200
+    odd = "9" * 200
+    even = "1" + "0" * 200
     source = (
         "(set-logic QF_LRA)\n"
         "(declare-const p Bool)\n"
         "(declare-const q Bool)\n"
         "(declare-const x Real)\n"
-        f"(assert (= (+ (ite p (/ x {digits}) x) (ite q (/ x {digits}) x)) 0))\n"
+        f"(assert (= (+ (ite p (/ x {odd}) x) (ite q (/ x {even}) x)) 0))\n"
         "(check-sat)\n"
     )
 
     with pytest.raises(ValidationError, match="normalized SMT coefficient"):
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+
+
+def test_request_keeps_shared_denominator_formless_ite_sums_admitted() -> None:
+    digits = "9" * 100
+    source = (
+        "(set-logic QF_LRA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const q Bool)\n"
+        "(declare-const r Bool)\n"
+        "(declare-const x Real)\n"
+        "(assert (= (+ "
+        f"(ite p (/ x {digits}) x) "
+        f"(ite q (/ x {digits}) x) "
+        f"(ite r (/ x {digits}) x)"
+        ") 3))\n"
+        "(assert (>= x 1))\n"
+        "(assert (<= x 1))\n"
+        "(check-sat)\n"
+    )
+
+    assert SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+
+    result = compute_smt_unsat_core(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
+
+    assert result.outcome == "SAT"
+    assert result.core_indices == ()
 
 
 def test_bounded_formless_ite_sums_flatten_and_still_solve() -> None:

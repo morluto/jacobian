@@ -403,6 +403,123 @@ def test_forged_residual_totals_without_omitted_subsets_are_rejected() -> None:
         )
 
 
+def test_forged_saturated_shared_core_differences_are_rejected() -> None:
+    with pytest.raises(ValidationError, match="joint block budget"):
+        IncidenceMomentComparison(
+            points=("a", "b", "c"),
+            order=2,
+            left_total=200,
+            right_total=0,
+            differences=(
+                IncidenceMultiplicityDifference(
+                    subset=("a", "b"),
+                    left_multiplicity=100,
+                    right_multiplicity=0,
+                ),
+                IncidenceMultiplicityDifference(
+                    subset=("a", "c"),
+                    left_multiplicity=100,
+                    right_multiplicity=0,
+                ),
+            ),
+            equal=False,
+        )
+
+
+def test_forged_right_saturated_shared_core_differences_are_rejected() -> None:
+    with pytest.raises(ValidationError, match="joint block budget"):
+        IncidenceMomentComparison(
+            points=("a", "b", "c"),
+            order=2,
+            left_total=0,
+            right_total=200,
+            differences=(
+                IncidenceMultiplicityDifference(
+                    subset=("a", "b"),
+                    left_multiplicity=0,
+                    right_multiplicity=100,
+                ),
+                IncidenceMultiplicityDifference(
+                    subset=("a", "c"),
+                    left_multiplicity=0,
+                    right_multiplicity=100,
+                ),
+            ),
+            equal=False,
+        )
+
+
+def test_joint_block_budget_boundary_is_accepted_standalone() -> None:
+    comparison = IncidenceMomentComparison(
+        points=("a", "b", "c"),
+        order=2,
+        left_total=220,
+        right_total=60,
+        differences=(
+            IncidenceMultiplicityDifference(
+                subset=("a", "b"),
+                left_multiplicity=100,
+                right_multiplicity=0,
+            ),
+            IncidenceMultiplicityDifference(
+                subset=("a", "c"),
+                left_multiplicity=60,
+                right_multiplicity=0,
+            ),
+        ),
+        equal=False,
+    )
+
+    assert (comparison.left_total, comparison.right_total) == (220, 60)
+
+
+def test_joint_block_budget_below_boundary_is_rejected_standalone() -> None:
+    with pytest.raises(ValidationError, match="joint block budget"):
+        IncidenceMomentComparison(
+            points=("a", "b", "c"),
+            order=2,
+            left_total=219,
+            right_total=59,
+            differences=(
+                IncidenceMultiplicityDifference(
+                    subset=("a", "b"),
+                    left_multiplicity=100,
+                    right_multiplicity=0,
+                ),
+                IncidenceMultiplicityDifference(
+                    subset=("a", "c"),
+                    left_multiplicity=60,
+                    right_multiplicity=0,
+                ),
+            ),
+            equal=False,
+        )
+
+
+def test_disjoint_saturated_keys_are_accepted_without_shared_core() -> None:
+    comparison = IncidenceMomentComparison(
+        points=("a", "b", "c", "d"),
+        order=2,
+        left_total=110,
+        right_total=8,
+        differences=(
+            IncidenceMultiplicityDifference(
+                subset=("a", "b"),
+                left_multiplicity=51,
+                right_multiplicity=0,
+            ),
+            IncidenceMultiplicityDifference(
+                subset=("c", "d"),
+                left_multiplicity=51,
+                right_multiplicity=0,
+            ),
+        ),
+        equal=False,
+    )
+
+    assert (comparison.left_total, comparison.right_total) == (110, 8)
+
+
 def test_forged_repeated_labels_in_difference_values_are_rejected() -> None:
     with pytest.raises(ValidationError, match="distinct labels"):
         IncidenceMultiplicityDifference(

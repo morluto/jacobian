@@ -177,6 +177,49 @@ def _require_incidence_trade_admitted(
         )
 
 
+def _require_joint_difference_block_budget(
+    sparse_values: dict[tuple[str, ...], int],
+    order: int,
+    axis_index: dict[str, int],
+    residual: int,
+) -> None:
+    cores: dict[tuple[str, ...], list[tuple[str, int]]] = {}
+    for subset, value in sparse_values.items():
+        for index in range(order):
+            core = subset[:index] + subset[index + 1 :]
+            cores.setdefault(core, []).append((subset[index], value))
+    omitted_bound = min(MAX_BLOCKS, residual)
+    for core, members in cores.items():
+        if len(members) < 2:
+            continue
+        ranked = sorted(members, key=lambda member: member[1], reverse=True)
+        for first in range(len(ranked) - 1):
+            label_first, value_first = ranked[first]
+            if value_first + ranked[first + 1][1] <= MAX_BLOCKS:
+                break
+            for second in range(first + 1, len(ranked)):
+                label_second, value_second = ranked[second]
+                if value_first + value_second <= MAX_BLOCKS:
+                    break
+                union = tuple(
+                    sorted(
+                        (*core, label_first, label_second),
+                        key=axis_index.__getitem__,
+                    )
+                )
+                capacity = min(
+                    sparse_values.get(
+                        union[:position] + union[position + 1 :],
+                        omitted_bound,
+                    )
+                    for position in range(len(union))
+                )
+                if value_first + value_second - capacity > MAX_BLOCKS:
+                    raise ValueError(
+                        "sparse keys sharing labels must not exceed the joint block budget"
+                    )
+
+
 class IncidenceMatrixRequest(StrictModel):
     incidence: IncidenceStructure
 
@@ -303,7 +346,11 @@ class IncidenceMomentComparison(StrictModel):
     not exceed its declared total, and ``left_total - right_total`` equals
     the sum of ``left_multiplicity - right_multiplicity`` over the sparse
     differences, because every omitted subset carries equal nonnegative
-    multiplicity on both sides bounded by the omitted-subset capacity.
+    multiplicity on both sides bounded by the omitted-subset capacity. Two
+    sparse keys sharing ``order - 1`` axis labels are additionally rejected
+    when either side's joint multiplicity exceeds the ``MAX_BLOCKS`` block
+    budget beyond every ``order``-subset spanning their union: blocks
+    containing both keys already contain each such spanned subset.
     """
 
     points: tuple[str, ...] = Field(min_length=1, max_length=MAX_POINTS)
@@ -323,6 +370,8 @@ class IncidenceMomentComparison(StrictModel):
             raise ValueError("moment point axes must have distinct labels")
         axis_index = {point: index for index, point in enumerate(self.points)}
         seen_subsets: set[tuple[str, ...]] = set()
+        sparse_left: dict[tuple[str, ...], int] = {}
+        sparse_right: dict[tuple[str, ...], int] = {}
         left_subtotal = 0
         right_subtotal = 0
         for difference in self.differences:
@@ -341,6 +390,8 @@ class IncidenceMomentComparison(StrictModel):
             if subset in seen_subsets:
                 raise ValueError("difference subsets must be unique")
             seen_subsets.add(subset)
+            sparse_left[subset] = difference.left_multiplicity
+            sparse_right[subset] = difference.right_multiplicity
             left_subtotal += difference.left_multiplicity
             right_subtotal += difference.right_multiplicity
         if left_subtotal > self.left_total or right_subtotal > self.right_total:
@@ -363,6 +414,18 @@ class IncidenceMomentComparison(StrictModel):
             raise ValueError(
                 "moment residual totals must not exceed the omitted-subset capacity"
             )
+        _require_joint_difference_block_budget(
+            sparse_left,
+            self.order,
+            axis_index,
+            residual,
+        )
+        _require_joint_difference_block_budget(
+            sparse_right,
+            self.order,
+            axis_index,
+            residual,
+        )
         return self
 
 

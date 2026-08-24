@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from jacobian.math.code_linear._models import (
     CodeEqualRequest,
     CodewordCheckRequest,
+    DualCodeRequest,
     GeneratorMatrixRequest,
     MacWilliamsRequest,
     ParityCheckRequest,
@@ -80,10 +81,8 @@ def test_from_generator_canonicalizes_dependent_rows() -> None:
 
 
 def test_dual_of_repetition_is_parity_check() -> None:
-    request = GeneratorMatrixRequest(
-        field_order=2,
-        generator_matrix=((1, 1),),
-        coordinate_axis=("left", "right"),
+    request = DualCodeRequest(
+        encoder=_encoder(((1, 1),), coordinate_axis=("left", "right"))
     )
     result = compute_dual_code(request)
     assert result.dimension == 1
@@ -95,7 +94,7 @@ def test_dual_of_repetition_is_parity_check() -> None:
 
 
 def test_parity_check_matches_dual() -> None:
-    request = ParityCheckRequest(field_order=2, generator_matrix=((1, 1),))
+    request = ParityCheckRequest(encoder=_encoder(((1, 1),)))
     result = compute_parity_check(request)
     assert result.dimension == 1
     assert result.rank_h == 1
@@ -104,18 +103,14 @@ def test_parity_check_matches_dual() -> None:
 
 
 def test_codeword_check_member() -> None:
-    request = CodewordCheckRequest(
-        field_order=2, generator_matrix=((1, 1),), word=(1, 1)
-    )
+    request = CodewordCheckRequest(encoder=_encoder(((1, 1),)), word=(1, 1))
     result = compute_codeword_check(request)
     assert result.is_member is True
     assert result.hamming_weight == 2
 
 
 def test_codeword_check_nonmember() -> None:
-    request = CodewordCheckRequest(
-        field_order=2, generator_matrix=((1, 1),), word=(1, 0)
-    )
+    request = CodewordCheckRequest(encoder=_encoder(((1, 1),)), word=(1, 0))
     result = compute_codeword_check(request)
     assert result.is_member is False
     assert result.hamming_weight == 1
@@ -143,11 +138,7 @@ def test_syndrome_nonzero_for_noncodeword() -> None:
 
 def test_full_space_dual_composes_into_empty_syndrome() -> None:
     dual = compute_dual_code(
-        GeneratorMatrixRequest(
-            field_order=2,
-            generator_matrix=((1, 0), (0, 1)),
-            coordinate_axis=("left", "right"),
-        )
+        DualCodeRequest(encoder=_encoder(((1, 0), (0, 1))))
     )
     assert dual.parity_check.rows == ()
     result = compute_syndrome(
@@ -159,10 +150,11 @@ def test_full_space_dual_composes_into_empty_syndrome() -> None:
 
 def test_rank_one_length_32_code_retains_all_dual_rows() -> None:
     result = compute_dual_code(
-        GeneratorMatrixRequest(
-            field_order=2,
-            generator_matrix=(tuple([1] + [0] * 31),),
-            coordinate_axis=tuple(f"x{index}" for index in range(32)),
+        DualCodeRequest(
+            encoder=_encoder(
+                (tuple([1] + [0] * 31),),
+                coordinate_axis=tuple(f"x{index}" for index in range(32)),
+            )
         )
     )
     assert len(result.parity_check.rows) == 31
@@ -172,9 +164,8 @@ def test_rank_one_length_32_code_retains_all_dual_rows() -> None:
 
 def test_code_equal_same_matrices() -> None:
     request = CodeEqualRequest(
-        field_order=2,
-        generator_matrix_a=((1, 1),),
-        generator_matrix_b=((1, 1),),
+        encoder_a=_encoder(((1, 1),)),
+        encoder_b=_encoder(((1, 1),)),
     )
     result = compute_code_equal(request)
     assert result.equal is True
@@ -183,9 +174,8 @@ def test_code_equal_same_matrices() -> None:
 
 def test_code_equal_different_codes() -> None:
     request = CodeEqualRequest(
-        field_order=2,
-        generator_matrix_a=((1, 0),),
-        generator_matrix_b=((0, 1),),
+        encoder_a=_encoder(((1, 0),)),
+        encoder_b=_encoder(((0, 1),)),
     )
     result = compute_code_equal(request)
     assert result.equal is False
@@ -243,25 +233,45 @@ def test_shorten_2d_code() -> None:
 
 
 def test_requests_accept_serialized_producer_encoders_unchanged() -> None:
-    from_generator = compute_from_generator(
+    canonical = compute_from_generator(
         GeneratorMatrixRequest(
             field_order=2,
             generator_matrix=((1, 0, 1), (0, 1, 1)),
             coordinate_axis=("left", "middle", "right"),
         )
     )
-    dual = compute_dual_code(
-        GeneratorMatrixRequest(
-            field_order=2,
-            generator_matrix=((1, 1, 1),),
-            coordinate_axis=("left", "middle", "right"),
-        )
+    dual = compute_dual_code(DualCodeRequest(encoder=_encoder(((1, 1, 1),))))
+    shortened = compute_shorten(
+        ShortenRequest(encoder=_encoder(((1, 1, 0), (1, 0, 1))), coordinate=0)
     )
 
-    puncture_request = PunctureRequest.model_validate(
-        {"encoder": from_generator.model_dump(mode="json")["encoder"], "coordinate": 2}
+    serialized_canonical = canonical.model_dump(mode="json")["encoder"]
+    serialized_dual = dual.model_dump(mode="json")["encoder"]
+
+    dual_request = DualCodeRequest.model_validate({"encoder": serialized_canonical})
+    assert dual_request.encoder == canonical.encoder
+
+    parity_request = ParityCheckRequest.model_validate({"encoder": serialized_dual})
+    assert parity_request.encoder == dual.encoder
+
+    member_request = CodewordCheckRequest.model_validate(
+        {"encoder": serialized_canonical, "word": [1, 1, 0]}
     )
-    assert puncture_request.encoder == from_generator.encoder
+    assert member_request.encoder == canonical.encoder
+    checked = compute_codeword_check(member_request)
+    assert checked.is_member is True
+    assert checked.coefficients == (1, 1)
+
+    equal_request = CodeEqualRequest.model_validate(
+        {"encoder_a": serialized_dual, "encoder_b": serialized_dual}
+    )
+    assert equal_request.encoder_a == dual.encoder
+    assert compute_code_equal(equal_request).equal is True
+
+    puncture_request = PunctureRequest.model_validate(
+        {"encoder": serialized_canonical, "coordinate": 2}
+    )
+    assert puncture_request.encoder == canonical.encoder
 
     punctured = compute_puncture(puncture_request)
     chained_request = ShortenRequest.model_validate(
@@ -269,19 +279,118 @@ def test_requests_accept_serialized_producer_encoders_unchanged() -> None:
     )
     assert chained_request.encoder == punctured.encoder
 
-    dual_request = ShortenRequest.model_validate(
-        {"encoder": dual.model_dump(mode="json")["encoder"], "coordinate": 0}
+    shortened_member = CodewordCheckRequest.model_validate(
+        {
+            "encoder": shortened.model_dump(mode="json")["encoder"],
+            "word": [1, 1],
+        }
     )
-    assert dual_request.encoder == dual.encoder
+    assert compute_codeword_check(shortened_member).is_member is True
+
+    parity_of_shortened = compute_parity_check(
+        ParityCheckRequest(encoder=shortened.encoder)
+    )
+    assert parity_of_shortened.parity_check.rows == ((1, 1),)
 
     chained_result = compute_shorten(chained_request)
     assert chained_result.dimension == 1
     assert chained_result.encoder.coordinate_axis == ("middle",)
     assert chained_result.encoder.generator_matrix == ((1,),)
 
-    dual_result = compute_shorten(dual_request)
+    dual_result = compute_shorten(ShortenRequest(encoder=dual.encoder, coordinate=0))
     assert dual_result.dimension == 1
     assert dual_result.encoder.generator_matrix == ((1, 1),)
+
+
+def test_degenerate_dimension_zero_encoders_are_accepted() -> None:
+    # The zero code arises as producer output (for example shortening); its
+    # dual is the full space GF(2)^2 and its parity-check is the identity.
+    zero_on_two_coordinates = PrimeFieldLinearEncoder(
+        field_order=2,
+        message_axis=(),
+        coordinate_axis=("left", "right"),
+        generator_matrix=(),
+    )
+
+    dual = compute_dual_code(DualCodeRequest(encoder=zero_on_two_coordinates))
+    assert dual.dimension == 0
+    assert dual.dual_dimension == 2
+    assert dual.length == 2
+    assert dual.encoder.message_axis == ("m0", "m1")
+    assert dual.encoder.generator_matrix == ((1, 0), (0, 1))
+    assert dual.parity_check.rows == dual.encoder.generator_matrix
+
+    parity = compute_parity_check(ParityCheckRequest(encoder=zero_on_two_coordinates))
+    assert parity.dimension == 0
+    assert parity.rank_h == 2
+    assert parity.parity_check.rows == ((1, 0), (0, 1))
+
+    empty_encoder = _encoder(())
+    zero_word = compute_codeword_check(
+        CodewordCheckRequest(encoder=empty_encoder, word=())
+    )
+    assert zero_word.is_member is True
+    assert zero_word.coefficients == ()
+    assert zero_word.syndrome == ()
+
+    nonmember = compute_codeword_check(
+        CodewordCheckRequest(encoder=zero_on_two_coordinates, word=(1, 0))
+    )
+    assert nonmember.is_member is False
+    assert nonmember.syndrome == (1, 0)
+
+    member_zero_code = compute_codeword_check(
+        CodewordCheckRequest(encoder=zero_on_two_coordinates, word=(0, 0))
+    )
+    assert member_zero_code.is_member is True
+
+    equal = compute_code_equal(
+        CodeEqualRequest(
+            encoder_a=zero_on_two_coordinates,
+            encoder_b=_encoder(((1, 0), (0, 1)), coordinate_axis=("left", "right")),
+        )
+    )
+    assert equal.equal is False
+    assert equal.witness_word == (0, 1)
+    assert equal.dimension_a == 0
+    assert equal.dimension_b == 2
+
+
+def test_parity_checks_satisfy_orthogonality_invariant() -> None:
+    encoder = _encoder(((1, 1, 0), (1, 0, 1)), field_order=3)
+    result = compute_parity_check(ParityCheckRequest(encoder=encoder))
+    q = 3
+    for row in result.parity_check.rows:
+        for message_row in encoder.generator_matrix:
+            product = sum(a * b for a, b in zip(row, message_row, strict=True)) % q
+            assert product == 0
+
+
+def test_dual_and_parity_check_reject_length_zero_encoders() -> None:
+    length_zero = _encoder(())
+    with pytest.raises(ValidationError, match="at least one coordinate"):
+        DualCodeRequest(encoder=length_zero)
+    with pytest.raises(ValidationError, match="at least one coordinate"):
+        ParityCheckRequest(encoder=length_zero)
+
+
+def test_equal_request_rejects_incomparable_encoders() -> None:
+    binary = _encoder(((1, 1),))
+    ternary = _encoder(((1, 1),), field_order=3)
+    wider = _encoder(((1, 1, 1),))
+    with pytest.raises(ValidationError, match="prime field order"):
+        CodeEqualRequest(encoder_a=binary, encoder_b=ternary)
+    with pytest.raises(ValidationError, match="coordinate axis"):
+        CodeEqualRequest(encoder_a=binary, encoder_b=wider)
+
+    oversized = PrimeFieldLinearEncoder(
+        field_order=251,
+        message_axis=("m0", "m1"),
+        coordinate_axis=("x0", "x1"),
+        generator_matrix=((1, 1), (1, 0)),
+    )
+    with pytest.raises(ValidationError, match="enumeration bound"):
+        CodeEqualRequest(encoder_a=oversized, encoder_b=oversized)
 
 
 def test_puncture_and_shorten_requests_reject_unselectable_coordinates() -> None:
@@ -373,4 +482,9 @@ def test_syndrome_request_rejects_bad_word_length() -> None:
 
 def test_codeword_check_request_rejects_bad_word_length() -> None:
     with pytest.raises(ValidationError, match="length"):
-        CodewordCheckRequest(field_order=2, generator_matrix=((1, 1),), word=(1,))
+        CodewordCheckRequest(encoder=_encoder(((1, 1),)), word=(1,))
+
+
+def test_codeword_check_request_rejects_noncanonical_word_entries() -> None:
+    with pytest.raises(ValidationError, match="residues"):
+        CodewordCheckRequest(encoder=_encoder(((1, 1),)), word=(2, 0))

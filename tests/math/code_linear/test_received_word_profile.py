@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from jacobian.math import code_linear
 from jacobian.math.code_linear._models import (
+    DualCodeRequest,
     GeneratorMatrixRequest,
     PunctureRequest,
     ReceivedWordProfileRequest,
@@ -108,10 +109,13 @@ def test_canonicalized_encoder_serializes_directly_into_profile() -> None:
 
 def test_dual_encoder_serializes_directly_into_profile() -> None:
     dual = compute_dual_code(
-        GeneratorMatrixRequest(
-            field_order=2,
-            generator_matrix=((1, 1, 1),),
-            coordinate_axis=("left", "middle", "right"),
+        DualCodeRequest(
+            encoder=PrimeFieldLinearEncoder(
+                field_order=2,
+                message_axis=("m0",),
+                coordinate_axis=("left", "middle", "right"),
+                generator_matrix=((1, 1, 1),),
+            )
         )
     )
 

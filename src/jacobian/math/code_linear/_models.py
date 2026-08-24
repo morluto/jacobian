@@ -263,31 +263,52 @@ class GeneratorMatrixRequest(StrictModel):
         return self
 
 
-class ParityCheckRequest(StrictModel):
-    """A linear code given by a generator matrix for computing a parity-check."""
+class DualCodeRequest(StrictModel):
+    """Compute the dual code of a canonical linear encoder."""
 
-    field_order: int = Field(ge=2, le=251)
-    generator_matrix: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=16)
+    encoder: PrimeFieldLinearEncoder
 
     @model_validator(mode="after")
-    def require_valid(self) -> Self:
-        _validate_prime_matrix(self.field_order, self.generator_matrix)
+    def require_representable_dual(self) -> Self:
+        if not self.encoder.coordinate_axis:
+            raise ValueError(
+                "dual requires a code with at least one coordinate so the "
+                "parity-check matrix can represent the dual"
+            )
+        return self
+
+
+class ParityCheckRequest(StrictModel):
+    """A canonical linear encoder for computing a parity-check."""
+
+    encoder: PrimeFieldLinearEncoder
+
+    @model_validator(mode="after")
+    def require_representable_parity_check(self) -> Self:
+        if not self.encoder.coordinate_axis:
+            raise ValueError(
+                "parity-check requires a code with at least one coordinate"
+            )
         return self
 
 
 class CodewordCheckRequest(StrictModel):
-    """Check whether a word is a codeword of the code."""
+    """Check whether a word is a codeword of a canonical linear encoder."""
 
-    field_order: int = Field(ge=2, le=251)
-    generator_matrix: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=16)
-    word: tuple[int, ...] = Field(min_length=1, max_length=MAX_LENGTH)
+    encoder: PrimeFieldLinearEncoder
+    word: tuple[_FieldElement, ...] = Field(
+        max_length=MAX_LINEAR_CODE_LENGTH,
+        description=(
+            "Canonical GF(p) residues on the encoder's ordered coordinate axis; "
+            "the empty word is valid exactly for a length-zero encoder."
+        ),
+    )
 
     @model_validator(mode="after")
-    def require_valid(self) -> Self:
-        width = _validate_prime_matrix(self.field_order, self.generator_matrix)
-        if len(self.word) != width:
-            raise ValueError("word length must match code length")
-        if any(not 0 <= v < self.field_order for v in self.word):
+    def require_aligned_canonical_word(self) -> Self:
+        if len(self.word) != len(self.encoder.coordinate_axis):
+            raise ValueError("word length must match the encoder coordinate axis")
+        if any(value >= self.encoder.field_order for value in self.word):
             raise ValueError("word entries must be canonical field residues")
         return self
 
@@ -328,24 +349,22 @@ class SyndromeRequest(StrictModel):
 
 
 class CodeEqualRequest(StrictModel):
-    """Check whether two generator matrices define the same code."""
+    """Check whether two canonical encoders define the same code."""
 
-    field_order: int = Field(ge=2, le=251)
-    generator_matrix_a: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=16)
-    generator_matrix_b: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=16)
+    encoder_a: PrimeFieldLinearEncoder
+    encoder_b: PrimeFieldLinearEncoder
 
     @model_validator(mode="after")
-    def require_valid(self) -> Self:
-        _validate_prime_matrix(self.field_order, self.generator_matrix_a)
-        _validate_prime_matrix(self.field_order, self.generator_matrix_b)
-        width_a = len(self.generator_matrix_a[0])
-        width_b = len(self.generator_matrix_b[0])
-        if width_a != width_b:
-            raise ValueError("generator matrices must have the same code length")
-        if self.field_order ** len(self.generator_matrix_a) > MAX_CODEWORDS:
-            raise ValueError("code cardinality exceeds enumeration bound")
-        if self.field_order ** len(self.generator_matrix_b) > MAX_CODEWORDS:
-            raise ValueError("code cardinality exceeds enumeration bound")
+    def require_comparable_encoders(self) -> Self:
+        if self.encoder_a.field_order != self.encoder_b.field_order:
+            raise ValueError("encoders must share one prime field order")
+        if self.encoder_a.coordinate_axis != self.encoder_b.coordinate_axis:
+            raise ValueError("encoders must share one ordered coordinate axis")
+        if (
+            self.encoder_a.codeword_count > MAX_CODEWORDS
+            or self.encoder_b.codeword_count > MAX_CODEWORDS
+        ):
+            raise ValueError("code cardinality exceeds exact enumeration bound")
         return self
 
 

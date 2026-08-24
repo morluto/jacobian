@@ -11,6 +11,7 @@ from jacobian.math.code_linear._models import (
     CodeEqualResult,
     CodewordCheckRequest,
     CodewordCheckResult,
+    DualCodeRequest,
     DualCodeResult,
     FromGeneratorResult,
     GeneratorMatrixRequest,
@@ -135,6 +136,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "code",
         "linear",
         "exact",
+        version="2",
         examples=(
             example(
                 "binary_repetition",
@@ -151,24 +153,30 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "code.linear.dual.compute",
         "Compute the dual code of a linear code",
-        "Compute the exact dual code C^perp as a linear encoder that preserves "
-        "the primal coordinate axis. Canonical dual basis rows receive "
-        "deterministic message-axis labels m0, m1, and so on.",
-        GeneratorMatrixRequest,
+        "Compute the exact dual code C^perp of a canonical full-rank linear "
+        "encoder as a linear encoder that preserves the primal coordinate "
+        "axis. Canonical dual basis rows receive deterministic message-axis "
+        "labels m0, m1, and so on.",
+        DualCodeRequest,
         DualCodeResult,
         compute_dual_code,
         "code",
         "dual",
         "exact",
+        version="2",
         examples=(
             example(
                 "binary_repetition",
-                "Compute the dual of the binary repetition code of length two; "
-                "the coordinate axis must label the generator columns in order.",
+                "Compute the dual of the binary repetition code of length "
+                "two; supply any producer's canonical full-rank encoder "
+                "unchanged.",
                 {
-                    "field_order": 2,
-                    "generator_matrix": [[1, 1]],
-                    "coordinate_axis": ["x0", "x1"],
+                    "encoder": {
+                        "field_order": 2,
+                        "message_axis": ["m0"],
+                        "coordinate_axis": ["x0", "x1"],
+                        "generator_matrix": [[1, 1]],
+                    },
                 },
             ),
         ),
@@ -176,40 +184,58 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "code.linear.parity_check.compute",
         "Compute a parity-check matrix for a linear code",
-        "Return one canonical parity-check matrix for C, with dimension and "
-        "rank relation k = n - rank(H).",
+        "Return one canonical parity-check matrix for the code of a canonical "
+        "full-rank linear encoder, with dimension and rank relation "
+        "k = n - rank(H).",
         ParityCheckRequest,
         ParityCheckResult,
         compute_parity_check,
         "code",
         "parity-check",
         "exact",
+        version="2",
         examples=(
             example(
                 "binary_repetition",
-                "Parity-check of the binary repetition code of length two.",
-                {"field_order": 2, "generator_matrix": [[1, 1]]},
+                "Parity-check of the binary repetition code of length two; "
+                "supply any producer's canonical full-rank encoder unchanged.",
+                {
+                    "encoder": {
+                        "field_order": 2,
+                        "message_axis": ["m0"],
+                        "coordinate_axis": ["x0", "x1"],
+                        "generator_matrix": [[1, 1]],
+                    },
+                },
             ),
         ),
     ),
     _op(
         "code.linear.codeword.check",
         "Check whether a word is a codeword",
-        "Check whether a word lies in the row space of the generator and "
-        "return membership, Hamming weight, and syndrome.",
+        "Check whether a word lies in the row space of a canonical full-rank "
+        "linear encoder's generator and return membership, Hamming weight, "
+        "and syndrome. The word entries follow the encoder's ordered "
+        "coordinate axis.",
         CodewordCheckRequest,
         CodewordCheckResult,
         compute_codeword_check,
         "code",
         "codeword",
         "exact",
+        version="2",
         examples=(
             example(
                 "member_word",
-                "Check [1,1] against generator [1,1] over F_2.",
+                "Check [1,1] against the canonical binary repetition encoder "
+                "of length two.",
                 {
-                    "field_order": 2,
-                    "generator_matrix": [[1, 1]],
+                    "encoder": {
+                        "field_order": 2,
+                        "message_axis": ["m0"],
+                        "coordinate_axis": ["x0", "x1"],
+                        "generator_matrix": [[1, 1]],
+                    },
                     "word": [1, 1],
                 },
             ),
@@ -243,23 +269,35 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     ),
     _op(
         "code.linear.equal.decide",
-        "Decide whether two generator matrices define the same code",
-        "Check exact mutual row-space containment; return equality or a "
-        "concrete codeword witnessing the difference.",
+        "Decide whether two linear encoders define the same code",
+        "Check exact mutual row-space containment between two canonical "
+        "full-rank linear encoders on one shared ordered coordinate axis; "
+        "return equality or a concrete codeword witnessing the difference.",
         CodeEqualRequest,
         CodeEqualResult,
         compute_code_equal,
         "code",
         "equality",
         "exact",
+        version="2",
         examples=(
             example(
                 "equal_row_equivalent",
-                "Two row-equivalent matrices define the same code.",
+                "Two row-equivalent encoders of the full binary space of "
+                "length two define the same code.",
                 {
-                    "field_order": 2,
-                    "generator_matrix_a": [[1, 1]],
-                    "generator_matrix_b": [[1, 1]],
+                    "encoder_a": {
+                        "field_order": 2,
+                        "message_axis": ["m0", "m1"],
+                        "coordinate_axis": ["x0", "x1"],
+                        "generator_matrix": [[1, 0], [0, 1]],
+                    },
+                    "encoder_b": {
+                        "field_order": 2,
+                        "message_axis": ["m0", "m1"],
+                        "coordinate_axis": ["x0", "x1"],
+                        "generator_matrix": [[1, 1], [0, 1]],
+                    },
                 },
             ),
         ),

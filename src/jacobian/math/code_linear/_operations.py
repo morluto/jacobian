@@ -10,6 +10,7 @@ from jacobian.math.code_linear._models import (
     CodeEqualResult,
     CodewordCheckRequest,
     CodewordCheckResult,
+    DualCodeRequest,
     DualCodeResult,
     FromGeneratorResult,
     GeneratorMatrixRequest,
@@ -149,22 +150,23 @@ def _rref(matrix: list[list[int]], field_order: int) -> tuple[list[list[int]], i
     return rows, pivot_row
 
 
-def _nullspace(matrix: list[list[int]], field_order: int) -> list[list[int]]:
-    """Compute a basis for the nullspace of the matrix over a prime field."""
+def _nullspace(
+    matrix: list[list[int]], field_order: int, columns: int
+) -> list[list[int]]:
+    """Compute a basis for the nullspace of a GF(p) matrix with ``columns`` columns."""
     rows, rank = _rref(matrix, field_order)
-    n = len(matrix[0])
     piv_cols: list[int] = []
     for i in range(rank):
-        piv = n
-        for j in range(n):
+        piv = columns
+        for j in range(columns):
             if rows[i][j] % field_order != 0:
                 piv = j
                 break
         piv_cols.append(piv)
-    free_cols = [j for j in range(n) if j not in piv_cols]
+    free_cols = [j for j in range(columns) if j not in piv_cols]
     basis: list[list[int]] = []
     for fc in free_cols:
-        vec = [0] * n
+        vec = [0] * columns
         vec[fc] = 1
         for i in range(rank):
             piv = piv_cols[i]
@@ -226,24 +228,24 @@ def compute_from_generator(request: GeneratorMatrixRequest) -> FromGeneratorResu
     )
 
 
-def compute_dual_code(request: GeneratorMatrixRequest) -> DualCodeResult:
-    matrix = [list(row) for row in request.generator_matrix]
-    _, rank = _rref(matrix, request.field_order)
-    null = _canonical_generator(
-        _nullspace(matrix, request.field_order), request.field_order
-    )
-    length = len(request.generator_matrix[0])
-    encoder = _canonical_encoder(
-        field_order=request.field_order,
-        coordinate_axis=request.coordinate_axis,
+def compute_dual_code(request: DualCodeRequest) -> DualCodeResult:
+    encoder = request.encoder
+    q = encoder.field_order
+    length = len(encoder.coordinate_axis)
+    matrix = [list(row) for row in encoder.generator_matrix]
+    _, rank = _rref(matrix, q)
+    null = _canonical_generator(_nullspace(matrix, q, length), q)
+    dual_encoder = _canonical_encoder(
+        field_order=q,
+        coordinate_axis=encoder.coordinate_axis,
         generator_matrix=null,
     )
     return DualCodeResult(
-        encoder=encoder,
+        encoder=dual_encoder,
         parity_check=ParityCheckMatrix(
-            field_order=request.field_order,
+            field_order=q,
             column_count=length,
-            rows=encoder.generator_matrix,
+            rows=dual_encoder.generator_matrix,
         ),
         dimension=rank,
         dual_dimension=length - rank,
@@ -252,13 +254,15 @@ def compute_dual_code(request: GeneratorMatrixRequest) -> DualCodeResult:
 
 
 def compute_parity_check(request: ParityCheckRequest) -> ParityCheckResult:
-    matrix = [list(row) for row in request.generator_matrix]
-    _, rank = _rref(matrix, request.field_order)
-    null = _nullspace(matrix, request.field_order)
-    length = len(request.generator_matrix[0])
+    encoder = request.encoder
+    q = encoder.field_order
+    length = len(encoder.coordinate_axis)
+    matrix = [list(row) for row in encoder.generator_matrix]
+    _, rank = _rref(matrix, q)
+    null = _nullspace(matrix, q, length)
     return ParityCheckResult(
         parity_check=ParityCheckMatrix(
-            field_order=request.field_order,
+            field_order=q,
             column_count=length,
             rows=tuple(map(tuple, null)),
         ),
@@ -271,9 +275,11 @@ def compute_parity_check(request: ParityCheckRequest) -> ParityCheckResult:
 def compute_codeword_check(
     request: CodewordCheckRequest,
 ) -> CodewordCheckResult:
-    matrix = [list(row) for row in request.generator_matrix]
+    encoder = request.encoder
+    matrix = [list(row) for row in encoder.generator_matrix]
     word = list(request.word)
-    q = request.field_order
+    q = encoder.field_order
+    length = len(encoder.coordinate_axis)
 
     # Word is a codeword iff it lies in the row space of the generator.
     # Augment the generator with the word as a new row and check
@@ -289,9 +295,9 @@ def compute_codeword_check(
         # transpose [G^T | word^T].
         gt = [
             [matrix[r][c] % q for r in range(len(matrix))]
-            for c in range(len(matrix[0]))
+            for c in range(length)
         ]
-        aug_t = [gt[c] + [word[c] % q] for c in range(len(matrix[0]))]
+        aug_t = [gt[c] + [word[c] % q] for c in range(length)]
         rref_aug, rank_aug2 = _rref(aug_t, q)
         # Extract solution from augmented column
         coeffs: list[int] = [0] * len(matrix)
@@ -308,9 +314,7 @@ def compute_codeword_check(
                     break
         coefficients = tuple(coeffs)
 
-    syndrome_vec = _mat_mul_vec(
-        _nullspace([list(row) for row in request.generator_matrix], q), word, q
-    )
+    syndrome_vec = _mat_mul_vec(_nullspace(matrix, q, length), word, q)
     hamming = _hamming_weight(word)
     return CodewordCheckResult(
         is_member=is_member,
@@ -361,9 +365,9 @@ def _enumerate_code(
 
 
 def compute_code_equal(request: CodeEqualRequest) -> CodeEqualResult:
-    q = request.field_order
-    mat_a = [list(row) for row in request.generator_matrix_a]
-    mat_b = [list(row) for row in request.generator_matrix_b]
+    q = request.encoder_a.field_order
+    mat_a = [list(row) for row in request.encoder_a.generator_matrix]
+    mat_b = [list(row) for row in request.encoder_b.generator_matrix]
 
     rref_a, rank_a = _rref([list(r) for r in mat_a], q)
     rref_b, rank_b = _rref([list(r) for r in mat_b], q)
@@ -374,7 +378,7 @@ def compute_code_equal(request: CodeEqualRequest) -> CodeEqualResult:
 
     witness = None
     if not equal:
-        n = len(mat_a[0])
+        n = len(request.encoder_a.coordinate_axis)
         code_a = _enumerate_code(rref_a, rank_a, n, q)
         code_b = _enumerate_code(rref_b, rank_b, n, q)
         diff = code_a.symmetric_difference(code_b)

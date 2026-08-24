@@ -196,3 +196,38 @@ class TestKernelEquivalence:
             )
         with pytest.raises(ValidationError, match="transport envelope"):
             SetFunction(ground_set_size=16, entries=tuple(entries))
+
+
+def test_value_height_bound_keeps_scan_work_small() -> None:
+    """Scan requests reject 129-digit values so the ~8M-inequality scan stays
+    on small big-ints; the shared entry type keeps admitting them so the
+    single-lookup evaluator can return any exact representable height."""
+    from pydantic import ValidationError
+
+    wide_empty = SetFunctionEntry(subset=(), value={"num": "9" * 129, "den": "1"})
+    wide_full = SetFunctionEntry(subset=(0,), value={"num": "9" * 129, "den": "1"})
+    with pytest.raises(ValidationError, match="128-digit"):
+        MonotonicityCheckRequest(
+            function=SetFunction(ground_set_size=1, entries=(wide_empty, wide_full))
+        )
+    with pytest.raises(ValidationError, match="128-digit"):
+        SubmodularityCheckRequest(
+            function=SetFunction(ground_set_size=1, entries=(wide_empty, wide_full))
+        )
+
+    narrow = SetFunctionEntry(subset=(0,), value={"num": "9" * 128, "den": "1"})
+    # Exactly-128-digit values are admitted and the scan completes normally.
+    assert (
+        check_monotonicity(
+            MonotonicityCheckRequest(
+                function=SetFunction(
+                    ground_set_size=1,
+                    entries=(
+                        SetFunctionEntry(subset=(), value={"num": "0", "den": "1"}),
+                        narrow,
+                    ),
+                )
+            )
+        ).is_monotone
+        is True
+    )

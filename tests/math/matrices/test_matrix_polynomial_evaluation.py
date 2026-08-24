@@ -451,6 +451,83 @@ def test_request_schema_publishes_coupled_digit_work_bound() -> None:
     assert f"{MAX_MATRIX_POLYNOMIAL_DIGIT_WORK:,}" in polynomial_description
 
 
+def _rational_polynomial(
+    *terms: tuple[CanonicalRational, int],
+) -> RationalPolynomial:
+    return RationalPolynomial(
+        variables=("t",),
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=coefficient,
+                    exponents=(exponent,),
+                )
+                for coefficient, exponent in terms
+            )
+        ),
+    )
+
+
+def test_degree_two_admission_cross_cancels_coefficient_and_matrix_power_factors(
+) -> None:
+    base_two = format_canonical_integer(2**53_179)
+    base_three = format_canonical_integer(3**33_558)
+    coefficient = _rational(
+        format_canonical_integer(2**106_358),
+        format_canonical_integer(3**67_116),
+    )
+
+    request = MatrixPolynomialEvaluationRequest(
+        matrix=RationalMatrix(entries=((_rational(base_three, base_two),),)),
+        polynomial=_rational_polynomial((coefficient, 2)),
+    )
+    result = compute_matrix_polynomial_evaluation(request)
+
+    assert request.polynomial.polynomial.terms[0].exponents == (2,)
+    assert result.value.entries[0][0].num == "1"
+    assert result.value.entries[0][0].den == "1"
+    assert result.polynomial_degree == 2
+    assert result.matrix_multiplications == 2
+
+
+def test_degree_two_admission_still_rejects_uncancellable_power_growth() -> None:
+    entry_numerator = format_canonical_integer(7**24_048)
+    entry_denominator = format_canonical_integer(5**28_072)
+    coefficient_numerator = format_canonical_integer(11**18_900)
+    coefficient_denominator = format_canonical_integer(13**17_400)
+
+    with pytest.raises(ValidationError, match="digit result bound"):
+        MatrixPolynomialEvaluationRequest(
+            matrix=RationalMatrix(
+                entries=((_rational(entry_numerator, entry_denominator),),)
+            ),
+            polynomial=_rational_polynomial(
+                (
+                    _rational(coefficient_numerator, coefficient_denominator),
+                    2,
+                )
+            ),
+        )
+
+
+def test_admission_falls_back_to_dense_bound_beyond_materialization_ceiling() -> (
+    None
+):
+    height = "1" + "0" * 20_000
+    with pytest.raises(ValidationError, match="digit result bound"):
+        MatrixPolynomialEvaluationRequest(
+            matrix=RationalMatrix(entries=((_rational(height),),)),
+            polynomial=_polynomial((1, 5)),
+        )
+
+    moderate = "1" + "0" * 15_000
+    request = MatrixPolynomialEvaluationRequest(
+        matrix=RationalMatrix(entries=((_rational(moderate),),)),
+        polynomial=_polynomial((1, 2)),
+    )
+    assert request.matrix.entries[0][0].num == moderate
+
+
 def _linear_rational_polynomial(
     coefficient: CanonicalRational,
     constant: CanonicalRational | None = None,

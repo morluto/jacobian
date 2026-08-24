@@ -460,6 +460,37 @@ def test_symbolic_matrix_product_rejects_rational_entries_without_coefficient_bo
         _product_request(((inverse,),), ((inverse,),), variables)
 
 
+def test_symbolic_matrix_product_admits_identity_times_rational_entry() -> None:
+    """Identity multiplication leaves the canonical operand unchanged."""
+
+    variables = ("x", "y")
+    rational = _rf(
+        variables,
+        (1, 1, (16, 16)),
+        (1, 1, (0, 0)),
+        denominator=((1, 1, (1, 0)), (1, 1, (0, 0))),
+    )
+    one = _rf(variables, (1, 1, (0, 0)))
+    product = compute_symbolic_matrix_product(
+        _product_request(((rational,),), ((one,),), variables)
+    )
+    assert product.entries == ((rational,),)
+
+
+def test_symbolic_matrix_product_admits_dense_constant_matrices() -> None:
+    """Scalar-product work counts the real products, not inert denominators."""
+
+    variables: tuple[str, ...] = ()
+    two = _constant(2)
+    one = _constant(1)
+    left = tuple(tuple(two for _ in range(8)) for _ in range(8))
+    right = tuple(tuple(one for _ in range(8)) for _ in range(8))
+    product = compute_symbolic_matrix_product(_product_request(left, right, variables))
+    assert product.entries == tuple(
+        tuple(_constant(16) for _ in range(8)) for _ in range(8)
+    )
+
+
 def test_rational_function_entries_use_the_advertised_field() -> None:
     variables = ("x",)
     inverse_x = _rf(

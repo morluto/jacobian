@@ -34,6 +34,17 @@ def _is_polynomial_entry(value: RationalFunction) -> bool:
     )
 
 
+def _is_scalar_identity(value: RationalFunction) -> bool:
+    terms = value.numerator.terms
+    return (
+        len(terms) == 1
+        and terms[0].coefficient.num == "1"
+        and terms[0].coefficient.den == "1"
+        and all(exponent == 0 for exponent in terms[0].exponents)
+        and _is_polynomial_entry(value)
+    )
+
+
 def _principal_minor_term_bounds(
     entries: tuple[tuple[RationalFunction, ...], ...],
 ) -> tuple[int, ...]:
@@ -262,6 +273,30 @@ def _product_cell_bounds(
         zero_exponents = (0,) * len(left[0].variables)
         return 0, 1, zero_exponents, zero_exponents, 1, True
 
+    if len(factors) == 1:
+        left_value, right_value = factors[0]
+        if _is_scalar_identity(right_value):
+            effective = left_value
+        elif _is_scalar_identity(left_value):
+            effective = right_value
+        else:
+            effective = None
+        if effective is not None:
+            # Identity multiplication returns the other canonical operand
+            # verbatim, so its own shape is the exact bound and no expansion
+            # or cancellation can occur.
+            return (
+                len(effective.numerator.terms),
+                len(effective.denominator.terms),
+                _maximum_exponents(effective, numerator=True),
+                _maximum_exponents(effective, numerator=False),
+                max(
+                    _maximum_coefficient_digits(effective, numerator=True),
+                    _maximum_coefficient_digits(effective, numerator=False),
+                ),
+                True,
+            )
+
     integral_coefficients = all(
         _has_integral_coefficients(left_value)
         and _has_integral_coefficients(right_value)
@@ -456,7 +491,11 @@ def _require_symbolic_product_admission(
                 raise ValueError(
                     "symbolic matrix product exceeds the result coefficient budget"
                 )
-            aggregate_expansion_terms += numerator_terms + denominator_terms
+            # Unit denominators produce no denominator work at all, so the
+            # expansion charge counts only the scalar products that run.
+            aggregate_expansion_terms += numerator_terms
+            if not unit_denominator_factors:
+                aggregate_expansion_terms += denominator_terms
     if aggregate_expansion_terms > MAX_SYMBOLIC_MATRIX_TERMS:
         raise ValueError(
             "symbolic matrix product exceeds the 512-term aggregate expansion budget"

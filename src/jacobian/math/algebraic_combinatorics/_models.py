@@ -24,7 +24,10 @@ from jacobian.math.symmetric_functions.values import (
 )
 from jacobian.math.words.values import FiniteWord
 
-MAX_RSK_PERMUTATION_LENGTH = 50
+# A permutation of length N inserts N ranks through the same _row_insert
+# kernel and produces two N-cell tableaux, so the canonical tableau cell
+# budget derives the permutation envelope.
+MAX_RSK_PERMUTATION_LENGTH = MAX_RSK_WORD_LENGTH
 
 
 def _require_permutation(permutation: tuple[int, ...]) -> None:
@@ -81,7 +84,12 @@ class ConjugatePartitionResult(StrictModel):
 
 
 class RSKPermutationRequest(StrictModel):
-    """One strict bounded permutation for ordinary row-insertion RSK."""
+    """One strict bounded permutation for ordinary row-insertion RSK.
+
+    Forward and replayed reverse insertion each perform at most
+    ``N(N-1)/2 <= 124750`` binary row searches, with at most nine integer
+    comparisons per search for ``N <= 500``.
+    """
 
     permutation: tuple[StrictInt, ...] = Field(
         min_length=0, max_length=MAX_RSK_PERMUTATION_LENGTH
@@ -97,8 +105,9 @@ class RSKPermutationRequest(StrictModel):
 class RSKResult(StrictModel):
     """Source-bound canonical tableaux from permutation RSK.
 
-    Construction and result replay each perform at most 1,225 binary row
-    searches, with at most six integer comparisons per search.
+    Construction and result replay each perform at most
+    ``N(N-1)/2 <= 124750`` binary row searches, with at most nine integer
+    comparisons per search for ``N <= 500``.
     """
 
     permutation: tuple[StrictInt, ...] = Field(

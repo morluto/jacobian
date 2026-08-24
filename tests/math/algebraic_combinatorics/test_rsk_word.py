@@ -17,9 +17,11 @@ from jacobian.math.algebraic_combinatorics import (
 )
 from jacobian.math.algebraic_combinatorics._admission import ADMISSIONS
 from jacobian.math.algebraic_combinatorics._models import (
+    MAX_RSK_PERMUTATION_LENGTH,
     HookLengthRequest,
     RSKInverseWordRequest,
     RSKPermutationRequest,
+    RSKResult,
     RSKWordRequest,
 )
 from jacobian.math.algebraic_combinatorics._operations import (
@@ -32,6 +34,7 @@ from jacobian.math.algebraic_combinatorics._tools import TOOLS
 from jacobian.math.algebraic_combinatorics.values import (
     MAX_RSK_ROW_SEARCH_COMPARISONS,
     MAX_RSK_WORD_BYTES,
+    MAX_RSK_WORD_LENGTH,
     RSKTableauPair,
 )
 from jacobian.math.symmetric_functions import (
@@ -214,6 +217,33 @@ def test_permutation_inversion_swaps_the_tableaux() -> None:
         )
         assert pair.p_tableau == inverse_pair.q_tableau
         assert pair.q_tableau == inverse_pair.p_tableau
+
+
+def test_permutation_envelope_is_derived_from_the_canonical_cell_budget() -> None:
+    assert MAX_RSK_PERMUTATION_LENGTH == MAX_RSK_WORD_LENGTH
+
+    identity_51 = tuple(range(1, 52))
+    result = compute_rsk_permutation(RSKPermutationRequest(permutation=identity_51))
+    assert result.shape.parts == (51,)
+    assert result.lis_length == 51
+    assert result.lds_length == 1
+
+    identity_500 = tuple(range(1, 501))
+    wide = compute_rsk_permutation(RSKPermutationRequest(permutation=identity_500))
+    assert wide.p_tableau.rows == (tuple(range(1, 501)),)
+    assert wide.q_tableau.rows == (tuple(range(1, 501)),)
+    assert wide.shape.parts == (500,)
+    assert RSKResult.model_validate(wide.model_dump()) == wide
+
+    descending_500 = tuple(range(500, 0, -1))
+    deep = compute_rsk_permutation(RSKPermutationRequest(permutation=descending_500))
+    assert deep.shape.parts == (1,) * 500
+    assert deep.lis_length == 1
+    assert deep.lds_length == 500
+    assert RSKResult.model_validate(deep.model_dump()) == deep
+
+    with pytest.raises(ValidationError):
+        RSKPermutationRequest(permutation=tuple(range(1, 502)))
 
 
 def test_structurally_incompatible_pairs_fail_before_reverse_insertion() -> None:

@@ -868,8 +868,18 @@ def _validate_skeleton_kind(node: SPQRSkeleton) -> None:
         degrees[node.vertices[edge.left]] += 1
         degrees[node.vertices[edge.right]] += 1
     if node.kind == "Q_NODE":
-        if len(node.real_edge_sources) != 1 or len(node.graph.edges) > 2:
-            raise ValueError("a Q skeleton must contain exactly one source real edge")
+        if (
+            len(node.vertices) != 2
+            or len(node.real_edge_sources) != 1
+            or len(node.graph.edges) > 2
+            or any(
+                _global_endpoints(node, edge) != node.vertices
+                for edge in node.graph.edges
+            )
+        ):
+            raise ValueError(
+                "a Q skeleton must carry one source real edge on its two carriers"
+            )
         return
     if node.kind == "P_NODE":
         if (

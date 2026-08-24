@@ -716,6 +716,34 @@ class TestSPQRTree:
                 source_edge_owners=owners,
             )
 
+    def test_result_deserialization_rejects_extra_isolated_q_carrier(self) -> None:
+        result = _spqr_tree(
+            {
+                "vertex_count": 4,
+                "edges": [(0, 1), (1, 2), (2, 0), (0, 3), (3, 1)],
+            }
+        )
+        assert any(node.kind == "Q_NODE" for node in result.nodes)
+        malformed = result.model_dump(mode="json")
+        q_node = next(node for node in malformed["nodes"] if node["kind"] == "Q_NODE")
+        q_node["vertices"] = sorted([*q_node["vertices"], 9])
+        q_node["graph"]["vertex_count"] = len(q_node["vertices"])
+        malformed["source_vertex_incidence"] = [
+            (
+                vertex,
+                tuple(
+                    skeleton["node_id"]
+                    for skeleton in sorted(
+                        malformed["nodes"], key=lambda n: n["node_id"]
+                    )
+                    if vertex in skeleton["vertices"]
+                ),
+            )
+            for vertex in range(malformed["source_graph"]["vertex_count"])
+        ]
+        with pytest.raises(ValidationError, match="Q skeleton"):
+            SPQRTreeResult.model_validate(malformed)
+
     def test_request_admits_complete_graphs_on_the_declared_vertex_axis(self) -> None:
         k33_edges = [(i, j) for i in range(33) for j in range(i + 1, 33)]
         result = _spqr_tree({"vertex_count": 33, "edges": k33_edges})

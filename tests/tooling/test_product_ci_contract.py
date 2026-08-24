@@ -85,7 +85,13 @@ def test_full_lean_runs_on_merge_group_and_main() -> None:
     )
 
     lean = workflow.split("  lean:", 1)[1].split("  coverage:", 1)[0]
-    assert "if: github.event_name != 'pull_request'" in lean
+    # Pull requests and autofix dispatches that select pr_lanes skip Lean;
+    # merge groups and main pushes always run it.
+    assert "github.event_name != 'pull_request'" in lean
+    assert "inputs.pr_lanes" in lean
+    assert "inputs.pr_lanes" in workflow.split("EVENT_NAME", 1)[0] or (
+        "PR_LANE_SELECTION" in workflow
+    )
     assert "JACOBIAN_LEAN_REQUIRED" not in lean
     assert "python tools/setup_lean.py --repo ." in action
     assert "lake-manifest.json" not in action

@@ -31,10 +31,11 @@ whenever its next exact result fits, so a 200-digit operand still composes
 with an identity operand at the 256-digit boundary, while rejection means
 the requested computation's true coefficients exceed the envelope rather
 than that an input estimate did. PSD order likewise has no fixed component
-ceiling: it admits operands whose derived `right - left` component bound
-stays within 513 digits and whose dimension-scaled replayable-witness bound
-stays within the canonical rational limit, so operands above 256 digits are
-accepted whenever those derived bounds fit. A large Kronecker product
+ceiling: it measures the exact reduced `right - left` components, admits
+the pair when they stay within 513 digits and the dimension-scaled
+replayable-witness bound stays within the canonical rational limit, and
+identical or nearly equal operands whose reduced difference is tiny
+therefore admit trivially. A large Kronecker product
 therefore does not imply that every downstream decision fits in one bounded
 call. The kernels are exact rational computations; they do not use
 floating-point matrix predicates or a tensor registry. The catalog schemas

@@ -25,14 +25,6 @@ MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS = 4 * MAX_PARTIAL_TRACE_RESULT_COMPONENT
 MAX_PSD_DIFFERENCE_COMPONENT_DIGITS = 513
 
 
-def _component_digits(matrix: FactorizedHermitianMatrix) -> tuple[int, int]:
-    numerators = (
-        len(entry.num.lstrip("-")) for row in matrix.matrix.entries for entry in row
-    )
-    denominators = (len(entry.den) for row in matrix.matrix.entries for entry in row)
-    return max(numerators, default=1), max(denominators, default=1)
-
-
 def _fraction_component_digits(value: Fraction) -> tuple[int, int]:
     """Count one exact fraction's signed-numerator and denominator digits.
 
@@ -124,10 +116,10 @@ def _psd_witness_digit_bound(
 ) -> int:
     """Conservatively bound the rational congruence witness coordinates.
 
-    A common denominator for an ``n`` by ``n`` difference is the product of
-    at most ``n²`` input denominators.  Symmetric elimination transports one
-    direction through ratios of bounded minors; charging two such scaled
-    minors and their quadratic evaluation gives this safe integer-digit cap.
+    Symmetric elimination transports one direction through ratios of bounded
+    minors of the measured reduced difference; charging two such scaled minors
+    and their quadratic evaluation per measured difference-component digit
+    gives this safe integer-digit cap.
     """
 
     dimension = len(matrix.matrix.entries)
@@ -140,26 +132,28 @@ def _require_psd_pair_admission(
 ) -> None:
     """Admit one ordered pair through the coupled PSD digit envelopes.
 
-    Identical operands are admitted directly: canonical entries make
-    structural equality exact, so ``right - left`` is the zero matrix whose
-    components fit trivially and no vector can produce a negative quadratic
-    value.  Distinct pairs go through the coupled difference and witness
-    bounds unchanged.
+    The exact reduced right-minus-left components are measured before any
+    witness bound is applied, so identical operands -- whose difference is
+    the zero matrix and admits no negative witness -- and nearly equal
+    operands whose reduced difference stays tiny admit trivially, while no
+    unreduced cross-term estimate can reject a pair whose actual difference
+    fits.
     """
 
-    if left == right:
-        return
-    left_numerator, left_denominator = _component_digits(left)
-    right_numerator, right_denominator = _component_digits(right)
     if left.factors != right.factors:
         raise ValueError(
             "PSD order requires exactly equal subsystem labels, dimensions, and "
             "basis linearization"
         )
     difference_component_digits = max(
-        left_numerator + right_denominator + 1,
-        right_numerator + left_denominator + 1,
-        left_denominator + right_denominator,
+        (
+            max(_fraction_component_digits(right_entry - left_entry))
+            for left_row, right_row in zip(
+                _entry_fractions(left), _entry_fractions(right), strict=True
+            )
+            for left_entry, right_entry in zip(left_row, right_row, strict=True)
+        ),
+        default=1,
     )
     if difference_component_digits > MAX_PSD_DIFFERENCE_COMPONENT_DIGITS:
         raise ValueError(
@@ -360,19 +354,17 @@ class PsdOrderRequest(StrictModel):
     left: FactorizedHermitianMatrix = Field(
         description=(
             "First operand; admission couples both operands through the "
-            "derived right-minus-left component bound (513 digits) and the "
+            "measured right-minus-left component bound (513 digits) and the "
             "dimension-scaled witness bound, not a fixed per-operand ceiling. "
-            "Identical operands are admitted directly because their exact "
-            "difference is the zero matrix."
+            "Identical operands measure the zero matrix and admit trivially."
         ),
     )
     right: FactorizedHermitianMatrix = Field(
         description=(
             "Second operand; admission couples both operands through the "
-            "derived right-minus-left component bound (513 digits) and the "
+            "measured right-minus-left component bound (513 digits) and the "
             "dimension-scaled witness bound, not a fixed per-operand ceiling. "
-            "Identical operands are admitted directly because their exact "
-            "difference is the zero matrix."
+            "Identical operands measure the zero matrix and admit trivially."
         ),
     )
 

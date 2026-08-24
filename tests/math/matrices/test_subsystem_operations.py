@@ -629,6 +629,51 @@ def test_psd_order_admits_identical_operands_before_witness_growth() -> None:
     assert PsdOrderResult.model_validate(ordered.model_dump(mode="python")) == ordered
 
 
+def test_psd_order_admits_nearly_equal_operands_with_a_tiny_reduced_difference() -> (
+    None
+):
+    q = MatrixSubsystem(label="q", dimension=16)
+    shared_denominator = 10**254 + 19
+    left = _matrix(
+        [
+            [
+                Fraction(1, shared_denominator) if row == column else 0
+                for column in range(16)
+            ]
+            for row in range(16)
+        ],
+        (q,),
+    )
+    right_entries = [
+        [
+            (
+                Fraction(shared_denominator + 1, shared_denominator)
+                if (row, column) == (0, 0)
+                else (Fraction(1, shared_denominator) if row == column else 0)
+            )
+            for column in range(16)
+        ]
+        for row in range(16)
+    ]
+    right = _matrix(right_entries, (q,))
+    assert len(left.matrix.entries[0][0].den) == 255
+
+    ordered = decide_psd_order(PsdOrderRequest(left=left, right=right))
+    assert ordered.is_less_or_equal is True
+    expected_difference = tuple(
+        tuple(
+            Fraction(1) if (row, column) == (0, 0) else Fraction(0)
+            for column in range(16)
+        )
+        for row in range(16)
+    )
+    assert _entries(ordered.difference) == expected_difference
+    assert (ordered.inertia.n_positive, ordered.inertia.n_negative) == (1, 0)
+    assert ordered.inertia.n_zero == 15
+    assert ordered.negative_witness is None
+    assert PsdOrderResult.model_validate(ordered.model_dump(mode="python")) == ordered
+
+
 def test_kronecker_product_schema_describes_the_exact_product_component_envelope() -> (
     None
 ):

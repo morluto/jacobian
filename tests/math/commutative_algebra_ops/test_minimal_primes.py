@@ -525,8 +525,8 @@ def test_verification_verdicts_map_to_typed_outcomes(
 
 def test_bezout_component_count_boundary_is_admitted_at_the_envelope() -> None:
     variables = tuple(f"x{index}" for index in range(1, 7))
-    # 2^6 = 64 Bezout components: exactly the generator envelope, so the
-    # certified component count fits and admission retains the request.
+    # A source whose Bezout degree product (2^6 = 64) meets the generator
+    # envelope is admitted; admission bounds the input, not the worst case.
     request = IdealMinimalPrimesRequest(ideal=_product_ideal(variables, (2,) * 6))
 
     assert len(request.ideal.generators) == 6
@@ -534,18 +534,29 @@ def test_bezout_component_count_boundary_is_admitted_at_the_envelope() -> None:
 
 def test_bezout_boundary_family_is_admitted() -> None:
     variables = tuple(f"x{index}" for index in range(1, 5))
-    # 2^4 = 16 Bezout components with up to 4 generators each: exactly 64.
+    # The Bezout degree product is not an input constraint: this source is
+    # admitted like any other within the aggregate input envelopes.
     request = IdealMinimalPrimesRequest(ideal=_product_ideal(variables, (2,) * 4))
 
     assert len(request.ideal.generators) == 4
 
 
-def test_bezout_boundary_just_over_is_rejected() -> None:
-    variables = tuple(f"x{index}" for index in range(1, 8))
+def test_bezout_worst_case_above_the_envelope_still_admits_the_source() -> None:
+    """The Bezout degree product bounds families only across ideals.
 
-    # 2^7 = 128 Bezout components exceed the generator envelope.
-    with pytest.raises(ValidationError, match="worst-case minimal-prime family"):
-        IdealMinimalPrimesRequest(ideal=_product_ideal(variables, (2,) * 7))
+    For <x1^2 - x1, ..., x7^2 - x7> the degree product 2^7 = 128 exceeds
+    the 64-generator exact-result envelope, but that product is only an
+    upper bound across all ideals with these generator degrees; it does
+    not establish that this source's own family cannot fit. Admission
+    retains the source and the decoded result answers under the aggregate
+    generator and term envelopes, with typed LIMIT_EXCEEDED only when the
+    backend output genuinely overflows.
+    """
+
+    variables = tuple(f"x{index}" for index in range(1, 8))
+    request = IdealMinimalPrimesRequest(ideal=_product_ideal(variables, (2,) * 7))
+
+    assert len(request.ideal.generators) == 7
 
 
 def test_pure_power_sources_admit_large_degree_products() -> None:
@@ -586,8 +597,14 @@ def test_monomial_sources_on_few_active_variables_admit_their_family_bound() -> 
     assert len(request.ideal.generators) == 1
 
 
-def test_wide_monomial_sources_without_full_pure_powers_are_rejected() -> None:
-    """Seven active variables defeat both certificates and the Bezout bound."""
+def test_wide_monomial_sources_without_full_pure_powers_are_admitted() -> None:
+    """Seven active monomial variables are admitted without certification.
+
+    The former worst-case rejection relied on the Bezout bound's value
+    across ideals; admission now retains every source within the input
+    envelopes and lets the decoded family answer against the aggregate
+    exact-result envelopes.
+    """
 
     variables = tuple(f"x{index}" for index in range(1, 9))
     generators = [
@@ -598,8 +615,9 @@ def test_wide_monomial_sources_without_full_pure_powers_are_rejected() -> None:
         for index in range(7)
     ]
 
-    with pytest.raises(ValidationError, match="worst-case minimal-prime family"):
-        IdealMinimalPrimesRequest(ideal=_ideal(variables, *generators))
+    request = IdealMinimalPrimesRequest(ideal=_ideal(variables, *generators))
+
+    assert len(request.ideal.generators) == 7
 
 
 def test_unit_and_zero_degenerate_sources_admit_their_exact_families() -> None:
@@ -626,7 +644,7 @@ def test_request_description_advertises_the_enforced_budgets() -> None:
     assert "at most 8 variables" in description
     assert "at most 32 generators" in description
     assert "total degree is at most 20" in description
-    assert "64-generator" in description
+    assert "LIMIT_EXCEEDED" in description
 
 
 @pytest.mark.skipif(

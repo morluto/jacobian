@@ -528,6 +528,30 @@ def test_admission_falls_back_to_dense_bound_beyond_materialization_ceiling() ->
     assert request.matrix.entries[0][0].num == moderate
 
 
+def test_structurally_dead_powers_are_excluded_from_digit_work_estimate() -> None:
+    height = "1" + "0" * 20_000
+    request = MatrixPolynomialEvaluationRequest(
+        matrix=RationalMatrix(
+            entries=(
+                (_rational(0), _rational(height)),
+                (_rational(0), _rational(0)),
+            )
+        ),
+        polynomial=_polynomial((1, 100)),
+    )
+
+    result = compute_matrix_polynomial_evaluation(request)
+
+    assert request.polynomial.polynomial.terms[0].exponents == (100,)
+    assert result.polynomial_degree == 100
+    assert result.matrix_multiplications == 100
+    assert result.scalar_product_terms == 800
+    assert _fractions(result.value) == (
+        (Fraction(0), Fraction(0)),
+        (Fraction(0), Fraction(0)),
+    )
+
+
 def _linear_rational_polynomial(
     coefficient: CanonicalRational,
     constant: CanonicalRational | None = None,

@@ -351,11 +351,12 @@ def _general_result_component_bounds(
     The zero-matrix case is handled separately because its intermediates are
     individual input coefficients.
 
-    The dense sum over every exponent is retained as a second, never-
-    structural work bound: every Horner intermediate equals one of its
-    sub-sums with denominator at most ``V Q^d``, so its digit size drives
-    the coupled digit-work estimate independently of how small the exact
-    result is.
+    The dense sum over every surviving exponent is retained as a second,
+    never-structural work bound: every Horner intermediate equals one of its
+    sub-sums over surviving powers, since structurally vanishing powers
+    contribute identically zero matrices, with denominator at most ``V Q^d``,
+    so its digit size drives the coupled digit-work estimate independently of
+    how small the exact result is.
     """
 
     matrix_ratios = tuple(
@@ -413,11 +414,13 @@ def _general_result_component_bounds(
             _capped_power(common_matrix_denominator, degree - exponent),
         )
         term_height = _capped_multiply(term_height, matrix_power_height)
-        work_numerator_bound = _capped_add(work_numerator_bound, term_height)
         if exponent and longest_walk is not None and exponent > longest_walk:
+            # Structurally vanishing powers are identically zero, so neither
+            # the exact result nor any Horner intermediate contains them.
             continue
         if exponent:
             live_nonconstant_power = True
+        work_numerator_bound = _capped_add(work_numerator_bound, term_height)
         numerator_bound = _capped_add(numerator_bound, term_height)
 
     if not live_nonconstant_power:

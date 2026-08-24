@@ -51,9 +51,7 @@ def test_dispatch_rejects_a_profile_beyond_the_facet_cap_as_invalid_request() ->
     with pytest.raises(OperationRequestValidationError) as exc_info:
         invoke_operation("polytope.facets.compute", payload, Catalog.open())
 
-    assert (
-        "256-facet result bound" in exc_info.value.errors()[0]["msg"]
-    )
+    assert "256-facet result bound" in exc_info.value.errors()[0]["msg"]
 
 
 def test_dispatch_admits_the_seven_simplex_with_interior_rows_at_the_cap_budget() -> (
@@ -76,10 +74,7 @@ def test_dispatch_admits_the_seven_simplex_with_interior_rows_at_the_cap_budget(
     ]
     payload = {
         "vertices": simplex
-        + [
-            {"coordinates": [{"num": "1", "den": str(k)}] * 7}
-            for k in range(9, 17)
-        ]
+        + [{"coordinates": [{"num": "1", "den": str(k)}] * 7} for k in range(9, 17)]
     }
 
     result = invoke_operation("polytope.facets.compute", payload, Catalog.open())

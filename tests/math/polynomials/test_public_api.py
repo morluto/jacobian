@@ -796,3 +796,68 @@ def test_square_free_results_require_canonical_square_free_parts() -> None:
             ),
             reconstructed=source,
         )
+
+
+def test_square_free_replay_admits_sparse_multivariate_pure_powers() -> None:
+    """``x^64 * y^64 * z^64`` decomposes and validates as ``(x*y*z)^64``.
+
+    A degree-box replay bound would project a ``64^3``-term first quotient
+    for the one-term source and reject this admitted request; the
+    recomparison lane returns and revalidates the producer's records.
+    """
+
+    from jacobian.math.polynomials._models import (
+        PolynomialSquareFreeDecompositionResult,
+        PolynomialSquareFreeRequest,
+    )
+    from jacobian.math.polynomials._operations import (
+        polynomial_square_free_decomposition,
+    )
+
+    result = polynomial_square_free_decomposition(
+        PolynomialSquareFreeRequest(
+            polynomial=_sparse_polynomial(("x", "y", "z"), {(64, 64, 64): "1"})
+        )
+    )
+    assert [
+        (len(record.factor.polynomial.terms), record.multiplicity)
+        for record in result.factors
+    ] == [(1, 64)]
+    assert (
+        PolynomialSquareFreeDecompositionResult.model_validate(result.model_dump())
+        == result
+    )
+
+
+def test_square_free_replay_rejects_inexact_multivariate_divisors() -> None:
+    """A forged divisor with a tiny degree box is rejected without dividing.
+
+    The claimed factor ``v_0 - sum(v_i^64)`` over eight variables leaves
+    per-variable degree room ``64`` and ``1`` against the monomial source
+    ``prod(v_i^64)``, so a division replay would pass any box bound while
+    its inexact lexicographic long division builds huge partial sums.  The
+    recomparison lane rejects the mismatched records typedly instead.
+    """
+
+    from pydantic import ValidationError
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.polynomials._models import (
+        PolynomialSquareFreeDecompositionResult,
+        PolynomialSquareFreeFactor,
+    )
+
+    variables = tuple(f"v{index}" for index in range(8))
+    source = _sparse_polynomial(variables, {(64,) * 8: "1"})
+    terms = {(1, *(0,) * 7): "1"}
+    for index in range(1, 8):
+        terms[tuple(64 if position == index else 0 for position in range(8))] = "-1"
+    factor = _sparse_polynomial(variables, terms)
+    assert len(factor.polynomial.terms) == 8
+    with pytest.raises(ValidationError, match="must reconstruct"):
+        PolynomialSquareFreeDecompositionResult(
+            polynomial=source,
+            coefficient=CanonicalRational(num="1", den="1"),
+            factors=(PolynomialSquareFreeFactor(factor=factor, multiplicity=1),),
+            reconstructed=source,
+        )

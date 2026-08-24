@@ -621,6 +621,65 @@ def test_negative_root_certificate_rejects_and_admits_at_the_boundary() -> None:
     assert len(request.ideal.generators) == 4
 
 
+def test_coupling_generators_remove_infeasible_root_choices() -> None:
+    """Root choices are certified only when every generator stays feasible.
+
+    For <x_i^2 - x_i (1<=i<=5), x_2 - x_1, ..., x_5 - x_1> the coupling
+    equations vanish only on the two diagonal choices (all zero or all
+    one), so the source provably holds just two minimal primes carrying at
+    least 10 aggregate generators; rejecting from the univariate generators
+    alone would falsely claim 160. The source stays admitted.
+    """
+
+    def coupled_ideal(
+        variable_count: int, coupled_count: int
+    ) -> RationalPolynomialIdeal:
+        variables = tuple(f"x{index}" for index in range(1, variable_count + 1))
+        idempotents = _product_ideal(variables, (2,) * variable_count).generators
+        couplings = tuple(
+            _poly(
+                variables,
+                (-1, 1, tuple(1 if slot == 0 else 0 for slot in range(variable_count))),
+                (
+                    1,
+                    1,
+                    tuple(1 if slot == index else 0 for slot in range(variable_count)),
+                ),
+            )
+            for index in range(1, coupled_count)
+        )
+        return _ideal(variables, *idempotents, *couplings)
+
+    request = IdealMinimalPrimesRequest(ideal=coupled_ideal(5, 5))
+
+    assert len(request.ideal.generators) == 9
+
+    partially_coupled = coupled_ideal(7, 2)
+
+    with pytest.raises(ValidationError, match="provably forces"):
+        IdealMinimalPrimesRequest(ideal=partially_coupled)
+
+
+def test_incompatible_extra_generators_block_certification_entirely() -> None:
+    """An extra generator vanishing on no root choice certifies nothing.
+
+    <x^2 - x, y^2 - y, x + y - 2> admits exactly one feasible choice
+    (1, 1), so the certificate bounds the family by one two-generator
+    component and the source stays admitted.
+    """
+
+    variables = ("x", "y")
+    request = IdealMinimalPrimesRequest(
+        ideal=_ideal(
+            variables,
+            *_product_ideal(variables, (2, 2)).generators,
+            _poly(variables, (1, 1, (1, 0)), (1, 1, (0, 1)), (-2, 1, (0, 0))),
+        )
+    )
+
+    assert len(request.ideal.generators) == 3
+
+
 def test_pure_power_sources_admit_large_degree_products() -> None:
     """<x^20, y^20> has Bezout product 400 yet exactly one minimal prime.
 
@@ -868,3 +927,66 @@ def test_family_overflowing_the_generator_envelope_is_a_typed_result_limit() -> 
     assert result.outcome == "LIMIT_EXCEEDED"
     assert result.components is None
     assert result.detail is not None
+
+
+@pytest.mark.skipif(
+    shutil.which("Singular") is None,
+    reason="Singular 4.4 backend is not installed",
+)
+def test_coupled_source_computes_its_two_diagonal_components() -> None:
+    """The coupled idempotent source computes exactly two maximal components.
+
+    The couplings x_j - x_1 collapse the five-dimensional {0,1} grid to the
+    two diagonal points, so the complete family is <x1,...,x5> together
+    with <x1-1,...,x5-1>: admission must retain the source and the backend
+    must return both components.
+    """
+
+    variables = tuple(f"x{index}" for index in range(1, 6))
+    request = IdealMinimalPrimesRequest(
+        ideal=_ideal(
+            variables,
+            *_product_ideal(variables, (2,) * 5).generators,
+            *(
+                _poly(
+                    variables,
+                    (-1, 1, (1, 0, 0, 0, 0)),
+                    (1, 1, tuple(1 if slot == index else 0 for slot in range(5))),
+                )
+                for index in range(1, 5)
+            ),
+        )
+    )
+
+    result = compute_ideal_minimal_primes(request)
+
+    expected = (
+        _ideal(
+            variables,
+            *(
+                _poly(variables, (1, 1, tuple(1 if v == i else 0 for v in range(5))))
+                for i in range(5)
+            ),
+        ),
+        _ideal(
+            variables,
+            *(
+                _poly(
+                    variables,
+                    (1, 1, tuple(1 if v == i else 0 for v in range(5))),
+                    (-1, 1, (0, 0, 0, 0, 0)),
+                )
+                for i in range(5)
+            ),
+        ),
+    )
+
+    assert result.outcome == "COMPUTED"
+    assert result.components is not None
+    assert {
+        frozenset(generator.model_dump_json() for generator in component.generators)
+        for component in result.components
+    } == {
+        frozenset(generator.model_dump_json() for generator in component.generators)
+        for component in expected
+    }

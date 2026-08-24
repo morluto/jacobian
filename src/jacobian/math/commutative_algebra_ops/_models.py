@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 from fractions import Fraction
 from typing import Any, Literal, Self
 
@@ -85,41 +86,64 @@ def _single_variable_slot(generator: RationalPolynomial) -> int | None:
     return occupied.pop() if len(occupied) == 1 else None
 
 
-def _certified_rational_root_count(
+def _certified_rational_roots(
     generator: RationalPolynomial,
     slot: int,
-) -> int:
-    """Count fixed probe points where the generator exactly vanishes."""
+) -> list[int]:
+    """Return the fixed probe points where the univariate exactly vanishes."""
 
     terms = [
         (Fraction(*term.coefficient.as_integer_ratio()), term.exponents[slot])
         for term in generator.polynomial.terms
     ]
-    return sum(
-        1
+    return [
+        probe
         for probe in _RATIONAL_ROOT_PROBES
         if sum(coefficient * probe**exponent for coefficient, exponent in terms) == 0
-    )
+    ]
+
+
+def _vanishes_at_point(
+    generator: RationalPolynomial,
+    point: tuple[Fraction, ...],
+) -> bool:
+    """Evaluate one generator exactly at a rational point of the ring."""
+
+    total = Fraction(0)
+    for term in generator.polynomial.terms:
+        value = Fraction(*term.coefficient.as_integer_ratio())
+        for slot, exponent in enumerate(term.exponents):
+            if exponent:
+                value *= point[slot] ** exponent
+        total += value
+    return total == 0
 
 
 def _require_provable_family_fit(ideal: RationalPolynomialIdeal) -> None:
     """Reject sources whose complete family provably overflows the envelope.
 
-    Certificate: suppose ``k`` generators each live in one distinct variable
-    and each vanishes at two distinct certified rational points (exact
-    evaluation). Every prime above the source contains an irreducible factor
-    of each such generator, and a prime inside one certified point's
-    evaluation kernel forces those factors through rational roots; an
-    irreducible univariate over ``QQ`` with a rational root is linear, so
-    distinct point choices give distinct minimal primes — at least ``2^k``
-    of them. Each such minimal prime contains ``k`` independent linear
-    forms, hence has height at least ``k`` and, by Krull's height theorem,
-    needs at least ``k`` generators. The complete family therefore carries
-    at least ``k * 2^k`` aggregate generators: when that exceeds the
-    exact-result envelope every admitted execution ends in typed
-    LIMIT_EXCEEDED, so the source is rejected here before any backend
-    launch. A source containing a nonzero constant is the unit ideal with an
-    empty family and always stays admitted.
+    Certificate: suppose ``k`` generators each live in one distinct
+    variable and each vanishes at two distinct certified rational points.
+    Every choice of one certified root per certified generator extends, by
+    zero on every other variable, to a rational point of the whole ring;
+    the choice is FEASIBLE only when every generator of the ideal — not
+    just the certified ones — vanishes at that extended point, so coupling
+    or incompatible extra generators remove choices they rule out. Each
+    feasible point's maximal ideal contains the whole source, hence a
+    minimal prime of it. That prime holds exactly one irreducible factor
+    per certified generator (two coprime factors would generate the unit
+    ideal), and containment in the point's maximal ideal forces that
+    factor through a rational root, i.e. to be the corresponding linear
+    form; distinct feasible points therefore force distinct minimal
+    primes. Each such prime contains ``k`` independent linear forms, so it
+    has height at least ``k`` and, by Krull's height theorem, needs at
+    least ``k`` generators in any presentation. The complete family thus
+    carries at least ``feasible * k`` aggregate generators: when that
+    exceeds the exact-result envelope, every admitted execution ends in
+    typed LIMIT_EXCEEDED and the source is rejected here before any
+    backend launch. A source containing a nonzero constant is the unit
+    ideal with an empty family and always stays admitted, and a source
+    with no feasible choice certifies nothing and stays admitted.
     """
 
     unit_witness = any(
@@ -130,23 +154,35 @@ def _require_provable_family_fit(ideal: RationalPolynomialIdeal) -> None:
     )
     if unit_witness:
         return
-    certified: set[int] = set()
+    certified_roots: dict[int, list[int]] = {}
     for generator in ideal.generators:
         slot = _single_variable_slot(generator)
-        if slot is None or slot in certified:
+        if slot is None or slot in certified_roots:
             continue
-        if _certified_rational_root_count(generator, slot) >= 2:
-            certified.add(slot)
-    count = len(certified)
-    if count * 2**count > MAX_OUTPUT_GENERATORS:
-        raise ValueError(
-            "the source provably forces a complete family above the "
-            f"{MAX_OUTPUT_GENERATORS}-generator exact-result envelope: "
-            f"{count} single-variable generators each certified against two "
-            f"distinct rational roots yield at least 2^{count} minimal "
-            f"primes with at least {count} generators apiece "
-            f"({count * 2**count} aggregate generators)"
-        )
+        roots = _certified_rational_roots(generator, slot)
+        if len(roots) >= 2:
+            certified_roots[slot] = roots
+    count = len(certified_roots)
+    if not count:
+        return
+    slots = sorted(certified_roots)
+    variables = len(ideal.variables)
+    feasible = 0
+    for choice in itertools.product(*(certified_roots[slot] for slot in slots)):
+        values = dict(zip(slots, choice, strict=True))
+        point = tuple(Fraction(values.get(slot, 0)) for slot in range(variables))
+        if all(_vanishes_at_point(generator, point) for generator in ideal.generators):
+            feasible += 1
+            if feasible * count > MAX_OUTPUT_GENERATORS:
+                raise ValueError(
+                    "the source provably forces a complete family above the "
+                    f"{MAX_OUTPUT_GENERATORS}-generator exact-result envelope: "
+                    f"{count} single-variable generators each certified "
+                    f"against two distinct rational roots already yield at "
+                    f"least {feasible} feasible root choices as minimal "
+                    f"primes with at least {count} generators apiece "
+                    f"({feasible * count} aggregate generators)"
+                )
 
 
 class IdealRadicalRequest(StrictModel):
@@ -378,10 +414,10 @@ class IdealMinimalPrimesRequest(StrictModel):
             "256 aggregate terms; generator total degree is at most 20 and "
             "coefficient components are at most 128 digits. A source whose "
             "complete family provably exceeds the aggregate 64-generator "
-            "exact-result envelope — k certified two-rational-root "
-            "single-variable generators force at least 2^k minimal primes "
-            "with k generators apiece — is rejected here before the backend "
-            "launches; otherwise a family exceeding the aggregate "
+            "exact-result envelope — feasible rational-root choices of its "
+            "certified single-variable generators force that many minimal "
+            "primes with k generators apiece — is rejected here before the "
+            "backend launches; otherwise a family exceeding the aggregate "
             "64-generator or 1024-term envelope returns a typed "
             "LIMIT_EXCEEDED outcome."
         )

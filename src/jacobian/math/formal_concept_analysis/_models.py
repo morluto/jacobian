@@ -130,11 +130,12 @@ class ConceptResult(StrictModel):
 # Bound the concept enumeration by its declared output budget. NextClosure's
 # cost is proportional to the number of concepts, and that number is bounded
 # by 2^min(|objects|, |attributes|): intents biject with a closure system on
-# the attribute axis and extents with one on the object axis.  Admission
-# therefore derives its input envelope from that worst case against
-# MAX_CONCEPTS instead of bounding one axis alone, so sparse wide contexts
-# stay admissible while dense contexts whose family could exceed the budget
-# are rejected before execution.
+# the attribute axis and extents with one on the object axis.  Admission is
+# therefore two-tier and result-sensitive.  When that tight worst case fits
+# MAX_CONCEPTS the request is admitted statically.  Otherwise one capped
+# NextClosure preflight — bounded by the same budget it guards — counts the
+# true family, so sparse wide or square contexts stay admissible and only
+# contexts whose actual family overflows are rejected before execution.
 MAX_CONCEPTS = 10000
 
 
@@ -149,12 +150,18 @@ class EnumerateConceptsRequest(StrictModel):
             len(self.context.objects), len(self.context.attributes)
         )
         if worst_case_concepts > MAX_CONCEPTS:
-            raise ValueError(
-                "the context may carry up to "
-                f"{worst_case_concepts} concepts and concept enumeration "
-                f"returns at most {MAX_CONCEPTS}; narrow the smaller axis "
-                "or split the context"
+            from jacobian.math.formal_concept_analysis.operations import (
+                concept_family_size_capped,
             )
+
+            family_size = concept_family_size_capped(self.context, MAX_CONCEPTS)
+            if family_size > MAX_CONCEPTS:
+                raise ValueError(
+                    f"the context carries more than {MAX_CONCEPTS} concepts "
+                    "and concept enumeration returns at most "
+                    f"{MAX_CONCEPTS}; narrow the context or split the "
+                    "enumeration"
+                )
         return self
 
 

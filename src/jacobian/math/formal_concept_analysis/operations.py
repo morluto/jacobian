@@ -29,6 +29,7 @@ __all__ = [
     "MAX_CONCEPTS",
     "attribute_closure",
     "attribute_derivation",
+    "concept_family_size_capped",
     "concept_from_attributes",
     "concept_from_objects",
     "concept_lattice",
@@ -411,6 +412,26 @@ def enumerate_concepts(ctx: FormalContext) -> list[dict[str, frozenset[int]]]:
         current = _next_closure(ctx, current, n)
 
     return concepts
+
+
+def concept_family_size_capped(ctx: FormalContext, limit: int) -> int:
+    """Return the exact concept-family size, aborting once it exceeds ``limit``.
+
+    Walks the same NextClosure order as :func:`enumerate_concepts` but keeps
+    only a counter, so the work is bounded by ``limit + 1`` closure steps
+    regardless of the true family size.  Admission uses this to decide
+    overflow exactly for contexts whose worst case alone cannot prove that
+    the family fits the declared budget.
+    """
+    n = len(ctx.attributes)
+    count = 0
+    current: frozenset[int] | None = attribute_closure(ctx, frozenset())
+    while current is not None:
+        count += 1
+        if count > limit:
+            return count
+        current = _next_closure(ctx, current, n)
+    return count
 
 
 def _inclusion_order(

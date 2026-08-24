@@ -173,8 +173,8 @@ FORMAL_CONCEPT_ANALYSIS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "Return the complete concept family of closed attribute intents "
         "using Ganter's NextClosure algorithm over the declared attribute "
         "order. The family, not the enumeration order, is mathematical. "
-        "Admission bounds the smaller context axis so the worst-case family "
-        "size fits the declared concept budget.",
+        "Admission proves the complete family fits the declared concept "
+        "budget before enumeration.",
         EnumerateConceptsRequest,
         EnumerateConceptsResult,
         compute_enumerate_concepts,

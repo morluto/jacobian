@@ -5,12 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from fractions import Fraction
 from math import comb
-from typing import Literal
-
-import networkx as nx
+from typing import TYPE_CHECKING, Literal
 
 from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+if TYPE_CHECKING:
+    import networkx as nx
 
 MAX_ALL_TERMINAL_RELIABILITY_EDGES = 20
 MAX_ALL_TERMINAL_RELIABILITY_STATES = 1 << MAX_ALL_TERMINAL_RELIABILITY_EDGES
@@ -84,6 +85,8 @@ def _require_bounded_problem(
 def _indexed_graph(
     graph: SimpleUndirectedGraph,
 ) -> tuple[nx.Graph[int], tuple[tuple[int, int], ...]]:
+    import networkx as nx
+
     vertex_index = {vertex: index for index, vertex in enumerate(graph.vertices)}
     indexed_edges = tuple(
         (vertex_index[left], vertex_index[right]) for left, right in graph.edges
@@ -97,6 +100,8 @@ def _connected_spanning_subgraph_counts(
     graph: SimpleUndirectedGraph,
 ) -> tuple[int, ...]:
     """Count connected spanning edge subsets, indexed by subset cardinality."""
+
+    import networkx as nx
 
     backend_graph, edges = _indexed_graph(graph)
     counts = [0] * (len(edges) + 1)

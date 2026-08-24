@@ -305,6 +305,7 @@ def test_fixed_point_source_and_result_envelopes_cover_exact_boundaries() -> Non
         sum(len(image) for image in source_boundary.substitution.morphism.images)
         == 20_000
     )
+    assert fixed_point_prefix(source_boundary, 1).prefix.letters == ("0",)
     accepted = compute_substitution_fixed_point_prefix(
         SubstitutionFixedPointPrefixRequest(
             source=source_boundary,

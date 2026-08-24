@@ -96,7 +96,7 @@ class ProlongableSubstitution(StrictModel):
     @classmethod
     def require_bounded_source_before_mortality_analysis(cls, value: Any) -> Any:
         _require_prolongable_source_occurrence_bound(value)
-        return value
+        return _prepare_prolongable_substitution_input(value)
 
     @model_validator(mode="after")
     def require_growing_seed(self) -> Self:
@@ -159,6 +159,41 @@ def _require_prolongable_source_occurrence_bound(value: object) -> None:
             "fixed-point source exceeds the aggregate occurrence bound "
             f"({occurrence_count} > {MAX_PROLONGABLE_SUBSTITUTION_SOURCE_OCCURRENCES})"
         )
+
+
+def _prepare_prolongable_substitution_input(value: object) -> object:
+    """Preserve JSON-array tuple decoding after the raw source preflight.
+
+    Pydantic passes JSON arrays to model ``before`` validators as Python lists.
+    The strict canonical models below require tuples, so prepare just the
+    sequence fields owned by a prolongable substitution before nested parsing.
+    """
+
+    if not isinstance(value, Mapping):
+        return value
+    substitution = value.get("substitution")
+    if not isinstance(substitution, Mapping):
+        return value
+    morphism = substitution.get("morphism")
+    if not isinstance(morphism, Mapping):
+        return value
+
+    prepared_morphism = dict(morphism)
+    for field_name in ("source_alphabet", "target_alphabet"):
+        sequence = prepared_morphism.get(field_name)
+        if isinstance(sequence, list):
+            prepared_morphism[field_name] = tuple(sequence)
+    images = prepared_morphism.get("images")
+    if isinstance(images, list):
+        prepared_morphism["images"] = tuple(
+            tuple(image) if isinstance(image, list) else image for image in images
+        )
+
+    prepared_substitution = dict(substitution)
+    prepared_substitution["morphism"] = prepared_morphism
+    prepared = dict(value)
+    prepared["substitution"] = prepared_substitution
+    return prepared
 
 
 class SubstitutionDependencyEdge(StrictModel):

@@ -25,6 +25,21 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "exact incidence matrix of a bounded word morphism",
     ),
+    OperationAdmission(
+        "substitution.dependency_graph.compute",
+        AdmissionDecision.KEEP,
+        "exact occurrence-labelled dependency graph of a substitution",
+    ),
+    OperationAdmission(
+        "substitution.primitivity_profile.compute",
+        AdmissionDecision.KEEP,
+        "complete finite primitivity decision with a least exponent or obstruction",
+    ),
+    OperationAdmission(
+        "substitution.fixed_point_prefix.compute",
+        AdmissionDecision.KEEP,
+        "exact finite prefix from a certified prolongable substitution",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

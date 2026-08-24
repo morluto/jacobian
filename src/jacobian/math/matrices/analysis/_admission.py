@@ -20,6 +20,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
+    OperationAdmission(
+        "matrix.symmetric.rational_spectrum_claim.check",
+        AdmissionDecision.KEEP,
+        "one source-bound exact predicate that replays every rational eigenspace multiplicity and completeness from a canonical symmetric QQ matrix",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

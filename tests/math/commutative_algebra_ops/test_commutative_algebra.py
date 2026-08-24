@@ -124,6 +124,9 @@ def test_catalog_contains_only_audited_operations() -> None:
         "polynomial.ideal.radical_membership.decide",
         "polynomial.ideal.quotient.compute",
         "polynomial.ideal.saturation.compute",
+        "polynomial.ideal.groebner_basis.compute",
+        "polynomial.ideal.normal_form.compute",
+        "polynomial.ideal.elimination.compute",
     }
 
 
@@ -355,6 +358,37 @@ def test_ideal_quotient_by_zero_is_the_unit_ideal() -> None:
     assert _equal(result.quotient, _ideal(("x",), {(0,): 1}))
 
 
+def test_zero_basis_must_use_the_source_ideal_ring() -> None:
+    from jacobian.math.commutative_algebra_ops._models import (
+        GroebnerBasisRequest,
+        GroebnerBasisResult,
+    )
+
+    request = GroebnerBasisRequest(ideal=_ideal(("x",), {}))
+    foreign_zero_basis = _ideal(("y",), {})
+    with pytest.raises(ValueError, match="source ideal's ordered ring"):
+        GroebnerBasisResult(
+            request=request,
+            basis=foreign_zero_basis,
+            generator_count=1,
+            monomial_order="grevlex",
+        )
+    same_ring_zero_basis = _ideal(("x",), {})
+    result = GroebnerBasisResult(
+        request=request,
+        basis=same_ring_zero_basis,
+        generator_count=1,
+        monomial_order="grevlex",
+    )
+    assert result.basis is not None
+
+
+@requires_singular
+@pytest.mark.requires_backend("singular")
+@requires_singular
+@pytest.mark.requires_backend("singular")
+@requires_singular
+@pytest.mark.requires_backend("singular")
 @requires_singular
 @pytest.mark.requires_backend("singular")
 def test_ideal_quotient_by_unit_is_the_dividend() -> None:
@@ -461,3 +495,100 @@ def test_ideal_quotient_by_product_equals_iterated_quotient() -> None:
     assert iterated.quotient is not None
     assert _equal(by_product.quotient, iterated.quotient)
     assert _equal(by_product.quotient, _ideal(variables, {(2, 1): 1}))
+
+
+def _poly(variables, terms):
+    from jacobian._exact import CanonicalRational
+
+    return RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational.from_fraction(Fraction(c)),
+                    exponents=e,
+                )
+                for e, c in terms
+            )
+        ),
+    )
+
+
+class TestIdealMembershipViaGroebnerBasis:
+    def test_membership_needs_groebner_reduction(self):
+        """x-y lies in <xy-1, y^2-1> though neither generator divides it."""
+        from jacobian.math.commutative_algebra_ops._models import (
+            IdealNormalFormRequest,
+        )
+        from jacobian.math.commutative_algebra_ops._operations import (
+            compute_ideal_normal_form,
+        )
+
+        ring = ("x", "y")
+        ideal = RationalPolynomialIdeal(
+            variables=ring,
+            generators=(
+                _poly(ring, [((1, 1), 1), ((0, 0), -1)]),
+                _poly(ring, [((0, 2), 1), ((0, 0), -1)]),
+            ),
+        )
+        result = compute_ideal_normal_form(
+            IdealNormalFormRequest(
+                ideal=ideal,
+                polynomial=_poly(ring, [((1, 0), 1), ((0, 1), -1)]),
+            )
+        )
+        assert result.in_ideal is True
+        assert len(result.remainder.polynomial.terms) == 0
+
+
+class TestEliminationIdealSemantics:
+    def _eliminate(self, generators, eliminated):
+        from jacobian.math.commutative_algebra_ops._models import (
+            EliminationIdealRequest,
+        )
+        from jacobian.math.commutative_algebra_ops._operations import (
+            compute_elimination_ideal,
+        )
+
+        ring = ("x", "y")
+        ideal = RationalPolynomialIdeal(
+            variables=ring,
+            generators=tuple(_poly(ring, g) for g in generators),
+        )
+        return compute_elimination_ideal(
+            EliminationIdealRequest(ideal=ideal, eliminated_variables=eliminated)
+        )
+
+    @staticmethod
+    def _terms(result):
+        return [
+            (str(t.coefficient.num), str(t.coefficient.den), t.exponents)
+            for g in result.elimination_ideal.generators
+            for t in g.polynomial.terms
+        ]
+
+    def test_eliminated_variables_lead_lex_order(self):
+        """Eliminating y from <x-y, y^2-1> yields <x^2-1>."""
+        result = self._eliminate(
+            [(((1, 0), 1), ((0, 1), -1)), (((0, 2), 1), ((0, 0), -1))],
+            ("y",),
+        )
+        terms = self._terms(result)
+        assert (("1", "1", (2,))) in [tuple(t) for t in terms]
+        assert tuple((n, d, e) for n, d, e in terms)[:2] == (
+            ("1", "1", (2,)),
+            ("-1", "1", (0,)),
+        )
+
+    def test_zero_elimination_ideal_preserved(self):
+        """<x> ∩ QQ[y] = (0): the zero ideal must not become the whole ring."""
+        result = self._eliminate([(((1, 0), 1),)], ("x",))
+        assert len(result.elimination_ideal.generators) == 1
+        assert len(result.elimination_ideal.generators[0].polynomial.terms) == 0
+
+    def test_unit_elimination_ideal(self):
+        """An ideal containing 1 eliminates to the whole ring."""
+        result = self._eliminate([(((0, 0), 1),)], ("y",))
+        terms = self._terms(result)
+        assert terms == [("1", "1", (0,))]

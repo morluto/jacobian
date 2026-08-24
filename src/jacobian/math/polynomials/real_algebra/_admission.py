@@ -11,6 +11,11 @@ from jacobian.math.polynomials.real_algebra._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "polynomial.real.strict_sublevel_measure.compute",
+        AdmissionDecision.KEEP,
+        "complete exact measure and source-bound component decomposition of a strict polynomial sublevel set",
+    ),
+    OperationAdmission(
         "polynomial.root_count.compute",
         AdmissionDecision.KEEP,
         "distinct exact or explicitly bounded search outcome with material computational leverage",

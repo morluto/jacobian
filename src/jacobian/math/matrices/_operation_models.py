@@ -198,11 +198,47 @@ class RationalLinearSolveRequest(StrictModel):
 
 
 class RrefResult(StrictModel):
+    """The unique reduced row echelon form bound to its source matrix.
+
+    Retains the source matrix so validation replays the defining relation:
+    the claimed form is the unique RREF over QQ of the retained source, the
+    rank equals the pivot count, and the pivot and free columns partition the
+    source column axis.  The rational matrix domain admits at least one row
+    and column, so zero-row shapes are rejected by request admission rather
+    than silently dropped.
+    """
+
+    matrix: RationalMatrix
     reduced_matrix: RationalMatrix
     rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
     pivot_columns: tuple[int, ...] = Field(max_length=MAX_MATRIX_DIMENSION)
     free_columns: tuple[int, ...] = Field(max_length=MAX_MATRIX_DIMENSION)
     convention: Literal["UNIQUE_RREF_OVER_QQ"] = "UNIQUE_RREF_OVER_QQ"
+
+    @model_validator(mode="after")
+    def require_source_bound(self) -> Self:
+        column_count = len(self.matrix.entries[0])
+        if (
+            len(self.reduced_matrix.entries) != len(self.matrix.entries)
+            or len(self.reduced_matrix.entries[0]) != column_count
+        ):
+            raise ValueError("reduced matrix must have the source shape")
+        if self.rank != len(self.pivot_columns):
+            raise ValueError("rank must equal the pivot column count")
+        if sorted((*self.pivot_columns, *self.free_columns)) != list(
+            range(column_count)
+        ):
+            raise ValueError("pivot and free columns must partition the source columns")
+        from jacobian.math.matrices import _conversions as conversions
+        from jacobian.math.matrices._operations import _rref_replay
+
+        expected_reduced, pivots = _rref_replay(self.matrix)
+        if tuple(int(pivot) for pivot in pivots) != self.pivot_columns or (
+            conversions.rational_matrix_to_sympy(self.reduced_matrix)
+            != expected_reduced
+        ):
+            raise ValueError("reduced matrix must be the unique RREF of the source")
+        return self
 
 
 class MatrixDeterminantResult(StrictModel):
@@ -213,14 +249,38 @@ class MatrixDeterminantResult(StrictModel):
 
 
 class MatrixRankResult(StrictModel):
-    """One exact rank with the canonical RREF pivot columns."""
+    """One exact rank with the canonical RREF pivot columns, bound to its source."""
 
+    matrix: RationalMatrix
     rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
     pivot_columns: tuple[int, ...] = Field(max_length=MAX_MATRIX_DIMENSION)
     method: Literal["EXACT_RATIONAL_ROW_REDUCTION"] = "EXACT_RATIONAL_ROW_REDUCTION"
 
+    @model_validator(mode="after")
+    def require_source_bound(self) -> Self:
+        if self.rank != len(self.pivot_columns):
+            raise ValueError("rank must equal the pivot column count")
+        from jacobian.math.matrices._operations import _rank_replay
+
+        expected_rank, pivots = _rank_replay(self.matrix)
+        if expected_rank != self.rank or tuple(int(p) for p in pivots) != (
+            self.pivot_columns
+        ):
+            raise ValueError("rank and pivot columns must replay against the source")
+        return self
+
 
 class NullspaceResult(StrictModel):
+    """The RREF fundamental nullspace basis bound to its source matrix.
+
+    Retains the source matrix so validation replays the defining relations:
+    every basis vector satisfies ``A v = 0`` exactly, each vector carries a
+    one in its own free column and zeros in the other free columns (which
+    also establishes independence), and the claimed rank equals the exact
+    rank of the retained source.
+    """
+
+    matrix: RationalMatrix
     ambient_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
     rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
     nullity: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
@@ -232,14 +292,43 @@ class NullspaceResult(StrictModel):
 
     @model_validator(mode="after")
     def require_basis_shape(self) -> Self:
+        if self.ambient_dimension != len(self.matrix.entries[0]):
+            raise ValueError("ambient dimension must equal the source column count")
         if self.rank + self.nullity != self.ambient_dimension:
             raise ValueError("rank plus nullity must equal the ambient dimension")
         if len(self.basis_vectors) != self.nullity:
             raise ValueError("basis vector count must equal nullity")
         if any(len(vector) != self.ambient_dimension for vector in self.basis_vectors):
             raise ValueError("each basis vector must have the ambient dimension")
-        if len(self.free_columns) != self.nullity:
-            raise ValueError("free column count must equal nullity")
+        if len(self.free_columns) != self.nullity or self.free_columns != tuple(
+            sorted(self.free_columns)
+        ):
+            raise ValueError("free column count must equal nullity in ascending order")
+
+        entries = [
+            [value.as_fraction() for value in row] for row in self.matrix.entries
+        ]
+        for index, vector in enumerate(self.basis_vectors):
+            components = [value.as_fraction() for value in vector]
+            for row in entries:
+                if sum(a * b for a, b in zip(row, components, strict=True)) != 0:
+                    raise ValueError(
+                        f"basis vector {index} does not satisfy A v = 0 exactly"
+                    )
+            own = self.free_columns[index]
+            if components[own] != 1 or any(
+                components[other] != 0 for other in self.free_columns if other != own
+            ):
+                raise ValueError(
+                    f"basis vector {index} is not the fundamental basis vector "
+                    "of its free column"
+                )
+
+        from jacobian.math.matrices._operations import _rank_replay
+
+        expected_rank, _pivots = _rank_replay(self.matrix)
+        if expected_rank != self.rank:
+            raise ValueError("claimed rank must equal the exact rank of the source")
         return self
 
 

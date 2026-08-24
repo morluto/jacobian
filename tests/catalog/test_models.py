@@ -4,8 +4,12 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import (
+    OperationBrowseCard,
     OperationBrowseResult,
     OperationCatalogSnapshot,
+    OperationDescriptor,
+    OperationDiscoveryMatch,
+    OperationDiscoveryRequest,
     OperationDiscoveryResult,
 )
 
@@ -19,6 +23,33 @@ def _descriptor(operation_id: str) -> dict[str, object]:
         "input_schema": {"type": "object"},
         "output_schema": {"type": "object"},
     }
+
+
+def test_catalog_discovery_text_has_no_arbitrary_character_cap() -> None:
+    long_text = "x" * 513
+
+    request = OperationDiscoveryRequest(query=long_text)
+    descriptor = OperationDescriptor(
+        **{**_descriptor("integer.compute.gcd"), "description": long_text}
+    )
+    match = OperationDiscoveryMatch(
+        operation_id="integer.compute.gcd",
+        title="Compute gcd",
+        description=long_text,
+        relevance_score=0,
+        applicability="NEEDS_MORE_TYPED_REQUIREMENTS",
+        applicability_code="FULL_REQUEST_REQUIRED",
+    )
+    card = OperationBrowseCard(
+        operation_id="integer.compute.gcd",
+        title="Compute gcd",
+        description=long_text,
+    )
+
+    assert request.query == long_text
+    assert descriptor.description == long_text
+    assert match.description == long_text
+    assert card.description == long_text
 
 
 def test_discovery_page_metadata_is_bound_to_returned_matches() -> None:

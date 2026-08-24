@@ -7,6 +7,7 @@ from jacobian.math.group.operations import (
     group_orbit,
     group_order,
     group_stabilizer,
+    subgroup_lattice,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "group_orbit",
     "group_order",
     "group_stabilizer",
+    "subgroup_lattice",
 ]

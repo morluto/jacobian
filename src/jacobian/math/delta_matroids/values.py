@@ -91,7 +91,12 @@ def require_delta_matroid_admission(system: FiniteFeasibleSetSystem) -> None:
             "delta-matroid feasible-family memberships exceed the "
             f"{MAX_DELTA_MEMBERSHIPS}-entry envelope"
         )
-    label_bytes = sum(len(label.encode("utf-8")) for label in system.ground)
+    try:
+        label_bytes = sum(len(label.encode("utf-8")) for label in system.ground)
+    except UnicodeEncodeError as error:
+        raise ValueError(
+            "delta-matroid ground labels must be UTF-8-representable"
+        ) from error
     if label_bytes > MAX_DELTA_LABEL_BYTES:
         raise ValueError(
             "delta-matroid ground labels exceed the "

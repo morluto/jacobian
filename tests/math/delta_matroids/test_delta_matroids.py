@@ -173,6 +173,22 @@ def test_label_byte_budget_bounds_ground_count_without_a_fixed_cap() -> None:
         )
 
 
+def test_non_utf8_representable_ground_labels_are_rejected_not_host_errors() -> None:
+    # An unpaired surrogate is structurally well formed for the shared carrier
+    # but has no UTF-8 byte length, so admission must reject it with a
+    # controlled validation error instead of leaking UnicodeEncodeError.
+    system = FiniteFeasibleSetSystem(ground=("\ud800",), feasible=((),))
+
+    with pytest.raises(ValueError, match="UTF-8-representable"):
+        delta_matroids.from_feasible_sets(system)
+
+    with pytest.raises(ValidationError, match="UTF-8-representable"):
+        DeltaMatroidFromFeasibleSetsRequest(system=system)
+
+    with pytest.raises(ValidationError, match="UTF-8-representable"):
+        FiniteDeltaMatroid(ground=("\ud800",), feasible=((),))
+
+
 def test_request_schema_exposes_every_delta_specific_admission_limit() -> None:
     schema = DeltaMatroidFromFeasibleSetsRequest.model_json_schema()
 

@@ -631,6 +631,18 @@ def _coefficient_height(
             child_envelopes,
             validate_budget=enforce_digit_budget,
         )
+    if kind in (
+        z3.Z3_OP_EQ,
+        z3.Z3_OP_DISTINCT,
+        z3.Z3_OP_LE,
+        z3.Z3_OP_LT,
+        z3.Z3_OP_GE,
+        z3.Z3_OP_GT,
+    ):
+        return _compared_envelope(
+            child_envelopes,
+            validate_budget=enforce_digit_budget,
+        )
     height = Fraction(0)
     for envelope in child_envelopes:
         height += envelope.height
@@ -743,6 +755,35 @@ def _signed_sum_envelope(
             sum(10**envelope.numerator_digits for envelope in envelopes) * shared
         )
         numerator_digits = min(numerator_digits, len(str(merged_numerator)))
+    if validate_budget:
+        _require_bounded_coefficient_digit_budget(
+            numerator_digits,
+            denominator_digits,
+        )
+    return _CoefficientEnvelope(height, numerator_digits, denominator_digits, shared)
+
+
+def _compared_envelope(
+    envelopes: tuple[_CoefficientEnvelope, ...],
+    *,
+    validate_budget: bool,
+) -> _CoefficientEnvelope:
+    """Bound the difference an arithmetic comparison forms between its sides."""
+
+    height = Fraction(0)
+    for envelope in envelopes:
+        height += envelope.height
+        _require_bounded_normalized_coefficient(height)
+    shared = _shared_common_denominator(
+        tuple(envelope.common_denominator for envelope in envelopes)
+    )
+    denominator_digits = sum(envelope.denominator_digits for envelope in envelopes)
+    numerator_digits = max(
+        (envelope.numerator_digits for envelope in envelopes), default=0
+    )
+    if shared is not None:
+        denominator_digits = min(denominator_digits, len(str(shared)))
+        numerator_digits = min(numerator_digits, len(str(shared)) + numerator_digits)
     if validate_budget:
         _require_bounded_coefficient_digit_budget(
             numerator_digits,

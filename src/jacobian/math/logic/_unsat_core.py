@@ -739,6 +739,10 @@ def _signed_sum_envelope(
     numerator_digits = widest_numerator + len(str(len(envelopes)))
     if shared is not None:
         denominator_digits = min(denominator_digits, len(str(shared)))
+        merged_numerator = (
+            sum(10**envelope.numerator_digits for envelope in envelopes) * shared
+        )
+        numerator_digits = min(numerator_digits, len(str(merged_numerator)))
     if validate_budget:
         _require_bounded_coefficient_digit_budget(
             numerator_digits,

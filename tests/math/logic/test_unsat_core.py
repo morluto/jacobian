@@ -843,6 +843,34 @@ def test_request_bounds_mixed_denominator_formless_ite_sum_scaling() -> None:
     assert SmtUnsatCoreRequest(logic="QF_LRA", smtlib=unscaled_source)
 
 
+def test_request_bounds_four_shared_denominator_formless_ite_terms() -> None:
+    digits = "9" * 100
+    source = (
+        "(set-logic QF_LRA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const q Bool)\n"
+        "(declare-const r Bool)\n"
+        "(declare-const s Bool)\n"
+        "(declare-const x Real)\n"
+        "(assert (= (+ "
+        f"(ite p (/ x {digits}) x) "
+        f"(ite q (/ x {digits}) x) "
+        f"(ite r (/ x {digits}) x) "
+        f"(ite s (/ x {digits}) x)"
+        ") 4))\n"
+        "(assert (>= x 1))\n"
+        "(assert (<= x 1))\n"
+        "(check-sat)\n"
+    )
+
+    assert SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+
+    result = compute_smt_unsat_core(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
+
+    assert result.outcome == "SAT"
+    assert result.core_indices == ()
+
+
 def test_request_keeps_shared_denominator_formless_ite_sums_admitted() -> None:
     digits = "9" * 100
     source = (

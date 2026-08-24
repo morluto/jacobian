@@ -17,6 +17,7 @@ MAX_QUADRATIC_EVALUATION_TERM_DIGITS = (
     MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS + 2 * MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS
 )
 MAX_QUADRATIC_EVALUATION_DIGITS = 8_192
+MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS = 4_096
 
 
 class QuadraticCrossTerm(StrictModel):
@@ -187,13 +188,13 @@ def require_evaluation_budget(
     form: RationalQuadraticForm,
     vector: RationalCoordinateVector,
 ) -> None:
-    """Preflight the common denominator, active terms, and exact output size.
+    """Preflight total support, common denominator, and exact output size.
 
     Only monomials with a nonzero coefficient evaluated at nonzero
-    coordinates contribute to ``Q(vector)``, so every budget is based on
-    those active monomials alone.  A common denominator divides the product
-    of the active polynomial-coefficient denominators and the squares of the
-    denominators of the coordinates those monomials touch, so its digit
+    coordinates contribute to ``Q(vector)``, so every arithmetic budget is
+    based on those active monomials alone.  A common denominator divides the
+    product of the active polynomial-coefficient denominators and the squares
+    of the denominators of the coordinates those monomials touch, so its digit
     length is at most the aggregate ``d`` of those digit lengths.  Over that
     shared denominator each numerator summand carries one coefficient and
     two coordinate numerators on top of ``d``, hence at most
@@ -208,8 +209,30 @@ def require_evaluation_budget(
     which this preflight rejects against before any arithmetic runs.  The
     bound is conservative but known before execution and admits light forms
     at every dimension.
+
+    The active accounting deliberately ignores annihilated monomials, so it
+    says nothing about how much support a request may materialize.
+    Validation, kernel traversal, result replay, and source-bound
+    serialization all visit every stored diagonal coefficient, cross term,
+    and coordinate whether or not it contributes, and each stored entry has
+    bounded height (per-entry numerator/denominator digit bounds; bounded
+    label length).  The total materialized form support,
+
+        len(diagonal_coefficients) + len(cross_terms),
+
+    is therefore capped at ``MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS`` before
+    the active accounting runs.  The coupled length validators keep the
+    coordinate count equal to the diagonal-coefficient count, so this single
+    bound also limits every linear traversal and the request echoed inside
+    the serialized result, independently of the arithmetic-digit budgets
+    above.
     """
 
+    support_terms = len(form.diagonal_coefficients) + len(form.cross_terms)
+    if support_terms > MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS:
+        raise ValueError(
+            "quadratic-form evaluation exceeds the total support budget"
+        )
     nonzero_coordinates = {
         index
         for index, coordinate in enumerate(vector.coordinates)
@@ -244,6 +267,7 @@ def require_evaluation_budget(
 
 __all__ = [
     "MAX_QUADRATIC_EVALUATION_DIGITS",
+    "MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS",
     "MAX_QUADRATIC_EVALUATION_TERM_DIGITS",
     "MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS",
     "MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS",

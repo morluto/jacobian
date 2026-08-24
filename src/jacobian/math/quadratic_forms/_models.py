@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.math.quadratic_forms.values import (
     MAX_QUADRATIC_EVALUATION_DIGITS,
+    MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS,
+    MAX_QUADRATIC_EVALUATION_TERM_DIGITS,
     RationalCoordinateVector,
     RationalQuadraticForm,
     evaluate_rational_quadratic_form,
@@ -18,10 +20,32 @@ from jacobian.math.quadratic_forms.values import (
 
 
 class EvaluationRequest(StrictModel):
-    """Evaluate one rational quadratic form at an axis-matched rational vector."""
+    """Evaluate one rational quadratic form at an axis-matched rational vector.
 
-    form: RationalQuadraticForm
-    vector: RationalCoordinateVector
+    Admission runs in ``require_evaluation_budget`` before any arithmetic:
+    per-entry digit bounds are stated on the nested value fields, and the
+    form and vector field descriptions publish the total-support and
+    aggregate-denominator envelopes a schema-valid request must satisfy.
+    """
+
+    form: RationalQuadraticForm = Field(
+        description=(
+            "Form on its declared axis; admission additionally caps the "
+            "total materialized support (diagonal coefficients plus cross "
+            f"terms) at {MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS} terms."
+        ),
+    )
+    vector: RationalCoordinateVector = Field(
+        description=(
+            "Vector whose axis equals the form axis; over the active "
+            "monomials (nonzero coefficient at nonzero coordinates) the "
+            "aggregate denominator digits d -- active coefficient-"
+            "denominator digits plus twice the touched coordinate-denominator "
+            f"digits -- must satisfy d + {MAX_QUADRATIC_EVALUATION_TERM_DIGITS} "
+            f"+ len(str(t)) <= {MAX_QUADRATIC_EVALUATION_DIGITS}, where t is "
+            "the active term count."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_shared_axis(self) -> Self:

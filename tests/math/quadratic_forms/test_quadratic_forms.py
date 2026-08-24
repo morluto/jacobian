@@ -14,8 +14,10 @@ from jacobian.math.quadratic_forms import (
 )
 from jacobian.math.quadratic_forms._models import EvaluationRequest, EvaluationResult
 from jacobian.math.quadratic_forms._operations import evaluate_form
+from jacobian.math.quadratic_forms._tools import TOOLS
 from jacobian.math.quadratic_forms.values import (
     MAX_QUADRATIC_EVALUATION_DIGITS,
+    MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS,
     MAX_QUADRATIC_EVALUATION_TERM_DIGITS,
     MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS,
     MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS,
@@ -308,6 +310,85 @@ def test_schema_documents_entry_digit_limits() -> None:
     assert (
         f"at most {MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS} decimal digits"
         in vector_properties["coordinates"]["description"]
+    )
+
+
+def test_total_support_bound_rejects_unbounded_annihilated_support() -> None:
+    dimension = MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS + 1
+    labels = [f"x{index}" for index in range(dimension)]
+    form = {
+        "axis": labels,
+        "diagonal_coefficients": [_rational(0) for _ in labels],
+    }
+    vector = {
+        "axis": labels,
+        "coordinates": [_rational(0) for _ in labels],
+    }
+
+    with pytest.raises(ValidationError, match="total support"):
+        EvaluationRequest.model_validate({"form": form, "vector": vector})
+    with pytest.raises(ValidationError, match="total support"):
+        EvaluationResult.model_validate(
+            {"form": form, "vector": vector, "value": _rational(0)}
+        )
+
+
+def test_total_support_admits_the_boundary_and_rejects_one_past_it() -> None:
+    def _request(dimension: int) -> dict[str, object]:
+        labels = [f"x{index}" for index in range(dimension)]
+        return {
+            "form": {
+                "axis": labels,
+                "diagonal_coefficients": [_rational(i + 1) for i, _ in enumerate(labels)],
+            },
+            "vector": {
+                "axis": labels,
+                "coordinates": [_rational(0) for _ in labels],
+            },
+        }
+
+    accepted = EvaluationRequest.model_validate(
+        _request(MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS)
+    )
+
+    assert evaluate_rational_quadratic_form(
+        accepted.form, accepted.vector
+    ) == Fraction(0)
+    with pytest.raises(ValidationError, match="total support"):
+        EvaluationRequest.model_validate(
+            _request(MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS + 1)
+        )
+
+
+def test_request_schema_documents_the_evaluation_budgets() -> None:
+    properties = EvaluationRequest.model_json_schema()["properties"]
+
+    assert (
+        f"at {MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS} terms"
+        in properties["form"]["description"]
+    )
+    assert (
+        f"d + {MAX_QUADRATIC_EVALUATION_TERM_DIGITS} + len(str(t)) <= "
+        f"{MAX_QUADRATIC_EVALUATION_DIGITS}"
+        in properties["vector"]["description"]
+    )
+
+
+def test_tool_description_and_example_publish_the_evaluation_budgets() -> None:
+    tool = TOOLS[0]
+
+    assert f"{MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS} terms" in tool.description
+    assert (
+        f"d + {MAX_QUADRATIC_EVALUATION_TERM_DIGITS} + len(str(t)) <= "
+        f"{MAX_QUADRATIC_EVALUATION_DIGITS}"
+        in tool.description
+    )
+    example_description = tool.examples[0].description
+    assert f"{MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS} terms" in example_description
+    assert (
+        f"d + {MAX_QUADRATIC_EVALUATION_TERM_DIGITS} + digits(t) within "
+        f"{MAX_QUADRATIC_EVALUATION_DIGITS}"
+        in example_description
     )
 
 

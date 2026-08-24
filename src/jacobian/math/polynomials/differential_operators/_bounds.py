@@ -316,6 +316,10 @@ def _powered_support_bound(
 
 ENUMERATION_WORK_CAP = 250_000
 _HEIGHT_CAP_BITS = 64 * MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS
+# A single catalog invocation validates the request, runs the compute
+# preflight, validates the inherited result, and runs the replay preflight;
+# per-pass admission scans share one quarter of the deterministic budget.
+_ADMISSION_SCAN_PASSES = 4
 _RETAINED_WEIGHT_BITS = MAX_APPLICATION_RESULT_BYTES * 8
 
 
@@ -1065,7 +1069,11 @@ def validate_application_envelope(
     # identity aggregate acts, so the power collapses to rescaling and the
     # unreachable expansion does not narrow the domain.
     scalar_action = _is_scalar_operator(operator)
-    rescale_only = _rescale_only(polynomial, operator, MAX_APPLICATION_WORK_UNITS)
+    rescale_only = _rescale_only(
+        polynomial,
+        operator,
+        MAX_APPLICATION_WORK_UNITS // _ADMISSION_SCAN_PASSES,
+    )
     if scalar_action or rescale_only:
         _require_nonexpanding_output(polynomial, expected)
     else:

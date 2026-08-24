@@ -1656,6 +1656,22 @@ def test_annihilating_rescale_scan_follows_the_request_work_budget() -> None:
     assert replayed == result
 
 
+def test_rescale_scan_overflow_falls_back_to_expansion_gates() -> None:
+    variables = ("x",)
+    source = _polynomial(variables, dict.fromkeys(((i,) for i in range(4_096)), 1))
+    operator = _operator(
+        variables,
+        {(0,): 1, **dict.fromkeys(((j,) for j in range(2, 1_002)), 1)},
+    )
+
+    with pytest.raises(ValidationError, match="deterministic work budget"):
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=operator,
+            iterations=1,
+        )
+
+
 def test_rescale_scaling_reduces_against_source_denominators() -> None:
     variables = ("x",)
     numerator_n = "1" + "0" * 19999 + "1"

@@ -61,9 +61,17 @@ def _edge_orbits(
     )
 
 
-def _generator_orbits(
+def _declared_orbit_partitions(
     request: GraphSymmetryOrbitRequest,
-) -> GraphSymmetryOrbitResult:
+) -> tuple[
+    tuple[tuple[str, ...], ...],
+    tuple[tuple[tuple[str, str], ...], ...],
+]:
+    """Canonical vertex and edge orbit members of the declared generators.
+
+    Shared by execution and result-model validation so both replay the exact
+    same orbit computation on the retained source action.
+    """
     vertices = tuple(sorted(request.graph.vertices))
     edges = tuple(sorted(request.graph.edges))
     vertex_actions = tuple(generator.mapping for generator in request.generators)
@@ -71,8 +79,18 @@ def _generator_orbits(
         {edge: _canonical_edge(mapping[edge[0]], mapping[edge[1]]) for edge in edges}
         for mapping in vertex_actions
     )
-    vertex_orbit_members = _vertex_orbits(vertices, vertex_actions)
-    edge_orbit_members = _edge_orbits(edges, edge_actions)
+    return (
+        _vertex_orbits(vertices, vertex_actions),
+        _edge_orbits(edges, edge_actions),
+    )
+
+
+def _generator_orbits(
+    request: GraphSymmetryOrbitRequest,
+) -> GraphSymmetryOrbitResult:
+    vertices = tuple(sorted(request.graph.vertices))
+    edges = tuple(sorted(request.graph.edges))
+    vertex_orbit_members, edge_orbit_members = _declared_orbit_partitions(request)
     vertex_orbits = tuple(
         GraphVertexOrbit(
             orbit_index=index,
@@ -90,6 +108,7 @@ def _generator_orbits(
         for index, members in enumerate(edge_orbit_members)
     )
     return GraphSymmetryOrbitResult(
+        source=request,
         vertices=vertices,
         edges=edges,
         generator_ids=tuple(
@@ -108,7 +127,7 @@ def _generator_orbits(
 GRAPH_SYMMETRY_OPERATIONS: MathTools = (
     MathTool(
         operation_id="graph.symmetry.generator_orbits.compute",
-        version="5",
+        version="6",
         title="Exact declared graph-symmetry orbit partitions",
         description=(
             "Validate explicit color-preserving graph automorphism generators and "

@@ -203,6 +203,17 @@ class GraphEdgeOrbit(StrictModel):
 
 
 class GraphSymmetryOrbitResult(StrictModel):
+    """Complete vertex and edge orbits of one declared generated subgroup.
+
+    The result retains its complete declared source action - the canonical
+    graph, the generator mappings, and the declared colors - through the
+    domain-owned request value. Validation binds every claim to that source:
+    the retained graph and generators must equal it, the color modes must
+    match its declared colors, and both returned partitions must equal a
+    replay of the exact orbits of the declared generators.
+    """
+
+    source: GraphSymmetryOrbitRequest
     vertices: tuple[GraphSymmetryLabel, ...] = Field(
         max_length=MAX_GRAPH_SYMMETRY_VERTICES
     )
@@ -252,6 +263,29 @@ class GraphSymmetryOrbitResult(StrictModel):
             raise ValueError(
                 "result generator identifiers must be unique and canonical"
             )
+        declared_generator_ids = tuple(
+            sorted(generator.generator_id for generator in self.source.generators)
+        )
+        if (
+            self.vertices != tuple(sorted(self.source.graph.vertices))
+            or self.edges != tuple(sorted(self.source.graph.edges))
+            or self.generator_ids != declared_generator_ids
+        ):
+            raise ValueError(
+                "result graph and generators must equal the retained source action"
+            )
+        if self.vertex_color_mode != (
+            "DECLARED" if self.source.vertex_colors else "UNCOLORED"
+        ):
+            raise ValueError(
+                "vertex color mode must match the retained source vertex colors"
+            )
+        if self.edge_color_mode != (
+            "DECLARED" if self.source.edge_colors else "UNCOLORED"
+        ):
+            raise ValueError(
+                "edge color mode must match the retained source edge colors"
+            )
         vertex_members = tuple(
             member for orbit in self.vertex_orbits for member in orbit.members
         )
@@ -280,6 +314,23 @@ class GraphSymmetryOrbitResult(StrictModel):
             or set(edge_members) != set(self.edges)
         ):
             raise ValueError("edge orbits must be a complete canonical edge partition")
+        from jacobian.math.graphs.symmetry._operations import _declared_orbit_partitions
+
+        expected_vertex_members, expected_edge_members = _declared_orbit_partitions(
+            self.source
+        )
+        if tuple(orbit.members for orbit in self.vertex_orbits) != (
+            expected_vertex_members
+        ):
+            raise ValueError(
+                "vertex orbits must be the exact orbits of the declared generators"
+            )
+        if tuple(orbit.members for orbit in self.edge_orbits) != (
+            expected_edge_members
+        ):
+            raise ValueError(
+                "edge orbits must be the exact orbits of the declared generators"
+            )
         return self
 
 

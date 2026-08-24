@@ -194,15 +194,15 @@ def test_request_rejects_duplicate_and_out_of_domain_positions() -> None:
 
 
 def test_request_rejects_group_immediately_above_enumeration_bound() -> None:
-    symmetric_s7 = FinitePermutationAction(
-        domain=tuple(f"p{position}" for position in range(7)),
-        generators=((1, 2, 3, 4, 5, 6, 0), (1, 0, 2, 3, 4, 5, 6)),
+    symmetric_s8 = FinitePermutationAction(
+        domain=tuple(f"p{position}" for position in range(8)),
+        generators=((1, 2, 3, 4, 5, 6, 7, 0), (1, 0, 2, 3, 4, 5, 6, 7)),
     )
 
-    with pytest.raises(ValidationError, match=r"group order 5040.*maximum 720"):
-        _request(symmetric_s7, (0,))
-    with pytest.raises(ValueError, match=r"group order exceeds.*720"):
-        _enumerate_group(symmetric_s7)
+    with pytest.raises(ValidationError, match=r"group order 40320.*maximum 10000"):
+        _request(symmetric_s8, (0,))
+    with pytest.raises(ValueError, match=r"group order exceeds.*10000"):
+        _enumerate_group(symmetric_s8)
 
 
 def test_domain_and_subset_boundary_of_fifty_positions_is_accepted() -> None:
@@ -408,7 +408,7 @@ def test_public_declaration_exposes_and_executes_copyable_example() -> None:
     bound_schema = schema["$defs"]["ActionBoundSubset"]
     assert bound_schema["properties"]["positions"]["maxItems"] == 50
     assert (
-        "generated group must have order at most 720"
+        "generated group must have order at most 10000"
         in schema["properties"]["subset"]["description"]
     )
     # The example is one copyable request whose subset carries its action.

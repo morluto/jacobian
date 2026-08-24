@@ -105,6 +105,11 @@ or reasoning before designing an implementation (see
 Only a genuine operation gap proceeds to the
 [admission contract](public-operation-admission.md).
 
+Before trusting backend output for a new claim, consult the
+[known backend defects](backend-known-defects.md) registry; add an entry
+whenever the adapter compensates for backend behavior instead of narrowing
+the public domain.
+
 Every new or materially changed public operation must include the following
 completed review artifact in its issue or pull request. A field may say `Not
 applicable` with a reason; it must not be omitted.

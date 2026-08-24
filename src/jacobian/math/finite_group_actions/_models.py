@@ -9,7 +9,7 @@ from pydantic import Field, model_validator
 from jacobian._models import StrictModel
 
 MAX_DOMAIN_SIZE = 50
-MAX_GROUP_ORDER = 720
+MAX_GROUP_ORDER = 10000
 MAX_GENERATORS = 50
 MAX_LABEL_LENGTH = 64
 MAX_COLORS = 50
@@ -126,7 +126,7 @@ class SubsetCanonicalizationRequest(StrictModel):
 
     The subset carries the action giving its positions meaning, so a dumped
     canonical result replays into this request as one unchanged canonical
-    value.  The generated group must have order at most 720; validation
+    value.  The generated group must have order at most 10000; validation
     establishes that bound with SymPy's Schreier--Sims order computation
     before the kernel enumerates any group elements.
     """

@@ -10,7 +10,7 @@ from sympy import isprime
 from jacobian._models import StrictModel
 
 MAX_DIM = 32
-MAX_FIELD_ORDER = 251
+MAX_FIELD_ORDER = 10000
 
 
 class PrimeFieldVectorSpace(StrictModel):
@@ -59,7 +59,7 @@ class LinearSubspace(StrictModel):
     """A subspace represented by its unique RREF basis in an ordered parent."""
 
     space: PrimeFieldVectorSpace
-    basis: tuple[tuple[int, ...], ...] = Field(max_length=16)
+    basis: tuple[tuple[int, ...], ...] = Field(max_length=32)
 
     @model_validator(mode="after")
     def require_canonical(self) -> Self:
@@ -112,7 +112,7 @@ class ProjectivePointEqualRequest(StrictModel):
 
 class SubspaceComputeRequest(StrictModel):
     space: PrimeFieldVectorSpace
-    vectors: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=16)
+    vectors: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=32)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -133,8 +133,8 @@ class SubspaceMembershipRequest(StrictModel):
 
 class SubspaceSpanRequest(StrictModel):
     space: PrimeFieldVectorSpace
-    vectors: tuple[tuple[int, ...], ...] = Field(max_length=16)
-    subspaces: tuple[LinearSubspace, ...] = Field(max_length=16)
+    vectors: tuple[tuple[int, ...], ...] = Field(max_length=32)
+    subspaces: tuple[LinearSubspace, ...] = Field(max_length=32)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -144,7 +144,7 @@ class SubspaceSpanRequest(StrictModel):
             _validate_vector(vector, self.space)
         if any(subspace.space != self.space for subspace in self.subspaces):
             raise ValueError("all subspaces must have the declared field and axis")
-        if len(self.vectors) + sum(len(item.basis) for item in self.subspaces) > 16:
+        if len(self.vectors) + sum(len(item.basis) for item in self.subspaces) > 32:
             raise ValueError("span generator count exceeds bound")
         return self
 

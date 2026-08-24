@@ -14,8 +14,6 @@ from jacobian.math.number_theory._models import (
     DivisorListResult,
     FactorizationRequest,
     IntegerValueResult,
-    PowerfulNumberRequest,
-    PowerfulNumberResult,
     PrattCertificateNode,
     PrimalityCertificateRequest,
     PrimalityCertificateResult,
@@ -149,22 +147,6 @@ def factorize_primes(request: FactorizationRequest) -> PrimeFactorizationResult:
             PrimePower(prime=str(prime), power=int(power))
             for prime, power in sorted(factorint(abs(value)).items())
         )
-    )
-
-
-def decide_powerful(request: PowerfulNumberRequest) -> PowerfulNumberResult:
-    from sympy import factorint
-
-    factors = sorted(factorint(int(request.value)).items())
-    return PowerfulNumberResult(
-        semantics_version="powerful-number.prime-exponents-at-least-two.v1",
-        is_powerful=not any(power < 2 for _, power in factors),
-        factors=tuple(
-            PrimePower(prime=str(prime), power=int(power)) for prime, power in factors
-        ),
-        violating_primes=tuple(
-            str(prime) for prime, power in factors if int(power) < 2
-        ),
     )
 
 

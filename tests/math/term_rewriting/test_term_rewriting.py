@@ -29,6 +29,7 @@ from jacobian.math.term_rewriting._operations import (
 )
 from jacobian.math.term_rewriting._tools import TOOLS
 from jacobian.math.term_rewriting.operations import (
+    _bounded_unify,
     _MaterializationBudget,
     _nonvariable_positions,
     _positions,
@@ -1500,6 +1501,23 @@ class TestDeepTermTraversal:
         assert UnificationResult.model_validate_json(result.model_dump_json()) == (
             result
         )
+
+    def test_dependency_chained_mgu_is_rejected_before_materialization(self):
+        # Six equations x_i = F(x_{i+1}, ..., x_{i+1}) followed by x_6 = c
+        # have shallow, small inputs but expand x_0 to 17,895,697 nodes.
+        # The bounded kernel must charge the growth before constructing it.
+        signature = RankedSignature(arities=(7, 16, 0))
+        left = _app(0, *[_var(index) for index in range(7)])
+        right = _app(
+            0,
+            *[_app(1, *([_var(index + 1)] * 16)) for index in range(6)],
+            _app(2),
+        )
+
+        with pytest.raises(ValueError, match="result nodes"):
+            _bounded_unify(left, right)
+        with pytest.raises(ValidationError, match="result nodes"):
+            UnificationRequest(signature=signature, left=left, right=right)
 
     def test_deep_unification_and_matching_stay_typed(self):
         def chain(length: int) -> Term:

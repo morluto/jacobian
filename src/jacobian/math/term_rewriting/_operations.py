@@ -19,13 +19,13 @@ from jacobian.math.term_rewriting._models import (
     UnificationResult,
 )
 from jacobian.math.term_rewriting.operations import (
+    _bounded_unify,
     apply_substitution,
     critical_pairs,
     match,
     normal_form,
     rewrite_steps,
     selected_rewrite_step,
-    unify,
 )
 
 __all__ = [
@@ -53,7 +53,7 @@ def compute_matching(request: MatchingRequest) -> MatchingResult:
 
 
 def compute_unification(request: UnificationRequest) -> UnificationResult:
-    result = unify(request.left, request.right)
+    result = _bounded_unify(request.left, request.right)
     if result is None:
         return UnificationResult(
             signature=request.signature,

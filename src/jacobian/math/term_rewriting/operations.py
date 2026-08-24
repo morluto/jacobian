@@ -214,6 +214,21 @@ def _unify(
     return substitution
 
 
+def _bounded_unify(left: Term, right: Term) -> dict[int, Term] | None:
+    """Unify within the bounded public result envelope."""
+
+    try:
+        return _unify(
+            left,
+            right,
+            _MaterializationBudget(MAX_CRITICAL_PAIR_RESULT_NODES),
+        )
+    except _ResultEnvelopeError as error:
+        raise ValueError(
+            "unification result nodes exceed the supported bound"
+        ) from error
+
+
 def term_at_position(term: Term, position: tuple[int, ...]) -> Term:
     """Return the subterm at a child-index path, raising for an invalid path."""
     current = term

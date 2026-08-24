@@ -7,7 +7,9 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.canonical import CanonicalizationError, CanonicalLimits, canonicalize_json
 from jacobian.math.term_rewriting.operations import (
+    _bounded_unify,
     _validate_critical_pair_source,
     apply_substitution,
     critical_pairs,
@@ -15,9 +17,9 @@ from jacobian.math.term_rewriting.operations import (
     rewrite_steps,
     selected_rewrite_step,
     term_at_position,
-    unify,
 )
 from jacobian.math.term_rewriting.values import (
+    MAX_CRITICAL_PAIR_RESULT_BYTES,
     MAX_CRITICAL_PAIR_RULES,
     MAX_RULES,
     MAX_TERM_DEPTH,
@@ -131,9 +133,29 @@ class UnificationRequest(StrictModel):
         self.signature.validate_term(self.left)
         self.signature.validate_term(self.right)
         _require_transport_safe_depth(self.left, self.right)
-        expected = unify(self.left, self.right)
+        expected = _bounded_unify(self.left, self.right)
         if expected is not None:
             _require_transport_safe_depth(*expected.values())
+            try:
+                canonicalize_json(
+                    {
+                        "signature": self.signature.model_dump(mode="json"),
+                        "left": self.left.model_dump(mode="json"),
+                        "right": self.right.model_dump(mode="json"),
+                        "unified": True,
+                        "substitution": {
+                            str(variable): term.model_dump(mode="json")
+                            for variable, term in expected.items()
+                        },
+                    },
+                    limits=CanonicalLimits(
+                        max_output_bytes=MAX_CRITICAL_PAIR_RESULT_BYTES
+                    ),
+                )
+            except CanonicalizationError as error:
+                raise ValueError(
+                    "unification result exceeds the supported transport bound"
+                ) from error
         return self
 
 
@@ -145,7 +167,7 @@ class UnificationResult(UnificationRequest):
 
     @model_validator(mode="after")
     def require_exact_unifier(self) -> Self:
-        expected = unify(self.left, self.right)
+        expected = _bounded_unify(self.left, self.right)
         if expected is None:
             if self.unified or self.substitution:
                 raise ValueError("failed unification must not claim a substitution")

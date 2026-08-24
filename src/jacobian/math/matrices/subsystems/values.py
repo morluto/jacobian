@@ -10,6 +10,7 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.matrices.values import RationalMatrix
 
 MAX_SUBSYSTEM_FACTORS = 4
@@ -151,27 +152,66 @@ def partial_trace_source_index_groups(
     return tuple(cells)
 
 
-def partial_trace_entries(
+def partial_trace_measured_entries(
     matrix: FactorizedHermitianMatrix,
     traced_factor_labels: tuple[str, ...],
-) -> tuple[tuple[Fraction, ...], ...]:
-    """Return the exact trace over named factors in the declared product basis."""
+) -> tuple[tuple[tuple[Fraction, ...], ...], int]:
+    """Return the exact trace over named factors and its widest intermediate.
+
+    Each reduced output cell sums its source terms with one
+    cancellation-aware exact strategy: numerators are first accumulated per
+    distinct denominator -- integer sums that cannot widen past one
+    denominator -- and only the groups whose accumulated numerator survives
+    are folded together in ascending-denominator order.  ``Fraction`` reduces
+    between additions, so the recorded peak is the exact widest reduced
+    numerator or denominator this walk observes, whatever cancellation delays
+    or prevents.
+    """
 
     source = tuple(
         tuple(entry.as_fraction() for entry in row) for row in matrix.matrix.entries
     )
     groups = partial_trace_source_index_groups(matrix, traced_factor_labels)
     kept_order = isqrt(len(groups))
-    return tuple(
-        tuple(
-            sum(
-                (source[row_index][column_index] for row_index, column_index in group),
-                Fraction(0),
-            )
-            for group in groups[row * kept_order : (row + 1) * kept_order]
+    peak_component_digits = 1
+
+    def charge(value: Fraction) -> None:
+        nonlocal peak_component_digits
+        peak_component_digits = max(
+            peak_component_digits,
+            len(format_canonical_integer(value.numerator)),
+            len(format_canonical_integer(value.denominator)),
         )
-        for row in range(len(groups) // kept_order)
-    )
+
+    rows: list[tuple[Fraction, ...]] = []
+    for row in range(len(groups) // kept_order):
+        cell_row: list[Fraction] = []
+        for group in groups[row * kept_order : (row + 1) * kept_order]:
+            grouped: dict[int, int] = {}
+            for row_index, column_index in group:
+                term = source[row_index][column_index]
+                grouped[term.denominator] = (
+                    grouped.get(term.denominator, 0) + term.numerator
+                )
+                charge(Fraction(grouped[term.denominator], term.denominator))
+            value = Fraction(0)
+            for denominator in sorted(grouped):
+                if grouped[denominator] == 0:
+                    continue
+                value += Fraction(grouped[denominator], denominator)
+                charge(value)
+            cell_row.append(value)
+        rows.append(tuple(cell_row))
+    return tuple(rows), peak_component_digits
+
+
+def partial_trace_entries(
+    matrix: FactorizedHermitianMatrix,
+    traced_factor_labels: tuple[str, ...],
+) -> tuple[tuple[Fraction, ...], ...]:
+    """Return the exact trace over named factors in the declared product basis."""
+
+    return partial_trace_measured_entries(matrix, traced_factor_labels)[0]
 
 
 __all__ = [

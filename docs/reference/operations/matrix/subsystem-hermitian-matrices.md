@@ -24,8 +24,11 @@ The admitted product dimension is at most 16, with at most four factors.
 Kronecker and partial-trace admission fix no per-operand ceilings: preflight
 derives the operation's exact result coefficients and admits them against
 the documented component envelopes — 256 decimal digits for one product
-component and 4,098 digits for one partial-trace component. Because
-admission measures the emitted values themselves, the envelopes stay closed
+component and 4,098 digits for one partial-trace component — and partial
+trace additionally charges its actual contracted intermediates, cancelling
+equal-denominator terms before any cross-denominator addition so delayed
+cancellation is measured as executed, against a 16,392-digit work envelope.
+Because admission measures the emitted values themselves, the envelopes stay closed
 under composition: a produced matrix re-enters its own consumer unchanged
 whenever its next exact result fits, so a 200-digit operand still composes
 with an identity operand at the 256-digit boundary, while rejection means
@@ -35,7 +38,9 @@ ceiling: it measures the exact reduced `right - left` components, admits
 the pair when they stay within 513 digits and the dimension-scaled
 replayable-witness bound stays within the canonical rational limit, and
 identical or nearly equal operands whose reduced difference is tiny
-therefore admit trivially. A large Kronecker product
+therefore admit trivially; because the result echoes both operands and
+their difference, admission also reserves the serialized transport budget,
+so every accepted call returns its typed result. A large Kronecker product
 therefore does not imply that every downstream decision fits in one bounded
 call. The kernels are exact rational computations; they do not use
 floating-point matrix predicates or a tensor registry. The catalog schemas

@@ -9,20 +9,27 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import (
+    CanonicalizationError,
+    CanonicalLimits,
+    encode_strict_json,
+    format_canonical_integer,
+)
 from jacobian.math._exact_linear_algebra import symmetric_inertia
 from jacobian.math.matrices.subsystems.values import (
     MAX_SUBSYSTEM_DIMENSION,
     MAX_SUBSYSTEM_FACTORS,
     FactorizedHermitianMatrix,
-    partial_trace_entries,
-    partial_trace_source_index_groups,
+    partial_trace_measured_entries,
 )
+from jacobian.math.matrices.values import RationalMatrix
 
 MAX_KRONECKER_RESULT_COMPONENT_DIGITS = 256
 MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS = 4_098
 MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS = 4 * MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS
 MAX_PSD_DIFFERENCE_COMPONENT_DIGITS = 513
+_PSD_RESULT_ENVELOPE_RESERVE_BYTES = 4_096
+_PSD_WITNESS_COMPONENT_RESERVE_BYTES = 2 * MAX_CANONICAL_RATIONAL_DIGITS + 32
 
 
 def _fraction_component_digits(value: Fraction) -> tuple[int, int]:
@@ -50,35 +57,32 @@ def _entry_fractions(
 def _require_trace_work_envelope(
     matrix: FactorizedHermitianMatrix,
     traced_factor_labels: tuple[str, ...],
-) -> None:
-    """Bound contraction intermediates by replaying each cell's exact fold.
+) -> tuple[tuple[Fraction, ...], ...]:
+    """Charge one contraction's actual folded intermediates against the work bound.
 
     ``Fraction`` folds reduce between additions, and cancellation inside a
     cell can collapse the running value below any aggregate of its input
     widths -- adjacent pairs ``1/d, -1/d`` over distinct denominators never
-    widen past one denominator even though their digit sum grows with the
-    cell -- so no per-input estimate bounds every fold safely.  Admission
-    therefore replays each contracted cell's exact kernel fold -- the same
-    terms in the :func:`partial_trace_source_index_groups` order that
-    :func:`partial_trace_entries` accumulates -- and charges the widest
-    signed-numerator or denominator width among that cell's running reduced
-    intermediates.  Measuring the real arithmetic keeps cancelling folds
-    admissible while any genuinely growing intermediate is rejected before
-    the operation runs.
+    widen past one denominator, and cancellation can also arrive late, when
+    matching terms of opposite sign sit far apart in the fold order -- so no
+    per-input estimate bounds every fold safely.  Admission therefore runs
+    the exact kernel itself through :func:`partial_trace_measured_entries`,
+    whose per-denominator grouping cancels surviving equal-denominator
+    numerators before any cross-denominator addition, and charges the widest
+    signed-numerator or denominator width the executed walk reaches.
+    Measuring the real arithmetic keeps cancelling folds admissible while any
+    genuinely growing intermediate is rejected fail-closed.
     """
 
-    for group in partial_trace_source_index_groups(matrix, traced_factor_labels):
-        running = Fraction(0)
-        widest = max(_fraction_component_digits(running))
-        for row, column in group:
-            running += matrix.matrix.entries[row][column].as_fraction()
-            numerator_digits, denominator_digits = _fraction_component_digits(running)
-            widest = max(widest, numerator_digits, denominator_digits)
-        if widest > MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS:
-            raise ValueError(
-                "partial-trace contraction work exceeds the "
-                f"{MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS}-digit intermediate bound"
-            )
+    entries, peak_component_digits = partial_trace_measured_entries(
+        matrix, traced_factor_labels
+    )
+    if peak_component_digits > MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS:
+        raise ValueError(
+            "partial-trace contraction work exceeds the "
+            f"{MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS}-digit intermediate bound"
+        )
+    return entries
 
 
 def _require_trace_result_envelope(
@@ -137,7 +141,11 @@ def _require_psd_pair_admission(
     the zero matrix and admits no negative witness -- and nearly equal
     operands whose reduced difference stays tiny admit trivially, while no
     unreduced cross-term estimate can reject a pair whose actual difference
-    fits.
+    fits.  Because the source-bound result echoes both operands and their
+    difference, admission also reserves the serialized transport budget --
+    measured exactly, plus a component-capped witness allowance and one
+    result envelope -- so every accepted request returns its typed result
+    instead of overflowing canonical output encoding.
     """
 
     if left.factors != right.factors:
@@ -145,13 +153,20 @@ def _require_psd_pair_admission(
             "PSD order requires exactly equal subsystem labels, dimensions, and "
             "basis linearization"
         )
+    difference_rows = tuple(
+        tuple(
+            right_entry - left_entry
+            for left_entry, right_entry in zip(left_row, right_row, strict=True)
+        )
+        for left_row, right_row in zip(
+            _entry_fractions(left), _entry_fractions(right), strict=True
+        )
+    )
     difference_component_digits = max(
         (
-            max(_fraction_component_digits(right_entry - left_entry))
-            for left_row, right_row in zip(
-                _entry_fractions(left), _entry_fractions(right), strict=True
-            )
-            for left_entry, right_entry in zip(left_row, right_row, strict=True)
+            max(_fraction_component_digits(entry))
+            for row in difference_rows
+            for entry in row
         ),
         default=1,
     )
@@ -169,6 +184,43 @@ def _require_psd_pair_admission(
     ):
         raise ValueError(
             "PSD-order witness growth exceeds the canonical rational component bound"
+        )
+    output_limit = CanonicalLimits().max_output_bytes
+    witness_reserve = (
+        0
+        if all(entry == 0 for row in difference_rows for entry in row)
+        else (len(left.matrix.entries) + 1) * _PSD_WITNESS_COMPONENT_RESERVE_BYTES
+    )
+    try:
+        result_bytes = (
+            len(encode_strict_json(left.model_dump(mode="json")))
+            + len(encode_strict_json(right.model_dump(mode="json")))
+            + len(
+                encode_strict_json(
+                    FactorizedHermitianMatrix(
+                        matrix=RationalMatrix(
+                            entries=tuple(
+                                tuple(
+                                    CanonicalRational.from_fraction(entry)
+                                    for entry in row
+                                )
+                                for row in difference_rows
+                            )
+                        ),
+                        factors=left.factors,
+                    ).model_dump(mode="json")
+                )
+            )
+            + witness_reserve
+            + _PSD_RESULT_ENVELOPE_RESERVE_BYTES
+        )
+    except CanonicalizationError:
+        result_bytes = output_limit + 1
+    if result_bytes > output_limit:
+        raise ValueError(
+            "the PSD-order result retains both operands and their exact "
+            f"difference and would exceed the {output_limit}-byte canonical "
+            "output limit; use smaller or sparser operands"
         )
 
 
@@ -237,9 +289,10 @@ class SubsystemPartialTraceRequest(StrictModel):
     matrix: FactorizedHermitianMatrix = Field(
         description=(
             "Source operand; no fixed per-operand digit ceiling applies. "
-            "Admission bounds contraction intermediates within the 16392-digit "
-            "work envelope before the exact trace runs, then admits reduced "
-            "coefficients within the 4098-digit result envelope."
+            "Admission measures contraction intermediates, cancelling "
+            "equal-denominator terms first, against the 16392-digit work "
+            "envelope, then admits reduced coefficients within the 4098-digit "
+            "result envelope."
         ),
     )
     traced_factor_labels: tuple[str, ...] = Field(
@@ -263,9 +316,8 @@ class SubsystemPartialTraceRequest(StrictModel):
         )
         if self.traced_factor_labels != expected_order:
             raise ValueError("traced subsystem labels must follow source factor order")
-        _require_trace_work_envelope(self.matrix, self.traced_factor_labels)
         _require_trace_result_envelope(
-            partial_trace_entries(self.matrix, self.traced_factor_labels)
+            _require_trace_work_envelope(self.matrix, self.traced_factor_labels)
         )
         return self
 
@@ -292,10 +344,8 @@ class SubsystemPartialTraceResult(StrictModel):
         )
         if self.traced_factor_labels != expected_order:
             raise ValueError("traced subsystem labels must follow source factor order")
-        _require_trace_work_envelope(self.source_matrix, self.traced_factor_labels)
-        expected_entries = partial_trace_entries(
-            self.source_matrix,
-            self.traced_factor_labels,
+        expected_entries = _require_trace_work_envelope(
+            self.source_matrix, self.traced_factor_labels
         )
         _require_trace_result_envelope(expected_entries)
         expected = tuple(
@@ -354,16 +404,18 @@ class PsdOrderRequest(StrictModel):
     left: FactorizedHermitianMatrix = Field(
         description=(
             "First operand; admission couples both operands through the "
-            "measured right-minus-left component bound (513 digits) and the "
-            "dimension-scaled witness bound, not a fixed per-operand ceiling. "
+            "measured right-minus-left component bound (513 digits), the "
+            "dimension-scaled witness bound, and the serialized result's "
+            "canonical output budget, not a fixed per-operand ceiling. "
             "Identical operands measure the zero matrix and admit trivially."
         ),
     )
     right: FactorizedHermitianMatrix = Field(
         description=(
             "Second operand; admission couples both operands through the "
-            "measured right-minus-left component bound (513 digits) and the "
-            "dimension-scaled witness bound, not a fixed per-operand ceiling. "
+            "measured right-minus-left component bound (513 digits), the "
+            "dimension-scaled witness bound, and the serialized result's "
+            "canonical output budget, not a fixed per-operand ceiling. "
             "Identical operands measure the zero matrix and admit trivially."
         ),
     )

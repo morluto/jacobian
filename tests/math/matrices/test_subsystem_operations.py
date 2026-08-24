@@ -13,6 +13,7 @@ from pydantic import BaseModel, ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.math.matrices import subsystems
 from jacobian.math.matrices.subsystems._models import (
+    MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS,
     PsdOrderRequest,
     PsdOrderResult,
     SubsystemKroneckerProductRequest,
@@ -32,7 +33,7 @@ from jacobian.math.matrices.subsystems.operations import (
 from jacobian.math.matrices.subsystems.values import (
     FactorizedHermitianMatrix,
     MatrixSubsystem,
-    partial_trace_entries,
+    partial_trace_measured_entries,
 )
 from jacobian.math.matrices.values import RationalMatrix
 
@@ -321,11 +322,7 @@ def test_kronecker_product_stops_the_digit_scan_after_the_first_excess_product(
     assert scanned == [301]
 
 
-def test_partial_trace_rejects_contraction_work_before_exact_expansion(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from jacobian.math.matrices.subsystems import _models
-
+def test_partial_trace_rejects_genuinely_growing_contractions() -> None:
     factors = tuple(MatrixSubsystem(label=label, dimension=2) for label in "pqrs")
     source = _matrix(
         [
@@ -337,21 +334,12 @@ def test_partial_trace_rejects_contraction_work_before_exact_expansion(
         ],
         factors,
     )
-    contracted: list[object] = []
-    real_entries = partial_trace_entries
-
-    def counted(matrix: object, labels: object) -> object:
-        contracted.append(matrix)
-        return real_entries(matrix, labels)  # type: ignore[arg-type]
-
-    monkeypatch.setattr(_models, "partial_trace_entries", counted)
 
     with pytest.raises(ValidationError, match="intermediate bound"):
         SubsystemPartialTraceRequest(
             matrix=source,
             traced_factor_labels=("p", "q", "r", "s"),
         )
-    assert contracted == []
 
 
 def test_partial_trace_work_envelope_admits_folded_boundary_terms() -> None:
@@ -423,11 +411,9 @@ def test_partial_trace_work_charges_only_contracted_terms() -> None:
     )
 
 
-def test_partial_trace_work_envelope_rejects_one_step_above_the_contracted_boundary(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from jacobian.math.matrices.subsystems import _models
-
+def test_partial_trace_work_envelope_rejects_one_step_above_the_contracted_boundary() -> (
+    None
+):
     q = MatrixSubsystem(label="q", dimension=4)
     rejected_denominators = (
         10**4099 - 3,
@@ -445,18 +431,12 @@ def test_partial_trace_work_envelope_rejects_one_step_above_the_contracted_bound
         ],
         (q,),
     )
-    contracted: list[object] = []
-    real_entries = partial_trace_entries
 
-    def counted(matrix: object, labels: object) -> object:
-        contracted.append(matrix)
-        return real_entries(matrix, labels)  # type: ignore[arg-type]
-
-    monkeypatch.setattr(_models, "partial_trace_entries", counted)
+    _, peak = partial_trace_measured_entries(source, ("q",))
+    assert peak > MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS
 
     with pytest.raises(ValidationError, match="intermediate bound"):
         SubsystemPartialTraceRequest(matrix=source, traced_factor_labels=("q",))
-    assert contracted == []
 
 
 def test_partial_trace_admits_cancelling_pairs_and_rereads_its_emitted_factor() -> None:
@@ -495,6 +475,39 @@ def test_partial_trace_admits_cancelling_pairs_and_rereads_its_emitted_factor() 
     final = partial_trace(reduced, ("r",))
     assert final.factors == ()
     assert _entries(final) == ((Fraction(0),),)
+
+
+def test_partial_trace_admits_folds_whose_cancellation_arrives_late() -> None:
+    a = MatrixSubsystem(label="a", dimension=1)
+    r = MatrixSubsystem(label="r", dimension=16)
+    denominators = tuple(10**4097 + offset for offset in (1, 3, 5, 7, 9))
+    diagonal = (
+        [Fraction(1, denominator) for denominator in denominators]
+        + [Fraction(-1, denominator) for denominator in denominators]
+        + [Fraction(0)] * 6
+    )
+    source = _matrix(
+        [
+            [diagonal[row] if row == column else 0 for column in range(16)]
+            for row in range(16)
+        ],
+        (a, r),
+    )
+
+    entries, peak = partial_trace_measured_entries(source, ("r",))
+    assert entries == ((Fraction(0),),)
+    assert peak == len(str(denominators[0]))
+
+    emitted = partial_trace(source, ("a",))
+    assert _entries(emitted) == tuple(
+        tuple(diagonal[row] if row == column else Fraction(0) for column in range(16))
+        for row in range(16)
+    )
+
+    stepwise = partial_trace(emitted, ("r",))
+    combined = partial_trace(source, ("a", "r"))
+    assert stepwise == combined
+    assert _entries(stepwise) == ((Fraction(0),),)
 
 
 def test_partial_trace_schema_describes_the_coupled_trace_envelopes() -> None:
@@ -672,6 +685,43 @@ def test_psd_order_admits_nearly_equal_operands_with_a_tiny_reduced_difference()
     assert ordered.inertia.n_zero == 15
     assert ordered.negative_witness is None
     assert PsdOrderResult.model_validate(ordered.model_dump(mode="python")) == ordered
+
+
+def _dense_equal_operand(digits: int) -> FactorizedHermitianMatrix:
+    q = MatrixSubsystem(label="q", dimension=16)
+    value = Fraction(10**digits + 3, 10**digits + 9)
+    return _matrix([[value] * 16 for _ in range(16)], (q,))
+
+
+def test_psd_order_rejects_results_beyond_the_canonical_output_limit() -> None:
+    from jacobian.canonical import CanonicalLimits, encode_strict_json
+
+    operand = _dense_equal_operand(digits=10224)
+    request_bytes = 2 * len(encode_strict_json(operand.model_dump(mode="json")))
+    assert request_bytes <= CanonicalLimits().max_input_bytes
+
+    with pytest.raises(ValidationError, match="canonical output limit"):
+        PsdOrderRequest(left=operand, right=operand)
+
+
+def test_psd_order_admits_dense_equal_operands_inside_the_output_budget() -> None:
+    from jacobian.canonical import CanonicalLimits, encode_strict_json
+
+    operand = _dense_equal_operand(digits=10150)
+    request_bytes = 2 * len(encode_strict_json(operand.model_dump(mode="json")))
+    assert request_bytes <= CanonicalLimits().max_input_bytes
+
+    ordered = decide_psd_order(PsdOrderRequest(left=operand, right=operand))
+    assert ordered.is_less_or_equal is True
+    encoded = encode_strict_json(
+        {
+            "operation_id": "matrix.subsystem.psd_order.decide",
+            "operation_version": "1",
+            "runtime_ms": 1,
+            "output": ordered.model_dump(mode="json"),
+        }
+    )
+    assert len(encoded) <= CanonicalLimits().max_output_bytes
 
 
 def test_kronecker_product_schema_describes_the_exact_product_component_envelope() -> (

@@ -7,6 +7,7 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.finite_group_actions._models import (
+    MAX_GROUP_ORDER,
     BurnsideCountRequest,
     BurnsideCountResult,
     CycleIndexRequest,
@@ -15,12 +16,15 @@ from jacobian.math.finite_group_actions._models import (
     ElementCyclesResult,
     PolyaInventoryRequest,
     PolyaInventoryResult,
+    SubsetCanonicalizationRequest,
+    SubsetCanonicalizationResult,
 )
 from jacobian.math.finite_group_actions._operations import (
     compute_burnside_count,
     compute_cycle_index,
     compute_element_cycles,
     compute_polya_inventory,
+    compute_subset_canonicalization,
 )
 
 
@@ -81,6 +85,41 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {
                     "action": _ACTION,
                     "element": 0,
+                },
+            ),
+        ),
+    ),
+    _op(
+        "group_action.subset.canonicalize",
+        "Canonicalize a subset under a finite permutation action",
+        "Return the lexicographically least image of a subset under the "
+        "generated group as an action-bound value whose increasing domain "
+        "positions carry their permutation action, together with the "
+        "lexicographically least transporter to that image and exact "
+        "subset-orbit and setwise-stabilizer sizes.",
+        SubsetCanonicalizationRequest,
+        SubsetCanonicalizationResult,
+        compute_subset_canonicalization,
+        "algebra",
+        "group",
+        "permutation",
+        "subset",
+        "canonicalization",
+        "transporter",
+        "orbit-stabilizer",
+        "exact",
+        examples=(
+            example(
+                "cyclic_c3_singleton_canonicalization",
+                "Canonicalize the singleton at position 2 under C_3; subset "
+                "positions are bound to the declared action and must be "
+                "distinct indices into its domain, and the generated group "
+                f"must have order at most {MAX_GROUP_ORDER}.",
+                {
+                    "subset": {
+                        "action": _ACTION,
+                        "positions": [2],
+                    },
                 },
             ),
         ),

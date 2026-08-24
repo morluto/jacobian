@@ -18,9 +18,9 @@ from jacobian._models import StrictModel
 
 _MAX_INTEGER_DIGITS = 256
 _MAX_MODULUS = 1_000_000
-_MAX_VARIABLES = 6
-_MAX_TERMS = 64
-_MAX_EXPONENT = 32
+_MAX_VARIABLES = 20
+_MAX_TERMS = 512
+_MAX_EXPONENT = 256
 _VARIABLE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 _INTEGER = re.compile(r"^(?:0|-?[1-9][0-9]*)$")
 
@@ -39,7 +39,7 @@ class ModularPolynomialTerm(StrictModel):
     @model_validator(mode="after")
     def require_bounded_exponents(self) -> Self:
         if any(exponent < 0 or exponent > _MAX_EXPONENT for exponent in self.exponents):
-            raise ValueError("term exponents must be between 0 and 32")
+            raise ValueError("term exponents must be between 0 and 256")
         return self
 
 

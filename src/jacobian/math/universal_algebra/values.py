@@ -9,7 +9,8 @@ is introduced.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Self
+from itertools import product as iproduct
+from typing import Annotated, Literal, NamedTuple, Self
 
 from pydantic import Field, model_validator
 
@@ -67,6 +68,120 @@ class FiniteAlgebra(StrictModel):
             for output in table:
                 if not 0 <= output < len(self.carrier):
                     raise ValueError("table output out of carrier range")
+        return self
+
+
+class FiniteAlgebraCarrierMap(StrictModel):
+    """One total carrier map between finite algebras with the same signature.
+
+    ``mapping[a]`` is the target carrier index assigned to source carrier
+    index ``a``.  This value establishes only totality and exact signature
+    binding; :class:`FiniteAlgebraHomomorphism` additionally establishes
+    preservation of every basic operation.
+    """
+
+    source: FiniteAlgebra = Field(
+        description="Source finite algebra whose carrier positions index the map."
+    )
+    target: FiniteAlgebra = Field(
+        description=(
+            "Target finite algebra with exactly the source operation identifiers "
+            "and arities in the same order."
+        )
+    )
+    mapping: tuple[int, ...] = Field(
+        min_length=1,
+        max_length=MAX_CARRIER_SIZE,
+        description=(
+            "Complete target carrier index for each source carrier position, in "
+            "source carrier order."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_total_signature_bound_map(self) -> Self:
+        if self.source.operations != self.target.operations:
+            raise ValueError(
+                "source and target operation identifiers and arities must match exactly"
+            )
+        if len(self.mapping) != len(self.source.carrier):
+            raise ValueError("mapping must contain one target index per source element")
+        if any(not 0 <= image < len(self.target.carrier) for image in self.mapping):
+            raise ValueError("mapping image is outside the target carrier")
+        return self
+
+
+class _PreservationFailure(NamedTuple):
+    operation: int
+    source_arguments: tuple[int, ...]
+    target_arguments: tuple[int, ...]
+    source_output: int
+    mapped_source_output: int
+    target_output: int
+
+
+def _dense_table_index(arguments: tuple[int, ...], carrier_size: int) -> int:
+    index = 0
+    for argument in arguments:
+        index = index * carrier_size + argument
+    return index
+
+
+def _first_homomorphism_failure(
+    carrier_map: FiniteAlgebraCarrierMap,
+) -> _PreservationFailure | None:
+    """Return the first operation-preservation failure in canonical order."""
+
+    source_size = len(carrier_map.source.carrier)
+    target_size = len(carrier_map.target.carrier)
+    for operation, symbol in enumerate(carrier_map.source.operations):
+        for source_arguments in iproduct(range(source_size), repeat=symbol.arity):
+            target_arguments = tuple(
+                carrier_map.mapping[argument] for argument in source_arguments
+            )
+            source_output = carrier_map.source.tables[operation][
+                _dense_table_index(source_arguments, source_size)
+            ]
+            mapped_source_output = carrier_map.mapping[source_output]
+            target_output = carrier_map.target.tables[operation][
+                _dense_table_index(target_arguments, target_size)
+            ]
+            if mapped_source_output != target_output:
+                return _PreservationFailure(
+                    operation=operation,
+                    source_arguments=source_arguments,
+                    target_arguments=target_arguments,
+                    source_output=source_output,
+                    mapped_source_output=mapped_source_output,
+                    target_output=target_output,
+                )
+    return None
+
+
+def _homomorphism_kernel_and_image(
+    mapping: tuple[int, ...],
+) -> tuple[tuple[tuple[int, ...], ...], tuple[int, ...]]:
+    """Return kernel fibers and image in canonical carrier-position order."""
+
+    fibers: dict[int, list[int]] = {}
+    for source_element, target_element in enumerate(mapping):
+        fibers.setdefault(target_element, []).append(source_element)
+    return tuple(tuple(block) for block in fibers.values()), tuple(sorted(fibers))
+
+
+class FiniteAlgebraHomomorphism(FiniteAlgebraCarrierMap):
+    """A checked carrier map preserving every basic operation exactly."""
+
+    @model_validator(mode="after")
+    def require_operation_preservation(self) -> Self:
+        failure = _first_homomorphism_failure(self)
+        if failure is not None:
+            operation_id = self.source.operations[failure.operation].operation_id
+            raise ValueError(
+                "carrier map does not preserve operation "
+                f"{operation_id!r} at source arguments "
+                f"{failure.source_arguments}"
+            )
         return self
 
 
@@ -157,6 +272,8 @@ __all__ = [
     "MAX_SIGNATURE_SIZE",
     "ApplicationTerm",
     "FiniteAlgebra",
+    "FiniteAlgebraCarrierMap",
+    "FiniteAlgebraHomomorphism",
     "FlatTerm",
     "OperationSymbol",
     "Term",

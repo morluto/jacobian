@@ -36,6 +36,9 @@ SingularOperation = Literal["radical", "quotient", "saturation"]
 SingularOutcome = Literal[
     "COMPUTED", "UNAVAILABLE", "TIMEOUT", "LIMIT_EXCEEDED", "ERROR"
 ]
+SaturationVerificationVerdict = Literal[
+    "VERIFIED", "REFUTED", "UNAVAILABLE", "TIMEOUT", "ERROR"
+]
 
 
 class _ResultLimitExceededError(ValueError):
@@ -363,4 +366,187 @@ def run_singular_ideal_operation(
     )
 
 
-__all__ = ["SingularIdealResult", "run_singular_ideal_operation"]
+def _verification_script(
+    source: RationalPolynomialIdeal,
+    saturator: RationalPolynomialIdeal,
+    claimed: RationalPolynomialIdeal,
+) -> bytes:
+    """Script deciding ``source : saturator^inf == claimed`` inside Singular."""
+    variable_count = len(source.variables)
+    variables = ",".join(f"jv{index + 1}" for index in range(variable_count))
+    declarations = [
+        _singular_ideal("jacobian_source", source),
+        _singular_ideal("jacobian_saturator", saturator),
+        _singular_ideal("jacobian_claimed", claimed),
+    ]
+    source_lines = [
+        'LIB "primdec.lib";',
+        "option(redSB);",
+        f"ring jacobian_ring=0,({variables}),dp;",
+        *declarations,
+        # The defining equality I : d^inf == J, decided by mutual exact
+        # reduction of Groebner bases computed inside this bounded process.
+        "list jacobian_sat=sat(jacobian_source,jacobian_saturator);",
+        "ideal jacobian_true=std(jacobian_sat[1]);",
+        "ideal jacobian_std_claimed=std(jacobian_claimed);",
+        "int jacobian_equal=1;",
+        "int jacobian_i;",
+        "for (jacobian_i=1; jacobian_i<=size(jacobian_true); jacobian_i=",
+        "jacobian_i+1)",
+        "{",
+        "  if (reduce(jacobian_true[jacobian_i],jacobian_std_claimed) != 0)",
+        "  { jacobian_equal=0; }",
+        "}",
+        "for (jacobian_i=1; jacobian_i<=size(jacobian_claimed); jacobian_i=",
+        "jacobian_i+1)",
+        "{",
+        "  if (reduce(jacobian_claimed[jacobian_i],jacobian_true) != 0)",
+        "  { jacobian_equal=0; }",
+        "}",
+        f'print("{_PROTOCOL_HEADER}");',
+        'system("version");',
+        'print("VERDICT "+string(jacobian_equal));',
+        'print("END");',
+        "quit;",
+        "",
+    ]
+    return "\n".join(source_lines).encode("ascii")
+
+
+def _parse_verification_verdict(output: bytes) -> SaturationVerificationVerdict:
+    """Decode the bounded process output into a verification verdict."""
+    try:
+        text = output.decode("ascii")
+    except UnicodeDecodeError:
+        return "ERROR"
+    lines = _ProtocolReader(text.splitlines())
+    try:
+        lines.expect(_PROTOCOL_HEADER)
+        version_number = int(lines.pop())
+        if not _SUPPORTED_VERSION_MIN <= version_number < _SUPPORTED_VERSION_MAX:
+            return "ERROR"
+        verdict_line = lines.pop()
+        if not verdict_line.startswith("VERDICT "):
+            return "ERROR"
+        verdict = int(verdict_line.removeprefix("VERDICT "))
+        lines.expect("END")
+        if not lines.finished() or verdict not in (0, 1):
+            return "ERROR"
+    except ValueError:
+        return "ERROR"
+    return "VERIFIED" if verdict == 1 else "REFUTED"
+
+
+def run_singular_saturation_verification(
+    source: RationalPolynomialIdeal,
+    saturator: RationalPolynomialIdeal,
+    claimed: RationalPolynomialIdeal,
+    budget: IdealComputationBudget,
+) -> SaturationVerificationVerdict:
+    """Decide the saturation's defining equality in a bounded subprocess.
+
+    Returns ``"VERIFIED"``, ``"REFUTED"``, or an execution outcome
+    (``UNAVAILABLE``/``TIMEOUT``/``ERROR``) when the bounded backend could
+    not decide. Running inside the supervised process keeps the replay
+    under the same wall-time and memory limits as the operation itself.
+    """
+    resolved = shutil.which("Singular")
+    if resolved is None:
+        return "UNAVAILABLE"
+    resolved = str(Path(resolved).resolve())
+    prlimit = shutil.which("prlimit")
+    if prlimit is not None:
+        prlimit = str(Path(prlimit).resolve())
+    try:
+        with tempfile.TemporaryDirectory(prefix="jacobian-singular-") as directory:
+            completed = run_bounded_process(
+                [resolved, "-q"],
+                input_bytes=_verification_script(source, saturator, claimed),
+                timeout_seconds=float(budget.wall_seconds),
+                environment=worker_environment(locale="C.UTF-8"),
+                stdout_limit=_STDOUT_LIMIT,
+                stderr_limit=_STDERR_LIMIT,
+                resource_limits=ProcessResourceLimits(
+                    cpu_seconds=budget.wall_seconds,
+                    address_space_bytes=1024 * 1024 * 1024,
+                    file_size_bytes=1024 * 1024,
+                ),
+                platform_tools=ProcessPlatformTools(prlimit_executable=prlimit),
+                cwd=directory,
+            )
+    except OSError:
+        return "UNAVAILABLE"
+    if completed.timed_out:
+        return "TIMEOUT"
+    if (
+        completed.cancelled
+        or completed.returncode != 0
+        or completed.stderr
+        or completed.stdout_exceeded
+        or completed.stderr_exceeded
+    ):
+        return "ERROR"
+    return _parse_verification_verdict(completed.stdout)
+
+
+__all__ = [
+    "SaturationVerificationVerdict",
+    "SingularIdealResult",
+    "run_singular_ideal_operation",
+    "run_singular_saturation_verification",
+]
+
+
+def run_bounded_stdin_python_kernel(
+    script: str,
+    payload_json: str,
+    *,
+    wall_seconds: float,
+    stdout_limit: int,
+    stderr_limit: int,
+) -> tuple[bool, str, bool]:
+    """Run one bounded Python-kernel worker and return (timed_out, stdout,
+    output_limit_exceeded).
+
+    The child process is terminated on wall-budget expiry, so an admitted
+    request cannot leave detached computations running inside the server.
+    This owner owns every external-executable lookup and the killable
+    process launch for the domain's exact kernels.
+    """
+    import sys
+    import tempfile
+
+    from jacobian.process import (
+        ProcessPlatformTools,
+        ProcessResourceLimits,
+        run_bounded_process,
+        worker_environment,
+    )
+
+    # Deliberately not resolved: following the interpreter symlink would
+    # reparent the worker onto the base prefix without the environment's
+    # site-packages.
+    resolved = shutil.which(sys.executable) or sys.executable
+    prlimit = shutil.which("prlimit")
+    if prlimit is not None:
+        prlimit = str(Path(prlimit).resolve())
+    with tempfile.TemporaryDirectory(prefix="jacobian-sympy-") as directory:
+        completed = run_bounded_process(
+            [resolved, "-I", "-c", script],
+            input_bytes=payload_json.encode("ascii"),
+            timeout_seconds=float(wall_seconds),
+            environment=worker_environment(locale="C.UTF-8"),
+            stdout_limit=stdout_limit,
+            stderr_limit=stderr_limit,
+            resource_limits=ProcessResourceLimits(
+                cpu_seconds=int(wall_seconds),
+                address_space_bytes=2 * 1024 * 1024 * 1024,
+                file_size_bytes=1024 * 1024,
+            ),
+            platform_tools=ProcessPlatformTools(prlimit_executable=prlimit),
+            cwd=directory,
+        )
+    if completed.timed_out:
+        return True, "", False
+    exceeded = completed.stdout_exceeded or completed.stderr_exceeded
+    return False, completed.stdout.decode("ascii", errors="replace"), exceeded

@@ -10,8 +10,9 @@ from jacobian.math.universal_algebra._models import (
     EquationProfileResult,
     EvaluateRequest,
     EvaluateResult,
+    HomomorphismProfileRequest,
+    HomomorphismProfileResult,
     QuotientRequest,
-    QuotientResult,
     SubalgebraRequest,
     SubalgebraResult,
 )
@@ -20,14 +21,17 @@ from jacobian.math.universal_algebra.operations import (
     equation_profile,
     evaluate_term,
     generated_subalgebra,
+    homomorphism_profile,
     quotient,
 )
+from jacobian.math.universal_algebra.values import FiniteAlgebraHomomorphism
 
 __all__ = [
     "compute_congruence",
     "compute_equation_profile",
     "compute_evaluate",
     "compute_generated_subalgebra",
+    "compute_homomorphism_profile",
     "compute_quotient",
 ]
 
@@ -65,6 +69,14 @@ def compute_generated_subalgebra(request: SubalgebraRequest) -> SubalgebraResult
     )
 
 
+def compute_homomorphism_profile(
+    request: HomomorphismProfileRequest,
+) -> HomomorphismProfileResult:
+    return HomomorphismProfileResult.model_validate(
+        homomorphism_profile(request.carrier_map)
+    )
+
+
 def compute_congruence(request: CongruenceRequest) -> CongruenceResult:
     result = congruence_check(request.algebra, request.partition)
     return CongruenceResult(
@@ -73,9 +85,5 @@ def compute_congruence(request: CongruenceRequest) -> CongruenceResult:
     )
 
 
-def compute_quotient(request: QuotientRequest) -> QuotientResult:
-    algebra, quotient_map = quotient(request.algebra, request.partition)
-    return QuotientResult(
-        algebra=algebra,
-        quotient_map=quotient_map,
-    )
+def compute_quotient(request: QuotientRequest) -> FiniteAlgebraHomomorphism:
+    return quotient(request.algebra, request.partition)

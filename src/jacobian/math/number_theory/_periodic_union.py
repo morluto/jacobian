@@ -153,6 +153,10 @@ class PeriodicUnionProfileRequest(StrictModel):
         subsets = data.get("subsets")
         if not isinstance(subsets, (list, tuple)):
             return data
+        if len(subsets) > MAX_PERIODIC_FAMILY_SIZE:
+            raise ValueError(
+                f"the family exceeds the {MAX_PERIODIC_FAMILY_SIZE}-subset bound"
+            )
         total = 0
         normalized_subsets: list[object] = []
         for subset in subsets:

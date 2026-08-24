@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator, Mapping
 from fractions import Fraction
 from itertools import combinations
 
@@ -418,8 +419,43 @@ def test_family_size_boundary_allows_repeated_moduli() -> None:
         ],
         "result_mode": "count_only",
     }
-    with pytest.raises(ValidationError, match="at most 64 items"):
+    with pytest.raises(ValidationError, match="64-subset bound"):
         PeriodicUnionProfileRequest.model_validate(rejected_payload)
+
+    with pytest.raises(ValidationError, match="64-subset bound"):
+        PeriodicUnionProfileRequest(
+            subsets=tuple(
+                PeriodicResidueSubset(modulus=MAX_PERIODIC_FAMILY_SIZE, residues=())
+                for _ in range(MAX_PERIODIC_FAMILY_SIZE + 1)
+            )
+        )
+
+
+def test_oversized_family_is_rejected_without_normalizing_entries() -> None:
+    class UnnormalizableEntry(Mapping[str, object]):
+        """A row whose normalization would fail if it were ever copied."""
+
+        def __init__(self) -> None:
+            self._data: dict[str, object] = {"modulus": 2, "residues": [0]}
+
+        def __getitem__(self, key: str) -> object:
+            return self._data[key]
+
+        def __iter__(self) -> Iterator[str]:
+            raise AssertionError("entry normalization ran past the 64-subset bound")
+
+        def __len__(self) -> int:
+            return len(self._data)
+
+    payload = {
+        "subsets": [
+            UnnormalizableEntry() for _ in range(MAX_PERIODIC_FAMILY_SIZE + 1)
+        ],
+        "result_mode": "count_only",
+    }
+
+    with pytest.raises(ValidationError, match="family exceeds the 64-subset bound"):
+        PeriodicUnionProfileRequest.model_validate(payload)
 
 
 def test_small_erdos_486_periodic_footprint_analogue() -> None:

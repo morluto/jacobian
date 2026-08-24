@@ -166,6 +166,64 @@ def test_graph_symmetry_request_admits_result_near_output_limit() -> None:
     assert len(encoded) <= _estimate_orbit_result_wire_bytes(request)
 
 
+def test_transitive_action_charges_only_possible_representatives() -> None:
+    """A transitive rotation proves most elements cannot be representatives.
+
+    A 256-vertex circulant graph with edges at distances 1-16 and one
+    rotation generator plus fourteen identity generators has exactly one
+    vertex orbit and sixteen edge orbits, so charging every declared vertex
+    and edge as a representative inflated the estimate above the canonical
+    output limit even though the exact result keeps over 2 MiB of headroom.
+    """
+
+    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+
+    prefix = "\U0001d552" * 60
+    vertices = [f"{prefix}{index:04d}" for index in range(256)]
+    edges: list[list[str]] = []
+    for distance in range(1, 17):
+        for index in range(256):
+            left, right = (
+                vertices[index],
+                vertices[(index + distance) % 256],
+            )
+            edge = [left, right] if left < right else [right, left]
+            if edge not in edges:
+                edges.append(edge)
+        if len(edges) > 4096:
+            break
+    edges = sorted(edges)[:4096]
+    payload = {
+        "graph": {"vertices": vertices, "edges": edges},
+        "generators": [
+            {
+                "generator_id": "rotation",
+                "mapping": [
+                    [vertex, vertices[(index + 1) % 256]]
+                    for index, vertex in enumerate(vertices)
+                ],
+            },
+            *(
+                {
+                    "generator_id": f"{'i' * 62}{index:02d}",
+                    "mapping": [[vertex, vertex] for vertex in vertices],
+                }
+                for index in range(14)
+            ),
+        ],
+    }
+    request = GraphSymmetryOrbitRequest.model_validate(payload)
+    result = _generator_orbits(request)
+
+    assert result.vertex_orbit_count == 1
+    assert result.edge_orbit_count == 16
+    encoded = canonicalize_json(result.model_dump(mode="json"))
+    estimate = _estimate_orbit_result_wire_bytes(request)
+    limit = CanonicalLimits().max_output_bytes
+    assert len(encoded) <= estimate <= limit
+    assert limit - len(encoded) > 2 * 1024 * 1024
+
+
 def test_graph_symmetry_estimate_bounds_heterogeneous_representatives() -> None:
     """One large label among tiny ones must not inflate the estimate by a maximum."""
 
@@ -237,15 +295,24 @@ def test_graph_symmetry_schema_publishes_nfc_requirement() -> None:
     edge_color_schema = GraphEdgeColor.model_json_schema()
     request_schema = GraphSymmetryOrbitRequest.model_json_schema()
 
-    assert "NFC" in request_schema["$defs"]["GraphAutomorphismGenerator"]["properties"][
-        "generator_id"
-    ]["description"]
-    assert "NFC" in request_schema["$defs"]["GraphVertexColor"]["properties"]["color"][
-        "description"
-    ]
-    assert "NFC" in request_schema["$defs"]["GraphEdgeColor"]["properties"]["color"][
-        "description"
-    ]
+    assert (
+        "NFC"
+        in request_schema["$defs"]["GraphAutomorphismGenerator"]["properties"][
+            "generator_id"
+        ]["description"]
+    )
+    assert (
+        "NFC"
+        in request_schema["$defs"]["GraphVertexColor"]["properties"]["color"][
+            "description"
+        ]
+    )
+    assert (
+        "NFC"
+        in request_schema["$defs"]["GraphEdgeColor"]["properties"]["color"][
+            "description"
+        ]
+    )
     assert (
         "NFC"
         in generator_schema["properties"]["generator_id"]["description"]

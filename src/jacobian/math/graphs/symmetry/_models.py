@@ -153,18 +153,21 @@ def _estimate_orbit_result_wire_bytes(request: GraphSymmetryOrbitRequest) -> int
     vertex label once (the ``vertices`` field plus the vertex-orbit members)
     and every canonical edge once (the ``edges`` field plus the edge-orbit
     members) beyond that echo. Orbit representatives are drawn from those
-    same declared labels and pairs, so all three repetitions are bounded by
-    the exact per-label/pair totals rather than any single maximum. Every
-    retained string is Unicode NFC - vertices through the canonical graph
-    value, generator identifiers and colors through request admission - so
-    these strict-JSON measurements equal their canonicalized sizes. The
-    bound also charges the worst-case partition shape, at most one orbit per
-    declared vertex or edge whose fixed object wire cost is at most 51 bytes
-    plus one member separator each together with the top-level field
-    repetitions, each retained generator identifier, and the envelope
-    reserve, so every accepted request serializes inside the canonical
-    output limit.
+    same declared labels and pairs, and the declared action fixes exactly
+    which elements can be representatives: the union components of the
+    declared generator mappings are the generated subgroup's orbits, so
+    admission prices one representative per computed orbit instead of
+    re-charging the complete graph. Every retained string is Unicode NFC -
+    vertices through the canonical graph value, generator identifiers and
+    colors through request admission - so these strict-JSON measurements
+    equal their canonicalized sizes. The bound charges the per-orbit fixed
+    structure at the exact orbit counts, two member separators per declared
+    vertex or edge (one for each repetition beyond the echo), each retained
+    generator identifier, and the envelope reserve, so every accepted
+    request serializes inside the canonical output limit.
     """
+    from jacobian.math.graphs.symmetry._operations import _declared_orbit_partitions
+
     vertex_label_bytes = [
         len(encode_strict_json(vertex)) for vertex in request.graph.vertices
     ]
@@ -172,11 +175,22 @@ def _estimate_orbit_result_wire_bytes(request: GraphSymmetryOrbitRequest) -> int
         len(encode_strict_json(left)) + len(encode_strict_json(right)) + 3
         for left, right in request.graph.edges
     ]
+    declared_vertex_members, declared_edge_members = _declared_orbit_partitions(request)
+    representative_bytes = sum(
+        len(encode_strict_json(representative))
+        for representative in (members[0] for members in declared_vertex_members)
+    ) + sum(
+        len(encode_strict_json(left)) + len(encode_strict_json(right)) + 3
+        for left, right in (members[0] for members in declared_edge_members)
+    )
     return (
         len(encode_strict_json(request.model_dump(mode="json")))
-        + 3 * sum(vertex_label_bytes)
-        + 3 * sum(edge_pair_bytes)
-        + (len(vertex_label_bytes) + len(edge_pair_bytes)) * _ORBIT_STRUCTURE_WIRE_BYTES
+        + 2 * sum(vertex_label_bytes)
+        + 2 * sum(edge_pair_bytes)
+        + 2 * (len(vertex_label_bytes) + len(edge_pair_bytes))
+        + (len(declared_vertex_members) + len(declared_edge_members))
+        * _ORBIT_STRUCTURE_WIRE_BYTES
+        + representative_bytes
         + sum(
             len(encode_strict_json(generator.generator_id)) + 4
             for generator in request.generators

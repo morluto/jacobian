@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationError, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.canonical import canonicalize_json
 from jacobian.math.greedoids.values import FiniteFeasibleSetSystem
 
-MAX_DELTA_FEASIBLE_SETS = 128
 MAX_DELTA_MEMBERSHIPS = 1_024
 MAX_DELTA_LABEL_BYTES = 2_048
 MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS = 250_000
+MAX_DELTA_AXIOM_REPLAYS_PER_REQUEST = 4
 MAX_DELTA_RESULT_BYTES = 65_536
 
 
@@ -85,12 +85,6 @@ def _wire_size(system: FiniteFeasibleSetSystem) -> int:
 def require_delta_matroid_admission(system: FiniteFeasibleSetSystem) -> None:
     """Bound all work and the canonical recognition result before replay."""
 
-    feasible_count = len(system.feasible)
-    if feasible_count > MAX_DELTA_FEASIBLE_SETS:
-        raise ValueError(
-            "delta-matroid feasible-family size exceeds the "
-            f"{MAX_DELTA_FEASIBLE_SETS}-row envelope"
-        )
     memberships = sum(len(row) for row in system.feasible)
     if memberships > MAX_DELTA_MEMBERSHIPS:
         raise ValueError(
@@ -103,6 +97,8 @@ def require_delta_matroid_admission(system: FiniteFeasibleSetSystem) -> None:
             "delta-matroid ground labels exceed the "
             f"{MAX_DELTA_LABEL_BYTES}-byte envelope"
         )
+    # Every nonempty row carries at least one membership, so the membership
+    # envelope bounds the row count and keeps this ordered-pair scan bounded.
     _, candidate_space = _exchange_work(canonical_feasible_rows(system))
     if candidate_space > MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS:
         raise ValueError(
@@ -161,10 +157,7 @@ class FiniteDeltaMatroid(StrictModel):
         "jacobian.finite-delta-matroid/v1"
     )
     ground: tuple[str, ...] = Field()
-    feasible: tuple[tuple[int, ...], ...] = Field(
-        min_length=1,
-        max_length=MAX_DELTA_FEASIBLE_SETS,
-    )
+    feasible: tuple[tuple[int, ...], ...] = Field(min_length=1)
 
     @model_validator(mode="after")
     def require_complete_canonical_delta_matroid(self) -> Self:
@@ -185,19 +178,25 @@ def canonical_delta_matroid(system: FiniteFeasibleSetSystem) -> FiniteDeltaMatro
     """Construct the canonical value after the complete exchange replay."""
 
     require_delta_matroid_admission(system)
-    obstruction = first_symmetric_exchange_obstruction(system)
-    if obstruction is not None:
-        raise ValueError(f"feasible family is not a delta-matroid: {obstruction.kind}")
-    feasible = canonical_feasible_rows(system)
-    return FiniteDeltaMatroid(
-        ground=system.ground,
-        feasible=feasible,
-    )
+    try:
+        return FiniteDeltaMatroid(
+            ground=system.ground,
+            feasible=canonical_feasible_rows(system),
+        )
+    except ValidationError as error:
+        obstruction = first_symmetric_exchange_obstruction(system)
+        if obstruction is None:
+            raise ValueError(
+                "feasible family is not a canonical delta-matroid"
+            ) from error
+        raise ValueError(
+            f"feasible family is not a delta-matroid: {obstruction.kind}"
+        ) from error
 
 
 __all__ = [
+    "MAX_DELTA_AXIOM_REPLAYS_PER_REQUEST",
     "MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS",
-    "MAX_DELTA_FEASIBLE_SETS",
     "MAX_DELTA_LABEL_BYTES",
     "MAX_DELTA_MEMBERSHIPS",
     "MAX_DELTA_RESULT_BYTES",

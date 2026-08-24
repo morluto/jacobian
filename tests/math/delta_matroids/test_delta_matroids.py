@@ -146,13 +146,55 @@ def test_request_schema_exposes_every_delta_specific_admission_limit() -> None:
 
     assert schema["admission_limits"] == {
         "max_ground_elements": 64,
-        "max_feasible_sets": 128,
         "max_feasible_set_memberships": 1_024,
         "max_ground_label_utf8_bytes": 2_048,
-        "max_symmetric_exchange_candidate_checks": 250_000,
+        "max_symmetric_exchange_candidate_checks_per_replay": 250_000,
+        "max_complete_axiom_replays_per_request": 4,
         "max_result_bytes": 65_536,
     }
-    assert "no separate delta-specific ground-size cap" in schema["description"]
+    assert "no separate delta-specific ground-size or row-count caps" in (
+        schema["description"]
+    )
+
+
+def test_short_row_family_beyond_any_row_cap_is_recognized() -> None:
+    # Every subset of a sixteen-element ground with size at most two: 137 rows
+    # and 220,832 ordered exchange candidate checks. The family fits every
+    # derived membership, candidate-work, and result bound, so no row-count
+    # ceiling may exclude it.
+    feasible = [()]
+    feasible.extend((index,) for index in range(16))
+    feasible.extend(
+        (left, right) for left in range(15) for right in range(left + 1, 16)
+    )
+    system = FiniteFeasibleSetSystem(
+        ground=tuple(f"e{index}" for index in range(16)),
+        feasible=tuple(feasible),
+    )
+
+    result = delta_matroids.from_feasible_sets(system)
+
+    assert result.status == "DELTA_MATROID"
+    assert result.delta_matroid == FiniteDeltaMatroid(
+        ground=system.ground,
+        feasible=tuple(sorted(feasible)),
+    )
+
+
+def test_membership_envelope_rejects_wide_families_without_a_row_cap() -> None:
+    # Six hundred distinct pairs carry 1,200 memberships, past the membership
+    # envelope; rejection names the controlling quantity rather than a row cap.
+    feasible = []
+    for index in range(25):
+        for offset in range(1, 25):
+            feasible.append((index, index + offset))
+    with pytest.raises(ValidationError, match="memberships"):
+        DeltaMatroidFromFeasibleSetsRequest(
+            system=FiniteFeasibleSetSystem(
+                ground=tuple(f"e{index}" for index in range(50)),
+                feasible=tuple(feasible),
+            )
+        )
 
 
 def test_request_rejects_exchange_candidate_space_before_axiom_replay() -> None:
@@ -173,3 +215,28 @@ def test_request_rejects_exchange_candidate_space_before_axiom_replay() -> None:
                 feasible=feasible,
             )
         )
+
+
+def test_successful_request_stays_within_the_documented_replay_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # One accepted request performs exactly the advertised number of complete
+    # axiom replays, so the aggregate candidate-work envelope is truthful.
+    from jacobian.math.delta_matroids import _models, operations, values
+
+    calls = {"complete_replays": 0}
+    real_kernel = values.first_symmetric_exchange_obstruction
+
+    def counting_kernel(system: FiniteFeasibleSetSystem):
+        calls["complete_replays"] += 1
+        return real_kernel(system)
+
+    for module in (_models, operations, values):
+        monkeypatch.setattr(
+            module, "first_symmetric_exchange_obstruction", counting_kernel
+        )
+
+    result = delta_matroids.from_feasible_sets(_two_element_delta_matroid())
+
+    assert result.status == "DELTA_MATROID"
+    assert calls["complete_replays"] == values.MAX_DELTA_AXIOM_REPLAYS_PER_REQUEST

@@ -13,12 +13,21 @@ lexicographic order. Omitted rows are infeasible; they are never unknown.
 
 The operation checks every ordered pair of feasible sets and every element of
 their symmetric difference. It preflights the complete family before replaying
-the axiom: at most 128 feasible rows, 1,024 total row memberships, 2,048 UTF-8
-bytes of ground labels, 250,000 symmetric-exchange candidate checks, and a
+the axiom: 1,024 total row memberships, 2,048 UTF-8 bytes of ground labels,
+250,000 symmetric-exchange candidate checks per complete axiom replay, and a
 65,536-byte serialized result. The shared `FiniteFeasibleSetSystem` carrier
-also bounds the labelled ground set to 64 elements. There is deliberately no
-smaller delta-matroid ground-size cap: a sparse complete family on all 64
-carrier elements is admitted when these work and result bounds hold.
+also bounds the labelled ground set to 64 elements. There are deliberately no
+separate delta-matroid ground-size or row-count caps: the membership envelope
+bounds the row count, and the candidate-work and result bounds control the
+actual work, so a sparse family on all 64 carrier elements — or a dense
+short-row family such as every subset of size at most two over 16 elements
+(137 rows, 220,832 candidate checks) — is admitted when these bounds hold.
+
+One recognized request performs at most four complete axiom replays: the
+operation's obstruction decision, the canonical value construction, the
+returned value's own defining-invariant validation, and the result-binding
+obstruction replay. The aggregate worst case is therefore 1,000,000 candidate
+checks per accepted call, which is part of the advertised envelope.
 
 This initial operation deliberately does not construct twists, minors, binary
 matrix presentations, graph conversions, or interlace polynomials. Those are

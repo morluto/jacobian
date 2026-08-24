@@ -168,7 +168,91 @@ def test_narrowed_replay_allowance_reaches_the_bounded_process(
 
     assert result.outcome == "TIMEOUT"
     assert seen["timeout_seconds"] == 6.75
-    assert seen["cpu_seconds"] == 6
+    assert seen["cpu_seconds"] == 7
+
+
+def _family_records(component_generator_counts: list[int]) -> str:
+    lines = [
+        "JACOBIAN_SINGULAR_IDEAL_V1",
+        "44000",
+        str(len(component_generator_counts)),
+    ]
+    for count in component_generator_counts:
+        lines.append("COMPONENT")
+        lines.append(str(count))
+        for _ in range(count):
+            lines.extend(("GENERATOR", "1|0", "END_GENERATOR"))
+        lines.append("END_COMPONENT")
+    lines.append("END")
+    return "\n".join(lines)
+
+
+def test_aggregate_generator_limit_is_enforced_across_components(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = _executable(
+        tmp_path, f"print({_family_records([40, 40])!r})"
+    )
+    _select_executable(monkeypatch, executable)
+
+    result = run_singular_minimal_primes(_ideal(), IdealComputationBudget())
+
+    assert result.outcome == "LIMIT_EXCEEDED"
+    assert result.components is None
+
+
+def test_family_at_the_aggregate_generator_limit_is_accepted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = _executable(
+        tmp_path, f"print({_family_records([32, 32])!r})"
+    )
+    _select_executable(monkeypatch, executable)
+
+    result = run_singular_minimal_primes(_ideal(), IdealComputationBudget())
+
+    assert result.outcome == "COMPUTED"
+    assert result.components is not None
+    assert all(
+        len(component.generators) == 32 for component in result.components
+    )
+
+
+def test_family_at_the_aggregate_generator_limit_with_placeholders_is_accepted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = _executable(
+        tmp_path, f"print({_family_records([0, 0, 62])!r})"
+    )
+    _select_executable(monkeypatch, executable)
+
+    result = run_singular_minimal_primes(_ideal(), IdealComputationBudget())
+
+    assert result.outcome == "COMPUTED"
+    assert result.components is not None
+    assert sorted(len(component.generators) for component in result.components) == [
+        1,
+        1,
+        62,
+    ]
+
+
+def test_zero_placeholder_padding_cannot_exceed_the_generator_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = _executable(
+        tmp_path, f"print({_family_records([64, 0])!r})"
+    )
+    _select_executable(monkeypatch, executable)
+
+    result = run_singular_minimal_primes(_ideal(), IdealComputationBudget())
+
+    assert result.outcome == "LIMIT_EXCEEDED"
+    assert result.components is None
 
 
 def test_exhausted_replay_allowance_times_out_without_launching_singular(

@@ -394,7 +394,7 @@ def _parse_minimal_primes_output(
                 "Singular component generator count exceeds the exact-result limit"
             )
         total_generators += generator_count
-        if total_generators > budget.maximum_output_terms:
+        if total_generators > budget.maximum_output_generators:
             raise _ResultLimitExceededError(
                 "Singular component generators exceed the exact-result limit"
             )
@@ -409,6 +409,11 @@ def _parse_minimal_primes_output(
                 )
         reader.expect("END_COMPONENT")
         if not generators:
+            total_generators += 1
+            if total_generators > budget.maximum_output_generators:
+                raise _ResultLimitExceededError(
+                    "Singular component generators exceed the exact-result limit"
+                )
             generators.append(
                 RationalPolynomial(
                     variables=variables,
@@ -553,7 +558,7 @@ def run_singular_minimal_primes(
                 stdout_limit=_STDOUT_LIMIT,
                 stderr_limit=_STDERR_LIMIT,
                 resource_limits=ProcessResourceLimits(
-                    cpu_seconds=max(1, int(allowance)),
+                    cpu_seconds=math.ceil(allowance),
                     address_space_bytes=1024 * 1024 * 1024,
                     file_size_bytes=1024 * 1024,
                 ),

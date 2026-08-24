@@ -341,18 +341,7 @@ class IdealMinimalPrimesResult(StrictModel):
             raise ValueError(
                 "computed minimal-prime family requires components and backend version"
             )
-        if any(
-            component.variables != self.request.ideal.variables
-            for component in self.components
-        ):
-            raise ValueError(
-                "every minimal prime must use the source ideal's ordered ring"
-            )
-        keys = tuple(component.model_dump_json() for component in self.components)
-        if keys != tuple(sorted(keys)) or len(set(keys)) != len(keys):
-            raise ValueError(
-                "minimal-prime components must be unique and canonically ordered"
-            )
+        _require_computed_minimal_prime_family(self.request, self.components)
         _require_source_bound_minimal_primes(
             self.request,
             self.components,
@@ -392,6 +381,54 @@ def _require_source_bound_minimal_primes(
             "components must equal the complete minimal-prime family of the "
             "retained source ideal over QQ"
         )
+
+
+def _require_computed_minimal_prime_family(
+    request: IdealMinimalPrimesRequest,
+    components: tuple[RationalPolynomialIdeal, ...],
+) -> None:
+    """Gate ring, canonical ordering, and uniqueness without any replay."""
+
+    if any(
+        component.variables != request.ideal.variables
+        for component in components
+    ):
+        raise ValueError(
+            "every minimal prime must use the source ideal's ordered ring"
+        )
+    keys = tuple(component.model_dump_json() for component in components)
+    if keys != tuple(sorted(keys)) or len(set(keys)) != len(keys):
+        raise ValueError(
+            "minimal-prime components must be unique and canonically ordered"
+        )
+
+
+def computed_minimal_primes_result(
+    request: IdealMinimalPrimesRequest,
+    components: tuple[RationalPolynomialIdeal, ...] | None,
+    backend_version: str | None,
+) -> IdealMinimalPrimesResult:
+    """Build the typed computed result from this request's own passes.
+
+    The caller has just completed both bounded producing passes under one
+    operation-level deadline, so this trusted factory skips only the third
+    backend replay while still enforcing the computed shape plus the ring,
+    canonical-ordering, and uniqueness invariants; independently supplied
+    results always validate through the full model validator.
+    """
+
+    if components is None or backend_version is None:
+        raise ValueError(
+            "computed minimal-prime family requires components and backend version"
+        )
+    _require_computed_minimal_prime_family(request, components)
+    return IdealMinimalPrimesResult.model_construct(
+        request=request,
+        outcome="COMPUTED",
+        components=components,
+        backend_version=backend_version,
+        detail=None,
+    )
 
 
 __all__ = [

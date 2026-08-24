@@ -11,6 +11,7 @@ from jacobian.math.commutative_algebra_ops import _singular
 from jacobian.math.commutative_algebra_ops._models import (
     IdealMinimalPrimesRequest,
     IdealMinimalPrimesResult,
+    computed_minimal_primes_result,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
     compute_ideal_minimal_primes,
@@ -200,6 +201,91 @@ def test_nonreproducible_producer_output_is_a_typed_error(
 
     assert result.outcome == "ERROR"
     assert result.components is None
+
+
+def test_duplicate_producer_family_is_a_typed_error_without_a_third_pass(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    variables = ("x",)
+    prime = _ideal(variables, _poly(variables, (1, 1, (1,))))
+    duplicated = (prime, prime)
+    request = IdealMinimalPrimesRequest(ideal=_ideal(variables, _poly(variables, (1, 2, (2,)))))
+    calls = 0
+
+    def backend(
+        source: RationalPolynomialIdeal,
+        budget: object,
+        *,
+        wall_seconds: float | None = None,
+    ) -> SingularMinimalPrimesResult:
+        nonlocal calls
+        calls += 1
+        return SingularMinimalPrimesResult(
+            outcome="COMPUTED",
+            components=duplicated,
+            backend_version="4.4.0",
+        )
+
+    monkeypatch.setattr(
+        "jacobian.math.commutative_algebra_ops._operations.run_singular_minimal_primes",
+        backend,
+    )
+
+    result = compute_ideal_minimal_primes(request)
+
+    assert calls == 2
+    assert result.outcome == "ERROR"
+    assert result.components is None
+    assert result.detail is not None
+
+
+def test_trusted_factory_enforces_shape_ring_ordering_and_uniqueness() -> None:
+    request = _axes_request()
+    components = _axes_components()
+    foreign_ring = (
+        _ideal(("y", "x"), _poly(("y", "x"), (1, 1, (0, 1)))),
+    )
+
+    computed = computed_minimal_primes_result(request, components, "4.4.0")
+    assert computed.outcome == "COMPUTED"
+    assert computed.components == components
+    assert computed.backend_version == "4.4.0"
+    assert computed.detail is None
+
+    with pytest.raises(ValueError, match="ordered ring"):
+        computed_minimal_primes_result(request, foreign_ring, "4.4.0")
+    with pytest.raises(ValueError, match="unique and canonically ordered"):
+        computed_minimal_primes_result(
+            request, tuple(reversed(components)), "4.4.0"
+        )
+    with pytest.raises(ValueError, match="unique and canonically ordered"):
+        computed_minimal_primes_result(
+            request, (components[0], components[0]), "4.4.0"
+        )
+    with pytest.raises(ValueError, match="requires components and backend version"):
+        computed_minimal_primes_result(request, None, None)
+
+
+def test_validator_rejects_duplicate_components_before_any_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = _axes_request()
+    duplicated = (_axes_components()[0], _axes_components()[0])
+
+    def forbidden(
+        source: RationalPolynomialIdeal, budget: object
+    ) -> SingularMinimalPrimesResult:
+        raise AssertionError("structural rejection must precede the backend replay")
+
+    monkeypatch.setattr(_singular, "run_singular_minimal_primes", forbidden)
+
+    with pytest.raises(ValidationError, match="unique and canonically ordered"):
+        IdealMinimalPrimesResult(
+            request=request,
+            outcome="COMPUTED",
+            components=duplicated,
+            backend_version="4.4.0",
+        )
 
 
 class _Clock:

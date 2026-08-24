@@ -25,6 +25,7 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealRadicalResult,
     IdealSaturationRequest,
     IdealSaturationResult,
+    computed_minimal_primes_result,
 )
 from jacobian.math.commutative_algebra_ops._singular import (
     run_bounded_stdin_python_kernel,
@@ -485,16 +486,28 @@ def compute_ideal_minimal_primes(
             ),
         )
 
-    # The producer has just completed the exact source replay itself.  Direct
-    # construction avoids a third backend invocation in the public execution
-    # path; externally supplied JSON still runs the model validator's replay.
-    return IdealMinimalPrimesResult.model_construct(
-        request=request,
-        outcome=backend.outcome,
-        components=backend.components,
-        backend_version=backend.backend_version,
-        detail=None,
-    )
+    # Both passes above completed this request's exact source replay under
+    # one operation-level deadline. The trusted factory skips only the third
+    # backend pass while still enforcing shape, ring, ordering, and
+    # uniqueness; externally supplied JSON still runs the model validator's
+    # replay.
+    try:
+        return computed_minimal_primes_result(
+            request=request,
+            components=backend.components,
+            backend_version=backend.backend_version,
+        )
+    except ValueError:
+        return IdealMinimalPrimesResult(
+            request=request,
+            outcome="ERROR",
+            components=None,
+            backend_version=None,
+            detail=(
+                "The computed minimal-prime family violated its own shape, "
+                "ring, ordering, or uniqueness invariant."
+            ),
+        )
 
 
 def compute_ideal_radical_membership(

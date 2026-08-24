@@ -6,7 +6,7 @@ import pytest
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import MathTool
-from jacobian.dispatch import invoke_operation
+from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 
 _CATALOG = Catalog.open()
 
@@ -45,3 +45,47 @@ def test_advertised_invocation_example_executes_successfully(
             serialized,
             validated.model_dump(mode="json"),
         )
+
+
+def test_fixed_point_prefix_dispatch_preserves_tuple_decoding_and_preflights_source() -> (
+    None
+):
+    """JSON arrays remain valid canonical tuples after fixed-point preflight."""
+
+    operation = _CATALOG.operation("substitution.fixed_point_prefix.compute")
+    assert operation is not None
+    example = operation.examples[0]
+
+    result = invoke_operation(operation.operation_id, example.input, _CATALOG)
+    assert result.output["prefix"]["letters"] == [
+        "0",
+        "1",
+        "0",
+        "0",
+        "1",
+        "0",
+        "1",
+        "0",
+    ]
+
+    oversized_mortal_source = {
+        "source": {
+            "substitution": {
+                "morphism": {
+                    "source_alphabet": ["0", "1", "2", "3"],
+                    "target_alphabet": ["0", "1", "2", "3"],
+                    "images": [["0", *(["1"] * 9_999)], [], ["2"] * 10_000, ["3"]],
+                }
+            },
+            "seed": "0",
+        },
+        "prefix_length": 1,
+    }
+    with pytest.raises(
+        OperationRequestValidationError, match="payload failed validation"
+    ) as error:
+        invoke_operation(operation.operation_id, oversized_mortal_source, _CATALOG)
+    assert (
+        "source exceeds the aggregate occurrence bound"
+        in error.value.errors()[0]["msg"]
+    )

@@ -13,7 +13,7 @@ from jacobian._exact import (
 )
 from jacobian._models import StrictModel
 
-_MAX_SEQUENCE_LENGTH = 256
+_MAX_SEQUENCE_LENGTH = 10_000
 MAX_INTEGER_SEQUENCE_ITEM_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
 
 

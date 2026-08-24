@@ -148,6 +148,36 @@ def test_natural_prime_power_query_ranks_factorization_before_prime_navigation()
     )
 
 
+def test_natural_powerful_number_query_finds_bounded_decision() -> None:
+    catalog = Catalog.open()
+
+    result = catalog.search(
+        OperationDiscoveryRequest(
+            query="decide whether an integer is 2-full or powerful",
+            limit=5,
+        )
+    )
+
+    assert "integer.decide.powerful" in {match.operation_id for match in result.matches}
+
+
+def test_catalog_runs_source_bound_powerful_decision() -> None:
+    catalog = Catalog.open()
+    operation = catalog.operation("integer.decide.powerful")
+    assert operation is not None
+    assert operation.version == "3"
+
+    result = invoke_operation(
+        "integer.decide.powerful",
+        {"value": "12168"},
+        catalog,
+    )
+
+    assert result.output is not None
+    assert result.output["is_powerful"] is True
+    assert result.output["value"] == "12168"
+
+
 def test_search_finds_lattice_hnf_in_matrix_domain() -> None:
     catalog = Catalog.open()
 

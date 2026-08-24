@@ -10,7 +10,7 @@ from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import parse_canonical_integer
 
-_MAX_SET_SIZE = 128
+_MAX_SET_SIZE = 1_024
 _MAX_BINARY_SET_RESULT_SIZE = 2 * _MAX_SET_SIZE
 _MAX_COVERAGE_VALUES = 2 * _MAX_SET_SIZE
 

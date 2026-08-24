@@ -9,8 +9,8 @@ from pydantic import Field, model_validator
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 
-MAX_DIMENSION = 20
-MAX_PIECES = 100
+MAX_DIMENSION = 100
+MAX_PIECES = 10_000
 
 
 class AffinePiece(StrictModel):

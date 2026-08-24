@@ -245,6 +245,60 @@ class TestRationalWeightTriangulation:
                 diagonal_weights=weights,
             )
 
+    _REVIEW_PENTAGON = ((0, 0), (2, 0), (3, 1), (2, 3), (0, 2))
+    _REVIEW_PENTAGON_DIAGONALS = ((0, 2), (0, 3), (1, 3), (1, 4), (2, 4))
+
+    @staticmethod
+    def _mixed_extreme_weights(scale: int):
+        huge = format_canonical_integer(2 * scale)
+        assignments = {
+            (0, 2): (format_canonical_integer(scale), "1"),
+            (0, 3): ("1", format_canonical_integer(scale + 3)),
+            (1, 3): (huge, "1"),
+            (1, 4): (huge, "1"),
+            (2, 4): (huge, "1"),
+        }
+        return tuple(
+            {
+                "first": first,
+                "second": second,
+                "weight": {
+                    "num": assignments[(first, second)][0],
+                    "den": assignments[(first, second)][1],
+                },
+            }
+            for first, second in TestRationalWeightTriangulation._REVIEW_PENTAGON_DIAGONALS
+        )
+
+    def test_complementary_region_coexistence_is_rejected_at_request_validation(self):
+        # Regression: the complementary interval dropped its closing vertex,
+        # so anchoring (0,2) hid the coexisting 20,001-digit denominator on
+        # (0,3); admission accepted these weights and serializing the ledger
+        # sum later raised inside CanonicalRational instead.
+        with pytest.raises(ValidationError, match="split-table ledger sums"):
+            ConvexPolygonTriangulationRequest(
+                polygon={"points": self._ring(*self._REVIEW_PENTAGON)},
+                diagonal_weights=self._mixed_extreme_weights(10**20000),
+            )
+
+    def test_complementary_region_coexistence_stays_admitted_below_the_cap(self):
+        request = ConvexPolygonTriangulationRequest(
+            polygon={"points": self._ring(*self._REVIEW_PENTAGON)},
+            diagonal_weights=self._mixed_extreme_weights(10**16000),
+        )
+        result = minimum_weight_triangulation(request)
+
+        expected = Fraction(10**16000) + Fraction(1, 10**16000 + 3)
+        assert result.optimum.as_fraction() == expected
+        root = next(
+            item for item in result.split_table if (item.start, item.end) == (0, 4)
+        )
+        assert root.optimum.as_fraction() == expected
+        validated = ConvexPolygonTriangulationResult.model_validate(
+            result.model_dump(mode="json")
+        )
+        assert validated.optimum == result.optimum
+
 
 class TestAngleEquality:
     def test_right_angles(self):

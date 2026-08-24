@@ -15,6 +15,7 @@ from jacobian.math.geometry._models import (
     MAX_EUCLIDEAN_TRIANGULATION_VERTICES,
     EuclideanConvexPolygonTriangulationRequest,
     EuclideanConvexPolygonTriangulationResult,
+    _span_term_occurrences,
 )
 
 _FLOOR_TERM_CHARS = 2 * (4 * 1 + 1) + 128
@@ -23,8 +24,8 @@ _FLOOR_TERM_CHARS = 2 * (4 * 1 + 1) + 128
 def _floor_estimate_chars(vertices: int) -> int:
     return (
         sum((vertices - span) * (span - 1) for span in range(1, vertices - 1))
-        * _FLOOR_TERM_CHARS
-    )
+        + 2 * (vertices - 3)
+    ) * _FLOOR_TERM_CHARS
 
 
 def _expected_vertex_ceiling() -> int:
@@ -563,6 +564,32 @@ class TestEuclideanTriangulation:
                 tuple(
                     _point(index * spread, index * index * spread)
                     for index in range(38)
+                )
+            )
+
+    def test_request_rejects_a_root_optimum_expression_beyond_the_output_bound(
+        self,
+    ) -> None:
+        # Regression: counting only non-root table spans estimated this
+        # 10-vertex ring at 6,588,512 characters; the omitted root entry and
+        # its duplicated optimum raise the worst case to 7,412,076, over the
+        # published bound.
+        scale = 10**7335
+        assert (2 * (4 * 7337 + 1) + 128) * (
+            _span_term_occurrences(10) - 2 * (10 - 3)
+        ) == 6_588_512
+        assert (2 * (4 * 7337 + 1) + 128) * _span_term_occurrences(10) == 7_412_076
+        with pytest.raises(ValidationError, match="character output bound"):
+            _request(
+                tuple(
+                    {
+                        "x": {"num": str(index), "den": "1"},
+                        "y": {
+                            "num": format_canonical_integer(index * index * scale),
+                            "den": "1",
+                        },
+                    }
+                    for index in range(10)
                 )
             )
 

@@ -862,7 +862,7 @@ def _require_bounded_split_table_rationals(
     anchored = max(
         heights[pair][1]
         + open_region[pair[0], pair[1] - pair[0] + 1]
-        + open_region[pair[1], count - pair[1] + pair[0]]
+        + open_region[pair[1], count - pair[1] + pair[0] + 1]
         for pair in heights
     )
     slack = len(str(count - 3)) + 1
@@ -972,16 +972,21 @@ _MIN_EUCLIDEAN_SPLIT_TERM_CHARS = 2 * (4 * 1 + 1) + 128
 
 
 def _span_term_occurrences(count: int) -> int:
-    """Total split-table term occurrences charged by a ``count``-vertex source.
+    """Total retained expression term occurrences charged by a ``count``-vertex source.
 
-    A span-``s`` state carries at most ``s - 1`` terms - its subpolygon
-    triangulates with ``s - 2`` diagonals plus one charged boundary - and
-    spans ``1..count - 2`` each occur ``count - s`` times, so the retained
-    table sums exactly these span-specific counts rather than charging
-    every state the root's ``count - 3`` terms.
+    A non-root span-``s`` state carries at most ``s - 1`` terms - its
+    subpolygon triangulates with ``s - 2`` diagonals plus one charged
+    boundary - and spans ``1..count - 2`` each occur ``count - s`` times.
+    The root span ``count - 1`` carries exactly ``count - 3`` terms, since
+    its boundary is an uncharged hull edge, and it occurs once in the
+    retained table plus once more as the duplicated top-level optimum, so
+    the serialized envelope counts both copies rather than charging every
+    state the root's term count.
     """
 
-    return sum((count - span) * (span - 1) for span in range(1, count - 1))
+    return sum((count - span) * (span - 1) for span in range(1, count - 1)) + 2 * (
+        count - 3
+    )
 
 
 def _euclidean_envelope_vertex_ceiling() -> int:
@@ -1026,12 +1031,13 @@ def _require_euclidean_triangulation_envelope(
     harmless translations for free.  A squared length then has at most
     ``4d + 1`` digits in each component (each product doubles its side and
     the final sum adds one digit), and each split-table expression term is
-    charged twice that plus fixed punctuation slack.  A span-``s`` table
-    state carries at most ``s - 1`` terms, so summing the span-specific
-    term counts over all ``(n - 1)(n - 2)/2`` states gives the conservative
-    serialized-expression estimate below, bounding every retained exact sum
-    before Arb is invoked; each raw input coordinate stays inside the shared
-    canonical rational cap.
+    charged twice that plus fixed punctuation slack.  A non-root span-``s``
+    table state carries at most ``s - 1`` terms, the root span carries
+    ``count - 3``, and the top-level optimum duplicates the root expression,
+    so summing those span-specific term counts over all retained expression
+    serializations gives the conservative serialized-expression estimate
+    below, bounding every retained exact sum before Arb is invoked; each raw
+    input coordinate stays inside the shared canonical rational cap.
     Every candidate diagonal's exact squared length is also checked against
     the canonical rational cap, because the aggregate serialized estimate
     alone admits sources whose derived values cannot be represented at all.

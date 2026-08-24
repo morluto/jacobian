@@ -339,7 +339,9 @@ def test_total_support_admits_the_boundary_and_rejects_one_past_it() -> None:
         return {
             "form": {
                 "axis": labels,
-                "diagonal_coefficients": [_rational(i + 1) for i, _ in enumerate(labels)],
+                "diagonal_coefficients": [
+                    _rational(i + 1) for i, _ in enumerate(labels)
+                ],
             },
             "vector": {
                 "axis": labels,
@@ -351,9 +353,9 @@ def test_total_support_admits_the_boundary_and_rejects_one_past_it() -> None:
         _request(MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS)
     )
 
-    assert evaluate_rational_quadratic_form(
-        accepted.form, accepted.vector
-    ) == Fraction(0)
+    assert evaluate_rational_quadratic_form(accepted.form, accepted.vector) == Fraction(
+        0
+    )
     with pytest.raises(ValidationError, match="total support"):
         EvaluationRequest.model_validate(
             _request(MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS + 1)
@@ -369,8 +371,7 @@ def test_request_schema_documents_the_evaluation_budgets() -> None:
     )
     assert (
         f"d + {MAX_QUADRATIC_EVALUATION_TERM_DIGITS} + len(str(t)) <= "
-        f"{MAX_QUADRATIC_EVALUATION_DIGITS}"
-        in properties["vector"]["description"]
+        f"{MAX_QUADRATIC_EVALUATION_DIGITS}" in properties["vector"]["description"]
     )
 
 
@@ -380,15 +381,13 @@ def test_tool_description_and_example_publish_the_evaluation_budgets() -> None:
     assert f"{MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS} terms" in tool.description
     assert (
         f"d + {MAX_QUADRATIC_EVALUATION_TERM_DIGITS} + len(str(t)) <= "
-        f"{MAX_QUADRATIC_EVALUATION_DIGITS}"
-        in tool.description
+        f"{MAX_QUADRATIC_EVALUATION_DIGITS}" in tool.description
     )
     example_description = tool.examples[0].description
     assert f"{MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS} terms" in example_description
     assert (
         f"d + {MAX_QUADRATIC_EVALUATION_TERM_DIGITS} + digits(t) within "
-        f"{MAX_QUADRATIC_EVALUATION_DIGITS}"
-        in example_description
+        f"{MAX_QUADRATIC_EVALUATION_DIGITS}" in example_description
     )
 
 

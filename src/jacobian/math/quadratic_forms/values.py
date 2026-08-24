@@ -230,9 +230,7 @@ def require_evaluation_budget(
 
     support_terms = len(form.diagonal_coefficients) + len(form.cross_terms)
     if support_terms > MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS:
-        raise ValueError(
-            "quadratic-form evaluation exceeds the total support budget"
-        )
+        raise ValueError("quadratic-form evaluation exceeds the total support budget")
     nonzero_coordinates = {
         index
         for index, coordinate in enumerate(vector.coordinates)

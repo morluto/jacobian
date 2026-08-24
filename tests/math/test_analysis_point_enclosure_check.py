@@ -155,9 +155,10 @@ def test_producer_enclosure_crosses_the_checker_boundary_unchanged() -> None:
     assert request.enclosure == producer_result.enclosure
     assert outcome.outcome == "ACCEPTED"
     assert outcome.enclosure == producer_result.enclosure
-    assert ArbPointEnclosureResult.model_validate_json(
-        producer_result.model_dump_json()
-    ) == producer_result
+    assert (
+        ArbPointEnclosureResult.model_validate_json(producer_result.model_dump_json())
+        == producer_result
+    )
 
 
 def test_checker_rejects_unsupported_claim_functions_at_admission() -> None:
@@ -491,9 +492,9 @@ def test_request_schema_publishes_work_and_precision_limits() -> None:
         == 512
     )
     assert schema["point_check_output_byte_bound"] == MAX_POINT_CHECK_OUTPUT_BYTES
-    precision_description = (
-        enclosure_schema["properties"]["precision_bits"]["description"]
-    )
+    precision_description = enclosure_schema["properties"]["precision_bits"][
+        "description"
+    ]
     assert "does not promise" in precision_description
     precision_description_schema = ClaimedPointEnclosure.model_json_schema()[
         "properties"

@@ -360,10 +360,11 @@ class PointEnclosureCheckRequest(StrictModel):
 
     @model_validator(mode="after")
     def preflight_exact_checker(self) -> Self:
-        if self.enclosure.function not in (RealUnaryFunction.LOG, RealUnaryFunction.SQRT):
-            raise ValueError(
-                "point-enclosure checker replays only LOG and SQRT claims"
-            )
+        if self.enclosure.function not in (
+            RealUnaryFunction.LOG,
+            RealUnaryFunction.SQRT,
+        ):
+            raise ValueError("point-enclosure checker replays only LOG and SQRT claims")
         if any(
             abs(endpoint.exponent) > MAX_POINT_CHECK_DYADIC_EXPONENT
             for endpoint in (self.enclosure.lower, self.enclosure.upper)

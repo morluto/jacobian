@@ -59,6 +59,7 @@ def test_catalog_contains_only_audited_agent_outcomes() -> None:
         "formal_context.concept.from_attributes.compute",
         "formal_context.concepts.enumerate.compute",
         "formal_context.concept_lattice.compute",
+        "formal_context.duquenne_guigues_basis.compute",
         "implication_system.closure.compute",
     }
 
@@ -230,6 +231,37 @@ def test_lattice_embedded_concepts_replay_defining_equations() -> None:
     extents = [frozenset(extent_tuple) for extent_tuple, _intent in result.concepts]
     assert len(set(extents)) == len(extents)
 
+    def test_sparse_context_beyond_twenty_attributes_is_enumerated(self) -> None:
+        # One object with no incidences over 21 attributes carries exactly the
+        # two trivial concepts, so admission must not reject it by attribute
+        # count before considering actual enumeration work.
+        context = FormalContext(
+            objects=("o0",),
+            attributes=tuple(f"a{index}" for index in range(21)),
+            incidence=(),
+        )
+        result = compute_enumerate_concepts(EnumerateConceptsRequest(context=context))
+        assert result.count == 2
+
+    def test_attribute_fallback_boundary_is_admitted_and_rejected(self) -> None:
+        wide = FormalContext(
+            objects=("o0",),
+            attributes=tuple(f"a{index}" for index in range(64)),
+            incidence=(),
+        )
+        assert (
+            compute_enumerate_concepts(EnumerateConceptsRequest(context=wide)).count
+            == 2
+        )
+        with pytest.raises(ValidationError):
+            EnumerateConceptsRequest(
+                context=FormalContext(
+                    objects=("o0",),
+                    attributes=tuple(f"a{index}" for index in range(65)),
+                    incidence=(),
+                )
+            )
+
 
 # ---------------------------------------------------------------------------
 # Concept lattice
@@ -244,6 +276,17 @@ class TestConceptLattice:
         assert result.top is not None
         assert result.bottom is not None
         assert len(result.concepts) == 4
+
+    def test_sparse_lattice_beyond_twenty_attributes_is_computed(self) -> None:
+        context = FormalContext(
+            objects=("o0",),
+            attributes=tuple(f"a{index}" for index in range(21)),
+            incidence=(),
+        )
+        result = compute_concept_lattice(EnumerateConceptsRequest(context=context))
+        assert len(result.concepts) == 2
+        assert result.top is not None
+        assert result.bottom is not None
 
 
 # ---------------------------------------------------------------------------

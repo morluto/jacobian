@@ -22,9 +22,14 @@ from jacobian.math.graphs.transforms import (
     induced_subgraph,
     line_graph,
 )
-from jacobian.math.graphs.values import GraphCompositionInput, SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    ColoredUndirectedGraph,
+    GraphCompositionInput,
+    SimpleUndirectedGraph,
+)
 
 __all__ = [
+    "ColoredUndirectedGraph",
     "GraphCompositionInput",
     "IndependenceNumberBudget",
     "IndependenceNumberRequest",

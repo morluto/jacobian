@@ -31,6 +31,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
     OperationAdmission(
+        "additive.multiset_sum.representation_profile.compute",
+        AdmissionDecision.KEEP,
+        "one source-bound exact profile of fixed-arity unordered sums; ordered Cartesian pair profiles discard the index symmetry needed to derive it",
+    ),
+    OperationAdmission(
         "additive.sumset_cardinality.compute",
         AdmissionDecision.DROP,
         "cheap deterministic projection of additive.representation_profile.compute",

@@ -25,16 +25,18 @@ def _format_rational(value: Fraction) -> str:
     )
 
 
-def _lookup(
-    function: SetFunction,
-    subset: tuple[int, ...],
-) -> Fraction | None:
-    """Look up f(S) in the table; return None if not found."""
-    key = tuple(sorted(subset))
+def _subset_label(mask: int, size: int) -> tuple[int, ...]:
+    return tuple(index for index in range(size) if mask & (1 << index))
+
+
+def _table_by_mask(function: SetFunction) -> dict[int, Fraction]:
+    table: dict[int, Fraction] = {}
     for entry in function.entries:
-        if tuple(sorted(entry.subset)) == key:
-            return entry.value.as_fraction()
-    return None
+        mask = 0
+        for element in entry.subset:
+            mask |= 1 << element
+        table[mask] = entry.value.as_fraction()
+    return table
 
 
 def evaluate_set_function(
@@ -47,33 +49,45 @@ def evaluate_set_function(
     return SetFunctionEvalResult(value="0", found=False)
 
 
+def _lookup(
+    function: SetFunction,
+    subset: tuple[int, ...],
+) -> Fraction | None:
+    """Look up f(S) in the table; return None if not found."""
+    key = tuple(sorted(subset))
+    for entry in function.entries:
+        if tuple(sorted(entry.subset)) == key:
+            return entry.value.as_fraction()
+    return None
+
+
 def check_monotonicity(
     request: MonotonicityCheckRequest,
 ) -> MonotonicityCheckResult:
     """Check if a set function is monotone non-decreasing.
 
-    f is monotone iff for all S subset T: f(S) <= f(T).
-    We check all pairs S, T with S subset T and |T| = |S| + 1.
+    f is monotone iff every covering relation preserves order: for each S
+    and each i not in S, f(S) <= f(S | {i}).  This is O(n * 2^n) covering
+    checks; violating any one covering relation violates some comparable
+    pair, so the local scan is exact.
     """
-    entries = request.function.entries
-    # Build dict
-    table: dict[tuple[int, ...], Fraction] = {}
-    for entry in entries:
-        key = tuple(sorted(entry.subset))
-        table[key] = entry.value.as_fraction()
+    size = request.function.ground_set_size
+    table = _table_by_mask(request.function)
 
-    for subset_str, val_s in table.items():
-        subset = set(subset_str)
-        for entry in entries:
-            other = set(entry.subset)
-            if (
-                subset < other
-                and len(other) == len(subset) + 1
-                and val_s > entry.value.as_fraction()
-            ):
+    for mask in range(1 << size):
+        value_mask = table[mask]
+        for index in range(size):
+            bit = 1 << index
+            if mask & bit:
+                continue
+            supersets_value = table[mask | bit]
+            if value_mask > supersets_value:
                 return MonotonicityCheckResult(
                     is_monotone=False,
-                    violation=f"f({subset_str}) > f({tuple(sorted(other))})",
+                    violation=(
+                        f"f({_subset_label(mask, size)}) > "
+                        f"f({_subset_label(mask | bit, size)})"
+                    ),
                 )
     return MonotonicityCheckResult(is_monotone=True, violation="")
 
@@ -83,30 +97,40 @@ def check_submodularity(
 ) -> SubmodularityCheckResult:
     """Check if a set function is submodular.
 
-    f is submodular iff for all S, T: f(S) + f(T) >= f(S union T) + f(S intersection T).
-    """
-    entries = request.function.entries
-    table: dict[tuple[int, ...], Fraction] = {}
-    for entry in entries:
-        key = tuple(sorted(entry.subset))
-        table[key] = entry.value.as_fraction()
+    Exact local characterization: f is submodular iff for every S and every
+    two distinct i, j outside S,
 
-    keys = list(table.keys())
-    for i, s_key in enumerate(keys):
-        s_set = set(s_key)
-        for j in range(i + 1, len(keys)):
-            t_key = keys[j]
-            t_set = set(t_key)
-            union_key = tuple(sorted(s_set | t_set))
-            inter_key = tuple(sorted(s_set & t_set))
-            if union_key in table and inter_key in table:
-                lhs = table[s_key] + table[t_key]
-                rhs = table[union_key] + table[inter_key]
-                if lhs < rhs:
-                    return SubmodularityCheckResult(
-                        is_submodular=False,
-                        violation=f"f({s_key}) + f({t_key}) < f({union_key}) + f({inter_key})",
-                    )
+        f(S | {i}) + f(S | {j}) >= f(S) + f(S | {i, j}).
+
+    This needs C(n,2) checks per subset instead of the O(4^n) all-pairs
+    scan, and it is complete: any violated inequality anywhere in 2^N has a
+    violated local instance (take S minimal inside the differing part).
+    """
+    size = request.function.ground_set_size
+    table = _table_by_mask(request.function)
+
+    full_mask = (1 << size) - 1
+    complement_pairs = [
+        (1 << i, 1 << j) for i in range(size) for j in range(i + 1, size)
+    ]
+    for mask in range(1 << size):
+        base_value = table[mask]
+        remaining = full_mask & ~mask
+        for bit_i, bit_j in complement_pairs:
+            if (bit_i | bit_j) & ~remaining:
+                continue
+            lhs = table[mask | bit_i] + table[mask | bit_j]
+            rhs = base_value + table[mask | bit_i | bit_j]
+            if lhs < rhs:
+                return SubmodularityCheckResult(
+                    is_submodular=False,
+                    violation=(
+                        f"f({_subset_label(mask | bit_i, size)}) + "
+                        f"f({_subset_label(mask | bit_j, size)}) < "
+                        f"f({_subset_label(mask, size)}) + "
+                        f"f({_subset_label(mask | bit_i | bit_j, size)})"
+                    ),
+                )
     return SubmodularityCheckResult(is_submodular=True, violation="")
 
 

@@ -2,7 +2,19 @@
 
 from __future__ import annotations
 
+from jacobian.canonical import encode_strict_json
+
+from .basis import (
+    CanonicalImplicationBasisResult,
+    DGBasisClosureRow,
+    PseudoIntent,
+    _basis_attribute_labels,
+    _duquenne_guigues_preflight,
+    _enumerate_dg_masks,
+    _subset_for_state,
+)
 from .values import (
+    AttributeImplication,
     FiniteAttributeImplicationSystem,
     FormalContext,
     ImplicationClosureResult,
@@ -20,6 +32,7 @@ __all__ = [
     "concept_from_attributes",
     "concept_from_objects",
     "concept_lattice",
+    "duquenne_guigues_basis",
     "enumerate_concepts",
     "implication_closure",
     "object_closure",
@@ -98,6 +111,177 @@ def implication_closure(
             canonical_membership_checks=membership_checks,
             canonical_replay_work=canonical_replay_work,
         ),
+    )
+
+
+def _enumerate_dg_basis(
+    context: FormalContext,
+) -> tuple[
+    tuple[DGBasisClosureRow, ...],
+    tuple[tuple[int, int], ...],
+    int,
+    int,
+    int,
+]:
+    """Enumerate all closures and pseudo-intents with bounded integer bitsets."""
+
+    attribute_count = len(context.attributes)
+    (
+        closure_masks,
+        pseudo_intent_masks,
+        subset_comparisons,
+        closure_comparisons,
+        (row_intersections),
+    ) = _enumerate_dg_masks(context)
+    closure_rows = tuple(
+        DGBasisClosureRow(
+            candidate_state=state,
+            subset=_subset_for_state(state, attribute_count),
+            closure=_subset_for_state(closure_mask, attribute_count),
+        )
+        for state, closure_mask in enumerate(closure_masks)
+    )
+    return (
+        closure_rows,
+        pseudo_intent_masks,
+        subset_comparisons,
+        closure_comparisons,
+        row_intersections,
+    )
+
+
+def _result_payload_with_exact_wire_bytes(
+    payload: dict[str, object],
+) -> dict[str, object]:
+    work = payload["work"]
+    if not isinstance(work, dict):
+        raise TypeError("internal DG-basis work payload must be an object")
+    serialized_result_bytes = 1
+    for _ in range(4):
+        work["serialized_result_bytes"] = serialized_result_bytes
+        measured = len(encode_strict_json(payload))
+        if measured == serialized_result_bytes:
+            return payload
+        serialized_result_bytes = measured
+    raise RuntimeError("serialized DG-basis result size did not reach a fixed point")
+
+
+def duquenne_guigues_basis(
+    context: FormalContext,
+) -> CanonicalImplicationBasisResult:
+    """Return every pseudo-intent and the exact canonical implication basis.
+
+    Candidate states are visited in binary lectic order, where the largest
+    differing source attribute decides the order.  Numeric bit-mask order is a
+    linear extension of subset inclusion, so every proper-subset pseudo-intent
+    needed by the recursive definition has already been considered.
+    """
+
+    states, reserved_logical_work, reserved_result_bytes = _duquenne_guigues_preflight(
+        context
+    )
+    (
+        closure_matrix,
+        pseudo_intent_masks,
+        subset_comparisons,
+        closure_comparisons,
+        row_intersections,
+    ) = _enumerate_dg_basis(context)
+    attribute_count = len(context.attributes)
+    implications = tuple(
+        AttributeImplication(
+            premise=_subset_for_state(state, attribute_count),
+            conclusion=_subset_for_state(closure & ~state, attribute_count),
+        )
+        for state, closure in pseudo_intent_masks
+    )
+    basis = FiniteAttributeImplicationSystem(
+        attributes=_basis_attribute_labels(attribute_count),
+        implications=implications,
+    )
+    implication_indices = {
+        implication.premise: index
+        for index, implication in enumerate(basis.implications)
+    }
+    pseudo_intents = tuple(
+        PseudoIntent(
+            candidate_state=state,
+            premise=_subset_for_state(state, attribute_count),
+            closure=_subset_for_state(closure, attribute_count),
+            basis_implication_index=implication_indices[
+                _subset_for_state(state, attribute_count)
+            ],
+        )
+        for state, closure in pseudo_intent_masks
+    )
+
+    basis_replay_work = 0
+    for closure_row in closure_matrix:
+        replay = implication_closure(basis, frozenset(closure_row.subset))
+        if replay.closure != closure_row.closure:
+            raise RuntimeError(
+                "constructed canonical basis failed source closure equivalence"
+            )
+        basis_replay_work += replay.work.canonical_replay_work
+
+    closure_matrix_memberships = sum(
+        len(row.subset) + len(row.closure) for row in closure_matrix
+    )
+    pseudo_intent_memberships = sum(
+        len(row.premise) + len(row.closure) for row in pseudo_intents
+    )
+    incidence_checks = len(context.incidence) * (
+        attribute_count * states // 2 + row_intersections
+    )
+    implication_memberships = basis.total_memberships
+    # Exact accounting covers the three kernel-executed closure-matrix passes
+    # (producer preflight, producer enumeration, result-validation preflight),
+    # the result validator's independent per-state reconstruction, and the
+    # recursive pseudo-intent replays those passes run.  Request-model
+    # admission probing precedes the kernel and stays outside the reported
+    # result, so native and catalog invocations report identical counts.
+    accounted_logical_work = (
+        3 * states * len(context.objects)
+        + 3 * len(context.incidence)
+        + 4 * row_intersections
+        + incidence_checks
+        + 3 * subset_comparisons
+        + 3 * closure_comparisons
+        + 4 * basis_replay_work
+        + closure_matrix_memberships
+        + pseudo_intent_memberships
+        + implication_memberships
+    )
+    payload: dict[str, object] = {
+        "context": context.model_dump(mode="json"),
+        "source_attribute_indices": list(range(attribute_count)),
+        "lectic_order": "BINARY_LECTIC_BY_MAXIMUM_DIFFERENCE",
+        "closure_matrix": [row.model_dump(mode="json") for row in closure_matrix],
+        "pseudo_intents": [row.model_dump(mode="json") for row in pseudo_intents],
+        "basis": basis.model_dump(mode="json"),
+        "work": {
+            "candidate_states": states,
+            "context_closure_queries": 4 * states,
+            "context_object_row_checks": 3 * states * len(context.objects),
+            "context_incidence_loads": 3 * len(context.incidence),
+            "context_row_intersections": 4 * row_intersections,
+            "context_incidence_checks": incidence_checks,
+            "pseudo_intent_subset_comparisons": 3 * subset_comparisons,
+            "pseudo_intent_closure_comparisons": 3 * closure_comparisons,
+            "basis_closure_queries": 2 * states,
+            "basis_canonical_replay_work": 2 * basis_replay_work,
+            "closure_matrix_memberships": closure_matrix_memberships,
+            "pseudo_intent_memberships": pseudo_intent_memberships,
+            "implication_count": len(basis.implications),
+            "implication_memberships": implication_memberships,
+            "accounted_logical_work": accounted_logical_work,
+            "reserved_logical_work": reserved_logical_work,
+            "reserved_result_bytes": reserved_result_bytes,
+            "serialized_result_bytes": 1,
+        },
+    }
+    return CanonicalImplicationBasisResult.model_validate(
+        _result_payload_with_exact_wire_bytes(payload)
     )
 
 

@@ -1,189 +1,76 @@
-"""Quadratic form operation declarations."""
+"""Quadratic-form operation declarations."""
 
-from collections.abc import Callable
-from typing import Any
-
-from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationExample
-from jacobian.math.quadratic_forms._models import (
-    DirectSumRequest,
-    DirectSumResult,
-    DiscriminantRequest,
-    DiscriminantResult,
-    EvaluationRequest,
-    EvaluationResult,
-    RepresentationNumbersRequest,
-    RepresentationNumbersResult,
-    ScalingRequest,
-    ScalingResult,
-    SignatureRequest,
-    SignatureResult,
-    ThetaSeriesPrefixRequest,
-    ThetaSeriesPrefixResult,
-)
-from jacobian.math.quadratic_forms._operations import (
-    compute_direct_sum,
-    compute_discriminant,
-    compute_representation_numbers,
-    compute_scaling,
-    compute_signature,
-    compute_theta_series_prefix,
-    evaluate_form,
+from jacobian.catalog.models import MathTool
+from jacobian.math.quadratic_forms._models import EvaluationRequest, EvaluationResult
+from jacobian.math.quadratic_forms._operations import evaluate_form
+from jacobian.math.quadratic_forms.values import (
+    MAX_QUADRATIC_EVALUATION_DIGITS,
+    MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS,
+    MAX_QUADRATIC_EVALUATION_TERM_DIGITS,
+    MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS,
+    MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS,
 )
 
-
-def _op[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        version="1",
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
-_FORM_2D = {"matrix": [["1", "0"], ["0", "1"]]}
-
-TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "quadratic_form.evaluate.compute",
-        "Evaluate a quadratic form q(x) = x^T A x",
-        "Compute the exact integer value q(x) = x^T A x for an "
-        "integral quadratic form (symmetric matrix) and integer vector.",
-        EvaluationRequest,
-        EvaluationResult,
-        evaluate_form,
-        "algebra",
-        "quadratic-form",
-        "exact",
-        examples=(
-            example(
-                "identity_2d_at_3_4",
-                "Evaluate x^T I x at (3, 4); "
-                "the matrix must be symmetric and the vector length must match.",
-                {"form": _FORM_2D, "vector": ["3", "4"]},
-            ),
+TOOLS = (
+    MathTool(
+        operation_id="quadratic_form.evaluate.compute",
+        version="2",
+        title="Evaluate an exact rational quadratic form",
+        description=(
+            "Evaluate Q(x)=sum a_i*x_i^2+sum c_ij*x_i*x_j exactly over QQ. "
+            "Axis labels are unique; diagonal_coefficients carries exactly "
+            "one coefficient per axis label and every cross-term index lies "
+            "within that axis. The ordered vector axis must equal the form "
+            "axis. The form stores polynomial coefficients; its polar matrix "
+            "has diagonal 2*a_i and off-diagonal c_ij. Admission also "
+            "requires the total materialized support (diagonal coefficients "
+            "plus cross terms) to stay within "
+            f"{MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS} terms, and the active "
+            "monomial denominator digits d to satisfy d + "
+            f"{MAX_QUADRATIC_EVALUATION_TERM_DIGITS} + len(str(t)) <= "
+            f"{MAX_QUADRATIC_EVALUATION_DIGITS}, where t is the active term "
+            "count."
         ),
-    ),
-    _op(
-        "quadratic_form.discriminant.compute",
-        "Compute the discriminant det(A) of a quadratic form",
-        "Compute the exact determinant of the symmetric matrix "
-        "representing the quadratic form, using SymPy for exact "
-        "integer matrix computation.",
-        DiscriminantRequest,
-        DiscriminantResult,
-        compute_discriminant,
-        "algebra",
-        "quadratic-form",
-        "exact",
+        request_type=EvaluationRequest,
+        result_type=EvaluationResult,
+        run=evaluate_form,
+        tags=("algebra", "quadratic-form", "exact-rational"),
         examples=(
             example(
-                "identity_2d_discriminant",
-                "Compute det(I_2) = 1; the matrix must be symmetric.",
-                {"form": _FORM_2D},
-            ),
-        ),
-    ),
-    _op(
-        "quadratic_form.signature.compute",
-        "Compute the signature/inertia of a quadratic form",
-        "Compute the inertia (n_positive, n_negative, n_zero) of a "
-        "quadratic form using SymPy eigenvalue computation, with "
-        "definiteness classification.",
-        SignatureRequest,
-        SignatureResult,
-        compute_signature,
-        "algebra",
-        "quadratic-form",
-        "exact",
-        examples=(
-            example(
-                "identity_2d_signature",
-                "Compute the signature of I_2; the matrix must be symmetric.",
-                {"form": _FORM_2D},
-            ),
-        ),
-    ),
-    _op(
-        "quadratic_form.representation_numbers.compute",
-        "Compute representation numbers r(0), ..., r(bound)",
-        "Compute the exact representation numbers r(n) for n = 0, 1, ..., bound by brute-force enumeration over a bounded integer box. The form must be positive-definite for finite counts.",
-        RepresentationNumbersRequest,
-        RepresentationNumbersResult,
-        compute_representation_numbers,
-        "quadratic-form",
-        "exact",
-        examples=(
-            example(
-                "rep_numbers_identity_2d_bound_2",
-                "Representation numbers of I_2 up to 2 (positive-definite).",
-                {"form": {"matrix": [["1", "0"], ["0", "1"]]}, "bound": 2},
-            ),
-        ),
-    ),
-    _op(
-        "quadratic_form.theta_series_prefix.compute",
-        "Compute the theta series prefix",
-        "Compute the theta series prefix coefficients r(0), ..., r(bound) where r(n) is the number of representations of n by the quadratic form.",
-        ThetaSeriesPrefixRequest,
-        ThetaSeriesPrefixResult,
-        compute_theta_series_prefix,
-        "quadratic-form",
-        "exact",
-        examples=(
-            example(
-                "theta_prefix_identity_2d_bound_2",
-                "Theta prefix of I_2 up to 2.",
-                {"form": {"matrix": [["1", "0"], ["0", "1"]]}, "bound": 2},
-            ),
-        ),
-    ),
-    _op(
-        "quadratic_form.scale.compute",
-        "Scale a quadratic form by an integer factor",
-        "Scale the symmetric matrix A by an integer factor, returning factor * A. Factor and entries must keep result within digit bounds.",
-        ScalingRequest,
-        ScalingResult,
-        compute_scaling,
-        "quadratic-form",
-        "exact",
-        examples=(
-            example(
-                "scale-i2-by-2",
-                "Scale 2D identity by 2.",
-                {"form": {"matrix": [["1", "0"], ["0", "1"]]}, "factor": 2},
-            ),
-        ),
-    ),
-    _op(
-        "quadratic_form.direct_sum.compute",
-        "Compute the direct sum of two quadratic forms",
-        "Compute the block diagonal direct sum A ⊕ B of two quadratic forms. Combined dimension must not exceed 50.",
-        DirectSumRequest,
-        DirectSumResult,
-        compute_direct_sum,
-        "quadratic-form",
-        "exact",
-        examples=(
-            example(
-                "direct-sum-i1-i1",
-                "Direct sum of two 1D forms [[1]] oplus [[1]].",
-                {"form1": {"matrix": [["1"]]}, "form2": {"matrix": [["1"]]}},
+                "binary_cross_term",
+                "Evaluate 2*x^2+3*x*y+5*y^2 at (1/2, 2); unique labels "
+                "with exactly one entry each, cross indices on that axis, "
+                "matching form/vector axes, "
+                f"{MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS}/"
+                f"{MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS}-digit per-entry "
+                "bounds, support within "
+                f"{MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS} terms, and d + "
+                f"{MAX_QUADRATIC_EVALUATION_TERM_DIGITS} + digits(t) within "
+                f"{MAX_QUADRATIC_EVALUATION_DIGITS} on active denominators.",
+                {
+                    "form": {
+                        "axis": ["x", "y"],
+                        "diagonal_coefficients": [
+                            {"num": "2", "den": "1"},
+                            {"num": "5", "den": "1"},
+                        ],
+                        "cross_terms": [
+                            {
+                                "left": 0,
+                                "right": 1,
+                                "coefficient": {"num": "3", "den": "1"},
+                            }
+                        ],
+                    },
+                    "vector": {
+                        "axis": ["x", "y"],
+                        "coordinates": [
+                            {"num": "1", "den": "2"},
+                            {"num": "2", "den": "1"},
+                        ],
+                    },
+                },
             ),
         ),
     ),

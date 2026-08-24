@@ -27,6 +27,7 @@ def compute_continued_fraction(
     )
     return ContinuedFractionResult(
         discriminant=request.discriminant,
+        term_count=request.term_count,
         coefficients=tuple(coefficients),
         preperiod_length=preperiod_length,
         period_length=period_length,
@@ -37,6 +38,7 @@ def compute_convergents(request: ConvergentRequest) -> ConvergentResult:
     values = convergents(request.discriminant, request.convergent_count)
     return ConvergentResult(
         discriminant=request.discriminant,
+        convergent_count=request.convergent_count,
         convergents=tuple(
             ConvergentValue(
                 index=index,

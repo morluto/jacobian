@@ -44,3 +44,34 @@ def test_public_operations_reject_indices_outside_their_axis(
             {"context": context, "subset": [1]},
             Catalog.open(),
         )
+
+
+def test_public_duquenne_guigues_basis_retains_complete_closure_matrix() -> None:
+    public_result = invoke_operation(
+        "formal_context.duquenne_guigues_basis.compute",
+        {
+            "context": {
+                "objects": ["g0", "g1"],
+                "attributes": ["always", "sometimes"],
+                "incidence": [[0, 0], [1, 0]],
+            }
+        },
+        Catalog.open(),
+    )
+
+    output = public_result.output
+    assert output["source_attribute_indices"] == [0, 1]
+    assert output["closure_matrix"] == [
+        {"candidate_state": 0, "subset": [], "closure": [0]},
+        {"candidate_state": 1, "subset": [0], "closure": [0]},
+        {"candidate_state": 2, "subset": [1], "closure": [0, 1]},
+        {"candidate_state": 3, "subset": [0, 1], "closure": [0, 1]},
+    ]
+    assert output["pseudo_intents"] == [
+        {
+            "candidate_state": 0,
+            "premise": [],
+            "closure": [0],
+            "basis_implication_index": 0,
+        }
+    ]

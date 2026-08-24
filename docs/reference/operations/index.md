@@ -13,3 +13,4 @@ that need more context than an operation card:
 - [Combinatorics on words](words/index.md)
 - [SAT and SMT](sat-smt/index.md)
 - [Lean source checking](lean/index.md)
+- [Exact rational quadratic forms](quadratic-forms.md)

@@ -12,6 +12,8 @@ from jacobian.math.additive_combinatorics._models import (
     AdditiveEnergyResult,
     DirectSumPredicateRequest,
     DirectSumPredicateResult,
+    MultisetSumRepresentationProfileRequest,
+    MultisetSumRepresentationProfileResult,
     OrderedDifferenceProfileRequest,
     OrderedDifferenceProfileResult,
     RepresentationProfileRequest,
@@ -22,6 +24,7 @@ from jacobian.math.additive_combinatorics._models import (
 )
 from jacobian.math.additive_combinatorics._operations import (
     compute_additive_energy,
+    compute_multiset_sum_representation_profile,
     compute_ordered_difference_profile,
     compute_representation_profile,
     compute_subset_sum_profile,
@@ -83,6 +86,11 @@ _REPRESENTATION_PROFILE_EXAMPLE: dict[str, Any] = {
     "right": {"elements": ["3", "4"]},
 }
 
+_MULTISET_SUM_PROFILE_EXAMPLE: dict[str, Any] = {
+    "source": {"elements": ["0", "1", "2"]},
+    "arity": 2,
+}
+
 _SUBSET_SUM_PROFILE_EXAMPLE: dict[str, Any] = {
     "source": {"items": ["1", "1"]},
 }
@@ -132,6 +140,33 @@ ADDITIVE_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                     "E(A,B)=6 is derivable from this profile."
                 ),
                 _REPRESENTATION_PROFILE_EXAMPLE,
+            ),
+        ),
+    ),
+    additive_combinatorics_operation(
+        "additive.multiset_sum.representation_profile.compute",
+        "Compute a fixed-arity unordered multiset-sum profile",
+        "Given a canonical finite integer source A and arity k, return the exact "
+        "multiplicity of every sum of a nondecreasing k-tuple of source indices, "
+        "with repetition allowed. An optional closed sum window returns the "
+        "complete profile only inside that interval. Admission bounds complete "
+        "materialized enumeration and worst-case serialized support before "
+        "execution; the result retains and replays its source, arity, and scope.",
+        MultisetSumRepresentationProfileRequest,
+        MultisetSumRepresentationProfileResult,
+        compute_multiset_sum_representation_profile,
+        "additive-combinatorics",
+        "multiset-sum",
+        "representation-profile",
+        "exact",
+        examples=(
+            example(
+                "three_element_pair_multisums",
+                "Compute all unordered two-term sums from {0,1,2}, including "
+                "repeated source elements; the source must be distinct, strictly "
+                "increasing, and bounded, and omitting the window requests the "
+                "complete profile.",
+                _MULTISET_SUM_PROFILE_EXAMPLE,
             ),
         ),
     ),

@@ -3,14 +3,23 @@
 
 from __future__ import annotations
 
+from math import comb
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from jacobian._models import StrictModel
 
 MAX_CODEWORDS = 4096
 MAX_LENGTH = 64
+
+# ``code.nonlinear.constant_weight.compute`` materializes every C(length,
+# weight) word, so its admitted domain is bounded by the exact binomial
+# output size rather than the shared explicit-code length limit.  The
+# worst case at MAX_LENGTH is C(64,32) ~ 1.8e18 words, which cannot be
+# enumerated; requests whose complete output would exceed MAX_CODEWORDS
+# are rejected before any backend work.
+MAX_CONSTANT_WEIGHT_WORDS = MAX_CODEWORDS
 
 
 class BinaryCodeRequest(StrictModel):
@@ -39,13 +48,47 @@ class BinaryCodeRequest(StrictModel):
 class ConstantWeightRequest(StrictModel):
     """Generate all constant-weight binary words of given length and weight."""
 
-    length: int = Field(ge=1, le=MAX_LENGTH)
-    weight: int = Field(ge=0)
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Generate every constant-weight binary word. Coupled admission "
+                "rule: the complete output size C(length, weight) must not "
+                f"exceed {MAX_CONSTANT_WEIGHT_WORDS} materialized words; requests "
+                "whose binomial output is larger are rejected before enumeration. "
+                "For example, length=12 weight=6 (924 words) is admitted while "
+                "length=64 weight=32 (~1.8e18 words) is not."
+            )
+        }
+    )
+
+    length: int = Field(
+        ge=1,
+        le=MAX_LENGTH,
+        description=(
+            f"Word length in [1, {MAX_LENGTH}]. Subject to the coupled rule "
+            f"C(length, weight) <= {MAX_CONSTANT_WEIGHT_WORDS}."
+        ),
+    )
+    weight: int = Field(
+        ge=0,
+        description=(
+            f"Hamming weight in [0, length]. Subject to the coupled rule "
+            f"C(length, weight) <= {MAX_CONSTANT_WEIGHT_WORDS}."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_valid_weight(self) -> Self:
         if self.weight > self.length:
             raise ValueError("weight cannot exceed length")
+        expected_words = comb(self.length, self.weight)
+        if expected_words > MAX_CONSTANT_WEIGHT_WORDS:
+            raise ValueError(
+                "constant-weight enumeration would materialize "
+                f"{expected_words:,} words (C({self.length},{self.weight})), "
+                f"exceeding the {MAX_CONSTANT_WEIGHT_WORDS}-word result bound; "
+                "enumerate a smaller length/weight or compose via subsets"
+            )
         return self
 
 

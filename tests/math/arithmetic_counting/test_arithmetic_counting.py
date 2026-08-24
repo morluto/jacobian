@@ -39,7 +39,34 @@ class TestFloorSum:
         with pytest.raises(ValidationError):
             FloorSumRequest(n=5, m=0, a=2, b=1)
         with pytest.raises(ValidationError):
-            FloorSumRequest(n=1_000_001, m=1, a=0, b=0)
+            FloorSumRequest(n=10**18 + 1, m=1, a=0, b=0)
+
+    def test_matches_bruteforce_on_bounded_inputs(self):
+        import random
+
+        generator = random.Random(20260824)
+        for _ in range(64):
+            n = generator.randint(0, 400)
+            m = generator.randint(1, 40)
+            a = generator.randint(0, 120)
+            b = generator.randint(0, 90)
+            expected = sum((a * index + b) // m for index in range(n))
+            result = compute_floor_sum(FloorSumRequest(n=n, m=m, a=a, b=b))
+            assert int(result.value) == expected
+
+    def test_number_theory_scale_is_admitted(self):
+        # n = 10^12 with the Euclidean kernel completes in microseconds; the
+        # brute-force loop this replaced would need hours.  Each term is
+        # (a*i+b)/m within 1, so the exact sum is pinned between two
+        # closed-form rational bounds of width n.
+        from fractions import Fraction
+
+        n, m, a, b = 10**12, 999_983, 123_456, 789
+        result = compute_floor_sum(FloorSumRequest(n=n, m=m, a=a, b=b))
+        value = int(result.value)
+        linear = Fraction(a * n * (n - 1) // 2 + b * n, m)
+        assert Fraction(value) <= linear
+        assert Fraction(value) >= linear - n
 
 
 class TestCongruenceBoxCount:

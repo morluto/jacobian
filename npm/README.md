@@ -16,7 +16,7 @@ stdio server. The carrier invokes exactly one canonical Python command.
 
 ## Requirements
 
-- Node.js >= 18
+- Node.js 20.17+, 22.13+, or 23.5+
 - `uv` on `$PATH` (or set `JACOBIAN_UV_BIN`)
 
 ## Install
@@ -29,16 +29,17 @@ Install, upgrade, and remove this carrier with npm.
 
 ## Set up agents
 
-Set up Jacobian for your agents with a single command. It requires Node.js 18
-or newer and `uvx` on your `PATH`.
+Set up Jacobian for your agents with a single command. It requires Node.js
+20.17+, 22.13+, or 23.5+ and `uvx` on your `PATH`.
 
 ```sh
 npx jacobian@latest setup
 ```
 
 Choose detected agents and review the changes before they are written. Setup
-writes only a `jacobian` MCP entry for selected agents; existing unowned
-entries are protected unless you explicitly pass `--force`.
+writes a `jacobian` MCP entry and installs the `jacobian-math` skill for each
+selected agent. Existing unowned MCP entries and skills are protected unless
+you explicitly pass `--force`.
 
 The generated launcher pins the Jacobian version that ran setup. Setup itself
 does not install or upgrade Node.js, `uv`, Python, or an agent.

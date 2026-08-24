@@ -11,6 +11,12 @@ from jacobian.math.graphs.decomposition._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "graph.decomposition.spqr_tree.compute",
+        AdmissionDecision.KEEP,
+        "bounded exact structural decomposition with source-edge ownership,"
+        " virtual-edge gluing, and a distinct replayable postcondition",
+    ),
+    OperationAdmission(
         "graph.decomposition.biconnected_components.compute",
         AdmissionDecision.NATIVE_ONLY,
         "useful projection of the retained block-cut-tree decomposition",

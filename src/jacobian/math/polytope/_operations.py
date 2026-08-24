@@ -35,10 +35,16 @@ from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.polytope._models import (
     MAX_BOUNDEDNESS_COMBINATIONS,
+    MAX_COMPUTED_FACETS,
+    MAX_FACET_INCIDENCES,
+    MAX_FACET_SIGN_TESTS,
     MAX_HULL_SUBFACETS,
+    FacetIncidenceRequest,
+    FacetIncidenceResult,
     Halfspace,
     PolytopeVolumeRequest,
     PolytopeVolumeResult,
+    PrimitiveFacet,
     Vertex,
 )
 
@@ -70,7 +76,7 @@ def _hyperplane_normal(points: list[list[Rational]]) -> Matrix | None:
         [[points[i][k] - points[0][k] for k in range(d)] for i in range(1, d)]
     )
     basis = diffs.nullspace()
-    if not basis:
+    if len(basis) != 1:
         return None
     return basis[0]
 
@@ -105,6 +111,159 @@ def _facets_from_points(
             seen.add(key)
             out.append((normal, offset))
     return out
+
+
+def _deduplicate_source_rows(points: list[list[Rational]]) -> list[list[Rational]]:
+    """Drop repeated source rows, preserving first-seen order."""
+
+    seen: set[tuple[Rational, ...]] = set()
+    unique: list[list[Rational]] = []
+    for point in points:
+        key = tuple(point)
+        if key not in seen:
+            seen.add(key)
+            unique.append(point)
+    return unique
+
+
+def _require_facet_preflight(vertices: tuple[Vertex, ...], dim: int) -> None:
+    """Prove the exact V-to-facet enumeration is admitted before it starts."""
+
+    points = [
+        [Rational(*coordinate.as_integer_ratio()) for coordinate in vertex.coordinates]
+        for vertex in vertices
+    ]
+    if dim == 1:
+        if len({point[0] for point in points}) < 2:
+            raise ValueError(
+                "V-representation is not full-dimensional; lower-dimensional hulls "
+                "require intrinsic affine coordinates"
+            )
+    else:
+        differences = Matrix(
+            [
+                [points[index][axis] - points[0][axis] for axis in range(dim)]
+                for index in range(1, len(points))
+            ]
+        )
+        if differences.rank() < dim:
+            raise ValueError(
+                "V-representation is not full-dimensional; lower-dimensional hulls "
+                "require intrinsic affine coordinates"
+            )
+    # Repeated source rows create neither candidate hyperplanes nor
+    # candidate side tests: ``_facets_from_points`` receives exactly the
+    # distinct rows below, so each of the ``C(m, d)`` candidates is
+    # side-tested against those ``m`` distinct rows and the sign-test
+    # budget is charged per distinct row actually tested. The final-facet
+    # incidence pass ranges over all source positions and is accounted
+    # separately -- its work is bounded by the facet and incidence result
+    # limits enforced exactly on the materialized profile this bounded
+    # enumeration produces (see ``_computed_facets_from_vertices``); row
+    # counts alone cannot derive those bounds because interior and other
+    # non-extreme rows inflate every vertex-count upper bound while
+    # contributing no facets.
+    distinct_points = _deduplicate_source_rows(points)
+    candidate_count = math.comb(len(distinct_points), dim)
+    side_tests = len(distinct_points) * candidate_count
+    if side_tests > MAX_FACET_SIGN_TESTS:
+        raise ValueError(
+            "facet enumeration exceeds the "
+            f"{MAX_FACET_SIGN_TESTS}-side-test bound "
+            f"({side_tests} > {MAX_FACET_SIGN_TESTS})"
+        )
+
+
+def _primitive_facet_key(
+    normal: Matrix, offset: Rational, dim: int
+) -> tuple[tuple[int, ...], int]:
+    """Normalize an oriented rational supporting inequality to primitive integers."""
+
+    values = [Rational(normal[index]) for index in range(dim)] + [Rational(offset)]
+    scale = 1
+    for value in values:
+        scale = math.lcm(scale, int(value.q))
+    integers = [int(value * scale) for value in values]
+    divisor = 0
+    for value in integers:
+        divisor = math.gcd(divisor, abs(value))
+    if divisor == 0:
+        raise ValueError("facet normal must not be zero")
+    coefficients = tuple(value // divisor for value in integers[:-1])
+    return coefficients, integers[-1] // divisor
+
+
+def _primitive_halfspace(coefficients: tuple[int, ...], rhs: int) -> Halfspace:
+    """Wrap a primitive integer supporting inequality in the shared value."""
+
+    return Halfspace(
+        coefficients=tuple(
+            CanonicalRational.from_integer_ratio(value, 1) for value in coefficients
+        ),
+        offset=CanonicalRational.from_integer_ratio(rhs, 1),
+    )
+
+
+def _computed_facets_from_vertices(
+    vertices: tuple[Vertex, ...], dim: int
+) -> tuple[PrimitiveFacet, ...]:
+    """Return every canonical supporting facet and complete source incidence.
+
+    The pinned SymPy backend supplies exact nullspaces and rational arithmetic.
+    This owner adapter enumerates the finite candidate family over the
+    distinct source rows -- duplicates create no candidate hyperplanes --
+    canonicalizes every oriented supporting row, and binds it to all equal
+    source rows in the original ordered V-representation.
+    """
+
+    _require_facet_preflight(vertices, dim)
+    points = [
+        [Rational(*coordinate.as_integer_ratio()) for coordinate in vertex.coordinates]
+        for vertex in vertices
+    ]
+    candidates = _facets_from_points(_deduplicate_source_rows(points), dim)
+    canonical: dict[tuple[tuple[int, ...], int], PrimitiveFacet] = {}
+    for normal, offset in candidates:
+        coefficients, rhs = _primitive_facet_key(normal, offset, dim)
+        incidence = tuple(
+            index
+            for index, point in enumerate(points)
+            if sum(
+                Rational(coefficient) * point[axis]
+                for axis, coefficient in enumerate(coefficients)
+            )
+            == rhs
+        )
+        key = coefficients, rhs
+        canonical[key] = PrimitiveFacet(
+            halfspace=_primitive_halfspace(coefficients, rhs),
+            source_vertex_indices=incidence,
+        )
+    facets = tuple(canonical[key] for key in sorted(canonical))
+    if len(facets) > MAX_COMPUTED_FACETS:
+        raise ValueError(
+            f"facet profile exceeds the {MAX_COMPUTED_FACETS}-facet result bound"
+        )
+    incidence_count = sum(len(facet.source_vertex_indices) for facet in facets)
+    if incidence_count > MAX_FACET_INCIDENCES:
+        raise ValueError(
+            f"facet profile exceeds the {MAX_FACET_INCIDENCES}-incidence result bound"
+        )
+    return facets
+
+
+def compute_facet_incidence(
+    request: FacetIncidenceRequest,
+) -> FacetIncidenceResult:
+    """Compute the complete canonical facet-incidence profile of ``conv(V)``."""
+
+    dimension = len(request.vertices[0].coordinates)
+    facets = _computed_facets_from_vertices(request.vertices, dimension)
+    return FacetIncidenceResult(
+        vertices=request.vertices,
+        dimension=dimension,
+        facets=facets,
+    )
 
 
 def _deduplicate_halfspaces(
@@ -726,4 +885,8 @@ def convex_hull_volume(
     return _canonical_rational(volume), dim
 
 
-__all__ = ["compute_polytope_volume", "convex_hull_volume"]
+__all__ = [
+    "compute_facet_incidence",
+    "compute_polytope_volume",
+    "convex_hull_volume",
+]

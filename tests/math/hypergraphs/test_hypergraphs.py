@@ -96,6 +96,19 @@ class TestFiniteHypergraph:
         with pytest.raises(ValidationError, match="edge members must be distinct"):
             FiniteHypergraph(vertices=["a", "b"], edges=[["e", ["a", "a"]]])
 
+    def test_lone_surrogate_vertex_label_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="must be valid UTF-8"):
+            FiniteHypergraph(vertices=["\ud800"], edges=[])
+
+    def test_lone_surrogate_edge_id_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="must be valid UTF-8"):
+            FiniteHypergraph(vertices=["a"], edges=[["\udfff", ["a"]]])
+
+    def test_astral_plane_label_accepted(self) -> None:
+        hg = FiniteHypergraph(vertices=["\U0001d5a0"], edges=[["e", ["\U0001d5a0"]]])
+        assert hg.vertices == ("\U0001d5a0",)
+        assert hg.edges[0][1] == ("\U0001d5a0",)
+
 
 class TestParameters:
     def test_basic(self) -> None:

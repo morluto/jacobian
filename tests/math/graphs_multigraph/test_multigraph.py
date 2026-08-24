@@ -313,6 +313,24 @@ class TestEulerianDecomposition:
         assert result.covers_all
         assert len(result.cycles) == 0
 
+    def test_full_axis_ring_decomposition_round_trips(self) -> None:
+        """A ring through all 64 vertices closes with 65 sequence entries."""
+        ring = LooplessMultigraph(
+            vertex_count=64,
+            edges=tuple(
+                MultigraphEdge(edge_id=f"e{i}", left=i, right=(i + 1) % 64)
+                for i in range(64)
+            ),
+        )
+        result = compute_eulerian_cycles(EulerianCyclesRequest(graph=ring))
+        assert result.covers_all
+        assert len(result.cycles) == 1
+        cycle = result.cycles[0]
+        assert len(cycle.vertices) == 65
+        assert len(cycle.edge_ids) == 64
+        replayed = EulerianCyclesResult.model_validate(result.model_dump(mode="json"))
+        assert replayed == result
+
 
 # ---------------------------------------------------------------------------
 # Fixture 8: Submitted exact double cover with every edge multiplicity two

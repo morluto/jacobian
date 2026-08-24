@@ -40,6 +40,7 @@ ROOT_MATH_DOMAINS = (
     "greedoids",
     "hypergraphs",
     "impartial_games",
+    "incidence_structures",
     "integral_binary_quadratic_forms",
     "intervals",
     "matrices",

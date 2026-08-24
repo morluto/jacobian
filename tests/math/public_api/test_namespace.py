@@ -16,7 +16,9 @@ import importlib
 import jacobian
 
 ROOT_MATH_DOMAINS = (
+    "additive_combinatorics",
     "algebraic_combinatorics",
+    "approximation_theory",
     "arithmetic",
     "arithmetic_dynamics",
     "combinatorial_maps",
@@ -37,6 +39,7 @@ ROOT_MATH_DOMAINS = (
     "matrices",
     "numerical_semigroups",
     "petri_nets",
+    "polynomial_support_geometry",
     "polynomials",
     "prime_field_linear_algebra",
     "probability",

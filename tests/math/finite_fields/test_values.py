@@ -156,8 +156,8 @@ def test_presentation_rejects_oversized_characteristic_before_primality() -> Non
 def test_presentation_rejects_oversized_field_order_before_irreducibility() -> None:
     with pytest.raises(ValueError, match="field order"):
         FiniteFieldPresentation(
-            characteristic=2,
-            modulus_coefficients=(1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
+            characteristic=3,
+            modulus_coefficients=(1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
         )
 
 

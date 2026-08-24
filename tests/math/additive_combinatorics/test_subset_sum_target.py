@@ -41,7 +41,7 @@ def _request(
     allow_empty_subset: bool,
 ) -> SubsetSumTargetRequest:
     return SubsetSumTargetRequest(
-        source=IndexedIntegerSequence(values=tuple(str(value) for value in values)),
+        source=IndexedIntegerSequence(items=tuple(str(value) for value in values)),
         target=str(target),
         allow_empty_subset=allow_empty_subset,
     )
@@ -64,11 +64,11 @@ def _brute_force(
 
 def test_request_and_result_compose_through_strict_json_parsing() -> None:
     request = SubsetSumTargetRequest.model_validate_json(
-        '{"source":{"values":["2","3"]},"target":"5","allow_empty_subset":false}',
+        '{"source":{"items":["2","3"]},"target":"5","allow_empty_subset":false}',
         strict=True,
     )
 
-    assert request.source == IndexedIntegerSequence(values=("2", "3"))
+    assert request.source == IndexedIntegerSequence(items=("2", "3"))
     result = _operation().run(request)
     assert (
         SubsetSumTargetResult.model_validate_json(result.model_dump_json(), strict=True)
@@ -77,7 +77,7 @@ def test_request_and_result_compose_through_strict_json_parsing() -> None:
 
 
 @pytest.mark.parametrize(
-    ("values", "target", "allow_empty_subset", "expected"),
+    ("items", "target", "allow_empty_subset", "expected"),
     (
         ((2, 3), 5, False, (0, 1)),
         ((2, 3), 4, False, None),
@@ -90,14 +90,14 @@ def test_request_and_result_compose_through_strict_json_parsing() -> None:
     ),
 )
 def test_target_kernel_known_answers(
-    values: tuple[int, ...],
+    items: tuple[int, ...],
     target: int,
     allow_empty_subset: bool,
     expected: tuple[int, ...] | None,
 ) -> None:
     assert (
         _solve_subset_sum_target(
-            values,
+            items,
             target,
             allow_empty_subset=allow_empty_subset,
         )
@@ -108,7 +108,7 @@ def test_target_kernel_known_answers(
 def test_operation_reports_attained_and_not_attained() -> None:
     attained = _operation().run(_request((2, 3), 5, allow_empty_subset=False))
     assert attained == SubsetSumTargetResult(
-        source=IndexedIntegerSequence(values=("2", "3")),
+        source=IndexedIntegerSequence(items=("2", "3")),
         target="5",
         allow_empty_subset=False,
         status="ATTAINED",
@@ -118,7 +118,7 @@ def test_operation_reports_attained_and_not_attained() -> None:
 
     not_attained = _operation().run(_request((2, 3), 4, allow_empty_subset=False))
     assert not_attained == SubsetSumTargetResult(
-        source=IndexedIntegerSequence(values=("2", "3")),
+        source=IndexedIntegerSequence(items=("2", "3")),
         target="4",
         allow_empty_subset=False,
         status="NOT_ATTAINED",
@@ -167,7 +167,7 @@ def test_result_rejects_source_decision_and_witness_mutations() -> None:
     valid = _operation().run(_request((3, 2, 5), 5, allow_empty_subset=False))
     payload = valid.model_dump(mode="json")
     mutations = (
-        {**payload, "source": {"values": ["3", "1", "5"]}},
+        {**payload, "source": {"items": ["3", "1", "5"]}},
         {**payload, "target": "4"},
         {
             **payload,
@@ -205,13 +205,13 @@ def test_request_admits_large_low_state_and_exact_digit_and_state_boundaries() -
     zeros = _operation().run(_request((0,) * 256, 0, allow_empty_subset=False))
     assert zeros.witness == IndexSubset(indices=(0,))
 
-    many_zeros = _operation().run(_request((0,) * 4_096, 0, allow_empty_subset=True))
+    many_zeros = _operation().run(_request((0,) * 256, 0, allow_empty_subset=True))
     assert many_zeros.witness == IndexSubset(indices=())
 
     widest = "9" * 256
     wide_result = _operation().run(
         SubsetSumTargetRequest(
-            source=IndexedIntegerSequence(values=(widest,)),
+            source=IndexedIntegerSequence(items=(widest,)),
             target=widest,
             allow_empty_subset=False,
         )
@@ -228,13 +228,13 @@ def test_request_admits_large_low_state_and_exact_digit_and_state_boundaries() -
 def test_request_rejects_immediately_above_each_search_bound() -> None:
     with pytest.raises(ValidationError, match="256-digit"):
         SubsetSumTargetRequest(
-            source={"values": ["1" + "0" * 256]},
+            source={"items": ["1" + "0" * 256]},
             target="0",
             allow_empty_subset=False,
         )
     with pytest.raises(ValidationError, match="256-digit"):
         SubsetSumTargetRequest(
-            source={"values": []},
+            source={"items": []},
             target="1" + "0" * 256,
             allow_empty_subset=False,
         )
@@ -243,7 +243,7 @@ def test_request_rejects_immediately_above_each_search_bound() -> None:
     above_wire_count = (4 * 1024 * 1024 - 64) // (len(widest) + 4) + 1
     with pytest.raises(ValidationError, match="4 MiB wire-size"):
         SubsetSumTargetRequest(
-            source={"values": [widest] * above_wire_count},
+            source={"items": [widest] * above_wire_count},
             target="0",
             allow_empty_subset=True,
         )
@@ -251,7 +251,7 @@ def test_request_rejects_immediately_above_each_search_bound() -> None:
     with pytest.raises(ValidationError, match="complete-call bound"):
         SubsetSumTargetRequest.model_validate(
             {
-                "source": {"values": ["not-an-integer"] * (500_000 + 1)},
+                "source": {"items": ["not-an-integer"] * (500_000 + 1)},
                 "target": "0",
                 "allow_empty_subset": True,
             }

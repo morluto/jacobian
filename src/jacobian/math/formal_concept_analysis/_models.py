@@ -64,7 +64,7 @@ class ConceptResult(StrictModel):
 # number of concepts (not 2^|M|), but the number of concepts itself can be
 # exponential in the number of attributes.  We bound both the attribute count
 # and the number of concepts returned.
-MAX_CONCEPT_ATTRIBUTES = 20
+MAX_CONCEPT_ATTRIBUTES = 64
 MAX_CONCEPTS = 10000
 
 

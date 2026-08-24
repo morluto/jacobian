@@ -39,9 +39,9 @@ def _raw_source_item_count(source: object) -> int | None:
     """Bound one raw source before Pydantic parses its canonical integers."""
 
     if isinstance(source, IndexedIntegerSequence):
-        values: list[object] | tuple[object, ...] = source.values
+        values: list[object] | tuple[object, ...] = source.items
     elif isinstance(source, Mapping):
-        raw_values = source.get("values")
+        raw_values = source.get("items")
         if not isinstance(raw_values, (list, tuple)):
             return None
         values = raw_values
@@ -138,9 +138,9 @@ class SubsetSumTargetRequest(StrictModel):
         raw_source = prepared.get("source")
         if isinstance(raw_source, Mapping):
             source = dict(raw_source)
-            values = source.get("values")
+            values = source.get("items")
             if isinstance(values, list):
-                source["values"] = tuple(values)
+                source["items"] = tuple(values)
             prepared["source"] = source
         _raw_source_item_count(prepared.get("source"))
         raw_target = prepared.get("target")
@@ -150,18 +150,18 @@ class SubsetSumTargetRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_exact_search(self) -> Self:
-        for value in self.source.values:
+        for value in self.source.items:
             _require_integer_digits(value, "source item")
         _require_integer_digits(self.target, "target")
 
         # Exact ASCII digits plus conservative JSON string/container overhead.
         # Retaining this source and a maximal 65,536-index witness stays below
         # Jacobian's 10 MiB canonical result limit.
-        source_wire_bound = 64 + sum(len(value) + 4 for value in self.source.values)
+        source_wire_bound = 64 + sum(len(value) + 4 for value in self.source.items)
         if source_wire_bound > MAX_SUBSET_SUM_SOURCE_WIRE_BYTES:
             raise ValueError("subset-sum source exceeds the 4 MiB wire-size bound")
 
-        values = tuple(parse_canonical_integer(value) for value in self.source.values)
+        values = tuple(parse_canonical_integer(value) for value in self.source.items)
         _require_admitted_work(values, self.allow_empty_subset)
         return self
 
@@ -197,9 +197,9 @@ class SubsetSumTargetResult(StrictModel):
         raw_source = prepared.get("source")
         if isinstance(raw_source, Mapping):
             source = dict(raw_source)
-            raw_values = source.get("values")
+            raw_values = source.get("items")
             if isinstance(raw_values, list):
-                source["values"] = tuple(raw_values)
+                source["items"] = tuple(raw_values)
             prepared["source"] = source
         raw_witness = prepared.get("witness")
         if isinstance(raw_witness, Mapping):
@@ -247,9 +247,7 @@ class SubsetSumTargetResult(StrictModel):
             target=self.target,
             allow_empty_subset=self.allow_empty_subset,
         )
-        values = tuple(
-            parse_canonical_integer(value) for value in request.source.values
-        )
+        values = tuple(parse_canonical_integer(value) for value in request.source.items)
         target = parse_canonical_integer(request.target)
         expected_indices = _solve_subset_sum_target(
             values,
@@ -283,7 +281,7 @@ def solve_subset_sum_target_request(
 ) -> SubsetSumTargetResult:
     """Decide one admitted exact target and return its canonical witness."""
 
-    values = tuple(parse_canonical_integer(value) for value in request.source.values)
+    values = tuple(parse_canonical_integer(value) for value in request.source.items)
     target = parse_canonical_integer(request.target)
     indices = _solve_subset_sum_target(
         values,

@@ -1,3 +1,5 @@
 """Topology operation ownership."""
 
-__all__: list[str] = []
+from jacobian.math.topology.native import simplicial_chain_complex_value
+
+__all__ = ["simplicial_chain_complex_value"]

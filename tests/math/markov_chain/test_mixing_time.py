@@ -76,11 +76,11 @@ def test_nonergodic_chains_return_typed_outcome(
 
 
 def test_search_bounds_reject_before_exact_matrix_powers() -> None:
-    with pytest.raises(ValidationError, match="at most 8 states"):
+    with pytest.raises(ValidationError, match="at most 32"):
         MixingTimeRequest.model_validate(
             {
                 "matrix": [
-                    [_r(1 if i == j else 0) for j in range(9)] for i in range(9)
+                    [_r(1 if i == j else 0) for j in range(33)] for i in range(33)
                 ],
                 "epsilon": _r(1, 10),
                 "max_steps": 4,

@@ -118,7 +118,12 @@ def test_codeword_check_nonmember() -> None:
 
 def test_syndrome_zero_for_codeword() -> None:
     request = SyndromeRequest(
-        parity_check={"field_order": 2, "column_count": 2, "rows": ((1, 1),)},
+        parity_check={
+            "field_order": 2,
+            "coordinate_axis": ["x0", "x1"],
+            "rows": ((1, 1),),
+        },
+        coordinate_axis=["x0", "x1"],
         word=(1, 1),
     )
     result = compute_syndrome(request)
@@ -128,7 +133,12 @@ def test_syndrome_zero_for_codeword() -> None:
 
 def test_syndrome_nonzero_for_noncodeword() -> None:
     request = SyndromeRequest(
-        parity_check={"field_order": 2, "column_count": 2, "rows": ((1, 1),)},
+        parity_check={
+            "field_order": 2,
+            "coordinate_axis": ["x0", "x1"],
+            "rows": ((1, 1),),
+        },
+        coordinate_axis=["x0", "x1"],
         word=(1, 0),
     )
     result = compute_syndrome(request)
@@ -139,8 +149,13 @@ def test_syndrome_nonzero_for_noncodeword() -> None:
 def test_full_space_dual_composes_into_empty_syndrome() -> None:
     dual = compute_dual_code(DualCodeRequest(encoder=_encoder(((1, 0), (0, 1)))))
     assert dual.parity_check.rows == ()
+    assert dual.parity_check.coordinate_axis == ("x0", "x1")
     result = compute_syndrome(
-        SyndromeRequest(parity_check=dual.parity_check, word=(1, 1))
+        SyndromeRequest(
+            parity_check=dual.parity_check,
+            coordinate_axis=("x0", "x1"),
+            word=(1, 1),
+        )
     )
     assert result.syndrome == ()
     assert result.is_member is True
@@ -156,7 +171,9 @@ def test_rank_one_length_32_code_retains_all_dual_rows() -> None:
         )
     )
     assert len(result.parity_check.rows) == 31
-    assert result.parity_check.column_count == 32
+    assert result.parity_check.coordinate_axis == tuple(
+        f"x{index}" for index in range(32)
+    )
     assert len(result.encoder.message_axis) == 31
 
 
@@ -364,12 +381,116 @@ def test_parity_checks_satisfy_orthogonality_invariant() -> None:
             assert product == 0
 
 
-def test_dual_and_parity_check_reject_length_zero_encoders() -> None:
-    length_zero = _encoder(())
-    with pytest.raises(ValidationError, match="at least one coordinate"):
-        DualCodeRequest(encoder=length_zero)
-    with pytest.raises(ValidationError, match="at least one coordinate"):
-        ParityCheckRequest(encoder=length_zero)
+def test_dual_and_parity_check_accept_length_zero_encoders() -> None:
+    # Puncturing a length-one encoder produces the length-zero code; its dual
+    # is the zero-dimensional space GF(q)^0 with a zero-column parity-check.
+    punctured = compute_puncture(
+        PunctureRequest(encoder=_encoder(((1,),)), coordinate=0)
+    )
+    assert punctured.encoder.coordinate_axis == ()
+
+    length_zero = PrimeFieldLinearEncoder.model_validate(
+        punctured.model_dump(mode="json")["encoder"]
+    )
+    assert length_zero == punctured.encoder
+
+    dual = compute_dual_code(DualCodeRequest(encoder=length_zero))
+    assert dual.dimension == 0
+    assert dual.dual_dimension == 0
+    assert dual.length == 0
+    assert dual.encoder.message_axis == ()
+    assert dual.encoder.generator_matrix == ()
+    assert dual.parity_check.rows == ()
+    assert dual.parity_check.coordinate_axis == ()
+
+    parity = compute_parity_check(ParityCheckRequest(encoder=length_zero))
+    assert parity.dimension == 0
+    assert parity.rank_h == 0
+    assert parity.length == 0
+    assert parity.parity_check.rows == ()
+    assert parity.parity_check.coordinate_axis == ()
+
+    empty_syndrome = compute_syndrome(
+        SyndromeRequest(
+            parity_check=dual.model_dump(mode="json")["parity_check"],
+            coordinate_axis=[],
+            word=[],
+        )
+    )
+    assert empty_syndrome.syndrome == ()
+    assert empty_syndrome.is_member is True
+
+
+def test_parity_check_value_preserves_the_encoder_coordinate_axis() -> None:
+    encoder = _encoder(
+        ((1, 1, 0), (1, 0, 1)), coordinate_axis=("left", "middle", "right")
+    )
+
+    dual = compute_dual_code(DualCodeRequest(encoder=encoder))
+    assert dual.parity_check.coordinate_axis == ("left", "middle", "right")
+
+    parity = compute_parity_check(ParityCheckRequest(encoder=encoder))
+    assert parity.parity_check.coordinate_axis == ("left", "middle", "right")
+    assert len(parity.parity_check.rows[0]) == 3
+
+    serialized = parity.model_dump(mode="json")["parity_check"]
+    aligned = SyndromeRequest.model_validate(
+        {
+            "parity_check": serialized,
+            "coordinate_axis": ["left", "middle", "right"],
+            "word": [1, 1, 0],
+        }
+    )
+    result = compute_syndrome(aligned)
+    assert result.is_member is True
+
+    with pytest.raises(ValidationError, match="column axis"):
+        SyndromeRequest.model_validate(
+            {
+                "parity_check": serialized,
+                "coordinate_axis": ["middle", "left", "right"],
+                "word": [1, 1, 0],
+            }
+        )
+
+
+def test_syndrome_request_rejects_misaligned_or_mutated_axes() -> None:
+    parity = compute_parity_check(ParityCheckRequest(encoder=_encoder(((1, 1),))))
+    serialized = parity.model_dump(mode="json")["parity_check"]
+
+    with pytest.raises(ValidationError, match="column axis"):
+        SyndromeRequest(
+            parity_check=serialized,
+            coordinate_axis=["x1", "x0"],
+            word=(1, 0),
+        )
+    with pytest.raises(ValidationError, match="length"):
+        SyndromeRequest(
+            parity_check=serialized,
+            coordinate_axis=["x0", "x1"],
+            word=(1,),
+        )
+
+    mutated = dict(serialized)
+    mutated["coordinate_axis"] = ["y0", "y1"]
+    with pytest.raises(ValidationError, match="column axis"):
+        SyndromeRequest(
+            parity_check=mutated,
+            coordinate_axis=["x0", "x1"],
+            word=(1, 0),
+        )
+    with pytest.raises(ValidationError, match="unique"):
+        SyndromeRequest.model_validate(
+            {
+                "parity_check": {
+                    "field_order": 2,
+                    "coordinate_axis": ["x0", "x0"],
+                    "rows": [[1, 1]],
+                },
+                "coordinate_axis": ["x0", "x0"],
+                "word": [1, 0],
+            }
+        )
 
 
 def test_equal_request_rejects_incomparable_encoders() -> None:
@@ -473,7 +594,12 @@ def test_code_producer_requests_reject_ambiguous_coordinate_axes() -> None:
 def test_syndrome_request_rejects_bad_word_length() -> None:
     with pytest.raises(ValidationError, match="length"):
         SyndromeRequest(
-            parity_check={"field_order": 2, "column_count": 2, "rows": ((1, 1),)},
+            parity_check={
+                "field_order": 2,
+                "coordinate_axis": ["x0", "x1"],
+                "rows": ((1, 1),),
+            },
+            coordinate_axis=["x0", "x1"],
             word=(1,),
         )
 

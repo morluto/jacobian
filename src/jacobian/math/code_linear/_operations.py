@@ -244,7 +244,7 @@ def compute_dual_code(request: DualCodeRequest) -> DualCodeResult:
         encoder=dual_encoder,
         parity_check=ParityCheckMatrix(
             field_order=q,
-            column_count=length,
+            coordinate_axis=encoder.coordinate_axis,
             rows=dual_encoder.generator_matrix,
         ),
         dimension=rank,
@@ -263,7 +263,7 @@ def compute_parity_check(request: ParityCheckRequest) -> ParityCheckResult:
     return ParityCheckResult(
         parity_check=ParityCheckMatrix(
             field_order=q,
-            column_count=length,
+            coordinate_axis=encoder.coordinate_axis,
             rows=tuple(map(tuple, null)),
         ),
         dimension=rank,

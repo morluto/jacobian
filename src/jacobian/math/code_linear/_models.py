@@ -17,9 +17,33 @@ from jacobian.math.code_linear.values import (
 
 MAX_CODEWORDS = 16384  # binary k=14 (2^14), ternary k=8 (3^8=6561); mainly for equal.decide witness enumeration
 MAX_LENGTH = MAX_LINEAR_CODE_LENGTH  # rowspace operations are O(k^2 n) and remain cheap; raised from 32
-MAX_RECEIVED_PROFILE_CODEWORDS = 4_096
 MAX_RECEIVED_PROFILE_REPLAY_WORK = 3_000_000
 MAX_RECEIVED_PROFILE_WITNESS_CELLS = 65_536
+
+
+def _max_codewords_within_replay_work(replay_work_bound: int) -> int:
+    """Largest encoder image admitted by the exact replay-work bound."""
+
+    best = 1
+    for order in range(2, 252):
+        if any(order % divisor == 0 for divisor in range(2, int(order**0.5) + 1)):
+            continue
+        for dimension in range(1, MAX_LINEAR_CODE_DIMENSION + 1):
+            count = order**dimension
+            # Full rank forces length >= dimension, so the work product is
+            # minimized at length == dimension; larger lengths reject sooner.
+            if 2 * count * dimension * (dimension + 1) > replay_work_bound:
+                break
+            if count > best:
+                best = count
+    return best
+
+
+# Derived from the replay-work bound over primes <= 251: every admitted
+# encoder image satisfies codeword_count <= this constant.
+MAX_RECEIVED_PROFILE_CODEWORDS = _max_codewords_within_replay_work(
+    MAX_RECEIVED_PROFILE_REPLAY_WORK
+)
 
 _FieldElement = Annotated[StrictInt, Field(ge=0, le=250)]
 _HistogramCount = Annotated[
@@ -84,11 +108,6 @@ class ReceivedWordProfileRequest(StrictModel):
             raise ValueError("received word must match the encoder coordinate axis")
         if any(value >= self.encoder.field_order for value in self.received_word):
             raise ValueError("received-word entries must be canonical field residues")
-        if self.encoder.codeword_count > MAX_RECEIVED_PROFILE_CODEWORDS:
-            raise ValueError(
-                "encoder codeword count exceeds the exact profile bound of "
-                f"{MAX_RECEIVED_PROFILE_CODEWORDS}"
-            )
         if self.profile_replay_work > MAX_RECEIVED_PROFILE_REPLAY_WORK:
             raise ValueError(
                 "received-word profile replay work exceeds the bound of "
@@ -268,28 +287,11 @@ class DualCodeRequest(StrictModel):
 
     encoder: PrimeFieldLinearEncoder
 
-    @model_validator(mode="after")
-    def require_representable_dual(self) -> Self:
-        if not self.encoder.coordinate_axis:
-            raise ValueError(
-                "dual requires a code with at least one coordinate so the "
-                "parity-check matrix can represent the dual"
-            )
-        return self
-
 
 class ParityCheckRequest(StrictModel):
     """A canonical linear encoder for computing a parity-check."""
 
     encoder: PrimeFieldLinearEncoder
-
-    @model_validator(mode="after")
-    def require_representable_parity_check(self) -> Self:
-        if not self.encoder.coordinate_axis:
-            raise ValueError(
-                "parity-check requires a code with at least one coordinate"
-            )
-        return self
 
 
 class CodewordCheckRequest(StrictModel):
@@ -314,10 +316,16 @@ class CodewordCheckRequest(StrictModel):
 
 
 class ParityCheckMatrix(StrictModel):
-    """A prime-field matrix retaining its column count when it has no rows."""
+    """A prime-field matrix retaining its ordered column axis when it has no rows."""
 
     field_order: int = Field(ge=2, le=251)
-    column_count: int = Field(ge=1, le=MAX_LENGTH)
+    coordinate_axis: tuple[OpaqueLabel, ...] = Field(
+        max_length=MAX_LENGTH,
+        description=(
+            "Ordered unique labels for matrix columns; syndrome words must "
+            "present this same ordered axis."
+        ),
+    )
     rows: tuple[tuple[int, ...], ...] = Field(max_length=MAX_LENGTH)
 
     @model_validator(mode="after")
@@ -326,8 +334,10 @@ class ParityCheckMatrix(StrictModel):
 
         if not isprime(self.field_order):
             raise ValueError("field_order must be prime")
-        if any(len(row) != self.column_count for row in self.rows):
-            raise ValueError("parity-check rows must match the declared column count")
+        if len(set(self.coordinate_axis)) != len(self.coordinate_axis):
+            raise ValueError("coordinate-axis labels must be unique")
+        if any(len(row) != len(self.coordinate_axis) for row in self.rows):
+            raise ValueError("parity-check rows must match the column axis")
         if any(not 0 <= value < self.field_order for row in self.rows for value in row):
             raise ValueError("parity-check entries must be canonical field residues")
         return self
@@ -337,11 +347,21 @@ class SyndromeRequest(StrictModel):
     """Compute the syndrome of a word under a parity-check matrix."""
 
     parity_check: ParityCheckMatrix
-    word: tuple[int, ...] = Field(min_length=1, max_length=MAX_LENGTH)
+    coordinate_axis: tuple[OpaqueLabel, ...] = Field(
+        max_length=MAX_LENGTH,
+        description=(
+            "Ordered labels of the word's coordinates; must equal the "
+            "parity-check column axis so word entries cannot align to the "
+            "wrong columns."
+        ),
+    )
+    word: tuple[int, ...] = Field(max_length=MAX_LENGTH)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
-        if len(self.word) != self.parity_check.column_count:
+        if self.coordinate_axis != self.parity_check.coordinate_axis:
+            raise ValueError("word axis must match the parity-check column axis")
+        if len(self.word) != len(self.coordinate_axis):
             raise ValueError("word length must match code length")
         if any(not 0 <= v < self.parity_check.field_order for v in self.word):
             raise ValueError("word entries must be canonical field residues")
@@ -478,8 +498,8 @@ class DualCodeResult(StrictModel):
             raise ValueError("primal and dual dimensions must sum to the code length")
         if self.parity_check.field_order != self.encoder.field_order:
             raise ValueError("parity-check field must match the dual encoder")
-        if self.parity_check.column_count != self.length:
-            raise ValueError("parity-check columns must match the code length")
+        if self.parity_check.coordinate_axis != self.encoder.coordinate_axis:
+            raise ValueError("parity-check must preserve the dual coordinate axis")
         if self.parity_check.rows != self.encoder.generator_matrix:
             raise ValueError("parity-check rows must match the dual encoder")
         return self

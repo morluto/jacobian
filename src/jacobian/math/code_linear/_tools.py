@@ -84,6 +84,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "coset-weight-distribution",
         "hamming-distance",
         "exact",
+        version="2",
         examples=(
             example(
                 "outside_binary_repetition_code",
@@ -163,7 +164,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "code",
         "dual",
         "exact",
-        version="2",
+        version="3",
         examples=(
             example(
                 "binary_repetition",
@@ -186,14 +187,16 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute a parity-check matrix for a linear code",
         "Return one canonical parity-check matrix for the code of a canonical "
         "full-rank linear encoder, with dimension and rank relation "
-        "k = n - rank(H).",
+        "k = n - rank(H). The matrix columns keep the encoder's ordered "
+        "coordinate axis, and the length-zero encoder yields a zero-column "
+        "matrix.",
         ParityCheckRequest,
         ParityCheckResult,
         compute_parity_check,
         "code",
         "parity-check",
         "exact",
-        version="2",
+        version="3",
         examples=(
             example(
                 "binary_repetition",
@@ -245,23 +248,27 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "code.linear.syndrome.compute",
         "Compute the syndrome of a word under a parity-check",
         "Return the exact syndrome Hw^T over the prime field, and whether "
-        "the word is a member of the code.",
+        "the word is a member of the code. The word must present the same "
+        "ordered coordinate axis as the parity-check columns.",
         SyndromeRequest,
         SyndromeResult,
         compute_syndrome,
         "code",
         "syndrome",
         "exact",
+        version="2",
         examples=(
             example(
                 "binary_repetition_syndrome",
-                "Syndrome of [1,0] under parity-check [1,1] over F_2.",
+                "Syndrome of [1,0] under parity-check [1,1] over F_2; the "
+                "word presents the parity-check's ordered column axis.",
                 {
                     "parity_check": {
                         "field_order": 2,
-                        "column_count": 2,
+                        "coordinate_axis": ["x0", "x1"],
                         "rows": [[1, 1]],
                     },
+                    "coordinate_axis": ["x0", "x1"],
                     "word": [1, 0],
                 },
             ),

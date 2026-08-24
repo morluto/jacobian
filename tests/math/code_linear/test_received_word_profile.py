@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from jacobian.math import code_linear
 from jacobian.math.code_linear._models import (
+    MAX_RECEIVED_PROFILE_CODEWORDS,
     DualCodeRequest,
     GeneratorMatrixRequest,
     PunctureRequest,
@@ -340,16 +341,26 @@ def test_threshold_mode_relation_is_schema_visible() -> None:
     assert "NONE without a threshold" in mode_description
 
 
-def test_codeword_and_work_bounds_reject_before_enumeration() -> None:
+def test_replay_work_admits_larger_profiles_without_a_codeword_cap() -> None:
+    # A binary 13x13 identity encoder has 8,192 codewords and replay work
+    # 2,981,888, so admission comes from the work bound alone.
     identity_13 = tuple(
         tuple(int(row == column) for column in range(13)) for row in range(13)
     )
-    with pytest.raises(ValidationError, match="codeword count"):
-        ReceivedWordProfileRequest(
-            encoder=_encoder(identity_13),
-            received_word=(0,) * 13,
-        )
+    request = ReceivedWordProfileRequest(
+        encoder=_encoder(identity_13),
+        received_word=(0,) * 13,
+    )
+    assert request.encoder.codeword_count == 8_192
+    assert request.profile_replay_work == 2_981_888
 
+    result = compute_received_word_profile(request)
+    assert result.codeword_count == 8_192
+    assert len(result.distance_histogram) == 14
+    assert sum(result.distance_histogram) == 8_192
+
+
+def test_work_bound_still_rejects_before_enumeration() -> None:
     def rectangular_identity(length: int) -> ReceivedWordProfileRequest:
         generator = tuple(
             tuple(int(row == column) for column in range(length)) for row in range(12)
@@ -362,6 +373,26 @@ def test_codeword_and_work_bounds_reject_before_enumeration() -> None:
     assert rectangular_identity(28).profile_replay_work == 2_981_888
     with pytest.raises(ValidationError, match="replay work"):
         rectangular_identity(29)
+
+
+def test_codeword_budget_is_derived_from_the_replay_work_bound() -> None:
+    # GF(47)^3 is the largest image admitted by the 3,000,000 replay-work
+    # budget: 2 * 47^3 * 3 * 4 = 2,491,752; GF(53)^3 needs 3,573,048.
+    assert MAX_RECEIVED_PROFILE_CODEWORDS == 47**3 == 103_823
+
+    identity = ((1, 0, 0), (0, 1, 0), (0, 0, 1))
+    admitted = ReceivedWordProfileRequest(
+        encoder=_encoder(identity, field_order=47),
+        received_word=(0, 0, 0),
+    )
+    assert admitted.encoder.codeword_count == MAX_RECEIVED_PROFILE_CODEWORDS
+    assert admitted.profile_replay_work == 2_491_752
+
+    with pytest.raises(ValidationError, match="replay work"):
+        ReceivedWordProfileRequest(
+            encoder=_encoder(identity, field_order=53),
+            received_word=(0, 0, 0),
+        )
 
 
 def test_all_witness_output_has_a_separate_preflight_bound() -> None:

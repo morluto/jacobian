@@ -16,7 +16,6 @@ MAX_CRITICAL_PAIR_RULES = 8
 MAX_CRITICAL_PAIR_CANDIDATES = 32
 MAX_CRITICAL_PAIR_RESULT_NODES = 42_752
 MAX_CRITICAL_PAIR_RESULT_BYTES = 4 * 1024 * 1024
-MAX_CRITICAL_PAIR_VARIABLE_ID = 999_999
 
 
 class RankedSignature(StrictModel):
@@ -31,19 +30,27 @@ class RankedSignature(StrictModel):
         return self
 
     def validate_term(self, term: Term) -> None:
-        if not term.is_variable:
-            if term.symbol >= len(self.arities):
-                raise ValueError("term uses an undeclared function symbol")
-            if len(term.children) != self.arities[term.symbol]:
-                raise ValueError("term child count must match the ranked signature")
-        for child in term.children:
-            self.validate_term(child)
+        stack = [term]
+        while stack:
+            current = stack.pop()
+            if not current.is_variable:
+                if current.symbol >= len(self.arities):
+                    raise ValueError("term uses an undeclared function symbol")
+                if len(current.children) != self.arities[current.symbol]:
+                    raise ValueError("term child count must match the ranked signature")
+            stack.extend(current.children)
 
 
 def _variable_symbols(term: Term) -> set[int]:
-    if term.is_variable:
-        return {term.symbol}
-    return set().union(*(_variable_symbols(child) for child in term.children))
+    symbols: set[int] = set()
+    stack = [term]
+    while stack:
+        current = stack.pop()
+        if current.is_variable:
+            symbols.add(current.symbol)
+        else:
+            stack.extend(current.children)
+    return symbols
 
 
 class Term(StrictModel):
@@ -145,7 +152,6 @@ __all__ = [
     "MAX_CRITICAL_PAIR_RESULT_BYTES",
     "MAX_CRITICAL_PAIR_RESULT_NODES",
     "MAX_CRITICAL_PAIR_RULES",
-    "MAX_CRITICAL_PAIR_VARIABLE_ID",
     "MAX_RULES",
     "MAX_SYMBOLS",
     "MAX_TERMS",

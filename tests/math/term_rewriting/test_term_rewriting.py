@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math import term_rewriting
+from jacobian.math.term_rewriting import operations as operations_module
 from jacobian.math.term_rewriting._models import (
     CriticalPairsRequest,
     CriticalPairsResult,
@@ -29,6 +30,7 @@ from jacobian.math.term_rewriting._tools import TOOLS
 from jacobian.math.term_rewriting.operations import (
     _MaterializationBudget,
     _nonvariable_positions,
+    _positions,
     _replace_at_position,
     _ResultEnvelopeError,
     _standardize_apart,
@@ -96,6 +98,33 @@ def _chained_overlap_witness(
         RewriteRule(lhs=_app(0, *left_slots), rhs=_app(2, *([_var(100)] * 15))),
         RewriteRule(lhs=_app(0, *right_slots), rhs=_app(2, *([_var(101)] * 15))),
     )
+
+
+def _refreshed_binding_chain_terms() -> tuple[Term, Term]:
+    """Unification terms whose stored binding is refreshed by a later bind.
+
+    Processing pops ``w = f(x)`` first (storing ``w = f(x)``), then binds
+    ``x`` to a 4095-node ground tree, which eagerly expands the stored ``w``
+    binding to ``f(T)`` and must refresh its cached size. The final equation
+    repeats ``w`` sixteen times under one application on both sides, so its
+    precharge is ``2 * (1 + 16 * |f(T)|)`` only when the cache was refreshed;
+    a stale three-node size undercharges it while the substituted equation
+    materializes 65537 nodes per side.
+    """
+    tree = _complete_tree(3, _app(4), 2, 11)
+    left = _app(
+        0,
+        _app(2, *([_var(52)] * 16)),
+        _var(51),
+        _var(52),
+    )
+    right = _app(
+        0,
+        _app(2, *([_var(52)] * 16)),
+        tree,
+        _app(1, _var(51)),
+    )
+    return left, right
 
 
 def _failed_overlap_witness(
@@ -540,7 +569,6 @@ class TestCriticalPairs:
             "max_overlap_candidates": 32,
             "max_result_bytes": 4 * 1024 * 1024,
             "max_result_nodes": 42_752,
-            "max_variable_id": 999_999,
         }
 
     def test_retained_rules_pay_for_the_result_envelope_without_overlaps(self):
@@ -709,11 +737,43 @@ class TestCriticalPairs:
         assert result.profile.pairs == ()
         assert all(not candidate.unifiable for candidate in result.profile.candidates)
 
-    def test_native_operation_enforces_the_same_signature_and_work_bounds(self):
+    def test_wide_variable_labels_admit_by_serialized_size(self):
+        # Variable labels never change the mathematical work: a single rule
+        # whose only self-root overlap is excluded must admit regardless of
+        # its label magnitudes, because its echoed result is far below both
+        # output budgets.
         signature = term_rewriting.RankedSignature(arities=(1,))
         rule = RewriteRule(lhs=_app(0, _var(1_000_000)), rhs=_var(1_000_000))
-        with pytest.raises(ValueError, match="variable IDs"):
-            critical_pairs(signature, (rule,))
+        result = compute_critical_pairs(
+            CriticalPairsRequest(signature=signature, rules=(rule,))
+        )
+        assert result.profile.candidates == ()
+        assert result.profile.pairs == ()
+        assert CriticalPairsResult.model_validate_json(result.model_dump_json()) == (
+            result
+        )
+
+    def test_label_serialization_width_is_charged_against_the_byte_bound(self):
+        # One rule shaped as an arity-16 bush repeats its wide-label leaves
+        # across the echo and every renaming key; labels wider than the
+        # six-digit baseline push the serialized result past the byte bound
+        # while a narrower family still admits.
+        def bushy_rule(label: int) -> RewriteRule:
+            leaves = [_var(label + index) for index in range(256)]
+            middle = tuple(
+                _app(1, *leaves[slot * 16 : (slot + 1) * 16]) for slot in range(16)
+            )
+            bush = _app(0, *middle)
+            return RewriteRule(lhs=bush, rhs=bush)
+
+        assert _term_node_count(bushy_rule(10**95).lhs) == 273
+        signature = term_rewriting.RankedSignature(arities=(16, 16))
+        admitted = critical_pairs(signature, (bushy_rule(10**95),))
+        assert admitted.pairs == ()
+        with pytest.raises(ValidationError, match="result bytes"):
+            CriticalPairsRequest(signature=signature, rules=(bushy_rule(10**106),))
+        with pytest.raises(ValueError, match="result bytes"):
+            critical_pairs(signature, (bushy_rule(10**106),))
 
     @pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
     def test_chained_binding_family_admits_and_replays_within_envelope(
@@ -800,6 +860,138 @@ class TestCriticalPairs:
             CriticalPairsRequest(signature=signature, rules=rules)
         with pytest.raises(ValueError, match="result nodes"):
             critical_pairs(signature, rules)
+
+    def test_refreshed_binding_sizes_charge_the_repeated_equation_exactly(self):
+        # The stored w binding is eagerly rewritten when x is bound, so its
+        # cached size must be refreshed at the same moment: the final
+        # sixteen-fold repetition of w is precharged from |f(T)|, and any
+        # smaller allowance must reject before that equation materializes.
+        left, right = _refreshed_binding_chain_terms()
+        tree = _complete_tree(3, _app(4), 2, 11)
+        binding = _app(1, tree)
+        expected_spend = (
+            # root equation predictions before any binding exists
+            _term_node_count(left)
+            + _term_node_count(right)
+            # w = f(x): prediction plus storing the binding
+            + (_term_node_count(_app(1, _var(51))) + 1)
+            + _term_node_count(_app(1, _var(51)))
+            # x = T: prediction plus storing the binding
+            + (1 + _term_node_count(tree))
+            + _term_node_count(tree)
+            # eagerly expanding the stored w binding onto f(T)
+            + _term_node_count(binding)
+            # the repeated-w equations precharge from the REFRESHED size
+            + 2 * (1 + 16 * _term_node_count(binding))
+        )
+        budget = _MaterializationBudget(expected_spend)
+        assert _unify(left, right, budget) == {52: binding, 51: tree}
+        with pytest.raises(_ResultEnvelopeError):
+            _unify(left, right, _MaterializationBudget(expected_spend - 1))
+
+    def test_stale_binding_sizes_neither_admit_nor_materialize_the_chain(self):
+        # End-to-end form of the refreshed-size obligation: processing the
+        # overlap equations stores W = A(y) first, then binds y = C(z),
+        # which eagerly expands the stored W binding from 17 to 273 nodes.
+        # Six subsequent equations each repeat W sixteen times, so their
+        # honest precharges are 6 * 4369 nodes against a refreshed cache;
+        # the pair work afterwards exceeds what remains and the family must
+        # reject typedly. A cache left at the stale 17-node size predicts
+        # only 6 * 273 there, admits the system, and then materializes the
+        # uncharged expansions during replay.
+        signature = RankedSignature(arities=(8, 16))
+        inner_rule = RewriteRule(
+            lhs=_app(
+                0,
+                *[_app(1, *([_var(50)] * 16)) for _ in range(6)],
+                _var(52),
+                _app(1, *([_var(52)] * 16)),
+            ),
+            rhs=_var(52),
+        )
+        outer_rule = RewriteRule(
+            lhs=_app(
+                0,
+                *[_app(1, *([_var(51)] * 16)) for _ in range(6)],
+                _app(1, *([_var(50)] * 16)),
+                _var(51),
+            ),
+            rhs=_var(51),
+        )
+        rules = (inner_rule, outer_rule)
+        candidates = len(rules) * sum(
+            len(_nonvariable_positions(rule.lhs)) for rule in rules
+        ) - len(rules)
+        assert 0 < candidates <= MAX_CRITICAL_PAIR_CANDIDATES
+
+        tracemalloc.start()
+        try:
+            with pytest.raises(ValueError, match="result nodes"):
+                critical_pairs(signature, rules)
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        assert peak < 8 * 1024 * 1024
+        with pytest.raises(ValidationError, match="result nodes"):
+            CriticalPairsRequest(signature=signature, rules=rules)
+
+    def test_failed_overlaps_rename_only_the_terms_unification_inspects(
+        self, monkeypatch
+    ):
+        # Standardize-apart work is bounded by what unification actually
+        # reads: a failed overlap renames only the inner left side and the
+        # overlap subterm, never either right side, and duplicate detection
+        # compares flat canonical keys without renaming anything.
+        renamed_nodes = []
+        original_rename = operations_module._rename_variables
+
+        def counting_rename(term, renaming):
+            renamed = original_rename(term, renaming)
+            renamed_nodes.append(_term_node_count(renamed))
+            return renamed
+
+        monkeypatch.setattr(operations_module, "_rename_variables", counting_rename)
+        big_rhs = _complete_tree(2, _var(0), 16, 2)
+        outer = RewriteRule(lhs=_app(0, _var(0)), rhs=big_rhs)
+        inner = RewriteRule(lhs=_app(1, _var(1)), rhs=_var(1))
+        signature = RankedSignature(arities=(1, 1, 16))
+        profile = critical_pairs(signature, (outer, inner))
+        assert all(not candidate.unifiable for candidate in profile.candidates)
+        assert profile.pairs == ()
+        expected_renamed_nodes = (
+            2 * 2 * (_term_node_count(outer.lhs) + _term_node_count(inner.lhs))
+        )
+        assert sum(renamed_nodes) == expected_renamed_nodes
+
+    def test_standardize_apart_copies_are_charged_against_the_shared_envelope(self):
+        # Three rules whose six root overlaps all unify carry near-envelope
+        # right sides; replaying them materializes renamed rules, splices,
+        # and both right sides per pair, so the shared envelope must reject
+        # once those copy charges accumulate even though every reduct fits
+        # alone.
+        signature = RankedSignature(arities=(1, 16))
+        big_rhs = _complete_tree(1, _var(7), 16, 3)
+        small_rhs = _complete_tree(1, _var(9), 16, 2)
+        rules = (
+            RewriteRule(lhs=_app(0, _var(7)), rhs=big_rhs),
+            RewriteRule(lhs=_app(0, _var(8)), rhs=_var(8)),
+            RewriteRule(lhs=_app(0, _var(9)), rhs=small_rhs),
+        )
+        candidates = len(rules) * sum(
+            len(_nonvariable_positions(rule.lhs)) for rule in rules
+        ) - len(rules)
+        assert 0 < candidates <= MAX_CRITICAL_PAIR_CANDIDATES
+
+        tracemalloc.start()
+        try:
+            with pytest.raises(ValueError, match="result nodes"):
+                critical_pairs(signature, rules)
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        assert peak < 8 * 1024 * 1024
+        with pytest.raises(ValidationError, match="result nodes"):
+            CriticalPairsRequest(signature=signature, rules=rules)
 
     def test_budgeted_unification_charges_exactly_the_materialized_sizes(self):
         for depth in range(1, 6):
@@ -914,6 +1106,55 @@ class TestCriticalPairs:
         finally:
             tracemalloc.stop()
         assert peak < MAX_CRITICAL_PAIR_RESULT_BYTES // 8
+
+
+class TestDeepTermTraversal:
+    def test_deep_rule_source_returns_a_profile_not_a_recursion_error(self):
+        # A schema-valid 1200-deep unary right side stays far below the node
+        # envelope and its single rule excludes its tautological root
+        # overlap, so source validation must traverse iteratively and return
+        # the empty profile instead of raising RecursionError.
+        def deep_rule() -> RewriteRule:
+            rhs = _var(0)
+            for _ in range(1200):
+                rhs = _app(0, rhs)
+            return RewriteRule(lhs=_app(0, _var(0)), rhs=rhs)
+
+        rule = deep_rule()
+        assert _term_node_count(rule.rhs) == 1201
+        profile = critical_pairs(RankedSignature(arities=(1,)), (rule,))
+        assert profile.candidates == ()
+        assert profile.pairs == ()
+        result = compute_critical_pairs(
+            CriticalPairsRequest(signature={"arities": [1]}, rules=(rule,))
+        )
+        assert result.profile.candidates == ()
+        assert result.profile.pairs == ()
+
+    def test_deep_unification_and_matching_stay_typed(self):
+        def chain(length: int) -> Term:
+            term = _var(7)
+            for _ in range(length - 1):
+                term = _app(0, term)
+            return term
+
+        left = chain(1500)
+        assert unify(left, chain(1500)) == {}
+        assert unify(left, _app(1)) is None
+        assert match(chain(400), chain(400)) == {7: _var(7)}
+        assert match(_app(1), chain(1500)) is None
+        substituted = apply_substitution(chain(1500), {7: _app(2)})
+        assert _term_node_count(substituted) == 1500
+
+    def test_deep_replacement_and_positions_remain_exact(self):
+        subject = _var(3)
+        for _ in range(1500):
+            subject = _app(0, subject)
+        replacement = _app(9)
+        spliced = _replace_at_position(subject, (0,) * 1500, replacement)
+        assert term_at_position(spliced, (0,) * 1500) == replacement
+        assert len(_positions(subject)) == 1501
+        assert len(_nonvariable_positions(subject)) == 1500
 
 
 class TestValidation:

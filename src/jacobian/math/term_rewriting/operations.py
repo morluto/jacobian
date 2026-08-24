@@ -9,7 +9,6 @@ from jacobian.math.term_rewriting.values import (
     MAX_CRITICAL_PAIR_RESULT_BYTES,
     MAX_CRITICAL_PAIR_RESULT_NODES,
     MAX_CRITICAL_PAIR_RULES,
-    MAX_CRITICAL_PAIR_VARIABLE_ID,
     CriticalOverlapCandidate,
     CriticalPair,
     CriticalPairProfile,
@@ -31,62 +30,120 @@ __all__ = [
 ]
 
 _RESULT_NODES_EXCEEDED = "critical-pair result nodes exceed the supported bound"
+_RESULT_BYTES_EXCEEDED = "critical-pair result bytes exceed the supported bound"
 _CRITICAL_PAIR_PROFILE_FIXED_NODES = 384
+_RESULT_BYTES_PER_NODE = 96
+_VARIABLE_LABEL_BASE_WIDTH = 6
 
 
 def _variables(term: Term) -> set[int]:
-    if term.is_variable:
-        return {term.symbol}
-    result: set[int] = set()
-    for child in term.children:
-        result |= _variables(child)
-    return result
+    symbols: set[int] = set()
+    stack = [term]
+    while stack:
+        current = stack.pop()
+        if current.is_variable:
+            symbols.add(current.symbol)
+        else:
+            stack.extend(current.children)
+    return symbols
 
 
 def apply_substitution(term: Term, subst: dict[int, Term]) -> Term:
     """Apply a substitution to a term, replacing variables with their bindings."""
     if term.is_variable:
-        if term.symbol in subst:
-            return subst[term.symbol]
-        return term
-    new_children = tuple(apply_substitution(c, subst) for c in term.children)
-    return Term(is_variable=False, symbol=term.symbol, children=new_children)
+        return subst.get(term.symbol, term)
+    rebuilt: dict[int, Term] = {}
+    stack = [term]
+    while stack:
+        current = stack.pop()
+        if current.is_variable:
+            rebuilt[id(current)] = subst.get(current.symbol, current)
+            continue
+        pending = [child for child in current.children if id(child) not in rebuilt]
+        if pending:
+            stack.append(current)
+            stack.extend(pending)
+        else:
+            rebuilt[id(current)] = Term(
+                is_variable=False,
+                symbol=current.symbol,
+                children=tuple(rebuilt[id(child)] for child in current.children),
+            )
+    return rebuilt[id(term)]
 
 
 def match(pattern: Term, subject: Term) -> dict[int, Term] | None:
     """One-way matching: instantiate pattern variables to obtain the subject."""
-    if pattern.is_variable:
-        return {pattern.symbol: subject}
-    if subject.is_variable:
-        return None
-    if pattern.symbol != subject.symbol:
-        return None
-    if len(pattern.children) != len(subject.children):
-        return None
     result: dict[int, Term] = {}
-    for p_child, s_child in zip(pattern.children, subject.children, strict=False):
-        sub_result = match(p_child, s_child)
-        if sub_result is None:
-            return None
-        for var, val in sub_result.items():
-            if var in result and result[var] != val:
+    stack = [(pattern, subject)]
+    while stack:
+        pattern_part, subject_part = stack.pop()
+        if pattern_part.is_variable:
+            bound = result.get(pattern_part.symbol)
+            if bound is None:
+                result[pattern_part.symbol] = subject_part
+            elif not _structural_equal(bound, subject_part):
                 return None
-            result[var] = val
+            continue
+        if (
+            subject_part.is_variable
+            or pattern_part.symbol != subject_part.symbol
+            or len(pattern_part.children) != len(subject_part.children)
+        ):
+            return None
+        stack.extend(zip(pattern_part.children, subject_part.children, strict=True))
     return result
 
 
+def _structural_equal(left: Term, right: Term) -> bool:
+    """Compare two terms structurally without recursing on host frames."""
+    pending = [(left, right)]
+    while pending:
+        left_part, right_part = pending.pop()
+        if left_part is right_part:
+            continue
+        if (
+            left_part.is_variable != right_part.is_variable
+            or left_part.symbol != right_part.symbol
+            or len(left_part.children) != len(right_part.children)
+        ):
+            return False
+        pending.extend(zip(left_part.children, right_part.children, strict=True))
+    return True
+
+
 def _apply_recursive_substitution(term: Term, subst: dict[int, Term]) -> Term:
-    if term.is_variable and term.symbol in subst:
-        return _apply_recursive_substitution(subst[term.symbol], subst)
-    if term.is_variable:
-        return term
-    return Term(
-        is_variable=False,
-        symbol=term.symbol,
-        children=tuple(
-            _apply_recursive_substitution(child, subst) for child in term.children
-        ),
-    )
+    resolved: dict[int, Term] = {}
+    stack = [term]
+    while stack:
+        current = stack.pop()
+        if id(current) in resolved:
+            continue
+        if current.is_variable:
+            bound = subst.get(current.symbol)
+            if bound is None:
+                resolved[id(current)] = current
+                continue
+            target = bound
+            while target.is_variable and target.symbol in subst:
+                target = subst[target.symbol]
+            if target.is_variable or id(target) in resolved:
+                resolved[id(current)] = resolved.get(id(target), target)
+                continue
+            stack.append(current)
+            stack.append(target)
+            continue
+        pending = [child for child in current.children if id(child) not in resolved]
+        if pending:
+            stack.append(current)
+            stack.extend(pending)
+        else:
+            resolved[id(current)] = Term(
+                is_variable=False,
+                symbol=current.symbol,
+                children=tuple(resolved[id(child)] for child in current.children),
+            )
+    return resolved[id(term)]
 
 
 def unify(left: Term, right: Term) -> dict[int, Term] | None:
@@ -115,7 +172,7 @@ def _unify(
             )
         equation_left = _apply_recursive_substitution(equation_left, substitution)
         equation_right = _apply_recursive_substitution(equation_right, substitution)
-        if equation_left == equation_right:
+        if _structural_equal(equation_left, equation_right):
             continue
         if equation_right.is_variable:
             equation_left, equation_right = equation_right, equation_left
@@ -169,43 +226,58 @@ def _replace_at_position(
 ) -> Term:
     if not position:
         return replacement
-    child_index = position[0]
-    children = list(term.children)
-    children[child_index] = _replace_at_position(
-        children[child_index], position[1:], replacement
-    )
-    return Term(is_variable=False, symbol=term.symbol, children=tuple(children))
+    spine = [term]
+    for child_index in position:
+        parent = spine[-1]
+        if not 0 <= child_index < len(parent.children):
+            raise ValueError("rewrite position is outside the source term")
+        spine.append(parent.children[child_index])
+    current = replacement
+    for depth in reversed(range(len(position))):
+        parent = spine[depth]
+        children = list(parent.children)
+        children[position[depth]] = current
+        current = Term(
+            is_variable=False, symbol=parent.symbol, children=tuple(children)
+        )
+    return current
 
 
 def _positions(term: Term, prefix: tuple[int, ...] = ()) -> tuple[tuple[int, ...], ...]:
-    return (
-        prefix,
-        *(
-            position
-            for child_index, child in enumerate(term.children)
-            for position in _positions(child, (*prefix, child_index))
-        ),
-    )
+    positions: list[tuple[int, ...]] = []
+    stack: list[tuple[Term, tuple[int, ...]]] = [(term, prefix)]
+    while stack:
+        current, path = stack.pop()
+        positions.append(path)
+        for child_index in reversed(range(len(current.children))):
+            stack.append((current.children[child_index], (*path, child_index)))
+    return tuple(positions)
 
 
 def _nonvariable_positions(
     term: Term, prefix: tuple[int, ...] = ()
 ) -> tuple[tuple[int, ...], ...]:
     """Return exactly the positions whose subterm is a function application."""
-    if term.is_variable:
-        return ()
-    return (
-        prefix,
-        *(
-            position
-            for child_index, child in enumerate(term.children)
-            for position in _nonvariable_positions(child, (*prefix, child_index))
-        ),
-    )
+    positions: list[tuple[int, ...]] = []
+    stack: list[tuple[Term, tuple[int, ...]]] = [(term, prefix)]
+    while stack:
+        current, path = stack.pop()
+        if current.is_variable:
+            continue
+        positions.append(path)
+        for child_index in reversed(range(len(current.children))):
+            stack.append((current.children[child_index], (*path, child_index)))
+    return tuple(positions)
 
 
 def _term_node_count(term: Term) -> int:
-    return 1 + sum(_term_node_count(child) for child in term.children)
+    count = 0
+    stack = [term]
+    while stack:
+        current = stack.pop()
+        count += 1
+        stack.extend(current.children)
+    return count
 
 
 class _ResultEnvelopeError(Exception):
@@ -236,20 +308,46 @@ class _MaterializationBudget:
         self.charge_nodes(_term_node_count(term))
 
 
-def _require_bounded_variable_ids(term: Term) -> None:
-    if term.is_variable and term.symbol > MAX_CRITICAL_PAIR_VARIABLE_ID:
-        raise ValueError("critical-pair variable IDs exceed the supported bound")
-    for child in term.children:
-        _require_bounded_variable_ids(child)
+def _variable_label_bytes(rules: tuple[RewriteRule, ...]) -> int:
+    """Serialized-byte overhead for variable labels wider than the baseline.
+
+    Variable labels never change the mathematical work, so admission charges
+    their serialized width instead of capping IDs. The per-node byte cost
+    already absorbs the baseline label width; labels wider than
+    ``_VARIABLE_LABEL_BASE_WIDTH`` digits appear in the echoed source rules
+    and in the original-ID renaming keys of every candidate row and pair, so
+    their count is upper-bounded by the source variable nodes times one echo
+    plus two full ledgers.
+    """
+    widest = 0
+    variable_nodes = 0
+    for rule in rules:
+        stack = [rule.lhs, rule.rhs]
+        while stack:
+            term = stack.pop()
+            if term.is_variable:
+                variable_nodes += 1
+                width = len(str(term.symbol))
+                if width > widest:
+                    widest = width
+            else:
+                stack.extend(term.children)
+    extra_width = max(0, widest - _VARIABLE_LABEL_BASE_WIDTH)
+    return extra_width * variable_nodes * (1 + 2 * MAX_CRITICAL_PAIR_CANDIDATES)
 
 
 def _expanded_node_count(term: Term, binding_sizes: dict[int, int]) -> int:
     """Node count of ``apply_substitution(term, ...)`` without materializing it."""
-    if term.is_variable:
-        return binding_sizes.get(term.symbol, 1)
-    return 1 + sum(
-        _expanded_node_count(child, binding_sizes) for child in term.children
-    )
+    count = 0
+    stack = [term]
+    while stack:
+        current = stack.pop()
+        if current.is_variable:
+            count += binding_sizes.get(current.symbol, 1)
+        else:
+            count += 1
+            stack.extend(current.children)
+    return count
 
 
 def _retained_source_charge(rules: tuple[RewriteRule, ...]) -> int:
@@ -273,11 +371,13 @@ def _admit_critical_pair_result_envelope(rules: tuple[RewriteRule, ...]) -> int:
     Binding growth is dependency-driven: a chained idempotent MGU expands
     exponentially in its binding depth, so no product of rule-side caps bounds
     the materialized substitution or its reducts. Each candidate is therefore
-    standardized apart and unified exactly as execution will, under the shared
-    remaining node allowance and with every materialized term charged; reduct
-    sizes are then computed exactly from the substitution, whose retained
-    bindings are charged once more as serialized certificate content. Failed
-    unifications keep their committed charges against the shared allowance.
+    unified exactly as execution will, under the shared remaining node
+    allowance and with every materialized term charged: the two renamed
+    unification terms are charged before construction, and a successful
+    unifier additionally pays for the renamed outer rule, its spliced left
+    side, both renamed right sides, its retained bindings, and the exact
+    expansions execution will materialize as reducts. Failed unifications
+    keep their committed charges against the shared allowance.
     Returns the total charged nodes and raises when the envelope is exceeded.
     """
     remaining = (
@@ -293,16 +393,18 @@ def _admit_critical_pair_result_envelope(rules: tuple[RewriteRule, ...]) -> int:
                 if outer_index == inner_index and not position:
                     continue
                 (
-                    standardized_outer,
-                    standardized_inner,
-                    _outer_renaming,
-                    _inner_renaming,
-                ) = _standardize_apart(outer, inner)
+                    renamed_overlap,
+                    renamed_inner_lhs,
+                    outer_renaming,
+                    inner_renaming,
+                ) = _overlap_unification_terms(outer, inner, position)
                 budget = _MaterializationBudget(remaining)
                 try:
+                    budget.charge_nodes(_term_node_count(renamed_inner_lhs))
+                    budget.charge_nodes(_term_node_count(renamed_overlap))
                     substitution = _unify(
-                        standardized_inner.lhs,
-                        term_at_position(standardized_outer.lhs, position),
+                        renamed_inner_lhs,
+                        renamed_overlap,
                         budget,
                     )
                 except _ResultEnvelopeError:
@@ -310,19 +412,35 @@ def _admit_critical_pair_result_envelope(rules: tuple[RewriteRule, ...]) -> int:
                 remaining = budget.remaining
                 if substitution is None:
                     continue
+                overlap_size = _term_node_count(renamed_overlap)
+                spliced_size = (
+                    _term_node_count(outer.lhs)
+                    - overlap_size
+                    + _term_node_count(inner.rhs)
+                )
+                try:
+                    budget.charge_nodes(_term_node_count(outer.lhs))
+                    budget.charge_nodes(spliced_size)
+                    budget.charge_nodes(_term_node_count(inner.rhs))
+                    budget.charge_nodes(_term_node_count(outer.rhs))
+                except _ResultEnvelopeError:
+                    raise ValueError(_RESULT_NODES_EXCEEDED) from None
+                remaining = budget.remaining
+                renamed_outer_lhs = _rename_variables(outer.lhs, outer_renaming)
+                renamed_inner_rhs = _rename_variables(inner.rhs, inner_renaming)
+                spliced = _replace_at_position(
+                    renamed_outer_lhs, position, renamed_inner_rhs
+                )
                 binding_sizes = {
                     variable: _term_node_count(binding)
                     for variable, binding in substitution.items()
                 }
                 for bound in substitution.values():
                     remaining -= _term_node_count(bound)
+                remaining -= _expanded_node_count(spliced, binding_sizes)
                 remaining -= _expanded_node_count(
-                    _replace_at_position(
-                        standardized_outer.lhs, position, standardized_inner.rhs
-                    ),
-                    binding_sizes,
+                    _rename_variables(outer.rhs, outer_renaming), binding_sizes
                 )
-                remaining -= _expanded_node_count(standardized_outer.rhs, binding_sizes)
                 if remaining < 0:
                     raise ValueError(_RESULT_NODES_EXCEEDED)
     return MAX_CRITICAL_PAIR_RESULT_NODES - remaining
@@ -337,14 +455,12 @@ def _validate_critical_pair_source(
     for rule in rules:
         signature.validate_term(rule.lhs)
         signature.validate_term(rule.rhs)
-        _require_bounded_variable_ids(rule.lhs)
-        _require_bounded_variable_ids(rule.rhs)
     if (
         _CRITICAL_PAIR_PROFILE_FIXED_NODES + _retained_source_charge(rules)
         > MAX_CRITICAL_PAIR_RESULT_NODES
     ):
         raise ValueError(_RESULT_NODES_EXCEEDED)
-    canonical_rules = {_canonical_rule(rule).model_dump_json() for rule in rules}
+    canonical_rules = {_canonical_rule_key(rule) for rule in rules}
     if len(canonical_rules) != len(rules):
         raise ValueError("critical-pair rules must be duplicate-free up to renaming")
     candidates = len(rules) * sum(
@@ -353,8 +469,11 @@ def _validate_critical_pair_source(
     if candidates > MAX_CRITICAL_PAIR_CANDIDATES:
         raise ValueError("critical-pair overlap candidates exceed the supported bound")
     charged_nodes = _admit_critical_pair_result_envelope(rules)
-    if charged_nodes * 96 > MAX_CRITICAL_PAIR_RESULT_BYTES:
-        raise ValueError("critical-pair result bytes exceed the supported bound")
+    label_bytes = _variable_label_bytes(rules)
+    if charged_nodes * _RESULT_BYTES_PER_NODE + label_bytes > (
+        MAX_CRITICAL_PAIR_RESULT_BYTES
+    ):
+        raise ValueError(_RESULT_BYTES_EXCEEDED)
 
 
 def _preorder_variables(term: Term) -> tuple[int, ...]:
@@ -372,18 +491,83 @@ def _preorder_variables(term: Term) -> tuple[int, ...]:
 def _rename_variables(term: Term, renaming: dict[int, int]) -> Term:
     if term.is_variable:
         return Term(is_variable=True, symbol=renaming[term.symbol])
-    return Term(
-        symbol=term.symbol,
-        children=tuple(_rename_variables(child, renaming) for child in term.children),
-    )
+    rebuilt: dict[int, Term] = {}
+    stack = [term]
+    while stack:
+        current = stack.pop()
+        if current.is_variable:
+            rebuilt[id(current)] = Term(
+                is_variable=True, symbol=renaming[current.symbol]
+            )
+            continue
+        pending = [child for child in current.children if id(child) not in rebuilt]
+        if pending:
+            stack.append(current)
+            stack.extend(pending)
+        else:
+            rebuilt[id(current)] = Term(
+                is_variable=False,
+                symbol=current.symbol,
+                children=tuple(rebuilt[id(child)] for child in current.children),
+            )
+    return rebuilt[id(term)]
 
 
-def _canonical_rule(rule: RewriteRule) -> RewriteRule:
-    variables = _preorder_variables(rule.lhs)
-    renaming = {variable: index for index, variable in enumerate(variables)}
+def _canonical_rule_key(rule: RewriteRule) -> str:
+    """Flat token stream identifying the rule up to variable renaming.
+
+    Variables are renamed to their left-hand-side preorder indices and both
+    sides are emitted as prefix-free ``V<index>`` / ``A<symbol>:<arity>``
+    tokens, so two rules are duplicate-free up to renaming exactly when
+    their keys are equal. The stream is built iteratively, which keeps deep
+    sources away from serializer recursion limits.
+    """
+    renaming = {
+        variable: index for index, variable in enumerate(_preorder_variables(rule.lhs))
+    }
+    parts: list[str] = []
+    for side in (rule.lhs, rule.rhs):
+        stack = [side]
+        while stack:
+            current = stack.pop()
+            if current.is_variable:
+                parts.append(f"V{renaming[current.symbol]};")
+            else:
+                parts.append(f"A{current.symbol}:{len(current.children)};")
+                stack.extend(reversed(current.children))
+    return "".join(parts)
+
+
+def _renaming_for(variables: tuple[int, ...], offset: int) -> dict[int, int]:
+    """Map each variable to ``offset`` plus its preorder index."""
+    return {variable: offset + index for index, variable in enumerate(variables)}
+
+
+def _renamed_rule(rule: RewriteRule, renaming: dict[int, int]) -> RewriteRule:
     return RewriteRule(
         lhs=_rename_variables(rule.lhs, renaming),
         rhs=_rename_variables(rule.rhs, renaming),
+    )
+
+
+def _overlap_unification_terms(
+    outer: RewriteRule, inner: RewriteRule, position: tuple[int, ...]
+) -> tuple[Term, Term, dict[int, int], dict[int, int]]:
+    """Rename only the two terms one overlap unification inspects.
+
+    Unification never inspects either rule's right side or the outer left
+    side away from ``position``, so those copies are deferred until an
+    overlap actually unifies; only the renamed inner left side and the
+    renamed subterm at ``position`` are constructed here.
+    """
+    outer_variables = _preorder_variables(outer.lhs)
+    outer_renaming = _renaming_for(outer_variables, 0)
+    inner_renaming = _renaming_for(_preorder_variables(inner.lhs), len(outer_variables))
+    return (
+        _rename_variables(term_at_position(outer.lhs, position), outer_renaming),
+        _rename_variables(inner.lhs, inner_renaming),
+        outer_renaming,
+        inner_renaming,
     )
 
 
@@ -392,20 +576,11 @@ def _standardize_apart(
 ) -> tuple[RewriteRule, RewriteRule, dict[int, int], dict[int, int]]:
     """Canonically rename one ordered pair of rules to disjoint variables."""
     outer_variables = _preorder_variables(outer.lhs)
-    outer_renaming = {variable: index for index, variable in enumerate(outer_variables)}
-    inner_renaming = {
-        variable: len(outer_variables) + index
-        for index, variable in enumerate(_preorder_variables(inner.lhs))
-    }
+    outer_renaming = _renaming_for(outer_variables, 0)
+    inner_renaming = _renaming_for(_preorder_variables(inner.lhs), len(outer_variables))
     return (
-        RewriteRule(
-            lhs=_rename_variables(outer.lhs, outer_renaming),
-            rhs=_rename_variables(outer.rhs, outer_renaming),
-        ),
-        RewriteRule(
-            lhs=_rename_variables(inner.lhs, inner_renaming),
-            rhs=_rename_variables(inner.rhs, inner_renaming),
-        ),
+        _renamed_rule(outer, outer_renaming),
+        _renamed_rule(inner, inner_renaming),
         outer_renaming,
         inner_renaming,
     )
@@ -429,15 +604,12 @@ def critical_pairs(
                 if outer_index == inner_index and not position:
                     continue
                 (
-                    standardized_outer,
-                    standardized_inner,
+                    renamed_overlap,
+                    renamed_inner_lhs,
                     outer_renaming,
                     inner_renaming,
-                ) = _standardize_apart(outer, inner)
-                substitution = unify(
-                    standardized_inner.lhs,
-                    term_at_position(standardized_outer.lhs, position),
-                )
+                ) = _overlap_unification_terms(outer, inner, position)
+                substitution = unify(renamed_inner_lhs, renamed_overlap)
                 candidate_index = len(candidates)
                 candidates.append(
                     CriticalOverlapCandidate(
@@ -451,15 +623,14 @@ def critical_pairs(
                 )
                 if substitution is None:
                     continue
-                inner_reduct = apply_substitution(
-                    _replace_at_position(
-                        standardized_outer.lhs,
-                        position,
-                        standardized_inner.rhs,
-                    ),
-                    substitution,
+                renamed_outer_rule = _renamed_rule(outer, outer_renaming)
+                spliced = _replace_at_position(
+                    renamed_outer_rule.lhs,
+                    position,
+                    _rename_variables(inner.rhs, inner_renaming),
                 )
-                outer_reduct = apply_substitution(standardized_outer.rhs, substitution)
+                inner_reduct = apply_substitution(spliced, substitution)
+                outer_reduct = apply_substitution(renamed_outer_rule.rhs, substitution)
                 pairs.append(
                     CriticalPair(
                         candidate_index=candidate_index,

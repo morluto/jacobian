@@ -725,8 +725,9 @@ def _signed_sum_envelope(
     for envelope in envelopes:
         height += envelope.height
         _require_bounded_normalized_coefficient(height)
-    common_denominators = tuple(envelope.common_denominator for envelope in envelopes)
-    shared = _shared_common_denominator(common_denominators)
+    shared = _shared_common_denominator(
+        tuple(envelope.common_denominator for envelope in envelopes)
+    )
     denominator_digits = sum(envelope.denominator_digits for envelope in envelopes)
     widest_numerator = max(
         (
@@ -738,12 +739,6 @@ def _signed_sum_envelope(
     numerator_digits = widest_numerator + len(str(len(envelopes)))
     if shared is not None:
         denominator_digits = min(denominator_digits, len(str(shared)))
-        merged_numerator = sum(
-            10**envelope.numerator_digits
-            * (shared // (envelope.common_denominator or 1))
-            for envelope in envelopes
-        )
-        numerator_digits = min(numerator_digits, len(str(merged_numerator)))
     if validate_budget:
         _require_bounded_coefficient_digit_budget(
             numerator_digits,

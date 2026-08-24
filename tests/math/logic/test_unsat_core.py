@@ -811,6 +811,38 @@ def test_request_bounds_formless_ite_sum_denominator_digits() -> None:
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
 
 
+def test_request_bounds_mixed_denominator_formless_ite_sum_scaling() -> None:
+    odd = "9" * 200
+    scalar = "9" * 100
+    ite_template = "(ite {p} (* (/ 9 2) x) (* (/ 1 {odd}) x))"
+    sum_term = (
+        f"(+ {ite_template.format(p='p', odd=odd)} "
+        f"{ite_template.format(p='q', odd=odd)})"
+    )
+    scaled_source = (
+        "(set-logic QF_LRA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const q Bool)\n"
+        "(declare-const x Real)\n"
+        f"(assert (= (* {scalar} {sum_term}) 0))\n"
+        "(check-sat)\n"
+    )
+
+    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=scaled_source)
+
+    unscaled_source = (
+        "(set-logic QF_LRA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const q Bool)\n"
+        "(declare-const x Real)\n"
+        f"(assert (= {sum_term} 0))\n"
+        "(check-sat)\n"
+    )
+
+    assert SmtUnsatCoreRequest(logic="QF_LRA", smtlib=unscaled_source)
+
+
 def test_request_keeps_shared_denominator_formless_ite_sums_admitted() -> None:
     digits = "9" * 100
     source = (

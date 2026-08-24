@@ -29,5 +29,6 @@ def test_subject_operation_groups_preserve_wire_contracts() -> None:
             "probability.graph_reliability.all_terminal.compute",
             "probability.graph_reliability.connection_probability.compute",
             "probability.local_lemma.asymmetric_witness.check",
+        ),
         ("optimization.linear.rational_optimum.compute",),
     )

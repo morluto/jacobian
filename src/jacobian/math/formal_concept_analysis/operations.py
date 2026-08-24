@@ -126,8 +126,12 @@ def _enumerate_dg_basis(
     """Enumerate all closures and pseudo-intents with bounded integer bitsets."""
 
     attribute_count = len(context.attributes)
-    closure_masks, pseudo_intent_masks, subset_comparisons, closure_comparisons, (
-        row_intersections
+    (
+        closure_masks,
+        pseudo_intent_masks,
+        subset_comparisons,
+        closure_comparisons,
+        (row_intersections),
     ) = _enumerate_dg_masks(context)
     closure_rows = tuple(
         DGBasisClosureRow(

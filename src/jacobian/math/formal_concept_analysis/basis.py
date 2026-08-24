@@ -179,8 +179,7 @@ def _reserved_dg_logical_work(
         4 * states * object_count
         + 4 * incidence_count
         + 5 * row_intersections
-        + incidence_count
-        * (attribute_count * states // 2 + row_intersections)
+        + incidence_count * (attribute_count * states // 2 + row_intersections)
         + 5 * (subset_comparisons + closure_comparisons)
         # Each of the two exhaustive DG-basis passes invokes #2267's closure
         # kernel twice (producer plus source-bound replay), hence four scans
@@ -279,9 +278,7 @@ def _duquenne_guigues_preflight(context: FormalContext) -> tuple[int, int, int]:
         closure_comparisons,
         row_intersections,
     ) = _enumerate_dg_masks(context)
-    implication_memberships = _require_dg_canonical_carrier_fit(
-        pseudo_intent_pairs
-    )
+    implication_memberships = _require_dg_canonical_carrier_fit(pseudo_intent_pairs)
     reserved_logical_work = _reserved_dg_logical_work(
         context,
         states,

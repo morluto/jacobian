@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+from jacobian._exact import CanonicalRational
+from jacobian.math.graphs.coloring._chromatic_number_models import (
+    ChromaticNumberCertificateCheckRequest,
+    ChromaticNumberCertificateCheckResult,
+    _evaluate_chromatic_number_certificate,
+)
 from jacobian.math.graphs.coloring._models import (
     EdgeColoringAssignment,
     EdgeColoringCheckRequest,
@@ -14,6 +20,38 @@ from jacobian.math.graphs.coloring._models import (
     MaximalIndependentSetResult,
     _incident_edge_index_pairs_for_canonical_graph,
 )
+
+
+def compute_chromatic_number_certificate_check(
+    request: ChromaticNumberCertificateCheckRequest,
+) -> ChromaticNumberCertificateCheckResult:
+    """Check a proper coloring and exact fractional-clique lower certificate."""
+    evaluation = _evaluate_chromatic_number_certificate(
+        request.graph,
+        request.claimed_chromatic_number,
+        request.coloring,
+        request.weights,
+    )
+    return ChromaticNumberCertificateCheckResult(
+        graph=request.graph,
+        claimed_chromatic_number=request.claimed_chromatic_number,
+        coloring=request.coloring,
+        weights=request.weights,
+        verdict=evaluation.verdict,
+        reason=evaluation.reason,
+        weight_sum=CanonicalRational.from_fraction(evaluation.weight_sum),
+        certified_lower_bound=evaluation.certified_lower_bound,
+        blocking_vertex=evaluation.blocking_vertex,
+        blocking_edge=evaluation.blocking_edge,
+        blocking_independent_set=evaluation.blocking_independent_set,
+        blocking_independent_set_weight=(
+            None
+            if evaluation.blocking_independent_set_weight is None
+            else CanonicalRational.from_fraction(
+                evaluation.blocking_independent_set_weight
+            )
+        ),
+    )
 
 
 def compute_k_colorability(request: KColorabilityRequest) -> KColorabilityResult:

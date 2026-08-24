@@ -456,17 +456,26 @@ class TestScanWorkBoundary:
         with pytest.raises(ValidationError, match="scan work exceeds"):
             GroupLikeElementsRequest(coalgebra=ca)
 
-    def test_reported_sixteen_dim_request_typed_rejected(self):
+    def test_reported_sixteen_dim_request_typed_rejected(self, monkeypatch):
         """The originally reported 16-dim GF(2) direct-sum request pays
         roughly 152M reconstruction units per pass (kernel plus replay),
         far above the budget, so it fails admission without enumerating.
 
         Rejection is proven structurally: the predicted scan work exceeds
         the budget, and the typed admission error (not a completed scan)
-        is what fires. No wall-clock bound: construction legitimately pays
-        the O(dimension^4) coalgebra-axiom verification, which varies
-        several fold on loaded CI runners.
+        is what fires. The group-like kernel is patched to fail if
+        admission ever triggers enumeration. No wall-clock bound:
+        construction legitimately pays the O(dimension^4) coalgebra-axiom
+        verification, which varies several fold on loaded CI runners.
         """
+        import jacobian.math.coalgebras._operations as coalgebra_operations
+
+        def forbid_enumeration(coalgebra):
+            raise AssertionError("admission must reject before enumeration")
+
+        monkeypatch.setattr(
+            coalgebra_operations, "_group_like_coefficients", forbid_enumeration
+        )
         ca = _direct_sum_group_like_coalgebra(16)
         assert (
             group_like_scan_work(ca.prime, ca.dimension) > GROUP_LIKE_SCAN_WORK_BUDGET

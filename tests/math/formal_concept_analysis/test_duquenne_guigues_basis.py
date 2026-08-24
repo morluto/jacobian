@@ -342,9 +342,7 @@ def test_candidate_work_and_output_envelopes_at_boundary() -> None:
 
 def test_exact_basis_beyond_canonical_implication_carrier_is_rejected() -> None:
     full_mask = (1 << MAX_DG_ATTRIBUTES) - 1
-    wide_pairs = tuple(
-        (state, full_mask) for state in range(MAX_IMPLICATIONS + 1)
-    )
+    wide_pairs = tuple((state, full_mask) for state in range(MAX_IMPLICATIONS + 1))
     with pytest.raises(ValueError, match="implications exceeds"):
         _require_dg_canonical_carrier_fit(wide_pairs)
 
@@ -396,9 +394,7 @@ def test_work_accounting_includes_every_probe_pass_and_replay() -> None:
 
     work = result.work
 
-    assert work.context_object_row_checks == (
-        4 * states * len(context.objects)
-    )
+    assert work.context_object_row_checks == (4 * states * len(context.objects))
     assert work.context_incidence_loads == 4 * len(context.incidence)
     assert work.context_row_intersections == 5 * row_intersections
     assert work.pseudo_intent_subset_comparisons == 5 * subset_comparisons

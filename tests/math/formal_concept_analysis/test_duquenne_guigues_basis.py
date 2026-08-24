@@ -328,7 +328,7 @@ def test_candidate_work_and_output_envelopes_at_boundary() -> None:
     result = compute_duquenne_guigues_basis(request)
     assert result.work.candidate_states == MAX_DG_CANDIDATE_STATES
     assert result.work.context_object_row_checks == (
-        MAX_DG_CANDIDATE_STATES * MAX_DG_ATTRIBUTES
+        4 * MAX_DG_CANDIDATE_STATES * MAX_DG_ATTRIBUTES
     )
     assert 0 < result.work.reserved_logical_work < MAX_DG_LOGICAL_WORK
     assert result.work.reserved_result_bytes <= MAX_DG_RESULT_BYTES
@@ -351,6 +351,71 @@ def test_exact_basis_beyond_canonical_implication_carrier_is_rejected() -> None:
     dense_pairs = tuple((state, (1 << 64) - 1) for state in range(MAX_IMPLICATIONS))
     with pytest.raises(ValueError, match="memberships exceeds"):
         _require_dg_canonical_carrier_fit(dense_pairs)
+
+
+def test_work_accounting_includes_every_probe_pass_and_replay() -> None:
+    context = _context(((0, 3), (0, 2), (1, 2), (1, 2, 3)), 4)
+    result = duquenne_guigues_basis(context)
+
+    attribute_count = len(context.attributes)
+    states = len(result.closure_matrix)
+    incidence = set(context.incidence)
+
+    def extent_size(state: int) -> int:
+        return sum(
+            1
+            for object_index in range(len(context.objects))
+            if all(
+                (object_index, attribute_index) in incidence
+                for attribute_index in range(attribute_count)
+                if state & (1 << attribute_index)
+            )
+        )
+
+    row_intersections = sum(extent_size(state) for state in range(states))
+
+    subset_comparisons = 0
+    closure_comparisons = 0
+    pseudo_intents: list[tuple[int, int]] = []
+    for row in result.closure_matrix:
+        premise_mask = row.candidate_state
+        closure_mask = _mask(row.closure)
+        if premise_mask == closure_mask:
+            continue
+        is_pseudo_intent = True
+        for previous_state, previous_closure in pseudo_intents:
+            subset_comparisons += 1
+            if previous_state & premise_mask != previous_state:
+                continue
+            closure_comparisons += 1
+            if previous_closure & premise_mask != previous_closure:
+                is_pseudo_intent = False
+                break
+        if is_pseudo_intent:
+            pseudo_intents.append((premise_mask, closure_mask))
+
+    work = result.work
+
+    assert work.context_object_row_checks == (
+        4 * states * len(context.objects)
+    )
+    assert work.context_incidence_loads == 4 * len(context.incidence)
+    assert work.context_row_intersections == 5 * row_intersections
+    assert work.pseudo_intent_subset_comparisons == 5 * subset_comparisons
+    assert work.pseudo_intent_closure_comparisons == 5 * closure_comparisons
+    assert work.accounted_logical_work == (
+        work.context_object_row_checks
+        + work.context_incidence_loads
+        + work.context_row_intersections
+        + work.context_incidence_checks
+        + work.pseudo_intent_subset_comparisons
+        + work.pseudo_intent_closure_comparisons
+        + 2 * work.basis_canonical_replay_work
+        + work.closure_matrix_memberships
+        + work.pseudo_intent_memberships
+        + work.implication_memberships
+    )
+    assert work.reserved_logical_work >= work.accounted_logical_work
 
 
 def test_result_byte_reservation_accepts_its_last_byte_and_rejects_the_next() -> None:

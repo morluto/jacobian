@@ -231,12 +231,12 @@ def duquenne_guigues_basis(
     )
     implication_memberships = basis.total_memberships
     accounted_logical_work = (
-        states * len(context.objects)
-        + len(context.incidence)
-        + 2 * row_intersections
+        4 * states * len(context.objects)
+        + 4 * len(context.incidence)
+        + 5 * row_intersections
         + incidence_checks
-        + 2 * subset_comparisons
-        + 2 * closure_comparisons
+        + 5 * subset_comparisons
+        + 5 * closure_comparisons
         + 4 * basis_replay_work
         + closure_matrix_memberships
         + pseudo_intent_memberships
@@ -252,12 +252,12 @@ def duquenne_guigues_basis(
         "work": {
             "candidate_states": states,
             "context_closure_queries": 2 * states,
-            "context_object_row_checks": states * len(context.objects),
-            "context_incidence_loads": len(context.incidence),
-            "context_row_intersections": 2 * row_intersections,
+            "context_object_row_checks": 4 * states * len(context.objects),
+            "context_incidence_loads": 4 * len(context.incidence),
+            "context_row_intersections": 5 * row_intersections,
             "context_incidence_checks": incidence_checks,
-            "pseudo_intent_subset_comparisons": 2 * subset_comparisons,
-            "pseudo_intent_closure_comparisons": 2 * closure_comparisons,
+            "pseudo_intent_subset_comparisons": 5 * subset_comparisons,
+            "pseudo_intent_closure_comparisons": 5 * closure_comparisons,
             "basis_closure_queries": 2 * states,
             "basis_canonical_replay_work": 2 * basis_replay_work,
             "closure_matrix_memberships": closure_matrix_memberships,

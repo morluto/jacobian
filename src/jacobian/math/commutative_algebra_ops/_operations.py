@@ -8,6 +8,7 @@ from typing import Any
 
 import sympy
 
+from jacobian.canonical import CanonicalizationError, canonicalize_json
 from jacobian.math.commutative_algebra_ops._models import (
     EliminationIdealRequest,
     EliminationIdealResult,
@@ -62,6 +63,19 @@ class _SympyKernelTimeoutError(TimeoutError):
 
 class _SympyKernelError(RuntimeError):
     """The bounded SymPy worker failed without producing an exact result."""
+
+
+def _require_transportable_minimal_primes_result(
+    result: IdealMinimalPrimesResult,
+) -> None:
+    """Reject a family whose complete public result exceeds JSON limits."""
+
+    try:
+        canonicalize_json(result.model_dump(mode="json"))
+    except CanonicalizationError as error:
+        raise _ResultLimitExceededError(
+            "the exact minimal-prime result exceeds the canonical transport bound"
+        ) from error
 
 
 _SYMPY_WORKER_SCRIPT = r"""
@@ -474,10 +488,20 @@ def compute_ideal_minimal_primes(
         # uniqueness; externally supplied JSON always runs the model
         # validator's own independent verification.
         try:
-            return computed_minimal_primes_result(
+            result = computed_minimal_primes_result(
                 request=request,
                 components=components,
                 backend_version=backend.backend_version,
+            )
+            _require_transportable_minimal_primes_result(result)
+            return result
+        except _ResultLimitExceededError as error:
+            return IdealMinimalPrimesResult(
+                request=request,
+                outcome="LIMIT_EXCEEDED",
+                components=None,
+                backend_version=None,
+                detail=str(error),
             )
         except ValueError:
             return IdealMinimalPrimesResult(

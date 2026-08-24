@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Literal
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import CanonicalLimits, parse_canonical_integer
 from jacobian.math._singular import (
     SINGULAR_ARGUMENTS,
     SingularProtocolReader,
@@ -42,6 +42,7 @@ _PROTOCOL_HEADER = "JACOBIAN_SINGULAR_IDEAL_V1"
 _COEFFICIENT = re.compile(r"^(0|-?[1-9][0-9]*)(?:/([1-9][0-9]*))?$")
 _STDOUT_LIMIT = 512 * 1024
 _STDERR_LIMIT = 64 * 1024
+_CANONICAL_OUTPUT_LIMIT = CanonicalLimits().max_output_bytes
 
 SingularOperation = Literal["radical", "quotient", "saturation"]
 SingularOutcome = Literal[
@@ -370,10 +371,11 @@ def _minimal_primes_stdout_limit(
     at most ``budget.maximum_output_generators`` generator marker pairs
     across at most that many components with their count lines; and the
     fixed version, top-level count, and end scaffolding. A capture limit
-    derived from this admitted envelope lets every admitted result reach
-    ``_parse_minimal_primes_output`` intact, while any output above it could
-    not decode into an admitted result anyway, so killing the child there
-    still reports a true result-bound violation.
+    derived from this admitted envelope lets every result within the
+    canonical transport limit reach ``_parse_minimal_primes_output`` intact.
+    The transport cap is included here as an early result bound; the operation
+    also checks the complete serialized result envelope after decoding because
+    protocol bytes do not include the public JSON framing.
     """
 
     coefficient_width = (
@@ -387,11 +389,12 @@ def _minimal_primes_stdout_limit(
     generator_scaffolding = len("GENERATOR\n") + len("END_GENERATOR\n")
     component_scaffolding = len("COMPONENT\n") + 3 + len("END_COMPONENT\n")
     scaffolding = len(_PROTOCOL_HEADER) + 1 + 8 + 3 + len("END\n")
-    return (
+    return min(
+        _CANONICAL_OUTPUT_LIMIT,
         budget.maximum_output_terms * term_record
         + budget.maximum_output_generators
         * (generator_scaffolding + component_scaffolding)
-        + scaffolding
+        + scaffolding,
     )
 
 

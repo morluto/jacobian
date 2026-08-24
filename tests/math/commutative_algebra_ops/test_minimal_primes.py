@@ -7,6 +7,9 @@ import shutil
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationResult
+from jacobian.math.commutative_algebra_ops import _operations as operations_module
 from jacobian.math.commutative_algebra_ops._models import (
     IdealMinimalPrimesRequest,
     IdealMinimalPrimesResult,
@@ -19,6 +22,8 @@ from jacobian.math.commutative_algebra_ops._singular import SingularMinimalPrime
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialIdeal,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
 )
 
 _VERIFIER_TARGET = "jacobian.math.commutative_algebra_ops._singular"
@@ -77,6 +82,27 @@ def _axes_components() -> tuple[RationalPolynomialIdeal, ...]:
             key=lambda ideal: ideal.model_dump_json(),
         )
     )
+
+
+def _transport_oversized_components() -> tuple[RationalPolynomialIdeal, ...]:
+    variables = ("x",)
+    coefficient = CanonicalRational(
+        num="9" * 32_768,
+        den="9" * 32_767 + "8",
+    )
+    polynomial = RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=coefficient,
+                    exponents=(exponent,),
+                )
+                for exponent in range(160, -1, -1)
+            )
+        ),
+    )
+    return (_ideal(variables, polynomial),)
 
 
 def _product_ideal(
@@ -855,6 +881,41 @@ def test_coordinate_axes_are_the_two_qq_minimal_primes() -> None:
 
     assert result.outcome == "COMPUTED"
     assert result.components == _axes_components()
+
+
+def test_transport_oversize_is_typed_before_operation_result_validation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = IdealMinimalPrimesRequest(
+        ideal=_ideal(("x",), _poly(("x",), (1, 1, (1,))))
+    )
+    components = _transport_oversized_components()
+    monkeypatch.setattr(
+        operations_module,
+        "run_singular_minimal_primes",
+        lambda ideal, budget: SingularMinimalPrimesResult(
+            outcome="COMPUTED",
+            components=components,
+            backend_version="4.4.0",
+        ),
+    )
+    monkeypatch.setattr(
+        operations_module,
+        "run_singular_minimal_primes_verification",
+        lambda *args, **kwargs: "VERIFIED",
+    )
+
+    result = compute_ideal_minimal_primes(request)
+
+    assert result.outcome == "LIMIT_EXCEEDED"
+    assert result.components is None
+    public = OperationResult(
+        operation_id="polynomial.ideal.minimal_primes.compute",
+        operation_version="1",
+        runtime_ms=0,
+        output=result.model_dump(mode="json"),
+    )
+    assert public.output["outcome"] == "LIMIT_EXCEEDED"
 
 
 @pytest.mark.skipif(

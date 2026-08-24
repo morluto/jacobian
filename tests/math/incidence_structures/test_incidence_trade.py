@@ -245,6 +245,42 @@ def test_trade_requires_identical_ordered_point_parents() -> None:
         IncidenceTradeRequest(left=left, right=right, max_order=1)
 
 
+def test_exported_native_values_compare_equal_across_member_orders() -> None:
+    def family(blocks: tuple[tuple[str, ...], ...]) -> IncidenceStructure:
+        return IncidenceStructure(
+            points=("a", "b"),
+            block_ids=("x", "y"),
+            blocks=blocks,
+        )
+
+    left = family((("a", "b"), ("a",)))
+    right = family((("b", "a"), ("a",)))
+
+    profile = containment_profile(left, 2)
+    trade = check_incidence_trade(left, right, 2)
+
+    assert left.blocks == (("a", "b"), ("a",))
+    assert left == right
+    assert profile.incidence == left
+    assert trade.left == trade.right
+    serialized = trade.model_dump(mode="json")
+    assert serialized["left"] == serialized["right"]
+    assert trade.positive_moments_equal
+    assert all(comparison.equal for comparison in trade.comparisons)
+
+
+def test_result_validation_accepts_reordered_source_members() -> None:
+    incidence = _family((("b", "a"),), "b", points=("a", "b"))
+    result = containment_profile(incidence, 1)
+    payload: dict[str, Any] = result.model_dump(mode="python")
+    reordered = _family((("a", "b"),), "b", points=("a", "b"))
+    payload["incidence"] = reordered
+
+    accepted = ContainmentProfileResult.model_validate(payload)
+
+    assert accepted == result
+
+
 def test_profile_result_replays_source_and_authoritative_totals() -> None:
     incidence = _family((("a",), ("a", "b")), "b", points=("a", "b"))
     result = containment_profile(incidence, 1)

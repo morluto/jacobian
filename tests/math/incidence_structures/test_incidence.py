@@ -10,6 +10,7 @@ from jacobian.math.incidence_structures._models import (
     DualRequest,
     GramRequest,
     IncidenceMatrixRequest,
+    IncidenceStructure,
     IntersectionsRequest,
     LeviGraphRequest,
     RestrictionRequest,
@@ -82,6 +83,48 @@ class TestIncidenceMatrix:
                     "blocks": [["p2"]],
                 }
             )
+
+
+class TestIncidenceStructureCanonicalization:
+    def test_block_members_are_canonicalized_to_point_axis_order(self) -> None:
+        structure = IncidenceStructure(
+            points=("p1", "p2", "p3"),
+            block_ids=("b1",),
+            blocks=(("p3", "p1"),),
+        )
+        assert structure.blocks == (("p1", "p3"),)
+
+    def test_equal_membership_in_different_orders_compares_and_serializes_equal(
+        self,
+    ) -> None:
+        first = IncidenceStructure(
+            points=("p1", "p2", "p3"),
+            block_ids=("b1", "b2"),
+            blocks=(("p2", "p1"), ("p3",)),
+        )
+        second = IncidenceStructure(
+            points=("p1", "p2", "p3"),
+            block_ids=("b1", "b2"),
+            blocks=(("p1", "p2"), ("p3",)),
+        )
+        assert first == second
+        assert first.model_dump(mode="json") == second.model_dump(mode="json")
+
+    def test_canonicalized_source_still_rejects_undecorated_members(self) -> None:
+        with pytest.raises(ValidationError, match="declared point"):
+            IncidenceStructure(
+                points=("p1", "p2"),
+                block_ids=("b1",),
+                blocks=(("p2", "pX"),),
+            )
+
+    def test_empty_block_canonicalizes_to_empty(self) -> None:
+        structure = IncidenceStructure(
+            points=("p1", "p2"),
+            block_ids=("b1",),
+            blocks=((),),
+        )
+        assert structure.blocks == ((),)
 
 
 class TestDegreeProfile:

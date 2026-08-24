@@ -34,8 +34,10 @@ class IncidenceStructure(StrictModel):
     """An ordered point axis and an indexed family of finite blocks.
 
     Point labels and block IDs are unique. Membership inside one block is
-    set-valued, while distinct block IDs may carry equal blocks, so repeated
-    blocks remain meaningful in incidence multiplicities.
+    set-valued and is canonicalized to point-axis order on construction,
+    so blocks with equal members compare equal regardless of input member
+    order. Distinct block IDs may carry equal blocks, so repeated blocks
+    remain meaningful in incidence multiplicities.
     """
 
     points: tuple[str, ...] = Field(min_length=1, max_length=MAX_POINTS)
@@ -51,14 +53,20 @@ class IncidenceStructure(StrictModel):
         if len(self.blocks) != len(self.block_ids):
             raise ValueError("blocks and block IDs must have same length")
         point_set = set(self.points)
+        canonical_blocks: list[tuple[str, ...]] = []
         for block in self.blocks:
-            if len(set(block)) != len(block):
+            block_members = set(block)
+            if len(block_members) != len(block):
                 raise ValueError(
                     "duplicate point labels within a block are not allowed"
                 )
             for p in block:
                 if p not in point_set:
                     raise ValueError("every block member must be a declared point")
+            canonical_blocks.append(
+                tuple(point for point in self.points if point in block_members)
+            )
+        object.__setattr__(self, "blocks", tuple(canonical_blocks))
         return self
 
 

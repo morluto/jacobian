@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -212,7 +211,7 @@ class PolynomialSquareFreeDecompositionResult(StrictModel):
                 product
                 * rational_polynomial_to_sympy(factor.factor) ** factor.multiplicity
             )
-        coefficient = Fraction(int(self.coefficient.num), int(self.coefficient.den))
+        coefficient = self.coefficient.as_fraction()
         if product * coefficient != source:
             raise ValueError(
                 "square-free factors must reconstruct the retained source "
@@ -311,7 +310,7 @@ class PolynomialFactorizationResult(StrictModel):
                 product
                 * rational_polynomial_to_sympy(record.factor) ** record.multiplicity
             )
-        coefficient = Fraction(int(self.coefficient.num), int(self.coefficient.den))
+        coefficient = self.coefficient.as_fraction()
         if product * coefficient != source:
             raise ValueError(
                 "factorization must reconstruct the retained source polynomial exactly"

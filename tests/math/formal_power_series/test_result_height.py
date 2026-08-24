@@ -111,9 +111,7 @@ def test_small_requests_remain_admitted() -> None:
 
 def test_value_carrier_admits_compact_series_beyond_the_input_order_ceiling() -> None:
     order = MAX_TRUNCATION_ORDER + 88
-    value = TruncatedSeries.model_validate(
-        _series(order, [_coefficient("1")] * order)
-    )
+    value = TruncatedSeries.model_validate(_series(order, [_coefficient("1")] * order))
     assert value.truncation_order == order
 
 

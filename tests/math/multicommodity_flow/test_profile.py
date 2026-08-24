@@ -12,7 +12,6 @@ from jacobian._exact import CanonicalRational
 from jacobian.math.graphs.flow._models import CapacitatedEdge, FlowGraph
 from jacobian.math.graphs.multicommodity_flow._models import (
     MAX_COMMODITY_VERTEX_CELLS,
-    MAX_MULTICOMMODITY_EDGES,
     CommodityDemand,
     CommodityEdgeFlow,
     MulticommodityFlow,
@@ -348,27 +347,56 @@ def test_large_exact_scalars_are_admitted_when_derived_digits_stay_bounded() -> 
 
 
 def test_operand_digit_budget_bounds_the_canonical_boundary() -> None:
-    def single_edge_flow(capacity: CanonicalRational) -> MulticommodityFlow:
+    def unit_edge_amount(amount: CanonicalRational) -> MulticommodityFlow:
         return MulticommodityFlow(
             network=FlowGraph(
                 vertex_count=2,
-                edges=(CapacitatedEdge(source=0, target=1, capacity=capacity),),
+                edges=(CapacitatedEdge(source=0, target=1, capacity=q(1)),),
             ),
             commodities=(
                 CommodityDemand(commodity_id="a", source=0, sink=1, demand=q(1)),
             ),
+            entries=(
+                CommodityEdgeFlow(commodity_id="a", source=0, target=1, amount=amount),
+            ),
         )
 
-    # One 32,759-digit numerator plus its one-digit denominator and the eight
-    # derivation slack digits reach exactly the canonical 32,768-digit cap.
-    at_boundary = single_edge_flow(CanonicalRational(num="9" * 32_759, den="1"))
+    # One 32,757-digit amount numerator, its one-digit denominator, the eight
+    # sum carry digits, and one subtraction-composition digit reach exactly
+    # the canonical 32,768-digit component cap.
+    at_boundary = unit_edge_amount(CanonicalRational(num="9" * 32_757, den="1"))
     result = compute_multicommodity_flow_profile(at_boundary)
-    assert result.capacity_feasible is True
-    assert result.edge_profiles[0].slack.num == "9" * 32_759
+    assert result.capacity_feasible is False
+    assert result.edge_profiles[0].load.num == "9" * 32_757
+    assert result.congestion == CanonicalRational(num="9" * 32_757, den="1")
 
-    beyond_boundary = CanonicalRational(num="9" * 32_760, den="1")
+    beyond_boundary = CanonicalRational(num="9" * 32_758, den="1")
     with pytest.raises(ValidationError, match="canonical cap"):
-        single_edge_flow(beyond_boundary)
+        unit_edge_amount(beyond_boundary)
+
+
+def test_rational_components_are_bounded_independently() -> None:
+    # A reduced capacity whose numerator and denominator are EACH 20,000
+    # digits is itself a valid canonical rational: its slack equals that
+    # capacity exactly and its congestion is zero, so numerator and denominator
+    # growth are tracked separately and the tensor is admitted even though the
+    # summed component lengths exceed the per-component 32,768-digit cap.
+    capacity = CanonicalRational(num="9" * 20_000, den="1" + "0" * 19_999)
+    flow = MulticommodityFlow(
+        network=FlowGraph(
+            vertex_count=2,
+            edges=(CapacitatedEdge(source=0, target=1, capacity=capacity),),
+        ),
+        commodities=(CommodityDemand(commodity_id="a", source=0, sink=1, demand=q(1)),),
+    )
+    # With no entries the load is exactly zero: the slack equals the capacity,
+    # the congestion is exactly zero, and no composition digit is added, so
+    # the shared budget is just the larger capacity component.
+    assert derived_profile_digit_budget(flow) == 20_000
+    result = compute_multicommodity_flow_profile(flow)
+    assert result.capacity_feasible is True
+    assert result.congestion == q(0)
+    assert result.edge_profiles[0].slack == capacity
 
 
 def test_per_component_digit_bounds_admit_unrelated_large_operands() -> None:
@@ -388,7 +416,10 @@ def test_per_component_digit_bounds_admit_unrelated_large_operands() -> None:
         ),
         commodities=(CommodityDemand(commodity_id="a", source=0, sink=2, demand=q(1)),),
     )
-    assert derived_profile_digit_budget(capacities_flow) == 8 + 16_380 + 1
+    # With no entries each load is exactly zero: its slack equals its
+    # capacity, its congestion ratio is exactly zero, and no composition
+    # digit is added, so the shared budget is just a capacity component.
+    assert derived_profile_digit_budget(capacities_flow) == 16_380
     capacities_result = compute_multicommodity_flow_profile(capacities_flow)
     assert capacities_result.capacity_feasible is True
     assert capacities_result.congestion == q(0)
@@ -422,6 +453,53 @@ def test_per_component_digit_bounds_admit_unrelated_large_operands() -> None:
     amounts_result = compute_multicommodity_flow_profile(amounts_flow)
     assert amounts_result.all_demands_routed is False
     assert amounts_result.edge_profiles[0].load == big_amount
+
+
+def test_derived_quantities_admit_edges_without_a_fixed_ceiling() -> None:
+    # FlowGraph owns the structural edge domain; this operation controls only
+    # the derived commodity-edge cells, ledger, and result envelope. A
+    # one-commodity 129-edge network over 12 vertices executes 658 steps per
+    # pass with a tiny result, so no independent edge ceiling may reject it.
+    def many_edge_flow(vertex_count: int, edge_count: int) -> MulticommodityFlow:
+        pairs = [
+            (source, target)
+            for source in range(vertex_count)
+            for target in range(vertex_count)
+            if source != target
+        ][:edge_count]
+        return MulticommodityFlow(
+            network=FlowGraph(
+                vertex_count=vertex_count,
+                edges=tuple(
+                    CapacitatedEdge(source=source, target=target, capacity=q(1))
+                    for source, target in pairs
+                ),
+            ),
+            commodities=(
+                CommodityDemand(
+                    commodity_id="a", source=0, sink=vertex_count - 1, demand=q(1)
+                ),
+            ),
+        )
+
+    result = compute_multicommodity_flow_profile(many_edge_flow(12, 129))
+    assert result.all_demands_routed is False
+    assert result.capacity_feasible is True
+    assert result.congestion == q(0)
+    assert len(result.edge_profiles) == 129
+    assert result.work.edge_cells == 129
+    assert result.work.rational_additions_per_pass == 129
+    assert result.work.exact_comparisons_per_pass == 12 + 3 * 129
+    assert result.work.logical_steps_per_call == 2 * (129 + 1 + 129 + 12 + 387)
+
+    # The ledger and returned rows inherit FlowGraph's own 512-edge maximum:
+    # a full 512-edge network is admitted and accounted exactly.
+    full = compute_multicommodity_flow_profile(many_edge_flow(64, 512))
+    assert len(full.edge_profiles) == 512
+    assert full.work.logical_steps_per_call == 2 * (512 + 1 + 512 + 64 + 3 * 512)
+
+    with pytest.raises(ValidationError, match=r"at most 512 item"):
+        many_edge_flow(64, 513)
 
 
 def test_cell_budgets_admit_commodities_without_a_fixed_ceiling() -> None:
@@ -467,17 +545,19 @@ def test_result_envelope_rejects_wide_tensors_with_large_operands() -> None:
     from itertools import combinations
 
     def comb_edge_tensor(capacity: CanonicalRational) -> MulticommodityFlow:
+        # 128 edges keep the echoed source under the 10 MiB canonical encoder
+        # while the priced derived rows cross the 8 MiB result envelope.
         edges = tuple(
             CapacitatedEdge(source=source, target=target, capacity=capacity)
             for source, target in combinations(range(32), 2)
-        )[:MAX_MULTICOMMODITY_EDGES]
+        )[:128]
         return MulticommodityFlow(
             network=FlowGraph(vertex_count=32, edges=edges),
             commodities=tuple(
                 CommodityDemand(
                     commodity_id=f"c{index:02d}", source=0, sink=31, demand=q(1)
                 )
-                for index in range(16)
+                for index in range(4)
             ),
         )
 
@@ -493,7 +573,7 @@ def test_result_envelope_rejects_wide_tensors_with_large_operands() -> None:
     admitted = comb_edge_tensor(CanonicalRational(num="9" * 5_000, den="1"))
     result = compute_multicommodity_flow_profile(admitted)
     assert result.capacity_feasible is True
-    assert result.work.edge_cells == MAX_MULTICOMMODITY_EDGES
+    assert result.work.edge_cells == len(result.flow.network.edges)
 
 
 def test_result_replay_rejects_forged_source_and_derived_ledger_fields() -> None:

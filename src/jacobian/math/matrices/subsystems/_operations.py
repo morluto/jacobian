@@ -9,9 +9,9 @@ from jacobian.math.matrices.subsystems._models import (
     SubsystemPartialTraceResult,
 )
 from jacobian.math.matrices.subsystems.operations import (
-    kronecker_product,
-    partial_trace,
-    psd_order,
+    _kronecker_product_kernel,
+    _partial_trace_kernel,
+    _psd_order_kernel,
 )
 
 
@@ -19,7 +19,7 @@ def compute_kronecker_product(
     request: SubsystemKroneckerProductRequest,
 ) -> SubsystemKroneckerProductResult:
     return SubsystemKroneckerProductResult(
-        product=kronecker_product(request.left, request.right)
+        product=_kronecker_product_kernel(request.left, request.right)
     )
 
 
@@ -29,12 +29,15 @@ def compute_partial_trace(
     return SubsystemPartialTraceResult(
         source_matrix=request.matrix,
         traced_factor_labels=request.traced_factor_labels,
-        reduced_matrix=partial_trace(request.matrix, request.traced_factor_labels),
+        reduced_matrix=_partial_trace_kernel(
+            request.matrix,
+            request.traced_factor_labels,
+        ),
     )
 
 
 def decide_psd_order(request: PsdOrderRequest) -> PsdOrderResult:
-    return psd_order(request.left, request.right)
+    return _psd_order_kernel(request.left, request.right)
 
 
 __all__ = [

@@ -126,12 +126,15 @@ def kronecker_product(
 ) -> FactorizedHermitianMatrix:
     """Compute one exact product while concatenating the ordered factors."""
 
-    SubsystemKroneckerProductRequest(left=left, right=right)
-    if len(left.matrix.entries) * len(right.matrix.entries) > 16:
-        raise ValueError("Kronecker product dimension exceeds the 16 bound")
+    request = SubsystemKroneckerProductRequest(left=left, right=right)
+    return _kronecker_product_kernel(request.left, request.right)
+
+
+def _kronecker_product_kernel(
+    left: FactorizedHermitianMatrix,
+    right: FactorizedHermitianMatrix,
+) -> FactorizedHermitianMatrix:
     factors = (*left.factors, *right.factors)
-    if len(factors) > 4 or len({factor.label for factor in factors}) != len(factors):
-        raise ValueError("Kronecker product requires unique factors within the bound")
     product_matrix = matrices.kronecker_product(
         conversions.rational_matrix_to_sympy(left.matrix),
         conversions.rational_matrix_to_sympy(right.matrix),
@@ -148,26 +151,17 @@ def partial_trace(
 ) -> FactorizedHermitianMatrix:
     """Trace named factors from a product basis, retaining source factor order."""
 
-    SubsystemPartialTraceRequest(
+    request = SubsystemPartialTraceRequest(
         matrix=matrix,
         traced_factor_labels=traced_factor_labels,
     )
-    if not traced_factor_labels or len(set(traced_factor_labels)) != len(
-        traced_factor_labels
-    ):
-        raise ValueError("partial trace requires distinct traced subsystem labels")
-    positions = {
-        factor.label: position for position, factor in enumerate(matrix.factors)
-    }
-    if not set(traced_factor_labels) <= set(positions):
-        raise ValueError("each traced subsystem label must occur in matrix.factors")
-    expected_order = tuple(
-        factor.label
-        for factor in matrix.factors
-        if factor.label in traced_factor_labels
-    )
-    if traced_factor_labels != expected_order:
-        raise ValueError("traced subsystem labels must follow source factor order")
+    return _partial_trace_kernel(request.matrix, request.traced_factor_labels)
+
+
+def _partial_trace_kernel(
+    matrix: FactorizedHermitianMatrix,
+    traced_factor_labels: tuple[str, ...],
+) -> FactorizedHermitianMatrix:
     kept_positions = tuple(
         position
         for position, factor in enumerate(matrix.factors)
@@ -185,9 +179,14 @@ def psd_order(
 ) -> PsdOrderResult:
     """Decide the exact rational Löwner order ``left <= right``."""
 
-    PsdOrderRequest(left=left, right=right)
-    if left.factors != right.factors:
-        raise ValueError("PSD order requires exactly equal subsystem factor axes")
+    request = PsdOrderRequest(left=left, right=right)
+    return _psd_order_kernel(request.left, request.right)
+
+
+def _psd_order_kernel(
+    left: FactorizedHermitianMatrix,
+    right: FactorizedHermitianMatrix,
+) -> PsdOrderResult:
     difference_entries = tuple(
         tuple(
             right_entry - left_entry

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from fractions import Fraction
 from itertools import product
+from typing import Any
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.matrices import subsystems
@@ -245,7 +247,7 @@ def test_operation_input_digits_are_checked_before_exact_backend_work() -> None:
         [[Fraction(1, large), 0], [0, Fraction(1, large)]],
         (q,),
     )
-    with pytest.raises(ValidationError, match="256"):
+    with pytest.raises(ValidationError, match="513"):
         PsdOrderRequest(left=source, right=source)
 
 
@@ -306,3 +308,112 @@ def test_psd_order_rejects_a_large_product_before_witness_expansion() -> None:
 
     with pytest.raises(ValidationError, match="witness growth"):
         PsdOrderRequest(left=product_matrix, right=product_matrix)
+
+
+def test_partial_trace_readmits_its_emitted_values_across_sequential_traces() -> None:
+    y = MatrixSubsystem(label="y", dimension=2)
+    z = MatrixSubsystem(label="z", dimension=2)
+    first = Fraction(1, 10**255 + 19)
+    second = Fraction(1, 10**255 + 21)
+    source = _matrix(
+        [
+            [first, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, second, 0],
+            [0, 0, 0, 1],
+        ],
+        (y, z),
+    )
+
+    reduced = partial_trace(source, ("y",))
+    assert len(reduced.matrix.entries[0][0].den) == 511
+    stepwise = partial_trace(reduced, ("z",))
+    combined = partial_trace(source, ("y", "z"))
+    assert stepwise == combined
+    assert stepwise.factors == ()
+    assert _entries(stepwise) == ((first + second + 2,),)
+
+
+def test_kronecker_product_readmits_its_emitted_product_as_an_operand() -> None:
+    q = MatrixSubsystem(label="q", dimension=2)
+    r = MatrixSubsystem(label="r", dimension=2)
+    s = MatrixSubsystem(label="s", dimension=2)
+    first_value = Fraction(1, 10**64 + 7)
+    second_value = Fraction(1, 10**64 + 9)
+    left = _matrix([[first_value, 0], [0, first_value]], (q,))
+    middle = _matrix([[second_value, 0], [0, second_value]], (r,))
+    right = _matrix([[1, 0], [0, 1]], (s,))
+
+    once = kronecker_product(left, middle)
+    assert len(once.matrix.entries[0][0].den) == 129
+    twice = kronecker_product(once, right)
+    expected_value = first_value * second_value
+    assert twice.factors == (q, r, s)
+    assert _entries(twice) == tuple(
+        tuple(expected_value if row == column else Fraction(0) for column in range(8))
+        for row in range(8)
+    )
+    assert kronecker_product(left, kronecker_product(middle, right)) == twice
+
+
+def test_native_functions_admit_through_one_typed_request_parse() -> None:
+    q = MatrixSubsystem(label="q", dimension=2)
+    r = MatrixSubsystem(label="r", dimension=2)
+    left = _matrix([[1, 0], [0, 2]], (q,))
+    right = _matrix([[3, 0], [0, 4]], (r,))
+
+    with pytest.raises(ValidationError, match="unique"):
+        kronecker_product(left, left)
+    with pytest.raises(ValidationError, match="occur"):
+        partial_trace(left, ("missing",))
+    with pytest.raises(ValidationError, match="exactly equal"):
+        psd_order(left, right)
+
+
+def test_catalog_wrappers_run_the_single_parsed_request_without_revalidation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    q = MatrixSubsystem(label="q", dimension=2)
+    r = MatrixSubsystem(label="r", dimension=2)
+    left = _matrix([[1, 0], [0, 2]], (q,))
+    right = _matrix([[3, 0], [0, 4]], (r,))
+    cases: tuple[
+        tuple[type[BaseModel], Callable[[], Any], Callable[[Any], Any]], ...
+    ] = (
+        (
+            SubsystemKroneckerProductRequest,
+            lambda: SubsystemKroneckerProductRequest(left=left, right=right),
+            compute_kronecker_product,
+        ),
+        (
+            SubsystemPartialTraceRequest,
+            lambda: SubsystemPartialTraceRequest(
+                matrix=left,
+                traced_factor_labels=("q",),
+            ),
+            compute_partial_trace,
+        ),
+        (
+            PsdOrderRequest,
+            lambda: PsdOrderRequest(left=left, right=left),
+            decide_psd_order,
+        ),
+    )
+    for model, build, compute in cases:
+        parsed: list[BaseModel] = []
+        inner = model.__init__
+
+        def counted(
+            self: BaseModel,
+            *args: object,
+            __inner: Callable[..., None] = inner,
+            __parsed: list[BaseModel] = parsed,
+            **kwargs: object,
+        ) -> None:
+            __parsed.append(self)
+            __inner(self, *args, **kwargs)
+
+        monkeypatch.setattr(model, "__init__", counted)
+        compute(build())
+        monkeypatch.undo()
+        assert len(parsed) == 1

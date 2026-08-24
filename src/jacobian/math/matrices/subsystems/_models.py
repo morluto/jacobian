@@ -15,13 +15,9 @@ from jacobian.math.matrices.subsystems.values import (
     FactorizedHermitianMatrix,
     partial_trace_entries,
 )
-from jacobian.math.matrices.values import require_matrix_scalar_digits
 
-MAX_KRONECKER_OPERAND_COMPONENT_DIGITS = 128
 MAX_KRONECKER_RESULT_COMPONENT_DIGITS = 256
-MAX_PARTIAL_TRACE_INPUT_COMPONENT_DIGITS = 256
 MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS = 4_098
-MAX_PSD_INPUT_COMPONENT_DIGITS = 256
 MAX_PSD_DIFFERENCE_COMPONENT_DIGITS = 513
 
 
@@ -31,16 +27,6 @@ def _component_digits(matrix: FactorizedHermitianMatrix) -> tuple[int, int]:
     )
     denominators = (len(entry.den) for row in matrix.matrix.entries for entry in row)
     return max(numerators, default=1), max(denominators, default=1)
-
-
-def _require_component_digits(
-    matrix: FactorizedHermitianMatrix,
-    *,
-    maximum: int,
-    label: str,
-) -> tuple[int, int]:
-    require_matrix_scalar_digits(matrix.matrix.entries, maximum=maximum, label=label)
-    return _component_digits(matrix)
 
 
 def _trace_component_digit_bound(
@@ -88,16 +74,8 @@ class SubsystemKroneckerProductRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_product_envelope(self) -> Self:
-        left_numerator, left_denominator = _require_component_digits(
-            self.left,
-            maximum=MAX_KRONECKER_OPERAND_COMPONENT_DIGITS,
-            label="left subsystem matrix",
-        )
-        right_numerator, right_denominator = _require_component_digits(
-            self.right,
-            maximum=MAX_KRONECKER_OPERAND_COMPONENT_DIGITS,
-            label="right subsystem matrix",
-        )
+        left_numerator, left_denominator = _component_digits(self.left)
+        right_numerator, right_denominator = _component_digits(self.right)
         if (
             max(
                 left_numerator + right_numerator,
@@ -145,11 +123,6 @@ class SubsystemPartialTraceRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_traceable_factors(self) -> Self:
-        _require_component_digits(
-            self.matrix,
-            maximum=MAX_PARTIAL_TRACE_INPUT_COMPONENT_DIGITS,
-            label="subsystem matrix",
-        )
         if len(set(self.traced_factor_labels)) != len(self.traced_factor_labels):
             raise ValueError("traced subsystem labels must be unique")
         labels = tuple(factor.label for factor in self.matrix.factors)
@@ -255,16 +228,8 @@ class PsdOrderRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_common_axis_bound_source(self) -> Self:
-        left_numerator, left_denominator = _require_component_digits(
-            self.left,
-            maximum=MAX_PSD_INPUT_COMPONENT_DIGITS,
-            label="left subsystem matrix",
-        )
-        right_numerator, right_denominator = _require_component_digits(
-            self.right,
-            maximum=MAX_PSD_INPUT_COMPONENT_DIGITS,
-            label="right subsystem matrix",
-        )
+        left_numerator, left_denominator = _component_digits(self.left)
+        right_numerator, right_denominator = _component_digits(self.right)
         if self.left.factors != self.right.factors:
             raise ValueError(
                 "PSD order requires exactly equal subsystem labels, dimensions, and "
@@ -378,12 +343,9 @@ class PsdOrderResult(StrictModel):
 
 
 __all__ = [
-    "MAX_KRONECKER_OPERAND_COMPONENT_DIGITS",
     "MAX_KRONECKER_RESULT_COMPONENT_DIGITS",
-    "MAX_PARTIAL_TRACE_INPUT_COMPONENT_DIGITS",
     "MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS",
     "MAX_PSD_DIFFERENCE_COMPONENT_DIGITS",
-    "MAX_PSD_INPUT_COMPONENT_DIGITS",
     "NegativeQuadraticWitness",
     "PsdInertia",
     "PsdOrderRequest",

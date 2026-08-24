@@ -5,7 +5,6 @@ from __future__ import annotations
 import time
 
 import sympy
-from pydantic import ValidationError
 
 from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
@@ -110,19 +109,13 @@ def compute_generic_degree(request: GenericDegreeRequest) -> GenericDegreeResult
             source=request.polynomial_map,
             detail=("Singular metadata disagree with the exact certificate replay."),
         )
-    try:
-        return GenericDegreeResult(
-            outcome=mathematical_outcome,
-            source=request.polynomial_map,
-            degree=degree,
-            evidence=backend.certificate,
-        )
-    except ValidationError:
-        return GenericDegreeResult(
-            outcome="ERROR",
-            source=request.polynomial_map,
-            detail="Singular evidence failed source-bound exact replay.",
-        )
+    return GenericDegreeResult.model_construct(
+        outcome=mathematical_outcome,
+        source=request.polynomial_map,
+        degree=degree,
+        evidence=backend.certificate,
+        detail=None,
+    )
 
 
 def evaluate_polynomial(request: EvalRequest) -> EvalResult:

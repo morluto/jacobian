@@ -17,6 +17,7 @@ from jacobian.math.polynomials.maps import (
     RationalPolynomialMap,
     _generic_degree,
     _operations,
+    _replay,
 )
 from jacobian.math.polynomials.maps._generic_degree import (
     GenericFiberReplayLimitError,
@@ -33,7 +34,10 @@ from jacobian.math.polynomials.maps._models import (
     GenericFiberTerm,
 )
 from jacobian.math.polynomials.maps._operations import compute_generic_degree
-from jacobian.math.polynomials.maps._replay import CertificateReplayResult
+from jacobian.math.polynomials.maps._replay import (
+    CertificateReplayResult,
+    ReplayStatus,
+)
 from jacobian.math.polynomials.maps._singular import SingularGenericFiberResult
 from jacobian.math.polynomials.maps._tools import TOOLS
 from jacobian.math.polynomials.values import (
@@ -593,7 +597,7 @@ def test_source_names_cannot_collide_with_generic_target_parameters() -> None:
     assert result.evidence.target_parameters == ("t1",)
 
 
-def _power_map_result(power: int) -> GenericDegreeResult:
+def _power_map_certificate(power: int) -> GenericFiberCertificate:
     empty = _fiber_polynomial(())
     unit = _fiber_polynomial((((0, 0), _generic_fiber_coefficient((0, 0))),))
     y_minus_t2 = _fiber_polynomial(
@@ -608,17 +612,21 @@ def _power_map_result(power: int) -> GenericDegreeResult:
             ((0, 0), _generic_fiber_coefficient((1, 0), -1)),
         )
     )
+    return GenericFiberCertificate(
+        target_parameters=("t1", "t2"),
+        source_variable_order=("x", "y"),
+        basis=(y_minus_t2, x_power_minus_t1),
+        basis_from_source=((empty, unit), (unit, empty)),
+        standard_monomials=tuple((index, 0) for index in range(power)),
+    )
+
+
+def _power_map_result(power: int) -> GenericDegreeResult:
     return GenericDegreeResult(
         outcome="GENERICALLY_FINITE",
         source=_map(("x", "y"), {(power, 0): 1}, {(0, 1): 1}),
         degree=power,
-        evidence=GenericFiberCertificate(
-            target_parameters=("t1", "t2"),
-            source_variable_order=("x", "y"),
-            basis=(y_minus_t2, x_power_minus_t1),
-            basis_from_source=((empty, unit), (unit, empty)),
-            standard_monomials=tuple((index, 0) for index in range(power)),
-        ),
+        evidence=_power_map_certificate(power),
     )
 
 
@@ -636,13 +644,98 @@ def test_serialized_evidence_cannot_be_presented_against_a_different_source() ->
     forged = result.model_dump(mode="json")
     forged["source"] = _power_map_result(2).source.model_dump(mode="json")
 
-    with pytest.raises(ValidationError, match="reconstruct"):
+    with pytest.raises(ValidationError, match="bounded source-bound replay"):
         GenericDegreeResult.model_validate(forged)
     with pytest.raises(ValueError, match="reconstruct"):
         require_certificate_reconstructs_from_source(
             _power_map_result(2).source,
             result.evidence,
         )
+
+
+def test_forged_standard_monomials_are_rejected_against_the_certified_ideal() -> None:
+    evidence = _identity_certificate().model_dump(mode="json")
+    evidence["standard_monomials"] = [[0, 0], [1, 0]]
+    forged = {
+        "outcome": "GENERICALLY_FINITE",
+        "source": _identity_source().model_dump(mode="json"),
+        "degree": 2,
+        "evidence": evidence,
+    }
+
+    with pytest.raises(ValidationError, match="bounded source-bound replay"):
+        GenericDegreeResult.model_validate(forged)
+
+
+def test_cleared_standard_monomials_cannot_invent_a_positive_dimensional_outcome() -> None:
+    evidence = _power_map_certificate(2).model_dump(mode="json")
+    evidence["standard_monomials"] = []
+    forged = {
+        "outcome": "DOMINANT_NOT_GENERICALLY_FINITE",
+        "source": _map(("x", "y"), {(2, 0): 1}, {(0, 1): 1}).model_dump(mode="json"),
+        "evidence": evidence,
+    }
+
+    with pytest.raises(ValidationError, match="bounded source-bound replay"):
+        GenericDegreeResult.model_validate(forged)
+
+
+@pytest.mark.parametrize(
+    "status",
+    ("INVALID", "TIMEOUT", "CANCELLED", "LIMIT_EXCEEDED", "ERROR"),
+)
+def test_unconfirmed_replay_verdicts_never_establish_a_conclusion(
+    status: ReplayStatus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def failing_replay(*_args: object, **_kwargs: object) -> CertificateReplayResult:
+        return CertificateReplayResult(status=status)
+
+    monkeypatch.setattr(_replay, "run_bounded_certificate_replay", failing_replay)
+    payload = {
+        "outcome": "GENERICALLY_FINITE",
+        "source": _map(("x", "y"), {(2, 0): 1}, {(0, 1): 1}).model_dump(mode="json"),
+        "degree": 2,
+        "evidence": _power_map_certificate(2).model_dump(mode="json"),
+    }
+
+    with pytest.raises(ValidationError, match="bounded source-bound replay"):
+        GenericDegreeResult.model_validate(payload)
+
+
+def test_producing_operation_replays_evidence_exactly_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    replays: list[int] = []
+
+    def fake_backend(*_args: object) -> SingularGenericFiberResult:
+        return SingularGenericFiberResult(
+            outcome="COMPUTED",
+            certificate=_identity_certificate(),
+            dimension=0,
+            vector_dimension=1,
+            backend_version="4.4.1",
+        )
+
+    def counting_replay(*_args: object, wall_seconds: int) -> CertificateReplayResult:
+        replays.append(wall_seconds)
+        return CertificateReplayResult(
+            status="COMPUTED",
+            outcome="GENERICALLY_FINITE",
+            degree=1,
+        )
+
+    monkeypatch.setattr(_operations, "run_singular_generic_fiber", fake_backend)
+    monkeypatch.setattr(_operations, "run_bounded_certificate_replay", counting_replay)
+    monkeypatch.setattr(_replay, "run_bounded_certificate_replay", counting_replay)
+
+    result = _compute(_identity_source())
+
+    assert len(replays) == 1
+    assert replays[0] >= 1
+    assert result.outcome == "GENERICALLY_FINITE"
+    assert result.degree == 1
+    assert result.evidence == _identity_certificate()
 
 
 def test_serialized_coefficient_support_is_counted_before_nested_construction() -> None:

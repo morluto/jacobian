@@ -518,27 +518,45 @@ def _is_unit_generic_fiber_basis(certificate: GenericFiberCertificate) -> bool:
     )
 
 
-def _require_source_bound_evidence(
+GENERIC_DEGREE_RESULT_REPLAY_WALL_SECONDS = 60
+
+
+def _require_bounded_conclusion_replay(
     source: RationalPolynomialMap,
     evidence: GenericFiberCertificate,
+    outcome: GenericDegreeOutcome,
+    degree: int | None,
 ) -> None:
-    """Reject evidence that does not reconstruct from its stated source map."""
+    """Accept a generic-degree conclusion only behind the bounded replay boundary."""
 
-    from jacobian.math.polynomials.maps._generic_degree import (
-        require_certificate_reconstructs_from_source,
+    from jacobian.math.polynomials.maps._replay import run_bounded_certificate_replay
+
+    replay = run_bounded_certificate_replay(
+        source,
+        evidence,
+        wall_seconds=GENERIC_DEGREE_RESULT_REPLAY_WALL_SECONDS,
     )
-
-    require_certificate_reconstructs_from_source(source, evidence)
+    if replay.status != "COMPUTED":
+        raise ValueError(
+            "generic-degree evidence failed its bounded source-bound replay"
+        )
+    if replay.outcome != outcome or replay.degree != degree:
+        raise ValueError(
+            "claimed generic-degree conclusion disagrees with the bounded "
+            "generic-fiber replay"
+        )
 
 
 class GenericDegreeResult(StrictModel):
     """An exact source-bound generic-fiber conclusion or operational failure.
 
-    The declared outcome must agree with the evidence shape, and validation
-    replays the exact source/evidence reconstruction identity, so serialized
-    results cannot bind evidence to a different source. The full Gröbner
-    replay of freshly computed evidence runs behind the bounded process
-    boundary in the owning operation.
+    The declared outcome must agree with the evidence shape, and a killable
+    bounded replay worker must reproduce the conclusion from the source and
+    evidence -- recomputing the standard-monomial complement from the
+    certified leading ideal -- before any mathematical outcome is accepted,
+    so serialized results cannot bind evidence to another source or replace
+    its standard monomials. The producing operation reuses its own worker
+    verdict instead of replaying a second time in this process.
     """
 
     outcome: GenericDegreeOutcome
@@ -565,7 +583,6 @@ class GenericDegreeResult(StrictModel):
             raise ValueError(
                 "mathematical generic-degree outcomes require exact evidence"
             )
-        _require_source_bound_evidence(self.source, self.evidence)
         unit_basis = _is_unit_generic_fiber_basis(self.evidence)
         if self.outcome == "GENERICALLY_FINITE":
             if (
@@ -577,19 +594,24 @@ class GenericDegreeResult(StrictModel):
                 raise ValueError(
                     "claimed degree does not match the standard-monomial evidence"
                 )
-            return self
-        if self.degree is not None:
-            raise ValueError("non-finite generic-degree outcomes carry no degree")
-        if self.outcome == "NOT_DOMINANT":
-            if not unit_basis or self.evidence.standard_monomials:
+        else:
+            if self.degree is not None:
+                raise ValueError("non-finite generic-degree outcomes carry no degree")
+            if self.outcome == "NOT_DOMINANT":
+                if not unit_basis or self.evidence.standard_monomials:
+                    raise ValueError(
+                        "not-dominant outcomes carry the unit generic-fiber basis"
+                    )
+            elif unit_basis or self.evidence.standard_monomials:
                 raise ValueError(
-                    "not-dominant outcomes carry the unit generic-fiber basis"
+                    "positive-dimensional outcomes carry a non-unit generic-fiber basis"
                 )
-            return self
-        if unit_basis or self.evidence.standard_monomials:
-            raise ValueError(
-                "positive-dimensional outcomes carry a non-unit generic-fiber basis"
-            )
+        _require_bounded_conclusion_replay(
+            self.source,
+            self.evidence,
+            self.outcome,
+            self.degree,
+        )
         return self
 
 

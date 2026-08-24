@@ -293,10 +293,7 @@ def compute_codeword_check(
     if is_member:
         # Solve x * G = word over GF(q) by RREF on the augmented
         # transpose [G^T | word^T].
-        gt = [
-            [matrix[r][c] % q for r in range(len(matrix))]
-            for c in range(length)
-        ]
+        gt = [[matrix[r][c] % q for r in range(len(matrix))] for c in range(length)]
         aug_t = [gt[c] + [word[c] % q] for c in range(length)]
         rref_aug, rank_aug2 = _rref(aug_t, q)
         # Extract solution from augmented column

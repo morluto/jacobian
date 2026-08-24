@@ -137,9 +137,7 @@ def test_syndrome_nonzero_for_noncodeword() -> None:
 
 
 def test_full_space_dual_composes_into_empty_syndrome() -> None:
-    dual = compute_dual_code(
-        DualCodeRequest(encoder=_encoder(((1, 0), (0, 1))))
-    )
+    dual = compute_dual_code(DualCodeRequest(encoder=_encoder(((1, 0), (0, 1)))))
     assert dual.parity_check.rows == ()
     result = compute_syndrome(
         SyndromeRequest(parity_check=dual.parity_check, word=(1, 1))

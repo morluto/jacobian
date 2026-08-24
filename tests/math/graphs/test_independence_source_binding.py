@@ -195,9 +195,7 @@ def test_exhausted_exact_replay_budget_is_fail_closed(
 def _matching_graph(edges: int) -> SimpleUndirectedGraph:
     return _graph(
         tuple(f"m{index:02d}" for index in range(2 * edges)),
-        tuple(
-            (f"m{2 * index:02d}", f"m{2 * index + 1:02d}") for index in range(edges)
-        ),
+        tuple((f"m{2 * index:02d}", f"m{2 * index + 1:02d}") for index in range(edges)),
     )
 
 
@@ -245,18 +243,14 @@ def test_structured_disjoint_graphs_replay_within_tight_budgets(
 
     produced = []
     for graph, expected in ((cycles, 20), (mixed, 5), (_matching_graph(15), 15)):
-        result = solve_independence_number(
-            IndependenceNumberRequest(graph=graph)
-        )
+        result = solve_independence_number(IndependenceNumberRequest(graph=graph))
         assert result.status == "EXACT"
         assert result.optimum_value == expected
         produced.append(result)
 
     monkeypatch.setattr(independence_models, "_EXACT_REPLAY_SEARCH_NODES", 512)
     for result in produced:
-        assert (
-            IndependenceNumberResult.model_validate(result.model_dump()) == result
-        )
+        assert IndependenceNumberResult.model_validate(result.model_dump()) == result
 
 
 def test_unreplayable_solver_optimum_demotes_to_unknown(

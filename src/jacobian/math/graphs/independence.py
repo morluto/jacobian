@@ -173,11 +173,7 @@ def _replay_exact_optimum(graph: SimpleUndirectedGraph, claimed_optimum: int) ->
             if not candidates:
                 best_size = chosen
                 return
-            if (
-                chosen
-                + _greedy_clique_cover_size(candidates, neighbours)
-                <= best_size
-            ):
+            if chosen + _greedy_clique_cover_size(candidates, neighbours) <= best_size:
                 return
             pivot_degree = -1
             rest = candidates

@@ -151,17 +151,21 @@ def _require_facet_preflight(vertices: tuple[Vertex, ...], dim: int) -> None:
                 "V-representation is not full-dimensional; lower-dimensional hulls "
                 "require intrinsic affine coordinates"
             )
-    # Repeated source rows create neither candidate hyperplanes nor facets,
-    # so the candidate enumeration runs on the distinct rows; every side
-    # test and incidence index still ranges over all source positions. The
-    # facet and incidence result bounds cannot be derived from the row
-    # counts alone -- interior and other non-extreme rows inflate every
-    # vertex-count upper bound while contributing no facets -- so they are
-    # enforced exactly on the materialized profile this bounded
-    # enumeration produces (see ``_computed_facets_from_vertices``).
+    # Repeated source rows create neither candidate hyperplanes nor
+    # candidate side tests: ``_facets_from_points`` receives exactly the
+    # distinct rows below, so each of the ``C(m, d)`` candidates is
+    # side-tested against those ``m`` distinct rows and the sign-test
+    # budget is charged per distinct row actually tested. The final-facet
+    # incidence pass ranges over all source positions and is accounted
+    # separately -- its work is bounded by the facet and incidence result
+    # limits enforced exactly on the materialized profile this bounded
+    # enumeration produces (see ``_computed_facets_from_vertices``); row
+    # counts alone cannot derive those bounds because interior and other
+    # non-extreme rows inflate every vertex-count upper bound while
+    # contributing no facets.
     distinct_points = _deduplicate_source_rows(points)
     candidate_count = math.comb(len(distinct_points), dim)
-    side_tests = len(points) * candidate_count
+    side_tests = len(distinct_points) * candidate_count
     if side_tests > MAX_FACET_SIGN_TESTS:
         raise ValueError(
             "facet enumeration exceeds the "

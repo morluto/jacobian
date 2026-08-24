@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from fractions import Fraction
 
 import pytest
@@ -389,6 +390,77 @@ class TestFacetIncidence:
             incident_positions.update(facet.source_vertex_indices)
         assert sorted(incident_positions) == list(range(64))
         assert sum(len(facet.source_vertex_indices) for facet in result.facets) == 448
+
+    def test_padded_distinct_interior_rows_are_charged_per_distinct_row(self) -> None:
+        """Reviewer counterexample: a 7-simplex plus 13 distinct strict
+        interior points (1/k, ..., 1/k) for k = 9..21, padded to 64 rows
+        with duplicate copies. The enumeration receives only the m = 21
+        distinct rows and executes 21*C(21,7) = 2441880 candidate-side
+        tests, so charging every candidate against the raw 64 source rows
+        -- 64*C(21,7) = 7441920 tests -- would reject a request whose real
+        work fits the published side-test budget purely because of its
+        padding representation."""
+        from jacobian.math.polytope._operations import _require_facet_preflight
+
+        simplex = (
+            _v(*((0, 1) for _ in range(7))),
+            *(
+                _v(*((1 if index == axis else 0, 1) for axis in range(7)))
+                for index in range(7)
+            ),
+        )
+        interior = tuple(_v(*(((1, k),) * 7)) for k in range(9, 22))
+        vertices = simplex + interior + (_v(*((0, 1) for _ in range(7))),) * 43
+
+        assert len(vertices) == MAX_VERTICES == 64
+        candidate_count = math.comb(21, 7)
+        assert candidate_count * len(vertices) > MAX_FACET_SIGN_TESTS
+        assert candidate_count * 21 <= MAX_FACET_SIGN_TESTS
+
+        # Admission charges only the rows the enumeration actually
+        # side-tests; the padded request is no longer representation-
+        # rejected before its bounded enumeration starts.
+        _require_facet_preflight(vertices, 7)
+
+    def test_padded_duplicates_admit_when_distinct_row_work_fits_the_budget(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """End-to-end flip of the same charging defect at a test-scale
+        budget: padding a hull with m = 10 distinct rows to n = 64 rows
+        pushes a per-raw-row charge of 64*C(10,2) = 2880 side tests over
+        the patched 450-test budget although the enumeration actually
+        executes exactly 10*C(10,2) = 450. The full request-validate ->
+        execute -> replay path must admit the padded request and bind
+        duplicate positions to their incident facets."""
+        import jacobian.math.polytope._operations as operations
+
+        square = (
+            _v((0, 1), (0, 1)),
+            _v((1, 1), (0, 1)),
+            _v((1, 1), (1, 1)),
+            _v((0, 1), (1, 1)),
+        )
+        interior = tuple(_v((1, k), (1, k)) for k in range(2, 8))
+        vertices = square + interior + (_v((0, 1), (0, 1)),) * 54
+
+        assert len(vertices) == MAX_VERTICES
+        executed_side_tests = 10 * math.comb(10, 2)
+        monkeypatch.setattr(operations, "MAX_FACET_SIGN_TESTS", executed_side_tests)
+
+        result = _facet_profile(vertices)
+        unpadded = _facet_profile(square + interior)
+
+        assert len(result.facets) == len(unpadded.facets) == 4
+        assert {facet.halfspace for facet in result.facets} == {
+            facet.halfspace for facet in unpadded.facets
+        }
+        # Facets sort lexicographically: x >= 0, y >= 0, y <= 1, x <= 1.
+        # Interior rows bind nothing; the origin and its 54 duplicates sit
+        # on both lower facets.
+        assert result.facets[0].source_vertex_indices == (0, 3, *range(10, 64))
+        assert result.facets[1].source_vertex_indices == (0, 1, *range(10, 64))
+        assert result.facets[2].source_vertex_indices == (2, 3)
+        assert result.facets[3].source_vertex_indices == (1, 2)
 
     def test_seven_dimensional_counterexample_has_136_simplicial_facets(self) -> None:
         rows = (

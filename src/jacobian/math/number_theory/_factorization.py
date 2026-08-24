@@ -157,6 +157,7 @@ FACTORIZATION_OPERATIONS = (
                 "divisors_12", "Enumerate the positive divisors of 12.", {"value": "12"}
             ),
         ),
+        version="3",
     ),
     _operation(
         operation_id="integer.compute.proper_divisors",
@@ -173,6 +174,7 @@ FACTORIZATION_OPERATIONS = (
                 {"value": "12"},
             ),
         ),
+        version="3",
     ),
     _operation(
         operation_id="integer.compute.prime_factorization",
@@ -192,6 +194,7 @@ FACTORIZATION_OPERATIONS = (
                 {"value": "360"},
             ),
         ),
+        version="3",
     ),
     _operation(
         operation_id="integer.decide.powerful",

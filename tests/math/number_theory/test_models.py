@@ -218,3 +218,22 @@ def test_producer_results_serialize_and_reconstruct() -> None:
     assert len(proper.divisors) == len(full.divisors) - 1
     pairs = list(zip(full.divisors, reversed(full.divisors), strict=True))
     assert all(int(a) * int(b) == 72 for a, b in pairs)
+
+
+@pytest.mark.parametrize(
+    ("operation_id", "version"),
+    [
+        ("integer.compute.divisors", "3"),
+        ("integer.compute.proper_divisors", "3"),
+        ("integer.compute.prime_factorization", "3"),
+    ],
+)
+def test_source_bound_result_schema_changes_bump_operation_version(
+    operation_id: str, version: str
+) -> None:
+    from jacobian.math.number_theory._factorization import FACTORIZATION_OPERATIONS
+
+    operation = next(
+        item for item in FACTORIZATION_OPERATIONS if item.operation_id == operation_id
+    )
+    assert operation.version == version

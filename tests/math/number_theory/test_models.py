@@ -90,18 +90,18 @@ def test_divisor_list_result_admits_twelve_digit_source_boundary() -> None:
 
 
 def test_divisor_list_result_rejects_sources_beyond_factorization_domain() -> None:
-    """A forged serialized output with a hard semiprime source is rejected
-    by the schema bound before any factorization replay work runs."""
+    """A forged serialized output whose divisor list does not enumerate the
+    source's divisors exactly is rejected by the source-bound replay."""
 
     from jacobian.math.number_theory._models import DivisorListResult
 
-    hard_semiprime = 1_000_000_000_000_000_000_000_000_039
-    assert len(str(hard_semiprime)) > 12
-    with pytest.raises(ValidationError, match="at most 12"):
+    with pytest.raises(
+        ValidationError, match="divisor list must enumerate the divisors"
+    ):
         DivisorListResult.model_validate(
             {
-                "value": str(hard_semiprime),
-                "divisors": ["1"],
+                "value": "12",
+                "divisors": ["1", "2", "3", "12"],
                 "convention": "ALL_POSITIVE_DIVISORS",
             }
         )

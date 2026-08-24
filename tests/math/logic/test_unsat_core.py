@@ -812,12 +812,12 @@ def test_request_bounds_formless_ite_sum_denominator_digits() -> None:
 
 
 def test_request_bounds_mixed_denominator_formless_ite_sum_scaling() -> None:
-    odd = "9" * 200
-    scalar = "9" * 100
-    ite_template = "(ite {p} (* (/ 9 2) x) (* (/ 1 {odd}) x))"
+    power = "3" * 170
+    scalar = "7" * 100
+    ite_template = "(ite {p} (* 4.5 x) (* (/ 1 {power}) x))"
     sum_term = (
-        f"(+ {ite_template.format(p='p', odd=odd)} "
-        f"{ite_template.format(p='q', odd=odd)})"
+        f"(+ {ite_template.format(p='p', power=power)} "
+        f"{ite_template.format(p='q', power=power)})"
     )
     scaled_source = (
         "(set-logic QF_LRA)\n"
@@ -841,6 +841,43 @@ def test_request_bounds_mixed_denominator_formless_ite_sum_scaling() -> None:
     )
 
     assert SmtUnsatCoreRequest(logic="QF_LRA", smtlib=unscaled_source)
+
+
+def test_request_bounds_opposite_sign_comparison_numerator_digits() -> None:
+    divisor = "8" + "0" * 254 + "9"
+    numerator = "9" * 256
+    source = (
+        "(set-logic QF_LRA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const q Bool)\n"
+        "(declare-const x Real)\n"
+        "(assert (= (ite p (* (- (/ "
+        f"{numerator} {divisor}))) x) "
+        "(ite q (* (/ "
+        f"{numerator} {divisor})) x)))\n"
+        "(check-sat)\n"
+    )
+
+    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+
+
+def test_bounded_reciprocal_cancelling_formless_ite_still_admitted() -> None:
+    digits = "9" * 256
+    source = (
+        "(set-logic QF_LRA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const x Real)\n"
+        f"(assert (= (* (/ 1 {digits}) (ite p (* {digits} x) x)) 1))\n"
+        "(check-sat)\n"
+    )
+
+    assert SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+
+    result = compute_smt_unsat_core(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
+
+    assert result.outcome == "SAT"
+    assert result.core_indices == ()
 
 
 def test_request_bounds_four_shared_denominator_formless_ite_terms() -> None:

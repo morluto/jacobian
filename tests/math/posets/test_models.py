@@ -73,8 +73,8 @@ def test_required_reflexive_policy_binds_the_entire_diagonal() -> None:
 
 
 def test_linear_extension_contract_has_a_separate_exponential_bound() -> None:
-    antichain = _materialize([f"x{index}" for index in range(15)], [])
-    with pytest.raises(ValidationError, match="at most 14"):
+    antichain = _materialize([f"x{index}" for index in range(21)], [])
+    with pytest.raises(ValidationError, match="at most 20"):
         LinearExtensionRequest(poset=antichain)
 
 

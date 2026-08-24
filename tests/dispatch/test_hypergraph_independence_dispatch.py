@@ -39,7 +39,7 @@ def test_math_run_rejects_infeasible_backend_candidate(
         )
 
 
-def test_math_run_rejects_optimum_inconsistent_with_termination_evidence(
+def test_math_run_projects_solver_error_when_sat_witness_misses_threshold(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from jacobian.math.hypergraphs import _independence_z3
@@ -48,18 +48,21 @@ def test_math_run_rejects_optimum_inconsistent_with_termination_evidence(
         return z3.sat, ("b",), ""
 
     monkeypatch.setattr(_independence_z3, "_check_threshold", regressed)
-    with pytest.raises(ValidationError, match="descending thresholds"):
-        invoke_operation(
-            "hypergraph.independence_number.compute",
-            {
-                "hypergraph": {
-                    "vertices": ["a", "b", "c", "d"],
-                    "edges": [
-                        ["ab", ["a", "b"]],
-                        ["ac", ["a", "c"]],
-                        ["ad", ["a", "d"]],
-                    ],
-                }
-            },
-            Catalog.open(),
-        )
+    result = invoke_operation(
+        "hypergraph.independence_number.compute",
+        {
+            "hypergraph": {
+                "vertices": ["a", "b", "c", "d"],
+                "edges": [
+                    ["ab", ["a", "b"]],
+                    ["ac", ["a", "c"]],
+                    ["ad", ["a", "d"]],
+                ],
+            }
+        },
+        Catalog.open(),
+    )
+    assert result.output["status"] == "UNKNOWN"
+    assert result.output["termination_reason"] == "SOLVER_ERROR"
+    assert result.output["independence_number"] is None
+    assert result.output["solver_calls"] == 1

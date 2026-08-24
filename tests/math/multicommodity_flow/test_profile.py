@@ -17,6 +17,7 @@ from jacobian.math.graphs.multicommodity_flow._models import (
     MulticommodityFlow,
     MulticommodityFlowProfileRequest,
     MulticommodityFlowProfileResult,
+    _profile_component_digit_bounds,
     derived_profile_digit_budget,
 )
 from jacobian.math.graphs.multicommodity_flow._operations import (
@@ -727,6 +728,32 @@ def test_result_envelope_prices_rows_at_their_actual_sides() -> None:
     # exceed 8 MiB together, so admission fails closed before any backend.
     with pytest.raises(ValidationError, match="aggregate result bound"):
         comb_amount_tensor(22_000)
+
+
+def test_congestion_bound_uses_the_capacity_denominator() -> None:
+    # A unit load over capacity 1/D reduces to exactly D: cross-multiplication
+    # grows the congestion numerator by the capacity denominator's 4,000
+    # digits plus one additive digit, not by its one-digit numerator.
+    flow = MulticommodityFlow(
+        network=FlowGraph(
+            vertex_count=2,
+            edges=(
+                CapacitatedEdge(
+                    source=0,
+                    target=1,
+                    capacity=CanonicalRational(num="1", den="5" * 4_000),
+                ),
+            ),
+        ),
+        commodities=(CommodityDemand(commodity_id="a", source=0, sink=1, demand=q(1)),),
+        entries=(CommodityEdgeFlow(commodity_id="a", source=0, target=1, amount=q(1)),),
+    )
+    _cell_bounds, load_bounds, slack_bounds, congestion_bound = (
+        _profile_component_digit_bounds(flow)
+    )
+    assert congestion_bound == (4_001, 2)
+    assert max(load_bounds.values()) == (1, 1)
+    assert slack_bounds[(0, 1)] == (4_002, 4_001)
 
 
 def test_result_replay_rejects_forged_source_and_derived_ledger_fields() -> None:

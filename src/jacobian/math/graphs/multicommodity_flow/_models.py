@@ -255,10 +255,11 @@ def _profile_component_digit_bounds(
         slack_d = capacity_den + den_total
         load_bounds[edge_key] = (load_n, load_d)
         slack_bounds[edge_key] = (slack_n, slack_d)
-        # The ratio divides one load by one capacity: both sides pick up the
-        # capacity numerator only.
+        # The ratio divides one load by one capacity: cross-multiplication
+        # grows the ratio numerator by the capacity denominator and the ratio
+        # denominator by the capacity numerator.
         congestion_bound = (
-            max(congestion_bound[0], load_n + capacity_num),
+            max(congestion_bound[0], load_n + capacity_den),
             max(congestion_bound[1], den_total + capacity_num),
         )
     return cell_bounds, load_bounds, slack_bounds, congestion_bound

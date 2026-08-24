@@ -15,6 +15,7 @@ from jacobian.canonical import encode_strict_json
 from jacobian.math.polynomials._conversions import rational_polynomial_from_sympy
 from jacobian.math.polynomials.differential_operators._bounds import (
     MAX_APPLICATION_INPUT_EXPONENT,
+    MAX_APPLICATION_INPUT_TERMS,
     MAX_APPLICATION_ITERATIONS,
     MAX_APPLICATION_RESULT_BYTES,
 )
@@ -171,6 +172,146 @@ def test_positive_order_short_circuits_a_large_vanishing_iterate() -> None:
     )
 
     assert output == _polynomial(variables, {})
+
+
+def test_identity_iterate_admits_sources_beyond_expansion_caps() -> None:
+    variables = ("x",)
+    source = _polynomial(variables, {(MAX_APPLICATION_INPUT_EXPONENT + 1,): 1})
+    operator = _operator(variables, {(1,): 1})
+
+    identity = apply_constant_coefficient_differential_operator(
+        source,
+        operator,
+        iterations=0,
+    )
+    assert identity == source
+
+    with pytest.raises(ValidationError, match="degree operation budget"):
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=operator,
+            iterations=1,
+        )
+
+
+def test_identity_result_retains_expected_and_replays_bound() -> None:
+    variables = ("x",)
+    source = _polynomial(variables, {(MAX_APPLICATION_INPUT_EXPONENT + 1,): 1})
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=_operator(variables, {(1,): 1}),
+            iterations=0,
+            expected=source,
+        )
+    )
+
+    assert result.output == source
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+    assert replayed == result
+
+
+def test_guaranteed_zero_admits_sources_beyond_expansion_caps() -> None:
+    variables = ("x", "y")
+    wide_source = _polynomial(
+        variables,
+        dict.fromkeys(
+            (
+                (index // 25, index % 25)
+                for index in range(MAX_APPLICATION_INPUT_TERMS + 88)
+            ),
+            1,
+        ),
+    )
+    steep_operator = _operator(variables, {(64, 0): 1})
+
+    vanished = apply_constant_coefficient_differential_operator(
+        wide_source,
+        steep_operator,
+        iterations=9,
+    )
+    tall_vanished = apply_constant_coefficient_differential_operator(
+        _polynomial(("x",), {(200,): 3}),
+        _operator(("x",), {(64,): 1}),
+        iterations=4,
+    )
+
+    assert len(wide_source.polynomial.terms) > MAX_APPLICATION_INPUT_TERMS
+    assert vanished == _polynomial(variables, {})
+    assert vanished.variables == variables
+    assert tall_vanished == _polynomial(("x",), {})
+
+
+def test_input_digit_budget_only_gates_paths_that_expand() -> None:
+    variables = ("x",)
+    coefficient = CanonicalRational(num=str(10**300 - 1), den="1")
+    source = RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=(RationalPolynomialTerm(coefficient=coefficient, exponents=(0,)),)
+        ),
+    )
+
+    copied = apply_constant_coefficient_differential_operator(
+        source,
+        _operator(variables, {(1,): 1}),
+        iterations=0,
+    )
+    vanished = apply_constant_coefficient_differential_operator(
+        source,
+        _operator(variables, {(1,): 1}),
+        iterations=1,
+    )
+
+    assert copied == source
+    assert vanished == _polynomial(variables, {})
+    with pytest.raises(ValueError, match="256-digit bound"):
+        apply_constant_coefficient_differential_operator(
+            source,
+            _operator(variables, {(0,): 1}),
+            iterations=1,
+        )
+
+
+def test_degenerate_shortcuts_still_honor_the_retained_byte_budget() -> None:
+    coefficient = CanonicalRational(num="1" + "0" * 32_767, den="1")
+
+    def oversized_source(term_count: int) -> RationalPolynomial:
+        return RationalPolynomial(
+            variables=("x",),
+            polynomial=SparseRationalPolynomial(
+                terms=tuple(
+                    RationalPolynomialTerm(
+                        coefficient=coefficient,
+                        exponents=(exponent,),
+                    )
+                    for exponent in reversed(range(term_count))
+                )
+            ),
+        )
+
+    admitted = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=oversized_source(280),
+            operator=_operator(("x",), {}),
+            iterations=1,
+        )
+    )
+    assert admitted.is_zero is True
+
+    with pytest.raises(ValidationError, match="serialized-output budget"):
+        DifferentialOperatorApplyRequest(
+            polynomial=oversized_source(300),
+            operator=_operator(("x",), {}),
+            iterations=1,
+        )
+    per_term_bytes = 32_768 + 1 + 3 + 2 + 96
+    assert 280 * per_term_bytes <= MAX_APPLICATION_RESULT_BYTES
+    assert 300 * per_term_bytes > MAX_APPLICATION_RESULT_BYTES
 
 
 def test_operator_and_polynomial_axes_must_match_exactly() -> None:

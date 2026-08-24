@@ -12,6 +12,7 @@ from jacobian.math.polynomials.differential_operators.values import (
     ConstantCoefficientDifferentialOperator,
 )
 from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_EXPONENT,
     RationalPolynomial,
     require_polynomial_budget,
 )
@@ -136,6 +137,16 @@ def _decimal_digits_from_bits(bits: int) -> int:
     return max(1, (bits * 30_103 + 99_999) // 100_000)
 
 
+def _max_coefficient_digits(polynomial: RationalPolynomial) -> int:
+    return max(
+        (
+            max(len(term.coefficient.num.lstrip("-")), len(term.coefficient.den))
+            for term in polynomial.polynomial.terms
+        ),
+        default=1,
+    )
+
+
 def _coefficient_digit_bound(
     polynomial: RationalPolynomial,
     operator: ConstantCoefficientDifferentialOperator,
@@ -143,13 +154,7 @@ def _coefficient_digit_bound(
     path_count_bits: int,
 ) -> int:
     if iterations == 0:
-        return max(
-            (
-                max(len(term.coefficient.num.lstrip("-")), len(term.coefficient.den))
-                for term in polynomial.polynomial.terms
-            ),
-            default=1,
-        )
+        return _max_coefficient_digits(polynomial)
 
     source_denominator, source_numerator = _common_denominator_height(
         term.coefficient.as_fraction() for term in polynomial.polynomial.terms
@@ -216,7 +221,15 @@ def _require_result_size(
     if expected is not None:
         retained_bytes += polynomial_bytes(expected)
 
-    exponent_digits = len(str(MAX_APPLICATION_INPUT_EXPONENT))
+    # Output monomials never exceed the source's exponents, so the source's
+    # widest exponent bounds every output term's serialized exponent digits.
+    exponent_digits = max(
+        (
+            max(len(str(exponent)) for exponent in term.exponents)
+            for term in polynomial.polynomial.terms
+        ),
+        default=1,
+    )
     per_output_term = (
         2 * coefficient_digits + len(polynomial.variables) * (exponent_digits + 2) + 96
     )
@@ -231,27 +244,23 @@ def _require_result_size(
         )
 
 
-def _require_application_inputs(
+def _require_application_shape(
     polynomial: RationalPolynomial,
     operator: ConstantCoefficientDifferentialOperator,
+    expected: RationalPolynomial | None,
     iterations: int,
 ) -> None:
+    """Apply the request checks that every execution path exercises."""
+
     if isinstance(iterations, bool) or not isinstance(iterations, int):
         raise TypeError("differential-operator iterations must be an integer")
     if polynomial.variables != operator.variables:
         raise ValueError(
             "polynomial and differential operator must use the same ordered variables"
         )
-    require_polynomial_budget(
-        polynomial,
-        maximum_terms=MAX_APPLICATION_INPUT_TERMS,
-        maximum_exponent=MAX_APPLICATION_INPUT_EXPONENT,
-        maximum_coefficient_digits=MAX_APPLICATION_INPUT_COEFFICIENT_DIGITS,
-        label="differential-operator source polynomial",
-    )
-    if _total_degree(polynomial) > MAX_APPLICATION_INPUT_TOTAL_DEGREE:
+    if expected is not None and expected.variables != polynomial.variables:
         raise ValueError(
-            "differential-operator source polynomial exceeds the total-degree budget"
+            "expected polynomial must use the source polynomial's ordered variables"
         )
     for term in operator.terms:
         require_bounded_rational(
@@ -263,16 +272,56 @@ def _require_application_inputs(
         raise ValueError("differential-operator iterations exceed the operation limit")
 
 
+def _require_expansion_source(polynomial: RationalPolynomial) -> None:
+    """Bound the source against the kernel's derivative-expansion input regime."""
+
+    require_polynomial_budget(
+        polynomial,
+        maximum_terms=MAX_APPLICATION_INPUT_TERMS,
+        maximum_exponent=MAX_APPLICATION_INPUT_EXPONENT,
+        maximum_coefficient_digits=MAX_APPLICATION_INPUT_COEFFICIENT_DIGITS,
+        label="differential-operator source polynomial",
+    )
+    if _total_degree(polynomial) > MAX_APPLICATION_INPUT_TOTAL_DEGREE:
+        raise ValueError(
+            "differential-operator source polynomial exceeds the total-degree budget"
+        )
+
+
+def _require_identity_output(
+    polynomial: RationalPolynomial,
+    expected: RationalPolynomial | None,
+) -> None:
+    """Admit the zero-iterate copy by the output budgets it actually exercises.
+
+    With ``iterations == 0`` the exact result is the source itself and no
+    expansion runs, so admission follows the copied result (output support,
+    digit, and aggregate-byte budgets) rather than the kernel input regime.
+    """
+
+    require_polynomial_budget(
+        polynomial,
+        maximum_terms=MAX_APPLICATION_OUTPUT_TERMS,
+        maximum_exponent=MAX_POLYNOMIAL_EXPONENT,
+        maximum_coefficient_digits=MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS,
+        label="differential-operator source polynomial",
+    )
+    if expected is not None:
+        require_polynomial_budget(
+            expected,
+            maximum_terms=MAX_APPLICATION_OUTPUT_TERMS,
+            maximum_exponent=MAX_POLYNOMIAL_EXPONENT,
+            maximum_coefficient_digits=MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS,
+            label="expected differential-operator output",
+        )
+
+
 def _require_expected_output(
     polynomial: RationalPolynomial,
     expected: RationalPolynomial | None,
 ) -> None:
     if expected is None:
         return
-    if expected.variables != polynomial.variables:
-        raise ValueError(
-            "expected polynomial must use the source polynomial's ordered variables"
-        )
     require_polynomial_budget(
         expected,
         maximum_terms=MAX_APPLICATION_OUTPUT_TERMS,
@@ -294,9 +343,11 @@ def validate_application_envelope(
 ) -> ApplicationEnvelope:
     """Validate the complete public domain before FLINT expansion."""
 
-    _require_application_inputs(polynomial, operator, iterations)
-    _require_expected_output(polynomial, expected)
+    _require_application_shape(polynomial, operator, expected, iterations)
 
+    # Degenerate shortcuts establish their exact results without running the
+    # kernel, so they are recognized before expansion-specific source limits
+    # and admitted by the result and work they actually have.
     guaranteed_zero = _guaranteed_zero(polynomial, operator, iterations)
     if guaranteed_zero:
         _require_result_size(
@@ -307,6 +358,20 @@ def validate_application_envelope(
             coefficient_digits=1,
         )
         return ApplicationEnvelope(True, 0, 0)
+
+    if iterations == 0:
+        _require_identity_output(polynomial, expected)
+        _require_result_size(
+            polynomial,
+            operator,
+            expected,
+            candidate_terms=len(polynomial.polynomial.terms),
+            coefficient_digits=_max_coefficient_digits(polynomial),
+        )
+        return ApplicationEnvelope(False, 1, len(polynomial.polynomial.terms))
+
+    _require_expansion_source(polynomial)
+    _require_expected_output(polynomial, expected)
 
     term_count = len(operator.terms)
     expanded_terms = _bounded_multiset_count(

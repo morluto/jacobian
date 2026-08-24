@@ -405,10 +405,12 @@ def test_operand_digit_budget_bounds_the_canonical_boundary() -> None:
             CanonicalRational(num="9" * 32_768, den="1"),
         )
     )
-    with pytest.raises(ValidationError, match="canonical cap"):
-        MulticommodityFlowProfileRequest(flow=over_boundary)
     with pytest.raises(ValueError, match="canonical cap"):
         compute_multicommodity_flow_profile(over_boundary)
+    with pytest.raises(ValueError, match="canonical cap"):
+        _run_multicommodity_flow_profile(
+            MulticommodityFlowProfileRequest(flow=over_boundary)
+        )
 
 
 def test_sole_operand_components_inherit_their_canonical_sides() -> None:
@@ -810,10 +812,10 @@ def test_result_envelope_prices_rows_at_their_actual_sides() -> None:
 
     # Unit-capacity edges carrying 22,000-digit amounts make the echoed
     # entries, divergence cells, loads, slacks, and congestion genuinely
-    # exceed 8 MiB together, so the profile request boundary fails closed
+    # exceed 8 MiB together, so the profile execution boundary fails closed
     # before any backend.
-    with pytest.raises(ValidationError, match="aggregate result bound"):
-        MulticommodityFlowProfileRequest(flow=comb_amount_tensor(22_000))
+    with pytest.raises(ValueError, match="aggregate result bound"):
+        compute_multicommodity_flow_profile(comb_amount_tensor(22_000))
 
 
 def test_congestion_bound_uses_the_capacity_denominator() -> None:
@@ -941,10 +943,10 @@ def test_coprime_denominator_flood_fails_closed() -> None:
     flood = MulticommodityFlow(
         network=network, commodities=commodities, entries=entries
     )
-    with pytest.raises(ValidationError, match="canonical cap"):
-        MulticommodityFlowProfileRequest(flow=flood)
     with pytest.raises(ValueError, match="canonical cap"):
         compute_multicommodity_flow_profile(flood)
+    with pytest.raises(ValueError, match="canonical cap"):
+        _run_multicommodity_flow_profile(MulticommodityFlowProfileRequest(flow=flood))
 
 
 def oversized_echo_flow() -> MulticommodityFlow:
@@ -983,18 +985,18 @@ def oversized_echo_flow() -> MulticommodityFlow:
 def test_oversized_source_is_rejected_before_the_component_scan(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from jacobian.math.graphs.multicommodity_flow import _models
+    from jacobian.math.graphs.multicommodity_flow import _kernel
 
     scanned: list[MulticommodityFlow] = []
-    original = _models._profile_component_digit_bounds
+    original = _kernel._component_sums_with_folds
 
     def spy(flow: MulticommodityFlow) -> object:
         scanned.append(flow)
         return original(flow)
 
-    monkeypatch.setattr(_models, "_profile_component_digit_bounds", spy)
-    with pytest.raises(ValidationError, match="aggregate result bound"):
-        MulticommodityFlowProfileRequest(flow=oversized_echo_flow())
+    monkeypatch.setattr(_kernel, "_component_sums_with_folds", spy)
+    with pytest.raises(ValueError, match="aggregate result bound"):
+        compute_multicommodity_flow_profile(oversized_echo_flow())
     assert scanned == []
 
 
@@ -1044,8 +1046,8 @@ def test_oversized_source_rejection_precedes_a_doomed_exact_scan() -> None:
             ),
         ),
     )
-    with pytest.raises(ValidationError, match="aggregate result bound"):
-        MulticommodityFlowProfileRequest(flow=doomed_echo)
+    with pytest.raises(ValueError, match="aggregate result bound"):
+        compute_multicommodity_flow_profile(doomed_echo)
 
 
 def test_ledger_charges_every_performed_bucket_fold_addition() -> None:
@@ -1269,8 +1271,6 @@ def test_folds_are_bounded_by_the_intermediate_budget_not_the_component_cap() ->
             ),
         ),
     )
-    with pytest.raises(ValidationError, match="fold-intermediate budget"):
-        MulticommodityFlowProfileRequest(flow=cancelling_cell)
     with pytest.raises(ValueError, match="fold-intermediate budget"):
         compute_multicommodity_flow_profile(cancelling_cell)
 
@@ -1289,9 +1289,9 @@ def test_near_cap_coprime_growth_aborts_within_budget_sized_arithmetic() -> None
     p_digits = "1" + "0" * 31_998 + "1"
     q_digits = "3" + "0" * 31_998 + "1"
     r_digits = "5" + "0" * 31_998 + "3"
-    with pytest.raises(ValidationError, match="fold-intermediate budget"):
-        MulticommodityFlowProfileRequest(
-            flow=MulticommodityFlow(
+    with pytest.raises(ValueError, match="fold-intermediate budget"):
+        compute_multicommodity_flow_profile(
+            MulticommodityFlow(
                 network=FlowGraph(
                     vertex_count=3,
                     edges=(

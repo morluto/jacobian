@@ -11,6 +11,8 @@ from jacobian.math.graphs.multicommodity_flow._models import (
     MulticommodityFlow,
     MulticommodityFlowProfileWork,
     _component_sums_with_folds,
+    _require_admitted_profile_rows,
+    _require_profile_source_room,
     derived_profile_components_from_sums,
 )
 
@@ -38,14 +40,27 @@ def profile_components(
     """Return the complete deterministic profile components for ``flow``.
 
     One pass initializes and updates dense commodity/vertex divergence cells
-    and aggregate edge loads.  Result-model validation calls this same pure
-    kernel once more, so the returned work ledger charges both passes.
+    and aggregate edge loads.  The aggregate result envelope is admitted from
+    the same measured components -- the echoed source before the scan, every
+    priced row afterwards -- so admission adds no arithmetic pass of its own.
+    Result-model validation calls this same pure kernel once more, so the
+    returned work ledger charges both passes.
     """
 
+    _require_profile_source_room(flow)
     commodity_ids = tuple(commodity.commodity_id for commodity in flow.commodities)
     divergences, loads, denominator_folds = _component_sums_with_folds(flow)
-    budget, slacks, max_congestion_ratio = derived_profile_components_from_sums(
-        flow, divergences, loads
+    (
+        budget,
+        slacks,
+        max_congestion_ratio,
+        cell_bounds,
+        load_bounds,
+        slack_bounds,
+        congestion_bound,
+    ) = derived_profile_components_from_sums(flow, divergences, loads)
+    _require_admitted_profile_rows(
+        flow, cell_bounds, load_bounds, slack_bounds, congestion_bound
     )
 
     divergence_rows = tuple(

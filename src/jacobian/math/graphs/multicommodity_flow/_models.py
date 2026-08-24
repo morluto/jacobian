@@ -54,13 +54,10 @@ MAX_COMMODITY_VERTEX_CELLS = 512
 # when its own component bounds limit the two sides separately; the
 # conservative row overhead reserves ASCII keys, labels, separators, and
 # vertices. This envelope belongs to the profile operation, not to the
-# canonical tensor value: the profile request validator measures the echoed
-# source exactly (rejecting immediately when no result skeleton fits),
-# prices exact-zero loads as the single-digit zero rational, and prices
-# every other row from its own numerator and denominator bounds against
-# this aggregate envelope, keeping the serialized result inside the
-# envelope with headroom under the 10 MiB transport limit. The native
-# compute boundary enforces the same admission for directly passed values.
+# canonical tensor value: the profile kernel measures the echoed source
+# before its scan and prices every returned row from the same measured
+# bounds afterwards, so admission adds no arithmetic pass of its own and
+# the two-pass work ledger stays an exact per-call accounting.
 MAX_PROFILE_RESULT_BYTES = 8 * 1024 * 1024
 _DIVERGENCE_ROW_OVERHEAD_BYTES = 128
 _EDGE_ROW_OVERHEAD_BYTES = 128
@@ -407,13 +404,23 @@ def derived_profile_components_from_sums(
     flow: MulticommodityFlow,
     divergences: dict[tuple[str, int], Fraction],
     loads: dict[tuple[int, int], Fraction],
-) -> tuple[int, dict[tuple[int, int], Fraction], Fraction]:
-    """Return the shared digit budget with each once-computed edge derivative.
+) -> tuple[
+    int,
+    dict[tuple[int, int], Fraction],
+    Fraction,
+    dict[tuple[str, int], tuple[int, int]],
+    dict[tuple[int, int], tuple[int, int]],
+    dict[tuple[int, int], tuple[int, int]],
+    tuple[int, int],
+]:
+    """Return the shared digit budget with each once-computed derivative.
 
     The returned slacks and maximum congestion ratio are the same measured
     components priced into the budget, so one producer or replay pass
     subtracts each slack and divides each positive-capacity ratio exactly
-    once and the work ledger charges that single execution.
+    once and the work ledger charges that single execution. The returned
+    per-row bound maps are those same measurements, letting envelope
+    admission price the result without any second arithmetic pass.
     """
 
     slacks, max_ratio = _edge_slacks_and_max_congestion(flow, loads)
@@ -426,19 +433,30 @@ def derived_profile_components_from_sums(
         *slack_bounds.values(),
         congestion_bound,
     ]
-    return max(max(sides) for sides in component_sides), slacks, max_ratio
+    budget = max(max(sides) for sides in component_sides)
+    return (
+        budget,
+        slacks,
+        max_ratio,
+        cell_bounds,
+        load_bounds,
+        slack_bounds,
+        congestion_bound,
+    )
 
 
-def _require_profile_output_admission(flow: MulticommodityFlow) -> None:
-    """Reject tensors whose echoed source and priced rows exceed the envelope."""
+def _require_profile_source_room(flow: MulticommodityFlow) -> None:
+    """Reject tensors whose echoed source leaves no room for any result.
 
-    # The echoed source is measured before any exact component work. Every
-    # admitted result contains at least the header, one congestion rational,
-    # and one divergence and one edge row (FlowGraph admits no zero-edge
-    # graphs and commodities at least one source/sink pair), so a serialized
-    # source that already leaves no room for that skeleton can never pass the
-    # priced estimate below and fails closed immediately instead of paying
-    # the full component scan first.
+    The echoed source is measured before any exact component work. Every
+    admitted result contains at least the header, one congestion rational,
+    and one divergence and one edge row (FlowGraph admits no zero-edge
+    graphs and commodities at least one source/sink pair), so a serialized
+    source that already leaves no room for that skeleton can never pass the
+    priced estimate below and fails closed immediately instead of paying
+    the full component scan first.
+    """
+
     source_bytes = len(encode_strict_json(flow.model_dump(mode="json")))
     minimum_result_bytes = (
         source_bytes
@@ -461,9 +479,21 @@ def _require_profile_output_admission(flow: MulticommodityFlow) -> None:
             f"{MAX_PROFILE_RESULT_BYTES}-byte aggregate result bound"
         )
 
-    cell_bounds, load_bounds, slack_bounds, congestion_bound = (
-        _profile_component_digit_bounds(flow)
-    )
+
+def _require_admitted_profile_rows(
+    flow: MulticommodityFlow,
+    cell_bounds: dict[tuple[str, int], tuple[int, int]],
+    load_bounds: dict[tuple[int, int], tuple[int, int]],
+    slack_bounds: dict[tuple[int, int], tuple[int, int]],
+    congestion_bound: tuple[int, int],
+) -> None:
+    """Price every returned row against the aggregate result envelope.
+
+    The bounds are the ones the kernel's single measured scan already
+    produced, so admission prices the result without a second arithmetic
+    pass and the two-pass work ledger stays exact.
+    """
+
     divergence_bytes = sum(
         num_digits
         + den_digits
@@ -486,7 +516,7 @@ def _require_profile_output_admission(flow: MulticommodityFlow) -> None:
             + _EDGE_ROW_OVERHEAD_BYTES
         )
     estimated_bytes = (
-        source_bytes
+        len(encode_strict_json(flow.model_dump(mode="json")))
         + divergence_bytes
         + edge_bytes
         + congestion_bytes
@@ -559,11 +589,6 @@ class MulticommodityFlowProfileRequest(StrictModel):
             "result envelope below 8 MiB."
         )
     )
-
-    @model_validator(mode="after")
-    def require_admitted_profile_work_and_result(self) -> Self:
-        _require_profile_output_admission(self.flow)
-        return self
 
 
 class CommodityDivergence(StrictModel):

@@ -549,6 +549,7 @@ def test_request_schema_publishes_coupled_digit_work_bound() -> None:
     polynomial_description = schema["properties"]["polynomial"]["description"]
     assert "(2 * degree * order^3) scalar products" in polynomial_description
     assert "largest decimal-digit component" in polynomial_description
+    assert "predicted shifted Horner intermediate components" in polynomial_description
     assert f"{MAX_MATRIX_POLYNOMIAL_DIGIT_WORK:,}" in polynomial_description
 
 
@@ -781,6 +782,132 @@ def test_clearing_denominator_growth_is_bounded_by_live_horner_shifts() -> None:
     assert result.polynomial_degree == 100
     assert result.matrix_multiplications == 100
     assert result.scalar_product_terms == 800
+
+
+def test_overlapping_dead_denominators_are_charged_at_shared_entries() -> None:
+    # Acyclic chain A = [[0,1,1],[0,0,1],[0,0,0]] with f = t^5/a + t^4/b for
+    # coprime 32,768-digit denominators: both powers are structurally dead,
+    # yet Horner temporarily forms (A^2)[0,2]/a + A[0,2]/b at the shared
+    # entry [0,2], whose reduced denominator compounds to about 65,535
+    # digits. Predicting only the largest single denominator admits about
+    # 2.9e11 digit-work units while execution performs about 1.16e12, so the
+    # resolved per-entry charge must reject this request while the same
+    # shape at denominators whose compounded width fits the coupled budget
+    # stays admitted and evaluates to the exact zero matrix.
+    first_denominator = "1" + "0" * 32_767
+    second_denominator = format_canonical_integer(11**31_400)
+    chain = _matrix((0, 1, 1), (0, 0, 1), (0, 0, 0))
+
+    with pytest.raises(ValidationError, match="exact-arithmetic work"):
+        MatrixPolynomialEvaluationRequest(
+            matrix=chain,
+            polynomial=_rational_polynomial(
+                (_rational(1, first_denominator), 5),
+                (_rational(1, second_denominator), 4),
+            ),
+        )
+
+    moderate_first = "1" + "0" * 16_383
+    moderate_second = format_canonical_integer(11**15_700)
+    admitted = compute_matrix_polynomial_evaluation(
+        MatrixPolynomialEvaluationRequest(
+            matrix=chain,
+            polynomial=_rational_polynomial(
+                (_rational(1, moderate_first), 5),
+                (_rational(1, moderate_second), 4),
+            ),
+        )
+    )
+
+    assert _fractions(admitted.value) == tuple(
+        tuple(Fraction(0) for _ in range(3)) for _ in range(3)
+    )
+    assert admitted.polynomial_degree == 5
+
+
+def test_disjoint_dead_denominators_never_compound_across_entries() -> None:
+    # Square-zero support with a live t term and f = t^3/a + t^2/b + t for
+    # coprime 17,000-digit a and b: during the ride the 1/a term occupies
+    # the off-diagonal while 1/b occupies the diagonal, and the former dies
+    # before the latter shifts off-diagonal, so no entry ever combines the
+    # denominators and every intermediate stays within 17,000 digits. A
+    # global dead-term lcm would exceed the canonical cap and reject this
+    # safely bounded request; resolved coexistence must admit it with
+    # f(A) = A exactly.
+    first_denominator = "1" + "0" * 17_000
+    second_denominator = format_canonical_integer(11**16_325)
+    request = MatrixPolynomialEvaluationRequest(
+        matrix=_matrix((0, 1), (0, 0)),
+        polynomial=RationalPolynomial(
+            variables=("t",),
+            polynomial=SparseRationalPolynomial(
+                terms=(
+                    RationalPolynomialTerm(
+                        coefficient=_rational(1, first_denominator),
+                        exponents=(3,),
+                    ),
+                    RationalPolynomialTerm(
+                        coefficient=_rational(1, second_denominator),
+                        exponents=(2,),
+                    ),
+                    RationalPolynomialTerm(
+                        coefficient=_rational(1),
+                        exponents=(1,),
+                    ),
+                )
+            ),
+        ),
+    )
+
+    result = compute_matrix_polynomial_evaluation(request)
+
+    assert _fractions(result.value) == (
+        (Fraction(0), Fraction(1)),
+        (Fraction(0), Fraction(0)),
+    )
+    assert result.polynomial_degree == 3
+    assert result.matrix_multiplications == 3
+
+
+def test_mixed_overlap_of_dead_denominators_is_still_charged() -> None:
+    # The disjointness relief above must not drop genuine overlap charging:
+    # the same chain shape with a surviving t term rides t^5/a and t^4/b
+    # through the shared entry [0,2] exactly as in the constant case, so
+    # coprime 31,000-digit denominators compound past the digit-work budget
+    # and must be rejected, while the smaller honest twin stays admitted
+    # with its exact value preserved.
+    first_denominator = "1" + "0" * 31_000
+    second_denominator = format_canonical_integer(11**29_800)
+    chain = _matrix((0, 1, 1), (0, 0, 1), (0, 0, 0))
+
+    with pytest.raises(ValidationError, match="exact-arithmetic work"):
+        MatrixPolynomialEvaluationRequest(
+            matrix=chain,
+            polynomial=_rational_polynomial(
+                (_rational(1, first_denominator), 5),
+                (_rational(1, second_denominator), 4),
+                (_rational(1), 1),
+            ),
+        )
+
+    moderate_first = "1" + "0" * 8_000
+    moderate_second = format_canonical_integer(11**7_700)
+    admitted = compute_matrix_polynomial_evaluation(
+        MatrixPolynomialEvaluationRequest(
+            matrix=chain,
+            polynomial=_rational_polynomial(
+                (_rational(1, moderate_first), 5),
+                (_rational(1, moderate_second), 4),
+                (_rational(1), 1),
+            ),
+        )
+    )
+
+    assert _fractions(admitted.value) == (
+        (Fraction(0), Fraction(1), Fraction(1)),
+        (Fraction(0), Fraction(0), Fraction(1)),
+        (Fraction(0), Fraction(0), Fraction(0)),
+    )
 
 
 def test_dead_coefficient_powers_are_classified_before_the_coefficient_lcm() -> None:

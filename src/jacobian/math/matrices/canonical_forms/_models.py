@@ -150,6 +150,24 @@ def _capped_lcm(values: Iterable[int]) -> int:
     return result
 
 
+def _work_lcm(values: Iterable[int]) -> int:
+    """Fold denominators into one common multiple under work saturation.
+
+    Unlike ``_capped_lcm`` this never clips at a canonical component: the
+    result is a work estimate whose digit width feeds the coupled digit-work
+    bound, so honest compounding past one component must stay visible.
+    """
+
+    result = 1
+    for value in values:
+        factor = value // gcd(result, value)
+        if factor != 1:
+            result = _work_multiply(result, factor)
+            if result > _MAX_WORK_BOUND:
+                return result
+    return result
+
+
 def _decimal_digit_upper_bound(value: int) -> int:
     """Return a conservative decimal digit count without converting huge ints."""
 
@@ -422,6 +440,265 @@ def _acyclic_support_longest_walk(
     return max(longest)
 
 
+def _support_reachability(
+    matrix_ratios: tuple[tuple[int, int], ...],
+    dimension: int,
+    longest_walk: int,
+) -> list[list[int]]:
+    """Return per-row bitmasks of columns joined by a walk of each length.
+
+    ``reach[length][row]`` is the bitmask of columns reachable from the row
+    by a supported walk of exactly that length; lengths beyond the longest
+    walk carry no walks and need no table.
+    """
+
+    adjacency = [0] * dimension
+    for row_index in range(dimension):
+        row_offset = row_index * dimension
+        for column_index in range(dimension):
+            if matrix_ratios[row_offset + column_index][0] != 0:
+                adjacency[row_index] |= 1 << column_index
+
+    reach = [[1 << row_index for row_index in range(dimension)]]
+    for _length in range(longest_walk):
+        previous = reach[-1]
+        current = []
+        for row_index in range(dimension):
+            mask = 0
+            neighbors = adjacency[row_index]
+            column_index = 0
+            while neighbors:
+                if neighbors & 1:
+                    mask |= previous[column_index]
+                neighbors >>= 1
+                column_index += 1
+            current.append(mask)
+        reach.append(current)
+    return reach
+
+
+def _reachable_length_signatures(
+    reach: list[list[int]],
+    dimension: int,
+    longest_walk: int,
+) -> list[tuple[tuple[bool, ...], tuple[bool, ...]]]:
+    """Group cells by their pairs of reachable-length signatures.
+
+    Cells share one evaluation when their signatures agree. Signature A
+    reads each live shift directly after the identity add; signature B reads
+    the same window once the following multiplication shifts every length by
+    one.
+    """
+
+    group_keys: list[tuple[tuple[bool, ...], tuple[bool, ...]]] = []
+    group_indices: dict[tuple[tuple[bool, ...], tuple[bool, ...]], int] = {}
+    for row_index in range(dimension):
+        for column_index in range(dimension):
+            signature_a = tuple(
+                bool((reach[length][row_index] >> column_index) & 1)
+                for length in range(longest_walk + 1)
+            )
+            signature_b = tuple(
+                length + 1 <= longest_walk
+                and bool((reach[length + 1][row_index] >> column_index) & 1)
+                for length in range(longest_walk + 1)
+            )
+            key = (signature_a, signature_b)
+            known = group_indices.setdefault(key, len(group_keys))
+            if known == len(group_keys):
+                group_keys.append(key)
+    return group_keys
+
+
+def _evaluate_horner_group(
+    signature_pair: tuple[tuple[bool, ...], tuple[bool, ...]],
+    window: tuple[tuple[int, int, int], ...],
+    allow_post_multiply: bool,
+    longest_walk: int,
+    denominator_height: int,
+    magnitude_height: int,
+    dimension: int,
+    budget: list[int],
+) -> tuple[int, int] | None:
+    """Bound one signature group's widths across both state shapes.
+
+    Returns ``(numerator, denominator)`` work estimates for the group, or
+    ``None`` when charging ``budget[0]`` exhausts the admission reduction
+    budget.
+
+    One exact common multiple covers both state shapes: the lcm over every
+    contributor of this group contains the lcm over each state shape's own
+    contributor set. Terms reaching no cell of the group stay excluded so
+    disjoint supports never compound here.
+    """
+
+    signature_a, signature_b = signature_pair
+
+    def charge(cost: int) -> bool:
+        budget[0] -= cost
+        return budget[0] >= 0
+
+    common_denominator = 1
+    for shift, _numerator, denominator in window:
+        reaches_group = signature_a[shift] or (
+            shift + 1 <= longest_walk and signature_b[shift]
+        )
+        if not reaches_group:
+            continue
+        factor = denominator // gcd(common_denominator, denominator)
+        if factor == 1:
+            continue
+        if not charge(
+            (common_denominator.bit_length() + factor.bit_length()) ** 2 // 65_536
+        ):
+            return None
+        widened = common_denominator * factor
+        if widened.bit_length() >= _MAX_WORK_BOUND.bit_length():
+            return None
+        common_denominator = widened
+
+    group_numerator = 0
+    group_denominator = 1
+    for index, signature in enumerate(signature_pair):
+        post_multiply = index == 1
+        if post_multiply and not allow_post_multiply:
+            continue
+        extra = 1 if post_multiply else 0
+        live = [
+            (shift + extra, numerator, denominator)
+            for shift, numerator, denominator in window
+            if shift + extra <= longest_walk and signature[shift]
+        ]
+        if not live:
+            continue
+        widest_shift = max(shift for shift, _numerator, _denominator in live)
+        variant_denominator = _work_multiply(
+            common_denominator,
+            _work_power(denominator_height, widest_shift),
+        )
+        variant_numerator = 0
+        for shift, numerator, denominator in live:
+            # Over the common denominator Dw = lcm{d_i} * H^E, term i
+            # contributes exactly ``n_i * Dw / (d_i * w_i) * u_i``. Entry
+            # numerators and denominators compound independently
+            # (``|u_i| <= magnitude_height^shift * n^(shift-1)`` and
+            # ``w_i <= denominator_height^shift``), so the charge splits
+            # into ``(lcm/d_i) * H^(E-shift)`` times that numerator product
+            # instead of squaring one height.
+            magnitude = _work_multiply(
+                _work_power(magnitude_height, shift),
+                _work_power(dimension, shift - 1 if shift else 0),
+            )
+            variant_numerator = _work_add(
+                variant_numerator,
+                _work_multiply(
+                    abs(numerator),
+                    _work_multiply(
+                        (common_denominator // denominator)
+                        * _work_power(denominator_height, widest_shift - shift),
+                        magnitude,
+                    ),
+                ),
+            )
+        if not charge(variant_denominator.bit_length() ** 2 // 65_536):
+            return None
+        group_numerator = max(group_numerator, variant_numerator)
+        group_denominator = max(group_denominator, variant_denominator)
+    return group_numerator, group_denominator
+
+
+def _resolved_horner_intermediate_bounds(
+    coefficient_ratios: tuple[tuple[int, int, int], ...],
+    matrix_ratios: tuple[tuple[int, int], ...],
+    dimension: int,
+    longest_walk: int,
+    denominator_height: int,
+    magnitude_height: int,
+) -> tuple[int, int] | None:
+    """Bound intermediate Horner widths by resolved entry coexistence.
+
+    Descending Horner stores, immediately after adding ``c_j``, entries equal
+    to ``sum_{i>=j} c_i A^(i-j)[p,q]``, and every following multiplication
+    presents the same expansion with all lengths shifted by one. Each stored
+    entry therefore reduces exactly like a sum of coefficient-weighted
+    matrix-power entries, so its reduced denominator divides
+    ``lcm{d_i} * H^E`` and its working numerator is bounded term-wise, where
+    ``d_i`` ranges over the coefficients whose shifted power ``A^(i-j)[p,q]``
+    is nonzero -- exactly the shifts in the cell's reachable-length signature
+    -- ``H`` bounds one shift's denominator growth, and ``E`` is the largest
+    live shift. Two coefficients whose powers never land on one shared cell
+    stay disjoint, while genuinely overlapping supports compound honestly, so
+    neither a largest-single-denominator guess nor a global dead-term lcm is
+    needed.
+
+    Returns the maximal working numerator and denominator widths across all
+    states, both state shapes, and all cells, or ``None`` when the admission
+    reduction budget is exhausted; callers then keep their conservative
+    whole-window bounds.
+    """
+
+    term_count = len(coefficient_ratios)
+    if not term_count:
+        return 0, 1
+    highest_exponent = coefficient_ratios[0][0]
+
+    reach = _support_reachability(matrix_ratios, dimension, longest_walk)
+    group_keys = _reachable_length_signatures(reach, dimension, longest_walk)
+
+    budget = [_ADMISSION_REDUCTION_BIT_BUDGET]
+    evaluations: dict[
+        tuple[int, bool, tuple[tuple[int, int, int], ...]],
+        tuple[int, int],
+    ] = {}
+    work_numerator_bound = 0
+    work_denominator_bound = 1
+    low = 0
+    high = 0
+    previous_state_key: tuple[tuple[tuple[int, int, int], ...], bool] | None = None
+    for state in range(highest_exponent, -1, -1):
+        while low < term_count and coefficient_ratios[low][0] > state + longest_walk:
+            low += 1
+        while high < term_count and coefficient_ratios[high][0] >= state:
+            high += 1
+        if low >= high:
+            continue
+        window = tuple(
+            (
+                coefficient_ratios[index][0] - state,
+                coefficient_ratios[index][1],
+                coefficient_ratios[index][2],
+            )
+            for index in range(low, high)
+        )
+        allow_post_multiply = state > 0
+        # Sliding windows repeat identically across exponent gaps; evaluating
+        # one representative per distinct (window, shape) pair suffices.
+        state_key = (window, allow_post_multiply)
+        if state_key == previous_state_key:
+            continue
+        previous_state_key = state_key
+        for group_index, signatures in enumerate(group_keys):
+            evaluation_key = (group_index, allow_post_multiply, window)
+            evaluated = evaluations.get(evaluation_key)
+            if evaluated is None:
+                evaluated = _evaluate_horner_group(
+                    signatures,
+                    window,
+                    allow_post_multiply,
+                    longest_walk,
+                    denominator_height,
+                    magnitude_height,
+                    dimension,
+                    budget,
+                )
+                if evaluated is None:
+                    return None
+                evaluations[evaluation_key] = evaluated
+            work_numerator_bound = max(work_numerator_bound, evaluated[0])
+            work_denominator_bound = max(work_denominator_bound, evaluated[1])
+    return work_numerator_bound, work_denominator_bound
+
+
 def _linear_result_component_bounds(
     matrix: RationalMatrix,
     coefficients: dict[int, tuple[int, int]],
@@ -517,25 +794,28 @@ def _general_result_component_bounds(
     leading powers -- each rides the accumulator until a shifted
     multiplication clears it, and that clearing step pairs its full-height
     entries against live ones once. The work sum therefore charges every
-    dead term at its saturated shift ``min(exponent, longest walk)`` under a
-    private lifting scale ``W`` over the dead denominators (rejected at the
-    component cap, since mixed Horner intermediates could compound to it
-    while dead terms coexist with surviving ones). Intermediate
-    denominators compound only across live shifts -- a surviving term rides
-    to its own exponent while a dead term dies at its clearing
-    multiplication -- so ``V W Q^S`` bounds every intermediate denominator,
-    where ``S`` is the maximum live Horner shift over the polynomial terms,
-    ``max(min(exponent, longest walk))``, and falls below the raw ordinary
-    degree exactly when structurally dead leading terms exist; charging
-    that raw degree instead would reject requests whose every intermediate
-    stays within one small compounded denominator. Work proxies saturate
-    at the dedicated work ceiling rather than one canonical component:
-    honest charges such as compounded shifted heights legitimately exceed
-    a single result component before the coupled digit-work bound rejects
-    them. In the constant-result branch no clearing denominator exists;
-    shifted Horner intermediates there carry rational heights compounded
-    over at most the longest support walk, driven by the largest input
-    entry height. The zero-matrix case is handled separately because its
+    dead term at its saturated shift ``min(exponent, longest walk)``.
+    Intermediate widths are resolved per state and cell rather than guessed
+    coarsely: after adding ``c_j`` an accumulator entry equals
+    ``sum_{i>=j} c_i A^(i-j)[p,q]``, so its denominator divides the lcm of
+    exactly those coefficient denominators whose shifted power lands on that
+    cell (``_resolved_horner_intermediate_bounds``). Coefficients whose
+    supports never meet one shared cell during the ride stay disjoint --
+    coprime denominators of such terms neither reject a request nor inflate
+    its digit-work estimate -- while overlapping supports compound honestly
+    through the same resolution. The resolution is budget-guarded; on
+    exhaustion the conservative whole-window compounds (every surviving and
+    dead coefficient denominator over the maximum live shift) stand in,
+    which remain sound because they dominate every coexistence pattern.
+    Work proxies saturate at the dedicated work ceiling rather than one
+    canonical component: honest charges such as compounded shifted heights
+    legitimately exceed a single result component before the coupled
+    digit-work bound rejects them. In the constant-result branch no clearing
+    denominator exists; shifted Horner intermediates there carry rational
+    heights compounded over at most the longest support walk, driven by the
+    largest input entry height, and the same resolution separates cells
+    where two dead denominators genuinely meet from cells where they ride
+    disjoint entries. The zero-matrix case is handled separately because its
     intermediates are individual input coefficients.
     """
 
@@ -601,29 +881,45 @@ def _general_result_component_bounds(
             max(abs(numerator), denominator) for numerator, denominator in matrix_ratios
         )
         shift_ceiling = max(longest_walk or 0, 0)
-        work_numerator_bound = 0
-        for exponent, numerator, denominator in coefficient_ratios:
-            shift = min(exponent, shift_ceiling)
-            work_numerator_bound = _work_add(
-                work_numerator_bound,
-                _work_multiply(
-                    max(abs(numerator), denominator),
-                    _work_multiply(
-                        _work_power(entry_height, shift),
-                        _work_power(dimension, shift - 1 if shift else 0),
-                    ),
-                ),
+        resolved_bounds = (
+            _resolved_horner_intermediate_bounds(
+                coefficient_ratios,
+                matrix_ratios,
+                dimension,
+                longest_walk,
+                denominator_height=entry_height,
+                magnitude_height=entry_height,
             )
-        work_denominator_bound = _work_multiply(
-            max(
-                (
+            if longest_walk is not None
+            else None
+        )
+        if resolved_bounds is not None:
+            work_numerator_bound, work_denominator_bound = resolved_bounds
+        else:
+            # Conservative fallback: additive per-term shifted heights with
+            # one global coefficient lcm compounding the widest shift. That
+            # lcm dominates every per-cell coexistence pattern, including
+            # two dead denominators meeting on a shared entry mid-ride.
+            work_numerator_bound = 0
+            for exponent, numerator, denominator in coefficient_ratios:
+                shift = min(exponent, shift_ceiling)
+                work_numerator_bound = _work_add(
+                    work_numerator_bound,
+                    _work_multiply(
+                        max(abs(numerator), denominator),
+                        _work_multiply(
+                            _work_power(entry_height, shift),
+                            _work_power(dimension, shift - 1 if shift else 0),
+                        ),
+                    ),
+                )
+            work_denominator_bound = _work_multiply(
+                _work_lcm(
                     denominator
                     for _exponent, _numerator, denominator in coefficient_ratios
                 ),
-                default=1,
-            ),
-            _work_power(entry_height, shift_ceiling),
-        )
+                _work_power(entry_height, shift_ceiling),
+            )
     else:
         common_matrix_denominator = _capped_lcm(
             denominator for _numerator, denominator in matrix_ratios
@@ -636,52 +932,32 @@ def _general_result_component_bounds(
         highest_surviving_exponent = max(
             exponent for exponent, _numerator, _denominator in surviving_terms
         )
-        # Dead leading powers ride every Horner multiplication until a
-        # shifted step clears them, so their transient digit work is charged
-        # at the saturated shift instead of being dropped from accounting.
-        # Their denominators receive a private lifting scale folded into the
-        # work denominator; exhausting the component cap here rejects the
-        # request because mixed Horner intermediates could compound to that
-        # LCM while dead terms coexist with surviving ones.
-        dead_common_denominator = _capped_lcm(
-            denominator for _exponent, _numerator, denominator in dead_terms
-        )
-        if dead_common_denominator > _MAX_RESULT_COMPONENT:
-            raise ValueError(
-                "matrix polynomial dead-power coefficient growth exceeds the "
-                f"canonical {MAX_CANONICAL_RATIONAL_DIGITS:,}-digit result bound"
-            )
-        # Intermediate denominators compound only across live shifts: a
-        # surviving term rides the accumulator up to its own exponent while
-        # a structurally dead leading term dies at its clearing
-        # multiplication, so no accumulator ever carries Q above the
-        # maximum live shift ``min(exponent, longest walk)``, which drops
-        # below the raw degree exactly when dead leading terms exist.
-        # Charging the raw degree of dead leading terms would reject
-        # requests whose every Horner intermediate stays within one
-        # compounded denominator.
-        maximum_live_shift = max(
-            (
-                exponent if longest_walk is None else min(exponent, longest_walk)
-                for exponent, _numerator, _denominator in coefficient_ratios
-            ),
-            default=0,
-        )
-        work_denominator_bound = _work_multiply(
-            _work_multiply(
-                common_coefficient_denominator,
-                dead_common_denominator,
-            ),
-            _work_power(common_matrix_denominator, maximum_live_shift),
-        )
         # |numerator| * (Q // denominator) is at most the square of two canonical
         # components, so the exact cleared height is always safe to materialize.
         cleared_matrix_height = max(
             abs(numerator) * (common_matrix_denominator // denominator)
             for numerator, denominator in matrix_ratios
         )
+        # Dead leading powers ride every Horner multiplication until a
+        # shifted step clears them, and surviving terms ride to their own
+        # exponents: the resolved bounds charge each state's live window per
+        # shared cell, so coprime denominators whose powers never land on one
+        # common entry stay disjoint while overlapping supports compound
+        # honestly. Only budget exhaustion falls back to the whole-window
+        # compounds below, which dominate every coexistence pattern.
+        resolved_bounds = (
+            _resolved_horner_intermediate_bounds(
+                coefficient_ratios,
+                matrix_ratios,
+                dimension,
+                longest_walk,
+                denominator_height=common_matrix_denominator,
+                magnitude_height=cleared_matrix_height,
+            )
+            if longest_walk is not None
+            else None
+        )
         numerator_bound = 0
-        work_numerator_bound = 0
         for exponent, numerator, denominator in surviving_terms:
             coefficient_lift = abs(numerator) * (
                 common_coefficient_denominator // denominator
@@ -699,44 +975,92 @@ def _general_result_component_bounds(
                     highest_surviving_exponent - exponent,
                 ),
             )
-            term_height = _work_multiply(
-                coefficient_lift,
-                _work_power(common_matrix_denominator, maximum_live_shift - exponent),
-            )
             output_term = _capped_multiply(output_term, matrix_power_height)
-            term_height = _work_multiply(term_height, matrix_power_height)
-            work_numerator_bound = _work_add(work_numerator_bound, term_height)
             numerator_bound = _capped_add(numerator_bound, output_term)
 
-        # Shifted dead terms keep their own Horner shifts alive up to the
-        # longest support walk: the killing multiplication pairs every
-        # surviving dead entry with a zero operand, so the saturated shift
-        # below is the last step whose products materialize full-height
-        # operands. The lift uses the combined coefficient scale so it never
-        # undercounts a dead denominator against the common work envelope.
-        support_walk = longest_walk or 0
-        for exponent, numerator, denominator in dead_terms:
-            shift = min(exponent, support_walk)
-            dead_lift = abs(numerator) * (
-                common_coefficient_denominator * dead_common_denominator // denominator
-            )
-            matrix_power_height = _work_multiply(
-                _work_power(cleared_matrix_height, shift),
-                _work_power(dimension, shift - 1),
-            )
-            work_numerator_bound = _work_add(
-                work_numerator_bound,
-                _work_multiply(
-                    dead_lift,
-                    _work_multiply(
-                        _work_power(
-                            common_matrix_denominator,
-                            maximum_live_shift - shift,
-                        ),
-                        matrix_power_height,
-                    ),
+        if resolved_bounds is not None:
+            work_numerator_bound, work_denominator_bound = resolved_bounds
+        else:
+            # Conservative fallback. Intermediate denominators compound only
+            # across live shifts -- a surviving term rides the accumulator up
+            # to its own exponent while a structurally dead leading term dies
+            # at its clearing multiplication -- so no accumulator ever
+            # carries Q above the maximum live shift
+            # ``max(min(exponent, longest walk))``. Charging the raw degree
+            # of dead leading terms would reject requests whose every
+            # Horner intermediate stays within one compounded denominator.
+            maximum_live_shift = max(
+                (
+                    exponent if longest_walk is None else min(exponent, longest_walk)
+                    for exponent, _numerator, _denominator in coefficient_ratios
                 ),
+                default=0,
             )
+            dead_common_denominator = _work_lcm(
+                denominator for _exponent, _numerator, denominator in dead_terms
+            )
+            work_denominator_bound = _work_multiply(
+                _work_multiply(
+                    common_coefficient_denominator,
+                    dead_common_denominator,
+                ),
+                _work_power(common_matrix_denominator, maximum_live_shift),
+            )
+            work_numerator_bound = 0
+            for exponent, numerator, denominator in surviving_terms:
+                coefficient_lift = abs(numerator) * (
+                    common_coefficient_denominator // denominator
+                )
+                matrix_power_height = 1
+                if exponent:
+                    matrix_power_height = _work_multiply(
+                        _work_power(cleared_matrix_height, exponent),
+                        _work_power(dimension, exponent - 1),
+                    )
+                term_height = _work_multiply(
+                    coefficient_lift,
+                    _work_power(
+                        common_matrix_denominator,
+                        maximum_live_shift - exponent,
+                    ),
+                )
+                term_height = _work_multiply(term_height, matrix_power_height)
+                work_numerator_bound = _work_add(work_numerator_bound, term_height)
+
+            # Shifted dead terms keep their own Horner shifts alive up to the
+            # longest support walk: the killing multiplication pairs every
+            # surviving dead entry with a zero operand, so the saturated shift
+            # below is the last step whose products materialize full-height
+            # operands. The lift uses the combined coefficient scale so it
+            # never undercounts a dead denominator against the common work
+            # envelope.
+            support_walk = longest_walk or 0
+            for exponent, numerator, denominator in dead_terms:
+                shift = min(exponent, support_walk)
+                dead_lift = _work_multiply(
+                    abs(numerator),
+                    _work_multiply(
+                        common_coefficient_denominator,
+                        dead_common_denominator // denominator,
+                    ),
+                )
+                matrix_power_height = _work_multiply(
+                    _work_power(cleared_matrix_height, shift),
+                    _work_power(dimension, shift - 1),
+                )
+                work_numerator_bound = _work_add(
+                    work_numerator_bound,
+                    _work_multiply(
+                        dead_lift,
+                        _work_multiply(
+                            _work_power(
+                                common_matrix_denominator,
+                                maximum_live_shift - shift,
+                            ),
+                            matrix_power_height,
+                        ),
+                    ),
+                )
 
         proven_numerator_factor = _proven_numerator_factor(
             surviving_terms, common_coefficient_denominator
@@ -862,8 +1186,12 @@ class MatrixPolynomialEvaluationRequest(StrictModel):
             "Exact admission additionally multiplies the total "
             "(2 * degree * order^3) scalar products by the square of the "
             "largest decimal-digit component among the matrix entries, the "
-            "polynomial coefficients, and the predicted exact-result "
-            "components; that digit-work product must stay within "
+            "polynomial coefficients, the predicted exact-result "
+            "components, and the predicted shifted Horner intermediate "
+            "components, whose denominators include coprime coefficient "
+            "denominators whenever their matrix-power supports overlap in "
+            "one shared entry during evaluation; that digit-work product "
+            "must stay within "
             f"{MAX_MATRIX_POLYNOMIAL_DIGIT_WORK:,} units."
         )
     )

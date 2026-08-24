@@ -34,12 +34,16 @@ MAX_COMMODITY_VERTEX_CELLS = 512
 # denominator plus eight carry digits for up to 256 accumulated endpoints;
 # the slack subtraction pushes the numerator through both denominators once
 # and adds one carry digit; and the division crosses the load with the
-# capacity numerator only.  An edge carrying no amount has the exact zero
-# load, so only single-digit zero operands compose with its capacity.  A
-# component stays admissible when each side of this split bound fits the
-# canonical cap on its own.  Demands take part only in exact conservation
-# comparisons, never in arithmetic, so they are covered by the measured
-# source echo instead of these budgets.
+# capacity numerator only.  A component fed by a single operand equals that
+# already-canonical operand exactly, so its own two sides are its bounds and
+# no summation growth is charged; when that lone amount also equals the edge
+# capacity, the slack is the exact zero rational and the congestion ratio is
+# exactly one.  An edge carrying no amount has the exact zero load, so only
+# single-digit zero operands compose with its capacity.  A component stays
+# admissible when each side of this split bound fits the canonical cap on
+# its own.  Demands take part only in exact conservation comparisons, never
+# in arithmetic, so they are covered by the measured source echo instead of
+# these budgets.
 _DERIVED_DIGIT_SLACK = 8
 
 # A result echoes its source tensor, then includes one divergence row per
@@ -185,20 +189,30 @@ def _profile_component_digit_bounds(
 
     cell_den: dict[tuple[str, int], int] = {}
     cell_num: dict[tuple[str, int], int] = {}
+    cell_operands: dict[tuple[str, int], int] = {}
     edge_den: dict[tuple[int, int], int] = {}
     edge_num: dict[tuple[int, int], int] = {}
+    edge_operands: dict[tuple[int, int], int] = {}
+    edge_sole_amount: dict[tuple[int, int], CanonicalRational] = {}
     for entry in flow.entries:
         amount_num = len(entry.amount.num)
         amount_den = len(entry.amount.den)
         edge_key = (entry.source, entry.target)
         edge_den[edge_key] = edge_den.get(edge_key, 0) + amount_den
         edge_num[edge_key] = max(edge_num.get(edge_key, 0), amount_num)
+        edge_operands[edge_key] = edge_operands.get(edge_key, 0) + 1
+        edge_sole_amount.setdefault(edge_key, entry.amount)
         for vertex in (entry.source, entry.target):
             cell_key = (entry.commodity_id, vertex)
             cell_den[cell_key] = cell_den.get(cell_key, 0) + amount_den
             cell_num[cell_key] = max(cell_num.get(cell_key, 0), amount_num)
+            cell_operands[cell_key] = cell_operands.get(cell_key, 0) + 1
 
-    def _sum_bound(den_total: int, max_num: int) -> tuple[int, int]:
+    def _sum_bound(operand_count: int, den_total: int, max_num: int) -> tuple[int, int]:
+        # One operand is its own reduced sum: the component equals that
+        # already-canonical operand and charges no summation growth.
+        if operand_count == 1:
+            return max_num, den_total
         return den_total + max_num + _DERIVED_DIGIT_SLACK, den_total
 
     cell_bounds: dict[tuple[str, int], tuple[int, int]] = {}
@@ -206,7 +220,9 @@ def _profile_component_digit_bounds(
         for vertex in range(flow.network.vertex_count):
             key = (commodity.commodity_id, vertex)
             if key in cell_den:
-                cell_bounds[key] = _sum_bound(cell_den[key], cell_num[key])
+                cell_bounds[key] = _sum_bound(
+                    cell_operands[key], cell_den[key], cell_num[key]
+                )
             else:
                 cell_bounds[key] = (1, 1)
 
@@ -225,7 +241,19 @@ def _profile_component_digit_bounds(
             load_bounds[edge_key] = (1, 1)
             slack_bounds[edge_key] = (capacity_num, capacity_den)
             continue
-        load_n, load_d = _sum_bound(den_total, edge_num[edge_key])
+        load_n, load_d = _sum_bound(
+            edge_operands[edge_key], den_total, edge_num[edge_key]
+        )
+        if (
+            edge_operands[edge_key] == 1
+            and edge_sole_amount[edge_key] == edge.capacity
+        ):
+            # The lone amount equals the capacity exactly: the load is the
+            # capacity, the slack is the exact zero rational, and the
+            # congestion ratio reduces to exactly one.
+            load_bounds[edge_key] = (load_n, load_d)
+            slack_bounds[edge_key] = (1, 1)
+            continue
         slack_n = max(capacity_num + den_total, load_n + capacity_den) + 1
         slack_d = capacity_den + den_total
         load_bounds[edge_key] = (load_n, load_d)

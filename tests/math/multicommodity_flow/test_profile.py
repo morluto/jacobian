@@ -361,18 +361,55 @@ def test_operand_digit_budget_bounds_the_canonical_boundary() -> None:
             ),
         )
 
-    # One 32,757-digit amount numerator, its one-digit denominator, the eight
-    # sum carry digits, and one subtraction-composition digit reach exactly
-    # the canonical 32,768-digit component cap.
-    at_boundary = unit_edge_amount(CanonicalRational(num="9" * 32_757, den="1"))
+    # One lone operand is its own reduced sum: the 32,766-digit amount
+    # numerator, its one-digit denominator, and the two subtraction-composition
+    # digits reach exactly the canonical 32,768-digit component cap.
+    at_boundary = unit_edge_amount(CanonicalRational(num="9" * 32_766, den="1"))
     result = compute_multicommodity_flow_profile(at_boundary)
     assert result.capacity_feasible is False
-    assert result.edge_profiles[0].load.num == "9" * 32_757
-    assert result.congestion == CanonicalRational(num="9" * 32_757, den="1")
+    assert result.edge_profiles[0].load.num == "9" * 32_766
+    assert result.congestion == CanonicalRational(num="9" * 32_766, den="1")
 
-    beyond_boundary = CanonicalRational(num="9" * 32_758, den="1")
+    beyond_boundary = CanonicalRational(num="9" * 32_767, den="1")
     with pytest.raises(ValidationError, match="canonical cap"):
         unit_edge_amount(beyond_boundary)
+
+
+def test_sole_operand_components_inherit_their_canonical_sides() -> None:
+    # A two-vertex, one-edge tensor whose sole entry, matching capacity, and
+    # demand are the same reduced rational with a 20,000-digit numerator and
+    # denominator: every divergence and the load equal that already-canonical
+    # operand, the slack is the exact zero rational, and the congestion is
+    # exactly one. Admission tracks the contributing operand count instead of
+    # charging nonexistent summation growth, so no 40,008-digit component is
+    # implied and the tensor stays far below every bound.
+    operand = CanonicalRational(num="9" * 20_000, den="1" + "0" * 19_999)
+    flow = MulticommodityFlow(
+        network=FlowGraph(
+            vertex_count=2,
+            edges=(CapacitatedEdge(source=0, target=1, capacity=operand),),
+        ),
+        commodities=(
+            CommodityDemand(commodity_id="a", source=0, sink=1, demand=operand),
+        ),
+        entries=(
+            CommodityEdgeFlow(commodity_id="a", source=0, target=1, amount=operand),
+        ),
+    )
+    assert derived_profile_digit_budget(flow) == 20_000
+    result = compute_multicommodity_flow_profile(flow)
+    assert result.all_demands_routed is True
+    assert result.capacity_feasible is True
+    assert result.congestion == q(1)
+    assert result.edge_profiles[0].load == operand
+    assert result.edge_profiles[0].slack == q(0)
+    negative_operand = CanonicalRational(
+        num="-" + "9" * 20_000, den="1" + "0" * 19_999
+    )
+    assert [row.divergence for row in result.divergences] == [
+        operand,
+        negative_operand,
+    ]
 
 
 def test_rational_components_are_bounded_independently() -> None:
@@ -449,7 +486,10 @@ def test_per_component_digit_bounds_admit_unrelated_large_operands() -> None:
             CommodityEdgeFlow(commodity_id="b", source=1, target=2, amount=big_amount),
         ),
     )
-    assert derived_profile_digit_budget(amounts_flow) == 8 + 16_381 + 2
+    # Each edge and divergence cell receives one lone 16,380-digit operand, so
+    # no component charges summation growth: the slack composition digits give
+    # the shared budget.
+    assert derived_profile_digit_budget(amounts_flow) == 16_380 + 2
     amounts_result = compute_multicommodity_flow_profile(amounts_flow)
     assert amounts_result.all_demands_routed is False
     assert amounts_result.edge_profiles[0].load == big_amount

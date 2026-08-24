@@ -42,6 +42,8 @@ from jacobian.math.additive_combinatorics.operations import (
     MAX_SUBSET_SUM_PROFILE_RESULT_BYTES,
 )
 from jacobian.math.additive_combinatorics.values import (
+    MAX_SUBSET_SUM_ITEM_DIGITS,
+    MAX_SUBSET_SUM_ITEMS,
     MAX_SUBSET_SUM_PROFILE_ENTRIES,
     SubsetSumProfile,
 )
@@ -158,8 +160,10 @@ ADDITIVE_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 (
                     "Compute all subset sums of the two indexed values [1,1], "
                     "giving multiplicities 1,2,1 at sums 0,1,2; input items must "
-                    "be canonical integers inside the schema-visible 256-item, "
-                    f"256-digit, {MAX_SUBSET_SUM_PROFILE_ENTRIES:,}-row, "
+                    "be canonical integers inside the schema-visible "
+                    f"{MAX_SUBSET_SUM_ITEMS:,}-item, "
+                    f"{MAX_SUBSET_SUM_ITEM_DIGITS:,}-digit, "
+                    f"{MAX_SUBSET_SUM_PROFILE_ENTRIES:,}-row, "
                     f"{MAX_SUBSET_SUM_DP_TRANSITIONS:,}-transition, and "
                     f"{MAX_SUBSET_SUM_PROFILE_RESULT_BYTES // (1024 * 1024)} MiB "
                     "profile bounds."

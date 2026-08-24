@@ -317,6 +317,37 @@ def test_request_bounds_raw_source_before_nested_parsing() -> None:
         )
 
 
+def test_source_schema_admits_the_advertised_residue_envelope() -> None:
+    schema = SubsetSumResidueProfileRequest.model_json_schema()
+    items_schema = schema["$defs"]["IndexedIntegerSequence"]["properties"]["items"]
+
+    assert items_schema["maxItems"] == MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS - 1
+    assert (
+        items_schema["items"]["maxLength"]
+        == MAX_RESIDUE_PROFILE_INPUT_INTEGER_DIGITS + 1
+    )
+
+
+def test_positions_beyond_legacy_source_cap_are_admitted() -> None:
+    result = compute_subset_sum_residue_profile(
+        _request((0,) * 257, 1, include_empty_subset=False)
+    )
+
+    assert result.residue_counts == (str((1 << 257) - 1),)
+
+
+def test_single_integer_beyond_legacy_digit_cap_is_admitted() -> None:
+    value = 10**256
+
+    result = compute_subset_sum_residue_profile(
+        _request((value,), 7, include_empty_subset=False)
+    )
+
+    assert result.residue_counts == tuple(
+        "1" if residue == value % 7 else "0" for residue in range(7)
+    )
+
+
 def test_exact_dp_cell_boundary_is_complete_and_serializable() -> None:
     item_count = 200
     modulus = MAX_RESIDUE_PROFILE_DP_CELLS // item_count

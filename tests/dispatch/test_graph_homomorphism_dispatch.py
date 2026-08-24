@@ -42,6 +42,31 @@ def test_dispatch_runs_canonical_graph_homomorphism_check() -> None:
     assert vertex_map["target_graph"]["graph_schema_version"] == "1"
 
 
+def test_dispatch_admits_a_near_limit_positive_map_without_duplicate_storage() -> None:
+    label_width = 18_000
+    source_vertices = [
+        f"{index:03d}-" + "s" * (label_width - 4) for index in range(256)
+    ]
+    payload = {
+        "vertex_map": {
+            "source_graph": {"vertices": source_vertices, "edges": []},
+            "target_graph": {"vertices": ["t"], "edges": []},
+            "rows": [
+                {"source_vertex": source_vertex, "target_vertex": "t"}
+                for source_vertex in source_vertices
+            ],
+        }
+    }
+
+    result = invoke_operation("graph.homomorphism.check", payload, Catalog.open())
+
+    assert result.output["status"] == "HOMOMORPHISM"
+    assert (
+        result.output["homomorphism"]["vertex_map"]["rows"]
+        == payload["vertex_map"]["rows"]
+    )
+
+
 def test_dispatch_rejects_the_retired_raw_integer_graph_payload() -> None:
     with pytest.raises(OperationRequestValidationError):
         invoke_operation(

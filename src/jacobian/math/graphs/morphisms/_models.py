@@ -101,11 +101,11 @@ class GraphVertexMap(StrictModel):
 def _first_homomorphism_obstruction(
     vertex_map: GraphVertexMap,
 ) -> tuple[tuple[str, str], tuple[str, str]] | None:
-    """Return the first declared source edge with a nonedge image, if any."""
+    """Return the lexicographically first source edge with a nonedge image."""
 
     images = {row.source_vertex: row.target_vertex for row in vertex_map.rows}
     target_edges = set(vertex_map.target_graph.edges)
-    for source_edge in vertex_map.source_graph.edges:
+    for source_edge in sorted(vertex_map.source_graph.edges):
         image_edge = (images[source_edge[0]], images[source_edge[1]])
         canonical_image = tuple(sorted(image_edge))
         if image_edge[0] == image_edge[1] or canonical_image not in target_edges:
@@ -126,10 +126,25 @@ class GraphHomomorphism(StrictModel):
 
 
 class GraphHomomorphismObstruction(StrictModel):
-    """The first source edge whose map is not a target edge."""
+    """A source-bound first edge image that is not a target edge."""
 
+    vertex_map: GraphVertexMap
     source_edge: tuple[str, str]
     image_vertices: tuple[str, str]
+
+    @model_validator(mode="after")
+    def require_first_replayable_obstruction(self) -> Self:
+        expected = _first_homomorphism_obstruction(self.vertex_map)
+        if expected is None:
+            raise ValueError("a homomorphism has no edge-image obstruction")
+        source_edge, image_vertices = expected
+        if self.source_edge != source_edge:
+            raise ValueError(
+                "obstruction source_edge must be the first failing source edge"
+            )
+        if self.image_vertices != image_vertices:
+            raise ValueError("obstruction image_vertices must replay the submitted map")
+        return self
 
 
 class HomomorphismCheckRequest(StrictModel):
@@ -140,8 +155,8 @@ class HomomorphismCheckRequest(StrictModel):
             "description": (
                 "Check one complete canonical vertex map. Admission validates "
                 "its retained source/map result envelope before execution; the "
-                "kernel builds target adjacency once and scans every source edge "
-                "once."
+                "kernel orders source edges canonically, builds target adjacency "
+                "once, and scans every source edge once."
             )
         }
     )
@@ -152,41 +167,25 @@ class HomomorphismCheckRequest(StrictModel):
 class HomomorphismCheckResult(StrictModel):
     """A replayable positive homomorphism or first edge-image obstruction."""
 
-    vertex_map: GraphVertexMap
     status: Literal["HOMOMORPHISM", "EDGE_IMAGE_NOT_EDGE"]
     homomorphism: GraphHomomorphism | None = None
     obstruction: GraphHomomorphismObstruction | None = None
 
     @model_validator(mode="after")
     def require_replayable_result(self) -> Self:
-        expected = _first_homomorphism_obstruction(self.vertex_map)
-        if expected is None:
-            if self.status != "HOMOMORPHISM":
-                raise ValueError("a preserved map must have HOMOMORPHISM status")
+        if self.status == "HOMOMORPHISM":
             if self.obstruction is not None:
                 raise ValueError("a homomorphism result must not carry an obstruction")
-            if (
-                self.homomorphism is None
-                or self.homomorphism.vertex_map != self.vertex_map
-            ):
+            if self.homomorphism is None:
                 raise ValueError(
                     "a HOMOMORPHISM result must retain the checked source-bound map"
                 )
             return self
 
-        source_edge, image_vertices = expected
-        if self.status != "EDGE_IMAGE_NOT_EDGE":
-            raise ValueError("a nonedge image must have EDGE_IMAGE_NOT_EDGE status")
         if self.homomorphism is not None:
             raise ValueError("a non-homomorphism result must not carry a homomorphism")
         if self.obstruction is None:
             raise ValueError("a non-homomorphism result requires its first obstruction")
-        if self.obstruction.source_edge != source_edge:
-            raise ValueError(
-                "obstruction source_edge must be the first failing source edge"
-            )
-        if self.obstruction.image_vertices != image_vertices:
-            raise ValueError("obstruction image_vertices must replay the submitted map")
         return self
 
 

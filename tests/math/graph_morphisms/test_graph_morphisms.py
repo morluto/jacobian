@@ -77,6 +77,7 @@ def test_homomorphism_check_returns_first_edge_image_nonedge() -> None:
     assert result.status == "EDGE_IMAGE_NOT_EDGE"
     assert result.homomorphism is None
     assert result.obstruction == GraphHomomorphismObstruction(
+        vertex_map=vertex_map,
         source_edge=("a", "b"),
         image_vertices=("x", "x"),
     )
@@ -126,18 +127,37 @@ def test_vertex_map_rejects_incomplete_out_of_order_and_foreign_rows() -> None:
 
 
 def test_homomorphism_result_replays_and_rejects_forged_conclusions() -> None:
-    vertex_map = _vertex_map(
-        ("a", "b"),
-        (("a", "b"),),
-        ("x", "y"),
-        (("x", "y"),),
-        (("a", "x"), ("b", "y")),
-    )
-    with pytest.raises(ValidationError, match="preserved map"):
+    with pytest.raises(ValidationError, match="requires its first obstruction"):
         HomomorphismCheckResult(
-            vertex_map=vertex_map,
             status="EDGE_IMAGE_NOT_EDGE",
         )
+
+
+def test_homomorphism_check_orders_edge_obstructions_canonically() -> None:
+    def first_obstruction(
+        source_edges: tuple[tuple[str, str], ...],
+    ) -> GraphHomomorphismObstruction:
+        vertex_map = _vertex_map(
+            ("a", "b", "c"),
+            source_edges,
+            ("x", "y"),
+            (("x", "y"),),
+            (("a", "x"), ("b", "x"), ("c", "x")),
+        )
+        result = compute_homomorphism_check(
+            HomomorphismCheckRequest(vertex_map=vertex_map)
+        )
+        assert result.obstruction is not None
+        return result.obstruction
+
+    assert first_obstruction((("a", "b"), ("a", "c"))).source_edge == (
+        "a",
+        "b",
+    )
+    assert first_obstruction((("a", "c"), ("a", "b"))).source_edge == (
+        "a",
+        "b",
+    )
 
 
 def test_homomorphism_check_preflights_retained_result_bytes(

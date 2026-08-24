@@ -21,15 +21,14 @@ def compute_homomorphism_check(
     obstruction = _first_homomorphism_obstruction(request.vertex_map)
     if obstruction is None:
         return HomomorphismCheckResult(
-            vertex_map=request.vertex_map,
             status="HOMOMORPHISM",
             homomorphism=GraphHomomorphism(vertex_map=request.vertex_map),
         )
     source_edge, image_vertices = obstruction
     return HomomorphismCheckResult(
-        vertex_map=request.vertex_map,
         status="EDGE_IMAGE_NOT_EDGE",
         obstruction=GraphHomomorphismObstruction(
+            vertex_map=request.vertex_map,
             source_edge=source_edge,
             image_vertices=image_vertices,
         ),

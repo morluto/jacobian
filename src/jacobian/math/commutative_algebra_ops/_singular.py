@@ -42,6 +42,9 @@ SingularOutcome = Literal[
 SaturationVerificationVerdict = Literal[
     "VERIFIED", "REFUTED", "UNAVAILABLE", "TIMEOUT", "ERROR"
 ]
+MinimalPrimesVerificationVerdict = Literal[
+    "VERIFIED", "REFUTED", "UNAVAILABLE", "TIMEOUT", "ERROR"
+]
 
 
 class _ResultLimitExceededError(ValueError):
@@ -403,6 +406,15 @@ def _parse_minimal_primes_output(
             raise _ResultLimitExceededError(
                 "Singular component generator count exceeds the exact-result limit"
             )
+        # Every minimal prime in n variables admits an n-generator canonical
+        # presentation (Eisenbud-Evans); a wider decoded component cannot fit
+        # the certified worst-case family envelope and is classified as a
+        # result limit, matching the other declared representation bounds.
+        if generator_count > len(variables):
+            raise _ResultLimitExceededError(
+                "Singular component exceeds the canonical "
+                f"{len(variables)}-generator presentation limit"
+            )
         total_generators += generator_count
         if total_generators > budget.maximum_output_generators:
             raise _ResultLimitExceededError(
@@ -628,6 +640,245 @@ def run_singular_minimal_primes(
     )
 
 
+def _minimal_primes_verification_script(
+    source: RationalPolynomialIdeal,
+    claimed: tuple[RationalPolynomialIdeal, ...],
+) -> bytes:
+    """Script deciding the defining minimal-prime invariants inside Singular.
+
+    Repetition of one deterministic kernel establishes reproducibility only,
+    so this pass decides each defining claim by independent evidence: every
+    claimed component is prime and no component contains another (pairwise
+    non-containment), the components' intersection equals the source radical
+    (mutual Groebner reduction), and the independent characteristic-set
+    decomposition ``minAssCharE`` returns the same family. Degenerate
+    sources are decided structurally without the heavy kernels.
+    """
+
+    variable_count = len(source.variables)
+    variables = ",".join(f"jv{index + 1}" for index in range(variable_count))
+    if claimed:
+        family = ",".join(
+            "ideal("
+            + ",".join(
+                _singular_polynomial(generator) for generator in component.generators
+            )
+            + ")"
+            for component in claimed
+        )
+        family_declaration = f"list jacobian_family={family};"
+    else:
+        family_declaration = "list jacobian_family;"
+    source_lines = [
+        'LIB "primdec.lib";',
+        "option(redSB);",
+        f"ring jacobian_ring=0,({variables}),dp;",
+        _singular_ideal("jacobian_source", source),
+        family_declaration,
+        "int jacobian_ok=1;",
+        "int jacobian_i,jacobian_j,jacobian_k;",
+        "int jacobian_contained,jacobian_matched,jacobian_same;",
+        "list jacobian_std_family;",
+        "list jacobian_char;",
+        "ideal jacobian_inter;",
+        "ideal jacobian_rad;",
+        "ideal jacobian_si;",
+        "ideal jacobian_std_source=std(jacobian_source);",
+        "if (size(jacobian_std_source)==1 && jacobian_std_source[1]==1)",
+        "{",
+        "  if (size(jacobian_family)!=0) { jacobian_ok=0; }",
+        "}",
+        "else",
+        "{",
+        "  if (size(jacobian_std_source)==0)",
+        "  {",
+        "    if (size(jacobian_family)!=1) { jacobian_ok=0; }",
+        "    else",
+        "    {",
+        "      if (size(std(jacobian_family[1]))!=0) { jacobian_ok=0; }",
+        "    }",
+        "  }",
+        "  else",
+        "  {",
+        "    for (jacobian_i=1; jacobian_i<=size(jacobian_family); "
+        "jacobian_i=jacobian_i+1)",
+        "    { jacobian_std_family[jacobian_i]=std(jacobian_family[jacobian_i]); }",
+        "    if (size(jacobian_family)==0)",
+        "    { jacobian_inter=ideal(1); }",
+        "    else",
+        "    {",
+        "      jacobian_inter=jacobian_std_family[1];",
+        "      for (jacobian_i=2; jacobian_i<=size(jacobian_family); "
+        "jacobian_i=jacobian_i+1)",
+        "      { "
+        "jacobian_inter=intersect(jacobian_inter,jacobian_std_family[jacobian_i]); "
+        "}",
+        "      jacobian_inter=std(jacobian_inter);",
+        "    }",
+        "    jacobian_rad=std(radical(jacobian_source));",
+        "    for (jacobian_i=1; jacobian_i<=size(jacobian_rad); "
+        "jacobian_i=jacobian_i+1)",
+        "    { if (reduce(jacobian_rad[jacobian_i],jacobian_inter)!=0) "
+        "{ jacobian_ok=0; } }",
+        "    for (jacobian_i=1; jacobian_i<=size(jacobian_inter); "
+        "jacobian_i=jacobian_i+1)",
+        "    { if (reduce(jacobian_inter[jacobian_i],jacobian_rad)!=0) "
+        "{ jacobian_ok=0; } }",
+        "    if (size(jacobian_family)>=2)",
+        "    {",
+        "      for (jacobian_i=1; jacobian_i<=size(jacobian_family); "
+        "jacobian_i=jacobian_i+1)",
+        "      {",
+        "        for (jacobian_j=1; jacobian_j<=size(jacobian_family); "
+        "jacobian_j=jacobian_j+1)",
+        "        {",
+        "          if (jacobian_i!=jacobian_j)",
+        "          {",
+        "            jacobian_contained=1;",
+        "            for (jacobian_k=1; "
+        "jacobian_k<=size(jacobian_std_family[jacobian_i]); "
+        "jacobian_k=jacobian_k+1)",
+        "            {",
+        "              if "
+        "(reduce(jacobian_std_family[jacobian_i][jacobian_k],"
+        "jacobian_std_family[jacobian_j])!=0) { jacobian_contained=0; }",
+        "            }",
+        "            if (jacobian_contained==1) { jacobian_ok=0; }",
+        "          }",
+        "        }",
+        "      }",
+        "    }",
+        "    if (jacobian_ok==1 && size(jacobian_rad)!=0)",
+        "    {",
+        "      jacobian_char=minAssCharE(jacobian_source);",
+        "      if (size(jacobian_char)!=size(jacobian_family)) { jacobian_ok=0; }",
+        "      else",
+        "      {",
+        "        for (jacobian_i=1; jacobian_i<=size(jacobian_char); "
+        "jacobian_i=jacobian_i+1)",
+        "        {",
+        "          jacobian_si=std(jacobian_char[jacobian_i]);",
+        "          jacobian_matched=0;",
+        "          for (jacobian_j=1; jacobian_j<=size(jacobian_std_family); "
+        "jacobian_j=jacobian_j+1)",
+        "          {",
+        "            jacobian_same=1;",
+        "            for (jacobian_k=1; jacobian_k<=size(jacobian_si); "
+        "jacobian_k=jacobian_k+1)",
+        "            {",
+        "              if (reduce(jacobian_si[jacobian_k],"
+        "jacobian_std_family[jacobian_j])!=0) { jacobian_same=0; }",
+        "            }",
+        "            for (jacobian_k=1; "
+        "jacobian_k<=size(jacobian_std_family[jacobian_j]); "
+        "jacobian_k=jacobian_k+1)",
+        "            {",
+        "              if (reduce(jacobian_std_family[jacobian_j][jacobian_k],"
+        "jacobian_si)!=0) { jacobian_same=0; }",
+        "            }",
+        "            if (jacobian_same==1) { jacobian_matched=1; }",
+        "          }",
+        "          if (jacobian_matched==0) { jacobian_ok=0; }",
+        "        }",
+        "      }",
+        "    }",
+        "  }",
+        "}",
+        f'print("{_PROTOCOL_HEADER}");',
+        'system("version");',
+        'print("VERDICT "+string(jacobian_ok));',
+        'print("END");',
+        "quit;",
+        "",
+    ]
+    return "\n".join(source_lines).encode("ascii")
+
+
+def _parse_minimal_primes_verdict(output: bytes) -> MinimalPrimesVerificationVerdict:
+    """Decode the bounded verification output into a verification verdict."""
+    try:
+        text = output.decode("ascii")
+    except UnicodeDecodeError:
+        return "ERROR"
+    lines = _ProtocolReader(text.splitlines())
+    try:
+        lines.expect(_PROTOCOL_HEADER)
+        version_number = int(lines.pop())
+        if not _SUPPORTED_VERSION_MIN <= version_number < _SUPPORTED_VERSION_MAX:
+            return "ERROR"
+        verdict_line = lines.pop()
+        if not verdict_line.startswith("VERDICT "):
+            return "ERROR"
+        verdict = int(verdict_line.removeprefix("VERDICT "))
+        lines.expect("END")
+        if not lines.finished() or verdict not in (0, 1):
+            return "ERROR"
+    except ValueError:
+        return "ERROR"
+    return "VERIFIED" if verdict == 1 else "REFUTED"
+
+
+def run_singular_minimal_primes_verification(
+    source_ideal: RationalPolynomialIdeal,
+    claimed_components: tuple[RationalPolynomialIdeal, ...],
+    budget: IdealComputationBudget,
+    *,
+    wall_seconds: float | None = None,
+) -> MinimalPrimesVerificationVerdict:
+    """Decide the minimal-prime defining invariants in one bounded process.
+
+    Returns ``"VERIFIED"``, ``"REFUTED"``, or an execution outcome
+    (``UNAVAILABLE``/``TIMEOUT``/``ERROR``) when the bounded backend could
+    not decide. ``wall_seconds`` charges this call to a caller-owned
+    operation deadline exactly like the producing pass.
+    """
+
+    allowance = (
+        float(budget.wall_seconds) if wall_seconds is None else float(wall_seconds)
+    )
+    if not math.isfinite(allowance) or allowance <= 0:
+        return "TIMEOUT"
+    resolved = shutil.which("Singular")
+    if resolved is None:
+        return "UNAVAILABLE"
+    resolved = str(Path(resolved).resolve())
+    prlimit = shutil.which("prlimit")
+    if prlimit is not None:
+        prlimit = str(Path(prlimit).resolve())
+    try:
+        with tempfile.TemporaryDirectory(prefix="jacobian-singular-") as directory:
+            completed = run_bounded_process(
+                [resolved, "-q"],
+                input_bytes=_minimal_primes_verification_script(
+                    source_ideal, claimed_components
+                ),
+                timeout_seconds=allowance,
+                environment=worker_environment(locale="C.UTF-8"),
+                stdout_limit=_STDOUT_LIMIT,
+                stderr_limit=_STDERR_LIMIT,
+                resource_limits=ProcessResourceLimits(
+                    cpu_seconds=math.ceil(allowance),
+                    address_space_bytes=1024 * 1024 * 1024,
+                    file_size_bytes=1024 * 1024,
+                ),
+                platform_tools=ProcessPlatformTools(prlimit_executable=prlimit),
+                cwd=directory,
+            )
+    except OSError:
+        return "UNAVAILABLE"
+    if completed.timed_out:
+        return "TIMEOUT"
+    if (
+        completed.cancelled
+        or completed.returncode != 0
+        or completed.stderr
+        or completed.stdout_exceeded
+        or completed.stderr_exceeded
+    ):
+        return "ERROR"
+    return _parse_minimal_primes_verdict(completed.stdout)
+
+
 def _verification_script(
     source: RationalPolynomialIdeal,
     saturator: RationalPolynomialIdeal,
@@ -752,11 +1003,13 @@ def run_singular_saturation_verification(
 
 
 __all__ = [
+    "MinimalPrimesVerificationVerdict",
     "SaturationVerificationVerdict",
     "SingularIdealResult",
     "SingularMinimalPrimesResult",
     "run_singular_ideal_operation",
     "run_singular_minimal_primes",
+    "run_singular_minimal_primes_verification",
     "run_singular_saturation_verification",
 ]
 

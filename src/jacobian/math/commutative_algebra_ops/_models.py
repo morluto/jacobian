@@ -285,14 +285,57 @@ class IdealSaturationResult(StrictModel):
         return self
 
 
+def _require_fittable_minimal_prime_family(
+    ideal: RationalPolynomialIdeal, *, label: str
+) -> None:
+    """Reject requests whose certified worst-case family cannot fit.
+
+    The affine Bezout inequality bounds the number of minimal primes by the
+    product of the min(variables, active generators) largest generator total
+    degrees, and every minimal prime in ``n`` variables admits a canonical
+    presentation with at most ``n`` generators, which the decoder enforces
+    per component. Their product bounds the complete exact result before any
+    backend work; inputs whose certified worst case exceeds the declared
+    output envelope are rejected here instead of failing after execution.
+    """
+
+    active_degrees = sorted(
+        (
+            max(sum(term.exponents) for term in generator.polynomial.terms)
+            for generator in ideal.generators
+            if generator.polynomial.terms
+        ),
+        reverse=True,
+    )
+    if not active_degrees:
+        return  # the zero ideal: its complete family is the single zero ideal
+    if min(active_degrees) == 0:
+        return  # a nonzero constant generator: the unit ideal's empty family
+    variable_count = len(ideal.variables)
+    bezout_product = 1
+    for degree in active_degrees[: min(variable_count, len(active_degrees))]:
+        bezout_product *= degree
+        worst_case_generators = bezout_product * variable_count
+        if worst_case_generators > MAX_OUTPUT_GENERATORS:
+            raise ValueError(
+                f"{label} has a certified worst-case minimal-prime family of "
+                f"up to {bezout_product} components with up to "
+                f"{variable_count} generators each, which cannot fit the "
+                f"{MAX_OUTPUT_GENERATORS}-generator exact-result envelope"
+            )
+
+
 class IdealMinimalPrimesRequest(StrictModel):
     """Compute minimal primes of an ideal in the exact ring ``QQ[variables]``."""
 
     ideal: RationalPolynomialIdeal = Field(
         description=(
-            "An ideal in at most 6 variables with at most 16 generators and "
-            "256 aggregate terms; generator total degree is at most 12 and "
-            "coefficient components are at most 128 digits."
+            "An ideal in at most 8 variables with at most 32 generators and "
+            "256 aggregate terms; generator total degree is at most 20, "
+            "coefficient components are at most 128 digits, and the "
+            "certified worst-case minimal-prime family (Bezout degree "
+            "product times variable count) must fit the 64-generator "
+            "exact-result envelope."
         )
     )
     resource_budget: IdealComputationBudget = Field(
@@ -302,6 +345,7 @@ class IdealMinimalPrimesRequest(StrictModel):
     @model_validator(mode="after")
     def require_backend_domain(self) -> Self:
         _require_ideal_budget(self.ideal, label="ideal")
+        _require_fittable_minimal_prime_family(self.ideal, label="ideal")
         return self
 
 
@@ -322,7 +366,7 @@ class IdealMinimalPrimesResult(StrictModel):
     detail: str | None = None
 
     @model_validator(mode="after")
-    def require_outcome_shape_and_source_replay(self) -> Self:
+    def require_outcome_shape_and_independent_verification(self) -> Self:
         if self.outcome != "COMPUTED":
             if (
                 self.components is not None
@@ -342,44 +386,44 @@ class IdealMinimalPrimesResult(StrictModel):
                 "computed minimal-prime family requires components and backend version"
             )
         _require_computed_minimal_prime_family(self.request, self.components)
-        _require_source_bound_minimal_primes(
-            self.request,
-            self.components,
-            self.backend_version,
-        )
+        _require_source_bound_minimal_primes(self.request, self.components)
         return self
 
 
 def _require_source_bound_minimal_primes(
     request: IdealMinimalPrimesRequest,
     components: tuple[RationalPolynomialIdeal, ...],
-    backend_version: str,
 ) -> None:
-    """Replay Singular's complete minimal-prime computation from its source.
+    """Verify the defining minimal-prime invariants by independent evidence.
 
-    The replay is the authoritative bounded evidence for all three claims:
-    every component is prime, no component contains another, and their
-    intersection equals the source radical.  ``minAssGTZE`` performs that
-    complete computation over ``QQ`` and its canonical decoded family is
-    compared byte-for-byte as typed values.
+    Repetition of one deterministic kernel establishes reproducibility only,
+    so a second bounded Singular pass decides each defining claim without
+    the producing ``minAssGTZE`` kernel: every component is prime and no
+    component contains another (pairwise non-containment), the components'
+    intersection equals the source radical (mutual Groebner reduction), and
+    the independent characteristic-set decomposition (``minAssCharE``)
+    returns the same family.
     """
 
     from jacobian.math.commutative_algebra_ops._singular import (
-        run_singular_minimal_primes,
+        run_singular_minimal_primes_verification,
     )
 
-    replay = run_singular_minimal_primes(request.ideal, request.resource_budget)
-    if replay.outcome != "COMPUTED":
-        raise ValueError(
-            "the minimal-prime family could not be re-verified within the "
-            f"enforced backend budget: {replay.outcome}"
-        )
-    if replay.backend_version != backend_version:
-        raise ValueError("minimal-prime replay used a different backend version")
-    if replay.components != components:
+    verdict = run_singular_minimal_primes_verification(
+        request.ideal,
+        components,
+        request.resource_budget,
+    )
+    if verdict == "REFUTED":
         raise ValueError(
             "components must equal the complete minimal-prime family of the "
-            "retained source ideal over QQ"
+            "retained source ideal over QQ: an independent primality, "
+            "minimality, or radical-intersection check failed"
+        )
+    if verdict != "VERIFIED":
+        raise ValueError(
+            "the minimal-prime family could not be independently verified "
+            f"within the enforced backend budget: {verdict}"
         )
 
 
@@ -387,10 +431,33 @@ def _require_computed_minimal_prime_family(
     request: IdealMinimalPrimesRequest,
     components: tuple[RationalPolynomialIdeal, ...],
 ) -> None:
-    """Gate ring, canonical ordering, and uniqueness without any replay."""
+    """Gate ring, presentation envelopes, ordering, and uniqueness."""
 
     if any(component.variables != request.ideal.variables for component in components):
         raise ValueError("every minimal prime must use the source ideal's ordered ring")
+    presentation_bound = len(request.ideal.variables)
+    total_generators = 0
+    total_terms = 0
+    for component in components:
+        if len(component.generators) > presentation_bound:
+            raise ValueError(
+                "every minimal prime must use the canonical "
+                f"{presentation_bound}-generator presentation"
+            )
+        total_generators += len(component.generators)
+        total_terms += sum(
+            len(generator.polynomial.terms) for generator in component.generators
+        )
+    if total_generators > MAX_OUTPUT_GENERATORS:
+        raise ValueError(
+            "the complete family must fit the "
+            f"{MAX_OUTPUT_GENERATORS}-generator exact-result envelope"
+        )
+    if total_terms > MAX_OUTPUT_TERMS:
+        raise ValueError(
+            "the complete family must fit the "
+            f"{MAX_OUTPUT_TERMS}-term exact-result envelope"
+        )
     keys = tuple(component.model_dump_json() for component in components)
     if keys != tuple(sorted(keys)) or len(set(keys)) != len(keys):
         raise ValueError(
@@ -405,11 +472,13 @@ def computed_minimal_primes_result(
 ) -> IdealMinimalPrimesResult:
     """Build the typed computed result from this request's own passes.
 
-    The caller has just completed both bounded producing passes under one
-    operation-level deadline, so this trusted factory skips only the third
-    backend replay while still enforcing the computed shape plus the ring,
-    canonical-ordering, and uniqueness invariants; independently supplied
-    results always validate through the full model validator.
+    The caller has just completed the bounded producing pass plus the
+    independent defining-invariant verification pass under one operation-
+    level deadline, so this trusted factory skips only a repeated backend
+    verification while still enforcing the computed shape plus the ring,
+    presentation-envelope, canonical-ordering, and uniqueness invariants;
+    independently supplied results always validate through the full model
+    validator.
     """
 
     if components is None or backend_version is None:

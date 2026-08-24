@@ -23,7 +23,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "polynomial.ideal.minimal_primes.compute",
         AdmissionDecision.KEEP,
-        "complete source-replayed minimal-prime family over the declared rational coefficient field",
+        "complete independently verified minimal-prime family over the declared rational coefficient field",
     ),
     OperationAdmission(
         "polynomial.ideal.normal_form.compute",

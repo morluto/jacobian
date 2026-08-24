@@ -99,7 +99,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute the complete minimal-prime family of a bounded ideal in "
         "QQ[x_1, ..., x_n] using Singular's minAssGTZ kernel. Components "
         "are prime ideals over QQ, not after extension to an algebraic closure; "
-        "the result is canonically ordered and source-replayed.",
+        "the result is canonically ordered and verified against the retained "
+        "source by independent radical-intersection, minimality, and "
+        "characteristic-set checks.",
         IdealMinimalPrimesRequest,
         IdealMinimalPrimesResult,
         compute_ideal_minimal_primes,

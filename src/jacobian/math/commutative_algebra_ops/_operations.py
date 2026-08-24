@@ -31,6 +31,7 @@ from jacobian.math.commutative_algebra_ops._singular import (
     run_bounded_stdin_python_kernel,
     run_singular_ideal_operation,
     run_singular_minimal_primes,
+    run_singular_minimal_primes_verification,
 )
 from jacobian.math.polynomials._conversions import (
     rational_polynomial_to_sympy,
@@ -422,17 +423,20 @@ def compute_ideal_minimal_primes(
 ) -> IdealMinimalPrimesResult:
     """Compute the complete minimal-prime family over ``QQ``.
 
-    The process adapter canonicalizes and orders each returned reduced standard
-    basis.  Constructing the typed computed result then replays the whole
-    ``minAssGTZE`` calculation from the retained source under ONE
-    operation-level deadline: the replay subprocess receives only the wall
-    allowance remaining after the producing pass, so one request never
-    exceeds its declared wall-time budget.
+    The producing pass runs Singular's ``minAssGTZE`` kernel. A second
+    bounded pass then verifies the family's defining invariants by
+    independent evidence — radical-intersection equality, pairwise
+    non-containment, and agreement with the characteristic-set
+    decomposition — under ONE operation-level deadline: the verifier
+    subprocess receives only the wall allowance remaining after the
+    producing pass, so one request never exceeds its declared wall-time
+    budget.
     """
 
     started = time.monotonic()
     backend = run_singular_minimal_primes(request.ideal, request.resource_budget)
-    if backend.outcome != "COMPUTED":
+    components = backend.components
+    if backend.outcome != "COMPUTED" or components is None:
         return IdealMinimalPrimesResult(
             request=request,
             outcome=backend.outcome,
@@ -451,63 +455,84 @@ def compute_ideal_minimal_primes(
             components=None,
             backend_version=None,
             detail=(
-                "The minimal-prime source replay did not complete within "
-                "the declared backend budget."
+                "The minimal-prime defining-invariant verification did not "
+                "complete within the declared backend budget."
             ),
         )
 
-    replay = run_singular_minimal_primes(
+    verdict = run_singular_minimal_primes_verification(
         request.ideal,
+        components,
         request.resource_budget,
         wall_seconds=remaining,
     )
-    if replay.outcome != "COMPUTED":
-        return IdealMinimalPrimesResult(
-            request=request,
-            outcome=replay.outcome,
-            components=None,
-            backend_version=None,
-            detail=(
-                "The minimal-prime source replay did not complete within the "
-                "declared backend budget."
-            ),
-        )
-    if (
-        replay.backend_version != backend.backend_version
-        or replay.components != backend.components
-    ):
-        return IdealMinimalPrimesResult(
-            request=request,
-            outcome="ERROR",
-            components=None,
-            backend_version=None,
-            detail=(
-                "The minimal-prime source replay did not reproduce the computed family."
-            ),
-        )
-
-    # Both passes above completed this request's exact source replay under
-    # one operation-level deadline. The trusted factory skips only the third
-    # backend pass while still enforcing shape, ring, ordering, and
-    # uniqueness; externally supplied JSON still runs the model validator's
-    # replay.
-    try:
-        return computed_minimal_primes_result(
-            request=request,
-            components=backend.components,
-            backend_version=backend.backend_version,
-        )
-    except ValueError:
+    if verdict == "VERIFIED":
+        # The producing pass and the independent verification pass above
+        # completed this request under one operation-level deadline. The
+        # trusted factory skips only a repeated backend verification while
+        # still enforcing shape, ring, presentation envelopes, ordering, and
+        # uniqueness; externally supplied JSON always runs the model
+        # validator's own independent verification.
+        try:
+            return computed_minimal_primes_result(
+                request=request,
+                components=components,
+                backend_version=backend.backend_version,
+            )
+        except ValueError:
+            return IdealMinimalPrimesResult(
+                request=request,
+                outcome="ERROR",
+                components=None,
+                backend_version=None,
+                detail=(
+                    "The computed minimal-prime family violated its own shape, "
+                    "ring, presentation, ordering, or uniqueness invariant."
+                ),
+            )
+    if verdict == "REFUTED":
         return IdealMinimalPrimesResult(
             request=request,
             outcome="ERROR",
             components=None,
             backend_version=None,
             detail=(
-                "The computed minimal-prime family violated its own shape, "
-                "ring, ordering, or uniqueness invariant."
+                "The computed minimal-prime family failed its independent "
+                "primality, minimality, or radical-intersection verification."
             ),
         )
+    if verdict == "TIMEOUT":
+        return IdealMinimalPrimesResult(
+            request=request,
+            outcome="TIMEOUT",
+            components=None,
+            backend_version=None,
+            detail=(
+                "The minimal-prime defining-invariant verification did not "
+                "complete within the declared backend budget."
+            ),
+        )
+    if verdict == "UNAVAILABLE":
+        return IdealMinimalPrimesResult(
+            request=request,
+            outcome="UNAVAILABLE",
+            components=None,
+            backend_version=None,
+            detail=(
+                "The supported Singular backend became unavailable during "
+                "independent verification."
+            ),
+        )
+    return IdealMinimalPrimesResult(
+        request=request,
+        outcome="ERROR",
+        components=None,
+        backend_version=None,
+        detail=(
+            "The independent minimal-prime verification failed without "
+            "producing a verdict."
+        ),
+    )
 
 
 def compute_ideal_radical_membership(

@@ -13,8 +13,8 @@ from jacobian.math.tree_automata._models import (
     TreeRunResult,
 )
 from jacobian.math.tree_automata.operations import (
-    _reachable_state_profile,
     accepted_tree_count,
+    reachable_state_profile,
     run_tree_automaton,
     tree_state_chart,
 )
@@ -62,7 +62,7 @@ def compute_tree_automaton_reachability(
 ) -> TreeAutomatonReachabilityResult:
     """Compute the exact reachable-state profile with minimum tree witnesses."""
 
-    profile = _reachable_state_profile(request.automaton)
+    profile = reachable_state_profile(request.automaton)
     return TreeAutomatonReachabilityResult(
         **request.model_dump(),
         reachable_states=profile.reachable_states,

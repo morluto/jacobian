@@ -5,6 +5,10 @@ from math import comb
 import pytest
 from pydantic import ValidationError
 
+from jacobian.math.tree_automata import (
+    ReachableStateProfile,
+    reachable_state_profile,
+)
 from jacobian.math.tree_automata._models import (
     AcceptedTreeCountRequest,
     TreeAutomatonReachabilityRequest,
@@ -220,6 +224,27 @@ class TestAcceptedTreeCount:
 
 
 class TestReachableStates:
+    def test_native_reachable_state_profile_returns_canonical_value(self):
+        automaton = _simple_automaton()
+
+        profile = reachable_state_profile(automaton)
+
+        assert isinstance(profile, ReachableStateProfile)
+        assert profile.automaton == automaton
+        assert profile.reachable_states == (0,)
+        assert profile.unreachable_states == (1,)
+        for state, tree in profile.witnesses:
+            assert run_tree_automaton(automaton, tree) == {state}
+
+        result = compute_tree_automaton_reachability(
+            TreeAutomatonReachabilityRequest(automaton=automaton)
+        )
+        assert result.reachable_states == profile.reachable_states
+        assert result.unreachable_states == profile.unreachable_states
+        assert tuple(witness.tree for witness in result.witnesses) == tuple(
+            tree for _, tree in profile.witnesses
+        )
+
     def test_no_nullary_seed_has_an_empty_reachable_profile(self):
         automaton = BottomUpTreeAutomaton(
             state_count=2,
@@ -360,7 +385,7 @@ class TestValidation:
         assert result.reachable_states == tuple(range(64))
         assert len(result.witnesses) == 64
 
-    def test_reachability_rejects_child_slot_scans_beyond_work_bound(self):
+    def test_nullary_free_child_slot_scans_admit_immediately_stable_profile(self):
         automaton = BottomUpTreeAutomaton(
             state_count=64,
             arity=(16,),
@@ -373,6 +398,40 @@ class TestValidation:
                     target_state=index % 64,
                 )
                 for index in range(4096)
+            ),
+            final_states=(),
+        )
+
+        result = compute_tree_automaton_reachability(
+            TreeAutomatonReachabilityRequest(automaton=automaton)
+        )
+        profile = reachable_state_profile(automaton)
+
+        assert result.reachable_states == ()
+        assert result.unreachable_states == tuple(range(64))
+        assert result.witnesses == ()
+        assert isinstance(profile, ReachableStateProfile)
+        assert profile.automaton == automaton
+        assert profile.reachable_states == ()
+        assert profile.unreachable_states == tuple(range(64))
+        assert profile.witnesses == ()
+
+    def test_reachability_rejects_child_slot_scans_beyond_work_bound(self):
+        automaton = BottomUpTreeAutomaton(
+            state_count=64,
+            arity=(16, 0),
+            transitions=(
+                TreeAutomatonTransition(symbol=1, child_states=(), target_state=0),
+                *tuple(
+                    TreeAutomatonTransition(
+                        symbol=0,
+                        child_states=tuple(
+                            (index // 64**position) % 64 for position in range(16)
+                        ),
+                        target_state=index % 64,
+                    )
+                    for index in range(4095)
+                ),
             ),
             final_states=(),
         )

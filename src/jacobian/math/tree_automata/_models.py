@@ -113,9 +113,9 @@ class TreeAutomatonReachabilityRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_witness_profile(self) -> Self:
-        from jacobian.math.tree_automata.operations import _reachable_state_profile
+        from jacobian.math.tree_automata.operations import reachable_state_profile
 
-        _reachable_state_profile(self.automaton)
+        reachable_state_profile(self.automaton)
         return self
 
 
@@ -129,9 +129,9 @@ class TreeAutomatonReachabilityResult(StrictModel):
 
     @model_validator(mode="after")
     def require_source_bound_profile(self) -> Self:
-        from jacobian.math.tree_automata.operations import _reachable_state_profile
+        from jacobian.math.tree_automata.operations import reachable_state_profile
 
-        expected = _reachable_state_profile(self.automaton)
+        expected = reachable_state_profile(self.automaton)
         expected_witnesses = tuple(
             ReachableStateWitness(
                 state=state,

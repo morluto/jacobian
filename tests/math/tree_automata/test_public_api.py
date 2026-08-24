@@ -10,8 +10,10 @@ def test_exact_public_api_symbols() -> None:
     expected = (
         "BottomUpTreeAutomaton",
         "RankedTree",
+        "ReachableStateProfile",
         "TreeAutomatonTransition",
         "accepted_tree_count",
+        "reachable_state_profile",
         "run_tree_automaton",
     )
     assert tuple(tree_automata.__all__) == expected

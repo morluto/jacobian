@@ -20,14 +20,16 @@ from jacobian.math.tree_automata.values import (
 )
 
 __all__ = [
+    "ReachableStateProfile",
     "accepted_tree_count",
+    "reachable_state_profile",
     "run_tree_automaton",
     "tree_state_chart",
 ]
 
 
 @dataclass(frozen=True)
-class _ReachableStateProfile:
+class ReachableStateProfile:
     """Exact least-fixed-point profile for one bottom-up tree automaton."""
 
     automaton: BottomUpTreeAutomaton
@@ -42,9 +44,9 @@ class _WitnessChoice:
     transition: TreeAutomatonTransition
 
 
-def _reachable_state_profile(
+def reachable_state_profile(
     automaton: BottomUpTreeAutomaton,
-) -> _ReachableStateProfile:
+) -> ReachableStateProfile:
     """Return each reachable state and its canonical minimum-node witness tree.
 
     This is least-fixed-point reachability over transition hyperedges: a row
@@ -93,7 +95,7 @@ def _reachable_state_profile(
         if ranked_tree_node_count(tree) > MAX_REACHABILITY_WITNESS_NODES:
             raise ValueError("reachable-state witness exceeds the node bound")
 
-    return _ReachableStateProfile(
+    return ReachableStateProfile(
         automaton=automaton,
         reachable_states=reachable_states,
         unreachable_states=tuple(
@@ -108,6 +110,9 @@ def _reachability_execution_work_bound(automaton: BottomUpTreeAutomaton) -> int:
 
     Each profile sorts transition rows, makes at most ``|Q| + 1`` simultaneous
     scans, and materializes then recounts at most the admitted witness nodes.
+    A scan round repeats only when the previous round defined or improved a
+    choice, so an automaton without nullary transitions is immediately stable
+    and pays exactly one scan: no row can fire before any state has a witness.
     Every row scan visits its child-state tuple independently to construct the
     lookup tuple, test that all children are known, add their node counts, and
     compare an equal-size candidate's canonical transition key.
@@ -121,7 +126,12 @@ def _reachability_execution_work_bound(automaton: BottomUpTreeAutomaton) -> int:
     )
     sort_rounds = max(1, (transition_count - 1).bit_length())
     sort_work = transition_count * sort_rounds * (4 + maximum_arity)
-    scan_work = (automaton.state_count + 1) * (
+    scan_rounds = (
+        automaton.state_count + 1
+        if any(not row.child_states for row in automaton.transitions)
+        else 1
+    )
+    scan_work = scan_rounds * (
         2 * automaton.state_count
         + sum(6 + 4 * len(row.child_states) for row in automaton.transitions)
     )

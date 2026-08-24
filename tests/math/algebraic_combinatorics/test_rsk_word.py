@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import itertools
+import json
 from collections import Counter
 
 import pytest
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from jacobian.catalog.admission import AdmissionDecision
 from jacobian.math import algebraic_combinatorics
@@ -36,6 +37,7 @@ from jacobian.math.symmetric_functions import (
 )
 from jacobian.math.symmetric_functions._models import PartitionRequest
 from jacobian.math.words import FiniteWord
+from jacobian.math.words.values import Symbol, _require_unicode_scalar_string
 
 
 def _word(
@@ -274,6 +276,65 @@ def test_inverse_size_bound_is_checked_before_reverse_insertion() -> None:
             recording_tableau=StandardYoungTableau(rows=(tuple(range(1, 52)),)),
             shape=IntegerPartition(parts=(51,)),
         )
+
+
+@pytest.mark.parametrize(
+    "symbol",
+    [
+        "\ud800",
+        "\udfff",
+        "a\ud800b",
+        "\U0001d400\ud800",
+    ],
+)
+def test_lone_surrogate_symbols_are_rejected_at_request_admission(
+    symbol: str,
+) -> None:
+    with pytest.raises(ValidationError):
+        RSKWordRequest.model_validate(
+            {"word": {"alphabet": [symbol], "letters": [symbol]}}
+        )
+    with pytest.raises(ValidationError):
+        RSKInverseWordRequest.model_validate(
+            {
+                "pair": {
+                    "alphabet": [symbol],
+                    "insertion_tableau": {"rows": [[1]]},
+                    "recording_tableau": {"rows": [[1]]},
+                    "shape": {"parts": [1]},
+                }
+            }
+        )
+
+
+def test_surrogate_json_decode_reaches_typed_request_rejection() -> None:
+    raw_word = json.loads('{"alphabet": ["\\ud800"], "letters": ["\\ud800"]}')
+    with pytest.raises(ValidationError):
+        RSKWordRequest(word=FiniteWord.model_validate(raw_word))
+
+    raw_pair = json.loads(
+        '{"alphabet": ["\\ud800"], "insertion_tableau": {"rows": [[1]]}, '
+        '"recording_tableau": {"rows": [[1]]}, "shape": {"parts": [1]}}'
+    )
+    with pytest.raises(ValidationError):
+        RSKInverseWordRequest(pair=RSKTableauPair.model_validate(raw_pair))
+
+
+def test_unicode_scalar_validator_rejects_surrogates_and_admits_astral_symbols() -> None:
+    for symbol in ("\ud800", "\udfff", "a\ud800b"):
+        with pytest.raises(ValueError, match="Unicode scalar values"):
+            _require_unicode_scalar_string(symbol)
+
+    assert _require_unicode_scalar_string("\U0001d400") == "\U0001d400"
+    assert TypeAdapter(Symbol).validate_python("\U0001d401\U0001d402")
+
+
+def test_astral_scalar_symbols_round_trip_through_both_directions() -> None:
+    alphabet = ("\U0001d400", "\U0001d401", "\U0001d402")
+    word = FiniteWord(alphabet=alphabet, letters=(alphabet[2], alphabet[0]))
+    pair = row_insertion_rsk(word)
+    assert pair.alphabet == alphabet
+    assert inverse_row_insertion_rsk(pair) == word
 
 
 def test_rsk_request_schema_publishes_convention_and_work_envelope() -> None:

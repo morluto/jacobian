@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pydantic import Field, model_validator
+from pydantic import AfterValidator, Field, model_validator
 
 from jacobian._models import StrictModel
 
@@ -14,7 +14,18 @@ MAX_SYMBOL_LENGTH = 64
 MAX_MORPHISM_IMAGE_LENGTH = 10_000
 MAX_MORPHISM_OUTPUT_LENGTH = MAX_WORD_LENGTH
 
-Symbol = Annotated[str, Field(min_length=1, max_length=MAX_SYMBOL_LENGTH)]
+
+def _require_unicode_scalar_string(value: str) -> str:
+    if any(0xD800 <= ord(character) <= 0xDFFF for character in value):
+        raise ValueError("symbol must contain only Unicode scalar values")
+    return value
+
+
+Symbol = Annotated[
+    str,
+    Field(min_length=1, max_length=MAX_SYMBOL_LENGTH),
+    AfterValidator(_require_unicode_scalar_string),
+]
 
 
 class FiniteWord(StrictModel):

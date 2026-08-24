@@ -171,6 +171,14 @@ def test_value_models_reject_ambiguous_or_unbounded_inputs() -> None:
         )
 
 
+@pytest.mark.parametrize("symbol", ["\ud800", "\udfff", "a\ud800b"])
+def test_symbols_admit_only_unicode_scalar_strings(symbol: str) -> None:
+    with pytest.raises(ValidationError):
+        FiniteWord(alphabet=(symbol,), letters=())
+    with pytest.raises(ValidationError):
+        WordMorphism(source_alphabet=("a",), target_alphabet=(symbol,), images=(("a",),))
+
+
 def test_random_words_match_independent_factor_and_period_oracles() -> None:
     random_source = random.Random(1966)
     for length in range(9):

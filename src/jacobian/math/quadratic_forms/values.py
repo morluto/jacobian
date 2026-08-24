@@ -128,8 +128,7 @@ class RationalCoordinateVector(StrictModel):
         min_length=1,
         max_length=MAX_QUADRATIC_FORM_DIMENSION,
         description=(
-            "Ordered labels of the rational coordinate axis; labels must "
-            "be unique."
+            "Ordered labels of the rational coordinate axis; labels must be unique."
         ),
     )
     coordinates: tuple[CanonicalRational, ...] = Field(

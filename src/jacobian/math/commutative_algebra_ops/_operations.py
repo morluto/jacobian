@@ -524,6 +524,17 @@ def compute_ideal_minimal_primes(
                 "independent verification."
             ),
         )
+    if verdict == "CANCELLED":
+        return IdealMinimalPrimesResult(
+            request=request,
+            outcome="CANCELLED",
+            components=None,
+            backend_version=None,
+            detail=(
+                "The minimal-prime defining-invariant verification was "
+                "cancelled before producing a verdict."
+            ),
+        )
     return IdealMinimalPrimesResult(
         request=request,
         outcome="ERROR",

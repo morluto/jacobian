@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Literal
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math._singular import (
     SINGULAR_ARGUMENTS,
     SingularProtocolReader,
@@ -52,10 +53,10 @@ SingularOutcome = Literal[
     "ERROR",
 ]
 SaturationVerificationVerdict = Literal[
-    "VERIFIED", "REFUTED", "UNAVAILABLE", "TIMEOUT", "ERROR"
+    "VERIFIED", "REFUTED", "UNAVAILABLE", "TIMEOUT", "CANCELLED", "ERROR"
 ]
 MinimalPrimesVerificationVerdict = Literal[
-    "VERIFIED", "REFUTED", "UNAVAILABLE", "TIMEOUT", "ERROR"
+    "VERIFIED", "REFUTED", "UNAVAILABLE", "TIMEOUT", "CANCELLED", "ERROR"
 ]
 
 
@@ -182,7 +183,10 @@ def _parse_coefficient(text: str) -> CanonicalRational:
             "Singular coefficient exceeds the canonical exact-result digit limit"
         )
     return CanonicalRational.from_fraction(
-        Fraction(int(numerator_text), int(denominator_text or "1"))
+        Fraction(
+            parse_canonical_integer(numerator_text),
+            parse_canonical_integer(denominator_text or "1"),
+        )
     )
 
 
@@ -564,7 +568,7 @@ def run_singular_minimal_primes(
         )
     if completed.cancelled:
         return SingularMinimalPrimesResult(
-            outcome="ERROR",
+            outcome="CANCELLED",
             detail="Singular execution was cancelled before producing a result.",
         )
     if completed.stdout_exceeded or completed.stderr_exceeded:
@@ -798,9 +802,9 @@ def run_singular_minimal_primes_verification(
     """Decide the minimal-prime defining invariants in one bounded process.
 
     Returns ``"VERIFIED"``, ``"REFUTED"``, or an execution outcome
-    (``UNAVAILABLE``/``TIMEOUT``/``ERROR``) when the bounded backend could
-    not decide. ``wall_seconds`` charges this call to a caller-owned
-    operation deadline exactly like the producing pass.
+    (``UNAVAILABLE``/``TIMEOUT``/``CANCELLED``/``ERROR``) when the bounded
+    backend could not decide. ``wall_seconds`` charges this call to a
+    caller-owned operation deadline exactly like the producing pass.
     """
 
     allowance = (
@@ -838,9 +842,10 @@ def run_singular_minimal_primes_verification(
         return "UNAVAILABLE"
     if completed.timed_out:
         return "TIMEOUT"
+    if completed.cancelled:
+        return "CANCELLED"
     if (
-        completed.cancelled
-        or completed.returncode != 0
+        completed.returncode != 0
         or completed.stderr
         or completed.stdout_exceeded
         or completed.stderr_exceeded
@@ -931,9 +936,10 @@ def run_singular_saturation_verification(
     """Decide the saturation's defining equality in a bounded subprocess.
 
     Returns ``"VERIFIED"``, ``"REFUTED"``, or an execution outcome
-    (``UNAVAILABLE``/``TIMEOUT``/``ERROR``) when the bounded backend could
-    not decide. Running inside the supervised process keeps the replay
-    under the same wall-time and memory limits as the operation itself.
+    (``UNAVAILABLE``/``TIMEOUT``/``CANCELLED``/``ERROR``) when the bounded
+    backend could not decide. Running inside the supervised process keeps
+    the replay under the same wall-time and memory limits as the operation
+    itself.
     """
     resolved = shutil.which("Singular")
     if resolved is None:
@@ -963,9 +969,10 @@ def run_singular_saturation_verification(
         return "UNAVAILABLE"
     if completed.timed_out:
         return "TIMEOUT"
+    if completed.cancelled:
+        return "CANCELLED"
     if (
-        completed.cancelled
-        or completed.returncode != 0
+        completed.returncode != 0
         or completed.stderr
         or completed.stdout_exceeded
         or completed.stderr_exceeded

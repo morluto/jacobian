@@ -7,16 +7,19 @@ import shutil
 import sys
 import tempfile
 import threading
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.commutative_algebra_ops._models import IdealComputationBudget
 from jacobian.math.commutative_algebra_ops._singular import (
     run_singular_ideal_operation,
     run_singular_minimal_primes,
     run_singular_minimal_primes_verification,
+    run_singular_saturation_verification,
 )
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
@@ -122,6 +125,68 @@ def test_cancellation_is_preserved_as_its_own_outcome(
 
     assert result.outcome == "CANCELLED"
     assert result.ideal is None
+
+
+def test_minimal_prime_producing_cancellation_keeps_its_typed_outcome(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = _executable(tmp_path, "import time; time.sleep(30)")
+    _select_executable(monkeypatch, executable)
+    cancellation = threading.Event()
+    cancellation.set()
+
+    with bounded_process_cancellation(cancellation):
+        result = run_singular_minimal_primes(_ideal(), IdealComputationBudget())
+
+    assert result.outcome == "CANCELLED"
+    assert result.components is None
+    assert result.detail == (
+        "Singular execution was cancelled before producing a result."
+    )
+
+
+def test_minimal_prime_verification_cancellation_is_a_typed_verdict(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The independent verification pass preserves cancellation too."""
+
+    executable = _executable(tmp_path, "import time; time.sleep(30)")
+    _select_executable(monkeypatch, executable)
+    cancellation = threading.Event()
+    cancellation.set()
+
+    with bounded_process_cancellation(cancellation):
+        verdict = run_singular_minimal_primes_verification(
+            _ideal(), (_ideal(),), IdealComputationBudget()
+        )
+
+    assert verdict == "CANCELLED"
+
+
+def test_saturation_verification_cancellation_is_a_typed_verdict(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = _executable(tmp_path, "import time; time.sleep(30)")
+    _select_executable(monkeypatch, executable)
+    variables = ("x", "y")
+    source = _monomial_ideal(variables, (1, 1))
+    saturator = RationalPolynomialIdeal(
+        variables=variables,
+        generators=(_single_term_poly(variables, (1, 0)),),
+    )
+    claimed = _monomial_ideal(variables, (1, 0))
+    cancellation = threading.Event()
+    cancellation.set()
+
+    with bounded_process_cancellation(cancellation):
+        verdict = run_singular_saturation_verification(
+            source, saturator, claimed, IdealComputationBudget()
+        )
+
+    assert verdict == "CANCELLED"
 
 
 def test_missing_backend_is_a_typed_unavailable_outcome(
@@ -691,6 +756,42 @@ def test_exact_result_limit_is_not_reported_as_invalid_backend_encoding(
     assert (
         result.detail == "The exact Singular ideal exceeds the declared result bound."
     )
+
+
+def test_large_canonical_coefficients_decode_without_the_digit_cap(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A canonical coefficient beyond Python's 4300-digit int() cap decodes.
+
+    MAX_CANONICAL_RATIONAL_DIGITS admits 32,768-digit components, so a
+    minAssGTZE result carrying a 5,001-digit numerator must be decoded by
+    the chunked canonical parser instead of ``int(text)``.
+    """
+
+    numerator = format_canonical_integer(10**5000)
+    assert len(numerator) > 4300
+    records = (
+        "JACOBIAN_SINGULAR_IDEAL_V1",
+        "44000",
+        "1",
+        "COMPONENT",
+        "1",
+        "GENERATOR",
+        f"{numerator}/3|0",
+        "END_GENERATOR",
+        "END_COMPONENT",
+        "END",
+    )
+    executable = _executable(tmp_path, f"print({chr(10).join(records)!r})")
+    _select_executable(monkeypatch, executable)
+
+    result = run_singular_minimal_primes(_ideal(), IdealComputationBudget())
+
+    assert result.outcome == "COMPUTED"
+    assert result.components is not None
+    coefficient = result.components[0].generators[0].polynomial.terms[0].coefficient
+    assert coefficient == CanonicalRational.from_fraction(Fraction(10**5000, 3))
 
 
 def test_stderr_on_zero_exit_fails_closed(

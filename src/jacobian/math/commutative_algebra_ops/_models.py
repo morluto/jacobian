@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Any, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -21,6 +22,8 @@ MAX_COEFFICIENT_DIGITS = 128
 MAX_OUTPUT_GENERATORS = 64
 MAX_OUTPUT_TERMS = 1024
 DEFAULT_WALL_SECONDS = 10.0
+
+_RATIONAL_ROOT_PROBES = (0, 1, -1)
 
 
 class IdealComputationBudget(StrictModel):
@@ -68,6 +71,82 @@ def _require_ideal_budget(ideal: RationalPolynomialIdeal, *, label: str) -> None
             raise ValueError(
                 f"{label} generator exceeds total degree {MAX_INPUT_EXPONENT}"
             )
+
+
+def _single_variable_slot(generator: RationalPolynomial) -> int | None:
+    """Return the only variable slot a generator occupies, else ``None``."""
+
+    occupied = {
+        index
+        for term in generator.polynomial.terms
+        for index, exponent in enumerate(term.exponents)
+        if exponent
+    }
+    return occupied.pop() if len(occupied) == 1 else None
+
+
+def _certified_rational_root_count(
+    generator: RationalPolynomial,
+    slot: int,
+) -> int:
+    """Count fixed probe points where the generator exactly vanishes."""
+
+    terms = [
+        (Fraction(*term.coefficient.as_integer_ratio()), term.exponents[slot])
+        for term in generator.polynomial.terms
+    ]
+    return sum(
+        1
+        for probe in _RATIONAL_ROOT_PROBES
+        if sum(coefficient * probe**exponent for coefficient, exponent in terms) == 0
+    )
+
+
+def _require_provable_family_fit(ideal: RationalPolynomialIdeal) -> None:
+    """Reject sources whose complete family provably overflows the envelope.
+
+    Certificate: suppose ``k`` generators each live in one distinct variable
+    and each vanishes at two distinct certified rational points (exact
+    evaluation). Every prime above the source contains an irreducible factor
+    of each such generator, and a prime inside one certified point's
+    evaluation kernel forces those factors through rational roots; an
+    irreducible univariate over ``QQ`` with a rational root is linear, so
+    distinct point choices give distinct minimal primes — at least ``2^k``
+    of them. Each such minimal prime contains ``k`` independent linear
+    forms, hence has height at least ``k`` and, by Krull's height theorem,
+    needs at least ``k`` generators. The complete family therefore carries
+    at least ``k * 2^k`` aggregate generators: when that exceeds the
+    exact-result envelope every admitted execution ends in typed
+    LIMIT_EXCEEDED, so the source is rejected here before any backend
+    launch. A source containing a nonzero constant is the unit ideal with an
+    empty family and always stays admitted.
+    """
+
+    unit_witness = any(
+        len(generator.polynomial.terms) == 1
+        and not any(generator.polynomial.terms[0].exponents)
+        and generator.polynomial.terms[0].coefficient.num != "0"
+        for generator in ideal.generators
+    )
+    if unit_witness:
+        return
+    certified: set[int] = set()
+    for generator in ideal.generators:
+        slot = _single_variable_slot(generator)
+        if slot is None or slot in certified:
+            continue
+        if _certified_rational_root_count(generator, slot) >= 2:
+            certified.add(slot)
+    count = len(certified)
+    if count * 2**count > MAX_OUTPUT_GENERATORS:
+        raise ValueError(
+            "the source provably forces a complete family above the "
+            f"{MAX_OUTPUT_GENERATORS}-generator exact-result envelope: "
+            f"{count} single-variable generators each certified against two "
+            f"distinct rational roots yield at least 2^{count} minimal "
+            f"primes with at least {count} generators apiece "
+            f"({count * 2**count} aggregate generators)"
+        )
 
 
 class IdealRadicalRequest(StrictModel):
@@ -298,8 +377,13 @@ class IdealMinimalPrimesRequest(StrictModel):
             "An ideal in at most 8 variables with at most 32 generators and "
             "256 aggregate terms; generator total degree is at most 20 and "
             "coefficient components are at most 128 digits. A source whose "
-            "complete family exceeds the aggregate 64-generator or 1024-term "
-            "exact-result envelope returns a typed LIMIT_EXCEEDED outcome."
+            "complete family provably exceeds the aggregate 64-generator "
+            "exact-result envelope — k certified two-rational-root "
+            "single-variable generators force at least 2^k minimal primes "
+            "with k generators apiece — is rejected here before the backend "
+            "launches; otherwise a family exceeding the aggregate "
+            "64-generator or 1024-term envelope returns a typed "
+            "LIMIT_EXCEEDED outcome."
         )
     )
     resource_budget: IdealComputationBudget = Field(
@@ -309,6 +393,7 @@ class IdealMinimalPrimesRequest(StrictModel):
     @model_validator(mode="after")
     def require_backend_domain(self) -> Self:
         _require_ideal_budget(self.ideal, label="ideal")
+        _require_provable_family_fit(self.ideal)
         return self
 
 

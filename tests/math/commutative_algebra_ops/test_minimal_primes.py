@@ -496,6 +496,7 @@ def test_exhausted_deadline_is_a_typed_timeout_without_a_verification_launch(
         ("REFUTED", "ERROR"),
         ("TIMEOUT", "TIMEOUT"),
         ("UNAVAILABLE", "UNAVAILABLE"),
+        ("CANCELLED", "CANCELLED"),
         ("ERROR", "ERROR"),
     ],
 )
@@ -523,40 +524,101 @@ def test_verification_verdicts_map_to_typed_outcomes(
     assert result.detail is not None
 
 
-def test_bezout_component_count_boundary_is_admitted_at_the_envelope() -> None:
-    variables = tuple(f"x{index}" for index in range(1, 7))
-    # A source whose Bezout degree product (2^6 = 64) meets the generator
-    # envelope is admitted; admission bounds the input, not the worst case.
-    request = IdealMinimalPrimesRequest(ideal=_product_ideal(variables, (2,) * 6))
+def test_producer_cancellation_is_a_typed_outcome_without_a_verification_launch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A cancelled producing pass keeps its CANCELLED verdict end to end."""
 
-    assert len(request.ideal.generators) == 6
+    monkeypatch.setattr(
+        _PRODUCER_TARGET,
+        lambda source, budget: SingularMinimalPrimesResult(
+            outcome="CANCELLED",
+            detail="Singular execution was cancelled before producing a result.",
+        ),
+    )
+    _forbid_verifier(monkeypatch)
+
+    result = compute_ideal_minimal_primes(_axes_request())
+
+    assert result.outcome == "CANCELLED"
+    assert result.components is None
+    assert result.backend_version is None
+    assert result.detail is not None
+
+
+def test_certified_families_above_the_envelope_are_rejected_before_launch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The rational-root certificate rejects guaranteed overflow preflight.
+
+    For <x1^2 - x1, ..., xk^2 - xk> each generator is single-variable and
+    vanishes at two distinct certified rationals (0 and 1), so the source
+    provably has at least 2^k minimal primes with at least k generators
+    apiece. At k = 5 that is 160 aggregate generators against a fixed
+    64-generator exact-result envelope: every execution could only end in
+    typed LIMIT_EXCEEDED, so admission rejects the source before Singular
+    launches instead of spending backend work on a guaranteed overflow.
+    """
+
+    def forbidden(*args: object, **kwargs: object) -> object:
+        raise AssertionError("the backend must not launch for a rejected source")
+
+    monkeypatch.setattr(_PRODUCER_TARGET, forbidden)
+    _forbid_verifier(monkeypatch)
+
+    for variable_count in (5, 6, 7):
+        variables = tuple(f"x{index}" for index in range(1, variable_count + 1))
+        with pytest.raises(ValidationError, match="provably forces"):
+            compute_ideal_minimal_primes(
+                IdealMinimalPrimesRequest(
+                    ideal=_product_ideal(variables, (2,) * variable_count)
+                )
+            )
 
 
 def test_bezout_boundary_family_is_admitted() -> None:
     variables = tuple(f"x{index}" for index in range(1, 5))
-    # The Bezout degree product is not an input constraint: this source is
-    # admitted like any other within the aggregate input envelopes.
+    # Four certified generators give 4 * 2^4 = 64 aggregate generators:
+    # exactly the envelope boundary, so the family may still fit and the
+    # source stays admitted.
     request = IdealMinimalPrimesRequest(ideal=_product_ideal(variables, (2,) * 4))
 
     assert len(request.ideal.generators) == 4
 
 
-def test_bezout_worst_case_above_the_envelope_still_admits_the_source() -> None:
-    """The Bezout degree product bounds families only across ideals.
+def test_negative_root_certificate_rejects_and_admits_at_the_boundary() -> None:
+    """Certification is by exact evaluation, not one fixed root pattern.
 
-    For <x1^2 - x1, ..., x7^2 - x7> the degree product 2^7 = 128 exceeds
-    the 64-generator exact-result envelope, but that product is only an
-    upper bound across all ideals with these generator degrees; it does
-    not establish that this source's own family cannot fit. Admission
-    retains the source and the decoded result answers under the aggregate
-    generator and term envelopes, with typed LIMIT_EXCEEDED only when the
-    backend output genuinely overflows.
+    Each generator x_i^2 - 1 vanishes at the distinct probes -1 and 1 and
+    never at 0: five certified generators force 5 * 2^5 = 160 aggregate
+    generators and are rejected, while four sit exactly at the envelope
+    boundary and stay admitted.
     """
 
-    variables = tuple(f"x{index}" for index in range(1, 8))
-    request = IdealMinimalPrimesRequest(ideal=_product_ideal(variables, (2,) * 7))
+    def unit_offset_ideal(count: int) -> RationalPolynomialIdeal:
+        variables = tuple(f"x{index}" for index in range(1, count + 1))
+        return _ideal(
+            variables,
+            *(
+                _poly(
+                    variables,
+                    (
+                        1,
+                        1,
+                        tuple(2 if slot == index else 0 for slot in range(count)),
+                    ),
+                    (-1, 1, (0,) * count),
+                )
+                for index in range(count)
+            ),
+        )
 
-    assert len(request.ideal.generators) == 7
+    with pytest.raises(ValidationError, match="provably forces"):
+        IdealMinimalPrimesRequest(ideal=unit_offset_ideal(5))
+
+    request = IdealMinimalPrimesRequest(ideal=unit_offset_ideal(4))
+
+    assert len(request.ideal.generators) == 4
 
 
 def test_pure_power_sources_admit_large_degree_products() -> None:
@@ -779,10 +841,27 @@ def test_prime_wider_than_the_ring_dimension_is_computed() -> None:
     reason="Singular 4.4 backend is not installed",
 )
 def test_family_overflowing_the_generator_envelope_is_a_typed_result_limit() -> None:
-    """An admitted family whose decoded size overflows the aggregate bound."""
+    """An admitted family whose decoded size overflows the aggregate bound.
 
-    variables = tuple(f"x{index}" for index in range(1, 7))
-    request = IdealMinimalPrimesRequest(ideal=_product_ideal(variables, (2,) * 6))
+    Four idempotent generators sit at the certificate boundary (4 * 2^4 =
+    64), and x5^2 - 2 certifies no rational root among the fixed probes,
+    so the source stays admitted; its true family of 32 components with 5
+    generators apiece then overflows the envelope and answers as a typed
+    result limit instead of a backend failure.
+    """
+
+    variables = tuple(f"x{index}" for index in range(1, 6))
+    request = IdealMinimalPrimesRequest(
+        ideal=_ideal(
+            variables,
+            *_product_ideal(variables, (2,) * 4).generators,
+            _poly(
+                variables,
+                (1, 1, (0, 0, 0, 0, 2)),
+                (-2, 1, (0, 0, 0, 0, 0)),
+            ),
+        )
+    )
 
     result = compute_ideal_minimal_primes(request)
 

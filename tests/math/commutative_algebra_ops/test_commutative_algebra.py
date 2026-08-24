@@ -176,6 +176,17 @@ def test_singular_protocol_accepts_coefficients_beyond_input_budget() -> None:
     assert _singular._parse_coefficient(coefficient).num == coefficient
 
 
+def test_singular_protocol_decodes_coefficients_beyond_the_python_digit_cap() -> None:
+    """Chunked canonical parsing survives CPython's 4300-digit int() limit."""
+
+    coefficient = "1" + "0" * 5_000
+
+    assert _singular._parse_coefficient(coefficient).num == coefficient
+    assert _singular._parse_coefficient(f"-{coefficient}/3").as_fraction() == (
+        Fraction(-(10**5000), 3)
+    )
+
+
 def test_singular_protocol_classifies_unrepresentable_coefficients_as_a_limit() -> None:
     coefficient = "1" + "0" * 32_768
 

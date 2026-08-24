@@ -11,6 +11,8 @@ from jacobian.math.commutative_algebra_ops._models import (
     EliminationIdealResult,
     GroebnerBasisRequest,
     GroebnerBasisResult,
+    IdealMinimalPrimesRequest,
+    IdealMinimalPrimesResult,
     IdealNormalFormRequest,
     IdealNormalFormResult,
     IdealQuotientRequest,
@@ -25,6 +27,7 @@ from jacobian.math.commutative_algebra_ops._models import (
 from jacobian.math.commutative_algebra_ops._operations import (
     compute_elimination_ideal,
     compute_groebner_basis,
+    compute_ideal_minimal_primes,
     compute_ideal_normal_form,
     compute_ideal_quotient,
     compute_ideal_radical,
@@ -90,6 +93,33 @@ def _op[RequestT: StrictModel, ResultT: StrictModel](
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    _op(
+        "polynomial.ideal.minimal_primes.compute",
+        "Compute minimal primes of a rational polynomial ideal",
+        "Compute the complete minimal-prime family of a bounded ideal in "
+        "QQ[x_1, ..., x_n] using Singular's minAssGTZ kernel. Components "
+        "are prime ideals over QQ, not after extension to an algebraic closure; "
+        "the result is canonically ordered and source-replayed.",
+        IdealMinimalPrimesRequest,
+        IdealMinimalPrimesResult,
+        compute_ideal_minimal_primes,
+        "commutative-algebra",
+        "minimal-primes",
+        "irreducible-components",
+        "exact",
+        examples=(
+            example(
+                "coordinate_axes",
+                "Compute the two QQ-minimal primes of <x*y> in Q[x,y].",
+                {
+                    "ideal": _ideal(
+                        ("x", "y"),
+                        ((1, 1, (1, 1)),),
+                    ),
+                },
+            ),
+        ),
+    ),
     _op(
         "polynomial.ideal.radical.compute",
         "Compute the radical of an ideal",

@@ -125,6 +125,7 @@ def test_catalog_contains_only_audited_operations() -> None:
         "polynomial.ideal.quotient.compute",
         "polynomial.ideal.saturation.compute",
         "polynomial.ideal.groebner_basis.compute",
+        "polynomial.ideal.minimal_primes.compute",
         "polynomial.ideal.normal_form.compute",
         "polynomial.ideal.elimination.compute",
     }

@@ -12,6 +12,8 @@ from jacobian.math.commutative_algebra_ops._models import (
     EliminationIdealResult,
     GroebnerBasisRequest,
     GroebnerBasisResult,
+    IdealMinimalPrimesRequest,
+    IdealMinimalPrimesResult,
     IdealNormalFormRequest,
     IdealNormalFormResult,
     IdealQuotientRequest,
@@ -26,6 +28,7 @@ from jacobian.math.commutative_algebra_ops._models import (
 from jacobian.math.commutative_algebra_ops._singular import (
     run_bounded_stdin_python_kernel,
     run_singular_ideal_operation,
+    run_singular_minimal_primes,
 )
 from jacobian.math.polynomials._conversions import (
     rational_polynomial_to_sympy,
@@ -412,6 +415,64 @@ def compute_ideal_radical(request: IdealRadicalRequest) -> IdealRadicalResult:
     )
 
 
+def compute_ideal_minimal_primes(
+    request: IdealMinimalPrimesRequest,
+) -> IdealMinimalPrimesResult:
+    """Compute the complete minimal-prime family over ``QQ``.
+
+    The process adapter canonicalizes and orders each returned reduced standard
+    basis.  Constructing the typed computed result then replays the whole
+    ``minAssGTZE`` calculation from the retained source under the same bound.
+    """
+
+    backend = run_singular_minimal_primes(request.ideal, request.resource_budget)
+    if backend.outcome != "COMPUTED":
+        return IdealMinimalPrimesResult(
+            request=request,
+            outcome=backend.outcome,
+            components=None,
+            backend_version=None,
+            detail=backend.detail,
+        )
+
+    replay = run_singular_minimal_primes(request.ideal, request.resource_budget)
+    if replay.outcome != "COMPUTED":
+        return IdealMinimalPrimesResult(
+            request=request,
+            outcome=replay.outcome,
+            components=None,
+            backend_version=None,
+            detail=(
+                "The minimal-prime source replay did not complete within the "
+                "declared backend budget."
+            ),
+        )
+    if (
+        replay.backend_version != backend.backend_version
+        or replay.components != backend.components
+    ):
+        return IdealMinimalPrimesResult(
+            request=request,
+            outcome="ERROR",
+            components=None,
+            backend_version=None,
+            detail=(
+                "The minimal-prime source replay did not reproduce the computed family."
+            ),
+        )
+
+    # The producer has just completed the exact source replay itself.  Direct
+    # construction avoids a third backend invocation in the public execution
+    # path; externally supplied JSON still runs the model validator's replay.
+    return IdealMinimalPrimesResult.model_construct(
+        request=request,
+        outcome=backend.outcome,
+        components=backend.components,
+        backend_version=backend.backend_version,
+        detail=None,
+    )
+
+
 def compute_ideal_radical_membership(
     request: IdealRadicalMembershipRequest,
 ) -> IdealRadicalMembershipResult:
@@ -473,6 +534,7 @@ def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturation
 
 
 __all__ = [
+    "compute_ideal_minimal_primes",
     "compute_ideal_quotient",
     "compute_ideal_radical",
     "compute_ideal_radical_membership",

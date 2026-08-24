@@ -285,6 +285,115 @@ class IdealSaturationResult(StrictModel):
         return self
 
 
+class IdealMinimalPrimesRequest(StrictModel):
+    """Compute minimal primes of an ideal in the exact ring ``QQ[variables]``."""
+
+    ideal: RationalPolynomialIdeal = Field(
+        description=(
+            "An ideal in at most 6 variables with at most 16 generators and "
+            "256 aggregate terms; generator total degree is at most 12 and "
+            "coefficient components are at most 128 digits."
+        )
+    )
+    resource_budget: IdealComputationBudget = Field(
+        default_factory=IdealComputationBudget
+    )
+
+    @model_validator(mode="after")
+    def require_backend_domain(self) -> Self:
+        _require_ideal_budget(self.ideal, label="ideal")
+        return self
+
+
+class IdealMinimalPrimesResult(StrictModel):
+    """The complete minimal-prime family of a retained rational ideal source.
+
+    Components are the minimal primes of ``ideal`` over ``QQ``—not geometric
+    components after scalar extension to an algebraic closure.  The empty
+    family represents the unit ideal, whose empty intersection is the unit
+    ideal.
+    """
+
+    request: IdealMinimalPrimesRequest
+    outcome: IdealExecutionOutcome
+    components: tuple[RationalPolynomialIdeal, ...] | None = None
+    method: Literal["SINGULAR_MIN_ASS_GTZ"] = "SINGULAR_MIN_ASS_GTZ"
+    backend_version: str | None = None
+    detail: str | None = None
+
+    @model_validator(mode="after")
+    def require_outcome_shape_and_source_replay(self) -> Self:
+        if self.outcome != "COMPUTED":
+            if (
+                self.components is not None
+                or self.backend_version is not None
+                or not self.detail
+            ):
+                raise ValueError(
+                    "incomplete minimal-prime computation requires only a safe detail"
+                )
+            return self
+        if (
+            self.components is None
+            or self.backend_version is None
+            or self.detail is not None
+        ):
+            raise ValueError(
+                "computed minimal-prime family requires components and backend version"
+            )
+        if any(
+            component.variables != self.request.ideal.variables
+            for component in self.components
+        ):
+            raise ValueError(
+                "every minimal prime must use the source ideal's ordered ring"
+            )
+        keys = tuple(component.model_dump_json() for component in self.components)
+        if keys != tuple(sorted(keys)) or len(set(keys)) != len(keys):
+            raise ValueError(
+                "minimal-prime components must be unique and canonically ordered"
+            )
+        _require_source_bound_minimal_primes(
+            self.request,
+            self.components,
+            self.backend_version,
+        )
+        return self
+
+
+def _require_source_bound_minimal_primes(
+    request: IdealMinimalPrimesRequest,
+    components: tuple[RationalPolynomialIdeal, ...],
+    backend_version: str,
+) -> None:
+    """Replay Singular's complete minimal-prime computation from its source.
+
+    The replay is the authoritative bounded evidence for all three claims:
+    every component is prime, no component contains another, and their
+    intersection equals the source radical.  ``minAssGTZE`` performs that
+    complete computation over ``QQ`` and its canonical decoded family is
+    compared byte-for-byte as typed values.
+    """
+
+    from jacobian.math.commutative_algebra_ops._singular import (
+        run_singular_minimal_primes,
+    )
+
+    replay = run_singular_minimal_primes(request.ideal, request.resource_budget)
+    if replay.outcome != "COMPUTED":
+        raise ValueError(
+            "the minimal-prime family could not be re-verified within the "
+            f"enforced backend budget: {replay.outcome}"
+        )
+    if replay.backend_version != backend_version:
+        raise ValueError("minimal-prime replay used a different backend version")
+    if replay.components != components:
+        raise ValueError(
+            "components must equal the complete minimal-prime family of the "
+            "retained source ideal over QQ"
+        )
+
+
 __all__ = [
     "MAX_OUTPUT_GENERATORS",
     "MAX_OUTPUT_TERMS",
@@ -295,6 +404,8 @@ __all__ = [
     "GroebnerBasisResult",
     "IdealComputationBudget",
     "IdealExecutionOutcome",
+    "IdealMinimalPrimesRequest",
+    "IdealMinimalPrimesResult",
     "IdealNormalFormRequest",
     "IdealNormalFormResult",
     "IdealQuotientRequest",

@@ -13,6 +13,7 @@ from jacobian._exact import CanonicalRational
 from jacobian.math.commutative_algebra_ops._models import IdealComputationBudget
 from jacobian.math.commutative_algebra_ops._singular import (
     run_singular_ideal_operation,
+    run_singular_minimal_primes,
 )
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
@@ -89,6 +90,40 @@ def test_missing_backend_is_a_typed_unavailable_outcome(
 
     assert result.outcome == "UNAVAILABLE"
     assert result.ideal is None
+
+
+def test_minimal_prime_family_protocol_is_typed_and_canonically_ordered(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    records = (
+        "JACOBIAN_SINGULAR_IDEAL_V1",
+        "44000",
+        "2",
+        "COMPONENT",
+        "1",
+        "GENERATOR",
+        "1|1",
+        "END_GENERATOR",
+        "END_COMPONENT",
+        "COMPONENT",
+        "1",
+        "GENERATOR",
+        "1|2",
+        "END_GENERATOR",
+        "END_COMPONENT",
+        "END",
+    )
+    executable = _executable(tmp_path, f"print({chr(10).join(records)!r})")
+    _select_executable(monkeypatch, executable)
+
+    result = run_singular_minimal_primes(_ideal(), IdealComputationBudget())
+
+    assert result.outcome == "COMPUTED"
+    assert result.components is not None
+    assert tuple(
+        component.model_dump_json() for component in result.components
+    ) == tuple(sorted(component.model_dump_json() for component in result.components))
 
 
 def test_caller_cannot_narrow_the_exact_result_contract() -> None:

@@ -53,6 +53,16 @@ class SingularIdealResult:
     detail: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class SingularMinimalPrimesResult:
+    """One complete minimal-prime family returned by Singular."""
+
+    outcome: SingularOutcome
+    components: tuple[RationalPolynomialIdeal, ...] | None = None
+    backend_version: str | None = None
+    detail: str | None = None
+
+
 @dataclass(slots=True)
 class _ProtocolReader:
     lines: list[str]
@@ -279,6 +289,140 @@ def _parse_output(
     )
 
 
+def _minimal_primes_script(source_ideal: RationalPolynomialIdeal) -> bytes:
+    """Encode ``minAssGTZE`` and its complete prime-family result.
+
+    ``minAssGTZE`` differs from ``minAssGTZ`` only on the unit ideal: it
+    returns the empty family rather than an invalid unit ``ideal(1)`` entry.
+    That is precisely the empty intersection convention needed for a complete
+    minimal-prime result.
+    """
+
+    variable_count = len(source_ideal.variables)
+    variables = ",".join(f"jv{index + 1}" for index in range(variable_count))
+    exponent_fields = '+","+'.join(
+        f"string(jacobian_exponents[{index + 1}])" for index in range(variable_count)
+    )
+    return "\n".join(
+        [
+            'LIB "primdec.lib";',
+            "option(redSB);",
+            f"ring jacobian_ring=0,({variables}),dp;",
+            _singular_ideal("jacobian_source", source_ideal),
+            "list jacobian_primes=minAssGTZE(jacobian_source);",
+            f'print("{_PROTOCOL_HEADER}");',
+            'system("version");',
+            "print(size(jacobian_primes));",
+            "int jacobian_component_index,jacobian_generator_index;",
+            "ideal jacobian_component;",
+            "poly jacobian_poly;",
+            "intvec jacobian_exponents;",
+            "for (jacobian_component_index=1; "
+            "jacobian_component_index<=size(jacobian_primes); "
+            "jacobian_component_index=jacobian_component_index+1)",
+            "{",
+            '  print("COMPONENT");',
+            "  jacobian_component=std(jacobian_primes[jacobian_component_index]);",
+            "  print(size(jacobian_component));",
+            "  for (jacobian_generator_index=1; "
+            "jacobian_generator_index<=size(jacobian_component); "
+            "jacobian_generator_index=jacobian_generator_index+1)",
+            "  {",
+            '    print("GENERATOR");',
+            "    jacobian_poly=jacobian_component[jacobian_generator_index];",
+            "    while (jacobian_poly != 0)",
+            "    {",
+            "      jacobian_exponents=leadexp(jacobian_poly);",
+            f'      print(string(leadcoef(jacobian_poly))+"|"+{exponent_fields});',
+            "      jacobian_poly=jacobian_poly-lead(jacobian_poly);",
+            "    }",
+            '    print("END_GENERATOR");',
+            "  }",
+            '  print("END_COMPONENT");',
+            "}",
+            'print("END");',
+            "quit;",
+            "",
+        ]
+    ).encode("ascii")
+
+
+def _ideal_key(ideal: RationalPolynomialIdeal) -> str:
+    """Return the stable public serialization used to order prime families."""
+
+    return ideal.model_dump_json()
+
+
+def _parse_minimal_primes_output(
+    output: bytes,
+    *,
+    variables: tuple[str, ...],
+    budget: IdealComputationBudget,
+) -> tuple[tuple[RationalPolynomialIdeal, ...], str]:
+    """Decode a bounded canonical family of minimal prime ideals."""
+
+    try:
+        text = output.decode("ascii")
+    except UnicodeDecodeError as exc:
+        raise ValueError("Singular output is not ASCII") from exc
+    reader = _ProtocolReader(text.splitlines())
+    reader.expect(_PROTOCOL_HEADER)
+    try:
+        version_number = int(reader.pop())
+        component_count = int(reader.pop())
+    except ValueError as exc:
+        raise ValueError("Singular output has invalid numeric metadata") from exc
+    if not _SUPPORTED_VERSION_MIN <= version_number < _SUPPORTED_VERSION_MAX:
+        raise ValueError("Singular backend version is unsupported")
+    if not 0 <= component_count <= budget.maximum_output_generators:
+        raise _ResultLimitExceededError(
+            "Singular component count exceeds the exact-result limit"
+        )
+
+    total_generators = 0
+    total_terms = 0
+    components: list[RationalPolynomialIdeal] = []
+    for _ in range(component_count):
+        reader.expect("COMPONENT")
+        try:
+            generator_count = int(reader.pop())
+        except ValueError as exc:
+            raise ValueError("Singular output has invalid component metadata") from exc
+        if not 0 <= generator_count <= budget.maximum_output_generators:
+            raise _ResultLimitExceededError(
+                "Singular component generator count exceeds the exact-result limit"
+            )
+        total_generators += generator_count
+        if total_generators > budget.maximum_output_terms:
+            raise _ResultLimitExceededError(
+                "Singular component generators exceed the exact-result limit"
+            )
+        generators: list[RationalPolynomial] = []
+        for _ in range(generator_count):
+            generator, term_count = _parse_generator(reader, variables)
+            generators.append(generator)
+            total_terms += term_count
+            if total_terms > budget.maximum_output_terms:
+                raise _ResultLimitExceededError(
+                    "Singular component terms exceed the exact-result limit"
+                )
+        reader.expect("END_COMPONENT")
+        if not generators:
+            generators.append(
+                RationalPolynomial(
+                    variables=variables,
+                    polynomial=SparseRationalPolynomial(terms=()),
+                )
+            )
+        components.append(
+            RationalPolynomialIdeal(variables=variables, generators=tuple(generators))
+        )
+    reader.expect("END")
+    if not reader.finished():
+        raise ValueError("Singular output has invalid trailing data")
+    return tuple(sorted(components, key=_ideal_key)), _format_version(version_number)
+
+
 def run_singular_ideal_operation(
     operation: SingularOperation,
     left: RationalPolynomialIdeal,
@@ -362,6 +506,92 @@ def run_singular_ideal_operation(
     return SingularIdealResult(
         outcome="COMPUTED",
         ideal=ideal,
+        backend_version=version,
+    )
+
+
+def run_singular_minimal_primes(
+    source_ideal: RationalPolynomialIdeal,
+    budget: IdealComputationBudget,
+) -> SingularMinimalPrimesResult:
+    """Compute minimal primes over ``QQ`` in one bounded Singular process."""
+
+    resolved = shutil.which("Singular")
+    if resolved is None:
+        return SingularMinimalPrimesResult(
+            outcome="UNAVAILABLE",
+            detail="The supported Singular 4.4 backend is not installed.",
+        )
+    resolved = str(Path(resolved).resolve())
+    prlimit = shutil.which("prlimit")
+    if prlimit is not None:
+        prlimit = str(Path(prlimit).resolve())
+    try:
+        with tempfile.TemporaryDirectory(prefix="jacobian-singular-") as directory:
+            completed = run_bounded_process(
+                [resolved, "-q"],
+                input_bytes=_minimal_primes_script(source_ideal),
+                timeout_seconds=float(budget.wall_seconds),
+                environment=worker_environment(locale="C.UTF-8"),
+                stdout_limit=_STDOUT_LIMIT,
+                stderr_limit=_STDERR_LIMIT,
+                resource_limits=ProcessResourceLimits(
+                    cpu_seconds=budget.wall_seconds,
+                    address_space_bytes=1024 * 1024 * 1024,
+                    file_size_bytes=1024 * 1024,
+                ),
+                platform_tools=ProcessPlatformTools(prlimit_executable=prlimit),
+                cwd=directory,
+            )
+    except OSError:
+        return SingularMinimalPrimesResult(
+            outcome="UNAVAILABLE",
+            detail="The supported Singular backend could not be started.",
+        )
+    if completed.timed_out:
+        return SingularMinimalPrimesResult(
+            outcome="TIMEOUT",
+            detail="Singular exceeded the declared wall-time limit.",
+        )
+    if completed.cancelled:
+        return SingularMinimalPrimesResult(
+            outcome="ERROR",
+            detail="Singular execution was cancelled before producing a result.",
+        )
+    if completed.stdout_exceeded or completed.stderr_exceeded:
+        return SingularMinimalPrimesResult(
+            outcome="LIMIT_EXCEEDED" if completed.stdout_exceeded else "ERROR",
+            detail=(
+                "The exact Singular minimal-prime family exceeds the declared "
+                "result bound."
+                if completed.stdout_exceeded
+                else "Singular exceeded the diagnostic-output limit."
+            ),
+        )
+    if completed.returncode != 0 or completed.stderr:
+        return SingularMinimalPrimesResult(
+            outcome="ERROR",
+            detail="Singular failed without producing an exact minimal-prime family.",
+        )
+    try:
+        components, version = _parse_minimal_primes_output(
+            completed.stdout,
+            variables=source_ideal.variables,
+            budget=budget,
+        )
+    except _ResultLimitExceededError:
+        return SingularMinimalPrimesResult(
+            outcome="LIMIT_EXCEEDED",
+            detail="The exact Singular minimal-prime family exceeds the declared result bound.",
+        )
+    except ValueError:
+        return SingularMinimalPrimesResult(
+            outcome="ERROR",
+            detail="Singular returned an invalid or unsupported minimal-prime encoding.",
+        )
+    return SingularMinimalPrimesResult(
+        outcome="COMPUTED",
+        components=components,
         backend_version=version,
     )
 
@@ -492,7 +722,9 @@ def run_singular_saturation_verification(
 __all__ = [
     "SaturationVerificationVerdict",
     "SingularIdealResult",
+    "SingularMinimalPrimesResult",
     "run_singular_ideal_operation",
+    "run_singular_minimal_primes",
     "run_singular_saturation_verification",
 ]
 

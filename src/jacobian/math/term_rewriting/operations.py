@@ -8,7 +8,6 @@ from jacobian.math.term_rewriting.values import (
     MAX_CRITICAL_PAIR_CANDIDATES,
     MAX_CRITICAL_PAIR_RESULT_BYTES,
     MAX_CRITICAL_PAIR_RESULT_NODES,
-    MAX_CRITICAL_PAIR_RULE_NODES,
     MAX_CRITICAL_PAIR_RULES,
     MAX_CRITICAL_PAIR_VARIABLE_ID,
     CriticalOverlapCandidate,
@@ -239,8 +238,9 @@ def _admit_critical_pair_result_envelope(rules: tuple[RewriteRule, ...]) -> int:
     the materialized substitution or its reducts. Each candidate is therefore
     standardized apart and unified exactly as execution will, under the shared
     remaining node allowance and with every materialized term charged; reduct
-    sizes are then computed exactly from the substitution. Returns the total
-    charged nodes and raises when the envelope is exceeded.
+    sizes are then computed exactly from the substitution. Failed unifications
+    keep their committed charges against the shared allowance. Returns the
+    total charged nodes and raises when the envelope is exceeded.
     """
     remaining = MAX_CRITICAL_PAIR_RESULT_NODES
     for outer_index, outer in enumerate(rules):
@@ -263,9 +263,9 @@ def _admit_critical_pair_result_envelope(rules: tuple[RewriteRule, ...]) -> int:
                     )
                 except _ResultEnvelopeError:
                     raise ValueError(_RESULT_NODES_EXCEEDED) from None
+                remaining = budget.remaining
                 if substitution is None:
                     continue
-                remaining = budget.remaining
                 binding_sizes = {
                     variable: _term_node_count(binding)
                     for variable, binding in substitution.items()
@@ -293,11 +293,6 @@ def _validate_critical_pair_source(
         signature.validate_term(rule.rhs)
         _require_bounded_variable_ids(rule.lhs)
         _require_bounded_variable_ids(rule.rhs)
-        if (
-            _term_node_count(rule.lhs) > MAX_CRITICAL_PAIR_RULE_NODES
-            or _term_node_count(rule.rhs) > MAX_CRITICAL_PAIR_RULE_NODES
-        ):
-            raise ValueError("critical-pair rule sides exceed the supported node bound")
     canonical_rules = {_canonical_rule(rule).model_dump_json() for rule in rules}
     if len(canonical_rules) != len(rules):
         raise ValueError("critical-pair rules must be duplicate-free up to renaming")

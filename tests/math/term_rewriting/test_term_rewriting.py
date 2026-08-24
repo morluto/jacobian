@@ -25,10 +25,12 @@ from jacobian.math.term_rewriting._operations import (
 )
 from jacobian.math.term_rewriting._tools import TOOLS
 from jacobian.math.term_rewriting.operations import (
+    _MaterializationBudget,
     _nonvariable_positions,
     _replace_at_position,
     _standardize_apart,
     _term_node_count,
+    _unify,
     apply_substitution,
     critical_pairs,
     match,
@@ -42,7 +44,6 @@ from jacobian.math.term_rewriting.values import (
     MAX_CRITICAL_PAIR_CANDIDATES,
     MAX_CRITICAL_PAIR_RESULT_BYTES,
     MAX_CRITICAL_PAIR_RESULT_NODES,
-    MAX_CRITICAL_PAIR_RULE_NODES,
     RankedSignature,
     RewriteRule,
     Term,
@@ -84,6 +85,34 @@ def _chained_overlap_witness(
         signature,
         RewriteRule(lhs=_app(0, *left_slots), rhs=_app(2, *([_var(100)] * 15))),
         RewriteRule(lhs=_app(0, *right_slots), rhs=_app(2, *([_var(101)] * 15))),
+    )
+
+
+def _failed_overlap_witness(
+    depth: int,
+) -> tuple[RankedSignature, RewriteRule, RewriteRule]:
+    """Signature and two root-overlapping rules whose every overlap fails.
+
+    The shared root carries a leading constant clash that the kernel examines
+    only after every chained binding has been built, so each overlap charges
+    its complete dependency-driven expansion before returning ``None``. Both
+    depth-8 root orientations charge 36914 nodes, so each fits alone in a
+    fresh envelope while two already exceed it together.
+    """
+    left_slots: list[Term] = [_app(2)]
+    right_slots: list[Term] = [_app(3)]
+    for level in range(depth):
+        if level % 2 == 0:
+            left_slots.append(_var(100 + level))
+            right_slots.append(_app(1, *([_var(101 + level)] * 3)))
+        else:
+            left_slots.append(_app(1, *([_var(101 + level)] * 3)))
+            right_slots.append(_var(100 + level))
+    signature = RankedSignature(arities=(depth + 1, 3, 0, 0))
+    return (
+        signature,
+        RewriteRule(lhs=_app(0, *left_slots), rhs=_var(100)),
+        RewriteRule(lhs=_app(0, *right_slots), rhs=_var(101)),
     )
 
 
@@ -466,7 +495,6 @@ class TestCriticalPairs:
             "max_overlap_candidates": 32,
             "max_result_bytes": 4 * 1024 * 1024,
             "max_result_nodes": 42_752,
-            "max_rule_side_nodes": 16,
             "max_variable_id": 999_999,
         }
 
@@ -525,15 +553,70 @@ class TestCriticalPairs:
         assert len(result.profile.pairs) == 32
         assert len(result.model_dump_json()) <= MAX_CRITICAL_PAIR_RESULT_BYTES
 
-    def test_rule_side_node_count_is_preflight_bounded(self):
-        term = _var(0)
-        for _ in range(MAX_CRITICAL_PAIR_RULE_NODES):
-            term = _app(0, term)
-        with pytest.raises(ValidationError, match="rule sides"):
+    def test_long_rules_reach_the_result_sensitive_preflight(self):
+        # f^16(x) -> x has a 17-node left side, yet its complete overlap
+        # family is 15 non-root self-overlaps with a small exact profile.
+        lhs = _var(0)
+        for _ in range(16):
+            lhs = _app(0, lhs)
+        assert _term_node_count(lhs) == 17
+        rule = RewriteRule(lhs=lhs, rhs=_var(0))
+        result = compute_critical_pairs(
+            CriticalPairsRequest(signature={"arities": [1]}, rules=(rule,))
+        )
+        assert len(result.profile.candidates) == 15
+        assert len(result.profile.pairs) == 15
+        assert all(candidate.unifiable for candidate in result.profile.candidates)
+        assert all(pair.substitution for pair in result.profile.pairs)
+        assert (
+            CriticalPairsResult.model_validate_json(result.model_dump_json()) == result
+        )
+
+    def test_oversized_rule_work_stays_derived_bound_bounded(self):
+        lhs = _var(0)
+        for _ in range(64):
+            lhs = _app(0, lhs)
+        with pytest.raises(ValidationError, match="overlap candidates"):
             CriticalPairsRequest(
                 signature={"arities": [1]},
-                rules=(RewriteRule(lhs=term, rhs=_var(0)),),
+                rules=(RewriteRule(lhs=lhs, rhs=_var(0)),),
             )
+
+    def test_failed_overlap_charges_commit_to_the_shared_budget(self):
+        signature, outer_rule, inner_rule = _failed_overlap_witness(8)
+        rules = (outer_rule, inner_rule)
+        candidates = len(rules) * sum(
+            len(_nonvariable_positions(rule.lhs)) for rule in rules
+        ) - len(rules)
+        assert candidates <= MAX_CRITICAL_PAIR_CANDIDATES
+        for outer_index, outer in enumerate(rules):
+            for position in _nonvariable_positions(outer.lhs):
+                for inner_index, inner in enumerate(rules):
+                    if outer_index == inner_index and not position:
+                        continue
+                    standardized_outer, standardized_inner, _, _ = _standardize_apart(
+                        outer, inner
+                    )
+                    budget = _MaterializationBudget(MAX_CRITICAL_PAIR_RESULT_NODES)
+                    substitution = _unify(
+                        standardized_inner.lhs,
+                        term_at_position(standardized_outer.lhs, position),
+                        budget,
+                    )
+                    assert substitution is None
+        with pytest.raises(ValueError, match="result nodes"):
+            critical_pairs(signature, rules)
+        with pytest.raises(ValidationError, match="result nodes"):
+            CriticalPairsRequest(signature=signature, rules=rules)
+
+    def test_failed_overlap_family_within_budget_still_admits(self):
+        signature, outer_rule, inner_rule = _failed_overlap_witness(7)
+        result = compute_critical_pairs(
+            CriticalPairsRequest(signature=signature, rules=(outer_rule, inner_rule))
+        )
+        assert len(result.profile.candidates) == 20
+        assert result.profile.pairs == ()
+        assert all(not candidate.unifiable for candidate in result.profile.candidates)
 
     def test_native_operation_enforces_the_same_signature_and_work_bounds(self):
         signature = term_rewriting.RankedSignature(arities=(1,))
@@ -586,7 +669,7 @@ class TestCriticalPairs:
         signature, outer_rule, inner_rule = _chained_overlap_witness(6)
         rules = (outer_rule, inner_rule)
         assert all(
-            _term_node_count(side) <= MAX_CRITICAL_PAIR_RULE_NODES
+            _term_node_count(side) == 16
             for rule in rules
             for side in (rule.lhs, rule.rhs)
         )

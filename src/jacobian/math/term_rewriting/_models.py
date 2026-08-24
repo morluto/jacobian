@@ -252,15 +252,14 @@ class CriticalPairsRequest(StrictModel):
     rules: tuple[RewriteRule, ...] = Field(
         max_length=MAX_CRITICAL_PAIR_RULES,
         description=(
-            "Duplicate-free ordered rules, possibly empty. Each side has at "
-            "most 16 nodes, each variable ID is at most 999999, and the "
-            "complete ordered nonvariable overlap ledger has at most 32 "
-            "candidates. The retained result and its exact replay are bounded "
-            "by 42752 structural nodes and 4MiB."
+            "Duplicate-free ordered rules, possibly empty. Each variable ID "
+            "is at most 999999, and the complete ordered nonvariable overlap "
+            "ledger has at most 32 candidates. The materialized replay work, "
+            "the retained result, and its exact replay are bounded by 42752 "
+            "structural nodes and 4MiB."
         ),
         json_schema_extra={
             "x-jacobian-bounds": {
-                "max_rule_side_nodes": 16,
                 "max_variable_id": 999999,
                 "max_overlap_candidates": 32,
                 "max_result_nodes": 42752,

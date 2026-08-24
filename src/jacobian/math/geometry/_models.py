@@ -929,10 +929,43 @@ def _compare_euclidean_root_sums(
         return 1 if difference > 0 else -1
 
 
+class EuclideanTriangulationPolygonRequest(PolygonRequest):
+    """Strict CCW convex simple rational ring admitted by Euclidean triangulation."""
+
+    points: tuple[RationalPoint2D, ...] = Field(
+        min_length=4,
+        max_length=MAX_EUCLIDEAN_TRIANGULATION_VERTICES,
+        description=(
+            "Ring vertices listed counterclockwise; the closed ring must be "
+            "simple and strictly convex. Every numerator and denominator "
+            "carries at most "
+            f"{MAX_EUCLIDEAN_TRIANGULATION_COORDINATE_DIGITS} decimal digits."
+        ),
+        json_schema_extra={
+            "coordinate_digit_bound": MAX_EUCLIDEAN_TRIANGULATION_COORDINATE_DIGITS,
+        },
+    )
+
+
 class EuclideanConvexPolygonTriangulationRequest(StrictModel):
     """One bounded strict convex rational polygon with Euclidean diagonal cost."""
 
-    polygon: PolygonRequest
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Minimum Euclidean triangulation of one strict CCW convex "
+                "simple rational polygon. Admitted requests contain 4 to 28 "
+                "vertices whose coordinates carry at most "
+                f"{MAX_EUCLIDEAN_TRIANGULATION_COORDINATE_DIGITS} decimal "
+                "digits per component and whose exact split table fits the "
+                "published serialized-output bound; strict counterclockwise "
+                "convexity and ring simplicity are enforced by the request "
+                "validator after parsing."
+            ),
+        },
+    )
+
+    polygon: EuclideanTriangulationPolygonRequest
     objective: Literal["NON_HULL_EUCLIDEAN_LENGTH_SUM"] = (
         "NON_HULL_EUCLIDEAN_LENGTH_SUM"
     )

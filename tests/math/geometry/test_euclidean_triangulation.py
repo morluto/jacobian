@@ -13,6 +13,8 @@ from jacobian.math.geometry._euclidean_triangulation import (
     minimum_euclidean_weight_triangulation,
 )
 from jacobian.math.geometry._models import (
+    MAX_EUCLIDEAN_TRIANGULATION_COORDINATE_DIGITS,
+    MAX_EUCLIDEAN_TRIANGULATION_VERTICES,
     EuclideanConvexPolygonTriangulationRequest,
     EuclideanConvexPolygonTriangulationResult,
 )
@@ -245,6 +247,48 @@ class TestEuclideanTriangulation:
                     _point(2, -3),
                 )
             )
+
+    def test_request_rejects_a_triangle_below_the_admitted_vertex_floor(self) -> None:
+        with pytest.raises(ValidationError, match="at least 4 items"):
+            _request((_point(0, 0), _point(2, 0), _point(0, 2)))
+
+    def test_request_rejects_a_ring_above_the_admitted_vertex_ceiling(self) -> None:
+        with pytest.raises(ValidationError, match="at most 28 items"):
+            _request(tuple(_point(index, index * index) for index in range(29)))
+
+    def test_request_rejects_coordinates_beyond_the_digit_bound(self) -> None:
+        scale = 10**MAX_EUCLIDEAN_TRIANGULATION_COORDINATE_DIGITS
+        with pytest.raises(ValidationError, match="exceed the 32-digit bound"):
+            _request(
+                (
+                    _point(0, 0),
+                    {"x": {"num": str(scale), "den": "1"}, "y": {"num": "0", "den": "1"}},
+                    {
+                        "x": {"num": str(scale + 1), "den": "1"},
+                        "y": {"num": "1", "den": "1"},
+                    },
+                    {"x": {"num": "1", "den": "1"}, "y": {"num": "1", "den": "1"}},
+                )
+            )
+
+    def test_schema_publishes_the_admitted_envelope_and_preconditions(self) -> None:
+        schema = EuclideanConvexPolygonTriangulationRequest.model_json_schema()
+        points = schema["$defs"]["EuclideanTriangulationPolygonRequest"][
+            "properties"
+        ]["points"]
+        assert points["minItems"] == 4
+        assert points["maxItems"] == MAX_EUCLIDEAN_TRIANGULATION_VERTICES == 28
+        assert (
+            points["coordinate_digit_bound"]
+            == MAX_EUCLIDEAN_TRIANGULATION_COORDINATE_DIGITS
+            == 32
+        )
+        assert "strictly convex" in points["description"]
+        assert "simple" in points["description"]
+        assert "32 decimal digits" in points["description"]
+        description = schema.get("description", "")
+        assert "4 to 28 vertices" in description
+        assert "convexity and ring simplicity are enforced" in description
 
     def test_catalog_example_returns_a_replayable_public_result(self) -> None:
         catalog = Catalog.open()

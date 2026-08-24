@@ -36,11 +36,13 @@ POLYGON_OPERATIONS = (
         "Compute a certified minimum Euclidean convex-polygon triangulation",
         (
             "Compute one deterministic minimum triangulation of a strict CCW convex "
-            "rational polygon, charging each selected non-hull diagonal once by its "
-            "Euclidean length. Returns the exact sum-of-square-roots cost expression "
-            "only when every finite dynamic-programming comparison is separated by "
-            "a pinned 128-bit outward-rounded Arb interval; otherwise returns the "
-            "first unresolved exact comparison without claiming an optimum."
+            "simple rational polygon of 4 to 28 vertices, charging each selected "
+            "non-hull diagonal once by its Euclidean length; coordinates carry at "
+            "most 32 decimal digits per component. Returns the exact "
+            "sum-of-square-roots cost expression only when every finite DP "
+            "comparison is separated by a pinned 128-bit outward-rounded Arb "
+            "interval; otherwise returns the first unresolved exact comparison "
+            "without claiming an optimum."
         ),
         EuclideanConvexPolygonTriangulationRequest,
         EuclideanConvexPolygonTriangulationResult,
@@ -54,7 +56,12 @@ POLYGON_OPERATIONS = (
         examples=(
             example(
                 "unit_square_euclidean",
-                "Triangulate a unit square under the non-hull Euclidean diagonal-length objective.",
+                (
+                    "Triangulate a unit square under the non-hull Euclidean "
+                    "diagonal-length objective; the polygon must be simple and "
+                    "strictly CCW convex with 4 to 28 vertices and at most "
+                    "32-digit rational coordinates."
+                ),
                 {"polygon": {"points": _UNIT_SQUARE}},
             ),
         ),

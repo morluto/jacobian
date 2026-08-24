@@ -77,10 +77,23 @@ def test_inline_results_keep_only_mathematical_values() -> None:
 
 
 def test_inline_results_preserve_completed_no_candidate_outcomes() -> None:
-    system = LinearRationalSystem.model_validate(_system())
-    solution = LinearRationalSolutionResult(system=system, status="INCONSISTENT")
+    dependent = LinearRationalSystem.model_validate(
+        {
+            "variables": ["x", "y"],
+            "coefficients": {"entries": [[_q(1), _q(1)], [_q(1), _q(1)]]},
+            "rhs": [_q(0), _q(1)],
+        }
+    )
+    solution = LinearRationalSolutionResult(system=dependent, status="INCONSISTENT")
+    free = LinearRationalSystem.model_validate(
+        {
+            "variables": ["x", "y"],
+            "coefficients": {"entries": [[_q(1), _q(1)]]},
+            "rhs": [_q(1)],
+        }
+    )
     inconsistency = LinearRationalInconsistencyResult(
-        system=system,
+        system=free,
         status="CONSISTENT",
     )
 
@@ -88,9 +101,16 @@ def test_inline_results_preserve_completed_no_candidate_outcomes() -> None:
     assert inconsistency.left_witness is None
     with pytest.raises(ValidationError, match="agree with the result status"):
         LinearRationalSolutionResult(
-            system=system,
+            system=dependent,
             status="INCONSISTENT",
             values=(_q(2), _q(1)),
+        )
+    with pytest.raises(ValidationError, match="agree with the result status"):
+        LinearRationalInconsistencyResult(
+            system=dependent,
+            status="CONSISTENT",
+            left_witness=(_q(-1), _q(1)),
+            rhs_pairing=_q(1),
         )
 
 

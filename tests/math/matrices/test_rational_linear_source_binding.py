@@ -270,6 +270,102 @@ def test_consistent_outcome_rejects_bare_or_mutated_claims() -> None:
         LinearRationalInconsistencyResult.model_validate(flipped_status)
 
 
+def test_inconsistent_outcome_requires_a_genuinely_inconsistent_source() -> None:
+    """A mutated INCONSISTENT claim cannot attach to a consistent source."""
+
+    dumped = _mutable(
+        compute_rational_solution(
+            LinearRationalSolutionFindRequest.model_validate(
+                {"system": _unique_system()}
+            )
+        ).model_dump()
+    )
+    assert dumped["status"] == "SOLUTION"
+
+    flipped = copy.deepcopy(dumped)
+    flipped["status"] = "INCONSISTENT"
+    flipped["values"] = None
+    with pytest.raises(ValidationError, match=r"rank\(A\) < rank"):
+        LinearRationalSolutionResult.model_validate(flipped)
+
+    identity = copy.deepcopy(dumped)
+    identity["system"] = _system(
+        ["x", "y"],
+        [[Fraction(1), Fraction(0)], [Fraction(0), Fraction(1)]],
+        [Fraction(0), Fraction(0)],
+    )
+    identity["status"] = "INCONSISTENT"
+    identity["values"] = None
+    with pytest.raises(ValidationError, match=r"rank\(A\) < rank"):
+        LinearRationalSolutionResult.model_validate(identity)
+
+
+def test_consistent_outcome_requires_a_genuinely_consistent_source() -> None:
+    """A CONSISTENT claim cannot attach to a contradictory source system."""
+
+    consistent = _mutable(
+        compute_rational_inconsistency(
+            LinearRationalInconsistencyFindRequest.model_validate(
+                {"system": _unique_system()}
+            )
+        ).model_dump()
+    )
+    assert consistent["status"] == "CONSISTENT"
+
+    contradictory = copy.deepcopy(consistent)
+    contradictory["system"] = _system(
+        ["x"],
+        [[Fraction(1)], [Fraction(1)]],
+        [Fraction(0), Fraction(1)],
+    )
+    with pytest.raises(ValidationError, match=r"rank\(A\) == rank"):
+        LinearRationalInconsistencyResult.model_validate(contradictory)
+
+
+def test_negative_outcomes_round_trip_on_their_true_sources() -> None:
+    """Genuine no-witness outcomes replay successfully against their own system."""
+
+    solution = compute_rational_solution(
+        LinearRationalSolutionFindRequest.model_validate(
+            {"system": _inconsistent_system()}
+        )
+    )
+    assert solution.status == "INCONSISTENT"
+    assert (
+        LinearRationalSolutionResult.model_validate_json(solution.model_dump_json())
+        == solution
+    )
+
+    inconsistency = compute_rational_inconsistency(
+        LinearRationalInconsistencyFindRequest.model_validate(
+            {"system": _underdetermined_system()}
+        )
+    )
+    assert inconsistency.status == "CONSISTENT"
+    assert (
+        LinearRationalInconsistencyResult.model_validate_json(
+            inconsistency.model_dump_json()
+        )
+        == inconsistency
+    )
+
+
+def test_source_bound_result_versions_track_wire_shape() -> None:
+    """The required source fields bump all three affected declarations."""
+
+    from jacobian.math.matrices._tools import TOOLS as MATRIX_TOOLS
+    from jacobian.math.matrices.rational_linear._tools import TOOLS as LINEAR_TOOLS
+
+    versions = {
+        tool.operation_id: tool.version
+        for tool in (*MATRIX_TOOLS, *LINEAR_TOOLS)
+    }
+
+    assert versions["matrix.rational_linear_system.solve"] == "3"
+    assert versions["linear.rational_solution.compute"] == "3"
+    assert versions["linear.rational_inconsistency.compute"] == "3"
+
+
 def test_polynomial_coordinate_composition_reconstructs_the_target() -> None:
     """A Ringel-style span solve stays bound: A c = t reconstructs the target."""
 

@@ -25,6 +25,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
+    OperationAdmission(
+        "polynomial.multivariate.factor.compute",
+        AdmissionDecision.KEEP,
+        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

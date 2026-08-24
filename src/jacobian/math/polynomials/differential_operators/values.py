@@ -9,16 +9,15 @@ from pydantic import Field, StrictInt, model_validator
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_EXPONENT,
+    MAX_POLYNOMIAL_TERMS,
     MAX_POLYNOMIAL_VARIABLES,
     PolynomialVariable,
 )
 
-MAX_DIFFERENTIAL_OPERATOR_TERMS = 64
-MAX_DIFFERENTIAL_OPERATOR_TOTAL_ORDER = 64
-
 DifferentialOrder = Annotated[
     StrictInt,
-    Field(ge=0, le=MAX_DIFFERENTIAL_OPERATOR_TOTAL_ORDER),
+    Field(ge=0, le=MAX_POLYNOMIAL_EXPONENT),
 ]
 
 
@@ -37,11 +36,9 @@ class DifferentialOperatorTerm(StrictModel):
     )
 
     @model_validator(mode="after")
-    def require_nonzero_bounded_term(self) -> Self:
+    def require_nonzero_term(self) -> Self:
         if self.coefficient.as_fraction() == 0:
             raise ValueError("zero differential-operator terms must be omitted")
-        if sum(self.orders) > MAX_DIFFERENTIAL_OPERATOR_TOTAL_ORDER:
-            raise ValueError("differential-operator term exceeds the total-order limit")
         return self
 
 
@@ -66,7 +63,7 @@ class ConstantCoefficientDifferentialOperator(StrictModel):
     )
     terms: tuple[DifferentialOperatorTerm, ...] = Field(
         default=(),
-        max_length=MAX_DIFFERENTIAL_OPERATOR_TERMS,
+        max_length=MAX_POLYNOMIAL_TERMS,
         description=(
             "Nonzero terms in descending lexicographic order of their derivative "
             "multi-indices. Equal multi-indices must already be combined."
@@ -92,8 +89,6 @@ class ConstantCoefficientDifferentialOperator(StrictModel):
 
 
 __all__ = [
-    "MAX_DIFFERENTIAL_OPERATOR_TERMS",
-    "MAX_DIFFERENTIAL_OPERATOR_TOTAL_ORDER",
     "ConstantCoefficientDifferentialOperator",
     "DifferentialOperatorTerm",
 ]

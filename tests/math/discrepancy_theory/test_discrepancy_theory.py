@@ -622,6 +622,51 @@ class TestDiscrepancyOptimum:
             assert result.optimal_coloring == ()
             assert result.optimal_discrepancy is None
 
+    @pytest.mark.parametrize(
+        ("milp_status", "expected_status"),
+        [
+            (1, "BUDGET_EXCEEDED"),
+            (2, "EXECUTION_FAILED"),
+            (3, "EXECUTION_FAILED"),
+            (4, "EXECUTION_FAILED"),
+        ],
+    )
+    def test_milp_statuses_map_to_distinct_typed_outcomes(
+        self,
+        milp_status: int,
+        expected_status: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from types import SimpleNamespace
+
+        def fake_milp(**_kwargs: object) -> SimpleNamespace:
+            return SimpleNamespace(status=milp_status, x=None)
+
+        monkeypatch.setattr("scipy.optimize.milp", fake_milp)
+        req = DiscrepancyOptimumRequest(
+            set_system=FiniteSetSystem(ground_set_size=2, sets=((0, 1),)),
+        )
+
+        result = compute_optimal_discrepancy(req)
+
+        assert result.status == expected_status
+        assert result.optimal_coloring == ()
+        assert result.optimal_discrepancy is None
+        assert result.set_system == req.set_system
+        assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == result
+
+    def test_execution_failed_result_carries_no_claim(self):
+        from pydantic import ValidationError
+
+        system = FiniteSetSystem(ground_set_size=2, sets=((0, 1),))
+        with pytest.raises(ValidationError, match="EXECUTION_FAILED"):
+            DiscrepancyOptimumResult(
+                set_system=system,
+                status="EXECUTION_FAILED",
+                optimal_coloring=(1, -1),
+                optimal_discrepancy=0,
+            )
+
     def test_budget_exceeded_result_carries_no_claim(self):
         from pydantic import ValidationError
 

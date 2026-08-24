@@ -392,28 +392,56 @@ def _feasibility_outcome(
     """Run one bounded exact feasibility check for imbalance at most ``allowed``.
 
     Mirrors the optimum program's constraints with a fixed target instead of
-    a minimized objective. Only an explicit ``unsat`` may support a lower
-    bound; an exhausted budget reports ``unknown`` so validation fails
-    closed rather than accepting an unproven claim.
+    a minimized objective, solved by the same HiGHS backend through
+    ``scipy.optimize.milp``. Only a proven-infeasible outcome may support a
+    lower bound; an exhausted budget or backend failure reports ``unknown``
+    so validation fails closed rather than accepting an unproven claim.
     """
 
-    import z3  # type: ignore[import-untyped]
+    import numpy as np
+    from scipy.optimize import (  # type: ignore[import-untyped]
+        Bounds,
+        LinearConstraint,
+        milp,
+    )
 
-    solver = z3.Solver()
-    solver.set("timeout", MAX_OPTIMUM_SOLVER_MILLISECONDS)
-    variables = [z3.Int(f"x_{index}") for index in range(set_system.ground_set_size)]
-    solver.add(*(z3.Or(value == 1, value == -1) for value in variables))
+    n = set_system.ground_set_size
+    if n == 0:
+        return "sat" if allowed >= 0 else "unsat"
+    if allowed < 0:
+        return "unsat"
+
+    rows: list[np.ndarray] = []
+    bounds_upper: list[float] = []
     for subset in set_system.sets:
-        signed_sum = (
-            z3.Sum([variables[element] for element in subset])
-            if subset
-            else z3.IntVal(0)
-        )
-        solver.add(signed_sum <= allowed, -signed_sum <= allowed)
-    outcome = solver.check()
-    if outcome == z3.sat:
+        size = len(subset)
+        plus_row = np.zeros(n)
+        minus_row = np.zeros(n)
+        for element in subset:
+            plus_row[element] = 2.0
+            minus_row[element] = -2.0
+        # sum(x_S) <= allowed  <=>  2*sum(b_S) <= allowed + |S|
+        rows.append(plus_row)
+        bounds_upper.append(float(allowed + size))
+        # -sum(x_S) <= allowed  <=>  -2*sum(b_S) <= allowed - |S|
+        rows.append(minus_row)
+        bounds_upper.append(float(allowed - size))
+
+    matrix = np.array(rows)
+    result = milp(
+        c=np.zeros(n),
+        constraints=LinearConstraint(
+            matrix,
+            np.full(matrix.shape[0], -np.inf),
+            np.array(bounds_upper),
+        ),
+        integrality=np.ones(n),
+        bounds=Bounds(np.zeros(n), np.ones(n)),
+        options={"time_limit": MAX_OPTIMUM_SOLVER_MILLISECONDS / 1000},
+    )
+    if result.status == 0 and result.x is not None:
         return "sat"
-    if outcome == z3.unsat:
+    if result.status == 2:
         return "unsat"
     return "unknown"
 
@@ -432,16 +460,16 @@ class DiscrepancyOptimumResult(StrictModel):
     """
 
     set_system: FiniteSetSystem
-    status: Literal["OPTIMAL", "BUDGET_EXCEEDED"]
+    status: Literal["OPTIMAL", "BUDGET_EXCEEDED", "EXECUTION_FAILED"]
     optimal_coloring: tuple[int, ...] = Field(default=())
     optimal_discrepancy: int | None = Field(default=None, ge=0, strict=True)
 
     @model_validator(mode="after")
     def bind_optimal_coloring(self) -> Self:
-        if self.status == "BUDGET_EXCEEDED":
+        if self.status in ("BUDGET_EXCEEDED", "EXECUTION_FAILED"):
             if self.optimal_coloring or self.optimal_discrepancy is not None:
                 raise ValueError(
-                    "a BUDGET_EXCEEDED result must not carry a coloring or optimum"
+                    f"a {self.status} result must not carry a coloring or optimum"
                 )
             return self
         if self.optimal_discrepancy is None:
@@ -516,6 +544,22 @@ def _budget_exceeded_result(set_system: FiniteSetSystem) -> DiscrepancyOptimumRe
     return DiscrepancyOptimumResult.model_construct(
         set_system=set_system,
         status="BUDGET_EXCEEDED",
+        optimal_coloring=(),
+        optimal_discrepancy=None,
+    )
+
+
+def _execution_failed_result(set_system: FiniteSetSystem) -> DiscrepancyOptimumResult:
+    """Build the typed non-mathematical outcome from a backend failure.
+
+    Same claim-free shape as ``_budget_exceeded_result``: the producing
+    solve's answer is carried unclaimed and replay stays reserved for
+    independently supplied results via ``bind_optimal_coloring``.
+    """
+
+    return DiscrepancyOptimumResult.model_construct(
+        set_system=set_system,
+        status="EXECUTION_FAILED",
         optimal_coloring=(),
         optimal_discrepancy=None,
     )

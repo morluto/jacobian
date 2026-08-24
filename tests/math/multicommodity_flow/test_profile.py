@@ -1098,6 +1098,8 @@ def test_ledger_charges_every_performed_bucket_fold_addition() -> None:
     assert divergence[("a", 0)] == Fraction(1, 2) + Fraction(1, 3)
     assert divergence[("b", 0)] == Fraction(1, 2)
     assert result.edge_profiles[0].load.as_fraction() == Fraction(1)
+
+
 def test_fold_intermediates_admit_coprime_sums_with_small_components() -> None:
     # One edge, four commodities carrying 1/p, 1/q, (p-2)/(2p), (q-2)/(2q)
     # with p and q coprime 20,000-digit odd integers: denominator sorting

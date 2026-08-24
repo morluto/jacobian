@@ -845,9 +845,7 @@ class TestDiscrepancyOptimum:
             assert result.optimal_coloring == ()
             assert result.optimal_discrepancy is None
 
-    def test_proving_checker_failure_stays_typed(
-        self, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_proving_checker_failure_stays_typed(self, monkeypatch: pytest.MonkeyPatch):
         """A raising proof checker must translate to the claim-free outcome,
         never escape compute_optimal_discrepancy as a host exception."""
 

@@ -11,25 +11,20 @@ from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
 
-MAX_QUADRATIC_FORM_DIMENSION = 32
 MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS = 256
 MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS = 256
 MAX_QUADRATIC_EVALUATION_TERM_DIGITS = (
     MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
     + 2 * MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS
-    + 3
 )
 MAX_QUADRATIC_EVALUATION_DIGITS = 8_192
-MAX_QUADRATIC_EVALUATION_COMMON_DENOMINATOR_DIGITS = (
-    MAX_QUADRATIC_EVALUATION_DIGITS - MAX_QUADRATIC_EVALUATION_TERM_DIGITS
-)
 
 
 class QuadraticCrossTerm(StrictModel):
     """One nonzero coefficient of ``x_left * x_right`` with ``left < right``."""
 
-    left: int = Field(ge=0, lt=MAX_QUADRATIC_FORM_DIMENSION)
-    right: int = Field(ge=0, lt=MAX_QUADRATIC_FORM_DIMENSION)
+    left: int = Field(ge=0)
+    right: int = Field(ge=0)
     coefficient: CanonicalRational
 
     @model_validator(mode="after")
@@ -65,7 +60,6 @@ class RationalQuadraticForm(StrictModel):
     domain: Literal["QQ"] = "QQ"
     axis: tuple[OpaqueLabel, ...] = Field(
         min_length=1,
-        max_length=MAX_QUADRATIC_FORM_DIMENSION,
         description=(
             "Ordered coordinate labels for the polynomial variables; "
             "labels must be unique."
@@ -73,7 +67,6 @@ class RationalQuadraticForm(StrictModel):
     )
     diagonal_coefficients: tuple[CanonicalRational, ...] = Field(
         min_length=1,
-        max_length=MAX_QUADRATIC_FORM_DIMENSION,
         description=(
             "Coefficient a_i of x_i^2 in the declared axis order; exactly "
             "one coefficient per axis label."
@@ -81,9 +74,6 @@ class RationalQuadraticForm(StrictModel):
     )
     cross_terms: tuple[QuadraticCrossTerm, ...] = Field(
         default=(),
-        max_length=MAX_QUADRATIC_FORM_DIMENSION
-        * (MAX_QUADRATIC_FORM_DIMENSION - 1)
-        // 2,
         description=(
             "Nonzero x_i*x_j coefficients, strictly ordered by (left, right); "
             "every cross-term index must lie within the declared axis."
@@ -126,14 +116,12 @@ class RationalCoordinateVector(StrictModel):
     domain: Literal["QQ"] = "QQ"
     axis: tuple[OpaqueLabel, ...] = Field(
         min_length=1,
-        max_length=MAX_QUADRATIC_FORM_DIMENSION,
         description=(
             "Ordered labels of the rational coordinate axis; labels must be unique."
         ),
     )
     coordinates: tuple[CanonicalRational, ...] = Field(
         min_length=1,
-        max_length=MAX_QUADRATIC_FORM_DIMENSION,
         description=(
             "Exact values x_i in the declared axis order; exactly one "
             "coordinate per axis label."
@@ -189,37 +177,48 @@ def require_evaluation_budget(
     form: RationalQuadraticForm,
     vector: RationalCoordinateVector,
 ) -> None:
-    """Preflight the common denominator and exact output of one evaluation.
+    """Preflight the common denominator, term count, and exact output size.
 
     A common denominator divides the product of every polynomial-coefficient
-    denominator and the square of every coordinate denominator.  After that
-    multiplication, each numerator summand has at most the common-denominator
-    digits plus one coefficient and two coordinate numerators; summing at most
-    528 terms adds three decimal digits.  The bound is conservative but known
-    before arithmetic and applies equally to diagonal and cross terms.
+    denominator and the square of every coordinate denominator, so its digit
+    length is at most the aggregate ``d`` of those digit lengths.  Over that
+    shared denominator each numerator summand carries one coefficient and two
+    coordinate numerators on top of ``d``, hence at most
+    ``d + MAX_QUADRATIC_EVALUATION_TERM_DIGITS`` digits, and summing the
+    ``t`` polynomial terms adds at most the decimal digits of ``t``.  The
+    reduced value therefore keeps both components at or below
+    ``MAX_QUADRATIC_EVALUATION_DIGITS`` digits whenever
+
+        d + MAX_QUADRATIC_EVALUATION_TERM_DIGITS + len(str(t))
+            <= MAX_QUADRATIC_EVALUATION_DIGITS,
+
+    which this preflight rejects against before any arithmetic runs.  The
+    bound is conservative but known before execution, applies equally to
+    diagonal and cross terms, and admits light forms at every dimension.
     """
 
-    coefficient_denominator_digits = sum(
+    terms = len(form.diagonal_coefficients) + len(form.cross_terms)
+    common_denominator_digits = sum(
         len(coefficient.den) for coefficient in form.diagonal_coefficients
     ) + sum(len(term.coefficient.den) for term in form.cross_terms)
-    coordinate_denominator_digits = sum(
+    common_denominator_digits += 2 * sum(
         len(coordinate.den) for coordinate in vector.coordinates
     )
-    common_denominator_digits = (
-        coefficient_denominator_digits + 2 * coordinate_denominator_digits
-    )
-    if common_denominator_digits > MAX_QUADRATIC_EVALUATION_COMMON_DENOMINATOR_DIGITS:
+    if (
+        common_denominator_digits
+        + MAX_QUADRATIC_EVALUATION_TERM_DIGITS
+        + len(str(terms))
+        > MAX_QUADRATIC_EVALUATION_DIGITS
+    ):
         raise ValueError(
             "quadratic-form evaluation exceeds the aggregate denominator budget"
         )
 
 
 __all__ = [
-    "MAX_QUADRATIC_EVALUATION_COMMON_DENOMINATOR_DIGITS",
     "MAX_QUADRATIC_EVALUATION_DIGITS",
     "MAX_QUADRATIC_EVALUATION_TERM_DIGITS",
     "MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS",
-    "MAX_QUADRATIC_FORM_DIMENSION",
     "MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS",
     "QuadraticCrossTerm",
     "RationalCoordinateVector",

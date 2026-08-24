@@ -14,7 +14,8 @@ from jacobian.math.quadratic_forms import (
 from jacobian.math.quadratic_forms._models import EvaluationRequest, EvaluationResult
 from jacobian.math.quadratic_forms._operations import evaluate_form
 from jacobian.math.quadratic_forms.values import (
-    MAX_QUADRATIC_EVALUATION_COMMON_DENOMINATOR_DIGITS,
+    MAX_QUADRATIC_EVALUATION_DIGITS,
+    MAX_QUADRATIC_EVALUATION_TERM_DIGITS,
     MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS,
     MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS,
 )
@@ -104,6 +105,16 @@ def test_cross_terms_are_nonzero_unique_and_canonically_ordered() -> None:
                 ],
             }
         )
+    with pytest.raises(ValidationError, match="within the quadratic-form axis"):
+        RationalQuadraticForm.model_validate(
+            {
+                "axis": ["x"],
+                "diagonal_coefficients": [_rational(1)],
+                "cross_terms": [
+                    {"left": 0, "right": 3, "coefficient": _rational(1)},
+                ],
+            }
+        )
 
 
 def test_result_replays_the_source_bound_value() -> None:
@@ -139,14 +150,56 @@ def test_digit_bounds_reject_before_exact_arithmetic() -> None:
         )
 
 
+def test_work_based_admission_accepts_light_high_dimension_forms() -> None:
+    labels = [f"x{index}" for index in range(33)]
+    form = {
+        "axis": labels,
+        "diagonal_coefficients": [_rational(1) for _ in labels],
+    }
+    vector = {
+        "axis": labels,
+        "coordinates": [_rational(index + 1) for index in range(33)],
+    }
+    request = EvaluationRequest.model_validate({"form": form, "vector": vector})
+
+    assert evaluate_rational_quadratic_form(request.form, request.vector) == Fraction(
+        sum((index + 1) ** 2 for index in range(33))
+    )
+
+
+def test_evaluation_budget_admits_forms_near_the_denominator_boundary() -> None:
+    denominator = "1" + "0" * (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1)
+    densest_terms = (
+        MAX_QUADRATIC_EVALUATION_DIGITS - MAX_QUADRATIC_EVALUATION_TERM_DIGITS
+    ) // MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
+    axes = (
+        MAX_QUADRATIC_EVALUATION_DIGITS
+        - MAX_QUADRATIC_EVALUATION_TERM_DIGITS
+        - len(str(densest_terms))
+    ) // MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
+    labels = [f"x{index}" for index in range(axes)]
+    form = {
+        "axis": labels,
+        "diagonal_coefficients": [
+            {"num": "1", "den": denominator} for _ in labels
+        ],
+    }
+    vector = {
+        "axis": labels,
+        "coordinates": [_rational(1) for _ in labels],
+    }
+    request = EvaluationRequest.model_validate({"form": form, "vector": vector})
+
+    assert evaluate_rational_quadratic_form(
+        request.form, request.vector
+    ) == Fraction(axes, 10 ** (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1))
+
+
 def test_evaluation_preflights_the_aggregate_denominator() -> None:
     denominator = "1" + "0" * (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1)
     dimension = (
-        MAX_QUADRATIC_EVALUATION_COMMON_DENOMINATOR_DIGITS
-        // MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
-        + 1
-    )
-    assert dimension <= 32
+        MAX_QUADRATIC_EVALUATION_DIGITS - MAX_QUADRATIC_EVALUATION_TERM_DIGITS
+    ) // MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS + 1
     labels = [f"x{index}" for index in range(dimension)]
     form = {
         "axis": labels,

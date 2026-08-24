@@ -12,7 +12,8 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "quadratic_form.evaluate.compute",
         AdmissionDecision.KEEP,
         "exact source-bound rational-form evaluation over an explicit ordered axis; "
-        "the direct Fraction kernel is complete under the value digit and dimension bounds",
+        "the direct Fraction kernel is complete under the entry-digit bounds and "
+        "the term-count-aware aggregate-denominator and exact-result budgets",
     ),
 )
 

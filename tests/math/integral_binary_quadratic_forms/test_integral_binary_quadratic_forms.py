@@ -3,9 +3,11 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import canonicalize_json
 from jacobian.math.integral_binary_quadratic_forms._models import (
     BinaryQuadraticFormCheckRequest,
     BinaryQuadraticFormEvaluateRequest,
+    BinaryQuadraticFormEvaluateResult,
     BinaryQuadraticFormProperEquivRequest,
     BinaryQuadraticFormReducedClassesRequest,
     BinaryQuadraticFormReduceRequest,
@@ -105,6 +107,74 @@ class TestEvaluate:
             BinaryQuadraticFormEvaluateRequest.model_validate(
                 {"a": 1, "b": 1, "c": 1, "x": 1, "y": 0, "value": 2, "primitive": True}
             )
+
+    def test_evaluate_rejects_values_beyond_the_interoperable_integer_range(
+        self,
+    ) -> None:
+        # Q(10^8, 0) = 10^16 > 2^53 - 1 for [1,0,1]: the request must be
+        # rejected at admission instead of failing transport canonicalization.
+        with pytest.raises(ValidationError, match="interoperable integer range"):
+            BinaryQuadraticFormEvaluateRequest(
+                form=_positive_form(1, 0, 1), x=100_000_000, y=0
+            )
+        with pytest.raises(ValidationError, match="interoperable integer range"):
+            BinaryQuadraticFormEvaluateRequest(
+                form=_positive_form(1, 0, 1), x=-100_000_000, y=0
+            )
+
+    def test_evaluate_admits_the_largest_transportable_square(self) -> None:
+        # 94_906_265 = floor_sqrt(2^53 - 1), so Q(x,0) = x^2 fits exactly.
+        result = compute_evaluate(
+            BinaryQuadraticFormEvaluateRequest(
+                form=_positive_form(1, 0, 1), x=94_906_265, y=0
+            )
+        )
+        assert result.value == 9_007_199_136_250_225
+        assert result.value <= 2**53 - 1
+
+    def test_evaluate_boundary_one_above_the_interoperable_bound_is_rejected(
+        self,
+    ) -> None:
+        with pytest.raises(ValidationError, match="interoperable integer range"):
+            BinaryQuadraticFormEvaluateRequest(
+                form=_positive_form(1, 0, 1), x=94_906_266, y=0
+            )
+        with pytest.raises(ValidationError, match="interoperable integer range"):
+            BinaryQuadraticFormEvaluateRequest(
+                form=_positive_form(1, 0, 1), x=-94_906_266, y=0
+            )
+
+    def test_evaluate_admission_tracks_the_exact_value_not_the_worst_case(
+        self,
+    ) -> None:
+        # [1,-2,2] at (floor_sqrt(2^53-1), 1): the worst-case envelope
+        # a*x^2 + abs(b*x*y) + c*y^2 exceeds the bound, but the exact value
+        # 9_007_198_946_437_697 does not, so the request stays admitted.
+        result = compute_evaluate(
+            BinaryQuadraticFormEvaluateRequest(
+                form=_positive_form(1, -2, 2), x=94_906_265, y=1
+            )
+        )
+        assert result.value == 9_007_198_946_437_697
+
+    def test_result_replay_rejects_coordinates_beyond_the_transport_range(
+        self,
+    ) -> None:
+        result = compute_evaluate(
+            BinaryQuadraticFormEvaluateRequest(form=_positive_form(1, 1, 1), x=3, y=0)
+        )
+        forged = result.model_dump(mode="json")
+        forged["x"] = 100_000_000
+        with pytest.raises(ValidationError, match="interoperable integer range"):
+            BinaryQuadraticFormEvaluateResult.model_validate(forged)
+
+    def test_maximal_admitted_evaluation_canonicalizes_for_transport(self) -> None:
+        result = compute_evaluate(
+            BinaryQuadraticFormEvaluateRequest(
+                form=_positive_form(1, 0, 1), x=94_906_265, y=0
+            )
+        )
+        canonicalize_json(result.model_dump(mode="json"))
 
 
 class TestReduce:

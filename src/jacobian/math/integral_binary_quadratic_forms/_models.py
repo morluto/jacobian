@@ -24,6 +24,10 @@ MAX_REPRESENTATION_COORDINATE = 13_500_000_000
 # canonical class tuple and its independent result replay in one request.
 MAX_REDUCED_CLASS_SEARCH_STATES = 10_000
 MAX_REDUCED_CLASS_OUTPUT_ROWS = MAX_REDUCED_CLASS_SEARCH_STATES
+# Canonical JSON carries integers only up to the interoperable IEEE 754 double
+# range; every accepted evaluation must stay inside it so ``math.run`` returns
+# a typed result instead of failing transport canonicalization.
+MAX_EVALUATED_VALUE = (1 << 53) - 1
 
 
 def _require_positive_primitive_form(form: tuple[int, int, int]) -> None:
@@ -68,11 +72,22 @@ class BinaryQuadraticFormCheckRequest(StrictModel):
 
 
 class BinaryQuadraticFormEvaluateRequest(StrictModel):
-    """Request to evaluate a canonical form at an integer pair ``(x, y)``."""
+    """Request to evaluate a canonical form at an integer pair ``(x, y)``.
+
+    Admitted exactly when the exact value ``Q(x,y) = a*x^2 + b*x*y + c*y^2``
+    lies in ``[0, MAX_EVALUATED_VALUE]`` with
+    ``MAX_EVALUATED_VALUE = 9007199254740991``, the interoperable canonical
+    integer range.
+    """
 
     form: PrimitivePositiveDefiniteBinaryQuadraticForm
     x: int = Field(ge=-MAX_REPRESENTATION_COORDINATE, le=MAX_REPRESENTATION_COORDINATE)
     y: int = Field(ge=-MAX_REPRESENTATION_COORDINATE, le=MAX_REPRESENTATION_COORDINATE)
+
+    @model_validator(mode="after")
+    def require_transportable_value(self) -> Self:
+        _require_evaluated_value_bound(self.form, self.x, self.y)
+        return self
 
 
 class BinaryQuadraticFormReduceRequest(StrictModel):
@@ -151,6 +166,20 @@ def _require_representation_budget(
             "representation search exceeds the supported y-coordinate candidate budget"
         )
     return y_bound
+
+
+def _require_evaluated_value_bound(
+    form: PrimitivePositiveDefiniteBinaryQuadraticForm, x: int, y: int
+) -> int:
+    """Return the exact evaluated value after checking the transport range.
+
+    The form is positive definite, so the value is nonnegative and checking
+    the upper endpoint admits exactly the transportable outputs.
+    """
+    value = form.a * x * x + form.b * x * y + form.c * y * y
+    if value > MAX_EVALUATED_VALUE:
+        raise ValueError("evaluated value exceeds the interoperable integer range")
+    return value
 
 
 class BinaryQuadraticFormRepresentationsRequest(StrictModel):
@@ -281,6 +310,7 @@ class BinaryQuadraticFormEvaluateResult(StrictModel):
             _gcd,
         )
 
+        _require_evaluated_value_bound(self.form, self.x, self.y)
         value = _evaluate(self.form.a, self.form.b, self.form.c, self.x, self.y)
         if self.value != value:
             raise ValueError("value must be a*x^2 + b*x*y + c*y^2")

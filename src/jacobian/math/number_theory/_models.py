@@ -25,7 +25,10 @@ from jacobian._models import StrictModel
 # ---------------------------------------------------------------------------
 
 _MAX_INTEGER_LENGTH = 256
-_MAX_FACTORIZATION_LENGTH = 12
+# FactorizationInteger covers 20-digit inputs; SymPy factorint (Pollard rho /
+# ECM) handles 20-digit semiprimes in ~0.2s, keeping the bounded
+# synchronous budget safe.
+_MAX_FACTORIZATION_LENGTH = 20
 MAX_POWERFUL_INTEGER_DIGITS = 25
 MAX_POWERFUL_CUTOFF = 100_000
 MAX_POWERFUL_FACTOR_ENTRIES = 42
@@ -40,11 +43,23 @@ MAX_POWERFUL_EXPONENT = 83
 # synchronous ``math.run`` worker, so the admitted domain is narrowed here
 # and documented as an algorithmic budget.
 _MAX_CERTIFIED_FACTORIZATION_LENGTH = 30
-# These small bounds deliberately keep arithmetic functions that may factor
-# their input (totient, Möbius, divisor sigma, square-free predicates, and
-# multiplicative order) safe for in-process SymPy execution.
-_MAX_N_SMALL = 1_000
-_MAX_MODULUS = 10_000
+# ``_MAX_N_SMALL`` covers arithmetic functions that may factor their input
+# (totient, Möbius, divisor sigma, square-free predicates, and
+# multiplicative order).  The 10_000 bound keeps SymPy factoring safe for
+# in-process execution while admitting materially larger useful cases than
+# the prior 1_000 cap.  Primorial output is separately guarded by
+# ``_MAX_PRIMORIAL_DIGITS`` (3_400), so the larger ``n`` does not admit
+# unbounded output.
+_MAX_N_SMALL = 10_000
+# ``_MAX_MODULUS`` is shared across modular inverse, multiplicative order,
+# quadratic residues, CRT, Jacobi symbol, and brute-force discrete log.
+# Raised to 1_000_000 for non-enumeration ops (inverse, order, CRT, Jacobi
+# are O(log m)).  Quadratic residues at 1M enumerates ~500k entries
+# (worst case ~10 MiB JSON) and relies on existing output-size limits.
+# Brute-force discrete log is O(m) — 200k ~12ms, 1M ~60ms — so the uniform
+# 1M cap makes discrete log heavy; a future BSGS implementation should
+# replace the brute force before further raising this bound.
+_MAX_MODULUS = 1_000_000
 _MAX_CRT_SIZE = 64
 _MAX_DIVISORS = 4_096
 _MAX_FACTOR_ENTRIES = 256
@@ -275,13 +290,13 @@ class ValuationRequest(StrictModel):
 
 
 class NonnegativeIntegerRequest(StrictModel):
-    """One bounded non-negative integer (0 <= n <= 1 000)."""
+    """One bounded non-negative integer (0 <= n <= 10 000)."""
 
     n: StrictInt = Field(ge=0, le=_MAX_N_SMALL)
 
 
 class PositiveIntegerRequest(StrictModel):
-    """One bounded positive integer (1 <= n <= 1 000)."""
+    """One bounded positive integer (1 <= n <= 10 000)."""
 
     n: StrictInt = Field(ge=1, le=_MAX_N_SMALL)
 
@@ -394,7 +409,7 @@ class FriableCountResult(StrictModel):
 
 
 class ModularValueRequest(StrictModel):
-    """One canonical integer and a bounded modulus (2 <= modulus <= 10 000)."""
+    """One canonical integer and a bounded modulus (2 <= modulus <= 1 000 000)."""
 
     value: BoundedInteger
     modulus: StrictInt = Field(ge=2, le=_MAX_MODULUS)
@@ -416,7 +431,7 @@ class ModularUnitRequest(StrictModel):
 
 
 class ModulusRequest(StrictModel):
-    """A single bounded modulus (2 <= modulus <= 10 000)."""
+    """A single bounded modulus (2 <= modulus <= 1 000 000)."""
 
     modulus: StrictInt = Field(ge=2, le=_MAX_MODULUS)
 
@@ -513,7 +528,7 @@ class ChineseRemainderRequest(StrictModel):
         if len(self.residues) != len(self.moduli):
             raise ValueError("residues and moduli must have equal length")
         if any(modulus < 2 or modulus > _MAX_MODULUS for modulus in self.moduli):
-            raise ValueError("every modulus must be between 2 and 10,000")
+            raise ValueError("every modulus must be between 2 and 1,000,000")
         if any(
             residue < 0 or residue >= modulus
             for residue, modulus in zip(self.residues, self.moduli, strict=True)

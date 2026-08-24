@@ -32,7 +32,9 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "hypergraph.clique_expansion.compute",
         AdmissionDecision.KEEP,
-        "exact 2-section graph where vertices are adjacent if they share a hyperedge",
+        "exact 2-section of a finite hypergraph as a canonical "
+        "SimpleUndirectedGraph: two vertices are adjacent if they share a "
+        "hyperedge",
     ),
 )
 

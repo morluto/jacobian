@@ -152,8 +152,9 @@ def test_request_schema_exposes_every_delta_specific_admission_limit() -> None:
         "max_complete_axiom_replays_per_request": 4,
         "max_result_bytes": 65_536,
     }
-    assert "no separate delta-specific ground-size or row-count caps" in (
-        schema["description"]
+    assert (
+        "no separate delta-specific ground-size or row-count caps"
+        in (schema["description"])
     )
 
 

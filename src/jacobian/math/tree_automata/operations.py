@@ -154,9 +154,7 @@ def _reachability_execution_work_bound(automaton: BottomUpTreeAutomaton) -> int:
     Native callers perform exactly one profile per call.
     """
 
-    sort_work, per_scan_work, scan_rounds, _ = _reachability_price_components(
-        automaton
-    )
+    sort_work, per_scan_work, scan_rounds, _ = _reachability_price_components(automaton)
     witness_work = 3 * MAX_REACHABILITY_WITNESS_NODES
     return sort_work + scan_rounds * per_scan_work + witness_work
 

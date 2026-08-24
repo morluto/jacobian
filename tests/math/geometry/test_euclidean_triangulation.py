@@ -11,7 +11,6 @@ from jacobian.math.geometry._euclidean_triangulation import (
     minimum_euclidean_weight_triangulation,
 )
 from jacobian.math.geometry._models import (
-    MAX_EUCLIDEAN_TRIANGULATION_COORDINATE_DIGITS,
     MAX_EUCLIDEAN_TRIANGULATION_VERTICES,
     EuclideanConvexPolygonTriangulationRequest,
     EuclideanConvexPolygonTriangulationResult,
@@ -407,21 +406,44 @@ class TestEuclideanTriangulation:
         with pytest.raises(ValidationError, match="at most 28 items"):
             _request(tuple(_point(index, index * index) for index in range(29)))
 
-    def test_request_rejects_coordinates_beyond_the_digit_bound(self) -> None:
-        scale = 10**MAX_EUCLIDEAN_TRIANGULATION_COORDINATE_DIGITS
-        with pytest.raises(ValidationError, match="exceed the 32-digit bound"):
+    def test_request_admits_a_far_translated_unit_square(self) -> None:
+        scale = 10**32 + 7
+        plain = minimum_euclidean_weight_triangulation(
+            _request((_point(0, 0), _point(1, 0), _point(1, 1), _point(0, 1)))
+        )
+        shifted = minimum_euclidean_weight_triangulation(
             _request(
                 (
-                    _point(0, 0),
-                    {
-                        "x": {"num": str(scale), "den": "1"},
-                        "y": {"num": "0", "den": "1"},
-                    },
-                    {
-                        "x": {"num": str(scale + 1), "den": "1"},
-                        "y": {"num": "1", "den": "1"},
-                    },
-                    {"x": {"num": "1", "den": "1"}, "y": {"num": "1", "den": "1"}},
+                    _point(scale, 0),
+                    _point(scale + 1, 0),
+                    _point(scale + 1, 1),
+                    _point(scale, 1),
+                )
+            )
+        )
+
+        assert shifted.status == "CERTIFIED_OPTIMUM"
+        assert shifted.optimum is not None
+        assert plain.optimum is not None
+        assert shifted.split_table == plain.split_table
+        assert tuple((edge.first, edge.second) for edge in shifted.diagonals) == (
+            (1, 3),
+        )
+        assert tuple(
+            edge.squared_length.as_fraction() for edge in shifted.diagonals
+        ) == (Fraction(2),)
+        assert shifted.optimum.squared_lengths == plain.optimum.squared_lengths
+        assert tuple(
+            term.as_fraction() for term in shifted.optimum.squared_lengths
+        ) == (Fraction(2),)
+
+    def test_request_rejects_extent_beyond_the_derived_output_bound(self) -> None:
+        spread = 10**90
+        with pytest.raises(ValidationError, match="character output bound"):
+            _request(
+                tuple(
+                    _point(index * spread, index * index * spread)
+                    for index in range(28)
                 )
             )
 
@@ -432,14 +454,10 @@ class TestEuclideanTriangulation:
         ]
         assert points["minItems"] == 4
         assert points["maxItems"] == MAX_EUCLIDEAN_TRIANGULATION_VERTICES == 28
-        assert (
-            points["coordinate_digit_bound"]
-            == MAX_EUCLIDEAN_TRIANGULATION_COORDINATE_DIGITS
-            == 32
-        )
+        assert points["maximum_split_table_characters"] == 7_000_000
         assert "strictly convex" in points["description"]
         assert "simple" in points["description"]
-        assert "32 decimal digits" in points["description"]
+        assert "pairwise coordinate differences" in points["description"]
         description = schema.get("description", "")
         assert "4 to 28 vertices" in description
         assert "convexity and ring simplicity are enforced" in description

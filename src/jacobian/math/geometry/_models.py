@@ -843,7 +843,6 @@ class ConvexPolygonTriangulationResult(StrictModel):
 # ---------------------------------------------------------------------------
 
 MAX_EUCLIDEAN_TRIANGULATION_VERTICES = 28
-MAX_EUCLIDEAN_TRIANGULATION_COORDINATE_DIGITS = 32
 EUCLIDEAN_TRIANGULATION_COMPARISON_PRECISION_BITS = 128
 _MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS = 7_000_000
 
@@ -854,12 +853,18 @@ def _require_euclidean_triangulation_envelope(
     """Validate the bounded exact source and return its rational coordinates.
 
     Positive consecutive turns establish strict convexity only for a simple
-    ring, so global simplicity is checked before the recurrence runs.  A
-    dynamic-programming state retains at most ``n - 3`` diagonal lengths.  A
-    squared distance between ``d``-digit rational coordinates has at most
-    ``8d`` digits in each component.  The complete split table has
+    ring, so global simplicity is checked before the recurrence runs.  Raw
+    positions control no kernel quantity: every turn, diagonal squared
+    length, and serialized expression depends only on pairwise coordinate
+    differences, so admission derives ``d``, the maximum decimal digits in
+    any pairwise-difference component, from the source itself and admits
+    harmless translations for free.  A squared length then has at most
+    ``4d + 1`` digits in each component (each product doubles its side and
+    the final sum adds one digit), and each split-table expression term is
+    charged twice that plus fixed punctuation slack.  The complete table has
     ``(n - 1)(n - 2)/2`` states, so the conservative serialized-expression
-    estimate below bounds every retained exact sum before Arb is invoked.
+    estimate below bounds every retained exact sum before Arb is invoked;
+    each raw input coordinate stays inside the shared canonical rational cap.
     """
 
     points = tuple(_point_key(point) for point in polygon.points)
@@ -869,16 +874,16 @@ def _require_euclidean_triangulation_envelope(
             "Euclidean triangulation supports 4 to "
             f"{MAX_EUCLIDEAN_TRIANGULATION_VERTICES} vertices"
         )
-    max_digits = max(
-        max(len(str(abs(component.numerator))), len(str(component.denominator)))
-        for point in points
-        for component in point
-    )
-    if max_digits > MAX_EUCLIDEAN_TRIANGULATION_COORDINATE_DIGITS:
-        raise ValueError(
-            "Euclidean triangulation coordinates exceed the "
-            f"{MAX_EUCLIDEAN_TRIANGULATION_COORDINATE_DIGITS}-digit bound"
-        )
+    difference_digits = 1
+    for first in range(count):
+        for second in range(first + 1, count):
+            for left, right in zip(points[first], points[second], strict=True):
+                delta = right - left
+                difference_digits = max(
+                    difference_digits,
+                    len(str(abs(delta.numerator))),
+                    len(str(delta.denominator)),
+                )
     turns = tuple(
         _cross(
             _subtract(points[(index + 1) % count], points[index]),
@@ -891,7 +896,8 @@ def _require_euclidean_triangulation_envelope(
     if not _is_simple_ring(polygon.points):
         raise ValueError("Euclidean triangulation requires a simple ring")
     states = (count - 1) * (count - 2) // 2
-    estimated_chars = states * (count - 3) * (16 * max_digits + 128)
+    term_chars = 2 * (4 * difference_digits + 1) + 128
+    estimated_chars = states * (count - 3) * term_chars
     if estimated_chars > _MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS:
         raise ValueError(
             "Euclidean triangulation split table can serialize up to "
@@ -937,12 +943,12 @@ class EuclideanTriangulationPolygonRequest(PolygonRequest):
         max_length=MAX_EUCLIDEAN_TRIANGULATION_VERTICES,
         description=(
             "Ring vertices listed counterclockwise; the closed ring must be "
-            "simple and strictly convex. Every numerator and denominator "
-            "carries at most "
-            f"{MAX_EUCLIDEAN_TRIANGULATION_COORDINATE_DIGITS} decimal digits."
+            "simple and strictly convex. Admission derives the exact split-"
+            "table output bound from the pairwise coordinate differences, so "
+            "absolute positions stay inside the shared canonical rational cap."
         ),
         json_schema_extra={
-            "coordinate_digit_bound": MAX_EUCLIDEAN_TRIANGULATION_COORDINATE_DIGITS,
+            "maximum_split_table_characters": _MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS,
         },
     )
 
@@ -955,12 +961,10 @@ class EuclideanConvexPolygonTriangulationRequest(StrictModel):
             "description": (
                 "Minimum Euclidean triangulation of one strict CCW convex "
                 "simple rational polygon. Admitted requests contain 4 to 28 "
-                "vertices whose coordinates carry at most "
-                f"{MAX_EUCLIDEAN_TRIANGULATION_COORDINATE_DIGITS} decimal "
-                "digits per component and whose exact split table fits the "
-                "published serialized-output bound; strict counterclockwise "
-                "convexity and ring simplicity are enforced by the request "
-                "validator after parsing."
+                "vertices whose pairwise coordinate differences keep the "
+                "exact split table inside the published serialized-output "
+                "bound; strict counterclockwise convexity and ring simplicity "
+                "are enforced by the request validator after parsing."
             ),
         },
     )

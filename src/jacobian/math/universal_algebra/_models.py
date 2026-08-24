@@ -4,17 +4,34 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.canonical import (
+    CanonicalizationError,
+    CanonicalLimits,
+    encode_strict_json,
+)
 from jacobian.math.universal_algebra.values import (
+    MAX_ARITY,
     MAX_CARRIER_SIZE,
+    MAX_SIGNATURE_SIZE,
     FiniteAlgebra,
+    FiniteAlgebraCarrierMap,
+    FiniteAlgebraHomomorphism,
     FlatTerm,
+    _first_homomorphism_failure,
+    _homomorphism_kernel_and_image,
     require_term_for_algebra,
 )
 
 MAX_ENUMERATION_WORK = 1_000_000
+_HOMOMORPHISM_REPLAY_PASSES = 2
+# The result adds at most 32 source indices in kernel blocks, 32 image indices,
+# six flags/scalars, or one obstruction with two arity-at-most-four tuples and a
+# 64-byte operation ID.  Four KiB conservatively bounds that JSON wrapper over
+# the exactly measured retained carrier-map bytes.
+_HOMOMORPHISM_RESULT_RESERVE_BYTES = 4_096
 CarrierBlock = Annotated[
     tuple[int, ...],
     Field(min_length=1, max_length=MAX_CARRIER_SIZE),
@@ -129,6 +146,168 @@ class SubalgebraResult(StrictModel):
     is_closed: bool
 
 
+def _require_homomorphism_output_headroom(
+    carrier_map: FiniteAlgebraCarrierMap,
+) -> None:
+    try:
+        retained_source_bytes = len(
+            encode_strict_json(carrier_map.model_dump(mode="json"))
+        )
+    except CanonicalizationError as exc:
+        raise ValueError(
+            "finite algebra carrier map exceeds the canonical output limit"
+        ) from exc
+    output_limit = CanonicalLimits().max_output_bytes
+    if retained_source_bytes + _HOMOMORPHISM_RESULT_RESERVE_BYTES > output_limit:
+        raise ValueError(
+            "homomorphism profile retains the carrier map and would exceed the "
+            f"{output_limit}-byte canonical output limit"
+        )
+
+
+class HomomorphismProfileRequest(StrictModel):
+    """Check one total finite-algebra carrier map for operation preservation."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Check a complete carrier map between finite algebras with exactly "
+                "matching ordered operation identifiers and arities. Every source "
+                "operation-table cell is checked; the retained-map result is "
+                "rejected before execution when replay work or canonical output "
+                "would exceed its bound."
+            )
+        }
+    )
+
+    carrier_map: FiniteAlgebraCarrierMap = Field(
+        description=(
+            "Total source-to-target carrier map. Source and target signatures must "
+            "match exactly; carrier sizes may differ."
+        )
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_complete_scan(self) -> Self:
+        preservation_cells = sum(len(table) for table in self.carrier_map.source.tables)
+        if preservation_cells * _HOMOMORPHISM_REPLAY_PASSES > MAX_ENUMERATION_WORK:
+            raise ValueError(
+                "homomorphism operation-and-replay work exceeds the enumeration budget"
+            )
+        _require_homomorphism_output_headroom(self.carrier_map)
+        return self
+
+
+class HomomorphismObstruction(StrictModel):
+    """The first exact operation-preservation failure in canonical scan order."""
+
+    operation: int = Field(ge=0, le=MAX_SIGNATURE_SIZE - 1)
+    operation_id: str = Field(min_length=1, max_length=64)
+    source_arguments: tuple[int, ...] = Field(max_length=MAX_ARITY)
+    target_arguments: tuple[int, ...] = Field(max_length=MAX_ARITY)
+    source_output: int = Field(ge=0, le=MAX_CARRIER_SIZE - 1)
+    mapped_source_output: int = Field(ge=0, le=MAX_CARRIER_SIZE - 1)
+    target_output: int = Field(ge=0, le=MAX_CARRIER_SIZE - 1)
+
+
+class HomomorphismProfileResult(StrictModel):
+    """A checked homomorphism or the first exact preservation obstruction.
+
+    The positive branch carries a reusable :class:`FiniteAlgebraHomomorphism`;
+    the negative branch retains the supplied carrier map. Validation replays
+    preservation and reconstructs every positive kernel/image field or every
+    negative obstruction from that retained source.
+    """
+
+    status: Literal["HOMOMORPHISM", "NOT_A_HOMOMORPHISM"]
+    homomorphism: FiniteAlgebraHomomorphism | None = None
+    carrier_map: FiniteAlgebraCarrierMap | None = None
+    kernel_partition: tuple[CarrierBlock, ...] = Field(
+        default=(), max_length=MAX_CARRIER_SIZE
+    )
+    image: tuple[int, ...] = Field(default=(), max_length=MAX_CARRIER_SIZE)
+    injective: bool | None = None
+    surjective: bool | None = None
+    isomorphism: bool | None = None
+    obstruction: HomomorphismObstruction | None = None
+    method: Literal["DENSE_TABLE_SCAN"] = "DENSE_TABLE_SCAN"
+
+    @model_validator(mode="after")
+    def require_source_bound_profile(self) -> Self:
+        if self.status == "HOMOMORPHISM":
+            if self.homomorphism is None:
+                raise ValueError("HOMOMORPHISM must carry a checked homomorphism")
+            if self.carrier_map is not None or self.obstruction is not None:
+                raise ValueError(
+                    "HOMOMORPHISM cannot carry a failed map or obstruction"
+                )
+            if None in (self.injective, self.surjective, self.isomorphism):
+                raise ValueError("HOMOMORPHISM must carry all map-property flags")
+            _require_homomorphism_output_headroom(self.homomorphism)
+            expected_kernel, expected_image = _homomorphism_kernel_and_image(
+                self.homomorphism.mapping
+            )
+            if self.kernel_partition != expected_kernel:
+                raise ValueError(
+                    "kernel_partition must be the canonical fibers of the carrier map"
+                )
+            if self.image != expected_image:
+                raise ValueError("image must be the sorted carrier-map image")
+            expected_injective = len(expected_image) == len(
+                self.homomorphism.source.carrier
+            )
+            expected_surjective = len(expected_image) == len(
+                self.homomorphism.target.carrier
+            )
+            if self.injective is not expected_injective:
+                raise ValueError("injective must be reconstructed from the kernel")
+            if self.surjective is not expected_surjective:
+                raise ValueError("surjective must be reconstructed from the image")
+            if self.isomorphism is not (expected_injective and expected_surjective):
+                raise ValueError(
+                    "isomorphism must be reconstructed from injectivity and surjectivity"
+                )
+            return self
+
+        if self.carrier_map is None or self.obstruction is None:
+            raise ValueError(
+                "NOT_A_HOMOMORPHISM must retain the carrier map and obstruction"
+            )
+        if self.homomorphism is not None:
+            raise ValueError("NOT_A_HOMOMORPHISM cannot carry a homomorphism")
+        if (
+            self.kernel_partition
+            or self.image
+            or any(
+                flag is not None
+                for flag in (self.injective, self.surjective, self.isomorphism)
+            )
+        ):
+            raise ValueError(
+                "NOT_A_HOMOMORPHISM cannot carry positive map-property data"
+            )
+        _require_homomorphism_output_headroom(self.carrier_map)
+        expected = _first_homomorphism_failure(self.carrier_map)
+        if expected is None:
+            raise ValueError(
+                "NOT_A_HOMOMORPHISM source map preserves every basic operation"
+            )
+        expected_obstruction = HomomorphismObstruction(
+            operation=expected.operation,
+            operation_id=self.carrier_map.source.operations[
+                expected.operation
+            ].operation_id,
+            source_arguments=expected.source_arguments,
+            target_arguments=expected.target_arguments,
+            source_output=expected.source_output,
+            mapped_source_output=expected.mapped_source_output,
+            target_output=expected.target_output,
+        )
+        if self.obstruction != expected_obstruction:
+            raise ValueError("obstruction must be the first exact preservation failure")
+        return self
+
+
 class _PartitionRequest(StrictModel):
     algebra: FiniteAlgebra
     partition: tuple[CarrierBlock, ...] = Field(
@@ -156,22 +335,59 @@ class CongruenceResult(StrictModel):
 class QuotientRequest(_PartitionRequest):
     """Construct ``A/theta`` for an admitted congruence partition."""
 
-
-class QuotientResult(StrictModel):
-    """A directly composable quotient algebra and its carrier map."""
-
-    algebra: FiniteAlgebra
-    quotient_map: tuple[int, ...] = Field(
-        min_length=1,
-        max_length=MAX_CARRIER_SIZE,
-    )
-
     @model_validator(mode="after")
-    def require_map_into_quotient(self) -> Self:
-        if any(
-            not 0 <= value < len(self.algebra.carrier) for value in self.quotient_map
-        ):
-            raise ValueError("quotient map value is outside the quotient carrier")
+    def require_source_bound_result_headroom(self) -> Self:
+        """Bound the retained source, quotient tables, and carrier map."""
+
+        quotient_size = len(self.partition)
+        quotient_table_cells = sum(
+            quotient_size**operation.arity for operation in self.algebra.operations
+        )
+        quotient_work = (
+            _congruence_work(self.algebra)
+            + sum(len(table) for table in self.algebra.tables)
+            + quotient_table_cells
+        )
+        if quotient_work > MAX_ENUMERATION_WORK:
+            raise ValueError(
+                "quotient construction and homomorphism replay exceed the "
+                "operation work budget"
+            )
+        try:
+            source_bytes = len(encode_strict_json(self.algebra.model_dump(mode="json")))
+            operation_bytes = len(
+                encode_strict_json(
+                    [
+                        operation.model_dump(mode="json")
+                        for operation in self.algebra.operations
+                    ]
+                )
+            )
+            quotient_carrier_bytes = sum(
+                len(encode_strict_json(f"B{index}")) + 1
+                for index in range(quotient_size)
+            )
+        except CanonicalizationError as exc:
+            raise ValueError(
+                "quotient source exceeds the canonical output limit"
+            ) from exc
+        quotient_index_bytes = len(str(quotient_size - 1)) + 1
+        quotient_table_bytes = quotient_table_cells * quotient_index_bytes
+        mapping_bytes = len(self.algebra.carrier) * quotient_index_bytes
+        predicted_bytes = (
+            source_bytes
+            + operation_bytes
+            + quotient_carrier_bytes
+            + quotient_table_bytes
+            + mapping_bytes
+            + _HOMOMORPHISM_RESULT_RESERVE_BYTES
+        )
+        output_limit = CanonicalLimits().max_output_bytes
+        if predicted_bytes > output_limit:
+            raise ValueError(
+                "canonical quotient homomorphism would exceed the "
+                f"{output_limit}-byte output limit"
+            )
         return self
 
 
@@ -183,8 +399,10 @@ __all__ = [
     "EquationProfileResult",
     "EvaluateRequest",
     "EvaluateResult",
+    "HomomorphismObstruction",
+    "HomomorphismProfileRequest",
+    "HomomorphismProfileResult",
     "QuotientRequest",
-    "QuotientResult",
     "SubalgebraRequest",
     "SubalgebraResult",
 ]

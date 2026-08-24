@@ -10,6 +10,13 @@ from jacobian.catalog.admission import (
 from jacobian.math.graphs.coloring._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
+    # The exact order-16 usefulness fixture comes from Campbell, Theorem 2:
+    # https://arxiv.org/abs/2608.06863v1
+    OperationAdmission(
+        "graph.coloring.chromatic_number.check",
+        AdmissionDecision.KEEP,
+        "direct exact bounded check of a claimed vertex chromatic number from a proper-coloring upper witness and an independently replayed fractional-clique lower certificate",
+    ),
     OperationAdmission(
         "graph.edge_coloring.check",
         AdmissionDecision.KEEP,

@@ -119,6 +119,34 @@ def _vanishes_at_point(
     return total == 0
 
 
+def _occupied_slots(generator: RationalPolynomial) -> set[int]:
+    """Return every variable slot a generator's terms actually occupy."""
+
+    return {
+        index
+        for term in generator.polynomial.terms
+        for index, exponent in enumerate(term.exponents)
+        if exponent
+    }
+
+
+def _sole_owned_generators(
+    ideal: RationalPolynomialIdeal,
+) -> dict[int, RationalPolynomial]:
+    """Map each variable slot to the only generator occupying it, if any."""
+
+    sole: dict[int, RationalPolynomial] = {}
+    contested: set[int] = set()
+    for generator in ideal.generators:
+        for slot in _occupied_slots(generator):
+            if slot in sole:
+                del sole[slot]
+                contested.add(slot)
+            elif slot not in contested:
+                sole[slot] = generator
+    return sole
+
+
 def _require_provable_family_fit(ideal: RationalPolynomialIdeal) -> None:
     """Reject sources whose complete family provably overflows the envelope.
 
@@ -126,24 +154,34 @@ def _require_provable_family_fit(ideal: RationalPolynomialIdeal) -> None:
     variable and each vanishes at two distinct certified rational points.
     Every choice of one certified root per certified generator extends, by
     zero on every other variable, to a rational point of the whole ring;
-    the choice is FEASIBLE only when every generator of the ideal — not
-    just the certified ones — vanishes at that extended point, so coupling
-    or incompatible extra generators remove choices they rule out. Each
-    feasible point's maximal ideal contains the whole source, hence a
-    minimal prime of it. That prime holds exactly one irreducible factor
-    per certified generator (two coprime factors would generate the unit
-    ideal), and containment in the point's maximal ideal forces that
-    factor through a rational root, i.e. to be the corresponding linear
-    form; distinct feasible points therefore force distinct minimal
-    primes. Each such prime contains ``k`` independent linear forms, so it
-    has height at least ``k`` and, by Krull's height theorem, needs at
-    least ``k`` generators in any presentation. The complete family thus
-    carries at least ``feasible * k`` aggregate generators: when that
-    exceeds the exact-result envelope, every admitted execution ends in
-    typed LIMIT_EXCEEDED and the source is rejected here before any
-    backend launch. A source containing a nonzero constant is the unit
-    ideal with an empty family and always stays admitted, and a source
-    with no feasible choice certifies nothing and stays admitted.
+    the choice is FEASIBLE only when every remaining generator of the
+    ideal — not just the certified ones — vanishes at that extended point,
+    so coupling or incompatible extra generators remove choices they rule
+    out. Distinct feasible choices force distinct minimal primes: each
+    holds exactly one irreducible factor per certified generator (two
+    coprime factors would generate the unit ideal), and containment in the
+    choice's maximal ideal forces that factor through a rational root,
+    i.e. to be the corresponding linear form.
+
+    Each further single-variable constraint that SOLELY occupies its own
+    uncertified variable adds one forced generator to every counted prime
+    without multiplying how many there are. Specializing the ring by the
+    choice's roots (and zero elsewhere) leaves each such constraint a
+    nonconstant univariate polynomial in its own surviving variable, so
+    the images cannot jointly generate 1 and a prime above the specialized
+    source exists; that prime contains the ``k`` linear forms plus ``e``
+    nonconstant univariate constraints on distinct fresh variables, so it
+    has height at least ``k + e`` and, by Krull's height theorem, needs at
+    least ``k + e`` generators in any presentation. A slot shared with any
+    other generator certifies nothing extra, because specialization could
+    then combine constraints into a unit and falsely count dead choices.
+    The complete family thus carries at least ``feasible * (k + e)``
+    aggregate generators: when that exceeds the exact-result envelope,
+    every admitted execution ends in typed LIMIT_EXCEEDED and the source
+    is rejected here before any backend launch. A source containing a
+    nonzero constant is the unit ideal with an empty family and always
+    stays admitted, and a source with no feasible choice certifies nothing
+    and stays admitted.
     """
 
     unit_witness = any(
@@ -165,23 +203,38 @@ def _require_provable_family_fit(ideal: RationalPolynomialIdeal) -> None:
     count = len(certified_roots)
     if not count:
         return
+    extra_constraints = {
+        slot: generator
+        for slot, generator in _sole_owned_generators(ideal).items()
+        if slot not in certified_roots and _single_variable_slot(generator) == slot
+    }
+    minimum_component_generators = count + len(extra_constraints)
+    constrained = [
+        generator
+        for generator in ideal.generators
+        if _single_variable_slot(generator) not in extra_constraints
+    ]
     slots = sorted(certified_roots)
     variables = len(ideal.variables)
     feasible = 0
     for choice in itertools.product(*(certified_roots[slot] for slot in slots)):
         values = dict(zip(slots, choice, strict=True))
         point = tuple(Fraction(values.get(slot, 0)) for slot in range(variables))
-        if all(_vanishes_at_point(generator, point) for generator in ideal.generators):
+        if all(_vanishes_at_point(generator, point) for generator in constrained):
             feasible += 1
-            if feasible * count > MAX_OUTPUT_GENERATORS:
+            if feasible * minimum_component_generators > MAX_OUTPUT_GENERATORS:
                 raise ValueError(
                     "the source provably forces a complete family above the "
                     f"{MAX_OUTPUT_GENERATORS}-generator exact-result envelope: "
                     f"{count} single-variable generators each certified "
-                    f"against two distinct rational roots already yield at "
-                    f"least {feasible} feasible root choices as minimal "
-                    f"primes with at least {count} generators apiece "
-                    f"({feasible * count} aggregate generators)"
+                    f"against two distinct rational roots yield at least "
+                    f"{feasible} feasible root choices as minimal primes, "
+                    f"and each carries at least "
+                    f"{minimum_component_generators} generators including "
+                    f"{len(extra_constraints)} further independent "
+                    f"single-variable constraints "
+                    f"({feasible * minimum_component_generators} aggregate "
+                    f"generators)"
                 )
 
 
@@ -414,11 +467,12 @@ class IdealMinimalPrimesRequest(StrictModel):
             "256 aggregate terms; generator total degree is at most 20 and "
             "coefficient components are at most 128 digits. A source whose "
             "complete family provably exceeds the aggregate 64-generator "
-            "exact-result envelope — feasible rational-root choices of its "
-            "certified single-variable generators force that many minimal "
-            "primes with k generators apiece — is rejected here before the "
-            "backend launches; otherwise a family exceeding the aggregate "
-            "64-generator or 1024-term envelope returns a typed "
+            "exact-result envelope — k certified two-rational-root "
+            "single-variable generators force at least 2^k minimal primes, "
+            "and each further independent single-variable constraint raises "
+            "every component's forced generator count — is rejected here "
+            "before the backend launches; otherwise a family exceeding the "
+            "aggregate 64-generator or 1024-term envelope returns a typed "
             "LIMIT_EXCEEDED outcome."
         )
     )

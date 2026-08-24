@@ -621,6 +621,84 @@ def test_negative_root_certificate_rejects_and_admits_at_the_boundary() -> None:
     assert len(request.ideal.generators) == 4
 
 
+def test_irreducible_constraint_stays_admitted_below_the_envelope() -> None:
+    """The forced-height bonus respects the same exact envelope boundary.
+
+    Three certified generators give 2^3 = 8 feasible root choices and,
+    with x4^2 - 2 solely occupying its own uncertified variable, every
+    counted minimal prime needs at least 4 generators: 8 * 4 = 32
+    aggregate generators stay provably inside the 64-generator envelope,
+    so the source is admitted for the backend to answer exactly.
+    """
+
+    variables = tuple(f"x{index}" for index in range(1, 5))
+    request = IdealMinimalPrimesRequest(
+        ideal=_ideal(
+            variables,
+            *_product_ideal(variables, (2,) * 3).generators,
+            _poly(
+                variables,
+                (1, 1, (0, 0, 0, 2)),
+                (-2, 1, (0, 0, 0, 0)),
+            ),
+        )
+    )
+
+    assert len(request.ideal.generators) == 4
+
+
+def test_shared_extra_slot_is_not_counted_as_a_forced_constraint() -> None:
+    """A slot shared with another generator certifies no extra height.
+
+    <x1(x1-1), ..., x4(x4-1), x5, x5 - 1> contains comaximal generators
+    x5 and x5 - 1, so it is the unit ideal with an empty family and fits
+    trivially; naively counting either generator's slot as one forced
+    constraint would claim 16 * 5 = 80 aggregate generators and reject a
+    fitting source. The shared slot is neither exempted from the point
+    feasibility test nor counted toward any component's forced height.
+    """
+
+    variables = tuple(f"x{index}" for index in range(1, 6))
+    request = IdealMinimalPrimesRequest(
+        ideal=_ideal(
+            variables,
+            *_product_ideal(variables, (2,) * 4).generators,
+            _poly(variables, (1, 1, (0, 0, 0, 0, 1))),
+            _poly(variables, (1, 1, (0, 0, 0, 0, 1)), (-1, 1, (0,) * 5)),
+        )
+    )
+
+    assert len(request.ideal.generators) == 6
+
+
+def test_coupled_irreducible_constraint_falls_back_to_plain_certification() -> None:
+    """An irreducible constraint sharing its slot loses the height bonus.
+
+    Adding the coupling x5 * x1 to the rejected family makes x5's slot
+    shared, so specialization could combine the constraints into a unit;
+    the certificate then counts neither extra height nor exempt choices.
+    The coupling does not vanish at any pinned probe point, so no choice
+    stays feasible and admission retains the conservative four-certified
+    behavior without rejecting the source.
+    """
+
+    variables = tuple(f"x{index}" for index in range(1, 6))
+    request = IdealMinimalPrimesRequest(
+        ideal=_ideal(
+            variables,
+            *_product_ideal(variables, (2,) * 4).generators,
+            _poly(
+                variables,
+                (1, 1, (0, 0, 0, 0, 2)),
+                (-2, 1, (0, 0, 0, 0, 0)),
+            ),
+            _poly(variables, (1, 1, (1, 0, 0, 0, 1))),
+        )
+    )
+
+    assert len(request.ideal.generators) == 6
+
+
 def test_coupling_generators_remove_infeasible_root_choices() -> None:
     """Root choices are certified only when every generator stays feasible.
 
@@ -895,38 +973,42 @@ def test_prime_wider_than_the_ring_dimension_is_computed() -> None:
     )
 
 
-@pytest.mark.skipif(
-    shutil.which("Singular") is None,
-    reason="Singular 4.4 backend is not installed",
-)
-def test_family_overflowing_the_generator_envelope_is_a_typed_result_limit() -> None:
-    """An admitted family whose decoded size overflows the aggregate bound.
+def test_irreducible_constraint_overflow_is_rejected_before_launch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A sole irreducible constraint raises every component's forced height.
 
-    Four idempotent generators sit at the certificate boundary (4 * 2^4 =
-    64), and x5^2 - 2 certifies no rational root among the fixed probes,
-    so the source stays admitted; its true family of 32 components with 5
-    generators apiece then overflows the envelope and answers as a typed
-    result limit instead of a backend failure.
+    For <x1(x1-1), ..., x4(x4-1), x5^2 - 2> the four certified generators
+    give 16 feasible root choices, and x5^2 - 2 solely occupies its own
+    variable with no rational root among the fixed probes: over QQ every
+    counted minimal prime contains the four linear forms plus x5^2 - 2, so
+    each needs at least five generators and the family carries at least 80
+    aggregate generators against a fixed 64-generator envelope. Admission
+    rejects the source before Singular launches instead of spending
+    backend work on a guaranteed overflow.
     """
 
+    def forbidden(*args: object, **kwargs: object) -> object:
+        raise AssertionError("the backend must not launch for a rejected source")
+
+    monkeypatch.setattr(_PRODUCER_TARGET, forbidden)
+    _forbid_verifier(monkeypatch)
+
     variables = tuple(f"x{index}" for index in range(1, 6))
-    request = IdealMinimalPrimesRequest(
-        ideal=_ideal(
-            variables,
-            *_product_ideal(variables, (2,) * 4).generators,
-            _poly(
-                variables,
-                (1, 1, (0, 0, 0, 0, 2)),
-                (-2, 1, (0, 0, 0, 0, 0)),
-            ),
+    with pytest.raises(ValidationError, match="provably forces"):
+        compute_ideal_minimal_primes(
+            IdealMinimalPrimesRequest(
+                ideal=_ideal(
+                    variables,
+                    *_product_ideal(variables, (2,) * 4).generators,
+                    _poly(
+                        variables,
+                        (1, 1, (0, 0, 0, 0, 2)),
+                        (-2, 1, (0, 0, 0, 0, 0)),
+                    ),
+                )
+            )
         )
-    )
-
-    result = compute_ideal_minimal_primes(request)
-
-    assert result.outcome == "LIMIT_EXCEEDED"
-    assert result.components is None
-    assert result.detail is not None
 
 
 @pytest.mark.skipif(

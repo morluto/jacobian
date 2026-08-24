@@ -125,6 +125,16 @@ def _merged_unit_power_weights(
 
     weights: dict[tuple[int, ...], int] = {}
     visited = 0
+    if iterations == 1:
+        # A single application selects exactly one term per composition: each
+        # term contributes its own shift with signed unit weight.  Building
+        # this family directly avoids the skip-chain DFS whose frame cost is
+        # quadratic in the term count and crashed workers on wide operators.
+        for term in operator.terms:
+            sign = 1 if term.coefficient.as_fraction() == 1 else -1
+            shift = tuple(term.orders)
+            weights[shift] = weights.get(shift, 0) + sign
+        return weights
     frames: list[tuple[int, int, tuple[int, ...], int, int]] = [
         (0, iterations, (0,) * len(operator.variables), 0, 1)
     ]

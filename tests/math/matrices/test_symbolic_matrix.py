@@ -335,6 +335,72 @@ def test_symbolic_matrix_product_rejects_exponent_growth_before_kernel() -> None
         _product_request(((x_to_64,),), ((x,),), variables)
 
 
+def test_symbolic_matrix_product_admits_scalar_identity_with_large_coefficients() -> None:
+    variables = ("x",)
+    large = _rf(variables, (10**63, 1, (1,)), (1, 1, (0,)))
+    one = _rf(variables, (1, 1, (0,)))
+    product = compute_symbolic_matrix_product(
+        _product_request(((large,),), ((one,),), variables)
+    )
+    assert product.entries == ((large,),)
+
+
+def test_symbolic_matrix_product_admits_partial_exponent_collisions() -> None:
+    """Only products sharing an exponent are charged to one coefficient."""
+
+    variables = ("x",)
+    scaled = _rf(
+        variables,
+        (10**40, 1, (2,)),
+        (10**40, 1, (1,)),
+        (10**40, 1, (0,)),
+    )
+    shifted = _rf(variables, (1, 1, (1,)), (1, 1, (0,)))
+    request = _product_request(((scaled,),), ((shifted,),), variables)
+    product = compute_symbolic_matrix_product(request)
+    assert product.entries == (
+        (
+            _rf(
+                variables,
+                (10**40, 1, (3,)),
+                (2 * 10**40, 1, (2,)),
+                (2 * 10**40, 1, (1,)),
+                (10**40, 1, (0,)),
+            ),
+        ),
+    )
+
+
+def test_symbolic_matrix_product_still_charges_colliding_products() -> None:
+    variables = ("x",)
+    scaled = _rf(variables, (10**63, 1, (1,)), (10**63, 1, (0,)))
+    shifted = _rf(variables, (1, 1, (1,)), (1, 1, (0,)))
+    with pytest.raises(ValidationError, match="coefficient"):
+        _product_request(((scaled,),), ((shifted,),), variables)
+
+
+def test_symbolic_matrix_product_admits_sparse_support_without_cancellation() -> None:
+    """Polynomial cells cannot densify, so sparse support stays bounded."""
+
+    variables = ("x", "y")
+    monomial = _rf(variables, (1, 1, (16, 16)))
+    product = compute_symbolic_matrix_product(
+        _product_request(((monomial,),), ((monomial,),), variables)
+    )
+    assert product.entries == ((_rf(variables, (1, 1, (32, 32))),),)
+
+
+def test_symbolic_matrix_product_keeps_dense_box_for_rational_entries() -> None:
+    variables = ("x", "y")
+    inverse = _rf(
+        variables,
+        (1, 1, (0, 0)),
+        denominator=((1, 1, (16, 16)),),
+    )
+    with pytest.raises(ValidationError, match="canonical result budget"):
+        _product_request(((inverse,),), ((inverse,),), variables)
+
+
 def test_rational_function_entries_use_the_advertised_field() -> None:
     variables = ("x",)
     inverse_x = _rf(

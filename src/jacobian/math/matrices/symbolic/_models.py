@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
-from itertools import combinations, permutations
+from collections import Counter
+from collections.abc import Iterable
+from itertools import combinations, permutations, product
 from typing import Any, Literal, Self
 
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.math.polynomials.values import PolynomialVariable, RationalFunction
+from jacobian.math.polynomials.values import (
+    PolynomialVariable,
+    RationalFunction,
+    SparseRationalPolynomial,
+)
 
 MAX_SYMBOLIC_MATRIX_DIMENSION = 8
 MAX_SYMBOLIC_VARIABLES = 8
@@ -189,6 +195,41 @@ def _monomial_box_term_bound(exponents: tuple[int, ...]) -> int:
     return bound
 
 
+def _polynomial_pair_exponents(
+    first: SparseRationalPolynomial, second: SparseRationalPolynomial
+) -> tuple[tuple[int, ...], ...]:
+    """Enumerate monomial exponents of every pairwise product of two polynomials."""
+
+    return tuple(
+        tuple(
+            first_exponent + second_exponent
+            for first_exponent, second_exponent in zip(
+                first_term.exponents, second_term.exponents, strict=True
+            )
+        )
+        for first_term in first.terms
+        for second_term in second.terms
+    )
+
+
+def _maximum_product_collisions(
+    expansions: Iterable[tuple[tuple[tuple[int, ...], ...], ...]],
+) -> int:
+    """Count raw products colliding at the most crowded exponent.
+
+    Each expansion is a finite product of monomial-exponent choices; only
+    products landing on one exponent are collected into a single coefficient,
+    so the maximum multiplicity, not the total support size, drives the
+    coefficient digit bound.
+    """
+
+    counts: Counter[tuple[int, ...]] = Counter()
+    for groups in expansions:
+        for chosen in product(*groups):
+            counts[tuple(map(sum, zip(*chosen, strict=True)))] += 1
+    return max(counts.values(), default=1)
+
+
 def _product_cell_bounds(
     left: tuple[RationalFunction, ...],
     right: tuple[RationalFunction, ...],
@@ -198,9 +239,10 @@ def _product_cell_bounds(
     The cell is a finite sum of products ``a_i * b_i``. Each nonzero product
     is first written over its own canonical denominator, then all products are
     put over the product common denominator. The raw term and coefficient
-    bounds admit that expansion before SymPy receives the request. A separate
-    per-axis monomial-box bound accounts for a canonical quotient becoming
-    denser after exact cancellation.
+    bounds admit that expansion before SymPy receives the request. Coefficient
+    digits are bounded by the products colliding at one exponent rather than
+    by total support size. A separate per-axis monomial-box bound accounts for
+    a canonical quotient becoming denser after exact cancellation.
     """
 
     factors = tuple(
@@ -283,13 +325,44 @@ def _product_cell_bounds(
             - denominator_coefficient_digits[index],
         )
 
+    # Only cells within the result term budget can survive admission, so
+    # enumerating their raw products stays bounded; larger cells keep the
+    # conservative support-size estimate and are rejected by the term checks.
+    numerator_collision_count = numerator_terms
+    denominator_collision_count = denominator_terms
+    if (
+        numerator_terms <= MAX_SYMBOLIC_RESULT_TERMS
+        and denominator_terms <= MAX_SYMBOLIC_RESULT_TERMS
+    ):
+        denominator_groups = tuple(
+            _polynomial_pair_exponents(left_value.denominator, right_value.denominator)
+            for left_value, right_value in factors
+        )
+        numerator_expansions: list[
+            tuple[tuple[tuple[int, ...], ...], ...]
+        ] = []
+        for index, (left_value, right_value) in enumerate(factors):
+            expansion: list[tuple[tuple[int, ...], ...]] = [
+                _polynomial_pair_exponents(left_value.numerator, right_value.numerator)
+            ]
+            expansion.extend(
+                group
+                for other_index, group in enumerate(denominator_groups)
+                if other_index != index
+            )
+            numerator_expansions.append(tuple(expansion))
+        denominator_collision_count = _maximum_product_collisions(
+            (denominator_groups,)
+        )
+        numerator_collision_count = _maximum_product_collisions(numerator_expansions)
+
     maximum_coefficient_digits = max(
         _sum_coefficient_digit_bound(
-            term_count=numerator_terms,
+            term_count=numerator_collision_count,
             product_coefficient_digits=numerator_product_digits,
         ),
         _sum_coefficient_digit_bound(
-            term_count=denominator_terms,
+            term_count=denominator_collision_count,
             product_coefficient_digits=denominator_product_digits,
         ),
     )
@@ -336,10 +409,21 @@ def _require_symbolic_product_admission(
                 raise ValueError(
                     "symbolic matrix product exceeds the 256-term exact result budget"
                 )
-            canonical_numerator_terms = _monomial_box_term_bound(numerator_exponents)
-            canonical_denominator_terms = _monomial_box_term_bound(
-                denominator_exponents
-            )
+            if all(
+                _is_polynomial_entry(value) for value in (*left_row, *right_column)
+            ):
+                # Unit denominators cannot cancel against the collected
+                # numerator, so support can only shrink below the raw
+                # expansion already bounded above.
+                canonical_numerator_terms = numerator_terms
+                canonical_denominator_terms = denominator_terms
+            else:
+                canonical_numerator_terms = _monomial_box_term_bound(
+                    numerator_exponents
+                )
+                canonical_denominator_terms = _monomial_box_term_bound(
+                    denominator_exponents
+                )
             if (
                 canonical_numerator_terms > MAX_SYMBOLIC_RESULT_TERMS
                 or canonical_denominator_terms > MAX_SYMBOLIC_RESULT_TERMS

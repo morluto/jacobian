@@ -61,6 +61,15 @@ _RESULT_ENVELOPE_RESERVE_BYTES: int = 4_096
 _MAX_RESULT_COMPONENT: int = 10**MAX_CANONICAL_RATIONAL_DIGITS - 1
 
 
+# Work proxies may legitimately exceed one canonical component: the coupled
+# digit-work bound admits intermediate digits up to the square root of the
+# work limit divided by the smallest product count. Saturating work
+# arithmetic at the component cap would clip exactly those honest charges,
+# so work bounds saturate at a ceiling whose digits alone force the
+# digit-work rejection for any admissible product count.
+_MAX_WORK_BOUND = _MAX_RESULT_COMPONENT**32
+
+
 def _capped_multiply(left: int, right: int) -> int:
     if left == 0 or right == 0:
         return 0
@@ -73,6 +82,37 @@ def _capped_add(left: int, right: int) -> int:
     if left > _MAX_RESULT_COMPONENT - right:
         return _MAX_RESULT_COMPONENT + 1
     return left + right
+
+
+def _work_multiply(left: int, right: int) -> int:
+    if left == 0 or right == 0:
+        return 0
+    if left > _MAX_WORK_BOUND // right:
+        return _MAX_WORK_BOUND + 1
+    return left * right
+
+
+def _work_add(left: int, right: int) -> int:
+    if left > _MAX_WORK_BOUND - right:
+        return _MAX_WORK_BOUND + 1
+    return left + right
+
+
+def _work_power(base: int, exponent: int) -> int:
+    result = 1
+    factor = base
+    remaining = exponent
+    while remaining:
+        if remaining & 1:
+            result = _work_multiply(result, factor)
+            if result > _MAX_WORK_BOUND:
+                return result
+        remaining >>= 1
+        if remaining:
+            factor = _work_multiply(factor, factor)
+            if factor > _MAX_WORK_BOUND:
+                return factor
+    return result
 
 
 def _capped_power(base: int, exponent: int) -> int:
@@ -100,22 +140,6 @@ def _capped_lcm(values: Iterable[int]) -> int:
         if result > _MAX_RESULT_COMPONENT:
             return result
     return result
-
-
-def _cancelled_product(
-    left_numerator: int,
-    left_denominator: int,
-    right_numerator: int,
-    right_denominator: int,
-) -> tuple[int, int]:
-    """Return the reduced numerator and denominator of one product of ratios."""
-
-    top = gcd(left_numerator, right_denominator)
-    bottom = gcd(right_numerator, left_denominator)
-    return (
-        _capped_multiply(left_numerator // top, right_numerator // bottom),
-        _capped_multiply(left_denominator // bottom, right_denominator // top),
-    )
 
 
 def _decimal_digit_upper_bound(value: int) -> int:
@@ -153,21 +177,27 @@ def _coefficient_ratios(
 
 
 def _bounded_rational_sum(terms: Iterable[tuple[int, int]]) -> tuple[int, int]:
-    active = tuple(
-        (numerator, denominator) for numerator, denominator in terms if numerator
-    )
-    if not active:
-        return 0, 1
-    denominator = _capped_lcm(item[1] for item in active)
-    if denominator > _MAX_RESULT_COMPONENT:
-        return denominator, denominator
-    numerator = 0
-    for term_numerator, term_denominator in active:
-        lifted = _capped_multiply(term_numerator, denominator // term_denominator)
-        numerator = _capped_add(numerator, lifted)
-        if numerator > _MAX_RESULT_COMPONENT:
-            break
-    return numerator, denominator
+    """Add signed rationals exactly and return the fully reduced sum.
+
+    Operand signs are preserved so additive cancellation between summands
+    reduces before any component bound is enforced; callers digit-bound the
+    reduced result afterwards. Summands carry canonical components and the
+    callers here add at most two rationals per entry, so the exact pairwise
+    accumulation stays far below any resource limit.
+    """
+
+    total_numerator = 0
+    total_denominator = 1
+    for numerator, denominator in terms:
+        if numerator == 0:
+            continue
+        common = gcd(total_denominator, denominator)
+        total_numerator = total_numerator * (denominator // common) + numerator * (
+            total_denominator // common
+        )
+        total_denominator *= denominator // common
+    divisor = gcd(total_numerator, total_denominator)
+    return total_numerator // divisor, total_denominator // divisor
 
 
 def _materialized_power(base: int, exponent: int) -> tuple[int | None, int]:
@@ -390,26 +420,34 @@ def _linear_result_component_bounds(
 ) -> tuple[tuple[tuple[int, int], ...], int]:
     """Bound every entry of ``c_1 A + c_0 I`` independently.
 
-    Products are reduced before digit budgets are charged so exact
-    cancellations between coefficients and matrix entries are not rejected as
-    growth; the SymPy kernel keeps every intermediate reduced as well.
+    Each product ``c_1 a`` is formed and cancelled exactly -- its components
+    are at most the product of two canonical components, far below any
+    resource limit -- and the diagonal sum keeps operand signs, so additive
+    cancellation between ``c_1 a`` and ``c_0`` reduces to its exact rational
+    value before digits are counted. Only the reduced entry bounds face the
+    digit budgets; the SymPy kernel keeps every intermediate reduced the
+    same way.
     """
 
     linear_numerator, linear_denominator = coefficients.get(1, (0, 1))
     constant_numerator, constant_denominator = coefficients.get(0, (0, 1))
+    linear_magnitude = abs(linear_numerator)
     bounds: list[tuple[int, int]] = []
     for row_index, row in enumerate(matrix.entries):
         for column_index, entry in enumerate(row):
             entry_numerator, entry_denominator = entry.as_integer_ratio()
-            product_numerator, product_denominator = _cancelled_product(
-                abs(linear_numerator),
-                linear_denominator,
-                abs(entry_numerator),
-                entry_denominator,
+            entry_magnitude = abs(entry_numerator)
+            top = gcd(linear_magnitude, entry_denominator)
+            bottom = gcd(entry_magnitude, linear_denominator)
+            product_numerator = (linear_magnitude // top) * (entry_magnitude // bottom)
+            if (linear_numerator >= 0) != (entry_numerator >= 0):
+                product_numerator = -product_numerator
+            product_denominator = (linear_denominator // bottom) * (
+                entry_denominator // top
             )
             terms = [(product_numerator, product_denominator)]
             if row_index == column_index:
-                terms.append((abs(constant_numerator), constant_denominator))
+                terms.append((constant_numerator, constant_denominator))
             numerator, denominator = _bounded_rational_sum(terms)
             bounds.append(
                 (
@@ -440,39 +478,49 @@ def _general_result_component_bounds(
     the cleared integer entries carries a walk of length ``k`` from ``i`` to
     ``j``, so an acyclic support digraph with longest walk ``L`` makes every
     exponent beyond ``L`` identically zero. Those structurally dead powers
-    are classified before any matrix-side quantity is derived: when no
-    nonconstant power survives, ``f(A) = c(0) I`` reduces exactly to the
-    constant coefficient and no global clearing denominator is constructed
-    at all, so coprime entry denominators of dead powers can never reject a
+    are classified before any matrix-side quantity or global coefficient
+    denominator is derived: when no nonconstant power survives, ``f(A)``
+    equals ``c(0) I`` exactly and neither a clearing denominator nor a
+    coefficient LCM is constructed at all, so coprime denominators of dead
+    powers -- on entries or on coefficients alike -- can never reject a
     request whose admitted work and exact value are small.
 
     When some nonconstant power survives, every nonzero entry lies on a walk
     of length one, so the global clearing denominator ``Q`` is required and
     its LCM stays within the canonical component cap or the request is
-    rejected here. The output bounds then charge compounded denominators
-    honestly: the numerator satisfies ``|N| <= S`` where ``S`` is the dense
-    capped sum over surviving terms of ``w_k Q^(D-k) n^(k-1) h^k``, and the
-    reduced denominator divides ``V Q^D``. Cancelling more than proven
-    factors would be unsound -- the cleared height ``h`` is a maximum over
-    entries and ``n^(k-1)`` is a count, so neither divides the contributing
-    numerators -- hence ``S`` is divided only by the exact gcd of the lifted
-    coefficients when its power products materialize within the admission
-    ceiling, and ``V Q^D`` only by the divisor parts of that same proven
-    factor (see ``_reduced_general_result_bound`` and
-    ``_proven_denominator_bound``). Whenever those reductions are
-    unavailable, the uncancelled dense bound stands and oversized growth is
-    rejected during request validation rather than after execution.
+    rejected here; the common coefficient denominator ``V`` is formed over
+    the surviving powers only. The output bounds then charge compounded
+    denominators honestly: the numerator satisfies ``|N| <= S`` where ``S``
+    is the dense capped sum over surviving terms of
+    ``w_k Q^(D-k) n^(k-1) h^k``, and the reduced denominator divides
+    ``V Q^D``. Cancelling more than proven factors would be unsound -- the
+    cleared height ``h`` is a maximum over entries and ``n^(k-1)`` is a
+    count, so neither divides the contributing numerators -- hence ``S`` is
+    divided only by the exact gcd of the lifted coefficients when its power
+    products materialize within the admission ceiling, and ``V Q^D`` only by
+    the divisor parts of that same proven factor (see
+    ``_reduced_general_result_bound`` and ``_proven_denominator_bound``).
+    Whenever those reductions are unavailable, the uncancelled dense bound
+    stands and oversized growth is rejected during request validation rather
+    than after execution.
 
-    The dense sum over surviving exponents charged with ``Q^degree`` is
-    retained as a second, never-structural work bound: every Horner
-    intermediate equals one of its sub-sums over surviving powers, since
-    structurally vanishing powers contribute identically zero matrices, so
-    its digit size drives the coupled digit-work estimate independently of
-    how small the exact result is. In the constant-result branch no clearing
-    denominator exists; shifted Horner intermediates there carry rational
-    heights compounded over at most the longest support walk, driven by the
-    largest input entry height. The zero-matrix case is handled separately
-    because its intermediates are individual input coefficients.
+    The dense sum charged with ``Q^degree`` is retained as a second,
+    never-structural work bound: its digit size drives the coupled
+    digit-work estimate independently of how small the exact result is.
+    Horner does not skip structurally dead leading powers -- each rides the
+    accumulator until a shifted multiplication clears it, and that clearing
+    step pairs its full-height entries against live ones once. The work sum
+    therefore charges every dead term at its saturated shift
+    ``min(exponent, longest walk)`` under a private lifting scale ``W`` over
+    the dead denominators (rejected at the component cap, since mixed
+    Horner intermediates could compound to it while dead terms coexist with
+    surviving ones), and ``V W Q^degree`` bounds every intermediate
+    denominator while dead terms ride. In the constant-result branch no
+    clearing denominator exists; shifted Horner intermediates there carry
+    rational heights compounded over at most the longest support walk,
+    driven by the largest input entry height. The zero-matrix case is
+    handled separately because its intermediates are individual input
+    coefficients.
     """
 
     matrix_ratios = tuple(
@@ -487,19 +535,27 @@ def _general_result_component_bounds(
         )
         for term in polynomial.polynomial.terms
     )
+    surviving_terms = tuple(
+        (exponent, numerator, denominator)
+        for exponent, numerator, denominator in coefficient_ratios
+        if longest_walk is None or exponent <= longest_walk
+    )
+    # Structural support is classified before any common denominator is
+    # required. Coefficients of structurally dead powers never reach the
+    # exact value, so coprime dead-power denominators must not be forced into
+    # one global coefficient LCM ahead of the support analysis.
     common_coefficient_denominator = _capped_lcm(
-        denominator for _exponent, _numerator, denominator in coefficient_ratios
+        denominator for _exponent, _numerator, denominator in surviving_terms
     )
     if common_coefficient_denominator > _MAX_RESULT_COMPONENT:
         raise ValueError(
             "matrix polynomial denominator growth exceeds the canonical "
             f"{MAX_CANONICAL_RATIONAL_DIGITS:,}-digit result bound"
         )
-
-    surviving_terms = tuple(
+    dead_terms = tuple(
         (exponent, numerator, denominator)
         for exponent, numerator, denominator in coefficient_ratios
-        if longest_walk is None or exponent <= longest_walk
+        if longest_walk is not None and exponent > longest_walk
     )
 
     if all(exponent == 0 for exponent, _n, _d in surviving_terms):
@@ -558,9 +614,27 @@ def _general_result_component_bounds(
         highest_surviving_exponent = max(
             exponent for exponent, _numerator, _denominator in surviving_terms
         )
-        work_denominator_bound = _capped_multiply(
-            common_coefficient_denominator,
-            _capped_power(common_matrix_denominator, degree),
+        # Dead leading powers ride every Horner multiplication until a
+        # shifted step clears them, so their transient digit work is charged
+        # at the saturated shift instead of being dropped from accounting.
+        # Their denominators receive a private lifting scale folded into the
+        # work denominator; exhausting the component cap here rejects the
+        # request because mixed Horner intermediates could compound to that
+        # LCM while dead terms coexist with surviving ones.
+        dead_common_denominator = _capped_lcm(
+            denominator for _exponent, _numerator, denominator in dead_terms
+        )
+        if dead_common_denominator > _MAX_RESULT_COMPONENT:
+            raise ValueError(
+                "matrix polynomial dead-power coefficient growth exceeds the "
+                f"canonical {MAX_CANONICAL_RATIONAL_DIGITS:,}-digit result bound"
+            )
+        work_denominator_bound = _work_multiply(
+            _work_multiply(
+                common_coefficient_denominator,
+                dead_common_denominator,
+            ),
+            _work_power(common_matrix_denominator, degree),
         )
         # |numerator| * (Q // denominator) is at most the square of two canonical
         # components, so the exact cleared height is always safe to materialize.
@@ -576,9 +650,9 @@ def _general_result_component_bounds(
             )
             matrix_power_height = 1
             if exponent:
-                matrix_power_height = _capped_multiply(
-                    _capped_power(cleared_matrix_height, exponent),
-                    _capped_power(dimension, exponent - 1),
+                matrix_power_height = _work_multiply(
+                    _work_power(cleared_matrix_height, exponent),
+                    _work_power(dimension, exponent - 1),
                 )
             output_term = _capped_multiply(
                 coefficient_lift,
@@ -587,14 +661,41 @@ def _general_result_component_bounds(
                     highest_surviving_exponent - exponent,
                 ),
             )
-            term_height = _capped_multiply(
+            term_height = _work_multiply(
                 coefficient_lift,
-                _capped_power(common_matrix_denominator, degree - exponent),
+                _work_power(common_matrix_denominator, degree - exponent),
             )
             output_term = _capped_multiply(output_term, matrix_power_height)
-            term_height = _capped_multiply(term_height, matrix_power_height)
-            work_numerator_bound = _capped_add(work_numerator_bound, term_height)
+            term_height = _work_multiply(term_height, matrix_power_height)
+            work_numerator_bound = _work_add(work_numerator_bound, term_height)
             numerator_bound = _capped_add(numerator_bound, output_term)
+
+        # Shifted dead terms keep their own Horner shifts alive up to the
+        # longest support walk: the killing multiplication pairs every
+        # surviving dead entry with a zero operand, so the saturated shift
+        # below is the last step whose products materialize full-height
+        # operands. The lift uses the combined coefficient scale so it never
+        # undercounts a dead denominator against the common work envelope.
+        support_walk = longest_walk or 0
+        for exponent, numerator, denominator in dead_terms:
+            shift = min(exponent, support_walk)
+            dead_lift = abs(numerator) * (
+                common_coefficient_denominator * dead_common_denominator // denominator
+            )
+            matrix_power_height = _work_multiply(
+                _work_power(cleared_matrix_height, shift),
+                _work_power(dimension, shift - 1),
+            )
+            work_numerator_bound = _work_add(
+                work_numerator_bound,
+                _work_multiply(
+                    dead_lift,
+                    _work_multiply(
+                        _work_power(common_matrix_denominator, degree - shift),
+                        matrix_power_height,
+                    ),
+                ),
+            )
 
         proven_numerator_factor = _proven_numerator_factor(
             surviving_terms, common_coefficient_denominator

@@ -652,6 +652,133 @@ def test_structurally_dead_powers_are_excluded_from_digit_work_estimate() -> Non
     )
 
 
+def test_horner_charges_shifted_dead_leading_terms_during_their_ride() -> None:
+    # The live t term keeps the square-zero support in the general branch,
+    # and Horner materializes the doubled-height entry C*H on its first
+    # multiplication before later shifts clear the structurally dead C*t^50.
+    # Dropping the dead leading term from work accounting would admit this
+    # request on a 20,001-digit prediction while execution constructs a
+    # 40,000-digit product, so honest charging must reject it here while the
+    # same shape at smaller heights stays admitted and evaluates exactly.
+    height = "1" + "0" * 20_000
+    with pytest.raises(ValidationError, match="exact-arithmetic work"):
+        MatrixPolynomialEvaluationRequest(
+            matrix=RationalMatrix(
+                entries=(
+                    (_rational(0), _rational(height)),
+                    (_rational(0), _rational(0)),
+                )
+            ),
+            polynomial=_polynomial(("1" + "0" * 20_000, 50), (1, 1)),
+        )
+
+    moderate_height = "1" + "0" * 14_999
+    admitted = compute_matrix_polynomial_evaluation(
+        MatrixPolynomialEvaluationRequest(
+            matrix=RationalMatrix(
+                entries=(
+                    (_rational(0), _rational(moderate_height)),
+                    (_rational(0), _rational(0)),
+                )
+            ),
+            polynomial=_polynomial(("1" + "0" * 14_999, 50), (1, 1)),
+        )
+    )
+
+    assert admitted.value.entries[0][1].num == moderate_height
+    assert admitted.value.entries[0][0].num == "0"
+    assert admitted.polynomial_degree == 50
+    assert admitted.matrix_multiplications == 50
+
+
+def test_dead_coefficient_powers_are_classified_before_the_coefficient_lcm() -> None:
+    # Square-zero [[0, 1], [0, 0]] with f = t^3/a + t^2/b for coprime
+    # 17,000-digit a and b: both nonconstant powers are structurally dead
+    # and the exact value is zero, so forming lcm(a, b) before support
+    # classification would reject a request whose every Horner intermediate
+    # stays within a single input denominator.
+    first_denominator = "1" + "0" * 17_000
+    second_denominator = format_canonical_integer(11**16_325)
+    request = MatrixPolynomialEvaluationRequest(
+        matrix=_matrix((0, 1), (0, 0)),
+        polynomial=RationalPolynomial(
+            variables=("t",),
+            polynomial=SparseRationalPolynomial(
+                terms=(
+                    RationalPolynomialTerm(
+                        coefficient=_rational(1, first_denominator),
+                        exponents=(3,),
+                    ),
+                    RationalPolynomialTerm(
+                        coefficient=_rational(1, second_denominator),
+                        exponents=(2,),
+                    ),
+                )
+            ),
+        ),
+    )
+
+    result = compute_matrix_polynomial_evaluation(request)
+
+    assert _fractions(result.value) == (
+        (Fraction(0), Fraction(0)),
+        (Fraction(0), Fraction(0)),
+    )
+    assert result.polynomial_degree == 3
+    assert result.matrix_multiplications == 3
+    assert result.scalar_product_terms == 24
+
+
+def test_surviving_coefficient_denominators_still_demand_a_common_denominator() -> None:
+    # The same coprime denominators attached to powers that reach the value
+    # compound genuinely: the linear identity case produces (a + b)/(ab) on
+    # the diagonal, and the general degree-2 case clears its surviving
+    # coefficients through lcm(a, b). Both compounded predictions exceed the
+    # canonical cap, so admission must still reject during validation.
+    first_denominator = "1" + "0" * 17_000
+    second_denominator = format_canonical_integer(11**16_325)
+
+    with pytest.raises(ValidationError, match="rational result bound"):
+        MatrixPolynomialEvaluationRequest(
+            matrix=_matrix((1,)),
+            polynomial=RationalPolynomial(
+                variables=("t",),
+                polynomial=SparseRationalPolynomial(
+                    terms=(
+                        RationalPolynomialTerm(
+                            coefficient=_rational(1, first_denominator),
+                            exponents=(1,),
+                        ),
+                        RationalPolynomialTerm(
+                            coefficient=_rational(1, second_denominator),
+                            exponents=(0,),
+                        ),
+                    )
+                ),
+            ),
+        )
+
+    with pytest.raises(ValidationError, match="denominator growth"):
+        MatrixPolynomialEvaluationRequest(
+            matrix=_matrix((2, 0), (0, 2)),
+            polynomial=RationalPolynomial(
+                variables=("t",),
+                polynomial=SparseRationalPolynomial(
+                    terms=(
+                        RationalPolynomialTerm(
+                            coefficient=_rational(1, first_denominator),
+                            exponents=(2,),
+                        ),
+                        RationalPolynomialTerm(
+                            coefficient=_rational(1, second_denominator),
+                            exponents=(1,),
+                        ),
+                    )
+                ),
+            ),
+        )
+
+
 def _linear_rational_polynomial(
     coefficient: CanonicalRational,
     constant: CanonicalRational | None = None,
@@ -706,6 +833,37 @@ def test_linear_admission_still_rejects_uncancellable_product_growth() -> None:
             polynomial=_linear_rational_polynomial(
                 _rational(coefficient_numerator, coefficient_denominator)
             ),
+        )
+
+
+def test_linear_output_bounds_preserve_additive_cancellation() -> None:
+    # [H] with f = t - H: both diagonal summands have magnitude H yet their
+    # exact sum is zero, so magnitude-only addition charges 2H and rejects a
+    # request whose digit work and exact value are small. Sign-preserving
+    # reduction must admit the exact zero instead.
+    height = "9" + "0" * 32_767
+    request = MatrixPolynomialEvaluationRequest(
+        matrix=RationalMatrix(entries=((_rational(height),),)),
+        polynomial=_linear_rational_polynomial(_rational(1), _rational("-" + height)),
+    )
+
+    result = compute_matrix_polynomial_evaluation(request)
+
+    assert _fractions(result.value) == ((Fraction(0),),)
+    assert result.polynomial_degree == 1
+    assert result.matrix_multiplications == 1
+    assert result.scalar_product_terms == 1
+
+
+def test_linear_output_bounds_still_reject_uncancellable_additive_growth() -> None:
+    # The additive twin without cancellation: f = t + H genuinely evaluates
+    # to 2H, whose 32,769 digits exceed the canonical component cap, so the
+    # reduced exact bound still rejects during request validation.
+    height = "9" + "0" * 32_767
+    with pytest.raises(ValidationError, match="rational result bound"):
+        MatrixPolynomialEvaluationRequest(
+            matrix=RationalMatrix(entries=((_rational(height),),)),
+            polynomial=_linear_rational_polynomial(_rational(1), _rational(height)),
         )
 
 

@@ -14,6 +14,7 @@ from sympy.polys.domains import ZZ
 from jacobian.canonical import encode_strict_json
 from jacobian.math import finite_abelian_groups as domain
 from jacobian.math.finite_abelian_groups import (
+    FiniteAbelianGroupFactorizationRequest,
     FiniteAbelianProductGroup,
     FiniteAbelianSpectralPairRequest,
     FiniteAbelianSpectralPairResult,
@@ -289,12 +290,39 @@ def test_maximum_equal_size_work_boundary_is_admitted() -> None:
     assert result.is_spectral is True
 
 
-def test_exponent_immediately_above_reduction_boundary_is_rejected() -> None:
+def test_derived_budgets_admit_exponent_above_the_former_fixed_cap() -> None:
     source = _source((65,), ((0,), (1,)), ((0,), (1,)))
+    work = domain._spectral_pair_work(source)
 
-    with pytest.raises(ValidationError, match="exponent at most 64"):
+    assert work.cyclotomic_degree == 48
+    assert work.character_terms == 4
+    assert work.cyclotomic_reductions == 2
+    assert work.cyclotomic_dense_ops == 304_920
+    assert work.cyclotomic_intermediate_bits == 138
+    assert work.remainder_coefficient_bits == 835
+
+    result = decide_finite_abelian_spectral_pair(source)
+
+    assert result.is_spectral is False
+    assert result.reason == "NONORTHOGONAL_FREQUENCIES"
+    witness = result.first_nonorthogonal_pair
+    assert witness is not None
+    assert (witness.left_frequency, witness.right_frequency) == ((0,), (1,))
+    assert witness.difference == (64,)
+    assert len(witness.remainder_coefficients) == 48
+
+
+def test_equal_size_pair_over_derived_dense_op_budget_is_rejected() -> None:
+    source = _source((128,), ((0,), (1,)), ((0,), (1,)))
+
+    with pytest.raises(
+        ValidationError,
+        match="cyclotomic construction work exceeds its dense-op bound",
+    ):
         FiniteAbelianSpectralPairRequest(source=source)
-    with pytest.raises(ValueError, match="exponent at most 64"):
+    with pytest.raises(
+        ValueError, match="cyclotomic construction work exceeds its dense-op bound"
+    ):
         decide_finite_abelian_spectral_pair(source)
 
 
@@ -313,22 +341,91 @@ def test_cyclotomic_degree_boundary_at_prime_exponent_is_admitted() -> None:
 def test_group_rank_and_order_boundaries() -> None:
     assert FiniteAbelianProductGroup(moduli=(2, 2, 2, 2, 2, 2)).order == 64
     assert FiniteAbelianProductGroup(moduli=(64, 64)).order == 4_096
+    assert FiniteAbelianProductGroup(moduli=(4_096, 2)).order == 8_192
 
     with pytest.raises(ValidationError, match="at most 6 items"):
         FiniteAbelianProductGroup(moduli=(2, 2, 2, 2, 2, 2, 2))
+
     with pytest.raises(ValidationError, match="4,096-element bound"):
-        FiniteAbelianProductGroup(moduli=(4_096, 2))
+        FiniteAbelianGroupFactorizationRequest(
+            moduli=(4_096, 2),
+            left=((0, 0),),
+            right=((0, 0),),
+        )
 
 
-def test_set_size_and_coordinate_boundaries() -> None:
-    maximum_rows = tuple((value,) for value in range(64))
-    source = _source((64,), maximum_rows, ((1_000_000,),))
+def test_singleton_pair_beyond_the_group_order_cap_is_admitted() -> None:
+    result = decide_finite_abelian_spectral_pair(
+        _source((4_097,), ((3_999,),), ((1_337,),))
+    )
+
+    assert result.is_spectral is True
+    assert result.reason == "SPECTRAL"
+    assert result.source.group.order == 4_097
+
+
+def test_equal_size_pair_in_group_above_order_cap_fits_derived_budgets() -> None:
+    source = _source((64, 64, 2), ((0, 0, 0), (1, 0, 0)), ((0, 0, 0), (0, 0, 1)))
+    work = domain._spectral_pair_work(source)
+
+    assert source.group.order == 8_192
+    assert work.cyclotomic_degree == 32
+    assert work.cyclotomic_dense_ops == 295_750
+
+    result = decide_finite_abelian_spectral_pair(source)
+
+    assert result.is_spectral is False
+    assert result.reason == "NONORTHOGONAL_FREQUENCIES"
+    witness = result.first_nonorthogonal_pair
+    assert witness is not None
+    assert witness.difference == (0, 0, 1)
+    assert witness.remainder_coefficients[0] == "2"
+
+
+def test_coordinate_and_materialization_fallback_boundaries() -> None:
+    fallback_rows = tuple((value,) for value in range(domain.MAX_SPECTRAL_SET_SIZE))
+    source = _source((1_000_000,), fallback_rows, ((1_000_000,),))
     assert source.frequencies == ((0,),)
 
-    with pytest.raises(ValidationError, match="at most 64 items"):
-        _source((65,), tuple((value,) for value in range(65)), ((0,),))
+    with pytest.raises(ValidationError, match="at most 4096 items"):
+        _source((64,), tuple((value,) for value in range(4_097)), ((0,),))
     with pytest.raises(ValidationError, match="less than or equal to 1000000"):
         _source((2,), ((1_000_001,),), ((0,),))
+
+
+def test_cardinality_mismatch_admits_point_sets_above_the_row_fallback() -> None:
+    source = _source((128,), tuple((value,) for value in range(65)), ((0,),))
+
+    result = FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION.run(
+        FiniteAbelianSpectralPairRequest(source=source)
+    )
+
+    assert result.is_spectral is False
+    assert result.reason == "CARDINALITY_MISMATCH"
+    assert len(result.source.points) == 65
+    assert result.first_nonorthogonal_pair is None
+
+
+def test_equal_size_sets_over_character_term_budget_are_still_rejected() -> None:
+    rows = tuple((value,) for value in range(65))
+    source = _source((80,), rows, rows)
+
+    with pytest.raises(ValidationError, match="character-term work exceeds its bound"):
+        FiniteAbelianSpectralPairRequest(source=source)
+
+
+def test_serialized_source_bytes_reject_oversized_mismatch_sets() -> None:
+    source = _source(
+        (1_000_000,),
+        tuple((value,) for value in range(2_400)),
+        ((999_983,),),
+    )
+
+    assert len(source.points) < domain.MAX_SPECTRAL_SET_SIZE
+    with pytest.raises(ValidationError, match="serialized byte bound"):
+        FiniteAbelianSpectralPairRequest(source=source)
+    with pytest.raises(ValueError, match="serialized byte bound"):
+        decide_finite_abelian_spectral_pair(source)
 
 
 @pytest.mark.parametrize(

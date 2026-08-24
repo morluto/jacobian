@@ -22,8 +22,7 @@ MAX_FINITE_GROUP_RANK = 6
 MAX_FINITE_GROUP_FACTOR_SIZE = 256
 MAX_FINITE_GROUP_MODULUS = 1_000_000
 MAX_FINITE_GROUP_COORDINATE = 1_000_000
-MAX_SPECTRAL_SET_SIZE = 64
-MAX_SPECTRAL_GROUP_EXPONENT = 64
+MAX_SPECTRAL_SET_SIZE = 4_096
 MAX_SPECTRAL_CYCLOTOMIC_DEGREE = 60
 MAX_SPECTRAL_CHARACTER_TERMS = 258_048
 MAX_SPECTRAL_CYCLOTOMIC_REDUCTIONS = 4_032
@@ -61,18 +60,12 @@ BoundedRemainderInteger = Annotated[
 
 
 class FiniteAbelianProductGroup(StrictModel):
-    """An ordered product of 2-1,000,000 cyclic moduli, of order at most 4,096."""
+    """An ordered product of cyclic moduli between 2 and 1,000,000."""
 
     moduli: tuple[FiniteGroupModulus, ...] = Field(
         min_length=1,
         max_length=MAX_FINITE_GROUP_RANK,
     )
-
-    @model_validator(mode="after")
-    def require_bounded_product_group(self) -> Self:
-        if self.order > MAX_FINITE_GROUP_ORDER:
-            raise ValueError("finite abelian group exceeds the 4,096-element bound")
-        return self
 
     @property
     def order(self) -> int:
@@ -88,7 +81,12 @@ class FiniteAbelianProductGroup(StrictModel):
 
 
 class FiniteAbelianGroupFactorizationRequest(StrictModel):
-    """Two bounded integer-vector factors in a product of cyclic groups."""
+    """Two bounded integer-vector factors in a product of cyclic groups.
+
+    The kernel enumerates every element of the ambient group, so this
+    operation keeps its own order bound at 4,096 independent of the reusable
+    group value's domain.
+    """
 
     moduli: tuple[StrictInt, ...] = Field(
         min_length=1,
@@ -106,6 +104,8 @@ class FiniteAbelianGroupFactorizationRequest(StrictModel):
     @model_validator(mode="after")
     def require_bounded_product_group(self) -> Self:
         FiniteAbelianProductGroup(moduli=self.moduli)
+        if prod(self.moduli) > MAX_FINITE_GROUP_ORDER:
+            raise ValueError("finite abelian group exceeds the 4,096-element bound")
         if len(self.left) * len(self.right) > MAX_FINITE_GROUP_ORDER:
             raise ValueError("factor Cartesian product exceeds the 4,096-pair bound")
         if any(
@@ -139,7 +139,9 @@ class FiniteAbelianSpectralPairSource(StrictModel):
 
     Coordinates are reduced on their declared axes and rows are sorted
     lexicographically. Distinctness is checked after reduction, so this value
-    has one canonical residue-tuple representation.
+    has one canonical residue-tuple representation. The per-set row cap is a
+    defensive materialization fallback; operation admission is governed by
+    serialized result bytes and the derived reduction budgets.
     """
 
     group: FiniteAbelianProductGroup
@@ -186,10 +188,12 @@ class FiniteAbelianSpectralPairSource(StrictModel):
 class FiniteAbelianSpectralPairRequest(StrictModel):
     """Decide whether the supplied frequencies are a spectrum of the points.
 
-    Equal-size sources with at least two frequencies are admitted through
-    exponent 64, set size 64, 258,048 point-character terms, and 4,032 exact
-    reductions; those counts include the result model's independent replay.
-    Cardinality mismatches and singleton pairs need no cyclotomic reduction.
+    Equal-size sources with at least two frequencies are admitted through the
+    derived reduction envelope: 60-degree cyclotomics, 258,048 point-character
+    terms, 4,032 exact reductions, bounded construction intermediates, and a
+    32,768-byte serialized result; those counts include the result model's
+    independent replay. Cardinality mismatches and singleton pairs need no
+    cyclotomic reduction and are admitted by source and result size alone.
     """
 
     source: FiniteAbelianSpectralPairSource
@@ -356,9 +360,12 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
     """Preflight exact work, intermediate growth, and output obligations.
 
     A cardinality mismatch and an equal singleton pair are decided without a
-    cyclotomic backend call. Otherwise, the public operation plus source-bound
+    cyclotomic backend call; their admission is the serialized source-plus-
+    decision byte bound. Otherwise, the public operation plus source-bound
     result validation perform two complete passes. Each pass checks at most
-    ``C(|Lambda|, 2)`` pairs and ``|A|`` character terms per pair.
+    ``C(|Lambda|, 2)`` pairs and ``|A|`` character terms per pair. No check
+    depends on the ambient group order, only on the supplied rows, the rank,
+    and the group exponent.
 
     Every coefficient of ``Phi_N`` is at most ``2**phi(N)`` in absolute value:
     it is an elementary symmetric sum of ``phi(N)`` unit-modulus roots. SymPy's
@@ -369,7 +376,11 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
     division of a degree-``< N`` character polynomial starts at height ``|A|``
     and has at most ``N - phi(N)`` eliminations, each growing height by at most
     ``1 + 2**phi(N)``. The bit bounds below are the corresponding integer upper
-    bounds, computed before SymPy is invoked.
+    bounds, computed before SymPy is invoked. The dense-op and intermediate
+    budgets grow only with ``N``, so they are enforced before ``Phi_N``'s
+    totient trial division; every rejected exponent is already over one of
+    those derived budgets, and every surviving exponent makes that preflight
+    itself trivially bounded.
     """
 
     exponent = source.group.exponent
@@ -395,19 +406,19 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
         if work.predicted_result_bytes > MAX_SPECTRAL_RESULT_BYTES:
             raise ValueError("spectral-pair result exceeds its serialized byte bound")
         return work
-    if exponent > MAX_SPECTRAL_GROUP_EXPONENT:
-        raise ValueError(
-            "equal-size spectral pairs with at least two frequencies require "
-            f"group exponent at most {MAX_SPECTRAL_GROUP_EXPONENT}"
-        )
+
+    cyclotomic_dense_ops = 10 * exponent.bit_length() * (exponent + 1) * (exponent + 1)
+    cyclotomic_intermediate_bits = 2 * exponent + (exponent + 1).bit_length() + 1
+    if cyclotomic_dense_ops > MAX_SPECTRAL_CYCLOTOMIC_DENSE_OPS:
+        raise ValueError("cyclotomic construction work exceeds its dense-op bound")
+    if cyclotomic_intermediate_bits > MAX_SPECTRAL_CYCLOTOMIC_INTERMEDIATE_BITS:
+        raise ValueError("cyclotomic construction intermediate exceeds its bit bound")
 
     degree = _euler_totient(exponent)
     pair_count = comb(len(source.frequencies), 2)
     character_terms = 2 * pair_count * len(source.points)
     reductions = 2 * pair_count
-    cyclotomic_dense_ops = 10 * exponent.bit_length() * (exponent + 1) * (exponent + 1)
     cyclotomic_coefficient_bits = degree + 1
-    cyclotomic_intermediate_bits = 2 * exponent + (exponent + 1).bit_length() + 1
     remainder_coefficient_bits = len(source.points).bit_length() + (degree + 1) * (
         exponent - degree
     )
@@ -423,12 +434,8 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
         raise ValueError("spectral-pair character-term work exceeds its bound")
     if reductions > MAX_SPECTRAL_CYCLOTOMIC_REDUCTIONS:
         raise ValueError("spectral-pair cyclotomic reductions exceed their bound")
-    if cyclotomic_dense_ops > MAX_SPECTRAL_CYCLOTOMIC_DENSE_OPS:
-        raise ValueError("cyclotomic construction work exceeds its dense-op bound")
     if cyclotomic_coefficient_bits > MAX_SPECTRAL_CYCLOTOMIC_COEFFICIENT_BITS:
         raise ValueError("cyclotomic coefficient exceeds its bit bound")
-    if cyclotomic_intermediate_bits > MAX_SPECTRAL_CYCLOTOMIC_INTERMEDIATE_BITS:
-        raise ValueError("cyclotomic construction intermediate exceeds its bit bound")
     if remainder_coefficient_bits > MAX_SPECTRAL_REMAINDER_COEFFICIENT_BITS:
         raise ValueError("cyclotomic remainder intermediate exceeds its bit bound")
     if predicted_result_bytes > MAX_SPECTRAL_RESULT_BYTES:

@@ -10,7 +10,6 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory._factorization_kernels import (
     compute_pratt_certificate,
     compute_radical,
-    decide_powerful,
     decide_squarefree,
     enumerate_divisors,
     enumerate_proper_divisors,
@@ -25,8 +24,6 @@ from jacobian.math.number_theory._models import (
     DivisorListResult,
     IntegerValueResult,
     NonzeroFactorizationRequest,
-    PowerfulNumberRequest,
-    PowerfulNumberResult,
     PrimalityCertificateRequest,
     PrimalityCertificateResult,
     PrimeFactorizationResult,
@@ -61,12 +58,6 @@ def _compute_prime_factorization(
     request: NonzeroFactorizationRequest,
 ) -> PrimeFactorizationResult:
     return factorize_primes(request)
-
-
-def _compute_powerful(
-    request: PowerfulNumberRequest,
-) -> PowerfulNumberResult:
-    return decide_powerful(request)
 
 
 def _compute_squarefree(
@@ -190,26 +181,6 @@ FACTORIZATION_OPERATIONS = (
                 "prime_factorization_360",
                 "Factor 360 into prime powers.",
                 {"value": "360"},
-            ),
-        ),
-    ),
-    _operation(
-        operation_id="integer.decide.powerful",
-        title="Decide powerful-number status",
-        description=(
-            "Decide whether every prime exponent of one positive integer is at "
-            "least two, preserving the complete factor witness and every "
-            "violating prime."
-        ),
-        request_model=PowerfulNumberRequest,
-        result_model=PowerfulNumberResult,
-        implementation=_compute_powerful,
-        tags=("number-theory", "factorization", "predicate"),
-        examples=(
-            example(
-                "powerful_72",
-                "Decide whether 72 is powerful and inspect its factor witness.",
-                {"value": "72"},
             ),
         ),
     ),

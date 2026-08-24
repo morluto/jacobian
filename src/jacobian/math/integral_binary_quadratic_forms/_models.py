@@ -91,7 +91,15 @@ class BinaryQuadraticFormProperEquivRequest(StrictModel):
 class BinaryQuadraticFormReducedClassesRequest(StrictModel):
     """Request all reduced primitive positive-definite classes of a discriminant."""
 
-    discriminant: int = Field(le=-3)
+    discriminant: int = Field(
+        le=-3,
+        description=(
+            "Negative quadratic discriminant D <= -3 with D mod 4 in {0, 1}. "
+            "The complete reduced-form scan uses A=floor_sqrt((-D)//3)+1 "
+            "leading coefficients, so this request is admitted exactly when "
+            f"A*(A+2) is at most {MAX_REDUCED_CLASS_SEARCH_STATES}."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_complete_search_budget(self) -> Self:

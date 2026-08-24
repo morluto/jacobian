@@ -173,7 +173,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "classes_disc_neg_3",
-                "Enumerate reduced classes of D=-3.",
+                "For D=-3 the reduced-scan envelope A*(A+2) with "
+                "A=floor_sqrt((-D)//3)+1 is 8; enumerate the single reduced "
+                "class of discriminant -3.",
                 {"discriminant": -3},
             ),
         ),

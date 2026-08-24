@@ -21,6 +21,7 @@ from jacobian.math.integral_binary_quadratic_forms._operations import (
     compute_reduced_classes,
     compute_representations,
 )
+from jacobian.math.integral_binary_quadratic_forms._tools import TOOLS
 
 
 def _positive_form(
@@ -185,6 +186,24 @@ class TestProperEquivalence:
 
 
 class TestReducedClasses:
+    def test_schema_exposes_the_reduced_class_scan_admission_condition(self) -> None:
+        discriminant_schema = BinaryQuadraticFormReducedClassesRequest.model_json_schema()[
+            "properties"
+        ]["discriminant"]
+        assert "A*(A+2)" in discriminant_schema["description"]
+        assert "floor_sqrt((-D)//3)+1" in discriminant_schema["description"]
+
+    def test_example_states_the_scan_envelope_precondition(self) -> None:
+        (tool,) = (
+            candidate
+            for candidate in TOOLS
+            if candidate.operation_id
+            == "number_theory.binary_quadratic_form.reduced_classes.compute"
+        )
+        description = str(tool.examples[0].description)
+        assert "A*(A+2)" in description
+        assert "is 8" in description
+
     def test_disc_neg_3(self) -> None:
         result = compute_reduced_classes(
             BinaryQuadraticFormReducedClassesRequest(discriminant=-3)

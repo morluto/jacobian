@@ -13,11 +13,14 @@ from jacobian.math.plane_algebraic_curves._models import (
     AffineCurveResult,
     ProjectiveClosureRequest,
     ProjectiveClosureResult,
+    RationalConicParametrizationRequest,
+    RationalConicParametrizationResult,
 )
 from jacobian.math.plane_algebraic_curves._operations import (
     compute_affine_chart,
     compute_affine_curve_check,
     compute_projective_closure,
+    compute_rational_conic_parametrization,
 )
 
 
@@ -115,6 +118,45 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         (1, (0, 2)),
                         (-1, (0, 0)),
                     ),
+                },
+            ),
+        ),
+    ),
+    _op(
+        "algebraic_geometry.conic.rational_parametrization.compute",
+        "Parametrize a smooth rational conic",
+        "Construct canonical rational coordinate functions, their inverse chart, "
+        "the finite affine-denominator locus, and the exceptional source point "
+        "from a smooth rational affine conic with a supplied rational point.",
+        RationalConicParametrizationRequest,
+        RationalConicParametrizationResult,
+        compute_rational_conic_parametrization,
+        "algebraic-geometry",
+        "conic",
+        "rational-parametrization",
+        "exact",
+        examples=(
+            example(
+                "smooth_conic_from_point",
+                "Parametrize x^2 + x*y - y^2 - 1 = 0 from (1,0); the "
+                "polynomial must have smooth projective closure and the checked "
+                "point must lie on it.",
+                {
+                    "polynomial": _polynomial(
+                        ("x", "y"),
+                        (1, (2, 0)),
+                        (1, (1, 1)),
+                        (-1, (0, 2)),
+                        (-1, (0, 0)),
+                    ),
+                    "point": {
+                        "variables": ["x", "y"],
+                        "values": [
+                            {"num": "1", "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                    },
+                    "parameter": "t",
                 },
             ),
         ),

@@ -661,11 +661,14 @@ def _coefficient_digit_bound(
     # One aggregate multi-index receives a contribution from every ordered
     # term sequence of the power that produces it, so the coefficient bound
     # carries the multinomial path multiplicity, at most term_count **
-    # iterations sequences.
+    # iterations sequences. A one-bit numerator bound means every operator
+    # coefficient is the unit +-1 and adds no growth, matching the tight
+    # multiplier bound's treatment of unit factors.
+    operator_growth_bits = _multiplier_bit_bound(operator_numerator, iterations)
     shared_numerator_bits = (
         _multiplier_bit_bound(candidate_terms, 1)
         + _multiplier_bit_bound(len(operator.terms), iterations)
-        + _multiplier_bit_bound(operator_numerator, iterations)
+        + operator_growth_bits
         + falling_factor_bits
     )
     shared_denominator_bits = _multiplier_bit_bound(operator_denominator, iterations)

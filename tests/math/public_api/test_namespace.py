@@ -23,6 +23,7 @@ ROOT_MATH_DOMAINS = (
     "combinatorial_maps",
     "combinatorial_matrices",
     "combinatorics",
+    "crossed_products",
     "diophantine_approximation",
     "finite_abelian_groups",
     "finite_fields",

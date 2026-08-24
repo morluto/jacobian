@@ -233,20 +233,23 @@ def _wide_unicode_symbols(count: int) -> tuple[str, ...]:
 
 
 def test_word_length_and_utf8_payload_bounds_are_closed() -> None:
-    length_boundary = FiniteWord(alphabet=("a",), letters=("a",) * 50)
-    assert sum(_pair(length_boundary).shape.parts) == 50
+    length_boundary = FiniteWord(alphabet=("a",), letters=("a",) * 100)
+    assert sum(_pair(length_boundary).shape.parts) == 100
 
-    too_long = FiniteWord(alphabet=("a",), letters=("a",) * 51)
-    with pytest.raises(ValidationError, match="length must not exceed 50"):
+    too_long = FiniteWord(alphabet=("a",), letters=("a",) * 101)
+    with pytest.raises(ValidationError, match="length must not exceed 100"):
         RSKWordRequest(word=too_long)
-    with pytest.raises(ValueError, match="length must not exceed 50"):
+    with pytest.raises(ValueError, match="length must not exceed 100"):
         row_insertion_rsk(too_long)
 
     ordered_symbols = tuple(f"s{index:02d}" for index in range(50))
     deepest_shape = _pair(
-        FiniteWord(alphabet=ordered_symbols, letters=tuple(reversed(ordered_symbols)))
+        FiniteWord(
+            alphabet=ordered_symbols,
+            letters=tuple(symbol for symbol in reversed(ordered_symbols) for _ in (0, 1)),
+        )
     )
-    assert deepest_shape.shape.parts == (1,) * 50
+    assert deepest_shape.shape.parts == (2,) * 50
 
     with pytest.raises(ValidationError):
         FiniteWord(
@@ -257,25 +260,40 @@ def test_word_length_and_utf8_payload_bounds_are_closed() -> None:
     boundary_symbols = _wide_unicode_symbols(50)
     byte_boundary = FiniteWord(
         alphabet=boundary_symbols,
-        letters=(boundary_symbols[0],) * 50,
+        letters=(boundary_symbols[0],) * 100,
     )
     assert RSKWordRequest(word=byte_boundary).word == byte_boundary
 
     assert (
         sum(len(symbol.encode("utf-8")) for symbol in boundary_symbols)
         + sum(len(letter.encode("utf-8")) for letter in byte_boundary.letters)
-        == 25_600
+        == 38_400
     )
 
 
-def test_inverse_size_bound_is_checked_before_reverse_insertion() -> None:
-    with pytest.raises(ValidationError, match="pair size must not exceed 50"):
-        RSKTableauPair(
-            alphabet=("a",),
-            insertion_tableau=SemistandardYoungTableau(rows=((1,) * 51,)),
-            recording_tableau=StandardYoungTableau(rows=(tuple(range(1, 52)),)),
-            shape=IntegerPartition(parts=(51,)),
-        )
+def test_canonical_tableau_cell_bound_admits_boundary_pairs_end_to_end() -> None:
+    single_row = _pair(FiniteWord(alphabet=("a",), letters=("a",) * 100))
+    assert single_row.insertion_tableau.rows == ((1,) * 100,)
+    assert single_row.recording_tableau.rows == (tuple(range(1, 101)),)
+    assert single_row.shape.parts == (100,)
+    assert inverse_row_insertion_rsk(single_row) == FiniteWord(
+        alphabet=("a",), letters=("a",) * 100
+    )
+
+    reconstructed = compute_inverse_rsk_word(
+        RSKInverseWordRequest.model_validate({"pair": single_row.model_dump()})
+    )
+    assert reconstructed.word == FiniteWord(alphabet=("a",), letters=("a",) * 100)
+
+    wide = tuple(f"s{index:02d}" for index in range(50))
+    descending_pairs = tuple(
+        symbol for symbol in reversed(wide) for _ in (0, 1)
+    )
+    pair = _pair(FiniteWord(alphabet=wide, letters=descending_pairs))
+    assert pair.shape.parts == (2,) * 50
+    assert inverse_row_insertion_rsk(pair) == FiniteWord(
+        alphabet=wide, letters=descending_pairs
+    )
 
 
 @pytest.mark.parametrize(
@@ -343,17 +361,17 @@ def test_rsk_request_schema_publishes_convention_and_work_envelope() -> None:
     description = schema["properties"]["word"]["description"]
     assert "unique strings" in description
     assert "every positioned letter" in description
-    assert "at most 50 letters" in description
-    assert "25600 UTF-8 bytes" in description
+    assert "at most 100 letters" in description
+    assert "38400 UTF-8 bytes" in description
     assert "2N" in schema["description"]
-    assert "1225" in schema["description"]
+    assert "4950" in schema["description"]
     assert "six integer" in schema["description"]
     assert "comparisons per search" in schema["description"]
 
     inverse_schema = RSKInverseWordRequest.model_json_schema()
     pair_schema = inverse_schema["$defs"]["RSKTableauPair"]
-    assert "at most 50 cells" in pair_schema["description"]
-    assert "at most 50 cells" in pair_schema["properties"]["shape"]["description"]
+    assert "at most 100 cells" in pair_schema["description"]
+    assert "at most 100 cells" in pair_schema["properties"]["shape"]["description"]
 
 
 def test_public_operations_are_admitted_and_examples_execute() -> None:

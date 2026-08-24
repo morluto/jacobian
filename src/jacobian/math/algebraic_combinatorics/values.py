@@ -8,16 +8,26 @@ from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.symmetric_functions.values import (
+    MAX_PARTITION_SIZE,
     IntegerPartition,
     SemistandardYoungTableau,
     StandardYoungTableau,
 )
-from jacobian.math.words.values import MAX_ALPHABET_SIZE, Symbol
+from jacobian.math.words.values import (
+    MAX_ALPHABET_SIZE,
+    MAX_SYMBOL_LENGTH,
+    Symbol,
+)
 
-MAX_RSK_WORD_LENGTH = 50
-# A word at the length boundary and all 50 declared symbols can each use the
-# FiniteWord maximum of 64 Unicode scalar values, each encoded in four bytes.
-MAX_RSK_WORD_BYTES = 25_600
+# An N-letter word produces two N-cell tableaux, so the canonical tableau
+# cell bound derives the word-length envelope.
+MAX_RSK_WORD_LENGTH = MAX_PARTITION_SIZE
+# A word at the length boundary over an alphabet of MAX_ALPHABET_SIZE symbols
+# can use MAX_SYMBOL_LENGTH Unicode scalar values per symbol, each encoded in
+# four UTF-8 bytes.
+MAX_RSK_WORD_BYTES = (
+    (MAX_RSK_WORD_LENGTH + MAX_ALPHABET_SIZE) * MAX_SYMBOL_LENGTH * 4
+)
 RSKConvention = Literal["ROW_INSERTION_RSK_V1"]
 
 
@@ -27,7 +37,7 @@ class RSKTableauPair(StrictModel):
     Insertion-tableau entries are one-based ranks in ``alphabet``.  The
     alphabet therefore remains attached to the pair and makes inverse RSK an
     exact operation even when symbols are not integers.  The common shape has
-    at most 50 cells.
+    at most 100 cells, the canonical tableau bound.
     """
 
     alphabet: tuple[Symbol, ...] = Field(
@@ -44,7 +54,7 @@ class RSKTableauPair(StrictModel):
     shape: IntegerPartition = Field(
         description=(
             "The common tableau shape, required to equal both derived row-length "
-            f"partitions and to contain at most {MAX_RSK_WORD_LENGTH} cells."
+            f"partitions and to contain at most {MAX_PARTITION_SIZE} cells."
         )
     )
     source_kind: Literal["WORD"] = "WORD"
@@ -58,10 +68,6 @@ class RSKTableauPair(StrictModel):
             raise ValueError("insertion tableau shape must equal the common shape")
         if self.recording_tableau.shape != self.shape:
             raise ValueError("recording tableau shape must equal the common shape")
-        if sum(self.shape.parts) > MAX_RSK_WORD_LENGTH:
-            raise ValueError(
-                f"RSK tableau pair size must not exceed {MAX_RSK_WORD_LENGTH}"
-            )
         if any(
             entry > len(self.alphabet)
             for row in self.insertion_tableau.rows

@@ -1181,6 +1181,21 @@ def test_surrogate_vertex_id_rejected_before_hull_proof(
         PolytopeSupportRequest.model_validate(payload)
 
 
+def test_result_preflights_surrogate_face_vertex_id_before_nested_parsing(
+    square_result: PolytopeSupportResult,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An exposed-face vertex ID outside the Unicode scalar label grammar
+    fails the raw conclusion gate before nested parsing can reach the
+    retained source's exact extremality proof."""
+    _forbid_extremality_proof(monkeypatch)
+    payload = square_result.model_dump(mode="json")
+    payload["exposed_face"]["vertices"][0]["vertex_id"] = "top_left\ud800"
+
+    with pytest.raises(ValidationError, match=r"[Uu]nicode"):
+        PolytopeSupportResult.model_validate(payload)
+
+
 def test_accepted_result_encodes_strict_json(square_result) -> None:
     """Every accepted canonical result crosses the supported serialization
     boundary unchanged."""

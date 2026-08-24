@@ -448,7 +448,8 @@ def _require_raw_exposed_face_vertex(
 
     Returns the vertex ID and its reduced-component key so the caller can
     apply the exposed face's defining ordering and distinctness
-    invariants; any shape outside the published schema raises here.
+    invariants; any shape outside the published schema raises here,
+    including a vertex ID outside the Unicode scalar label grammar.
     """
 
     if isinstance(vertex, RationalPolytopeVertex):
@@ -465,6 +466,7 @@ def _require_raw_exposed_face_vertex(
             "exposed face vertex must be an object with a short vertex_id "
             "and coordinates"
         )
+    _require_unicode_scalar_label(vertex["vertex_id"])
     coordinates = vertex["coordinates"]
     if not isinstance(coordinates, (list, tuple)) or not coordinates:
         raise ValueError("exposed face vertex coordinates must be a non-empty sequence")

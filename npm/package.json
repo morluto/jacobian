@@ -16,7 +16,7 @@
     "jacobian": "bin/jacobian.cjs"
   },
   "dependencies": {
-    "@inquirer/prompts": "^7.2.1",
+    "@inquirer/prompts": "^8.6.0",
     "@iarna/toml": "^2.2.5",
     "jsonc-parser": "^3.3.1"
   },

@@ -5,18 +5,25 @@ from pydantic import ValidationError
 
 from jacobian.math.numerical_semigroups._models import (
     BettiElementsRequest,
+    BettiElementsResult,
     CatenaryDegreeRequest,
+    CatenaryDegreeResult,
     DeltaSetRequest,
+    DeltaSetResult,
     ElasticityRequest,
     ElementCatenaryDegreeRequest,
+    ElementCatenaryDegreeResult,
     ElementDeltaSetRequest,
+    ElementDeltaSetResult,
     ElementElasticityRequest,
+    ElementElasticityResult,
     FactorizationComputeRequest,
     FactorizationComputeResult,
     FactorizationDistanceRequest,
     FactorizationGraphComputeRequest,
     FactorizationGraphComputeResult,
     FactorizationLengthsComputeRequest,
+    FactorizationLengthsComputeResult,
     MinimalPresentationRequest,
     MinimalPresentationResult,
     PresentationBinomialsRequest,
@@ -99,6 +106,94 @@ class TestFactorizations:
         assert result.in_semigroup
 
 
+@pytest.mark.parametrize(
+    ("result_model", "payload"),
+    [
+        (
+            FactorizationComputeResult,
+            {"value": "15", "in_semigroup": True, "factorizations": ((0, 3, 0),)},
+        ),
+        (
+            FactorizationLengthsComputeResult,
+            {"value": "18", "in_semigroup": True, "lengths": (3, 4, 5, 6)},
+        ),
+        (
+            FactorizationGraphComputeResult,
+            {
+                "value": "15",
+                "in_semigroup": True,
+                "factorizations": ((0, 3, 0),),
+                "edges": (),
+                "connected_components": ((0,),),
+                "is_connected": True,
+            },
+        ),
+        (
+            ElementDeltaSetResult,
+            {
+                "value": "18",
+                "factorization_lengths": (3, 4, 5, 6),
+                "delta_set": (1,),
+            },
+        ),
+        (
+            ElementElasticityResult,
+            {
+                "value": "18",
+                "minimum_length": 3,
+                "maximum_length": 6,
+                "elasticity": "2",
+            },
+        ),
+        (
+            ElementCatenaryDegreeResult,
+            {"value": "18", "factorization_count": 5, "catenary_degree": 3},
+        ),
+        (
+            BettiElementsResult,
+            {
+                "apery_set": ("0", "10", "5"),
+                "candidate_count": 6,
+                "betti_elements": ("15",),
+            },
+        ),
+        (
+            MinimalPresentationResult,
+            {
+                "betti_elements": ("15",),
+                "relations": ({"first": (5, 0, 0), "second": (0, 3, 0)},),
+            },
+        ),
+        (
+            PresentationBinomialsResult,
+            {
+                "binomials": (
+                    {
+                        "left_exponents": (5, 0, 0),
+                        "right_exponents": (0, 3, 0),
+                    },
+                )
+            },
+        ),
+        (
+            DeltaSetResult,
+            {"delta_set": (1,), "periodicity_bound": 45, "checked_through": 50},
+        ),
+        (
+            CatenaryDegreeResult,
+            {
+                "catenary_degree": 3,
+                "betti_degrees": ({"betti_element": "15", "catenary_degree": 3},),
+                "witness_betti_elements": ("15",),
+            },
+        ),
+    ],
+)
+def test_result_rejects_redundant_minimal_generator_axis(result_model, payload):
+    with pytest.raises(ValidationError, match="canonical minimal"):
+        result_model(minimal_generators=("3", "5", "6"), **payload)
+
+
 class TestFactorizationLengths:
     def test_lengths_15_in_3_5(self):
         req = FactorizationLengthsComputeRequest(generators=("3", "5"), value="15")
@@ -138,6 +233,18 @@ class TestFactorizationDistance:
         )
         result = compute_factorization_distance(req)
         assert result.distance == 0
+
+    def test_distance_normalizes_the_generator_presentation_not_coordinates(self):
+        result = compute_factorization_distance(
+            FactorizationDistanceRequest(
+                generators=("8", "5", "3"),
+                value="15",
+                first=(5, 0),
+                second=(0, 3),
+            )
+        )
+
+        assert result.distance == 5
 
     def test_distance_rejects_mismatched_lengths(self):
         with pytest.raises(ValidationError, match="coordinates must match"):

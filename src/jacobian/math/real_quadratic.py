@@ -286,11 +286,11 @@ def real_quadratic_order(
 
 
 def real_quadratic_embeddings(
-    request: RealQuadraticEmbeddingsRequest,
+    element: RealQuadraticValue,
 ) -> RealQuadraticEmbeddingProfile:
     """Return both exact real embeddings, trace, and norm of one element."""
 
-    source = request.element
+    source = element
     radical_coefficient = source.radical_coefficient.as_fraction()
     trace, norm = _embedding_scalars(source)
     return RealQuadraticEmbeddingProfile(

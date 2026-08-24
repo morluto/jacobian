@@ -11,6 +11,13 @@ from jacobian.math.real_quadratic import (
     real_quadratic_order,
 )
 
+
+def _compute_real_quadratic_embeddings(
+    request: RealQuadraticEmbeddingsRequest,
+) -> RealQuadraticEmbeddingProfile:
+    return real_quadratic_embeddings(request.element)
+
+
 REAL_QUADRATIC_OPERATIONS = (
     arithmetic_operation(
         "arithmetic.real_quadratic.embeddings.compute",
@@ -25,7 +32,7 @@ REAL_QUADRATIC_OPERATIONS = (
         ),
         RealQuadraticEmbeddingsRequest,
         RealQuadraticEmbeddingProfile,
-        real_quadratic_embeddings,
+        _compute_real_quadratic_embeddings,
         "arithmetic",
         "real-quadratic",
         "number-field",

@@ -40,9 +40,7 @@ def _element(
 
 
 def _profile() -> RealQuadraticEmbeddingProfile:
-    return real_quadratic_embeddings(
-        RealQuadraticEmbeddingsRequest(element=_element(3, 2, 2))
-    )
+    return real_quadratic_embeddings(_element(3, 2, 2))
 
 
 def test_complete_embedding_profile_is_exact_and_ordered() -> None:
@@ -61,9 +59,7 @@ def test_complete_embedding_profile_is_exact_and_ordered() -> None:
 
 
 def test_zero_has_two_labeled_embeddings_and_zero_invariants() -> None:
-    profile = real_quadratic_embeddings(
-        RealQuadraticEmbeddingsRequest(element=_element(0, 0, 5))
-    )
+    profile = real_quadratic_embeddings(_element(0, 0, 5))
 
     assert tuple(image.embedding for image in profile.images) == (
         "POSITIVE_ROOT",
@@ -113,14 +109,22 @@ def test_embedding_images_compose_with_existing_field_multiplication() -> None:
 
 def test_result_bound_is_proved_from_the_accepted_input_envelope() -> None:
     largest_component = 10**256 - 1
-    profile = real_quadratic_embeddings(
-        RealQuadraticEmbeddingsRequest(element=_element(largest_component, 0, 2))
-    )
+    profile = real_quadratic_embeddings(_element(largest_component, 0, 2))
 
     assert profile.trace.as_fraction() == 2 * largest_component
     assert profile.norm.as_fraction() == largest_component * largest_component
     with pytest.raises(ValidationError, match="256-digit"):
         _element(10**256, 0, 2)
+
+
+def test_embedding_declaration_adapter_serves_the_native_profile() -> None:
+    tools = {tool.operation_id: tool for tool in REAL_QUADRATIC_OPERATIONS}
+    tool = tools["arithmetic.real_quadratic.embeddings.compute"]
+    profile = tool.run(RealQuadraticEmbeddingsRequest(element=_element(1, 1, 2)))
+
+    assert profile == real_quadratic_embeddings(_element(1, 1, 2))
+    assert profile.trace.as_fraction() == 2
+    assert profile.norm.as_fraction() == -1
 
 
 def test_embedding_declaration_is_native_only_with_a_supported_symbol() -> None:
@@ -167,7 +171,7 @@ def test_fractional_trace_and_norm_are_exact() -> None:
         radical_coefficient=_r(1, 3),
         radicand=3,
     )
-    profile = real_quadratic_embeddings(RealQuadraticEmbeddingsRequest(element=element))
+    profile = real_quadratic_embeddings(element)
 
     assert profile.trace.as_fraction() == 1
     assert profile.norm.as_fraction() == Fraction(-1, 12)

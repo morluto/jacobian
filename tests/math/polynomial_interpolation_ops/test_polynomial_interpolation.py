@@ -32,6 +32,7 @@ def _samples(
 def test_catalog_contains_only_audited_operations() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
         "polynomial.interpolation.divided_differences.compute",
+        "polynomial.interpolation.hermite.compute",
         "polynomial.interpolation.newton_form.compute",
         "polynomial.interpolation.newton_evaluate.compute",
     }

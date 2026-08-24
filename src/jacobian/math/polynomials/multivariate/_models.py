@@ -148,8 +148,14 @@ class MultivariateDivisionResult(StrictModel):
 class MultivariateResultantRequest(StrictModel):
     """Compute a bounded resultant with respect to one variable.
 
-    The request rejects inputs whose degree envelope can produce more terms
-    than the exact sparse result contract can represent.
+    The eliminated-variable domain follows the Sylvester determinant exactly,
+    including its degenerate rows: an input that is a nonzero constant in the
+    elimination variable contributes the standard power rule
+    ``Res_x(f, c) = c ^ deg_x(f)`` (and symmetrically ``Res_x(c, g) =
+    c ^ deg_x(g)``), two inputs both constant in the eliminated variable give
+    the empty-determinant value 1, and a zero input gives 0.  The request
+    rejects inputs whose degree envelope can produce more terms than the
+    exact sparse result contract can represent.
     """
 
     left: RationalPolynomial
@@ -171,18 +177,6 @@ class MultivariateResultantRequest(StrictModel):
                 maximum_coefficient_digits=_MAX_MULTIVARIATE_COEFFICIENT_DIGITS,
             )
         variable_index = self.left.variables.index(self.elimination_variable)
-        for polynomial, label in ((self.left, "left"), (self.right, "right")):
-            degree_in_variable = max(
-                (
-                    term.exponents[variable_index]
-                    for term in polynomial.polynomial.terms
-                ),
-                default=0,
-            )
-            if degree_in_variable == 0:
-                raise ValueError(
-                    f"{label} polynomial has zero degree in the elimination variable"
-                )
         degree_sum = max(
             (term.exponents[variable_index] for term in self.left.polynomial.terms),
             default=0,
@@ -217,9 +211,37 @@ MultivariateInvariantValue = Annotated[
 
 
 class MultivariateResultantResult(StrictModel):
+    """The exact resultant bound to its source pair.
+
+    Retains both source polynomials and the eliminated variable so
+    validation replays the exact Sylvester determinant instead of trusting
+    an independently authored value.  The replay runs inside the same
+    admitted degree envelope as the producer.
+    """
+
+    left: RationalPolynomial
+    right: RationalPolynomial
     elimination_variable: PolynomialVariable
     resultant: MultivariateInvariantValue
     convention: Literal["SYLVESTER_DETERMINANT"] = "SYLVESTER_DETERMINANT"
+
+    @model_validator(mode="after")
+    def require_source_bound(self) -> Self:
+        from jacobian.math.polynomials.multivariate._operations import (
+            _sylvester_resultant_value,
+        )
+
+        request = MultivariateResultantRequest(
+            left=self.left,
+            right=self.right,
+            elimination_variable=self.elimination_variable,
+        )
+        if self.resultant != _sylvester_resultant_value(request):
+            raise ValueError(
+                "resultant must equal the Sylvester determinant of the "
+                "retained source polynomials"
+            )
+        return self
 
 
 class MultivariateFactorRequest(StrictModel):

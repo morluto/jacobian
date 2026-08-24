@@ -6,6 +6,7 @@ from jacobian.math.formal_power_series import (
     identity_check,
     multiply,
     power,
+    to_polynomial,
     truncate,
 )
 from jacobian.math.formal_power_series._models import (
@@ -20,6 +21,7 @@ from jacobian.math.formal_power_series._models import (
 from jacobian.math.formal_power_series._operations import (
     compute_derivative,
     compute_multiply,
+    compute_to_polynomial,
     compute_truncate,
 )
 
@@ -56,6 +58,7 @@ def test_native_projection_aliases_call_the_shared_typed_kernels() -> None:
 
     assert derivative(series) == compute_derivative(series)
     assert multiply(series, series) == compute_multiply(series, series)
+    assert to_polynomial(series) == compute_to_polynomial(series)
 
 
 def test_power_rejects_result_digit_overflow() -> None:
@@ -180,6 +183,8 @@ def test_native_exports_admit_inputs_before_kernel_work() -> None:
         power(wide, 2)
     with pytest.raises(ValidationError, match="512"):
         compose(wide, wide)
+    with pytest.raises(ValidationError, match="512"):
+        to_polynomial(wide)
 
     tall = "1" + "0" * MAX_RATIONAL_DIGITS
     oversized = TruncatedSeries(
@@ -195,6 +200,7 @@ def test_native_exports_still_admit_the_wire_boundary_order() -> None:
     edge = _ascending(MAX_TRUNCATION_ORDER)
     assert power(edge, 0).result.truncation_order == MAX_TRUNCATION_ORDER
     assert identity_check(edge, edge).status == "EQUAL_MOD_X_TO_N"
+    assert to_polynomial(edge) == compute_to_polynomial(edge)
 
 
 def test_truncate_accepts_widened_carrier_orders_and_replays_the_prefix() -> None:

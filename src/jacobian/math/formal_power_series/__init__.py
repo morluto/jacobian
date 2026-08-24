@@ -25,6 +25,7 @@ from jacobian.math.formal_power_series._models import (
     SeriesReversionResult,
     SeriesScalarMultiplyRequest,
     SeriesScalarMultiplyResult,
+    SeriesToPolynomialResult,
     SeriesTruncateRequest,
     SeriesTruncateResult,
     TruncatedSeries,
@@ -166,7 +167,12 @@ def identity_check(
 
 
 from_polynomial = compute_from_polynomial
-to_polynomial = compute_to_polynomial
+
+
+def to_polynomial(series: TruncatedSeries) -> SeriesToPolynomialResult:
+    """Return the canonical truncated polynomial representative of the series."""
+    return compute_to_polynomial(as_input_series(series))
+
 
 __all__ = [
     "TruncatedSeries",

@@ -59,8 +59,13 @@ _EDGE_ROW_OVERHEAD_BYTES = 128
 _RATIONAL_JSON_OVERHEAD_BYTES = 24
 _PROFILE_RESULT_HEADER_BYTES = 1_024
 
-# One pass performs at most 3F+E additions/subtractions, K negations, E
-# divisions, and K*V+4E comparisons. Sparse entries are distinct
+# One pass performs at most 6F+E additions/subtractions, K negations, E
+# divisions, and K*V+4E comparisons. Each sparse entry performs three bucketed
+# numerator additions -- source divergence, sink divergence, and edge load --
+# and deposits its denominator into each of those three buckets, so the shared
+# combination adds at most one fraction per distinct (bucket, denominator)
+# pair: at most 3F denominator folds on top of the 3F numerator additions,
+# plus one slack subtraction per edge. Sparse entries are distinct
 # commodity-by-edge cells of the conceptual tensor, so F <= K*E <= 256 * 512.
 # Every admitted commodity occupies V >= 2 distinct commodity-vertex cells
 # because its source and sink differ, so the 512-cell divergence budget
@@ -69,14 +74,21 @@ _PROFILE_RESULT_HEADER_BYTES = 1_024
 # capacity and capacity against zero in the kernel loop, capacity against
 # zero in the shared derivative scan, then either load against zero or its
 # ratio against the running congestion maximum. With the admitted maxima
-# this is 397,056 logical steps per pass; producer plus exact result replay
-# therefore costs at most 794,112.
-MAX_PROFILE_LOGICAL_STEPS = 794_112
-MAX_PROFILE_ADDITIONS_PER_PASS = 393_728
-MAX_PROFILE_NEGATIONS_PER_PASS = MAX_COMMODITY_VERTEX_CELLS // 2
-MAX_PROFILE_DIVISIONS_PER_PASS = 512
-MAX_PROFILE_COMPARISONS_PER_PASS = 2_560
+# this is 790,272 logical steps per pass; producer plus exact result replay
+# therefore costs at most 1,580,544.
 MAX_SPARSE_FLOW_ENTRIES = (MAX_COMMODITY_VERTEX_CELLS // 2) * MAX_MULTICOMMODITY_EDGES
+MAX_PROFILE_ADDITIONS_PER_PASS = 6 * MAX_SPARSE_FLOW_ENTRIES + MAX_MULTICOMMODITY_EDGES
+MAX_PROFILE_NEGATIONS_PER_PASS = MAX_COMMODITY_VERTEX_CELLS // 2
+MAX_PROFILE_DIVISIONS_PER_PASS = MAX_MULTICOMMODITY_EDGES
+MAX_PROFILE_COMPARISONS_PER_PASS = (
+    MAX_COMMODITY_VERTEX_CELLS + 4 * MAX_MULTICOMMODITY_EDGES
+)
+MAX_PROFILE_LOGICAL_STEPS = 2 * (
+    MAX_PROFILE_ADDITIONS_PER_PASS
+    + MAX_PROFILE_NEGATIONS_PER_PASS
+    + MAX_PROFILE_DIVISIONS_PER_PASS
+    + MAX_PROFILE_COMPARISONS_PER_PASS
+)
 
 
 class CommodityDemand(StrictModel):
@@ -180,14 +192,29 @@ def _require_canonical_entries(
 def _component_sums(
     flow: MulticommodityFlow,
 ) -> tuple[dict[tuple[str, int], Fraction], dict[tuple[int, int], Fraction]]:
-    """Return the exact divergence-cell and edge-load sums for one tensor.
+    """Return the exact divergence-cell and edge-load sums for one tensor."""
+
+    divergences, loads, _fold_additions = _component_sums_with_folds(flow)
+    return divergences, loads
+
+
+def _component_sums_with_folds(
+    flow: MulticommodityFlow,
+) -> tuple[
+    dict[tuple[str, int], Fraction],
+    dict[tuple[int, int], Fraction],
+    int,
+]:
+    """Return the exact sums plus how many fraction folds were performed.
 
     Amounts are bucketed by identical denominator and combined smallest
     denominator first: integer bucket sums never exceed the request volume,
     shared denominators add with zero growth, and every cross-denominator
     fold is checked against the canonical cap so adversarial
     coprime-denominator floods abort after constant work instead of
-    constructing huge intermediate fractions.
+    constructing huge intermediate fractions. The fold counter increments
+    inside the combination loop itself, so the profile work ledger charges
+    exactly the additions this scan executes.
     """
 
     cell_buckets: dict[tuple[str, int], dict[int, int]] = {
@@ -211,17 +238,21 @@ def _component_sums(
         bucket = edge_buckets.setdefault(edge_key, {})
         bucket[denominator] = bucket.get(denominator, 0) + numerator
 
+    fold_additions = 0
+
     def _combine(buckets: dict[int, int]) -> Fraction:
+        nonlocal fold_additions
         total = Fraction(0)
         for den in sorted(buckets, key=int.bit_length):
             total += Fraction(buckets[den], den)
+            fold_additions += 1
             for digits in _rational_side_bounds(total):
                 _require_side_within_cap(digits)
         return total
 
     divergences = {key: _combine(bucket) for key, bucket in cell_buckets.items()}
     loads = {key: _combine(bucket) for key, bucket in edge_buckets.items()}
-    return divergences, loads
+    return divergences, loads, fold_additions
 
 
 def _rational_side_bounds(value: Fraction) -> tuple[int, int]:
@@ -352,10 +383,38 @@ def derived_profile_components_from_sums(
 def _require_profile_output_admission(flow: MulticommodityFlow) -> None:
     """Reject tensors whose echoed source and priced rows exceed the envelope."""
 
+    # The echoed source is measured before any exact component work. Every
+    # admitted result contains at least the header, one congestion rational,
+    # and one divergence and one edge row (FlowGraph admits no zero-edge
+    # graphs and commodities at least one source/sink pair), so a serialized
+    # source that already leaves no room for that skeleton can never pass the
+    # priced estimate below and fails closed immediately instead of paying
+    # the full component scan first.
+    source_bytes = len(encode_strict_json(flow.model_dump(mode="json")))
+    minimum_result_bytes = (
+        source_bytes
+        + _PROFILE_RESULT_HEADER_BYTES
+        # One congestion rational and the mandatory first divergence row,
+        # each priced at one digit per side like the estimate below.
+        + _RATIONAL_JSON_OVERHEAD_BYTES
+        + 2
+        + _DIVERGENCE_ROW_OVERHEAD_BYTES
+        + _RATIONAL_JSON_OVERHEAD_BYTES
+        + 2
+        # The mandatory first edge row prices two rationals.
+        + _EDGE_ROW_OVERHEAD_BYTES
+        + 2 * _RATIONAL_JSON_OVERHEAD_BYTES
+        + 4
+    )
+    if minimum_result_bytes > MAX_PROFILE_RESULT_BYTES:
+        raise ValueError(
+            "multicommodity-flow profile result would exceed the "
+            f"{MAX_PROFILE_RESULT_BYTES}-byte aggregate result bound"
+        )
+
     cell_bounds, load_bounds, slack_bounds, congestion_bound = (
         _profile_component_digit_bounds(flow)
     )
-    source_bytes = len(encode_strict_json(flow.model_dump(mode="json")))
     divergence_bytes = sum(
         num_digits
         + den_digits

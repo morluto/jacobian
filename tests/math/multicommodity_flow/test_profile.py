@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from copy import deepcopy
 from fractions import Fraction
 
@@ -104,14 +105,18 @@ def test_exact_shared_bottleneck_profile_replays_its_source() -> None:
     ]
     # Producer and replay both scan the four sparse entries, four-by-two dense
     # divergence cells, and three edges; the ledger is exact rather than a cap.
+    # Every entry shares denominator 1, so the bucket fold performs one
+    # fraction addition per nonempty bucket: six touched divergence cells and
+    # three edges add nine folds to the twelve numerator additions, plus the
+    # three slack subtractions.
     assert result.work.sparse_entries == 4
     assert result.work.commodity_vertex_cells == 8
     assert result.work.edge_cells == 3
-    assert result.work.rational_additions_per_pass == 15
+    assert result.work.rational_additions_per_pass == 3 * 4 + (6 + 3) + 3
     assert result.work.rational_negations_per_pass == 2
     assert result.work.rational_divisions_per_pass == 3
     assert result.work.exact_comparisons_per_pass == 20
-    assert result.work.logical_steps_per_call == 80
+    assert result.work.logical_steps_per_call == 2 * (24 + 2 + 3 + 20)
 
 
 def test_profile_distinguishes_capacity_and_conservation_failures() -> None:
@@ -162,9 +167,11 @@ def test_zero_capacity_positive_load_has_no_finite_congestion() -> None:
     # A zero-capacity edge still compares load to capacity and capacity to
     # zero in the edge loop, capacity to zero in the shared slack scan, then
     # checks whether its load is positive; no ratio division is attempted.
+    # The lone entry folds one denominator into each of its two divergence
+    # cells and one edge bucket: three fold additions beyond 3*1 + 1.
     assert result.work.rational_divisions_per_pass == 0
     assert result.work.exact_comparisons_per_pass == 6
-    assert result.work.logical_steps_per_call == 22
+    assert result.work.logical_steps_per_call == 2 * ((3 + 3 + 1) + 1 + 0 + 6)
 
 
 def test_early_divergence_mismatch_still_executes_every_counted_comparison() -> None:
@@ -185,7 +192,7 @@ def test_early_divergence_mismatch_still_executes_every_counted_comparison() -> 
     assert result.work.commodity_vertex_cells == 8
     assert result.work.edge_cells == 3
     assert result.work.exact_comparisons_per_pass == 8 + 4 * 3
-    assert result.work.logical_steps_per_call == 80
+    assert result.work.logical_steps_per_call == 2 * (24 + 2 + 3 + 20)
 
 
 def test_mixed_zero_and_positive_capacities_execute_every_counted_comparison() -> None:
@@ -222,7 +229,7 @@ def test_mixed_zero_and_positive_capacities_execute_every_counted_comparison() -
         assert result.congestion is None
         assert result.work.rational_divisions_per_pass == 2
         assert result.work.exact_comparisons_per_pass == 4 + 4 * 3
-        assert result.work.logical_steps_per_call == 62
+        assert result.work.logical_steps_per_call == 2 * ((9 + 7 + 3) + 1 + 2 + 16)
 
 
 def test_fractional_split_flow_uses_exact_rational_loads_and_congestion() -> None:
@@ -294,7 +301,7 @@ def test_low_commodity_networks_admit_vertices_up_to_the_cell_budget() -> None:
     assert len(result.divergences) == 33
     assert result.work.commodity_vertex_cells == 33
     assert result.work.exact_comparisons_per_pass == 33 + 4
-    assert result.work.logical_steps_per_call == 2 * (4 + 1 + 1 + 37)
+    assert result.work.logical_steps_per_call == 2 * ((3 + 3 + 1) + 1 + 1 + 37)
 
     # Eight commodities over all 64 FlowGraph vertices reach exactly 512
     # returned cells; a ninth commodity exceeds the dense divergence budget.
@@ -630,21 +637,40 @@ def test_entry_count_is_bounded_by_distinct_cells_not_a_fixed_ceiling() -> None:
             ),
         )
 
-    result = compute_multicommodity_flow_profile(filled_network(13, 129))
+    # Every amount shares denominator 1, so each bucket performs exactly one
+    # fold per distinct bucket key: one per touched commodity/vertex cell and
+    # one per loaded edge, counted independently of the kernel below.
+    def unit_fold_additions(flow: MulticommodityFlow) -> int:
+        touched_cells = {
+            (entry.commodity_id, vertex)
+            for entry in flow.entries
+            for vertex in (entry.source, entry.target)
+        }
+        return len(touched_cells) + len({(e.source, e.target) for e in flow.entries})
+
+    flow = filled_network(13, 129)
+    result = compute_multicommodity_flow_profile(flow)
     assert result.capacity_feasible is True
     assert result.congestion == q(1)
     assert result.work.sparse_entries == 129
     assert len(result.edge_profiles) == 129
     assert all(row.load == q(1) for row in result.edge_profiles)
-    assert result.work.rational_additions_per_pass == 3 * 129 + 129
+    assert result.work.rational_additions_per_pass == (
+        3 * 129 + unit_fold_additions(flow) + 129
+    )
     assert result.work.exact_comparisons_per_pass == 13 + 4 * 129
-    assert result.work.logical_steps_per_call == 2 * (516 + 1 + 129 + 529)
+    assert result.work.logical_steps_per_call == 2 * (
+        3 * 129 + unit_fold_additions(flow) + 129 + 1 + 129 + (13 + 4 * 129)
+    )
 
     # The entry count inherits the derived cell maxima: one commodity over a
     # full 512-edge graph admits exactly 512 distinct entries.
-    full = compute_multicommodity_flow_profile(filled_network(64, 512))
+    full_flow = filled_network(64, 512)
+    full = compute_multicommodity_flow_profile(full_flow)
     assert full.work.sparse_entries == 512
-    assert full.work.rational_additions_per_pass == 3 * 512 + 512
+    assert full.work.rational_additions_per_pass == (
+        3 * 512 + unit_fold_additions(full_flow) + 512
+    )
 
 
 def test_sparse_scan_admits_commodities_over_a_full_edge_graph() -> None:
@@ -907,6 +933,168 @@ def test_coprime_denominator_flood_fails_closed() -> None:
     )
     with pytest.raises(ValidationError, match="canonical cap"):
         MulticommodityFlow(network=network, commodities=commodities, entries=entries)
+
+
+def oversized_echo_flow() -> MulticommodityFlow:
+    # One commodity carries 270 lone 32,000-digit entries on distinct edges:
+    # every derived component is a single operand inside the canonical cap,
+    # so only the serialized echo -- about 8.7 MB of numerator digits --
+    # exhausts the 8 MiB aggregate result envelope.
+    vertex_count = 17
+    pairs = [
+        (source, target)
+        for source in range(vertex_count)
+        for target in range(vertex_count)
+        if source != target
+    ][:270]
+    big = CanonicalRational(num="9" * 32_000, den="1")
+    return MulticommodityFlow(
+        network=FlowGraph(
+            vertex_count=vertex_count,
+            edges=tuple(
+                CapacitatedEdge(source=source, target=target, capacity=q(1))
+                for source, target in pairs
+            ),
+        ),
+        commodities=(
+            CommodityDemand(commodity_id="a", source=0, sink=16, demand=q(1)),
+        ),
+        entries=tuple(
+            CommodityEdgeFlow(
+                commodity_id="a", source=source, target=target, amount=big
+            )
+            for source, target in pairs
+        ),
+    )
+
+
+def test_oversized_source_is_rejected_before_the_component_scan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.graphs.multicommodity_flow import _models
+
+    scanned: list[MulticommodityFlow] = []
+    original = _models._profile_component_digit_bounds
+
+    def spy(flow: MulticommodityFlow) -> object:
+        scanned.append(flow)
+        return original(flow)
+
+    monkeypatch.setattr(_models, "_profile_component_digit_bounds", spy)
+    with pytest.raises(ValidationError, match="aggregate result bound"):
+        oversized_echo_flow()
+    assert scanned == []
+
+
+def test_oversized_source_rejection_precedes_a_doomed_exact_scan() -> None:
+    # Same oversized echo, but two commodities fold coprime near-cap
+    # denominators into one shared edge bucket whose sum would abort the
+    # component scan with a canonical-cap error. The envelope preflight must
+    # win: the request fails for its result size before any exact arithmetic.
+    vertex_count = 17
+    bulk_pairs = [
+        (source, target)
+        for source in range(vertex_count)
+        for target in range(vertex_count)
+        if source != target and (source, target) != (0, 1)
+    ][:268]
+    big = CanonicalRational(num="9" * 32_000, den="1")
+    with pytest.raises(ValidationError, match="aggregate result bound"):
+        MulticommodityFlow(
+            network=FlowGraph(
+                vertex_count=vertex_count,
+                edges=tuple(
+                    CapacitatedEdge(source=source, target=target, capacity=q(1))
+                    for source, target in [(0, 1), *bulk_pairs]
+                ),
+            ),
+            commodities=(
+                CommodityDemand(commodity_id="a", source=0, sink=16, demand=q(1)),
+                CommodityDemand(commodity_id="b", source=0, sink=1, demand=q(1)),
+            ),
+            entries=(
+                CommodityEdgeFlow(
+                    commodity_id="a",
+                    source=0,
+                    target=1,
+                    amount=CanonicalRational(num="1", den="3" + "0" * 19_999),
+                ),
+                *(
+                    CommodityEdgeFlow(
+                        commodity_id="a", source=source, target=target, amount=big
+                    )
+                    for source, target in bulk_pairs
+                ),
+                CommodityEdgeFlow(
+                    commodity_id="b",
+                    source=0,
+                    target=1,
+                    amount=CanonicalRational(num="1", den="7" + "0" * 12_775 + "1"),
+                ),
+            ),
+        )
+
+
+def test_ledger_charges_every_performed_bucket_fold_addition() -> None:
+    # Five entries carry four pairwise-coprime denominators into buckets that
+    # share cells and one edge, so the denominator-fold pass performs one
+    # fraction addition per distinct (bucket, denominator) pair -- fourteen
+    # here -- beyond the fifteen bucketed numerator additions and four slack
+    # subtractions. The reference count below re-derives the bucket shapes
+    # from the entry list itself, so the ledger can only match by charging
+    # exactly the arithmetic the scan executes.
+    flow = MulticommodityFlow(
+        network=FlowGraph(
+            vertex_count=4,
+            edges=(
+                CapacitatedEdge(source=0, target=1, capacity=q(1)),
+                CapacitatedEdge(source=0, target=2, capacity=q(1)),
+                CapacitatedEdge(source=1, target=3, capacity=q(1)),
+                CapacitatedEdge(source=2, target=3, capacity=q(1)),
+            ),
+        ),
+        commodities=(
+            CommodityDemand(commodity_id="a", source=0, sink=3, demand=q(1)),
+            CommodityDemand(commodity_id="b", source=0, sink=1, demand=q(1)),
+        ),
+        entries=(
+            CommodityEdgeFlow(commodity_id="a", source=0, target=1, amount=q(1, 2)),
+            CommodityEdgeFlow(commodity_id="a", source=0, target=2, amount=q(1, 3)),
+            CommodityEdgeFlow(commodity_id="a", source=1, target=3, amount=q(1, 5)),
+            CommodityEdgeFlow(commodity_id="a", source=2, target=3, amount=q(1, 7)),
+            CommodityEdgeFlow(commodity_id="b", source=0, target=1, amount=q(1, 2)),
+        ),
+    )
+
+    def bucket_fold_additions(tensor: MulticommodityFlow) -> int:
+        cell_denominators: dict[tuple[str, int], set[int]] = defaultdict(set)
+        edge_denominators: dict[tuple[int, int], set[int]] = defaultdict(set)
+        for entry in tensor.entries:
+            denominator = entry.amount.as_fraction().denominator
+            cell_denominators[(entry.commodity_id, entry.source)].add(denominator)
+            cell_denominators[(entry.commodity_id, entry.target)].add(denominator)
+            edge_denominators[(entry.source, entry.target)].add(denominator)
+        cell_folds = sum(len(sides) for sides in cell_denominators.values())
+        edge_folds = sum(len(sides) for sides in edge_denominators.values())
+        return cell_folds + edge_folds
+
+    result = compute_multicommodity_flow_profile(flow)
+    folds = bucket_fold_additions(flow)
+    assert folds == 14
+    assert result.work.rational_additions_per_pass == 3 * 5 + folds + 4
+    assert result.work.rational_negations_per_pass == 2
+    assert result.work.rational_divisions_per_pass == 4
+    assert result.work.exact_comparisons_per_pass == 8 + 4 * 4
+    assert result.work.logical_steps_per_call == 2 * (33 + 2 + 4 + 24)
+    # The exact values stay the known answers even though the fold order
+    # follows ascending denominator bit length rather than entry order.
+    divergence = {
+        (row.commodity_id, row.vertex): row.divergence.as_fraction()
+        for row in result.divergences
+    }
+    assert divergence[("a", 0)] == Fraction(1, 2) + Fraction(1, 3)
+    assert divergence[("b", 0)] == Fraction(1, 2)
+    assert result.edge_profiles[0].load.as_fraction() == Fraction(1)
 
 
 def test_result_replay_rejects_forged_source_and_derived_ledger_fields() -> None:

@@ -10,7 +10,7 @@ from jacobian.math.graphs.multicommodity_flow._models import (
     EdgeLoadProfile,
     MulticommodityFlow,
     MulticommodityFlowProfileWork,
-    _component_sums,
+    _component_sums_with_folds,
     derived_profile_components_from_sums,
 )
 
@@ -43,7 +43,7 @@ def profile_components(
     """
 
     commodity_ids = tuple(commodity.commodity_id for commodity in flow.commodities)
-    divergences, loads = _component_sums(flow)
+    divergences, loads, denominator_folds = _component_sums_with_folds(flow)
     budget, slacks, max_congestion_ratio = derived_profile_components_from_sums(
         flow, divergences, loads
     )
@@ -101,18 +101,22 @@ def profile_components(
     sparse_entries = len(flow.entries)
     divergence_cells = len(divergence_rows)
     edge_cells = len(edge_rows)
-    # Each sparse entry adds to source divergence, sink divergence, and edge
-    # load. Each edge's slack is subtracted exactly once by the shared scan
-    # that returned the budget above, which also divides one ratio per
-    # positive-capacity edge; this loop reuses those measured components. One
-    # demand is negated per commodity for its sink target. Every edge is
-    # compared four times -- load against capacity and capacity against zero
-    # in this loop, capacity against zero in the shared scan, then either
-    # load against zero or its ratio against the running congestion maximum.
-    # The demand scan above compares all commodity/vertex cells rather than
-    # short-circuiting at the first mismatch, so every charged comparison is
-    # executed exactly once.
-    additions = 3 * sparse_entries + edge_cells
+    # Each sparse entry performs three bucketed integer additions -- source
+    # divergence, sink divergence, and edge load -- and deposits its
+    # denominator into each of those three buckets. The shared sum scan then
+    # folds every distinct bucket denominator exactly once, counted inside
+    # the fold loop itself, so ``denominator_folds`` equals the fraction
+    # additions the scan executed. Each edge's slack is subtracted exactly
+    # once by the shared scan that returned the budget above, which also
+    # divides one ratio per positive-capacity edge; this loop reuses those
+    # measured components. One demand is negated per commodity for its sink
+    # target. Every edge is compared four times -- load against capacity and
+    # capacity against zero in this loop, capacity against zero in the shared
+    # scan, then either load against zero or its ratio against the running
+    # congestion maximum. The demand scan above compares all commodity/vertex
+    # cells rather than short-circuiting at the first mismatch, so every
+    # charged comparison is executed exactly once.
+    additions = 3 * sparse_entries + denominator_folds + edge_cells
     negations = len(flow.commodities)
     divisions = positive_capacity_edges
     comparisons = divergence_cells + 4 * edge_cells

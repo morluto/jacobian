@@ -68,3 +68,17 @@ def test_primorial_contract_version_tracks_the_result_schema_change() -> None:
         if item.operation_id == "integer.compute.primorial"
     )
     assert operation.version == "4"
+
+
+def test_primorial_admission_records_the_v4_result_derived_envelope() -> None:
+    """The materially changed v4 candidate has a fresh owner-local decision."""
+    from jacobian.catalog.admission import AdmissionDecision
+    from jacobian.math.number_theory._admission import ADMISSIONS
+
+    admission = next(
+        item for item in ADMISSIONS if item.operation_id == "integer.compute.primorial"
+    )
+
+    assert admission.decision == AdmissionDecision.KEEP
+    assert "n <= 1001" in admission.rationale
+    assert "3,400-digit result budget" in admission.rationale

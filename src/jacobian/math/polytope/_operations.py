@@ -48,10 +48,10 @@ from jacobian.math.polytope._models import (
     PolytopeSupportResult,
     PolytopeVolumeRequest,
     PolytopeVolumeResult,
+    PrimitiveFacet,
     RationalCovector,
     RationalPolytopeVertex,
     RationalVPolytope,
-    PrimitiveFacet,
     Vertex,
 )
 

@@ -7,16 +7,16 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polytope._models import (
-    PolytopeSupportRequest,
-    PolytopeSupportResult,
     FacetIncidenceRequest,
     FacetIncidenceResult,
+    PolytopeSupportRequest,
+    PolytopeSupportResult,
     PolytopeVolumeRequest,
     PolytopeVolumeResult,
 )
 from jacobian.math.polytope._operations import (
-    compute_polytope_support,
     compute_facet_incidence,
+    compute_polytope_support,
     compute_polytope_volume,
 )
 

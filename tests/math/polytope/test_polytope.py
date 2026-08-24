@@ -27,15 +27,12 @@ from jacobian.math.polytope._models import (
     RationalCovector,
     RationalPolytopeVertex,
     RationalVPolytope,
-    Vertex,
 )
 from jacobian.math.polytope._operations import (
-    compute_polytope_support,
     PrimitiveFacet,
     Vertex,
-)
-from jacobian.math.polytope._operations import (
     compute_facet_incidence,
+    compute_polytope_support,
     compute_polytope_volume,
 )
 

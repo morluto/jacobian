@@ -322,11 +322,12 @@ def _distinct_powered_orders(
     operator: ConstantCoefficientDifferentialOperator,
     iterations: int,
     limit: int,
+    work_cap: int,
 ) -> tuple[tuple[int, ...], ...] | None:
     """Enumerate the distinct aggregate multi-indices of a powered operator.
 
-    Returns ``None`` when enumeration exceeds ``limit`` distinct sums or the
-    work cap; callers then fall back to the analytic support bound.
+    Returns ``None`` when enumeration exceeds ``limit`` distinct sums or
+    ``work_cap`` steps; callers then fall back to the analytic support bound.
     """
 
     if iterations == 0:
@@ -343,7 +344,7 @@ def _distinct_powered_orders(
             for orders in terms:
                 expanded.add(tuple(map(sum, zip(existing, orders, strict=True))))
                 work += 1
-                if len(expanded) > limit or work > ENUMERATION_WORK_CAP:
+                if len(expanded) > limit or work > work_cap:
                     exhausted = True
                     break
             if exhausted:
@@ -398,13 +399,30 @@ def _multiplier_bit_bound(value: int, exponent: int) -> int:
     return exponent * (value - 1).bit_length()
 
 
-def _common_denominator_height(values: Iterable[Fraction]) -> tuple[int, int]:
+def _common_denominator_height(
+    values: Iterable[Fraction],
+    *,
+    maximum_digits: int | None = None,
+) -> tuple[int, int] | None:
+    """Shared denominator and largest scaled numerator of ``values``.
+
+    Every later shared denominator is a multiple of the running one, so once
+    its decimal length exceeds ``maximum_digits`` no completion can stay
+    inside that digit budget; construction stops there and returns ``None``
+    instead of materializing an arbitrarily large integer.
+    """
+
     fractions = tuple(values)
     if not fractions:
         return 1, 0
     denominator = 1
     for value in fractions:
         denominator = math.lcm(denominator, value.denominator)
+        if (
+            maximum_digits is not None
+            and _decimal_digits_from_bits(denominator.bit_length()) > maximum_digits
+        ):
+            return None
     maximum_scaled_numerator = max(
         abs(value.numerator) * (denominator // value.denominator) for value in fractions
     )
@@ -599,9 +617,37 @@ def _coefficient_digit_bound(
     if iterations == 0:
         return _max_coefficient_digits(polynomial)
 
-    operator_denominator, operator_numerator = _common_denominator_height(
-        term.coefficient.as_fraction() for term in operator.terms
+    # The refined per-exponent accounting never constructs a shared height
+    # across nonacting terms, so it runs first and answers without any
+    # global operator arithmetic.
+    per_exponent = _per_exponent_height_bits(
+        polynomial,
+        operator,
+        iterations,
+        support_cap,
     )
+    if per_exponent is not None:
+        return max(
+            _decimal_digits_from_bits(per_exponent[0]),
+            _decimal_digits_from_bits(per_exponent[1]),
+        )
+
+    operator_height = _common_denominator_height(
+        (term.coefficient.as_fraction() for term in operator.terms),
+        maximum_digits=MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS,
+    )
+    source_height = _common_denominator_height(
+        (term.coefficient.as_fraction() for term in polynomial.polynomial.terms),
+        maximum_digits=MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS,
+    )
+    if operator_height is None or source_height is None:
+        # A shared denominator whose own decimal length already forces more
+        # than budget digits onto every coefficient bound rejects the request
+        # either way, so the coarse bound returns one digit past the budget
+        # and no intermediate larger than the gate ever materializes.
+        return MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS + 1
+    operator_denominator, operator_numerator = operator_height
+    source_denominator, source_numerator = source_height
     degree = _total_degree(polynomial)
     maximum_operator_order = max(sum(term.orders) for term in operator.terms)
     derivative_order = min(degree, iterations * maximum_operator_order)
@@ -624,21 +670,6 @@ def _coefficient_digit_bound(
     )
     shared_denominator_bits = _multiplier_bit_bound(operator_denominator, iterations)
 
-    per_exponent = _per_exponent_height_bits(
-        polynomial,
-        operator,
-        iterations,
-        support_cap,
-    )
-    if per_exponent is not None:
-        return max(
-            _decimal_digits_from_bits(per_exponent[0]),
-            _decimal_digits_from_bits(per_exponent[1]),
-        )
-
-    source_denominator, source_numerator = _common_denominator_height(
-        term.coefficient.as_fraction() for term in polynomial.polynomial.terms
-    )
     numerator_bits = source_numerator.bit_length() + shared_numerator_bits
     denominator_bits = source_denominator.bit_length() + shared_denominator_bits
     return max(
@@ -814,10 +845,21 @@ def _expansion_support_candidates(
         max(term.orders[axis] for term in operator.terms)
         for axis in range(len(polynomial.variables))
     )
-    powered_orders = _distinct_powered_orders(
-        operator,
-        iterations,
-        MAX_APPLICATION_OUTPUT_TERMS,
+    # The correlated-sum enumeration may cost about as much as the sparse
+    # power whose support it predicts, so its cutoff follows the admitted
+    # power-work budget: a power that already exhausts the deterministic work
+    # budget rejects regardless of its exact support and skips straight to
+    # the analytic bound.
+    power_work = _operator_power_work(term_count, iterations, maximum_axis_orders)
+    powered_orders = (
+        _distinct_powered_orders(
+            operator,
+            iterations,
+            MAX_APPLICATION_OUTPUT_TERMS,
+            power_work,
+        )
+        if power_work <= MAX_APPLICATION_WORK_UNITS
+        else None
     )
     if powered_orders is not None:
         expanded_terms = len(powered_orders)
@@ -842,7 +884,6 @@ def _expansion_support_candidates(
         _total_degree(polynomial),
         iterations * maximum_operator_order,
     )
-    power_work = _operator_power_work(term_count, iterations, maximum_axis_orders)
     derivative_work = source_terms * expanded_terms * (1 + derivative_order)
     conversion_work = 2 * (source_terms + term_count + coarse_candidates)
     if (

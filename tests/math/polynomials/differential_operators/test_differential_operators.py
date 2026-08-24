@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import math
 import random
 from fractions import Fraction
@@ -15,6 +16,11 @@ from jacobian.canonical import encode_strict_json
 from jacobian.math.polynomials._conversions import rational_polynomial_from_sympy
 from jacobian.math.polynomials.differential_operators._bounds import (
     MAX_APPLICATION_RESULT_BYTES,
+    ApplicationEnvelope,
+    _common_denominator_height,
+    _decimal_digits_from_bits,
+    _distinct_powered_orders,
+    validate_application_envelope,
 )
 from jacobian.math.polynomials.differential_operators._models import (
     DifferentialOperatorApplyRequest,
@@ -87,6 +93,11 @@ def _from_sympy(
         sympy.Poly(expression, *symbols, domain=sympy.QQ),
         tuple(str(symbol) for symbol in symbols),
     )
+
+
+def _coprime_tall_denominators(count: int, digits: int) -> list[int]:
+    primes = list(sympy.primerange(2, sympy.prime(count + 1) + 1))
+    return [prime ** math.ceil(digits / math.log10(prime)) for prime in primes[:count]]
 
 
 def test_catalog_contains_the_single_atomic_application() -> None:
@@ -1356,6 +1367,48 @@ def test_correlated_powered_axes_are_counted_distinctly() -> None:
     assert replayed == result
 
 
+def test_correlated_support_survives_the_enumeration_cutoff() -> None:
+    variables = ("x", "y")
+    terms = {(0, 0): 1}
+    terms.update({(order, order): 1 for order in range(600)})
+    terms[(1, 0)] = 1
+    # D^2(x+y) = x+y+2: only the identity and first-order diagonal shifts act,
+    # so the exact 1,800-shift correlated power must stay admissible even
+    # though its pair enumeration outworks the coarse fixed cutoff.
+    expected = _polynomial(variables, {(1, 0): 1, (0, 1): 1, (0, 0): 2})
+
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(variables, {(1, 0): 1, (0, 1): 1}),
+            operator=_operator(variables, terms),
+            iterations=2,
+            expected=expected,
+        )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.output == expected
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    assert replayed == result
+
+
+def test_widened_correlated_power_still_follows_the_work_budget() -> None:
+    variables = ("x", "y")
+    terms = {(0, 0): 1}
+    terms.update({(order, order): 1 for order in range(1_000)})
+    terms[(1, 0)] = 1
+
+    with pytest.raises(ValidationError, match="deterministic work budget"):
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(variables, {(1, 0): 1, (0, 1): 1}),
+            operator=_operator(variables, terms),
+            iterations=2,
+        )
+
+
 def test_per_monomial_annihilation_is_counted_in_the_candidate_bound() -> None:
     variables = ("x", "y")
     operator = _operator(
@@ -1660,6 +1713,61 @@ def test_wide_operator_weight_growth_gates_at_the_height_cap() -> None:
         )
 
 
+def test_coprime_tall_operator_denominators_defer_the_shared_height() -> None:
+    variables = ("x",)
+
+    def coprime_operator(
+        digit_count: int,
+    ) -> tuple[ConstantCoefficientDifferentialOperator, list[int]]:
+        denominators = _coprime_tall_denominators(1_024, digit_count)
+        operator = _operator(
+            variables,
+            {(order,): Fraction(1, denominators[order]) for order in range(1_024)},
+        )
+        return operator, denominators
+
+    # Only the order-0 and order-1 aggregates act on x, so admission answers
+    # from the per-exponent accounting alone and never constructs a shared
+    # height across the 1,024 pairwise-coprime tall denominators.
+    tall_operator, _ = coprime_operator(512)
+    envelope = validate_application_envelope(
+        _polynomial(variables, {(1,): 1}),
+        tall_operator,
+        1,
+        None,
+    )
+    assert envelope == ApplicationEnvelope(
+        guaranteed_zero=False,
+        expanded_operator_terms=1_024,
+        candidate_output_terms=2,
+        rescale_only=False,
+    )
+
+    # Inside the kernel's coefficient regime the same shape applies exactly:
+    # D(x) = x/q_0 + 1/q_1 with every nonacting term discarded.
+    operator, denominators = coprime_operator(24)
+    expected = _polynomial(
+        variables,
+        {(1,): Fraction(1, denominators[0]), (0,): Fraction(1, denominators[1])},
+    )
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(variables, {(1,): 1}),
+            operator=operator,
+            iterations=1,
+            expected=expected,
+        )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.output == expected
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    assert replayed == result
+
+
 def test_iterations_stay_inside_the_interoperable_integer_range() -> None:
     schema = DifferentialOperatorApplyRequest.model_json_schema()
     assert schema["properties"]["iterations"]["maximum"] == (1 << 53) - 1
@@ -1845,3 +1953,73 @@ def test_flint_kernel_matches_independent_sympy_replay() -> None:
             )
             == expected
         )
+
+
+def test_common_denominator_height_gate_is_exact_at_its_boundary() -> None:
+    # 2**1000 has exactly 302 decimal digits and its bit-length estimate
+    # agrees, so the gate admits at 302 and refuses one digit earlier.
+    assert _common_denominator_height([Fraction(1, 2**1000)], maximum_digits=302) == (
+        2**1000,
+        1,
+    )
+    assert (
+        _common_denominator_height([Fraction(1, 2**1000)], maximum_digits=301) is None
+    )
+    assert _common_denominator_height([Fraction(3, 2**1000)], maximum_digits=302) == (
+        2**1000,
+        3,
+    )
+    assert _common_denominator_height([], maximum_digits=1) == (1, 0)
+
+    # Defining invariant: the gated height is either the exact ungated pair or
+    # a refusal whose ungated decimal length provably exceeds the budget.
+    rng = random.Random(1177)
+    for _ in range(200):
+        values = [
+            Fraction(
+                rng.randrange(1, 50),
+                rng.choice((2, 3, 5, 7)) ** rng.randrange(0, 40),
+            )
+            for _ in range(rng.randrange(1, 12))
+        ]
+        ungated = _common_denominator_height(values)
+        cap = rng.randrange(1, 400)
+        gated = _common_denominator_height(values, maximum_digits=cap)
+        if gated is None:
+            estimated = _decimal_digits_from_bits(ungated[0].bit_length())
+            assert estimated > cap
+        else:
+            assert gated == ungated
+
+
+def test_distinct_powered_orders_match_the_composition_family() -> None:
+    def brute_force(
+        orders: list[tuple[int, ...]], iterations: int
+    ) -> set[tuple[int, ...]]:
+        return {
+            tuple(map(sum, zip(*combo, strict=True)))
+            for combo in itertools.combinations_with_replacement(orders, iterations)
+        }
+
+    rng = random.Random(2342)
+    for _ in range(25):
+        axis_count = rng.randrange(1, 4)
+        variables = tuple("xyz"[:axis_count])
+        term_count = rng.randrange(1, 6)
+        iterations = rng.randrange(1, 5)
+        coefficients: dict[tuple[int, ...], int] = {
+            tuple(rng.randrange(3) for _ in range(axis_count)): rng.choice((1, -1))
+            for _ in range(term_count)
+        }
+        operator = _operator(variables, coefficients)
+        orders = [term.orders for term in operator.terms]
+
+        enumerated = _distinct_powered_orders(operator, iterations, 500, 100_000)
+        assert enumerated is not None
+        assert enumerated == tuple(sorted(brute_force(orders, iterations)))
+
+    wide = _operator(("x", "y"), {(j, j): 1 for j in range(6)})
+    zero_iterations = _distinct_powered_orders(wide, 0, 500, 100_000)
+    assert zero_iterations == ()
+    assert _distinct_powered_orders(wide, 2, 3, 100_000) is None
+    assert _distinct_powered_orders(wide, 2, 500, 0) is None

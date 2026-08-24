@@ -10,114 +10,184 @@ from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
-MAX_VERTICES = 64
-MAX_EDGES = 512
-
 # Exhaustive backtracking search over graph morphisms is exponential in the
 # vertex count.  This dedicated bound keeps every search-based morphism
 # operation inside a tested, provably bounded domain.
 MORPHISM_MAX_VERTICES = 20
 
+# Source-bound graph results retain their input graphs and may add witnesses.
+# This reserved envelope covers the result wrapper and field names after those
+# representation-dependent components.
+_RESULT_ENVELOPE_RESERVE_BYTES = 1_024
 
-class SimpleGraph(StrictModel):
-    """A simple undirected graph with integer-labelled vertices."""
 
-    vertex_count: int = Field(ge=1, le=MAX_VERTICES)
-    edges: tuple[tuple[int, int], ...] = Field(default=(), max_length=MAX_EDGES)
+def _graph_wire_bytes(graph: SimpleUndirectedGraph) -> int:
+    return len(encode_strict_json(graph.model_dump(mode="json")))
+
+
+def _label_wire_bytes(labels: tuple[str, ...]) -> int:
+    return sum(len(encode_strict_json(label) + b",") for label in labels)
+
+
+def _require_output_headroom(
+    source_bytes: int, witness_label_bytes: int, operation: str
+) -> None:
+    estimated_result_bytes = (
+        source_bytes + witness_label_bytes + _RESULT_ENVELOPE_RESERVE_BYTES
+    )
+    output_limit = CanonicalLimits().max_output_bytes
+    if estimated_result_bytes > output_limit:
+        raise ValueError(
+            f"the {operation} result retains its sources and would exceed the "
+            f"{output_limit}-byte canonical output limit; "
+            "shorten vertex labels or shrink the graphs"
+        )
+
+
+class GraphVertexMapRow(StrictModel):
+    """One canonical source-vertex to target-vertex assignment."""
+
+    source_vertex: str
+    target_vertex: str
+
+
+class GraphVertexMap(StrictModel):
+    """A complete canonical vertex map between two labelled simple graphs.
+
+    The rows are ordered by source label rather than either graph's display
+    order.  This binds one total function to its precise source and target
+    graphs without making row order mathematical data.
+    """
+
+    source_graph: SimpleUndirectedGraph
+    target_graph: SimpleUndirectedGraph
+    rows: tuple[GraphVertexMapRow, ...] = Field(max_length=256)
 
     @model_validator(mode="after")
-    def require_valid(self) -> Self:
-        seen: set[tuple[int, int]] = set()
-        for u, v in self.edges:
-            if not (0 <= u < self.vertex_count and 0 <= v < self.vertex_count):
-                raise ValueError("edge vertices must be in 0..vertex_count-1")
-            if u == v:
-                raise ValueError("self-loops are not allowed")
-            endpoint_pair = (min(u, v), max(u, v))
-            if endpoint_pair in seen:
-                raise ValueError("edges must be unique")
-            seen.add(endpoint_pair)
+    def require_complete_canonical_map(self) -> Self:
+        expected_sources = tuple(sorted(self.source_graph.vertices))
+        actual_sources = tuple(row.source_vertex for row in self.rows)
+        if actual_sources != expected_sources:
+            raise ValueError(
+                "vertex-map rows must cover every source vertex exactly once "
+                "in canonical source-label order"
+            )
+        target_vertices = set(self.target_graph.vertices)
+        if any(row.target_vertex not in target_vertices for row in self.rows):
+            raise ValueError(
+                "vertex-map targets must be declared target-graph vertices"
+            )
+
+        max_obstruction_label_bytes = max(
+            (
+                len(encode_strict_json(label))
+                for label in self.source_graph.vertices + self.target_graph.vertices
+            ),
+            default=0,
+        )
+        estimated_result_bytes = (
+            len(encode_strict_json(self.model_dump(mode="json")))
+            + 4 * max_obstruction_label_bytes
+            + _RESULT_ENVELOPE_RESERVE_BYTES
+        )
+        if estimated_result_bytes > CanonicalLimits().max_output_bytes:
+            raise ValueError(
+                "the source-bound graph-homomorphism result would exceed the "
+                f"{CanonicalLimits().max_output_bytes}-byte canonical output limit"
+            )
         return self
+
+
+def _first_homomorphism_obstruction(
+    vertex_map: GraphVertexMap,
+) -> tuple[tuple[str, str], tuple[str, str]] | None:
+    """Return the first declared source edge with a nonedge image, if any."""
+
+    images = {row.source_vertex: row.target_vertex for row in vertex_map.rows}
+    target_edges = set(vertex_map.target_graph.edges)
+    for source_edge in vertex_map.source_graph.edges:
+        image_edge = (images[source_edge[0]], images[source_edge[1]])
+        canonical_image = tuple(sorted(image_edge))
+        if image_edge[0] == image_edge[1] or canonical_image not in target_edges:
+            return source_edge, image_edge
+    return None
+
+
+class GraphHomomorphism(StrictModel):
+    """A source-bound complete vertex map that preserves every source edge."""
+
+    vertex_map: GraphVertexMap
+
+    @model_validator(mode="after")
+    def require_edge_preservation(self) -> Self:
+        if _first_homomorphism_obstruction(self.vertex_map) is not None:
+            raise ValueError("a graph homomorphism must preserve every source edge")
+        return self
+
+
+class GraphHomomorphismObstruction(StrictModel):
+    """The first source edge whose map is not a target edge."""
+
+    source_edge: tuple[str, str]
+    image_vertices: tuple[str, str]
 
 
 class HomomorphismCheckRequest(StrictModel):
-    source_graph: SimpleGraph
-    target_graph: SimpleGraph
-    vertex_map: tuple[int, ...]
+    """Check one complete source-bound graph vertex map exactly."""
 
-    @model_validator(mode="after")
-    def require_valid(self) -> Self:
-        if len(self.vertex_map) != self.source_graph.vertex_count:
-            raise ValueError("vertex_map length must match source_graph vertex_count")
-        if any(not 0 <= v < self.target_graph.vertex_count for v in self.vertex_map):
-            raise ValueError("vertex_map entries must be valid target_graph vertices")
-        return self
-
-
-class HomomorphismFindRequest(StrictModel):
-    source_graph: SimpleGraph
-    target_graph: SimpleGraph
-
-    @model_validator(mode="after")
-    def require_search_bounded(self) -> Self:
-        if self.source_graph.vertex_count > MORPHISM_MAX_VERTICES:
-            raise ValueError(
-                f"source graph must have at most {MORPHISM_MAX_VERTICES} vertices"
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Check one complete canonical vertex map. Admission validates "
+                "its retained source/map result envelope before execution; the "
+                "kernel builds target adjacency once and scans every source edge "
+                "once."
             )
-        return self
+        }
+    )
 
-
-class CoreCheckRequest(StrictModel):
-    graph: SimpleGraph
-
-    @model_validator(mode="after")
-    def require_search_bounded(self) -> Self:
-        if self.graph.vertex_count > MORPHISM_MAX_VERTICES:
-            raise ValueError(
-                f"graph must have at most {MORPHISM_MAX_VERTICES} vertices"
-            )
-        return self
-
-
-class RetractionCheckRequest(StrictModel):
-    graph: SimpleGraph
-    subgraph_vertices: tuple[int, ...]
-
-    @model_validator(mode="after")
-    def require_valid(self) -> Self:
-        if self.graph.vertex_count > MORPHISM_MAX_VERTICES:
-            raise ValueError(
-                f"graph must have at most {MORPHISM_MAX_VERTICES} vertices"
-            )
-        if len(self.subgraph_vertices) > self.graph.vertex_count:
-            raise ValueError("subgraph_vertices must be a subset")
-        for v in self.subgraph_vertices:
-            if not 0 <= v < self.graph.vertex_count:
-                raise ValueError("subgraph_vertices must be valid vertex indices")
-        if len(set(self.subgraph_vertices)) != len(self.subgraph_vertices):
-            raise ValueError("subgraph_vertices must be unique")
-        return self
+    vertex_map: GraphVertexMap
 
 
 class HomomorphismCheckResult(StrictModel):
-    is_homomorphism: bool
-    method: str = "EDGE_PRESERVING_CHECK"
+    """A replayable positive homomorphism or first edge-image obstruction."""
 
+    vertex_map: GraphVertexMap
+    status: Literal["HOMOMORPHISM", "EDGE_IMAGE_NOT_EDGE"]
+    homomorphism: GraphHomomorphism | None = None
+    obstruction: GraphHomomorphismObstruction | None = None
 
-class HomomorphismFindResult(StrictModel):
-    found: bool
-    vertex_map: tuple[int, ...] = ()
-    method: str = "BACKTRACKING_SEARCH"
+    @model_validator(mode="after")
+    def require_replayable_result(self) -> Self:
+        expected = _first_homomorphism_obstruction(self.vertex_map)
+        if expected is None:
+            if self.status != "HOMOMORPHISM":
+                raise ValueError("a preserved map must have HOMOMORPHISM status")
+            if self.obstruction is not None:
+                raise ValueError("a homomorphism result must not carry an obstruction")
+            if (
+                self.homomorphism is None
+                or self.homomorphism.vertex_map != self.vertex_map
+            ):
+                raise ValueError(
+                    "a HOMOMORPHISM result must retain the checked source-bound map"
+                )
+            return self
 
-
-class CoreCheckResult(StrictModel):
-    is_core: bool
-    method: str = "ENDOMORPHISM_CHECK"
-
-
-class RetractionCheckResult(StrictModel):
-    is_retraction: bool
-    method: str = "HOMOMORPHISM_CHECK"
+        source_edge, image_vertices = expected
+        if self.status != "EDGE_IMAGE_NOT_EDGE":
+            raise ValueError("a nonedge image must have EDGE_IMAGE_NOT_EDGE status")
+        if self.homomorphism is not None:
+            raise ValueError("a non-homomorphism result must not carry a homomorphism")
+        if self.obstruction is None:
+            raise ValueError("a non-homomorphism result requires its first obstruction")
+        if self.obstruction.source_edge != source_edge:
+            raise ValueError(
+                "obstruction source_edge must be the first failing source edge"
+            )
+        if self.obstruction.image_vertices != image_vertices:
+            raise ValueError("obstruction image_vertices must replay the submitted map")
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -138,35 +208,6 @@ SEARCH_PASSES_PER_NEGATIVE_DECISION = 2
 _MAX_SEARCH_PATHS_PER_PASS = (
     MAX_CYCLE_SEARCH_PATHS // SEARCH_PASSES_PER_NEGATIVE_DECISION
 )
-
-# Results retain their source graphs, so a request near the canonical input
-# limit can produce a response past the identical output limit.  Admission
-# reserves this much for the result envelope beyond the echoed sources and
-# witness labels.
-_RESULT_ENVELOPE_RESERVE_BYTES = 1_024
-
-
-def _graph_wire_bytes(graph: SimpleUndirectedGraph) -> int:
-    return len(encode_strict_json(graph.model_dump(mode="json")))
-
-
-def _label_wire_bytes(graph: SimpleUndirectedGraph) -> int:
-    return sum(len(encode_strict_json(label) + b",") for label in graph.vertices)
-
-
-def _require_output_headroom(
-    source_bytes: int, witness_label_bytes: int, operation: str
-) -> None:
-    estimated_result_bytes = (
-        source_bytes + witness_label_bytes + _RESULT_ENVELOPE_RESERVE_BYTES
-    )
-    output_limit = CanonicalLimits().max_output_bytes
-    if estimated_result_bytes > output_limit:
-        raise ValueError(
-            f"the {operation} result retains its sources and would exceed the "
-            f"{output_limit}-byte canonical output limit; "
-            "shorten vertex labels or shrink the graphs"
-        )
 
 
 def _canonical_max_degree(graph: SimpleUndirectedGraph) -> int:
@@ -225,7 +266,7 @@ class FixedLengthCycleRequest(StrictModel):
         # the envelope and witness labels beyond that echo.
         _require_output_headroom(
             _graph_wire_bytes(self.graph),
-            _label_wire_bytes(self.graph),
+            _label_wire_bytes(self.graph.vertices),
             "fixed-length cycle",
         )
         return self
@@ -391,7 +432,7 @@ class SubgraphPatternFindRequest(StrictModel):
         # the envelope and witness labels beyond those echoes.
         _require_output_headroom(
             _graph_wire_bytes(self.pattern) + _graph_wire_bytes(self.host),
-            _label_wire_bytes(self.host),
+            _label_wire_bytes(self.host.vertices),
             "subgraph-pattern",
         )
         return self

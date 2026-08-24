@@ -49,6 +49,20 @@ def test_each_tool_contract_and_function_have_one_math_owner() -> None:
         )
 
 
+def test_geometry_incidence_search_stays_one_capability_family() -> None:
+    """Exhaustive collinear-triple and concyclic-quadruple search has one
+    public operation (``geometry.points.general_position.search``, which
+    returns both complete witness sets with certified absence); per-kind
+    projections of the same postcondition must not re-enter the catalog as
+    near-duplicate discovery entries."""
+    public_ids = {tool.operation_id for tool in BUILTIN_TOOLS}
+    assert "geometry.points.general_position.search" in public_ids
+    assert not public_ids & {
+        "geometry.points.collinear_triples.find",
+        "geometry.points.concyclic_quadruples.find",
+    }
+
+
 def test_prime_field_matrix_computations_have_one_operation_family() -> None:
     """Rank, RREF, and nullspace over GF(p) are owned by ``prime_field.matrix``.
 

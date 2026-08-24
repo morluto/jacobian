@@ -538,6 +538,103 @@ def _cr(x):
     return CanonicalRational.from_fraction(Fraction(x))
 
 
+class TestCanonicalPointValueComposition:
+    """The exact-geometry domain composes through the one canonical
+    point-configuration value: every surviving operation accepts a shared
+    ``PointConfiguration`` unchanged and no operation-local model recreates
+    the canonical point types (review: reuse the canonical type)."""
+
+    @staticmethod
+    def _configuration() -> PointConfiguration:
+        return PointConfiguration(
+            points=(
+                LabelledRationalPoint(label="a", coordinates=(_cr(0), _cr(0))),
+                LabelledRationalPoint(label="b", coordinates=(_cr(1), _cr(0))),
+                LabelledRationalPoint(label="c", coordinates=(_cr(0), _cr(1))),
+            )
+        )
+
+    def test_every_surviving_operation_accepts_canonical_configuration(self):
+        from jacobian.math.geometry.exact._operations import (
+            compute_pinned_line_distance_profile,
+        )
+
+        configuration = self._configuration()
+        profile = compute_distance_profile(
+            DistanceProfileRequest(configuration=configuration)
+        )
+        graph = compute_distance_graph(
+            DistanceGraphRequest(
+                configuration=configuration,
+                target_squared_distance=CanonicalRational(num="1", den="1"),
+            )
+        )
+        pinned = compute_pinned_line_distance_profile(
+            PinnedLineDistanceRequest(
+                configuration=configuration, anchor=(_cr(0), _cr(0))
+            )
+        )
+        assert profile.point_count == 3
+        assert graph.vertex_count == 3
+        assert pinned.point_count == 3
+
+    def test_retained_configuration_feeds_sibling_operations_unchanged(self):
+        """A producer's retained configuration is the canonical domain value,
+        so consumers accept it without translation through a second type."""
+        from jacobian.math.geometry.exact._operations import (
+            compute_pinned_line_distance_profile,
+        )
+
+        configuration = self._configuration()
+        result = compute_pinned_line_distance_profile(
+            PinnedLineDistanceRequest(
+                configuration=configuration, anchor=(_cr(0), _cr(1))
+            )
+        )
+        # The retained value is the shared configuration (the pinned request's
+        # schema view is a subclass, never a parallel recreation).
+        assert isinstance(result.configuration, PointConfiguration)
+        replayed = PinnedLineDistanceResult.model_validate(
+            result.model_dump(mode="json")
+        )
+        assert replayed == result
+        # A consumer accepts the producer's retained configuration directly
+        # and computes exactly what it would from the original source value.
+        profile = compute_distance_profile(
+            DistanceProfileRequest(configuration=result.configuration)
+        )
+        assert profile == compute_distance_profile(
+            DistanceProfileRequest(configuration=configuration)
+        )
+        graph = compute_distance_graph(
+            DistanceGraphRequest(
+                configuration=result.configuration,
+                target_squared_distance=CanonicalRational(num="1", den="1"),
+            )
+        )
+        assert graph == compute_distance_graph(
+            DistanceGraphRequest(
+                configuration=configuration,
+                target_squared_distance=CanonicalRational(num="1", den="1"),
+            )
+        )
+
+    def test_incidence_projections_no_longer_define_local_value_models(self):
+        """The removed duplicate family took its recreated CanonicalRational /
+        LabelledRationalPoint / PointConfiguration views with it."""
+        import jacobian.math.geometry.exact._models as models
+
+        for name in (
+            "IncidenceBoundedRational",
+            "IncidencePoint",
+            "IncidencePointConfiguration",
+            "CollinearTriplesRequest",
+            "ConcyclicQuadruplesRequest",
+            "IncidenceSearchResult",
+        ):
+            assert not hasattr(models, name), name
+
+
 class TestAggregatePairLedgerBound:
     def test_oversized_aggregate_pair_ledger_rejected_before_parsing(self):
         """2016 entries each carrying 2016 distinct pairs would amplify into

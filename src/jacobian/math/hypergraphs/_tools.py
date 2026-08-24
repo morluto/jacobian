@@ -145,8 +145,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "hypergraph.clique_expansion.compute",
         "Compute the 2-section (clique expansion) of a hypergraph",
-        "Compute the primal/2-section graph where two vertices are "
-        "adjacent if and only if they share a hyperedge.",
+        "Compute the primal/2-section of a finite hypergraph as a canonical "
+        "simple undirected graph: two vertices are adjacent if and only if "
+        "they share a hyperedge, with edge endpoints in lexical order.",
         CliqueExpansionRequest,
         CliqueExpansionResult,
         compute_clique_expansion,

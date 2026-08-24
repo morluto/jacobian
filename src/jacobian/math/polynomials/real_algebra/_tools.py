@@ -14,7 +14,12 @@ from jacobian.math.polynomials.real_algebra._models import (
 )
 from jacobian.math.polynomials.real_algebra._operations import (
     compute_root_count,
+    compute_strict_sublevel_measure,
     compute_sturm_chain,
+)
+from jacobian.math.polynomials.real_algebra._strict_sublevel_models import (
+    StrictSublevelMeasureRequest,
+    StrictSublevelMeasureResult,
 )
 
 
@@ -97,6 +102,43 @@ REAL_ALGEBRA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                     },
                     "lower": {"num": "-10", "den": "1"},
                     "upper": {"num": "10", "den": "1"},
+                },
+            ),
+        ),
+    ),
+    ra_operation(
+        "polynomial.real.strict_sublevel_measure.compute",
+        "Compute an exact strict polynomial sublevel measure",
+        "Return the complete component decomposition and source-bound exact "
+        "real-algebraic measure of {x in [lower, upper] : |f(x)| < threshold} "
+        "for a canonical univariate polynomial over QQ.",
+        StrictSublevelMeasureRequest,
+        StrictSublevelMeasureResult,
+        compute_strict_sublevel_measure,
+        "polynomial",
+        "real-algebra",
+        "sublevel-set",
+        "measure",
+        "exact",
+        examples=(
+            example(
+                "quadratic_irrational_length",
+                "Measure |x^2| < 2 on [-2, 2], with endpoints at ±sqrt(2).",
+                {
+                    "polynomial": {
+                        "variables": ["x"],
+                        "polynomial": {
+                            "terms": [
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [2],
+                                }
+                            ]
+                        },
+                    },
+                    "threshold": {"num": "2", "den": "1"},
+                    "lower": {"num": "-2", "den": "1"},
+                    "upper": {"num": "2", "den": "1"},
                 },
             ),
         ),

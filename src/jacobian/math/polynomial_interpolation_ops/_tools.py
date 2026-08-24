@@ -9,6 +9,8 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polynomial_interpolation_ops._models import (
     DividedDifferencesRequest,
     DividedDifferencesResult,
+    HermiteInterpolationRequest,
+    HermiteInterpolationResult,
     NewtonEvaluateRequest,
     NewtonEvaluateResult,
     NewtonFormRequest,
@@ -16,6 +18,7 @@ from jacobian.math.polynomial_interpolation_ops._models import (
 )
 from jacobian.math.polynomial_interpolation_ops._operations import (
     compute_divided_differences,
+    compute_hermite_interpolation,
     compute_newton_evaluate,
     compute_newton_form,
 )
@@ -56,7 +59,56 @@ def _samples() -> dict[str, list[dict[str, str]]]:
     }
 
 
+def _hermite_table() -> dict[str, object]:
+    return {
+        "variable": "x",
+        "jets": [
+            {
+                "node": _rational(0),
+                "derivatives": [
+                    {"derivative_order": 0, "value": _rational(0)},
+                    {"derivative_order": 1, "value": _rational(0)},
+                ],
+            },
+            {
+                "node": _rational(1),
+                "derivatives": [
+                    {"derivative_order": 0, "value": _rational(1)},
+                    {"derivative_order": 1, "value": _rational(2)},
+                ],
+            },
+        ],
+    }
+
+
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    _op(
+        "polynomial.interpolation.hermite.compute",
+        "Compute an exact rational Hermite interpolant",
+        "Return the unique degree-<M polynomial in QQ[x] whose ordinary "
+        "derivatives match a complete table of rational derivative jets, with "
+        "a complete exact source-bound replay ledger. Uses a preflighted exact "
+        "Hermite-Vandermonde solve; rows require distinct nodes and derivative "
+        "orders 0 through m-1.",
+        HermiteInterpolationRequest,
+        HermiteInterpolationResult,
+        compute_hermite_interpolation,
+        "polynomial",
+        "interpolation",
+        "hermite",
+        "derivative-jet",
+        "confluent-interpolation",
+        "exact",
+        examples=(
+            example(
+                "quadratic_from_two_first_order_jets",
+                "Compute the exact polynomial matching value and first derivative "
+                "jets of x^2 at 0 and 1; nodes must be distinct and each jet must "
+                "list the complete derivative-order prefix starting at zero.",
+                {"table": _hermite_table()},
+            ),
+        ),
+    ),
     _op(
         "polynomial.interpolation.divided_differences.compute",
         "Compute Newton divided differences",

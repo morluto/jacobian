@@ -386,13 +386,47 @@ class DiscrepancyOptimumRequest(StrictModel):
     set_system: FiniteSetSystem
 
 
+def _feasibility_outcome(
+    set_system: FiniteSetSystem, allowed: int
+) -> Literal["sat", "unsat", "unknown"]:
+    """Run one bounded exact feasibility check for imbalance at most ``allowed``.
+
+    Mirrors the optimum program's constraints with a fixed target instead of
+    a minimized objective. Only an explicit ``unsat`` may support a lower
+    bound; an exhausted budget reports ``unknown`` so validation fails
+    closed rather than accepting an unproven claim.
+    """
+
+    import z3  # type: ignore[import-untyped]
+
+    solver = z3.Solver()
+    solver.set("timeout", MAX_OPTIMUM_SOLVER_MILLISECONDS)
+    variables = [z3.Int(f"x_{index}") for index in range(set_system.ground_set_size)]
+    solver.add(*(z3.Or(value == 1, value == -1) for value in variables))
+    for subset in set_system.sets:
+        signed_sum = (
+            z3.Sum([variables[element] for element in subset])
+            if subset
+            else z3.IntVal(0)
+        )
+        solver.add(signed_sum <= allowed, -signed_sum <= allowed)
+    outcome = solver.check()
+    if outcome == z3.sat:
+        return "sat"
+    if outcome == z3.unsat:
+        return "unsat"
+    return "unknown"
+
+
 class DiscrepancyOptimumResult(StrictModel):
     """A proven-minimum coloring or an exhausted solver budget.
 
     Source-bound on its set system: ``OPTIMAL`` carries the exact minimum
-    discrepancy and one witnessing coloring, replayed against the retained
-    system at validation.  The integer program's sat answer establishes
-    optimality, so no exhaustive-scan claim is needed.
+    discrepancy and one witnessing coloring. Deserialization replays the
+    witness against the retained system and independently re-establishes
+    the lower bound: zero is definitional, and any positive claimed optimum
+    must be backed by an explicit unsat of the exact feasibility program
+    that asks for a coloring of imbalance at most one less.
     ``BUDGET_EXCEEDED`` makes no mathematical claim: it carries neither a
     coloring nor a discrepancy value.
     """
@@ -401,7 +435,6 @@ class DiscrepancyOptimumResult(StrictModel):
     status: Literal["OPTIMAL", "BUDGET_EXCEEDED"]
     optimal_coloring: tuple[int, ...] = Field(default=())
     optimal_discrepancy: int | None = Field(default=None, ge=0, strict=True)
-    exhaustive: Literal[True] = True
 
     @model_validator(mode="after")
     def bind_optimal_coloring(self) -> Self:
@@ -429,7 +462,63 @@ class DiscrepancyOptimumResult(StrictModel):
                 "the reported discrepancy must be the exact maximum imbalance "
                 "of the returned coloring"
             )
+        self._require_lower_bound()
         return self
+
+    def _require_lower_bound(self) -> None:
+        """Re-establish minimality; only a proven lower bound may pass."""
+
+        assert self.optimal_discrepancy is not None
+        if self.optimal_discrepancy == 0:
+            return
+        outcome = _feasibility_outcome(self.set_system, self.optimal_discrepancy - 1)
+        if outcome == "unsat":
+            return
+        if outcome == "sat":
+            raise ValueError(
+                "a coloring with smaller imbalance exists; the claimed "
+                "optimum is not minimal"
+            )
+        raise ValueError(
+            "claimed optimality was not established within the replay budget"
+        )
+
+
+def _proven_optimal_result(
+    set_system: FiniteSetSystem,
+    optimal_coloring: tuple[int, ...],
+    optimal_discrepancy: int,
+) -> DiscrepancyOptimumResult:
+    """Build a proven-optimal result from one producing Optimize solve.
+
+    Direct construction from the producing solve skips result replay so one
+    declared budget covers all solver work; independently supplied results
+    always validate through ``bind_optimal_coloring``, which replays the
+    witness and re-establishes the lower bound.
+    """
+
+    return DiscrepancyOptimumResult.model_construct(
+        set_system=set_system,
+        status="OPTIMAL",
+        optimal_coloring=optimal_coloring,
+        optimal_discrepancy=optimal_discrepancy,
+    )
+
+
+def _budget_exceeded_result(set_system: FiniteSetSystem) -> DiscrepancyOptimumResult:
+    """Build the typed incomplete outcome from one exhausted producing solve.
+
+    As with ``_proven_optimal_result``, the producing solve's own answer is
+    carried unclaimed; replay stays reserved for independently supplied
+    results via ``bind_optimal_coloring``.
+    """
+
+    return DiscrepancyOptimumResult.model_construct(
+        set_system=set_system,
+        status="BUDGET_EXCEEDED",
+        optimal_coloring=(),
+        optimal_discrepancy=None,
+    )
 
 
 __all__ = [

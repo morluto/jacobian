@@ -521,7 +521,7 @@ class TestDiscrepancyOptimum:
         result = compute_optimal_discrepancy(req)
         assert result.status == "OPTIMAL"
         assert result.optimal_discrepancy == 2
-        assert result.exhaustive is True
+        assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == result
 
     def test_empty_ground_set(self):
         req = DiscrepancyOptimumRequest(
@@ -634,6 +634,17 @@ class TestDiscrepancyOptimum:
                 optimal_discrepancy=0,
             )
 
+    def test_budget_exceeded_serialization_carries_no_completeness_claim(self):
+        result = DiscrepancyOptimumResult.model_validate(
+            {
+                "set_system": {"ground_set_size": 2, "sets": [[0, 1]]},
+                "status": "BUDGET_EXCEEDED",
+            }
+        )
+        assert "exhaustive" not in result.model_dump()
+        assert result.optimal_coloring == ()
+        assert result.optimal_discrepancy is None
+
     def test_optimal_result_replay_binds_coloring_to_system(self):
         from pydantic import ValidationError
 
@@ -645,3 +656,49 @@ class TestDiscrepancyOptimum:
                 optimal_coloring=(1, 1),
                 optimal_discrepancy=0,
             )
+
+    def test_forged_nonminimal_optimum_is_rejected(self):
+        """The witness attains the claimed discrepancy 2, but (1, -1)
+        proves the true optimum of the single pair system is 0; only an
+        independently re-established lower bound exposes the forgery."""
+        payload = {
+            "set_system": {"ground_set_size": 2, "sets": [[0, 1]]},
+            "status": "OPTIMAL",
+            "optimal_coloring": [1, 1],
+            "optimal_discrepancy": 2,
+        }
+        with pytest.raises(ValidationError, match="not minimal"):
+            DiscrepancyOptimumResult.model_validate(payload)
+
+    def test_zero_optimum_validates_without_a_lower_bound_solve(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        def fail_if_asked(_system: object, _allowed: int) -> str:
+            raise AssertionError("zero lower bound is definitional, not solved")
+
+        monkeypatch.setattr(discrepancy_models, "_feasibility_outcome", fail_if_asked)
+        result = compute_optimal_discrepancy(
+            DiscrepancyOptimumRequest(
+                set_system=FiniteSetSystem(ground_set_size=2, sets=((0, 1),))
+            )
+        )
+        assert result.status == "OPTIMAL"
+        assert result.optimal_discrepancy == 0
+        assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == result
+
+    def test_unestablished_lower_bound_fails_closed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        def undecided(_system: object, _allowed: int) -> str:
+            return "unknown"
+
+        monkeypatch.setattr(discrepancy_models, "_feasibility_outcome", undecided)
+        req = DiscrepancyOptimumRequest(
+            set_system=FiniteSetSystem(
+                ground_set_size=3,
+                sets=((0, 1), (1, 2), (0, 2)),
+            ),
+        )
+        payload = compute_optimal_discrepancy(req).model_dump()
+        with pytest.raises(ValidationError, match="replay budget"):
+            DiscrepancyOptimumResult.model_validate(payload)

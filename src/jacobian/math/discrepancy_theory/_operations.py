@@ -20,6 +20,8 @@ from jacobian.math.discrepancy_theory._models import (
     HardConstraintRoundingResult,
     HardConstraintRowLedger,
     MonitoredColumnLedger,
+    _budget_exceeded_result,
+    _proven_optimal_result,
 )
 
 
@@ -232,13 +234,7 @@ def compute_optimal_discrepancy(
     sets = request.set_system.sets
 
     if n == 0:
-        return DiscrepancyOptimumResult(
-            set_system=request.set_system,
-            status="OPTIMAL",
-            optimal_coloring=(),
-            optimal_discrepancy=0,
-            exhaustive=True,
-        )
+        return _proven_optimal_result(request.set_system, (), 0)
 
     import z3  # type: ignore[import-untyped]
 
@@ -259,17 +255,8 @@ def compute_optimal_discrepancy(
 
     outcome = optimizer.check()
     if outcome != z3.sat:
-        return DiscrepancyOptimumResult(
-            set_system=request.set_system,
-            status="BUDGET_EXCEEDED",
-        )
+        return _budget_exceeded_result(request.set_system)
     model = optimizer.model()
     coloring = tuple(int(model.evaluate(variable).as_long()) for variable in variables)
     optimum = int(model.evaluate(objective).as_long())
-    return DiscrepancyOptimumResult(
-        set_system=request.set_system,
-        status="OPTIMAL",
-        optimal_coloring=coloring,
-        optimal_discrepancy=optimum,
-        exhaustive=True,
-    )
+    return _proven_optimal_result(request.set_system, coloring, optimum)

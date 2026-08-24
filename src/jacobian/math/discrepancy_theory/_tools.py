@@ -120,8 +120,11 @@ DISCREPANCY_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     discrepancy_theory_operation(
         "discrepancy.theory.optimum.compute",
         "Search for a coloring minimizing maximum discrepancy",
-        "Search over all 2^n colorings (bounded n <= 20) of a finite set "
-        "system to find the coloring with minimum maximum discrepancy.",
+        "Minimize the maximum absolute set imbalance over all +1/-1 "
+        "colorings of a finite set system by solving an exact integer "
+        "program under a fixed solver budget; OPTIMAL carries one witnessing "
+        "coloring attaining the proven minimum, BUDGET_EXCEEDED makes no "
+        "mathematical claim.",
         DiscrepancyOptimumRequest,
         DiscrepancyOptimumResult,
         compute_optimal_discrepancy,
@@ -129,6 +132,7 @@ DISCREPANCY_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "set-system",
         "combinatorial-search",
         "exact",
+        version="2",
         examples=(
             example(
                 "three_element_optimum",

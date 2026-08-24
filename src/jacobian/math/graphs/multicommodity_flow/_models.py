@@ -244,10 +244,7 @@ def _profile_component_digit_bounds(
         load_n, load_d = _sum_bound(
             edge_operands[edge_key], den_total, edge_num[edge_key]
         )
-        if (
-            edge_operands[edge_key] == 1
-            and edge_sole_amount[edge_key] == edge.capacity
-        ):
+        if edge_operands[edge_key] == 1 and edge_sole_amount[edge_key] == edge.capacity:
             # The lone amount equals the capacity exactly: the load is the
             # capacity, the slack is the exact zero rational, and the
             # congestion ratio reduces to exactly one.

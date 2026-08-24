@@ -403,9 +403,7 @@ def test_sole_operand_components_inherit_their_canonical_sides() -> None:
     assert result.congestion == q(1)
     assert result.edge_profiles[0].load == operand
     assert result.edge_profiles[0].slack == q(0)
-    negative_operand = CanonicalRational(
-        num="-" + "9" * 20_000, den="1" + "0" * 19_999
-    )
+    negative_operand = CanonicalRational(num="-" + "9" * 20_000, den="1" + "0" * 19_999)
     assert [row.divergence for row in result.divergences] == [
         operand,
         negative_operand,

@@ -452,17 +452,29 @@ class ExtendedGcdResult(StrictModel):
 class DivisorListResult(StrictModel):
     """An ordered list of positive divisors of one nonzero integer.
 
-    The list may be empty: ``proper_divisors(±1)`` has no positive proper
-    divisors.  Zero remains not-applicable (handled at the operation layer).
+    Retains the canonical source integer and the operation's divisor
+    convention so validation replays the exact enumeration: the list is
+    exactly all positive divisors of ``abs(value)`` (proper ones exclude
+    ``abs(value)`` itself) in ascending order.  The list may be empty:
+    ``proper_divisors(±1)`` has no positive proper divisors.  Zero remains
+    not-applicable (handled at the operation layer).
     """
 
+    value: BoundedInteger
     divisors: tuple[BoundedInteger, ...] = Field(
         min_length=0,
         max_length=_MAX_DIVISORS,
     )
+    convention: Literal["ALL_POSITIVE_DIVISORS", "PROPER_DIVISORS"] = (
+        "ALL_POSITIVE_DIVISORS"
+    )
 
     @model_validator(mode="after")
-    def require_positive_ascending_unique(self) -> Self:
+    def require_source_enumeration(self) -> Self:
+        from jacobian.math.number_theory._factorization_kernels import (
+            _replayed_divisors,
+        )
+
         values = [int(divisor) for divisor in self.divisors]
         if any(value < 1 for value in values):
             raise ValueError("divisors must be positive")
@@ -470,6 +482,13 @@ class DivisorListResult(StrictModel):
             raise ValueError("divisors must be ascending")
         if len(set(values)) != len(values):
             raise ValueError("divisors must be unique")
+        value = int(self.value)
+        if value == 0:
+            raise ValueError("zero has infinitely many divisors")
+        if self.divisors != _replayed_divisors(
+            value, proper=self.convention == "PROPER_DIVISORS"
+        ):
+            raise ValueError("divisor list must enumerate the divisors of the source")
         return self
 
 
@@ -483,20 +502,41 @@ class PrimePower(StrictModel):
 class PrimeFactorizationResult(StrictModel):
     """The complete prime-power factorization of one nonzero integer.
 
+    Retains the canonical source integer so validation replays the defining
+    invariant: prime bases are strictly increasing proven primes with
+    positive exponents whose product reconstructs ``abs(value)`` exactly.
     The factor list may be empty: ``±1`` has no prime factors.  Zero remains
     not-applicable (handled at the operation layer).
     """
 
+    value: BoundedInteger
     factors: tuple[PrimePower, ...] = Field(
         min_length=0,
         max_length=_MAX_FACTOR_ENTRIES,
     )
 
     @model_validator(mode="after")
-    def require_unique_primes(self) -> Self:
+    def require_source_factorization(self) -> Self:
+        from sympy import isprime
+
         primes = [factor.prime for factor in self.factors]
         if len(set(primes)) != len(primes):
             raise ValueError("prime factors must be unique")
+        value = int(self.value)
+        if value == 0:
+            raise ValueError("zero has no finite prime factorization")
+        product = 1
+        previous_prime = 0
+        for factor in self.factors:
+            prime = int(factor.prime)
+            if prime <= previous_prime:
+                raise ValueError("prime bases must be strictly ascending")
+            if prime < 2 or not isprime(prime):
+                raise ValueError(f"{factor.prime} is not prime")
+            product *= prime**factor.power
+            previous_prime = prime
+        if product != abs(value):
+            raise ValueError("prime powers must multiply to abs(value)")
         return self
 
 

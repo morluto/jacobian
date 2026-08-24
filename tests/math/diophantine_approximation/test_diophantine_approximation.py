@@ -436,26 +436,31 @@ def test_results_reject_non_squarefree_discriminant() -> None:
 def test_convergent_result_rejects_oversized_components_before_bigint_work() -> None:
     """Forged long canonical strings die on the digit bound, before parsing/gcd.
 
-    With convergent_count=4 the derived cap is len(str(201**4)) == 10 digits,
-    so a 100,000-digit numerator is rejected by string length alone; matching
-    the digit-bound message proves the gate ran instead of the gcd/replay work.
+    With convergent_count=4 the derived cap is
+    ``_convergent_component_digit_cap(4)``, so a 100,000-digit numerator is
+    rejected by string length alone; matching the digit-bound message proves
+    the gate ran instead of the gcd/replay work.
     """
-    from jacobian.math.diophantine_approximation._models import ConvergentResult
+    from jacobian.math.diophantine_approximation._models import (
+        ConvergentResult,
+        _convergent_component_digit_cap,
+    )
 
     result = compute_convergents(
         ConvergentRequest(discriminant=2, convergent_count=4)
     ).model_dump()
 
+    digit_bound = _convergent_component_digit_cap(4)
     long_numerator = dict(result)
     long_numerator["convergents"] = [dict(item) for item in result["convergents"]]
     long_numerator["convergents"][3]["numerator"] = "9" * 100_000
-    with pytest.raises(ValidationError, match=r"10-digit bound"):
+    with pytest.raises(ValidationError, match=rf"{digit_bound}-digit bound"):
         ConvergentResult.model_validate(long_numerator)
 
     long_denominator = dict(result)
     long_denominator["convergents"] = [dict(item) for item in result["convergents"]]
     long_denominator["convergents"][3]["denominator"] = "7" * 100_000
-    with pytest.raises(ValidationError, match=r"10-digit bound"):
+    with pytest.raises(ValidationError, match=rf"{digit_bound}-digit bound"):
         ConvergentResult.model_validate(long_denominator)
 
 

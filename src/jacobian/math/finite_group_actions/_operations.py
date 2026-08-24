@@ -14,7 +14,7 @@ from jacobian.math.finite_group_actions._models import (
     PolyaInventoryResult,
 )
 
-MAX_GROUP_ORDER = 720
+MAX_GROUP_ORDER = 10000
 
 CycleTypeCount = tuple[tuple[int, ...], int]
 

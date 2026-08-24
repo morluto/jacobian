@@ -40,6 +40,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "one complete indexed-subset multiplicity profile in a finite cyclic group; unlike an integer-sum profile, its work and output depend on the modulus rather than the integer sum span",
     ),
+    OperationAdmission(
+        "additive.subset_sum.profile.compute",
+        AdmissionDecision.KEEP,
+        "one complete source-bound profile of sums and multiplicities over indexed at-most-once selections, which pair-sum composition cannot retain",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

@@ -21,24 +21,9 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "exact bounded injective edge-preserving subgraph-monomorphism search with material leverage over bespoke enumeration",
     ),
     OperationAdmission(
-        "graph.core.check",
-        AdmissionDecision.KEEP,
-        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
-    ),
-    OperationAdmission(
         "graph.homomorphism.check",
         AdmissionDecision.KEEP,
-        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
-    ),
-    OperationAdmission(
-        "graph.homomorphism.find",
-        AdmissionDecision.KEEP,
-        "distinct exact or explicitly bounded search outcome with material computational leverage",
-    ),
-    OperationAdmission(
-        "graph.retraction.check",
-        AdmissionDecision.KEEP,
-        "distinct exact or explicitly bounded search outcome with material computational leverage",
+        "complete canonical graph-map check with a reusable source-bound positive value or exact first edge-image obstruction",
     ),
 )
 

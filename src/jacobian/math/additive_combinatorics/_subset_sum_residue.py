@@ -60,8 +60,8 @@ def _estimated_result_bytes(
     include_witnesses: bool,
 ) -> int:
     """Conservatively bound the canonical result before running the DP."""
-    item_count = len(source.values)
-    source_bytes = sum(len(value) + 3 for value in source.values)
+    item_count = len(source.items)
+    source_bytes = sum(len(value) + 3 for value in source.items)
     count_bytes = modulus * (_maximum_count_digits(item_count) + 3)
 
     witness_bytes = 0
@@ -81,9 +81,9 @@ def _raw_source_shape(source: object) -> tuple[int, int] | None:
     """Bound a raw indexed source before Pydantic parses its integer strings."""
 
     if isinstance(source, IndexedIntegerSequence):
-        values: list[object] | tuple[object, ...] = source.values
+        values: list[object] | tuple[object, ...] = source.items
     elif isinstance(source, Mapping):
-        raw_values = source.get("values")
+        raw_values = source.get("items")
         if not isinstance(raw_values, (list, tuple)):
             return None
         values = raw_values
@@ -240,16 +240,16 @@ class SubsetSumResidueProfileRequest(StrictModel):
         raw_source = prepared.get("source")
         if isinstance(raw_source, Mapping):
             source = dict(raw_source)
-            values = source.get("values")
+            values = source.get("items")
             if isinstance(values, list):
-                source["values"] = tuple(values)
+                source["items"] = tuple(values)
             prepared["source"] = source
         _raw_source_shape(prepared.get("source"))
         return prepared
 
     @model_validator(mode="after")
     def require_bounded_complete_profile(self) -> Self:
-        item_count = len(self.source.values)
+        item_count = len(self.source.items)
         if item_count + 1 > MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS:
             raise ValueError(
                 "subset multiplicities exceed the 4,096-bit intermediate bound"
@@ -258,7 +258,7 @@ class SubsetSumResidueProfileRequest(StrictModel):
         oversized = next(
             (
                 index
-                for index, value in enumerate(self.source.values)
+                for index, value in enumerate(self.source.items)
                 if len(value.lstrip("-")) > MAX_RESIDUE_PROFILE_INPUT_INTEGER_DIGITS
             ),
             None,
@@ -330,9 +330,9 @@ class SubsetSumResidueProfileResult(StrictModel):
         raw_source = prepared.get("source")
         if isinstance(raw_source, Mapping):
             source = dict(raw_source)
-            source_values = source.get("values")
+            source_values = source.get("items")
             if isinstance(source_values, list):
-                source["values"] = tuple(source_values)
+                source["items"] = tuple(source_values)
             prepared["source"] = source
         raw_counts = prepared.get("residue_counts")
         if isinstance(raw_counts, list):
@@ -423,7 +423,7 @@ def _compute_residue_profile(
         if witness_masks is not None:
             witness_masks[0] = 0
 
-    for index, raw_value in enumerate(request.source.values):
+    for index, raw_value in enumerate(request.source.items):
         residue = parse_canonical_integer(raw_value) % modulus
         next_counts = counts.copy()
         next_witness_masks = witness_masks.copy() if witness_masks is not None else None
@@ -459,7 +459,7 @@ def _compute_residue_profile(
     residue_witnesses = tuple(
         None
         if mask is None
-        else IndexSubset(indices=_indices_from_mask(mask, len(request.source.values)))
+        else IndexSubset(indices=_indices_from_mask(mask, len(request.source.items)))
         for mask in witness_masks
     )
     return residue_counts, residue_witnesses

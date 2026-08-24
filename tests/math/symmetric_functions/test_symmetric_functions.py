@@ -129,9 +129,9 @@ def test_request_schema_publishes_schur_invariants() -> None:
     assert point["items"]["maximum"] == 999_999
     assert "decimal digits" in point["items"]["description"]
     partition = schema["$defs"]["IntegerPartition"]["properties"]["parts"]
-    assert "100" in partition["description"]
-    assert schema["$defs"]["IntegerPartition"]["properties"]["parts"]["maxItems"] == 50
-    assert "100" in schema["$defs"]["IntegerPartition"]["description"]
+    assert "500" in partition["description"]
+    assert schema["$defs"]["IntegerPartition"]["properties"]["parts"]["maxItems"] == 200
+    assert "500" in schema["$defs"]["IntegerPartition"]["description"]
 
 
 def test_schur_rejects_coordinate_exceeding_digit_bound() -> None:
@@ -154,4 +154,4 @@ def test_schur_accepts_boundary_coordinate() -> None:
 
 def test_partition_schema_rejects_size_above_cap() -> None:
     with pytest.raises(ValueError, match="bound"):
-        IntegerPartition(parts=(51, 50))
+        IntegerPartition(parts=(251, 250))

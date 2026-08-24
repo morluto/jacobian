@@ -32,7 +32,7 @@ def _request(
     include_witnesses: bool = False,
 ) -> SubsetSumResidueProfileRequest:
     return SubsetSumResidueProfileRequest(
-        source={"values": [str(value) for value in values]},
+        source={"items": [str(value) for value in values]},
         modulus=modulus,
         include_empty_subset=include_empty_subset,
         include_witnesses=include_witnesses,
@@ -68,12 +68,12 @@ def _bitmask_oracle(
 
 def test_request_and_result_compose_through_strict_json_parsing() -> None:
     request = SubsetSumResidueProfileRequest.model_validate_json(
-        '{"source":{"values":["2","3"]},"modulus":5,'
+        '{"source":{"items":["2","3"]},"modulus":5,'
         '"include_empty_subset":false,"include_witnesses":true}',
         strict=True,
     )
 
-    assert request.source == IndexedIntegerSequence(values=("2", "3"))
+    assert request.source == IndexedIntegerSequence(items=("2", "3"))
     result = compute_subset_sum_residue_profile(request)
     assert (
         SubsetSumResidueProfileResult.model_validate_json(
@@ -115,7 +115,7 @@ def test_empty_source_has_explicit_empty_subset_convention(
         _request((), 4, include_empty_subset=include_empty_subset)
     )
     assert result.residue_counts == expected
-    assert result.source == IndexedIntegerSequence(values=())
+    assert result.source == IndexedIntegerSequence(items=())
 
 
 def test_single_item_does_not_claim_nonempty_zero_residue() -> None:
@@ -226,7 +226,7 @@ def test_result_rejects_mutated_count() -> None:
 @pytest.mark.parametrize(
     ("field", "replacement"),
     [
-        ("source", {"values": ["1", "2", "3"]}),
+        ("source", {"items": ["1", "2", "3"]}),
         ("modulus", 4),
         ("include_empty_subset", True),
         ("include_witnesses", False),
@@ -260,7 +260,7 @@ def test_result_rejects_source_reordering_that_changes_canonical_witnesses() -> 
         )
     )
     payload = result.model_dump(mode="json")
-    payload["source"] = {"values": ["4", "2", "1"]}
+    payload["source"] = {"items": ["4", "2", "1"]}
     with pytest.raises(ValidationError, match="residue witnesses do not match"):
         SubsetSumResidueProfileResult.model_validate(payload)
 
@@ -289,7 +289,7 @@ def test_request_rejects_one_oversized_source_integer_before_parsing() -> None:
     oversized = "1" + "0" * MAX_RESIDUE_PROFILE_INPUT_INTEGER_DIGITS
     with pytest.raises(ValidationError, match="32,768-digit input bound"):
         SubsetSumResidueProfileRequest(
-            source={"values": [oversized]},
+            source={"items": [oversized]},
             modulus=2,
             include_empty_subset=True,
         )
@@ -298,7 +298,7 @@ def test_request_rejects_one_oversized_source_integer_before_parsing() -> None:
 def test_request_rejects_multiplicity_intermediate_above_bound() -> None:
     with pytest.raises(ValidationError, match="4,096-bit intermediate bound"):
         SubsetSumResidueProfileRequest(
-            source={"values": ["0"] * MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS},
+            source={"items": ["0"] * MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS},
             modulus=1,
             include_empty_subset=True,
         )
@@ -309,7 +309,7 @@ def test_request_bounds_raw_source_before_nested_parsing() -> None:
         SubsetSumResidueProfileRequest.model_validate(
             {
                 "source": {
-                    "values": ["not-an-integer"] * MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS
+                    "items": ["not-an-integer"] * MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS
                 },
                 "modulus": 1,
                 "include_empty_subset": True,
@@ -318,10 +318,10 @@ def test_request_bounds_raw_source_before_nested_parsing() -> None:
 
 
 def test_exact_dp_cell_boundary_is_complete_and_serializable() -> None:
-    item_count = 1_000
+    item_count = 200
     modulus = MAX_RESIDUE_PROFILE_DP_CELLS // item_count
     request = SubsetSumResidueProfileRequest(
-        source={"values": ["0"] * item_count},
+        source={"items": ["0"] * item_count},
         modulus=modulus,
         include_empty_subset=True,
     )
@@ -336,11 +336,11 @@ def test_exact_dp_cell_boundary_is_complete_and_serializable() -> None:
 
 
 def test_request_just_above_dp_cell_boundary_is_rejected() -> None:
-    item_count = 1_001
-    modulus = MAX_RESIDUE_PROFILE_DP_CELLS // 1_000
+    item_count = 201
+    modulus = MAX_RESIDUE_PROFILE_DP_CELLS // 200
     with pytest.raises(ValidationError, match="1,000,000-cell work bound"):
         SubsetSumResidueProfileRequest(
-            source={"values": ["0"] * item_count},
+            source={"items": ["0"] * item_count},
             modulus=modulus,
             include_empty_subset=True,
         )
@@ -365,11 +365,13 @@ def test_modulus_boundary_and_schema_are_explicit() -> None:
     assert schema["properties"]["modulus"]["maximum"] == (MAX_RESIDUE_PROFILE_MODULUS)
     assert "include_empty_subset" in schema["required"]
     source_schema = schema["$defs"]["IndexedIntegerSequence"]
-    assert "distinct positions" in source_schema["properties"]["values"]["description"]
+    assert (
+        "distinct indexed items" in source_schema["properties"]["items"]["description"]
+    )
 
     with pytest.raises(ValidationError):
         SubsetSumResidueProfileRequest(
-            source={"values": []},
+            source={"items": []},
             modulus=2,
             include_empty_subset=1,
         )
@@ -378,8 +380,8 @@ def test_modulus_boundary_and_schema_are_explicit() -> None:
 def test_witness_and_result_output_budgets_reject_before_work() -> None:
     with pytest.raises(ValidationError, match="index-slot storage bound"):
         SubsetSumResidueProfileRequest(
-            source={"values": ["0"] * 1_000},
-            modulus=251,
+            source={"items": ["0"] * 251},
+            modulus=1000,
             include_empty_subset=False,
             include_witnesses=True,
         )
@@ -425,14 +427,14 @@ def test_result_bounds_raw_arrays_before_source_binding_replay() -> None:
     widest = "1" + "0" * (MAX_RESIDUE_PROFILE_INPUT_INTEGER_DIGITS - 1)
     with pytest.raises(ValidationError, match="4 MiB result bound"):
         SubsetSumResidueProfileRequest(
-            source={"values": [widest] * 128},
+            source={"items": [widest] * 128},
             modulus=1,
             include_empty_subset=False,
         )
 
 
 def test_shared_values_reject_ambiguous_index_subsets() -> None:
-    assert IndexedIntegerSequence(values=("1", "1", "0")).values == (
+    assert IndexedIntegerSequence(items=("1", "1", "0")).items == (
         "1",
         "1",
         "0",

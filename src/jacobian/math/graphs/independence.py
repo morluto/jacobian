@@ -53,6 +53,56 @@ class IndependenceNumberRequest(StrictModel):
         return self
 
 
+_EXACT_REPLAY_SEARCH_NODES = 200_000
+
+
+def _replay_exact_optimum(graph: SimpleUndirectedGraph, claimed_optimum: int) -> None:
+    """Replay the claimed optimum as an exact search over the source graph.
+
+    The producing solve establishes optimality with its own budgeted Z3 call;
+    independently supplied results must reproduce the claim through this
+    deterministic branch-and-bound before an ``EXACT`` conclusion validates.
+    The budget counts expanded search nodes, so each node performs bounded
+    work (bitset ops over at most 128 vertices) and the whole replay is
+    bounded by ``_EXACT_REPLAY_SEARCH_NODES`` node expansions.
+    """
+
+    vertices = tuple(sorted(graph.vertices))
+    index = {vertex: position for position, vertex in enumerate(vertices)}
+    neighbours = [0] * len(vertices)
+    for left, right in graph.edges:
+        mask = (1 << index[left]) | (1 << index[right])
+        neighbours[index[left]] |= mask
+        neighbours[index[right]] |= mask
+    state_nodes = 0
+    best_size = 0
+
+    def search(candidates: int, chosen: int) -> None:
+        nonlocal state_nodes, best_size
+        state_nodes += 1
+        if state_nodes > _EXACT_REPLAY_SEARCH_NODES:
+            raise ValueError(
+                "claimed exact optimum was not reproduced by the bounded "
+                "source-graph replay"
+            )
+        if candidates == 0:
+            best_size = max(best_size, chosen)
+            return
+        if chosen + candidates.bit_count() <= best_size:
+            return
+        pivot_bit = candidates & -candidates
+        pivot = pivot_bit.bit_length() - 1
+        rest = candidates & ~pivot_bit
+        search(rest & ~((1 << pivot) | neighbours[pivot]), chosen + 1)
+        search(rest, chosen)
+
+    search((1 << len(vertices)) - 1, 0)
+    if best_size != claimed_optimum:
+        raise ValueError(
+            "claimed exact optimum contradicts the independent source-graph replay"
+        )
+
+
 class IndependenceNumberResult(StrictModel):
     """Exact optimum or bounded incumbent and bounds for one supplied graph.
 
@@ -60,10 +110,13 @@ class IndependenceNumberResult(StrictModel):
     incumbent invariant: every witness identifier belongs to the source,
     no source edge has both endpoints in the witness, the incumbent equals
     the witness cardinality, and the reported order matches the source.
+    An ``EXACT`` conclusion additionally replays a bounded maximum
+    independent-set search on the retained source graph, so a feasible but
+    non-maximum witness cannot validate a forged optimum or upper bound.
     Operational ``UNKNOWN`` stays distinct from a mathematical optimum.
     """
 
-    result_schema_version: Literal["1"] = "1"
+    result_schema_version: Literal["2"] = "2"
     graph: SimpleUndirectedGraph
     status: IndependenceSearchStatus
     order: StrictInt = Field(ge=0, le=128)
@@ -109,6 +162,7 @@ class IndependenceNumberResult(StrictModel):
                 not in {"OPTIMUM_ESTABLISHED", "SPECIAL_CASE"}
             ):
                 raise ValueError("exact result must bind one coincident optimum")
+            _replay_exact_optimum(self.graph, self.optimum_value)
         elif self.optimum_value is not None:
             raise ValueError("incomplete search cannot claim an optimum")
         return self

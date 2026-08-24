@@ -7,6 +7,7 @@ import copy
 import pytest
 from pydantic import ValidationError
 
+from jacobian.math.graphs import independence as independence_models
 from jacobian.math.graphs._independence_z3 import solve_independence_number
 from jacobian.math.graphs.independence import (
     IndependenceNumberRequest,
@@ -29,6 +30,7 @@ def test_producer_results_replay_against_source() -> None:
     empty = solve_independence_number(IndependenceNumberRequest(graph=_graph((), ())))
     assert empty.status == "EXACT"
     assert empty.optimum_value == 0
+    assert empty.result_schema_version == "2"
     assert IndependenceNumberResult.model_validate(empty.model_dump()) == empty
 
     complete = solve_independence_number(
@@ -143,3 +145,46 @@ def test_matching_via_edge_intersection_composition() -> None:
         result = solve_independence_number(IndependenceNumberRequest(graph=graph))
         assert result.status == "EXACT"
         assert result.optimum_value == 1
+
+
+def test_forged_nonmaximum_optimum_is_rejected_by_source_replay() -> None:
+    feasible = solve_independence_number(
+        IndependenceNumberRequest(graph=_graph(("a", "b", "c"), ()))
+    )
+    dumped = feasible.model_dump()
+    dumped["graph"]["edges"] = [["a", "b"], ["b", "c"]]
+    dumped["witness_vertices"] = ["a"]
+    for field in (
+        "optimum_value",
+        "incumbent_value",
+        "lower_bound",
+        "upper_bound",
+    ):
+        dumped[field] = 1
+    dumped["termination_reason"] = "OPTIMUM_ESTABLISHED"
+    with pytest.raises(ValidationError, match="contradicts"):
+        IndependenceNumberResult.model_validate(dumped)
+
+
+def test_edge_removal_invalidating_the_claimed_optimum_is_rejected() -> None:
+    triangle = solve_independence_number(
+        IndependenceNumberRequest(
+            graph=_graph(("a", "b", "c"), (("a", "b"), ("a", "c"), ("b", "c")))
+        )
+    )
+    assert triangle.optimum_value == 1
+    dumped = triangle.model_dump()
+    dumped["graph"]["edges"] = []
+    with pytest.raises(ValidationError, match="contradicts"):
+        IndependenceNumberResult.model_validate(dumped)
+
+
+def test_exhausted_exact_replay_budget_is_fail_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = IndependenceNumberRequest(graph=_path_graph())
+    result = solve_independence_number(request)
+    assert result.status == "EXACT"
+    monkeypatch.setattr(independence_models, "_EXACT_REPLAY_SEARCH_NODES", 1)
+    with pytest.raises(ValidationError, match="was not reproduced"):
+        IndependenceNumberResult.model_validate(result.model_dump())

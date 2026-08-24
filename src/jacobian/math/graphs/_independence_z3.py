@@ -20,13 +20,20 @@ def _integer_bound(value: z3.ArithRef, fallback: int) -> int:
 def solve_independence_number(
     request: IndependenceNumberRequest,
 ) -> IndependenceNumberResult:
-    """Run one wall-clock-bounded exact maximum independent-set optimization."""
+    """Run one wall-clock-bounded exact maximum independent-set optimization.
+
+    Results are built through ``model_construct``: the producing solve
+    already established every field invariant under its own declared
+    budget, and validation replay of an ``EXACT`` conclusion is reserved
+    for independently supplied results.
+    """
 
     started = time.monotonic()
     vertices = request.graph.vertices
     order = len(vertices)
     if not vertices:
-        return IndependenceNumberResult(
+        return IndependenceNumberResult.model_construct(
+            result_schema_version="2",
             graph=request.graph,
             status="EXACT",
             order=0,
@@ -37,6 +44,7 @@ def solve_independence_number(
             witness_vertices=(),
             termination_reason="SPECIAL_CASE",
             detail="the empty graph has independence number zero",
+            convention="MAXIMUM_EDGE_FREE_VERTEX_SUBSET",
         )
 
     incumbent: tuple[str, ...] = (min(vertices),)
@@ -44,7 +52,8 @@ def solve_independence_number(
         (request.resource_budget.wall_seconds - (time.monotonic() - started)) * 1000
     )
     if remaining_ms <= 0:
-        return IndependenceNumberResult(
+        return IndependenceNumberResult.model_construct(
+            result_schema_version="2",
             graph=request.graph,
             status="UNKNOWN",
             order=order,
@@ -85,7 +94,8 @@ def solve_independence_number(
         lower_bound = max(len(incumbent), _integer_bound(lower, len(incumbent)))
         upper_bound = max(lower_bound, min(order, _integer_bound(upper, order)))
         if lower_bound == upper_bound == len(incumbent):
-            return IndependenceNumberResult(
+            return IndependenceNumberResult.model_construct(
+                result_schema_version="2",
                 graph=request.graph,
                 status="EXACT",
                 order=order,
@@ -98,7 +108,8 @@ def solve_independence_number(
                 detail="bounded Z3 optimization seeded by a NetworkX feasible witness",
             )
     elif status == z3.unsat:
-        return IndependenceNumberResult(
+        return IndependenceNumberResult.model_construct(
+            result_schema_version="2",
             graph=request.graph,
             status="UNKNOWN",
             order=order,
@@ -119,7 +130,8 @@ def solve_independence_number(
         if time.monotonic() - started >= request.resource_budget.wall_seconds
         else "SOLVER_UNKNOWN"
     )
-    return IndependenceNumberResult(
+    return IndependenceNumberResult.model_construct(
+        result_schema_version="2",
         graph=request.graph,
         status="UNKNOWN",
         order=order,

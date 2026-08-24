@@ -133,3 +133,14 @@ class TestConstantWeight:
         """C(12,6) = 924 <= MAX_CODEWORDS is admitted at the length-64 envelope."""
         result = compute_constant_weight(ConstantWeightRequest(length=12, weight=6))
         assert result.count == 924
+
+    def test_published_schema_advertises_the_coupled_binomial_rule(self) -> None:
+        """math.find must expose the C(length, weight) bound without a failed run."""
+        schema = ConstantWeightRequest.model_json_schema()
+
+        assert "C(length, weight)" in schema["description"]
+        assert "4096" in schema["description"]
+        assert "C(length, weight)" in schema["properties"]["length"]["description"]
+        assert "C(length, weight)" in schema["properties"]["weight"]["description"]
+        assert schema["properties"]["length"]["maximum"] == 64
+        assert schema["properties"]["weight"]["minimum"] == 0

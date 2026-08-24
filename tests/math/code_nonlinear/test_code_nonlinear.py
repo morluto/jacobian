@@ -2,6 +2,7 @@
 
 import pytest
 
+from jacobian.math.code_nonlinear import to_set_system
 from jacobian.math.code_nonlinear._models import (
     ConstantWeightProfileRequest,
     ConstantWeightRequest,
@@ -17,6 +18,7 @@ from jacobian.math.code_nonlinear._operations import (
     compute_to_set_system,
     compute_word_distance,
 )
+from jacobian.math.code_nonlinear.values import ExplicitBinaryCode
 
 
 class TestWordDistance:
@@ -49,7 +51,11 @@ class TestWordDistance:
 class TestExplicitProfile:
     def test_simple_code(self) -> None:
         result = compute_explicit_profile(
-            ExplicitProfileRequest(codewords=((0, 0, 0), (1, 1, 0), (0, 1, 1)))
+            ExplicitProfileRequest(
+                code=ExplicitBinaryCode(
+                    length=3, codewords=((0, 0, 0), (1, 1, 0), (0, 1, 1))
+                )
+            )
         )
         assert result.length == 3
         assert result.cardinality == 3
@@ -57,16 +63,27 @@ class TestExplicitProfile:
         assert result.maximum_distance == 2
 
     def test_single_codeword(self) -> None:
-        # Singleton codes have no pairwise distances and are now rejected.
-        import pytest
-        from pydantic import ValidationError
+        result = compute_explicit_profile(
+            ExplicitProfileRequest(
+                code=ExplicitBinaryCode(length=3, codewords=((1, 0, 1),))
+            )
+        )
+        assert result.minimum_distance == 0
+        assert result.min_distance_pair is None
 
-        with pytest.raises(ValidationError):
-            ExplicitProfileRequest(codewords=((1, 0, 1),))
+    def test_empty_code(self) -> None:
+        result = compute_explicit_profile(
+            ExplicitProfileRequest(code=ExplicitBinaryCode(length=0, codewords=()))
+        )
+        assert result.length == 0
+        assert result.cardinality == 0
+        assert result.weight_distribution == (0,)
 
     def test_distance_histogram(self) -> None:
         result = compute_explicit_profile(
-            ExplicitProfileRequest(codewords=((0, 0), (1, 1), (0, 1)))
+            ExplicitProfileRequest(
+                code=ExplicitBinaryCode(length=2, codewords=((0, 0), (1, 1), (0, 1)))
+            )
         )
         # d((0,0),(1,1))=2, d((0,0),(0,1))=1, d((1,1),(0,1))=1
         assert result.distance_histogram[1] == 2
@@ -77,7 +94,11 @@ class TestExplicitProfile:
 class TestConstantWeightProfile:
     def test_weight_2_code(self) -> None:
         result = compute_constant_weight_profile(
-            ConstantWeightProfileRequest(codewords=((1, 1, 0, 0), (1, 0, 1, 0)))
+            ConstantWeightProfileRequest(
+                code=ExplicitBinaryCode(
+                    length=4, codewords=((1, 1, 0, 0), (1, 0, 1, 0))
+                )
+            )
         )
         # intersection = 1, distance = 2*(2-1) = 2
         assert result.minimum_distance == 2
@@ -85,22 +106,36 @@ class TestConstantWeightProfile:
 
     def test_disjoint_supports(self) -> None:
         result = compute_constant_weight_profile(
-            ConstantWeightProfileRequest(codewords=((1, 1, 0, 0), (0, 0, 1, 1)))
+            ConstantWeightProfileRequest(
+                code=ExplicitBinaryCode(
+                    length=4, codewords=((1, 1, 0, 0), (0, 0, 1, 1))
+                )
+            )
         )
         # intersection = 0, distance = 2*(2-0) = 4
         assert result.minimum_distance == 4
 
 
 class TestToSetSystem:
+    def test_native_projection_uses_the_typed_value(self) -> None:
+        code = ExplicitBinaryCode(length=3, codewords=((1, 0, 1),))
+        assert to_set_system(code) == ((0, 2),)
+
     def test_supports(self) -> None:
         result = compute_to_set_system(
-            ToSetSystemRequest(codewords=((1, 0, 1, 0), (0, 1, 0, 1)))
+            ToSetSystemRequest(
+                code=ExplicitBinaryCode(
+                    length=4, codewords=((1, 0, 1, 0), (0, 1, 0, 1))
+                )
+            )
         )
-        assert result.supports == ((0, 2), (1, 3))
+        assert result.supports == ((1, 3), (0, 2))
 
     def test_zero_word(self) -> None:
         result = compute_to_set_system(
-            ToSetSystemRequest(codewords=((0, 0, 0), (1, 0, 1)))
+            ToSetSystemRequest(
+                code=ExplicitBinaryCode(length=3, codewords=((0, 0, 0), (1, 0, 1)))
+            )
         )
         assert result.supports == ((), (0, 2))
 
@@ -110,7 +145,11 @@ class TestDistanceProfile:
         from jacobian.math.code_nonlinear._models import BinaryCodeRequest
 
         result = compute_distance_profile(
-            BinaryCodeRequest(codewords=((0, 0, 0), (1, 1, 0), (0, 1, 1)))
+            BinaryCodeRequest(
+                code=ExplicitBinaryCode(
+                    length=3, codewords=((0, 0, 0), (1, 1, 0), (0, 1, 1))
+                )
+            )
         )
         assert result.minimum_distance == 2
         assert result.weight_profile == (0, 2, 2)
@@ -120,7 +159,7 @@ class TestConstantWeight:
     def test_weight_2_length_4(self) -> None:
         result = compute_constant_weight(ConstantWeightRequest(length=4, weight=2))
         assert result.count == 6  # C(4,2) = 6
-        assert len(result.codewords) == 6
+        assert len(result.code.codewords) == 6
 
     def test_binomial_output_bound_rejects_infeasible_enumeration(self) -> None:
         """C(64,32) ~ 1.8e18 words cannot be materialized; admission must reject."""
@@ -172,3 +211,12 @@ def test_constant_weight_admission_records_the_narrowed_binomial_envelope() -> N
     assert admission.decision == AdmissionDecision.KEEP
     assert "C(length, weight) <= 4096" in admission.rationale
     assert "4,096 words" in admission.rationale
+
+
+def test_explicit_code_is_the_published_request_source() -> None:
+    from jacobian.math.code_nonlinear._models import BinaryCodeRequest
+
+    schema = BinaryCodeRequest.model_json_schema()
+    assert tuple(schema["properties"]) == ("code",)
+    request = BinaryCodeRequest.model_validate({"code": {"length": 0, "codewords": []}})
+    assert request.code == ExplicitBinaryCode(length=0, codewords=())

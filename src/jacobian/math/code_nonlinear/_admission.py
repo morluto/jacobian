@@ -13,7 +13,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "code.nonlinear.distance_profile.compute",
         AdmissionDecision.KEEP,
-        "exact minimum Hamming distance and weight profile by brute-force enumeration",
+        "version-2 canonical ExplicitBinaryCode source with exact minimum Hamming distance and weight profile; pair-work admission runs before enumeration",
     ),
     OperationAdmission(
         "code.nonlinear.constant_weight.compute",
@@ -32,17 +32,17 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "code.binary.explicit.profile.compute",
         AdmissionDecision.KEEP,
-        "exact complete distance profile with histogram and extremal witnesses",
+        "version-2 canonical ExplicitBinaryCode source with exact complete distance profile, histogram, and extremal witnesses; profile admission bounds pair work and exact output",
     ),
     OperationAdmission(
         "code.binary.constant_weight.profile.compute",
         AdmissionDecision.KEEP,
-        "exact profile of a constant-weight binary code with support-intersection distances",
+        "version-2 canonical ExplicitBinaryCode source with exact constant-weight profile and support-intersection distances; profile admission bounds pair work and exact output",
     ),
     OperationAdmission(
         "code.binary.explicit.to_set_system.compute",
         AdmissionDecision.NATIVE_ONLY,
-        "trivial projection enumerating support indices already supplied by caller",
+        "version-2 canonical ExplicitBinaryCode support projection; MCP execution applies the exact retained-source and support-output bound while native callers receive the typed projection directly",
         native_symbol="jacobian.math.code_nonlinear.to_set_system",
     ),
 )

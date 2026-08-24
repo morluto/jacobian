@@ -9,6 +9,7 @@ from typing import Self
 from pydantic import ConfigDict, Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.code_nonlinear.values import ExplicitBinaryCode
 
 MAX_CODEWORDS = 4096
 MAX_LENGTH = 64
@@ -23,26 +24,9 @@ MAX_CONSTANT_WEIGHT_WORDS = MAX_CODEWORDS
 
 
 class BinaryCodeRequest(StrictModel):
-    """A binary code as a list of distinct codewords."""
+    """A canonical explicit binary code, including empty and degenerate codes."""
 
-    codewords: tuple[tuple[int, ...], ...] = Field(
-        min_length=1, max_length=MAX_CODEWORDS
-    )
-
-    @model_validator(mode="after")
-    def require_valid_codewords(self) -> Self:
-        if not self.codewords:
-            raise ValueError("codewords must not be empty")
-        width = len(self.codewords[0])
-        if width == 0 or width > MAX_LENGTH:
-            raise ValueError(f"codeword length must be between 1 and {MAX_LENGTH}")
-        if any(len(w) != width for w in self.codewords):
-            raise ValueError("all codewords must have equal length")
-        if any(b not in (0, 1) for w in self.codewords for b in w):
-            raise ValueError("codewords must be binary (0 or 1)")
-        if len(set(self.codewords)) != len(self.codewords):
-            raise ValueError("codewords must be distinct")
-        return self
+    code: ExplicitBinaryCode
 
 
 class ConstantWeightRequest(StrictModel):
@@ -93,15 +77,39 @@ class ConstantWeightRequest(StrictModel):
 
 
 class DistanceProfileResult(StrictModel):
+    code: ExplicitBinaryCode
     minimum_distance: int = Field(ge=0)
     weight_profile: tuple[int, ...]
     method: str = "EXACT_ENUMERATION"
 
+    @model_validator(mode="after")
+    def bind_profile(self) -> Self:
+        codewords = self.code.codewords
+        expected_weights = tuple(sum(word) for word in codewords)
+        if self.weight_profile != expected_weights:
+            raise ValueError("weight_profile must be exact")
+        expected_distance = 0
+        if len(codewords) > 1:
+            expected_distance = min(
+                sum(a != b for a, b in zip(left, right, strict=True))
+                for index, left in enumerate(codewords)
+                for right in codewords[index + 1 :]
+            )
+        if self.minimum_distance != expected_distance:
+            raise ValueError("minimum_distance must be exact")
+        return self
+
 
 class ConstantWeightResult(StrictModel):
-    codewords: tuple[tuple[int, ...], ...]
+    code: ExplicitBinaryCode
     count: int = Field(ge=0)
     method: str = "EXACT_ENUMERATION"
+
+    @model_validator(mode="after")
+    def bind_count(self) -> Self:
+        if self.count != len(self.code.codewords):
+            raise ValueError("count must equal the source code cardinality")
+        return self
 
 
 class WordDistanceRequest(StrictModel):
@@ -149,32 +157,17 @@ class WordDistanceResult(StrictModel):
 
 
 class ExplicitProfileRequest(StrictModel):
-    """Compute the complete profile of an explicit binary code."""
+    """Compute a complete profile, including empty and singleton codes."""
 
-    codewords: tuple[tuple[int, ...], ...] = Field(
-        min_length=2, max_length=MAX_CODEWORDS
-    )
-
-    @model_validator(mode="after")
-    def require_valid_codewords(self) -> Self:
-        width = len(self.codewords[0])
-        if width == 0 or width > MAX_LENGTH:
-            raise ValueError(f"codeword length must be between 1 and {MAX_LENGTH}")
-        if any(len(w) != width for w in self.codewords):
-            raise ValueError("all codewords must have equal length")
-        if any(b not in (0, 1) for w in self.codewords for b in w):
-            raise ValueError("codewords must be binary (0 or 1)")
-        if len(set(self.codewords)) != len(self.codewords):
-            raise ValueError("codewords must be distinct")
-        return self
+    code: ExplicitBinaryCode
 
 
 class ExplicitProfileResult(StrictModel):
     """Complete profile of an explicit binary code."""
 
-    codewords: tuple[tuple[int, ...], ...]
-    length: int = Field(ge=1)
-    cardinality: int = Field(ge=1)
+    code: ExplicitBinaryCode
+    length: int = Field(ge=0)
+    cardinality: int = Field(ge=0)
     weight_distribution: tuple[int, ...]
     minimum_distance: int = Field(ge=0)
     maximum_distance: int = Field(ge=0)
@@ -186,7 +179,11 @@ class ExplicitProfileResult(StrictModel):
     def bind_profile(self) -> Self:
         from jacobian.math.code_nonlinear._operations import _explicit_profile
 
-        profile = _explicit_profile(self.codewords)
+        profile = _explicit_profile(self.code)
+        if self.length != self.code.length or self.cardinality != len(
+            self.code.codewords
+        ):
+            raise ValueError("length and cardinality must restate the source code")
         if self.weight_distribution != profile["weight_distribution"]:
             raise ValueError("weight_distribution must be exact")
         if self.minimum_distance != profile["minimum_distance"]:
@@ -195,42 +192,35 @@ class ExplicitProfileResult(StrictModel):
             raise ValueError("maximum_distance must be exact")
         if self.distance_histogram != profile["distance_histogram"]:
             raise ValueError("distance_histogram must be exact")
+        if self.min_distance_pair != profile["min_distance_pair"]:
+            raise ValueError("min_distance_pair must be exact")
+        if self.max_distance_pair != profile["max_distance_pair"]:
+            raise ValueError("max_distance_pair must be exact")
         return self
 
 
 class ConstantWeightProfileRequest(StrictModel):
     """Profile of a constant-weight binary code."""
 
-    codewords: tuple[tuple[int, ...], ...] = Field(
-        min_length=1, max_length=MAX_CODEWORDS
-    )
+    code: ExplicitBinaryCode
 
     @model_validator(mode="after")
     def require_valid_constant_weight(self) -> Self:
-        if not self.codewords:
-            raise ValueError("codewords must not be empty")
-        width = len(self.codewords[0])
-        if width == 0 or width > MAX_LENGTH:
-            raise ValueError(f"codeword length must be between 1 and {MAX_LENGTH}")
-        if any(len(w) != width for w in self.codewords):
-            raise ValueError("all codewords must have equal length")
-        if any(b not in (0, 1) for w in self.codewords for b in w):
-            raise ValueError("codewords must be binary (0 or 1)")
-        if len(set(self.codewords)) != len(self.codewords):
-            raise ValueError("codewords must be distinct")
-        weight = sum(self.codewords[0])
-        if any(sum(w) != weight for w in self.codewords):
-            raise ValueError("all codewords must have the same weight")
+        codewords = self.code.codewords
+        if codewords:
+            weight = sum(codewords[0])
+            if any(sum(w) != weight for w in codewords):
+                raise ValueError("all codewords must have the same weight")
         return self
 
 
 class ConstantWeightProfileResult(StrictModel):
     """Profile of a constant-weight binary code."""
 
-    codewords: tuple[tuple[int, ...], ...]
-    length: int = Field(ge=1)
+    code: ExplicitBinaryCode
+    length: int = Field(ge=0)
     weight: int = Field(ge=0)
-    cardinality: int = Field(ge=1)
+    cardinality: int = Field(ge=0)
     minimum_distance: int = Field(ge=0)
     distance_histogram: tuple[int, ...]
 
@@ -238,7 +228,16 @@ class ConstantWeightProfileResult(StrictModel):
     def bind_profile(self) -> Self:
         from jacobian.math.code_nonlinear._operations import _constant_weight_profile
 
-        profile = _constant_weight_profile(self.codewords)
+        profile = _constant_weight_profile(self.code)
+        if self.length != self.code.length or self.cardinality != len(
+            self.code.codewords
+        ):
+            raise ValueError("length and cardinality must restate the source code")
+        expected_weight = sum(self.code.codewords[0]) if self.code.codewords else 0
+        if self.weight != expected_weight:
+            raise ValueError("weight must restate the source code")
+        if any(sum(word) != expected_weight for word in self.code.codewords):
+            raise ValueError("code must be constant-weight")
         if self.minimum_distance != profile["minimum_distance"]:
             raise ValueError("minimum_distance must be exact")
         if self.distance_histogram != profile["distance_histogram"]:
@@ -249,34 +248,26 @@ class ConstantWeightProfileResult(StrictModel):
 class ToSetSystemRequest(StrictModel):
     """Map codewords to support subsets on coordinate labels."""
 
-    codewords: tuple[tuple[int, ...], ...] = Field(
-        min_length=1, max_length=MAX_CODEWORDS
-    )
-
-    @model_validator(mode="after")
-    def require_valid(self) -> Self:
-        width = len(self.codewords[0])
-        if width == 0 or width > MAX_LENGTH:
-            raise ValueError(f"codeword length must be between 1 and {MAX_LENGTH}")
-        if any(len(w) != width for w in self.codewords):
-            raise ValueError("all codewords must have equal length")
-        if any(b not in (0, 1) for w in self.codewords for b in w):
-            raise ValueError("codewords must be binary (0 or 1)")
-        return self
+    code: ExplicitBinaryCode
 
 
 class ToSetSystemResult(StrictModel):
     """Support subsets for each codeword."""
 
-    length: int = Field(ge=1)
-    cardinality: int = Field(ge=1)
+    code: ExplicitBinaryCode
+    length: int = Field(ge=0)
+    cardinality: int = Field(ge=0)
     supports: tuple[tuple[int, ...], ...]
 
     @model_validator(mode="after")
     def bind_supports(self) -> Self:
         from jacobian.math.code_nonlinear._operations import _to_set_system
 
-        supports = _to_set_system(self.supports, self.length, self.cardinality)
+        supports = _to_set_system(self.code)
         if self.supports != supports:
             raise ValueError("supports must be exact")
+        if self.length != self.code.length or self.cardinality != len(
+            self.code.codewords
+        ):
+            raise ValueError("length and cardinality must restate the source code")
         return self

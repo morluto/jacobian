@@ -58,7 +58,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "code.nonlinear.distance_profile.compute",
         "Compute the distance profile of a binary code",
-        "Compute the minimum Hamming distance and weight profile of a nonlinear binary code by exact enumeration.",
+        "Compute the minimum Hamming distance and weight profile of a canonical explicit binary code by exact enumeration. The source-bound code may be empty or degenerate; pair-work admission is checked before execution.",
         BinaryCodeRequest,
         DistanceProfileResult,
         compute_distance_profile,
@@ -69,9 +69,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "binary_code",
                 "Distance profile of a simple binary code.",
-                {"codewords": [[0, 0, 0], [1, 1, 0], [0, 1, 1]]},
+                {"code": {"length": 3, "codewords": [[0, 0, 0], [1, 1, 0], [0, 1, 1]]}},
             ),
         ),
+        version="2",
     ),
     _op(
         "code.nonlinear.constant_weight.compute",
@@ -113,7 +114,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "code.binary.explicit.profile.compute",
         "Compute the complete profile of an explicit binary code",
-        "Compute length, cardinality, weight distribution, minimum/maximum pairwise Hamming distance, distance histogram, and extremal pairs for a nonlinear binary code with at least two codewords.",
+        "Compute length, cardinality, weight distribution, minimum/maximum pairwise Hamming distance, distance histogram, and extremal pairs for a canonical explicit binary code. Empty and singleton codes are valid and report zero pairwise distance with no witness.",
         ExplicitProfileRequest,
         ExplicitProfileResult,
         compute_explicit_profile,
@@ -124,14 +125,15 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "explicit_profile_three",
                 "Complete distance profile of three-word code [[0,0,0],[1,1,0],[0,1,1]] with pairwise distances.",
-                {"codewords": [[0, 0, 0], [1, 1, 0], [0, 1, 1]]},
+                {"code": {"length": 3, "codewords": [[0, 0, 0], [1, 1, 0], [0, 1, 1]]}},
             ),
         ),
+        version="2",
     ),
     _op(
         "code.binary.constant_weight.profile.compute",
         "Profile of a constant-weight binary code",
-        "Compute the profile of a constant-weight binary code using support-intersection distances.",
+        "Compute the profile of a canonical explicit constant-weight binary code using support-intersection distances. Empty and singleton codes are valid; profile admission bounds pair work and exact output size.",
         ConstantWeightProfileRequest,
         ConstantWeightProfileResult,
         compute_constant_weight_profile,
@@ -142,14 +144,15 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "const_weight_profile",
                 "Profile of constant-weight code [[1,1,0,0],[1,0,1,0]] with distance via support intersection.",
-                {"codewords": [[1, 1, 0, 0], [1, 0, 1, 0]]},
+                {"code": {"length": 4, "codewords": [[1, 1, 0, 0], [1, 0, 1, 0]]}},
             ),
         ),
+        version="2",
     ),
     _op(
         "code.binary.explicit.to_set_system.compute",
         "Map codewords to support subsets",
-        "Map each binary codeword to its support subset on coordinate labels.",
+        "Map each word in a canonical explicit binary code to its support subset on coordinate labels. Empty and degenerate codes are valid; MCP execution checks the retained-source and support-output bound.",
         ToSetSystemRequest,
         ToSetSystemResult,
         compute_to_set_system,
@@ -160,9 +163,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "to_set_system_two",
                 "Support subsets for two codewords [[1,0,1,0],[0,1,0,1]] on four coordinates.",
-                {"codewords": [[1, 0, 1, 0], [0, 1, 0, 1]]},
+                {"code": {"length": 4, "codewords": [[1, 0, 1, 0], [0, 1, 0, 1]]}},
             ),
         ),
+        version="2",
     ),
 )
 

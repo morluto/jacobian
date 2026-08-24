@@ -7,15 +7,18 @@ from typing import Any
 import networkx as nx
 from networkx.algorithms import isomorphism as nx_isomorphism
 
+from jacobian.math.graphs.isomorphism._canonicalization import (
+    canonicalize_colored_graph_data,
+)
 from jacobian.math.graphs.isomorphism._models import (
     ColoredGraphCanonicalizationRequest,
     ColoredGraphCanonicalizationResult,
     GraphIsomorphismRequest,
     GraphIsomorphismResult,
+    GraphRelabelingPair,
     SimpleGraph,
     VertexMappingPair,
 )
-from jacobian.math.graphs.isomorphism.operations import canonicalize_colored_graph
 
 
 def _build_graph(graph: SimpleGraph) -> nx.Graph[int] | nx.DiGraph[int]:
@@ -71,6 +74,20 @@ def decide_graph_isomorphism(
 def compute_colored_graph_canonicalization(
     request: ColoredGraphCanonicalizationRequest,
 ) -> ColoredGraphCanonicalizationResult:
-    """Adapt the public request to the native value-based operation."""
+    """Return the exact canonical form for one admitted request.
 
-    return canonicalize_colored_graph(request.colored_graph)
+    This is the shared request-accepting implementation: ``math.run`` parses
+    and admits the typed request once, and the native
+    ``canonicalize_colored_graph`` entry point validates its value by
+    constructing this same request before delegating here.
+    """
+
+    canonical_graph, relabeling = canonicalize_colored_graph_data(request.colored_graph)
+    return ColoredGraphCanonicalizationResult(
+        source_graph=request.colored_graph,
+        canonical_graph=canonical_graph,
+        relabeling=tuple(
+            GraphRelabelingPair(source_vertex=source, canonical_vertex=target)
+            for source, target in relabeling
+        ),
+    )

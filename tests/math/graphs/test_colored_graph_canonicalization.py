@@ -13,12 +13,16 @@ import networkx as nx
 import pytest
 from pydantic import ValidationError
 
+import jacobian.math.graphs.isomorphism._models as isomorphism_models
 from jacobian.math.graphs import explicit_graph
 from jacobian.math.graphs.isomorphism import (
     ColoredGraphCanonicalizationRequest,
     ColoredGraphCanonicalizationResult,
     ColoredUndirectedGraph,
     canonicalize_colored_graph,
+)
+from jacobian.math.graphs.isomorphism._operations import (
+    compute_colored_graph_canonicalization,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -434,3 +438,51 @@ def test_native_api_exports_typed_canonicalization() -> None:
 
     assert "ColoredUndirectedGraph" in isomorphism.__all__
     assert "canonicalize_colored_graph" in isomorphism.__all__
+
+
+def test_catalog_path_and_native_api_agree() -> None:
+    graph = _graph(
+        ("a", "b", "c", "d"),
+        (("a", "b"), ("b", "c"), ("c", "d")),
+        vertex_colors=("endpoint", "middle", "middle", "endpoint"),
+        edge_colors=("outer", "middle", "outer"),
+    )
+    request = ColoredGraphCanonicalizationRequest(colored_graph=graph)
+
+    assert compute_colored_graph_canonicalization(request) == (
+        canonicalize_colored_graph(graph)
+    )
+
+
+def test_catalog_execution_admits_the_parsed_request_once(monkeypatch) -> None:
+    """``math.run`` parses once; the adapter must not readmit the request.
+
+    The result-size preflight runs once per request admission. For an
+    already-parsed request, exactly one further admission may occur inside
+    the catalog run: the result replay's own source-bound revalidation. A
+    second one means the adapter detoured through the validating native
+    wrapper instead of the shared request-accepting implementation.
+    """
+    parsed = ColoredGraphCanonicalizationRequest(
+        colored_graph=_graph(("a", "b"), (("a", "b"),))
+    )
+    expected = canonicalize_colored_graph(parsed.colored_graph)
+
+    admissions: list[ColoredUndirectedGraph] = []
+    real_preflight = isomorphism_models.canonicalization_result_wire_bytes
+
+    def counted_preflight(graph: ColoredUndirectedGraph) -> int:
+        admissions.append(graph)
+        return real_preflight(graph)
+
+    monkeypatch.setattr(
+        isomorphism_models,
+        "canonicalization_result_wire_bytes",
+        counted_preflight,
+    )
+
+    result = compute_colored_graph_canonicalization(parsed)
+
+    assert result == expected
+    assert len(admissions) == 1
+    assert admissions[0] == parsed.colored_graph

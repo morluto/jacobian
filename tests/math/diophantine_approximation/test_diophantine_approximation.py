@@ -494,3 +494,33 @@ def test_producer_to_convergent_composition() -> None:
         for c in convs.convergents
     ]
     assert claimed == replayed
+
+
+# ---------------------------------------------------------------------------
+# Contract-version regressions (#2313)
+# ---------------------------------------------------------------------------
+
+
+def _operation_version(operation_id: str) -> str:
+    from jacobian.math.diophantine_approximation._tools import TOOLS
+
+    return next(
+        tool for tool in TOOLS if tool.operation_id == operation_id
+    ).version
+
+
+def test_continued_fraction_contract_version_tracks_wire_shape() -> None:
+    """term_count joined the required result, so the declaration is version 2."""
+    assert (
+        _operation_version("diophantine.continued_fraction.compute") == "2"
+    )
+
+
+def test_convergents_contract_version_tracks_wire_shape() -> None:
+    """convergent_count joined the required result, so the declaration is version 2."""
+    assert _operation_version("diophantine.convergents.compute") == "2"
+
+
+def test_pell_equation_keeps_unchanged_wire_contract_version() -> None:
+    """The Pell request/result schemas did not change shape in this contract."""
+    assert _operation_version("diophantine.pell_equation.solve") == "1"

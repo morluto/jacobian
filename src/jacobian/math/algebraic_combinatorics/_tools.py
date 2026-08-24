@@ -113,6 +113,7 @@ ALGEBRAIC_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 _PARTITION_321,
             ),
         ),
+        version="2",
     ),
     ac_operation(
         "combinatorics.rsk.permutation.compute",

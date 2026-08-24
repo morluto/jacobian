@@ -17,10 +17,12 @@ from jacobian.math.symmetric_functions._tools import TOOLS
 
 
 def test_operations_in_catalog() -> None:
-    ids = {tool.operation_id for tool in TOOLS}
-    assert "symmetric_function.schur.evaluate.compute" in ids
+    tools = {tool.operation_id: tool for tool in TOOLS}
+    assert "symmetric_function.schur.evaluate.compute" in tools
+    # The narrowed request envelope (50 parts) is a versioned contract change.
+    assert tools["symmetric_function.schur.evaluate.compute"].version == "2"
     # conjugate is NATIVE_ONLY via algebraic_combinatorics; not a distinct public operation
-    assert "symmetric_function.partition.conjugate.compute" not in ids
+    assert "symmetric_function.partition.conjugate.compute" not in tools
 
 
 def test_conjugate_self_conjugate_partition() -> None:

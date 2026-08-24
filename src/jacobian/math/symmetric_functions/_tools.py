@@ -63,6 +63,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
+        version="2",
     ),
 )
 

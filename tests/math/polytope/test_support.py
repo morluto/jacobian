@@ -463,6 +463,27 @@ def test_request_preflights_foreign_covector_space_before_hull_proof(
         PolytopeSupportRequest.model_validate(payload)
 
 
+def test_request_preflights_built_foreign_covector_space_before_hull_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A serialized near-limit polytope paired with an already-built
+    covector from a different space is rejected by the same raw gate
+    before nested parsing reconstructs (and proves) the source."""
+
+    _forbid_extremality_proof(monkeypatch)
+    payload = _square_payload()
+    payload["covector"] = RationalCovector(
+        space=RationalCoordinateSpace(axes=("u", "v")),
+        components=(_rational(0), _rational(1)),
+    )
+
+    with pytest.raises(
+        ValidationError,
+        match="polytope and covector must use the same coordinate space",
+    ):
+        PolytopeSupportRequest.model_validate(payload)
+
+
 def test_request_preflights_malformed_covector_space_before_hull_proof(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -860,13 +881,45 @@ def test_result_preflights_foreign_exposed_face_space_before_nested_parsing(
         PolytopeSupportResult.model_validate(payload)
 
 
-def test_constructed_result_rejects_foreign_exposed_face_space_at_bind(
+def test_result_preflights_built_foreign_exposed_face_space_before_nested_parsing(
+    square_result: PolytopeSupportResult,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A serialized near-limit source paired with an already-built face
+    from a different space is rejected by the same raw gate before nested
+    parsing reconstructs (and proves) the retained polytope."""
+
+    _forbid_extremality_proof(monkeypatch)
+    payload = square_result.model_dump(mode="json")
+    payload["exposed_face"] = RationalExposedFace(
+        space=RationalCoordinateSpace(axes=("u", "v")),
+        vertices=(
+            RationalPolytopeVertex(
+                vertex_id="u_left",
+                coordinates=(_rational(0), _rational(1)),
+            ),
+            RationalPolytopeVertex(
+                vertex_id="u_right",
+                coordinates=(_rational(1), _rational(1)),
+            ),
+        ),
+    )
+
+    with pytest.raises(
+        ValidationError,
+        match="exposed face must use the same coordinate space as the polytope",
+    ):
+        PolytopeSupportResult.model_validate(payload)
+
+
+def test_constructed_result_rejects_foreign_exposed_face_space_at_construction(
     square_result: PolytopeSupportResult,
 ) -> None:
-    """An already-built face is bound to the source coordinate space by
-    the after-validator instead of the raw-payload preflight."""
+    """An already-built face in another coordinate space is rejected at
+    construction with the typed space mismatch, before any binding work
+    runs."""
 
-    with pytest.raises(ValidationError, match="exposed face must be exactly"):
+    with pytest.raises(ValidationError, match="same coordinate space"):
         PolytopeSupportResult(
             polytope=square_result.polytope,
             covector=square_result.covector,
@@ -874,6 +927,24 @@ def test_constructed_result_rejects_foreign_exposed_face_space_at_bind(
             exposed_face=RationalExposedFace(
                 space=RationalCoordinateSpace(axes=("u", "v")),
                 vertices=square_result.exposed_face.vertices,
+            ),
+        )
+
+
+def test_constructed_result_still_rejects_forged_face_at_bind(
+    square_result: PolytopeSupportResult,
+) -> None:
+    """A built face in the correct space but with forged membership is
+    still bound to the source by the after-validator."""
+
+    with pytest.raises(ValidationError, match="exposed face must be exactly"):
+        PolytopeSupportResult(
+            polytope=square_result.polytope,
+            covector=square_result.covector,
+            support_value=square_result.support_value,
+            exposed_face=RationalExposedFace(
+                space=square_result.polytope.space,
+                vertices=(square_result.polytope.vertices[0],),
             ),
         )
 

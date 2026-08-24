@@ -414,31 +414,38 @@ def _require_raw_support_covector_admissible(canonical: Any) -> None:
     space is reported. This gate mirrors only the covector-level
     constraints nested validation rejects anyway: presence, closed
     field set, component container and per-component canonical-rational
-    shapes, the declared-axis match, and raw space agreement with the
-    polytope.
+    shapes, the declared-axis match, and space agreement with the
+    polytope — including an already-built covector whose space disagrees
+    with the raw polytope's.
     """
 
     covector = canonical.get("covector")
     if covector is None:
         raise ValueError("covector must be provided")
     if isinstance(covector, RationalCovector):
-        return
-    if not isinstance(covector, dict) or set(covector) != {"space", "components"}:
-        raise ValueError("covector must be an object with space and components")
-    components = covector["components"]
-    if not isinstance(components, (list, tuple)):
-        raise ValueError("covector components must be a sequence")
-    if not components:
-        raise ValueError("covector components must be a non-empty sequence")
-    if len(components) > MAX_DIMENSION:
-        raise ValueError(
-            f"covector components must carry at most {MAX_DIMENSION} entries"
-        )
-    for component in components:
-        _require_raw_canonical_rational_component(component, "covector component")
-    axes = _require_raw_coordinate_space(covector["space"], "covector")
-    if len(components) != len(axes):
-        raise ValueError("covector components must use the declared coordinate axis")
+        axes = tuple(covector.space.axes)
+    else:
+        if not isinstance(covector, dict) or set(covector) != {
+            "space",
+            "components",
+        }:
+            raise ValueError("covector must be an object with space and components")
+        components = covector["components"]
+        if not isinstance(components, (list, tuple)):
+            raise ValueError("covector components must be a sequence")
+        if not components:
+            raise ValueError("covector components must be a non-empty sequence")
+        if len(components) > MAX_DIMENSION:
+            raise ValueError(
+                f"covector components must carry at most {MAX_DIMENSION} entries"
+            )
+        for component in components:
+            _require_raw_canonical_rational_component(component, "covector component")
+        axes = _require_raw_coordinate_space(covector["space"], "covector")
+        if len(components) != len(axes):
+            raise ValueError(
+                "covector components must use the declared coordinate axis"
+            )
     polytope_axes = _raw_space_axes(
         _raw_field_value(canonical.get("polytope"), "space")
     )
@@ -525,8 +532,9 @@ def _require_raw_support_conclusions_admissible(canonical: Any) -> None:
     mirrors only the result-level constraints nested validation rejects
     anyway: the closed field set and the published shape of both
     conclusion fields, including the exposed face's defining ordering
-    and distinctness invariants and its raw space agreement with the
-    retained polytope.
+    and distinctness invariants and its space agreement with the
+    retained polytope — including an already-built face whose space
+    disagrees with the raw polytope's.
     """
 
     if not isinstance(canonical, dict):
@@ -550,17 +558,18 @@ def _require_raw_support_conclusions_admissible(canonical: Any) -> None:
     exposed_face = canonical.get("exposed_face")
     if exposed_face is None:
         raise ValueError("exposed_face must be provided")
-    if isinstance(exposed_face, RationalExposedFace):
-        return
-    if not isinstance(exposed_face, dict) or set(exposed_face) != {
-        "space",
-        "vertices",
-    }:
-        raise ValueError("exposed face must be an object with space and vertices")
-    axes = _require_raw_coordinate_space(exposed_face["space"], "exposed face")
     polytope_axes = _raw_space_axes(
         _raw_field_value(canonical.get("polytope"), "space")
     )
+    if isinstance(exposed_face, RationalExposedFace):
+        axes = tuple(exposed_face.space.axes)
+    else:
+        if not isinstance(exposed_face, dict) or set(exposed_face) != {
+            "space",
+            "vertices",
+        }:
+            raise ValueError("exposed face must be an object with space and vertices")
+        axes = _require_raw_coordinate_space(exposed_face["space"], "exposed face")
     if (
         polytope_axes is not None
         and all(isinstance(axis, str) for axis in polytope_axes)
@@ -569,6 +578,11 @@ def _require_raw_support_conclusions_admissible(canonical: Any) -> None:
         raise ValueError(
             "exposed face must use the same coordinate space as the polytope"
         )
+    if isinstance(exposed_face, RationalExposedFace):
+        # Its ordering, distinctness, and serialization invariants already
+        # hold by construction; only the source-space agreement above can
+        # still fail before nested validation runs.
+        return
     vertices = exposed_face["vertices"]
     if not isinstance(vertices, (list, tuple)):
         raise ValueError("exposed face vertices must be a sequence")

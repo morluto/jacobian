@@ -946,3 +946,30 @@ def test_square_free_replay_rejects_inexact_multivariate_divisors() -> None:
             factors=(PolynomialSquareFreeFactor(factor=factor, multiplicity=1),),
             reconstructed=source,
         )
+
+
+def test_factorization_replay_requires_canonical_irreducible_records() -> None:
+    """A reducible record cannot authenticate an irreducible factorization.
+
+    ``x**2 - 1`` reconstructs itself exactly when claimed as the single
+    "irreducible" factor of the equal source, so a product-only replay
+    would accept it; re-deriving the unique content-and-monic-irreducibles
+    factorization rejects the non-canonical multiset typedly.
+    """
+
+    from pydantic import ValidationError
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.polynomials._models import (
+        PolynomialFactorizationResult,
+        PolynomialIrreducibleFactor,
+    )
+
+    source = _univariate("x", {2: "1", 0: "-1"})
+    with pytest.raises(ValidationError, match="must reconstruct"):
+        PolynomialFactorizationResult(
+            polynomial=source,
+            coefficient=CanonicalRational(num="1", den="1"),
+            factors=(PolynomialIrreducibleFactor(factor=source, multiplicity=1),),
+            reconstructed=source,
+        )

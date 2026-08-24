@@ -37,6 +37,7 @@ from jacobian.math.symmetric_functions import (
 )
 from jacobian.math.symmetric_functions._models import PartitionRequest
 from jacobian.math.words import FiniteWord
+from jacobian.math.words._models import PeriodsRequest
 from jacobian.math.words.values import Symbol, _require_unicode_scalar_string
 
 
@@ -136,8 +137,8 @@ def test_forward_output_feeds_inverse_without_representation_repair() -> None:
     produced = compute_rsk_word(RSKWordRequest(word=source))
     consumed = RSKInverseWordRequest.model_validate({"pair": produced.model_dump()})
     result = compute_inverse_rsk_word(consumed)
-    assert result.word == source
-    assert row_insertion_rsk(result.word) == produced
+    assert result == source
+    assert row_insertion_rsk(result) == produced
 
     partition_request = PartitionRequest.model_validate(
         {"partition": produced.shape.model_dump()}
@@ -160,6 +161,17 @@ def test_forward_output_feeds_inverse_without_representation_repair() -> None:
         1,
     )
     assert algebraic_combinatorics.standard_young_tableaux_count(produced.shape) == 6
+
+
+def test_inverse_result_chains_into_word_requests_without_rebuilding() -> None:
+    source = _word(("c", "a", "c", "b", "a"))
+    pair = compute_rsk_word(RSKWordRequest(word=source))
+    result = compute_inverse_rsk_word(
+        RSKInverseWordRequest.model_validate({"pair": pair.model_dump()})
+    )
+    assert result == source
+    assert PeriodsRequest(word=result).word == source
+    assert FiniteWord.model_validate(result.model_dump()) == source
 
 
 def test_all_short_ternary_words_round_trip_both_directions() -> None:
@@ -283,7 +295,7 @@ def test_canonical_tableau_cell_bound_admits_boundary_pairs_end_to_end() -> None
     reconstructed = compute_inverse_rsk_word(
         RSKInverseWordRequest.model_validate({"pair": single_row.model_dump()})
     )
-    assert reconstructed.word == FiniteWord(alphabet=("a",), letters=("a",) * 100)
+    assert reconstructed == FiniteWord(alphabet=("a",), letters=("a",) * 100)
 
     wide = tuple(f"s{index:02d}" for index in range(50))
     descending_pairs = tuple(
@@ -383,6 +395,7 @@ def test_public_operations_are_admitted_and_examples_execute() -> None:
     decisions = {admission.operation_id: admission.decision for admission in ADMISSIONS}
     assert public_ids <= tools.keys()
     assert tools["combinatorics.rsk.permutation.compute"].version == "2"
+    assert tools["tableau.rsk.inverse_word.compute"].version == "2"
     assert all(
         decisions[operation_id] is AdmissionDecision.KEEP for operation_id in public_ids
     )

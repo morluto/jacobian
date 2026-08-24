@@ -171,20 +171,12 @@ class RSKInverseWordRequest(StrictModel):
     convention: RSKConvention = "ROW_INSERTION_RSK_V1"
 
 
-class RSKInverseWordResult(StrictModel):
-    """The exact word reconstructed from an ordinary word-RSK pair."""
-
-    word: FiniteWord
-    convention: RSKConvention = "ROW_INSERTION_RSK_V1"
-
-
 __all__ = [
     "ConjugatePartitionRequest",
     "ConjugatePartitionResult",
     "HookLengthRequest",
     "HookLengthResult",
     "RSKInverseWordRequest",
-    "RSKInverseWordResult",
     "RSKPermutationRequest",
     "RSKResult",
     "RSKWordRequest",

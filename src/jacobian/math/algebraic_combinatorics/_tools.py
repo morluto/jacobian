@@ -12,7 +12,6 @@ from jacobian.math.algebraic_combinatorics._models import (
     HookLengthRequest,
     HookLengthResult,
     RSKInverseWordRequest,
-    RSKInverseWordResult,
     RSKPermutationRequest,
     RSKResult,
     RSKWordRequest,
@@ -28,6 +27,7 @@ from jacobian.math.algebraic_combinatorics._operations import (
     compute_syt_count,
 )
 from jacobian.math.algebraic_combinatorics.values import RSKTableauPair
+from jacobian.math.words.values import FiniteWord
 
 
 def ac_operation[RequestT: StrictModel, ResultT: StrictModel](
@@ -177,9 +177,10 @@ ALGEBRAIC_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "insertion tableau and standard recording tableau under "
         "ROW_INSERTION_RSK_V1. Tableau entries are one-based ranks in the "
         "pair's exact ordered alphabet, and the reconstructed word is replayed "
-        "through forward RSK before return.",
+        "through forward RSK before it is returned as the canonical finite "
+        "word value.",
         RSKInverseWordRequest,
-        RSKInverseWordResult,
+        FiniteWord,
         compute_inverse_rsk_word,
         "combinatorics",
         "rsk",
@@ -203,6 +204,7 @@ ALGEBRAIC_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
+        version="2",
     ),
 )
 

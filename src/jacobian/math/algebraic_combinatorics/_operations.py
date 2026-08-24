@@ -16,7 +16,6 @@ from jacobian.math.algebraic_combinatorics._models import (
     HookLengthRequest,
     HookLengthResult,
     RSKInverseWordRequest,
-    RSKInverseWordResult,
     RSKPermutationRequest,
     RSKResult,
     RSKWordRequest,
@@ -29,6 +28,7 @@ from jacobian.math.symmetric_functions.values import (
     IntegerPartition,
     StandardYoungTableau,
 )
+from jacobian.math.words.values import FiniteWord
 
 
 def compute_hook_lengths(request: HookLengthRequest) -> HookLengthResult:
@@ -92,6 +92,6 @@ def compute_rsk_word(request: RSKWordRequest) -> RSKTableauPair:
 
 def compute_inverse_rsk_word(
     request: RSKInverseWordRequest,
-) -> RSKInverseWordResult:
+) -> FiniteWord:
     """Reverse-insert and forward-replay one ordinary-word RSK pair."""
-    return RSKInverseWordResult(word=inverse_row_insertion_rsk(request.pair))
+    return inverse_row_insertion_rsk(request.pair)

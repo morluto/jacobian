@@ -634,9 +634,7 @@ def test_oversized_family_is_rejected_without_normalizing_entries() -> None:
             return len(self._data)
 
     payload = {
-        "subsets": [
-            UnnormalizableEntry() for _ in range(MAX_PERIODIC_FAMILY_SIZE + 1)
-        ],
+        "subsets": [UnnormalizableEntry() for _ in range(MAX_PERIODIC_FAMILY_SIZE + 1)],
         "complement": False,
     }
 

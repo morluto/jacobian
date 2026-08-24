@@ -1801,6 +1801,36 @@ def test_coprime_tall_operator_denominators_defer_the_shared_height() -> None:
     assert replayed == result
 
 
+def test_falling_factorial_growth_is_measured_exactly() -> None:
+    variables = ("x",)
+    factorial = math.factorial(8_500)
+
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(variables, {(8_500,): 1}),
+            operator=_operator(variables, {(8_500,): 1}),
+            iterations=1,
+            expected=_polynomial(variables, {(0,): factorial}),
+        )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.output == _polynomial(variables, {(0,): factorial})
+    assert len(result.output.polynomial.terms[0].coefficient.num) == 29_711
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    assert replayed == result
+
+    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(variables, {(8_501,): 10**32_000}),
+            operator=_operator(variables, {(8_501,): 1}),
+            iterations=1,
+        )
+
+
 def test_iterations_stay_inside_the_interoperable_integer_range() -> None:
     schema = DifferentialOperatorApplyRequest.model_json_schema()
     assert schema["properties"]["iterations"]["maximum"] == (1 << 53) - 1

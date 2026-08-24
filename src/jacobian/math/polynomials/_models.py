@@ -23,8 +23,22 @@ from jacobian.math.polynomials.values import (
 _MAX_COEFFICIENT_DIGITS = 256
 _MAX_GCD_TERMS = 1024
 _MAX_INVARIANT_TERMS = 256
-_MAX_REPLAY_WORK = 1 << 24
-_MAX_REPLAY_INTERMEDIATE_TERMS = 262_144
+# Cumulative monomial-multiplication budget for one factor-replay
+# authentication.  Sized from the replay's admitted envelope: the largest
+# known authentic canonical decomposition inside the square-free request
+# envelope, S_57(x)*(S_31(y)S_31(z))^2*(x+1)^3*((x-1)(y-1)(z-1))^4 with
+# per-variable degrees (63, 64, 64), performs exactly 29,892,365 pairwise
+# monomial multiplications under multiplicity-ordered reconstruction, so
+# the ceiling admits it with headroom while still bounding every forged
+# claim's arithmetic before a mismatch can hide inside unbounded work.
+_MAX_REPLAY_WORK = 1 << 25
+# Conservative ceiling on one replay step's predicted product support,
+# checked before the backend multiplication runs.  The admitted trivariate
+# square-free envelope keeps every partial-product degree box at or below
+# 65^3 = 274,625 terms (the fixture above peaks at 270,400), so this
+# ceiling admits that whole envelope; wider claimed degree boxes reject
+# before materializing anything rather than trusting backend expansion.
+_MAX_REPLAY_INTERMEDIATE_TERMS = 1 << 19
 _MAX_GCD_DEGREE = 500
 _MAX_ELIMINATION_DEGREE_SUM = 128
 _MAX_DISCRIMINANT_DEGREE = 64
@@ -374,29 +388,58 @@ def _canonical_poly_key(polynomial: Any) -> Any:
     )
 
 
+def _degree_vector(polynomial: Any) -> tuple[int, ...]:
+    """Return one backend polynomial's per-generator maximum exponents."""
+
+    monoms = polynomial.monoms()
+    return tuple(
+        max((monom[index] for monom in monoms), default=0)
+        for index in range(len(polynomial.gens))
+    )
+
+
 def _require_bounded_replay_step(
     accumulated: Any, base: Any, work: int, *, label: str
 ) -> tuple[Any, int]:
     """Multiply one reconstruction step under proven preflight bounds.
 
-    ``len(accumulated) * len(base)`` counts every exact monomial
-    multiplication the sparse product can perform and upper-bounds the
-    product's support, because every output monomial arises from exactly one
-    input pair.  Both budgets are therefore checked before any backend
-    multiplication runs: this step's support bound against
-    ``_MAX_REPLAY_INTERMEDIATE_TERMS`` and the running total against
-    ``_MAX_REPLAY_WORK``.  Authentic reconstruction prefixes can transiently
-    out-density the retained source — later records cancel a dense prefix
-    back into the request envelope — so the per-step ceiling is a documented
-    conservative replay bound above the serialization envelope instead of
-    the envelope itself.  For an authentic claim every partial product
-    divides the retained source, so a guard trip proves only that the claim
-    cannot be authenticated within bounded work, never a mathematical
-    mismatch.
+    Two independent quantities are derived from the claimed records'
+    actual structure and checked before any backend multiplication runs:
+
+    * ``support`` — every output monomial arises from exactly one input
+      pair, so ``len(accumulated) * len(base)`` upper-bounds the product's
+      support, and so does the per-variable degree box
+      ``prod_i(deg_i(accumulated) + deg_i(base) + 1)``.  Their minimum is
+      therefore a proven support bound that uses whichever structure the
+      claimed records actually exhibit.  Claimed powers whose supports
+      collide into a sparse product — geometric sums telescoping under
+      multiplication — are admitted where the bare pairwise count would
+      reject an authentic decomposition, while claims whose product cannot
+      stay inside ``_MAX_REPLAY_INTERMEDIATE_TERMS`` reject before anything
+      materializes.
+    * ``work`` — ``len(accumulated) * len(base)`` counts this step's exact
+      monomial multiplications; the running total must stay inside
+      ``_MAX_REPLAY_WORK``.
+
+    Authentic reconstruction prefixes can transiently out-density the
+    retained source — later records cancel a dense prefix back into the
+    request envelope — so the per-step ceiling is a documented conservative
+    replay bound above the serialization envelope instead of the envelope
+    itself.  For an authentic claim every partial product divides the
+    retained source, so a guard trip proves only that the claim cannot be
+    authenticated within bounded work, never a mathematical mismatch.
     """
 
     step_work = len(accumulated.terms()) * len(base.terms())
-    if step_work > _MAX_REPLAY_INTERMEDIATE_TERMS:
+    support_bound = step_work
+    box_bound = 1
+    for accumulated_degree, base_degree in zip(
+        _degree_vector(accumulated), _degree_vector(base), strict=True
+    ):
+        box_bound *= accumulated_degree + base_degree + 1
+    if box_bound < support_bound:
+        support_bound = box_bound
+    if support_bound > _MAX_REPLAY_INTERMEDIATE_TERMS:
         raise ValueError(
             f"{label} factor replay would materialize more than "
             f"{_MAX_REPLAY_INTERMEDIATE_TERMS} intermediate terms"
@@ -512,11 +555,13 @@ def _verify_exact_factor_product(
     request envelope), so validation must not materialize it to compare.
     Every operation here touches only the claimed records or bounded
     products of them; for an authentic claim every such partial product
-    divides the retained source.  Each sparse multiplication's exact cost
-    and support bound are counted before the backend runs — per step against
-    ``_MAX_REPLAY_INTERMEDIATE_TERMS`` and cumulatively against
-    ``_MAX_REPLAY_WORK`` — so nothing larger than those proven bounds ever
-    materializes.
+    divides the retained source.  Each sparse multiplication's exact work
+    count and its structure-derived support bound — the minimum of the
+    pairwise-product bound and the per-variable degree box of the claimed
+    records — are computed before the backend runs, the support bound per
+    step against ``_MAX_REPLAY_INTERMEDIATE_TERMS`` and the cumulative work
+    against ``_MAX_REPLAY_WORK``, so nothing larger than those proven bounds
+    ever materializes.
     """
 
     from sympy import Poly, Rational

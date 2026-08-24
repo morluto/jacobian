@@ -390,9 +390,10 @@ def test_source_bound_results_reject_combinatorial_replay_claims() -> None:
     """Forged factor records are rejected without expanding their product.
 
     The claimed factor is a dense-box multivariate sum within the shared wire
-    limits whose multiplicity-64 power densifies past any replayable
-    support; bounded reconstruction counts each step's exact work and
-    support bound and stops typedly before materializing it.
+    limits whose multiplicity-64 power chain exhausts the cumulative
+    reconstruction-work budget; bounded reconstruction counts each step's
+    exact work and stops typedly before any oversized expansion, with every
+    executed step's materialized support inside the per-step ceiling.
     """
 
     from pydantic import ValidationError
@@ -404,14 +405,15 @@ def test_source_bound_results_reject_combinatorial_replay_claims() -> None:
         # The factorization contract is univariate, so a forged QQ[x, y]
         # source is rejected by the semantic-domain check before any replay
         # work; square-free decomposition admits several variables, and the
-        # monster's multiplicity-64 power densifies past the per-step replay
-        # support bound during bounded prefix-product reconstruction, so the
-        # preflight guard rejects the claim before any multiplication could
-        # materialize it.
+        # monster's multiplicity-64 power chain keeps every per-step degree
+        # box inside the replay ceiling (its dense grids collapse into
+        # predictable boxes) while the cumulative monomial-multiplication
+        # count crosses the reconstruction budget, so the work guard rejects
+        # the claim before any further multiplication could run.
         expected = (
             "one variable over QQ"
             if "Factorization" in result_model.__name__
-            else "materialize more than"
+            else "reconstruction budget"
         )
         with pytest.raises(ValidationError, match=expected):
             result_model.model_validate(forged)
@@ -1164,6 +1166,169 @@ def test_square_free_operation_admits_transiently_dense_prefixes() -> None:
     )
 
 
+def test_square_free_operation_admits_telescoping_geometric_decomposition() -> None:
+    """The reported admitted source returns its typed decomposition.
+
+    ``S_57(x) * (S_31(y) S_31(z))^2 * (x+1)^3 * ((x-1)(y-1)(z-1))^4`` with
+    ``S_n(t) = 1 + t + ... + t^(n-1)`` expands to 648 terms with per-variable
+    degrees (63, 64, 64), inside the request envelope, and all four claimed
+    canonical records fit their representation limits.  Its multiplicity-2
+    record holds 961 terms whose squared support collapses to the full
+    ``[0, 60]^2`` grid of 3,721 terms — a collision structure the former
+    pairwise-product estimate (923,521 for that step alone) rejected as an
+    intermediate overflow even though the authentic replay peaks at
+    270,400 materialized terms and finishes inside the work budget.  The
+    operation must return its typed, source-bound result.
+    """
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
+    from jacobian.math.polynomials._models import PolynomialSquareFreeRequest
+    from jacobian.math.polynomials._operations import (
+        polynomial_square_free_decomposition,
+    )
+
+    def convolve_ints(left: dict[int, int], right: dict[int, int]) -> dict[int, int]:
+        product: dict[int, int] = {}
+        for left_degree, left_coeff in left.items():
+            for right_degree, right_coeff in right.items():
+                product[left_degree + right_degree] = (
+                    product.get(left_degree + right_degree, 0)
+                    + left_coeff * right_coeff
+                )
+        return {degree: c for degree, c in product.items() if c}
+
+    def convolve(
+        left: dict[tuple[int, ...], int], right: dict[tuple[int, ...], int]
+    ) -> dict[tuple[int, ...], int]:
+        product: dict[tuple[int, ...], int] = {}
+        for left_exps, left_coeff in left.items():
+            for right_exps, right_coeff in right.items():
+                key = tuple(a + b for a, b in zip(left_exps, right_exps, strict=True))
+                product[key] = product.get(key, 0) + left_coeff * right_coeff
+        return {exps: c for exps, c in product.items() if c}
+
+    def on_axis(axis: int, part: dict[int, int]) -> dict[tuple[int, ...], int]:
+        lifted: dict[tuple[int, ...], int] = {}
+        for degree, coefficient in part.items():
+            exps = [0, 0, 0]
+            exps[axis] = degree
+            lifted[tuple(exps)] = coefficient
+        return lifted
+
+    # Per-variable telescoped parts of the source:
+    #   x: S_57(x)(x+1)^3(x-1)^4 = (x^57 - 1)(x^2 - 1)^3          -> 8 terms
+    #   y: S_31(y)^2 (y-1)^4     = (y^62 - 2 y^31 + 1)(y^2-2y+1)  -> 9 terms
+    #   z: same as y                                              -> 9 terms
+    part_x = convolve_ints({57: 1, 0: -1}, {6: 1, 4: -3, 2: 3, 0: -1})
+    part_y = convolve_ints({62: 1, 31: -2, 0: 1}, {2: 1, 1: -2, 0: 1})
+    source_terms = convolve(
+        convolve(on_axis(0, part_x), on_axis(1, part_y)), on_axis(2, part_y)
+    )
+    assert len(source_terms) == 648
+    assert [max(exps[i] for exps in source_terms) for i in range(3)] == [63, 64, 64]
+    request = PolynomialSquareFreeRequest(
+        polynomial=_sparse_polynomial(
+            ("x", "y", "z"),
+            {exps: str(coefficient) for exps, coefficient in source_terms.items()},
+        )
+    )
+    result = polynomial_square_free_decomposition(request)
+    assert result.polynomial == request.polynomial
+    assert result.reconstructed == request.polynomial
+    assert result.coefficient == CanonicalRational(num="1", den="1")
+    records = sorted(
+        (
+            (len(rational_polynomial_to_sympy(r.factor).terms()), r.multiplicity)
+            for r in result.factors
+        ),
+        key=lambda record: record[1],
+    )
+    assert records == [(57, 1), (961, 2), (2, 3), (8, 4)]
+
+
+def test_square_free_replay_rejects_forged_disjoint_grid_claims() -> None:
+    """A forged disjoint-grid claim still rejects before materializing.
+
+    Two schema-valid 1,296-term grid factors live on disjoint variable
+    groups of one 8-variable ring at multiplicities 1 and 2.  Their merge's
+    pairwise bound (about 19 million) and degree box (11^8) both exceed the
+    per-step support ceiling, so the structure-derived preflight refuses the
+    claim typedly before any backend multiplication can expand it.
+    """
+
+    import itertools
+
+    from pydantic import ValidationError
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.polynomials._models import (
+        PolynomialSquareFreeDecompositionResult,
+        PolynomialSquareFreeFactor,
+    )
+
+    variables = tuple(f"x{index}" for index in range(8))
+    grid = list(itertools.product(range(6), repeat=4))
+    assert len(grid) == 1_296
+    left = _sparse_polynomial(
+        variables, {exponents + (0,) * 4: "1" for exponents in grid}
+    )
+    right = _sparse_polynomial(
+        variables, {(0,) * 4 + exponents: "1" for exponents in grid}
+    )
+    constant = _sparse_polynomial(variables, {(0,) * 8: "1"})
+    with pytest.raises(ValidationError, match="materialize more than"):
+        PolynomialSquareFreeDecompositionResult(
+            polynomial=constant,
+            coefficient=CanonicalRational(num="1", den="1"),
+            factors=(
+                PolynomialSquareFreeFactor(factor=left, multiplicity=1),
+                PolynomialSquareFreeFactor(factor=right, multiplicity=2),
+            ),
+            reconstructed=constant,
+        )
+
+
+def test_square_free_replay_support_prediction_keeps_colliding_claims_bounded() -> None:
+    """Trusting the degree box admits only provably bounded products.
+
+    A 729-term monic grid factor and a distinct 512-term grid factor live in
+    one 3-variable ring at multiplicities 1 and 2.  The replay merge's
+    pairwise bound (about 3.6 million) exceeds the per-step estimate that
+    rejected authentic collisions before this fix, while the degree boxes
+    prove every executed step's support stays inside the ceiling — so the
+    steps run safely, and the forged constant-source claim is then rejected
+    by the exact reconstruction equality instead.
+    """
+
+    from pydantic import ValidationError
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.polynomials._models import (
+        PolynomialSquareFreeDecompositionResult,
+        PolynomialSquareFreeFactor,
+    )
+
+    low_grid = {(a, b, c): "1" for a in range(9) for b in range(9) for c in range(9)}
+    high_grid = {
+        (a, b, c): "1" for a in range(9, 17) for b in range(9, 17) for c in range(9, 17)
+    }
+    assert len(low_grid) == 729 and len(high_grid) == 512
+    first = _sparse_polynomial(("x", "y", "z"), low_grid)
+    second = _sparse_polynomial(("x", "y", "z"), high_grid)
+    constant = _sparse_polynomial(("x", "y", "z"), {(0, 0, 0): "1"})
+    with pytest.raises(ValidationError, match="must reconstruct"):
+        PolynomialSquareFreeDecompositionResult(
+            polynomial=constant,
+            coefficient=CanonicalRational(num="1", den="1"),
+            factors=(
+                PolynomialSquareFreeFactor(factor=first, multiplicity=1),
+                PolynomialSquareFreeFactor(factor=second, multiplicity=2),
+            ),
+            reconstructed=constant,
+        )
+
+
 def test_replay_preflights_support_before_multiplying(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1171,10 +1336,13 @@ def test_replay_preflights_support_before_multiplying(
 
     Two schema-valid square-free factors each hold all 4,095 monomials of
     ``[0, 7]^4`` minus one on disjoint variable groups, at multiplicities 1
-    and 2.  Their Cartesian product bound is 16,769,025 terms while the
-    running work counter stays inside ``_MAX_REPLAY_WORK``, so only a
-    per-step support preflight can stop the replay before it materializes
-    the product; every multiplication that does run must respect the bound.
+    and 2.  Their Cartesian merge has a 16,777,216-term degree box and a
+    16,769,025-term pairwise bound, so both structure-derived support
+    predictions exceed the per-step ceiling and the replay must refuse the
+    merge before it materializes the product.  Squaring ``right`` is a
+    different story its structure proves safe: the degree box of that step
+    collapses to ``8^4 = 4,096`` terms, so it runs — and every operand of
+    every multiplication that executes stays inside the ceiling.
     """
 
     import itertools
@@ -1205,10 +1373,11 @@ def test_replay_preflights_support_before_multiplying(
     constant = _sparse_polynomial(variables, {(0,) * 8: "1"})
 
     original_mul = Poly.__mul__
-    observed: list[int] = []
+    observed_operands: list[int] = []
 
     def spy_mul(self, other):
-        observed.append(len(self.terms()) * len(other.terms()))
+        observed_operands.append(len(self.terms()))
+        observed_operands.append(len(other.terms()))
         return original_mul(self, other)
 
     monkeypatch.setattr(Poly, "__mul__", spy_mul)
@@ -1222,8 +1391,12 @@ def test_replay_preflights_support_before_multiplying(
             ),
             reconstructed=constant,
         )
-    assert observed
-    assert max(observed) <= _models._MAX_REPLAY_INTERMEDIATE_TERMS
+    # The left merge ran (trivially), then the right square ran under its
+    # collapsed degree-box prediction, and the Cartesian merge was refused
+    # before any backend multiplication: no operand ever exceeded the
+    # materialization ceiling.
+    assert observed_operands[-2:] == [4_095, 4_095]
+    assert max(observed_operands) <= _models._MAX_REPLAY_INTERMEDIATE_TERMS
 
 
 def test_square_free_operation_admits_envelope_scale_parts() -> None:

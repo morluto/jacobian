@@ -629,7 +629,7 @@ def test_tall_source_coefficients_are_admitted_by_derived_growth() -> None:
         )
 
 
-def test_operator_digit_budget_only_gates_paths_that_power_the_operator() -> None:
+def test_tall_operator_coefficients_are_admitted_by_derived_growth() -> None:
     variables = ("x",)
     coefficient = CanonicalRational(num=str(10**300 - 1), den="1")
     operator = ConstantCoefficientDifferentialOperator(
@@ -646,13 +646,50 @@ def test_operator_digit_budget_only_gates_paths_that_power_the_operator() -> Non
         _polynomial(variables, {(0,): 1}),
         operator,
     )
+    applied = apply_constant_coefficient_differential_operator(
+        _polynomial(variables, {(5,): 1}),
+        operator,
+    )
 
     assert copied == _polynomial(variables, {(5,): 1})
     assert vanished == _polynomial(variables, {})
-    with pytest.raises(ValueError, match="256-digit bound"):
+    assert applied == _polynomial(
+        variables,
+        {(4,): 5 * (10**300 - 1)},
+    )
+
+    reviewer = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(variables, {(1,): 1}),
+            operator=ConstantCoefficientDifferentialOperator(
+                variables=variables,
+                terms=(
+                    DifferentialOperatorTerm(
+                        coefficient=CanonicalRational(num="1" + "0" * 299, den="1"),
+                        orders=(1,),
+                    ),
+                ),
+            ),
+            iterations=1,
+            expected=_polynomial(variables, {(0,): 10**299}),
+        )
+    )
+    assert reviewer.output == _polynomial(variables, {(0,): 10**299})
+    assert reviewer.matches_expected is True
+
+    with pytest.raises(ValueError, match="coefficient-digit budget"):
         apply_constant_coefficient_differential_operator(
-            _polynomial(variables, {(5,): 1}),
-            operator,
+            _polynomial(variables, {(2,): 1}),
+            ConstantCoefficientDifferentialOperator(
+                variables=variables,
+                terms=(
+                    DifferentialOperatorTerm(
+                        coefficient=CanonicalRational(num="1" + "0" * 32_700, den="1"),
+                        orders=(1,),
+                    ),
+                ),
+            ),
+            iterations=2,
         )
 
 

@@ -21,7 +21,6 @@ from jacobian.math.polynomials.values import (
     require_polynomial_budget,
 )
 
-MAX_APPLICATION_OPERATOR_COEFFICIENT_DIGITS = 256
 MAX_APPLICATION_OUTPUT_TERMS = 4_096
 MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS = 32_768
 MAX_APPLICATION_WORK_UNITS = 2_000_000
@@ -316,12 +315,17 @@ def _require_application_shape(
 def _require_expansion_operator(
     operator: ConstantCoefficientDifferentialOperator,
 ) -> None:
-    """Bound the operator against the kernel's derivative-powering input regime."""
+    """Bound the operator against the kernel's derivative-powering input regime.
+
+    Operator coefficient growth is derived from the coefficients' actual
+    heights downstream; this check enforces only the shared canonical
+    rational representation.
+    """
 
     for term in operator.terms:
         require_bounded_rational(
             term.coefficient,
-            max_digits=MAX_APPLICATION_OPERATOR_COEFFICIENT_DIGITS,
+            max_digits=MAX_CANONICAL_RATIONAL_DIGITS,
             label="differential-operator coefficient",
         )
 
@@ -511,7 +515,6 @@ def validate_application_envelope(
 
 
 __all__ = [
-    "MAX_APPLICATION_OPERATOR_COEFFICIENT_DIGITS",
     "MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS",
     "MAX_APPLICATION_OUTPUT_TERMS",
     "ApplicationEnvelope",

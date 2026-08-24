@@ -7,6 +7,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_GRAPH_SYMMETRY_VERTICES = 256
@@ -109,6 +110,52 @@ def _validate_automorphism_generator(
         raise ValueError("graph symmetry generators must preserve declared edge colors")
 
 
+_RESULT_ENVELOPE_RESERVE_BYTES = 2_048
+_ORBIT_STRUCTURE_WIRE_BYTES = 96
+
+
+def _estimate_orbit_result_wire_bytes(request: GraphSymmetryOrbitRequest) -> int:
+    """Upper-bound the canonical wire size of this request's orbit result.
+
+    The result echoes its complete declared source action and repeats every
+    vertex label once (the ``vertices`` field plus the vertex-orbit members)
+    and every canonical edge once (the ``edges`` field plus the edge-orbit
+    members) beyond that echo. The bound charges that repetition plus the
+    worst-case partition shape - at most one orbit per vertex or edge, each
+    with bounded structure and one representative - and the envelope reserve,
+    so every accepted request serializes inside the canonical output limit.
+    """
+    vertex_label_bytes = [
+        len(encode_strict_json(vertex)) for vertex in request.graph.vertices
+    ]
+    edge_pair_bytes = [
+        len(encode_strict_json(left)) + len(encode_strict_json(right)) + 3
+        for left, right in request.graph.edges
+    ]
+    max_label_bytes = max(vertex_label_bytes, default=0)
+    return (
+        len(encode_strict_json(request.model_dump(mode="json")))
+        + 2 * sum(vertex_label_bytes)
+        + 2 * sum(edge_pair_bytes)
+        + (len(vertex_label_bytes) + len(edge_pair_bytes))
+        * _ORBIT_STRUCTURE_WIRE_BYTES
+        + len(vertex_label_bytes) * max_label_bytes
+        + len(edge_pair_bytes) * max(edge_pair_bytes, default=0)
+        + len(request.generators) * (max_label_bytes + 4)
+        + _RESULT_ENVELOPE_RESERVE_BYTES
+    )
+
+
+def _require_result_output_headroom(request: GraphSymmetryOrbitRequest) -> None:
+    output_limit = CanonicalLimits().max_output_bytes
+    if _estimate_orbit_result_wire_bytes(request) > output_limit:
+        raise ValueError(
+            "the graph symmetry orbit result retains its declared source and "
+            f"would exceed the {output_limit}-byte canonical output limit; "
+            "shorten vertex labels or shrink the graph"
+        )
+
+
 class GraphSymmetryOrbitRequest(StrictModel):
     graph: SimpleUndirectedGraph
     generators: tuple[GraphAutomorphismGenerator, ...] = Field(
@@ -160,6 +207,11 @@ class GraphSymmetryOrbitRequest(StrictModel):
                 vertex_colors,
                 edge_colors,
             )
+        return self
+
+    @model_validator(mode="after")
+    def require_result_within_canonical_output_limit(self) -> Self:
+        _require_result_output_headroom(self)
         return self
 
 

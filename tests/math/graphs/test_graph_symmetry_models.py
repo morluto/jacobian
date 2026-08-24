@@ -3,9 +3,15 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import (
+    CanonicalLimits,
+    canonicalize_json,
+    encode_strict_json,
+)
 from jacobian.math.graphs.symmetry._models import (
     GraphSymmetryOrbitRequest,
     GraphSymmetryOrbitResult,
+    _estimate_orbit_result_wire_bytes,
 )
 
 
@@ -60,6 +66,63 @@ def test_graph_symmetry_request_rejects_labels_outside_artifact_budget() -> None
 
     with pytest.raises(ValidationError, match="1-64 characters"):
         GraphSymmetryOrbitRequest.model_validate(payload)
+
+
+def _wide_orbit_payload(generators: int) -> dict[str, object]:
+    """A 256-vertex, 4096-edge graph with maximal 64-character labels."""
+
+    prefix = "\U0001d552" * 60
+    vertices = [f"{prefix}{index:04d}" for index in range(256)]
+    edges: list[list[str]] = []
+    for left in range(256):
+        for right in range(left + 1, 256):
+            if len(edges) == 4096:
+                break
+            edges.append([vertices[left], vertices[right]])
+        if len(edges) == 4096:
+            break
+    return {
+        "graph": {"vertices": vertices, "edges": edges},
+        "generators": [
+            {
+                "generator_id": f"{'g' * 62}{index:02d}",
+                "mapping": {vertex: vertex for vertex in vertices},
+            }
+            for index in range(generators)
+        ],
+    }
+
+
+def test_graph_symmetry_request_admission_bounds_retained_source_output() -> None:
+    payload = _wide_orbit_payload(30)
+    assert (
+        len(encode_strict_json(payload)) <= CanonicalLimits().max_input_bytes
+    )
+
+    with pytest.raises(ValidationError, match="canonical output limit"):
+        GraphSymmetryOrbitRequest.model_validate(payload)
+
+
+def test_graph_symmetry_admitted_request_result_fits_canonical_output() -> None:
+    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+
+    request = GraphSymmetryOrbitRequest.model_validate(_wide_orbit_payload(8))
+    result = _generator_orbits(request)
+
+    encoded = canonicalize_json(result.model_dump(mode="json"))
+    assert len(encoded) <= CanonicalLimits().max_output_bytes
+    assert len(encoded) <= _estimate_orbit_result_wire_bytes(request)
+
+
+def test_graph_symmetry_admission_estimate_bounds_actual_result_wire() -> None:
+    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+
+    request = GraphSymmetryOrbitRequest.model_validate(_path_request())
+    result = _generator_orbits(request)
+
+    actual = len(canonicalize_json(result.model_dump(mode="json")))
+    assert actual > 0
+    assert _estimate_orbit_result_wire_bytes(request) >= actual
 
 
 def test_graph_symmetry_result_rejects_incomplete_orbit_partition() -> None:

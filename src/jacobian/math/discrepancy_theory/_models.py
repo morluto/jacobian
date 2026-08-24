@@ -13,11 +13,22 @@ from jacobian._models import StrictModel
 
 MAX_GROUND_SET = 64
 MAX_SETS = 1_000
-# The optimum operation encodes minimum-discrepancy search as an exact
-# integer program (Z3 Optimize over {±1} variables with one shared
-# objective D); a sat answer is a proven optimum, and an exhausted budget
-# returns BUDGET_EXCEEDED without any mathematical claim.
+# The optimum operation pairs two maintained backends: a bounded
+# scipy.optimize.milp (HiGHS) search produces the incumbent coloring, and the
+# minimality of any positive claimed optimum is re-established exactly by one
+# Z3 pseudo-boolean feasibility check at D-1 before OPTIMAL may carry it.
+# Exhausted budgets return BUDGET_EXCEEDED without any mathematical claim.
 MAX_OPTIMUM_SOLVER_MILLISECONDS = 30_000
+# The node limit bounds HiGHS' branch-and-bound tree retention independently
+# of wall clock: an admitted hard 64-variable instance can otherwise expand
+# and retain an arbitrary portion of its ~2^64 search tree before the timer
+# fires. Exhausting either limit yields the claim-free outcome; neither limit
+# stands in for a mathematical bound on the optimum itself.
+MAX_OPTIMUM_SOLVER_NODES = 1_000_000
+# The exact proof check runs under its own explicit budget so one request's
+# total solver work stays bounded; exhaustion reports unknown, which the
+# producing path maps to BUDGET_EXCEEDED and replay rejects fail-closed.
+MAX_OPTIMUM_PROOF_MILLISECONDS = 10_000
 
 MAX_ROUNDING_COORDINATES = 512
 MAX_ROUNDING_ROWS = 512
@@ -333,8 +344,9 @@ class FiniteSetSystem(StrictModel):
                 "A finite ground set of size `ground_set_size` and up to "
                 f"{MAX_SETS} subsets given as strictly increasing index tuples. "
                 f"The optimum operation admits ground sets up to {MAX_GROUND_SET} "
-                "elements and encodes the minimum-discrepancy search as an exact "
-                "integer program; the solver budget bounds each request."
+                "elements and pairs a bounded HiGHS MILP incumbent search with "
+                "an exact pseudo-boolean optimality proof; the combined solver "
+                "budget bounds each request."
             )
         }
     )
@@ -389,21 +401,15 @@ class DiscrepancyOptimumRequest(StrictModel):
 def _feasibility_outcome(
     set_system: FiniteSetSystem, allowed: int
 ) -> Literal["sat", "unsat", "unknown"]:
-    """Run one bounded exact feasibility check for imbalance at most ``allowed``.
+    """Decide exactly whether a coloring with imbalance at most ``allowed`` exists.
 
-    Mirrors the optimum program's constraints with a fixed target instead of
-    a minimized objective, solved by the same HiGHS backend through
-    ``scipy.optimize.milp``. Only a proven-infeasible outcome may support a
-    lower bound; an exhausted budget or backend failure reports ``unknown``
-    so validation fails closed rather than accepting an unproven claim.
+    One pseudo-boolean satisfiability check over the binary color bits with
+    the maintained Z3 backend: ``unsat`` is an exact infeasibility proof and
+    is the only outcome that may support a lower bound; ``sat`` supplies a
+    witness; an exhausted proof budget, unavailable backend, or backend
+    failure reports ``unknown`` so validation fails closed rather than
+    accepting an unproven claim.
     """
-
-    import numpy as np
-    from scipy.optimize import (  # type: ignore[import-untyped]
-        Bounds,
-        LinearConstraint,
-        milp,
-    )
 
     n = set_system.ground_set_size
     if n == 0:
@@ -411,37 +417,25 @@ def _feasibility_outcome(
     if allowed < 0:
         return "unsat"
 
-    rows: list[np.ndarray] = []
-    bounds_upper: list[float] = []
-    for subset in set_system.sets:
-        size = len(subset)
-        plus_row = np.zeros(n)
-        minus_row = np.zeros(n)
-        for element in subset:
-            plus_row[element] = 2.0
-            minus_row[element] = -2.0
-        # sum(x_S) <= allowed  <=>  2*sum(b_S) <= allowed + |S|
-        rows.append(plus_row)
-        bounds_upper.append(float(allowed + size))
-        # -sum(x_S) <= allowed  <=>  -2*sum(b_S) <= allowed - |S|
-        rows.append(minus_row)
-        bounds_upper.append(float(allowed - size))
+    try:
+        import z3  # type: ignore[import-untyped]
 
-    matrix = np.array(rows)
-    result = milp(
-        c=np.zeros(n),
-        constraints=LinearConstraint(
-            matrix,
-            np.full(matrix.shape[0], -np.inf),
-            np.array(bounds_upper),
-        ),
-        integrality=np.ones(n),
-        bounds=Bounds(np.zeros(n), np.ones(n)),
-        options={"time_limit": MAX_OPTIMUM_SOLVER_MILLISECONDS / 1000},
-    )
-    if result.status == 0 and result.x is not None:
+        solver = z3.Solver()
+        solver.set(timeout=max(1, MAX_OPTIMUM_PROOF_MILLISECONDS))
+        bits = [z3.Bool(f"b_{index}") for index in range(n)]
+        signed_sums = [
+            z3.Sum([z3.If(bits[element], 1, -1) for element in subset])
+            for subset in set_system.sets
+        ]
+        for signed_sum in signed_sums:
+            solver.add(signed_sum <= allowed)
+            solver.add(signed_sum >= -allowed)
+        status = solver.check()
+    except Exception:
+        return "unknown"
+    if status == z3.sat:
         return "sat"
-    if result.status == 2:
+    if status == z3.unsat:
         return "unsat"
     return "unknown"
 
@@ -517,7 +511,7 @@ def _proven_optimal_result(
     optimal_coloring: tuple[int, ...],
     optimal_discrepancy: int,
 ) -> DiscrepancyOptimumResult:
-    """Build a proven-optimal result from one producing Optimize solve.
+    """Build a proven-optimal result after one producing incumbent solve.
 
     Direct construction from the producing solve skips result replay so one
     declared budget covers all solver work; independently supplied results

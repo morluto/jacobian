@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import math
 from fractions import Fraction
+from typing import Any
 
 from sympy import ZZ
 from sympy.polys.matrices import DomainMatrix
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.discrepancy_theory import _models as discrepancy_models
 from jacobian.math.discrepancy_theory._models import (
     MAX_OPTIMUM_SOLVER_MILLISECONDS,
+    MAX_OPTIMUM_SOLVER_NODES,
     MAX_ROUNDING_INTERMEDIATE_DIGITS,
     DiscrepancyEvalRequest,
     DiscrepancyEvalResult,
@@ -221,7 +224,7 @@ def compute_discrepancy(request: DiscrepancyEvalRequest) -> DiscrepancyEvalResul
 def compute_optimal_discrepancy(
     request: DiscrepancyOptimumRequest,
 ) -> DiscrepancyOptimumResult:
-    """Minimize the maximum imbalance via an exact mixed-integer program.
+    """Minimize the maximum imbalance via a bounded incumbent search plus proof.
 
     Binary variables ``b_u in {0, 1}`` encode the coloring ``x_u = 2 b_u -1``
     and one continuous bound ``t`` satisfies, per set ``S`` of size ``k``::
@@ -229,15 +232,19 @@ def compute_optimal_discrepancy(
         2 sum(b[u] for u in S) - t <= k
         -2 sum(b[u] for u in S) - t <= -k
 
-    Minimizing ``t`` with the maintained HiGHS backend through
-    ``scipy.optimize.milp`` at zero MIP gap proves the optimum. The returned
-    coloring is integrality-checked and its discrepancy is recomputed
-    exactly with Python integers, so floating-point solver internals can
-    never surface as a mathematical value. A solver limit produces
-    ``BUDGET_EXCEEDED``; any other nonzero status, a non-integral
-    assignment, or an objective/replay disagreement produces the distinct
-    non-mathematical ``EXECUTION_FAILED`` outcome. Neither carries a
-    coloring or any claim. The empty ground set has the single empty
+    A time- and node-bounded HiGHS MILP through ``scipy.optimize.milp``
+    produces the incumbent. The returned coloring is integrality-checked,
+    checked against its binary domain before rounding, and its discrepancy is
+    recomputed exactly with Python integers, so floating-point solver
+    internals can never surface as a mathematical value. A positive optimum
+    is carried by OPTIMAL only after the exact Z3 pseudo-boolean feasibility
+    check proves no coloring attains one less; a witness for that smaller
+    bound yields EXECUTION_FAILED and an exhausted or unavailable proof
+    yields BUDGET_EXCEEDED. Zero is definitional. A solver limit produces
+    BUDGET_EXCEEDED; any other nonzero status, a non-integral or out-of-domain
+    assignment, an objective/replay disagreement, or a raised backend failure
+    produces the distinct non-mathematical EXECUTION_FAILED outcome. Neither
+    carries a coloring or any claim. The empty ground set has the single empty
     coloring with discrepancy zero.
     """
     n = request.set_system.ground_set_size
@@ -287,25 +294,47 @@ def compute_optimal_discrepancy(
             np.array(bounds_upper),
         )
 
-    result = milp(
-        c=objective,
-        constraints=constraints,
-        integrality=integrality,
-        bounds=Bounds(lower, upper),
-        options={
-            "mip_rel_gap": 0,
-            "time_limit": MAX_OPTIMUM_SOLVER_MILLISECONDS / 1000,
-        },
-    )
+    try:
+        result = milp(
+            c=objective,
+            constraints=constraints,
+            integrality=integrality,
+            bounds=Bounds(lower, upper),
+            options={
+                "mip_rel_gap": 0,
+                "time_limit": MAX_OPTIMUM_SOLVER_MILLISECONDS / 1000,
+                "node_limit": MAX_OPTIMUM_SOLVER_NODES,
+            },
+        )
+    except Exception:
+        # A raised backend failure is transport, not mathematics: report the
+        # typed claim-free outcome instead of escaping the kernel.
+        return _execution_failed_result(request.set_system)
     if result.status == 1:
         return _budget_exceeded_result(request.set_system)
     if result.status != 0 or result.x is None:
         return _execution_failed_result(request.set_system)
+    return _incumbent_outcome(request, result, variable_count)
+
+
+def _incumbent_outcome(
+    request: DiscrepancyOptimumRequest,
+    result: Any,
+    variable_count: int,
+) -> DiscrepancyOptimumResult:
+    """Validate one status-zero solve and gate OPTIMAL on the exact proof."""
+
+    import numpy as np
+
+    sets = request.set_system.sets
+    n = request.set_system.ground_set_size
     if result.x.shape != (variable_count,) or not bool(np.all(np.isfinite(result.x))):
         return _execution_failed_result(request.set_system)
 
     raw_assignment = result.x[:n]
     if float(np.max(np.abs(raw_assignment - np.round(raw_assignment)))) > 1e-6:
+        return _execution_failed_result(request.set_system)
+    if bool(np.any(raw_assignment < -1e-6) or np.any(raw_assignment > 1 + 1e-6)):
         return _execution_failed_result(request.set_system)
     coloring = tuple(1 if value > 0.5 else -1 for value in raw_assignment)
 
@@ -318,4 +347,18 @@ def compute_optimal_discrepancy(
     solved_bound = float(result.x[-1])
     if abs(solved_bound - recomputed) > 1e-6:
         return _execution_failed_result(request.set_system)
-    return _proven_optimal_result(request.set_system, coloring, recomputed)
+    if recomputed == 0:
+        return _proven_optimal_result(request.set_system, coloring, recomputed)
+    try:
+        outcome = discrepancy_models._feasibility_outcome(
+            request.set_system, recomputed - 1
+        )
+    except Exception:
+        # An unavailable exact proof cannot back the OPTIMAL claim; report
+        # the claim-free outcome instead of escaping the kernel.
+        return _budget_exceeded_result(request.set_system)
+    if outcome == "unsat":
+        return _proven_optimal_result(request.set_system, coloring, recomputed)
+    if outcome == "sat":
+        return _execution_failed_result(request.set_system)
+    return _budget_exceeded_result(request.set_system)

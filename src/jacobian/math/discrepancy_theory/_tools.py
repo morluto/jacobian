@@ -121,10 +121,10 @@ DISCREPANCY_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "discrepancy.theory.optimum.compute",
         "Search for a coloring minimizing maximum discrepancy",
         "Minimize the maximum absolute set imbalance over all +1/-1 "
-        "colorings of a finite set system by solving one exact mixed-integer "
-        "program with the HiGHS backend under a fixed solver budget; "
-        "OPTIMAL carries one witnessing coloring attaining the proven "
-        "minimum, BUDGET_EXCEEDED and EXECUTION_FAILED make no mathematical "
+        "colorings of a finite set system: a bounded HiGHS MILP search "
+        "produces the incumbent coloring and an exact pseudo-boolean "
+        "feasibility proof re-establishes minimality before OPTIMAL carries "
+        "it; BUDGET_EXCEEDED and EXECUTION_FAILED make no mathematical "
         "claim.",
         DiscrepancyOptimumRequest,
         DiscrepancyOptimumResult,

@@ -844,9 +844,7 @@ def _validate_negative_spqr_result(result: SPQRTreeResult) -> None:
         if len(result.witness_vertices) != 2:
             raise ValueError("disconnectedness requires two concrete vertices")
         left, right = result.witness_vertices
-        if not (
-            0 <= left < graph.vertex_count and 0 <= right < graph.vertex_count
-        ):
+        if not (0 <= left < graph.vertex_count and 0 <= right < graph.vertex_count):
             raise ValueError(
                 "disconnectedness witness vertices must name source vertices"
             )

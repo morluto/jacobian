@@ -609,7 +609,10 @@ class TestSPQRTree:
             SPQRTreeResult.model_validate(forged.model_dump(mode="json"))
 
     def test_negative_replay_rejects_witnesses_absent_from_source(self) -> None:
-        k4 = {"vertex_count": 4, "edges": [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]}
+        k4 = {
+            "vertex_count": 4,
+            "edges": [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)],
+        }
         with pytest.raises(ValidationError, match="articulation witness"):
             SPQRTreeResult.model_validate(
                 {

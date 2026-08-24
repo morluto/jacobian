@@ -26,6 +26,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "exact least subalgebra by finite closure under all basic operations and nullary constants",
     ),
     OperationAdmission(
+        "universal_algebra.map.homomorphism_profile.compute",
+        AdmissionDecision.KEEP,
+        "exact supplied-map operation preservation with a reusable checked homomorphism or first source-bound countertuple",
+    ),
+    OperationAdmission(
         "universal_algebra.congruence.check.compute",
         AdmissionDecision.KEEP,
         "exact compatibility check of a carrier partition against all basic operations",

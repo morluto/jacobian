@@ -13,12 +13,18 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "diophantine.continued_fraction.compute",
         AdmissionDecision.KEEP,
-        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+        "contract version 2 reevaluation: exact bounded periodic continued "
+        "fraction of sqrt(D) for squarefree D whose retained request is "
+        "replayed against the canonical preperiod/period expansion of the "
+        "same discriminant within the admitted term envelope",
     ),
     OperationAdmission(
         "diophantine.convergents.compute",
         AdmissionDecision.NATIVE_ONLY,
-        "useful deterministic projection of the retained continued-fraction result",
+        "contract version 2 reevaluation: deterministic projection of the "
+        "retained source-replayed continued-fraction result, admissible only "
+        "when the convergents replay the continuant recurrence of the same "
+        "sqrt(D) under the derived digit cap",
         native_symbol="jacobian.math.diophantine_approximation.convergents",
     ),
     OperationAdmission(

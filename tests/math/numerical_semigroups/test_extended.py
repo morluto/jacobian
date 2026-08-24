@@ -4,19 +4,31 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.numerical_semigroups._models import (
+    MAX_GENERATOR,
     BettiElementsRequest,
+    BettiElementsResult,
     CatenaryDegreeRequest,
+    CatenaryDegreeResult,
     DeltaSetRequest,
+    DeltaSetResult,
     ElasticityRequest,
     ElementCatenaryDegreeRequest,
+    ElementCatenaryDegreeResult,
     ElementDeltaSetRequest,
+    ElementDeltaSetResult,
     ElementElasticityRequest,
+    ElementElasticityResult,
     FactorizationComputeRequest,
+    FactorizationComputeResult,
     FactorizationDistanceRequest,
     FactorizationGraphComputeRequest,
+    FactorizationGraphComputeResult,
     FactorizationLengthsComputeRequest,
+    FactorizationLengthsComputeResult,
     MinimalPresentationRequest,
+    MinimalPresentationResult,
     PresentationBinomialsRequest,
+    PresentationBinomialsResult,
 )
 from jacobian.math.numerical_semigroups._operations import (
     compute_betti_elements,
@@ -62,10 +74,23 @@ class TestFactorizations:
         with pytest.raises(ValidationError, match="positive"):
             FactorizationComputeRequest(generators=("0", "5"), value="10")
 
-    def test_factorizations_non_minimal_generators(self):
-        """Coordinate-bearing requests reject ambiguous redundant generators."""
-        with pytest.raises(ValidationError, match="minimal generating system"):
-            FactorizationComputeRequest(generators=("3", "5", "8"), value="15")
+    def test_factorizations_normalize_redundant_permuted_generators(self):
+        """Factorizations always use the canonical minimal-generator axis."""
+        result = compute_factorizations(
+            FactorizationComputeRequest(generators=("8", "5", "3"), value="15")
+        )
+
+        assert result.minimal_generators == ("3", "5")
+        assert result.factorizations == ((0, 3), (5, 0))
+
+    def test_factorization_result_rejects_a_redundant_coordinate_axis(self):
+        with pytest.raises(ValidationError, match="canonical minimal"):
+            FactorizationComputeResult(
+                value="15",
+                minimal_generators=("3", "5", "8"),
+                in_semigroup=True,
+                factorizations=((0, 3, 0), (5, 0, 0)),
+            )
 
     def test_factorization_materialization_is_complete_past_old_silent_cap(self):
         generators = ("6", "7", "8", "9", "10", "11")
@@ -80,6 +105,164 @@ class TestFactorizations:
         assert counts[200] == 14_506
         assert len(result.factorizations) == counts[200]
         assert result.in_semigroup
+
+
+@pytest.mark.parametrize(
+    ("result_model", "payload"),
+    [
+        (
+            FactorizationComputeResult,
+            {"value": "15", "in_semigroup": True, "factorizations": ((0, 3, 0),)},
+        ),
+        (
+            FactorizationLengthsComputeResult,
+            {"value": "18", "in_semigroup": True, "lengths": (3, 4, 5, 6)},
+        ),
+        (
+            FactorizationGraphComputeResult,
+            {
+                "value": "15",
+                "in_semigroup": True,
+                "factorizations": ((0, 3, 0),),
+                "edges": (),
+                "connected_components": ((0,),),
+                "is_connected": True,
+            },
+        ),
+        (
+            ElementDeltaSetResult,
+            {
+                "value": "18",
+                "factorization_lengths": (3, 4, 5, 6),
+                "delta_set": (1,),
+            },
+        ),
+        (
+            ElementElasticityResult,
+            {
+                "value": "18",
+                "minimum_length": 3,
+                "maximum_length": 6,
+                "elasticity": "2",
+            },
+        ),
+        (
+            ElementCatenaryDegreeResult,
+            {"value": "18", "factorization_count": 5, "catenary_degree": 3},
+        ),
+        (
+            BettiElementsResult,
+            {
+                "apery_set": ("0", "10", "5"),
+                "candidate_count": 6,
+                "betti_elements": ("15",),
+            },
+        ),
+        (
+            MinimalPresentationResult,
+            {
+                "betti_elements": ("15",),
+                "relations": ({"first": (5, 0, 0), "second": (0, 3, 0)},),
+            },
+        ),
+        (
+            PresentationBinomialsResult,
+            {
+                "binomials": (
+                    {
+                        "left_exponents": (5, 0, 0),
+                        "right_exponents": (0, 3, 0),
+                    },
+                )
+            },
+        ),
+        (
+            DeltaSetResult,
+            {"delta_set": (1,), "periodicity_bound": 45, "checked_through": 50},
+        ),
+        (
+            CatenaryDegreeResult,
+            {
+                "catenary_degree": 3,
+                "betti_degrees": ({"betti_element": "15", "catenary_degree": 3},),
+                "witness_betti_elements": ("15",),
+            },
+        ),
+    ],
+)
+def test_result_rejects_redundant_minimal_generator_axis(result_model, payload):
+    with pytest.raises(ValidationError, match="canonical minimal"):
+        result_model(minimal_generators=("3", "5", "6"), **payload)
+
+
+@pytest.mark.parametrize("axis", [(), tuple(map(str, range(30, 51)))])
+@pytest.mark.parametrize(
+    ("result_model", "payload"),
+    [
+        (
+            FactorizationComputeResult,
+            {"value": "-1", "in_semigroup": False, "factorizations": ()},
+        ),
+        (
+            FactorizationLengthsComputeResult,
+            {"value": "-1", "in_semigroup": False, "lengths": ()},
+        ),
+        (
+            FactorizationGraphComputeResult,
+            {
+                "value": "-1",
+                "in_semigroup": False,
+                "factorizations": (),
+                "edges": (),
+                "connected_components": (),
+                "is_connected": True,
+            },
+        ),
+        (
+            ElementDeltaSetResult,
+            {"value": "0", "factorization_lengths": (0,), "delta_set": ()},
+        ),
+        (
+            ElementElasticityResult,
+            {
+                "value": "30",
+                "minimum_length": 1,
+                "maximum_length": 1,
+                "elasticity": "1",
+            },
+        ),
+        (
+            ElementCatenaryDegreeResult,
+            {"value": "30", "factorization_count": 1, "catenary_degree": 0},
+        ),
+        (
+            BettiElementsResult,
+            {"apery_set": (), "candidate_count": 0, "betti_elements": ()},
+        ),
+        (
+            MinimalPresentationResult,
+            {"betti_elements": (), "relations": ()},
+        ),
+        (PresentationBinomialsResult, {"binomials": ()}),
+        (
+            DeltaSetResult,
+            {"delta_set": (), "periodicity_bound": 0, "checked_through": 0},
+        ),
+        (
+            CatenaryDegreeResult,
+            {
+                "catenary_degree": 0,
+                "betti_degrees": (),
+                "witness_betti_elements": (),
+            },
+        ),
+    ],
+)
+def test_result_rejects_empty_or_overlong_minimal_generator_axis(
+    axis, result_model, payload
+):
+    with pytest.raises(ValidationError):
+        result_model(minimal_generators=axis, **payload)
 
 
 class TestFactorizationLengths:
@@ -122,8 +305,20 @@ class TestFactorizationDistance:
         result = compute_factorization_distance(req)
         assert result.distance == 0
 
+    def test_distance_normalizes_the_generator_presentation_not_coordinates(self):
+        result = compute_factorization_distance(
+            FactorizationDistanceRequest(
+                generators=("8", "5", "3"),
+                value="15",
+                first=(5, 0),
+                second=(0, 3),
+            )
+        )
+
+        assert result.distance == 5
+
     def test_distance_rejects_mismatched_lengths(self):
-        with pytest.raises(ValidationError, match="minimal generating system"):
+        with pytest.raises(ValidationError, match="coordinates must match"):
             FactorizationDistanceRequest(
                 generators=("3", "5"), value="15", first=(5, 0, 0), second=(0, 3)
             )
@@ -142,6 +337,26 @@ class TestFactorizationDistance:
 
 
 class TestFactorizationGraph:
+    def test_graph_normalizes_redundant_generators(self):
+        result = compute_factorization_graph(
+            FactorizationGraphComputeRequest(generators=("8", "3", "5"), value="15")
+        )
+
+        assert result.minimal_generators == ("3", "5")
+        assert result.factorizations == ((0, 3), (5, 0))
+
+    def test_graph_result_rejects_a_redundant_coordinate_axis(self):
+        with pytest.raises(ValidationError, match="canonical minimal"):
+            FactorizationGraphComputeResult(
+                value="15",
+                minimal_generators=("3", "5", "8"),
+                in_semigroup=True,
+                factorizations=((0, 3, 0), (5, 0, 0)),
+                edges=(),
+                connected_components=((0,), (1,)),
+                is_connected=False,
+            )
+
     def test_graph_15_in_3_5_disconnected(self):
         req = FactorizationGraphComputeRequest(generators=("3", "5"), value="15")
         result = compute_factorization_graph(req)
@@ -259,6 +474,26 @@ class TestBettiElements:
 
 
 class TestMinimalPresentation:
+    def test_presentation_normalizes_redundant_permuted_generators(self):
+        result = compute_minimal_presentation(
+            MinimalPresentationRequest(generators=("10", "9", "6", "4"))
+        )
+
+        assert result.minimal_generators == ("4", "6", "9")
+        assert all(
+            len(relation.first) == len(result.minimal_generators)
+            and len(relation.second) == len(result.minimal_generators)
+            for relation in result.relations
+        )
+
+    def test_presentation_result_rejects_a_redundant_coordinate_axis(self):
+        with pytest.raises(ValidationError, match="canonical minimal"):
+            MinimalPresentationResult(
+                minimal_generators=("3", "5", "8"),
+                betti_elements=("15",),
+                relations=({"first": [5, 0, 0], "second": [0, 3, 0]},),
+            )
+
     def test_presentation_3_5(self):
         req = MinimalPresentationRequest(generators=("3", "5"))
         result = compute_minimal_presentation(req)
@@ -301,6 +536,32 @@ class TestMinimalPresentation:
 
 
 class TestPresentationBinomials:
+    def test_binomials_accept_relations_on_the_normalized_axis(self):
+        presentation = compute_minimal_presentation(
+            MinimalPresentationRequest(generators=("8", "5", "3"))
+        )
+        result = compute_presentation_binomials(
+            PresentationBinomialsRequest(
+                generators=("3", "8", "5"), relations=presentation.relations
+            )
+        )
+
+        assert result.minimal_generators == ("3", "5")
+        assert result.binomials[0].left_exponents == (5, 0)
+        assert result.binomials[0].right_exponents == (0, 3)
+
+    def test_binomial_result_rejects_a_redundant_coordinate_axis(self):
+        with pytest.raises(ValidationError, match="canonical minimal"):
+            PresentationBinomialsResult(
+                minimal_generators=("3", "5", "8"),
+                binomials=(
+                    {
+                        "left_exponents": [5, 0, 0],
+                        "right_exponents": [0, 3, 0],
+                    },
+                ),
+            )
+
     def test_binomials_3_5(self):
         req = PresentationBinomialsRequest(
             generators=("3", "5"),
@@ -385,3 +646,50 @@ class TestGlobalCatenaryDegree:
         result = compute_catenary_degree(req)
         assert result.catenary_degree == 3
         assert result.witness_betti_elements == ("12", "18")
+
+
+class TestGeneratorEnvelopeIsSchemaVisible:
+    """The per-generator ceiling is published wherever acceptance is advertised."""
+
+    def test_request_schemas_state_the_per_generator_ceiling(self):
+        for model in (
+            BettiElementsRequest,
+            CatenaryDegreeRequest,
+            DeltaSetRequest,
+            ElementCatenaryDegreeRequest,
+            ElementDeltaSetRequest,
+            ElementElasticityRequest,
+            FactorizationComputeRequest,
+            FactorizationDistanceRequest,
+            FactorizationGraphComputeRequest,
+            FactorizationLengthsComputeRequest,
+            MinimalPresentationRequest,
+            PresentationBinomialsRequest,
+        ):
+            schema = model.model_json_schema()
+            description = schema["properties"]["generators"]["description"]
+            assert f"each at most {MAX_GENERATOR}" in description
+
+    def test_rejects_a_generator_above_the_published_ceiling(self):
+        with pytest.raises(ValidationError, match=f"at most {MAX_GENERATOR}"):
+            FactorizationComputeRequest(generators=("2", "501"), value="503")
+
+    def test_broadened_declarations_state_the_per_generator_ceiling(self):
+        from jacobian.math.numerical_semigroups._tools import TOOLS
+
+        tools = {tool.operation_id: tool for tool in TOOLS}
+        for operation_id in (
+            "number_theory.numerical_semigroup.factorizations.compute",
+            "number_theory.numerical_semigroup.presentation_binomials.compute",
+        ):
+            assert f"each at most {MAX_GENERATOR}" in tools[operation_id].description
+        for operation_id in (
+            "number_theory.numerical_semigroup.elasticity.compute",
+            "number_theory.numerical_semigroup.elasticity.global_compute",
+        ):
+            examples = tools[operation_id].examples
+            assert examples
+            assert all(
+                f"each at most {MAX_GENERATOR}" in example.description
+                for example in examples
+            )

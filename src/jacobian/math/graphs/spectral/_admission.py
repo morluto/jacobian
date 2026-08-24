@@ -23,12 +23,14 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "graph.spectrum.adjacency.compute",
         AdmissionDecision.KEEP,
-        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+        "exact adjacency eigenvalue/multiplicity multiset bound to its "
+        "retained source graph by structural checks and exact replay",
     ),
     OperationAdmission(
         "graph.spectrum.laplacian.compute",
         AdmissionDecision.KEEP,
-        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+        "exact Laplacian eigenvalue/multiplicity multiset bound to its "
+        "retained source graph by structural checks and exact replay",
     ),
 )
 

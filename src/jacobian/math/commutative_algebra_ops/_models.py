@@ -13,10 +13,10 @@ from jacobian.math.polynomials.values import (
     require_polynomial_budget,
 )
 
-MAX_VARS = 6
-MAX_GENERATORS = 16
+MAX_VARS = 8
+MAX_GENERATORS = 32
 MAX_INPUT_TERMS = 256
-MAX_INPUT_EXPONENT = 12
+MAX_INPUT_EXPONENT = 20
 MAX_COEFFICIENT_DIGITS = 128
 MAX_OUTPUT_GENERATORS = 64
 MAX_OUTPUT_TERMS = 1024
@@ -205,7 +205,12 @@ class IdealQuotientRequest(StrictModel):
 
 
 IdealExecutionOutcome = Literal[
-    "COMPUTED", "UNAVAILABLE", "TIMEOUT", "LIMIT_EXCEEDED", "ERROR"
+    "COMPUTED",
+    "UNAVAILABLE",
+    "TIMEOUT",
+    "CANCELLED",
+    "LIMIT_EXCEEDED",
+    "ERROR",
 ]
 
 

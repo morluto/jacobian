@@ -1,3 +1,5 @@
-"""Domain operation ownership."""
+"""Canonical values for exact linear-code operations."""
 
-__all__: list[str] = []
+from jacobian.math.code_linear.values import PrimeFieldLinearEncoder
+
+__all__ = ["PrimeFieldLinearEncoder"]

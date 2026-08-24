@@ -14,8 +14,13 @@ from jacobian._exact import (
 )
 from jacobian._models import StrictModel
 from jacobian.canonical import parse_canonical_integer
+from jacobian.math.real_quadratic import RealQuadraticValue
 
 MAX_MATRIX_DIMENSION = 32
+# The canonical dense rational matrix retains exact sources for analysis
+# results whose operations admit them by their own work and result budgets,
+# so its structural order is not tied to the shared computation dimension.
+MAX_RATIONAL_MATRIX_ORDER = 50
 MAX_MATRIX_SCALAR_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
 
 
@@ -43,14 +48,17 @@ class RationalMatrix(StrictModel):
     domain: Literal["QQ"] = "QQ"
     entries: tuple[tuple[CanonicalRational, ...], ...] = Field(
         min_length=1,
-        max_length=MAX_MATRIX_DIMENSION,
+        max_length=MAX_RATIONAL_MATRIX_ORDER,
     )
 
     @model_validator(mode="after")
     def require_rectangular_nonempty_rows(self) -> Self:
         column_count = len(self.entries[0])
-        if column_count == 0 or column_count > MAX_MATRIX_DIMENSION:
-            raise ValueError("matrix rows must contain between 1 and 32 entries")
+        if column_count == 0 or column_count > MAX_RATIONAL_MATRIX_ORDER:
+            raise ValueError(
+                "matrix rows must contain between 1 and "
+                f"{MAX_RATIONAL_MATRIX_ORDER} entries"
+            )
         if any(len(row) != column_count for row in self.entries):
             raise ValueError("matrix rows must all have the same length")
         require_matrix_scalar_digits(
@@ -58,6 +66,35 @@ class RationalMatrix(StrictModel):
             maximum=MAX_MATRIX_SCALAR_DIGITS,
             label="matrix",
         )
+        return self
+
+
+class RealQuadraticMatrix(StrictModel):
+    """One nonempty rectangular matrix over a shared real quadratic field."""
+
+    matrix_schema_version: Literal["1"] = "1"
+    domain: Literal["QQ_SQRT_D"] = "QQ_SQRT_D"
+    entries: tuple[tuple[RealQuadraticValue, ...], ...] = Field(
+        min_length=1,
+        max_length=MAX_MATRIX_DIMENSION,
+        description=(
+            "Nonempty rectangular rows of a+b*sqrt(d) values. Every entry "
+            "must carry the same square-free positive radicand d."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_rectangular_shared_field(self) -> Self:
+        column_count = len(self.entries[0])
+        if column_count == 0 or column_count > MAX_MATRIX_DIMENSION:
+            raise ValueError("matrix rows must contain between 1 and 32 entries")
+        if any(len(row) != column_count for row in self.entries):
+            raise ValueError("matrix rows must all have the same length")
+        radicand = self.entries[0][0].radicand
+        if any(entry.radicand != radicand for row in self.entries for entry in row):
+            raise ValueError(
+                "every matrix entry must belong to one shared real quadratic field"
+            )
         return self
 
 
@@ -140,8 +177,10 @@ class SmithNormalForm(StrictModel):
 __all__ = [
     "MAX_MATRIX_DIMENSION",
     "MAX_MATRIX_SCALAR_DIGITS",
+    "MAX_RATIONAL_MATRIX_ORDER",
     "IntegerMatrix",
     "RationalMatrix",
+    "RealQuadraticMatrix",
     "SmithNormalForm",
     "require_matrix_scalar_digits",
 ]

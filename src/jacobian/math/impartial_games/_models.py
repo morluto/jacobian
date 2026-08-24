@@ -4,22 +4,31 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictBool, StrictInt, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.canonical import encode_strict_json
 from jacobian.math.impartial_games.operations import (
+    _nim_option_plan,
     birthdays,
     grundy_table,
+    nim_options,
+    nim_sum,
     subtraction_grundy_prefix,
 )
 from jacobian.math.impartial_games.values import (
     MAX_HEAP_BOUND,
     MAX_HEAP_SIZE,
     MAX_HEAPS,
+    MAX_NIM_DISTINCT_OPTIONS,
+    MAX_NIM_OPTION_RESULT_BYTES,
+    MAX_NIM_RAW_CANDIDATES,
     MAX_POSITIONS,
     MAX_SUBTRACTION_VALUE,
     MAX_SUBTRACTION_WORK,
     ImpartialGame,
+    NimOption,
+    NimPosition,
 )
 
 MAX_COMPONENT_GRUNDY = MAX_POSITIONS - 1
@@ -140,6 +149,8 @@ __all__ = [
     "GrundyEntry",
     "GrundyTableRequest",
     "GrundyTableResult",
+    "NimOptionsRequest",
+    "NimOptionsResult",
     "SubtractionGrundyPrefixRequest",
     "SubtractionGrundyPrefixResult",
 ]
@@ -151,25 +162,83 @@ __all__ = [
 
 
 class NimSumRequest(StrictModel):
-    """A finite Nim position: a bounded list of nonnegative heap sizes."""
+    """One canonical finite normal-play Nim position."""
 
-    heaps: tuple[int, ...] = Field(min_length=0, max_length=MAX_HEAPS)
+    position: NimPosition
+
+
+class NimSumResult(NimSumRequest):
+    """The exact bitwise xor bound to its canonical source position."""
+
+    nim_sum: StrictInt = Field(ge=0, le=(1 << MAX_HEAP_SIZE.bit_length()) - 1)
+    is_p_position: StrictBool
 
     @model_validator(mode="after")
-    def require_bounded_heaps(self) -> Self:
-        if any(heap < 0 for heap in self.heaps):
-            raise ValueError("heap sizes must be nonnegative")
-        if any(heap > MAX_HEAP_SIZE for heap in self.heaps):
-            raise ValueError(f"heap sizes must be at most {MAX_HEAP_SIZE}")
+    def bind_exact_nim_sum(self) -> Self:
+        expected = nim_sum(self.position)
+        if self.nim_sum != expected:
+            raise ValueError("nim_sum must be the exact xor of the source position")
+        if self.is_p_position != (expected == 0):
+            raise ValueError("is_p_position must report whether the exact xor is zero")
         return self
 
 
-class NimSumResult(StrictModel):
-    """The exact nim sum (bitwise xor) of a Nim position."""
+class NimOptionsRequest(StrictModel):
+    """Enumerate the complete distinct option family of one Nim multiset."""
 
-    nim_sum: int = Field(ge=0)
-    is_p_position: bool
-    heaps: tuple[int, ...]
+    position: NimPosition = Field(
+        description=(
+            "Canonical sorted heap multiset whose one-move option family is requested."
+        )
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_complete_family(self) -> Self:
+        _nim_option_plan(self.position)
+        return self
+
+
+class NimOptionsResult(NimOptionsRequest):
+    """Every distinct legal one-heap reduction, in option-position order."""
+
+    options: tuple[NimOption, ...] = Field(
+        max_length=MAX_NIM_DISTINCT_OPTIONS,
+        description="Distinct resulting positions in lexicographic heap order.",
+    )
+    raw_candidate_count: int = Field(
+        ge=0,
+        le=MAX_NIM_RAW_CANDIDATES,
+        description=(
+            "Number of indexed (source heap, replacement size) moves before "
+            "canonical multiset deduplication."
+        ),
+    )
+    distinct_option_count: int = Field(
+        ge=0,
+        le=MAX_NIM_DISTINCT_OPTIONS,
+        description="Number of distinct canonical resulting positions.",
+    )
+    complete: Literal[True] = True
+
+    @model_validator(mode="after")
+    def bind_complete_option_family(self) -> Self:
+        expected = nim_options(self.position)
+        plan = _nim_option_plan(self.position)
+        if (
+            self.options != expected
+            or self.raw_candidate_count != plan.raw_candidate_count
+            or self.distinct_option_count != plan.distinct_option_count
+        ):
+            raise ValueError("result must be the exact complete Nim option family")
+        actual_bytes = len(encode_strict_json(self.model_dump(mode="json")))
+        if (
+            actual_bytes != plan.serialized_result_bytes
+            or actual_bytes > MAX_NIM_OPTION_RESULT_BYTES
+        ):
+            raise ValueError(
+                "serialized result must match the request-time Nim option bound"
+            )
+        return self
 
 
 class OutcomeProfileRequest(StrictModel):

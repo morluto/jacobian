@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+import threading
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,7 @@ from jacobian.math.polynomials.values import (
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
+from jacobian.process import bounded_process_cancellation
 
 
 def _ideal() -> RationalPolynomialIdeal:
@@ -51,7 +53,7 @@ def _executable(tmp_path: Path, body: str) -> str:
 
 def _select_executable(monkeypatch: pytest.MonkeyPatch, executable: str) -> None:
     monkeypatch.setattr(
-        "jacobian.math.commutative_algebra_ops._singular.shutil.which",
+        "jacobian.math._singular.shutil.which",
         lambda name: executable if name == "Singular" else None,
     )
 
@@ -72,11 +74,32 @@ def test_timeout_is_not_reported_as_a_mathematical_result(
     assert result.ideal is None
 
 
+def test_cancellation_is_preserved_as_its_own_outcome(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = _executable(tmp_path, "import time; time.sleep(30)")
+    _select_executable(monkeypatch, executable)
+    cancellation = threading.Event()
+    cancellation.set()
+
+    with bounded_process_cancellation(cancellation):
+        result = run_singular_ideal_operation(
+            "radical",
+            _ideal(),
+            None,
+            IdealComputationBudget(),
+        )
+
+    assert result.outcome == "CANCELLED"
+    assert result.ideal is None
+
+
 def test_missing_backend_is_a_typed_unavailable_outcome(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "jacobian.math.commutative_algebra_ops._singular.shutil.which",
+        "jacobian.math._singular.shutil.which",
         lambda name: None,
     )
 
@@ -107,7 +130,7 @@ def test_temporary_directory_failure_is_a_typed_unavailable_outcome(
         raise OSError("temporary storage unavailable")
 
     monkeypatch.setattr(
-        "jacobian.math.commutative_algebra_ops._singular.tempfile.TemporaryDirectory",
+        "jacobian.math._singular.tempfile.TemporaryDirectory",
         unavailable_directory,
     )
 
@@ -146,7 +169,7 @@ def test_relative_prlimit_path_is_resolved_before_entering_worker_directory(
     executable = Path(_executable(tmp_path, 'print("not the protocol")'))
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "jacobian.math.commutative_algebra_ops._singular.shutil.which",
+        "jacobian.math._singular.shutil.which",
         lambda name: executable.name if name in {"Singular", "prlimit"} else None,
     )
 
@@ -193,7 +216,7 @@ def test_malformed_success_output_is_a_typed_execution_error(
     )
 
 
-def test_unsupported_backend_version_is_a_typed_execution_error(
+def test_unsupported_backend_version_is_typed_unavailability(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -212,11 +235,50 @@ def test_unsupported_backend_version_is_a_typed_execution_error(
         IdealComputationBudget(),
     )
 
-    assert result.outcome == "ERROR"
+    assert result.outcome == "UNAVAILABLE"
     assert result.ideal is None
-    assert (
-        result.detail == "Singular returned an invalid or unsupported result encoding."
+    assert result.detail == "The installed Singular release is unsupported."
+
+
+def test_invocation_is_hermetic_and_version_precedes_algebra(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    records = (
+        "JACOBIAN_SINGULAR_IDEAL_V1",
+        "44105",
+        "1",
+        "GENERATOR",
+        "1|2",
+        "END_GENERATOR",
+        "END",
     )
+    body = (
+        "import sys\n"
+        "required={'-q','-t','--no-rc','--no-shell','--no-stdlib'}\n"
+        "if not required.issubset(sys.argv): raise SystemExit(7)\n"
+        f"print({chr(10).join(records)!r})"
+    )
+    executable = _executable(tmp_path, body)
+    _select_executable(monkeypatch, executable)
+
+    result = run_singular_ideal_operation(
+        "radical",
+        _ideal(),
+        None,
+        IdealComputationBudget(),
+    )
+
+    assert result.outcome == "COMPUTED"
+    source = (
+        __import__(
+            "jacobian.math.commutative_algebra_ops._singular",
+            fromlist=["_script"],
+        )
+        ._script("radical", _ideal(), None)
+        .decode("ascii")
+    )
+    assert source.index('system("version")') < source.index('LIB "primdec.lib"')
 
 
 def test_exact_result_limit_is_not_reported_as_invalid_backend_encoding(
@@ -300,7 +362,7 @@ def test_request_scoped_directory_is_removed_after_execution(
             return directory
 
     monkeypatch.setattr(
-        "jacobian.math.commutative_algebra_ops._singular.tempfile.TemporaryDirectory",
+        "jacobian.math._singular.tempfile.TemporaryDirectory",
         RecordingTemporaryDirectory,
     )
 

@@ -11,6 +11,7 @@ from jacobian._models import StrictModel
 from jacobian.math.matrices.values import (
     MAX_MATRIX_DIMENSION,
     MAX_MATRIX_SCALAR_DIGITS,
+    MAX_RATIONAL_MATRIX_ORDER,
     IntegerMatrix,
     RationalMatrix,
     require_matrix_scalar_digits,
@@ -25,6 +26,16 @@ DeterminantRow = Annotated[
 ]
 
 
+def _require_computation_dimensions(
+    entries: tuple[tuple[CanonicalRational, ...], ...],
+) -> None:
+    if len(entries) > MAX_MATRIX_DIMENSION or len(entries[0]) > MAX_MATRIX_DIMENSION:
+        raise ValueError(
+            "matrix computation dimensions are limited to "
+            f"{MAX_MATRIX_DIMENSION} rows and columns"
+        )
+
+
 def _check_integer_digits(
     value: str, *, maximum: int = MAX_INPUT_SCALAR_DIGITS
 ) -> None:
@@ -32,11 +43,33 @@ def _check_integer_digits(
         raise ValueError(f"matrix scalars are limited to {maximum} decimal digits")
 
 
+def _require_square_system_admission(
+    matrix: RationalMatrix, rhs: tuple[CanonicalRational, ...]
+) -> None:
+    """Apply the linear-solve shape and scalar envelope to one system.
+
+    Shared by the wire request and by result validation, so a retained
+    source can never reach replay arithmetic outside this operation's
+    admitted work envelope.
+    """
+
+    rows = len(matrix.entries)
+    if len(matrix.entries[0]) != rows or len(rhs) != rows:
+        raise ValueError("linear solve requires a square matrix and matching rhs")
+    require_matrix_scalar_digits(
+        matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
+    )
+    for value in rhs:
+        _check_integer_digits(value.num)
+        _check_integer_digits(value.den)
+
+
 class RationalMatrixRequest(StrictModel):
     matrix: RationalMatrix
 
     @model_validator(mode="after")
     def require_rref_input_budget(self) -> Self:
+        _require_computation_dimensions(self.matrix.entries)
         require_matrix_scalar_digits(
             self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
         )
@@ -56,6 +89,8 @@ class RationalMatrixProductRequest(StrictModel):
                 "matrix multiplication requires the left column count to equal "
                 "the right row count"
             )
+        _require_computation_dimensions(self.left.entries)
+        _require_computation_dimensions(self.right.entries)
         require_matrix_scalar_digits(
             self.left.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
         )
@@ -72,6 +107,7 @@ class SquareRationalMatrixRequest(StrictModel):
     def require_square(self) -> Self:
         if len(self.matrix.entries) != len(self.matrix.entries[0]):
             raise ValueError("characteristic polynomial requires a square matrix")
+        _require_computation_dimensions(self.matrix.entries)
         require_matrix_scalar_digits(
             self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
         )
@@ -123,6 +159,7 @@ class MatrixRankRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_input_budget(self) -> Self:
+        _require_computation_dimensions(self.matrix.entries)
         require_matrix_scalar_digits(
             self.matrix.entries,
             maximum=MAX_INPUT_SCALAR_DIGITS,
@@ -185,24 +222,52 @@ class RationalLinearSolveRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_square_system(self) -> Self:
-        rows = len(self.matrix.entries)
-        if len(self.matrix.entries[0]) != rows or len(self.rhs) != rows:
-            raise ValueError("linear solve requires a square matrix and matching rhs")
-        require_matrix_scalar_digits(
-            self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
-        )
-        for value in self.rhs:
-            _check_integer_digits(value.num)
-            _check_integer_digits(value.den)
+        _require_square_system_admission(self.matrix, self.rhs)
         return self
 
 
 class RrefResult(StrictModel):
+    """The unique reduced row echelon form bound to its source matrix.
+
+    Retains the source matrix so validation replays the defining relation:
+    the claimed form is the unique RREF over QQ of the retained source, the
+    rank equals the pivot count, and the pivot and free columns partition the
+    source column axis.  The rational matrix domain admits at least one row
+    and column, so zero-row shapes are rejected by request admission rather
+    than silently dropped.
+    """
+
+    matrix: RationalMatrix
     reduced_matrix: RationalMatrix
     rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
     pivot_columns: tuple[int, ...] = Field(max_length=MAX_MATRIX_DIMENSION)
     free_columns: tuple[int, ...] = Field(max_length=MAX_MATRIX_DIMENSION)
     convention: Literal["UNIQUE_RREF_OVER_QQ"] = "UNIQUE_RREF_OVER_QQ"
+
+    @model_validator(mode="after")
+    def require_source_bound(self) -> Self:
+        column_count = len(self.matrix.entries[0])
+        if (
+            len(self.reduced_matrix.entries) != len(self.matrix.entries)
+            or len(self.reduced_matrix.entries[0]) != column_count
+        ):
+            raise ValueError("reduced matrix must have the source shape")
+        if self.rank != len(self.pivot_columns):
+            raise ValueError("rank must equal the pivot column count")
+        if sorted((*self.pivot_columns, *self.free_columns)) != list(
+            range(column_count)
+        ):
+            raise ValueError("pivot and free columns must partition the source columns")
+        from jacobian.math.matrices import _conversions as conversions
+        from jacobian.math.matrices._operations import _rref_replay
+
+        expected_reduced, pivots = _rref_replay(self.matrix)
+        if tuple(int(pivot) for pivot in pivots) != self.pivot_columns or (
+            conversions.rational_matrix_to_sympy(self.reduced_matrix)
+            != expected_reduced
+        ):
+            raise ValueError("reduced matrix must be the unique RREF of the source")
+        return self
 
 
 class MatrixDeterminantResult(StrictModel):
@@ -213,14 +278,38 @@ class MatrixDeterminantResult(StrictModel):
 
 
 class MatrixRankResult(StrictModel):
-    """One exact rank with the canonical RREF pivot columns."""
+    """One exact rank with the canonical RREF pivot columns, bound to its source."""
 
+    matrix: RationalMatrix
     rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
     pivot_columns: tuple[int, ...] = Field(max_length=MAX_MATRIX_DIMENSION)
     method: Literal["EXACT_RATIONAL_ROW_REDUCTION"] = "EXACT_RATIONAL_ROW_REDUCTION"
 
+    @model_validator(mode="after")
+    def require_source_bound(self) -> Self:
+        if self.rank != len(self.pivot_columns):
+            raise ValueError("rank must equal the pivot column count")
+        from jacobian.math.matrices._operations import _rank_replay
+
+        expected_rank, pivots = _rank_replay(self.matrix)
+        if expected_rank != self.rank or tuple(int(p) for p in pivots) != (
+            self.pivot_columns
+        ):
+            raise ValueError("rank and pivot columns must replay against the source")
+        return self
+
 
 class NullspaceResult(StrictModel):
+    """The RREF fundamental nullspace basis bound to its source matrix.
+
+    Retains the source matrix so validation replays the defining relations:
+    every basis vector satisfies ``A v = 0`` exactly, each vector carries a
+    one in its own free column and zeros in the other free columns (which
+    also establishes independence), and the claimed rank equals the exact
+    rank of the retained source.
+    """
+
+    matrix: RationalMatrix
     ambient_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
     rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
     nullity: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
@@ -232,14 +321,43 @@ class NullspaceResult(StrictModel):
 
     @model_validator(mode="after")
     def require_basis_shape(self) -> Self:
+        if self.ambient_dimension != len(self.matrix.entries[0]):
+            raise ValueError("ambient dimension must equal the source column count")
         if self.rank + self.nullity != self.ambient_dimension:
             raise ValueError("rank plus nullity must equal the ambient dimension")
         if len(self.basis_vectors) != self.nullity:
             raise ValueError("basis vector count must equal nullity")
         if any(len(vector) != self.ambient_dimension for vector in self.basis_vectors):
             raise ValueError("each basis vector must have the ambient dimension")
-        if len(self.free_columns) != self.nullity:
-            raise ValueError("free column count must equal nullity")
+        if len(self.free_columns) != self.nullity or self.free_columns != tuple(
+            sorted(self.free_columns)
+        ):
+            raise ValueError("free column count must equal nullity in ascending order")
+
+        entries = [
+            [value.as_fraction() for value in row] for row in self.matrix.entries
+        ]
+        for index, vector in enumerate(self.basis_vectors):
+            components = [value.as_fraction() for value in vector]
+            for row in entries:
+                if sum(a * b for a, b in zip(row, components, strict=True)) != 0:
+                    raise ValueError(
+                        f"basis vector {index} does not satisfy A v = 0 exactly"
+                    )
+            own = self.free_columns[index]
+            if components[own] != 1 or any(
+                components[other] != 0 for other in self.free_columns if other != own
+            ):
+                raise ValueError(
+                    f"basis vector {index} is not the fundamental basis vector "
+                    "of its free column"
+                )
+
+        from jacobian.math.matrices._operations import _rank_replay
+
+        expected_rank, _pivots = _rank_replay(self.matrix)
+        if expected_rank != self.rank:
+            raise ValueError("claimed rank must equal the exact rank of the source")
         return self
 
 
@@ -297,14 +415,27 @@ class MatrixProductResult(StrictModel):
 
 
 class RationalLinearSolveResult(StrictModel):
-    """Result of solving a linear system Ax=b over QQ.
+    """One square-system classification over QQ, bound to its source system.
 
-    The outcome discriminates between:
-    - UNIQUE: the system has a unique solution (solution field is populated)
-    - INCONSISTENT: the system has no solution
-    - NON_UNIQUE: the system has infinitely many solutions (non-unique)
+    Retains the coefficient matrix and right-hand side so validation replays
+    the classification with the same exact kernel: a unique solution carries
+    one coordinate per column, satisfies ``A x = b`` exactly, and requires
+    the retained coefficient matrix to be nonsingular; an inconsistent
+    outcome requires ``rank(A) < rank([A | b])`` on the retained system; a
+    non-unique outcome requires a consistent, rank-deficient retained system.
+    Validation first reapplies the request's squareness and scalar envelope
+    to the retained source, so deserializing a relayed payload can never push
+    replay arithmetic outside this operation's admitted work envelope.
+    The rational matrix domain admits at least one row and column, so
+    zero-row shapes are rejected by request admission rather than silently
+    dropped.
     """
 
+    matrix: RationalMatrix
+    rhs: tuple[CanonicalRational, ...] = Field(
+        min_length=1,
+        max_length=MAX_MATRIX_DIMENSION,
+    )
     outcome: Literal["UNIQUE", "INCONSISTENT", "NON_UNIQUE"]
     solution: tuple[CanonicalRational, ...] | None = Field(
         default=None,
@@ -316,14 +447,52 @@ class RationalLinearSolveResult(StrictModel):
     )
 
     @model_validator(mode="after")
-    def require_outcome_solution_consistency(self) -> Self:
+    def require_source_bound_classification(self) -> Self:
+        solution = self.solution
         if self.outcome == "UNIQUE":
-            if self.solution is None:
+            if solution is None:
                 raise ValueError("a unique solution must populate the solution field")
-        else:
-            if self.solution is not None:
+        elif solution is not None:
+            raise ValueError(
+                "a non-unique or inconsistent result must not populate the solution field"
+            )
+        # Deserialized source components pass the canonical rational domain
+        # but not this operation's work envelope, so reapply request
+        # admission before any exact replay arithmetic runs.
+        _require_square_system_admission(self.matrix, self.rhs)
+        if len(self.rhs) != len(self.matrix.entries):
+            raise ValueError("right-hand side length must equal the source row count")
+
+        from jacobian.math.matrices._operations import _system_rank_replay
+
+        coefficient_rank, augmented_rank = _system_rank_replay(self.matrix, self.rhs)
+        columns = len(self.matrix.entries[0])
+        if solution is not None:
+            components = [value.as_fraction() for value in solution]
+            if len(components) != columns:
+                raise ValueError("solution length must equal the source column count")
+            for row, bound in zip(self.matrix.entries, self.rhs, strict=True):
+                residual = sum(
+                    coefficient.as_fraction() * component
+                    for coefficient, component in zip(row, components, strict=True)
+                )
+                if residual != bound.as_fraction():
+                    raise ValueError("solution does not satisfy A x = b exactly")
+            if coefficient_rank != columns:
                 raise ValueError(
-                    "a non-unique or inconsistent result must not populate the solution field"
+                    "a unique outcome requires a nonsingular source coefficient matrix"
+                )
+        elif self.outcome == "INCONSISTENT":
+            if coefficient_rank >= augmented_rank:
+                raise ValueError(
+                    "an inconsistent outcome requires rank(A) < rank([A | b]) "
+                    "on the source system"
+                )
+        else:
+            if coefficient_rank == columns or coefficient_rank != augmented_rank:
+                raise ValueError(
+                    "a non-unique outcome requires a consistent, rank-deficient "
+                    "source system"
                 )
         return self
 
@@ -348,6 +517,17 @@ class MatrixKroneckerProductRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_input_budget(self) -> Self:
+        _require_computation_dimensions(self.left.entries)
+        _require_computation_dimensions(self.right.entries)
+        if len(self.left.entries) * len(self.right.entries) > (
+            MAX_RATIONAL_MATRIX_ORDER
+        ) or len(self.left.entries[0]) * len(self.right.entries[0]) > (
+            MAX_RATIONAL_MATRIX_ORDER
+        ):
+            raise ValueError(
+                "kronecker products must fit within "
+                f"{MAX_RATIONAL_MATRIX_ORDER} rows and columns"
+            )
         require_matrix_scalar_digits(
             self.left.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
         )
@@ -402,6 +582,7 @@ class MatrixPartialTraceRequest(StrictModel):
             raise ValueError(
                 "composite matrix must be square: traced_dimension * kept_dimension"
             )
+        _require_computation_dimensions(self.matrix.entries)
         require_matrix_scalar_digits(
             self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
         )

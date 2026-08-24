@@ -11,11 +11,35 @@ from jacobian.math.arithmetic_counting._models import (
 )
 
 
+def _floor_sum_euclidean(n: int, m: int, a: int, b: int) -> int:
+    """Exact ``sum_{i=0}^{n-1} floor((a*i + b) / m)`` by Euclidean-like halving.
+
+    Standard identity (AtCoder Library ``floor_sum``): reduce a >= m and
+    b >= m with closed-form quotient sums, then recurse on the shrunk pair
+    ``(m mod a-style swap)``.  Each iteration at least halves the larger of
+    ``(a, m)``, so the work is O(log m * log(a/m))-ish — logarithmic in the
+    parameters and independent of ``n``.
+    """
+
+    answer = 0
+    while True:
+        if a >= m:
+            answer += (n - 1) * n // 2 * (a // m)
+            a %= m
+        if b >= m:
+            answer += n * (b // m)
+            b %= m
+        y_max = a * n + b
+        if y_max < m:
+            return answer
+        n = y_max // m
+        b = y_max % m
+        m, a = a, m
+
+
 def compute_floor_sum(request: FloorSumRequest) -> FloorSumResult:
     """Compute sum_{i=0}^{n-1} floor((a*i + b) / m) exactly."""
-    total = 0
-    for index in range(request.n):
-        total += (request.a * index + request.b) // request.m
+    total = _floor_sum_euclidean(request.n, request.m, request.a, request.b)
     return FloorSumResult(value=format_canonical_integer(total))
 
 

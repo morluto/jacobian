@@ -9,7 +9,7 @@ from pydantic import Field, model_validator
 from jacobian._models import StrictModel
 
 MAX_DOMAIN_SIZE = 50
-MAX_GROUP_ORDER = 720
+MAX_GROUP_ORDER = 10000
 MAX_LABEL_LENGTH = 64
 MAX_COLORS = 50
 MAX_TERMS = 5000

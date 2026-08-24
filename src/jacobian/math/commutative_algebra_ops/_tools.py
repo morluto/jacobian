@@ -7,6 +7,12 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.commutative_algebra_ops._models import (
+    EliminationIdealRequest,
+    EliminationIdealResult,
+    GroebnerBasisRequest,
+    GroebnerBasisResult,
+    IdealNormalFormRequest,
+    IdealNormalFormResult,
     IdealQuotientRequest,
     IdealQuotientResult,
     IdealRadicalMembershipRequest,
@@ -17,6 +23,9 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealSaturationResult,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
+    compute_elimination_ideal,
+    compute_groebner_basis,
+    compute_ideal_normal_form,
     compute_ideal_quotient,
     compute_ideal_radical,
     compute_ideal_radical_membership,
@@ -38,7 +47,9 @@ def _polynomial(
                     "coefficient": {"num": str(numerator), "den": str(denominator)},
                     "exponents": list(exponents),
                 }
-                for numerator, denominator, exponents in terms
+                for numerator, denominator, exponents in sorted(
+                    terms, key=lambda term: term[2], reverse=True
+                )
             ]
         },
     }
@@ -187,6 +198,94 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         ("x", "y"),
                         ((1, 1, (1, 0)),),
                     ),
+                },
+            ),
+        ),
+    ),
+    _op(
+        "polynomial.ideal.groebner_basis.compute",
+        "Compute a reduced Groebner basis over QQ",
+        "Compute a reduced Groewski basis for a bounded ideal in QQ[x_1, "
+        "x_2, ..., x_n] using SymPy's exact groebner function. Returns the "
+        "basis as a RationalPolynomialIdeal with the declared monomial order.",
+        GroebnerBasisRequest,
+        GroebnerBasisResult,
+        compute_groebner_basis,
+        "commutative-algebra",
+        "groebner-basis",
+        "exact",
+        examples=(
+            example(
+                "groebner_basis_xy",
+                "Compute the Groebner basis of <x^2 - y, x*y - 1> in Q[x,y].",
+                {
+                    "ideal": _ideal(
+                        ("x", "y"),
+                        ((1, 1, (2, 0)), (-1, 1, (0, 1))),
+                        ((1, 1, (1, 1)), (-1, 1, (0, 0))),
+                    ),
+                    "monomial_order": "grevlex",
+                },
+            ),
+        ),
+    ),
+    _op(
+        "polynomial.ideal.normal_form.compute",
+        "Reduce a polynomial modulo an ideal",
+        "Reduce one bounded polynomial modulo a bounded ideal in QQ[x_1, "
+        "x_2, ..., x_n] using a Groebner basis remainder. Returns the exact "
+        "remainder and whether the polynomial is in the ideal; a computation "
+        "that exceeds the enforced wall-time bound returns a typed TIMEOUT "
+        "outcome instead of a remainder.",
+        IdealNormalFormRequest,
+        IdealNormalFormResult,
+        compute_ideal_normal_form,
+        "commutative-algebra",
+        "normal-form",
+        "ideal-membership",
+        "exact",
+        examples=(
+            example(
+                "normal_form_xy",
+                "Reduce x^2 modulo <x^2 - y^2> in Q[x,y]; the remainder is y^2, so x^2 is not in the ideal.",
+                {
+                    "ideal": _ideal(
+                        ("x", "y"),
+                        ((1, 1, (2, 0)), (-1, 1, (0, 2))),
+                    ),
+                    "polynomial": _polynomial(
+                        ("x", "y"),
+                        ((1, 1, (2, 0)),),
+                    ),
+                },
+            ),
+        ),
+    ),
+    _op(
+        "polynomial.ideal.elimination.compute",
+        "Compute an elimination ideal",
+        "Compute the elimination ideal I ∩ QQ[remaining variables] by "
+        "computing a lex Groebner basis and extracting the generators that "
+        "involve only the remaining variables. A computation that exceeds the "
+        "enforced wall-time budget returns a typed TIMEOUT outcome instead of "
+        "an ideal.",
+        EliminationIdealRequest,
+        EliminationIdealResult,
+        compute_elimination_ideal,
+        "commutative-algebra",
+        "elimination-ideal",
+        "exact",
+        examples=(
+            example(
+                "elimination_xy",
+                "Compute <x^2 - y^2, x + y> ∩ Q[y] in Q[x,y]; eliminates x.",
+                {
+                    "ideal": _ideal(
+                        ("x", "y"),
+                        ((1, 1, (2, 0)), (-1, 1, (0, 2))),
+                        ((1, 1, (1, 0)), (1, 1, (0, 1))),
+                    ),
+                    "eliminated_variables": ["x"],
                 },
             ),
         ),

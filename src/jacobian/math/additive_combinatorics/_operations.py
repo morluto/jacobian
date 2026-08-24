@@ -21,12 +21,15 @@ from jacobian.math.additive_combinatorics._models import (
     RepresentationProfileEntry,
     RepresentationProfileRequest,
     RepresentationProfileResult,
+    SubsetSumProfileRequest,
     SumsetCardinalityRequest,
     SumsetCardinalityResult,
     _multiset_sum_source_values,
     _vector_from_ints,
 )
 from jacobian.math.additive_combinatorics._multiset_sum import count_sums
+from jacobian.math.additive_combinatorics.operations import subset_sum_profile
+from jacobian.math.additive_combinatorics.values import SubsetSumProfile
 
 
 def _parse_set(spec: FiniteIntegerSet) -> frozenset[int]:
@@ -94,6 +97,14 @@ def compute_multiset_sum_representation_profile(
         window=request.window,
         entries=entries,
     )
+
+
+def compute_subset_sum_profile(
+    request: SubsetSumProfileRequest,
+) -> SubsetSumProfile:
+    """Compute the complete exact indexed-subset sum profile."""
+
+    return subset_sum_profile(request.source)
 
 
 def compute_additive_energy(
@@ -188,6 +199,7 @@ __all__ = [
     "compute_multiset_sum_representation_profile",
     "compute_ordered_difference_profile",
     "compute_representation_profile",
+    "compute_subset_sum_profile",
     "compute_sumset_cardinality",
     "decide_direct_sum_predicate",
 ]

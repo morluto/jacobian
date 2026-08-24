@@ -528,6 +528,30 @@ def _shift_weights(
     return weights
 
 
+def _falling_factorial_product(
+    exponents: tuple[int, ...],
+    orders: tuple[int, ...],
+    cap_bits: int,
+    work: list[int],
+) -> int | None:
+    """Exact falling-factorial product for one shift on one monomial.
+
+    Returns ``None`` when the product itself crosses ``cap_bits`` or the
+    shared falling-factorial step budget is exhausted.
+    """
+
+    product = 1
+    for exponent, order in zip(exponents, orders, strict=True):
+        if not order:
+            continue
+        for factor in range(exponent - order + 1, exponent + 1):
+            product *= factor
+            work[0] += 1
+            if product.bit_length() > cap_bits or work[0] > ENUMERATION_WORK_CAP:
+                return None
+    return product
+
+
 def _per_exponent_height_bits(
     polynomial: RationalPolynomial,
     operator: ConstantCoefficientDifferentialOperator,
@@ -541,15 +565,19 @@ def _per_exponent_height_bits(
     no global operator LCM enters: contributions merge only when
     differentiated source monomials land on the same output exponent, and
     each class combines denominators through its own least common multiple.
-    Returns ``None`` when the accounting would exceed its enumeration or size
-    caps, in which case the caller falls back to the coarser global bound.
+    Falling factorials are measured exactly per contribution instead of
+    substituting exponent^order, which overestimates boundary cases such as
+    (8500)_8500 = 8500! by thousands of digits. Returns ``None`` when the
+    accounting or its falling-factorial work would exceed its caps, in which
+    case the caller falls back to the coarser global bound.
     """
 
-    cap = 64 * MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS
+    cap = _HEIGHT_CAP_BITS
+    falling_work = [0]
     weights = _shift_weights(operator, iterations, support_cap)
     if weights is None:
         return None
-    classes: dict[tuple[int, ...], tuple[int, int, int]] = {}
+    classes: dict[tuple[int, ...], tuple[int, int]] = {}
     for shift, weight in weights.items():
         if (
             abs(weight.numerator).bit_length() > cap
@@ -566,46 +594,41 @@ def _per_exponent_height_bits(
                 exponent - order
                 for exponent, order in zip(source_term.exponents, shift, strict=True)
             )
-            falling_bits = sum(
-                _multiplier_bit_bound(exponent, order)
-                for exponent, order in zip(source_term.exponents, shift, strict=True)
+            falling_product = _falling_factorial_product(
+                source_term.exponents, shift, cap, falling_work
             )
+            if falling_product is None:
+                # True growth provably crosses the height envelope; the coarse
+                # global estimate rejects this request soundly.
+                return None
             # The exact reduced contribution keeps cross-canceling factors -
             # e.g. an N weight against a 1/N coefficient - from inflating the
             # accounted heights.
             contribution = weight * source_term.coefficient.as_fraction()
             class_denominator = contribution.denominator
-            scaled_numerator = abs(contribution.numerator)
+            scaled_numerator = abs(contribution.numerator) * falling_product
             entry = classes.get(target)
             if entry is None:
                 if class_denominator.bit_length() > cap:
                     return None
-                classes[target] = (
-                    class_denominator,
-                    scaled_numerator,
-                    falling_bits,
-                )
+                classes[target] = (class_denominator, scaled_numerator)
                 continue
-            lcm, numerator_sum, max_falling = entry
+            lcm, numerator_sum = entry
             new_lcm = math.lcm(lcm, class_denominator)
-            scaled_existing = numerator_sum * (new_lcm // lcm)
-            scaled_new = scaled_numerator * (new_lcm // class_denominator)
-            total = scaled_existing + scaled_new
+            total = numerator_sum * (new_lcm // lcm) + scaled_numerator * (
+                new_lcm // class_denominator
+            )
             if new_lcm.bit_length() > cap or total.bit_length() > cap:
                 return None
-            classes[target] = (
-                new_lcm,
-                total,
-                max(max_falling, falling_bits),
-            )
-    worst_numerator_bits = 0
-    worst_denominator_bits = 0
-    for lcm, numerator_sum, max_falling in classes.values():
-        denominator_bits = lcm.bit_length()
-        numerator_bits = numerator_sum.bit_length() + max_falling
-        worst_numerator_bits = max(worst_numerator_bits, numerator_bits)
-        worst_denominator_bits = max(worst_denominator_bits, denominator_bits)
-    return worst_numerator_bits, worst_denominator_bits
+            classes[target] = (new_lcm, total)
+    worst_digits = 0
+    for lcm, numerator_sum in classes.values():
+        worst_digits = max(
+            worst_digits,
+            _height_decimal_digits(lcm.bit_length(), lcm),
+            _height_decimal_digits(numerator_sum.bit_length(), numerator_sum),
+        )
+    return worst_digits, 0
 
 
 def _coefficient_digit_bound(
@@ -628,10 +651,7 @@ def _coefficient_digit_bound(
         support_cap,
     )
     if per_exponent is not None:
-        return max(
-            _decimal_digits_from_bits(per_exponent[0]),
-            _decimal_digits_from_bits(per_exponent[1]),
-        )
+        return max(per_exponent[0], per_exponent[1])
 
     operator_height = _common_denominator_height(
         (term.coefficient.as_fraction() for term in operator.terms),

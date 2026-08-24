@@ -35,6 +35,7 @@ ROOT_MATH_DOMAINS = (
     "graphs",
     "greedoids",
     "impartial_games",
+    "integral_binary_quadratic_forms",
     "matrices",
     "numerical_semigroups",
     "petri_nets",

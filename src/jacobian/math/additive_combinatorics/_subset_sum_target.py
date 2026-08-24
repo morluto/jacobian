@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictBool, StringConstraints, model_validator
+from pydantic.json_schema import WithJsonSchema
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -17,6 +18,7 @@ from jacobian.math.additive_combinatorics._subset_sum_target_kernel import (
 from jacobian.math.additive_combinatorics.values import (
     IndexedIntegerSequence,
     IndexSubset,
+    indexed_sequence_item_ceiling,
 )
 
 MAX_SUBSET_SUM_INTEGER_DIGITS = 256
@@ -47,6 +49,23 @@ _SubsetSumTargetScalar = Annotated[
 The absolute digit ceiling is published as a JSON Schema ``pattern``, so
 schema-driven clients see the enforced domain; only a negative 262-digit
 value needs the extra sign character of ``maxLength``.
+"""
+
+_SubsetSumTargetSource = Annotated[
+    IndexedIntegerSequence,
+    WithJsonSchema(
+        indexed_sequence_item_ceiling(
+            MAX_SUBSET_SUM_TRANSITIONS_PER_PASS,
+            maximum_item_digits=MAX_SUBSET_SUM_INTEGER_DIGITS,
+        )
+    ),
+]
+"""The shared sequence narrowed to this operation's admitted source items.
+
+Request and result admission both reject any item wider than
+``MAX_SUBSET_SUM_INTEGER_DIGITS`` digits, so the published schema encodes
+that absolute per-item ceiling instead of the shared 32,768-digit envelope;
+validation itself stays with the canonical sequence value.
 """
 
 
@@ -165,7 +184,7 @@ def _require_admitted_work(
 class SubsetSumTargetRequest(StrictModel):
     """One bounded indexed integer sequence and exact target."""
 
-    source: IndexedIntegerSequence = Field(
+    source: _SubsetSumTargetSource = Field(
         description=(
             "The materialized indexed integers available for selection; "
             "request admission bounds this operation to at most "
@@ -243,7 +262,7 @@ class SubsetSumTargetRequest(StrictModel):
 class SubsetSumTargetResult(StrictModel):
     """An exact source-bound target decision with its canonical witness."""
 
-    source: IndexedIntegerSequence
+    source: _SubsetSumTargetSource
     target: _SubsetSumTargetScalar
     allow_empty_subset: StrictBool
     status: Literal["ATTAINED", "NOT_ATTAINED"] = Field(

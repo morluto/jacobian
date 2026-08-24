@@ -84,7 +84,11 @@ class IndexedIntegerSequence(StrictModel):
         return tuple(parse_canonical_integer(item) for item in self.items)
 
 
-def indexed_sequence_item_ceiling(maximum_items: int) -> dict[str, Any]:
+def indexed_sequence_item_ceiling(
+    maximum_items: int,
+    *,
+    maximum_item_digits: int | None = None,
+) -> dict[str, Any]:
     """Return the shared sequence definition tightened to ``maximum_items``.
 
     The canonical sequence value advertises the widest consumer envelope, so a
@@ -93,18 +97,34 @@ def indexed_sequence_item_ceiling(maximum_items: int) -> dict[str, Any]:
     attach the returned schema through ``WithJsonSchema`` so their own schema
     documents advertise exactly the item ceiling their validators enforce;
     validation itself stays with the canonical value.
+
+    ``maximum_item_digits`` additionally publishes a consumer-specific
+    per-item digit ceiling: the item ``pattern`` encodes the absolute digit
+    bound and ``maxLength`` keeps only its sign character, so schema-driven
+    clients never submit an item that request admission would reject.
     """
 
     schema: dict[str, Any] = IndexedIntegerSequence.model_json_schema()
     schema.pop("$defs", None)
     items_schema = schema["properties"]["items"]
     items_schema["maxItems"] = maximum_items
+    item_digits = (
+        MAX_SUBSET_SUM_ITEM_DIGITS
+        if maximum_item_digits is None
+        else maximum_item_digits
+    )
     items_schema["description"] = (
         f"An ordered tuple of at most {maximum_items:,} canonical integers. "
         "Repeated values and zeros remain distinct indexed items; each "
-        f"integer has at most {MAX_SUBSET_SUM_ITEM_DIGITS:,} decimal digits, "
+        f"integer has at most {item_digits:,} decimal digits, "
         "excluding its optional sign."
     )
+    if maximum_item_digits is not None:
+        raw_item_schema = items_schema["items"]
+        raw_item_schema["maxLength"] = maximum_item_digits + 1
+        raw_item_schema["pattern"] = (
+            rf"^(?:0|-?[1-9][0-9]{{0,{maximum_item_digits - 1}}})$"
+        )
     return schema
 
 

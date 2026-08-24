@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from itertools import permutations, product
 from typing import cast
 
@@ -18,6 +19,7 @@ from jacobian.math.additive_combinatorics._subset_sum_residue import (
 )
 from jacobian.math.additive_combinatorics._subset_sum_target import (
     MAX_SUBSET_SUM_COMPLETE_CALL_PASSES,
+    MAX_SUBSET_SUM_INTEGER_DIGITS,
     MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS,
     MAX_SUBSET_SUM_TOTAL_TRANSITIONS,
     MAX_SUBSET_SUM_TRANSITIONS_PER_PASS,
@@ -599,8 +601,46 @@ def test_schema_publishes_enforced_target_and_source_bounds() -> None:
         rf"^(?:0|-?[1-9][0-9]{{0,{MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS - 1}}})$"
     )
 
-    items_schema = schema["$defs"]["IndexedIntegerSequence"]["properties"]["items"]
+    items_schema = schema["properties"]["source"]["properties"]["items"]
     assert items_schema["maxItems"] == 500_000
+    description = items_schema["description"]
+    assert f"{MAX_SUBSET_SUM_INTEGER_DIGITS} decimal digits" in description
+    item_schema = items_schema["items"]
+    assert item_schema["maxLength"] == MAX_SUBSET_SUM_INTEGER_DIGITS + 1
+    assert item_schema["pattern"] == (
+        rf"^(?:0|-?[1-9][0-9]{{0,{MAX_SUBSET_SUM_INTEGER_DIGITS - 1}}})$"
+    )
+    assert "IndexedIntegerSequence" not in schema.get("$defs", {})
+
+    result_schema = SubsetSumTargetResult.model_json_schema()
+    result_item_schema = result_schema["properties"]["source"]["properties"]["items"][
+        "items"
+    ]
+    assert result_item_schema["maxLength"] == MAX_SUBSET_SUM_INTEGER_DIGITS + 1
+    assert result_item_schema["pattern"] == item_schema["pattern"]
+
+
+def test_published_item_pattern_matches_the_enforced_digit_boundary() -> None:
+    schema = SubsetSumTargetRequest.model_json_schema()
+    pattern = re.compile(
+        schema["properties"]["source"]["properties"]["items"]["items"]["pattern"]
+    )
+
+    at_ceiling = "9" * MAX_SUBSET_SUM_INTEGER_DIGITS
+    beyond = "1" + "0" * MAX_SUBSET_SUM_INTEGER_DIGITS
+    assert pattern.fullmatch(at_ceiling)
+    assert not pattern.fullmatch(beyond)
+
+    # The same 257-digit item the published pattern rejects is rejected by
+    # typed request validation with the enforced bound named.
+    with pytest.raises(ValidationError, match="256-digit"):
+        SubsetSumTargetRequest.model_validate(
+            {
+                "source": {"items": [beyond]},
+                "target": "0",
+                "allow_empty_subset": True,
+            }
+        )
 
 
 def test_target_scalar_pattern_encodes_the_absolute_digit_ceiling() -> None:

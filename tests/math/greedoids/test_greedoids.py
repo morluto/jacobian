@@ -258,6 +258,38 @@ class TestValidation:
         with pytest.raises(ValidationError, match="out of range"):
             FiniteFeasibleSetSystem(ground=("a", "b"), feasible=((0, 5),))
 
+    def test_every_request_bounds_ground_size(self) -> None:
+        # The carrier is structural only; each greedoid request owns the
+        # execution-envelope ceiling on ground cardinality.
+        system = FiniteFeasibleSetSystem(
+            ground=tuple(f"e{index}" for index in range(65)),
+            feasible=((),),
+        )
+        assert isinstance(system, FiniteFeasibleSetSystem)
+
+        builders = (
+            lambda s: RecognizeRequest(system=s),
+            lambda s: RankRequest(system=s),
+            lambda s: BasesRequest(system=s),
+            lambda s: BasicWordProfileRequest(system=s, word=(0,)),
+            lambda s: ConvexGeometryRequest(system=s),
+        )
+        for build in builders:
+            with pytest.raises(ValidationError, match="ground size"):
+                build(system)
+
+    def test_recognize_request_bounds_feasible_set_count(self) -> None:
+        feasible = []
+        for mask in range(1, 4098):
+            feasible.append(tuple(i for i in range(13) if (mask >> i) & 1))
+        system = FiniteFeasibleSetSystem(
+            ground=tuple(f"e{index}" for index in range(13)),
+            feasible=tuple(feasible),
+        )
+
+        with pytest.raises(ValidationError, match="feasible-set count"):
+            RecognizeRequest(system=system)
+
 
 # ---------------------------------------------------------------------------
 # Native helpers

@@ -126,36 +126,65 @@ def test_invalid_delta_matroid_value_is_rejected_at_its_value_boundary() -> None
         )
 
 
-def test_sparse_family_uses_the_full_shared_ground_carrier_bound() -> None:
+def test_sparse_family_beyond_any_fixed_ground_cap_is_recognized() -> None:
+    # Sixty-five short labels with only the empty feasible set carry zero
+    # memberships and zero exchange candidates, so every derived budget admits
+    # them; no fixed ground-size ceiling may exclude this valid delta-matroid.
     system = FiniteFeasibleSetSystem(
-        ground=tuple(f"e{index}" for index in range(64)),
+        ground=tuple(f"e{index}" for index in range(65)),
         feasible=((),),
     )
 
-    result = delta_matroids.from_feasible_sets(system)
-
-    assert result.status == "DELTA_MATROID"
-    assert result.delta_matroid == FiniteDeltaMatroid(
+    native_result = delta_matroids.from_feasible_sets(system)
+    assert native_result.status == "DELTA_MATROID"
+    assert native_result.delta_matroid == FiniteDeltaMatroid(
         ground=system.ground,
         feasible=((),),
     )
+
+    wire_result = compute_from_feasible_sets(
+        DeltaMatroidFromFeasibleSetsRequest(system=system)
+    )
+    assert wire_result == native_result
+    assert (
+        DeltaMatroidRecognitionResult.model_validate_json(wire_result.model_dump_json())
+        == wire_result
+    )
+
+
+def test_label_byte_budget_bounds_ground_count_without_a_fixed_cap() -> None:
+    # Ground labels must be unique, so the UTF-8 label-byte envelope itself
+    # bounds the element count: exactly 1,024 distinct two-byte labels fit,
+    # while a 1,025th exceeds the byte budget and names that quantity.
+    def _labels(count: int) -> tuple[str, ...]:
+        return tuple(
+            chr(33 + index // 32) + chr(33 + index % 32) for index in range(count)
+        )
+
+    admitted = FiniteFeasibleSetSystem(ground=_labels(1_024), feasible=((),))
+    result = delta_matroids.from_feasible_sets(admitted)
+    assert result.status == "DELTA_MATROID"
+    assert result.delta_matroid is not None
+    assert len(result.delta_matroid.ground) == 1_024
+
+    with pytest.raises(ValidationError, match="byte envelope"):
+        DeltaMatroidFromFeasibleSetsRequest(
+            system=FiniteFeasibleSetSystem(ground=_labels(1_025), feasible=((),))
+        )
 
 
 def test_request_schema_exposes_every_delta_specific_admission_limit() -> None:
     schema = DeltaMatroidFromFeasibleSetsRequest.model_json_schema()
 
     assert schema["admission_limits"] == {
-        "max_ground_elements": 64,
         "max_feasible_set_memberships": 1_024,
         "max_ground_label_utf8_bytes": 2_048,
         "max_symmetric_exchange_candidate_checks_per_replay": 250_000,
         "max_complete_axiom_replays_per_request": 4,
         "max_result_bytes": 65_536,
     }
-    assert (
-        "no separate delta-specific ground-size or row-count caps"
-        in (schema["description"])
-    )
+    assert "no separate ground-size or row-count caps" in schema["description"]
+    assert "structural only" in schema["description"]
 
 
 def test_short_row_family_beyond_any_row_cap_is_recognized() -> None:

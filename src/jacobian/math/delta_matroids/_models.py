@@ -19,7 +19,7 @@ from jacobian.math.delta_matroids.values import (
     first_symmetric_exchange_obstruction,
     require_delta_matroid_admission,
 )
-from jacobian.math.greedoids.values import MAX_GROUND_SIZE, FiniteFeasibleSetSystem
+from jacobian.math.greedoids.values import FiniteFeasibleSetSystem
 
 
 class DeltaMatroidFromFeasibleSetsRequest(StrictModel):
@@ -28,15 +28,15 @@ class DeltaMatroidFromFeasibleSetsRequest(StrictModel):
     model_config = ConfigDict(
         json_schema_extra={
             "description": (
-                "Recognize one complete feasible family by exhaustive symmetric "
-                "exchange. Delta-matroid admission is result-sensitive: there "
-                "are no separate delta-specific ground-size or row-count caps; "
-                "the shared finite feasible-set carrier bounds ground labels to "
-                "64 elements and the derived membership, candidate-work, and "
-                "result bounds below admit every family whose replay fits."
+                "Recognize one complete feasible family by exhaustive "
+                "symmetric exchange. Delta-matroid admission is fully "
+                "result-sensitive: there are no separate ground-size or "
+                "row-count caps, and the shared finite feasible-set carrier "
+                "is structural only; the derived membership, UTF-8 label-byte, "
+                "candidate-work, replay-count, and result-size bounds below "
+                "admit every complete family whose recognition fits."
             ),
             "admission_limits": {
-                "max_ground_elements": MAX_GROUND_SIZE,
                 "max_feasible_set_memberships": MAX_DELTA_MEMBERSHIPS,
                 "max_ground_label_utf8_bytes": MAX_DELTA_LABEL_BYTES,
                 "max_symmetric_exchange_candidate_checks_per_replay": (

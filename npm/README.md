@@ -16,7 +16,7 @@ stdio server. The carrier invokes exactly one canonical Python command.
 
 ## Requirements
 
-- Node.js >= 18
+- Node.js 20.17+, 22.13+, or 23.5+
 - `uv` on `$PATH` (or set `JACOBIAN_UV_BIN`)
 
 ## Install
@@ -29,8 +29,8 @@ Install, upgrade, and remove this carrier with npm.
 
 ## Set up agents
 
-Set up Jacobian for your agents with a single command. It requires Node.js 18
-or newer and `uvx` on your `PATH`.
+Set up Jacobian for your agents with a single command. It requires Node.js
+20.17+, 22.13+, or 23.5+ and `uvx` on your `PATH`.
 
 ```sh
 npx jacobian@latest setup

@@ -10,7 +10,7 @@
   },
   "homepage": "https://github.com/morluto/jacobian",
   "engines": {
-    "node": ">=18"
+    "node": ">=23.5.0 || ^22.13.0 || ^20.17.0"
   },
   "bin": {
     "jacobian": "bin/jacobian.cjs"

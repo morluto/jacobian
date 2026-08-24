@@ -44,7 +44,7 @@ for what semantic atomicity means and how the operation vocabulary grows.
 ## Quickstart
 
 Set up Jacobian for your agents with a single command. The setup command
-requires Node.js 18 or newer and `uvx` on your `PATH`.
+requires Node.js 20.17+, 22.13+, or 23.5+ and `uvx` on your `PATH`.
 
 ```sh
 npx jacobian@latest setup

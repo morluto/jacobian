@@ -329,6 +329,7 @@ test("npm and Python packages publish the same release version", async () => {
 });
 
 test("package metadata carries setup dependencies and packs the setup adapter", async () => {
+  assert.equal(packageMetadata.engines.node, ">=23.5.0 || ^22.13.0 || ^20.17.0");
   assert.deepEqual(packageMetadata.dependencies, {
     "@iarna/toml": "^2.2.5",
     "@inquirer/prompts": "^8.6.0",

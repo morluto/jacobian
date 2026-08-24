@@ -7,8 +7,9 @@ server: it contains every operation ID, request schema, result schema, and
 example. For the ordinary agent path, use `math.find` to search for an operation,
 browse compact sorted operation cards, or inspect one exact operation.
 
-The only operation references maintained outside that live catalog describe
-the external boundary that needs extra operational context:
+Additional references document mathematical contracts or external boundaries
+that need more context than an operation card:
 
+- [Combinatorics on words](words/index.md)
 - [SAT and SMT](sat-smt/index.md)
 - [Lean source checking](lean/index.md)

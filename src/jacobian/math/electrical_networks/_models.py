@@ -9,15 +9,15 @@ from pydantic import Field, model_validator
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 
-MAX_NETWORK_VERTICES = 64
+MAX_NETWORK_VERTICES = 128
 MAX_NETWORK_EDGES = 512
 
 # Each conductance is reduced and has numerator and denominator at most this many
 # decimal digits. Results (effective resistance, node potentials, Laplacian
-# entries) are ratios of degree-at-most-63 weighted spanning-forest/tree
+# entries) are ratios of degree-at-most-127 weighted spanning-forest/tree
 # polynomials: after clearing the common denominator, each component is bounded
-# by MAX_NETWORK_EDGES * MAX_CONDUCTANCE_DIGITS + log10(64**62) digits
-# (512 * 50 + 112 = 25,712), comfortably inside the canonical 32,768-digit
+# by MAX_NETWORK_EDGES * MAX_CONDUCTANCE_DIGITS + log10(128**126) digits
+# (512 * 50 + 266 = 25,866), comfortably inside the canonical 32,768-digit
 # rational ceiling.
 MAX_CONDUCTANCE_DIGITS = 50
 

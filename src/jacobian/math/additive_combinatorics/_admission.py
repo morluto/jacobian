@@ -35,6 +35,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.DROP,
         "cheap deterministic projection of additive.representation_profile.compute",
     ),
+    OperationAdmission(
+        "additive.subset_sum.profile.compute",
+        AdmissionDecision.KEEP,
+        "one complete source-bound profile of sums and multiplicities over indexed at-most-once selections, which pair-sum composition cannot retain",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

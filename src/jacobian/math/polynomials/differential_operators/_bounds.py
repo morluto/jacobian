@@ -628,6 +628,12 @@ def _per_exponent_height_bits(
             total = numerator_sum * (new_lcm // lcm) + scaled_numerator * (
                 new_lcm // class_denominator
             )
+            # Reduce the class fraction so shared factors between the summed
+            # numerator and the common denominator - contributions r and 2r
+            # over L = r - never inflate the measured height.
+            common = math.gcd(total, new_lcm)
+            new_lcm //= common
+            total //= common
             if new_lcm.bit_length() > cap or total.bit_length() > cap:
                 return None
             classes[target] = (new_lcm, total)

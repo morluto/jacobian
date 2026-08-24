@@ -1904,6 +1904,67 @@ def test_falling_factorial_cancels_against_source_denominators() -> None:
     assert replayed == result
 
 
+def test_class_sums_are_reduced_before_height_measurement() -> None:
+    variables = ("x",)
+    big = 10**32_767
+    shared_denominator = 6 * big + 1
+    source = RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational.from_fraction(
+                        Fraction(3 * big, shared_denominator)
+                    ),
+                    exponents=(1,),
+                ),
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational.from_fraction(
+                        Fraction(9 * big + 2, shared_denominator)
+                    ),
+                    exponents=(0,),
+                ),
+            )
+        ),
+    )
+    operator = _operator(variables, {(0,): 1, (1,): 1})
+    expected = RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational.from_fraction(
+                        Fraction(3 * big, shared_denominator)
+                    ),
+                    exponents=(1,),
+                ),
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational.from_fraction(Fraction(2)),
+                    exponents=(0,),
+                ),
+            )
+        ),
+    )
+
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=operator,
+            iterations=1,
+            expected=expected,
+        )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.output == expected
+    assert len(result.output.polynomial.terms[0].coefficient.num) == 32_768
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    assert replayed == result
+
+
 def test_colliding_output_exponents_share_the_candidate_budget() -> None:
     variables = ("x",)
     source = _polynomial(variables, {(degree,): 1 for degree in range(2_049)})

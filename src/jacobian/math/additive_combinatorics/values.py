@@ -187,4 +187,3 @@ __all__ = [
     "SubsetSumProfile",
     "SubsetSumProfileEntry",
 ]
-

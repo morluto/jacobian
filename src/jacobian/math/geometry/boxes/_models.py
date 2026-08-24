@@ -16,7 +16,6 @@ from jacobian.canonical import encode_strict_json
 from jacobian.math.geometry.boxes._kernel import box_volume
 from jacobian.math.geometry.boxes.values import RationalAxisAlignedBox
 
-MAX_BOX_UNION_DIMENSION = 8
 MAX_BOX_UNION_SOURCE_BOXES = 64
 MAX_BOX_UNION_NONEMPTY_BOXES = 16
 MAX_BOX_ENDPOINT_DIGITS = 256
@@ -139,7 +138,7 @@ class BoxUnionVolumeRequest(StrictModel):
         json_schema_extra={
             "description": (
                 "An ordered family of 1..64 rational boxes. Every box must use "
-                "the same dimension in [1,8]. Each endpoint component carries "
+                "the same dimension in [1,64]. Each endpoint component carries "
                 "at most 256 digits. intervals=null denotes the canonical empty "
                 "box; at most 16 boxes may be nonempty, and equal interval "
                 "endpoints are valid measure-zero axes."
@@ -166,7 +165,7 @@ class BoxUnionVolumeRequest(StrictModel):
         min_length=1,
         max_length=MAX_BOX_UNION_SOURCE_BOXES,
         description=(
-            "Ordered, indexed boxes with a common dimension in [1,8]. Empty "
+            "Ordered, indexed boxes with a common dimension in [1,64]. Empty "
             "boxes use intervals=null. The complete 2^nonempty_box_count-1 subset "
             "expansion, exact rational growth, and worst-case ledger bytes must "
             "fit the published operation budgets."
@@ -176,10 +175,6 @@ class BoxUnionVolumeRequest(StrictModel):
     @model_validator(mode="after")
     def require_bounded_common_space(self) -> Self:
         dimension = self.boxes[0].dimension
-        if dimension > MAX_BOX_UNION_DIMENSION:
-            raise ValueError(
-                f"box-union dimension exceeds the {MAX_BOX_UNION_DIMENSION}-axis bound"
-            )
         if any(box.dimension != dimension for box in self.boxes):
             raise ValueError("all box-union sources must have the same dimension")
         for endpoint in _endpoint_values(self.boxes):

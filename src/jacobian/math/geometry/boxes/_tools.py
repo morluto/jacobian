@@ -16,7 +16,7 @@ TOOLS: MathTools = (
         "Compute exact Lebesgue volume for closed rational axis-aligned boxes. "
         "Return every nonempty indexed subset intersection and its volume, plus "
         "the complete source-bound inclusion-exclusion sum. Inputs contain 1..64 "
-        "same-dimensional boxes in dimensions 1..8, at most 16 nonempty boxes, "
+        "same-dimensional boxes in dimensions 1..64, at most 16 nonempty boxes, "
         "and endpoints of at most 256 digits. intervals=null is the canonical "
         "empty box; equal endpoints are valid. Preflight bounds replay work, "
         "rational growth, and worst-case ledger bytes.",

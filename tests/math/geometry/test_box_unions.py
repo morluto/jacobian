@@ -18,6 +18,7 @@ from jacobian.math.geometry.boxes import (
     compute_box_union_volume,
 )
 from jacobian.math.geometry.boxes._models import MAX_BOX_UNION_SOURCE_BOXES
+from jacobian.math.geometry.boxes.values import MAX_CANONICAL_BOX_DIMENSION
 
 
 def _rational(value: str | int | Fraction) -> CanonicalRational:
@@ -349,11 +350,38 @@ def test_rejects_nonempty_candidate_and_source_shape_limits() -> None:
     with pytest.raises(ValidationError, match="intersection candidates"):
         BoxUnionVolumeRequest(boxes=(_box((0, 1)),) * 17)
 
-    with pytest.raises(ValidationError, match="8-axis"):
-        BoxUnionVolumeRequest(boxes=(_box(*((0, 1),) * 9),))
-
     with pytest.raises(ValidationError, match="at most 64 items"):
         BoxUnionVolumeRequest(boxes=tuple(_empty_box(1) for _ in range(65)))
+
+
+def test_high_dimension_single_box_is_admitted_by_scaled_budgets() -> None:
+    result = compute_box_union_volume((_box(*((0, 1),) * 9),))
+
+    assert result.union_volume.as_fraction() == 1
+    assert tuple(entry.box_indices for entry in result.intersections) == ((0,),)
+
+
+def test_boxes_admit_the_full_canonical_dimension_range_and_no_more() -> None:
+    result = compute_box_union_volume(
+        (_box(*((0, 1),) * MAX_CANONICAL_BOX_DIMENSION),)
+    )
+
+    assert result.union_volume.as_fraction() == 1
+    assert result.source.boxes[0].dimension == MAX_CANONICAL_BOX_DIMENSION
+
+    with pytest.raises(ValidationError, match="less than or equal to 64"):
+        _empty_box(MAX_CANONICAL_BOX_DIMENSION + 1)
+
+
+def test_high_dimension_families_remain_bounded_by_derived_budgets() -> None:
+    endpoint = Fraction(10**255, 10**255 + 1)
+    wide_box = _box((0, endpoint), *((0, 1),) * (MAX_CANONICAL_BOX_DIMENSION - 1))
+    with pytest.raises(ValidationError, match="exact rational intermediate bound"):
+        compute_box_union_volume((wide_box,))
+
+    unit_box = _box(*((0, 1),) * MAX_CANONICAL_BOX_DIMENSION)
+    with pytest.raises(ValidationError, match="replay work"):
+        BoxUnionVolumeRequest(boxes=(unit_box,) * 16)
 
 
 def test_schema_explains_empty_boxes_and_coupled_bounds() -> None:

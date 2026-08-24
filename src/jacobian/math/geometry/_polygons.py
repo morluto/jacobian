@@ -5,6 +5,7 @@ from jacobian.math.geometry._euclidean_triangulation import (
     minimum_euclidean_weight_triangulation,
 )
 from jacobian.math.geometry._models import (
+    MAX_EUCLIDEAN_TRIANGULATION_VERTICES,
     ConvexPolygonTriangulationRequest,
     ConvexPolygonTriangulationResult,
     EuclideanConvexPolygonTriangulationRequest,
@@ -36,7 +37,8 @@ POLYGON_OPERATIONS = (
         "Compute a certified minimum Euclidean convex-polygon triangulation",
         (
             "Compute one deterministic minimum triangulation of a strict CCW convex "
-            "simple rational polygon of 4 to 28 vertices, charging each selected "
+            f"simple rational polygon of 4 to {MAX_EUCLIDEAN_TRIANGULATION_VERTICES} "
+            "vertices, charging each selected "
             "non-hull diagonal once by its Euclidean length; admission derives "
             "the split-table output bound from exact pairwise coordinate "
             "differences, so it is invariant under translation and every raw "
@@ -62,7 +64,8 @@ POLYGON_OPERATIONS = (
                 (
                     "Triangulate a unit square under the non-hull Euclidean "
                     "diagonal-length objective; the polygon must be simple and "
-                    "strictly CCW convex with 4 to 28 vertices whose pairwise "
+                    f"strictly CCW convex with 4 to {MAX_EUCLIDEAN_TRIANGULATION_VERTICES} "
+                    "vertices whose pairwise "
                     "coordinate differences keep the split table inside its "
                     "serialized-output bound."
                 ),

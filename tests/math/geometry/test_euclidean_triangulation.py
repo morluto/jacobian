@@ -17,6 +17,19 @@ from jacobian.math.geometry._models import (
     EuclideanConvexPolygonTriangulationResult,
 )
 
+_FLOOR_TERM_CHARS = 2 * (4 * 1 + 1) + 128
+
+
+def _floor_estimate_chars(vertices: int) -> int:
+    return (vertices - 1) * (vertices - 2) // 2 * (vertices - 3) * _FLOOR_TERM_CHARS
+
+
+def _expected_vertex_ceiling() -> int:
+    count = 4
+    while _floor_estimate_chars(count + 1) <= 7_000_000:
+        count += 1
+    return count
+
 
 def _point(x: int, y: int) -> dict[str, dict[str, str]]:
     return {
@@ -410,9 +423,45 @@ class TestEuclideanTriangulation:
         with pytest.raises(ValidationError, match="at least 4 items"):
             _request((_point(0, 0), _point(2, 0), _point(0, 2)))
 
-    def test_request_rejects_a_ring_above_the_admitted_vertex_ceiling(self) -> None:
-        with pytest.raises(ValidationError, match="at most 28 items"):
+    def test_request_admits_a_ring_past_the_former_fixed_vertex_ceiling(
+        self,
+    ) -> None:
+        result = minimum_euclidean_weight_triangulation(
             _request(tuple(_point(index, index * index) for index in range(29)))
+        )
+
+        assert result.status == "CERTIFIED_OPTIMUM"
+        assert result.vertex_count == 29
+        assert len(result.split_table) == (29 - 1) * (29 - 2) // 2
+        assert len(result.diagonals) == result.vertex_count - 3
+        assert len(result.triangles) == result.vertex_count - 2
+
+    def test_ring_past_the_former_ceiling_round_trips_through_model_validate(
+        self,
+    ) -> None:
+        result = minimum_euclidean_weight_triangulation(
+            _request(tuple(_point(index, index * index) for index in range(29)))
+        )
+
+        validated = EuclideanConvexPolygonTriangulationResult.model_validate(
+            result.model_dump(mode="json")
+        )
+
+        assert validated.vertex_count == 29
+        assert validated.split_table == result.split_table
+        assert validated.optimum == result.optimum
+
+    def test_request_rejects_a_ring_beyond_the_derived_vertex_ceiling(self) -> None:
+        with pytest.raises(
+            ValidationError,
+            match=f"at most {MAX_EUCLIDEAN_TRIANGULATION_VERTICES} items",
+        ):
+            _request(
+                tuple(
+                    _point(index, index * index)
+                    for index in range(MAX_EUCLIDEAN_TRIANGULATION_VERTICES + 1)
+                )
+            )
 
     def test_request_admits_a_far_translated_unit_square(self) -> None:
         scale = 10**32 + 7
@@ -520,13 +569,18 @@ class TestEuclideanTriangulation:
             "points"
         ]
         assert points["minItems"] == 4
-        assert points["maxItems"] == MAX_EUCLIDEAN_TRIANGULATION_VERTICES == 28
+        assert (
+            points["maxItems"]
+            == MAX_EUCLIDEAN_TRIANGULATION_VERTICES
+            == _expected_vertex_ceiling()
+        )
+        assert points["maxItems"] >= 29
         assert points["maximum_split_table_characters"] == 7_000_000
         assert "strictly convex" in points["description"]
         assert "simple" in points["description"]
         assert "pairwise coordinate differences" in points["description"]
         description = schema.get("description", "")
-        assert "4 to 28 vertices" in description
+        assert f"4 to {MAX_EUCLIDEAN_TRIANGULATION_VERTICES} vertices" in description
         assert "convexity and ring simplicity are enforced" in description
 
     def test_certified_result_round_trips_through_model_validate(self) -> None:

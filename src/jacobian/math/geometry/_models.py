@@ -846,9 +846,37 @@ class ConvexPolygonTriangulationResult(StrictModel):
 # Euclidean convex-polygon triangulation (issue #945)
 # ---------------------------------------------------------------------------
 
-MAX_EUCLIDEAN_TRIANGULATION_VERTICES = 28
+MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS = 7_000_000
+_MIN_EUCLIDEAN_SPLIT_TERM_CHARS = 2 * (4 * 1 + 1) + 128
+
+
+def _euclidean_envelope_vertex_ceiling() -> int:
+    """Largest vertex count that admission could ever accept.
+
+    The split-table estimate multiplies ``term_chars``, which grows with the
+    pairwise-difference digit count derived from the source and never drops
+    below one digit, so ``(n - 1)(n - 2)/2 * (n - 3)`` evaluated at that floor
+    is a necessary condition for every admitted source. The returned ceiling
+    restates this closed-form consequence of
+    ``MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS`` for schemas that need static
+    bounds; it can never reject a source whose estimate fits the budget, so
+    the derived envelope alone decides admission.
+    """
+
+    count = 4
+    while True:
+        candidate = count + 1
+        states = (candidate - 1) * (candidate - 2) // 2
+        if (
+            states * (candidate - 3) * _MIN_EUCLIDEAN_SPLIT_TERM_CHARS
+            > MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS
+        ):
+            return count
+        count = candidate
+
+
+MAX_EUCLIDEAN_TRIANGULATION_VERTICES = _euclidean_envelope_vertex_ceiling()
 EUCLIDEAN_TRIANGULATION_COMPARISON_PRECISION_BITS = 128
-_MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS = 7_000_000
 
 
 def _require_euclidean_triangulation_envelope(
@@ -872,6 +900,9 @@ def _require_euclidean_triangulation_envelope(
     Every candidate diagonal's exact squared length is also checked against
     the canonical rational cap, because the aggregate serialized estimate
     alone admits sources whose derived values cannot be represented at all.
+    The static ``MAX_EUCLIDEAN_TRIANGULATION_VERTICES`` bound is the
+    closed-form consequence of this estimate at its one-digit difference
+    floor, never an independent admission gate.
     """
 
     points = tuple(_point_key(point) for point in polygon.points)
@@ -922,11 +953,11 @@ def _require_euclidean_triangulation_envelope(
     states = (count - 1) * (count - 2) // 2
     term_chars = 2 * (4 * difference_digits + 1) + 128
     estimated_chars = states * (count - 3) * term_chars
-    if estimated_chars > _MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS:
+    if estimated_chars > MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS:
         raise ValueError(
             "Euclidean triangulation split table can serialize up to "
             f"{estimated_chars} characters, exceeding the "
-            f"{_MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS}-character output bound"
+            f"{MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS}-character output bound"
         )
     return points
 
@@ -972,7 +1003,7 @@ class EuclideanTriangulationPolygonRequest(PolygonRequest):
             "absolute positions stay inside the shared canonical rational cap."
         ),
         json_schema_extra={
-            "maximum_split_table_characters": _MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS,
+            "maximum_split_table_characters": MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS,
         },
     )
 
@@ -984,11 +1015,12 @@ class EuclideanConvexPolygonTriangulationRequest(StrictModel):
         json_schema_extra={
             "description": (
                 "Minimum Euclidean triangulation of one strict CCW convex "
-                "simple rational polygon. Admitted requests contain 4 to 28 "
-                "vertices whose pairwise coordinate differences keep the "
-                "exact split table inside the published serialized-output "
-                "bound; strict counterclockwise convexity and ring simplicity "
-                "are enforced by the request validator after parsing."
+                "simple rational polygon. Admitted requests contain 4 to "
+                f"{MAX_EUCLIDEAN_TRIANGULATION_VERTICES} vertices whose "
+                "pairwise coordinate differences keep the exact split table "
+                "inside the published serialized-output bound; strict "
+                "counterclockwise convexity and ring simplicity are enforced "
+                "by the request validator after parsing."
             ),
         },
     )

@@ -37,8 +37,9 @@ class _CoefficientEnvelope(NamedTuple):
     magnitude at most ``height``, numerator digit count at most
     ``numerator_digits``, and denominator digit count at most
     ``denominator_digits``. ``pairs`` is the exact closure of reachable
-    ``(numerator bound, denominator)`` pairs, or ``None`` when only the
-    marginal digit budgets are tracked; sums and comparisons use it to keep
+    ``(numerator bound, denominator)`` pairs, or a conservative closure that
+    also retains unmatched child coefficients, or ``None`` when only the
+    marginal digit budgets are tracked. Sums and comparisons use it to keep
     shared denominators from compounding while still bounding merged
     numerators soundly.
     """
@@ -822,10 +823,13 @@ def _signed_sum_envelope(
             if len(totals) > _MAX_ENVELOPE_PAIRS:
                 break
         else:
+            reachable: set[Fraction] = set(totals)
+            for values in lifted:
+                reachable.update(values)
             pairs = _capped_pairs(
                 {
-                    ((total / shared).numerator, (total / shared).denominator)
-                    for total in totals
+                    ((value / shared).numerator, (value / shared).denominator)
+                    for value in reachable
                 }
             )
             common_denominator = _pairs_common_denominator(pairs)
@@ -833,7 +837,7 @@ def _signed_sum_envelope(
                 denominator_digits = min(
                     denominator_digits, len(str(common_denominator))
                 )
-            widest_merged = max(abs((total / shared).numerator) for total in totals)
+            widest_merged = max(abs((value / shared).numerator) for value in reachable)
             numerator_digits = min(numerator_digits, len(str(widest_merged)))
     else:
         pairs = None

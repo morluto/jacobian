@@ -978,6 +978,29 @@ def test_request_bounds_scaled_formless_comparison_lifted_numerators() -> None:
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
 
 
+def test_request_bounds_scaled_formless_sum_retains_unmatched_coefficients() -> None:
+    digits = "9" * 255
+    scalar = "7" * 10
+    left = f"(/ (+ (* (+ {digits} 1) {{variable}}) (+ {digits} 1)) (* 2 {digits}))"
+    right = f"(/ (+ (* (- {digits} 1) {{variable}}) (- {digits} 1)) (* 2 {digits}))"
+    source = (
+        "(set-logic QF_LRA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const q Bool)\n"
+        "(declare-const x Real)\n"
+        "(declare-const y Real)\n"
+        "(declare-const u Real)\n"
+        "(declare-const v Real)\n"
+        f"(assert (= (/ (- (ite p {left.format(variable='x')} "
+        f"{left.format(variable='y')}) (ite q {right.format(variable='u')} "
+        f"{right.format(variable='v')})) (/ 1 {scalar})) 0))\n"
+        "(check-sat)\n"
+    )
+
+    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+
+
 def test_bounded_scaled_formless_comparison_still_admitted() -> None:
     scalar = "1" + "0" * 79
     odd = "9" * 160

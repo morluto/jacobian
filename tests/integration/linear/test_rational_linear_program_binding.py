@@ -79,12 +79,12 @@ def test_optimal_outcome_retains_source_and_replays_strong_duality() -> None:
     assert _fractions(result.dual_slacks) == [Fraction(0), Fraction(0)]
 
 
-def test_infeasible_outcome_carries_a_replayable_farkas_witness() -> None:
+def test_infeasible_outcome_carries_a_replayable_farkas_candidate() -> None:
     result = _solve(INFEASIBLE_PROGRAM)
 
     assert result.status == "INFEASIBLE"
     assert result.primal_candidate is None
-    witness = _fractions(result.farkas_witness)
+    witness = _fractions(result.farkas_candidate)
     rows = [[Fraction(1), Fraction(1)], [Fraction(1), Fraction(0)]]
     b = [Fraction(1), Fraction(2)]
     # Public sign convention: A^T y >= 0 and b^T y < 0.
@@ -97,7 +97,7 @@ def test_unbounded_outcome_carries_a_point_and_an_improving_ray() -> None:
     result = _solve(UNBOUNDED_PROGRAM)
 
     assert result.status == "UNBOUNDED"
-    point = _fractions(result.feasible_point)
+    point = _fractions(result.primal_candidate)
     ray = _fractions(result.recession_direction)
     rows = [[Fraction(1), Fraction(-1)]]
     c = [Fraction(-1), Fraction(0)]
@@ -136,7 +136,7 @@ def test_unbounded_outcome_carries_a_point_and_an_improving_ray() -> None:
                 "coefficients": [[q(1), q(1)]],
                 "rhs": [q(3, 2)],
             },
-            [Fraction(3, 2), Fraction(0)],
+            None,
         ),
     ],
 )
@@ -153,12 +153,14 @@ def test_admitted_edge_programs_stay_exact_and_bound_to_source(
         assert _fractions(result.primal_candidate) == candidate
 
 
-def test_zero_row_programs_are_rejected_before_any_backend_call() -> None:
+def test_empty_row_program_is_the_admitted_unconstrained_orthant() -> None:
     zero_row = copy.deepcopy(BOUND_PROGRAM)
     zero_row["coefficients"] = []
     zero_row["rhs"] = []
-    with pytest.raises(ValidationError):
-        StandardFormRationalLinearProgram.model_validate(zero_row)
+    program = StandardFormRationalLinearProgram.model_validate(zero_row)
+
+    assert program.coefficients == ()
+    assert program.rhs == ()
 
 
 def test_operation_version_tracks_the_source_bound_wire_shape() -> None:
@@ -173,12 +175,12 @@ def test_fully_authored_optimal_payload_is_rejected() -> None:
         RationalLinearProgramResult(
             status="OPTIMAL",
             program=program,
-            primal_candidate=(q(999),),
+            primal_candidate=(q(999), q(0)),
             primal_objective=q(-123),
-            primal_residuals=(q(77),),
-            dual_candidate=(q(456),),
+            primal_residuals=(q(77), q(77)),
+            dual_candidate=(q(456), q(456)),
             dual_objective=q(-123),
-            dual_slacks=(q(-88),),
+            dual_slacks=(q(-88), q(88)),
         )
     with pytest.raises(ValidationError, match="program"):
         RationalLinearProgramResult.model_validate(
@@ -278,23 +280,23 @@ def test_feasible_point_without_dual_remains_only_primal_feasible() -> None:
 
 def test_corrupted_farkas_certificates_are_rejected() -> None:
     result = _solve(INFEASIBLE_PROGRAM)
-    witness = _fractions(result.farkas_witness)
+    witness = _fractions(result.farkas_candidate)
     program = StandardFormRationalLinearProgram.model_validate(INFEASIBLE_PROGRAM)
 
     # Flipping every sign breaks A^T y >= 0 for this program.
-    with pytest.raises(ValidationError, match="farkas"):
+    with pytest.raises(ValidationError, match="Farkas"):
         RationalLinearProgramResult(
             status="INFEASIBLE",
             program=program,
-            farkas_witness=tuple(
+            farkas_candidate=tuple(
                 q(-value.numerator, value.denominator) for value in witness
             ),
         )
-    with pytest.raises(ValidationError, match="constraint count"):
+    with pytest.raises(ValidationError, match="Farkas"):
         RationalLinearProgramResult(
             status="INFEASIBLE",
             program=program,
-            farkas_witness=(q(1),),
+            farkas_candidate=(q(1),),
         )
 
 
@@ -311,36 +313,37 @@ def test_valid_farkas_certificate_round_trips_through_serialization() -> None:
 def test_corrupted_unboundedness_pairs_are_rejected() -> None:
     result = _solve(UNBOUNDED_PROGRAM)
     program = StandardFormRationalLinearProgram.model_validate(UNBOUNDED_PROGRAM)
-    point = result.feasible_point
     ray = result.recession_direction
 
-    with pytest.raises(ValidationError, match="strictly improve"):
-        RationalLinearProgramResult(
+    def unbounded_with(
+        direction: tuple[object, ...],
+    ) -> RationalLinearProgramResult:
+        return RationalLinearProgramResult(
             status="UNBOUNDED",
             program=program,
-            feasible_point=point,
-            recession_direction=(q(0), q(0)),
+            primal_candidate=result.primal_candidate,
+            primal_objective=result.primal_objective,
+            primal_residuals=result.primal_residuals,
+            recession_direction=direction,
         )
-    with pytest.raises(ValidationError, match="A d = 0"):
-        RationalLinearProgramResult(
-            status="UNBOUNDED",
-            program=program,
-            feasible_point=point,
-            recession_direction=(q(2), q(1)),
-        )
+
+    # The zero ray satisfies Ad=0 but does not strictly improve c^T d.
+    with pytest.raises(ValidationError, match="recession direction"):
+        unbounded_with((q(0), q(0)))
+    # (2,1) is nonnegative but violates A d = 0.
+    with pytest.raises(ValidationError, match="Ad=0"):
+        unbounded_with((q(2), q(1)))
     negated_ray = [q(-value.numerator, value.denominator) for value in _fractions(ray)]
     with pytest.raises(ValidationError, match="nonnegative"):
+        unbounded_with(tuple(negated_ray))
+    # An infeasible retained point cannot anchor an unbounded outcome.
+    with pytest.raises(ValidationError, match="equalities"):
         RationalLinearProgramResult(
             status="UNBOUNDED",
             program=program,
-            feasible_point=point,
-            recession_direction=tuple(negated_ray),
-        )
-    with pytest.raises(ValidationError, match="not primal feasible"):
-        RationalLinearProgramResult(
-            status="UNBOUNDED",
-            program=program,
-            feasible_point=(q(1), q(0)),
+            primal_candidate=(q(1), q(0)),
+            primal_objective=q(-1),
+            primal_residuals=(q(1),),
             recession_direction=ray,
         )
 
@@ -351,9 +354,9 @@ def test_dimension_mismatches_are_rejected_against_the_retained_source() -> None
 
     long_dump = copy.deepcopy(dumped)
     long_dump["primal_candidate"] = [q(1), q(1), q(1)]
-    with pytest.raises(ValidationError, match="source variable count"):
+    with pytest.raises(ValidationError, match="length must match the source"):
         RationalLinearProgramResult.model_validate(long_dump)
-    with pytest.raises(ValidationError, match="source variable count"):
+    with pytest.raises(ValidationError, match="length must match the source"):
         RationalLinearProgramResult(
             status="PRIMAL_FEASIBLE",
             program=program,
@@ -361,7 +364,7 @@ def test_dimension_mismatches_are_rejected_against_the_retained_source() -> None
             primal_objective=q(1),
             primal_residuals=(q(0), q(0)),
         )
-    with pytest.raises(ValidationError, match="source constraint count"):
+    with pytest.raises(ValidationError, match="length must match the source"):
         RationalLinearProgramResult(
             status="OPTIMAL",
             program=program,
@@ -380,13 +383,15 @@ def test_unknown_outcome_carries_no_mathematical_claim() -> None:
 
     assert unknown.status == "UNKNOWN"
     assert unknown.primal_candidate is None
-    with pytest.raises(ValidationError, match="carries no mathematical claim"):
+    with pytest.raises(ValidationError, match="cannot carry primal data"):
         RationalLinearProgramResult(
             status="UNKNOWN",
             program=program,
             primal_candidate=(q(1), q(1)),
         )
-    with pytest.raises(ValidationError, match="requires a feasible point"):
+    with pytest.raises(
+        ValidationError, match="require exactly one feasible primal point"
+    ):
         RationalLinearProgramResult(status="UNBOUNDED", program=program)
 
 

@@ -217,7 +217,11 @@ MULTIVARIATE_POLYNOMIAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         (
             "Compute the exact resultant of two multivariate polynomials with "
             "respect to one declared variable over QQ[x_1, ..., x_n].  The "
-            "resultant lives in the ring over the remaining variables.  Backed "
+            "resultant lives in the ring over the remaining variables.  "
+            "Nonzero inputs that are constant in the eliminated variable "
+            "follow the Sylvester power rule Res_x(f, c) = c^deg_x(f) "
+            "(symmetrically for the right input), two such constants give "
+            "the empty-determinant value 1, and a zero input gives 0.  Backed "
             "by SymPy's resultant."
         ),
         MultivariateResultantRequest,

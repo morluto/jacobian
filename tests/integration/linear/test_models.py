@@ -79,32 +79,67 @@ def test_inline_results_preserve_completed_no_candidate_outcomes() -> None:
         )
 
 
-def _linear_program() -> dict[str, object]:
-    return {
-        "variables": ["x"],
-        "objective": [_q(1)],
-        "coefficients": [[_q(1)]],
-        "rhs": [_q(1)],
-    }
-
-
-def test_linear_program_outcomes_only_carry_their_mathematical_data() -> None:
-    program = StandardFormRationalLinearProgram.model_validate(_linear_program())
-    with pytest.raises(ValidationError, match="requires a Farkas witness"):
-        RationalLinearProgramResult(status="INFEASIBLE", program=program)
-    with pytest.raises(ValidationError, match="cannot carry a point"):
-        RationalLinearProgramResult(
-            status="INFEASIBLE",
-            program=program,
-            farkas_witness=(_q(1),),
-            primal_candidate=(_q(1),),
+def test_linear_program_outcomes_require_status_specific_source_bound_data() -> None:
+    program = StandardFormRationalLinearProgram.model_validate(
+        {
+            "variables": ["x"],
+            "objective": [_q(1)],
+            "coefficients": [[_q(1)]],
+            "rhs": [_q(1)],
+        }
+    )
+    with pytest.raises(ValidationError, match="cannot carry primal data"):
+        RationalLinearProgramResult.model_validate(
+            {
+                "program": program,
+                "status": "INFEASIBLE",
+                "primal_candidate": [_q(1)],
+            }
         )
     with pytest.raises(ValidationError, match="only an optimal"):
-        RationalLinearProgramResult(
-            status="PRIMAL_FEASIBLE",
-            program=program,
-            primal_candidate=(_q(1),),
-            primal_objective=_q(1),
-            primal_residuals=(_q(0),),
-            dual_candidate=(_q(1),),
+        RationalLinearProgramResult.model_validate(
+            {
+                "program": program,
+                "status": "PRIMAL_FEASIBLE",
+                "primal_candidate": [_q(1)],
+                "primal_objective": _q(1),
+                "primal_residuals": [_q(0)],
+                "dual_candidate": [_q(1)],
+            }
+        )
+
+
+def test_linear_program_raw_rational_bounds_precede_canonical_parsing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian._exact as exact
+
+    def fail_if_called(*_args: object, **_kwargs: object) -> int:
+        raise AssertionError("raw LP admission must run before integer parsing")
+
+    monkeypatch.setattr(exact, "parse_canonical_integer", fail_if_called)
+    oversized = "9" * 129
+    with pytest.raises(ValidationError, match="128-digit bound"):
+        StandardFormRationalLinearProgram.model_validate(
+            {
+                "variables": ["x"],
+                "objective": [{"num": oversized, "den": "1"}],
+                "coefficients": [[_q(1)]],
+                "rhs": [_q(1)],
+            }
+        )
+
+    program = StandardFormRationalLinearProgram.model_construct(
+        variables=("x",),
+        objective=(_q(1),),
+        coefficients=((_q(1),),),
+        rhs=(_q(1),),
+    )
+    with pytest.raises(ValidationError, match="32768-digit bound"):
+        RationalLinearProgramResult.model_validate(
+            {
+                "program": program,
+                "status": "UNKNOWN",
+                "farkas_candidate": [{"num": "9" * 32_769, "den": "1"}],
+            }
         )

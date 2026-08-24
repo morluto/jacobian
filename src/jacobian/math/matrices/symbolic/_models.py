@@ -419,6 +419,8 @@ def _shared_common_denominator_bounds(
 def _product_cell_bounds(
     left: tuple[RationalFunction, ...],
     right: tuple[RationalFunction, ...],
+    *,
+    exact_shared_bounds: bool = True,
 ) -> tuple[int, int, tuple[int, ...], tuple[int, ...], int, bool, int, bool]:
     """Return raw work bounds and cancellation-safe canonical degree bounds.
 
@@ -487,11 +489,15 @@ def _product_cell_bounds(
                 False,
             )
 
-    return _expanded_product_cell_bounds(factors)
+    return _expanded_product_cell_bounds(
+        factors, exact_shared_bounds=exact_shared_bounds
+    )
 
 
 def _expanded_product_cell_bounds(
     factors: tuple[tuple[RationalFunction, RationalFunction], ...],
+    *,
+    exact_shared_bounds: bool = True,
 ) -> tuple[int, int, tuple[int, ...], tuple[int, ...], int, bool, int, bool]:
     """Bound a multi-factor cell by its unreduced common-denominator expansion.
 
@@ -499,7 +505,11 @@ def _expanded_product_cell_bounds(
     then all products are put over the product common denominator; the raw
     term and coefficient bounds admit that expansion before SymPy receives
     the request. Cells the cancellation rejection would refuse get one exact
-    second chance through ``_shared_common_denominator_bounds``.
+    second chance through ``_shared_common_denominator_bounds``. With
+    ``exact_shared_bounds=False`` that second chance is not executed: an
+    eligible cell returns the raw expansion totals the exact fallback charges
+    when it admits the cell, so callers can project the aggregate admission
+    budget without SymPy work.
     """
 
     integral_coefficients = all(
@@ -540,6 +550,21 @@ def _expanded_product_cell_bounds(
     # admission can collect the numerator sum and prove it coprime to the
     # retained monic product, which fixes the canonical value verbatim.
     if not (unit_denominator_factors or denominator_terms == 1):
+        if not exact_shared_bounds:
+            zero_exponents = (0,) * len(factors[0][0].variables)
+            return (
+                sum(
+                    len(left_value.numerator.terms) * len(right_value.numerator.terms)
+                    for left_value, right_value in factors
+                ),
+                sum(denominator_term_counts),
+                zero_exponents,
+                zero_exponents,
+                0,
+                False,
+                1,
+                True,
+            )
         shared_bounds = _shared_common_denominator_bounds(factors)
         if shared_bounds is not None:
             return shared_bounds
@@ -646,6 +671,34 @@ def _expanded_product_cell_bounds(
     )
 
 
+def _projected_expansion_terms(left: SymbolicMatrix, right: SymbolicMatrix) -> int:
+    """Charge every cell the raw expansion its admitted shape must spend.
+
+    A cell admitted through the exact shared-denominator fallback carries
+    exactly these raw product totals, and every other cell's cheap bounds
+    are already final, so the sum lower-bounds the aggregate expansion of
+    any request that survives admission.
+    """
+
+    projected_expansion_terms = 0
+    for left_row in left.entries:
+        for right_column in zip(*right.entries, strict=True):
+            (
+                numerator_terms,
+                denominator_terms,
+                _numerator_exponents,
+                _denominator_exponents,
+                _maximum_coefficient_digits,
+                unit_denominator_factors,
+                _result_term_count,
+                _verified_no_cancellation,
+            ) = _product_cell_bounds(left_row, right_column, exact_shared_bounds=False)
+            projected_expansion_terms += numerator_terms
+            if not unit_denominator_factors:
+                projected_expansion_terms += denominator_terms
+    return projected_expansion_terms
+
+
 def _require_symbolic_product_admission(
     left: SymbolicMatrix,
     right: SymbolicMatrix,
@@ -657,7 +710,10 @@ def _require_symbolic_product_admission(
     pairwise product denominator whose exact collected numerator admission
     proved coprime to the retained monic product, where reduction cannot
     trigger at all; anything else stays outside the admitted domain
-    because no pre-execution bound covers it.
+    because no pre-execution bound covers it. A cheap projection pass first
+    charges every cell the raw expansion the exact shared-denominator
+    admission spends when it succeeds, so a request above the aggregate
+    expansion budget is rejected before any SymPy conversion runs.
     """
 
     if left.variables != right.variables:
@@ -668,6 +724,12 @@ def _require_symbolic_product_admission(
         raise ValueError(
             "symbolic matrix multiplication requires the left column count to equal "
             "the right row count"
+        )
+
+    projected_expansion_terms = _projected_expansion_terms(left, right)
+    if projected_expansion_terms > MAX_SYMBOLIC_MATRIX_TERMS:
+        raise ValueError(
+            "symbolic matrix product exceeds the 512-term aggregate expansion budget"
         )
 
     aggregate_expansion_terms = 0

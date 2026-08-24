@@ -816,6 +816,87 @@ def test_symbolic_matrix_product_rejects_shared_denominators_without_result_budg
         _product_request(((dense_inverse,),), ((dense_inverse,),), variables)
 
 
+def test_symbolic_matrix_product_rejects_aggregate_expansion_before_exact_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Dense shared-denominator overflow is rejected without SymPy work.
+
+    Every cell of this 8x8 product reuses one identical product denominator,
+    so each cell is eligible for the exact shared-denominator fallback; the
+    projection pass must still charge all 64 cells' raw expansion totals and
+    reject before any cell invokes SymPy conversion.
+    """
+
+    import jacobian.math.matrices.symbolic._models as symbolic_models
+
+    variables = ("x",)
+    inverse_successor = _rf(
+        variables,
+        (1, 1, (0,)),
+        denominator=((1, 1, (1,)), (1, 1, (0,))),
+    )
+    left = tuple(tuple(inverse_successor for _ in range(8)) for _ in range(8))
+    right = tuple(tuple(inverse_successor for _ in range(8)) for _ in range(8))
+
+    def fail_if_called(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("exact shared-denominator fallback ran during projection")
+
+    monkeypatch.setattr(
+        symbolic_models, "_shared_common_denominator_bounds", fail_if_called
+    )
+    with pytest.raises(ValidationError, match="aggregate expansion"):
+        _product_request(left, right, variables)
+
+
+def test_symbolic_matrix_product_admits_boundary_shared_projection() -> None:
+    """A projected expansion of exactly 512 still executes the exact fallback."""
+
+    variables = ("x", "y")
+    x_numerator = tuple((1, 1, (exponent, 0)) for exponent in range(15, -1, -1))
+    y_denominator = tuple((1, 1, (0, exponent)) for exponent in range(15, -1, -1))
+    left = ((_rf(variables, *x_numerator, denominator=y_denominator),),)
+    right = ((_rf(variables, *x_numerator, denominator=y_denominator),),)
+    product = compute_symbolic_matrix_product(_product_request(left, right, variables))
+    counts = tuple(min(exponent + 1, 31 - exponent) for exponent in range(30, -1, -1))
+    numerator = tuple(
+        (count, 1, (exponent, 0))
+        for count, exponent in zip(counts, range(30, -1, -1), strict=True)
+    )
+    denominator = tuple(
+        (count, 1, (0, exponent))
+        for count, exponent in zip(counts, range(30, -1, -1), strict=True)
+    )
+    assert product.entries == ((_rf(variables, *numerator, denominator=denominator),),)
+
+
+def test_symbolic_matrix_product_rejects_projection_above_aggregate_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One extra denominator term pushes the projection past 512 pre-SymPy."""
+
+    import jacobian.math.matrices.symbolic._models as symbolic_models
+
+    variables = ("x", "y")
+    x_numerator = tuple((1, 1, (exponent, 0)) for exponent in range(15, -1, -1))
+    y_denominator = tuple((1, 1, (0, exponent)) for exponent in range(15, -1, -1))
+    long_y_denominator = tuple((1, 1, (0, exponent)) for exponent in range(16, -1, -1))
+
+    def fail_if_called(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("exact shared-denominator fallback ran during projection")
+
+    monkeypatch.setattr(
+        symbolic_models, "_shared_common_denominator_bounds", fail_if_called
+    )
+    # The projected expansion charges 16*16 numerator products plus 16*17
+    # pair denominator terms: 528 raw terms against the 512-term budget.
+    with pytest.raises(ValidationError, match="aggregate expansion"):
+        _product_request(
+            ((_rf(variables, *x_numerator, denominator=y_denominator),),),
+            ((_rf(variables, *x_numerator, denominator=long_y_denominator),),),
+            variables,
+        )
+
+
 def test_symbolic_matrix_product_admits_identity_times_rational_entry() -> None:
     """Identity multiplication leaves the canonical operand unchanged."""
 

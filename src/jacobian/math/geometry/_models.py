@@ -839,6 +839,326 @@ class ConvexPolygonTriangulationResult(StrictModel):
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
 
+# Euclidean convex-polygon triangulation (issue #945)
+# ---------------------------------------------------------------------------
+
+MAX_EUCLIDEAN_TRIANGULATION_VERTICES = 28
+MAX_EUCLIDEAN_TRIANGULATION_COORDINATE_DIGITS = 32
+EUCLIDEAN_TRIANGULATION_COMPARISON_PRECISION_BITS = 128
+_MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS = 7_000_000
+
+
+def _require_euclidean_triangulation_envelope(
+    polygon: PolygonRequest,
+) -> tuple[tuple[Fraction, Fraction], ...]:
+    """Validate the bounded exact source and return its rational coordinates.
+
+    A dynamic-programming state retains at most ``n - 3`` diagonal lengths.  A
+    squared distance between ``d``-digit rational coordinates has at most
+    ``8d`` digits in each component.  The complete split table has
+    ``(n - 1)(n - 2)/2`` states, so the conservative serialized-expression
+    estimate below bounds every retained exact sum before Arb is invoked.
+    """
+
+    points = tuple(_point_key(point) for point in polygon.points)
+    count = len(points)
+    if not 4 <= count <= MAX_EUCLIDEAN_TRIANGULATION_VERTICES:
+        raise ValueError(
+            "Euclidean triangulation supports 4 to "
+            f"{MAX_EUCLIDEAN_TRIANGULATION_VERTICES} vertices"
+        )
+    max_digits = max(
+        max(len(str(abs(component.numerator))), len(str(component.denominator)))
+        for point in points
+        for component in point
+    )
+    if max_digits > MAX_EUCLIDEAN_TRIANGULATION_COORDINATE_DIGITS:
+        raise ValueError(
+            "Euclidean triangulation coordinates exceed the "
+            f"{MAX_EUCLIDEAN_TRIANGULATION_COORDINATE_DIGITS}-digit bound"
+        )
+    turns = tuple(
+        _cross(
+            _subtract(points[(index + 1) % count], points[index]),
+            _subtract(points[(index + 2) % count], points[index]),
+        )
+        for index in range(count)
+    )
+    if any(turn <= 0 for turn in turns):
+        raise ValueError("Euclidean triangulation requires strict CCW convexity")
+    states = (count - 1) * (count - 2) // 2
+    estimated_chars = states * (count - 3) * (16 * max_digits + 128)
+    if estimated_chars > _MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS:
+        raise ValueError(
+            "Euclidean triangulation split table can serialize up to "
+            f"{estimated_chars} characters, exceeding the "
+            f"{_MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS}-character output bound"
+        )
+    return points
+
+
+def _euclidean_squared_length(
+    points: tuple[tuple[Fraction, Fraction], ...], first: int, second: int
+) -> Fraction:
+    dx = points[second][0] - points[first][0]
+    dy = points[second][1] - points[first][1]
+    return dx * dx + dy * dy
+
+
+def _compare_euclidean_root_sums(
+    left: tuple[Fraction, ...], right: tuple[Fraction, ...]
+) -> int | None:
+    """Return a rigorous root-sum order, or ``None`` for an overlapping ball."""
+
+    if left == right:
+        return 0
+    from flint import arb, ctx, fmpq
+
+    with ctx.workprec(EUCLIDEAN_TRIANGULATION_COMPARISON_PRECISION_BITS):
+        difference = arb(0)
+        for value in left:
+            difference += arb(fmpq(value.numerator, value.denominator)).sqrt()
+        for value in right:
+            difference -= arb(fmpq(value.numerator, value.denominator)).sqrt()
+        if difference.contains(0):
+            return None
+        return 1 if difference > 0 else -1
+
+
+class EuclideanConvexPolygonTriangulationRequest(StrictModel):
+    """One bounded strict convex rational polygon with Euclidean diagonal cost."""
+
+    polygon: PolygonRequest
+    objective: Literal["NON_HULL_EUCLIDEAN_LENGTH_SUM"] = (
+        "NON_HULL_EUCLIDEAN_LENGTH_SUM"
+    )
+
+    @model_validator(mode="after")
+    def require_supported_source(self) -> Self:
+        _require_euclidean_triangulation_envelope(self.polygon)
+        return self
+
+
+class EuclideanDiagonal(StrictModel):
+    """One selected non-hull diagonal and its exact squared Euclidean length."""
+
+    first: StrictInt = Field(ge=0, le=MAX_EUCLIDEAN_TRIANGULATION_VERTICES - 1)
+    second: StrictInt = Field(ge=0, le=MAX_EUCLIDEAN_TRIANGULATION_VERTICES - 1)
+    squared_length: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_positive_canonical_pair(self) -> Self:
+        if self.first >= self.second:
+            raise ValueError("Euclidean diagonal endpoints must be strictly increasing")
+        if self.squared_length.as_fraction() <= 0:
+            raise ValueError("Euclidean diagonal squared length must be positive")
+        return self
+
+
+class EuclideanLengthExpression(StrictModel):
+    """An exact ordered sum of positive square roots of rational squared lengths.
+
+    Its source-bound use in a triangulation result is exactly
+    ``sum(sqrt(term) for term in squared_lengths)``. The ordered presentation
+    retains the selected diagonal lengths without a decimal approximation or
+    an unbounded expanded number-field representation.
+    """
+
+    squared_lengths: tuple[CanonicalRational, ...] = Field(
+        default=(), max_length=MAX_EUCLIDEAN_TRIANGULATION_VERTICES - 3
+    )
+
+    @model_validator(mode="after")
+    def require_sorted_positive_terms(self) -> Self:
+        values = tuple(term.as_fraction() for term in self.squared_lengths)
+        if any(value <= 0 for value in values):
+            raise ValueError("Euclidean length terms must be positive")
+        if values != tuple(sorted(values)):
+            raise ValueError("Euclidean length terms must be ordered canonically")
+        return self
+
+
+class EuclideanTriangulationSplitEntry(StrictModel):
+    start: StrictInt = Field(ge=0, le=MAX_EUCLIDEAN_TRIANGULATION_VERTICES - 1)
+    end: StrictInt = Field(ge=0, le=MAX_EUCLIDEAN_TRIANGULATION_VERTICES - 1)
+    split: StrictInt = Field(ge=0, le=MAX_EUCLIDEAN_TRIANGULATION_VERTICES - 1)
+    optimum: EuclideanLengthExpression
+
+    @model_validator(mode="after")
+    def require_proper_subproblem(self) -> Self:
+        if not self.start < self.split < self.end:
+            raise ValueError("triangulation split must lie strictly inside its span")
+        return self
+
+
+class EuclideanComparisonUnresolved(StrictModel):
+    """The first finite DP comparison whose rigorous Arb enclosure overlaps zero."""
+
+    start: StrictInt = Field(ge=0, le=MAX_EUCLIDEAN_TRIANGULATION_VERTICES - 1)
+    end: StrictInt = Field(ge=0, le=MAX_EUCLIDEAN_TRIANGULATION_VERTICES - 1)
+    left_split: StrictInt = Field(ge=0, le=MAX_EUCLIDEAN_TRIANGULATION_VERTICES - 1)
+    right_split: StrictInt = Field(ge=0, le=MAX_EUCLIDEAN_TRIANGULATION_VERTICES - 1)
+    left: EuclideanLengthExpression
+    right: EuclideanLengthExpression
+    precision_bits: StrictInt = Field(
+        ge=EUCLIDEAN_TRIANGULATION_COMPARISON_PRECISION_BITS,
+        le=EUCLIDEAN_TRIANGULATION_COMPARISON_PRECISION_BITS,
+    )
+
+
+class EuclideanConvexPolygonTriangulationResult(StrictModel):
+    """A certified optimum, or an explicit unresolved exact comparison."""
+
+    status: Literal["CERTIFIED_OPTIMUM", "COMPARISON_UNRESOLVED"]
+    polygon: PolygonRequest
+    vertex_count: StrictInt = Field(ge=4, le=MAX_EUCLIDEAN_TRIANGULATION_VERTICES)
+    objective: Literal["NON_HULL_EUCLIDEAN_LENGTH_SUM"] = (
+        "NON_HULL_EUCLIDEAN_LENGTH_SUM"
+    )
+    comparison_basis: Literal["ARB_OUTWARD_ROUNDED_INTERVAL"] = (
+        "ARB_OUTWARD_ROUNDED_INTERVAL"
+    )
+    comparison_precision_bits: StrictInt = Field(
+        ge=EUCLIDEAN_TRIANGULATION_COMPARISON_PRECISION_BITS,
+        le=EUCLIDEAN_TRIANGULATION_COMPARISON_PRECISION_BITS,
+    )
+    diagonals: tuple[EuclideanDiagonal, ...] = Field(
+        default=(), max_length=MAX_EUCLIDEAN_TRIANGULATION_VERTICES - 3
+    )
+    triangles: tuple[PolygonTriangle, ...] = Field(
+        default=(), max_length=MAX_EUCLIDEAN_TRIANGULATION_VERTICES - 2
+    )
+    split_table: tuple[EuclideanTriangulationSplitEntry, ...] = Field(
+        default=(),
+        max_length=(MAX_EUCLIDEAN_TRIANGULATION_VERTICES - 1)
+        * (MAX_EUCLIDEAN_TRIANGULATION_VERTICES - 2)
+        // 2,
+    )
+    optimum: EuclideanLengthExpression | None = None
+    unresolved_comparison: EuclideanComparisonUnresolved | None = None
+
+    @model_validator(mode="after")
+    def bind_status_fields(self) -> Self:
+        points = _require_euclidean_triangulation_envelope(self.polygon)
+        if self.vertex_count != len(points):
+            raise ValueError("vertex_count must equal the source polygon vertex count")
+        certified = self.status == "CERTIFIED_OPTIMUM"
+        if certified != (self.optimum is not None):
+            raise ValueError(
+                "only a certified optimum carries an exact cost expression"
+            )
+        if certified != (self.unresolved_comparison is None):
+            raise ValueError(
+                "only an unresolved result carries an ambiguous comparison"
+            )
+        if not certified and (self.diagonals or self.triangles or self.split_table):
+            raise ValueError("an unresolved comparison must not claim a triangulation")
+        if certified:
+            assert self.optimum is not None
+            if len(self.diagonals) != self.vertex_count - 3:
+                raise ValueError(
+                    "a triangulation must contain vertex_count - 3 diagonals"
+                )
+            if len(self.triangles) != self.vertex_count - 2:
+                raise ValueError(
+                    "a triangulation must contain vertex_count - 2 triangles"
+                )
+            expected_states = (self.vertex_count - 1) * (self.vertex_count - 2) // 2
+            if len(self.split_table) != expected_states:
+                raise ValueError("split table must contain every nontrivial DP state")
+            if tuple(
+                sorted(edge.squared_length.as_fraction() for edge in self.diagonals)
+            ) != tuple(term.as_fraction() for term in self.optimum.squared_lengths):
+                raise ValueError(
+                    "optimum expression must list the selected diagonal lengths"
+                )
+            _replay_euclidean_triangulation(self, points)
+        return self
+
+
+def _replay_euclidean_triangulation(
+    result: EuclideanConvexPolygonTriangulationResult,
+    points: tuple[tuple[Fraction, Fraction], ...],
+) -> None:
+    """Replay the bounded recurrence that binds a certified result to its source."""
+
+    count = len(points)
+    expected_entries = tuple(
+        (start, start + span)
+        for span in range(2, count)
+        for start in range(count - span)
+    )
+    actual_entries = tuple((entry.start, entry.end) for entry in result.split_table)
+    if actual_entries != expected_entries:
+        raise ValueError("split table must use deterministic span/start order")
+
+    optimum: dict[tuple[int, int], tuple[Fraction, ...]] = {
+        (index, index + 1): () for index in range(count - 1)
+    }
+    splits: dict[tuple[int, int], int] = {}
+    for entry in result.split_table:
+        start, end = entry.start, entry.end
+        boundary = (
+            ()
+            if end == start + 1 or (start, end) == (0, count - 1)
+            else (_euclidean_squared_length(points, start, end),)
+        )
+        candidates = tuple(
+            (
+                tuple(sorted(optimum[start, pivot] + optimum[pivot, end] + boundary)),
+                pivot,
+            )
+            for pivot in range(start + 1, end)
+        )
+        chosen = tuple(term.as_fraction() for term in entry.optimum.squared_lengths)
+        expected = next(
+            (candidate for candidate, pivot in candidates if pivot == entry.split),
+            None,
+        )
+        if expected != chosen:
+            raise ValueError("split-table optimum must equal its selected recurrence")
+        for candidate, pivot in candidates:
+            order = _compare_euclidean_root_sums(candidate, chosen)
+            if order is None:
+                raise ValueError(
+                    "certified split table contains an unresolved comparison"
+                )
+            if order < 0 or (order == 0 and pivot < entry.split):
+                raise ValueError("split-table choice is not the deterministic minimum")
+        optimum[start, end] = chosen
+        splits[start, end] = entry.split
+
+    if result.optimum is None or optimum[0, count - 1] != tuple(
+        term.as_fraction() for term in result.optimum.squared_lengths
+    ):
+        raise ValueError("result optimum must equal the root DP value")
+
+    triangles: list[tuple[int, int, int]] = []
+    diagonals: set[tuple[int, int]] = set()
+
+    def reconstruct(start: int, end: int) -> None:
+        if end == start + 1:
+            return
+        pivot = splits[start, end]
+        triangles.append((start, pivot, end))
+        if end != start + 1 and (start, end) != (0, count - 1):
+            diagonals.add((start, end))
+        reconstruct(start, pivot)
+        reconstruct(pivot, end)
+
+    reconstruct(0, count - 1)
+    if tuple(sorted(triangles)) != tuple(item.vertices for item in result.triangles):
+        raise ValueError("triangles must reconstruct from the certified split table")
+    actual_diagonals = tuple((item.first, item.second) for item in result.diagonals)
+    if actual_diagonals != tuple(sorted(diagonals)):
+        raise ValueError("diagonals must reconstruct from the certified split table")
+    for diagonal in result.diagonals:
+        if diagonal.squared_length.as_fraction() != _euclidean_squared_length(
+            points, diagonal.first, diagonal.second
+        ):
+            raise ValueError("diagonal squared length must match the source polygon")
+
+
 # ---------------------------------------------------------------------------
 # Configuration-level operations (issues #2107, #2106)
 # ---------------------------------------------------------------------------

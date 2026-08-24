@@ -1,9 +1,14 @@
 """Polygon-owned exact geometry operations."""
 
 from jacobian.catalog._examples import example
+from jacobian.math.geometry._euclidean_triangulation import (
+    minimum_euclidean_weight_triangulation,
+)
 from jacobian.math.geometry._models import (
     ConvexPolygonTriangulationRequest,
     ConvexPolygonTriangulationResult,
+    EuclideanConvexPolygonTriangulationRequest,
+    EuclideanConvexPolygonTriangulationResult,
     GeometryRationalResult,
     PolygonPointClassificationResult,
     PolygonRequest,
@@ -26,6 +31,34 @@ _UNIT_SQUARE = [
 ]
 
 POLYGON_OPERATIONS = (
+    geometry_operation(
+        "geometry.polygon.triangulation.minimum_euclidean_weight.compute",
+        "Compute a certified minimum Euclidean convex-polygon triangulation",
+        (
+            "Compute one deterministic minimum triangulation of a strict CCW convex "
+            "rational polygon, charging each selected non-hull diagonal once by its "
+            "Euclidean length. Returns the exact sum-of-square-roots cost expression "
+            "only when every finite dynamic-programming comparison is separated by "
+            "a pinned 128-bit outward-rounded Arb interval; otherwise returns the "
+            "first unresolved exact comparison without claiming an optimum."
+        ),
+        EuclideanConvexPolygonTriangulationRequest,
+        EuclideanConvexPolygonTriangulationResult,
+        minimum_euclidean_weight_triangulation,
+        "geometry",
+        "polygon",
+        "triangulation",
+        "optimization",
+        "euclidean",
+        "square-root-sum",
+        examples=(
+            example(
+                "unit_square_euclidean",
+                "Triangulate a unit square under the non-hull Euclidean diagonal-length objective.",
+                {"polygon": {"points": _UNIT_SQUARE}},
+            ),
+        ),
+    ),
     geometry_operation(
         "geometry.polygon.triangulation.minimum_weight.compute",
         "Compute an exact minimum-weight convex-polygon triangulation",

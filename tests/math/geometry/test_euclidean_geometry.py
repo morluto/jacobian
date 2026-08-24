@@ -1,5 +1,7 @@
 """Tests for Euclidean geometry operations."""
 
+from jacobian.math.geometry._models import ConvexPolygonTriangulationRequest
+from jacobian.math.geometry._triangulation import minimum_weight_triangulation
 from jacobian.math.geometry.euclidean._models import (
     AngleEqualityRequest,
     RationalPoint2D,
@@ -44,6 +46,31 @@ class TestSegmentRatio:
                 segment1=(_pt(0, 0), _pt(1, 0)),
                 segment2=(_pt(0, 0), _pt(0, 0)),
             )
+
+
+class TestRationalWeightTriangulation:
+    def test_charges_a_selected_diagonal_once(self):
+        request = ConvexPolygonTriangulationRequest(
+            polygon={
+                "points": (
+                    {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
+                    {"x": {"num": "1", "den": "1"}, "y": {"num": "0", "den": "1"}},
+                    {"x": {"num": "1", "den": "1"}, "y": {"num": "1", "den": "1"}},
+                    {"x": {"num": "0", "den": "1"}, "y": {"num": "1", "den": "1"}},
+                )
+            },
+            diagonal_weights=(
+                {"first": 0, "second": 2, "weight": {"num": "1", "den": "1"}},
+                {"first": 1, "second": 3, "weight": {"num": "2", "den": "1"}},
+            ),
+        )
+
+        result = minimum_weight_triangulation(request)
+
+        assert result.optimum.as_fraction() == 1
+        assert tuple((edge.first, edge.second) for edge in result.diagonals) == (
+            (0, 2),
+        )
 
 
 class TestAngleEquality:

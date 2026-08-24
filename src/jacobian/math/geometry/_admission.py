@@ -76,6 +76,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "distinct exact or explicitly bounded search outcome with material computational leverage",
     ),
     OperationAdmission(
+        "geometry.polygon.triangulation.minimum_euclidean_weight.compute",
+        AdmissionDecision.KEEP,
+        "distinct bounded Euclidean optimization outcome: unlike caller-supplied rational weights, it owns exact diagonal lengths and only reports an optimum after every finite root-sum comparison is certified",
+    ),
+    OperationAdmission(
         "geometry.segment.compute.midpoint",
         AdmissionDecision.DROP,
         "elementary exact formula without material leverage over direct Python",

@@ -49,8 +49,11 @@ def minimum_weight_triangulation(
                 (
                     optimum[start, pivot]
                     + optimum[pivot, end]
-                    + edge_weight(start, pivot)
-                    + edge_weight(pivot, end),
+                    # Every non-hull diagonal is the boundary of exactly one
+                    # non-root subproblem.  Charging that boundary here counts
+                    # it once; charging the two child boundaries counts a
+                    # selected diagonal again when it becomes a child boundary.
+                    + edge_weight(start, end),
                     pivot,
                 )
                 for pivot in range(start + 1, end)

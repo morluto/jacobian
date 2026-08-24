@@ -184,41 +184,40 @@ def test_partial_trace_rejects_unknown_and_repeated_factor_labels() -> None:
         SubsystemPartialTraceRequest(matrix=source, traced_factor_labels=("q", "q"))
 
 
-def test_partial_trace_result_admits_sources_before_replaying_the_trace(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from jacobian.math.matrices.subsystems import _models
-
-    q16 = MatrixSubsystem(label="q", dimension=16)
+def test_partial_trace_result_replays_exact_entries_and_bounds_forged_sources() -> None:
     q = MatrixSubsystem(label="q", dimension=2)
     base = compute_partial_trace(
         SubsystemPartialTraceRequest(
             matrix=_matrix([[1, 0], [0, 2]], (q,)), traced_factor_labels=("q",)
         )
     )
-    heavy_entries = [
-        [Fraction(1, 10**300) if row == column else Fraction(0) for column in range(16)]
-        for row in range(16)
-    ]
+    assert (
+        SubsystemPartialTraceResult.model_validate(base.model_dump(mode="python"))
+        == base
+    )
 
     forged = base.model_dump(mode="python")
-    forged["source_matrix"] = _matrix(heavy_entries, (q16,))
-    replayed: list[object] = []
+    forged["reduced_matrix"] = _matrix([[1]], ())
+    with pytest.raises(ValidationError, match="replay"):
+        SubsystemPartialTraceResult.model_validate(forged)
 
-    def guard(*args: object) -> tuple[tuple[Fraction, ...], ...]:
-        replayed.append(args)
-        return ((Fraction(0),),)
-
-    monkeypatch.setattr(_models, "partial_trace_entries", guard)
+    beyond_envelope = _matrix(
+        [
+            [Fraction(1, 10**4098 + 1), 0],
+            [0, Fraction(1, 10**4098 + 1)],
+        ],
+        (q,),
+    )
+    forged = base.model_dump(mode="python")
+    forged["source_matrix"] = beyond_envelope
     with pytest.raises(ValidationError, match="4098"):
         SubsystemPartialTraceResult.model_validate(forged)
-    assert not replayed
 
 
-def test_partial_trace_boundary_trace_bound_round_trips_as_a_result() -> None:
+def test_partial_trace_boundary_result_components_round_trip() -> None:
     q = MatrixSubsystem(label="q", dimension=2)
-    boundary_denominator = 10**2048 - 1
-    over_denominator = 10**2049 - 1
+    boundary_denominator = 10**4097 + 9
+    over_denominator = 10**4098 + 1
     boundary_source = _matrix(
         [
             [Fraction(1, boundary_denominator), 0],
@@ -232,7 +231,7 @@ def test_partial_trace_boundary_trace_bound_round_trips_as_a_result() -> None:
     )
 
     reduced = partial_trace(boundary_source, ("q",))
-    assert len(reduced.matrix.entries[0][0].den) == 2048
+    assert len(reduced.matrix.entries[0][0].den) == 4098
     wire = compute_partial_trace(
         SubsystemPartialTraceRequest(
             matrix=boundary_source, traced_factor_labels=("q",)
@@ -331,11 +330,13 @@ def test_operation_input_digits_are_checked_before_exact_backend_work() -> None:
         PsdOrderRequest(left=source, right=source)
 
 
-def test_kronecker_product_schema_describes_the_coupled_operand_digit_bound() -> None:
+def test_kronecker_product_schema_describes_the_exact_product_component_envelope() -> (
+    None
+):
     schema = SubsystemKroneckerProductRequest.model_json_schema()
     for side in ("left", "right"):
         description = schema["properties"][side]["description"]
-        assert "couples both operands" in description
+        assert "exact product coefficients" in description
         assert "256" in description
 
 
@@ -473,6 +474,30 @@ def test_partial_trace_readmits_its_emitted_values_across_sequential_traces() ->
     assert _entries(stepwise) == ((first + second + 2,),)
 
 
+def test_partial_trace_readmits_sequential_boundary_traces_of_one_coordinate() -> None:
+    y = MatrixSubsystem(label="y", dimension=2)
+    z = MatrixSubsystem(label="z", dimension=2)
+    first = Fraction(1, 10**2047 + 19)
+    second = Fraction(1, 10**2047 + 21)
+    source = _matrix(
+        [
+            [first, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, second, 0],
+            [0, 0, 0, 1],
+        ],
+        (y, z),
+    )
+
+    reduced = partial_trace(source, ("y",))
+    assert len(reduced.matrix.entries[0][0].den) == 4095
+    stepwise = partial_trace(reduced, ("z",))
+    combined = partial_trace(source, ("y", "z"))
+    assert stepwise == combined
+    assert stepwise.factors == ()
+    assert _entries(stepwise) == ((first + second + 2,),)
+
+
 def test_kronecker_product_readmits_its_emitted_product_as_an_operand() -> None:
     q = MatrixSubsystem(label="q", dimension=2)
     r = MatrixSubsystem(label="r", dimension=2)
@@ -493,6 +518,27 @@ def test_kronecker_product_readmits_its_emitted_product_as_an_operand() -> None:
         for row in range(8)
     )
     assert kronecker_product(left, kronecker_product(middle, right)) == twice
+
+
+def test_kronecker_product_composes_boundary_products_with_identity_operands() -> None:
+    q = MatrixSubsystem(label="q", dimension=1)
+    r = MatrixSubsystem(label="r", dimension=1)
+    s = MatrixSubsystem(label="s", dimension=1)
+    left_value = Fraction(1, 9 * 10**127 + 1)
+    right_value = Fraction(1, 9 * 10**127 + 3)
+    product = kronecker_product(
+        _matrix([[left_value]], (q,)),
+        _matrix([[right_value]], (r,)),
+    )
+    assert len(product.matrix.entries[0][0].den) == 256
+
+    identity = _matrix([[1]], (s,))
+    scaled = kronecker_product(product, identity)
+    assert scaled.factors == (q, r, s)
+    assert _entries(scaled) == ((left_value * right_value,),)
+    prefixed = kronecker_product(identity, product)
+    assert prefixed.factors == (s, q, r)
+    assert _entries(prefixed) == ((left_value * right_value,),)
 
 
 def test_native_functions_admit_through_one_typed_request_parse() -> None:

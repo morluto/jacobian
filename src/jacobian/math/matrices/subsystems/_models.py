@@ -30,24 +30,46 @@ def _component_digits(matrix: FactorizedHermitianMatrix) -> tuple[int, int]:
     return max(numerators, default=1), max(denominators, default=1)
 
 
-def _trace_component_digit_bound(
-    matrix: FactorizedHermitianMatrix,
-    *,
-    traced_factor_labels: tuple[str, ...],
-) -> int:
-    """Bound one trace coordinate after a common-denominator exact sum."""
+def _fraction_component_digits(value: Fraction) -> tuple[int, int]:
+    """Count one exact fraction's signed-numerator and denominator digits."""
 
-    numerator_digits, denominator_digits = _component_digits(matrix)
-    trace_dimension = 1
-    for factor in matrix.factors:
-        if factor.label in traced_factor_labels:
-            trace_dimension *= factor.dimension
-    # A common denominator is the product of at most trace_dimension input
-    # denominators.  Each numerator has one input numerator and the remaining
-    # denominator factors; summing them adds at most decimal digits(trace_dimension).
-    return max(numerator_digits, denominator_digits) * trace_dimension + len(
-        str(trace_dimension)
+    return len(str(abs(value.numerator))), len(str(value.denominator))
+
+
+def _entry_fractions(
+    matrix: FactorizedHermitianMatrix,
+) -> tuple[tuple[Fraction, ...], ...]:
+    return tuple(
+        tuple(entry.as_fraction() for entry in row) for row in matrix.matrix.entries
     )
+
+
+def _require_trace_result_envelope(
+    expected_entries: tuple[tuple[Fraction, ...], ...],
+) -> None:
+    """Admit one trace whose exact reduced coefficients fit the result bound.
+
+    Both request validation and result replay derive the exact reduced
+    entries first and admit those measured components rather than a
+    per-input estimate, so an emitted value re-enters its own consumer
+    unchanged unless its next exact result genuinely exceeds the bound, and
+    a transported or authored source can never drive the common-denominator
+    sums outside the admitted envelope.
+    """
+
+    measured = max(
+        (
+            max(_fraction_component_digits(entry))
+            for row in expected_entries
+            for entry in row
+        ),
+        default=1,
+    )
+    if measured > MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS:
+        raise ValueError(
+            "partial-trace coefficient growth exceeds the "
+            f"{MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS}-digit result bound"
+        )
 
 
 def _psd_witness_digit_bound(
@@ -102,62 +124,41 @@ def _require_psd_pair_admission(
         )
 
 
-def _require_trace_admission(
-    matrix: FactorizedHermitianMatrix,
-    *,
-    traced_factor_labels: tuple[str, ...],
-) -> None:
-    """Admit one trace pair only inside the derived trace envelope.
-
-    Both request validation and result replay call this before any backend
-    work, so a transported or authored result can never drive the exact
-    common-denominator sums with sources outside the admitted trace bound.
-    """
-
-    if (
-        _trace_component_digit_bound(
-            matrix,
-            traced_factor_labels=traced_factor_labels,
-        )
-        > MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS
-    ):
-        raise ValueError(
-            "partial-trace coefficient growth exceeds the "
-            f"{MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS}-digit result bound"
-        )
-
-
 class SubsystemKroneckerProductRequest(StrictModel):
     """Two factorized rational Hermitian matrices for one product."""
 
     left: FactorizedHermitianMatrix = Field(
         description=(
             "First operand; no fixed per-operand digit ceiling applies. "
-            "Admission couples both operands through max(left numerator + "
-            "right numerator, left denominator + right denominator) decimal "
-            "digits, bounded by the 256-digit product component envelope."
+            "Admission evaluates the exact product coefficients and admits "
+            "the pair when every numerator and denominator stays within the "
+            "256-digit product component envelope."
         ),
     )
     right: FactorizedHermitianMatrix = Field(
         description=(
             "Second operand; no fixed per-operand digit ceiling applies. "
-            "Admission couples both operands through max(left numerator + "
-            "right numerator, left denominator + right denominator) decimal "
-            "digits, bounded by the 256-digit product component envelope."
+            "Admission evaluates the exact product coefficients and admits "
+            "the pair when every numerator and denominator stays within the "
+            "256-digit product component envelope."
         ),
     )
 
     @model_validator(mode="after")
     def require_product_envelope(self) -> Self:
-        left_numerator, left_denominator = _component_digits(self.left)
-        right_numerator, right_denominator = _component_digits(self.right)
-        if (
-            max(
-                left_numerator + right_numerator,
-                left_denominator + right_denominator,
-            )
-            > MAX_KRONECKER_RESULT_COMPONENT_DIGITS
-        ):
+        left_entries = _entry_fractions(self.left)
+        right_entries = _entry_fractions(self.right)
+        measured = max(
+            (
+                max(_fraction_component_digits(left_entry * right_entry))
+                for left_row in left_entries
+                for left_entry in left_row
+                for right_row in right_entries
+                for right_entry in right_row
+            ),
+            default=1,
+        )
+        if measured > MAX_KRONECKER_RESULT_COMPONENT_DIGITS:
             raise ValueError(
                 "Kronecker product coefficient growth exceeds the "
                 f"{MAX_KRONECKER_RESULT_COMPONENT_DIGITS}-digit result bound"
@@ -209,9 +210,8 @@ class SubsystemPartialTraceRequest(StrictModel):
         )
         if self.traced_factor_labels != expected_order:
             raise ValueError("traced subsystem labels must follow source factor order")
-        _require_trace_admission(
-            self.matrix,
-            traced_factor_labels=self.traced_factor_labels,
+        _require_trace_result_envelope(
+            partial_trace_entries(self.matrix, self.traced_factor_labels)
         )
         return self
 
@@ -238,10 +238,11 @@ class SubsystemPartialTraceResult(StrictModel):
         )
         if self.traced_factor_labels != expected_order:
             raise ValueError("traced subsystem labels must follow source factor order")
-        _require_trace_admission(
+        expected_entries = partial_trace_entries(
             self.source_matrix,
-            traced_factor_labels=self.traced_factor_labels,
+            self.traced_factor_labels,
         )
+        _require_trace_result_envelope(expected_entries)
         expected = tuple(
             factor
             for factor in self.source_matrix.factors
@@ -251,10 +252,6 @@ class SubsystemPartialTraceResult(StrictModel):
             raise ValueError(
                 "partial trace must retain untraced factors in source order"
             )
-        expected_entries = partial_trace_entries(
-            self.source_matrix,
-            self.traced_factor_labels,
-        )
         actual_entries = tuple(
             tuple(entry.as_fraction() for entry in row)
             for row in self.reduced_matrix.matrix.entries

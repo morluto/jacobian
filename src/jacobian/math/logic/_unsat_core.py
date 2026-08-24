@@ -43,9 +43,11 @@ class SmtUnsatCoreRequest(SmtSolveRequest):
     of any closed arithmetic coefficient, including every scalar coefficient and
     translated constant obtained by flattening nested products and signed affine
     sums through coefficient-preserving wrappers (negation, additions and
-    subtractions over closed and variable-carrying operands, and exact division
+    subtractions over closed and variable-carrying operands, exact division
     by closed nonzero constants, integer division included when every divided
-    coefficient remains exactly divisible).
+    coefficient remains exactly divisible, and arithmetic if-then-else
+    selections, where scaling is bounded by the largest coefficient reachable
+    through any branch).
     Assertion source order is the public zero-based index. Parsing constructs Z3
     syntax trees only; it does not evaluate the source as Python or as a host
     command. Execution performs one tracked check and at most one direct
@@ -298,12 +300,14 @@ def _normalize_closed_coefficients(assertions: tuple[Any, ...]) -> tuple[Any, ..
     normalized_by_id: dict[int, Any] = {}
     closed_value_by_id: dict[int, Fraction | None] = {}
     form_by_id: dict[int, _AffineForm | None] = {}
+    height_by_id: dict[int, Fraction] = {}
     return tuple(
         _normalize_closed_expression(
             assertion,
             normalized_by_id=normalized_by_id,
             closed_value_by_id=closed_value_by_id,
             form_by_id=form_by_id,
+            height_by_id=height_by_id,
         )
         for assertion in assertions
     )
@@ -336,6 +340,7 @@ def _fold_scaled_product(
     child_values: tuple[Fraction | None, ...],
     *,
     form_by_id: dict[int, _AffineForm | None],
+    height_by_id: dict[int, Fraction],
 ) -> tuple[Any, _AffineForm | None]:
     """Flatten one product with a single variable-carrying affine child."""
 
@@ -347,12 +352,14 @@ def _fold_scaled_product(
     if len(open_indices) != 1:
         return candidate, None
     dependent = children[open_indices[0]]
-    child_form = form_by_id.get(dependent.get_id())
-    if child_form is None:
-        child_form = (((Fraction(1), dependent),), Fraction(0))
     coefficient = _bounded_fraction_product(
         tuple(value for value in child_values if value is not None)
     )
+    child_form = form_by_id.get(dependent.get_id())
+    if child_form is None:
+        scaled_height = coefficient * height_by_id.get(dependent.get_id(), Fraction(1))
+        _require_bounded_normalized_coefficient(scaled_height)
+        child_form = (((Fraction(1), dependent),), Fraction(0))
     terms, offset = child_form
     scaled_terms: list[tuple[Fraction, Any]] = []
     for term_coefficient, core in terms:
@@ -374,6 +381,7 @@ def _normalize_closed_expression(
     normalized_by_id: dict[int, Any],
     closed_value_by_id: dict[int, Fraction | None],
     form_by_id: dict[int, _AffineForm | None],
+    height_by_id: dict[int, Fraction],
 ) -> Any:
     """Normalize one expression without retaining a recursive closure over its AST."""
 
@@ -391,16 +399,19 @@ def _normalize_closed_expression(
         normalized_by_id[expression_id] = expression
         closed_value_by_id[expression_id] = value
         form_by_id[expression_id] = ((), value)
+        height_by_id[expression_id] = abs(value)
         return expression
     if not z3.is_app(expression):
         normalized_by_id[expression_id] = expression
         closed_value_by_id[expression_id] = None
         form_by_id[expression_id] = None
+        height_by_id[expression_id] = Fraction(1)
         return expression
     if z3.is_arith(expression) and not expression.children():
         normalized_by_id[expression_id] = expression
         closed_value_by_id[expression_id] = None
         form_by_id[expression_id] = (((Fraction(1), expression),), Fraction(0))
+        height_by_id[expression_id] = Fraction(1)
         return expression
 
     children = expression.children()
@@ -410,6 +421,7 @@ def _normalize_closed_expression(
             normalized_by_id=normalized_by_id,
             closed_value_by_id=closed_value_by_id,
             form_by_id=form_by_id,
+            height_by_id=height_by_id,
         )
         for child in children
     )
@@ -423,7 +435,11 @@ def _normalize_closed_expression(
 
     child_values = tuple(closed_value_by_id[child.get_id()] for child in children)
     candidate, form = _fold_scaled_product(
-        candidate, children, child_values, form_by_id=form_by_id
+        candidate,
+        children,
+        child_values,
+        form_by_id=form_by_id,
+        height_by_id=height_by_id,
     )
 
     closed_value = _evaluate_closed_arithmetic(candidate.decl().kind(), child_values)
@@ -434,12 +450,21 @@ def _normalize_closed_expression(
         form = _wrapped_linear_form(
             candidate, children, child_values, form_by_id=form_by_id
         )
+    height = (
+        abs(closed_value)
+        if closed_value is not None
+        else _coefficient_height(
+            candidate.decl().kind(), children, child_values, height_by_id=height_by_id
+        )
+    )
 
     normalized_by_id[expression_id] = candidate
     closed_value_by_id[expression_id] = closed_value
     form_by_id[expression_id] = form
+    height_by_id[expression_id] = height
     if not candidate.eq(expression):
         form_by_id[candidate.get_id()] = form
+        height_by_id[candidate.get_id()] = height
     return candidate
 
 
@@ -495,6 +520,56 @@ def _wrapped_linear_form(
         _require_bounded_normalized_coefficient(scaled_offset)
         return (tuple(scaled_terms), scaled_offset)
     return None
+
+
+def _coefficient_height(
+    kind: int,
+    children: tuple[Any, ...],
+    child_values: tuple[Fraction | None, ...],
+    *,
+    height_by_id: dict[int, Fraction],
+) -> Fraction:
+    """Bound every coefficient reachable in one expression's linear reading.
+
+    Arithmetic if-then-else selects exactly one branch, so its envelope is the
+    largest branch envelope; products multiply envelopes and signed sums merge
+    them, matching every scalar the preserving wrappers can derive downstream.
+    """
+
+    import z3
+
+    child_heights = tuple(height_by_id[child.get_id()] for child in children)
+    if kind == z3.Z3_OP_ITE and len(child_heights) == 3:
+        return max(child_heights[1], child_heights[2])
+    if kind == z3.Z3_OP_UMINUS:
+        return child_heights[0]
+    total = Fraction(0)
+    if kind == z3.Z3_OP_SUB:
+        total += child_heights[0]
+        _require_bounded_normalized_coefficient(total)
+        child_heights = child_heights[1:]
+    if kind in (z3.Z3_OP_ADD, z3.Z3_OP_SUB):
+        for height in child_heights:
+            total += height
+            _require_bounded_normalized_coefficient(total)
+        return total
+    if kind == z3.Z3_OP_MUL:
+        return _bounded_fraction_product(child_heights)
+    if (
+        len(children) == 2
+        and kind in (z3.Z3_OP_DIV, z3.Z3_OP_IDIV)
+        and child_values[1] is not None
+        and child_values[1] != 0
+    ):
+        scaled = child_heights[0] / abs(child_values[1])
+        if kind == z3.Z3_OP_IDIV:
+            scaled += 1
+        _require_bounded_normalized_coefficient(scaled)
+        return scaled
+    for height in child_heights:
+        total += height
+        _require_bounded_normalized_coefficient(total)
+    return total
 
 
 def _combined_signed_form(

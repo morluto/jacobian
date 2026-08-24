@@ -682,6 +682,65 @@ def test_request_bounds_integer_division_translated_constant_digits() -> None:
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=template.format(constant="9" * 256))
 
 
+def test_request_bounds_arithmetic_ite_branch_coefficient_digits() -> None:
+    factor = "9" * 128
+    boundary = (
+        "(set-logic QF_LIA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const x Int)\n"
+        f"(assert (= (* {factor} (ite p (* {factor} x) 0)) 0))\n"
+        "(check-sat)\n"
+    )
+    over = boundary.replace(factor, "9" * 129, 1)
+
+    assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=boundary)
+    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=over)
+
+
+@pytest.mark.parametrize(
+    "assertion_template",
+    (
+        "(assert (= (* {outer} (ite p (* {inner} x) 0)) 0))",
+        "(assert (= (* {outer} (ite p x (* {inner} x))) 0))",
+        "(assert (= (* {outer} (- (ite p (* {inner} x) 0))) 0))",
+        "(assert (= (* {outer} (- (- (ite p (* {inner} x) 0)))) 0))",
+        "(assert (= (* {outer} (+ (ite p (* {inner} x) 0) 1)) 0))",
+    ),
+)
+def test_request_bounds_scaled_ite_branch_coefficient_digits(
+    assertion_template: str,
+) -> None:
+    outer = "9" * 200
+    inner = "9" * 200
+    source = (
+        "(set-logic QF_LIA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const x Int)\n"
+        f"{assertion_template.format(outer=outer, inner=inner)}\n"
+        "(check-sat)\n"
+    )
+
+    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source)
+
+
+@pytest.mark.parametrize("nesting", (2, 3))
+def test_request_bounds_deeply_nested_ite_branch_coefficients(nesting: int) -> None:
+    factor = "9" * 128
+    term = f"(* {factor} " * nesting + f"(ite p (* {factor} x) 0)" + ")" * nesting
+    source = (
+        "(set-logic QF_LIA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const x Int)\n"
+        f"(assert (= {term} 0))\n"
+        "(check-sat)\n"
+    )
+
+    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source)
+
+
 def test_translated_nested_coefficients_flatten_and_still_solve() -> None:
     source = (
         "(set-logic QF_LIA)\n"
@@ -802,6 +861,37 @@ def test_non_exact_integer_division_remains_admitted() -> None:
 
     assert result.outcome == "UNSAT"
     assert result.core_indices == (0, 1)
+
+
+def test_bounded_ite_branch_coefficients_flatten_and_still_solve() -> None:
+    source = (
+        "(set-logic QF_LIA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const x Int)\n"
+        "(assert (>= (* 2 (ite p (* 2 x) 0)) 8))\n"
+        "(assert (<= x 1))\n"
+        "(check-sat)\n"
+    )
+
+    result = compute_smt_unsat_core(SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source))
+
+    assert result.outcome == "UNSAT"
+    assert result.core_indices == (0, 1)
+
+
+def test_small_ite_branch_scalars_remain_admitted_and_satisfiable() -> None:
+    source = (
+        "(set-logic QF_LIA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const x Int)\n"
+        "(assert (>= (* 2 (ite p x 0)) 0))\n"
+        "(check-sat)\n"
+    )
+
+    result = compute_smt_unsat_core(SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source))
+
+    assert result.outcome == "SAT"
+    assert result.core_indices == ()
 
 
 def test_request_bounds_parsed_ast_nodes() -> None:

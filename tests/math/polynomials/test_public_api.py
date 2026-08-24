@@ -274,3 +274,217 @@ def _canonical_key(record):
             for t in record.factor.polynomial.terms
         ),
     )
+
+
+def _sparse_polynomial(variables: tuple[str, ...], terms: dict[tuple[int, ...], str]):
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.polynomials.values import (
+        RationalPolynomial,
+        RationalPolynomialTerm,
+        SparseRationalPolynomial,
+    )
+
+    return RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=terms[exponents], den="1"),
+                    exponents=exponents,
+                )
+                for exponents in sorted(terms, reverse=True)
+            )
+        ),
+    )
+
+
+def _source_bound_result_cases() -> tuple[
+    tuple[Callable[[Any], Any], type, type], ...
+]:
+    from jacobian.math.polynomials._models import (
+        PolynomialFactorizationResult,
+        PolynomialFactorRequest,
+        PolynomialSquareFreeDecompositionResult,
+        PolynomialSquareFreeRequest,
+    )
+    from jacobian.math.polynomials._operations import (
+        polynomial_factorization,
+        polynomial_square_free_decomposition,
+    )
+
+    return (
+        (
+            polynomial_factorization,
+            PolynomialFactorRequest,
+            PolynomialFactorizationResult,
+        ),
+        (
+            polynomial_square_free_decomposition,
+            PolynomialSquareFreeRequest,
+            PolynomialSquareFreeDecompositionResult,
+        ),
+    )
+
+
+def _forged_monster_payload(dumped: dict[str, Any]) -> dict[str, Any]:
+    import copy as _copy
+
+    monster = _sparse_polynomial(
+        ("x", "y"),
+        {(first, second): "1" for first in range(16) for second in range(16)},
+    )
+    source = _sparse_polynomial(("x", "y"), {(2, 0): "1", (0, 2): "1"})
+    forged = _copy.deepcopy(dumped)
+    forged["polynomial"] = source.model_dump()
+    forged["reconstructed"] = source.model_dump()
+    forged["factors"] = [{"factor": monster.model_dump(), "multiplicity": 64}]
+    return forged
+
+
+def test_source_bound_results_reject_combinatorial_replay_claims() -> None:
+    """Forged factor records are rejected without expanding their product.
+
+    The claimed factor is a dense-box multivariate sum within the shared wire
+    limits whose multiplicity-64 power cannot be expanded; validation must
+    reject it at the first inexact division instead.
+    """
+
+    from pydantic import ValidationError
+
+    for operation, request_model, result_model in _source_bound_result_cases():
+        request = request_model(polynomial=_univariate("x", {2: "1", 0: "-1"}))
+        produced = operation(request)
+        forged = _forged_monster_payload(produced.model_dump())
+        with pytest.raises(ValidationError, match="must reconstruct"):
+            result_model.model_validate(forged)
+
+
+def test_zero_content_results_retain_no_factors() -> None:
+    """A zero coefficient cannot authenticate an arbitrary factor list."""
+
+    from pydantic import ValidationError
+
+    from jacobian.math.polynomials._models import (
+        PolynomialFactorizationResult,
+        PolynomialFactorRequest,
+    )
+    from jacobian.math.polynomials._operations import polynomial_factorization
+
+    zero = _univariate("x", {})
+    produced = polynomial_factorization(PolynomialFactorRequest(polynomial=zero))
+    assert produced.coefficient.as_fraction() == 0
+    assert PolynomialFactorizationResult.model_validate(produced.model_dump())
+
+    forged = produced.model_dump()
+    forged["factors"] = [
+        {
+            "factor": _univariate("x", {1: "1", 0: "-1"}).model_dump(),
+            "multiplicity": 1,
+        }
+    ]
+    with pytest.raises(ValidationError, match="zero content"):
+        PolynomialFactorizationResult.model_validate(forged)
+
+
+def test_factorization_replays_at_the_request_degree_cap() -> None:
+    """A pure power at the degree-127 request cap still replays exactly."""
+
+    from sympy import Poly, symbols
+
+    from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
+    from jacobian.math.polynomials._models import (
+        PolynomialFactorizationResult,
+        PolynomialFactorRequest,
+    )
+    from jacobian.math.polynomials._operations import polynomial_factorization
+
+    x = symbols("x")
+    expanded = Poly((x + 1) ** 127, x, domain="QQ")
+    coefficients = [str(int(value)) for value in expanded.all_coeffs()]
+    request = PolynomialFactorRequest(
+        polynomial=_univariate(
+            "x",
+            {
+                degree: coefficients[index]
+                for index, degree in enumerate(range(127, -1, -1))
+            },
+        )
+    )
+    result = polynomial_factorization(request)
+    records = [
+        (rational_polynomial_to_sympy(record.factor).as_expr(), record.multiplicity)
+        for record in result.factors
+    ]
+    assert records == [(x + 1, 127)]
+    assert (
+        PolynomialFactorizationResult.model_validate(result.model_dump()) == result
+    )
+
+
+def test_square_free_replays_at_the_multiplicity_cap() -> None:
+    """A pure power at the multiplicity-64 square-free cap still replays."""
+
+    from sympy import Poly, symbols
+
+    from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
+    from jacobian.math.polynomials._models import (
+        PolynomialSquareFreeDecompositionResult,
+        PolynomialSquareFreeRequest,
+    )
+    from jacobian.math.polynomials._operations import (
+        polynomial_square_free_decomposition,
+    )
+
+    x = symbols("x")
+    expanded = Poly((x + 1) ** 64, x, domain="QQ")
+    coefficients = [str(int(value)) for value in expanded.all_coeffs()]
+    request = PolynomialSquareFreeRequest(
+        polynomial=_univariate(
+            "x",
+            {
+                degree: coefficients[index]
+                for index, degree in enumerate(range(64, -1, -1))
+            },
+        )
+    )
+    result = polynomial_square_free_decomposition(request)
+    records = [
+        (rational_polynomial_to_sympy(record.factor).as_expr(), record.multiplicity)
+        for record in result.factors
+    ]
+    assert records == [(x + 1, 64)]
+    assert (
+        PolynomialSquareFreeDecompositionResult.model_validate(result.model_dump())
+        == result
+    )
+
+
+def test_result_models_parse_coefficients_above_int_str_limit() -> None:
+    """Coefficients past CPython's 4,300-digit int-str limit replay exactly.
+
+    ``CanonicalRational`` admits up to 32,768 digits through the chunked
+    canonical parser; the replay must convert it via ``as_fraction`` rather
+    than a direct ``int(...)`` cast.
+    """
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.polynomials._models import (
+        PolynomialFactorizationResult,
+        PolynomialSquareFreeDecompositionResult,
+    )
+
+    digits = 5_000
+    assert digits > 4_300
+    source = _univariate("x", {0: "9" * digits})
+    models = (
+        PolynomialFactorizationResult,
+        PolynomialSquareFreeDecompositionResult,
+    )
+    for model in models:
+        result = model(
+            polynomial=source,
+            coefficient=CanonicalRational(num="9" * digits, den="1"),
+            factors=(),
+            reconstructed=source,
+        )
+        assert model.model_validate(result.model_dump()) == result

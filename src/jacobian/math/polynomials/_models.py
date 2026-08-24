@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
@@ -34,6 +34,13 @@ _MAX_INTEGER_COEFFICIENT_DIGITS = 256
 def _degree(polynomial: RationalPolynomial, variable_index: int) -> int:
     return max(
         (term.exponents[variable_index] for term in polynomial.polynomial.terms),
+        default=0,
+    )
+
+
+def _polynomial_total_degree(polynomial: RationalPolynomial) -> int:
+    return max(
+        (sum(term.exponents) for term in polynomial.polynomial.terms),
         default=0,
     )
 
@@ -176,8 +183,9 @@ class PolynomialSquareFreeDecompositionResult(StrictModel):
     """The square-free decomposition bound to its source polynomial.
 
     Retains the canonical source polynomial so validation replays
-    ``reconstructed = polynomial`` and the exact product of the content and
-    multiplicity-weighted monic factors against it.
+    ``reconstructed = polynomial`` and, by exact division, the defining
+    relation ``polynomial = coefficient * product(factor^multiplicity)``
+    without ever forming a claimed product intermediate.
     """
 
     polynomial: RationalPolynomial
@@ -202,21 +210,34 @@ class PolynomialSquareFreeDecompositionResult(StrictModel):
             for factor in self.factors
         ):
             raise ValueError("square-free factors must use the source ring")
+        require_polynomial_budget(
+            self.polynomial,
+            maximum_terms=_MAX_GCD_TERMS,
+            maximum_exponent=_MAX_SQUARE_FREE_EXPONENT,
+            maximum_coefficient_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+            label="retained source polynomial",
+        )
+        require_polynomial_budget(
+            self.reconstructed,
+            maximum_terms=_MAX_GCD_TERMS,
+            maximum_exponent=_MAX_SQUARE_FREE_EXPONENT,
+            maximum_coefficient_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+            label="reconstructed polynomial",
+        )
         source = rational_polynomial_to_sympy(self.polynomial)
         if rational_polynomial_to_sympy(self.reconstructed) != source:
             raise ValueError("reconstructed must equal the retained source polynomial")
-        product = source * 0 + 1
-        for factor in self.factors:
-            product = (
-                product
-                * rational_polynomial_to_sympy(factor.factor) ** factor.multiplicity
-            )
-        coefficient = self.coefficient.as_fraction()
-        if product * coefficient != source:
-            raise ValueError(
+        _verify_exact_factor_product(
+            source,
+            self.factors,
+            coefficient=self.coefficient,
+            mismatch_message=(
                 "square-free factors must reconstruct the retained source "
                 "polynomial exactly"
-            )
+            ),
+            label="square-free",
+            maximum_exponent=_MAX_SQUARE_FREE_EXPONENT,
+        )
         return self
 
 
@@ -248,7 +269,7 @@ class PolynomialFactorizationResult(StrictModel):
     Retains the canonical source polynomial so validation replays the
     defining relations ``reconstructed = polynomial`` and
     ``polynomial = coefficient * product(factor^multiplicity)`` by exact
-    expansion; the literal ``product_reconstruction = EXACT`` label is
+    division; the literal ``product_reconstruction = EXACT`` label is
     derived from that replay, never accepted as evidence.  Content-and-
     monic-irreducibles normalization and canonical factor ordering remain.
     """
@@ -301,21 +322,89 @@ class PolynomialFactorizationResult(StrictModel):
                 "irreducible factors must be ordered by multiplicity, degree, "
                 "and sparse term fingerprint"
             )
+        require_polynomial_budget(
+            self.polynomial,
+            maximum_terms=_MAX_GCD_TERMS,
+            maximum_exponent=_MAX_GCD_DEGREE,
+            maximum_coefficient_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+            label="retained source polynomial",
+        )
+        require_polynomial_budget(
+            self.reconstructed,
+            maximum_terms=_MAX_GCD_TERMS,
+            maximum_exponent=_MAX_GCD_DEGREE,
+            maximum_coefficient_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+            label="reconstructed polynomial",
+        )
         source = rational_polynomial_to_sympy(self.polynomial)
         if rational_polynomial_to_sympy(self.reconstructed) != source:
             raise ValueError("reconstructed must equal the retained source polynomial")
-        product = source * 0 + 1
-        for record in self.factors:
-            product = (
-                product
-                * rational_polynomial_to_sympy(record.factor) ** record.multiplicity
-            )
-        coefficient = self.coefficient.as_fraction()
-        if product * coefficient != source:
-            raise ValueError(
+        _verify_exact_factor_product(
+            source,
+            self.factors,
+            coefficient=self.coefficient,
+            mismatch_message=(
                 "factorization must reconstruct the retained source polynomial exactly"
-            )
+            ),
+            label="irreducible",
+            maximum_exponent=_MAX_GCD_DEGREE,
+        )
         return self
+
+
+def _verify_exact_factor_product(
+    source: Any,
+    factors: tuple[PolynomialSquareFreeFactor, ...]
+    | tuple[PolynomialIrreducibleFactor, ...],
+    *,
+    coefficient: CanonicalRational,
+    mismatch_message: str,
+    label: str,
+    maximum_exponent: int,
+) -> None:
+    """Replay ``coefficient * product(factor ** multiplicity) == source``.
+
+    The replay divides the retained source by each factor once per unit of
+    multiplicity instead of forming the claimed product, so no intermediate
+    grows beyond the retained source envelope and a mismatched payload is
+    rejected at the first inexact division without expanding its claim.
+    """
+
+    from sympy import Poly, Rational
+    from sympy.polys.polyerrors import ExactQuotientFailed
+
+    from jacobian.math.polynomials._conversions import (
+        rational_polynomial_to_sympy,
+    )
+
+    if coefficient.as_fraction() == 0 and factors:
+        raise ValueError("results with zero content retain no factors")
+    quotient = source
+    for record in factors:
+        require_polynomial_budget(
+            record.factor,
+            maximum_terms=_MAX_GCD_TERMS,
+            maximum_exponent=maximum_exponent,
+            maximum_coefficient_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+            label=f"{label} factor",
+        )
+        if _polynomial_total_degree(record.factor) == 0:
+            raise ValueError(f"{label} factor must be non-constant")
+        base = rational_polynomial_to_sympy(record.factor)
+        try:
+            for _ in range(record.multiplicity):
+                quotient = quotient.exquo(base)
+        except ExactQuotientFailed as exc:
+            raise ValueError(mismatch_message) from exc
+        except Exception as exc:  # pragma: no cover - defensive
+            raise ValueError(f"invalid {label} factor replay") from exc
+    expected = Poly(
+        Rational(*coefficient.as_integer_ratio()),
+        *source.gens,
+        domain=source.domain,
+    )
+    if quotient != expected:
+        raise ValueError(mismatch_message)
 
 
 class PolynomialGroebnerBudget(StrictModel):

@@ -87,9 +87,17 @@ def _capped_add(left: int, right: int) -> int:
 def _work_multiply(left: int, right: int) -> int:
     if left == 0 or right == 0:
         return 0
-    if left > _MAX_WORK_BOUND // right:
+    # ``left * right >= 2 ** (bits(left) + bits(right) - 2)``, so operand
+    # lengths at or above the ceiling's own length force saturation without
+    # any arithmetic. Otherwise the product stays small enough to
+    # materialize, and comparing it against the ceiling directly replaces
+    # an expensive wide division while remaining exact.
+    if left.bit_length() + right.bit_length() - 2 >= _MAX_WORK_BOUND.bit_length():
         return _MAX_WORK_BOUND + 1
-    return left * right
+    product = left * right
+    if product > _MAX_WORK_BOUND:
+        return _MAX_WORK_BOUND + 1
+    return product
 
 
 def _work_add(left: int, right: int) -> int:
@@ -464,7 +472,6 @@ def _linear_result_component_bounds(
 def _general_result_component_bounds(
     matrix: RationalMatrix,
     polynomial: RationalPolynomial,
-    degree: int,
 ) -> tuple[tuple[tuple[int, int], ...], int]:
     """Bound ``f(A)`` after clearing one exact global denominator.
 
@@ -504,23 +511,32 @@ def _general_result_component_bounds(
     stands and oversized growth is rejected during request validation rather
     than after execution.
 
-    The dense sum charged with ``Q^degree`` is retained as a second,
-    never-structural work bound: its digit size drives the coupled
-    digit-work estimate independently of how small the exact result is.
-    Horner does not skip structurally dead leading powers -- each rides the
-    accumulator until a shifted multiplication clears it, and that clearing
-    step pairs its full-height entries against live ones once. The work sum
-    therefore charges every dead term at its saturated shift
-    ``min(exponent, longest walk)`` under a private lifting scale ``W`` over
-    the dead denominators (rejected at the component cap, since mixed
-    Horner intermediates could compound to it while dead terms coexist with
-    surviving ones), and ``V W Q^degree`` bounds every intermediate
-    denominator while dead terms ride. In the constant-result branch no
-    clearing denominator exists; shifted Horner intermediates there carry
-    rational heights compounded over at most the longest support walk,
-    driven by the largest input entry height. The zero-matrix case is
-    handled separately because its intermediates are individual input
-    coefficients.
+    The dense sum is retained as a second, never-structural work bound: its
+    digit size drives the coupled digit-work estimate independently of how
+    small the exact result is. Horner does not skip structurally dead
+    leading powers -- each rides the accumulator until a shifted
+    multiplication clears it, and that clearing step pairs its full-height
+    entries against live ones once. The work sum therefore charges every
+    dead term at its saturated shift ``min(exponent, longest walk)`` under a
+    private lifting scale ``W`` over the dead denominators (rejected at the
+    component cap, since mixed Horner intermediates could compound to it
+    while dead terms coexist with surviving ones). Intermediate
+    denominators compound only across live shifts -- a surviving term rides
+    to its own exponent while a dead term dies at its clearing
+    multiplication -- so ``V W Q^S`` bounds every intermediate denominator,
+    where ``S`` is the maximum live Horner shift over the polynomial terms,
+    ``max(min(exponent, longest walk))``, and falls below the raw ordinary
+    degree exactly when structurally dead leading terms exist; charging
+    that raw degree instead would reject requests whose every intermediate
+    stays within one small compounded denominator. Work proxies saturate
+    at the dedicated work ceiling rather than one canonical component:
+    honest charges such as compounded shifted heights legitimately exceed
+    a single result component before the coupled digit-work bound rejects
+    them. In the constant-result branch no clearing denominator exists;
+    shifted Horner intermediates there carry rational heights compounded
+    over at most the longest support walk, driven by the largest input
+    entry height. The zero-matrix case is handled separately because its
+    intermediates are individual input coefficients.
     """
 
     matrix_ratios = tuple(
@@ -574,7 +590,13 @@ def _general_result_component_bounds(
         # intermediates are sub-sums over powers shifted down from each
         # coefficient by at most the longest walk, so per-walk products
         # compound rational entry heights over at most that shift while
-        # coefficient components enter additively through the sum.
+        # coefficient components enter additively through the sum. These
+        # are work estimates, not result components, so they use the work
+        # arithmetic whose ceiling sits above one canonical component:
+        # clipping them at a single component cap would admit requests
+        # such as a nilpotent chain whose shifted intermediates compound
+        # several full input heights before the coupled digit-work bound
+        # sees their true size.
         entry_height = max(
             max(abs(numerator), denominator) for numerator, denominator in matrix_ratios
         )
@@ -582,17 +604,17 @@ def _general_result_component_bounds(
         work_numerator_bound = 0
         for exponent, numerator, denominator in coefficient_ratios:
             shift = min(exponent, shift_ceiling)
-            work_numerator_bound = _capped_add(
+            work_numerator_bound = _work_add(
                 work_numerator_bound,
-                _capped_multiply(
+                _work_multiply(
                     max(abs(numerator), denominator),
-                    _capped_multiply(
-                        _capped_power(entry_height, shift),
-                        _capped_power(dimension, shift - 1 if shift else 0),
+                    _work_multiply(
+                        _work_power(entry_height, shift),
+                        _work_power(dimension, shift - 1 if shift else 0),
                     ),
                 ),
             )
-        work_denominator_bound = _capped_multiply(
+        work_denominator_bound = _work_multiply(
             max(
                 (
                     denominator
@@ -600,7 +622,7 @@ def _general_result_component_bounds(
                 ),
                 default=1,
             ),
-            _capped_power(entry_height, shift_ceiling),
+            _work_power(entry_height, shift_ceiling),
         )
     else:
         common_matrix_denominator = _capped_lcm(
@@ -629,12 +651,28 @@ def _general_result_component_bounds(
                 "matrix polynomial dead-power coefficient growth exceeds the "
                 f"canonical {MAX_CANONICAL_RATIONAL_DIGITS:,}-digit result bound"
             )
+        # Intermediate denominators compound only across live shifts: a
+        # surviving term rides the accumulator up to its own exponent while
+        # a structurally dead leading term dies at its clearing
+        # multiplication, so no accumulator ever carries Q above the
+        # maximum live shift ``min(exponent, longest walk)``, which drops
+        # below the raw degree exactly when dead leading terms exist.
+        # Charging the raw degree of dead leading terms would reject
+        # requests whose every Horner intermediate stays within one
+        # compounded denominator.
+        maximum_live_shift = max(
+            (
+                exponent if longest_walk is None else min(exponent, longest_walk)
+                for exponent, _numerator, _denominator in coefficient_ratios
+            ),
+            default=0,
+        )
         work_denominator_bound = _work_multiply(
             _work_multiply(
                 common_coefficient_denominator,
                 dead_common_denominator,
             ),
-            _work_power(common_matrix_denominator, degree),
+            _work_power(common_matrix_denominator, maximum_live_shift),
         )
         # |numerator| * (Q // denominator) is at most the square of two canonical
         # components, so the exact cleared height is always safe to materialize.
@@ -663,7 +701,7 @@ def _general_result_component_bounds(
             )
             term_height = _work_multiply(
                 coefficient_lift,
-                _work_power(common_matrix_denominator, degree - exponent),
+                _work_power(common_matrix_denominator, maximum_live_shift - exponent),
             )
             output_term = _capped_multiply(output_term, matrix_power_height)
             term_height = _work_multiply(term_height, matrix_power_height)
@@ -691,7 +729,10 @@ def _general_result_component_bounds(
                 _work_multiply(
                     dead_lift,
                     _work_multiply(
-                        _work_power(common_matrix_denominator, degree - shift),
+                        _work_power(
+                            common_matrix_denominator,
+                            maximum_live_shift - shift,
+                        ),
                         matrix_power_height,
                     ),
                 ),
@@ -756,7 +797,7 @@ def _require_matrix_polynomial_output_budget(
         )
     else:
         component_bounds, maximum_arithmetic_digits = _general_result_component_bounds(
-            matrix, polynomial, degree
+            matrix, polynomial
         )
     if any(
         numerator_digits > MAX_CANONICAL_RATIONAL_DIGITS

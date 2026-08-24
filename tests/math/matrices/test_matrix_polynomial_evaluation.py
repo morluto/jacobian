@@ -628,6 +628,66 @@ def test_admission_falls_back_to_dense_bound_beyond_materialization_ceiling() ->
     assert request.matrix.entries[0][0].num == moderate
 
 
+def test_constant_result_work_estimates_are_not_clipped_at_the_component_cap() -> None:
+    # A 4x4 superdiagonal chain of 32,768-digit entries with f = t^4: every
+    # nonconstant power is structurally dead, yet Horner still materializes
+    # an A^3 entry compounding three input heights (~98,304 digits) on the
+    # way to the exact zero value. Clipping the shifted-height work proxy at
+    # one canonical component would predict 32,769 digits and admit about
+    # 5.5e11 digit-work units while execution performs about 4.9e12, so the
+    # unclipped work estimate must reject this request during validation
+    # while the same shape at heights whose compounded shifts fit the
+    # coupled budget stays admitted.
+    height = "1" + "0" * 32_767
+    chain = RationalMatrix(
+        entries=tuple(
+            tuple(
+                _rational(height) if column == row + 1 else _rational(0)
+                for column in range(4)
+            )
+            for row in range(4)
+        )
+    )
+
+    with pytest.raises(ValidationError, match="exact-arithmetic work"):
+        MatrixPolynomialEvaluationRequest(matrix=chain, polynomial=_polynomial((1, 4)))
+
+    moderate_height = "1" + "0" * 13_999
+    admitted = compute_matrix_polynomial_evaluation(
+        MatrixPolynomialEvaluationRequest(
+            matrix=RationalMatrix(
+                entries=(
+                    (
+                        _rational(0),
+                        _rational(moderate_height),
+                        _rational(0),
+                        _rational(0),
+                    ),
+                    (
+                        _rational(0),
+                        _rational(0),
+                        _rational(moderate_height),
+                        _rational(0),
+                    ),
+                    (
+                        _rational(0),
+                        _rational(0),
+                        _rational(0),
+                        _rational(moderate_height),
+                    ),
+                    (_rational(0), _rational(0), _rational(0), _rational(0)),
+                )
+            ),
+            polynomial=_polynomial((1, 4)),
+        )
+    )
+
+    assert _fractions(admitted.value) == tuple(
+        tuple(Fraction(0) for _ in range(4)) for _ in range(4)
+    )
+    assert admitted.matrix_multiplications == 4
+
+
 def test_structurally_dead_powers_are_excluded_from_digit_work_estimate() -> None:
     height = "1" + "0" * 20_000
     request = MatrixPolynomialEvaluationRequest(
@@ -689,6 +749,38 @@ def test_horner_charges_shifted_dead_leading_terms_during_their_ride() -> None:
     assert admitted.value.entries[0][0].num == "0"
     assert admitted.polynomial_degree == 50
     assert admitted.matrix_multiplications == 50
+
+
+def test_clearing_denominator_growth_is_bounded_by_live_horner_shifts() -> None:
+    # Square-zero [[0, 1/q], [0, 0]] with a 20,001-digit q and f = t^100 + t:
+    # the dead leading power clears on the first multiplication, so every
+    # Horner intermediate stays 0, I, or A and no denominator ever exceeds
+    # q. Raising the clearing denominator to the raw ordinary degree would
+    # predict q^100 (~two million work digits) and reject a request whose
+    # documented proxy 1600 * 20001^2 stays below the coupled budget;
+    # bounding denominator growth by the maximum live Horner shift admits
+    # it, and f(A) equals A exactly.
+    denominator = "1" + "0" * 20_000
+    request = MatrixPolynomialEvaluationRequest(
+        matrix=RationalMatrix(
+            entries=(
+                (_rational(0), _rational(1, denominator)),
+                (_rational(0), _rational(0)),
+            )
+        ),
+        polynomial=_polynomial((1, 100), (1, 1)),
+    )
+
+    result = compute_matrix_polynomial_evaluation(request)
+
+    assert result.value.entries[0][0].num == "0"
+    assert result.value.entries[1][0].num == "0"
+    assert result.value.entries[1][1].num == "0"
+    assert result.value.entries[0][1].num == "1"
+    assert result.value.entries[0][1].den == denominator
+    assert result.polynomial_degree == 100
+    assert result.matrix_multiplications == 100
+    assert result.scalar_product_terms == 800
 
 
 def test_dead_coefficient_powers_are_classified_before_the_coefficient_lcm() -> None:

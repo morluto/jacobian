@@ -610,9 +610,7 @@ def _per_exponent_height_bits(
             # against a 1/N coefficient, or 10000! against a /2000!
             # denominator - never inflate the accounted heights.
             contribution = (
-                weight
-                * source_term.coefficient.as_fraction()
-                * falling_product
+                weight * source_term.coefficient.as_fraction() * falling_product
             )
             class_denominator = contribution.denominator
             scaled_numerator = abs(contribution.numerator)

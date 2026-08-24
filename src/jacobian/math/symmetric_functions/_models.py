@@ -9,8 +9,8 @@ from pydantic import Field, model_validator
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 
-_MAX_PARTITION_SIZE = 100
-_MAX_PARTITION_PARTS = 50
+_MAX_PARTITION_SIZE = 500
+_MAX_PARTITION_PARTS = 200
 _MAX_POINT_COORDINATE_DIGITS = 6
 _MAX_POINT_COORDINATE_ABS = 10**_MAX_POINT_COORDINATE_DIGITS - 1
 _MAX_SCHUR_RESULT_DIGITS = 4000
@@ -32,8 +32,8 @@ PointCoordinate = Annotated[
 class IntegerPartition(StrictModel):
     """A partition of a positive integer as a weakly decreasing tuple.
 
-    Parts must be positive and weakly decreasing, there are at most 50
-    parts, and the total size (sum of the parts) is capped at 100.
+    Parts must be positive and weakly decreasing, there are at most 200
+    parts, and the total size (sum of the parts) is capped at 500.
     """
 
     parts: tuple[int, ...] = Field(
@@ -72,7 +72,7 @@ class SchurExpansionRequest(StrictModel):
     Preconditions published through this schema: ``variables`` and ``point``
     must have equal lengths in ``[1, 20]``, variable names must be distinct,
     each coordinate satisfies ``abs(coordinate) <= 999999``, and the partition
-    total size is capped at 100.
+    total size is capped at 500.
     """
 
     partition: IntegerPartition

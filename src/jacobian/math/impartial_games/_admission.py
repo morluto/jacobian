@@ -31,6 +31,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "exact bitwise xor nim sum determining the P/N outcome of a Nim position",
     ),
     OperationAdmission(
+        "game.nim.options.compute",
+        AdmissionDecision.KEEP,
+        "complete deduplicated one-move relation for a bounded canonical Nim multiset with indexed source transport",
+    ),
+    OperationAdmission(
         "game.impartial.outcome_profile.compute",
         AdmissionDecision.KEEP,
         "complete P/N position partition with Grundy values and terminal positions",

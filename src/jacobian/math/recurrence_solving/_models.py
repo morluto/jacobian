@@ -51,14 +51,14 @@ class RecurrenceFindResult(StrictModel):
 
 
 class ClosedFormRequest(StrictModel):
-    """Compute a SymPy-expression closed form for a recurrence of degree at most four."""
+    """Compute a SymPy-expression closed form for a recurrence of degree at most 16."""
 
     characteristic_coefficients: tuple[CanonicalRational, ...] = Field(
         min_length=1,
-        max_length=5,
-        description="Characteristic polynomial coefficients in descending order, with degree at most four.",
+        max_length=17,
+        description="Characteristic polynomial coefficients in descending order, with degree at most 16.",
     )
-    initial_values: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
+    initial_values: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=16)
 
     @model_validator(mode="after")
     def require_initial_values_for_order(self) -> Self:

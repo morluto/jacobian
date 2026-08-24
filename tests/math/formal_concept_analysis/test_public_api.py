@@ -7,13 +7,19 @@ from jacobian.math import formal_concept_analysis
 
 def test_exact_public_api_symbols() -> None:
     expected = (
+        "AttributeImplication",
+        "FiniteAttributeImplicationSystem",
         "FormalContext",
+        "ImplicationClosureResult",
+        "ImplicationClosureWork",
+        "ImplicationDerivation",
         "attribute_closure",
         "attribute_derivation",
         "concept_from_attributes",
         "concept_from_objects",
         "concept_lattice",
         "enumerate_concepts",
+        "implication_closure",
         "object_closure",
         "object_derivation",
     )

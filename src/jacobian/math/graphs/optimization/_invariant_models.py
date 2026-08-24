@@ -10,6 +10,7 @@ from jacobian._models import StrictModel
 from jacobian.math.graphs.optimization._coloring_models import (
     ChromaticGraph,
     GraphVertex,
+    PolynomialTimeGraph,
 )
 from jacobian.math.graphs.optimization._models import (
     OptimizationSearchStep,
@@ -19,14 +20,14 @@ from jacobian.math.graphs.optimization._models import (
 
 
 class GraphInvariantRequest(StrictModel):
-    graph: ChromaticGraph
+    graph: PolynomialTimeGraph
 
 
-class GraphMaximumMatchingGraph(ChromaticGraph):
+class GraphMaximumMatchingGraph(PolynomialTimeGraph):
     """A simple graph bounded for the polynomial-time matching operation."""
 
-    vertices: tuple[GraphVertex, ...] = Field(max_length=64)
-    edges: tuple[tuple[GraphVertex, GraphVertex], ...] = Field(max_length=2_016)
+    vertices: tuple[GraphVertex, ...] = Field(max_length=256)
+    edges: tuple[tuple[GraphVertex, GraphVertex], ...] = Field(max_length=32640)
 
 
 class GraphMaximumMatchingRequest(StrictModel):
@@ -34,7 +35,7 @@ class GraphMaximumMatchingRequest(StrictModel):
 
 
 class GraphGirthResult(StrictModel):
-    girth: StrictInt = Field(ge=0, le=32)
+    girth: StrictInt = Field(ge=0, le=256)
     has_cycle: StrictBool
 
     @model_validator(mode="after")
@@ -46,7 +47,7 @@ class GraphGirthResult(StrictModel):
 
 class GraphDiameterResult(StrictModel):
     status: Literal["COMPUTED", "NOT_APPLICABLE"]
-    diameter: StrictInt | None = Field(default=None, ge=0, le=31)
+    diameter: StrictInt | None = Field(default=None, ge=0, le=255)
     connected: StrictBool
     exactness: Literal["EXACT", "NOT_APPLICABLE"]
     detail: str | None = Field(default=None, min_length=1, max_length=512)
@@ -76,11 +77,11 @@ class GraphDiameterResult(StrictModel):
 
 
 class GraphEdgeConnectivityResult(StrictModel):
-    edge_connectivity: StrictInt = Field(ge=0, le=31)
+    edge_connectivity: StrictInt = Field(ge=0, le=255)
 
 
 class GraphVertexConnectivityResult(StrictModel):
-    vertex_connectivity: StrictInt = Field(ge=0, le=31)
+    vertex_connectivity: StrictInt = Field(ge=0, le=255)
 
 
 class GraphEulerianResult(StrictModel):
@@ -95,9 +96,9 @@ class GraphSpanningTreeCountResult(StrictModel):
 class GraphTutteBergeCertificate(StrictModel):
     certificate_schema_version: Literal["1"] = "1"
     kind: Literal["TUTTE_BERGE_BARRIER"] = "TUTTE_BERGE_BARRIER"
-    barrier_vertices: tuple[GraphVertex, ...] = Field(max_length=64)
-    odd_component_count: StrictInt = Field(ge=0, le=64)
-    upper_bound: StrictInt = Field(ge=0, le=32)
+    barrier_vertices: tuple[GraphVertex, ...] = Field(max_length=256)
+    odd_component_count: StrictInt = Field(ge=0, le=256)
+    upper_bound: StrictInt = Field(ge=0, le=128)
 
     @model_validator(mode="after")
     def require_canonical_barrier(self) -> Self:
@@ -109,7 +110,7 @@ class GraphTutteBergeCertificate(StrictModel):
 
 
 class GraphMaximumMatchingResult(StrictModel):
-    maximum_matching_cardinality: StrictInt = Field(ge=0, le=32)
+    maximum_matching_cardinality: StrictInt = Field(ge=0, le=128)
     witness_edges: tuple[tuple[GraphVertex, GraphVertex], ...]
     certificate: GraphTutteBergeCertificate
 
@@ -130,15 +131,15 @@ class GraphMaximumMatchingResult(StrictModel):
 
 
 class GraphTriangleCountResult(StrictModel):
-    triangle_count: StrictInt = Field(ge=0, le=4_960)
+    triangle_count: StrictInt = Field(ge=0, le=2_763_520)
 
 
 class GraphCoreRequest(GraphInvariantRequest):
-    k: StrictInt = Field(ge=0, le=32)
+    k: StrictInt = Field(ge=0, le=255)
 
 
 class GraphCoreResult(StrictModel):
-    k: StrictInt = Field(ge=0, le=32)
+    k: StrictInt = Field(ge=0, le=255)
     vertices: tuple[GraphVertex, ...]
 
     @model_validator(mode="after")
@@ -152,7 +153,7 @@ class GraphCoreResult(StrictModel):
 
 class GraphRadiusResult(StrictModel):
     status: Literal["COMPUTED", "NOT_APPLICABLE"]
-    radius: StrictInt | None = Field(default=None, ge=0, le=31)
+    radius: StrictInt | None = Field(default=None, ge=0, le=255)
     connected: StrictBool
     exactness: Literal["EXACT", "NOT_APPLICABLE"]
     detail: str | None = Field(default=None, min_length=1, max_length=512)

@@ -11,10 +11,13 @@ from jacobian.math.graphs.polynomials._models import (
     GraphPolynomialResult,
     MatchingPolynomialRequest,
     SparseMultivariatePolynomial,
+    TreeIndependencePolynomialRequest,
+    TreeIndependencePolynomialResult,
 )
 from jacobian.math.graphs.polynomials._operations import (
     compute_chromatic_polynomial,
     compute_flow_polynomial,
+    compute_independence_polynomial,
     compute_matching_polynomial,
     compute_tutte_polynomial,
 )
@@ -67,6 +70,14 @@ _PATH_GRAPH_EXAMPLE: dict[str, Any] = {
             {"u": 1, "v": 2},
         ],
     },
+}
+
+_PATH_TREE_EXAMPLE: dict[str, Any] = {
+    "graph": {
+        "graph_schema_version": "1",
+        "vertices": ["a", "b", "c", "d"],
+        "edges": [["a", "b"], ["b", "c"], ["c", "d"]],
+    }
 }
 
 
@@ -129,6 +140,37 @@ GRAPH_POLYNOMIAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "cycle_graph_c4_flow",
                 "Flow polynomial of the 4-cycle C4.",
                 _CYCLE_GRAPH_EXAMPLE,
+            ),
+        ),
+    ),
+    graph_polynomial_operation(
+        "graph.polynomial.independence.compute",
+        "Compute a tree independence polynomial",
+        "Compute the exact independence polynomial whose degree-k coefficient "
+        "counts independent vertex sets of cardinality k in one nonempty "
+        "finite tree. Return its source-bound dense coefficients, independence "
+        "number, total independent-set count, and canonical sparse "
+        "RationalPolynomial in QQ[x] after a scalar preflight bounds "
+        "convolution work and serialized-result size.",
+        TreeIndependencePolynomialRequest,
+        TreeIndependencePolynomialResult,
+        compute_independence_polynomial,
+        "graph",
+        "polynomial",
+        "independence",
+        "independent-sets",
+        "cardinality-count",
+        "tree",
+        "exact",
+        examples=(
+            example(
+                "path_tree_p4",
+                (
+                    "Compute the exact independence polynomial of P4; the graph "
+                    "must be a nonempty tree within this operation's bounded "
+                    "convolution-work and serialized-output envelope."
+                ),
+                _PATH_TREE_EXAMPLE,
             ),
         ),
     ),

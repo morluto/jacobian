@@ -241,3 +241,113 @@ def test_inertia_congruence_invariance() -> None:
         transformed.n_negative,
         transformed.n_zero,
     ) == (result.n_positive, result.n_negative, result.n_zero)
+
+
+def _encoded_inertia_payload_near_limit(offset: int) -> bytes:
+    """Encode an inertia request whose echoed source matrix lands exactly
+    ``offset`` bytes below the canonical output limit, so the payload fits
+    the identical input limit while the result echo plus the reserved
+    envelope may not."""
+
+    import functools
+
+    from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
+    from jacobian.canonical import CanonicalLimits, encode_strict_json
+
+    @functools.cache
+    def build(offset: int) -> bytes:
+        limits = CanonicalLimits()
+        digits = "9" * MAX_CANONICAL_RATIONAL_DIGITS
+        template = {"row": 0, "col": 0, "value": {"num": digits, "den": "1"}}
+        base = len(encode_strict_json({"dimension": 50, "entries": []}))
+        step = len(encode_strict_json({"dimension": 50, "entries": [template]})) - base
+        target = limits.max_output_bytes - offset
+        count = max(0, (target - base) // step)
+        cells = [(r, c) for r in range(50) for c in range(r, 50)]
+        assert count + 2 <= len(cells)
+        fixed_entries = [
+            {"row": r, "col": c, "value": {"num": digits, "den": "1"}}
+            for r, c in cells[:count]
+        ]
+        trim_cells = cells[count : count + 2]
+        trim_lengths = [1, 1]
+        encoded = b""
+        for _ in range(6):
+            trimmed = [
+                {
+                    "row": r,
+                    "col": c,
+                    "value": {"num": "9" * length, "den": "1"},
+                }
+                for (r, c), length in zip(trim_cells, trim_lengths, strict=True)
+            ]
+            encoded = encode_strict_json(
+                {"dimension": 50, "entries": fixed_entries + trimmed}
+            )
+            delta = target - len(encoded)
+            if not delta:
+                break
+            first = trim_lengths[0] + delta
+            if first < 1:
+                trim_lengths[1] += first - 1
+                first = 1
+            elif first > MAX_CANONICAL_RATIONAL_DIGITS:
+                trim_lengths[1] += first - MAX_CANONICAL_RATIONAL_DIGITS
+                first = MAX_CANONICAL_RATIONAL_DIGITS
+            assert 1 <= trim_lengths[1] <= MAX_CANONICAL_RATIONAL_DIGITS
+            trim_lengths[0] = first
+        assert len(encoded) == target
+        return encoded
+
+    return build(offset)
+
+
+def test_inertia_request_admission_reserves_output_headroom_for_source_echo() -> None:
+    from jacobian.canonical import CanonicalLimits
+
+    encoded = _encoded_inertia_payload_near_limit(offset=512)
+    assert len(encoded) <= CanonicalLimits().max_output_bytes
+    with pytest.raises(ValidationError, match="canonical output limit"):
+        SymmetricMatrixRequest.model_validate_json(encoded)
+
+
+def test_inertia_request_admission_accepts_payload_inside_reserved_budget() -> None:
+    encoded = _encoded_inertia_payload_near_limit(offset=2048)
+    request = SymmetricMatrixRequest.model_validate_json(encoded)
+    assert request.dimension == 50
+
+
+def test_dispatch_rejects_unfittable_inertia_request_as_typed_error() -> None:
+    import json
+
+    from jacobian.catalog.catalog import Catalog
+    from jacobian.dispatch import OperationRequestValidationError, invoke_operation
+
+    with pytest.raises(OperationRequestValidationError) as excinfo:
+        invoke_operation(
+            "matrix.inertia.compute",
+            json.loads(_encoded_inertia_payload_near_limit(offset=512)),
+            Catalog.open(),
+        )
+    assert "canonical output limit" in str(excinfo.value.cause)
+
+
+def test_large_fitting_inertia_request_returns_typed_result() -> None:
+    from jacobian.canonical import canonicalize_json
+    from jacobian.catalog.catalog import Catalog
+    from jacobian.dispatch import invoke_operation
+
+    digits = "9" * 4096
+    payload = {
+        "dimension": 50,
+        "entries": [
+            {"row": r, "col": r, "value": {"num": digits, "den": "1"}}
+            for r in range(50)
+        ],
+    }
+    assert len(canonicalize_json(payload)) > 100_000
+    result = invoke_operation("matrix.inertia.compute", payload, Catalog.open())
+    assert result.output["n_positive"] == 50
+    assert result.output["n_negative"] == 0
+    assert result.output["n_zero"] == 0
+    assert result.output["definiteness"] == "positive_definite"

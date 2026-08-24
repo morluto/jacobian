@@ -8,6 +8,13 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.canonical import CanonicalLimits, encode_strict_json
+
+# The inertia result echoes its retained source matrix, so a request near
+# the canonical input limit can produce a response past the identical
+# output limit. Admission reserves this much for the inertia counts,
+# definiteness label, and operation envelope beyond the echoed matrix.
+_RESULT_ENVELOPE_RESERVE_BYTES = 1_024
 
 
 class MatrixEntry(StrictModel):
@@ -34,6 +41,14 @@ class SymmetricMatrixRequest(StrictModel):
             if key in seen:
                 raise ValueError("symmetric matrix entries must not conflict")
             seen.add(key)
+        output_limit = CanonicalLimits().max_output_bytes
+        retained_bytes = len(encode_strict_json(self.model_dump(mode="json")))
+        if retained_bytes + _RESULT_ENVELOPE_RESERVE_BYTES > output_limit:
+            raise ValueError(
+                "the inertia result retains its source matrix and would "
+                f"exceed the {output_limit}-byte canonical output limit; "
+                "use fewer or smaller-magnitude entries"
+            )
         return self
 
 

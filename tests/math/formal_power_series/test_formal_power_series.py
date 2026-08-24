@@ -304,8 +304,55 @@ def test_level_one_q_expansion_results_are_consumable_through_truncate() -> None
     assert prefix.result.coefficients == e4.coefficients[:MAX_TRUNCATION_ORDER]
 
 
-def test_widened_truncate_request_is_versioned_as_version_two() -> None:
+def test_widened_truncate_request_is_versioned_as_version_three() -> None:
     from jacobian.math.formal_power_series._tools import TOOLS
 
     tools = {tool.operation_id: tool for tool in TOOLS}
-    assert tools["formal_series.rational.truncate.compute"].version == "2"
+    assert tools["formal_series.rational.truncate.compute"].version == "3"
+
+
+def test_truncate_source_ceiling_covers_the_level_one_replay_envelope() -> None:
+    from jacobian.math.modular_forms.kernel import (
+        eisenstein_coefficients,
+        metadata,
+        require_level_one_replay,
+    )
+    from jacobian.math.modular_forms.values import LevelOneModularQExpansion
+
+    assert require_level_one_replay("E4", MAX_TRUNCATE_SOURCE_ORDER) is None
+    widest, lo, hi = 1, 1, MAX_TRUNCATE_SOURCE_ORDER + 1
+    while lo < hi:
+        middle = (lo + hi + 1) // 2
+        try:
+            require_level_one_replay("E4", middle)
+        except ValueError:
+            hi = middle - 1
+        else:
+            widest = middle
+            lo = middle
+    assert widest == MAX_TRUNCATE_SOURCE_ORDER
+
+    weight, space_kind, normalization = metadata("E4")
+    coefficients = eisenstein_coefficients("E4", 3_000)
+    value = LevelOneModularQExpansion.model_validate(
+        {
+            "form": "E4",
+            "weight": weight,
+            "space_kind": space_kind,
+            "normalization": normalization,
+            "q_expansion": TruncatedSeries(
+                variable="q",
+                truncation_order=3_000,
+                coefficients=tuple(
+                    _coeff(str(term.numerator), str(term.denominator))
+                    for term in coefficients
+                ),
+            ).model_dump(),
+        }
+    )
+    prefix = truncate(value.q_expansion, MAX_TRUNCATION_ORDER)
+    assert prefix.result.truncation_order == MAX_TRUNCATION_ORDER
+    assert (
+        prefix.result.coefficients[-1].as_fraction()
+        == eisenstein_coefficients("E4", MAX_TRUNCATION_ORDER)[-1]
+    )

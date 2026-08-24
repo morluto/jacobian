@@ -515,7 +515,7 @@ FORMAL_POWER_SERIES_OPERATIONS = (
     ),
     MathTool(
         operation_id="formal_series.rational.truncate.compute",
-        version="2",
+        version="3",
         title="Truncate a formal power series to a smaller order",
         description=(
             "Return the same coefficients through M-1 at order M, where M <= N."

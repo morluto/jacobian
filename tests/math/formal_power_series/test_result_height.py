@@ -187,3 +187,44 @@ def test_division_result_rejects_fabricated_conclusion_with_zero_residual() -> N
 
     with pytest.raises(ValidationError, match="denominator times quotient"):
         SeriesDivideResult.model_validate(payload)
+
+
+def _zero_series_payload(order: int) -> dict[str, object]:
+    return _series(order, [_coefficient("0") for _ in range(order)])
+
+
+def test_replaying_results_reject_orders_above_the_producer_envelope() -> None:
+    order = MAX_TRUNCATION_ORDER + 1
+    zeros = [_coefficient("0") for _ in range(order)]
+    multiply_payload = {
+        "left": _zero_series_payload(order),
+        "right": _zero_series_payload(order),
+        "result": _zero_series_payload(order),
+        "convolution_ledger": zeros,
+    }
+    with pytest.raises(ValidationError, match="multiplication result replay"):
+        SeriesMultiplyResult.model_validate(multiply_payload)
+
+    reversion_residuals = tuple(_coefficient("0") for _ in range(order))
+    with pytest.raises(ValidationError, match="reversion result replay"):
+        SeriesReversionResult.model_validate(
+            {
+                "source": _zero_series_payload(order),
+                "result": _zero_series_payload(order),
+                "left_residual": reversion_residuals,
+                "right_residual": reversion_residuals,
+            }
+        )
+
+
+def test_all_zero_multiply_results_remain_representable_at_the_envelope_order() -> None:
+    order = MAX_TRUNCATION_ORDER
+    zeros = [_coefficient("0") for _ in range(order)]
+    payload = {
+        "left": _zero_series_payload(order),
+        "right": _zero_series_payload(order),
+        "result": _zero_series_payload(order),
+        "convolution_ledger": zeros,
+    }
+    verdict = SeriesMultiplyResult.model_validate(payload)
+    assert verdict.result.truncation_order == MAX_TRUNCATION_ORDER

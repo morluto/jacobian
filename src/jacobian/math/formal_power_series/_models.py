@@ -20,13 +20,24 @@ MAX_RATIONAL_DIGITS = 256
 MAX_RESULT_RATIONAL_DIGITS = 4_096
 MAX_POWER_EXPONENT = 1_000
 
-# Truncation sources are admitted through the widest carrier current
-# producers can emit: formal-series results keep the 512-order input
-# envelope and level-one modular q-expansions reach order 1477 under their
-# serialized-result budget.  Request admission still materializes and
-# height-validates every source coefficient before the prefix is read, so
-# 2048 bounds that linear admission work with documented headroom.
-MAX_TRUNCATE_SOURCE_ORDER = 2_048
+# Truncation sources are admitted through the widest carrier canonical
+# values can carry: formal-series results keep the 512-order input
+# envelope, and level-one modular q-expansion replay admits E4/E6
+# expansions up to order 25280 under its own 4,000,000 work-term budget
+# (p * isqrt(p)).  Request admission still materializes and
+# height-validates every source coefficient before the prefix is read,
+# so this ceiling bounds that linear admission work while
+# producer-to-truncate composition stays closed over every representable
+# expansion.
+MAX_TRUNCATE_SOURCE_ORDER = 25_280
+
+# Replaying result validators recompute their defining invariants during
+# deserialization at quadratic or cubic cost in the claimed order.  Every
+# producer of these results emits order equal to its admitted request
+# inputs, which cap at MAX_TRUNCATION_ORDER, so payloads claiming larger
+# orders are outside the representable result envelope and must be
+# rejected before any replay work starts.
+MAX_RESULT_REPLAY_ORDER = MAX_TRUNCATION_ORDER
 
 CoefficientHeight = RationalHeight | None
 
@@ -140,6 +151,14 @@ def _require_height(height: RationalHeight, operation: str) -> None:
         raise ValueError(
             f"{operation} coefficient growth exceeds the "
             f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound"
+        )
+
+
+def _require_replay_order(order: int, operation: str) -> None:
+    if order > MAX_RESULT_REPLAY_ORDER:
+        raise ValueError(
+            f"{operation} result replay exceeds the "
+            f"{MAX_RESULT_REPLAY_ORDER}-order replay envelope"
         )
 
 
@@ -462,6 +481,7 @@ class SeriesMultiplyResult(StrictModel):
 
     @model_validator(mode="after")
     def require_exact_convolution_ledger(self) -> Self:
+        _require_replay_order(self.result.truncation_order, "multiplication")
         expected = _convolution_coefficients(self.left, self.right)
         if _fraction_coefficients(self.result) != expected:
             raise ValueError("result must equal the source convolution")
@@ -579,6 +599,7 @@ class SeriesInverseResult(StrictModel):
 
     @model_validator(mode="after")
     def require_inverse_identity(self) -> Self:
+        _require_replay_order(self.result.truncation_order, "inverse")
         _require_zero_residual(
             self.residual_coefficients,
             self.result.truncation_order,
@@ -613,6 +634,7 @@ class SeriesDivideResult(StrictModel):
 
     @model_validator(mode="after")
     def require_division_identity(self) -> Self:
+        _require_replay_order(self.quotient.truncation_order, "division")
         _require_zero_residual(
             self.residual_coefficients,
             self.quotient.truncation_order,
@@ -741,6 +763,7 @@ class SeriesReversionResult(StrictModel):
     @model_validator(mode="after")
     def require_zero_residuals(self) -> Self:
         order = self.result.truncation_order
+        _require_replay_order(order, "reversion")
         _require_zero_residual(self.left_residual, order, "left reversion")
         _require_zero_residual(self.right_residual, order, "right reversion")
         identity = tuple(Fraction(int(index == 1)) for index in range(order))

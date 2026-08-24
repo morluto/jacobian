@@ -406,15 +406,6 @@ def _parse_minimal_primes_output(
             raise _ResultLimitExceededError(
                 "Singular component generator count exceeds the exact-result limit"
             )
-        # Every minimal prime in n variables admits an n-generator canonical
-        # presentation (Eisenbud-Evans); a wider decoded component cannot fit
-        # the certified worst-case family envelope and is classified as a
-        # result limit, matching the other declared representation bounds.
-        if generator_count > len(variables):
-            raise _ResultLimitExceededError(
-                "Singular component exceeds the canonical "
-                f"{len(variables)}-generator presentation limit"
-            )
         total_generators += generator_count
         if total_generators > budget.maximum_output_generators:
             raise _ResultLimitExceededError(

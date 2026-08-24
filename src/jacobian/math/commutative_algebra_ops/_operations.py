@@ -470,7 +470,7 @@ def compute_ideal_minimal_primes(
         # The producing pass and the independent verification pass above
         # completed this request under one operation-level deadline. The
         # trusted factory skips only a repeated backend verification while
-        # still enforcing shape, ring, presentation envelopes, ordering, and
+        # still enforcing shape, ring, exact-result envelopes, ordering, and
         # uniqueness; externally supplied JSON always runs the model
         # validator's own independent verification.
         try:
@@ -487,7 +487,8 @@ def compute_ideal_minimal_primes(
                 backend_version=None,
                 detail=(
                     "The computed minimal-prime family violated its own shape, "
-                    "ring, presentation, ordering, or uniqueness invariant."
+                    "ring, exact-result-envelope, ordering, or uniqueness "
+                    "invariant."
                 ),
             )
     if verdict == "REFUTED":

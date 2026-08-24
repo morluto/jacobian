@@ -332,7 +332,7 @@ def test_trusted_factory_enforces_shape_ring_ordering_and_uniqueness() -> None:
         computed_minimal_primes_result(request, None, None)
 
 
-def test_external_family_must_respect_the_presentation_and_term_envelopes() -> None:
+def test_external_family_must_respect_the_generator_and_term_envelopes() -> None:
     variables = tuple(f"v{index}" for index in range(8))
     request = IdealMinimalPrimesRequest(
         ideal=_ideal(variables, _poly(variables, (1, 1, (1,) * 8)))
@@ -346,8 +346,22 @@ def test_external_family_must_respect_the_presentation_and_term_envelopes() -> N
             ),
         ),
     )
-    with pytest.raises(ValueError, match="canonical 8-generator presentation"):
-        computed_minimal_primes_result(request, wide, "4.4.0")
+    computed = computed_minimal_primes_result(request, wide, "4.4.0")
+    assert computed.outcome == "COMPUTED"
+    assert computed.components == wide
+
+    over_generators = (
+        _ideal(
+            variables,
+            *(_poly(variables, (1, 1, (0,) * 8)) for _ in range(32)),
+        ),
+        _ideal(
+            variables,
+            *(_poly(variables, (-1, 1, (0,) * 8)) for _ in range(33)),
+        ),
+    )
+    with pytest.raises(ValueError, match="64-generator exact-result envelope"):
+        computed_minimal_primes_result(request, over_generators, "4.4.0")
 
     heavy_terms = tuple(
         sorted(
@@ -509,11 +523,13 @@ def test_verification_verdicts_map_to_typed_outcomes(
     assert result.detail is not None
 
 
-def test_six_variable_boolean_product_is_rejected_at_admission() -> None:
+def test_bezout_component_count_boundary_is_admitted_at_the_envelope() -> None:
     variables = tuple(f"x{index}" for index in range(1, 7))
+    # 2^6 = 64 Bezout components: exactly the generator envelope, so the
+    # certified component count fits and admission retains the request.
+    request = IdealMinimalPrimesRequest(ideal=_product_ideal(variables, (2,) * 6))
 
-    with pytest.raises(ValidationError, match="worst-case minimal-prime family"):
-        IdealMinimalPrimesRequest(ideal=_product_ideal(variables, (2,) * 6))
+    assert len(request.ideal.generators) == 6
 
 
 def test_bezout_boundary_family_is_admitted() -> None:
@@ -525,17 +541,11 @@ def test_bezout_boundary_family_is_admitted() -> None:
 
 
 def test_bezout_boundary_just_over_is_rejected() -> None:
-    variables = ("w", "x", "y", "z")
-    cubic = _poly(variables, (1, 1, (3, 0, 0, 0)), (-1, 1, (2, 0, 0, 0)))
+    variables = tuple(f"x{index}" for index in range(1, 8))
 
+    # 2^7 = 128 Bezout components exceed the generator envelope.
     with pytest.raises(ValidationError, match="worst-case minimal-prime family"):
-        IdealMinimalPrimesRequest(
-            ideal=_ideal(
-                variables,
-                cubic,
-                *_product_ideal(variables, (2, 2, 2)).generators,
-            )
-        )
+        IdealMinimalPrimesRequest(ideal=_product_ideal(variables, (2,) * 7))
 
 
 def test_unit_and_zero_degenerate_sources_admit_their_exact_families() -> None:
@@ -624,3 +634,56 @@ def test_unit_zero_and_embedded_sources_have_their_exact_family_shapes() -> None
     assert zero.components == (_ideal(variables, _poly(variables)),)
     assert unit.components == ()
     assert embedded.components == (_ideal(variables, _poly(variables, (1, 1, (1, 0)))),)
+
+
+@pytest.mark.skipif(
+    shutil.which("Singular") is None,
+    reason="Singular 4.4 backend is not installed",
+)
+def test_prime_wider_than_the_ring_dimension_is_computed() -> None:
+    """A minimal prime whose standard basis exceeds the variable count.
+
+    The affine cone over the rational normal quartic curve is one prime in
+    five variables whose reduced standard basis has six elements; the
+    Eisenbud-Evans set-theoretic bound does not bound the emitted
+    presentation.
+    """
+
+    variables = ("x0", "x1", "x2", "x3", "x4")
+    request = IdealMinimalPrimesRequest(
+        ideal=_ideal(
+            variables,
+            _poly(variables, (1, 1, (1, 0, 1, 0, 0)), (-1, 1, (0, 2, 0, 0, 0))),
+            _poly(variables, (1, 1, (1, 0, 0, 1, 0)), (-1, 1, (0, 1, 1, 0, 0))),
+            _poly(variables, (1, 1, (1, 0, 0, 0, 1)), (-1, 1, (0, 0, 2, 0, 0))),
+            _poly(variables, (1, 1, (0, 1, 0, 1, 0)), (-1, 1, (0, 0, 2, 0, 0))),
+            _poly(variables, (1, 1, (0, 1, 0, 0, 1)), (-1, 1, (0, 0, 1, 1, 0))),
+            _poly(variables, (1, 1, (0, 0, 1, 0, 1)), (-1, 1, (0, 0, 0, 2, 0))),
+        )
+    )
+
+    result = compute_ideal_minimal_primes(request)
+
+    assert result.outcome == "COMPUTED"
+    assert result.components is not None
+    assert len(result.components) == 1
+    assert all(
+        len(component.generators) > len(variables) for component in result.components
+    )
+
+
+@pytest.mark.skipif(
+    shutil.which("Singular") is None,
+    reason="Singular 4.4 backend is not installed",
+)
+def test_family_overflowing_the_generator_envelope_is_a_typed_result_limit() -> None:
+    """An admitted family whose decoded size overflows the aggregate bound."""
+
+    variables = tuple(f"x{index}" for index in range(1, 7))
+    request = IdealMinimalPrimesRequest(ideal=_product_ideal(variables, (2,) * 6))
+
+    result = compute_ideal_minimal_primes(request)
+
+    assert result.outcome == "LIMIT_EXCEEDED"
+    assert result.components is None
+    assert result.detail is not None

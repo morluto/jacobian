@@ -47,7 +47,7 @@ def _ideal() -> RationalPolynomialIdeal:
 
 
 def _eight_var_ideal() -> RationalPolynomialIdeal:
-    """A source whose ring bounds each decoded component by eight generators."""
+    """A source in eight variables exercising the aggregate decode envelopes."""
 
     variables = tuple(f"v{index}" for index in range(8))
     return RationalPolynomialIdeal(
@@ -287,7 +287,7 @@ def test_zero_placeholder_padding_cannot_exceed_the_generator_limit(
     assert result.components is None
 
 
-def test_component_wider_than_the_ring_presentation_bound_is_a_result_limit(
+def test_component_wider_than_the_ring_dimension_is_accepted(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -314,11 +314,12 @@ def test_component_wider_than_the_ring_presentation_bound_is_a_result_limit(
 
     result = run_singular_minimal_primes(source, IdealComputationBudget())
 
-    assert result.outcome == "LIMIT_EXCEEDED"
-    assert result.components is None
+    assert result.outcome == "COMPUTED"
+    assert result.components is not None
+    assert [len(component.generators) for component in result.components] == [3]
 
 
-def test_component_at_the_ring_presentation_bound_is_accepted(
+def test_component_at_the_ring_dimension_is_accepted(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

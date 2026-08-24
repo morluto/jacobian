@@ -292,11 +292,13 @@ def _require_fittable_minimal_prime_family(
 
     The affine Bezout inequality bounds the number of minimal primes by the
     product of the min(variables, active generators) largest generator total
-    degrees, and every minimal prime in ``n`` variables admits a canonical
-    presentation with at most ``n`` generators, which the decoder enforces
-    per component. Their product bounds the complete exact result before any
-    backend work; inputs whose certified worst case exceeds the declared
-    output envelope are rejected here instead of failing after execution.
+    degrees, and every component carries at least one generator, so a family
+    with more components than the generator envelope can never fit. Their
+    product bounds the complete exact result before any backend work;
+    inputs whose certified worst case exceeds the declared output envelope
+    are rejected here instead of failing after execution. The generators
+    each emitted component actually carries are bounded only by the decoder,
+    against the declared aggregate exact-result envelopes.
     """
 
     active_degrees = sorted(
@@ -311,16 +313,13 @@ def _require_fittable_minimal_prime_family(
         return  # the zero ideal: its complete family is the single zero ideal
     if min(active_degrees) == 0:
         return  # a nonzero constant generator: the unit ideal's empty family
-    variable_count = len(ideal.variables)
     bezout_product = 1
-    for degree in active_degrees[: min(variable_count, len(active_degrees))]:
+    for degree in active_degrees[: min(len(ideal.variables), len(active_degrees))]:
         bezout_product *= degree
-        worst_case_generators = bezout_product * variable_count
-        if worst_case_generators > MAX_OUTPUT_GENERATORS:
+        if bezout_product > MAX_OUTPUT_GENERATORS:
             raise ValueError(
                 f"{label} has a certified worst-case minimal-prime family of "
-                f"up to {bezout_product} components with up to "
-                f"{variable_count} generators each, which cannot fit the "
+                f"up to {bezout_product} components, which cannot fit the "
                 f"{MAX_OUTPUT_GENERATORS}-generator exact-result envelope"
             )
 
@@ -334,8 +333,7 @@ class IdealMinimalPrimesRequest(StrictModel):
             "256 aggregate terms; generator total degree is at most 20, "
             "coefficient components are at most 128 digits, and the "
             "certified worst-case minimal-prime family (Bezout degree "
-            "product times variable count) must fit the 64-generator "
-            "exact-result envelope."
+            "product) must fit the 64-generator exact-result envelope."
         )
     )
     resource_budget: IdealComputationBudget = Field(
@@ -431,19 +429,13 @@ def _require_computed_minimal_prime_family(
     request: IdealMinimalPrimesRequest,
     components: tuple[RationalPolynomialIdeal, ...],
 ) -> None:
-    """Gate ring, presentation envelopes, ordering, and uniqueness."""
+    """Gate ring, exact-result envelopes, ordering, and uniqueness."""
 
     if any(component.variables != request.ideal.variables for component in components):
         raise ValueError("every minimal prime must use the source ideal's ordered ring")
-    presentation_bound = len(request.ideal.variables)
     total_generators = 0
     total_terms = 0
     for component in components:
-        if len(component.generators) > presentation_bound:
-            raise ValueError(
-                "every minimal prime must use the canonical "
-                f"{presentation_bound}-generator presentation"
-            )
         total_generators += len(component.generators)
         total_terms += sum(
             len(generator.polynomial.terms) for generator in component.generators
@@ -476,7 +468,7 @@ def computed_minimal_primes_result(
     independent defining-invariant verification pass under one operation-
     level deadline, so this trusted factory skips only a repeated backend
     verification while still enforcing the computed shape plus the ring,
-    presentation-envelope, canonical-ordering, and uniqueness invariants;
+    exact-result-envelope, canonical-ordering, and uniqueness invariants;
     independently supplied results always validate through the full model
     validator.
     """

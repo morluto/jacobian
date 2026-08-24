@@ -148,6 +148,36 @@ class TestCanonicalExplicitBinaryCode:
                 codewords=_binary_words(512, MAX_EXPLICIT_CODE_BITS // 512 + 1),
             )
 
+    def test_exact_aggregate_boundary_passes_prevalidation(self) -> None:
+        source = ExplicitBinaryCode.model_validate(
+            {
+                "length": 32,
+                "codewords": [list(word) for word in _binary_words(32, 16_384)],
+            }
+        )
+        assert source.length * len(source.codewords) == MAX_EXPLICIT_CODE_BITS
+
+    def test_millions_of_empty_words_rejected_before_nested_conversion(self) -> None:
+        codewords: list[list[int]] = [[]] * MAX_EXPLICIT_CODE_BITS
+        codewords.append([2])
+        with pytest.raises(ValidationError, match="word container bound"):
+            ExplicitBinaryCode.model_validate({"length": 0, "codewords": codewords})
+
+    def test_aggregate_bit_overflow_rejected_before_nested_conversion(self) -> None:
+        codewords: list[list[int]] = [[0] * 1_000] * 2_000
+        codewords[-1][-1] = 2
+        with pytest.raises(ValidationError, match="bit source bound"):
+            ExplicitBinaryCode.model_validate(
+                {"length": 1_000, "codewords": codewords}
+            )
+
+    def test_enormous_single_word_rejected_before_nested_conversion(self) -> None:
+        codewords: list[list[str]] = [["x"] * (MAX_EXPLICIT_CODE_LENGTH + 1)]
+        with pytest.raises(ValidationError, match="bit source bound"):
+            ExplicitBinaryCode.model_validate(
+                {"length": 3, "codewords": codewords}
+            )
+
 
 class TestWordDistance:
     def test_exact_relation(self) -> None:
@@ -167,6 +197,16 @@ class TestWordDistance:
         payload["distance"] = 1
         with pytest.raises(ValidationError, match="replay"):
             type(result).model_validate(payload)
+
+    def test_contract_version_tracks_the_wire_shape_change(self) -> None:
+        from jacobian.math.code_nonlinear._tools import TOOLS
+
+        operation = next(
+            tool
+            for tool in TOOLS
+            if tool.operation_id == "code.binary.word_distance.compute"
+        )
+        assert operation.version == "2"
 
 
 class TestExplicitProfile:

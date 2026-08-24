@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Self
+from typing import Annotated, Any, Self
 
 from pydantic import ConfigDict, Field, model_validator
 
@@ -18,7 +18,10 @@ MAX_EXPLICIT_CODE_BITS = 1 << 19
 MAX_EXPLICIT_CODE_LENGTH = MAX_EXPLICIT_CODE_BITS
 
 BinaryBit = Annotated[int, Field(strict=True, ge=0, le=1)]
-type BinaryWord = tuple[BinaryBit, ...]
+type BinaryWord = Annotated[
+    tuple[BinaryBit, ...],
+    Field(max_length=MAX_EXPLICIT_CODE_LENGTH),
+]
 
 
 class ExplicitBinaryCode(StrictModel):
@@ -52,6 +55,7 @@ class ExplicitBinaryCode(StrictModel):
     ]
     codewords: tuple[BinaryWord, ...] = Field(
         default=(),
+        max_length=MAX_EXPLICIT_CODE_BITS,
         description=(
             "Distinct binary words, each of exactly `length` entries; input "
             "order is normalized lexicographically and the total number of "
@@ -59,6 +63,43 @@ class ExplicitBinaryCode(StrictModel):
         ),
         examples=[((0, 0, 0), (0, 1, 1), (1, 1, 0))],
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_bounded_containers(cls, data: Any) -> Any:
+        """Bound raw containers before Pydantic materializes nested bits.
+
+        ``require_canonical_code`` checks ``length * cardinality`` only after
+        every supplied bit has been converted, so raw shapes such as millions
+        of empty words or one enormous word could otherwise consume memory and
+        CPU far beyond the retained-source bound before rejection. Every
+        accepted code keeps at most ``MAX_EXPLICIT_CODE_BITS`` codewords (a
+        zero-length code later admits only the sole empty word) and at most
+        ``MAX_EXPLICIT_CODE_BITS`` materialized entries; both are checked on
+        the raw containers here.
+        """
+        if not isinstance(data, dict):
+            return data
+        words = data.get("codewords")
+        if not isinstance(words, (list, tuple)):
+            return data
+        if len(words) > MAX_EXPLICIT_CODE_BITS:
+            raise ValueError(
+                "explicit binary code declares "
+                f"{len(words)} codewords, exceeding the "
+                f"{MAX_EXPLICIT_CODE_BITS}-word container bound"
+            )
+        total_bits = 0
+        for word in words:
+            if isinstance(word, (list, tuple)):
+                total_bits += len(word)
+                if total_bits > MAX_EXPLICIT_CODE_BITS:
+                    raise ValueError(
+                        "explicit binary code materializes "
+                        f"{total_bits} bits, exceeding the "
+                        f"{MAX_EXPLICIT_CODE_BITS}-bit source bound"
+                    )
+        return data
 
     @model_validator(mode="after")
     def require_canonical_code(self) -> Self:

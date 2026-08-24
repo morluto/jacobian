@@ -115,6 +115,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {"word1": [1, 0, 1], "word2": [1, 1, 0]},
             ),
         ),
+        version="2",
     ),
     _op(
         "code.binary.explicit.profile.compute",

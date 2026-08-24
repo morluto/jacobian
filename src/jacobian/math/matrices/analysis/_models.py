@@ -38,23 +38,49 @@ class SymmetricMatrixRequest(StrictModel):
 
 
 class InertiaResult(StrictModel):
-    """Sylvester inertia (n_pos, n_neg, n_zero) of a symmetric matrix."""
+    """Sylvester inertia (n_pos, n_neg, n_zero) of a symmetric matrix.
 
+    Retains the canonical symmetric rational source matrix so validation
+    replays the exact congruence-diagonal counts and enforces the
+    definiteness label against them:
+
+    - ``n_positive + n_negative + n_zero`` equals the dimension;
+    - positive_definite iff all eigenvalues are positive, negative_definite
+      iff all negative;
+    - semidefinite labels require one zero sign class and none of the
+      opposite sign; indefinite requires both nonzero sign classes.
+    """
+
+    matrix: SymmetricMatrixRequest
     n_positive: int = Field(ge=0)
     n_negative: int = Field(ge=0)
     n_zero: int = Field(ge=0)
     definiteness: str
 
     @model_validator(mode="after")
-    def require_dimension(self) -> Self:
-        if self.definiteness not in (
-            "positive_definite",
-            "positive_semidefinite",
-            "negative_definite",
-            "negative_semidefinite",
-            "indefinite",
-        ):
-            raise ValueError("invalid definiteness label")
+    def require_source_bound(self) -> Self:
+        from jacobian.math.matrices.analysis._operations import (
+            _build_matrix,
+            _definiteness_label,
+            _symmetric_inertia,
+        )
+
+        if self.n_positive + self.n_negative + self.n_zero != self.matrix.dimension:
+            raise ValueError("inertia counts must sum to the matrix dimension")
+        replayed = _symmetric_inertia(_build_matrix(self.matrix))
+        if replayed != (self.n_positive, self.n_negative, self.n_zero):
+            raise ValueError(
+                "inertia counts must be the exact Sylvester inertia of the "
+                "retained source matrix"
+            )
+        expected_label = _definiteness_label(
+            self.n_positive, self.n_negative, self.n_zero
+        )
+        if self.definiteness != expected_label:
+            raise ValueError(
+                f"definiteness label must agree with the counts; expected "
+                f"{expected_label!r}"
+            )
         return self
 
 

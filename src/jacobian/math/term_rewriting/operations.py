@@ -9,6 +9,7 @@ from jacobian.math.term_rewriting.values import (
     MAX_CRITICAL_PAIR_RESULT_BYTES,
     MAX_CRITICAL_PAIR_RESULT_NODES,
     MAX_CRITICAL_PAIR_RULES,
+    MAX_TERM_DEPTH,
     CriticalOverlapCandidate,
     CriticalPair,
     CriticalPairProfile,
@@ -31,9 +32,11 @@ __all__ = [
 
 _RESULT_NODES_EXCEEDED = "critical-pair result nodes exceed the supported bound"
 _RESULT_BYTES_EXCEEDED = "critical-pair result bytes exceed the supported bound"
+_RESULT_DEPTH_EXCEEDED = "critical-pair result depth exceeds the transport-safe bound"
 _CRITICAL_PAIR_PROFILE_FIXED_NODES = 384
 _RESULT_BYTES_PER_NODE = 96
 _VARIABLE_LABEL_BASE_WIDTH = 6
+_RESULT_TERM_MAX_DEPTH = MAX_TERM_DEPTH - 1
 
 
 def _variables(term: Term) -> set[int]:
@@ -270,6 +273,24 @@ def _nonvariable_positions(
     return tuple(positions)
 
 
+def _nonvariable_position_count(term: Term) -> int:
+    """Count the positions whose subterm is a function application.
+
+    Admission counts candidates before any canonicalization work, so a
+    source that exceeds the candidate bound is rejected without ever
+    materializing the position paths of a deep term.
+    """
+    count = 0
+    stack = [term]
+    while stack:
+        current = stack.pop()
+        if current.is_variable:
+            continue
+        count += 1
+        stack.extend(current.children)
+    return count
+
+
 def _term_node_count(term: Term) -> int:
     count = 0
     stack = [term]
@@ -351,6 +372,38 @@ def _expanded_node_count(term: Term, binding_sizes: dict[int, int]) -> int:
     return count
 
 
+def _term_depth(term: Term) -> int:
+    """Longest root-to-leaf path measured in nodes, without recursion."""
+    deepest = 0
+    stack = [(term, 1)]
+    while stack:
+        current, depth = stack.pop()
+        if depth > deepest:
+            deepest = depth
+        stack.extend((child, depth + 1) for child in current.children)
+    return deepest
+
+
+def _expanded_max_depth(term: Term, binding_depths: dict[int, int]) -> int:
+    """Depth of ``apply_substitution(term, ...)`` without materializing it."""
+    depths: dict[int, int] = {}
+    stack = [term]
+    while stack:
+        current = stack.pop()
+        if current.is_variable:
+            depths[id(current)] = binding_depths.get(current.symbol, 1)
+            continue
+        pending = [child for child in current.children if id(child) not in depths]
+        if pending:
+            stack.append(current)
+            stack.extend(pending)
+        else:
+            depths[id(current)] = 1 + max(
+                depths[id(child)] for child in current.children
+            )
+    return depths[id(term)]
+
+
 def _retained_source_charge(rules: tuple[RewriteRule, ...]) -> int:
     """Node count charged once for echoing every retained source term."""
     return sum(
@@ -379,6 +432,15 @@ def _admit_critical_pair_result_envelope(rules: tuple[RewriteRule, ...]) -> int:
     side, both renamed right sides, its retained bindings, and the exact
     expansions execution will materialize as reducts. Failed unifications
     keep their committed charges against the shared allowance.
+
+    Transport adds one further result obligation: reducts serialize under
+    ``profile.pairs`` four strict-JSON wrappers deep and pair substitution
+    bindings five, and every serialized node costs an object level plus a
+    ``children`` array level including the leaf's empty array, so any
+    transported reduct or binding carries at most
+    ``_RESULT_TERM_MAX_DEPTH`` nodes on a root-to-leaf path. Both depths
+    are predicted from the unifier without materializing the reducts and
+    reject typedly.
     Returns the total charged nodes and raises when the envelope is exceeded.
     """
     remaining = (
@@ -432,18 +494,30 @@ def _admit_critical_pair_result_envelope(rules: tuple[RewriteRule, ...]) -> int:
                 spliced = _replace_at_position(
                     renamed_outer_lhs, position, renamed_inner_rhs
                 )
+                renamed_outer_rhs = _rename_variables(outer.rhs, outer_renaming)
                 binding_sizes = {
                     variable: _term_node_count(binding)
+                    for variable, binding in substitution.items()
+                }
+                binding_depths = {
+                    variable: _term_depth(binding)
                     for variable, binding in substitution.items()
                 }
                 for bound in substitution.values():
                     remaining -= _term_node_count(bound)
                 remaining -= _expanded_node_count(spliced, binding_sizes)
-                remaining -= _expanded_node_count(
-                    _rename_variables(outer.rhs, outer_renaming), binding_sizes
-                )
+                remaining -= _expanded_node_count(renamed_outer_rhs, binding_sizes)
                 if remaining < 0:
                     raise ValueError(_RESULT_NODES_EXCEEDED)
+                if max(binding_depths.values(), default=0) > (_RESULT_TERM_MAX_DEPTH):
+                    raise ValueError(_RESULT_DEPTH_EXCEEDED)
+                if (
+                    _expanded_max_depth(spliced, binding_depths)
+                    > _RESULT_TERM_MAX_DEPTH
+                    or _expanded_max_depth(renamed_outer_rhs, binding_depths)
+                    > _RESULT_TERM_MAX_DEPTH
+                ):
+                    raise ValueError(_RESULT_DEPTH_EXCEEDED)
     return MAX_CRITICAL_PAIR_RESULT_NODES - remaining
 
 
@@ -465,7 +539,7 @@ def _validate_critical_pair_source(
     if len(canonical_rules) != len(rules):
         raise ValueError("critical-pair rules must be duplicate-free up to renaming")
     candidates = len(rules) * sum(
-        len(_nonvariable_positions(rule.lhs)) for rule in rules
+        _nonvariable_position_count(rule.lhs) for rule in rules
     ) - len(rules)
     if candidates > MAX_CRITICAL_PAIR_CANDIDATES:
         raise ValueError("critical-pair overlap candidates exceed the supported bound")
@@ -481,11 +555,15 @@ def _preorder_variables(term: Term) -> tuple[int, ...]:
     """Return each variable once, in structural preorder."""
     seen: set[int] = set()
     ordered: list[int] = []
-    for position in _positions(term):
-        subterm = term_at_position(term, position)
-        if subterm.is_variable and subterm.symbol not in seen:
-            seen.add(subterm.symbol)
-            ordered.append(subterm.symbol)
+    stack = [term]
+    while stack:
+        current = stack.pop()
+        if current.is_variable:
+            if current.symbol not in seen:
+                seen.add(current.symbol)
+                ordered.append(current.symbol)
+            continue
+        stack.extend(reversed(current.children))
     return tuple(ordered)
 
 

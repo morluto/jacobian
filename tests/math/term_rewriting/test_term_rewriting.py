@@ -5,6 +5,7 @@ import tracemalloc
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import encode_strict_json
 from jacobian.math import term_rewriting
 from jacobian.math.term_rewriting import operations as operations_module
 from jacobian.math.term_rewriting._models import (
@@ -34,6 +35,7 @@ from jacobian.math.term_rewriting.operations import (
     _replace_at_position,
     _ResultEnvelopeError,
     _standardize_apart,
+    _term_depth,
     _term_node_count,
     _unify,
     apply_substitution,
@@ -70,6 +72,13 @@ def _complete_tree(symbol: int, leaf: Term, branching: int, depth: int) -> Term:
     result = leaf
     for _ in range(depth):
         result = _app(symbol, *([result] * branching))
+    return result
+
+
+def _chain_unary(symbol: int, length: int, leaf: Term) -> Term:
+    result = leaf
+    for _ in range(length):
+        result = _app(symbol, result)
     return result
 
 
@@ -571,6 +580,7 @@ class TestCriticalPairs:
             "max_overlap_candidates": 32,
             "max_result_bytes": 4 * 1024 * 1024,
             "max_result_nodes": 42_752,
+            "max_result_term_depth": MAX_TERM_DEPTH - 1,
             "max_term_depth": MAX_TERM_DEPTH,
             "max_variable_label": MAX_VARIABLE_LABEL,
         }
@@ -707,6 +717,107 @@ class TestCriticalPairs:
             CriticalPairsRequest(
                 signature={"arities": [1]},
                 rules=(RewriteRule(lhs=lhs, rhs=_var(0)),),
+            )
+
+    def test_deep_unary_source_rejects_by_candidates_without_path_expansion(self):
+        # A 20000-node unary left side fits the retained-source envelope and
+        # exceeds the candidate bound by orders of magnitude, but duplicate
+        # detection and candidate counting must stay linear: admission
+        # returns the typed candidate rejection without materializing the
+        # quadratic position-path expansion (hundreds of MB of path tuples
+        # when every prefix was retained and rewalked).
+        def unary_chain(function_nodes: int) -> Term:
+            term = _var(0)
+            for _ in range(function_nodes):
+                term = _app(0, term)
+            return term
+
+        lhs = unary_chain(20_000)
+        assert _term_node_count(lhs) == 20_001
+        signature = RankedSignature(arities=(1,))
+        rule = RewriteRule(lhs=lhs, rhs=_var(0))
+        tracemalloc.start()
+        try:
+            with pytest.raises(ValueError, match="overlap candidates"):
+                critical_pairs(signature, (rule,))
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        assert peak < 8 * 1024 * 1024
+        with pytest.raises(ValidationError, match="overlap candidates"):
+            CriticalPairsRequest(signature=signature, rules=(rule,))
+
+    def test_root_overlap_composed_reduct_depth_is_admission_bounded(self):
+        # Two individually transport-safe rules overlap at the root: the
+        # unifier splices g^14(y) into h^30(x), so the outer reduct is a
+        # 45-node chain even though every source path carries at most 31
+        # nodes. Admission must predict that composition from the unifier
+        # and reject typedly instead of failing result canonicalization.
+        def unary(symbol: int, leaf: Term, length: int) -> Term:
+            term = leaf
+            for _ in range(length):
+                term = _app(symbol, term)
+            return term
+
+        rules = (
+            RewriteRule(lhs=_app(0, _var(0)), rhs=unary(2, _var(0), 30)),
+            RewriteRule(lhs=_app(0, unary(1, _var(1), 14)), rhs=_var(1)),
+        )
+        signature = RankedSignature(arities=(1, 1, 1))
+        with pytest.raises(ValidationError, match="result depth"):
+            CriticalPairsRequest(signature=signature, rules=rules)
+        with pytest.raises(ValueError, match="result depth"):
+            critical_pairs(signature, rules)
+
+    def test_boundary_composed_reduct_admits_and_transports(self):
+        # h^16 after g^13 composes exactly MAX_TERM_DEPTH - 1 nodes on its
+        # only path, the deepest reduct a root overlap can serialize under
+        # profile.pairs once each node's children array is counted, so this
+        # family admits, replays exactly, and encodes within strict JSON
+        # transport.
+        def unary(symbol: int, leaf: Term, length: int) -> Term:
+            term = leaf
+            for _ in range(length):
+                term = _app(symbol, term)
+            return term
+
+        rules = (
+            RewriteRule(lhs=_app(0, _var(0)), rhs=unary(2, _var(0), 16)),
+            RewriteRule(lhs=_app(0, unary(1, _var(1), 13)), rhs=_var(1)),
+        )
+        result = compute_critical_pairs(
+            CriticalPairsRequest(
+                signature=RankedSignature(arities=(1, 1, 1)), rules=rules
+            )
+        )
+        deepest = max(
+            result.profile.pairs, key=lambda pair: _term_depth(pair.outer_reduct)
+        )
+        assert _term_depth(deepest.outer_reduct) == MAX_TERM_DEPTH - 1
+        assert _term_depth(deepest.inner_reduct) == 1
+        assert len(result.model_dump_json()) <= MAX_CRITICAL_PAIR_RESULT_BYTES
+        assert encode_strict_json(result.model_dump(mode="json"))
+        assert (
+            CriticalPairsResult.model_validate_json(result.model_dump_json()) == result
+        )
+
+    def test_one_deeper_composed_reduct_is_rejected_typed(self):
+        # The same overlap shape with one more h node composes a 31-node
+        # reduct, so depth alone - not candidates or nodes - must trigger
+        # the typed rejection.
+        def unary(symbol: int, leaf: Term, length: int) -> Term:
+            term = leaf
+            for _ in range(length):
+                term = _app(symbol, term)
+            return term
+
+        rules = (
+            RewriteRule(lhs=_app(0, _var(0)), rhs=unary(2, _var(0), 17)),
+            RewriteRule(lhs=_app(0, unary(1, _var(1), 13)), rhs=_var(1)),
+        )
+        with pytest.raises(ValidationError, match="result depth"):
+            CriticalPairsRequest(
+                signature=RankedSignature(arities=(1, 1, 1)), rules=rules
             )
 
     def test_failed_overlap_charges_commit_to_the_shared_budget(self):
@@ -1196,6 +1307,124 @@ class TestDeepTermTraversal:
             SubstitutionRequest.model_validate(
                 substitution_payload(MAX_VARIABLE_LABEL + 1)
             )
+
+    def test_composed_substitution_depth_is_transport_bounded(self):
+        # Each side of a substitution passes the 31-node checks separately,
+        # but composing f^30(x) with x -> f^30(c) yields a 61-node chain, so
+        # admission must preflight the composed result and reject typedly
+        # instead of failing canonicalization after the operation ran.
+        def unary_chain(length: int, leaf: Term) -> Term:
+            term = leaf
+            for _ in range(length):
+                term = _app(0, term)
+            return term
+
+        signature = {"arities": [1, 0]}
+        with pytest.raises(ValidationError, match="transport-safe"):
+            SubstitutionRequest(
+                signature=signature,
+                term=unary_chain(30, _var(0)),
+                substitution={"mapping": {0: unary_chain(30, _app(1))}},
+            )
+        boundary = SubstitutionRequest(
+            signature=signature,
+            term=unary_chain(15, _var(0)),
+            substitution={"mapping": {0: unary_chain(15, _app(1))}},
+        )
+        result = compute_substitution(boundary)
+        assert _term_depth(result.result) == 2 * MAX_TERM_DEPTH - 31
+        assert SubstitutionResult.model_validate_json(result.model_dump_json()) == (
+            result
+        )
+
+    def test_native_substitution_result_rejects_untransportable_composition(self):
+        def unary_chain(length: int, leaf: Term) -> Term:
+            term = leaf
+            for _ in range(length):
+                term = _app(0, term)
+            return term
+
+        term = unary_chain(30, _var(0))
+        mapping = {0: unary_chain(30, _app(1))}
+        with pytest.raises(ValidationError, match="transport-safe"):
+            SubstitutionResult(
+                signature={"arities": [1, 0]},
+                term=term,
+                substitution={"mapping": mapping},
+                result=apply_substitution(term, mapping),
+            )
+
+    def test_spliced_rewrite_step_depth_is_transport_bounded(self):
+        # f(g^15(x)) with rule g(y) -> f^30(y): every input path stays within
+        # 31 nodes, but the rewritten term splices the expanded right side
+        # under the f-prefix and reaches 46 nodes, so both enumeration modes
+        # must reject typedly at admission.
+        rules = (RewriteRule(lhs=_app(1, _var(3)), rhs=_chain_unary(0, 30, _var(3))),)
+        term = _app(0, _chain_unary(1, 15, _var(0)))
+        with pytest.raises(ValidationError, match="transport-safe"):
+            RewriteStepRequest(
+                signature={"arities": [1, 1]},
+                term=term,
+                rules=rules,
+                selection={"position": [0], "rule_index": 0},
+            )
+        with pytest.raises(ValidationError, match="transport-safe"):
+            RewriteStepRequest(signature={"arities": [1, 1]}, term=term, rules=rules)
+
+    def test_boundary_spliced_rewrite_step_admits_and_transports(self):
+        # The same shape with f^14 instead of f^30 composes a 30-node term,
+        # one node inside the transport bound, so the step admits and its
+        # exact application replays.
+        rules = (RewriteRule(lhs=_app(1, _var(3)), rhs=_chain_unary(0, 14, _var(3))),)
+        result = compute_rewrite_step(
+            RewriteStepRequest(
+                signature={"arities": [1, 1]},
+                term=_app(0, _chain_unary(1, 15, _var(0))),
+                rules=rules,
+                selection={"position": [0], "rule_index": 0},
+            )
+        )
+        assert len(result.applications) == 1
+        assert _term_depth(result.applications[0].term) == 2 * MAX_TERM_DEPTH - 32
+        assert RewriteStepResult.model_validate_json(result.model_dump_json()) == (
+            result
+        )
+
+    def test_normal_form_run_depth_is_transport_bounded(self):
+        # One step of g(y) -> f^30(y) under f(g^15(x)) pushes the run's term
+        # to 46 nodes, so admission must simulate the declared strategy and
+        # reject typedly before the operation runs.
+        rules = (RewriteRule(lhs=_app(1, _var(3)), rhs=_chain_unary(0, 30, _var(3))),)
+        with pytest.raises(ValidationError, match="transport-safe"):
+            NormalFormRequest(
+                signature={"arities": [1, 1]},
+                term=_app(0, _chain_unary(1, 15, _var(0))),
+                rules=rules,
+                strategy="LEFTMOST_OUTERMOST_RULE_ORDER",
+                max_steps=1,
+            )
+
+    def test_normal_form_step_limit_within_depth_admits_and_transports(self):
+        # A self-looping rule keeps every intermediate term at the source
+        # depth, so the bounded prefix admits with its open next step even
+        # though the strategy exhausts its step budget.
+        rules = (RewriteRule(lhs=_app(1, _var(3)), rhs=_app(1, _var(3))),)
+        result = compute_normal_form(
+            NormalFormRequest(
+                signature={"arities": [1, 1]},
+                term=_app(0, _chain_unary(1, 15, _var(0))),
+                rules=rules,
+                strategy="LEFTMOST_OUTERMOST_RULE_ORDER",
+                max_steps=3,
+            )
+        )
+        assert result.status == "STEP_LIMIT"
+        assert result.steps == 3
+        assert result.next_step is not None
+        assert _term_depth(result.term) == MAX_TERM_DEPTH - 14
+        assert NormalFormResult.model_validate_json(result.model_dump_json()) == (
+            result
+        )
 
     def test_deep_unification_and_matching_stay_typed(self):
         def chain(length: int) -> Term:

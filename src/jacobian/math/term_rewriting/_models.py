@@ -64,7 +64,11 @@ class SubstitutionRequest(StrictModel):
         self.signature.validate_term(self.term)
         for replacement in self.substitution.mapping.values():
             self.signature.validate_term(replacement)
-        _require_transport_safe_depth(self.term, *self.substitution.mapping.values())
+        _require_transport_safe_depth(
+            self.term,
+            *self.substitution.mapping.values(),
+            apply_substitution(self.term, self.substitution.mapping),
+        )
         return self
 
 
@@ -78,6 +82,7 @@ class SubstitutionResult(SubstitutionRequest):
         self.signature.validate_term(self.result)
         if self.result != apply_substitution(self.term, self.substitution.mapping):
             raise ValueError("substitution result is not bound to its source")
+        _require_transport_safe_depth(self.result)
         return self
 
 
@@ -177,10 +182,21 @@ class RewriteStepRequest(StrictModel):
             self.term, *(side for rule in self.rules for side in (rule.lhs, rule.rhs))
         )
         if self.selection is None:
-            return self
-        if self.selection.rule_index >= len(self.rules):
-            raise ValueError("selected rule_index is out of range")
-        term_at_position(self.term, self.selection.position)
+            applications = rewrite_steps(self.term, self.rules)
+        else:
+            if self.selection.rule_index >= len(self.rules):
+                raise ValueError("selected rule_index is out of range")
+            term_at_position(self.term, self.selection.position)
+            application = selected_rewrite_step(
+                self.term,
+                self.rules,
+                self.selection.position,
+                self.selection.rule_index,
+            )
+            applications = () if application is None else (application,)
+        _require_transport_safe_depth(
+            *(application.term for application in applications)
+        )
         return self
 
 
@@ -203,6 +219,9 @@ class RewriteStepResult(StrictModel):
         _require_transport_safe_depth(
             self.source_term,
             *(side for rule in self.rules for side in (rule.lhs, rule.rhs)),
+        )
+        _require_transport_safe_depth(
+            *(application.term for application in self.applications)
         )
         if self.selection is None:
             expected = rewrite_steps(self.source_term, self.rules)
@@ -241,6 +260,11 @@ class NormalFormRequest(StrictModel):
         _require_transport_safe_depth(
             self.term, *(side for rule in self.rules for side in (rule.lhs, rule.rhs))
         )
+        normalized, _, _, next_step = normal_form(self.term, self.rules, self.max_steps)
+        observed = [normalized]
+        if next_step is not None:
+            observed.append(next_step.term)
+        _require_transport_safe_depth(*observed)
         return self
 
 
@@ -267,6 +291,10 @@ class NormalFormResult(StrictModel):
             self.source_term,
             *(side for rule in self.rules for side in (rule.lhs, rule.rhs)),
         )
+        observed = [self.term]
+        if self.next_step is not None:
+            observed.append(self.next_step.term)
+        _require_transport_safe_depth(*observed)
         term, status, steps, next_step = normal_form(
             self.source_term, self.rules, self.max_steps
         )
@@ -300,7 +328,9 @@ class CriticalPairsRequest(StrictModel):
             "JSON transport accepts. The complete ordered nonvariable "
             "overlap ledger has at most 32 candidates. The materialized "
             "replay work, the retained result, and its exact replay are "
-            "bounded by 42752 structural nodes and 4MiB."
+            "bounded by 42752 structural nodes and 4MiB. Composed reducts "
+            "and pair substitution bindings carry at most 30 nodes on any "
+            "root-to-leaf path; deeper compositions reject at admission."
         ),
         json_schema_extra={
             "x-jacobian-bounds": {
@@ -309,6 +339,7 @@ class CriticalPairsRequest(StrictModel):
                 "max_result_bytes": 4194304,
                 "max_variable_label": MAX_VARIABLE_LABEL,
                 "max_term_depth": MAX_TERM_DEPTH,
+                "max_result_term_depth": MAX_TERM_DEPTH - 1,
             }
         },
     )

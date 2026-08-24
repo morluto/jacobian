@@ -398,8 +398,10 @@ def _expanded_max_depth(term: Term, binding_depths: dict[int, int]) -> int:
             stack.append(current)
             stack.extend(pending)
         else:
-            depths[id(current)] = 1 + max(
-                depths[id(child)] for child in current.children
+            depths[id(current)] = (
+                1
+                if not current.children
+                else 1 + max(depths[id(child)] for child in current.children)
             )
     return depths[id(term)]
 

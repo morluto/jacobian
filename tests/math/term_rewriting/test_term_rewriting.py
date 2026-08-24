@@ -517,6 +517,27 @@ class TestCriticalPairs:
             CriticalPairsResult.model_validate_json(result.model_dump_json()) == result
         )
 
+    def test_nested_overlap_with_constant_reducts(self):
+        # Nullary reducts are valid overlap results and have depth one.
+        rules = (
+            RewriteRule(lhs=_app(0, _app(1, _var(7))), rhs=_app(2)),
+            RewriteRule(lhs=_app(1, _var(99)), rhs=_app(3)),
+        )
+        signature = RankedSignature(arities=(1, 1, 0, 0))
+        native = critical_pairs(signature, rules)
+        result = compute_critical_pairs(
+            CriticalPairsRequest(signature=signature, rules=rules)
+        )
+
+        assert len(native.pairs) == 1
+        pair = native.pairs[0]
+        assert pair.inner_reduct == _app(0, _app(3))
+        assert pair.outer_reduct == _app(2)
+        assert result.profile == native
+        assert CriticalPairsResult.model_validate_json(result.model_dump_json()) == (
+            result
+        )
+
     def test_standardize_apart_makes_variable_labels_irrelevant(self):
         first = (
             RewriteRule(lhs=_app(0, _app(1, _var(7))), rhs=_var(7)),

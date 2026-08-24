@@ -799,7 +799,11 @@ class TestNonzeroNormalContractPublished:
     def test_operation_example_demonstrates_halfspace_input(self) -> None:
         from jacobian.math.polytope._tools import POLYTOPE_OPERATIONS
 
-        (operation,) = POLYTOPE_OPERATIONS
+        operation = next(
+            tool
+            for tool in POLYTOPE_OPERATIONS
+            if tool.operation_id == "polytope.volume.compute"
+        )
         names = [e.name for e in operation.examples]
         assert "unit_square_halfspaces" in names
 

@@ -11,6 +11,13 @@ from jacobian.math.polytope._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "polytope.rational.support.compute",
+        AdmissionDecision.KEEP,
+        "exact bounded support value and complete exposed vertex face over a "
+        "canonical labelled rational V-polytope; a reusable convex-geometry "
+        "primitive distinct from volume, separation, and H/V conversion",
+    ),
+    OperationAdmission(
         "polytope.volume.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value with material "

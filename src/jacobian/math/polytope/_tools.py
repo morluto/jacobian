@@ -7,10 +7,15 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polytope._models import (
+    PolytopeSupportRequest,
+    PolytopeSupportResult,
     PolytopeVolumeRequest,
     PolytopeVolumeResult,
 )
-from jacobian.math.polytope._operations import compute_polytope_volume
+from jacobian.math.polytope._operations import (
+    compute_polytope_support,
+    compute_polytope_volume,
+)
 
 
 def _op[
@@ -41,6 +46,71 @@ def _op[
 
 
 POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
+    _op(
+        "polytope.rational.support.compute",
+        "Compute an exact rational polytope support value",
+        "For a full-dimensional rational polytope with one labelled coordinate "
+        "axis and a complete irredundant V-representation, compute the exact "
+        "support value h_P(u)=max_{x in P}<u,x> and return every maximizing "
+        "vertex as the complete exposed face. The exact support kernel is one "
+        "bounded vertex-by-covector pass; the V-value separately proves that "
+        "each supplied generator is an extreme vertex before evaluation.",
+        PolytopeSupportRequest,
+        PolytopeSupportResult,
+        compute_polytope_support,
+        "polytope",
+        "support-function",
+        "exposed-face",
+        "exact-rational",
+        examples=(
+            example(
+                "unit_square_top_edge",
+                "The covector (0,1) exposes the complete top edge of the unit square.",
+                {
+                    "polytope": {
+                        "space": {"axes": ["x", "y"]},
+                        "vertices": [
+                            {
+                                "vertex_id": "bottom_left",
+                                "coordinates": [
+                                    {"num": "0", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                ],
+                            },
+                            {
+                                "vertex_id": "bottom_right",
+                                "coordinates": [
+                                    {"num": "1", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                ],
+                            },
+                            {
+                                "vertex_id": "top_left",
+                                "coordinates": [
+                                    {"num": "0", "den": "1"},
+                                    {"num": "1", "den": "1"},
+                                ],
+                            },
+                            {
+                                "vertex_id": "top_right",
+                                "coordinates": [
+                                    {"num": "1", "den": "1"},
+                                    {"num": "1", "den": "1"},
+                                ],
+                            },
+                        ],
+                    },
+                    "covector": {
+                        "space": {"axes": ["x", "y"]},
+                        "components": [
+                            {"num": "0", "den": "1"},
+                            {"num": "1", "den": "1"},
+                        ],
+                    },
+                },
+            ),
+        ),
+    ),
     _op(
         "polytope.volume.compute",
         "Compute the exact rational volume of a bounded polytope",

@@ -5,9 +5,9 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from fractions import Fraction
-from typing import Self
+from typing import Annotated, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, StringConstraints, model_validator
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
@@ -62,6 +62,85 @@ The volume is a canonical rational whose components cannot exceed the
 global ``CanonicalRational`` limit; requests whose exact volume can
 provably leave that domain are rejected at admission.
 """
+
+MAX_SUPPORT_COMPONENT_DIGITS = 150
+"""Per-component digit cap for rational polytope support inputs.
+
+The support value alone would permit a much larger cap, but canonical
+V-polytope validation also executes the existing exact hull-facet kernel. In
+dimension six, a facet normal has at most ``36D + 3`` digits after row-wise
+denominator clearing, and its active-normal rank proof has minors of at most
+``6 * (36D + 3) + 3 = 216D + 21`` digits. With ``D = 150`` every exact
+intermediate stays below the 32,768-digit canonical rational limit (the
+largest bound is 32,421 digits). The support dot product is smaller at
+``2*d*D + 2`` digits. This one cap therefore bounds both value admission and
+the exact construction/replay work required by the public V-polytope value.
+"""
+
+MAX_SUPPORT_VERTEX_SUBSETS = 100_000
+"""Maximum ``C(n, d)`` exact subfacets used to verify a V-polytope.
+
+The support kernel itself is a linear pass. Its canonical V-polytope value
+also proves that every declared generator is an extreme vertex, using the
+existing exact hull-facet kernel. This bound applies before that proof
+materializes its candidate subsets; its distinct orientation-test bound is
+declared separately.
+"""
+
+MAX_SUPPORT_ORIENTATION_TESTS = 500_000
+"""Maximum exact orientation determinants in the V-polytope hull proof.
+
+For every candidate ``d``-subset, the hull kernel tests each of the ``n-d``
+remaining vertices against its supporting hyperplane. Admission charges the
+complete product ``C(n,d) * (n-d)`` before materializing either family.
+"""
+
+CoordinateAxis = Annotated[
+    str,
+    StringConstraints(min_length=1, max_length=64, strict=True),
+]
+"""One coordinate identifier in an ordered labelled rational space."""
+
+SupportBoundedInteger = Annotated[
+    str,
+    StringConstraints(
+        pattern=rf"^(?:0|-?[1-9][0-9]{{0,{MAX_SUPPORT_COMPONENT_DIGITS - 1}}})$",
+        strict=True,
+        max_length=MAX_SUPPORT_COMPONENT_DIGITS + 1,
+    ),
+]
+SupportBoundedPositiveInteger = Annotated[
+    str,
+    StringConstraints(
+        pattern=rf"^[1-9][0-9]{{0,{MAX_SUPPORT_COMPONENT_DIGITS - 1}}}$",
+        strict=True,
+        max_length=MAX_SUPPORT_COMPONENT_DIGITS,
+    ),
+]
+
+
+class SupportBoundedRational(CanonicalRational):
+    """Canonical rational whose components fit support-hull admission.
+
+    ``from_attributes`` lets canonical values supplied by another native
+    operation enter the support value unchanged while enforcing this
+    operation's smaller, schema-visible construction envelope.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    num: SupportBoundedInteger = Field(
+        description=(
+            "Canonical reduced numerator with at most "
+            f"{MAX_SUPPORT_COMPONENT_DIGITS} digits."
+        )
+    )
+    den: SupportBoundedPositiveInteger = Field(
+        description=(
+            "Positive canonical reduced denominator with at most "
+            f"{MAX_SUPPORT_COMPONENT_DIGITS} digits."
+        )
+    )
 
 
 def _rational_pq(value: object) -> tuple[int, int]:
@@ -253,6 +332,150 @@ class Vertex(StrictModel):
     )
 
 
+class RationalCoordinateSpace(StrictModel):
+    """One ordered labelled rational coordinate space.
+
+    Coordinate order is mathematical data: a covector component can only
+    pair with the point coordinate named by the same position in this axis.
+    """
+
+    axes: tuple[CoordinateAxis, ...] = Field(min_length=1, max_length=MAX_DIMENSION)
+
+    @model_validator(mode="after")
+    def require_distinct_axes(self) -> Self:
+        if len(set(self.axes)) != len(self.axes):
+            raise ValueError("coordinate axes must be unique")
+        return self
+
+
+class RationalPolytopeVertex(StrictModel):
+    """A labelled exact vertex in a rational coordinate space."""
+
+    vertex_id: str = Field(min_length=1, max_length=64)
+    coordinates: tuple[SupportBoundedRational, ...] = Field(
+        min_length=1,
+        max_length=MAX_DIMENSION,
+    )
+
+
+class RationalVPolytope(StrictModel):
+    """A full-dimensional bounded rational polytope by its exact vertices.
+
+    The vertices are a canonical V-representation: their IDs are strictly
+    ordered, their coordinate tuples are distinct, and each one is an exact
+    extreme vertex of the hull. Lower-dimensional polytopes need explicit
+    intrinsic affine coordinates and are intentionally outside this first
+    support-operation contract.
+    """
+
+    space: RationalCoordinateSpace
+    vertices: tuple[RationalPolytopeVertex, ...] = Field(
+        min_length=1,
+        max_length=MAX_VERTICES,
+        description=(
+            "Complete irredundant vertex family, ordered strictly by vertex_id. "
+            "The exact extremality proof requires C(n,d) <= "
+            f"{MAX_SUPPORT_VERTEX_SUBSETS} candidate subfacets and C(n,d) * "
+            f"(n-d) <= {MAX_SUPPORT_ORIENTATION_TESTS} orientation tests."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_full_dimensional_vertices(self) -> Self:
+        dimension = len(self.space.axes)
+        if len(self.vertices) < dimension + 1:
+            raise ValueError(
+                "a full-dimensional V-polytope needs at least dimension + 1 vertices"
+            )
+        vertex_ids = tuple(vertex.vertex_id for vertex in self.vertices)
+        if tuple(sorted(vertex_ids)) != vertex_ids or len(set(vertex_ids)) != len(
+            vertex_ids
+        ):
+            raise ValueError("vertex IDs must be unique and strictly ordered")
+        coordinates = tuple(vertex.coordinates for vertex in self.vertices)
+        if any(len(point) != dimension for point in coordinates):
+            raise ValueError("every vertex must use the polytope coordinate axis")
+        if len(set(coordinates)) != len(coordinates):
+            raise ValueError("polytope vertices must have distinct coordinates")
+        for vertex in self.vertices:
+            for coordinate in vertex.coordinates:
+                require_bounded_rational(
+                    coordinate,
+                    max_digits=MAX_SUPPORT_COMPONENT_DIGITS,
+                    label="polytope vertex coordinate",
+                )
+        from jacobian.math.polytope._operations import (
+            require_full_dimensional_extreme_vertices,
+        )
+
+        require_full_dimensional_extreme_vertices(self)
+        return self
+
+
+class RationalCovector(StrictModel):
+    """An exact covector paired with one labelled rational coordinate space."""
+
+    space: RationalCoordinateSpace
+    components: tuple[SupportBoundedRational, ...] = Field(
+        min_length=1,
+        max_length=MAX_DIMENSION,
+        description=(
+            "Exact covector components in the declared coordinate-axis order; "
+            f"each component has at most {MAX_SUPPORT_COMPONENT_DIGITS} digits "
+            "per reduced numerator or denominator."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_axis_and_component_bounds(self) -> Self:
+        if len(self.components) != len(self.space.axes):
+            raise ValueError(
+                "covector components must use the declared coordinate axis"
+            )
+        for component in self.components:
+            require_bounded_rational(
+                component,
+                max_digits=MAX_SUPPORT_COMPONENT_DIGITS,
+                label="covector component",
+            )
+        return self
+
+
+class RationalExposedFace(StrictModel):
+    """The complete vertex family of one exposed face of a V-polytope."""
+
+    space: RationalCoordinateSpace
+    vertices: tuple[RationalPolytopeVertex, ...] = Field(
+        min_length=1,
+        max_length=MAX_VERTICES,
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_face_vertices(self) -> Self:
+        vertex_ids = tuple(vertex.vertex_id for vertex in self.vertices)
+        if tuple(sorted(vertex_ids)) != vertex_ids or len(set(vertex_ids)) != len(
+            vertex_ids
+        ):
+            raise ValueError(
+                "exposed-face vertex IDs must be unique and strictly ordered"
+            )
+        dimension = len(self.space.axes)
+        if any(len(vertex.coordinates) != dimension for vertex in self.vertices):
+            raise ValueError(
+                "every exposed-face vertex must use the face coordinate axis"
+            )
+        if len({vertex.coordinates for vertex in self.vertices}) != len(self.vertices):
+            raise ValueError("exposed-face vertices must have distinct coordinates")
+        for vertex in self.vertices:
+            for coordinate in vertex.coordinates:
+                require_bounded_rational(
+                    coordinate,
+                    max_digits=MAX_SUPPORT_COMPONENT_DIGITS,
+                    label="exposed-face vertex coordinate",
+                )
+        return self
+
+
 class Halfspace(StrictModel):
     """One rational half-space ``<a, x> <= b`` of an H-representation.
 
@@ -271,6 +494,55 @@ class Halfspace(StrictModel):
         ),
     )
     offset: CanonicalRational
+
+
+class PolytopeSupportRequest(StrictModel):
+    """Compute one support value and its complete exposed vertex face.
+
+    The input polytope is full-dimensional and already carries its complete
+    exact V-representation. Evaluation then performs one deterministic
+    ``O(n*d)`` rational dot-product pass; no H/V conversion or optimization
+    solver is introduced by this operation.
+    """
+
+    polytope: RationalVPolytope
+    covector: RationalCovector
+
+    @model_validator(mode="after")
+    def require_common_coordinate_space(self) -> Self:
+        if self.polytope.space != self.covector.space:
+            raise ValueError("polytope and covector must use the same coordinate space")
+        return self
+
+
+class PolytopeSupportResult(StrictModel):
+    """A source-bound exact support value and its complete exposed face."""
+
+    polytope: RationalVPolytope
+    covector: RationalCovector
+    support_value: CanonicalRational
+    exposed_face: RationalExposedFace
+
+    @model_validator(mode="after")
+    def bind_support_data_to_source(self) -> Self:
+        if self.polytope.space != self.covector.space:
+            raise ValueError("polytope and covector must use the same coordinate space")
+        from jacobian.math.polytope._operations import support_data
+
+        expected_value, expected_vertices = support_data(self.polytope, self.covector)
+        if self.support_value != CanonicalRational.from_fraction(expected_value):
+            raise ValueError(
+                "support value must equal the exact maximum on every vertex"
+            )
+        expected_face = RationalExposedFace(
+            space=self.polytope.space,
+            vertices=expected_vertices,
+        )
+        if self.exposed_face != expected_face:
+            raise ValueError(
+                "exposed face must be exactly the complete maximizing vertex family"
+            )
+        return self
 
 
 class PolytopeVolumeRequest(StrictModel):
@@ -467,9 +739,19 @@ __all__ = [
     "MAX_DIMENSION",
     "MAX_FACETS",
     "MAX_HULL_SUBFACETS",
+    "MAX_SUPPORT_COMPONENT_DIGITS",
+    "MAX_SUPPORT_ORIENTATION_TESTS",
+    "MAX_SUPPORT_VERTEX_SUBSETS",
     "MAX_VERTICES",
     "Halfspace",
+    "PolytopeSupportRequest",
+    "PolytopeSupportResult",
     "PolytopeVolumeRequest",
     "PolytopeVolumeResult",
+    "RationalCoordinateSpace",
+    "RationalCovector",
+    "RationalExposedFace",
+    "RationalPolytopeVertex",
+    "RationalVPolytope",
     "Vertex",
 ]

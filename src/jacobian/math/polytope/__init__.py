@@ -6,6 +6,32 @@ from collections.abc import Sequence
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.polytope._models import (
+    PolytopeSupportResult,
+    RationalCoordinateSpace,
+    RationalCovector,
+    RationalExposedFace,
+    RationalPolytopeVertex,
+    RationalVPolytope,
+)
+
+
+def polytope_support(
+    polytope: RationalVPolytope,
+    covector: RationalCovector,
+) -> PolytopeSupportResult:
+    """Return the exact support value and complete exposed vertex face.
+
+    Both arguments are canonical values from this domain. The V-polytope
+    retains an ordered labelled coordinate axis and its complete irredundant
+    full-dimensional vertex family, so the covector cannot be paired against
+    an unrelated coordinate order. The returned source-bound result replays
+    the maximum across every retained vertex.
+    """
+
+    from jacobian.math.polytope._operations import polytope_support as _kernel
+
+    return _kernel(polytope, covector)
 
 
 def convex_hull_volume(
@@ -63,4 +89,13 @@ def convex_hull_volume(
     return value
 
 
-__all__ = ["convex_hull_volume"]
+__all__ = [
+    "PolytopeSupportResult",
+    "RationalCoordinateSpace",
+    "RationalCovector",
+    "RationalExposedFace",
+    "RationalPolytopeVertex",
+    "RationalVPolytope",
+    "convex_hull_volume",
+    "polytope_support",
+]

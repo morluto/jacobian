@@ -36,9 +36,16 @@ from jacobian.canonical import format_canonical_integer
 from jacobian.math.polytope._models import (
     MAX_BOUNDEDNESS_COMBINATIONS,
     MAX_HULL_SUBFACETS,
+    MAX_SUPPORT_ORIENTATION_TESTS,
+    MAX_SUPPORT_VERTEX_SUBSETS,
     Halfspace,
+    PolytopeSupportRequest,
+    PolytopeSupportResult,
     PolytopeVolumeRequest,
     PolytopeVolumeResult,
+    RationalCovector,
+    RationalPolytopeVertex,
+    RationalVPolytope,
     Vertex,
 )
 
@@ -401,6 +408,74 @@ def _filter_redundant_vertices(
     return [pt for i, pt in enumerate(points) if i in keep_set]
 
 
+def _support_sympy_points(polytope: RationalVPolytope) -> list[list[Rational]]:
+    """Encode canonical V-vertices for the existing exact hull primitives."""
+
+    return [
+        [Rational(*coordinate.as_integer_ratio()) for coordinate in vertex.coordinates]
+        for vertex in polytope.vertices
+    ]
+
+
+def require_full_dimensional_extreme_vertices(polytope: RationalVPolytope) -> None:
+    """Prove the V-representation is full-dimensional and irredundant.
+
+    The support operation uses a direct finite maximum only after the value
+    has established that its labelled generators are exactly the polytope's
+    vertices.  The existing hull-facet code gives the latter proof by the
+    active-normal rank characterization of extreme vertices.
+    """
+
+    dimension = len(polytope.space.axes)
+    points = _support_sympy_points(polytope)
+    differences = [
+        [point[coordinate] - points[0][coordinate] for coordinate in range(dimension)]
+        for point in points[1:]
+    ]
+    if Matrix(differences).rank() != dimension:
+        raise ValueError("V-polytope vertices must affinely span the coordinate space")
+    subset_count = math.comb(len(points), dimension)
+    if subset_count > MAX_SUPPORT_VERTEX_SUBSETS:
+        raise ValueError(
+            "V-polytope extremality proof exceeds the subfacet bound "
+            f"({subset_count} > {MAX_SUPPORT_VERTEX_SUBSETS})"
+        )
+    orientation_tests = subset_count * (len(points) - dimension)
+    if orientation_tests > MAX_SUPPORT_ORIENTATION_TESTS:
+        raise ValueError(
+            "V-polytope extremality proof exceeds the orientation-test bound "
+            f"({orientation_tests} > {MAX_SUPPORT_ORIENTATION_TESTS})"
+        )
+    if len(_filter_redundant_vertices(points, dimension)) != len(points):
+        raise ValueError("V-polytope vertices must all be exact extreme vertices")
+
+
+def support_data(
+    polytope: RationalVPolytope,
+    covector: RationalCovector,
+) -> tuple[Fraction, tuple[RationalPolytopeVertex, ...]]:
+    """Return the exact support value and complete maximizing vertex family."""
+
+    values = tuple(
+        sum(
+            (
+                coordinate.as_fraction() * component.as_fraction()
+                for coordinate, component in zip(
+                    vertex.coordinates, covector.components, strict=True
+                )
+            ),
+            Fraction(0),
+        )
+        for vertex in polytope.vertices
+    )
+    maximum = max(values)
+    return maximum, tuple(
+        vertex
+        for vertex, value in zip(polytope.vertices, values, strict=True)
+        if value == maximum
+    )
+
+
 def _project_facet(
     facet_points: list[list[Rational]], dim: int
 ) -> list[list[Rational]]:
@@ -638,6 +713,36 @@ def _vertices_from_h_representation(
             unique.append(point)
     result: tuple[list[tuple[Rational, ...]], int] = (unique, dim)
     return result
+
+
+def compute_polytope_support(
+    request: PolytopeSupportRequest,
+) -> PolytopeSupportResult:
+    """Compute one exact support value and the complete exposed vertex face."""
+
+    return polytope_support(request.polytope, request.covector)
+
+
+def polytope_support(
+    polytope: RationalVPolytope,
+    covector: RationalCovector,
+) -> PolytopeSupportResult:
+    """Domain kernel for one exact support value and exposed vertex face."""
+
+    if polytope.space != covector.space:
+        raise ValueError("polytope and covector must use the same coordinate space")
+    value, vertices = support_data(polytope, covector)
+    from jacobian.math.polytope._models import RationalExposedFace
+
+    return PolytopeSupportResult(
+        polytope=polytope,
+        covector=covector,
+        support_value=CanonicalRational.from_fraction(value),
+        exposed_face=RationalExposedFace(
+            space=polytope.space,
+            vertices=vertices,
+        ),
+    )
 
 
 def compute_polytope_volume(

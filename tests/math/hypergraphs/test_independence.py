@@ -54,6 +54,26 @@ def test_rejects_empty_hyperedge_before_solver() -> None:
         )
 
 
+def test_lone_surrogate_vertex_label_rejected_before_execution() -> None:
+    with pytest.raises(ValidationError, match="must be valid UTF-8"):
+        HypergraphIndependenceRequest(hypergraph={"vertices": ["\ud800"], "edges": []})
+
+
+def test_lone_surrogate_edge_id_rejected_before_execution() -> None:
+    with pytest.raises(ValidationError, match="must be valid UTF-8"):
+        HypergraphIndependenceRequest(
+            hypergraph={"vertices": ["a"], "edges": [["\udbff", ["a"]]]}
+        )
+
+
+def test_astral_plane_label_computes_through_edge_free_special_case() -> None:
+    result = _compute({"vertices": ["\U0001d5a0"], "edges": []})
+    assert result.status == "EXACT"
+    assert result.independence_number == 1
+    assert result.incumbent_vertices == ("\U0001d5a0",)
+    assert result.termination_reason == "SPECIAL_CASE"
+
+
 def test_full_structural_encoding_boundary_is_admitted() -> None:
     vertices = [f"v{index:03d}" for index in range(100)]
     request = HypergraphIndependenceRequest(

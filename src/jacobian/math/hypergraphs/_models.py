@@ -50,6 +50,20 @@ _PAIR_ENTRY_OVERHEAD_BYTES = 128
 _RESULT_ENVELOPE_RESERVE_BYTES = 4_096
 
 
+def _encoded_utf8_label(label: str) -> bytes:
+    """Return the label's UTF-8 encoding or reject unencodable labels.
+
+    Unpaired surrogate code points cannot appear in strict JSON text or in
+    the RFC 8785 digest of a source hypergraph, so they are outside the
+    admitted label domain.
+    """
+
+    try:
+        return label.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise ValueError("hypergraph labels must be valid UTF-8") from exc
+
+
 class FiniteHypergraph(StrictModel):
     """A finite hypergraph: a finite set of vertices and named hyperedges.
 
@@ -58,11 +72,25 @@ class FiniteHypergraph(StrictModel):
     of vertex labels.  Edge member order is irrelevant and is canonicalized
     to sorted order on construction, so two hypergraphs with the same
     members in different orders compare equal.  Every edge member must be a
-    declared vertex.
+    declared vertex.  Vertex labels and edge IDs must encode as UTF-8;
+    strings containing unpaired surrogate code points are rejected.
     """
 
-    vertices: tuple[str, ...] = Field(max_length=MAX_VERTICES)
-    edges: tuple[tuple[str, tuple[str, ...]], ...] = Field(max_length=MAX_EDGES)
+    vertices: tuple[str, ...] = Field(
+        max_length=MAX_VERTICES,
+        description=(
+            "Unique UTF-8-encodable vertex labels of at most "
+            f"{MAX_LABEL_LENGTH} characters each."
+        ),
+    )
+    edges: tuple[tuple[str, tuple[str, ...]], ...] = Field(
+        max_length=MAX_EDGES,
+        description=(
+            "Unique UTF-8-encodable edge IDs (at most "
+            f"{MAX_LABEL_LENGTH} characters each) paired with tuples of "
+            "declared vertex labels."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_valid_hypergraph(self) -> Self:
@@ -72,11 +100,13 @@ class FiniteHypergraph(StrictModel):
         for label in self.vertices:
             if len(label) > MAX_LABEL_LENGTH:
                 raise ValueError("vertex label exceeds the bounded length budget")
+            _encoded_utf8_label(label)
         edge_ids: set[str] = set()
         canonical_edges: list[tuple[str, tuple[str, ...]]] = []
         for edge_id, members in self.edges:
             if len(edge_id) > MAX_LABEL_LENGTH:
                 raise ValueError("edge id exceeds the bounded length budget")
+            _encoded_utf8_label(edge_id)
             if edge_id in edge_ids:
                 raise ValueError("edge ids must be distinct")
             edge_ids.add(edge_id)
@@ -310,10 +340,7 @@ class HypergraphIndependenceResult(StrictModel):
 
 
 def _label_utf8_bytes(label: str) -> int:
-    try:
-        return len(label.encode("utf-8"))
-    except UnicodeEncodeError as exc:
-        raise ValueError("hypergraph labels must be valid UTF-8") from exc
+    return len(_encoded_utf8_label(label))
 
 
 def _strict_label_wire_bytes(label: str) -> int:

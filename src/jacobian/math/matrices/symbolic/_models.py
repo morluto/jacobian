@@ -143,6 +143,192 @@ class SymbolicMatrix(StrictModel):
         return self
 
 
+def _maximum_exponent(value: RationalFunction, *, numerator: bool) -> int:
+    polynomial = value.numerator if numerator else value.denominator
+    return max(
+        (exponent for term in polynomial.terms for exponent in term.exponents),
+        default=0,
+    )
+
+
+def _maximum_coefficient_digits(value: RationalFunction, *, numerator: bool) -> int:
+    polynomial = value.numerator if numerator else value.denominator
+    return max(
+        (
+            len(component.lstrip("-"))
+            for term in polynomial.terms
+            for component in (term.coefficient.num, term.coefficient.den)
+        ),
+        default=1,
+    )
+
+
+def _sum_coefficient_digit_bound(
+    *, term_count: int, product_coefficient_digits: int
+) -> int:
+    """Bound one coefficient after collecting ``term_count`` rational products."""
+
+    if term_count <= 1:
+        return product_coefficient_digits
+    return term_count * product_coefficient_digits + len(str(term_count))
+
+
+def _product_cell_bounds(
+    left: tuple[RationalFunction, ...],
+    right: tuple[RationalFunction, ...],
+) -> tuple[int, int, int, int]:
+    """Return unreduced numerator/denominator term, exponent, and digit bounds.
+
+    The cell is a finite sum of products ``a_i * b_i``. Each nonzero product
+    is first written over its own canonical denominator, then all products are
+    put over the product common denominator. Cancellation can only make the
+    final canonical rational function smaller, so these bounds admit every
+    backend expansion before SymPy receives the request.
+    """
+
+    factors = tuple(
+        (left_value, right_value)
+        for left_value, right_value in zip(left, right, strict=True)
+        if left_value.numerator.terms and right_value.numerator.terms
+    )
+    if not factors:
+        # The canonical zero has an empty numerator and a one-term denominator.
+        return 0, 1, 0, 1
+
+    denominator_term_counts = tuple(
+        len(left_value.denominator.terms) * len(right_value.denominator.terms)
+        for left_value, right_value in factors
+    )
+    denominator_exponents = tuple(
+        _maximum_exponent(left_value, numerator=False)
+        + _maximum_exponent(right_value, numerator=False)
+        for left_value, right_value in factors
+    )
+    denominator_coefficient_digits = tuple(
+        _maximum_coefficient_digits(left_value, numerator=False)
+        + _maximum_coefficient_digits(right_value, numerator=False)
+        for left_value, right_value in factors
+    )
+    denominator_terms = 1
+    for count in denominator_term_counts:
+        denominator_terms *= count
+    denominator_exponent = sum(denominator_exponents)
+    denominator_product_digits = sum(denominator_coefficient_digits)
+
+    numerator_terms = 0
+    numerator_exponent = 0
+    numerator_product_digits = 1
+    for index, (left_value, right_value) in enumerate(factors):
+        numerator_term_count = len(left_value.numerator.terms) * len(
+            right_value.numerator.terms
+        )
+        for other_index, denominator_term_count in enumerate(denominator_term_counts):
+            if other_index != index:
+                numerator_term_count *= denominator_term_count
+        numerator_terms += numerator_term_count
+        numerator_exponent = max(
+            numerator_exponent,
+            _maximum_exponent(left_value, numerator=True)
+            + _maximum_exponent(right_value, numerator=True)
+            + denominator_exponent
+            - denominator_exponents[index],
+        )
+        numerator_product_digits = max(
+            numerator_product_digits,
+            _maximum_coefficient_digits(left_value, numerator=True)
+            + _maximum_coefficient_digits(right_value, numerator=True)
+            + denominator_product_digits
+            - denominator_coefficient_digits[index],
+        )
+
+    maximum_exponent = max(numerator_exponent, denominator_exponent)
+    maximum_coefficient_digits = max(
+        _sum_coefficient_digit_bound(
+            term_count=numerator_terms,
+            product_coefficient_digits=numerator_product_digits,
+        ),
+        _sum_coefficient_digit_bound(
+            term_count=denominator_terms,
+            product_coefficient_digits=denominator_product_digits,
+        ),
+    )
+    return (
+        numerator_terms,
+        denominator_terms,
+        maximum_exponent,
+        maximum_coefficient_digits,
+    )
+
+
+def _require_symbolic_product_admission(
+    left: SymbolicMatrix,
+    right: SymbolicMatrix,
+) -> None:
+    """Prove that every exact product entry fits the canonical result value."""
+
+    if left.variables != right.variables:
+        raise ValueError(
+            "symbolic matrix multiplication requires identical ordered field variables"
+        )
+    if len(left.entries[0]) != len(right.entries):
+        raise ValueError(
+            "symbolic matrix multiplication requires the left column count to equal "
+            "the right row count"
+        )
+
+    aggregate_terms = 0
+    for left_row in left.entries:
+        for right_column in zip(*right.entries, strict=True):
+            (
+                numerator_terms,
+                denominator_terms,
+                maximum_exponent,
+                maximum_coefficient_digits,
+            ) = _product_cell_bounds(left_row, right_column)
+            if (
+                numerator_terms > MAX_SYMBOLIC_RESULT_TERMS
+                or denominator_terms > MAX_SYMBOLIC_RESULT_TERMS
+            ):
+                raise ValueError(
+                    "symbolic matrix product exceeds the 256-term exact result budget"
+                )
+            if maximum_exponent > MAX_SYMBOLIC_RESULT_EXPONENT:
+                raise ValueError(
+                    "symbolic matrix product exceeds the result exponent budget"
+                )
+            if maximum_coefficient_digits > MAX_SYMBOLIC_RESULT_COEFFICIENT_DIGITS:
+                raise ValueError(
+                    "symbolic matrix product exceeds the result coefficient budget"
+                )
+            aggregate_terms += numerator_terms + denominator_terms
+    if aggregate_terms > MAX_SYMBOLIC_MATRIX_TERMS:
+        raise ValueError(
+            "symbolic matrix product exceeds the 512-term aggregate result budget"
+        )
+
+
+class SymbolicMatrixProductRequest(StrictModel):
+    """Two compatible symbolic matrices whose exact product is representable."""
+
+    left: SymbolicMatrix = Field(
+        description=(
+            "A nonempty symbolic matrix over QQ(t_1, ..., t_n). Its ordered "
+            "field variables must exactly match right.variables."
+        )
+    )
+    right: SymbolicMatrix = Field(
+        description=(
+            "A nonempty symbolic matrix over the same ordered field as left. "
+            "Its row count must equal left's column count."
+        )
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_exact_product(self) -> Self:
+        _require_symbolic_product_admission(self.left, self.right)
+        return self
+
+
 class SymbolicMatrixRequest(StrictModel):
     """A symbolic matrix over a declared variable list."""
 

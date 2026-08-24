@@ -17,6 +17,7 @@ from jacobian.math.matrices.symbolic._models import (
     SymbolicEigenvaluesResult,
     SymbolicLinearSystemRequest,
     SymbolicMatrix,
+    SymbolicMatrixProductRequest,
     SymbolicMatrixRequest,
     SymbolicRankResult,
 )
@@ -24,6 +25,7 @@ from jacobian.math.matrices.symbolic._operations import (
     compute_symbolic_characteristic_polynomial,
     compute_symbolic_determinant,
     compute_symbolic_eigenvalues,
+    compute_symbolic_matrix_product,
     compute_symbolic_rank,
 )
 from jacobian.math.matrices.symbolic._tools import TOOLS
@@ -81,6 +83,17 @@ def _request(
 ) -> SymbolicMatrixRequest:
     return SymbolicMatrixRequest(
         matrix=SymbolicMatrix(variables=variables, entries=tuple(map(tuple, entries)))
+    )
+
+
+def _product_request(
+    left: Sequence[Sequence[RationalFunction]],
+    right: Sequence[Sequence[RationalFunction]],
+    variables: tuple[str, ...],
+) -> SymbolicMatrixProductRequest:
+    return SymbolicMatrixProductRequest(
+        left=SymbolicMatrix(variables=variables, entries=tuple(map(tuple, left))),
+        right=SymbolicMatrix(variables=variables, entries=tuple(map(tuple, right))),
     )
 
 
@@ -180,6 +193,84 @@ def test_symbolic_rank_of_full_and_singular_matrices() -> None:
     assert singular.rank == 1
 
 
+def test_symbolic_matrix_product_is_exact_and_composes_with_rank() -> None:
+    variables = ("a", "b")
+    a, b = (_variable(variables, index) for index in range(2))
+    one = _rf(variables, (1, 1, (0, 0)))
+    product = compute_symbolic_matrix_product(
+        _product_request(((a, b),), ((one,), (one,)), variables)
+    )
+    assert product == SymbolicMatrix(
+        variables=variables,
+        entries=((_rf(variables, (1, 1, (1, 0)), (1, 1, (0, 1))),),),
+    )
+    assert compute_symbolic_rank(SymbolicMatrixRequest(matrix=product)).rank == 1
+
+
+def test_symbolic_matrix_product_cancels_rational_function_entries() -> None:
+    variables = ("e", "f")
+    e_over_f = _rf(
+        variables,
+        (1, 1, (1, 0)),
+        denominator=((1, 1, (0, 1)),),
+    )
+    f_over_e = _rf(
+        variables,
+        (1, 1, (0, 1)),
+        denominator=((1, 1, (1, 0)),),
+    )
+    product = compute_symbolic_matrix_product(
+        _product_request(((e_over_f,),), ((f_over_e,),), variables)
+    )
+    assert product.entries == ((_rf(variables, (1, 1, (0, 0))),),)
+
+
+def test_symbolic_matrix_product_rejects_field_and_shape_mismatches() -> None:
+    a = _variable(("a",), 0)
+    b = _variable(("b",), 0)
+    with pytest.raises(ValidationError, match="identical ordered field"):
+        SymbolicMatrixProductRequest(
+            left=SymbolicMatrix(variables=("a",), entries=((a,),)),
+            right=SymbolicMatrix(variables=("b",), entries=((b,),)),
+        )
+    with pytest.raises(ValidationError, match="column count"):
+        _product_request(((_constant(1), _constant(1)),), ((_constant(1),),), ())
+
+
+def test_symbolic_matrix_product_rejects_unreduced_result_growth_before_kernel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.matrices.symbolic as symbolic
+
+    variables = ("x",)
+    many_terms = _rf(
+        variables,
+        *((1, 1, (exponent,)) for exponent in range(16, -1, -1)),
+    )
+
+    def fail_if_called(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("symbolic multiplication kernel ran during admission")
+
+    monkeypatch.setattr(symbolic, "symbolic_matrix_multiply", fail_if_called)
+    with pytest.raises(ValidationError, match="256-term"):
+        _product_request(((many_terms,),), ((many_terms,),), variables)
+
+
+def test_symbolic_matrix_product_rejects_coefficient_growth_before_kernel() -> None:
+    digits = "9" * 65
+    large = _rf((), (int(digits), 1, ()))
+    with pytest.raises(ValidationError, match="coefficient"):
+        _product_request(((large,),), ((large,),), ())
+
+
+def test_symbolic_matrix_product_rejects_exponent_growth_before_kernel() -> None:
+    variables = ("x",)
+    x_to_64 = _rf(variables, (1, 1, (64,)))
+    x = _rf(variables, (1, 1, (1,)))
+    with pytest.raises(ValidationError, match="exponent"):
+        _product_request(((x_to_64,),), ((x,),), variables)
+
+
 def test_rational_function_entries_use_the_advertised_field() -> None:
     variables = ("x",)
     inverse_x = _rf(
@@ -272,7 +363,22 @@ def test_symbolic_descriptors_publish_operation_specific_boundaries() -> None:
         "matrix.symbolic.characteristic_polynomial.compute": SymbolicCharacteristicPolynomialRequest,
         "matrix.symbolic.eigenvalues.compute": SymbolicCharacteristicPolynomialRequest,
         "matrix.symbolic.linear_system.solve": SymbolicLinearSystemRequest,
+        "matrix.symbolic.multiply.compute": SymbolicMatrixProductRequest,
     }
+
+
+def test_symbolic_native_api_exports_matrix_value_and_product() -> None:
+    import jacobian.math.matrices.symbolic as symbolic
+
+    assert tuple(symbolic.__all__) == (
+        "SymbolicMatrix",
+        "symbolic_characteristic_polynomial",
+        "symbolic_determinant",
+        "symbolic_eigenvalues",
+        "symbolic_linear_system_solve",
+        "symbolic_matrix_multiply",
+        "symbolic_rank",
+    )
 
 
 def test_matrix_rejects_nonrectangular_mismatched_and_invalid_axes() -> None:

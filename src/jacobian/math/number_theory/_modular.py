@@ -174,12 +174,15 @@ MODULAR_OPERATIONS = (
     number_theory_operation(
         "modular.solve.chinese_remainder",
         "Solve congruence system",
-        "Solve a finite compatible system of integer congruences.",
+        "Solve a finite compatible system of integer congruences. Admission "
+        "bounds the system's combined modulus (its LCM) to the 256-digit "
+        "exact result width rather than each modulus alone.",
         ChineseRemainderRequest,
         ChineseRemainderResult,
         solve_chinese_remainder,
         "number-theory",
         "modular",
+        version="3",
         examples=(
             example(
                 "crt_2_mod_3_3_mod_5",

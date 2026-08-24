@@ -131,25 +131,32 @@ def test_inline_homology_rejects_basis_that_exceeds_its_inline_budget() -> None:
         SimplicialHomologyRequest(complex=complex_, prime=2)
 
 
-def test_integral_homology_has_tighter_certificate_size_bounds() -> None:
-    too_many_vertices = tuple(f"v{index}" for index in range(51))
+def test_integral_homology_chain_groups_derive_from_certificate_dimension() -> None:
+    """Every integral-homology certificate matrix is a ``CertifiedIntegerMatrix``
+    bounded at ``MAX_CERTIFIED_SNF_DIMENSION`` = 32, so a chain group of 33
+    simplices must be rejected at admission rather than fail construction."""
+    too_many_vertices = tuple(f"v{index}" for index in range(33))
     vertex_complex = _canonical_complex(
         too_many_vertices,
         tuple((vertex,) for vertex in too_many_vertices),
     )
-    with pytest.raises(ValidationError, match="at most 50 simplices"):
+    assert max(vertex_complex.f_vector) == 33
+    with pytest.raises(ValidationError, match="at most 32 simplices"):
         IntegralSimplicialHomologyRequest(complex=vertex_complex)
 
-    # 15 disjoint triangles: 45 vertices, f = (45,45,15), sum 105 >100, max 45 ≤50
-    tri_vertices = tuple(f"v{index}" for index in range(45))
-    tri_facets = tuple(
-        tuple(f"v{3 * tri + offset}" for offset in range(3)) for tri in range(15)
-    )
-    total_rank_too_large = _canonical_complex(tri_vertices, tri_facets)
-    assert max(total_rank_too_large.f_vector) <= 50
-    assert sum(total_rank_too_large.f_vector) == 105  # exceeds the 100-bound
-    with pytest.raises(ValidationError, match="total chain rank at most 100"):
-        IntegralSimplicialHomologyRequest(complex=total_rank_too_large)
+
+def test_integral_homology_certificate_boundary_runs_the_public_operation() -> None:
+    """32 isolated vertices sit exactly on the certificate-dimension boundary:
+    the public operation returns a typed result whose H_0 carries one free
+    generator per component instead of failing result construction."""
+    vertices = tuple(f"v{index}" for index in range(32))
+    complex_ = _canonical_complex(vertices, tuple((vertex,) for vertex in vertices))
+    operation = _operation("topology.simplicial_homology.integral.compute")
+
+    result = operation.run(IntegralSimplicialHomologyRequest(complex=complex_))
+
+    assert result.groups[0].betti_number == 32
+    assert len(result.groups[0].free_generators) == 32
 
 
 def test_stale_complex_digest_reports_field_level_loc() -> None:

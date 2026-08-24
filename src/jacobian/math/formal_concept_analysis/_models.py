@@ -127,11 +127,14 @@ class ConceptResult(StrictModel):
     intent: tuple[int, ...]
 
 
-# Bound the concept enumeration. NextClosure has cost proportional to the
-# number of concepts (not 2^|M|), but the number of concepts itself can be
-# exponential in the number of attributes.  We bound both the attribute count
-# and the number of concepts returned.
-MAX_CONCEPT_ATTRIBUTES = 64
+# Bound the concept enumeration by its declared output budget. NextClosure's
+# cost is proportional to the number of concepts, and that number is bounded
+# by 2^min(|objects|, |attributes|): intents biject with a closure system on
+# the attribute axis and extents with one on the object axis.  Admission
+# therefore derives its input envelope from that worst case against
+# MAX_CONCEPTS instead of bounding one axis alone, so sparse wide contexts
+# stay admissible while dense contexts whose family could exceed the budget
+# are rejected before execution.
 MAX_CONCEPTS = 10000
 
 
@@ -141,10 +144,16 @@ class EnumerateConceptsRequest(StrictModel):
     context: FormalContext
 
     @model_validator(mode="after")
-    def require_bounded_attribute_count(self) -> Self:
-        if len(self.context.attributes) > MAX_CONCEPT_ATTRIBUTES:
+    def require_bounded_concept_family(self) -> Self:
+        worst_case_concepts = 2 ** min(
+            len(self.context.objects), len(self.context.attributes)
+        )
+        if worst_case_concepts > MAX_CONCEPTS:
             raise ValueError(
-                f"concept enumeration supports at most {MAX_CONCEPT_ATTRIBUTES} attributes"
+                "the context may carry up to "
+                f"{worst_case_concepts} concepts and concept enumeration "
+                f"returns at most {MAX_CONCEPTS}; narrow the smaller axis "
+                "or split the context"
             )
         return self
 
@@ -168,7 +177,6 @@ class ConceptLatticeResult(StrictModel):
 
 __all__ = [
     "MAX_CONCEPTS",
-    "MAX_CONCEPT_ATTRIBUTES",
     "AttributeSubsetRequest",
     "ClosureResult",
     "ConceptLatticeResult",

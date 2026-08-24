@@ -66,6 +66,12 @@ _MAX_PRIMORIAL_N = 1001
 # replace the brute force before further raising this bound.
 _MAX_MODULUS = 1_000_000
 _MAX_CRT_SIZE = 64
+# CRT admission derives its input envelope from the declared output
+# contract: ``ChineseRemainderResult.modulus`` is a ``BoundedInteger`` of
+# at most ``_MAX_INTEGER_LENGTH`` characters, so the LCM of an admitted
+# system must stay within the same width.  ``10 ** _MAX_INTEGER_LENGTH``
+# is the smallest excluded combined modulus (positive values only).
+_MAX_CRT_COMBINED_MODULUS = 10**_MAX_INTEGER_LENGTH
 _MAX_DIVISORS = 4_096
 _MAX_FACTOR_ENTRIES = 256
 _MAX_RESIDUE_VARIABLES = 6
@@ -547,14 +553,27 @@ class ChineseRemainderRequest(StrictModel):
             raise ValueError("residues and moduli must have equal length")
         if any(modulus < 2 or modulus > _MAX_MODULUS for modulus in self.moduli):
             raise ValueError("every modulus must be between 2 and 1,000,000")
+        # The result carries the system's combined modulus as one exact
+        # ``BoundedInteger``, so admission derives its input envelope from
+        # that declared output budget: reject any compatible system whose
+        # LCM exceeds the result width, however small each modulus is.
+        from math import gcd
+
+        combined = 1
+        for modulus in self.moduli:
+            combined = combined // gcd(combined, modulus) * modulus
+            if combined > _MAX_CRT_COMBINED_MODULUS:
+                raise ValueError(
+                    "the system's combined modulus must have at most "
+                    f"{_MAX_INTEGER_LENGTH} digits; split the congruence "
+                    "system into narrower subsystems"
+                )
         if any(
             residue < 0 or residue >= modulus
             for residue, modulus in zip(self.residues, self.moduli, strict=True)
         ):
             raise ValueError("every residue must be canonical for its modulus")
         # Check pairwise consistency: residues must agree modulo gcd(moduli).
-        from math import gcd
-
         for i in range(len(self.moduli)):
             for j in range(i + 1, len(self.moduli)):
                 g = gcd(self.moduli[i], self.moduli[j])

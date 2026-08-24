@@ -626,3 +626,155 @@ class TestSolverConflictBudget:
         assert (
             EdgeKColorabilityResult.model_validate(undecided.model_dump()) == undecided
         )
+
+
+class TestVertexKColorability:
+    def _k4(self):
+        from jacobian.math.graphs.coloring._models import GraphEdgeList
+
+        return GraphEdgeList(
+            vertex_count=4,
+            edges=((0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)),
+        )
+
+    def test_triangle_decision_carries_a_proper_witness(self):
+        from jacobian.math.graphs.coloring._models import KColorabilityRequest
+        from jacobian.math.graphs.coloring._operations import compute_k_colorability
+
+        result = compute_k_colorability(
+            KColorabilityRequest(
+                graph={"vertex_count": 3, "edges": [[0, 1], [1, 2], [2, 0]]},
+                colors=3,
+            )
+        )
+        assert result.status == "DECIDED"
+        assert result.colorable is True
+        assert len(result.coloring) == 3
+
+    def test_budget_exceeded_returns_typed_unknown_outcome(self):
+        """A conflict budget of 1 cannot decide the complete graph K4 under
+        three colors; the operation must report SOLVER_BUDGET_EXCEEDED with
+        no colorability claim instead of an unbounded wait or a false
+        negative."""
+        from jacobian.math.graphs.coloring._models import (
+            KColorabilityRequest,
+            KColorabilityResult,
+        )
+        from jacobian.math.graphs.coloring._operations import compute_k_colorability
+
+        request = KColorabilityRequest(graph=self._k4(), colors=3, solver_conflicts=1)
+        result = compute_k_colorability(request)
+        assert result.status == "SOLVER_BUDGET_EXCEEDED"
+        assert result.colorable is None
+        assert result.coloring is None
+        assert KColorabilityResult.model_validate(result.model_dump()) == result
+
+    def test_forged_budget_exceeded_rejected_when_decidable(self):
+        """An authored budget-exceeded label on a trivially decidable graph
+        must not validate."""
+        from jacobian.math.graphs.coloring._models import (
+            GraphEdgeList,
+            KColorabilityResult,
+        )
+
+        with pytest.raises(ValidationError, match="not reproduced"):
+            KColorabilityResult(
+                graph=GraphEdgeList(vertex_count=2, edges=((0, 1),)),
+                colors=2,
+                solver_conflicts=1000,
+                status="SOLVER_BUDGET_EXCEEDED",
+                colorable=None,
+                coloring=None,
+                vertex_count=2,
+            )
+
+    def test_budget_exceeded_cannot_claim_colorable(self):
+        from jacobian.math.graphs.coloring._models import KColorabilityResult
+
+        k4 = self._k4()
+        with pytest.raises(ValidationError, match="no colorability claim"):
+            KColorabilityResult(
+                graph=k4,
+                colors=3,
+                solver_conflicts=100000,
+                status="SOLVER_BUDGET_EXCEEDED",
+                colorable=False,
+                coloring=None,
+                vertex_count=4,
+            )
+
+    def test_negative_claim_requires_explicit_unsat_within_budget(self):
+        """A non-colorable claim replayed under a too-small budget (which
+        returns unknown) must not validate: negatives need explicit unsat."""
+        from jacobian.math.graphs.coloring._models import KColorabilityResult
+
+        k4 = self._k4()
+        payload = {
+            "graph": k4.model_dump(),
+            "colors": 3,
+            "solver_conflicts": 1,
+            "status": "DECIDED",
+            "colorable": False,
+            "coloring": None,
+            "vertex_count": 4,
+        }
+        with pytest.raises(ValidationError, match="undecided but result claims"):
+            KColorabilityResult.model_validate(payload)
+
+    def test_default_budget_still_decides_k4_negative(self):
+        from jacobian.math.graphs.coloring._models import KColorabilityRequest
+        from jacobian.math.graphs.coloring._operations import compute_k_colorability
+
+        result = compute_k_colorability(
+            KColorabilityRequest(graph=self._k4(), colors=3)
+        )
+        assert result.status == "DECIDED"
+        assert result.colorable is False
+        assert result.coloring is None
+
+    def test_decided_negative_runs_the_bounded_solver_exactly_once(self, monkeypatch):
+        """The producing solve must not pay a second full-budget replay:
+        one declared budget covers all solver work on the request."""
+        import jacobian.math.graphs.coloring._models as coloring_models
+        from jacobian.math.graphs.coloring._models import KColorabilityRequest
+        from jacobian.math.graphs.coloring._operations import compute_k_colorability
+
+        calls: list[int] = []
+        original = coloring_models._run_k_colorability_solver
+
+        def counting(graph, colors, solver_conflicts):
+            calls.append(solver_conflicts)
+            return original(graph, colors, solver_conflicts)
+
+        monkeypatch.setattr(coloring_models, "_run_k_colorability_solver", counting)
+        result = compute_k_colorability(
+            KColorabilityRequest(graph=self._k4(), colors=3)
+        )
+        assert result.status == "DECIDED"
+        assert result.colorable is False
+        assert calls == [result.solver_conflicts]
+
+    def test_forged_positive_witnesses_are_rejected(self):
+        """A colorable claim must carry one in-range color per vertex and the
+        witness must be proper for the result's own graph."""
+        from jacobian.math.graphs.coloring._models import (
+            GraphEdgeList,
+            KColorabilityResult,
+        )
+
+        path = GraphEdgeList(vertex_count=3, edges=((0, 1), (1, 2)))
+        base = {
+            "graph": path,
+            "colors": 2,
+            "status": "DECIDED",
+            "colorable": True,
+            "vertex_count": 3,
+        }
+        with pytest.raises(ValidationError, match="one color per vertex"):
+            KColorabilityResult(**{**base, "coloring": (0, 1)})
+        with pytest.raises(ValidationError, match=r"0\.\.colors-1"):
+            KColorabilityResult(**{**base, "coloring": (0, 1, 2)})
+        with pytest.raises(ValidationError, match="proper vertex coloring"):
+            KColorabilityResult(**{**base, "coloring": (0, 0, 1)})
+        with pytest.raises(ValidationError, match="must equal"):
+            KColorabilityResult(**{**base, "coloring": (0, 1, 0), "vertex_count": 2})

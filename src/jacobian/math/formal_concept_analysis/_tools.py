@@ -172,13 +172,16 @@ FORMAL_CONCEPT_ANALYSIS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "Enumerate every formal concept exactly once",
         "Return the complete concept family of closed attribute intents "
         "using Ganter's NextClosure algorithm over the declared attribute "
-        "order. The family, not the enumeration order, is mathematical.",
+        "order. The family, not the enumeration order, is mathematical. "
+        "Admission bounds the smaller context axis so the worst-case family "
+        "size fits the declared concept budget.",
         EnumerateConceptsRequest,
         EnumerateConceptsResult,
         compute_enumerate_concepts,
         "formal-concept-analysis",
         "enumeration",
         "exact",
+        version="2",
         examples=(
             example(
                 "enumerate_concepts",
@@ -198,6 +201,7 @@ FORMAL_CONCEPT_ANALYSIS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "formal-concept-analysis",
         "lattice",
         "exact",
+        version="2",
         examples=(
             example(
                 "concept_lattice",

@@ -4,7 +4,9 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.number_theory._models import (
+    _MAX_CRT_SIZE,
     _MAX_FACTORIZATION_LENGTH,
+    _MAX_INTEGER_LENGTH,
     ChineseRemainderRequest,
     FactorialValuationRequest,
     FactorizationRequest,
@@ -34,6 +36,55 @@ def test_chinese_remainder_rejects_invalid_system_bounds(
 ) -> None:
     with pytest.raises(ValidationError, match=message):
         ChineseRemainderRequest.model_validate(payload)
+
+
+def test_chinese_remainder_rejects_combined_modulus_beyond_result_budget() -> None:
+    """64 pairwise-coprime six-digit moduli each fit the per-modulus bound
+    while their LCM exceeds the declared 256-character ``BoundedInteger``
+    result width: admission must bound the combined modulus, not each
+    modulus alone."""
+    from sympy import prevprime
+
+    moduli: list[int] = []
+    candidate = 1_000_000
+    while len(moduli) < _MAX_CRT_SIZE:
+        candidate = int(prevprime(candidate))
+        moduli.append(candidate)
+
+    with pytest.raises(ValidationError, match="combined modulus"):
+        ChineseRemainderRequest(residues=(1,) * len(moduli), moduli=tuple(moduli))
+
+
+def test_chinese_remainder_admits_boundary_system_and_solves_exactly() -> None:
+    """A compatible system whose combined modulus fits the result budget is
+    admitted and solved; the typed result carries the system's LCM exactly."""
+
+    from math import lcm
+
+    from sympy import prevprime
+
+    from jacobian.math.number_theory._modular_operations import (
+        solve_chinese_remainder,
+    )
+
+    moduli: list[int] = []
+    combined = 1
+    candidate = 1_000_000
+    while True:
+        candidate = int(prevprime(candidate))
+        if len(str(combined * candidate)) > _MAX_INTEGER_LENGTH:
+            break
+        moduli.append(candidate)
+        combined *= candidate
+    assert len(str(combined)) >= _MAX_INTEGER_LENGTH - 6
+
+    request = ChineseRemainderRequest(residues=(1,) * len(moduli), moduli=tuple(moduli))
+    result = solve_chinese_remainder(request)
+
+    assert result.residue == "1"
+    assert result.modulus == str(combined)
+    assert int(result.modulus) == lcm(*moduli)
+    assert len(result.modulus) <= _MAX_INTEGER_LENGTH
 
 
 def test_in_process_factorization_dependencies_have_small_input_bounds() -> None:

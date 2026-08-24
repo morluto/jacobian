@@ -55,25 +55,55 @@ def compute_chromatic_number_certificate_check(
 
 
 def compute_k_colorability(request: KColorabilityRequest) -> KColorabilityResult:
-    import z3  # type: ignore[import-untyped]
+    """Decide whether a simple graph admits a proper ``k``-coloring.
 
-    solver = z3.Solver()
-    colors = [z3.Int(f"color_{vertex}") for vertex in range(request.graph.vertex_count)]
-    solver.add(*(z3.And(color >= 0, color < request.colors) for color in colors))
-    solver.add(*(colors[u] != colors[v] for u, v in request.graph.edges))
-    if solver.check() == z3.sat:
-        model = solver.model()
-        coloring = tuple(model.eval(color).as_long() for color in colors)
+    Uses a Z3 SAT search bounded by the request-visible ``solver_conflicts``
+    budget and returns one proper coloring as the witness of a colorable
+    decision.  Non-colorability is claimed only on an explicit
+    unsatisfiable outcome; an exhausted budget yields the typed
+    ``SOLVER_BUDGET_EXCEEDED`` outcome instead of an unbounded wait.  The
+    declared budget covers the whole request: decided-negative and
+    budget-exceeded outcomes reuse the producing solve directly instead of
+    paying a second replay, while independently supplied results still
+    validate through full replay.
+    """
+    from jacobian.math.graphs.coloring._models import _run_k_colorability_solver
+
+    outcome, coloring = _run_k_colorability_solver(
+        request.graph, request.colors, request.solver_conflicts
+    )
+    if outcome == "sat":
+        if coloring is None:
+            raise AssertionError(
+                "the bounded solver returned a satisfying outcome without a witness"
+            )
         return KColorabilityResult(
+            graph=request.graph,
+            colors=request.colors,
+            solver_conflicts=request.solver_conflicts,
+            status="DECIDED",
             colorable=True,
             coloring=coloring,
             vertex_count=request.graph.vertex_count,
-            colors=request.colors,
         )
-    return KColorabilityResult(
-        colorable=False,
-        vertex_count=request.graph.vertex_count,
+    if outcome == "unsat":
+        return KColorabilityResult.model_construct(
+            graph=request.graph,
+            colors=request.colors,
+            solver_conflicts=request.solver_conflicts,
+            status="DECIDED",
+            colorable=False,
+            coloring=None,
+            vertex_count=request.graph.vertex_count,
+        )
+    return KColorabilityResult.model_construct(
+        graph=request.graph,
         colors=request.colors,
+        solver_conflicts=request.solver_conflicts,
+        status="SOLVER_BUDGET_EXCEEDED",
+        colorable=None,
+        coloring=None,
+        vertex_count=request.graph.vertex_count,
     )
 
 

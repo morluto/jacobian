@@ -231,6 +231,37 @@ def test_lattice_embedded_concepts_replay_defining_equations() -> None:
     extents = [frozenset(extent_tuple) for extent_tuple, _intent in result.concepts]
     assert len(set(extents)) == len(extents)
 
+    def _contranominal(self, axis_size: int) -> FormalContext:
+        """The contranominal scale on n objects and n attributes: object i
+        has every attribute except i. It carries exactly 2^n concepts."""
+        n = axis_size
+        return FormalContext(
+            objects=tuple(f"o{index}" for index in range(n)),
+            attributes=tuple(f"a{index}" for index in range(n)),
+            incidence=tuple(
+                (object_index, attribute_index)
+                for object_index in range(n)
+                for attribute_index in range(n)
+                if attribute_index != object_index
+            ),
+        )
+
+    def test_contranominal_context_beyond_result_budget_is_rejected(self) -> None:
+        """A 21x21 contranominal context has exactly 2^21 concepts, beyond
+        the declared enumeration budget: admission must derive its envelope
+        from the worst-case family size instead of raising mid-enumeration."""
+        with pytest.raises(ValidationError, match="enumeration returns at most"):
+            EnumerateConceptsRequest(context=self._contranominal(21))
+
+    def test_contranominal_boundary_context_enumerates_complete_family(self) -> None:
+        """13 is the admitted boundary of the smaller axis (2^13 = 8192 fits
+        the budget; 2^14 does not), and the boundary context returns the
+        complete family as a typed result."""
+        result = compute_enumerate_concepts(
+            EnumerateConceptsRequest(context=self._contranominal(13))
+        )
+        assert result.count == 2**13 == 8192
+
     def test_sparse_context_beyond_twenty_attributes_is_enumerated(self) -> None:
         # One object with no incidences over 21 attributes carries exactly the
         # two trivial concepts, so admission must not reject it by attribute

@@ -254,7 +254,6 @@ class TruncatedSeries(StrictModel):
     variable: Variable = Field(description="The single formal variable.")
     truncation_order: StrictInt = Field(
         ge=1,
-        le=MAX_TRUNCATION_ORDER,
         description="Truncation order N (coefficients a_0..a_{N-1}).",
     )
     coefficients: tuple[CanonicalRational, ...] = Field(
@@ -277,7 +276,21 @@ class TruncatedSeries(StrictModel):
 
 
 class InputTruncatedSeries(TruncatedSeries):
-    """A truncated series admitted as an operation input."""
+    """A truncated series admitted as an operation input.
+
+    Operation kernels do work that grows with the truncation order, so the
+    input envelope keeps the shared order ceiling that the pure value carrier
+    does not impose.
+    """
+
+    truncation_order: StrictInt = Field(
+        ge=1,
+        le=MAX_TRUNCATION_ORDER,
+        description=(
+            "Truncation order N (coefficients a_0..a_{N-1}); bounded because "
+            "operation work scales with N."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_input_digit_bound(self) -> Self:

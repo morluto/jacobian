@@ -14,6 +14,7 @@ from jacobian.math.formal_power_series._models import (
     SeriesPowerRequest,
     SeriesReversionRequest,
     SeriesReversionResult,
+    TruncatedSeries,
     _SeriesAddSubtractRequest,
     _SeriesMultiplyRequest,
 )
@@ -106,6 +107,21 @@ def test_small_requests_remain_admitted() -> None:
         _series(2, [_coefficient("1"), _coefficient("1")])
     )
     assert SeriesPowerRequest(series=series, exponent=3)
+
+
+def test_value_carrier_admits_compact_series_beyond_the_input_order_ceiling() -> None:
+    order = MAX_TRUNCATION_ORDER + 88
+    value = TruncatedSeries.model_validate(
+        _series(order, [_coefficient("1")] * order)
+    )
+    assert value.truncation_order == order
+
+
+def test_operation_inputs_keep_the_shared_order_ceiling() -> None:
+    with pytest.raises(ValidationError):
+        InputTruncatedSeries.model_validate(
+            _series(MAX_TRUNCATION_ORDER + 1, [_coefficient("1")])
+        )
 
 
 def test_largest_multiplication_result_fits_shared_output_envelope() -> None:

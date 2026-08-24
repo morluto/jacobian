@@ -13,7 +13,6 @@ from typing import Literal
 
 NamedLevelOneModularForm = Literal["E4", "E6", "DELTA"]
 
-MAX_LEVEL_ONE_TRUNCATION_ORDER = 512
 # Delta needs five finite convolutions to construct and three more to replay
 # its defining identity in the result value.  The factor eleven also leaves
 # room for the operation boundary to validate that value once more.
@@ -124,10 +123,8 @@ def require_level_one_admission(
     """Prove finite scan, series work, coefficient, and output envelopes."""
     if isinstance(truncation_order, bool) or not isinstance(truncation_order, int):
         raise ValueError("truncation_order must be a plain integer")
-    if not 1 <= truncation_order <= MAX_LEVEL_ONE_TRUNCATION_ORDER:
-        raise ValueError(
-            "truncation_order must be within the supported level-one prefix bound"
-        )
+    if truncation_order < 1:
+        raise ValueError("truncation_order must be positive")
 
     p = truncation_order
     divisor_scans = p * isqrt(p)
@@ -146,7 +143,6 @@ def require_level_one_admission(
 
 __all__ = [
     "MAX_LEVEL_ONE_SERIALIZED_CHARACTERS",
-    "MAX_LEVEL_ONE_TRUNCATION_ORDER",
     "MAX_LEVEL_ONE_WORK_TERMS",
     "NamedLevelOneModularForm",
     "coefficient_digit_bound",

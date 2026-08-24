@@ -13,7 +13,7 @@ from jacobian.math.formal_power_series._operations import (
 )
 from jacobian.math.modular_forms._models import LevelOneNamedQExpansionRequest
 from jacobian.math.modular_forms.kernel import (
-    MAX_LEVEL_ONE_TRUNCATION_ORDER,
+    divisor_power_sum,
     require_level_one_admission,
 )
 from jacobian.math.modular_forms.operations import level_one_named_q_expansion
@@ -61,9 +61,9 @@ def test_delta_known_prefix_and_defining_e4_e6_identity() -> None:
 
 
 def test_full_public_precision_is_complete_and_carries_parent_metadata() -> None:
-    result = level_one_named_q_expansion("DELTA", MAX_LEVEL_ONE_TRUNCATION_ORDER)
-    assert result.q_expansion.truncation_order == MAX_LEVEL_ONE_TRUNCATION_ORDER
-    assert len(result.q_expansion.coefficients) == MAX_LEVEL_ONE_TRUNCATION_ORDER
+    result = level_one_named_q_expansion("DELTA", 600)
+    assert result.q_expansion.truncation_order == 600
+    assert len(result.q_expansion.coefficients) == 600
     assert result.congruence_subgroup == "SL2Z"
     assert result.level == 1
     assert result.weight == 12
@@ -88,9 +88,29 @@ def test_order_one_retains_the_known_constant_coefficient() -> None:
     assert _integers(level_one_named_q_expansion("DELTA", 1)) == (0,)
 
 
-def test_request_rejects_precision_above_complete_public_envelope() -> None:
-    with pytest.raises(ValidationError, match="less than or equal to 512"):
-        LevelOneNamedQExpansionRequest(form="E4", truncation_order=513)
+def test_eisenstein_prefixes_beyond_the_former_carrier_ceiling_are_admitted() -> None:
+    e6 = level_one_named_q_expansion("E6", 1000)
+    assert len(e6.q_expansion.coefficients) == 1000
+    assert all(coefficient.den == "1" for coefficient in e6.q_expansion.coefficients)
+    assert int(e6.q_expansion.coefficients[-1].as_fraction()) == -504 * (
+        divisor_power_sum(999, 5)
+    )
+    e4 = level_one_named_q_expansion("E4", 1477)
+    assert len(e4.q_expansion.coefficients) == 1477
+
+
+def test_requests_above_the_serialized_budget_name_the_controlling_quantity() -> None:
+    with pytest.raises(ValidationError, match="serialized result bound"):
+        LevelOneNamedQExpansionRequest(form="E6", truncation_order=1301)
+    with pytest.raises(ValueError, match="serialized result bound"):
+        require_level_one_admission("E4", 1478)
+
+
+def test_delta_above_the_work_budget_names_the_controlling_quantity() -> None:
+    with pytest.raises(ValidationError, match="exact work bound"):
+        LevelOneNamedQExpansionRequest(form="DELTA", truncation_order=601)
+    with pytest.raises(ValueError, match="exact work bound"):
+        require_level_one_admission("DELTA", 601)
 
 
 def test_wire_request_rejects_boolean_truncation_orders() -> None:
@@ -114,5 +134,14 @@ def test_value_rejects_forged_coefficient_during_replay() -> None:
         {"num": "241", "den": "1"},
         {"num": "2160", "den": "1"},
     )
+    with pytest.raises(ValidationError, match="does not match"):
+        LevelOneModularQExpansion.model_validate(payload)
+
+
+def test_value_rejects_forged_coefficient_at_widened_precision() -> None:
+    payload = level_one_named_q_expansion("E6", 1000).model_dump()
+    coefficients = list(payload["q_expansion"]["coefficients"])
+    coefficients[-1] = {"num": str(int(coefficients[-1]["num"]) + 1), "den": "1"}
+    payload["q_expansion"]["coefficients"] = tuple(coefficients)
     with pytest.raises(ValidationError, match="does not match"):
         LevelOneModularQExpansion.model_validate(payload)

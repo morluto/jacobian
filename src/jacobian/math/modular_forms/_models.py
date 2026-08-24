@@ -8,7 +8,6 @@ from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.modular_forms.kernel import (
-    MAX_LEVEL_ONE_TRUNCATION_ORDER,
     NamedLevelOneModularForm,
     require_level_one_admission,
 )
@@ -22,10 +21,10 @@ class LevelOneNamedQExpansionRequest(StrictModel):
     )
     truncation_order: StrictInt = Field(
         ge=1,
-        le=MAX_LEVEL_ONE_TRUNCATION_ORDER,
         description=(
-            "Return coefficients q^0 through q^(P-1); P is bounded before "
-            "divisor scans and finite-series arithmetic."
+            "Return coefficients q^0 through q^(P-1); the exact work and "
+            "serialized-result budgets bound P before any scan or "
+            "finite-series arithmetic."
         ),
     )
 

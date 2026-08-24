@@ -457,10 +457,12 @@ class DivisorListResult(StrictModel):
     exactly all positive divisors of ``abs(value)`` (proper ones exclude
     ``abs(value)`` itself) in ascending order.  The list may be empty:
     ``proper_divisors(±1)`` has no positive proper divisors.  Zero remains
-    not-applicable (handled at the operation layer).
+    not-applicable (handled at the operation layer).  The source carries the
+    same 12-digit factorization bound as the producing requests, so replay
+    never factors outside the operation's admitted work envelope.
     """
 
-    value: BoundedInteger
+    value: FactorizationInteger
     divisors: tuple[BoundedInteger, ...] = Field(
         min_length=0,
         max_length=_MAX_DIVISORS,

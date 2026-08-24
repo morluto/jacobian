@@ -110,6 +110,37 @@ def test_divisor_list_result_replays_source_enumeration() -> None:
     assert minus_one.divisors == ("1",)
 
 
+def test_divisor_list_result_admits_twelve_digit_source_boundary() -> None:
+    """The replayed source keeps the producing operations' 12-digit bound."""
+
+    from sympy import isprime
+
+    from jacobian.math.number_theory._models import DivisorListResult
+
+    prime = 999_999_999_989
+    assert isprime(prime)
+    result = DivisorListResult(value=str(prime), divisors=("1", str(prime)))
+    assert result.value == str(prime)
+
+
+def test_divisor_list_result_rejects_sources_beyond_factorization_domain() -> None:
+    """A forged serialized output with a hard semiprime source is rejected
+    by the schema bound before any factorization replay work runs."""
+
+    from jacobian.math.number_theory._models import DivisorListResult
+
+    hard_semiprime = 1_000_000_000_000_000_000_000_000_039
+    assert len(str(hard_semiprime)) > 12
+    with pytest.raises(ValidationError, match="at most 12"):
+        DivisorListResult.model_validate(
+            {
+                "value": str(hard_semiprime),
+                "divisors": ["1"],
+                "convention": "ALL_POSITIVE_DIVISORS",
+            }
+        )
+
+
 def test_divisor_list_result_rejects_mutations() -> None:
     from jacobian.math.number_theory._models import DivisorListResult
 
@@ -223,8 +254,8 @@ def test_producer_results_serialize_and_reconstruct() -> None:
 @pytest.mark.parametrize(
     ("operation_id", "version"),
     [
-        ("integer.compute.divisors", "3"),
-        ("integer.compute.proper_divisors", "3"),
+        ("integer.compute.divisors", "4"),
+        ("integer.compute.proper_divisors", "4"),
         ("integer.compute.prime_factorization", "3"),
     ],
 )

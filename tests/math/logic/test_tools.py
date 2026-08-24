@@ -12,8 +12,10 @@ from jacobian.math.logic._operations import (
     LeanCheckRequest,
     SatAssignmentCheckRequest,
     SatSolveRequest,
+    SatSolveResult,
     SmtLogic,
     SmtSolveRequest,
+    SmtSolveResult,
     canonicalize_cnf,
     check_lean_source,
     check_sat_assignment,
@@ -123,6 +125,307 @@ def test_smt_request_rejects_non_ascii_input() -> None:
             logic=SmtLogic.QF_LIA,
             smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n\xe9\n(check-sat\n",
         )
+
+
+def _left_nested_additions(levels: int) -> str:
+    expression = "0"
+    for _ in range(levels):
+        expression = f"(+ {expression} 0)"
+    return expression
+
+
+def _pigeonhole_smtlib(pigeons: int, holes: int) -> str:
+    lines = ["(set-logic QF_LIA)"]
+    for pigeon in range(pigeons):
+        for hole in range(holes):
+            lines.append(f"(declare-const b_{pigeon}_{hole} Int)")
+    for pigeon in range(pigeons):
+        row = " ".join(f"b_{pigeon}_{hole}" for hole in range(holes))
+        lines.append(f"(assert (= (+ {row}) 1))")
+    for hole in range(holes):
+        column = " ".join(f"b_{pigeon}_{hole}" for pigeon in range(pigeons))
+        lines.append(f"(assert (<= (+ {column}) 1))")
+    for pigeon in range(pigeons):
+        for hole in range(holes):
+            lines.append(
+                f"(assert (and (>= b_{pigeon}_{hole} 0) (<= b_{pigeon}_{hole} 1)))"
+            )
+    lines.append("(check-sat)")
+    return "\n".join(lines)
+
+
+def test_smt_request_rejects_nesting_beyond_the_term_depth_budget() -> None:
+    with pytest.raises(ValueError, match="maximum term depth"):
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib=(
+                "(set-logic QF_LIA)\n"
+                "(declare-const x Int)\n"
+                f"(assert (> x {_left_nested_additions(513)}))\n"
+                "(check-sat)\n"
+            ),
+        )
+
+
+def test_smt_request_admits_nesting_at_the_term_depth_boundary_and_still_solves() -> (
+    None
+):
+    result = solve_smt(
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib=(
+                "(set-logic QF_LIA)\n"
+                "(declare-const x Int)\n"
+                f"(assert (> x {_left_nested_additions(509)}))\n"
+                "(check-sat)\n"
+            ),
+        )
+    )
+
+    assert result.outcome == "SAT"
+    assert result.model_smtlib is not None
+
+
+def test_smt_request_rejects_more_than_the_compound_term_budget() -> None:
+    block = "(" * 400 + ")" * 400
+    with pytest.raises(ValueError, match="compound terms"):
+        SmtSolveRequest(logic=SmtLogic.QF_UF, smtlib=block * 100)
+
+
+def test_smt_request_admits_a_large_shallow_formula_and_still_solves() -> None:
+    assertions = "\n".join(
+        ["(set-logic QF_LIA)", "(declare-const x Int)"]
+        + ["(assert (= x (+ 1 1)))"] * 5_000
+    )
+    result = solve_smt(
+        SmtSolveRequest(logic=SmtLogic.QF_LIA, smtlib=assertions + "\n(check-sat)")
+    )
+
+    assert result.outcome == "SAT"
+    assert result.model_smtlib is not None
+
+
+def test_smt_request_rejects_a_numeral_wider_than_the_digit_budget() -> None:
+    with pytest.raises(ValueError, match="numeral wider"):
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib=(
+                "(set-logic QF_LIA)\n"
+                "(declare-const x Int)\n"
+                f"(assert (= x {'9' * 193}))\n"
+                "(check-sat)\n"
+            ),
+        )
+    with pytest.raises(ValueError, match="numeral wider"):
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib=(
+                "(set-logic QF_LIA)\n"
+                "(declare-const x Int)\n"
+                f"(assert (= x {'9' * 100_000}))\n"
+                "(check-sat)\n"
+            ),
+        )
+
+
+def test_smt_request_admits_a_numeral_at_the_digit_boundary_and_still_solves() -> None:
+    result = solve_smt(
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib=(
+                "(set-logic QF_LIA)\n"
+                "(declare-const x Int)\n"
+                f"(assert (= x {'9' * 192}))\n"
+                "(check-sat)\n"
+            ),
+        )
+    )
+
+    assert result.outcome == "SAT"
+    assert result.model_smtlib is not None
+
+
+def test_smt_request_rejects_more_than_the_declaration_budget() -> None:
+    declarations = "\n".join(f"(declare-const v{index} Int)" for index in range(4_097))
+    with pytest.raises(ValueError, match="declares more than"):
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib=f"(set-logic QF_LIA)\n{declarations}\n(check-sat)",
+        )
+
+
+def test_smt_request_admits_at_the_declaration_boundary_and_still_solves() -> None:
+    declarations = "\n".join(f"(declare-const v{index} Int)" for index in range(4_096))
+    result = solve_smt(
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib=(
+                f"(set-logic QF_LIA)\n{declarations}\n(assert (= v0 1))\n(check-sat)"
+            ),
+        )
+    )
+
+    assert result.outcome == "SAT"
+    assert result.model_smtlib is not None
+
+
+def test_structural_rejection_precedes_z3_parsing(monkeypatch) -> None:
+    import z3
+
+    def refuse(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("Z3 parsed a request that admission had to reject")
+
+    monkeypatch.setattr(z3, "parse_smt2_string", refuse)
+    with pytest.raises(ValueError, match="numeral wider"):
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib=(
+                "(set-logic QF_LIA)\n"
+                "(declare-const x Int)\n"
+                f"(assert (= x {'9' * 193}))\n"
+                "(check-sat)\n"
+            ),
+        )
+
+
+def test_smt_solver_passes_time_work_and_memory_budgets_to_z3(monkeypatch) -> None:
+    import z3
+
+    recorded: dict[str, int] = {}
+
+    class RecordingSolver:
+        def set(self, **settings: int) -> None:
+            recorded.update(settings)
+
+        def add(self, _assertions: object) -> None:
+            return None
+
+        def check(self) -> object:
+            return z3.unsat
+
+    monkeypatch.setattr(z3, "SolverFor", lambda _logic: RecordingSolver())
+    result = solve_smt(
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
+            timeout_ms=2_500,
+        )
+    )
+
+    assert result.outcome == "UNSAT"
+    assert recorded == {
+        "timeout": 2_500,
+        "rlimit": operations._SOLVER_RLIMIT,
+        "max_memory": operations._SOLVER_MAX_MEMORY_MB,
+    }
+
+
+def test_smt_solver_projects_exhausted_work_budget_as_typed_unknown(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(operations, "_SOLVER_RLIMIT", 1)
+    result = solve_smt(
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
+        )
+    )
+
+    assert result.outcome == "UNKNOWN"
+    assert result.exhausted == "work"
+    assert result.model_smtlib is None
+    assert result.detail is not None and "work budget" in result.detail
+
+
+def test_sat_solver_projects_exhausted_work_budget_as_typed_unknown(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(operations, "_SOLVER_RLIMIT", 1)
+    result = solve_sat(
+        SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),)))
+    )
+
+    assert result.outcome == "UNKNOWN"
+    assert result.exhausted == "work"
+    assert result.assignment is None
+    assert result.detail is not None and "work budget" in result.detail
+
+
+def test_smt_solver_projects_exhausted_memory_budget_as_typed_unknown(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(operations, "_SOLVER_MAX_MEMORY_MB", 2)
+    result = solve_smt(
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib=_pigeonhole_smtlib(8, 7),
+        )
+    )
+
+    assert result.outcome == "UNKNOWN"
+    assert result.exhausted == "memory"
+    assert result.detail is not None and "memory budget" in result.detail
+
+
+def test_smt_solver_projects_exhausted_time_budget_as_typed_unknown() -> None:
+    result = solve_smt(
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib=_pigeonhole_smtlib(8, 7),
+            timeout_ms=1,
+        )
+    )
+
+    assert result.outcome == "UNKNOWN"
+    assert result.exhausted == "time"
+    assert result.detail is not None and "time budget" in result.detail
+
+
+def test_smt_solver_wraps_backend_failure_during_the_solve(monkeypatch) -> None:
+    import z3
+
+    class ExplodingSolver:
+        def set(self, **_settings: int) -> None:
+            return None
+
+        def add(self, _assertions: object) -> None:
+            return None
+
+        def check(self) -> object:
+            raise z3.Z3Exception("backend exploded")
+
+    monkeypatch.setattr(z3, "SolverFor", lambda _logic: ExplodingSolver())
+    result = solve_smt(
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
+        )
+    )
+
+    assert result.outcome == "UNKNOWN"
+    assert result.exhausted is None
+    assert result.detail is not None and "backend exploded" in result.detail
+
+
+def test_unknown_projection_maps_every_exhausted_resource() -> None:
+    assert operations._project_unknown("max. resource limit exceeded") == (
+        "work",
+        "the bounded solver work budget was exhausted",
+    )
+    assert operations._project_unknown("canceled")[0] == "work"
+    assert operations._project_unknown("max. memory exceeded")[0] == "memory"
+    assert operations._project_unknown("timeout")[0] == "time"
+    passthrough = operations._project_unknown("max. engine depth reached")
+    assert passthrough[0] is None
+    assert passthrough[1] == "max. engine depth reached"
+    assert operations._project_unknown(None)[1].endswith("no completeness evidence")
+
+
+def test_result_models_bind_exhausted_budgets_to_unknown_outcomes() -> None:
+    with pytest.raises(ValueError, match="exhausted budget"):
+        SatSolveResult(outcome="SAT", assignment=(True,), exhausted="time")
+    with pytest.raises(ValueError, match="exhausted budget"):
+        SmtSolveResult(outcome="UNSAT", exhausted="memory")
 
 
 def test_lean_check_returns_typed_rejection_without_retaining_source(

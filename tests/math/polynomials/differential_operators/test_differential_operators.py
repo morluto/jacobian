@@ -353,6 +353,86 @@ def test_nonidentity_scalar_operators_follow_scale_only_budgets() -> None:
     )
 
 
+def test_signed_unit_scalar_iterate_admits_the_coefficient_boundary_source() -> None:
+    variables = ("x",)
+    coefficient = CanonicalRational(num="1" + "0" * 32_767, den="1")
+    source = RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=(RationalPolynomialTerm(coefficient=coefficient, exponents=(1,)),)
+        ),
+    )
+    negated = RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num="-1" + "0" * 32_767, den="1"),
+                    exponents=(1,),
+                ),
+            )
+        ),
+    )
+    negation = _operator(variables, {(0,): -1})
+
+    for iterations in (1, 2, 3):
+        result = compute_differential_operator_application(
+            DifferentialOperatorApplyRequest(
+                polynomial=source,
+                operator=negation,
+                iterations=iterations,
+                expected=source if iterations % 2 == 0 else negated,
+            )
+        )
+        replayed = DifferentialOperatorApplyResult.model_validate(
+            result.model_dump(mode="json")
+        )
+
+        assert result.output == (source if iterations % 2 == 0 else negated)
+        assert result.matches_expected is True
+        assert result.is_zero is False
+        assert replayed == result
+
+
+def test_signed_unit_scalar_iterate_keeps_multiterm_heights_unchanged() -> None:
+    variables = ("x", "y")
+    tall = 10**32_767
+    source = _polynomial(
+        variables,
+        {(2, 5): -tall, (0, 0): 7 * 10 ** (32_766)},
+    )
+    negation = _operator(variables, {(0, 0): -1})
+
+    output = apply_constant_coefficient_differential_operator(
+        source,
+        negation,
+        iterations=5,
+    )
+
+    assert output == _polynomial(
+        variables,
+        {(2, 5): tall, (0, 0): -7 * 10 ** (32_766)},
+    )
+
+
+def test_nonunit_scalar_growth_still_gates_at_the_coefficient_budget() -> None:
+    variables = ("x",)
+    coefficient = CanonicalRational(num="1" + "0" * 32_767, den="1")
+    source = RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=(RationalPolynomialTerm(coefficient=coefficient, exponents=(1,)),)
+        ),
+    )
+
+    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=_operator(variables, {(0,): 11}),
+            iterations=1,
+        )
+
+
 def test_componentwise_annihilation_admits_off_axis_sources_beyond_caps() -> None:
     variables = ("x", "y")
     tall_source = _polynomial(variables, {(0, 129): 1})

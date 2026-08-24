@@ -96,6 +96,17 @@ def _is_scalar_operator(
     return len(operator.terms) == 1 and not any(operator.terms[0].orders)
 
 
+def _is_signed_unit_scalar(
+    operator: ConstantCoefficientDifferentialOperator,
+) -> bool:
+    """Recognize scalar operators whose power is a pure sign, ``(±1)^k``."""
+
+    return (
+        _is_scalar_operator(operator)
+        and abs(operator.terms[0].coefficient.as_fraction()) == 1
+    )
+
+
 def _bounded_multiset_count(term_count: int, iterations: int, limit: int) -> int:
     """Bound the support of a commuting operator power.
 
@@ -441,12 +452,19 @@ def validate_application_envelope(
             "differential-operator output exceeds the candidate-term budget"
         )
 
-    coefficient_digits = _coefficient_digit_bound(
-        polynomial,
-        operator,
-        iterations,
-        _operator_path_bit_bound(term_count, iterations),
-    )
+    # Signed-unit scalar powers only flip signs: (±1)^k f = ±f keeps every
+    # coefficient height unchanged, so their digit admission follows the
+    # copied result's own heights; the generic multiplicative estimate's
+    # one-bit floors would otherwise push a fitting boundary rescale out.
+    if scalar_action and _is_signed_unit_scalar(operator):
+        coefficient_digits = _max_coefficient_digits(polynomial)
+    else:
+        coefficient_digits = _coefficient_digit_bound(
+            polynomial,
+            operator,
+            iterations,
+            _operator_path_bit_bound(term_count, iterations),
+        )
     if coefficient_digits > MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS:
         raise ValueError(
             "differential-operator output exceeds the coefficient-digit budget"

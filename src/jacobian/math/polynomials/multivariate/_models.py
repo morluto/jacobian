@@ -270,10 +270,35 @@ def _subresultant_envelope(
         maximum_support = max(maximum_support, coefficient_support)
         aggregate_terms += (index + 1) * coefficient_support
 
+    # The Brown kernel also materializes coefficient-ring scaling powers:
+    # every pseudo-remainder ends by multiplying with its divisor's leading
+    # coefficient raised to the degree gap plus one, and the abnormal branch
+    # raises scalar subresultants and member leading coefficients to the gap.
+    # A power's support follows from its base's remaining-variable degree
+    # times the exponent, so the formal returned supports above do not bound
+    # it.  The first gap is higher_degree - lower_degree and every later gap
+    # is at most lower_degree; every power base (a source or member leading
+    # coefficient, or a scalar subresultant) has remaining degree at most the
+    # index-zero formal coefficient degree.  Folding this derived power
+    # support into ``maximum_support`` keeps the product invariant below true
+    # for the scaling factors as well, and rejects the abnormal-gap nonscalar
+    # regime whose powers would otherwise expand unboundedly.
+    power_base_remaining_degree = (
+        lower_degree * higher_remaining_degree + higher_degree * lower_remaining_degree
+    )
+    power_exponent = max(higher_degree - lower_degree, lower_degree) + 1
+    scaling_power_support = comb(
+        power_exponent * power_base_remaining_degree + remaining_variable_count,
+        remaining_variable_count,
+    )
+    maximum_support = max(maximum_support, scaling_power_support)
+
     sylvester_order = higher_degree + lower_degree
     # At most ``sylvester_order`` PRS steps each perform at most a quadratic
-    # number of coefficient-ring operations.  Every coefficient product
-    # expands at most ``maximum_support**2`` term pairs.
+    # number of coefficient-ring operations.  Every materialized quantity --
+    # sources, members, scalar subresultants, and their scaling-power
+    # products -- has support at most ``maximum_support``, so every
+    # coefficient product expands at most ``maximum_support**2`` term pairs.
     arithmetic_term_pairs = (
         _SUBRESULTANT_BACKEND_PASS_COUNT * sylvester_order**3 * maximum_support**2
     )

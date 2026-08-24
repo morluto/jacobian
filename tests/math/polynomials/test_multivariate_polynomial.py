@@ -878,6 +878,90 @@ class TestMultivariateSubresultantSequence:
                     main_variable="x",
                 )
 
+    def test_rejects_unbounded_nonscalar_scaling_powers(self) -> None:
+        """Abnormal-gap admission bounds the Brown kernel's scaling powers.
+
+        The kernel raises nonscalar leading coefficients to the degree gaps
+        (pseudo-remainder multipliers and abnormal scalar-subresultant
+        powers), so their expanded support must be covered by the envelope
+        before SymPy runs rather than being bounded only by the formal
+        returned subresultant supports.
+        """
+
+        left = _poly(
+            ("x", "y"),
+            (("1/1", (6, 0)), ("-3/1", (4, 0)), ("1/1", (0, 0))),
+        )
+        right = _poly(
+            ("x", "y"),
+            (
+                ("3/1", (2, 2)),
+                ("2/1", (2, 1)),
+                ("1/1", (2, 0)),
+                ("1/1", (0, 0)),
+            ),
+        )
+
+        with pytest.raises(ValueError, match="term-pair work budget"):
+            MultivariateSubresultantSequenceRequest(
+                left=left,
+                right=right,
+                main_variable="x",
+            )
+
+    def test_admits_abnormal_drop_with_bounded_nonscalar_scaling(self) -> None:
+        """A nonscalar scaling factor inside the derived power envelope runs."""
+
+        left = _poly(
+            ("x", "y"),
+            (("1/1", (4, 0)), ("-3/1", (2, 0)), ("1/1", (0, 0))),
+        )
+        right = _poly(
+            ("x", "y"),
+            (
+                ("2/1", (2, 2)),
+                ("-3/1", (2, 1)),
+                ("1/1", (2, 0)),
+                ("1/1", (0, 0)),
+            ),
+        )
+
+        result = compute_multivariate_subresultant_sequence(
+            MultivariateSubresultantSequenceRequest(
+                left=left,
+                right=right,
+                main_variable="x",
+            )
+        )
+
+        assert result.source_order == "LEFT_RIGHT"
+        assert tuple(member.degree_in_main_variable for member in result.members) == (
+            4,
+            2,
+            0,
+        )
+        assert result.skipped_member_degrees == (1, 3)
+        assert result.resultant == _poly(
+            ("y",),
+            (
+                ("16/1", (8,)),
+                ("-96/1", (7,)),
+                ("296/1", (6,)),
+                ("-576/1", (5,)),
+                ("761/1", (4,)),
+                ("-690/1", (3,)),
+                ("415/1", (2,)),
+                ("-150/1", (1,)),
+                ("25/1", (0,)),
+            ),
+        )
+        assert (
+            MultivariateSubresultantSequenceResult.model_validate(
+                result.model_dump(mode="json")
+            )
+            == result
+        )
+
     def test_rejects_unbounded_aggregate_sequence_support(self) -> None:
         variables = ("x", "y1", "y2", "y3", "y4", "y5", "y6", "y7")
         zeroes = (0,) * len(variables)

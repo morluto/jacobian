@@ -126,14 +126,54 @@ def _bounded_multiset_count(term_count: int, iterations: int, limit: int) -> int
     return result
 
 
-def _operator_power_work(term_count: int, iterations: int) -> int:
+def _bounded_box_count(axis_counts: Iterable[int], limit: int) -> int:
+    """Bound the support of a power inside a per-axis order box.
+
+    Distinct aggregate multi-indices of a power have per-axis sums between
+    ``0`` and ``iterations * maximum_axis_order``, so the product of the
+    per-axis counts bounds the distinct support even when multiset order
+    sums collide.
+    """
+
+    result = 1
+    for count in axis_counts:
+        result *= count
+        if result > limit:
+            return limit + 1
+    return result
+
+
+def _powered_support_bound(
+    term_count: int,
+    iterations: int,
+    maximum_axis_orders: tuple[int, ...],
+    limit: int,
+) -> int:
+    """Bound the distinct aggregate multi-indices of a powered operator."""
+
+    return min(
+        _bounded_multiset_count(term_count, iterations, limit),
+        _bounded_box_count(
+            (iterations * order + 1 for order in maximum_axis_orders),
+            limit,
+        ),
+    )
+
+
+def _operator_power_work(
+    term_count: int,
+    iterations: int,
+    maximum_axis_orders: tuple[int, ...],
+) -> int:
     """Bound sparse term-pair products in the kernel's binary power schedule."""
 
     def support(exponent: int) -> int:
-        return _bounded_multiset_count(
-            term_count,
-            exponent,
-            MAX_APPLICATION_OUTPUT_TERMS,
+        return min(
+            _bounded_multiset_count(term_count, exponent, MAX_APPLICATION_OUTPUT_TERMS),
+            _bounded_box_count(
+                (exponent * order + 1 for order in maximum_axis_orders),
+                MAX_APPLICATION_OUTPUT_TERMS,
+            ),
         )
 
     work = 0
@@ -436,16 +476,43 @@ def validate_application_envelope(
     _require_expected_output(expected)
 
     term_count = len(operator.terms)
-    expanded_terms = _bounded_multiset_count(
+    maximum_exponents = tuple(
+        max(term.exponents[axis] for term in polynomial.polynomial.terms)
+        for axis in range(len(polynomial.variables))
+    )
+    maximum_axis_orders = tuple(
+        max(term.orders[axis] for term in operator.terms)
+        for axis in range(len(polynomial.variables))
+    )
+    expanded_terms = _powered_support_bound(
         term_count,
         iterations,
+        maximum_axis_orders,
         MAX_APPLICATION_OUTPUT_TERMS,
     )
     if expanded_terms > MAX_APPLICATION_OUTPUT_TERMS:
         raise ValueError(
             "differential-operator power exceeds the expanded-support budget"
         )
-    candidate_terms = len(polynomial.polynomial.terms) * expanded_terms
+    # A powered aggregate multi-index acts on the source only when every
+    # axis order stays within the source's widest per-axis exponent, so the
+    # candidate support counts those acting aggregates instead of treating
+    # annihilating powered terms as surviving output paths.
+    acting_terms = min(
+        expanded_terms,
+        _bounded_box_count(
+            (
+                min(exponent, iterations * order) + 1
+                for exponent, order in zip(
+                    maximum_exponents,
+                    maximum_axis_orders,
+                    strict=True,
+                )
+            ),
+            MAX_APPLICATION_OUTPUT_TERMS,
+        ),
+    )
+    candidate_terms = len(polynomial.polynomial.terms) * acting_terms
     if candidate_terms > MAX_APPLICATION_OUTPUT_TERMS:
         raise ValueError(
             "differential-operator output exceeds the candidate-term budget"
@@ -477,7 +544,7 @@ def validate_application_envelope(
         _total_degree(polynomial),
         iterations * maximum_operator_order,
     )
-    power_work = _operator_power_work(term_count, iterations)
+    power_work = _operator_power_work(term_count, iterations, maximum_axis_orders)
     derivative_work = (
         len(polynomial.polynomial.terms) * expanded_terms * (1 + derivative_order)
     )

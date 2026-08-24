@@ -262,6 +262,65 @@ def test_tall_expanding_iterates_are_admitted_by_derived_budgets() -> None:
     )
 
 
+def test_colliding_powered_orders_are_counted_distinctly() -> None:
+    variables = ("x",)
+    operator = _operator(
+        variables,
+        dict.fromkeys(((order,) for order in range(100)), 1),
+    )
+    source = _polynomial(variables, {(200,): 1})
+
+    def paths(order: int) -> int:
+        return min(order, 99) - max(0, order - 99) + 1
+
+    expected = _polynomial(
+        variables,
+        {(200 - order,): paths(order) * math.perm(200, order) for order in range(199)},
+    )
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=operator,
+            iterations=2,
+            expected=expected,
+        )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.output == expected
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    assert replayed == result
+
+
+def test_annihilating_powered_terms_are_excluded_from_the_candidate_cap() -> None:
+    variables = ("x",)
+    operator = _operator(
+        variables,
+        {(0,): 1, **dict.fromkeys(((order,) for order in range(2, 2_050)), 1)},
+    )
+    source = _polynomial(variables, {(0,): 1, (1,): 1})
+
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=operator,
+            iterations=1,
+            expected=source,
+        )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.output == source
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    assert replayed == result
+
+
 def test_scalar_iterate_growth_is_bounded_by_the_coefficient_budget() -> None:
     variables = ("x",)
     scaling = _operator(variables, {(0,): 2})

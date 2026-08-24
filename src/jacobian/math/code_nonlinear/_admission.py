@@ -13,16 +13,12 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "code.nonlinear.distance_profile.compute",
         AdmissionDecision.KEEP,
-        "version-2 canonical ExplicitBinaryCode source with exact minimum Hamming distance and weight profile; pair-work admission runs before enumeration",
+        "exact source-bound minimum Hamming distance and weight profile",
     ),
     OperationAdmission(
         "code.nonlinear.constant_weight.compute",
         AdmissionDecision.KEEP,
-        "exact generation of all constant-weight binary words; re-admitted for the "
-        "narrowed binomial envelope: ConstantWeightRequest bounds the admitted candidate "
-        "space to C(length, weight) <= 4096 (rejected before enumeration otherwise), so "
-        "the materialized output is at most 4,096 words of length <= 64 and admitted work "
-        "is one O(length) bit-write pass per word with no intermediate beyond a single word",
+        "exact bounded generation of the canonical constant-weight binary code",
     ),
     OperationAdmission(
         "code.binary.word_distance.compute",
@@ -32,17 +28,17 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "code.binary.explicit.profile.compute",
         AdmissionDecision.KEEP,
-        "version-2 canonical ExplicitBinaryCode source with exact complete distance profile, histogram, and extremal witnesses; profile admission bounds pair work and exact output",
+        "exact source-replayed distance profile under derived pair-work and result bounds",
     ),
     OperationAdmission(
         "code.binary.constant_weight.profile.compute",
         AdmissionDecision.KEEP,
-        "version-2 canonical ExplicitBinaryCode source with exact constant-weight profile and support-intersection distances; profile admission bounds pair work and exact output",
+        "exact source-replayed distance and intersection profile under derived bounds",
     ),
     OperationAdmission(
         "code.binary.explicit.to_set_system.compute",
         AdmissionDecision.NATIVE_ONLY,
-        "version-2 canonical ExplicitBinaryCode support projection; MCP execution applies the exact retained-source and support-output bound while native callers receive the typed projection directly",
+        "source-bound projection to the complete coordinate axis and support blocks",
         native_symbol="jacobian.math.code_nonlinear.to_set_system",
     ),
 )

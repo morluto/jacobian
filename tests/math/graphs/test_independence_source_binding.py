@@ -182,9 +182,96 @@ def test_edge_removal_invalidating_the_claimed_optimum_is_rejected() -> None:
 def test_exhausted_exact_replay_budget_is_fail_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    request = IndependenceNumberRequest(graph=_path_graph())
+    request = IndependenceNumberRequest(
+        graph=_graph(("a", "b", "c", "d"), (("a", "b"), ("b", "c"), ("c", "d")))
+    )
     result = solve_independence_number(request)
     assert result.status == "EXACT"
     monkeypatch.setattr(independence_models, "_EXACT_REPLAY_SEARCH_NODES", 1)
     with pytest.raises(ValidationError, match="was not reproduced"):
         IndependenceNumberResult.model_validate(result.model_dump())
+
+
+def _matching_graph(edges: int) -> SimpleUndirectedGraph:
+    return _graph(
+        tuple(f"m{index:02d}" for index in range(2 * edges)),
+        tuple(
+            (f"m{2 * index:02d}", f"m{2 * index + 1:02d}") for index in range(edges)
+        ),
+    )
+
+
+def test_matching_produced_exact_result_revalidates() -> None:
+    """The reported rejection case: 15 disjoint edges, order 30, optimum 15.
+
+    The producing solve must emit an ``EXACT`` payload whose serialized
+    output loads back as an equal ``IndependenceNumberResult``, so every
+    produced result revalidates against the retained source graph.
+    """
+
+    graph = _matching_graph(15)
+    result = solve_independence_number(IndependenceNumberRequest(graph=graph))
+    assert result.status == "EXACT"
+    assert result.optimum_value == 15
+    assert result.order == 30
+    assert result.termination_reason == "OPTIMUM_ESTABLISHED"
+    assert IndependenceNumberResult.model_validate(result.model_dump()) == result
+
+
+def test_structured_disjoint_graphs_replay_within_tight_budgets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Component decomposition keeps disjoint structures inside tiny budgets.
+
+    Ten disjoint five-cycles have optimum 20, isolated vertices are forced
+    without branching, and the whole replay stays deterministic and exact
+    well below the default search-node envelope that the naive search
+    exceeded on a 30-vertex matching.
+    """
+
+    cycle_vertices = []
+    cycle_edges = []
+    for component in range(10):
+        ids = [f"c{component}_{index}" for index in range(5)]
+        cycle_vertices += ids
+        for index in range(5):
+            left, right = sorted((ids[index], ids[(index + 1) % 5]))
+            cycle_edges.append((left, right))
+    cycles = _graph(tuple(cycle_vertices), tuple(cycle_edges))
+    mixed = _graph(
+        ("i0", "i1", "i2", "p0", "p1", "p2"),
+        (("p0", "p1"), ("p1", "p2")),
+    )
+
+    produced = []
+    for graph, expected in ((cycles, 20), (mixed, 5), (_matching_graph(15), 15)):
+        result = solve_independence_number(
+            IndependenceNumberRequest(graph=graph)
+        )
+        assert result.status == "EXACT"
+        assert result.optimum_value == expected
+        produced.append(result)
+
+    monkeypatch.setattr(independence_models, "_EXACT_REPLAY_SEARCH_NODES", 512)
+    for result in produced:
+        assert (
+            IndependenceNumberResult.model_validate(result.model_dump()) == result
+        )
+
+
+def test_unreplayable_solver_optimum_demotes_to_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A solver optimum the bounded replay cannot certify claims no optimum."""
+
+    request = IndependenceNumberRequest(
+        graph=_graph(("a", "b", "c", "d"), (("a", "b"), ("b", "c"), ("c", "d")))
+    )
+    monkeypatch.setattr(independence_models, "_EXACT_REPLAY_SEARCH_NODES", 1)
+    result = solve_independence_number(request)
+    assert result.status == "UNKNOWN"
+    assert result.optimum_value is None
+    assert result.termination_reason == "REPLAY_INCOMPLETE"
+    assert result.lower_bound == result.incumbent_value
+    assert result.upper_bound == 4
+    assert IndependenceNumberResult.model_validate(result.model_dump()) == result

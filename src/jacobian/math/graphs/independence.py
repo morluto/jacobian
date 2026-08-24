@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -16,6 +17,7 @@ IndependenceTermination = Literal[
     "SOLVER_UNKNOWN",
     "SOLVER_UNSAT",
     "SPECIAL_CASE",
+    "REPLAY_INCOMPLETE",
 ]
 
 
@@ -56,48 +58,147 @@ class IndependenceNumberRequest(StrictModel):
 _EXACT_REPLAY_SEARCH_NODES = 200_000
 
 
+def _component_masks(
+    neighbours: list[int],
+    unvisited: int,
+) -> Iterator[int]:
+    """Yield each connected component of ``unvisited`` as a vertex bitmask."""
+
+    while unvisited:
+        component = unvisited & -unvisited
+        frontier = component
+        while frontier:
+            bit = frontier & -frontier
+            frontier ^= bit
+            fresh = neighbours[bit.bit_length() - 1] & ~component
+            component |= fresh
+            frontier |= fresh
+        unvisited &= ~component
+        yield component
+
+
+def _greedy_clique_cover_size(candidates: int, neighbours: list[int]) -> int:
+    """Count clique classes in one greedy cover of ``candidates``.
+
+    Vertices enter in descending candidate-degree order and join the first
+    class whose members they are all adjacent to, so every class stays a
+    clique and an independent set meets it at most once.
+    """
+
+    weighted = []
+    rest = candidates
+    while rest:
+        bit = rest & -rest
+        rest ^= bit
+        position = bit.bit_length() - 1
+        weighted.append((-(neighbours[position] & candidates).bit_count(), position))
+    weighted.sort()
+    classes: list[int] = []
+    for _, position in weighted:
+        adjacent = neighbours[position]
+        for slot, members in enumerate(classes):
+            if members & ~adjacent == 0:
+                classes[slot] = members | (1 << position)
+                break
+        else:
+            classes.append(1 << position)
+    return len(classes)
+
+
 def _replay_exact_optimum(graph: SimpleUndirectedGraph, claimed_optimum: int) -> None:
     """Replay the claimed optimum as an exact search over the source graph.
 
     The producing solve establishes optimality with its own budgeted Z3 call;
     independently supplied results must reproduce the claim through this
     deterministic branch-and-bound before an ``EXACT`` conclusion validates.
-    The budget counts expanded search nodes, so each node performs bounded
-    work (bitset ops over at most 128 vertices) and the whole replay is
-    bounded by ``_EXACT_REPLAY_SEARCH_NODES`` node expansions.
+    The replay decomposes the source graph into connected components and sums
+    their exact maxima, which is sound because the independence number is
+    additive over components.  Inside one component it forces every
+    candidate-isolated vertex without branching (each such vertex belongs to
+    every maximum independent set of the remaining candidates), prunes
+    through a greedy clique cover of the candidates (an independent set
+    meets each clique at most once, so the class count bounds any
+    completion), and otherwise branches on a maximum-degree candidate, so
+    structured sparse graphs such as matchings or disjoint gadget unions
+    stay linear while dense graphs prune through the cover and
+    candidate-popcount bounds.  Each component seeds its incumbent with one
+    deterministic lowest-index greedy independent set before branching, so
+    pruning compares completions against an achieved feasible size.  Each
+    expanded node performs bounded bitset work over at most 128 vertices,
+    and the whole replay is bounded by ``_EXACT_REPLAY_SEARCH_NODES`` node
+    expansions charged across all components plus one linear greedy pass per
+    component; exhausting that budget rejects the claim fail-closed.
     """
 
     vertices = tuple(sorted(graph.vertices))
     index = {vertex: position for position, vertex in enumerate(vertices)}
-    neighbours = [0] * len(vertices)
+    order = len(vertices)
+    neighbours = [0] * order
     for left, right in graph.edges:
         mask = (1 << index[left]) | (1 << index[right])
         neighbours[index[left]] |= mask
         neighbours[index[right]] |= mask
     state_nodes = 0
-    best_size = 0
 
-    def search(candidates: int, chosen: int) -> None:
-        nonlocal state_nodes, best_size
-        state_nodes += 1
-        if state_nodes > _EXACT_REPLAY_SEARCH_NODES:
-            raise ValueError(
-                "claimed exact optimum was not reproduced by the bounded "
-                "source-graph replay"
-            )
-        if candidates == 0:
-            best_size = max(best_size, chosen)
-            return
-        if chosen + candidates.bit_count() <= best_size:
-            return
-        pivot_bit = candidates & -candidates
-        pivot = pivot_bit.bit_length() - 1
-        rest = candidates & ~pivot_bit
-        search(rest & ~((1 << pivot) | neighbours[pivot]), chosen + 1)
-        search(rest, chosen)
+    def component_optimum(component: int) -> int:
+        nonlocal state_nodes
+        greedy = 0
+        rest = component
+        while rest:
+            bit = rest & -rest
+            rest &= ~(bit | neighbours[bit.bit_length() - 1])
+            greedy += 1
+        best_size = greedy
 
-    search((1 << len(vertices)) - 1, 0)
-    if best_size != claimed_optimum:
+        def search(candidates: int, chosen: int) -> None:
+            nonlocal state_nodes, best_size
+            state_nodes += 1
+            if state_nodes > _EXACT_REPLAY_SEARCH_NODES:
+                raise ValueError(
+                    "claimed exact optimum was not reproduced by the bounded "
+                    "source-graph replay"
+                )
+            neighbourhood = 0
+            rest = candidates
+            while rest:
+                bit = rest & -rest
+                rest ^= bit
+                neighbourhood |= neighbours[bit.bit_length() - 1]
+            forced = candidates & ~neighbourhood
+            if forced:
+                chosen += forced.bit_count()
+                candidates ^= forced
+            if chosen + candidates.bit_count() <= best_size:
+                return
+            if not candidates:
+                best_size = chosen
+                return
+            if (
+                chosen
+                + _greedy_clique_cover_size(candidates, neighbours)
+                <= best_size
+            ):
+                return
+            pivot_degree = -1
+            rest = candidates
+            while rest:
+                bit = rest & -rest
+                rest ^= bit
+                degree = (neighbours[bit.bit_length() - 1] & candidates).bit_count()
+                if degree > pivot_degree:
+                    pivot_degree = degree
+                    pivot = bit.bit_length() - 1
+            search(candidates & ~((1 << pivot) | neighbours[pivot]), chosen + 1)
+            search(candidates & ~(1 << pivot), chosen)
+
+        search(component, 0)
+        return best_size
+
+    unvisited = (1 << order) - 1
+    total_optimum = 0
+    for component in _component_masks(neighbours, unvisited):
+        total_optimum += component_optimum(component)
+    if total_optimum != claimed_optimum:
         raise ValueError(
             "claimed exact optimum contradicts the independent source-graph replay"
         )
@@ -111,9 +212,13 @@ class IndependenceNumberResult(StrictModel):
     no source edge has both endpoints in the witness, the incumbent equals
     the witness cardinality, and the reported order matches the source.
     An ``EXACT`` conclusion additionally replays a bounded maximum
-    independent-set search on the retained source graph, so a feasible but
-    non-maximum witness cannot validate a forged optimum or upper bound.
-    Operational ``UNKNOWN`` stays distinct from a mathematical optimum.
+    independent-set search on the retained source graph — the same replay
+    the producing solve runs before claiming optimality, so every produced
+    result validates — and a feasible but non-maximum witness cannot
+    validate a forged optimum or upper bound.
+    Operational ``UNKNOWN`` stays distinct from a mathematical optimum;
+    ``REPLAY_INCOMPLETE`` marks a solver optimum that the bounded
+    source-graph replay could not certify, so no optimum is claimed.
     """
 
     result_schema_version: Literal["2"] = "2"

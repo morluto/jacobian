@@ -10,6 +10,7 @@ import z3  # type: ignore[import-untyped]
 from jacobian.math.graphs.independence import (
     IndependenceNumberRequest,
     IndependenceNumberResult,
+    _replay_exact_optimum,
 )
 
 
@@ -22,10 +23,13 @@ def solve_independence_number(
 ) -> IndependenceNumberResult:
     """Run one wall-clock-bounded exact maximum independent-set optimization.
 
-    Results are built through ``model_construct``: the producing solve
-    already established every field invariant under its own declared
-    budget, and validation replay of an ``EXACT`` conclusion is reserved
-    for independently supplied results.
+    Results are built through ``model_construct`` after the producing solve
+    established every field invariant under its own declared budget.  An
+    ``EXACT`` conclusion additionally reproduces its optimum through the
+    same bounded source-graph replay that independent validation runs, so
+    every returned result validates; a replay that cannot certify the
+    solver optimum demotes to the typed ``UNKNOWN`` outcome instead of an
+    ``EXACT`` payload that would fail revalidation.
     """
 
     started = time.monotonic()
@@ -94,6 +98,25 @@ def solve_independence_number(
         lower_bound = max(len(incumbent), _integer_bound(lower, len(incumbent)))
         upper_bound = max(lower_bound, min(order, _integer_bound(upper, order)))
         if lower_bound == upper_bound == len(incumbent):
+            try:
+                _replay_exact_optimum(request.graph, len(incumbent))
+            except ValueError:
+                return IndependenceNumberResult.model_construct(
+                    result_schema_version="2",
+                    graph=request.graph,
+                    status="UNKNOWN",
+                    order=order,
+                    optimum_value=None,
+                    incumbent_value=len(incumbent),
+                    lower_bound=len(incumbent),
+                    upper_bound=order,
+                    witness_vertices=incumbent,
+                    termination_reason="REPLAY_INCOMPLETE",
+                    detail=(
+                        "bounded source-graph replay could not certify the "
+                        "solver optimum, so no exact optimum is claimed"
+                    ),
+                )
             return IndependenceNumberResult.model_construct(
                 result_schema_version="2",
                 graph=request.graph,

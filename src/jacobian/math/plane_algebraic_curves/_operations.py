@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import sympy
 
+from jacobian.math.plane_algebraic_curves._conic import (
+    derive_rational_conic_parametrization,
+)
 from jacobian.math.plane_algebraic_curves._models import (
     HOMOGENIZING_COORDINATE,
     AffineChartRequest,
@@ -12,6 +15,8 @@ from jacobian.math.plane_algebraic_curves._models import (
     AffineCurveResult,
     ProjectiveClosureRequest,
     ProjectiveClosureResult,
+    RationalConicParametrizationRequest,
+    RationalConicParametrizationResult,
 )
 from jacobian.math.polynomials._conversions import (
     rational_polynomial_from_sympy,
@@ -97,8 +102,29 @@ def compute_affine_chart(request: AffineChartRequest) -> AffineChartResult:
     )
 
 
+def compute_rational_conic_parametrization(
+    request: RationalConicParametrizationRequest,
+) -> RationalConicParametrizationResult:
+    """Parametrize a smooth rational conic by its normalized line pencil."""
+
+    data = derive_rational_conic_parametrization(
+        request.polynomial,
+        request.point,
+        request.parameter,
+    )
+    return RationalConicParametrizationResult(
+        source_polynomial=request.polynomial,
+        exceptional_point=request.point,
+        parameter=request.parameter,
+        coordinates=data.coordinates,
+        inverse_parameter=data.inverse_parameter,
+        finite_parameter_denominator=data.finite_parameter_denominator,
+    )
+
+
 __all__ = [
     "compute_affine_chart",
     "compute_affine_curve_check",
     "compute_projective_closure",
+    "compute_rational_conic_parametrization",
 ]

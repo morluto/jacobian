@@ -4,9 +4,20 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs.isomorphism._canonicalization import (
+    MAX_CANONICAL_PERMUTATIONS,
+    MAX_CANONICAL_REPLAY_WORK,
+    MAX_CANONICALIZATION_RESULT_BYTES,
+    apply_colored_graph_relabeling,
+    canonical_permutation_count,
+    canonical_replay_work,
+    canonicalization_result_wire_bytes,
+    canonicalize_colored_graph_data,
+)
+from jacobian.math.graphs.values import ColoredUndirectedGraph, GraphVertexLabel
 
 
 class SimpleGraph(StrictModel):
@@ -82,3 +93,129 @@ class GraphIsomorphismResult(StrictModel):
     status: Literal["ISOMORPHIC", "NOT_ISOMORPHIC"]
     vertex_mapping: tuple[VertexMappingPair, ...] = Field(default=())
     convention: Literal["NETWORKX_IS_ISOMORPHIC"] = "NETWORKX_IS_ISOMORPHIC"
+
+
+class ColoredGraphCanonicalizationRequest(StrictModel):
+    """Canonicalize one materialized colored graph under color-preserving maps."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Canonicalize one materialized simple undirected graph. Vertex "
+                "and edge colors are exact names: a relabeling may move vertices "
+                "only when it preserves every declared color. Requests are "
+                "rejected before enumeration when their color-class permutation "
+                "count, execution-plus-validation replay work, or exact result "
+                "size exceeds the published bound."
+            )
+        }
+    )
+
+    colored_graph: ColoredUndirectedGraph = Field(
+        description=(
+            "Canonical colored-graph value. Color tuples are empty or total and "
+            "aligned with the embedded graph's authoritative vertex and edge axes."
+        )
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_canonicalization(self) -> Self:
+        candidate_count = canonical_permutation_count(self.colored_graph)
+        if candidate_count > MAX_CANONICAL_PERMUTATIONS:
+            raise ValueError(
+                "colored-graph canonicalization exceeds the "
+                f"{MAX_CANONICAL_PERMUTATIONS}-permutation bound"
+            )
+        replay_work = canonical_replay_work(self.colored_graph)
+        if replay_work > MAX_CANONICAL_REPLAY_WORK:
+            raise ValueError(
+                "colored-graph canonicalization exceeds the "
+                f"{MAX_CANONICAL_REPLAY_WORK}-unit execution-and-replay work bound"
+            )
+        result_bytes = canonicalization_result_wire_bytes(self.colored_graph)
+        if result_bytes > MAX_CANONICALIZATION_RESULT_BYTES:
+            raise ValueError(
+                "colored-graph canonicalization exceeds the "
+                f"{MAX_CANONICALIZATION_RESULT_BYTES}-byte result bound"
+            )
+        return self
+
+
+class GraphRelabelingPair(StrictModel):
+    """One source vertex and its canonical vertex label."""
+
+    source_vertex: GraphVertexLabel
+    canonical_vertex: GraphVertexLabel
+
+
+class ColoredGraphCanonicalizationResult(StrictModel):
+    """A canonical colored graph and its source-bound relabeling.
+
+    Canonical vertices are zero-padded ``v``-prefixed labels (``v00``,
+    ``v01``, ...) that sort in index order up to the shared carrier's
+    256-vertex bound. Vertex-color classes occupy
+    positions in increasing exact color-name order; among all relabelings inside
+    those classes, the canonical graph has the least sorted sequence of endpoint
+    positions and edge-color names. An automorphism tie uses the least target
+    tuple aligned to the source graph's vertex axis. Result validation replays
+    that complete bounded search, then checks that ``relabeling`` reconstructs
+    the returned graph exactly from ``source_graph``.
+    """
+
+    source_graph: ColoredUndirectedGraph
+    canonical_graph: ColoredUndirectedGraph
+    relabeling: tuple[GraphRelabelingPair, ...] = Field(
+        max_length=256,
+        description=(
+            "One source-to-canonical pair per source vertex, in the source "
+            "graph's authoritative vertex order."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_exact_source_bound_canonical_form(self) -> Self:
+        ColoredGraphCanonicalizationRequest(colored_graph=self.source_graph)
+        if tuple(item.source_vertex for item in self.relabeling) != (
+            self.source_graph.graph.vertices
+        ):
+            raise ValueError(
+                "relabeling must cover source vertices in their authoritative order"
+            )
+        mapping = {
+            item.source_vertex: item.canonical_vertex for item in self.relabeling
+        }
+        if len(mapping) != len(self.relabeling):
+            raise ValueError("relabeling source vertices must be unique")
+        if set(mapping.values()) != set(self.canonical_graph.graph.vertices):
+            raise ValueError(
+                "relabeling must be a bijection onto the canonical graph vertices"
+            )
+        if apply_colored_graph_relabeling(self.source_graph, mapping) != (
+            self.canonical_graph
+        ):
+            raise ValueError("relabeling must reconstruct the canonical colored graph")
+        expected_graph, expected_relabeling = canonicalize_colored_graph_data(
+            self.source_graph
+        )
+        actual_relabeling = tuple(
+            (item.source_vertex, item.canonical_vertex) for item in self.relabeling
+        )
+        if (
+            self.canonical_graph != expected_graph
+            or actual_relabeling != expected_relabeling
+        ):
+            raise ValueError(
+                "result must be the exact deterministic colored-graph canonical form"
+            )
+        return self
+
+
+__all__ = [
+    "ColoredGraphCanonicalizationRequest",
+    "ColoredGraphCanonicalizationResult",
+    "GraphIsomorphismRequest",
+    "GraphIsomorphismResult",
+    "GraphRelabelingPair",
+    "SimpleGraph",
+    "VertexMappingPair",
+]

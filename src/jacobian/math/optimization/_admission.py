@@ -13,7 +13,12 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "optimization.linear.rational_optimum.compute",
         AdmissionDecision.KEEP,
-        "distinct exact or explicitly bounded search outcome with material computational leverage",
+        "distinct exact source-bound standard-form LP outcome with replayable optimality, Farkas, or recession witnesses",
+    ),
+    OperationAdmission(
+        "optimization.linear.rational_general_optimum.compute",
+        AdmissionDecision.KEEP,
+        "distinct original-coordinate rational LP outcome for named inequalities, closed bounds, and free variables with source-replayed certificates",
     ),
 )
 

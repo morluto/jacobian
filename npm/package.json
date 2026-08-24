@@ -10,13 +10,13 @@
   },
   "homepage": "https://github.com/morluto/jacobian",
   "engines": {
-    "node": ">=18"
+    "node": ">=23.5.0 || ^22.13.0 || ^20.17.0"
   },
   "bin": {
     "jacobian": "bin/jacobian.cjs"
   },
   "dependencies": {
-    "@inquirer/prompts": "^7.2.1",
+    "@inquirer/prompts": "^8.6.0",
     "@iarna/toml": "^2.2.5",
     "jsonc-parser": "^3.3.1"
   },
@@ -27,6 +27,7 @@
   "files": [
     "bin",
     "lib",
+    "skill",
     "README.md"
   ]
 }

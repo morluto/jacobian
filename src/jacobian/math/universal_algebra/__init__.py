@@ -5,11 +5,14 @@ from jacobian.math.universal_algebra.operations import (
     equation_profile,
     evaluate_term,
     generated_subalgebra,
+    homomorphism_profile,
     quotient,
 )
 from jacobian.math.universal_algebra.values import (
     ApplicationTerm,
     FiniteAlgebra,
+    FiniteAlgebraCarrierMap,
+    FiniteAlgebraHomomorphism,
     FlatTerm,
     OperationSymbol,
     Term,
@@ -19,6 +22,8 @@ from jacobian.math.universal_algebra.values import (
 __all__ = [
     "ApplicationTerm",
     "FiniteAlgebra",
+    "FiniteAlgebraCarrierMap",
+    "FiniteAlgebraHomomorphism",
     "FlatTerm",
     "OperationSymbol",
     "Term",
@@ -27,5 +32,6 @@ __all__ = [
     "equation_profile",
     "evaluate_term",
     "generated_subalgebra",
+    "homomorphism_profile",
     "quotient",
 ]

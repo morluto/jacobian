@@ -7,10 +7,15 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polytope._models import (
+    FacetIncidenceRequest,
+    FacetIncidenceResult,
     PolytopeVolumeRequest,
     PolytopeVolumeResult,
 )
-from jacobian.math.polytope._operations import compute_polytope_volume
+from jacobian.math.polytope._operations import (
+    compute_facet_incidence,
+    compute_polytope_volume,
+)
 
 
 def _op[
@@ -41,6 +46,63 @@ def _op[
 
 
 POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
+    _op(
+        "polytope.facets.compute",
+        "Compute the complete exact facet-incidence profile of a rational polytope",
+        "Compute every maximal supporting facet of the convex hull of an ordered "
+        "rational V-representation (d <= 7); lower-dimensional hulls are "
+        "rejected. Each facet returns its canonical primitive supporting "
+        "inequality as the shared half-space value plus the complete "
+        "source-row incidence. For d <= 6 each row composes verbatim into "
+        "polytope.volume.compute; that consumer caps dimension at 6 and "
+        "rejects d = 7 rows. Request admission materializes the complete "
+        "bounded enumeration, enforcing the published facet and incidence "
+        "result limits before a request is accepted; the exact bounded "
+        "SymPy kernel then computes that profile and the source-bound "
+        "result replays it.",
+        FacetIncidenceRequest,
+        FacetIncidenceResult,
+        compute_facet_incidence,
+        "polytope",
+        "facets",
+        "incidence",
+        "exact-rational",
+        examples=(
+            example(
+                "unit_square",
+                "Compute the four supporting facets of the unit square and their "
+                "source-row incidences; the four supplied points affinely span R^2.",
+                {
+                    "vertices": [
+                        {
+                            "coordinates": [
+                                {"num": "0", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ]
+                        },
+                        {
+                            "coordinates": [
+                                {"num": "1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ]
+                        },
+                        {
+                            "coordinates": [
+                                {"num": "1", "den": "1"},
+                                {"num": "1", "den": "1"},
+                            ]
+                        },
+                        {
+                            "coordinates": [
+                                {"num": "0", "den": "1"},
+                                {"num": "1", "den": "1"},
+                            ]
+                        },
+                    ]
+                },
+            ),
+        ),
+    ),
     _op(
         "polytope.volume.compute",
         "Compute the exact rational volume of a bounded polytope",

@@ -4,13 +4,19 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 
-_MAX_FLOOR_SUM_N = 1_000_000
+# The floor-sum kernel is the Euclidean-like recursion (O(log m * log a/m)
+# halvings), so ``n`` no longer controls work.  The admitted ceiling stays
+# inside the interoperable JSON integer range (< 2^53) so the published
+# schema can carry it, and the result preflight below independently bounds
+# the exact output digits.
+_MAX_FLOOR_SUM_N = 10**15
 _MAX_FLOOR_SUM_PARAM = 1_000_000
+_MAX_FLOOR_SUM_RESULT_DIGITS = 32_768
 _MAX_BOX_COORD = 10_000
 _MAX_BOX_AREA = 250_000
 _MAX_BOX_MODULUS = 10_000
@@ -19,10 +25,33 @@ _MAX_BOX_MODULUS = 10_000
 class FloorSumRequest(StrictModel):
     """Compute sum_{i=0}^{n-1} floor((a*i + b) / m) for bounded non-negative inputs."""
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Exact sum of floor((a*i+b)/m) for i in [0, n). Executed by the "
+                "Euclidean-like recursion whose work is logarithmic in the "
+                "parameters, so large n is admitted; |result| <= n*(a+b) stays "
+                f"inside the {_MAX_FLOOR_SUM_RESULT_DIGITS}-digit canonical bound."
+            )
+        }
+    )
+
     n: int = Field(ge=0, le=_MAX_FLOOR_SUM_N)
     m: int = Field(ge=1, le=_MAX_FLOOR_SUM_PARAM)
     a: int = Field(ge=0, le=_MAX_FLOOR_SUM_PARAM)
     b: int = Field(ge=0, le=_MAX_FLOOR_SUM_PARAM)
+
+    @model_validator(mode="after")
+    def require_bounded_result(self) -> Self:
+        # Worst case m=1: |sum| <= n*(a+b).  Bound its decimal digits before
+        # execution so the exact result always fits the canonical contract.
+        magnitude_digits = len(str((self.n + 1) * (self.a + self.b) + 1))
+        if magnitude_digits > _MAX_FLOOR_SUM_RESULT_DIGITS:
+            raise ValueError(
+                "floor-sum result can exceed the "
+                f"{_MAX_FLOOR_SUM_RESULT_DIGITS}-digit canonical integer bound"
+            )
+        return self
 
 
 class FloorSumResult(StrictModel):

@@ -20,6 +20,8 @@ from jacobian.math.incidence_structures._models import (
     GramResult,
     IncidenceMatrixRequest,
     IncidenceMatrixResult,
+    IncidenceTradeRequest,
+    IncidenceTradeResult,
     IntersectionsRequest,
     IntersectionsResult,
     LeviGraphRequest,
@@ -35,6 +37,7 @@ from jacobian.math.incidence_structures._operations import (
     compute_dual,
     compute_gram,
     compute_incidence_matrix,
+    compute_incidence_trade,
     compute_intersections,
     compute_levi_graph,
     compute_restriction,
@@ -49,11 +52,12 @@ def _op[RequestT: StrictModel, ResultT: StrictModel](
     result_model: type[ResultT],
     operation: Callable[[RequestT], ResultT],
     *tags: str,
+    version: str = "1",
     examples: tuple[OperationExample, ...] = (),
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version="1",
+        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -124,12 +128,51 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "combinatorics",
         "incidence",
         "exact",
+        version="2",
         examples=(
             example(
                 "triangle_t1",
                 "Compute containment profiles at t=1 for a 3-point, 2-block "
                 "structure; returns per-point multiplicities.",
                 {"incidence": _STRUCTURE, "t": 1},
+            ),
+        ),
+    ),
+    _op(
+        "incidence.trade.check",
+        "Compare finite incidence trade moments",
+        "Compare two indexed finite block families on the same ordered point "
+        "axis through a requested maximum subset order, admitted order by "
+        "order from the subset-count, work, and output budgets. Return "
+        "per-order totals and every nonzero subset-multiplicity difference; "
+        "omitted subsets have equal, possibly zero, multiplicity. Report the "
+        "zeroth block-count difference separately.",
+        IncidenceTradeRequest,
+        IncidenceTradeResult,
+        compute_incidence_trade,
+        "combinatorics",
+        "incidence",
+        "design-trade",
+        "exact",
+        examples=(
+            example(
+                "unequal_block_count_with_equal_point_moments",
+                "Compare {a},{b} with {a,b} through order one on the exact "
+                "same point axis; the point multiplicities agree while the "
+                "left family has one more indexed block.",
+                {
+                    "left": {
+                        "points": ["a", "b"],
+                        "block_ids": ["l0", "l1"],
+                        "blocks": [["a"], ["b"]],
+                    },
+                    "right": {
+                        "points": ["a", "b"],
+                        "block_ids": ["r0"],
+                        "blocks": [["a", "b"]],
+                    },
+                    "max_order": 1,
+                },
             ),
         ),
     ),

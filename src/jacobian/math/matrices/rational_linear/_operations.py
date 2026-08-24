@@ -30,6 +30,15 @@ def _canonical_rational(value: Any) -> CanonicalRational:
     )
 
 
+def _canonical_fraction(value: Fraction) -> CanonicalRational:
+    """Convert one exact Python fraction through the canonical wire form."""
+
+    return CanonicalRational(
+        num=format_canonical_integer(value.numerator),
+        den=format_canonical_integer(value.denominator),
+    )
+
+
 def _solve(
     coefficients: list[list[Fraction]], rhs: list[Fraction], flint: Any
 ) -> list[Any] | None:
@@ -67,9 +76,10 @@ def compute_rational_solution(
 
     values = _solve(coefficients, bounds, flint)
     if values is None:
-        return LinearRationalSolutionResult(status="INCONSISTENT")
+        return LinearRationalSolutionResult(system=system, status="INCONSISTENT")
     return LinearRationalSolutionResult(
-        values=tuple(_canonical_rational(value) for value in values)
+        system=system,
+        values=tuple(_canonical_rational(value) for value in values),
     )
 
 
@@ -92,10 +102,19 @@ def compute_rational_inconsistency(
     dual.append(bounds)
     values = _solve(dual, [Fraction(0)] * column_count + [Fraction(1)], flint)
     if values is None:
-        return LinearRationalInconsistencyResult(status="CONSISTENT")
+        return LinearRationalInconsistencyResult(system=system, status="CONSISTENT")
+    witness = tuple(_canonical_rational(value) for value in values)
+    pairing: Fraction = sum(
+        (
+            bound * coordinate.as_fraction()
+            for bound, coordinate in zip(bounds, witness, strict=True)
+        ),
+        Fraction(0),
+    )
     return LinearRationalInconsistencyResult(
-        left_witness=tuple(_canonical_rational(value) for value in values),
-        rhs_pairing=CanonicalRational(num="1", den="1"),
+        system=system,
+        left_witness=witness,
+        rhs_pairing=_canonical_fraction(pairing),
     )
 
 
@@ -105,7 +124,7 @@ def rational_linear_operations() -> MathTools:
     return (
         MathTool(
             operation_id="linear.rational_solution.compute",
-            version="2",
+            version="3",
             title="Compute an exact rational solution",
             description="Return an exact rational solution or an inconsistent outcome.",
             request_type=LinearRationalSolutionFindRequest,
@@ -128,7 +147,7 @@ def rational_linear_operations() -> MathTools:
         ),
         MathTool(
             operation_id="linear.rational_inconsistency.compute",
-            version="2",
+            version="3",
             title="Compute an exact rational inconsistency witness",
             description="Return an inconsistency witness or a consistent outcome.",
             request_type=LinearRationalInconsistencyFindRequest,

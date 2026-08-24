@@ -16,6 +16,7 @@ import importlib
 import jacobian
 
 ROOT_MATH_DOMAINS = (
+    "additive_combinatorics",
     "algebraic_combinatorics",
     "approximation_theory",
     "arithmetic",
@@ -23,7 +24,10 @@ ROOT_MATH_DOMAINS = (
     "combinatorial_maps",
     "combinatorial_matrices",
     "combinatorics",
+    "crossed_products",
+    "delta_matroids",
     "diophantine_approximation",
+    "dirichlet_characters",
     "finite_abelian_groups",
     "finite_fields",
     "finite_metric_spaces",
@@ -34,7 +38,11 @@ ROOT_MATH_DOMAINS = (
     "graphical_models",
     "graphs",
     "greedoids",
+    "hypergraphs",
     "impartial_games",
+    "incidence_structures",
+    "integral_binary_quadratic_forms",
+    "intervals",
     "matrices",
     "numerical_semigroups",
     "petri_nets",

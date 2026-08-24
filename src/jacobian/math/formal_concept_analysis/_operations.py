@@ -10,25 +10,35 @@ from jacobian.math.formal_concept_analysis._models import (
     ConceptLatticeResult,
     ConceptResult,
     DerivationResult,
+    DuquenneGuiguesBasisRequest,
     EnumerateConceptsRequest,
     EnumerateConceptsResult,
+    ImplicationClosureRequest,
     ObjectSubsetRequest,
+)
+from jacobian.math.formal_concept_analysis.basis import (
+    CanonicalImplicationBasisResult,
 )
 from jacobian.math.formal_concept_analysis.operations import (
     attribute_derivation,
     concept_from_attributes,
     concept_from_objects,
     concept_lattice,
+    duquenne_guigues_basis,
     enumerate_concepts,
+    implication_closure,
     object_derivation,
 )
+from jacobian.math.formal_concept_analysis.values import ImplicationClosureResult
 
 __all__ = [
     "compute_attribute_derivation",
     "compute_concept_from_attributes",
     "compute_concept_from_objects",
     "compute_concept_lattice",
+    "compute_duquenne_guigues_basis",
     "compute_enumerate_concepts",
+    "compute_implication_closure",
     "compute_object_closure",
     "compute_object_derivation",
 ]
@@ -68,6 +78,18 @@ def compute_attribute_closure(request: AttributeSubsetRequest) -> ClosureResult:
         added=added,
         is_closed=set(fs) == set(closure),
     )
+
+
+def compute_implication_closure(
+    request: ImplicationClosureRequest,
+) -> ImplicationClosureResult:
+    return implication_closure(request.system, frozenset(request.seed))
+
+
+def compute_duquenne_guigues_basis(
+    request: DuquenneGuiguesBasisRequest,
+) -> CanonicalImplicationBasisResult:
+    return duquenne_guigues_basis(request.context)
 
 
 def compute_concept_from_objects(request: ObjectSubsetRequest) -> ConceptResult:

@@ -8,6 +8,10 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math.real_algebraic import (
+    RealAlgebraicOrderValue,
+    RealAlgebraicValue,
+)
 
 
 class UnivariatePolynomialRequest(StrictModel):
@@ -42,43 +46,7 @@ class RootIsolationResult(StrictModel):
         return self
 
 
-class AlgebraicNumberInput(StrictModel):
-    polynomial: tuple[CanonicalRational, ...] = Field(min_length=2, max_length=64)
-    isolating_interval_lower: CanonicalRational
-    isolating_interval_upper: CanonicalRational
-
-    @model_validator(mode="after")
-    def require_ordered_interval(self) -> Self:
-        if (
-            self.isolating_interval_lower.as_fraction()
-            >= self.isolating_interval_upper.as_fraction()
-        ):
-            raise ValueError("isolating interval must have lower < upper")
-        if self.polynomial[0].as_fraction() == 0:
-            raise ValueError(
-                "algebraic-number polynomial must have nonzero leading coefficient"
-            )
-        from sympy import Poly, Rational, symbols
-
-        x = symbols("x")
-        polynomial = Poly(
-            sum(
-                Rational(*coefficient.as_integer_ratio())
-                * x ** (len(self.polynomial) - 1 - index)
-                for index, coefficient in enumerate(self.polynomial)
-            ),
-            x,
-        )
-        lower = Rational(*self.isolating_interval_lower.as_integer_ratio())
-        upper = Rational(*self.isolating_interval_upper.as_integer_ratio())
-        roots = {
-            root
-            for root in polynomial.all_roots()
-            if root.is_real and lower <= root <= upper
-        }
-        if len(roots) != 1:
-            raise ValueError("isolating interval must contain exactly one real root")
-        return self
+AlgebraicNumberInput = RealAlgebraicValue
 
 
 class AlgebraicCompareRequest(StrictModel):
@@ -86,5 +54,13 @@ class AlgebraicCompareRequest(StrictModel):
     right: AlgebraicNumberInput
 
 
-class AlgebraicCompareResult(StrictModel):
-    order: Literal["LT", "EQ", "GT"]
+AlgebraicCompareResult = RealAlgebraicOrderValue
+
+
+__all__ = [
+    "AlgebraicCompareRequest",
+    "AlgebraicCompareResult",
+    "AlgebraicNumberInput",
+    "RootIsolationResult",
+    "UnivariatePolynomialRequest",
+]

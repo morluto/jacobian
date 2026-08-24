@@ -58,7 +58,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "code.nonlinear.distance_profile.compute",
         "Compute the distance profile of a binary code",
-        "Compute the minimum Hamming distance and weight profile of a nonlinear binary code by exact enumeration.",
+        "Compute the minimum pairwise Hamming distance and ordered word weights of a canonical explicit nonlinear binary code.",
         BinaryCodeRequest,
         DistanceProfileResult,
         compute_distance_profile,
@@ -68,15 +68,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "binary_code",
-                "Distance profile of a simple binary code.",
-                {"codewords": [[0, 0, 0], [1, 1, 0], [0, 1, 1]]},
+                "Compute the compact distance profile of a three-word code; the nested code retains its length and normalizes word order.",
+                {
+                    "code": {
+                        "length": 3,
+                        "codewords": [[0, 0, 0], [1, 1, 0], [0, 1, 1]],
+                    }
+                },
             ),
         ),
+        version="2",
     ),
     _op(
         "code.nonlinear.constant_weight.compute",
         "Generate all constant-weight binary words",
-        "Generate all binary words of given length and Hamming weight.",
+        "Generate all binary words of given length and Hamming weight; the exact work and result are bounded by length times binomial(length, weight).",
         ConstantWeightRequest,
         ConstantWeightResult,
         compute_constant_weight,
@@ -86,15 +92,16 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "weight_two_length_four",
-                "All weight-2 binary words of length 4.",
+                "Generate every weight-2 binary word of length 4; weight must not exceed length.",
                 {"length": 4, "weight": 2},
             ),
         ),
+        version="2",
     ),
     _op(
         "code.binary.word_distance.compute",
         "Compute Hamming distance between two binary words",
-        "Compute the exact Hamming distance, differing coordinates, weights, and support intersection of two equal-length binary words.",
+        "Compute the exact Hamming distance, differing coordinates, weights, and support intersection of two equal-length binary words; the exact result is bounded by the retained words plus their actual differing coordinates.",
         WordDistanceRequest,
         WordDistanceResult,
         compute_word_distance,
@@ -104,15 +111,16 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "word_distance_01",
-                "Hamming distance between [1,0,1] and [1,1,0] with differing coordinates and support intersection.",
+                "Compute the Hamming relation between [1,0,1] and [1,1,0]; both words must be nonempty and have equal length.",
                 {"word1": [1, 0, 1], "word2": [1, 1, 0]},
             ),
         ),
+        version="2",
     ),
     _op(
         "code.binary.explicit.profile.compute",
         "Compute the complete profile of an explicit binary code",
-        "Compute length, cardinality, weight distribution, minimum/maximum pairwise Hamming distance, distance histogram, and extremal pairs for a nonlinear binary code with at least two codewords.",
+        "Compute retained source metadata, complete weight and distance histograms, pair accounting, and compact extremal word-pair witnesses without materializing a distance graph.",
         ExplicitProfileRequest,
         ExplicitProfileResult,
         compute_explicit_profile,
@@ -122,15 +130,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "explicit_profile_three",
-                "Complete distance profile of three-word code [[0,0,0],[1,1,0],[0,1,1]] with pairwise distances.",
-                {"codewords": [[0, 0, 0], [1, 1, 0], [0, 1, 1]]},
+                "Compute the complete compact profile of a three-word code; the canonical source declares its ambient length and contains distinct binary words.",
+                {
+                    "code": {
+                        "length": 3,
+                        "codewords": [[0, 0, 0], [1, 1, 0], [0, 1, 1]],
+                    }
+                },
             ),
         ),
+        version="2",
     ),
     _op(
         "code.binary.constant_weight.profile.compute",
         "Profile of a constant-weight binary code",
-        "Compute the profile of a constant-weight binary code using support-intersection distances.",
+        "Compute complete distance and support-intersection histograms with source-bound extremal witnesses for a nonempty constant-weight explicit code.",
         ConstantWeightProfileRequest,
         ConstantWeightProfileResult,
         compute_constant_weight_profile,
@@ -140,15 +154,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "const_weight_profile",
-                "Profile of constant-weight code [[1,1,0,0],[1,0,1,0]] with distance via support intersection.",
-                {"codewords": [[1, 1, 0, 0], [1, 0, 1, 0]]},
+                "Compute the distance/intersection profile of two weight-2 words; the canonical source must be nonempty and every word must have the same weight.",
+                {
+                    "code": {
+                        "length": 4,
+                        "codewords": [[1, 1, 0, 0], [1, 0, 1, 0]],
+                    }
+                },
             ),
         ),
+        version="2",
     ),
     _op(
         "code.binary.explicit.to_set_system.compute",
         "Map codewords to support subsets",
-        "Map each binary codeword to its support subset on coordinate labels.",
+        "Map each canonical source codeword to its exact support block on the retained coordinate axis.",
         ToSetSystemRequest,
         ToSetSystemResult,
         compute_to_set_system,
@@ -158,10 +178,16 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "to_set_system_two",
-                "Support subsets for two codewords [[1,0,1,0],[0,1,0,1]] on four coordinates.",
-                {"codewords": [[1, 0, 1, 0], [0, 1, 0, 1]]},
+                "Convert two length-4 codewords to support blocks; the canonical source declares the coordinate-axis length.",
+                {
+                    "code": {
+                        "length": 4,
+                        "codewords": [[1, 0, 1, 0], [0, 1, 0, 1]],
+                    }
+                },
             ),
         ),
+        version="2",
     ),
 )
 

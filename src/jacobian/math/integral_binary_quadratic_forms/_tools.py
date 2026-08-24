@@ -14,6 +14,8 @@ from jacobian.math.integral_binary_quadratic_forms._models import (
     BinaryQuadraticFormProperEquivRequest,
     BinaryQuadraticFormReducedClassesRequest,
     BinaryQuadraticFormReduceRequest,
+    BinaryQuadraticFormRepresentationsRequest,
+    BinaryQuadraticFormRepresentationsResult,
     ProperEquivalenceResult,
     ReducedBinaryQuadraticFormResult,
     ReducedClassesResult,
@@ -24,6 +26,7 @@ from jacobian.math.integral_binary_quadratic_forms._operations import (
     compute_proper_equivalence,
     compute_reduce,
     compute_reduced_classes,
+    compute_representations,
 )
 
 
@@ -87,7 +90,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "evaluate_111_at_1_0",
                 "Evaluate [1,1,1] at (1,0): Q=1, primitive.",
-                {"a": 1, "b": 1, "c": 1, "x": 1, "y": 0},
+                {"form": {"a": 1, "b": 1, "c": 1}, "x": 1, "y": 0},
             ),
         ),
     ),
@@ -96,8 +99,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Gauss-reduce a binary quadratic form",
         "Reduce a primitive positive-definite binary quadratic form to its "
         "canonical Gauss-reduced representative under SL_2(Z), returning the "
-        "reduced form, the unimodular transformation witness, and the reduction "
-        "step ledger.",
+        "reduced form and the unimodular transformation witness.",
         BinaryQuadraticFormReduceRequest,
         ReducedBinaryQuadraticFormResult,
         compute_reduce,
@@ -107,7 +109,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "reduce_5_3_1",
                 "Reduce [5,3,1]: discriminant -11.",
-                {"a": 5, "b": 3, "c": 1},
+                {"form": {"a": 5, "b": 3, "c": 1}},
             ),
         ),
     ),
@@ -127,9 +129,33 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "equiv_1_1_1_and_1_1_1",
                 "Decide if [1,1,1] and [1,1,1] are properly equivalent.",
                 {
-                    "form1": [1, 1, 1],
-                    "form2": [1, 1, 1],
+                    "first": {"a": 1, "b": 1, "c": 1},
+                    "second": {"a": 1, "b": 1, "c": 1},
                 },
+            ),
+        ),
+    ),
+    _op(
+        "number_theory.binary_quadratic_form.representations.compute",
+        "Enumerate complete binary quadratic-form representations",
+        "Return every ordered signed integer pair (x,y) satisfying "
+        "Q(x,y)=n for one primitive positive-definite integral binary quadratic "
+        "form. The result distinguishes raw and primitive representation counts "
+        "and exhausts the exact discriminant-derived y-coordinate range.",
+        BinaryQuadraticFormRepresentationsRequest,
+        BinaryQuadraticFormRepresentationsResult,
+        compute_representations,
+        "number-theory",
+        "quadratic-forms",
+        "exact",
+        "bounded-search",
+        examples=(
+            example(
+                "representations_x_squared_plus_y_squared_of_5",
+                "For D=-4, the admission expression "
+                "2*floor_sqrt(4*a*n/(-D))+1 is 5; enumerate the eight "
+                "ordered signed representations of 5 by x^2+y^2.",
+                {"form": {"a": 1, "b": 0, "c": 1}, "target": 5},
             ),
         ),
     ),
@@ -147,7 +173,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "classes_disc_neg_3",
-                "Enumerate reduced classes of D=-3.",
+                "For D=-3 the reduced-scan envelope A*(A+2) with "
+                "A=floor_sqrt((-D)//3)+1 is 8; enumerate the single reduced "
+                "class of discriminant -3.",
                 {"discriminant": -3},
             ),
         ),

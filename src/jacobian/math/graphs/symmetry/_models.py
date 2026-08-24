@@ -7,14 +7,14 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import ColoredUndirectedGraph
 
 MAX_GRAPH_SYMMETRY_VERTICES = 256
 MAX_GRAPH_SYMMETRY_EDGES = 4_096
 MAX_GRAPH_SYMMETRY_GENERATORS = 64
+_UNCOLORED = "__UNCOLORED__"
 
 GraphSymmetryLabel = Annotated[str, Field(min_length=1, max_length=64)]
-GraphSymmetryColor = Annotated[str, Field(min_length=1, max_length=128)]
 GraphSymmetryEdge = tuple[GraphSymmetryLabel, GraphSymmetryLabel]
 
 
@@ -29,59 +29,14 @@ class GraphAutomorphismGenerator(StrictModel):
     )
 
 
-class GraphVertexColor(StrictModel):
-    vertex: GraphSymmetryLabel
-    color: GraphSymmetryColor
-
-
-class GraphEdgeColor(StrictModel):
-    edge: GraphSymmetryEdge
-    color: GraphSymmetryColor
-
-    @model_validator(mode="after")
-    def require_canonical_edge(self) -> Self:
-        if self.edge[0] >= self.edge[1]:
-            raise ValueError("colored graph edges must use canonical endpoint order")
-        return self
-
-
-def _validate_graph_symmetry_bounds_and_colors(
-    vertices: tuple[GraphSymmetryLabel, ...],
-    edges: tuple[GraphSymmetryEdge, ...],
-    generators: tuple[GraphAutomorphismGenerator, ...],
-    vertex_colors: tuple[GraphVertexColor, ...],
-    edge_colors: tuple[GraphEdgeColor, ...],
-) -> None:
-    if len(vertices) > MAX_GRAPH_SYMMETRY_VERTICES:
-        raise ValueError(
-            f"graph symmetry exceeds the {MAX_GRAPH_SYMMETRY_VERTICES}-vertex bound"
-        )
-    if len(edges) > MAX_GRAPH_SYMMETRY_EDGES:
-        raise ValueError(
-            f"graph symmetry exceeds the {MAX_GRAPH_SYMMETRY_EDGES}-edge bound"
-        )
-    if any(not vertex or len(vertex) > 64 for vertex in vertices):
-        raise ValueError("graph symmetry vertex labels must contain 1-64 characters")
-    generator_ids = tuple(generator.generator_id for generator in generators)
-    if len(set(generator_ids)) != len(generator_ids):
-        raise ValueError("graph symmetry generator identifiers must be unique")
-
-    if vertex_colors and tuple(item.vertex for item in vertex_colors) != vertices:
-        raise ValueError(
-            "vertex colors must cover vertices in the graph's declared order"
-        )
-    if edge_colors and tuple(item.edge for item in edge_colors) != edges:
-        raise ValueError("edge colors must cover edges in the graph's declared order")
-
-
 def _validate_automorphism_generator(
     generator: GraphAutomorphismGenerator,
     vertices: tuple[GraphSymmetryLabel, ...],
     edges: tuple[GraphSymmetryEdge, ...],
     vertex_set: set[GraphSymmetryLabel],
     edge_set: set[GraphSymmetryEdge],
-    vertex_colors: dict[GraphSymmetryLabel, GraphSymmetryColor],
-    edge_colors: dict[GraphSymmetryEdge, GraphSymmetryColor],
+    vertex_colors: dict[GraphSymmetryLabel, str],
+    edge_colors: dict[GraphSymmetryEdge, str],
 ) -> None:
     mapping = generator.mapping
     if set(mapping) != vertex_set or set(mapping.values()) != vertex_set:
@@ -110,17 +65,9 @@ def _validate_automorphism_generator(
 
 
 class GraphSymmetryOrbitRequest(StrictModel):
-    graph: SimpleUndirectedGraph
+    graph: ColoredUndirectedGraph
     generators: tuple[GraphAutomorphismGenerator, ...] = Field(
         max_length=MAX_GRAPH_SYMMETRY_GENERATORS
-    )
-    vertex_colors: tuple[GraphVertexColor, ...] = Field(
-        default=(),
-        max_length=MAX_GRAPH_SYMMETRY_VERTICES,
-    )
-    edge_colors: tuple[GraphEdgeColor, ...] = Field(
-        default=(),
-        max_length=MAX_GRAPH_SYMMETRY_EDGES,
     )
     action: Literal["DECLARED_AUTOMORPHISM_GENERATORS"] = (
         "DECLARED_AUTOMORPHISM_GENERATORS"
@@ -128,27 +75,32 @@ class GraphSymmetryOrbitRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_color_preserving_automorphisms(self) -> Self:
-        vertices = self.graph.vertices
-        edges = self.graph.edges
-        _validate_graph_symmetry_bounds_and_colors(
-            vertices,
-            edges,
-            self.generators,
-            self.vertex_colors,
-            self.edge_colors,
-        )
+        vertices = self.graph.graph.vertices
+        edges = self.graph.graph.edges
+        if len(vertices) > MAX_GRAPH_SYMMETRY_VERTICES:
+            raise ValueError(
+                f"graph symmetry exceeds the {MAX_GRAPH_SYMMETRY_VERTICES}-vertex bound"
+            )
+        if len(edges) > MAX_GRAPH_SYMMETRY_EDGES:
+            raise ValueError(
+                f"graph symmetry exceeds the {MAX_GRAPH_SYMMETRY_EDGES}-edge bound"
+            )
+
+        generator_ids = tuple(generator.generator_id for generator in self.generators)
+        if len(set(generator_ids)) != len(generator_ids):
+            raise ValueError("graph symmetry generator identifiers must be unique")
 
         vertex_set = set(vertices)
         edge_set = set(edges)
         vertex_colors = (
-            {item.vertex: item.color for item in self.vertex_colors}
-            if self.vertex_colors
-            else dict.fromkeys(vertices, "__UNCOLORED__")
+            dict(zip(vertices, self.graph.vertex_colors, strict=True))
+            if self.graph.vertex_colors
+            else dict.fromkeys(vertices, _UNCOLORED)
         )
         edge_colors = (
-            {item.edge: item.color for item in self.edge_colors}
-            if self.edge_colors
-            else dict.fromkeys(edges, "__UNCOLORED__")
+            dict(zip(edges, self.graph.edge_colors, strict=True))
+            if self.graph.edge_colors
+            else dict.fromkeys(edges, _UNCOLORED)
         )
         for generator in self.generators:
             _validate_automorphism_generator(
@@ -288,10 +240,8 @@ __all__ = [
     "MAX_GRAPH_SYMMETRY_GENERATORS",
     "MAX_GRAPH_SYMMETRY_VERTICES",
     "GraphAutomorphismGenerator",
-    "GraphEdgeColor",
     "GraphEdgeOrbit",
     "GraphSymmetryOrbitRequest",
     "GraphSymmetryOrbitResult",
-    "GraphVertexColor",
     "GraphVertexOrbit",
 ]

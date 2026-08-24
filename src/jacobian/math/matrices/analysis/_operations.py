@@ -3,14 +3,116 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import lcm
 
+from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.matrices.analysis._models import (
     FarkasCertificateRequest,
     FarkasCertificateResult,
     InertiaResult,
+    RationalSpectrumClaimRequest,
+    RationalSpectrumClaimResult,
+    RationalSpectrumFailure,
+    RationalSpectrumNullityLedgerEntry,
     SymmetricMatrixRequest,
 )
+from jacobian.math.matrices.values import RationalMatrix
+
+
+def _exact_shifted_nullities(
+    matrix: RationalMatrix,
+    eigenvalues: tuple[CanonicalRational, ...],
+) -> tuple[int, ...]:
+    """Return nullities of ``matrix - eigenvalue * I`` over QQ.
+
+    Each rational row is scaled by the least common multiple of its
+    denominators. This preserves rank and gives FLINT an exact integer matrix;
+    no floating-point or symbolic expression crosses the adapter boundary.
+    """
+    from flint import fmpz_mat
+
+    source = tuple(
+        tuple(entry.as_fraction() for entry in row) for row in matrix.entries
+    )
+    order = len(source)
+    nullities: list[int] = []
+    for canonical_eigenvalue in eigenvalues:
+        eigenvalue = canonical_eigenvalue.as_fraction()
+        integer_rows: list[list[int]] = []
+        for row_index, source_row in enumerate(source):
+            shifted_row = [
+                entry - eigenvalue if row_index == column_index else entry
+                for column_index, entry in enumerate(source_row)
+            ]
+            row_denominator = lcm(*(entry.denominator for entry in shifted_row))
+            integer_rows.append(
+                [
+                    entry.numerator * (row_denominator // entry.denominator)
+                    for entry in shifted_row
+                ]
+            )
+        nullities.append(order - int(fmpz_mat(integer_rows).rank()))
+    return tuple(nullities)
+
+
+def check_rational_spectrum_claim(
+    request: RationalSpectrumClaimRequest,
+) -> RationalSpectrumClaimResult:
+    """Check a claimed complete rational spectrum of a symmetric QQ matrix."""
+    ledger, claimed_sum, established_sum, mismatch, failure = (
+        _replay_rational_spectrum_claim(request)
+    )
+    valid = failure is None
+    return RationalSpectrumClaimResult(
+        matrix=request.matrix,
+        claimed_profile=request.claimed_profile,
+        nullity_ledger=ledger,
+        matrix_order=len(request.matrix.entries),
+        claimed_multiplicity_sum=claimed_sum,
+        established_multiplicity_sum=established_sum,
+        outcome="VALID" if valid else "INVALID",
+        valid_complete_rational_spectrum=valid,
+        first_failed_condition=failure,
+        first_failed_claim_index=mismatch,
+    )
+
+
+def _replay_rational_spectrum_claim(
+    request: RationalSpectrumClaimRequest,
+) -> tuple[
+    tuple[RationalSpectrumNullityLedgerEntry, ...],
+    int,
+    int,
+    int | None,
+    RationalSpectrumFailure | None,
+]:
+    """Recompute the complete source-bound claim ledger."""
+    nullities = _exact_shifted_nullities(
+        request.matrix,
+        tuple(claim.eigenvalue for claim in request.claimed_profile),
+    )
+    ledger = tuple(
+        RationalSpectrumNullityLedgerEntry(
+            eigenvalue=claim.eigenvalue,
+            claimed_multiplicity=claim.multiplicity,
+            exact_nullity=nullity,
+            multiplicity_matches=nullity == claim.multiplicity,
+        )
+        for claim, nullity in zip(request.claimed_profile, nullities, strict=True)
+    )
+    claimed_sum = sum(claim.multiplicity for claim in request.claimed_profile)
+    mismatch = next(
+        (index for index, entry in enumerate(ledger) if not entry.multiplicity_matches),
+        None,
+    )
+    if mismatch is not None:
+        failure: RationalSpectrumFailure | None = "MULTIPLICITY_MISMATCH"
+    elif claimed_sum != len(request.matrix.entries):
+        failure = "CLAIMED_MULTIPLICITY_SUM_DOES_NOT_EQUAL_MATRIX_ORDER"
+    else:
+        failure = None
+    return ledger, claimed_sum, sum(nullities), mismatch, failure
 
 
 def _build_matrix(request: SymmetricMatrixRequest) -> list[list[Fraction]]:
@@ -23,6 +125,26 @@ def _build_matrix(request: SymmetricMatrixRequest) -> list[list[Fraction]]:
         if entry.row != entry.col:
             mat[entry.col][entry.row] = value
     return mat
+
+
+def _rational_matrix(matrix: list[list[Fraction]]) -> RationalMatrix:
+    """Convert a dense Fraction matrix into the domain's canonical value."""
+    return RationalMatrix(
+        entries=tuple(
+            tuple(CanonicalRational.from_fraction(value) for value in row)
+            for row in matrix
+        )
+    )
+
+
+def _canonical_source_matrix(request: SymmetricMatrixRequest) -> RationalMatrix:
+    """Normalize the sparse symmetric request into the canonical dense value."""
+    return _rational_matrix(_build_matrix(request))
+
+
+def _dense_fractions(matrix: RationalMatrix) -> list[list[Fraction]]:
+    """Convert a canonical rational matrix into dense Fractions."""
+    return [[entry.as_fraction() for entry in row] for row in matrix.entries]
 
 
 def _swap_symmetric(matrix: list[list[Fraction]], left: int, right: int) -> None:
@@ -133,27 +255,30 @@ def _symmetric_inertia(matrix: list[list[Fraction]]) -> tuple[int, int, int]:
     return n_pos, n_neg, n_zero
 
 
+def _definiteness_label(n_pos: int, n_neg: int, n_zero: int) -> str:
+    """Return the definiteness label implied by one inertia triple."""
+    if n_zero == 0:
+        if n_neg == 0:
+            return "positive_definite"
+        if n_pos == 0:
+            return "negative_definite"
+        return "indefinite"
+    if n_neg == 0:
+        return "positive_semidefinite"
+    if n_pos == 0:
+        return "negative_semidefinite"
+    return "indefinite"
+
+
 def compute_inertia(request: SymmetricMatrixRequest) -> InertiaResult:
     """Compute the Sylvester inertia of a symmetric rational matrix."""
     n_pos, n_neg, n_zero = _symmetric_inertia(_build_matrix(request))
-    if n_zero == 0:
-        if n_neg == 0:
-            definiteness = "positive_definite"
-        elif n_pos == 0:
-            definiteness = "negative_definite"
-        else:
-            definiteness = "indefinite"
-    elif n_neg == 0:
-        definiteness = "positive_semidefinite"
-    elif n_pos == 0:
-        definiteness = "negative_semidefinite"
-    else:
-        definiteness = "indefinite"
     return InertiaResult(
+        matrix=_canonical_source_matrix(request),
         n_positive=n_pos,
         n_negative=n_neg,
         n_zero=n_zero,
-        definiteness=definiteness,
+        definiteness=_definiteness_label(n_pos, n_neg, n_zero),
     )
 
 
@@ -217,4 +342,8 @@ def check_farkas_certificate(
     )
 
 
-__all__ = ["check_farkas_certificate", "compute_inertia"]
+__all__ = [
+    "check_farkas_certificate",
+    "check_rational_spectrum_claim",
+    "compute_inertia",
+]

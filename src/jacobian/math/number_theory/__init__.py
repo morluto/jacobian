@@ -1,3 +1,7 @@
-"""Number-theory operation ownership."""
+"""Supported exact number-theory API."""
 
-__all__: list[str] = []
+from jacobian.math.number_theory._friable_operations import count_friable
+from jacobian.math.number_theory._models import FriableCountResult
+from jacobian.math.number_theory.ramanujan_sums import ramanujan_sum
+
+__all__ = ["FriableCountResult", "count_friable", "ramanujan_sum"]

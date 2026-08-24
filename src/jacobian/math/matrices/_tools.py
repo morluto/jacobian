@@ -235,7 +235,7 @@ MATRIX_OPERATIONS = (
                 },
             ),
         ),
-        version="2",
+        version="3",
     ),
     matrix_operation(
         "matrix.adjugate.compute",

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from fractions import Fraction
+
 import pytest
 from pydantic import ValidationError
 
@@ -74,63 +76,52 @@ def test_algebraic_comparison_parses_canonical_interval_endpoints() -> None:
         AlgebraicCompareRequest.model_validate(
             {
                 "left": {
-                    "polynomial": _quadratic("-2"),
-                    "isolating_interval_lower": {"num": "1", "den": "1"},
-                    "isolating_interval_upper": {"num": "2", "den": "1"},
+                    "polynomial": ["1", "0", "-2"],
+                    "real_root_index": 1,
                 },
                 "right": {
-                    "polynomial": _quadratic("-3"),
-                    "isolating_interval_lower": {"num": "1", "den": "1"},
-                    "isolating_interval_upper": {"num": "2", "den": "1"},
+                    "polynomial": ["1", "0", "-3"],
+                    "real_root_index": 1,
                 },
             }
         )
     )
 
     assert result.order == "LT"
+    assert result.left_isolating_interval.lower.as_fraction() == 1
+    assert result.left_isolating_interval.upper.as_fraction() < 2
+    assert result.right_isolating_interval.lower.as_fraction() == Fraction(3, 2)
+    assert result.right_isolating_interval.upper.as_fraction() == 2
 
 
-def test_algebraic_comparison_accepts_coefficients_above_python_digit_limit() -> None:
-    oversized_coefficient = "1" + "0" * 5_000
-    result = compute_algebraic_compare(
+def test_algebraic_comparison_rejects_coefficients_above_its_work_bound() -> None:
+    oversized_coefficient = "1" + "0" * 1_000
+    with pytest.raises(ValidationError, match="1000-digit bound"):
         AlgebraicCompareRequest.model_validate(
             {
                 "left": {
-                    "polynomial": [
-                        {"num": oversized_coefficient, "den": "1"},
-                        {"num": "0", "den": "1"},
-                    ],
-                    "isolating_interval_lower": {"num": "-1", "den": "1"},
-                    "isolating_interval_upper": {"num": "1", "den": "1"},
+                    "polynomial": [oversized_coefficient, "1"],
+                    "real_root_index": 0,
                 },
                 "right": {
-                    "polynomial": [
-                        {"num": "1", "den": "1"},
-                        {"num": "0", "den": "1"},
-                    ],
-                    "isolating_interval_lower": {"num": "-1", "den": "1"},
-                    "isolating_interval_upper": {"num": "1", "den": "1"},
+                    "polynomial": ["1", "0"],
+                    "real_root_index": 0,
                 },
             }
         )
-    )
-
-    assert result.order == "EQ"
 
 
-def test_algebraic_comparison_contract_rejects_a_nonisolating_interval() -> None:
-    with pytest.raises(ValidationError, match="exactly one real root"):
+def test_algebraic_comparison_contract_rejects_a_missing_real_root() -> None:
+    with pytest.raises(ValidationError, match="existing real root"):
         AlgebraicCompareRequest.model_validate(
             {
                 "left": {
-                    "polynomial": _quadratic("-2"),
-                    "isolating_interval_lower": {"num": "-2", "den": "1"},
-                    "isolating_interval_upper": {"num": "2", "den": "1"},
+                    "polynomial": ["1", "0", "-2"],
+                    "real_root_index": 2,
                 },
                 "right": {
-                    "polynomial": _quadratic("-3"),
-                    "isolating_interval_lower": {"num": "1", "den": "1"},
-                    "isolating_interval_upper": {"num": "2", "den": "1"},
+                    "polynomial": ["1", "0", "-3"],
+                    "real_root_index": 1,
                 },
             }
         )

@@ -17,6 +17,8 @@ def test_subject_operation_groups_preserve_wire_contracts() -> None:
         (
             "analysis.real_function.point_enclosure.compute",
             "interval.compute.enclosure",
+            "interval.expression.box_enclosure.compute",
+            "interval.expression.second_jet_enclosure.compute",
         ),
         (
             "probability.joint.mutual_information.compute",
@@ -28,6 +30,7 @@ def test_subject_operation_groups_preserve_wire_contracts() -> None:
             "probability.gaussian_polynomial.moment.compute",
             "probability.graph_reliability.connection_probability.compute",
             "probability.graph_reliability.all_terminal.compute",
+            "probability.local_lemma.asymmetric_witness.check",
         ),
         ("optimization.linear.rational_optimum.compute",),
     )

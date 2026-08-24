@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from jacobian.math.polynomials.values import RationalFunction
+
 if TYPE_CHECKING:
     from sympy import Poly
 
@@ -15,6 +17,7 @@ __all__ = [
     "factorization",
     "gcdex",
     "groebner_basis",
+    "hermite_reduction",
     "integral",
     "partial_fractions",
     "resultant",
@@ -111,6 +114,18 @@ def integral(polynomial: Poly) -> Poly:
     from jacobian.math.polynomials import _sympy
 
     return _sympy.polynomial_integral(_poly(polynomial))
+
+
+def hermite_reduction(
+    function: RationalFunction,
+) -> tuple[RationalFunction, RationalFunction]:
+    """Reduce one admitted canonical rational function modulo derivatives."""
+
+    from jacobian.math.polynomials.rational_functions.operations import (
+        hermite_reduction as _hermite_reduction,
+    )
+
+    return _hermite_reduction(function)
 
 
 def partial_fractions(expression: Any, generator: Any) -> Any:

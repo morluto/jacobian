@@ -21,6 +21,13 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
     OperationAdmission(
+        "algebraic_geometry.conic.rational_parametrization.compute",
+        AdmissionDecision.KEEP,
+        "constructs one reusable birational conic chart with canonical rational "
+        "functions, an inverse, and explicit exceptional loci that polynomial "
+        "substitution alone cannot recover",
+    ),
+    OperationAdmission(
         "algebraic_geometry.projective_curve.affine_chart.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",

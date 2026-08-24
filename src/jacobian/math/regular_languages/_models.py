@@ -12,7 +12,10 @@ from jacobian.math.regular_languages.values import (
     DFA,
     MAX_COUNT_WORD_LENGTH,
     MAX_DFA_STATES,
+    MAX_LABELED_AUTOMATON_STATES,
+    MAX_TRANSITION_PROFILE_PATH_LENGTH,
     MAX_WORD_LENGTH,
+    FiniteLabeledAutomaton,
 )
 
 
@@ -41,6 +44,51 @@ class ComplementRequest(StrictModel):
     """Compute the complement of a DFA's language."""
 
     dfa: DFA
+
+
+class TransitionParikhProfileRequest(StrictModel):
+    """Compute a complete transition-use profile for exact automaton paths.
+
+    The automaton's ordered ``transition_id`` axis is authoritative. Admission
+    derives path-extension, sparse-DP-cell, vector-coordinate, multiplicity,
+    profile-cell, and serialized-result bounds before running the recurrence.
+    """
+
+    automaton: FiniteLabeledAutomaton = Field(
+        description=(
+            "Finite labeled transition carrier whose contiguous transition_id "
+            "order is the complete profile coordinate axis."
+        )
+    )
+    source_state: int = Field(
+        ge=0,
+        le=MAX_LABELED_AUTOMATON_STATES - 1,
+        description="Path source on the automaton's zero-based state axis.",
+    )
+    target_state: int = Field(
+        ge=0,
+        le=MAX_LABELED_AUTOMATON_STATES - 1,
+        description="Path target on the automaton's zero-based state axis.",
+    )
+    path_length: int = Field(
+        ge=0,
+        le=MAX_TRANSITION_PROFILE_PATH_LENGTH,
+        description="Exact nonnegative number of transitions in every path.",
+    )
+
+    @model_validator(mode="after")
+    def require_complete_bounded_profile(self) -> Self:
+        from jacobian.math.regular_languages.operations import (
+            _require_transition_profile_envelope,
+        )
+
+        _require_transition_profile_envelope(
+            self.automaton,
+            self.source_state,
+            self.target_state,
+            self.path_length,
+        )
+        return self
 
 
 class RunResult(RunRequest):
@@ -96,4 +144,5 @@ __all__ = [
     "CountResult",
     "RunRequest",
     "RunResult",
+    "TransitionParikhProfileRequest",
 ]

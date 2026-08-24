@@ -168,6 +168,87 @@ def test_lpr_refutation_rejects_out_of_axis_literals_and_non_live_hints() -> Non
         )
 
 
+def test_lpr_refutation_admits_sparse_solver_assigned_clause_labels() -> None:
+    request = SatRefutationCheckRequest(
+        cnf=CanonicalCnf(
+            variables=("x", "y"), clauses=((-1,), (1,), (-2,), (2,))
+        ),
+        refutation=SatLprRefutation(
+            steps=(
+                LprAddition(
+                    clause_id=50_000,
+                    clause=(1,),
+                    at_hint_clause_ids=(2,),
+                    propagation_hints=(),
+                ),
+                LprAddition(
+                    clause_id=4_000_000_000,
+                    clause=(),
+                    at_hint_clause_ids=(1, 2),
+                    propagation_hints=(
+                        LprPropagationHint(clause_id=50_000, at_hint_clause_ids=()),
+                    ),
+                ),
+                LprDeletion(kind="deletion", clause_ids=(50_000,)),
+            )
+        ),
+    )
+
+    assert (
+        operations._ascii_lpr(request.refutation)
+        == b"50000 1 0 2 0\n4000000000 0 1 2 -50000 0\n0 d 50000 0\n"
+    )
+
+
+def test_lpr_refutation_still_binds_sparse_labels_to_live_clauses() -> None:
+    cnf = CanonicalCnf(variables=("x",), clauses=((-1,), (1,)))
+    with pytest.raises(ValueError, match="may not overwrite a live clause ID"):
+        SatRefutationCheckRequest(
+            cnf=cnf,
+            refutation=SatLprRefutation(
+                steps=(
+                    LprAddition(
+                        clause_id=50_000,
+                        clause=(1,),
+                        at_hint_clause_ids=(1,),
+                        propagation_hints=(),
+                    ),
+                    LprAddition(
+                        clause_id=50_000,
+                        clause=(1,),
+                        at_hint_clause_ids=(1,),
+                        propagation_hints=(),
+                    ),
+                )
+            ),
+        )
+    with pytest.raises(ValueError, match="non-live clause ID"):
+        SatRefutationCheckRequest(
+            cnf=cnf,
+            refutation=SatLprRefutation(
+                steps=(
+                    LprAddition(
+                        clause_id=50_000,
+                        clause=(),
+                        at_hint_clause_ids=(1, 2),
+                        propagation_hints=(
+                            LprPropagationHint(
+                                clause_id=60_000, at_hint_clause_ids=()
+                            ),
+                        ),
+                    ),
+                )
+            ),
+        )
+    with pytest.raises(ValueError, match="non-live clause ID"):
+        SatRefutationCheckRequest(
+            cnf=cnf,
+            refutation=SatLprRefutation(
+                steps=(LprDeletion(kind="deletion", clause_ids=(50_000,)),)
+            ),
+        )
+
+
 def test_lpr_refutation_reserves_the_transport_result_budget(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

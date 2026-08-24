@@ -182,8 +182,10 @@ class LprPropagationHint(StrictModel):
 
     clause_id: StrictInt = Field(
         ge=1,
-        le=_MAX_CLAUSES + _MAX_LPR_STEPS,
-        description="A currently live clause ID whose propagation is checked.",
+        description=(
+            "A currently live clause-ID label whose propagation is checked. "
+            "Labels may be sparse solver-assigned values."
+        ),
     )
     at_hint_clause_ids: tuple[StrictInt, ...] = Field(
         max_length=_MAX_LPR_HINT_IDS,
@@ -209,10 +211,10 @@ class LprAddition(StrictModel):
     kind: Literal["addition"] = "addition"
     clause_id: StrictInt = Field(
         ge=1,
-        le=_MAX_CLAUSES + _MAX_LPR_STEPS,
         description=(
-            "A fresh ID after all canonical source clauses; it may not overwrite "
-            "a live clause."
+            "A fresh positive clause-ID label above all canonical source clause "
+            "numbers; it may be a sparse solver-assigned value and may not "
+            "overwrite a live clause."
         ),
     )
     clause: tuple[StrictInt, ...] = Field(

@@ -34,15 +34,23 @@ __all__ = [
 ]
 
 # Public bounds
-MAX_VERTICES = 32
-MAX_EDGES = 128
+# The shared passive carrier transports the complete simple-graph envelope of
+# the declared vertex axis, including SPQR source graphs and skeletons: a
+# simple graph on 64 vertices admits up to C(64, 2) = 2016 edges. Individual
+# flow and cycle operations retain their own work admission; widening this
+# passive value does not widen an exhaustive search claim.
+MAX_VERTICES = 64
+MAX_EDGES = MAX_VERTICES * (MAX_VERTICES - 1) // 2
 MAX_PARALLEL_MULTIPLICITY = 32
 MAX_GROUP_RANK = 6
 MAX_GROUP_MODULUS = 4096
 MAX_GROUP_CARDINALITY = 4096
 MAX_FLOW_SEARCH_STATES = 1_048_576
-MAX_CYCLE_COUNT = 64
-MAX_CYCLE_LENGTH = 64
+# One Eulerian decomposition splits the admitted edge multiset into cycles of
+# at least two edges each, and one simple cycle on the declared vertex axis
+# closes with at most MAX_VERTICES + 1 sequence entries.
+MAX_CYCLE_COUNT = MAX_EDGES // 2
+MAX_CYCLE_LENGTH = MAX_VERTICES + 1
 MAX_CYCLE_EDGE_INCIDENCES = 4096
 
 
@@ -709,7 +717,7 @@ class CycleRecord(StrictModel):
     )
     edge_ids: tuple[StrictStr, ...] = Field(
         min_length=2,
-        max_length=MAX_CYCLE_LENGTH,
+        max_length=MAX_VERTICES,
         description=(
             "Edge IDs alternating with vertices: edge_ids[i] connects "
             "vertices[i] and vertices[i+1]; no edge ID may repeat."

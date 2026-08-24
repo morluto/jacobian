@@ -10,6 +10,8 @@ from jacobian.math.hypergraphs._models import (
     EdgeIntersectionsRequest,
     EdgeIntersectionsResult,
     FiniteHypergraph,
+    HypergraphIndependenceRequest,
+    HypergraphIndependenceResult,
     IncidenceGraphRequest,
     IncidenceGraphResult,
     ParametersRequest,
@@ -18,6 +20,16 @@ from jacobian.math.hypergraphs._models import (
     VertexDegreesResult,
     _require_edge_intersection_preflight,
 )
+
+
+def compute_independence_number(
+    request: HypergraphIndependenceRequest,
+) -> HypergraphIndependenceResult:
+    """Return an exact optimum or source-bound incumbent and sound bounds."""
+
+    from jacobian.math.hypergraphs import _independence_z3
+
+    return _independence_z3.solve_independence_number(request)
 
 
 def _canonical_edges(

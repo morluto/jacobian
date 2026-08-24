@@ -45,6 +45,12 @@ class CoherentConfigurationInput(StrictModel):
 
     @model_validator(mode="after")
     def require_complete_bounded_pair_partition(self) -> Self:
+        if any(
+            len(point.encode("utf-8")) > MAX_POINT_LABEL_BYTES for point in self.points
+        ):
+            raise ValueError(
+                f"point labels must not exceed {MAX_POINT_LABEL_BYTES} UTF-8 bytes"
+            )
         if tuple(sorted(self.points)) != self.points or len(set(self.points)) != len(
             self.points
         ):
@@ -59,6 +65,13 @@ class CoherentConfigurationInput(StrictModel):
             not is_normalized("NFC", relation_id) for relation_id in self.relation_ids
         ):
             raise ValueError("relation_ids must use Unicode NFC")
+        if any(
+            len(relation_id.encode("utf-8")) > MAX_RELATION_ID_BYTES
+            for relation_id in self.relation_ids
+        ):
+            raise ValueError(
+                f"relation_ids must not exceed {MAX_RELATION_ID_BYTES} UTF-8 bytes"
+            )
         if len(self.relation_ids) > len(self.points) ** 2:
             raise ValueError("relation count cannot exceed ordered-pair cells")
         if len(self.relation_matrix) != len(self.points) or any(

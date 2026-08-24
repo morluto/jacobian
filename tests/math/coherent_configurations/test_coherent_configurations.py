@@ -15,7 +15,11 @@ from jacobian.math.coherent_configurations._models import (
 )
 from jacobian.math.coherent_configurations._operations import compute_analyze
 from jacobian.math.coherent_configurations._tools import TOOLS
-from jacobian.math.coherent_configurations.values import FiniteCoherentConfiguration
+from jacobian.math.coherent_configurations.values import (
+    MAX_POINT_LABEL_BYTES,
+    MAX_RELATION_ID_BYTES,
+    FiniteCoherentConfiguration,
+)
 
 
 def _complete_graph_k3() -> dict[str, object]:
@@ -203,6 +207,45 @@ def test_relation_order_and_matrix_entries_must_be_canonical_and_complete() -> N
     payload["relation_ids"] = ["diagonal", "edge", "unused"]
     with pytest.raises(ValidationError, match="must occur"):
         _request(payload)
+
+
+def test_utf8_label_byte_bounds_apply_to_direct_and_json_requests() -> None:
+    point = "😀" * (MAX_POINT_LABEL_BYTES // len("😀".encode()))
+    relation_id = "😀" * (MAX_RELATION_ID_BYTES // len("😀".encode()))
+    request = _request(
+        {
+            "points": [point],
+            "relation_ids": [relation_id],
+            "relation_matrix": [[relation_id]],
+        }
+    )
+
+    assert compute_analyze(request).status == "COHERENT_CONFIGURATION"
+
+    oversized_point = point + "😀"
+    with pytest.raises(ValidationError, match="point labels must not exceed"):
+        _request(
+            {
+                "points": [oversized_point],
+                "relation_ids": ["diagonal"],
+                "relation_matrix": [["diagonal"]],
+            }
+        )
+
+    oversized_relation_id = relation_id + "😀"
+    with pytest.raises(OperationRequestValidationError) as error:
+        invoke_operation(
+            "coherent_configuration.analyze.compute",
+            {
+                "configuration": {
+                    "points": ["a"],
+                    "relation_ids": [oversized_relation_id],
+                    "relation_matrix": [[oversized_relation_id]],
+                }
+            },
+            Catalog.open(),
+        )
+    assert "relation_ids must not exceed" in str(error.value.errors())
 
 
 def test_maximum_relation_tensor_stays_inside_admitted_result_envelope() -> None:

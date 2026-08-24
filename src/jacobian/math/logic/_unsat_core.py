@@ -36,27 +36,74 @@ class _CoefficientEnvelope(NamedTuple):
     Every coefficient reachable while reading the expression linearly has
     magnitude at most ``height``, numerator digit count at most
     ``numerator_digits``, and denominator digit count at most
-    ``denominator_digits``. ``common_denominator`` is an upper bound that the
-    denominator of every reachable coefficient divides, or ``None`` when no
-    such shared bound is tracked; sums use it to keep shared denominators from
-    compounding.
+    ``denominator_digits``. ``pairs`` is the exact closure of reachable
+    ``(numerator bound, denominator)`` pairs, or ``None`` when only the
+    marginal digit budgets are tracked; sums and comparisons use it to keep
+    shared denominators from compounding while still bounding merged
+    numerators soundly.
     """
 
     height: Fraction
     numerator_digits: int
     denominator_digits: int
-    common_denominator: int | None
+    pairs: tuple[tuple[int, int], ...] | None
 
 
-_UNIT_COEFFICIENT_ENVELOPE = _CoefficientEnvelope(Fraction(1), 1, 1, 1)
+_UNIT_COEFFICIENT_ENVELOPE = _CoefficientEnvelope(Fraction(1), 1, 1, ((1, 1),))
+_MAX_ENVELOPE_PAIRS = 16
 
 
-def _shared_common_denominator(
-    common_denominators: tuple[int | None, ...],
-) -> int | None:
-    if any(value is None for value in common_denominators):
+def _capped_pairs(
+    numerators_by_denominator: dict[int, int],
+) -> tuple[tuple[int, int], ...] | None:
+    if len(numerators_by_denominator) > _MAX_ENVELOPE_PAIRS:
         return None
-    return lcm(*(value for value in common_denominators if value is not None))
+    return tuple(
+        sorted(
+            (numerator, denominator)
+            for denominator, numerator in numerators_by_denominator.items()
+        )
+    )
+
+
+def _merged_pairs(
+    *pair_lists: tuple[tuple[int, int], ...] | None,
+) -> tuple[tuple[int, int], ...] | None:
+    """Union reachable coefficient pairs, keeping the widest per denominator."""
+
+    numerators_by_denominator: dict[int, int] = {}
+    for pair_list in pair_lists:
+        if pair_list is None:
+            return None
+        for numerator, denominator in pair_list:
+            numerators_by_denominator[denominator] = max(
+                numerators_by_denominator.get(denominator, 0), numerator
+            )
+    return _capped_pairs(numerators_by_denominator)
+
+
+def _pairs_common_denominator(
+    pairs: tuple[tuple[int, int], ...] | None,
+) -> int | None:
+    if pairs is None:
+        return None
+    return lcm(*(denominator for _numerator, denominator in pairs))
+
+
+def _scaled_pairs(
+    scalar: Fraction,
+    pairs: tuple[tuple[int, int], ...] | None,
+) -> tuple[tuple[int, int], ...] | None:
+    if pairs is None:
+        return None
+    numerators_by_denominator: dict[int, int] = {}
+    for numerator, denominator in pairs:
+        scaled = Fraction(numerator, denominator) * scalar
+        numerators_by_denominator[scaled.denominator] = max(
+            numerators_by_denominator.get(scaled.denominator, 0),
+            abs(scaled.numerator),
+        )
+    return _capped_pairs(numerators_by_denominator)
 
 
 class SmtUnsatCoreRequest(SmtSolveRequest):
@@ -603,9 +650,7 @@ def _coefficient_height(
             max(left.height, right.height),
             max(left.numerator_digits, right.numerator_digits),
             max(left.denominator_digits, right.denominator_digits),
-            _shared_common_denominator(
-                (left.common_denominator, right.common_denominator)
-            ),
+            _merged_pairs(left.pairs, right.pairs),
         )
     if kind == z3.Z3_OP_UMINUS:
         return child_envelopes[0]
@@ -623,7 +668,7 @@ def _coefficient_height(
         return _divided_envelope(
             child_envelopes[0],
             child_values[1],
-            exact=kind == z3.Z3_OP_DIV,
+            exact=kind == z3.Z3_OP_DIV or abs(child_values[1]) == 1,
             validate_budget=enforce_digit_budget,
         )
     if kind in (z3.Z3_OP_ADD, z3.Z3_OP_SUB):
@@ -668,13 +713,8 @@ def _multiplied_envelope(
 
     numerator_digits = sum(envelope.numerator_digits for envelope in envelopes)
     denominator_digits = sum(envelope.denominator_digits for envelope in envelopes)
-    product = 1
-    for envelope in envelopes:
-        if envelope.common_denominator is None:
-            product = 0
-            break
-        product *= envelope.common_denominator
-    common_denominator: int | None = product or None
+    pairs = _product_pairs(tuple(envelope.pairs for envelope in envelopes))
+    common_denominator = _pairs_common_denominator(pairs)
     if common_denominator is not None:
         denominator_digits = min(denominator_digits, len(str(common_denominator)))
     if validate_budget:
@@ -686,7 +726,32 @@ def _multiplied_envelope(
         _bounded_fraction_product(tuple(envelope.height for envelope in envelopes)),
         numerator_digits,
         denominator_digits,
-        common_denominator,
+        pairs,
+    )
+
+
+def _product_pairs(
+    pair_lists: tuple[tuple[tuple[int, int], ...] | None, ...],
+) -> tuple[tuple[int, int], ...] | None:
+    result: dict[int, int] = {1: 1}
+    for pair_list in pair_lists:
+        if pair_list is None:
+            return None
+        combined: dict[int, int] = {}
+        for numerator, denominator in pair_list:
+            left = Fraction(numerator, denominator)
+            for shared_denominator, shared_numerator in result.items():
+                right = Fraction(shared_numerator, shared_denominator)
+                product = left * right
+                combined[product.denominator] = max(
+                    combined.get(product.denominator, 0),
+                    abs(product.numerator),
+                )
+        result = combined
+        if len(result) > _MAX_ENVELOPE_PAIRS:
+            return None
+    return tuple(
+        sorted((numerator, denominator) for denominator, numerator in result.items())
     )
 
 
@@ -705,11 +770,8 @@ def _divided_envelope(
     if not exact:
         scaled += 1
         numerator_digits += 1
-    common_denominator = (
-        None
-        if dividend.common_denominator is None
-        else dividend.common_denominator * abs(divisor.numerator)
-    )
+    pairs = _scaled_pairs(Fraction(1) / divisor, dividend.pairs) if exact else None
+    common_denominator = _pairs_common_denominator(pairs)
     if common_denominator is not None:
         denominator_digits = min(denominator_digits, len(str(common_denominator)))
     _require_bounded_normalized_coefficient(scaled)
@@ -718,12 +780,7 @@ def _divided_envelope(
             numerator_digits,
             denominator_digits,
         )
-    return _CoefficientEnvelope(
-        scaled,
-        numerator_digits,
-        denominator_digits,
-        common_denominator,
-    )
+    return _CoefficientEnvelope(scaled, numerator_digits, denominator_digits, pairs)
 
 
 def _signed_sum_envelope(
@@ -737,9 +794,6 @@ def _signed_sum_envelope(
     for envelope in envelopes:
         height += envelope.height
         _require_bounded_normalized_coefficient(height)
-    shared = _shared_common_denominator(
-        tuple(envelope.common_denominator for envelope in envelopes)
-    )
     denominator_digits = sum(envelope.denominator_digits for envelope in envelopes)
     widest_numerator = max(
         (
@@ -749,18 +803,39 @@ def _signed_sum_envelope(
         default=0,
     )
     numerator_digits = widest_numerator + len(str(len(envelopes)))
+    shared = _shared_denominator_of_pairs(envelopes)
     if shared is not None:
+        merged_numerator = 0
+        for envelope in envelopes:
+            merged_numerator += max(
+                (
+                    numerator * (shared // denominator)
+                    for numerator, denominator in envelope.pairs or ()
+                ),
+                default=0,
+            )
         denominator_digits = min(denominator_digits, len(str(shared)))
-        merged_numerator = (
-            sum(10**envelope.numerator_digits for envelope in envelopes) * shared
-        )
         numerator_digits = min(numerator_digits, len(str(merged_numerator)))
+        pairs: tuple[tuple[int, int], ...] | None = ((merged_numerator, shared),)
+    else:
+        pairs = None
     if validate_budget:
         _require_bounded_coefficient_digit_budget(
             numerator_digits,
             denominator_digits,
         )
-    return _CoefficientEnvelope(height, numerator_digits, denominator_digits, shared)
+    return _CoefficientEnvelope(height, numerator_digits, denominator_digits, pairs)
+
+
+def _shared_denominator_of_pairs(
+    envelopes: tuple[_CoefficientEnvelope, ...],
+) -> int | None:
+    denominators: list[int] = []
+    for envelope in envelopes:
+        if envelope.pairs is None:
+            return None
+        denominators.extend(denominator for _numerator, denominator in envelope.pairs)
+    return lcm(*denominators)
 
 
 def _compared_envelope(
@@ -768,28 +843,52 @@ def _compared_envelope(
     *,
     validate_budget: bool,
 ) -> _CoefficientEnvelope:
-    """Bound the difference an arithmetic comparison forms between its sides."""
+    """Bound the difference an arithmetic comparison forms between its sides.
+
+    The difference of two nonnegative quantities never exceeds the larger one,
+    so each side is lifted to the shared denominator and only the widest lifted
+    numerator bounds the merged coefficient.
+    """
 
     height = Fraction(0)
     for envelope in envelopes:
         height += envelope.height
         _require_bounded_normalized_coefficient(height)
-    shared = _shared_common_denominator(
-        tuple(envelope.common_denominator for envelope in envelopes)
+    shared = _shared_denominator_of_pairs(envelopes)
+    if shared is None:
+        fallback = _signed_sum_envelope(envelopes, validate_budget=False)
+        return _CoefficientEnvelope(
+            height,
+            fallback.numerator_digits,
+            fallback.denominator_digits,
+            None,
+        )
+    denominator_digits = min(
+        sum(envelope.denominator_digits for envelope in envelopes),
+        len(str(shared)),
     )
-    denominator_digits = sum(envelope.denominator_digits for envelope in envelopes)
-    numerator_digits = max(
-        (envelope.numerator_digits for envelope in envelopes), default=0
-    )
-    if shared is not None:
-        denominator_digits = min(denominator_digits, len(str(shared)))
-        numerator_digits = min(numerator_digits, len(str(shared)) + numerator_digits)
+    lifted_numerator = 0
+    for left_index, left in enumerate(envelopes):
+        for right in envelopes[left_index + 1 :]:
+            for left_numerator, left_denominator in left.pairs or ():
+                for right_numerator, right_denominator in right.pairs or ():
+                    difference = abs(
+                        Fraction(left_numerator, left_denominator)
+                        - Fraction(right_numerator, right_denominator)
+                    )
+                    lifted_numerator = max(lifted_numerator, difference.numerator)
+    numerator_digits = len(str(lifted_numerator))
     if validate_budget:
         _require_bounded_coefficient_digit_budget(
             numerator_digits,
             denominator_digits,
         )
-    return _CoefficientEnvelope(height, numerator_digits, denominator_digits, shared)
+    return _CoefficientEnvelope(
+        height,
+        numerator_digits,
+        denominator_digits,
+        ((lifted_numerator, shared),),
+    )
 
 
 def _maximal_digit_envelope(
@@ -812,7 +911,7 @@ def _closed_value_envelope(value: Fraction) -> _CoefficientEnvelope:
         abs(value),
         len(str(abs(value.numerator))),
         len(str(value.denominator)),
-        value.denominator,
+        ((abs(value.numerator), value.denominator),),
     )
 
 
@@ -822,11 +921,17 @@ def _affine_form_envelope(
     """Read exact digit budgets off the flattened coefficients of one form."""
 
     coefficients = (form[1], *(coefficient for coefficient, _core in form[0]))
+    numerators_by_denominator: dict[int, int] = {}
+    for value in coefficients:
+        key = value.denominator
+        numerators_by_denominator[key] = max(
+            numerators_by_denominator.get(key, 0), abs(value.numerator)
+        )
     return _CoefficientEnvelope(
         height,
         max(len(str(abs(value.numerator))) for value in coefficients),
         max(len(str(value.denominator)) for value in coefficients),
-        lcm(*(value.denominator for value in coefficients)),
+        _capped_pairs(numerators_by_denominator),
     )
 
 
@@ -838,12 +943,8 @@ def _scaled_coefficient_envelope(
 
     numerator_digits = len(str(abs(coefficient.numerator))) + envelope.numerator_digits
     denominator_digits = len(str(coefficient.denominator)) + envelope.denominator_digits
-    if coefficient.denominator == 1:
-        common_denominator = envelope.common_denominator
-    elif envelope.common_denominator is not None:
-        common_denominator = coefficient.denominator * envelope.common_denominator
-    else:
-        common_denominator = None
+    pairs = _scaled_pairs(coefficient, envelope.pairs)
+    common_denominator = _pairs_common_denominator(pairs)
     if common_denominator is not None:
         denominator_digits = min(denominator_digits, len(str(common_denominator)))
     _require_bounded_coefficient_digit_budget(numerator_digits, denominator_digits)
@@ -851,7 +952,7 @@ def _scaled_coefficient_envelope(
         coefficient * envelope.height,
         numerator_digits,
         denominator_digits,
-        common_denominator,
+        pairs,
     )
 
 

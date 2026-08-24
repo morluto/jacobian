@@ -279,7 +279,8 @@ def _product_cell_bounds(
         return 0, 1, zero_exponents, zero_exponents, 1, True
 
     integral_coefficients = all(
-        _has_integral_coefficients(left_value) and _has_integral_coefficients(right_value)
+        _has_integral_coefficients(left_value)
+        and _has_integral_coefficients(right_value)
         for left_value, right_value in factors
     )
     unit_denominator_factors = all(

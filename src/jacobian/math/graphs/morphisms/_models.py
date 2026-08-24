@@ -13,7 +13,7 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 # Exhaustive backtracking search over graph morphisms is exponential in the
 # vertex count.  This dedicated bound keeps every search-based morphism
 # operation inside a tested, provably bounded domain.
-MORPHISM_MAX_VERTICES = 20
+MORPHISM_MAX_VERTICES = 64
 
 # Source-bound graph results retain their input graphs and may add witnesses.
 # This reserved envelope covers the result wrapper and field names after those

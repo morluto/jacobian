@@ -26,6 +26,7 @@ from jacobian.math.polynomials.values import (
 )
 
 MAX_POINTS = 32
+MAX_NEWTON_POINTS = 256
 _MAX_RATIONAL_DIGITS = 256
 MAX_HERMITE_SYSTEM_CELLS = MAX_POINTS * (MAX_POINTS + 1)
 """Largest admitted Hermite matrix plus right-hand-side allocation."""
@@ -505,11 +506,11 @@ class InterpolationSamples(StrictModel):
 
     nodes: tuple[CanonicalRational, ...] = Field(
         min_length=1,
-        max_length=MAX_POINTS,
+        max_length=MAX_NEWTON_POINTS,
     )
     values: tuple[CanonicalRational, ...] = Field(
         min_length=1,
-        max_length=MAX_POINTS,
+        max_length=MAX_NEWTON_POINTS,
     )
 
     @model_validator(mode="after")
@@ -541,11 +542,11 @@ class NewtonForm(StrictModel):
 
     nodes: tuple[CanonicalRational, ...] = Field(
         min_length=1,
-        max_length=MAX_POINTS,
+        max_length=MAX_NEWTON_POINTS,
     )
     coefficients: tuple[CanonicalRational, ...] = Field(
         min_length=1,
-        max_length=MAX_POINTS,
+        max_length=MAX_NEWTON_POINTS,
     )
 
     @model_validator(mode="after")
@@ -585,7 +586,7 @@ class NewtonEvaluateRequest(StrictModel):
 class DividedDifferencesResult(StrictModel):
     coefficients: tuple[CanonicalRational, ...] = Field(
         min_length=1,
-        max_length=MAX_POINTS,
+        max_length=MAX_NEWTON_POINTS,
     )
     method: str = "NEWTON_DIVIDED_DIFFERENCES"
 

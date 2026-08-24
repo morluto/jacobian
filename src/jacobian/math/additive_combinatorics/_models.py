@@ -21,7 +21,7 @@ from jacobian.math.additive_combinatorics.values import (
     IndexedIntegerSequence,
 )
 
-_MAX_SET_SIZE = 256
+_MAX_SET_SIZE = 4096
 _MAX_RESULT_SIZE = _MAX_SET_SIZE * _MAX_SET_SIZE
 _MAX_DIMENSION = 8
 _MAX_COORDINATE_DIGITS = 6

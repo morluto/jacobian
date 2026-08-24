@@ -149,7 +149,16 @@ class BinaryQuadraticFormRepresentationsRequest(StrictModel):
     """Request the complete ordered signed representation set of one target."""
 
     form: PrimitivePositiveDefiniteBinaryQuadraticForm
-    target: int = Field(ge=0, le=MAX_REPRESENTATION_TARGET)
+    target: int = Field(
+        ge=0,
+        le=MAX_REPRESENTATION_TARGET,
+        description=(
+            "Nonnegative target n. With D=b^2-4ac for form, this request is "
+            "admitted exactly when 2*floor_sqrt(4*a*n/(-D))+1 is at most "
+            f"{MAX_REPRESENTATION_Y_CANDIDATES}; that is the complete "
+            "y-coordinate scan size."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_complete_search_budget(self) -> Self:

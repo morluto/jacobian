@@ -152,7 +152,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "representations_x_squared_plus_y_squared_of_5",
-                "Enumerate the eight ordered signed representations of 5 by x^2+y^2.",
+                "For D=-4, the admission expression "
+                "2*floor_sqrt(4*a*n/(-D))+1 is 5; enumerate the eight "
+                "ordered signed representations of 5 by x^2+y^2.",
                 {"form": {"a": 1, "b": 0, "c": 1}, "target": 5},
             ),
         ),

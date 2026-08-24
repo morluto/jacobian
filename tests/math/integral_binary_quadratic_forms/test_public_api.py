@@ -20,4 +20,11 @@ def test_public_form_value_and_native_functions_compose_after_serialization() ->
         "b": 1,
         "c": 3,
     }
-    assert len(integral_binary_quadratic_forms.representations(form, 5)) == 4
+    rows = integral_binary_quadratic_forms.representations(form, 5)
+    assert len(rows) == 4
+    assert all(
+        isinstance(
+            row, integral_binary_quadratic_forms.BinaryQuadraticFormRepresentation
+        )
+        for row in rows
+    )

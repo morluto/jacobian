@@ -246,6 +246,12 @@ class TestReducedClasses:
 
 
 class TestRepresentations:
+    def test_schema_exposes_the_complete_y_scan_admission_condition(self) -> None:
+        target_schema = BinaryQuadraticFormRepresentationsRequest.model_json_schema()[
+            "properties"
+        ]["target"]
+        assert "2*floor_sqrt(4*a*n/(-D))+1" in target_schema["description"]
+
     def test_x_squared_plus_y_squared_of_five_has_eight_ordered_signed_pairs(
         self,
     ) -> None:

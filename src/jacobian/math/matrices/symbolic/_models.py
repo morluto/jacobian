@@ -315,17 +315,16 @@ def _polynomial_budget_violation(
 def _shared_common_denominator_bounds(
     factors: tuple[tuple[RationalFunction, RationalFunction], ...],
 ) -> tuple[int, int, tuple[int, ...], tuple[int, ...], int, bool, int, bool] | None:
-    """Return exact cell bounds for one shared common denominator, or None.
+    """Return exact cell bounds for one shared product denominator, or None.
 
-    When every contributing pair writes its left factor over one identical
-    canonical denominator ``g`` and its right factor over one identical
-    canonical denominator ``v``, the cell value is exactly
-    ``(sum a_i b_i) / (g v)``. Admission collects that numerator sum
-    exactly and admits the cell only when the sum is coprime to the monic
-    product ``g v`` and both parts fit the canonical result budgets. The
-    backend's reduced value then equals this quotient verbatim, so the
-    collected support and height are exact bounds and no cancellation
-    estimate is needed. A nontrivial common factor, mixed denominators, or
+    When every contributing pair ``a_i/g_i * b_i/v_i`` carries one identical
+    canonical product denominator ``d = g_i v_i``, the cell value is exactly
+    ``(sum a_i b_i) / d``. Admission collects that numerator sum exactly and
+    admits the cell only when the sum is coprime to the monic product ``d``
+    and both parts fit the canonical result budgets. The backend's reduced
+    value then equals this quotient verbatim, so the collected support and
+    height are exact bounds and no cancellation estimate is needed. A
+    nontrivial common factor, mismatched pairwise product denominators, or
     an out-of-budget part returns None and the conservative rejection
     applies.
     """
@@ -339,18 +338,11 @@ def _shared_common_denominator_bounds(
     variables = factors[0][0].variables
     if not variables:
         return None
-    left_denominator = factors[0][0].denominator
-    right_denominator = factors[0][1].denominator
-    if any(
-        left_value.denominator != left_denominator
-        or right_value.denominator != right_denominator
+    pair_denominator_terms = tuple(
+        len(left_value.denominator.terms) * len(right_value.denominator.terms)
         for left_value, right_value in factors
-    ):
-        return None
-    if (
-        len(left_denominator.terms) * len(right_denominator.terms)
-        > MAX_SYMBOLIC_RESULT_TERMS
-    ):
+    )
+    if any(count > MAX_SYMBOLIC_RESULT_TERMS for count in pair_denominator_terms):
         return None
     raw_products = sum(
         len(left_value.numerator.terms) * len(right_value.numerator.terms)
@@ -361,21 +353,30 @@ def _shared_common_denominator_bounds(
 
     from sympy import Poly
 
+    pair_product_denominators = [
+        sparse_rational_polynomial_to_sympy(left_value.denominator, variables)
+        * sparse_rational_polynomial_to_sympy(right_value.denominator, variables)
+        for left_value, right_value in factors
+    ]
+    common_denominator = pair_product_denominators[0]
+    if any(
+        pair_denominator != common_denominator
+        for pair_denominator in pair_product_denominators[1:]
+    ):
+        return None
+
     generators = symbols_for_variables(variables)
     numerator_sum = Poly(0, *generators, domain="QQ")
     for left_value, right_value in factors:
         numerator_sum += sparse_rational_polynomial_to_sympy(
             left_value.numerator, variables
         ) * sparse_rational_polynomial_to_sympy(right_value.numerator, variables)
-    common_denominator = sparse_rational_polynomial_to_sympy(
-        left_denominator, variables
-    ) * sparse_rational_polynomial_to_sympy(right_denominator, variables)
 
     if numerator_sum.is_zero:
         zero_exponents = (0,) * len(variables)
         return (
             raw_products,
-            len(left_denominator.terms) * len(right_denominator.terms) * len(factors),
+            sum(pair_denominator_terms),
             zero_exponents,
             zero_exponents,
             1,
@@ -394,7 +395,7 @@ def _shared_common_denominator_bounds(
         return None
     return (
         raw_products,
-        len(left_denominator.terms) * len(right_denominator.terms) * len(factors),
+        sum(pair_denominator_terms),
         tuple(
             max(term.exponents[axis] for term in numerator.terms)
             for axis in range(len(variables))
@@ -431,12 +432,12 @@ def _product_cell_bounds(
     denominator terms, which are exactly one for expanded cells (unit or
     monomial) and the operand's own denominator for the verbatim or
     scalar-scaled copy. The final flag reports a proven cancellation-free
-    shape: either the cell stays inside the admitted cancellation domain
+    shape: either the cell stays inside the     admitted cancellation domain
     (unit denominators never cancel, and a monomial common denominator only
     cancels by monomial factors, so the raw bounds stay valid for the
-    canonical value), or every pair shares one common denominator whose
-    exact collected numerator admission proved coprime to the retained
-    monic denominator.
+    canonical value), or every pair carries one identical product
+    denominator whose exact collected numerator admission proved coprime to
+    the retained monic product.
     """
 
     factors = tuple(
@@ -535,9 +536,9 @@ def _expanded_product_cell_bounds(
         denominator_terms *= count
 
     # Cells the conservative cancellation rejection would refuse get one
-    # exact second chance: when every pair shares one common denominator,
+    # exact second chance: when every pair's product denominators coincide,
     # admission can collect the numerator sum and prove it coprime to the
-    # retained monic denominator, which fixes the canonical value verbatim.
+    # retained monic product, which fixes the canonical value verbatim.
     if not (unit_denominator_factors or denominator_terms == 1):
         shared_bounds = _shared_common_denominator_bounds(factors)
         if shared_bounds is not None:
@@ -652,9 +653,9 @@ def _require_symbolic_product_admission(
     """Prove that every exact product entry fits the canonical result value.
 
     Cells cancel only through unit or monomial common denominators, where
-    reduction cannot grow support or coefficients, or through one shared
-    common denominator whose exact collected numerator admission proved
-    coprime to the retained monic denominator, where reduction cannot
+    reduction cannot grow support or coefficients, or through one identical
+    pairwise product denominator whose exact collected numerator admission
+    proved coprime to the retained monic product, where reduction cannot
     trigger at all; anything else stays outside the admitted domain
     because no pre-execution bound covers it.
     """
@@ -701,8 +702,9 @@ def _require_symbolic_product_admission(
                 # pre-execution height bound exists for that quotient. Cells
                 # whose common denominator has several terms therefore lack a
                 # coefficient bound and stay outside the admitted domain unless
-                # admission collected their shared-denominator numerator and
-                # proved it coprime to the retained monic denominator. Unit
+                # admission collected the shared product denominator's
+                # numerator sum and proved it coprime to the retained monic
+                # product. Unit
                 # denominators never cancel, and a monomial common denominator
                 # only loses monomial factors during cancellation (every
                 # divisor of a monomial is a monomial), so support and

@@ -691,6 +691,77 @@ def test_symbolic_matrix_product_admits_shared_denominators_on_both_sides() -> N
     )
 
 
+def test_symbolic_matrix_product_admits_swapped_pair_denominators() -> None:
+    """Pairs whose product denominators coincide admit the exact sum.
+
+    [1/(x+1), 1/(x+2)] * [[1/(x+2)], [1/(x+1)]] has per-side denominators
+    that differ, yet both pairs carry the same product denominator
+    (x+1)(x+2), so the exact collected value 2/((x+1)(x+2)) is admitted.
+    """
+
+    variables = ("x",)
+    inverse_successor = _rf(
+        variables,
+        (1, 1, (0,)),
+        denominator=((1, 1, (1,)), (1, 1, (0,))),
+    )
+    inverse_shifted = _rf(
+        variables,
+        (1, 1, (0,)),
+        denominator=((1, 1, (1,)), (2, 1, (0,))),
+    )
+    product = compute_symbolic_matrix_product(
+        _product_request(
+            ((inverse_successor, inverse_shifted),),
+            ((inverse_shifted,), (inverse_successor,)),
+            variables,
+        )
+    )
+    assert product.entries == (
+        (
+            _rf(
+                variables,
+                (2, 1, (0,)),
+                denominator=((1, 1, (2,)), (3, 1, (1,)), (2, 1, (0,))),
+            ),
+        ),
+    )
+
+
+def test_symbolic_matrix_product_rejects_mismatched_pair_products(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pairs whose product denominators differ keep the conservative rejection."""
+
+    import jacobian.math.matrices.symbolic as symbolic
+
+    variables = ("x",)
+    inverse_successor = _rf(
+        variables,
+        (1, 1, (0,)),
+        denominator=((1, 1, (1,)), (1, 1, (0,))),
+    )
+    inverse_shifted = _rf(
+        variables,
+        (1, 1, (0,)),
+        denominator=((1, 1, (1,)), (2, 1, (0,))),
+    )
+    one = _rf(variables, (1, 1, (0,)))
+
+    def fail_if_called(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("symbolic multiplication kernel ran during admission")
+
+    monkeypatch.setattr(symbolic, "symbolic_matrix_multiply", fail_if_called)
+    # The pair products (x+1)(x+2) and (x+1)^2 differ, so no shared product
+    # denominator fixes the canonical value.
+    with pytest.raises(ValidationError, match="coefficient growth"):
+        _product_request(
+            ((one, one),),
+            ((inverse_successor,), (inverse_shifted,)),
+            variables,
+        )
+
+
 def test_symbolic_matrix_product_admits_shared_denominator_zero_sum() -> None:
     """Collected numerators that cancel completely return canonical zero."""
 

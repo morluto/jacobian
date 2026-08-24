@@ -14,7 +14,6 @@ from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
 from jacobian.math.polynomials._conversions import rational_polynomial_from_sympy
 from jacobian.math.polynomials.differential_operators._bounds import (
-    MAX_APPLICATION_INPUT_TERMS,
     MAX_APPLICATION_ITERATIONS,
     MAX_APPLICATION_RESULT_BYTES,
 )
@@ -30,11 +29,11 @@ from jacobian.math.polynomials.differential_operators.operations import (
     apply_constant_coefficient_differential_operator,
 )
 from jacobian.math.polynomials.differential_operators.values import (
-    MAX_DIFFERENTIAL_OPERATOR_TOTAL_ORDER,
     ConstantCoefficientDifferentialOperator,
     DifferentialOperatorTerm,
 )
 from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_TERMS,
     RationalPolynomial,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
@@ -237,14 +236,11 @@ def test_scalar_iterate_growth_is_bounded_by_the_coefficient_budget() -> None:
         )
 
 
-def test_identity_iterate_admits_sources_beyond_kernel_input_regime() -> None:
+def test_identity_iterate_admits_sources_beyond_the_former_input_cap() -> None:
     variables = ("x",)
     wide_source = _polynomial(
         variables,
-        dict.fromkeys(
-            ((index,) for index in range(MAX_APPLICATION_INPUT_TERMS + 88)),
-            1,
-        ),
+        dict.fromkeys(((index,) for index in range(600)), 1),
     )
     operator = _operator(variables, {(1,): 1})
 
@@ -336,20 +332,14 @@ def test_nonidentity_scalar_operators_follow_scale_only_budgets() -> None:
 
     wide_source = _polynomial(
         variables,
-        dict.fromkeys(
-            ((index,) for index in range(MAX_APPLICATION_INPUT_TERMS + 8)),
-            1,
-        ),
+        dict.fromkeys(((index,) for index in range(520)), 1),
     )
     assert apply_constant_coefficient_differential_operator(
         wide_source,
         negation,
     ) == _polynomial(
         variables,
-        dict.fromkeys(
-            ((index,) for index in range(MAX_APPLICATION_INPUT_TERMS + 8)),
-            -1,
-        ),
+        dict.fromkeys(((index,) for index in range(520)), -1),
     )
 
 
@@ -480,10 +470,7 @@ def test_guaranteed_zero_admits_sources_beyond_expansion_caps() -> None:
     wide_source = _polynomial(
         variables,
         dict.fromkeys(
-            (
-                (index // 25, index % 25)
-                for index in range(MAX_APPLICATION_INPUT_TERMS + 88)
-            ),
+            ((index // 25, index % 25) for index in range(600)),
             1,
         ),
     )
@@ -500,7 +487,7 @@ def test_guaranteed_zero_admits_sources_beyond_expansion_caps() -> None:
         iterations=4,
     )
 
-    assert len(wide_source.polynomial.terms) > MAX_APPLICATION_INPUT_TERMS
+    assert len(wide_source.polynomial.terms) == 600
     assert vanished == _polynomial(variables, {})
     assert vanished.variables == variables
     assert tall_vanished == _polynomial(("x",), {})
@@ -726,14 +713,9 @@ def test_operator_terms_must_be_canonical(
         )
 
 
-def test_operator_rejects_zero_coefficients_and_excess_total_order() -> None:
+def test_operator_rejects_zero_coefficient_terms() -> None:
     with pytest.raises(ValidationError, match="zero differential-operator"):
         DifferentialOperatorTerm(coefficient=_rational(0), orders=(1, 0))
-    with pytest.raises(ValidationError, match="total-order"):
-        DifferentialOperatorTerm(
-            coefficient=_rational(1),
-            orders=(MAX_DIFFERENTIAL_OPERATOR_TOTAL_ORDER, 1),
-        )
 
 
 def test_sparse_high_degree_sources_are_admitted_by_derived_derivative_work() -> None:
@@ -768,12 +750,137 @@ def test_sparse_high_degree_sources_are_admitted_by_derived_derivative_work() ->
 
     dense = _polynomial(
         ("x",),
-        dict.fromkeys(
-            ((index,) for index in range(MAX_APPLICATION_INPUT_TERMS + 1)), 1
-        ),
+        dict.fromkeys(((index,) for index in range(513)), 1),
     )
-    with pytest.raises(ValidationError, match="512-term operation budget"):
-        DifferentialOperatorApplyRequest(polynomial=dense, operator=derivative)
+    assert apply_constant_coefficient_differential_operator(dense, derivative) == (
+        _polynomial(("x",), {(index - 1,): index for index in range(1, 513)})
+    )
+
+
+def test_tall_orders_cross_the_former_total_order_cap() -> None:
+    factorial = math.factorial(65)
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(("x",), {(65,): 1}),
+            operator=_operator(("x",), {(65,): 1}),
+            iterations=1,
+            expected=_polynomial(("x",), {(0,): factorial}),
+        )
+    )
+
+    assert result.output == _polynomial(("x",), {(0,): factorial})
+    assert result.matches_expected is True
+    assert result.is_zero is False
+
+
+def test_orders_stay_inside_the_interoperable_integer_range() -> None:
+    boundary = DifferentialOperatorTerm(
+        coefficient=_rational(1),
+        orders=((1 << 53) - 1,),
+    )
+    assert boundary.orders == ((1 << 53) - 1,)
+    with pytest.raises(ValidationError, match="less than or equal"):
+        DifferentialOperatorTerm(
+            coefficient=_rational(1),
+            orders=((1 << 53),),
+        )
+
+
+def test_sixty_five_term_operators_follow_derived_support_budgets() -> None:
+    variables = ("x",)
+    operator = _operator(
+        variables,
+        dict.fromkeys(((order,) for order in range(65)), 1),
+    )
+    expected = _polynomial(
+        variables,
+        {
+            (64 - order,): math.factorial(64) // math.factorial(64 - order)
+            for order in range(65)
+        },
+    )
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(variables, {(64,): 1}),
+            operator=operator,
+            iterations=1,
+            expected=expected,
+        )
+    )
+
+    assert result.output == expected
+    assert result.matches_expected is True
+
+
+def test_dense_source_boundary_follows_the_candidate_support_budget() -> None:
+    variables = ("x",)
+    derivative_plus_one = _operator(variables, {(1,): 1, (0,): 1})
+
+    boundary = DifferentialOperatorApplyRequest(
+        polynomial=_polynomial(
+            variables,
+            dict.fromkeys(((index,) for index in range(2_048)), 1),
+        ),
+        operator=derivative_plus_one,
+    )
+    assert isinstance(
+        compute_differential_operator_application(boundary),
+        DifferentialOperatorApplyResult,
+    )
+
+    with pytest.raises(ValidationError, match="candidate-term budget"):
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(
+                variables,
+                dict.fromkeys(((index,) for index in range(2_049)), 1),
+            ),
+            operator=derivative_plus_one,
+        )
+
+
+def test_canonical_width_source_is_admitted_to_the_last_expanding_term() -> None:
+    accepted = DifferentialOperatorApplyRequest(
+        polynomial=_polynomial(
+            ("x",),
+            dict.fromkeys(((index,) for index in range(MAX_POLYNOMIAL_TERMS)), 1),
+        ),
+        operator=_operator(("x",), {(1,): 1}),
+    )
+    result = compute_differential_operator_application(accepted)
+
+    assert result.output == _polynomial(
+        ("x",),
+        {(index - 1,): index for index in range(1, MAX_POLYNOMIAL_TERMS)},
+    )
+    assert result.is_zero is False
+
+
+def test_astronomical_orders_annihilate_without_expanding() -> None:
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(("x",), {(65,): 1}),
+            operator=_operator(("x",), {(10**15,): 1}),
+            iterations=1,
+        )
+    )
+
+    assert result.is_zero is True
+    assert result.output == _polynomial(("x",), {})
+
+
+def test_mixed_astronomical_orders_keep_only_surviving_powered_terms() -> None:
+    annihilator = _operator(("x",), {(10**15,): 1, (1,): -1})
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(("x",), {(65,): 1}),
+            operator=annihilator,
+            iterations=2,
+            expected=_polynomial(("x",), {(63,): 65 * 64}),
+        )
+    )
+
+    assert result.output == _polynomial(("x",), {(63,): 65 * 64})
+    assert result.matches_expected is True
 
 
 def test_sparse_power_work_boundary_is_admitted_then_rejected() -> None:

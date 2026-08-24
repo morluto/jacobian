@@ -13,12 +13,12 @@ from jacobian.math.polynomials.differential_operators.values import (
 )
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_EXPONENT,
+    MAX_POLYNOMIAL_TERMS,
     RationalPolynomial,
     require_polynomial_budget,
 )
 
 MAX_APPLICATION_ITERATIONS = 4_096
-MAX_APPLICATION_INPUT_TERMS = 512
 MAX_APPLICATION_INPUT_COEFFICIENT_DIGITS = 256
 MAX_APPLICATION_OPERATOR_COEFFICIENT_DIGITS = 256
 MAX_APPLICATION_OUTPUT_TERMS = 4_096
@@ -329,13 +329,14 @@ def _require_expansion_source(polynomial: RationalPolynomial) -> None:
     """Bound the source against the kernel's derivative-expansion input regime.
 
     Derivative work, coefficient growth, and exact output size are derived
-    from the source's actual exponents and coefficients downstream; only the
-    term count and input coefficient height stay capped here.
+    from the source's actual support, exponents, and coefficients downstream;
+    input admission follows the shared canonical polynomial representation
+    while the input coefficient height stays capped here.
     """
 
     require_polynomial_budget(
         polynomial,
-        maximum_terms=MAX_APPLICATION_INPUT_TERMS,
+        maximum_terms=MAX_POLYNOMIAL_TERMS,
         maximum_exponent=MAX_POLYNOMIAL_EXPONENT,
         maximum_coefficient_digits=MAX_APPLICATION_INPUT_COEFFICIENT_DIGITS,
         label="differential-operator source polynomial",
@@ -514,7 +515,6 @@ def validate_application_envelope(
 
 __all__ = [
     "MAX_APPLICATION_INPUT_COEFFICIENT_DIGITS",
-    "MAX_APPLICATION_INPUT_TERMS",
     "MAX_APPLICATION_ITERATIONS",
     "MAX_APPLICATION_OPERATOR_COEFFICIENT_DIGITS",
     "MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS",

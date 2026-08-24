@@ -38,7 +38,8 @@ class SmtUnsatCoreRequest(SmtSolveRequest):
     Its inherited 128,000-byte ASCII envelope is further limited to 32,768 tokens,
     nesting depth 256, 512 top-level ``assert`` commands, 4,096 distinct parsed AST
     nodes, 256 digits per numeral, and 256 digits in the numerator or denominator
-    of a normalized closed arithmetic coefficient. Assertion source order is the
+    of any closed arithmetic coefficient, including the complete scalar coefficient
+    obtained by flattening nested products. Assertion source order is the
     public zero-based index. Parsing constructs Z3 syntax trees only; it does not
     evaluate the source as Python or as a host command. Execution performs one
     tracked check and at most one direct result-validation replay, each under the
@@ -289,11 +290,15 @@ def _normalize_closed_coefficients(assertions: tuple[Any, ...]) -> tuple[Any, ..
 
     normalized_by_id: dict[int, Any] = {}
     closed_value_by_id: dict[int, Fraction | None] = {}
+    scalar_by_id: dict[int, Fraction | None] = {}
+    residual_by_id: dict[int, Any] = {}
     return tuple(
         _normalize_closed_expression(
             assertion,
             normalized_by_id=normalized_by_id,
             closed_value_by_id=closed_value_by_id,
+            scalar_by_id=scalar_by_id,
+            residual_by_id=residual_by_id,
         )
         for assertion in assertions
     )
@@ -304,6 +309,8 @@ def _normalize_closed_expression(
     *,
     normalized_by_id: dict[int, Any],
     closed_value_by_id: dict[int, Fraction | None],
+    scalar_by_id: dict[int, Fraction | None],
+    residual_by_id: dict[int, Any],
 ) -> Any:
     """Normalize one expression without retaining a recursive closure over its AST."""
 
@@ -313,16 +320,21 @@ def _normalize_closed_expression(
     if expression_id in normalized_by_id:
         return normalized_by_id[expression_id]
     if z3.is_int_value(expression):
+        value = Fraction(expression.as_long())
         normalized_by_id[expression_id] = expression
-        closed_value_by_id[expression_id] = Fraction(expression.as_long())
+        closed_value_by_id[expression_id] = value
+        scalar_by_id[expression_id] = value
         return expression
     if z3.is_rational_value(expression):
+        value = expression.as_fraction()
         normalized_by_id[expression_id] = expression
-        closed_value_by_id[expression_id] = expression.as_fraction()
+        closed_value_by_id[expression_id] = value
+        scalar_by_id[expression_id] = value
         return expression
     if not z3.is_app(expression):
         normalized_by_id[expression_id] = expression
         closed_value_by_id[expression_id] = None
+        scalar_by_id[expression_id] = None
         return expression
 
     children = expression.children()
@@ -331,6 +343,8 @@ def _normalize_closed_expression(
             child,
             normalized_by_id=normalized_by_id,
             closed_value_by_id=closed_value_by_id,
+            scalar_by_id=scalar_by_id,
+            residual_by_id=residual_by_id,
         )
         for child in children
     )
@@ -343,6 +357,8 @@ def _normalize_closed_expression(
         candidate = expression
 
     child_values = tuple(closed_value_by_id[child.get_id()] for child in children)
+    folded_coefficient: Fraction | None = None
+    folded_dependent: Any | None = None
     if candidate.decl().kind() == z3.Z3_OP_MUL:
         dependent_children = tuple(
             normalized_child
@@ -352,12 +368,27 @@ def _normalize_closed_expression(
             if value is None
         )
         closed_factors = tuple(value for value in child_values if value is not None)
+        dependent_scalar: Fraction | None = None
+        for child, child_value in zip(children, child_values, strict=True):
+            if child_value is None:
+                dependent_scalar = scalar_by_id[child.get_id()]
+                break
         if len(dependent_children) == 1 and closed_factors:
-            coefficient = _bounded_fraction_product(closed_factors)
+            factors = (
+                (*closed_factors, dependent_scalar)
+                if dependent_scalar is not None
+                else closed_factors
+            )
+            coefficient = _bounded_fraction_product(factors)
+            dependent = dependent_children[0]
+            while (residual := residual_by_id.get(dependent.get_id())) is not None:
+                dependent = residual
             candidate = candidate.decl()(
                 _exact_arithmetic_value(coefficient, template=candidate),
-                dependent_children[0],
+                dependent,
             )
+            folded_coefficient = coefficient
+            folded_dependent = dependent
 
     closed_value = _evaluate_closed_arithmetic(candidate.decl().kind(), child_values)
     if closed_value is not None:
@@ -365,6 +396,12 @@ def _normalize_closed_expression(
 
     normalized_by_id[expression_id] = candidate
     closed_value_by_id[expression_id] = closed_value
+    scalar_by_id[expression_id] = (
+        closed_value if closed_value is not None else folded_coefficient
+    )
+    if folded_dependent is not None:
+        residual_by_id[expression_id] = folded_dependent
+        residual_by_id[candidate.get_id()] = folded_dependent
     return candidate
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from weakref import ReferenceType, ref
 
 import pytest
 import z3
@@ -33,7 +34,6 @@ def _request(
         smtlib=smtlib,
         timeout_ms=1_000,
         rlimit=rlimit,
-        max_memory_mb=128,
     )
 
 
@@ -47,6 +47,13 @@ def test_unsat_core_is_an_indexed_replayable_source_subset() -> None:
     replay = z3.SolverFor(result.source.logic.value)
     replay.add(*(assertions[index] for index in result.core_indices))
     assert replay.check() == z3.unsat
+
+
+def test_repeated_calls_have_a_stable_exact_outcome() -> None:
+    results = tuple(compute_smt_unsat_core(_request()) for _ in range(16))
+
+    assert tuple(result.outcome for result in results) == ("UNSAT",) * 16
+    assert tuple(result.core_indices for result in results) == ((0, 1),) * 16
 
 
 def test_unsat_core_result_rejects_a_core_detached_from_its_source() -> None:
@@ -91,6 +98,19 @@ def test_resource_exhaustion_is_unknown_not_unsat() -> None:
     assert result.outcome == "UNKNOWN"
     assert result.core_indices == ()
     assert result.detail
+
+
+def test_core_extraction_failure_is_a_typed_unknown(monkeypatch) -> None:
+    def fail_core_extraction(_solver: z3.Solver) -> None:
+        raise z3.Z3Exception("core extraction failed")
+
+    monkeypatch.setattr(z3.Solver, "unsat_core", fail_core_extraction)
+
+    result = compute_smt_unsat_core(_request())
+
+    assert result.outcome == "UNKNOWN"
+    assert result.core_indices == ()
+    assert result.detail == "Z3 could not complete the bounded source check."
 
 
 def test_replay_resource_exhaustion_is_a_typed_unknown(monkeypatch) -> None:
@@ -151,6 +171,128 @@ def test_unsat_core_supports_each_admitted_smt_fragment(
     assert result.core_indices == (0, 1)
 
 
+def test_qf_uf_accepts_boolean_uninterpreted_functions() -> None:
+    source = """\
+(set-logic QF_UF)
+(declare-fun f (Bool) Bool)
+(declare-const p Bool)
+(assert (f p))
+(assert (not (f p)))
+(check-sat)
+"""
+
+    result = compute_smt_unsat_core(SmtUnsatCoreRequest(logic="QF_UF", smtlib=source))
+
+    assert result.outcome == "UNSAT"
+    assert result.core_indices == (0, 1)
+
+
+@pytest.mark.parametrize(
+    ("logic", "source"),
+    (
+        (
+            "QF_LIA",
+            "(set-logic QF_LIA)\n"
+            "(declare-const x Int)\n"
+            "(assert (>= (* (- 2) x) 2))\n"
+            "(assert (>= x 0))\n"
+            "(check-sat)\n",
+        ),
+        (
+            "QF_LRA",
+            "(set-logic QF_LRA)\n"
+            "(declare-const x Real)\n"
+            "(assert (= (* (/ 1 3) x) 2.0))\n"
+            "(assert (= x 0.0))\n"
+            "(check-sat)\n",
+        ),
+        (
+            "QF_LIA",
+            "(set-logic QF_LIA)\n"
+            "(declare-const x Int)\n"
+            "(assert (= (* 2 3 x) 6))\n"
+            "(assert (= x 0))\n"
+            "(check-sat)\n",
+        ),
+        (
+            "QF_LRA",
+            "(set-logic QF_LRA)\n"
+            "(declare-const x Real)\n"
+            "(assert (= (* (/ 1 2) (/ 2 3) x) 1.0))\n"
+            "(assert (= x 0.0))\n"
+            "(check-sat)\n",
+        ),
+    ),
+)
+def test_linear_closed_coefficients_are_admitted(logic: str, source: str) -> None:
+    result = compute_smt_unsat_core(SmtUnsatCoreRequest(logic=logic, smtlib=source))
+
+    assert result.outcome == "UNSAT"
+    assert result.core_indices == (0, 1)
+
+
+@pytest.mark.parametrize(
+    ("logic", "declarations", "assertion"),
+    (
+        ("QF_LIA", "(declare-const x Int)", "(assert (= (* x x) 2))"),
+        ("QF_LIA", "(declare-const x Int)", "(assert (= (* 0 x x) 0))"),
+        ("QF_LIA", "(declare-const x Real)", "(assert (> x 0.0))"),
+        (
+            "QF_LIA",
+            "",
+            "(assert (forall ((x Int)) (= x x)))",
+        ),
+        (
+            "QF_LRA",
+            "(declare-const x (_ BitVec 8))",
+            "(assert (= x (_ bv0 8)))",
+        ),
+        ("QF_UF", "(declare-const x Int)", "(assert (= x x))"),
+    ),
+)
+def test_request_rejects_terms_outside_the_declared_fragment(
+    logic: str,
+    declarations: str,
+    assertion: str,
+) -> None:
+    source = "\n".join((f"(set-logic {logic})", declarations, assertion, "(check-sat)"))
+
+    with pytest.raises(ValidationError, match=f"declared {logic} fragment"):
+        SmtUnsatCoreRequest(logic=logic, smtlib=source)
+
+
+def test_retained_validation_error_does_not_retain_a_z3_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context_refs: list[ReferenceType[z3.Context]] = []
+    parse_assertions = unsat_core._parse_assertions
+
+    def track_context(
+        smtlib: str,
+        *,
+        context: z3.Context | None = None,
+    ) -> tuple[object, ...]:
+        owned_context = z3.Context() if context is None else context
+        context_refs.append(ref(owned_context))
+        return parse_assertions(smtlib, context=owned_context)
+
+    monkeypatch.setattr(unsat_core, "_parse_assertions", track_context)
+    with pytest.raises(ValidationError) as retained_error:
+        SmtUnsatCoreRequest(
+            logic="QF_LIA",
+            smtlib=(
+                "(set-logic QF_LIA)\n"
+                "(declare-const x Int)\n"
+                "(assert (= (* x x) 2))\n"
+                "(check-sat)\n"
+            ),
+        )
+
+    assert retained_error.value
+    assert context_refs
+    assert all(context_ref() is None for context_ref in context_refs)
+
+
 def test_comments_cannot_impersonate_indexed_assertions_or_execute_text(
     tmp_path: Path,
 ) -> None:
@@ -206,6 +348,31 @@ def test_request_bounds_the_number_of_indexed_assertions() -> None:
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=rejected)
 
 
+def test_request_bounds_source_tokens() -> None:
+    def source(term_count: int) -> str:
+        terms = " ".join("x" for _ in range(term_count))
+        return (
+            "(set-logic QF_LIA)\n"
+            "(declare-const x Bool)\n"
+            f"(assert (and {terms}))\n"
+            "(check-sat)\n"
+        )
+
+    assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source(32_750))
+    with pytest.raises(ValidationError, match="at most 32768 tokens"):
+        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source(32_751))
+
+
+def test_request_bounds_source_nesting() -> None:
+    def source(negation_count: int) -> str:
+        term = "(not " * negation_count + "true" + ")" * negation_count
+        return f"(set-logic QF_LIA)\n(assert {term})\n(check-sat)\n"
+
+    assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source(255))
+    with pytest.raises(ValidationError, match="nesting may not exceed 256"):
+        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source(256))
+
+
 def test_request_bounds_numeric_coefficient_digits() -> None:
     accepted_number = "1" * 256
     accepted = (
@@ -218,6 +385,22 @@ def test_request_bounds_numeric_coefficient_digits() -> None:
     assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=accepted)
     with pytest.raises(ValidationError, match="numeral may contain at most 256 digits"):
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=rejected)
+
+
+def test_request_bounds_negative_numeric_atom_digits() -> None:
+    rejected_number = "-" + "1" * 257
+    source = f"(set-logic QF_LIA)\n(assert (= {rejected_number} 0))\n(check-sat)\n"
+
+    with pytest.raises(ValidationError, match="numeral may contain at most 256 digits"):
+        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source)
+
+
+def test_request_bounds_normalized_closed_coefficient_digits() -> None:
+    factor = "9" * 256
+    source = f"(set-logic QF_LIA)\n(assert (= (* {factor} {factor}) 0))\n(check-sat)\n"
+
+    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source)
 
 
 def test_request_bounds_parsed_ast_nodes() -> None:
@@ -252,4 +435,6 @@ def test_request_schema_explains_validator_owned_indexing() -> None:
     schema = SmtUnsatCoreRequest.model_json_schema()
 
     assert "zero-based index" in schema["description"]
+    assert "does not claim a hard request-local byte limit" in schema["description"]
+    assert "Boolean-sorted" in schema["properties"]["logic"]["description"]
     assert schema["examples"]

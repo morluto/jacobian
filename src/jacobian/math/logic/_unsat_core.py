@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from fractions import Fraction
 from typing import Any, Literal, Self
 
 from pydantic import ConfigDict, Field, StrictInt, ValidationError, model_validator
@@ -11,6 +12,7 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
 from jacobian.math.logic._operations import (
+    SmtLogic,
     SmtSolveRequest,
     _tokenize_smtlib,
     _top_level_smtlib_commands,
@@ -22,21 +24,28 @@ _MAX_CORE_NESTING_DEPTH = 256
 _MAX_CORE_NUMERAL_DIGITS = 256
 _MAX_CORE_AST_NODES = 4_096
 _MAX_CORE_RLIMIT = 10_000_000
-_MAX_CORE_MEMORY_MB = 512
-_NUMERAL = re.compile(r"(?:[0-9]+(?:\.[0-9]+)?|#x[0-9a-fA-F]+|#b[01]+)")
+_NUMERAL = re.compile(r"(?:-?[0-9]+(?:\.[0-9]+)?|#x[0-9a-fA-F]+|#b[01]+)")
 
 
 class SmtUnsatCoreRequest(SmtSolveRequest):
     """One bounded SMT-LIB query whose top-level assertions are indexed from zero.
 
     The source uses the SMT-LIB 2 command and term grammar admitted by ``smt.solve``.
+    Terms must stay inside the selected quantifier-free fragment: QF_UF admits
+    Boolean-sorted constants and uninterpreted functions, while QF_LIA and QF_LRA
+    admit pure linear integer and real arithmetic respectively, together with
+    Boolean structure.
     Its inherited 128,000-byte ASCII envelope is further limited to 32,768 tokens,
     nesting depth 256, 512 top-level ``assert`` commands, 4,096 distinct parsed AST
-    nodes, and 256 digits per numeral. Assertion source order is the public
-    zero-based index. Parsing constructs Z3 syntax trees only; it does not evaluate
-    the source as Python or as a host command. Execution performs one tracked check
-    and at most one direct result-validation replay, each under the supplied timeout,
-    rlimit, and memory bound.
+    nodes, 256 digits per numeral, and 256 digits in the numerator or denominator
+    of a normalized closed arithmetic coefficient. Assertion source order is the
+    public zero-based index. Parsing constructs Z3 syntax trees only; it does not
+    evaluate the source as Python or as a host command. Execution performs one
+    tracked check and at most one direct result-validation replay, each under the
+    supplied deterministic rlimit and timeout safety net.
+    Z3 5.0 exposes only a process-global memory threshold, so this in-process
+    operation does not claim a hard request-local byte limit; fixed source, AST,
+    coefficient, and resource-unit bounds control its admitted memory envelope.
     """
 
     model_config = ConfigDict(
@@ -53,23 +62,23 @@ class SmtUnsatCoreRequest(SmtSolveRequest):
                     ),
                     "timeout_ms": 1_000,
                     "rlimit": 100_000,
-                    "max_memory_mb": 128,
                 }
             ]
         }
     )
 
+    logic: SmtLogic = Field(
+        description=(
+            "Declared quantifier-free fragment. QF_UF is Boolean-sorted "
+            "uninterpreted functions; QF_LIA and QF_LRA are pure linear integer "
+            "and real arithmetic respectively, with Boolean structure."
+        )
+    )
     rlimit: StrictInt = Field(
         default=100_000,
         ge=1,
         le=_MAX_CORE_RLIMIT,
         description="Z3 deterministic resource-unit limit for each solver check.",
-    )
-    max_memory_mb: StrictInt = Field(
-        default=128,
-        ge=16,
-        le=_MAX_CORE_MEMORY_MB,
-        description="Z3 memory limit in megabytes for each solver check.",
     )
 
     @property
@@ -92,16 +101,13 @@ class SmtUnsatCoreRequest(SmtSolveRequest):
             raise ValueError(
                 f"SMT core source may contain at most {_MAX_CORE_ASSERTIONS} source assertions"
             )
-        assertions = _parse_assertions(self.smtlib)
-        if len(assertions) != self.assertion_count:
-            raise ValueError(
-                "SMT-LIB parser output must preserve one term per source assertion"
-            )
-        node_count, _boolean_constants = _ast_facts(assertions)
-        if node_count > _MAX_CORE_AST_NODES:
-            raise ValueError(
-                f"SMT core source may contain at most {_MAX_CORE_AST_NODES} distinct AST nodes"
-            )
+        parsed_error = _parsed_request_error(
+            self.smtlib,
+            assertion_count=self.assertion_count,
+            logic=self.logic,
+        )
+        if parsed_error is not None:
+            raise ValueError(parsed_error)
         return self
 
 
@@ -115,7 +121,8 @@ class SmtUnsatCoreResult(StrictModel):
         max_length=_MAX_CORE_ASSERTIONS,
         description=(
             "Strictly increasing zero-based source-assertion indices. Present only "
-            "for UNSAT, when the selected assertions independently replay as UNSAT."
+            "for UNSAT, when the selected assertions independently replay as UNSAT; "
+            "the core is not promised to be minimum or inclusion-minimal."
         ),
     )
     detail: str | None = Field(default=None, max_length=1_024)
@@ -194,18 +201,39 @@ def _validate_numerals(tokens: tuple[str, ...]) -> None:
 def _parse_assertions(smtlib: str, *, context: Any | None = None) -> tuple[Any, ...]:
     import z3  # type: ignore[import-untyped]
 
-    ctx = context if context is not None else z3.Context()
     try:
+        ctx = context if context is not None else z3.Context()
         return tuple(z3.parse_smt2_string(smtlib, ctx=ctx))
     except z3.Z3Exception as exc:
         raise ValueError("SMT core source could not be parsed as SMT-LIB") from exc
 
 
-def _ast_facts(assertions: tuple[Any, ...]) -> tuple[int, frozenset[int]]:
-    import z3
+def _parsed_request_error(
+    smtlib: str,
+    *,
+    assertion_count: int,
+    logic: SmtLogic,
+) -> str | None:
+    """Inspect parsed terms without attaching Z3 objects to validation errors."""
 
+    try:
+        assertions = _parse_assertions(smtlib)
+        if len(assertions) != assertion_count:
+            return "SMT-LIB parser output must preserve one term per source assertion"
+        node_count = _ast_node_count(assertions)
+        if node_count > _MAX_CORE_AST_NODES:
+            return (
+                "SMT core source may contain at most "
+                f"{_MAX_CORE_AST_NODES} distinct AST nodes"
+            )
+        _require_declared_logic(assertions, logic)
+    except ValueError as exc:
+        return str(exc)
+    return None
+
+
+def _ast_node_count(assertions: tuple[Any, ...]) -> int:
     seen: set[int] = set()
-    boolean_constants: set[int] = set()
     stack = list(assertions)
     while stack:
         expression = stack.pop()
@@ -213,27 +241,241 @@ def _ast_facts(assertions: tuple[Any, ...]) -> tuple[int, frozenset[int]]:
         if expression_id in seen:
             continue
         seen.add(expression_id)
-        if z3.is_const(expression) and z3.is_bool(expression):
-            boolean_constants.add(expression_id)
         if len(seen) > _MAX_CORE_AST_NODES:
-            return len(seen), frozenset(boolean_constants)
+            return len(seen)
         stack.extend(expression.children())
-    return len(seen), frozenset(boolean_constants)
+    return len(seen)
 
 
-def _tracking_literals(assertions: tuple[Any, ...], *, context: Any) -> tuple[Any, ...]:
+def _require_declared_logic(
+    assertions: tuple[Any, ...],
+    logic: SmtLogic,
+) -> None:
+    """Reject parsed terms outside the request's advertised QF fragment."""
+
+    if not assertions:
+        return
+
     import z3
 
-    _node_count, used_boolean_constants = _ast_facts(assertions)
-    trackers: list[Any] = []
-    for index in range(len(assertions)):
-        name = f"jacobian_unsat_core_{index}"
-        tracker = z3.Bool(name, ctx=context)
-        while tracker.get_id() in used_boolean_constants:
-            name += "_"
-            tracker = z3.Bool(name, ctx=context)
-        trackers.append(tracker)
-    return tuple(trackers)
+    try:
+        if logic is SmtLogic.QF_UF:
+            if not _is_boolean_uninterpreted_fragment(assertions):
+                raise ValueError(
+                    "SMT core terms must belong to the declared QF_UF fragment"
+                )
+            return
+
+        classified_assertions = _normalize_closed_coefficients(assertions)
+        goal = z3.Goal(ctx=assertions[0].ctx)
+        goal.add(*classified_assertions)
+        probe_name = "is-lia" if logic is SmtLogic.QF_LIA else "is-lra"
+        has_quantifiers = float(
+            z3.Probe("has-quantifiers", ctx=assertions[0].ctx)(goal)
+        )
+        belongs_to_fragment = float(z3.Probe(probe_name, ctx=assertions[0].ctx)(goal))
+        if has_quantifiers != 0.0 or belongs_to_fragment != 1.0:
+            raise ValueError(
+                f"SMT core terms must belong to the declared {logic.value} fragment"
+            )
+    except z3.Z3Exception as exc:
+        raise ValueError(
+            f"SMT core terms could not be classified as {logic.value}"
+        ) from exc
+
+
+def _normalize_closed_coefficients(assertions: tuple[Any, ...]) -> tuple[Any, ...]:
+    """Normalize only bounded exact arithmetic subterms with no variables."""
+
+    normalized_by_id: dict[int, Any] = {}
+    closed_value_by_id: dict[int, Fraction | None] = {}
+    return tuple(
+        _normalize_closed_expression(
+            assertion,
+            normalized_by_id=normalized_by_id,
+            closed_value_by_id=closed_value_by_id,
+        )
+        for assertion in assertions
+    )
+
+
+def _normalize_closed_expression(
+    expression: Any,
+    *,
+    normalized_by_id: dict[int, Any],
+    closed_value_by_id: dict[int, Fraction | None],
+) -> Any:
+    """Normalize one expression without retaining a recursive closure over its AST."""
+
+    import z3
+
+    expression_id = expression.get_id()
+    if expression_id in normalized_by_id:
+        return normalized_by_id[expression_id]
+    if z3.is_int_value(expression):
+        normalized_by_id[expression_id] = expression
+        closed_value_by_id[expression_id] = Fraction(expression.as_long())
+        return expression
+    if z3.is_rational_value(expression):
+        normalized_by_id[expression_id] = expression
+        closed_value_by_id[expression_id] = expression.as_fraction()
+        return expression
+    if not z3.is_app(expression):
+        normalized_by_id[expression_id] = expression
+        closed_value_by_id[expression_id] = None
+        return expression
+
+    children = expression.children()
+    normalized_children = tuple(
+        _normalize_closed_expression(
+            child,
+            normalized_by_id=normalized_by_id,
+            closed_value_by_id=closed_value_by_id,
+        )
+        for child in children
+    )
+    if any(
+        not original.eq(normalized)
+        for original, normalized in zip(children, normalized_children, strict=True)
+    ):
+        candidate = expression.decl()(*normalized_children)
+    else:
+        candidate = expression
+
+    child_values = tuple(closed_value_by_id[child.get_id()] for child in children)
+    if candidate.decl().kind() == z3.Z3_OP_MUL:
+        dependent_children = tuple(
+            normalized_child
+            for normalized_child, value in zip(
+                normalized_children, child_values, strict=True
+            )
+            if value is None
+        )
+        closed_factors = tuple(value for value in child_values if value is not None)
+        if len(dependent_children) == 1 and closed_factors:
+            coefficient = _bounded_fraction_product(closed_factors)
+            candidate = candidate.decl()(
+                _exact_arithmetic_value(coefficient, template=candidate),
+                dependent_children[0],
+            )
+
+    closed_value = _evaluate_closed_arithmetic(candidate.decl().kind(), child_values)
+    if closed_value is not None:
+        candidate = _exact_arithmetic_value(closed_value, template=candidate)
+
+    normalized_by_id[expression_id] = candidate
+    closed_value_by_id[expression_id] = closed_value
+    return candidate
+
+
+def _evaluate_closed_arithmetic(
+    kind: int,
+    values: tuple[Fraction | None, ...],
+) -> Fraction | None:
+    import z3
+
+    if not values or any(value is None for value in values):
+        return None
+    exact_values = tuple(value for value in values if value is not None)
+    if kind == z3.Z3_OP_ADD:
+        total = Fraction()
+        for value in exact_values:
+            total += value
+            _require_bounded_normalized_coefficient(total)
+        return total
+    if kind == z3.Z3_OP_SUB:
+        difference = exact_values[0]
+        for value in exact_values[1:]:
+            difference -= value
+            _require_bounded_normalized_coefficient(difference)
+        return difference
+    if kind == z3.Z3_OP_UMINUS:
+        return -exact_values[0]
+    if kind == z3.Z3_OP_MUL:
+        return _bounded_fraction_product(exact_values)
+    if kind == z3.Z3_OP_DIV and len(exact_values) == 2 and exact_values[1]:
+        return exact_values[0] / exact_values[1]
+    return None
+
+
+def _bounded_fraction_product(values: tuple[Fraction, ...]) -> Fraction:
+    product = Fraction(1)
+    for value in values:
+        product *= value
+        _require_bounded_normalized_coefficient(product)
+    return product
+
+
+def _exact_arithmetic_value(value: Fraction, *, template: Any) -> Any:
+    import z3
+
+    _require_bounded_normalized_coefficient(value)
+    if template.sort().kind() == z3.Z3_INT_SORT:
+        if value.denominator != 1:
+            raise ValueError("normalized integer coefficient must remain integral")
+        return z3.IntVal(value.numerator, ctx=template.ctx)
+    if template.sort().kind() == z3.Z3_REAL_SORT:
+        return z3.RealVal(
+            f"{value.numerator}/{value.denominator}",
+            ctx=template.ctx,
+        )
+    raise ValueError("normalized coefficient must have an arithmetic sort")
+
+
+def _require_bounded_normalized_coefficient(value: Fraction) -> None:
+    if any(
+        len(str(abs(component))) > _MAX_CORE_NUMERAL_DIGITS
+        for component in (value.numerator, value.denominator)
+    ):
+        raise ValueError(
+            "normalized SMT coefficient numerator and denominator may contain at "
+            f"most {_MAX_CORE_NUMERAL_DIGITS} digits"
+        )
+
+
+def _is_boolean_uninterpreted_fragment(assertions: tuple[Any, ...]) -> bool:
+    import z3
+
+    allowed_kinds = frozenset(
+        {
+            z3.Z3_OP_TRUE,
+            z3.Z3_OP_FALSE,
+            z3.Z3_OP_EQ,
+            z3.Z3_OP_DISTINCT,
+            z3.Z3_OP_ITE,
+            z3.Z3_OP_AND,
+            z3.Z3_OP_OR,
+            z3.Z3_OP_XOR,
+            z3.Z3_OP_NOT,
+            z3.Z3_OP_IMPLIES,
+            z3.Z3_OP_UNINTERPRETED,
+        }
+    )
+    seen: set[int] = set()
+    stack = list(assertions)
+    while stack:
+        expression = stack.pop()
+        expression_id = expression.get_id()
+        if expression_id in seen:
+            continue
+        seen.add(expression_id)
+        if (
+            not z3.is_app(expression)
+            or not z3.is_bool(expression)
+            or expression.decl().kind() not in allowed_kinds
+        ):
+            return False
+        stack.extend(expression.children())
+    return True
+
+
+def _tracking_literals(assertion_count: int, *, context: Any) -> tuple[Any, ...]:
+    import z3
+
+    return tuple(
+        z3.FreshBool(f"jacobian_unsat_core_{index}", ctx=context)
+        for index in range(assertion_count)
+    )
 
 
 def _configured_solver(source: SmtUnsatCoreRequest, *, context: Any) -> Any:
@@ -243,7 +485,6 @@ def _configured_solver(source: SmtUnsatCoreRequest, *, context: Any) -> Any:
     solver.set(
         timeout=source.timeout_ms,
         rlimit=source.rlimit,
-        max_memory=source.max_memory_mb,
         random_seed=0,
         unsat_core=True,
     )
@@ -269,28 +510,29 @@ def _extract_source_core(
 ) -> tuple[Literal["SAT", "UNSAT", "UNKNOWN"], tuple[int, ...], str | None]:
     import z3
 
-    context = z3.Context()
     try:
+        context = z3.Context()
         assertions = _parse_assertions(source.smtlib, context=context)
         solver = _configured_solver(source, context=context)
-        trackers = _tracking_literals(assertions, context=context)
+        trackers = _tracking_literals(len(assertions), context=context)
         for assertion, tracker in zip(assertions, trackers, strict=True):
             solver.assert_and_track(assertion, tracker)
         outcome, detail = _bounded_outcome(solver)
+        if outcome != "UNSAT":
+            return outcome, (), detail
+
+        core_ids = {literal.get_id() for literal in solver.unsat_core()}
+        tracker_ids = {tracker.get_id() for tracker in trackers}
+        if not core_ids or not core_ids <= tracker_ids:
+            return "UNKNOWN", (), "Z3 returned an unusable UNSAT core."
+        core_indices = tuple(
+            index
+            for index, tracker in enumerate(trackers)
+            if tracker.get_id() in core_ids
+        )
+        return "UNSAT", core_indices, None
     except (ValueError, z3.Z3Exception):
         return "UNKNOWN", (), "Z3 could not complete the bounded source check."
-
-    if outcome != "UNSAT":
-        return outcome, (), detail
-
-    core_ids = {literal.get_id() for literal in solver.unsat_core()}
-    tracker_ids = {tracker.get_id() for tracker in trackers}
-    if not core_ids or not core_ids <= tracker_ids:
-        return "UNKNOWN", (), "Z3 returned an unusable UNSAT core."
-    core_indices = tuple(
-        index for index, tracker in enumerate(trackers) if tracker.get_id() in core_ids
-    )
-    return "UNSAT", core_indices, None
 
 
 def _replay_source(
@@ -299,8 +541,8 @@ def _replay_source(
 ) -> tuple[Literal["SAT", "UNSAT", "UNKNOWN"], str | None]:
     import z3
 
-    context = z3.Context()
     try:
+        context = z3.Context()
         assertions = _parse_assertions(source.smtlib, context=context)
         selected = (
             tuple(range(len(assertions)))
@@ -338,8 +580,9 @@ SMT_UNSAT_CORE_OPERATION = MathTool(
     version="1",
     title="Extract a bounded indexed SMT UNSAT core",
     description=(
-        "Return SAT, UNKNOWN, or source-order indices of assertions whose exact "
-        "subsystem replays as UNSAT through the maintained Z3 Python binding."
+        "Return SAT, UNKNOWN, or a deterministic backend-selected set of source-order "
+        "assertion indices whose exact subsystem replays as UNSAT through the "
+        "maintained Z3 Python binding. The core need not be minimal."
     ),
     request_type=SmtUnsatCoreRequest,
     result_type=SmtUnsatCoreResult,

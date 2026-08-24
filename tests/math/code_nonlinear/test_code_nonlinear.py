@@ -144,3 +144,31 @@ class TestConstantWeight:
         assert "C(length, weight)" in schema["properties"]["weight"]["description"]
         assert schema["properties"]["length"]["maximum"] == 64
         assert schema["properties"]["weight"]["minimum"] == 0
+
+
+def test_constant_weight_contract_version_tracks_the_request_schema_change() -> None:
+    """The narrowed binomial envelope must not present as the unchanged v1 contract."""
+    from jacobian.math.code_nonlinear._tools import TOOLS
+
+    operation = next(
+        item
+        for item in TOOLS
+        if item.operation_id == "code.nonlinear.constant_weight.compute"
+    )
+    assert operation.version == "2"
+
+
+def test_constant_weight_admission_records_the_narrowed_binomial_envelope() -> None:
+    """The materially changed candidate has a fresh owner-local admission decision."""
+    from jacobian.catalog.admission import AdmissionDecision
+    from jacobian.math.code_nonlinear._admission import ADMISSIONS
+
+    admission = next(
+        item
+        for item in ADMISSIONS
+        if item.operation_id == "code.nonlinear.constant_weight.compute"
+    )
+
+    assert admission.decision == AdmissionDecision.KEEP
+    assert "C(length, weight) <= 4096" in admission.rationale
+    assert "4,096 words" in admission.rationale

@@ -35,7 +35,7 @@ class RSKTableauPair(StrictModel):
     Insertion-tableau entries are one-based ranks in ``alphabet``.  The
     alphabet therefore remains attached to the pair and makes inverse RSK an
     exact operation even when symbols are not integers.  The common shape has
-    at most 100 cells, the canonical tableau bound.
+    at most 500 cells, the canonical tableau bound.
     """
 
     alphabet: tuple[Symbol, ...] = Field(

@@ -189,7 +189,7 @@ def test_contract_rejects_non_positive() -> None:
 def test_contract_rejects_partition_exceeding_size_bound() -> None:
     """A single-part partition summing above MAX_PARTITION_SIZE is rejected."""
     with pytest.raises(ValidationError, match="partition size exceeds"):
-        IntegerPartition(parts=(101,))
+        IntegerPartition(parts=(501,))
 
 
 def test_contract_rejects_non_integer_parts() -> None:

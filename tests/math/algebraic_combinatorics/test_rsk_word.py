@@ -245,14 +245,13 @@ def _wide_unicode_symbols(count: int) -> tuple[str, ...]:
 
 
 def test_word_length_and_utf8_payload_bounds_are_closed() -> None:
-    length_boundary = FiniteWord(alphabet=("a",), letters=("a",) * 100)
-    assert sum(_pair(length_boundary).shape.parts) == 100
+    length_boundary = FiniteWord(alphabet=("a",), letters=("a",) * 500)
+    assert sum(_pair(length_boundary).shape.parts) == 500
 
-    too_long = FiniteWord(alphabet=("a",), letters=("a",) * 101)
-    with pytest.raises(ValidationError, match="length must not exceed 100"):
-        RSKWordRequest(word=too_long)
-    with pytest.raises(ValueError, match="length must not exceed 100"):
-        row_insertion_rsk(too_long)
+    # The shared word-container bound closes the request before the RSK
+    # work-budget validator can see an over-long word.
+    with pytest.raises(ValidationError, match="at most 500 items"):
+        FiniteWord(alphabet=("a",), letters=("a",) * 501)
 
     ordered_symbols = tuple(f"s{index:02d}" for index in range(50))
     deepest_shape = _pair(
@@ -391,17 +390,17 @@ def test_rsk_request_schema_publishes_convention_and_work_envelope() -> None:
     description = schema["properties"]["word"]["description"]
     assert "unique strings" in description
     assert "every positioned letter" in description
-    assert "at most 100 letters" in description
-    assert "38400 UTF-8 bytes" in description
+    assert "at most 500 letters" in description
+    assert "140800 UTF-8 bytes" in description
     assert "2N" in schema["description"]
-    assert "4950" in schema["description"]
+    assert "124750" in schema["description"]
     assert "seven integer" in schema["description"]
     assert "comparisons per search" in schema["description"]
 
     inverse_schema = RSKInverseWordRequest.model_json_schema()
     pair_schema = inverse_schema["$defs"]["RSKTableauPair"]
-    assert "at most 100 cells" in pair_schema["description"]
-    assert "at most 100 cells" in pair_schema["properties"]["shape"]["description"]
+    assert "at most 500 cells" in pair_schema["description"]
+    assert "at most 500 cells" in pair_schema["properties"]["shape"]["description"]
 
 
 def test_public_operations_are_admitted_and_examples_execute() -> None:

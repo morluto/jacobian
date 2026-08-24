@@ -272,3 +272,33 @@ def test_serialized_results_round_trip_through_the_wire_shape() -> None:
         restored = RationalLinearSolveResult.model_validate(result.model_dump())
         assert restored == result
         assert restored.convention == "LINEAR_SYSTEM_CLASSIFICATION_OVER_QQ"
+
+
+def test_result_reapplies_source_admission_before_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A relayed source outside the work envelope is rejected before replay."""
+
+    import jacobian.math.matrices._operations as operations
+
+    def fail_if_called(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("rank replay ran on an unadmitted source system")
+
+    monkeypatch.setattr(operations, "_system_rank_replay", fail_if_called)
+    unadmitted = {
+        "matrix": {
+            "entries": [
+                [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
+                [{"num": "0", "den": "1"}, {"num": "9" * 257, "den": "1"}],
+            ]
+        },
+        "rhs": _rhs("1", "1"),
+        "outcome": "INCONSISTENT",
+    }
+    with pytest.raises(ValidationError, match="limited to 256"):
+        RationalLinearSolveResult.model_validate(unadmitted)
+
+    non_square = dict(unadmitted)
+    non_square["matrix"] = {"entries": [[{"num": "1", "den": "1"}]]}
+    with pytest.raises(ValidationError, match="square matrix"):
+        RationalLinearSolveResult.model_validate(non_square)

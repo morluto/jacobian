@@ -32,6 +32,27 @@ def _check_integer_digits(
         raise ValueError(f"matrix scalars are limited to {maximum} decimal digits")
 
 
+def _require_square_system_admission(
+    matrix: RationalMatrix, rhs: tuple[CanonicalRational, ...]
+) -> None:
+    """Apply the linear-solve shape and scalar envelope to one system.
+
+    Shared by the wire request and by result validation, so a retained
+    source can never reach replay arithmetic outside this operation's
+    admitted work envelope.
+    """
+
+    rows = len(matrix.entries)
+    if len(matrix.entries[0]) != rows or len(rhs) != rows:
+        raise ValueError("linear solve requires a square matrix and matching rhs")
+    require_matrix_scalar_digits(
+        matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
+    )
+    for value in rhs:
+        _check_integer_digits(value.num)
+        _check_integer_digits(value.den)
+
+
 class RationalMatrixRequest(StrictModel):
     matrix: RationalMatrix
 
@@ -185,15 +206,7 @@ class RationalLinearSolveRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_square_system(self) -> Self:
-        rows = len(self.matrix.entries)
-        if len(self.matrix.entries[0]) != rows or len(self.rhs) != rows:
-            raise ValueError("linear solve requires a square matrix and matching rhs")
-        require_matrix_scalar_digits(
-            self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
-        )
-        for value in self.rhs:
-            _check_integer_digits(value.num)
-            _check_integer_digits(value.den)
+        _require_square_system_admission(self.matrix, self.rhs)
         return self
 
 
@@ -394,6 +407,9 @@ class RationalLinearSolveResult(StrictModel):
     the retained coefficient matrix to be nonsingular; an inconsistent
     outcome requires ``rank(A) < rank([A | b])`` on the retained system; a
     non-unique outcome requires a consistent, rank-deficient retained system.
+    Validation first reapplies the request's squareness and scalar envelope
+    to the retained source, so deserializing a relayed payload can never push
+    replay arithmetic outside this operation's admitted work envelope.
     The rational matrix domain admits at least one row and column, so
     zero-row shapes are rejected by request admission rather than silently
     dropped.
@@ -424,6 +440,10 @@ class RationalLinearSolveResult(StrictModel):
             raise ValueError(
                 "a non-unique or inconsistent result must not populate the solution field"
             )
+        # Deserialized source components pass the canonical rational domain
+        # but not this operation's work envelope, so reapply request
+        # admission before any exact replay arithmetic runs.
+        _require_square_system_admission(self.matrix, self.rhs)
         if len(self.rhs) != len(self.matrix.entries):
             raise ValueError("right-hand side length must equal the source row count")
 

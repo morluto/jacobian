@@ -237,23 +237,47 @@ def test_symbolic_matrix_product_rejects_field_and_shape_mismatches() -> None:
         _product_request(((_constant(1), _constant(1)),), ((_constant(1),),), ())
 
 
-def test_symbolic_matrix_product_rejects_unreduced_result_growth_before_kernel(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import jacobian.math.matrices.symbolic as symbolic
+def test_symbolic_matrix_product_admits_expansion_that_collects_into_budget() -> None:
+    """Raw scalar products obey the aggregate work budget, not the result cap."""
 
     variables = ("x",)
     many_terms = _rf(
         variables,
         *((1, 1, (exponent,)) for exponent in range(16, -1, -1)),
     )
+    request = _product_request(((many_terms,),), ((many_terms,),), variables)
+    product = compute_symbolic_matrix_product(request)
+    collected = tuple(
+        (min(exponent + 1, 33 - exponent), 1, (exponent,))
+        for exponent in range(32, -1, -1)
+    )
+    assert product.entries == ((_rf(variables, *collected),),)
+
+
+def test_symbolic_matrix_product_rejects_collected_support_over_result_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The per-entry result limit binds collected support, not raw products."""
+
+    import jacobian.math.matrices.symbolic as symbolic
+
+    variables = ("x", "y")
+    row = _rf(variables, *((1, 1, (index, 0)) for index in range(15, -1, -1)))
+    column = _rf(
+        variables,
+        *((1, 1, (1, index)) for index in range(15, -1, -1)),
+        *((1, 1, (0, index)) for index in range(15, -1, -1)),
+    )
 
     def fail_if_called(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("symbolic multiplication kernel ran during admission")
 
     monkeypatch.setattr(symbolic, "symbolic_matrix_multiply", fail_if_called)
+    # The cell's 16 * 32 = 512 raw products fit the aggregate expansion
+    # budget but collect onto 272 distinct monomials, which exceeds the
+    # per-entry 256-term exact result budget.
     with pytest.raises(ValidationError, match="256-term"):
-        _product_request(((many_terms,),), ((many_terms,),), variables)
+        _product_request(((row,),), ((column,),), variables)
 
 
 def test_symbolic_matrix_product_rejects_cancellation_coefficient_amplification(
@@ -373,6 +397,69 @@ def test_symbolic_matrix_product_admits_boundary_aggregate_canonical_support() -
         variables=variables,
         entries=(tuple(dense for _ in range(8)),),
     )
+
+
+def test_symbolic_matrix_product_charges_retained_denominator_in_scalar_copy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A copied multi-term denominator keeps every term in the result."""
+
+    import jacobian.math.matrices.symbolic as symbolic
+
+    variables = ("x",)
+    dense_denominator = tuple((1, 1, (exponent,)) for exponent in range(63, -1, -1))
+    dense_inverse = _rf(
+        variables,
+        (1, 1, (0,)),
+        denominator=dense_denominator,
+    )
+    two = _rf(variables, (2, 1, (0,)))
+
+    def fail_if_called(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("symbolic multiplication kernel ran during admission")
+
+    monkeypatch.setattr(symbolic, "symbolic_matrix_multiply", fail_if_called)
+    # Every scaled copy retains one numerator term plus all 64 denominator
+    # terms, so eight cells carry 520 canonical result terms.
+    with pytest.raises(ValidationError, match="aggregate result"):
+        _product_request(((dense_inverse,),), ((two,) * 8,), variables)
+
+
+def test_symbolic_matrix_product_keeps_dense_denominator_under_scalar_copy() -> None:
+    """Scalar scaling retains the operand's full denominator verbatim."""
+
+    variables = ("x",)
+    dense_denominator = tuple((1, 1, (exponent,)) for exponent in range(63, -1, -1))
+    dense_inverse = _rf(
+        variables,
+        (1, 1, (0,)),
+        denominator=dense_denominator,
+    )
+    two = _rf(variables, (2, 1, (0,)))
+    product = compute_symbolic_matrix_product(
+        _product_request(((dense_inverse,),), ((two,),), variables)
+    )
+    assert product.entries == (
+        (
+            _rf(
+                variables,
+                (2, 1, (0,)),
+                denominator=dense_denominator,
+            ),
+        ),
+    )
+
+
+def test_symbolic_matrix_product_ignores_unit_denominator_coefficient_digits() -> None:
+    """Unit denominators add no height, matching their inert expansion work."""
+
+    variables: tuple[str, ...] = ()
+    large = _constant(10**120)
+    one = _constant(1)
+    left = ((large,) * 8,)
+    right = tuple((one,) for _ in range(8))
+    product = compute_symbolic_matrix_product(_product_request(left, right, variables))
+    assert product.entries == ((_constant(8 * 10**120),),)
 
 
 def test_symbolic_matrix_product_rejects_coefficient_growth_before_kernel() -> None:

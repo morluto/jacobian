@@ -211,6 +211,23 @@ def _has_integral_coefficients(value: RationalFunction) -> bool:
     )
 
 
+def _common_denominator_digits(
+    left_value: RationalFunction, right_value: RationalFunction
+) -> int:
+    """Coefficient digits one pair contributes to the product common denominator.
+
+    A canonical unit denominator contributes nothing: multiplying by one
+    leaves every coefficient unchanged, just as it performs no expansion
+    work.
+    """
+
+    if _is_polynomial_entry(left_value) and _is_polynomial_entry(right_value):
+        return 0
+    return _maximum_coefficient_digits(left_value, numerator=False) + (
+        _maximum_coefficient_digits(right_value, numerator=False)
+    )
+
+
 def _scalar_constant_digits(value: RationalFunction) -> int | None:
     """Coefficient height when the value is a nonzero rational constant.
 
@@ -289,9 +306,10 @@ def _product_cell_bounds(
     inside the admitted cancellation domain: unit denominators never cancel,
     and a monomial common denominator only cancels by monomial factors, so
     the raw bounds stay valid for the canonical value. The last element
-    bounds the cell's canonical result support: collected numerator exponents
-    plus exactly one canonical denominator term, since every admitted cell's
-    denominator is unit or monomial.
+    bounds the cell's canonical result support: collected numerator terms
+    plus the retained canonical denominator terms, which are exactly one for
+    expanded cells (unit or monomial) and the operand's own denominator for
+    the verbatim or scalar-scaled copy.
     """
 
     factors = tuple(
@@ -337,7 +355,7 @@ def _product_cell_bounds(
                 )
                 + scalar_digits,
                 True,
-                len(effective.numerator.terms) + 1,
+                len(effective.numerator.terms) + len(effective.denominator.terms),
             )
 
     integral_coefficients = all(
@@ -366,8 +384,7 @@ def _product_cell_bounds(
         for left_value, right_value in factors
     )
     denominator_coefficient_digits = tuple(
-        _maximum_coefficient_digits(left_value, numerator=False)
-        + _maximum_coefficient_digits(right_value, numerator=False)
+        _common_denominator_digits(left_value, right_value)
         for left_value, right_value in factors
     )
     denominator_terms = 1
@@ -420,15 +437,16 @@ def _product_cell_bounds(
             - denominator_coefficient_digits[index],
         )
 
-    # Only cells within the result term budget can survive admission, so
-    # enumerating their raw products stays bounded; larger cells keep the
-    # conservative support-size estimate and are rejected by the term checks.
+    # Only cells whose raw products fit the aggregate expansion budget can
+    # survive admission, so enumerating their raw products stays bounded;
+    # larger cells keep the conservative support-size estimate and are
+    # rejected by the term checks.
     numerator_collision_count = numerator_terms
     denominator_collision_count = denominator_terms
     result_term_count = numerator_terms + 1
     if (
-        numerator_terms <= MAX_SYMBOLIC_RESULT_TERMS
-        and denominator_terms <= MAX_SYMBOLIC_RESULT_TERMS
+        numerator_terms <= MAX_SYMBOLIC_MATRIX_TERMS
+        and denominator_terms <= MAX_SYMBOLIC_MATRIX_TERMS
     ):
         denominator_groups = tuple(
             _polynomial_pair_exponents(left_value.denominator, right_value.denominator)
@@ -507,10 +525,10 @@ def _require_symbolic_product_admission(
                 unit_denominator_factors,
                 result_term_count,
             ) = _product_cell_bounds(left_row, right_column)
-            if (
-                numerator_terms > MAX_SYMBOLIC_RESULT_TERMS
-                or denominator_terms > MAX_SYMBOLIC_RESULT_TERMS
-            ):
+            if result_term_count > MAX_SYMBOLIC_RESULT_TERMS:
+                # Raw scalar products are governed by the aggregate expansion
+                # budget below; this per-entry limit binds the already
+                # computed collected support of the canonical cell value.
                 raise ValueError(
                     "symbolic matrix product exceeds the 256-term exact result budget"
                 )

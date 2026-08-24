@@ -676,6 +676,8 @@ def _inertia_counts(matrix: RealQuadraticMatrix) -> tuple[int, int, int]:
 
 
 def _definiteness(positive: int, negative: int, zero: int) -> Definiteness:
+    if positive == 0 and negative == 0:
+        return "zero"
     if zero == 0:
         if negative == 0:
             return "positive_definite"

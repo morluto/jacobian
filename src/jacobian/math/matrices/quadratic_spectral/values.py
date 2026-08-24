@@ -16,6 +16,7 @@ Definiteness = Literal[
     "positive_semidefinite",
     "negative_definite",
     "negative_semidefinite",
+    "zero",
     "indefinite",
 ]
 

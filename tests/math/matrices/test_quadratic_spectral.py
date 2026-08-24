@@ -195,6 +195,45 @@ def test_inertia_handles_exact_two_by_two_pivots(
     assert (result.n_positive, result.n_negative, result.n_zero) == expected
 
 
+@pytest.mark.parametrize(
+    ("entries", "expected"),
+    [
+        (((_q(),),), (0, 0, 1, "zero")),
+        (((_q(), _q()), (_q(), _q())), (0, 0, 2, "zero")),
+        (
+            (
+                (_q(0, 0, 6), _q(0, 0, 6)),
+                (_q(0, 0, 6), _q(0, 0, 6)),
+            ),
+            (0, 0, 2, "zero"),
+        ),
+        (((_q(1), _q()), (_q(), _q())), (1, 0, 1, "positive_semidefinite")),
+        (((_q(-1), _q()), (_q(), _q())), (0, 1, 1, "negative_semidefinite")),
+        (((_q(0, 1, 6),),), (1, 0, 0, "positive_definite")),
+    ],
+)
+def test_zero_forms_get_the_explicit_zero_category(
+    entries: tuple[tuple[RealQuadraticValue, ...], ...],
+    expected: tuple[int, int, int, str],
+) -> None:
+    result = inertia(_matrix(entries))
+
+    assert (
+        result.n_positive,
+        result.n_negative,
+        result.n_zero,
+        result.definiteness,
+    ) == expected
+
+
+def test_serialized_zero_form_inertia_stays_source_bound() -> None:
+    source = _matrix(((_q(), _q()), (_q(), _q())))
+
+    payload = inertia(source).model_dump()
+
+    assert RealQuadraticInertia.model_validate(payload) == inertia(source)
+
+
 def test_matrix_value_requires_one_explicit_quadratic_field() -> None:
     with pytest.raises(ValidationError, match="shared real quadratic field"):
         _matrix(((_q(radicand=2), _q(radicand=3)),))

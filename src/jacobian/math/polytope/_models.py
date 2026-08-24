@@ -414,12 +414,15 @@ class FacetIncidenceRequest(StrictModel):
         description=(
             "Ordered rational V-representation. The points must affinely span their "
             "ambient dimension; lower-dimensional hulls are rejected because this "
-            "operation returns ambient codimension-one facets. After exact duplicate "
-            "rows are retained for source binding, admission requires n*C(n,d) <= "
-            f"{MAX_FACET_SIGN_TESTS} candidate-side tests in each of execution and "
-            f"exact result replay ({MAX_FACET_TOTAL_SIGN_TESTS} total), and uses the "
-            "cyclic-polytope upper bound to prove the complete facet and incidence "
-            "result fits its published limits."
+            "operation returns ambient codimension-one facets. Repeated source rows "
+            "are retained for incidence binding but create no candidate hyperplanes, "
+            "so admission requires n*C(m,d) <= "
+            f"{MAX_FACET_SIGN_TESTS} candidate-side tests, where m is the number of "
+            "distinct rows and every candidate is tested against all n source rows, "
+            f"in each of execution and exact result replay "
+            f"({MAX_FACET_TOTAL_SIGN_TESTS} total), and applies the cyclic-polytope "
+            "upper bound to the distinct rows to prove the complete facet and "
+            "incidence result fits its published limits."
         ),
     )
     dimension_bound: int = Field(

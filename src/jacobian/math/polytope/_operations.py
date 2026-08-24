@@ -113,6 +113,19 @@ def _facets_from_points(
     return out
 
 
+def _deduplicate_source_rows(points: list[list[Rational]]) -> list[list[Rational]]:
+    """Drop repeated source rows, preserving first-seen order."""
+
+    seen: set[tuple[Rational, ...]] = set()
+    unique: list[list[Rational]] = []
+    for point in points:
+        key = tuple(point)
+        if key not in seen:
+            seen.add(key)
+            unique.append(point)
+    return unique
+
+
 def _require_facet_preflight(vertices: tuple[Vertex, ...], dim: int) -> None:
     """Prove the exact V-to-facet enumeration is admitted before it starts."""
 
@@ -138,7 +151,12 @@ def _require_facet_preflight(vertices: tuple[Vertex, ...], dim: int) -> None:
                 "V-representation is not full-dimensional; lower-dimensional hulls "
                 "require intrinsic affine coordinates"
             )
-    candidate_count = math.comb(len(points), dim)
+    # Repeated source rows create neither candidate hyperplanes nor facets,
+    # so the candidate enumeration and facet upper bound run on the
+    # distinct rows; every side test and incidence index still ranges over
+    # all source positions.
+    distinct_points = _deduplicate_source_rows(points)
+    candidate_count = math.comb(len(distinct_points), dim)
     side_tests = len(points) * candidate_count
     if side_tests > MAX_FACET_SIGN_TESTS:
         raise ValueError(
@@ -147,20 +165,21 @@ def _require_facet_preflight(vertices: tuple[Vertex, ...], dim: int) -> None:
             f"({side_tests} > {MAX_FACET_SIGN_TESTS})"
         )
     # McMullen's upper-bound theorem bounds the number of facets of every
-    # d-polytope with n vertices by the cyclic-polytope count below. Source
-    # rows may repeat, but using their count is conservative and also bounds
-    # the complete source-incidence matrix before enumeration starts.
+    # d-polytope with n vertices by the cyclic-polytope count below. The
+    # vertex count is the distinct source rows, and multiplying by the
+    # total row count bounds the complete source-incidence matrix before
+    # enumeration starts.
     if dim == 1:
         facet_upper_bound = 2
     elif dim % 2 == 0:
         half_dimension = dim // 2
         facet_upper_bound = math.comb(
-            len(points) - half_dimension, half_dimension
-        ) + math.comb(len(points) - half_dimension - 1, half_dimension - 1)
+            len(distinct_points) - half_dimension, half_dimension
+        ) + math.comb(len(distinct_points) - half_dimension - 1, half_dimension - 1)
     else:
         half_dimension = dim // 2
         facet_upper_bound = 2 * math.comb(
-            len(points) - half_dimension - 1, half_dimension
+            len(distinct_points) - half_dimension - 1, half_dimension
         )
     if facet_upper_bound > MAX_COMPUTED_FACETS:
         raise ValueError(
@@ -200,8 +219,10 @@ def _computed_facets_from_vertices(
     """Return every canonical supporting facet and complete source incidence.
 
     The pinned SymPy backend supplies exact nullspaces and rational arithmetic.
-    This owner adapter enumerates the finite candidate family, canonicalizes
-    every oriented supporting row, and binds it to all equal source rows.
+    This owner adapter enumerates the finite candidate family over the
+    distinct source rows -- duplicates create no candidate hyperplanes --
+    canonicalizes every oriented supporting row, and binds it to all equal
+    source rows in the original ordered V-representation.
     """
 
     _require_facet_preflight(vertices, dim)
@@ -209,7 +230,7 @@ def _computed_facets_from_vertices(
         [Rational(*coordinate.as_integer_ratio()) for coordinate in vertex.coordinates]
         for vertex in vertices
     ]
-    candidates = _facets_from_points(points, dim)
+    candidates = _facets_from_points(_deduplicate_source_rows(points), dim)
     canonical: dict[tuple[tuple[int, ...], int], PrimitiveFacet] = {}
     for normal, offset in candidates:
         coefficients, rhs = _primitive_facet_key(normal, offset, dim)

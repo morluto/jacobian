@@ -193,26 +193,60 @@ class TestFacetIncidence:
                 )
             )
         vertices = (
-            tuple(
+            _v(*((0, 1),) * 7),
+            *(
                 _v(*((1 if index == axis else 0, 1) for axis in range(7)))
                 for index in range(7)
-            )
-            + (_v(*((0, 1) for _ in range(7))),) * 57
+            ),
+            *(_v(*(((index, 1),) * 7)) for index in range(1, 57)),
         )
         with pytest.raises(ValidationError, match="side-test bound"):
             FacetIncidenceRequest(vertices=vertices)
 
     def test_facet_result_upper_bound_rejects_before_enumeration(self) -> None:
-        vertices = (
-            tuple(
-                _v(*((1 if index == axis else 0, 1) for axis in range(7)))
-                for index in range(7)
-            )
-            + (_v(*((0, 1) for _ in range(7))),) * 8
-        )
+        distinct = [_v(*((0, 1),) * 7)]
+        for axis in range(7):
+            unit = [(0, 1)] * 7
+            unit[axis] = (1, 1)
+            distinct.append(_v(*unit))
+            doubled = [(0, 1)] * 7
+            doubled[axis] = (2, 1)
+            distinct.append(_v(*doubled))
+        distinct.append(_v(*([(1, 2)] * 7)))
+        vertices = tuple(distinct) + (_v(*((0, 1),) * 7),) * 48
 
         with pytest.raises(ValidationError, match="facet result bound"):
             FacetIncidenceRequest(vertices=vertices)
+
+    def test_padded_seven_simplex_admits_distinct_candidates_and_binds_every_row(
+        self,
+    ) -> None:
+        simplex = (
+            _v(*((0, 1) for _ in range(7))),
+            *(
+                _v(*((1 if index == axis else 0, 1) for axis in range(7)))
+                for index in range(7)
+            ),
+        )
+        vertices = simplex + (_v(*((0, 1) for _ in range(7))),) * 56
+        unpadded = _facet_profile(simplex)
+
+        result = _facet_profile(vertices)
+
+        assert len(result.facets) == len(unpadded.facets) == 8
+        assert {(facet.coefficients, facet.offset) for facet in result.facets} == {
+            (facet.coefficients, facet.offset) for facet in unpadded.facets
+        }
+        assert result.facets[-1].source_vertex_indices == tuple(range(1, 8))
+        incident_positions: set[int] = set()
+        for facet in result.facets[:-1]:
+            excluded = facet.coefficients.index("-1") + 1
+            assert facet.source_vertex_indices == tuple(
+                position for position in range(64) if position != excluded
+            )
+            incident_positions.update(facet.source_vertex_indices)
+        assert sorted(incident_positions) == list(range(64))
+        assert sum(len(facet.source_vertex_indices) for facet in result.facets) == 448
 
     def test_seven_dimensional_counterexample_has_136_simplicial_facets(self) -> None:
         rows = (

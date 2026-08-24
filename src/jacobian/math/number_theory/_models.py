@@ -617,7 +617,7 @@ class DivisorListResult(StrictModel):
     ``abs(value)`` itself) in ascending order.  The list may be empty:
     ``proper_divisors(±1)`` has no positive proper divisors.  Zero remains
     not-applicable (handled at the operation layer).  The source carries the
-    same 12-digit factorization bound as the producing requests, so replay
+    same 20-digit factorization bound as the producing requests, so replay
     never factors outside the operation's admitted work envelope.
     """
 

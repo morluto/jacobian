@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.number_theory._models import (
+    _MAX_FACTORIZATION_LENGTH,
     ChineseRemainderRequest,
     FactorialValuationRequest,
     FactorizationRequest,
@@ -76,17 +77,27 @@ def test_divisor_list_result_replays_source_enumeration() -> None:
     assert minus_one.divisors == ("1",)
 
 
-def test_divisor_list_result_admits_twelve_digit_source_boundary() -> None:
-    """The replayed source keeps the producing operations' 12-digit bound."""
+def test_divisor_list_result_admits_twenty_digit_source_boundary() -> None:
+    """The replayed source keeps the producing operations' 20-digit bound."""
 
     from sympy import isprime
 
     from jacobian.math.number_theory._models import DivisorListResult
 
-    prime = 999_999_999_989
+    prime = 99_999_999_999_999_999_989
+    assert len(str(prime)) == _MAX_FACTORIZATION_LENGTH == 20
     assert isprime(prime)
     result = DivisorListResult(value=str(prime), divisors=("1", str(prime)))
     assert result.value == str(prime)
+
+    with pytest.raises(ValidationError, match="value"):
+        DivisorListResult.model_validate(
+            {
+                "value": "10" + "0" * 19,
+                "divisors": ["1"],
+                "convention": "ALL_POSITIVE_DIVISORS",
+            }
+        )
 
 
 def test_divisor_list_result_rejects_sources_beyond_factorization_domain() -> None:

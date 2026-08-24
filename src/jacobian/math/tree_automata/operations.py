@@ -4,14 +4,18 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterator
+from dataclasses import dataclass
 from itertools import product
 from math import prod
 
 from jacobian.math.tree_automata.values import (
+    MAX_REACHABILITY_WITNESS_NODES,
+    MAX_TREE_AUTOMATON_REACHABILITY_WORK,
     BottomUpTreeAutomaton,
     RankedTree,
     TreeAutomatonTransition,
     accepted_tree_count_work_bound,
+    ranked_tree_node_count,
     validate_ranked_tree,
 )
 
@@ -20,6 +24,137 @@ __all__ = [
     "run_tree_automaton",
     "tree_state_chart",
 ]
+
+
+@dataclass(frozen=True)
+class _ReachableStateProfile:
+    """Exact least-fixed-point profile for one bottom-up tree automaton."""
+
+    automaton: BottomUpTreeAutomaton
+    reachable_states: tuple[int, ...]
+    unreachable_states: tuple[int, ...]
+    witnesses: tuple[tuple[int, RankedTree], ...]
+
+
+@dataclass(frozen=True)
+class _WitnessChoice:
+    node_count: int
+    transition: TreeAutomatonTransition
+
+
+def _reachable_state_profile(
+    automaton: BottomUpTreeAutomaton,
+) -> _ReachableStateProfile:
+    """Return each reachable state and its canonical minimum-node witness tree.
+
+    This is least-fixed-point reachability over transition hyperedges: a row
+    becomes usable only after every child state has a witness.  It is not graph
+    reachability over state vertices.
+    """
+
+    if _reachability_execution_work_bound(automaton) > (
+        MAX_TREE_AUTOMATON_REACHABILITY_WORK
+    ):
+        raise ValueError("tree automaton reachability work bound exceeded")
+
+    choices: list[_WitnessChoice | None] = [None] * automaton.state_count
+    transitions = tuple(sorted(automaton.transitions, key=_transition_key))
+    for _ in range(automaton.state_count + 1):
+        next_choices = choices.copy()
+        for transition in transitions:
+            child_choices = tuple(choices[state] for state in transition.child_states)
+            if any(choice is None for choice in child_choices):
+                continue
+            node_count = 1 + sum(
+                choice.node_count for choice in child_choices if choice is not None
+            )
+            candidate = _WitnessChoice(node_count, transition)
+            current = next_choices[transition.target_state]
+            if current is None or _witness_key(candidate) < _witness_key(current):
+                next_choices[transition.target_state] = candidate
+        if next_choices == choices:
+            break
+        choices = next_choices
+    else:  # pragma: no cover - the finite state bound proves convergence above.
+        raise RuntimeError("tree automaton reachability did not reach a fixed point")
+
+    reachable_choices = tuple(
+        (state, choice) for state, choice in enumerate(choices) if choice is not None
+    )
+    reachable_states = tuple(state for state, _ in reachable_choices)
+    total_witness_nodes = sum(choice.node_count for _, choice in reachable_choices)
+    if total_witness_nodes > MAX_REACHABILITY_WITNESS_NODES:
+        raise ValueError("reachable-state witness output exceeds the node bound")
+
+    witnesses = tuple(
+        (state, _materialize_witness(state, choices)) for state in reachable_states
+    )
+    for _, tree in witnesses:
+        if ranked_tree_node_count(tree) > MAX_REACHABILITY_WITNESS_NODES:
+            raise ValueError("reachable-state witness exceeds the node bound")
+
+    return _ReachableStateProfile(
+        automaton=automaton,
+        reachable_states=reachable_states,
+        unreachable_states=tuple(
+            state for state, choice in enumerate(choices) if choice is None
+        ),
+        witnesses=witnesses,
+    )
+
+
+def _reachability_execution_work_bound(automaton: BottomUpTreeAutomaton) -> int:
+    """Conservatively bound admission, execution, and source-bound replay.
+
+    Each profile sorts transition rows, makes at most ``|Q| + 1`` simultaneous
+    scans, and materializes then recounts at most the admitted witness nodes.
+    Every row scan visits its child-state tuple independently to construct the
+    lookup tuple, test that all children are known, add their node counts, and
+    compare an equal-size candidate's canonical transition key.
+    The public path performs that profile once for request admission, once for
+    execution, and once for result replay.
+    """
+
+    transition_count = len(automaton.transitions)
+    maximum_arity = max(
+        (len(row.child_states) for row in automaton.transitions), default=0
+    )
+    sort_rounds = max(1, (transition_count - 1).bit_length())
+    sort_work = transition_count * sort_rounds * (4 + maximum_arity)
+    scan_work = (automaton.state_count + 1) * (
+        2 * automaton.state_count
+        + sum(6 + 4 * len(row.child_states) for row in automaton.transitions)
+    )
+    witness_work = 3 * MAX_REACHABILITY_WITNESS_NODES
+    return 3 * (sort_work + scan_work + witness_work)
+
+
+def _transition_key(
+    transition: TreeAutomatonTransition,
+) -> tuple[int, tuple[int, ...], int]:
+    return (transition.symbol, transition.child_states, transition.target_state)
+
+
+def _witness_key(
+    choice: _WitnessChoice,
+) -> tuple[int, int, tuple[int, ...], int]:
+    return (choice.node_count, *_transition_key(choice.transition))
+
+
+def _materialize_witness(
+    state: int,
+    choices: list[_WitnessChoice | None],
+) -> RankedTree:
+    choice = choices[state]
+    if choice is None:  # pragma: no cover - callers pass reachable states only.
+        raise ValueError("cannot materialize an unreachable state")
+    return RankedTree(
+        symbol=choice.transition.symbol,
+        children=tuple(
+            _materialize_witness(child_state, choices)
+            for child_state in choice.transition.child_states
+        ),
+    )
 
 
 def run_tree_automaton(

@@ -17,6 +17,8 @@ MAX_TA_ARITY = 16
 MAX_RUN_TREE_NODES = 4096
 MAX_RUN_TREE_DEPTH = 128
 MAX_TREE_AUTOMATON_WORK = 2_000_000
+MAX_REACHABILITY_WITNESS_NODES = 4096
+MAX_TREE_AUTOMATON_REACHABILITY_WORK = 30_000_000
 
 Arity = Annotated[int, Field(ge=0, le=MAX_TA_ARITY)]
 
@@ -119,6 +121,22 @@ def validate_ranked_tree(
     return node_count
 
 
+def ranked_tree_node_count(tree: RankedTree) -> int:
+    """Return the bounded number of nodes in a ranked tree independent of an alphabet."""
+
+    node_count = 0
+    stack = [(tree, 1)]
+    while stack:
+        node, depth = stack.pop()
+        node_count += 1
+        if node_count > MAX_RUN_TREE_NODES:
+            raise ValueError("tree node count exceeds bound")
+        if depth > MAX_RUN_TREE_DEPTH:
+            raise ValueError("tree depth exceeds bound")
+        stack.extend((child, depth + 1) for child in node.children)
+    return node_count
+
+
 def accepted_tree_count_work_bound(
     automaton: BottomUpTreeAutomaton,
     tree_size: int,
@@ -143,16 +161,19 @@ def accepted_tree_count_work_bound(
 
 
 __all__ = [
+    "MAX_REACHABILITY_WITNESS_NODES",
     "MAX_RUN_TREE_DEPTH",
     "MAX_RUN_TREE_NODES",
     "MAX_TA_ARITY",
     "MAX_TA_STATES",
     "MAX_TA_SYMBOLS",
     "MAX_TA_TRANSITIONS",
+    "MAX_TREE_AUTOMATON_REACHABILITY_WORK",
     "MAX_TREE_AUTOMATON_WORK",
     "BottomUpTreeAutomaton",
     "RankedTree",
     "TreeAutomatonTransition",
     "accepted_tree_count_work_bound",
+    "ranked_tree_node_count",
     "validate_ranked_tree",
 ]

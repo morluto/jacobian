@@ -9,9 +9,11 @@ from pydantic import Field, model_validator
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.math.tree_automata.values import (
+    MAX_REACHABILITY_WITNESS_NODES,
     BottomUpTreeAutomaton,
     RankedTree,
     accepted_tree_count_work_bound,
+    ranked_tree_node_count,
     validate_ranked_tree,
 )
 
@@ -90,9 +92,73 @@ class AcceptedTreeCountResult(AcceptedTreeCountRequest):
         return self
 
 
+class ReachableStateWitness(StrictModel):
+    """One canonical minimum-node tree witnessing a reachable automaton state."""
+
+    state: int = Field(ge=0, le=63)
+    tree: RankedTree
+    node_count: int = Field(ge=1, le=MAX_REACHABILITY_WITNESS_NODES)
+
+    @model_validator(mode="after")
+    def require_exact_node_count(self) -> Self:
+        if self.node_count != ranked_tree_node_count(self.tree):
+            raise ValueError("witness node_count must equal its tree node count")
+        return self
+
+
+class TreeAutomatonReachabilityRequest(StrictModel):
+    """Compute ground-tree reachable states through bottom-up hyperedges."""
+
+    automaton: BottomUpTreeAutomaton
+
+    @model_validator(mode="after")
+    def require_bounded_witness_profile(self) -> Self:
+        from jacobian.math.tree_automata.operations import _reachable_state_profile
+
+        _reachable_state_profile(self.automaton)
+        return self
+
+
+class TreeAutomatonReachabilityResult(StrictModel):
+    """Exact source-bound ground-tree reachability profile."""
+
+    automaton: BottomUpTreeAutomaton
+    reachable_states: tuple[int, ...] = Field(max_length=64)
+    unreachable_states: tuple[int, ...] = Field(max_length=64)
+    witnesses: tuple[ReachableStateWitness, ...] = Field(max_length=64)
+
+    @model_validator(mode="after")
+    def require_source_bound_profile(self) -> Self:
+        from jacobian.math.tree_automata.operations import _reachable_state_profile
+
+        expected = _reachable_state_profile(self.automaton)
+        expected_witnesses = tuple(
+            ReachableStateWitness(
+                state=state,
+                tree=tree,
+                node_count=ranked_tree_node_count(tree),
+            )
+            for state, tree in expected.witnesses
+        )
+        if sum(witness.node_count for witness in self.witnesses) > (
+            MAX_REACHABILITY_WITNESS_NODES
+        ):
+            raise ValueError("reachable-state witness output exceeds the node bound")
+        if (
+            self.reachable_states != expected.reachable_states
+            or self.unreachable_states != expected.unreachable_states
+            or self.witnesses != expected_witnesses
+        ):
+            raise ValueError("reachability profile is not bound to its automaton")
+        return self
+
+
 __all__ = [
     "AcceptedTreeCountRequest",
     "AcceptedTreeCountResult",
+    "ReachableStateWitness",
+    "TreeAutomatonReachabilityRequest",
+    "TreeAutomatonReachabilityResult",
     "TreeRunRequest",
     "TreeRunResult",
 ]

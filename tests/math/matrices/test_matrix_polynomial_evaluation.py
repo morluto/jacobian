@@ -910,6 +910,110 @@ def test_mixed_overlap_of_dead_denominators_is_still_charged() -> None:
     )
 
 
+def test_converging_matrix_paths_compound_shared_cell_denominators() -> None:
+    # A 4x4 diamond whose edges carry reciprocals of four pairwise-coprime
+    # 25,000-digit integers with f = t^3: every power is structurally dead
+    # and the exact value is zero, yet Horner materializes
+    # (A^2)[0,3] = 1/(q1*q2) + 1/(q3*q4) at the shared cell [0,3], whose
+    # reduced denominator compounds to about 100,000 digits. Predicting
+    # entry_height^2 (about 50,000 digits) passes the coupled digit-work
+    # check while the true intermediate exceeds it, so the walk-denominator
+    # resolution must reject this request; the same shape at smaller
+    # denominators stays admitted and evaluates exactly to zero.
+    first = "1" + "0" * 24_999
+    second = format_canonical_integer(3**52_408)
+    third = format_canonical_integer(7**29_586)
+    fourth = format_canonical_integer(11**24_007)
+    diamond = RationalMatrix(
+        entries=(
+            (_rational(0), _rational(1, first), _rational(1, second), _rational(0)),
+            (_rational(0), _rational(0), _rational(0), _rational(1, third)),
+            (_rational(0), _rational(0), _rational(0), _rational(1, fourth)),
+            (_rational(0), _rational(0), _rational(0), _rational(0)),
+        )
+    )
+
+    with pytest.raises(ValidationError, match="exact-arithmetic work"):
+        MatrixPolynomialEvaluationRequest(
+            matrix=diamond,
+            polynomial=_polynomial((1, 3)),
+        )
+
+    small_first = format_canonical_integer(3**12_578)
+    small_second = format_canonical_integer(7**7_117)
+    small_third = format_canonical_integer(11**5_834)
+    small_fourth = format_canonical_integer(13**5_332)
+    admitted = compute_matrix_polynomial_evaluation(
+        MatrixPolynomialEvaluationRequest(
+            matrix=RationalMatrix(
+                entries=(
+                    (
+                        _rational(0),
+                        _rational(1, small_first),
+                        _rational(1, small_second),
+                        _rational(0),
+                    ),
+                    (
+                        _rational(0),
+                        _rational(0),
+                        _rational(0),
+                        _rational(1, small_third),
+                    ),
+                    (
+                        _rational(0),
+                        _rational(0),
+                        _rational(0),
+                        _rational(1, small_fourth),
+                    ),
+                    (_rational(0), _rational(0), _rational(0), _rational(0)),
+                )
+            ),
+            polynomial=_polynomial((1, 3)),
+        )
+    )
+
+    assert _fractions(admitted.value) == tuple(
+        tuple(Fraction(0) for _ in range(4)) for _ in range(4)
+    )
+    assert admitted.polynomial_degree == 3
+
+
+def test_disjoint_rational_entries_never_demand_a_global_clearing_denominator() -> None:
+    # Square-zero support with two rational entries in one row and a live t
+    # term: f = t^2 + t with coprime 17,000-digit entry denominators keeps
+    # the two denominators in separate entries at every Horner state and in
+    # the exact value itself, so no per-cell coexistence ever compounds them.
+    # Forming the global clearing lcm(a, b) exceeds the canonical cap and
+    # would reject this request although every input, intermediate, output,
+    # and digit-work bound holds; resolved coexistence admits it with
+    # f(A) = A exactly.
+    first_denominator = "1" + "0" * 17_000
+    second_denominator = format_canonical_integer(11**16_325)
+    request = MatrixPolynomialEvaluationRequest(
+        matrix=RationalMatrix(
+            entries=(
+                (
+                    _rational(0),
+                    _rational(1, first_denominator),
+                    _rational(1, second_denominator),
+                ),
+                (_rational(0), _rational(0), _rational(0)),
+                (_rational(0), _rational(0), _rational(0)),
+            )
+        ),
+        polynomial=_polynomial((1, 2), (1, 1)),
+    )
+
+    result = compute_matrix_polynomial_evaluation(request)
+
+    assert result.value.entries[0][1].num == "1"
+    assert result.value.entries[0][1].den == first_denominator
+    assert result.value.entries[0][2].den == second_denominator
+    assert result.value.entries[1][0].num == "0"
+    assert result.polynomial_degree == 2
+    assert result.matrix_multiplications == 2
+
+
 def test_dead_coefficient_powers_are_classified_before_the_coefficient_lcm() -> None:
     # Square-zero [[0, 1], [0, 0]] with f = t^3/a + t^2/b for coprime
     # 17,000-digit a and b: both nonconstant powers are structurally dead

@@ -300,6 +300,9 @@ def test_candidate_work_and_output_envelopes_at_boundary() -> None:
     result = compute_duquenne_guigues_basis(request)
     assert result.work.candidate_states == MAX_DG_CANDIDATE_STATES
     assert result.work.reserved_logical_work == MAX_DG_LOGICAL_WORK
+    assert result.work.context_row_intersections == (
+        2 * MAX_DG_CANDIDATE_STATES * MAX_OBJECTS
+    )
     assert result.work.reserved_result_bytes <= MAX_DG_RESULT_BYTES
 
     over_boundary = _context(((0,),), MAX_DG_ATTRIBUTES + 1)

@@ -265,7 +265,7 @@ def duquenne_guigues_basis(
     accounted_logical_work = (
         states * len(context.objects)
         + len(context.incidence)
-        + row_intersections
+        + 2 * row_intersections
         + incidence_checks
         + 2 * subset_comparisons
         + 2 * closure_comparisons
@@ -286,7 +286,7 @@ def duquenne_guigues_basis(
             "context_closure_queries": 2 * states,
             "context_object_row_checks": states * len(context.objects),
             "context_incidence_loads": len(context.incidence),
-            "context_row_intersections": row_intersections,
+            "context_row_intersections": 2 * row_intersections,
             "context_incidence_checks": incidence_checks,
             "pseudo_intent_subset_comparisons": 2 * subset_comparisons,
             "pseudo_intent_closure_comparisons": 2 * closure_comparisons,

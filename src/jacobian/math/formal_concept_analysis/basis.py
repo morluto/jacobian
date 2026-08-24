@@ -26,7 +26,7 @@ MAX_DG_ATTRIBUTES = 8
 MAX_DG_CANDIDATE_STATES = 1 << MAX_DG_ATTRIBUTES
 # Exact worst-case reserve for 256 states over an admitted dense 64-by-8
 # context, including both producer/replay passes and #2267 result validation.
-MAX_DG_LOGICAL_WORK = 30_452_224
+MAX_DG_LOGICAL_WORK = 30_468_608
 MAX_DG_RESULT_BYTES = 1 * 1_024 * 1_024
 
 _DGAttributeIndex = Annotated[
@@ -79,7 +79,8 @@ def _reserved_dg_logical_work(context: FormalContext, states: int) -> int:
     maximum_basis_replay = states * states * (attribute_count + 1) ** 2
     maximum_output_memberships = 5 * states * attribute_count
     return (
-        2 * states * object_count
+        # Producer subset checks plus producer and result-replay row intersections.
+        3 * states * object_count
         + len(context.incidence)
         + 4 * states * states
         + _max_context_incidence_replay_work(context, states)
@@ -128,7 +129,7 @@ def _dg_output_reservation_payload(
             "context_closure_queries": 2 * states,
             "context_object_row_checks": states * len(context.objects),
             "context_incidence_loads": len(context.incidence),
-            "context_row_intersections": states * len(context.objects),
+            "context_row_intersections": 2 * states * len(context.objects),
             "context_incidence_checks": maximum_incidence_work,
             "pseudo_intent_subset_comparisons": 2 * states * states,
             "pseudo_intent_closure_comparisons": 2 * states * states,
@@ -233,7 +234,7 @@ class DGBasisWork(StrictModel):
     )
     context_row_intersections: StrictInt = Field(
         ge=0,
-        le=MAX_DG_CANDIDATE_STATES * MAX_OBJECTS,
+        le=2 * MAX_DG_CANDIDATE_STATES * MAX_OBJECTS,
     )
     context_incidence_checks: StrictInt = Field(
         ge=0,
@@ -487,7 +488,7 @@ class CanonicalImplicationBasisResult(StrictModel):
         expected_accounted_work = (
             states * len(self.context.objects)
             + incidence_count
-            + row_intersections
+            + 2 * row_intersections
             + incidence_checks
             + 2 * subset_comparisons
             + 2 * closure_comparisons
@@ -501,7 +502,7 @@ class CanonicalImplicationBasisResult(StrictModel):
             "context_closure_queries": 2 * states,
             "context_object_row_checks": states * len(self.context.objects),
             "context_incidence_loads": incidence_count,
-            "context_row_intersections": row_intersections,
+            "context_row_intersections": 2 * row_intersections,
             "context_incidence_checks": incidence_checks,
             "pseudo_intent_subset_comparisons": 2 * subset_comparisons,
             "pseudo_intent_closure_comparisons": 2 * closure_comparisons,

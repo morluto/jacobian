@@ -12,3 +12,4 @@ the external boundary that needs extra operational context:
 
 - [SAT and SMT](sat-smt/index.md)
 - [Lean source checking](lean/index.md)
+- [Exact rational quadratic forms](quadratic-forms.md)

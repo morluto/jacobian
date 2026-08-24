@@ -1,132 +1,168 @@
-"""Tests for quadratic form operations."""
+"""Exact and contract tests for rational quadratic-form evaluation."""
+
+from fractions import Fraction
 
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.quadratic_forms._models import (
-    MAX_ENTRY_DIGITS,
-    MAX_VECTOR_DIGITS,
-    DiscriminantRequest,
-    EvaluationRequest,
-    SignatureRequest,
-    SymmetricMatrix,
+from jacobian._exact import CanonicalRational
+from jacobian.catalog.catalog import Catalog
+from jacobian.math.quadratic_forms import (
+    RationalCoordinateVector,
+    RationalQuadraticForm,
+    evaluate_rational_quadratic_form,
 )
-from jacobian.math.quadratic_forms._operations import (
-    compute_discriminant,
-    compute_signature,
-    evaluate_form,
+from jacobian.math.quadratic_forms._models import EvaluationRequest, EvaluationResult
+from jacobian.math.quadratic_forms._operations import evaluate_form
+from jacobian.math.quadratic_forms.values import (
+    MAX_QUADRATIC_EVALUATION_COMMON_DENOMINATOR_DIGITS,
+    MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS,
+    MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS,
 )
 
 
-def _form(matrix: list[list[int]]) -> dict[str, list[list[str]]]:
-    return {"matrix": [[str(entry) for entry in row] for row in matrix]}
+def _rational(numerator: int, denominator: int = 1) -> dict[str, str]:
+    return {"num": str(numerator), "den": str(denominator)}
 
 
-def _vector(vector: list[int]) -> list[str]:
-    return [str(entry) for entry in vector]
+def _form() -> dict[str, object]:
+    return {
+        "axis": ["x", "y"],
+        "diagonal_coefficients": [_rational(2), _rational(5)],
+        "cross_terms": [
+            {"left": 0, "right": 1, "coefficient": _rational(3)},
+        ],
+    }
 
 
-def test_evaluate_identity() -> None:
+def _vector() -> dict[str, object]:
+    return {
+        "axis": ["x", "y"],
+        "coordinates": [_rational(1, 2), _rational(2)],
+    }
+
+
+def test_evaluate_uses_explicit_polynomial_cross_term_convention() -> None:
     result = evaluate_form(
-        EvaluationRequest(form=_form([[1, 0], [0, 1]]), vector=_vector([3, 4]))
+        EvaluationRequest.model_validate({"form": _form(), "vector": _vector()})
     )
-    assert result.value == "25"
-    assert result.dimension == 2
+
+    assert result.value == CanonicalRational(num="47", den="2")
+    assert result.form.axis == ("x", "y")
+    assert result.vector.axis == result.form.axis
 
 
-def test_evaluate_diagonal() -> None:
-    result = evaluate_form(
-        EvaluationRequest(form=_form([[2, 0], [0, 3]]), vector=_vector([1, 1]))
-    )
-    assert result.value == "5"
+def test_native_evaluation_returns_an_exact_fraction() -> None:
+    form = RationalQuadraticForm.model_validate(_form())
+    vector = RationalCoordinateVector.model_validate(_vector())
+
+    assert evaluate_rational_quadratic_form(form, vector) == Fraction(47, 2)
 
 
-def test_evaluate_cross_terms() -> None:
-    result = evaluate_form(
-        EvaluationRequest(form=_form([[1, 1], [1, 1]]), vector=_vector([1, 2]))
-    )
-    assert result.value == "9"
+def test_zero_form_is_a_complete_exact_value() -> None:
+    form = {
+        "axis": ["u"],
+        "diagonal_coefficients": [_rational(0)],
+    }
+    vector = {"axis": ["u"], "coordinates": [_rational(-7, 3)]}
+
+    assert evaluate_form(
+        EvaluationRequest.model_validate({"form": form, "vector": vector})
+    ).value == CanonicalRational(num="0", den="1")
 
 
-def test_discriminant_identity() -> None:
-    result = compute_discriminant(DiscriminantRequest(form=_form([[1, 0], [0, 1]])))
-    assert result.discriminant == "1"
-
-
-def test_discriminant_diagonal() -> None:
-    result = compute_discriminant(DiscriminantRequest(form=_form([[2, 0], [0, 3]])))
-    assert result.discriminant == "6"
-
-
-def test_signature_positive_definite() -> None:
-    result = compute_signature(SignatureRequest(form=_form([[1, 0], [0, 1]])))
-    assert result.n_positive == 2
-    assert result.is_positive_definite is True
-
-
-def test_signature_indefinite() -> None:
-    result = compute_signature(SignatureRequest(form=_form([[1, 0], [0, -1]])))
-    assert result.n_positive == 1
-    assert result.n_negative == 1
-    assert result.is_indefinite is True
-
-
-def test_signature_irrational_eigenvalues() -> None:
-    """Matrix [[1,1],[1,2]] has eigenvalues (3±√5)/2, both positive.
-    The old int() truncation misclassified (3-√5)/2 ≈ 0.382 as zero."""
-    request = SignatureRequest(form=SymmetricMatrix(**_form([[1, 1], [1, 2]])))
-    result = compute_signature(request)
-    assert result.n_positive == 2
-    assert result.n_negative == 0
-    assert result.n_zero == 0
-    assert result.is_positive_definite is True
-
-
-def test_signature_negative_definite() -> None:
-    result = compute_signature(SignatureRequest(form=_form([[-1, 0], [0, -1]])))
-    assert result.is_negative_definite is True
-
-
-def test_signature_exact_quartic_root_signs() -> None:
-    matrix = [
-        [2, -1, -3, 1, -3],
-        [-1, 1, 2, 3, -3],
-        [-3, 2, 2, 1, 0],
-        [1, 3, 1, 2, -1],
-        [-3, -3, 0, -1, 1],
-    ]
-    result = compute_signature(SignatureRequest(form=_form(matrix)))
-    assert (result.n_positive, result.n_negative, result.n_zero) == (3, 2, 0)
-    assert result.is_indefinite is True
-
-
-def test_signature_singular_semidefinite() -> None:
-    result = compute_signature(SignatureRequest(form=_form([[1, 1], [1, 1]])))
-    assert (result.n_positive, result.n_negative, result.n_zero) == (1, 0, 1)
-
-
-def test_signature_counts_negative_root_sharing_square_free_factor_with_zero() -> None:
-    result = compute_signature(SignatureRequest(form=_form([[-1, 0], [0, 0]])))
-    assert (result.n_positive, result.n_negative, result.n_zero) == (0, 1, 1)
-
-
-def test_non_symmetric_rejected() -> None:
-    with pytest.raises(ValidationError, match="symmetric"):
-        SignatureRequest(form=_form([[1, 2], [0, 1]]))
-
-
-def test_quadratic_integer_wire_values_are_canonical_strings() -> None:
-    with pytest.raises(ValidationError, match="string"):
-        EvaluationRequest(form={"matrix": [[1]]}, vector=["1"])
-    with pytest.raises(ValidationError, match="string"):
-        EvaluationRequest(form={"matrix": [["1"]]}, vector=[1])
-
-
-def test_quadratic_integer_digit_bounds_reject_immediately_above_boundary() -> None:
-    with pytest.raises(ValidationError, match="matrix entries"):
-        SymmetricMatrix(matrix=(("1" + "0" * MAX_ENTRY_DIGITS,),))
-    with pytest.raises(ValidationError, match="vector entries"):
-        EvaluationRequest(
-            form={"matrix": [["1"]]},
-            vector=["1" + "0" * MAX_VECTOR_DIGITS],
+def test_axis_mismatch_is_rejected_before_arithmetic() -> None:
+    with pytest.raises(ValidationError, match="vector axis"):
+        EvaluationRequest.model_validate(
+            {
+                "form": _form(),
+                "vector": {
+                    "axis": ["y", "x"],
+                    "coordinates": [_rational(2), _rational(1)],
+                },
+            }
         )
+
+
+def test_cross_terms_are_nonzero_unique_and_canonically_ordered() -> None:
+    with pytest.raises(ValidationError, match="zero cross terms"):
+        RationalQuadraticForm.model_validate(
+            {
+                **_form(),
+                "cross_terms": [
+                    {"left": 0, "right": 1, "coefficient": _rational(0)},
+                ],
+            }
+        )
+    with pytest.raises(ValidationError, match="ordered"):
+        RationalQuadraticForm.model_validate(
+            {
+                "axis": ["x", "y", "z"],
+                "diagonal_coefficients": [_rational(0), _rational(0), _rational(0)],
+                "cross_terms": [
+                    {"left": 1, "right": 2, "coefficient": _rational(1)},
+                    {"left": 0, "right": 1, "coefficient": _rational(1)},
+                ],
+            }
+        )
+
+
+def test_result_replays_the_source_bound_value() -> None:
+    with pytest.raises(ValidationError, match="exact quadratic-form evaluation"):
+        EvaluationResult.model_validate(
+            {"form": _form(), "vector": _vector(), "value": _rational(1)}
+        )
+
+
+def test_digit_bounds_reject_before_exact_arithmetic() -> None:
+    too_large_coefficient = "1" + "0" * MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
+    with pytest.raises(ValidationError, match="cross coefficient"):
+        RationalQuadraticForm.model_validate(
+            {
+                "axis": ["x", "y"],
+                "diagonal_coefficients": [_rational(0), _rational(0)],
+                "cross_terms": [
+                    {
+                        "left": 0,
+                        "right": 1,
+                        "coefficient": {"num": too_large_coefficient, "den": "1"},
+                    }
+                ],
+            }
+        )
+    too_large_coordinate = "1" + "0" * MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS
+    with pytest.raises(ValidationError, match="vector coordinate"):
+        RationalCoordinateVector.model_validate(
+            {
+                "axis": ["x"],
+                "coordinates": [{"num": too_large_coordinate, "den": "1"}],
+            }
+        )
+
+
+def test_evaluation_preflights_the_aggregate_denominator() -> None:
+    denominator = "1" + "0" * (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1)
+    dimension = (
+        MAX_QUADRATIC_EVALUATION_COMMON_DENOMINATOR_DIGITS
+        // MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
+        + 1
+    )
+    assert dimension <= 32
+    labels = [f"x{index}" for index in range(dimension)]
+    form = {
+        "axis": labels,
+        "diagonal_coefficients": [{"num": "1", "den": denominator} for _ in labels],
+    }
+    vector = {
+        "axis": labels,
+        "coordinates": [_rational(1) for _ in labels],
+    }
+
+    with pytest.raises(ValidationError, match="aggregate denominator"):
+        EvaluationRequest.model_validate({"form": form, "vector": vector})
+
+
+def test_unsafe_global_enumeration_leaves_are_not_published() -> None:
+    catalog = Catalog.open()
+    assert catalog.operation("quadratic_form.representation_numbers.compute") is None
+    assert catalog.operation("quadratic_form.theta_series_prefix.compute") is None

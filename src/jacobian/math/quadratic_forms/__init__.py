@@ -1,3 +1,15 @@
-"""Quadratic form operations."""
+"""Exact rational quadratic-form values and direct evaluation."""
 
-__all__: list[str] = []
+from jacobian.math.quadratic_forms.values import (
+    QuadraticCrossTerm,
+    RationalCoordinateVector,
+    RationalQuadraticForm,
+    evaluate_rational_quadratic_form,
+)
+
+__all__ = [
+    "QuadraticCrossTerm",
+    "RationalCoordinateVector",
+    "RationalQuadraticForm",
+    "evaluate_rational_quadratic_form",
+]

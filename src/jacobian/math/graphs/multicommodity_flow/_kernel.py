@@ -6,14 +6,14 @@ from fractions import Fraction
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian.math.graphs.multicommodity_flow._models import (
+    AdmittedProfileScan,
     CommodityDivergence,
     EdgeLoadProfile,
     MulticommodityFlow,
     MulticommodityFlowProfileWork,
-    _component_sums_with_folds,
     _require_admitted_profile_rows,
     _require_profile_source_room,
-    derived_profile_components_from_sums,
+    measured_profile_components,
 )
 
 
@@ -29,6 +29,7 @@ def _wire(value: Fraction, *, max_digits: int) -> CanonicalRational:
 
 def profile_components(
     flow: MulticommodityFlow,
+    admitted: AdmittedProfileScan | None = None,
 ) -> tuple[
     tuple[CommodityDivergence, ...],
     tuple[EdgeLoadProfile, ...],
@@ -43,25 +44,33 @@ def profile_components(
     and aggregate edge loads.  The aggregate result envelope is admitted from
     the same measured components -- the echoed source before the scan, every
     priced row afterwards -- so admission adds no arithmetic pass of its own.
-    Result-model validation calls this same pure kernel once more, so the
-    returned work ledger charges both passes.
+    Request parsing may supply ``admitted``, the scan it already performed
+    and validated against, which then serves as this producer pass verbatim;
+    otherwise the pass runs here. Result-model validation calls this same
+    pure kernel without a stash, so its replay always rescans independently
+    and the returned work ledger charges both passes.
     """
 
-    _require_profile_source_room(flow)
+    if admitted is None:
+        _require_profile_source_room(flow)
+        scan = measured_profile_components(flow)
+        _require_admitted_profile_rows(
+            flow,
+            scan.cell_bounds,
+            scan.load_bounds,
+            scan.slack_bounds,
+            scan.congestion_bound,
+        )
+    else:
+        scan = admitted
+
     commodity_ids = tuple(commodity.commodity_id for commodity in flow.commodities)
-    divergences, loads, denominator_folds = _component_sums_with_folds(flow)
-    (
-        budget,
-        slacks,
-        max_congestion_ratio,
-        cell_bounds,
-        load_bounds,
-        slack_bounds,
-        congestion_bound,
-    ) = derived_profile_components_from_sums(flow, divergences, loads)
-    _require_admitted_profile_rows(
-        flow, cell_bounds, load_bounds, slack_bounds, congestion_bound
-    )
+    divergences = scan.divergences
+    loads = scan.loads
+    denominator_folds = scan.denominator_folds
+    budget = scan.budget
+    slacks = scan.slacks
+    max_congestion_ratio = scan.max_congestion_ratio
 
     divergence_rows = tuple(
         CommodityDivergence(

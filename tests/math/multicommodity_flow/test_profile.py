@@ -77,6 +77,38 @@ def test_native_api_accepts_the_canonical_flow_value_directly() -> None:
     assert native.congestion == q(1)
 
 
+def test_accepted_calls_execute_exactly_the_two_charged_scans(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Request parsing performs the operation's component scan once, admits
+    # work and result envelope from it, and hands it to the producer pass;
+    # the replay rescans independently. A native call runs the same producer
+    # scan itself. Either way an accepted call must execute exactly two
+    # arithmetic scans -- any more underreports nothing but wasted work,
+    # any fewer breaks exactness.
+    from jacobian.math.graphs.multicommodity_flow import _models
+
+    scans = {"count": 0}
+    original_models_scan = _models._component_sums_with_folds
+
+    def models_spy(flow: MulticommodityFlow) -> object:
+        scans["count"] += 1
+        return original_models_scan(flow)
+
+    monkeypatch.setattr(_models, "_component_sums_with_folds", models_spy)
+
+    via_request = _run_multicommodity_flow_profile(
+        MulticommodityFlowProfileRequest(flow=shared_bottleneck_flow())
+    )
+    assert scans == {"count": 2}
+
+    scans.update(count=0)
+    native = compute_multicommodity_flow_profile(shared_bottleneck_flow())
+    assert scans == {"count": 2}
+
+    assert native == via_request
+
+
 def test_exact_shared_bottleneck_profile_replays_its_source() -> None:
     result = compute_multicommodity_flow_profile(shared_bottleneck_flow())
 
@@ -983,12 +1015,12 @@ def oversized_echo_flow() -> MulticommodityFlow:
 def test_oversized_source_is_rejected_before_the_component_scan(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from jacobian.math.graphs.multicommodity_flow import _kernel, _models
+    from jacobian.math.graphs.multicommodity_flow import _models
 
     measured: list[MulticommodityFlow] = []
     executed: list[MulticommodityFlow] = []
     original_bounds = _models._profile_component_digit_bounds
-    original_scan = _kernel._component_sums_with_folds
+    original_scan = _models._component_sums_with_folds
 
     def bounds_spy(flow: MulticommodityFlow) -> object:
         measured.append(flow)
@@ -999,7 +1031,7 @@ def test_oversized_source_is_rejected_before_the_component_scan(
         return original_scan(flow)
 
     monkeypatch.setattr(_models, "_profile_component_digit_bounds", bounds_spy)
-    monkeypatch.setattr(_kernel, "_component_sums_with_folds", scan_spy)
+    monkeypatch.setattr(_models, "_component_sums_with_folds", scan_spy)
     # Request parsing measures the echoed source first and fails closed
     # before its own component measurement, and execution therefore never
     # starts, so neither spy records the tensor.

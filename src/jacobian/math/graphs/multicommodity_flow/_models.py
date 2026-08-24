@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Self
+from typing import NamedTuple, Self
 
-from pydantic import Field, StrictStr, model_validator
+from pydantic import Field, PrivateAttr, StrictStr, model_validator
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
@@ -54,10 +54,11 @@ MAX_COMMODITY_VERTEX_CELLS = 512
 # when its own component bounds limit the two sides separately; the
 # conservative row overhead reserves ASCII keys, labels, separators, and
 # vertices. This envelope belongs to the profile operation, not to the
-# canonical tensor value: request parsing validates it completely so every
-# accepted request is admissible before execution, and the kernel prices
-# its result from its own measured components, adding no arithmetic pass
-# of its own and keeping the two-pass work ledger exact.
+# canonical tensor value: request parsing performs the operation's single
+# component scan, admits work and result envelope from it, and hands the
+# measured components to the producer pass, while the replay pass always
+# rescans independently -- so an accepted call executes exactly the two
+# charged passes and the work ledger stays an exact per-call accounting.
 MAX_PROFILE_RESULT_BYTES = 8 * 1024 * 1024
 _DIVERGENCE_ROW_OVERHEAD_BYTES = 128
 _EDGE_ROW_OVERHEAD_BYTES = 128
@@ -394,35 +395,39 @@ def _profile_component_digit_bounds(
     return _measured_component_digit_bounds(divergences, loads, slacks, max_ratio)
 
 
-def derived_profile_digit_budget(flow: MulticommodityFlow) -> int:
-    """Return the exact digit bound shared by every derived profile component."""
+class AdmittedProfileScan(NamedTuple):
+    """The once-computed components of one measured profile scan.
 
-    return derived_profile_components_from_sums(flow, *_component_sums(flow))[0]
+    Request parsing performs this scan, admits work and result envelope
+    from it, and hands it to the producer pass, which otherwise recomputes
+    it; the replay pass always rescans independently. Either way an
+    accepted call executes exactly two arithmetic passes.
+    """
+
+    divergences: dict[tuple[str, int], Fraction]
+    loads: dict[tuple[int, int], Fraction]
+    denominator_folds: int
+    budget: int
+    slacks: dict[tuple[int, int], Fraction]
+    max_congestion_ratio: Fraction
+    cell_bounds: dict[tuple[str, int], tuple[int, int]]
+    load_bounds: dict[tuple[int, int], tuple[int, int]]
+    slack_bounds: dict[tuple[int, int], tuple[int, int]]
+    congestion_bound: tuple[int, int]
 
 
-def derived_profile_components_from_sums(
-    flow: MulticommodityFlow,
-    divergences: dict[tuple[str, int], Fraction],
-    loads: dict[tuple[int, int], Fraction],
-) -> tuple[
-    int,
-    dict[tuple[int, int], Fraction],
-    Fraction,
-    dict[tuple[str, int], tuple[int, int]],
-    dict[tuple[int, int], tuple[int, int]],
-    dict[tuple[int, int], tuple[int, int]],
-    tuple[int, int],
-]:
-    """Return the shared digit budget with each once-computed derivative.
+def measured_profile_components(flow: MulticommodityFlow) -> AdmittedProfileScan:
+    """Run the single bucketed component scan and derive every priced bound.
 
     The returned slacks and maximum congestion ratio are the same measured
     components priced into the budget, so one producer or replay pass
     subtracts each slack and divides each positive-capacity ratio exactly
-    once and the work ledger charges that single execution. The returned
-    per-row bound maps are those same measurements, letting envelope
-    admission price the result without any second arithmetic pass.
+    once and the work ledger charges that single execution. The per-row
+    bound maps are those same measurements, letting envelope admission
+    price the result without any second arithmetic pass.
     """
 
+    divergences, loads, denominator_folds = _component_sums_with_folds(flow)
     slacks, max_ratio = _edge_slacks_and_max_congestion(flow, loads)
     cell_bounds, load_bounds, slack_bounds, congestion_bound = (
         _measured_component_digit_bounds(divergences, loads, slacks, max_ratio)
@@ -433,16 +438,46 @@ def derived_profile_components_from_sums(
         *slack_bounds.values(),
         congestion_bound,
     ]
-    budget = max(max(sides) for sides in component_sides)
-    return (
-        budget,
-        slacks,
-        max_ratio,
-        cell_bounds,
-        load_bounds,
-        slack_bounds,
-        congestion_bound,
+    return AdmittedProfileScan(
+        divergences=divergences,
+        loads=loads,
+        denominator_folds=denominator_folds,
+        budget=max(max(sides) for sides in component_sides),
+        slacks=slacks,
+        max_congestion_ratio=max_ratio,
+        cell_bounds=cell_bounds,
+        load_bounds=load_bounds,
+        slack_bounds=slack_bounds,
+        congestion_bound=congestion_bound,
     )
+
+
+def derived_profile_digit_budget(flow: MulticommodityFlow) -> int:
+    """Return the exact digit bound shared by every derived profile component."""
+
+    return measured_profile_components(flow).budget
+
+
+def _require_profile_output_admission(flow: MulticommodityFlow) -> AdmittedProfileScan:
+    """Admit the profile envelope and return its once-computed components.
+
+    Request parsing runs this complete mathematical validation so every
+    accepted ``math.run`` request reaches the kernel guaranteed admissible,
+    and native callers get the same typed rejection before any result
+    construction. The returned scan is reused as the producer pass, so an
+    accepted call executes exactly the two charged passes.
+    """
+
+    _require_profile_source_room(flow)
+    scan = measured_profile_components(flow)
+    _require_admitted_profile_rows(
+        flow,
+        scan.cell_bounds,
+        scan.load_bounds,
+        scan.slack_bounds,
+        scan.congestion_bound,
+    )
+    return scan
 
 
 def _require_profile_source_room(flow: MulticommodityFlow) -> None:
@@ -529,26 +564,6 @@ def _require_admitted_profile_rows(
         )
 
 
-def _require_profile_output_admission(flow: MulticommodityFlow) -> None:
-    """Reject tensors whose derived rows or echoed source exceed the envelope.
-
-    Request parsing runs this complete mathematical validation so every
-    accepted ``math.run`` request reaches the kernel guaranteed admissible,
-    and native callers get the same typed rejection before any result
-    construction. The kernel still prices its result from its own measured
-    components, so an accepted request's execution remains exactly the two
-    charged passes.
-    """
-
-    _require_profile_source_room(flow)
-    cell_bounds, load_bounds, slack_bounds, congestion_bound = (
-        _profile_component_digit_bounds(flow)
-    )
-    _require_admitted_profile_rows(
-        flow, cell_bounds, load_bounds, slack_bounds, congestion_bound
-    )
-
-
 class MulticommodityFlow(StrictModel):
     """A canonical sparse exact commodity-by-edge tensor over one FlowGraph.
 
@@ -610,9 +625,11 @@ class MulticommodityFlowProfileRequest(StrictModel):
         )
     )
 
+    _admitted_scan: AdmittedProfileScan | None = PrivateAttr(default=None)
+
     @model_validator(mode="after")
     def require_admitted_profile_work_and_result(self) -> Self:
-        _require_profile_output_admission(self.flow)
+        self._admitted_scan = _require_profile_output_admission(self.flow)
         return self
 
 

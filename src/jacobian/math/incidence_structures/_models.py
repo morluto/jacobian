@@ -287,7 +287,12 @@ class IncidenceMultiplicityDifference(StrictModel):
 
 
 class IncidenceMomentComparison(StrictModel):
-    """Complete sparse difference data for one positive incidence moment."""
+    """Complete sparse difference data for one positive incidence moment.
+
+    Defining invariant: ``left_total - right_total`` equals the sum of
+    ``left_multiplicity - right_multiplicity`` over the sparse differences,
+    because omitted subsets carry equal multiplicities on both sides.
+    """
 
     order: StrictInt = Field(ge=1, le=MAX_TRADE_ORDER)
     left_total: StrictInt = Field(ge=0)
@@ -298,9 +303,17 @@ class IncidenceMomentComparison(StrictModel):
     equal: StrictBool
 
     @model_validator(mode="after")
-    def bind_equality_to_sparse_differences(self) -> Self:
+    def bind_equality_and_totals_to_sparse_differences(self) -> Self:
         if self.equal != (not self.differences):
             raise ValueError("moment equality must match the sparse difference profile")
+        total_difference = sum(
+            difference.left_multiplicity - difference.right_multiplicity
+            for difference in self.differences
+        )
+        if self.left_total - self.right_total != total_difference:
+            raise ValueError(
+                "moment totals must equal the sum of sparse multiplicity differences"
+            )
         return self
 
 

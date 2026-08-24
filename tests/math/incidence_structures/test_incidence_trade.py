@@ -9,6 +9,8 @@ from pydantic import ValidationError
 
 from jacobian.math.incidence_structures import (
     ContainmentProfileResult,
+    IncidenceMomentComparison,
+    IncidenceMultiplicityDifference,
     IncidenceStructure,
     IncidenceTradeResult,
     check_incidence_trade,
@@ -306,6 +308,67 @@ def test_trade_result_replays_sources_and_zeroth_difference() -> None:
 
     with pytest.raises(ValidationError, match="does not match"):
         IncidenceTradeResult.model_validate(payload)
+
+
+def test_moment_totals_bind_to_sparse_differences() -> None:
+    left = _family((("a", "b"), ("b",)), "l", points=("a", "b"))
+    right = _family((("a", "b"), ("a",)), "r", points=("a", "b"))
+
+    result = check_incidence_trade(left, right, 1)
+
+    comparison = result.comparisons[0]
+    assert not comparison.equal
+    assert (comparison.left_total, comparison.right_total) == (3, 3)
+    assert tuple(
+        (difference.subset, difference.left_multiplicity - difference.right_multiplicity)
+        for difference in comparison.differences
+    ) == ((("a",), -1), (("b",), 1))
+
+
+def test_equal_empty_moment_comparison_is_accepted_standalone() -> None:
+    comparison = IncidenceMomentComparison(
+        order=1,
+        left_total=4,
+        right_total=4,
+        differences=(),
+        equal=True,
+    )
+
+    assert comparison.left_total == comparison.right_total == 4
+
+
+def test_forged_equal_totals_with_sparse_differences_are_rejected() -> None:
+    with pytest.raises(ValidationError, match="sum of sparse multiplicity"):
+        IncidenceMomentComparison(
+            order=1,
+            left_total=2,
+            right_total=2,
+            differences=(
+                IncidenceMultiplicityDifference(
+                    subset=("a",),
+                    left_multiplicity=1,
+                    right_multiplicity=0,
+                ),
+            ),
+            equal=False,
+        )
+
+
+def test_forged_totals_diverging_from_sparse_sum_are_rejected() -> None:
+    with pytest.raises(ValidationError, match="sum of sparse multiplicity"):
+        IncidenceMomentComparison(
+            order=2,
+            left_total=5,
+            right_total=3,
+            differences=(
+                IncidenceMultiplicityDifference(
+                    subset=("a", "b"),
+                    left_multiplicity=1,
+                    right_multiplicity=0,
+                ),
+            ),
+            equal=False,
+        )
 
 
 def test_request_schema_exposes_validator_owned_trade_rules() -> None:

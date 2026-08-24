@@ -58,8 +58,9 @@ FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION = number_theory_operation(
     "finite_abelian_group.spectral_pair.decide",
     "Decide an exact finite-Abelian spectral pair",
     (
-        "Decide whether a nonempty canonical residue-tuple frequency set is a "
-        "spectrum of a point set in an explicit product of cyclic groups. Uses "
+        "Decide whether a canonical residue-tuple frequency set is a spectrum "
+        "of a point set in an explicit product of cyclic groups, including "
+        "empty and singleton degenerate cases. Uses "
         "the fixed positive dual pairing chi_lambda(a) = exp(2*pi*i*sum_j "
         "lambda_j*a_j/m_j), proves every required character sum zero by exact "
         "integer-polynomial reduction modulo Phi_lcm(m_j), and returns the "

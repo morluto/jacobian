@@ -20,8 +20,8 @@ if TYPE_CHECKING:
 MAX_FINITE_GROUP_ORDER = 4_096
 MAX_FINITE_GROUP_RANK = 6
 MAX_FINITE_GROUP_FACTOR_SIZE = 256
-MAX_FINITE_GROUP_MODULUS = 1_000_000
-MAX_FINITE_GROUP_COORDINATE = 1_000_000
+MAX_FINITE_GROUP_MODULUS = (1 << 53) - 1
+MAX_FINITE_GROUP_COORDINATE = (1 << 53) - 1
 MAX_SPECTRAL_SET_SIZE = 4_096
 MAX_SPECTRAL_CYCLOTOMIC_DEGREE = 60
 MAX_SPECTRAL_CHARACTER_TERMS = 258_048
@@ -60,7 +60,12 @@ BoundedRemainderInteger = Annotated[
 
 
 class FiniteAbelianProductGroup(StrictModel):
-    """An ordered product of cyclic moduli between 2 and 1,000,000."""
+    """An ordered product of cyclic moduli between 2 and the safe integer 2**53 - 1.
+
+    Moduli and canonical residues serialize as raw JSON integers inside exact
+    results, so this reusable value is bounded by the interoperable
+    safe-integer range rather than any operation's work envelope.
+    """
 
     moduli: tuple[FiniteGroupModulus, ...] = Field(
         min_length=1,
@@ -146,11 +151,11 @@ class FiniteAbelianSpectralPairSource(StrictModel):
 
     group: FiniteAbelianProductGroup
     points: tuple[BoundedGroupElement, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_SPECTRAL_SET_SIZE,
     )
     frequencies: tuple[BoundedGroupElement, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_SPECTRAL_SET_SIZE,
     )
 
@@ -192,8 +197,9 @@ class FiniteAbelianSpectralPairRequest(StrictModel):
     derived reduction envelope: 60-degree cyclotomics, 258,048 point-character
     terms, 4,032 exact reductions, bounded construction intermediates, and a
     32,768-byte serialized result; those counts include the result model's
-    independent replay. Cardinality mismatches and singleton pairs need no
-    cyclotomic reduction and are admitted by source and result size alone.
+    independent replay. Cardinality mismatches, singleton pairs, and the
+    equal-empty pair need no cyclotomic reduction and are admitted by source
+    and result size alone.
     """
 
     source: FiniteAbelianSpectralPairSource
@@ -359,13 +365,13 @@ def _predicted_spectral_result_bytes(
 def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPairWork:
     """Preflight exact work, intermediate growth, and output obligations.
 
-    A cardinality mismatch and an equal singleton pair are decided without a
-    cyclotomic backend call; their admission is the serialized source-plus-
-    decision byte bound. Otherwise, the public operation plus source-bound
-    result validation perform two complete passes. Each pass checks at most
-    ``C(|Lambda|, 2)`` pairs and ``|A|`` character terms per pair. No check
-    depends on the ambient group order, only on the supplied rows, the rank,
-    and the group exponent.
+    A cardinality mismatch, an equal singleton pair, and the equal empty pair
+    are decided without a cyclotomic backend call; their admission is the
+    serialized source-plus-decision byte bound. Otherwise, the public
+    operation plus source-bound result validation perform two complete passes.
+    Each pass checks at most ``C(|Lambda|, 2)`` pairs and ``|A|`` character
+    terms per pair. No check depends on the ambient group order or modulus
+    size, only on the supplied rows, the rank, and the group exponent.
 
     Every coefficient of ``Phi_N`` is at most ``2**phi(N)`` in absolute value:
     it is an elementary symmetric sum of ``phi(N)`` unit-modulus roots. SymPy's
@@ -517,7 +523,7 @@ def _finite_abelian_spectral_pair_decision_data(
             reason="CARDINALITY_MISMATCH",
             first_nonorthogonal_pair=None,
         )
-    if len(source.frequencies) == 1:
+    if len(source.frequencies) <= 1:
         return _SpectralPairDecisionData(
             is_spectral=True,
             reason="SPECTRAL",

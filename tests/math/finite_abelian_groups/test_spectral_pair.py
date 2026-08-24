@@ -173,9 +173,28 @@ def test_source_rejects_noncanonical_set_degeneracies(
         _source((4,), points, frequencies)
 
 
-def test_source_requires_both_sets_nonempty() -> None:
-    with pytest.raises(ValidationError, match="at least 1 item"):
-        _source((4,), (), ((0,),))
+def test_degenerate_empty_sets_route_through_trivial_decisions() -> None:
+    equal_empty = _source((12,), (), ())
+    work = domain._spectral_pair_work(equal_empty)
+
+    assert work.cyclotomic_degree is None
+    assert work.character_terms == 0
+
+    result = decide_finite_abelian_spectral_pair(equal_empty)
+
+    assert result.is_spectral is True
+    assert result.reason == "SPECTRAL"
+    assert result.first_nonorthogonal_pair is None
+
+    empty_points = decide_finite_abelian_spectral_pair(_source((12,), (), ((0,),)))
+
+    assert empty_points.is_spectral is False
+    assert empty_points.reason == "CARDINALITY_MISMATCH"
+
+    empty_frequencies = decide_finite_abelian_spectral_pair(_source((12,), ((5,),), ()))
+
+    assert empty_frequencies.is_spectral is False
+    assert empty_frequencies.reason == "CARDINALITY_MISMATCH"
 
 
 def test_product_pairing_weights_unequal_moduli() -> None:
@@ -364,6 +383,39 @@ def test_singleton_pair_beyond_the_group_order_cap_is_admitted() -> None:
     assert result.source.group.order == 4_097
 
 
+def test_singleton_beyond_the_former_modulus_ceiling_is_admitted() -> None:
+    result = decide_finite_abelian_spectral_pair(
+        _source((1_000_001,), ((1_000_000,),), ((5_000,),))
+    )
+
+    assert result.is_spectral is True
+    assert result.reason == "SPECTRAL"
+
+
+def test_modulus_bound_tracks_canonical_json_safe_integers() -> None:
+    limit = domain.MAX_FINITE_GROUP_MODULUS
+
+    assert limit == (1 << 53) - 1
+    assert FiniteAbelianProductGroup(moduli=(limit,)).order == limit
+    with pytest.raises(ValidationError, match="less than or equal to"):
+        FiniteAbelianProductGroup(moduli=(limit + 1,))
+
+
+def test_singleton_at_modulus_bound_serializes_within_budget() -> None:
+    source = _source((domain.MAX_FINITE_GROUP_MODULUS,), ((7,),), ((11,),))
+    work = domain._spectral_pair_work(source)
+
+    assert work.cyclotomic_degree is None
+    assert work.predicted_result_bytes <= domain.MAX_SPECTRAL_RESULT_BYTES
+
+    result = decide_finite_abelian_spectral_pair(source)
+
+    assert result.is_spectral is True
+    assert len(encode_strict_json(result.model_dump(mode="json"))) < (
+        domain.MAX_SPECTRAL_RESULT_BYTES
+    )
+
+
 def test_equal_size_pair_in_group_above_order_cap_fits_derived_budgets() -> None:
     source = _source((64, 64, 2), ((0, 0, 0), (1, 0, 0)), ((0, 0, 0), (0, 0, 1)))
     work = domain._spectral_pair_work(source)
@@ -387,10 +439,19 @@ def test_coordinate_and_materialization_fallback_boundaries() -> None:
     source = _source((1_000_000,), fallback_rows, ((1_000_000,),))
     assert source.frequencies == ((0,),)
 
+    limit = domain.MAX_FINITE_GROUP_MODULUS
+    wide = _source((limit,), ((limit - 1,),), ((0,),))
+    assert wide.points == ((limit - 1,),)
+    assert wide.frequencies == ((0,),)
+
     with pytest.raises(ValidationError, match="at most 4096 items"):
         _source((64,), tuple((value,) for value in range(4_097)), ((0,),))
-    with pytest.raises(ValidationError, match="less than or equal to 1000000"):
-        _source((2,), ((1_000_001,),), ((0,),))
+    with pytest.raises(ValidationError, match="less than or equal to"):
+        _source(
+            (2,),
+            ((domain.MAX_FINITE_GROUP_COORDINATE + 1,),),
+            ((0,),),
+        )
 
 
 def test_cardinality_mismatch_admits_point_sets_above_the_row_fallback() -> None:

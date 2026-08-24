@@ -54,7 +54,9 @@ class GraphSpectrumResult(StrictModel):
     the canonical exact SymPy rendering (over the algebraic closure of QQ,
     never a float) of one distinct eigenvalue; multiplicities are positive
     and sum to the graph order, so the claimed spectrum reconstructs
-    ``det(xI - A)`` exactly.
+    ``det(xI - A)`` exactly.  Pair order carries no mathematical meaning:
+    validation compares ``(eigenvalue, multiplicity)`` pairs as a multiset
+    rather than by backend iteration order.
     """
 
     graph: GraphEdgeList
@@ -75,6 +77,8 @@ class GraphSpectrumResult(StrictModel):
             raise ValueError(
                 "eigenvalue and multiplicity tuples must have equal length"
             )
+        if len(set(self.eigenvalues)) != len(self.eigenvalues):
+            raise ValueError("eigenvalues must be distinct")
         if any(multiplicity < 1 for multiplicity in self.multiplicities):
             raise ValueError("algebraic multiplicities must be positive")
         if sum(self.multiplicities) != order:
@@ -84,11 +88,8 @@ class GraphSpectrumResult(StrictModel):
             if self.matrix_convention == "ADJACENCY"
             else laplacian_spectrum(self.graph)
         )
-        if (
-            tuple(value for value, _ in replayed) != self.eigenvalues
-            or tuple(int(multiplicity) for _, multiplicity in replayed)
-            != self.multiplicities
-        ):
+        claimed = dict(zip(self.eigenvalues, self.multiplicities, strict=True))
+        if dict(replayed) != claimed:
             raise ValueError("spectrum must be the exact spectrum of the source graph")
         return self
 

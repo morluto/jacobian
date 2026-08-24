@@ -84,6 +84,55 @@ def test_structural_constraints_reject_forged_payloads() -> None:
         GraphSpectrumResult.model_validate(swapped_convention)
 
 
+def test_permuted_pair_order_still_binds_to_source() -> None:
+    """A valid spectrum serialized in a different pair order still replays."""
+
+    complete = compute_adjacency_spectrum(
+        GraphSpectrumRequest(
+            graph=_graph(4, ((0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)))
+        )
+    )
+    dumped = complete.model_dump()
+    dumped["eigenvalues"] = list(reversed(dumped["eigenvalues"]))
+    dumped["multiplicities"] = list(reversed(dumped["multiplicities"]))
+
+    permuted = GraphSpectrumResult.model_validate(dumped)
+
+    assert sorted(
+        zip(permuted.eigenvalues, permuted.multiplicities, strict=True)
+    ) == sorted(zip(complete.eigenvalues, complete.multiplicities, strict=True))
+
+
+def test_duplicate_eigenvalue_entries_are_rejected() -> None:
+    path = _graph(3, ((0, 1), (1, 2)))
+    adjacency = compute_adjacency_spectrum(GraphSpectrumRequest(graph=path))
+    duplicated = copy.deepcopy(adjacency.model_dump())
+    duplicated["eigenvalues"] = ["0", "0", "sqrt(2)"]
+    duplicated["multiplicities"] = [1, 1, 1]
+
+    with pytest.raises(ValidationError, match="distinct"):
+        GraphSpectrumResult.model_validate(duplicated)
+
+
+def test_spectrum_operations_declare_version_two() -> None:
+    from jacobian.math.graphs.spectral._tools import TOOLS
+
+    versions = {
+        tool.operation_id: tool.version
+        for tool in TOOLS
+        if tool.operation_id
+        in (
+            "graph.spectrum.adjacency.compute",
+            "graph.spectrum.laplacian.compute",
+        )
+    }
+
+    assert versions == {
+        "graph.spectrum.adjacency.compute": "2",
+        "graph.spectrum.laplacian.compute": "2",
+    }
+
+
 def test_degenerate_and_repeated_spectra_stay_exact() -> None:
     empty = compute_adjacency_spectrum(GraphSpectrumRequest(graph=_graph(2, ())))
     assert empty.eigenvalues == ("0",)

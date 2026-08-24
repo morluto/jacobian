@@ -280,12 +280,8 @@ def test_low_commodity_networks_admit_vertices_up_to_the_cell_budget() -> None:
             vertex_count=33,
             edges=(CapacitatedEdge(source=0, target=1, capacity=q(2)),),
         ),
-        commodities=(
-            CommodityDemand(commodity_id="a", source=0, sink=1, demand=q(1)),
-        ),
-        entries=(
-            CommodityEdgeFlow(commodity_id="a", source=0, target=1, amount=q(1)),
-        ),
+        commodities=(CommodityDemand(commodity_id="a", source=0, sink=1, demand=q(1)),),
+        entries=(CommodityEdgeFlow(commodity_id="a", source=0, target=1, amount=q(1)),),
     )
     result = compute_multicommodity_flow_profile(flow)
     assert result.all_demands_routed is True
@@ -333,9 +329,7 @@ def test_large_exact_scalars_are_admitted_when_derived_digits_stay_bounded() -> 
             vertex_count=2,
             edges=(CapacitatedEdge(source=0, target=1, capacity=big_capacity),),
         ),
-        commodities=(
-            CommodityDemand(commodity_id="a", source=0, sink=1, demand=q(1)),
-        ),
+        commodities=(CommodityDemand(commodity_id="a", source=0, sink=1, demand=q(1)),),
     )
     result = compute_multicommodity_flow_profile(flow)
     assert result.all_demands_routed is False
@@ -366,9 +360,7 @@ def test_operand_digit_budget_bounds_the_canonical_boundary() -> None:
 
     # One 32,759-digit numerator plus its one-digit denominator and the eight
     # derivation slack digits reach exactly the canonical 32,768-digit cap.
-    at_boundary = single_edge_flow(
-        CanonicalRational(num="9" * 32_759, den="1")
-    )
+    at_boundary = single_edge_flow(CanonicalRational(num="9" * 32_759, den="1"))
     result = compute_multicommodity_flow_profile(at_boundary)
     assert result.capacity_feasible is True
     assert result.edge_profiles[0].slack.num == "9" * 32_759

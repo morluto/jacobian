@@ -141,7 +141,9 @@ def profile_components(
         tuple(edge_rows),
         all_demands_routed,
         capacity_feasible,
-        None if zero_capacity_violation else _wire(max_congestion_ratio, max_digits=budget),
+        None
+        if zero_capacity_violation
+        else _wire(max_congestion_ratio, max_digits=budget),
         work,
     )
 

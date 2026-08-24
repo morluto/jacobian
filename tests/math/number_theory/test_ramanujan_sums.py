@@ -3,9 +3,10 @@ from __future__ import annotations
 from math import gcd, lcm
 
 import pytest
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 from sympy import divisors, mobius
 
+from jacobian._exact import CanonicalInteger
 from jacobian.math.number_theory import ramanujan_sum
 from jacobian.math.number_theory._ramanujan_sum import (
     RAMANUJAN_SUM_OPERATION,
@@ -141,6 +142,28 @@ def test_equal_frequencies_share_one_serialized_identity() -> None:
     zero_request = RamanujanSumRequest(modulus="4", frequency="0")
     result = RAMANUJAN_SUM_OPERATION.run(zero_request)
     assert result == RamanujanSumResult(modulus="4", frequency="0", value="2")
+
+
+@pytest.mark.parametrize(
+    "encoding",
+    ("0", "7", "-7", "9" * 256, "-0", "+0", "00", "-007", "", "-", "+1"),
+)
+def test_frequency_grammar_is_owned_by_canonical_integer(encoding: str) -> None:
+    owner = TypeAdapter(CanonicalInteger)
+    try:
+        expected = owner.validate_python(encoding)
+        owner_accepts = True
+    except ValidationError:
+        owner_accepts = False
+        expected = None
+
+    try:
+        request = RamanujanSumRequest(modulus="4", frequency=encoding)
+    except ValidationError:
+        assert not owner_accepts
+    else:
+        assert owner_accepts
+        assert request.frequency == expected
 
 
 @pytest.mark.parametrize(

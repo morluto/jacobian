@@ -6,6 +6,7 @@ from typing import Annotated, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
+from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.math.number_theory._models import _MAX_INTEGER_LENGTH
@@ -26,21 +27,16 @@ RamanujanModulus = Annotated[
     ),
 ]
 
-# The frequency and exact sum bind as canonical signed decimal integers
-# under the same grammar Jacobian's canonical integer encoding uses
-# everywhere else: zero is exactly "0" and any other value carries an
-# optional minus sign on a nonzero leading digit.  Unlike
-# ``BoundedInteger``, whose grammar also admits "-0", this pattern cannot
-# bind negative zero, so every accepted string is the unique canonical
-# decimal form of its integer and mathematically equal inputs share one
-# serialized identity across request and result.
+# The frequency and exact sum bind through ``jacobian._exact.CanonicalInteger``,
+# the owner of Jacobian's canonical signed-decimal integer encoding: zero is
+# exactly "0" and every other value carries an optional minus sign on a
+# nonzero leading digit, so negative zero cannot bind and mathematically equal
+# inputs share one serialized identity across request and result.  The
+# operation-specific 256-character execution bound is applied on top of the
+# owner type, never by restating its grammar.
 RamanujanSumInteger = Annotated[
-    str,
-    StringConstraints(
-        pattern=r"^(?:0|-?[1-9][0-9]*)$",
-        max_length=_MAX_INTEGER_LENGTH,
-        strict=True,
-    ),
+    CanonicalInteger,
+    Field(max_length=_MAX_INTEGER_LENGTH),
 ]
 
 

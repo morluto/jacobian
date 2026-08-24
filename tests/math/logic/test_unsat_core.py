@@ -510,6 +510,83 @@ def test_request_bounds_nested_real_coefficient_digits() -> None:
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
 
 
+@pytest.mark.parametrize(
+    ("logic", "declaration", "assertion_template"),
+    (
+        (
+            "QF_LIA",
+            "(declare-const x Int)",
+            "(assert (= (* {outer} (+ (* {inner} x) 1)) 0))",
+        ),
+        (
+            "QF_LIA",
+            "(declare-const x Int)",
+            "(assert (= (* {outer} (- (* {inner} x) 1)) 0))",
+        ),
+        (
+            "QF_LIA",
+            "(declare-const x Int)",
+            "(assert (= (* {outer} (+ 1 (- (* {inner} x)) 2)) 0))",
+        ),
+        (
+            "QF_LRA",
+            "(declare-const y Real)",
+            "(assert (= (* {outer}.0 (+ (* {inner}.0 y) (/ 1.0 3.0))) 0.0))",
+        ),
+    ),
+)
+def test_request_bounds_translated_product_coefficient_digits(
+    logic: str,
+    declaration: str,
+    assertion_template: str,
+) -> None:
+    outer = "9" * 200
+    inner = "9" * 200
+    source = (
+        f"(set-logic {logic})\n"
+        f"{declaration}\n"
+        f"{assertion_template.format(outer=outer, inner=inner)}\n"
+        "(check-sat)\n"
+    )
+
+    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+        SmtUnsatCoreRequest(logic=logic, smtlib=source)
+
+
+def test_request_bounds_translated_constant_digits() -> None:
+    boundary_constant = "9" * 255
+    over_constant = "9" * 256
+    template = (
+        "(set-logic QF_LIA)\n"
+        "(declare-const x Int)\n"
+        "(assert (= (* 2 (+ (* 2 x) {constant})) 0))\n"
+        "(check-sat)\n"
+    )
+
+    assert SmtUnsatCoreRequest(
+        logic="QF_LIA", smtlib=template.format(constant=boundary_constant)
+    )
+    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+        SmtUnsatCoreRequest(
+            logic="QF_LIA", smtlib=template.format(constant=over_constant)
+        )
+
+
+def test_translated_nested_coefficients_flatten_and_still_solve() -> None:
+    source = (
+        "(set-logic QF_LIA)\n"
+        "(declare-const x Int)\n"
+        "(assert (>= (* 2 (+ (* 2 x) 1)) 10))\n"
+        "(assert (<= x 1))\n"
+        "(check-sat)\n"
+    )
+
+    result = compute_smt_unsat_core(SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source))
+
+    assert result.outcome == "UNSAT"
+    assert result.core_indices == (0, 1)
+
+
 def test_nested_closed_coefficients_flatten_and_still_solve() -> None:
     source = (
         "(set-logic QF_LIA)\n"

@@ -8,7 +8,7 @@ from pydantic import Field, StringConstraints, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
-from jacobian.math.number_theory._models import _MAX_INTEGER_LENGTH, BoundedInteger
+from jacobian.math.number_theory._models import _MAX_INTEGER_LENGTH
 from jacobian.math.number_theory._support import number_theory_operation
 from jacobian.math.number_theory.ramanujan_sums import ramanujan_sum
 
@@ -26,12 +26,14 @@ RamanujanModulus = Annotated[
     ),
 ]
 
-# The exact sum binds as a canonical signed decimal integer under the same
-# grammar Jacobian's canonical integer encoding uses everywhere else:
-# zero is exactly "0" and any other value carries an optional minus sign on a
-# nonzero leading digit.  Unlike ``BoundedInteger``, whose grammar also admits
-# "-0", this pattern cannot bind negative zero, so every accepted result
-# string is the unique canonical decimal form of its integer.
+# The frequency and exact sum bind as canonical signed decimal integers
+# under the same grammar Jacobian's canonical integer encoding uses
+# everywhere else: zero is exactly "0" and any other value carries an
+# optional minus sign on a nonzero leading digit.  Unlike
+# ``BoundedInteger``, whose grammar also admits "-0", this pattern cannot
+# bind negative zero, so every accepted string is the unique canonical
+# decimal form of its integer and mathematically equal inputs share one
+# serialized identity across request and result.
 RamanujanSumInteger = Annotated[
     str,
     StringConstraints(
@@ -51,8 +53,12 @@ class RamanujanSumRequest(StrictModel):
             "zero denotes the empty reduced-residue sum."
         )
     )
-    frequency: BoundedInteger = Field(
-        description="Canonical signed integer frequency with at most 256 characters."
+    frequency: RamanujanSumInteger = Field(
+        description=(
+            "Canonical signed integer frequency with at most 256 characters; "
+            'zero is exactly "0" and every other value carries an optional '
+            "minus sign with no leading zeros."
+        )
     )
 
 
@@ -60,7 +66,7 @@ class RamanujanSumResult(StrictModel):
     """An exact Ramanujan sum bound to its modulus and frequency."""
 
     modulus: RamanujanModulus
-    frequency: BoundedInteger
+    frequency: RamanujanSumInteger
     value: RamanujanSumInteger = Field(
         description=(
             "Exact Ramanujan sum as a canonical signed decimal integer: "

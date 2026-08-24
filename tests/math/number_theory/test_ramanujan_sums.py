@@ -107,6 +107,63 @@ def test_result_rejects_noncanonical_value_encodings(noncanonical: str) -> None:
 
 
 @pytest.mark.parametrize(
+    ("model", "payload"),
+    (
+        (
+            RamanujanSumRequest,
+            {"modulus": "4", "frequency": "-0"},
+        ),
+        (
+            RamanujanSumResult,
+            {"modulus": "4", "frequency": "-0", "value": "2"},
+        ),
+    ),
+)
+def test_negative_zero_frequency_is_rejected_before_source_binding(
+    model: type, payload: dict[str, str]
+) -> None:
+    with pytest.raises(ValidationError):
+        model.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    "noncanonical",
+    ("-0", "+0", "00", "007", "-007", " 1", "1 ", "1_0", "", "-", "+1"),
+)
+def test_request_rejects_noncanonical_frequency_encodings(
+    noncanonical: str,
+) -> None:
+    with pytest.raises(ValidationError):
+        RamanujanSumRequest(modulus="4", frequency=noncanonical)
+
+
+def test_equal_frequencies_share_one_serialized_identity() -> None:
+    zero_request = RamanujanSumRequest(modulus="4", frequency="0")
+    result = RAMANUJAN_SUM_OPERATION.run(zero_request)
+    assert result == RamanujanSumResult(modulus="4", frequency="0", value="2")
+
+
+@pytest.mark.parametrize(
+    ("modulus", "frequency", "value"),
+    (
+        ("4", "-2", "-2"),
+        ("5", "-3", "-1"),
+        ("1", "-9", "1"),
+    ),
+)
+def test_canonical_negative_frequencies_round_trip(
+    modulus: str, frequency: str, value: str
+) -> None:
+    request = RamanujanSumRequest(modulus=modulus, frequency=frequency)
+    assert RAMANUJAN_SUM_OPERATION.run(request) == RamanujanSumResult(
+        modulus=modulus, frequency=frequency, value=value
+    )
+    assert RamanujanSumResult.model_validate(
+        {"modulus": modulus, "frequency": frequency, "value": value}
+    ) == RAMANUJAN_SUM_OPERATION.run(request)
+
+
+@pytest.mark.parametrize(
     ("modulus", "frequency", "value"),
     (
         ("5", "0", "4"),

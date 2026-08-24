@@ -516,7 +516,7 @@ def test_smt_request_rejects_a_numeral_wider_than_the_digit_budget() -> None:
             smtlib=(
                 "(set-logic QF_LIA)\n"
                 "(declare-const x Int)\n"
-                f"(assert (= x {'9' * 193}))\n"
+                f"(assert (= x {'9' * 4_097}))\n"
                 "(check-sat)\n"
             ),
         )
@@ -539,7 +539,7 @@ def test_smt_request_admits_a_numeral_at_the_digit_boundary_and_still_solves() -
             smtlib=(
                 "(set-logic QF_LIA)\n"
                 "(declare-const x Int)\n"
-                f"(assert (= x {'9' * 192}))\n"
+                f"(assert (= x {'9' * 4_096}))\n"
                 "(check-sat)\n"
             ),
         )
@@ -547,6 +547,27 @@ def test_smt_request_admits_a_numeral_at_the_digit_boundary_and_still_solves() -
 
     assert result.outcome == "SAT"
     assert result.model_smtlib is not None
+
+
+def test_smt_request_admits_a_literal_beyond_the_former_ceiling_with_its_exact_model() -> (
+    None
+):
+    literal = "3" + "1" * 191 + "7"
+    result = solve_smt(
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib=(
+                "(set-logic QF_LIA)\n"
+                "(declare-const x Int)\n"
+                f"(assert (= x {literal}))\n"
+                "(check-sat)\n"
+            ),
+        )
+    )
+
+    assert result.outcome == "SAT"
+    assert result.model_smtlib is not None
+    assert literal in result.model_smtlib
 
 
 def test_atom_numeral_weight_classifies_literal_tokens_not_symbols() -> None:
@@ -581,7 +602,7 @@ def test_smt_request_admits_digits_inside_simple_symbols_and_still_solves() -> N
 
 
 def test_smt_request_rejects_a_decimal_wider_than_the_digit_budget() -> None:
-    for numeral in ("9" * 193 + ".5", "0." + "9" * 193):
+    for numeral in ("9" * 4_097 + ".5", "0." + "9" * 4_097):
         with pytest.raises(ValueError, match="numeral wider"):
             SmtSolveRequest(
                 logic=SmtLogic.QF_LRA,
@@ -601,7 +622,7 @@ def test_smt_request_admits_a_decimal_at_the_digit_boundary_and_still_solves() -
             smtlib=(
                 "(set-logic QF_LRA)\n"
                 "(declare-const x Real)\n"
-                f"(assert (= x 99.{'9' * 190}))\n"
+                f"(assert (= x 99.{'9' * 4_094}))\n"
                 "(check-sat)\n"
             ),
         )
@@ -634,7 +655,7 @@ def test_smt_request_rejects_an_indexed_bit_vector_value_beyond_the_digit_budget
             smtlib=(
                 "(set-logic QF_LIA)\n"
                 "(declare-const x Int)\n"
-                f"(assert (= x (_ bv{'9' * 193} 8)))\n"
+                f"(assert (= x (_ bv{'9' * 4_097} 8)))\n"
                 "(check-sat)\n"
             ),
         )
@@ -646,12 +667,12 @@ def test_smt_request_admits_an_indexed_bit_vector_at_the_digit_boundary() -> Non
         smtlib=(
             "(set-logic QF_LIA)\n"
             "(declare-const x Int)\n"
-            f"(assert (= x (_ bv{'9' * 192} 8)))\n"
+            f"(assert (= x (_ bv{'9' * 4_096} 8)))\n"
             "(check-sat)\n"
         ),
     )
 
-    assert operations._smtlib_structure(request.smtlib).numeral_digits == 192
+    assert operations._smtlib_structure(request.smtlib).numeral_digits == 4_096
 
 
 def test_smt_request_admits_a_bv_named_symbol_outside_index_context_and_solves() -> (
@@ -674,14 +695,30 @@ def test_smt_request_admits_a_bv_named_symbol_outside_index_context_and_solves()
     assert result.model_smtlib is not None
 
 
-def test_solver_declarations_advertise_version_two_for_the_exhausted_schema() -> None:
+def test_solver_declarations_advertise_version_three_for_the_widened_envelope() -> (
+    None
+):
     versions = {
         tool.operation_id: tool.version
         for tool in TOOLS
         if tool.operation_id in ("sat.solve", "smt.solve")
     }
 
-    assert versions == {"sat.solve": "2", "smt.solve": "2"}
+    assert versions == {"sat.solve": "2", "smt.solve": "3"}
+
+
+def test_smt_request_schema_publishes_the_structural_limits() -> None:
+    schema = SmtSolveRequest.model_json_schema()
+    description = schema["properties"]["smtlib"]["description"]
+
+    assert f"nesting depth at most {operations._MAX_SMTLIB_DEPTH}" in description
+    assert f"compound terms at most {operations._MAX_SMTLIB_TERMS}" in description
+    assert (
+        f"declared symbols at most {operations._MAX_SMTLIB_DECLARATIONS}" in description
+    )
+    assert (
+        f"at most {operations._MAX_SMTLIB_NUMERAL_DIGITS} digits" in description
+    )
 
 
 def test_smt_request_rejects_more_than_the_declaration_budget() -> None:
@@ -721,7 +758,7 @@ def test_structural_rejection_precedes_z3_parsing(monkeypatch) -> None:
             smtlib=(
                 "(set-logic QF_LIA)\n"
                 "(declare-const x Int)\n"
-                f"(assert (= x {'9' * 193}))\n"
+                f"(assert (= x {'9' * 4_097}))\n"
                 "(check-sat)\n"
             ),
         )

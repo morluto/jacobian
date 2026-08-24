@@ -37,11 +37,14 @@ _MAX_SMTLIB_BYTES = 128_000
 # the recursive-descent parser's native stack per nesting level; compound terms
 # bound the assertion-DAG nodes the parser allocates and the solver preprocesses;
 # declarations bound the symbol table and the width of any returned model;
-# numeral digits bound big-integer growth from a compact textual spelling.
+# numeral digits bound the big-integer expansion of one literal spelling, the
+# quantity whose coefficient work measurably outgrows Z3's own timeout and
+# rlimit checks near 16k digits (4,096 keeps worst measured shapes within a
+# small multiple of the declared wall time).
 _MAX_SMTLIB_DEPTH = 512
 _MAX_SMTLIB_TERMS = 32_768
 _MAX_SMTLIB_DECLARATIONS = 4_096
-_MAX_SMTLIB_NUMERAL_DIGITS = 192
+_MAX_SMTLIB_NUMERAL_DIGITS = 4_096
 # Request-scoped solver budgets beyond wall time. Z3 rlimit is a deterministic
 # work measure: identical requests cut off identically regardless of host load
 # or speed. The ceiling is orders of magnitude above admitted easy queries
@@ -633,8 +636,10 @@ class SmtSolveRequest(StrictModel):
         max_length=_MAX_SMTLIB_BYTES,
         description=(
             "ASCII SMT-LIB that declares logic, contains exactly one check-sat command, "
-            "and ends with that command. Nesting depth, compound terms, declared "
-            "symbols, and numeral width are bounded before parsing."
+            "and ends with that command. Bounded before parsing: nesting depth at most "
+            f"{_MAX_SMTLIB_DEPTH}, compound terms at most {_MAX_SMTLIB_TERMS}, declared "
+            f"symbols at most {_MAX_SMTLIB_DECLARATIONS}, and any one numeral, decimal, "
+            f"or indexed bit-vector spelling at most {_MAX_SMTLIB_NUMERAL_DIGITS} digits."
         ),
         examples=[
             "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)"
@@ -1202,7 +1207,7 @@ LOGIC_OPERATIONS = (
     ),
     MathTool(
         operation_id="smt.solve",
-        version="2",
+        version="3",
         title="Solve a bounded SMT-LIB query",
         description="Run the maintained Z3 Python binding on one QF SMT-LIB query.",
         request_type=SmtSolveRequest,

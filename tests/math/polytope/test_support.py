@@ -82,6 +82,38 @@ def _oversized_simplex_payload() -> dict:
     }
 
 
+def _square_payload() -> dict:
+    """A valid serialized square support request payload."""
+    zero = {"num": "0", "den": "1"}
+    one = {"num": "1", "den": "1"}
+    vertices = [
+        {"vertex_id": name, "coordinates": [a, b]}
+        for name, a, b in (
+            ("bottom_left", zero, zero),
+            ("bottom_right", one, zero),
+            ("top_left", zero, one),
+            ("top_right", one, one),
+        )
+    ]
+    return {
+        "polytope": {"space": {"axes": ["x", "y"]}, "vertices": vertices},
+        "covector": {"space": {"axes": ["x", "y"]}, "components": [one, zero]},
+    }
+
+
+def _forbid_extremality_proof(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fail the test if the exact extremality proof is ever reached."""
+
+    def unexpected_proof(polytope: object) -> None:
+        raise AssertionError("extremality proof ran before the covector preflight")
+
+    monkeypatch.setattr(
+        polytope_operations,
+        "require_full_dimensional_extreme_vertices",
+        unexpected_proof,
+    )
+
+
 def test_support_returns_exact_value_and_complete_exposed_edge() -> None:
     result = compute_polytope_support(
         PolytopeSupportRequest(polytope=_square(), covector=_covector(0, 1))
@@ -297,6 +329,106 @@ def test_request_preflights_oversized_covector_payload_before_nested_parsing(
         PolytopeSupportRequest.model_validate(payload)
 
 
+def test_request_preflights_missing_covector_before_hull_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A raw payload omitting the covector is rejected before the valid
+    V-polytope pays its exact extremality proof."""
+
+    _forbid_extremality_proof(monkeypatch)
+    payload = _square_payload()
+    del payload["covector"]
+
+    with pytest.raises(ValidationError, match="covector must be provided"):
+        PolytopeSupportRequest.model_validate(payload)
+
+
+def test_request_preflights_malformed_covector_components_before_hull_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Component shapes that cannot construct a canonical rational are
+    rejected before the hull proof instead of after it."""
+
+    _forbid_extremality_proof(monkeypatch)
+    payload = _square_payload()
+    payload["covector"]["components"] = [
+        {"num": "1", "den": "1"},
+        {"num": "0"},
+    ]
+
+    with pytest.raises(
+        ValidationError,
+        match="covector component must be a canonical rational",
+    ):
+        PolytopeSupportRequest.model_validate(payload)
+
+    payload = _square_payload()
+    payload["covector"]["components"] = [{"num": "1", "den": "1"}, "0"]
+
+    with pytest.raises(
+        ValidationError,
+        match="covector component must be a canonical rational",
+    ):
+        PolytopeSupportRequest.model_validate(payload)
+
+
+def test_request_preflights_covector_dimension_mismatch_before_hull_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A covector whose components do not match its declared axis count
+    is rejected before the hull proof."""
+
+    _forbid_extremality_proof(monkeypatch)
+    payload = _square_payload()
+    payload["covector"]["components"] = [{"num": "1", "den": "1"}]
+
+    with pytest.raises(
+        ValidationError,
+        match="covector components must use the declared coordinate axis",
+    ):
+        PolytopeSupportRequest.model_validate(payload)
+
+
+def test_request_preflights_foreign_covector_space_before_hull_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A covector declaring a different raw space is rejected before the
+    hull proof."""
+
+    _forbid_extremality_proof(monkeypatch)
+    payload = _square_payload()
+    payload["covector"]["space"] = {"axes": ["x", "z"]}
+
+    with pytest.raises(
+        ValidationError,
+        match="polytope and covector must use the same coordinate space",
+    ):
+        PolytopeSupportRequest.model_validate(payload)
+
+
+def test_request_preflights_malformed_covector_space_before_hull_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A covector space violating a published constraint is rejected
+    before the hull proof."""
+
+    _forbid_extremality_proof(monkeypatch)
+    payload = _square_payload()
+    payload["covector"]["space"] = {"axes": []}
+
+    with pytest.raises(
+        ValidationError,
+        match="covector space axes must be a non-empty sequence",
+    ):
+        PolytopeSupportRequest.model_validate(payload)
+
+    payload = _square_payload()
+    payload["covector"]["space"] = {"axes": ["x", "x"]}
+
+    with pytest.raises(ValidationError, match="coordinate axes must be unique"):
+        PolytopeSupportRequest.model_validate(payload)
+
+
 def test_serialized_request_accepts_components_at_the_envelope_boundary() -> None:
     """The serialized math.run path admits exactly-150-digit components."""
     at_bound = _large_rational(MAX_SUPPORT_COMPONENT_DIGITS)
@@ -490,6 +622,23 @@ def test_result_preflights_oversized_covector_before_nested_parsing(
             f"{MAX_SUPPORT_COMPONENT_DIGITS}-digit bound"
         ),
     ):
+        PolytopeSupportResult.model_validate(payload)
+
+
+def test_result_preflights_missing_covector_before_nested_parsing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Result deserialization gates the retained covector's presence
+    before the nested V-polytope's exact extremality proof executes."""
+
+    result = compute_polytope_support(
+        PolytopeSupportRequest(polytope=_square(), covector=_covector(0, 1))
+    )
+    _forbid_extremality_proof(monkeypatch)
+    payload = result.model_dump(mode="json")
+    del payload["covector"]
+
+    with pytest.raises(ValidationError, match="covector must be provided"):
         PolytopeSupportResult.model_validate(payload)
 
 

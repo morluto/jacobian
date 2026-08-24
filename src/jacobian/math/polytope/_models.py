@@ -7,7 +7,13 @@ from collections.abc import Iterator, Sequence
 from fractions import Fraction
 from typing import Annotated, Any, Self
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import (
+    Field,
+    StringConstraints,
+    TypeAdapter,
+    ValidationError,
+    model_validator,
+)
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
@@ -160,6 +166,7 @@ def _preflight_raw_support_components(data: object) -> object:
     if not isinstance(data, dict):
         return data
     canonical: Any = _tuple_canonical_containers(data)
+    _require_raw_support_covector_admissible(canonical)
     for vertex in _iter_raw_entries(canonical.get("polytope"), "vertices"):
         for component in _iter_raw_entries(vertex, "coordinates"):
             _require_raw_component_within_support_envelope(
@@ -200,6 +207,120 @@ def _require_raw_component_within_support_envelope(
         raise ValueError(
             f"{label} exceeds the {MAX_SUPPORT_COMPONENT_DIGITS}-digit bound"
         )
+
+
+def _raw_space_axes(space: object) -> tuple[object, ...] | None:
+    """Read one raw or built coordinate space's declared axes.
+
+    Unrecognized payload shapes return ``None`` so ordinary canonical
+    validation reports them with the published schema errors.
+    """
+
+    if isinstance(space, RationalCoordinateSpace):
+        return tuple(space.axes)
+    if isinstance(space, dict):
+        axes = space.get("axes")
+        if isinstance(axes, (list, tuple)):
+            return tuple(axes)
+    return None
+
+
+def _require_raw_canonical_rational_component(
+    component: object,
+    label: str,
+) -> None:
+    """Reject component shapes that cannot construct ``CanonicalRational``.
+
+    A canonical rational parses only from its serialized ``num``/``den``
+    object or an already-built value — the component fields are strict
+    canonical strings and the model forbids extra keys — so any other
+    authored shape is certain to be rejected by nested validation, only
+    after the polytope field has paid its exact hull proof.
+    """
+
+    if isinstance(component, CanonicalRational):
+        return
+    if (
+        isinstance(component, dict)
+        and set(component) == {"num", "den"}
+        and isinstance(component["num"], str)
+        and isinstance(component["den"], str)
+    ):
+        return
+    raise ValueError(f"{label} must be a canonical rational")
+
+
+def _require_raw_coordinate_space(value: object, label: str) -> tuple[str, ...]:
+    """Mirror ``RationalCoordinateSpace`` on one raw payload value.
+
+    Returns the declared axis labels when the raw space satisfies every
+    published constraint (closed ``axes`` field, non-empty sequence of at
+    most ``MAX_DIMENSION`` short unique string labels); any violation
+    raises here because ordinary nested validation rejects it too, only
+    after the hull proof has run.
+    """
+
+    if isinstance(value, RationalCoordinateSpace):
+        return tuple(value.axes)
+    if not isinstance(value, dict) or set(value) != {"axes"}:
+        raise ValueError(f"{label} space must be an object with axes")
+    axes = value["axes"]
+    if not isinstance(axes, (list, tuple)) or not axes:
+        raise ValueError(f"{label} space axes must be a non-empty sequence")
+    if len(axes) > MAX_DIMENSION:
+        raise ValueError(f"{label} space must declare at most {MAX_DIMENSION} axes")
+    if any(not isinstance(axis, str) or not 1 <= len(axis) <= 64 for axis in axes):
+        raise ValueError(f"{label} space axes must be short string labels")
+    if len(set(axes)) != len(axes):
+        raise ValueError("coordinate axes must be unique")
+    return tuple(axes)
+
+
+def _require_raw_support_covector_admissible(canonical: Any) -> None:
+    """Gate the covector half of one raw support payload.
+
+    Pydantic parses declared fields in order and aggregates nested
+    errors, so a raw ``math.run`` payload whose ``polytope`` is valid
+    near the hull envelope pays the complete exact extremality proof —
+    up to the published orientation-test bound — before a missing
+    covector, malformed components, dimension mismatch, or foreign
+    space is reported. This gate mirrors only the covector-level
+    constraints nested validation rejects anyway: presence, closed
+    field set, component container and per-component canonical-rational
+    shapes, the declared-axis match, and raw space agreement with the
+    polytope.
+    """
+
+    covector = canonical.get("covector")
+    if covector is None:
+        raise ValueError("covector must be provided")
+    if isinstance(covector, RationalCovector):
+        return
+    if not isinstance(covector, dict) or set(covector) != {"space", "components"}:
+        raise ValueError("covector must be an object with space and components")
+    components = covector["components"]
+    if not isinstance(components, (list, tuple)):
+        raise ValueError("covector components must be a sequence")
+    if not components:
+        raise ValueError("covector components must be a non-empty sequence")
+    if len(components) > MAX_DIMENSION:
+        raise ValueError(
+            f"covector components must carry at most {MAX_DIMENSION} entries"
+        )
+    for component in components:
+        _require_raw_canonical_rational_component(component, "covector component")
+    axes = _require_raw_coordinate_space(covector["space"], "covector")
+    if len(components) != len(axes):
+        raise ValueError("covector components must use the declared coordinate axis")
+    polytope_axes = _raw_space_axes(
+        _raw_field_value(canonical.get("polytope"), "space")
+    )
+    if (
+        polytope_axes is not None
+        and all(isinstance(axis, str) for axis in polytope_axes)
+        and tuple(polytope_axes) != axes
+    ):
+        raise ValueError("polytope and covector must use the same coordinate space")
 
 
 def _require_interval_volume_within_result_bound(
@@ -681,18 +802,29 @@ def _v_polytope_axis_count(value: object) -> int | None:
 
 
 def _require_projected_dimension_bound(dimension: int, dimension_bound: object) -> None:
-    """Reject a V-polytope wider than the declared bound before hull replay.
+    """Reject a V-polytope outside the published bound before hull replay.
 
-    Malformed bound values stay untouched here so ordinary field validation
-    reports them with the published schema errors.
+    The raw bound is measured with the ``dimension_bound`` field's own
+    schema, derived from its declaration so the accepted coercion domain
+    cannot drift: malformed, null, and out-of-range values are rejected
+    here with the accept/reject boundary ordinary field validation
+    enforces, before the canonical reconstruction replays the exact
+    extremality proof, while a coercible raw value is compared through
+    its coerced integer exactly as the outer model would.
     """
 
-    if isinstance(dimension_bound, bool) or not isinstance(dimension_bound, int):
-        return
-    if dimension > dimension_bound:
+    if dimension_bound is None:
         raise ValueError(
-            f"dimension {dimension} exceeds the dimension bound {dimension_bound}"
+            f"dimension_bound must be an integer between 1 and {MAX_DIMENSION}"
         )
+    try:
+        bound: int = _DIMENSION_BOUND_ADAPTER.validate_python(dimension_bound)
+    except ValidationError as exc:
+        raise ValueError(
+            f"dimension_bound must be an integer between 1 and {MAX_DIMENSION}"
+        ) from exc
+    if dimension > bound:
+        raise ValueError(f"dimension {dimension} exceeds the dimension bound {bound}")
 
 
 VertexTuple = Annotated[
@@ -799,9 +931,10 @@ class PolytopeVolumeRequest(StrictModel):
         ordinary validation, so admission and the kernel see exactly the
         declared V-representation; a serialized value is re-validated as
         the canonical type first.  Reconstructing that type replays its
-        exact extremality proof, so the cheap outer representation and
-        dimension constraints are preflighted first: an already-invalid
-        request must fail before any hull replay runs.
+        exact extremality proof, so every cheap outer field — the closed
+        field set, the halfspace conflict, and the whole published
+        ``dimension_bound`` schema — is preflighted first: an
+        already-invalid request must fail before any hull replay runs.
         """
 
         if not isinstance(data, dict):
@@ -811,6 +944,12 @@ class PolytopeVolumeRequest(StrictModel):
             isinstance(value, dict) and set(value) == {"space", "vertices"}
         )
         if carries_v_polytope:
+            unknown_fields = set(data) - {"vertices", "halfspaces", "dimension_bound"}
+            if unknown_fields:
+                raise ValueError(
+                    "unexpected fields for a polytope volume request: "
+                    f"{sorted(unknown_fields)}"
+                )
             if data.get("halfspaces") is not None:
                 raise ValueError(
                     "exactly one of `vertices` or `halfspaces` must be provided"
@@ -818,7 +957,7 @@ class PolytopeVolumeRequest(StrictModel):
             axis_count = _v_polytope_axis_count(value)
             if axis_count is not None:
                 _require_projected_dimension_bound(
-                    axis_count, data.get("dimension_bound")
+                    axis_count, data.get("dimension_bound", MAX_DIMENSION)
                 )
         if isinstance(value, RationalVPolytope):
             return {**data, "vertices": _canonical_v_polytope_vertices(value)}
@@ -843,6 +982,11 @@ class PolytopeVolumeRequest(StrictModel):
             assert self.halfspaces is not None  # for type checkers
             _validate_halfspaces(self.halfspaces, self.dimension_bound)
         return self
+
+
+_DIMENSION_BOUND_ADAPTER: TypeAdapter[int] = TypeAdapter(
+    Annotated[int, *PolytopeVolumeRequest.model_fields["dimension_bound"].metadata]
+)
 
 
 def _validate_vertices(vertices: tuple[Vertex, ...], dimension_bound: int) -> None:

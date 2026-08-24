@@ -1024,6 +1024,24 @@ def _plain_vertices(polytope: RationalVPolytope) -> tuple[Vertex, ...]:
     return tuple(Vertex(coordinates=v.coordinates) for v in polytope.vertices)
 
 
+def _cube() -> RationalVPolytope:
+    ids = [f"v{a}{b}{c}" for a in (0, 1) for b in (0, 1) for c in (0, 1)]
+    return RationalVPolytope(
+        space=RationalCoordinateSpace(axes=("x", "y", "z")),
+        vertices=tuple(
+            RationalPolytopeVertex(
+                vertex_id=vertex_id,
+                coordinates=(
+                    _canonical_rational(int(vertex_id[1])),
+                    _canonical_rational(int(vertex_id[2])),
+                    _canonical_rational(int(vertex_id[3])),
+                ),
+            )
+            for vertex_id in sorted(ids)
+        ),
+    )
+
+
 class TestCanonicalVPolytopeComposition:
     """The canonical labelled V-polytope value must compose into the
     volume request unchanged (review thread: support results produce
@@ -1112,6 +1130,65 @@ class TestCanonicalVPolytopeComposition:
         with pytest.raises(ValidationError, match="exceeds the dimension bound"):
             PolytopeVolumeRequest.model_validate(
                 {"vertices": cube.model_dump(mode="json"), "dimension_bound": 2}
+            )
+
+    def _forged_serialized_square(self) -> dict:
+        """A serialized canonical value carrying a non-extreme vertex, so
+        any hull replay would fail with the extremality error before an
+        outer rejection could be reported."""
+        payload = _support_square_result().polytope.model_dump(mode="json")
+        payload["vertices"].insert(
+            2,
+            {
+                "vertex_id": "middle",
+                "coordinates": [{"num": "1", "den": "2"}, {"num": "0", "den": "1"}],
+            },
+        )
+        return payload
+
+    def test_outer_extra_field_rejects_before_the_hull_replay(self) -> None:
+        with pytest.raises(ValidationError, match="unexpected fields"):
+            PolytopeVolumeRequest.model_validate(
+                {
+                    "vertices": self._forged_serialized_square(),
+                    "purpose": "volume",
+                }
+            )
+
+    def test_outer_dimension_bound_type_rejects_before_the_hull_replay(self) -> None:
+        with pytest.raises(
+            ValidationError,
+            match="dimension_bound must be an integer between 1 and 6",
+        ):
+            PolytopeVolumeRequest.model_validate(
+                {
+                    "vertices": self._forged_serialized_square(),
+                    "dimension_bound": "wide",
+                }
+            )
+        with pytest.raises(
+            ValidationError,
+            match="dimension_bound must be an integer between 1 and 6",
+        ):
+            PolytopeVolumeRequest.model_validate(
+                {
+                    "vertices": self._forged_serialized_square(),
+                    "dimension_bound": None,
+                }
+            )
+
+    def test_coercible_dimension_bound_compares_through_its_integer(self) -> None:
+        """A raw bound inside the field's coercion domain is admitted and
+        compared exactly as the outer model would coerce it."""
+        admitted = PolytopeVolumeRequest.model_validate(
+            {"vertices": _cube().model_dump(mode="json"), "dimension_bound": "3"}
+        )
+
+        assert admitted.dimension_bound == 3
+        assert admitted.vertices == _plain_vertices(_cube())
+        with pytest.raises(ValidationError, match="exceeds the dimension bound 2"):
+            PolytopeVolumeRequest.model_validate(
+                {"vertices": _cube().model_dump(mode="json"), "dimension_bound": "2"}
             )
 
     def test_canonical_value_still_respects_dimension_bound(self) -> None:

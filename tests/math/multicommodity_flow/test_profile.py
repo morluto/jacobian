@@ -21,7 +21,6 @@ from jacobian.math.graphs.multicommodity_flow._models import (
     MulticommodityFlow,
     MulticommodityFlowProfileRequest,
     MulticommodityFlowProfileResult,
-    _fold_intermediate_digit_cap,
     _profile_component_digit_bounds,
     derived_profile_digit_budget,
 )
@@ -908,9 +907,9 @@ def test_cancelling_amounts_are_admitted_regardless_of_entry_order() -> None:
 
 def test_coprime_denominator_flood_fails_closed() -> None:
     # Two unit-fraction entries whose distinct near-cap denominators are
-    # coprime complete to a roughly 32,776-digit load denominator above the
-    # canonical cap: their fold intermediates stay inside the operand-mass
-    # envelope, and admission fails closed on the measured completed load
+    # coprime complete to a roughly 32,777-digit load denominator above the
+    # canonical cap: their single fold stays inside the fold-intermediate
+    # budget, and admission fails closed on the measured completed load
     # instead of admitting the huge component.
     network = FlowGraph(
         vertex_count=2,
@@ -1105,10 +1104,10 @@ def test_fold_intermediates_admit_coprime_sums_with_small_components() -> None:
     # with p and q coprime 20,000-digit odd integers: denominator sorting
     # folds 1/p + 1/q first, whose reduced intermediate has the roughly
     # 40,000-digit denominator p*q. That transient exceeds the 32,768-digit
-    # canonical cap but stays far inside the operand-mass fold envelope, and
-    # each completed sum is small -- the load is exactly one because each
-    # corresponding pair sums to exactly one half. Fold order must therefore
-    # not reject this tensor.
+    # canonical cap but stays inside the derived fold-intermediate budget,
+    # and each completed sum is small -- the load is exactly one because
+    # each corresponding pair sums to exactly one half. Fold order must
+    # therefore not reject this tensor.
     p = 5 * 10**19_999 + 3
 
     def amount(numerator: int, denominator: int) -> CanonicalRational:
@@ -1163,13 +1162,155 @@ def test_fold_intermediates_admit_coprime_sums_with_small_components() -> None:
     ]
 
 
-def test_fold_intermediate_cap_covers_the_proven_operand_mass_envelope() -> None:
-    # The derivation bounds every bucket numerator, reduced partial sum, and
-    # unreduced addition product by three times the amount digit mass plus a
-    # small constant; the admitted cap must dominate that envelope so it can
-    # only fail closed on a violated derivation, never on an admitted fold.
-    for mass in (0, 1, 120_004, 10**7):
-        assert _fold_intermediate_digit_cap(mass) >= 3 * mass + 9
+def test_folding_intermediates_cancel_beneath_the_completed_cap() -> None:
+    # One edge carries 1/p and 1/q alongside (p-2)/(2p) and (q-2)/(2q) for
+    # coprime 20,000-digit odd p and q, with matching demands. Folding the
+    # smallest denominators first forms the temporary (p+q)/(pq) whose
+    # denominator has about 40,000 digits -- above the canonical cap but
+    # within the separately derived fold-intermediate budget -- and the
+    # later terms cancel each pair to exactly one half, so the completed
+    # load is exactly 1 while every divergence stays input-sized.
+    p_digits = "1" + "0" * 19_998 + "1"
+    q_digits = "3" + "0" * 19_998 + "1"
+    first = CanonicalRational(num="1", den=p_digits)
+    second = CanonicalRational(num="1", den=q_digits)
+    half_of_p = CanonicalRational(num="9" * 19_999, den="2" + "0" * 19_998 + "2")
+    half_of_q = CanonicalRational(num="2" + "9" * 19_999, den="6" + "0" * 19_998 + "2")
+    flow = MulticommodityFlow(
+        network=FlowGraph(
+            vertex_count=2,
+            edges=(CapacitatedEdge(source=0, target=1, capacity=q(1)),),
+        ),
+        commodities=(
+            CommodityDemand(commodity_id="a", source=0, sink=1, demand=first),
+            CommodityDemand(commodity_id="b", source=0, sink=1, demand=second),
+            CommodityDemand(commodity_id="c", source=0, sink=1, demand=half_of_p),
+            CommodityDemand(commodity_id="d", source=0, sink=1, demand=half_of_q),
+        ),
+        entries=(
+            CommodityEdgeFlow(commodity_id="a", source=0, target=1, amount=first),
+            CommodityEdgeFlow(commodity_id="b", source=0, target=1, amount=second),
+            CommodityEdgeFlow(commodity_id="c", source=0, target=1, amount=half_of_p),
+            CommodityEdgeFlow(commodity_id="d", source=0, target=1, amount=half_of_q),
+        ),
+    )
+    assert derived_profile_digit_budget(flow) == 20_000
+    result = compute_multicommodity_flow_profile(flow)
+    assert result.all_demands_routed is True
+    assert result.capacity_feasible is True
+    assert result.congestion == q(1)
+    assert result.edge_profiles[0].load == q(1)
+    assert result.edge_profiles[0].slack == q(0)
+    divergence = {
+        (row.commodity_id, row.vertex): row.divergence for row in result.divergences
+    }
+    assert divergence[("c", 0)] == half_of_p
+    assert divergence[("d", 1)].as_fraction() == -half_of_q.as_fraction()
+    # Ledger: twelve entry additions, eight single-denominator divergence
+    # folds plus four distinct edge-bucket denominator folds, one slack.
+    assert result.work.sparse_entries == 4
+    assert result.work.commodity_vertex_cells == 8
+    assert result.work.rational_additions_per_pass == 3 * 4 + (8 + 4) + 1
+    assert result.work.exact_comparisons_per_pass == 8 + 4
+    assert result.work.logical_steps_per_call == 2 * (25 + 4 + 1 + 12)
+
+
+def test_folds_are_bounded_by_the_intermediate_budget_not_the_component_cap() -> None:
+    # Three pairwise-coprime 24,000-digit denominators meet in one divergence
+    # cell (+1/p - 1/q - 1/r, sources minus sinks). Any pair fold keeps its
+    # full product denominator -- about 48,000 digits, far above the
+    # canonical cap yet inside the fold-intermediate budget -- and the third
+    # fold's predicted unreduced product crosses that budget, so the request
+    # fails closed before the cross-denominator arithmetic runs. Pairwise
+    # coprimality: 3p-q = 2, r - 5p = -2, and r - q = 2p share no odd factor
+    # with any denominator.
+    p_digits = "1" + "0" * 23_998 + "1"
+    q_digits = "3" + "0" * 23_998 + "1"
+    r_digits = "5" + "0" * 23_998 + "3"
+    with pytest.raises(ValidationError, match="fold-intermediate budget"):
+        MulticommodityFlow(
+            network=FlowGraph(
+                vertex_count=3,
+                edges=(
+                    CapacitatedEdge(source=0, target=1, capacity=q(1)),
+                    CapacitatedEdge(source=1, target=0, capacity=q(1)),
+                    CapacitatedEdge(source=2, target=0, capacity=q(1)),
+                ),
+            ),
+            commodities=(
+                CommodityDemand(commodity_id="a", source=0, sink=1, demand=q(1)),
+            ),
+            entries=(
+                CommodityEdgeFlow(
+                    commodity_id="a",
+                    source=0,
+                    target=1,
+                    amount=CanonicalRational(num="1", den=p_digits),
+                ),
+                CommodityEdgeFlow(
+                    commodity_id="a",
+                    source=1,
+                    target=0,
+                    amount=CanonicalRational(num="1", den=q_digits),
+                ),
+                CommodityEdgeFlow(
+                    commodity_id="a",
+                    source=2,
+                    target=0,
+                    amount=CanonicalRational(num="1", den=r_digits),
+                ),
+            ),
+        )
+
+
+def test_near_cap_coprime_growth_aborts_within_budget_sized_arithmetic() -> None:
+    # The exhaustion shape behind the finding: distinct near-cap coprime
+    # denominators folded into one divergence cell (+1/p - 1/q - 1/r,
+    # sources minus sinks of one commodity) grow a monotone accumulator
+    # whose digit mass tracks no single operand. Because every fold is
+    # pre-checked against the derived budget from measured operand sides,
+    # the third fold is refused before its roughly 96,000-digit product is
+    # ever constructed: admission never builds a fraction larger than twice
+    # the canonical cap, whatever the request's total digit mass, so
+    # request validation cannot be driven into multi-million-digit rational
+    # arithmetic by a sub-envelope tensor. Pairwise coprimality as above.
+    p_digits = "1" + "0" * 31_998 + "1"
+    q_digits = "3" + "0" * 31_998 + "1"
+    r_digits = "5" + "0" * 31_998 + "3"
+    with pytest.raises(ValidationError, match="fold-intermediate budget"):
+        MulticommodityFlow(
+            network=FlowGraph(
+                vertex_count=3,
+                edges=(
+                    CapacitatedEdge(source=0, target=1, capacity=q(1)),
+                    CapacitatedEdge(source=1, target=0, capacity=q(1)),
+                    CapacitatedEdge(source=2, target=0, capacity=q(1)),
+                ),
+            ),
+            commodities=(
+                CommodityDemand(commodity_id="a", source=0, sink=1, demand=q(1)),
+            ),
+            entries=(
+                CommodityEdgeFlow(
+                    commodity_id="a",
+                    source=0,
+                    target=1,
+                    amount=CanonicalRational(num="1", den=p_digits),
+                ),
+                CommodityEdgeFlow(
+                    commodity_id="a",
+                    source=1,
+                    target=0,
+                    amount=CanonicalRational(num="1", den=q_digits),
+                ),
+                CommodityEdgeFlow(
+                    commodity_id="a",
+                    source=2,
+                    target=0,
+                    amount=CanonicalRational(num="1", den=r_digits),
+                ),
+            ),
+        )
 
 
 def test_result_replay_rejects_forged_source_and_derived_ledger_fields() -> None:

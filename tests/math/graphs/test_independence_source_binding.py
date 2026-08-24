@@ -293,6 +293,7 @@ class _StubVariable:
 
 class _StubModel:
     def eval(self, variable: _StubVariable, model_completion: bool) -> bool:
+        assert model_completion is True
         return variable.name.endswith("_0")
 
 
@@ -348,6 +349,7 @@ class _StubZ3:
     def If(  # noqa: N802 (z3 API mirror)
         condition: object, then: object, otherwise: object
     ) -> object:
+        assert condition is not None and otherwise is not None
         return then
 
     @staticmethod

@@ -466,13 +466,15 @@ class MultisetSumRepresentationProfileRequest(StrictModel):
     def require_bounded_complete_enumeration(self) -> Self:
         values = _multiset_sum_source_values(self.source)
         candidate_count = _multiset_sum.candidate_count(len(values), self.arity)
-        work = _multiset_sum.enumeration_work(len(values), self.arity, candidate_count)
+        bounds = self.window.as_integer_bounds() if self.window is not None else None
+        work = _multiset_sum.enumeration_work(
+            values, self.arity, bounds, candidate_count
+        )
         if work > _MAX_MULTISET_SUM_ENUMERATION_WORK:
             raise ValueError(
                 f"multiset-sum enumeration requires {work} coordinate steps, "
                 f"exceeding the {_MAX_MULTISET_SUM_ENUMERATION_WORK}-step bound"
             )
-        bounds = self.window.as_integer_bounds() if self.window is not None else None
         support_bound = _multiset_sum.support_bound(
             values, self.arity, bounds, candidate_count
         )

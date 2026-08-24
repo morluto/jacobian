@@ -45,10 +45,22 @@ def candidate_count(source_size: int, arity: int) -> int:
     return math.comb(source_size + arity - 1, source_size - 1)
 
 
-def enumeration_work(source_size: int, arity: int, candidates: int) -> int:
+def enumeration_work(
+    values: tuple[int, ...],
+    arity: int,
+    bounds: tuple[int, int] | None,
+    candidates: int,
+) -> int:
     if candidates == 0 or arity == 0:
         return 0
-    return candidates * min(source_size, arity)
+    # A window missing every attainable sum [arity*values[0], arity*values[-1]]
+    # has an exactly empty profile; count_sums returns before inspecting any
+    # candidate, so admission charges zero enumeration work for that scope.
+    if bounds is not None and (
+        arity * values[0] > bounds[1] or arity * values[-1] < bounds[0]
+    ):
+        return 0
+    return candidates * min(len(values), arity)
 
 
 def support_bound(

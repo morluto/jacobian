@@ -258,6 +258,45 @@ def test_disjoint_window_over_admitted_two_element_source_is_exactly_empty(
     assert _profile((0, 1), arity, window) == {}
 
 
+@pytest.mark.parametrize(
+    "window",
+    [(-10, -1), (10**15 + 1, 10**15 + 7)],
+)
+def test_disjoint_window_charges_zero_work_above_the_enumeration_cap(
+    window: tuple[int, int],
+) -> None:
+    # Reported failure mode: source {0,1} at arity 10^15 attains only [0,10^15],
+    # so a window missing that interval proves an exactly empty profile without
+    # inspecting any candidate; admission charges zero work instead of
+    # rejecting candidate_count * 2 as excessive.
+    assert _profile((0, 1), 10**15, window) == {}
+
+
+@pytest.mark.parametrize(
+    "window",
+    [(0, 0), (0, 3)],
+)
+def test_intersecting_window_still_pays_full_enumeration_work(
+    window: tuple[int, int],
+) -> None:
+    # Boundary of the shortcut: a window sharing any point with the attainable
+    # interval requires real candidate inspection, so the work preflight still
+    # rejects it even though the declared span is small.
+    with pytest.raises(ValidationError, match="coordinate steps"):
+        _request((0, 1), 10**15, window)
+
+
+def test_disjoint_window_result_rejects_forged_entries() -> None:
+    result = compute_multiset_sum_representation_profile(
+        _request((0, 1), 10**15, (-10, -1))
+    )
+    assert result.entries == ()
+    payload = result.model_dump(mode="json")
+    payload["entries"] = [{"sum": "5", "multiplicity": 1}]
+    with pytest.raises(ValidationError, match="exact source-bound"):
+        MultisetSumRepresentationProfileResult.model_validate(payload)
+
+
 def test_narrow_window_over_large_slot_family_matches_closed_form() -> None:
     arity = 100_000
     assert _profile((0, 1), arity, (0, 3)) == {0: 1, 1: 1, 2: 1, 3: 1}

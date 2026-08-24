@@ -73,8 +73,17 @@ class LinearRationalSolutionFindRequest(StrictModel):
 
 
 class LinearRationalSolutionResult(StrictModel):
-    """Whether a rational linear system has an exact solution."""
+    """One exact solution outcome bound to its declared source system.
 
+    Retains the canonical ``LinearRationalSystem`` so validation replays the
+    defining relation: an admitted solution carries one coordinate per
+    declared variable and satisfies ``A x = b`` exactly over QQ, while an
+    inconsistent outcome carries no values.  The coefficient domain admits at
+    least one row and column, so zero-row shapes are rejected by request
+    admission rather than silently dropped.
+    """
+
+    system: LinearRationalSystem
     status: Literal["SOLUTION", "INCONSISTENT"] = "SOLUTION"
     values: tuple[CanonicalRational, ...] | None = Field(
         default=None,
@@ -83,16 +92,44 @@ class LinearRationalSolutionResult(StrictModel):
     )
 
     @model_validator(mode="after")
-    def bind_values_to_status(self) -> Self:
+    def bind_solution_to_source(self) -> Self:
         produced = self.status == "SOLUTION"
         if produced != (self.values is not None):
             raise ValueError("solution values must agree with the result status")
+        if self.values is None:
+            return self
+        if len(self.values) != len(self.system.variables):
+            raise ValueError("solution length must equal the source variable count")
+        components = [value.as_fraction() for value in self.values]
+        for row, bound in zip(
+            self.system.coefficients.entries,
+            self.system.rhs,
+            strict=True,
+        ):
+            residual = sum(
+                coefficient.as_fraction() * component
+                for coefficient, component in zip(row, components, strict=True)
+            )
+            if residual != bound.as_fraction():
+                raise ValueError("solution does not satisfy A x = b exactly")
         return self
 
 
 class LinearRationalInconsistencyResult(StrictModel):
-    """Whether a rational linear system is inconsistent."""
+    """One exact inconsistency outcome bound to its declared source system.
 
+    Retains the canonical ``LinearRationalSystem`` so validation replays the
+    defining relations: an admitted separating witness ``y`` carries one
+    coordinate per source row, annihilates every source column exactly
+    (``y^T A = 0``), and its recorded pairing equals ``y^T b`` on the
+    retained right-hand side and is nonzero.  The witness is defined up to a
+    nonzero scaling; the producer emits the backend-scaled witness whose
+    pairing equals one.  A consistent outcome carries no witness.  The
+    coefficient domain admits at least one row and column, so zero-row shapes
+    are rejected by request admission rather than silently dropped.
+    """
+
+    system: LinearRationalSystem
     status: Literal["INCONSISTENT", "CONSISTENT"] = "INCONSISTENT"
     left_witness: tuple[CanonicalRational, ...] | None = Field(
         default=None,
@@ -102,10 +139,37 @@ class LinearRationalInconsistencyResult(StrictModel):
     rhs_pairing: CanonicalRational | None = None
 
     @model_validator(mode="after")
-    def bind_witness_to_status(self) -> Self:
+    def bind_witness_to_source(self) -> Self:
         produced = self.status == "INCONSISTENT"
         if produced != (self.left_witness is not None and self.rhs_pairing is not None):
             raise ValueError("inconsistency witness must agree with the result status")
+        if self.left_witness is None or self.rhs_pairing is None:
+            return self
+        if len(self.left_witness) != len(self.system.rhs):
+            raise ValueError("witness length must equal the source row count")
+        coordinates = [value.as_fraction() for value in self.left_witness]
+        columns = range(len(self.system.coefficients.entries[0]))
+        for column in columns:
+            if (
+                sum(
+                    row[column].as_fraction() * coordinate
+                    for row, coordinate in zip(
+                        self.system.coefficients.entries,
+                        coordinates,
+                        strict=True,
+                    )
+                )
+                != 0
+            ):
+                raise ValueError("witness does not satisfy y^T A = 0 exactly")
+        pairing = sum(
+            bound.as_fraction() * coordinate
+            for bound, coordinate in zip(self.system.rhs, coordinates, strict=True)
+        )
+        if pairing != self.rhs_pairing.as_fraction():
+            raise ValueError("recorded pairing must equal y^T b on the source system")
+        if pairing == 0:
+            raise ValueError("separating witness must have a nonzero pairing")
         return self
 
 

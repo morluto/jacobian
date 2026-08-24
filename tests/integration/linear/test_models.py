@@ -53,13 +53,23 @@ def test_linear_find_request_rejects_ambiguous_or_oversized_rationals() -> None:
 
 
 def test_inline_results_keep_only_mathematical_values() -> None:
-    solution = LinearRationalSolutionResult(values=(_q(2), _q(1)))
+    system = LinearRationalSystem.model_validate(_system())
+    solution = LinearRationalSolutionResult(system=system, values=(_q(2), _q(1)))
+    dependent = LinearRationalSystem.model_validate(
+        {
+            "variables": ["x", "y"],
+            "coefficients": {"entries": [[_q(1), _q(1)], [_q(1), _q(1)]]},
+            "rhs": [_q(0), _q(1)],
+        }
+    )
     inconsistency = LinearRationalInconsistencyResult(
-        left_witness=(_q(-2), _q(1)),
+        system=dependent,
+        left_witness=(_q(-1), _q(1)),
         rhs_pairing=_q(1),
     )
 
     assert solution.status == "SOLUTION"
+    assert solution.system == system
     assert solution.values is not None
     assert inconsistency.status == "INCONSISTENT"
     assert inconsistency.left_witness is not None
@@ -67,13 +77,18 @@ def test_inline_results_keep_only_mathematical_values() -> None:
 
 
 def test_inline_results_preserve_completed_no_candidate_outcomes() -> None:
-    solution = LinearRationalSolutionResult(status="INCONSISTENT")
-    inconsistency = LinearRationalInconsistencyResult(status="CONSISTENT")
+    system = LinearRationalSystem.model_validate(_system())
+    solution = LinearRationalSolutionResult(system=system, status="INCONSISTENT")
+    inconsistency = LinearRationalInconsistencyResult(
+        system=system,
+        status="CONSISTENT",
+    )
 
     assert solution.values is None
     assert inconsistency.left_witness is None
     with pytest.raises(ValidationError, match="agree with the result status"):
         LinearRationalSolutionResult(
+            system=system,
             status="INCONSISTENT",
             values=(_q(2), _q(1)),
         )

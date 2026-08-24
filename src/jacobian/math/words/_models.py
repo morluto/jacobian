@@ -24,6 +24,7 @@ from jacobian.math.words.values import (
     SubstitutionDependencyGraph,
     WordMorphism,
     _require_dependency_occurrence_bound,
+    _require_prolongable_source_occurrence_bound,
 )
 
 
@@ -206,6 +207,13 @@ class SubstitutionFixedPointPrefixRequest(StrictModel):
 
     source: ProlongableSubstitution
     prefix_length: int = Field(ge=0, le=MAX_MORPHISM_OUTPUT_LENGTH)
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_bounded_source_before_nested_parsing(cls, value: object) -> object:
+        if isinstance(value, dict):
+            _require_prolongable_source_occurrence_bound(value.get("source"))
+        return value
 
     @model_validator(mode="after")
     def require_bounded_source_work_and_result(self) -> Self:

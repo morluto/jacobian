@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Self
+from collections.abc import Mapping
+from typing import Annotated, Any, Self
 
 from pydantic import Field, field_validator, model_validator
 
@@ -14,6 +15,7 @@ MAX_SYMBOL_LENGTH = 64
 MAX_MORPHISM_IMAGE_LENGTH = 10_000
 MAX_MORPHISM_OUTPUT_LENGTH = MAX_WORD_LENGTH
 MAX_SUBSTITUTION_DEPENDENCY_OCCURRENCES = 10_000
+MAX_PROLONGABLE_SUBSTITUTION_SOURCE_OCCURRENCES = 20_000
 
 Symbol = Annotated[str, Field(min_length=1, max_length=MAX_SYMBOL_LENGTH)]
 
@@ -90,6 +92,12 @@ class ProlongableSubstitution(StrictModel):
     substitution: Substitution
     seed: Symbol
 
+    @model_validator(mode="before")
+    @classmethod
+    def require_bounded_source_before_mortality_analysis(cls, value: Any) -> Any:
+        _require_prolongable_source_occurrence_bound(value)
+        return value
+
     @model_validator(mode="after")
     def require_growing_seed(self) -> Self:
         morphism = self.substitution.morphism
@@ -113,6 +121,44 @@ class ProlongableSubstitution(StrictModel):
         if all(letter in mortal for letter in seed_image[1:]):
             raise ValueError("the seed suffix must not eventually erase")
         return self
+
+
+def _require_prolongable_source_occurrence_bound(value: object) -> None:
+    """Reject a fixed-prefix source before recursively proving prolongability."""
+
+    substitution: object | None
+    if isinstance(value, ProlongableSubstitution):
+        substitution = value.substitution
+    elif isinstance(value, Mapping):
+        substitution = value.get("substitution")
+    else:
+        return
+
+    morphism: object | None
+    if isinstance(substitution, Substitution):
+        morphism = substitution.morphism
+    elif isinstance(substitution, Mapping):
+        morphism = substitution.get("morphism")
+    else:
+        return
+
+    if isinstance(morphism, WordMorphism):
+        images: object = morphism.images
+    elif isinstance(morphism, Mapping):
+        images = morphism.get("images")
+    else:
+        return
+
+    if not isinstance(images, (list, tuple)) or not all(
+        isinstance(image, (list, tuple)) for image in images
+    ):
+        return
+    occurrence_count = sum(len(image) for image in images)
+    if occurrence_count > MAX_PROLONGABLE_SUBSTITUTION_SOURCE_OCCURRENCES:
+        raise ValueError(
+            "fixed-point source exceeds the aggregate occurrence bound "
+            f"({occurrence_count} > {MAX_PROLONGABLE_SUBSTITUTION_SOURCE_OCCURRENCES})"
+        )
 
 
 class SubstitutionDependencyEdge(StrictModel):
@@ -184,6 +230,7 @@ __all__ = [
     "MAX_ALPHABET_SIZE",
     "MAX_MORPHISM_IMAGE_LENGTH",
     "MAX_MORPHISM_OUTPUT_LENGTH",
+    "MAX_PROLONGABLE_SUBSTITUTION_SOURCE_OCCURRENCES",
     "MAX_SUBSTITUTION_DEPENDENCY_OCCURRENCES",
     "MAX_SYMBOL_LENGTH",
     "MAX_WORD_LENGTH",

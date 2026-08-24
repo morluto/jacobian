@@ -15,9 +15,9 @@ from jacobian.math.words.values import (
     SubstitutionDependencyGraph,
     WordMorphism,
     _require_dependency_occurrence_bound,
+    _require_prolongable_source_occurrence_bound,
 )
 
-MAX_FIXED_POINT_SOURCE_OCCURRENCES = 20_000
 MAX_FIXED_POINT_GENERATION_WORK = 1_000_000
 MAX_FIXED_POINT_RESULT_BYTES = 512_000
 
@@ -260,14 +260,7 @@ def _require_fixed_point_prefix_budget(
 ) -> None:
     if not 0 <= prefix_length <= MAX_MORPHISM_OUTPUT_LENGTH:
         raise ValueError(f"prefix length must be in 0..{MAX_MORPHISM_OUTPUT_LENGTH}")
-    source_occurrences = sum(
-        len(image) for image in source.substitution.morphism.images
-    )
-    if source_occurrences > MAX_FIXED_POINT_SOURCE_OCCURRENCES:
-        raise ValueError(
-            "fixed-point source exceeds the aggregate occurrence bound "
-            f"({source_occurrences} > {MAX_FIXED_POINT_SOURCE_OCCURRENCES})"
-        )
+    _require_prolongable_source_occurrence_bound(source)
     # One capped generation inspects/appends fewer than 2N cells, there are at
     # most N generations, and a public result replays the kernel once.
     generation_work = 4 * prefix_length * prefix_length

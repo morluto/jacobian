@@ -313,17 +313,29 @@ def test_fixed_point_source_and_result_envelopes_cover_exact_boundaries() -> Non
     )
     assert accepted.prefix.letters == ("0",)
 
-    source_above = ProlongableSubstitution(
-        substitution=_substitution(
-            (("0",) * 10_000, ("1",) * 10_000, ("2",)),
-            ("0", "1", "2"),
-        ),
-        seed="0",
-    )
+    over_limit_source = {
+        "substitution": {
+            "morphism": {
+                "source_alphabet": ["0", "1", "2", "3"],
+                "target_alphabet": ["0", "1", "2", "3"],
+                # The seed suffix eventually erases.  The public source limit
+                # must reject this payload before prolongability analyzes that.
+                "images": [
+                    ["0", *("1",) * 9_999],
+                    [],
+                    ["2"] * 10_000,
+                    ["3"],
+                ],
+            }
+        },
+        "seed": "0",
+    }
     with pytest.raises(ValidationError, match="source exceeds"):
-        SubstitutionFixedPointPrefixRequest(source=source_above, prefix_length=1)
-    with pytest.raises(ValueError, match="source exceeds"):
-        fixed_point_prefix(source_above, 1)
+        ProlongableSubstitution.model_validate(over_limit_source)
+    with pytest.raises(ValidationError, match="source exceeds"):
+        SubstitutionFixedPointPrefixRequest.model_validate(
+            {"source": over_limit_source, "prefix_length": 1}
+        )
 
     accepted_symbol = "x" * 45
     byte_boundary = ProlongableSubstitution(

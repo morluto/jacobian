@@ -8,8 +8,8 @@ from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 
-MAX_VERTICES = 32
-MAX_ARROWS = 256
+MAX_VERTICES = 128
+MAX_ARROWS = 1024
 
 
 class FiniteQuiver(StrictModel):
@@ -38,7 +38,10 @@ class VertexProfilesRequest(StrictModel):
 
 class FixedLengthPathsRequest(StrictModel):
     quiver: FiniteQuiver
-    length: int = Field(ge=0, le=MAX_VERTICES)
+    # Path length is decoupled from the vertex bound; keep a
+    # conservative 32-step cap and bound work via explicit work budget
+    # rather than tying length to MAX_VERTICES.
+    length: int = Field(ge=0, le=32)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:

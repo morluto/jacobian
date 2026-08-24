@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from fractions import Fraction
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import canonicalize_json, format_canonical_integer
@@ -24,22 +24,17 @@ from jacobian.math.polynomials._syzygy_models import (
     GradedJacobianKernelWitness,
     GradedJacobianMapEntry,
     GradedJacobianRankMinor,
+    GradedJacobianSyzygyCoefficientRequest,
     GradedJacobianSyzygyRequest,
+    GradedJacobianSyzygyRequestBase,
     GradedJacobianSyzygyResult,
+    _homogeneous_basis,
 )
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
-
-
-def _homogeneous_basis(degree: int) -> tuple[tuple[int, int, int], ...]:
-    return tuple(
-        (first, second, degree - first - second)
-        for first in range(degree, -1, -1)
-        for second in range(degree - first, -1, -1)
-    )
 
 
 def _fraction_text(value: Any) -> str:
@@ -53,8 +48,8 @@ def _fraction_text(value: Any) -> str:
 def _matrix_digest(
     *,
     multiplier_degree: int,
-    source_basis: tuple[tuple[int, int, int], ...],
-    target_basis: tuple[tuple[int, int, int], ...],
+    source_basis: tuple[tuple[int, ...], ...],
+    target_basis: tuple[tuple[int, ...], ...],
     entries: tuple[tuple[int, int, Any], ...],
 ) -> str:
     payload = {
@@ -80,8 +75,8 @@ def _primitive_kernel(vector: Any) -> tuple[Fraction, ...]:
 
 def _multiplier_polynomial(
     *,
-    variables: tuple[str, str, str],
-    basis: tuple[tuple[int, int, int], ...],
+    variables: tuple[str, ...],
+    basis: tuple[tuple[int, ...], ...],
     coefficients: tuple[Fraction, ...],
 ) -> RationalPolynomial:
     return RationalPolynomial(
@@ -103,38 +98,36 @@ def _multiplier_polynomial(
 
 
 def _coefficient_matrix(
-    partials: tuple[Any, Any, Any],
+    partials: tuple[Any, ...],
     multiplier_degree: int,
     homogeneous_degree: int,
 ) -> tuple[
-    tuple[tuple[int, int, int], ...],
-    tuple[tuple[int, int, int], ...],
+    tuple[tuple[int, ...], ...],
+    tuple[tuple[int, ...], ...],
     Any,
     tuple[tuple[int, int, Any], ...],
 ]:
     from sympy import Matrix
 
-    source_basis = _homogeneous_basis(multiplier_degree)
+    variable_count = len(partials)
+    source_basis = _homogeneous_basis(variable_count, multiplier_degree)
     target_degree = homogeneous_degree - 1 + multiplier_degree
-    target_basis = _homogeneous_basis(target_degree)
+    target_basis = _homogeneous_basis(variable_count, target_degree)
     row_by_exponent = {exponents: index for index, exponents in enumerate(target_basis)}
-    matrix = Matrix.zeros(len(target_basis), 3 * len(source_basis))
+    matrix = Matrix.zeros(len(target_basis), variable_count * len(source_basis))
     for component, partial in enumerate(partials):
         for basis_index, multiplier_exponents in enumerate(source_basis):
             column = component * len(source_basis) + basis_index
             for partial_exponents, coefficient in partial.terms():
                 if coefficient == 0:
                     continue
-                target_exponents = cast(
-                    tuple[int, int, int],
-                    tuple(
-                        left + right
-                        for left, right in zip(
-                            multiplier_exponents,
-                            partial_exponents,
-                            strict=True,
-                        )
-                    ),
+                target_exponents = tuple(
+                    left + right
+                    for left, right in zip(
+                        multiplier_exponents,
+                        partial_exponents,
+                        strict=True,
+                    )
                 )
                 row = row_by_exponent[target_exponents]
                 matrix[row, column] += coefficient
@@ -150,28 +143,21 @@ def _coefficient_matrix(
 def compute_graded_jacobian_syzygy(
     request: GradedJacobianSyzygyRequest,
 ) -> GradedJacobianSyzygyResult:
-    if request.coefficient_map_detail != "CERTIFICATES":
-        raise ValueError(
-            "full sparse coefficient maps are available through the explicit "
-            "jacobian syzygy coefficient-ledger operation"
-        )
     return _compute_graded_jacobian_syzygy(request)
 
 
 def compute_graded_jacobian_syzygy_coefficients(
-    request: GradedJacobianSyzygyRequest,
+    request: GradedJacobianSyzygyCoefficientRequest,
 ) -> GradedJacobianSyzygyResult:
     """Retain the full sparse coefficient maps as explicit evidence."""
-    return _compute_graded_jacobian_syzygy(
-        request.model_copy(update={"coefficient_map_detail": "SPARSE_ENTRIES"})
-    )
+    return _compute_graded_jacobian_syzygy(request)
 
 
 def _compute_graded_jacobian_syzygy(
-    request: GradedJacobianSyzygyRequest,
+    request: GradedJacobianSyzygyRequestBase,
 ) -> GradedJacobianSyzygyResult:
     if request.polynomial is not None:
-        variables = cast(tuple[str, str, str], request.polynomial.variables)
+        variables = request.polynomial.variables
         source = rational_polynomial_to_sympy(request.polynomial)
         source_kind: Literal[
             "EXPANDED_POLYNOMIAL", "LABELLED_LINEAR_FACTOR_PRODUCT"
@@ -201,10 +187,7 @@ def _compute_graded_jacobian_syzygy(
             )
         source_kind = "LABELLED_LINEAR_FACTOR_PRODUCT"
     source_degree = int(source.total_degree())
-    partials = cast(
-        tuple[Any, Any, Any],
-        tuple(source.diff(variable) for variable in source.gens),
-    )
+    partials = tuple(source.diff(variable) for variable in source.gens)
     maps: list[GradedJacobianCoefficientMap] = []
     kernel_witness: GradedJacobianKernelWitness | None = None
     first_degree: int | None = None
@@ -267,18 +250,15 @@ def _compute_graded_jacobian_syzygy(
             first_degree = multiplier_degree
             vector = _primitive_kernel(matrix.nullspace()[0])
             block_size = len(source_basis)
-            multipliers = cast(
-                tuple[RationalPolynomial, RationalPolynomial, RationalPolynomial],
-                tuple(
-                    _multiplier_polynomial(
-                        variables=variables,
-                        basis=source_basis,
-                        coefficients=vector[
-                            component * block_size : (component + 1) * block_size
-                        ],
-                    )
-                    for component in range(3)
-                ),
+            multipliers = tuple(
+                _multiplier_polynomial(
+                    variables=variables,
+                    basis=source_basis,
+                    coefficients=vector[
+                        component * block_size : (component + 1) * block_size
+                    ],
+                )
+                for component in range(len(variables))
             )
             kernel_witness = GradedJacobianKernelWitness(
                 multiplier_degree=multiplier_degree,
@@ -301,12 +281,8 @@ def _compute_graded_jacobian_syzygy(
         homogeneous_degree=source_degree,
         searched_through_degree=searched_through,
         coefficient_map_detail=request.coefficient_map_detail,
-        partial_derivatives=cast(
-            tuple[RationalPolynomial, RationalPolynomial, RationalPolynomial],
-            tuple(
-                rational_polynomial_from_sympy(partial, variables)
-                for partial in partials
-            ),
+        partial_derivatives=tuple(
+            rational_polynomial_from_sympy(partial, variables) for partial in partials
         ),
         degree_maps=tuple(maps),
         status="FOUND" if first_degree is not None else "NONE_THROUGH_BOUND",
@@ -319,13 +295,12 @@ GRADED_JACOBIAN_SYZYGY_OPERATION = polynomial_operation(
     "polynomial.jacobian_syzygy.minimum_degree.compute",
     "Compute the first graded Jacobian syzygy degree",
     (
-        "For one bounded homogeneous h in QQ[x,y,z], supplied either sparsely "
-        "or as a labelled product of linear forms, exactly construct every "
-        "graded map (QQ[x,y,z]_q)^3 -> QQ[x,y,z]_(q+deg(h)-1) from q=0, "
-        "report rank certificates, and stop at the first nonzero kernel or the "
-        "declared finite degree bound. Sparse polynomial terms must have "
-        "nonzero coefficients and unique exponent tuples in descending "
-        "lexicographic order. Full sparse maps are optional."
+        "For bounded homogeneous h in QQ[x_1,...,x_n], supplied sparsely or, "
+        "for n=3, as labelled linear forms, construct every graded map "
+        "(QQ[x_1,...,x_n]_q)^n -> QQ[x_1,...,x_n]_(q+deg(h)-1) from q=0 and "
+        "stop at the first nonzero kernel or the finite degree bound. This "
+        "operation returns rank certificates only; use the coefficient ledger "
+        "for sparse map entries."
     ),
     GradedJacobianSyzygyRequest,
     GradedJacobianSyzygyResult,
@@ -338,7 +313,7 @@ GRADED_JACOBIAN_SYZYGY_OPERATION = polynomial_operation(
     "rank",
     "kernel",
     "exact",
-    version="4",
+    version="6",
     examples=(
         OperationExample(
             name="sparse-homogeneous-polynomial",
@@ -416,7 +391,7 @@ JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_OPERATION = polynomial_operation(
         "Compute every sparse entry in the bounded graded Jacobian coefficient "
         "maps, together with the syzygy summary and rank certificates."
     ),
-    GradedJacobianSyzygyRequest,
+    GradedJacobianSyzygyCoefficientRequest,
     GradedJacobianSyzygyResult,
     compute_graded_jacobian_syzygy_coefficients,
     "polynomial",
@@ -424,6 +399,7 @@ JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_OPERATION = polynomial_operation(
     "syzygy",
     "coefficient-ledger",
     "evidence",
+    version="4",
     examples=(
         OperationExample(
             name="sparse-homogeneous-polynomial",

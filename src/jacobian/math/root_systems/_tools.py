@@ -11,13 +11,12 @@ from jacobian.math.root_systems._models import (
     RootSystemDataResult,
     SimpleReflectionRequest,
     SimpleReflectionResult,
-    WeylGroupDataRequest,
-    WeylGroupDataResult,
+    WeylGroupOrderResult,
 )
 from jacobian.math.root_systems._operations import (
     compute_root_system_data,
     compute_simple_reflection,
-    compute_weyl_group_data,
+    compute_weyl_group_order,
 )
 
 
@@ -93,20 +92,24 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     _op(
-        "root_system.weyl_group_data.compute",
-        "Compute Weyl group order and Coxeter number",
-        "Compute the Weyl group order, longest element, and Coxeter number "
-        "of a finite crystallographic root system from its Cartan matrix.",
-        WeylGroupDataRequest,
-        WeylGroupDataResult,
-        compute_weyl_group_data,
+        "root_system.weyl_group_order.compute",
+        "Compute the exact order of a Weyl group",
+        "Compute the exact order of the Weyl group of a finite "
+        "crystallographic root system from its Cartan matrix. The kernel "
+        "constructs the bounded complete signed-root action and uses SymPy's "
+        "Schreier-Sims order algorithm; it never enumerates Weyl-group elements.",
+        CartanMatrixRequest,
+        WeylGroupOrderResult,
+        compute_weyl_group_order,
         "algebra",
         "root-system",
         "exact",
         examples=(
             example(
-                "a2_weyl_group",
-                "Compute Weyl group data for A2 (order 6, h=3).",
+                "a2_weyl_group_order",
+                "Compute the order of the A2 Weyl group, which is 6; "
+                "the matrix must be a finite-type generalized Cartan "
+                "matrix of rank at most 8.",
                 {"matrix": _A2["matrix"]},
             ),
         ),

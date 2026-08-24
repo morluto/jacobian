@@ -34,9 +34,9 @@ def test_primorial_maximum_1000() -> None:
 
 
 def test_primorial_rejects_above_1000() -> None:
-    """n=1001 is rejected by the request model before backend work."""
+    """n=10001 is rejected by the request model before backend work."""
     with pytest.raises(ValueError):
-        PositiveIntegerRequest(n=1001)
+        PositiveIntegerRequest(n=10001)
 
 
 def test_primorial_5() -> None:

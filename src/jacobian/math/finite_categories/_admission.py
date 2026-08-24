@@ -18,6 +18,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "exact opposite category with reversed morphism directions",
     ),
+    OperationAdmission(
+        "finite_category.product.compute",
+        AdmissionDecision.KEEP,
+        "exact bounded Cartesian product with structural pair projections",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

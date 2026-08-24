@@ -26,10 +26,11 @@ def solve_independence_number(
     Results are built through ``model_construct`` after the producing solve
     established every field invariant under its own declared budget.  An
     ``EXACT`` conclusion additionally reproduces its optimum through the
-    same bounded source-graph replay that independent validation runs, so
-    every returned result validates; a replay that cannot certify the
-    solver optimum demotes to the typed ``UNKNOWN`` outcome instead of an
-    ``EXACT`` payload that would fail revalidation.
+    same bounded source-graph replay that independent validation runs,
+    charged against the same request deadline, so every returned result
+    validates; a replay that cannot certify the solver optimum demotes to
+    the typed ``UNKNOWN`` outcome instead of an ``EXACT`` payload that
+    would fail revalidation.
     """
 
     started = time.monotonic()
@@ -99,7 +100,11 @@ def solve_independence_number(
         upper_bound = max(lower_bound, min(order, _integer_bound(upper, order)))
         if lower_bound == upper_bound == len(incumbent):
             try:
-                _replay_exact_optimum(request.graph, len(incumbent))
+                _replay_exact_optimum(
+                    request.graph,
+                    len(incumbent),
+                    deadline=started + request.resource_budget.wall_seconds,
+                )
             except ValueError:
                 return IndependenceNumberResult.model_construct(
                     result_schema_version="2",

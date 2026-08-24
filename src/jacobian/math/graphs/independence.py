@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Iterator
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 IndependenceSearchStatus = Literal["EXACT", "UNKNOWN"]
@@ -37,6 +39,36 @@ class IndependenceNumberBudget(StrictModel):
     max_order: StrictInt = Field(default=128, ge=0, le=128)
 
 
+# The result retains its source graph and echoes every witness identifier,
+# so a request near the canonical input limit can serialize a response past
+# the identical output limit.  Admission reserves this much for the fixed
+# scalar fields, the bounded detail string, and the result envelope beyond
+# the echoed graph and worst-case witness labels.
+_RESULT_ENVELOPE_RESERVE_BYTES = 2_048
+
+
+def _graph_wire_bytes(graph: SimpleUndirectedGraph) -> int:
+    return len(encode_strict_json(graph.model_dump(mode="json")))
+
+
+def _label_wire_bytes(graph: SimpleUndirectedGraph) -> int:
+    return sum(len(encode_strict_json(label) + b",") for label in graph.vertices)
+
+
+def _require_output_headroom(source_bytes: int, witness_label_bytes: int) -> None:
+    estimated_result_bytes = (
+        source_bytes + witness_label_bytes + _RESULT_ENVELOPE_RESERVE_BYTES
+    )
+    output_limit = CanonicalLimits().max_output_bytes
+    if estimated_result_bytes > output_limit:
+        raise ValueError(
+            "the independence-number result retains its source graph and "
+            "witness labels and would exceed the "
+            f"{output_limit}-byte canonical output limit; "
+            "shorten vertex labels or shrink the graph"
+        )
+
+
 class IndependenceNumberRequest(StrictModel):
     """One finite simple graph and its operation-owned search budget."""
 
@@ -54,8 +86,39 @@ class IndependenceNumberRequest(StrictModel):
             raise ValueError("independence-number search supports order at most 128")
         return self
 
+    @model_validator(mode="after")
+    def require_transportable_result(self) -> Self:
+        # The result echoes the retained source graph and repeats up to
+        # every vertex identifier as the canonically sorted witness, so
+        # admission bounds that predicted serialization before any solve.
+        _require_output_headroom(
+            _graph_wire_bytes(self.graph),
+            _label_wire_bytes(self.graph),
+        )
+        return self
+
 
 _EXACT_REPLAY_SEARCH_NODES = 200_000
+
+
+def _replay_deadline_elapsed(deadline: float | None) -> bool:
+    """Report whether the shared request wall-clock envelope has elapsed."""
+
+    return deadline is not None and time.monotonic() >= deadline
+
+
+def _require_replay_budget(node_expansions: int, deadline: float | None) -> None:
+    """Reject the claim once the replay exhausts its node or wall budget."""
+
+    if node_expansions > _EXACT_REPLAY_SEARCH_NODES:
+        raise ValueError(
+            "claimed exact optimum was not reproduced by the bounded "
+            "source-graph replay"
+        )
+    if _replay_deadline_elapsed(deadline):
+        raise ValueError(
+            "claimed exact optimum replay exceeded the request wall-clock deadline"
+        )
 
 
 def _component_masks(
@@ -105,7 +168,11 @@ def _greedy_clique_cover_size(candidates: int, neighbours: list[int]) -> int:
     return len(classes)
 
 
-def _replay_exact_optimum(graph: SimpleUndirectedGraph, claimed_optimum: int) -> None:
+def _replay_exact_optimum(
+    graph: SimpleUndirectedGraph,
+    claimed_optimum: int,
+    deadline: float | None = None,
+) -> None:
     """Replay the claimed optimum as an exact search over the source graph.
 
     The producing solve establishes optimality with its own budgeted Z3 call;
@@ -127,7 +194,10 @@ def _replay_exact_optimum(graph: SimpleUndirectedGraph, claimed_optimum: int) ->
     expanded node performs bounded bitset work over at most 128 vertices,
     and the whole replay is bounded by ``_EXACT_REPLAY_SEARCH_NODES`` node
     expansions charged across all components plus one linear greedy pass per
-    component; exhausting that budget rejects the claim fail-closed.
+    component; exhausting that budget rejects the claim fail-closed.  When
+    ``deadline`` carries a monotonic timestamp, each expansion also charges
+    the replay to that shared request envelope and rejects the claim once it
+    elapses, so a producing solve never spends time beyond its own budget.
     """
 
     vertices = tuple(sorted(graph.vertices))
@@ -153,11 +223,7 @@ def _replay_exact_optimum(graph: SimpleUndirectedGraph, claimed_optimum: int) ->
         def search(candidates: int, chosen: int) -> None:
             nonlocal state_nodes, best_size
             state_nodes += 1
-            if state_nodes > _EXACT_REPLAY_SEARCH_NODES:
-                raise ValueError(
-                    "claimed exact optimum was not reproduced by the bounded "
-                    "source-graph replay"
-                )
+            _require_replay_budget(state_nodes, deadline)
             neighbourhood = 0
             rest = candidates
             while rest:
@@ -214,7 +280,9 @@ class IndependenceNumberResult(StrictModel):
     validate a forged optimum or upper bound.
     Operational ``UNKNOWN`` stays distinct from a mathematical optimum;
     ``REPLAY_INCOMPLETE`` marks a solver optimum that the bounded
-    source-graph replay could not certify, so no optimum is claimed.
+    source-graph replay could not certify, so no optimum is claimed.  An
+    incomplete outcome reports the graph order as its independently safe
+    upper bound, so no unauthenticated incumbent gap survives validation.
     """
 
     result_schema_version: Literal["2"] = "2"
@@ -266,6 +334,11 @@ class IndependenceNumberResult(StrictModel):
             _replay_exact_optimum(self.graph, self.optimum_value)
         elif self.optimum_value is not None:
             raise ValueError("incomplete search cannot claim an optimum")
+        elif self.upper_bound != self.order:
+            raise ValueError(
+                "an incomplete result must report the graph order as its "
+                "independently safe upper bound"
+            )
         return self
 
 

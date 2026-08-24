@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import copy
+import time
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.graphs import independence as independence_models
 from jacobian.math.graphs._independence_z3 import solve_independence_number
 from jacobian.math.graphs.independence import (
+    IndependenceNumberBudget,
     IndependenceNumberRequest,
     IndependenceNumberResult,
 )
@@ -269,3 +273,92 @@ def test_unreplayable_solver_optimum_demotes_to_unknown(
     assert result.lower_bound == result.incumbent_value
     assert result.upper_bound == 4
     assert IndependenceNumberResult.model_validate(result.model_dump()) == result
+
+
+def test_replay_deadline_is_charged_to_the_request_envelope() -> None:
+    """An elapsed deadline rejects the claim instead of opening a fresh budget."""
+
+    graph = _graph(("a", "b", "c", "d"), (("a", "b"), ("b", "c"), ("c", "d")))
+    with pytest.raises(ValueError, match="wall-clock deadline"):
+        independence_models._replay_exact_optimum(
+            graph, 2, deadline=time.monotonic() - 1.0
+        )
+    independence_models._replay_exact_optimum(graph, 2, deadline=time.monotonic() + 60)
+
+
+def test_producer_replay_shares_the_request_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Replay work cannot extend the producing solve past its wall budget.
+
+    The solver establishes the optimum inside the budget, but the shared
+    deadline has elapsed by replay time, so the typed ``UNKNOWN`` demotion
+    keeps the whole call inside the one admitted envelope and still
+    revalidates against the retained source graph.
+    """
+
+    request = IndependenceNumberRequest(
+        graph=_graph(("a", "b", "c", "d"), (("a", "b"), ("b", "c"), ("c", "d"))),
+        resource_budget=IndependenceNumberBudget(wall_seconds=5),
+    )
+    monkeypatch.setattr(
+        independence_models,
+        "time",
+        SimpleNamespace(monotonic=lambda: float("inf")),
+    )
+    result = solve_independence_number(request)
+    assert result.status == "UNKNOWN"
+    assert result.optimum_value is None
+    assert result.termination_reason == "REPLAY_INCOMPLETE"
+    assert result.upper_bound == 4
+    assert IndependenceNumberResult.model_validate(result.model_dump()) == result
+
+
+def test_result_headroom_admission_rejects_oversized_echo() -> None:
+    """A huge identifier is rejected before solving, not by dispatch after."""
+
+    oversized = "v" * (6 * 1024 * 1024)
+    with pytest.raises(ValidationError, match="canonical output limit"):
+        IndependenceNumberRequest(graph=_graph((oversized,), ()))
+
+
+def test_large_labels_near_boundary_stay_admitted_and_transportable() -> None:
+    """Admission tracks the predicted serialized result, not a coarse cap.
+
+    One hundred twenty-eight 30k-character identifiers predict a doubled
+    echo of roughly 7.7 MB, which stays inside the canonical output limit:
+    the solve runs, the exact payload serializes under the limit, and the
+    round trip revalidates.
+    """
+
+    labels = tuple(f"n{index:03d}" + "x" * 30_000 for index in range(128))
+    request = IndependenceNumberRequest(graph=_graph(labels, ()))
+    result = solve_independence_number(request)
+    assert result.status == "EXACT"
+    assert result.optimum_value == 128
+    assert result.witness_vertices == tuple(sorted(labels))
+    encoded = len(encode_strict_json(result.model_dump(mode="json")))
+    assert encoded <= CanonicalLimits().max_output_bytes
+    assert IndependenceNumberResult.model_validate(result.model_dump()) == result
+
+
+def test_incomplete_tight_upper_bound_is_rejected() -> None:
+    """An UNKNOWN upper bound must bind to an independently safe quantity.
+
+    Forging an edgeless three-vertex graph down to witness ``("a",)`` with
+    ``upper_bound = 1`` claims an incumbent gap that no source-bound check
+    authenticates; validation now requires the graph order itself.
+    """
+
+    dumped = solve_independence_number(
+        IndependenceNumberRequest(graph=_graph(("a", "b", "c"), ()))
+    ).model_dump()
+    dumped["status"] = "UNKNOWN"
+    dumped["optimum_value"] = None
+    dumped["witness_vertices"] = ["a"]
+    dumped["incumbent_value"] = 1
+    dumped["lower_bound"] = 1
+    dumped["upper_bound"] = 1
+    dumped["termination_reason"] = "SOLVER_UNKNOWN"
+    with pytest.raises(ValidationError, match="independently safe upper bound"):
+        IndependenceNumberResult.model_validate(dumped)

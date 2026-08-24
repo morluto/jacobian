@@ -148,6 +148,32 @@ def _iter_raw_entries(owner: object, name: str) -> Iterator[object]:
         yield from entries
 
 
+def _preflight_raw_support_components(data: object) -> object:
+    """Measure every authored support component against the envelope.
+
+    Shared by the support request and result models so a payload whose
+    components sit between the operation's 150-digit envelope and the
+    global canonical limit is rejected before nested V-polytope parsing
+    constructs (and canonically proves) the retained source.
+    """
+
+    if not isinstance(data, dict):
+        return data
+    canonical: Any = _tuple_canonical_containers(data)
+    for vertex in _iter_raw_entries(canonical.get("polytope"), "vertices"):
+        for component in _iter_raw_entries(vertex, "coordinates"):
+            _require_raw_component_within_support_envelope(
+                component,
+                "polytope vertex coordinate",
+            )
+    for component in _iter_raw_entries(canonical.get("covector"), "components"):
+        _require_raw_component_within_support_envelope(
+            component,
+            "covector component",
+        )
+    return canonical
+
+
 def _require_raw_component_within_support_envelope(
     component: object,
     label: str,
@@ -560,21 +586,7 @@ class PolytopeSupportRequest(StrictModel):
         canonical V-polytope value's broader domain is unchanged.
         """
 
-        if not isinstance(data, dict):
-            return data
-        canonical: Any = _tuple_canonical_containers(data)
-        for vertex in _iter_raw_entries(canonical.get("polytope"), "vertices"):
-            for component in _iter_raw_entries(vertex, "coordinates"):
-                _require_raw_component_within_support_envelope(
-                    component,
-                    "polytope vertex coordinate",
-                )
-        for component in _iter_raw_entries(canonical.get("covector"), "components"):
-            _require_raw_component_within_support_envelope(
-                component,
-                "covector component",
-            )
-        return canonical
+        return _preflight_raw_support_components(data)
 
     @model_validator(mode="after")
     def require_common_coordinate_space(self) -> Self:
@@ -589,17 +601,39 @@ class PolytopeSupportRequest(StrictModel):
 
 
 class PolytopeSupportResult(StrictModel):
-    """A source-bound exact support value and its complete exposed face."""
+    """A source-bound exact support value and its complete exposed face.
+
+    The retained source satisfies the same admitted execution envelope as
+    ``PolytopeSupportRequest``: each polytope vertex coordinate and
+    covector component carries at most 150 digits per reduced numerator or
+    denominator, so deserialization accepts only outputs the admitted
+    operation can produce and never replays a source outside the envelope.
+    """
 
     polytope: RationalVPolytope
     covector: RationalCovector
     support_value: CanonicalRational
     exposed_face: RationalExposedFace
 
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_components_within_support_envelope(cls, data: object) -> object:
+        """Preflight the retained source before nested V-polytope parsing.
+
+        Deserializing a serialized result constructs (and canonically
+        proves) the nested values before parent after-validators run, so
+        the same raw-payload measurement as the request rejects an
+        over-envelope retained source before the exact hull-facet proof
+        can execute outside the advertised envelope.
+        """
+
+        return _preflight_raw_support_components(data)
+
     @model_validator(mode="after")
     def bind_support_data_to_source(self) -> Self:
         if self.polytope.space != self.covector.space:
             raise ValueError("polytope and covector must use the same coordinate space")
+        require_support_components_within_envelope(self.polytope, self.covector)
         from jacobian.math.polytope._operations import support_data
 
         expected_value, expected_vertices = support_data(self.polytope, self.covector)

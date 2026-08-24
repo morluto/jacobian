@@ -256,68 +256,74 @@ def test_symbolic_matrix_product_rejects_unreduced_result_growth_before_kernel(
         _product_request(((many_terms,),), ((many_terms,),), variables)
 
 
-def test_symbolic_matrix_product_rejects_cancellation_that_densifies_result(
+def test_symbolic_matrix_product_rejects_cancellation_coefficient_amplification(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A sparse numerator may divide by a sparse factor into dense support."""
+    """Exact division can hide larger coefficients than the expansion shows."""
 
     import jacobian.math.matrices.symbolic as symbolic
 
-    variables = ("x", "y")
-    denominator = (
-        (1, 1, (1, 1)),
-        (-1, 1, (1, 0)),
-        (-1, 1, (0, 1)),
-        (1, 1, (0, 0)),
+    variables = ("x",)
+    amplitude = 9 * 10**126
+    heights = [min(index + 1, 63 - index) for index in range(63)]
+    hidden = [
+        height * amplitude * (-1) ** index for index, height in enumerate(heights)
+    ]
+    visible = (
+        [hidden[0]]
+        + [hidden[index] + hidden[index - 1] for index in range(1, 63)]
+        + [hidden[62]]
     )
-    p_minus_one = (
-        (1, 1, (32, 32)),
-        (-1, 1, (32, 0)),
-        (-1, 1, (0, 32)),
+    amplified = _rf(
+        variables,
+        *(
+            (visible[power], 1, (power,))
+            for power in range(len(visible) - 1, -1, -1)
+        ),
     )
-    one = _rf(variables, (1, 1, (0, 0)))
-    first = _rf(variables, (1, 1, (0, 0)), denominator=denominator)
-    second = _rf(variables, *p_minus_one, denominator=denominator)
-
-    def fail_if_called(*_args: object, **_kwargs: object) -> None:
-        raise AssertionError("symbolic multiplication kernel ran during admission")
-
-    monkeypatch.setattr(symbolic, "symbolic_matrix_multiply", fail_if_called)
-    with pytest.raises(ValidationError, match="canonical result budget"):
-        _product_request(((first, second),), ((one,), (one,)), variables)
-
-
-def test_symbolic_matrix_product_rejects_cancellation_that_densifies_aggregate(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Several bounded cells may still exceed SymbolicMatrix's total budget."""
-
-    import jacobian.math.matrices.symbolic as symbolic
-
-    variables = ("x", "y")
-    denominator = (
-        (1, 1, (1, 1)),
-        (-1, 1, (1, 0)),
-        (-1, 1, (0, 1)),
-        (1, 1, (0, 0)),
-    )
-    p_minus_one = (
-        (1, 1, (14, 14)),
-        (-1, 1, (14, 0)),
-        (-1, 1, (0, 14)),
-    )
-    one = _rf(variables, (1, 1, (0, 0)))
-    row = (
-        _rf(variables, (1, 1, (0, 0)), denominator=denominator),
-        _rf(variables, *p_minus_one, denominator=denominator),
+    one_over_successor = _rf(
+        variables,
+        (1, 1, (0,)),
+        denominator=((1, 1, (1,)), (1, 1, (0,))),
     )
 
     def fail_if_called(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("symbolic multiplication kernel ran during admission")
 
     monkeypatch.setattr(symbolic, "symbolic_matrix_multiply", fail_if_called)
-    with pytest.raises(ValidationError, match="canonical aggregate"):
-        _product_request((row, row, row), ((one,), (one,)), variables)
+    # The unreduced expansion fits every budget, yet the reduced quotient of
+    # the exact division would carry a 129-digit coefficient.
+    assert max(len(str(abs(digits))) for digits in hidden) == 129
+    with pytest.raises(ValidationError, match="coefficient growth"):
+        _product_request(((amplified,),), ((one_over_successor,),), variables)
+
+
+def test_symbolic_matrix_product_rejects_aggregate_expansion_before_kernel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each bounded cell may still push the whole product over the total."""
+
+    import jacobian.math.matrices.symbolic as symbolic
+
+    variables = ("x",)
+
+    def seven_terms() -> RationalFunction:
+        return _rf(
+            variables,
+            *((1, 1, (exponent,)) for exponent in range(6, -1, -1)),
+        )
+
+    left = tuple(
+        tuple(seven_terms() for _ in range(2)) for _ in range(8)
+    )
+    right = tuple((seven_terms(),) for _ in range(2))
+
+    def fail_if_called(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("symbolic multiplication kernel ran during admission")
+
+    monkeypatch.setattr(symbolic, "symbolic_matrix_multiply", fail_if_called)
+    with pytest.raises(ValidationError, match="aggregate expansion"):
+        _product_request(left, right, variables)
 
 
 def test_symbolic_matrix_product_rejects_coefficient_growth_before_kernel() -> None:
@@ -443,14 +449,14 @@ def test_symbolic_matrix_product_keeps_monomial_denominator_support() -> None:
     assert product.entries == ((inverse,),)
 
 
-def test_symbolic_matrix_product_keeps_dense_box_for_rational_entries() -> None:
+def test_symbolic_matrix_product_rejects_rational_entries_without_coefficient_bound() -> None:
     variables = ("x", "y")
     inverse = _rf(
         variables,
         (1, 1, (0, 0)),
         denominator=((1, 1, (16, 0)), (1, 1, (0, 16))),
     )
-    with pytest.raises(ValidationError, match="canonical result budget"):
+    with pytest.raises(ValidationError, match="coefficient growth"):
         _product_request(((inverse,),), ((inverse,),), variables)
 
 

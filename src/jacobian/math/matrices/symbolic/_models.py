@@ -200,22 +200,6 @@ def _has_integral_coefficients(value: RationalFunction) -> bool:
     )
 
 
-def _monomial_box_term_bound(exponents: tuple[int, ...]) -> int:
-    """Bound sparse support from independent degree bounds on every axis.
-
-    Cancellation can divide a sparse polynomial by a sparse common factor and
-    leave a denser quotient.  Degree in each declared variable cannot increase
-    under that exact division, so its full monomial box bounds the canonical
-    numerator or denominator support even when raw expansion term counts do
-    not.
-    """
-
-    bound = 1
-    for exponent in exponents:
-        bound *= exponent + 1
-    return bound
-
-
 def _polynomial_pair_exponents(
     first: SparseRationalPolynomial, second: SparseRationalPolynomial
 ) -> tuple[tuple[int, ...], ...]:
@@ -262,10 +246,10 @@ def _product_cell_bounds(
     put over the product common denominator. The raw term and coefficient
     bounds admit that expansion before SymPy receives the request. Coefficient
     digits are bounded by the products colliding at one exponent rather than
-    by total support size. A separate per-axis monomial-box bound accounts for
-    a canonical quotient becoming denser after exact cancellation. The final
-    flag reports whether every contributing pair has unit denominators, so no
-    cancellation can occur and the raw expansion bounds stay canonical.
+    by total support size. The final flag reports whether the cell stays
+    inside the admitted cancellation domain: unit denominators never cancel,
+    and a monomial common denominator only cancels by monomial factors, so
+    the raw bounds stay valid for the canonical value.
     """
 
     factors = tuple(
@@ -411,7 +395,12 @@ def _require_symbolic_product_admission(
     left: SymbolicMatrix,
     right: SymbolicMatrix,
 ) -> None:
-    """Prove that every exact product entry fits the canonical result value."""
+    """Prove that every exact product entry fits the canonical result value.
+
+    Cells cancel only through unit or monomial common denominators, where
+    reduction cannot grow support or coefficients; anything else stays outside
+    the admitted domain because no pre-execution bound covers it.
+    """
 
     if left.variables != right.variables:
         raise ValueError(
@@ -424,7 +413,6 @@ def _require_symbolic_product_admission(
         )
 
     aggregate_expansion_terms = 0
-    aggregate_canonical_terms = 0
     for left_row in left.entries:
         for right_column in zip(*right.entries, strict=True):
             (
@@ -442,31 +430,20 @@ def _require_symbolic_product_admission(
                 raise ValueError(
                     "symbolic matrix product exceeds the 256-term exact result budget"
                 )
-            if unit_denominator_factors:
-                # Unit denominators cannot cancel against the collected
-                # numerator, so support can only shrink below the raw
-                # expansion already bounded above.
-                canonical_numerator_terms = numerator_terms
-                canonical_denominator_terms = denominator_terms
-            else:
-                canonical_numerator_terms = _monomial_box_term_bound(
-                    numerator_exponents
-                )
-                # A monomial common denominator only loses monomial factors
-                # during cancellation and every divisor of a monomial is a
-                # monomial, so its canonical support stays a single term.
-                canonical_denominator_terms = (
-                    1
-                    if denominator_terms == 1
-                    else _monomial_box_term_bound(denominator_exponents)
-                )
-            if (
-                canonical_numerator_terms > MAX_SYMBOLIC_RESULT_TERMS
-                or canonical_denominator_terms > MAX_SYMBOLIC_RESULT_TERMS
-            ):
+            if not (unit_denominator_factors or denominator_terms == 1):
+                # Exact division by a non-monomial greatest common divisor can
+                # amplify coefficients far beyond the unreduced expansion
+                # (hidden cancellation inside the dividend), and no usable
+                # pre-execution height bound exists for that quotient. Cells
+                # whose common denominator has several terms therefore lack a
+                # coefficient bound and stay outside the admitted domain. Unit
+                # denominators never cancel, and a monomial common denominator
+                # only loses monomial factors during cancellation (every
+                # divisor of a monomial is a monomial), so support and
+                # coefficient size stay within the raw expansion bounds.
                 raise ValueError(
-                    "symbolic matrix product can exceed the 256-term canonical "
-                    "result budget after cancellation"
+                    "symbolic matrix product cannot bound coefficient growth "
+                    "under cancellation by a multi-term denominator"
                 )
             maximum_exponent = max(
                 (*numerator_exponents, *denominator_exponents), default=0
@@ -480,17 +457,9 @@ def _require_symbolic_product_admission(
                     "symbolic matrix product exceeds the result coefficient budget"
                 )
             aggregate_expansion_terms += numerator_terms + denominator_terms
-            aggregate_canonical_terms += (
-                canonical_numerator_terms + canonical_denominator_terms
-            )
     if aggregate_expansion_terms > MAX_SYMBOLIC_MATRIX_TERMS:
         raise ValueError(
             "symbolic matrix product exceeds the 512-term aggregate expansion budget"
-        )
-    if aggregate_canonical_terms > MAX_SYMBOLIC_MATRIX_TERMS:
-        raise ValueError(
-            "symbolic matrix product can exceed the 512-term canonical aggregate "
-            "result budget after cancellation"
         )
 
 

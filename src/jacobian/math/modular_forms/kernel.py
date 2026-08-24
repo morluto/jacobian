@@ -83,12 +83,12 @@ def expected_coefficients(
     form: NamedLevelOneModularForm, truncation_order: int
 ) -> tuple[Fraction, ...]:
     """Return the unique normalized prefix for one closed named form."""
-    e4 = eisenstein_coefficients("E4", truncation_order)
     if form == "E4":
-        return e4
-    e6 = eisenstein_coefficients("E6", truncation_order)
+        return eisenstein_coefficients("E4", truncation_order)
     if form == "E6":
-        return e6
+        return eisenstein_coefficients("E6", truncation_order)
+    e4 = eisenstein_coefficients("E4", truncation_order)
+    e6 = eisenstein_coefficients("E6", truncation_order)
     e4_cubed = _convolve(_convolve(e4, e4), e4)
     e6_squared = _convolve(e6, e6)
     return tuple(

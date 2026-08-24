@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
+from typing import Literal
+
 import pytest
 from pydantic import ValidationError
 
@@ -219,3 +222,40 @@ def test_replay_envelope_names_its_own_controlling_quantity() -> None:
     with pytest.raises(ValueError, match="plain integer"):
         require_level_one_replay("E4", True)
     assert require_level_one_replay("E4", 20000) is None
+
+
+def test_e6_replay_never_computes_the_e4_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    value = level_one_named_q_expansion("E6", 1000)
+    payload = value.model_dump()
+    requested_forms: list[str] = []
+
+    def spied(form: Literal["E4", "E6"], truncation_order: int) -> tuple[Fraction, ...]:
+        requested_forms.append(form)
+        if form == "E4":
+            raise AssertionError("replaying E6 must never compute the E4 prefix")
+        return eisenstein_coefficients(form, truncation_order)
+
+    monkeypatch.setattr(level_one_kernel, "eisenstein_coefficients", spied)
+    assert level_one_kernel.expected_coefficients("E6", 1000) == tuple(
+        coefficient.as_fraction() for coefficient in value.q_expansion.coefficients
+    )
+    assert LevelOneModularQExpansion.model_validate(payload) == value
+    assert requested_forms == ["E6", "E6"]
+
+
+def test_delta_replay_still_builds_both_eisenstein_prefixes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    value = level_one_named_q_expansion("DELTA", 40)
+    payload = value.model_dump()
+    requested_forms: list[str] = []
+
+    def spied(form: Literal["E4", "E6"], truncation_order: int) -> tuple[Fraction, ...]:
+        requested_forms.append(form)
+        return eisenstein_coefficients(form, truncation_order)
+
+    monkeypatch.setattr(level_one_kernel, "eisenstein_coefficients", spied)
+    assert LevelOneModularQExpansion.model_validate(payload) == value
+    assert requested_forms == ["E4", "E6"]

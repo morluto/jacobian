@@ -289,6 +289,8 @@ class PolynomialFactorizationResult(StrictModel):
             rational_polynomial_to_sympy,
         )
 
+        if len(self.polynomial.variables) != 1:
+            raise ValueError("factorization currently supports one variable over QQ")
         if any(
             factor.factor.variables != self.reconstructed.variables
             for factor in self.factors

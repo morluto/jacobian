@@ -235,6 +235,41 @@ def test_factorization_result_rejects_mutations() -> None:
         PolynomialFactorizationResult.model_validate(source_mutation)
 
 
+def test_factorization_results_reject_multivariate_sources() -> None:
+    """The univariate request domain also binds an authored or replayed result.
+
+    A QQ[x, y] payload whose exact-division replay succeeds (source ``x*y``
+    with factors ``x`` and ``y``) must still be rejected because
+    ``polynomial.factor.compute`` factorizes univariate polynomials only.
+    """
+
+    from pydantic import ValidationError
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.polynomials._models import (
+        PolynomialFactorizationResult,
+        PolynomialIrreducibleFactor,
+    )
+
+    variables = ("x", "y")
+    source = _sparse_polynomial(variables, {(1, 1): "1"})
+    factors = (
+        PolynomialIrreducibleFactor(
+            factor=_sparse_polynomial(variables, {(1, 0): "1"}), multiplicity=1
+        ),
+        PolynomialIrreducibleFactor(
+            factor=_sparse_polynomial(variables, {(0, 1): "1"}), multiplicity=1
+        ),
+    )
+    with pytest.raises(ValidationError, match="one variable over QQ"):
+        PolynomialFactorizationResult(
+            polynomial=source,
+            coefficient=CanonicalRational(num="1", den="1"),
+            factors=factors,
+            reconstructed=source,
+        )
+
+
 def test_equivalent_factor_orders_normalize_canonically() -> None:
     """A hand-built result with backend-incidental ordering still replays."""
 
@@ -353,7 +388,16 @@ def test_source_bound_results_reject_combinatorial_replay_claims() -> None:
         request = request_model(polynomial=_univariate("x", {2: "1", 0: "-1"}))
         produced = operation(request)
         forged = _forged_monster_payload(produced.model_dump())
-        with pytest.raises(ValidationError, match="must reconstruct"):
+        # The factorization contract is univariate, so a forged QQ[x, y]
+        # source is rejected by the semantic-domain check before any replay
+        # work; square-free decomposition admits several variables and must
+        # still stop the monster at the first inexact division.
+        expected = (
+            "one variable over QQ"
+            if "Factorization" in result_model.__name__
+            else "must reconstruct"
+        )
+        with pytest.raises(ValidationError, match=expected):
             result_model.model_validate(forged)
 
 

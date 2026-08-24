@@ -19,8 +19,6 @@ from jacobian.math.polynomials.values import (
 
 MAX_APPLICATION_ITERATIONS = 4_096
 MAX_APPLICATION_INPUT_TERMS = 512
-MAX_APPLICATION_INPUT_EXPONENT = 128
-MAX_APPLICATION_INPUT_TOTAL_DEGREE = 128
 MAX_APPLICATION_INPUT_COEFFICIENT_DIGITS = 256
 MAX_APPLICATION_OPERATOR_COEFFICIENT_DIGITS = 256
 MAX_APPLICATION_OUTPUT_TERMS = 4_096
@@ -88,6 +86,14 @@ def _is_identity_operator(
         and not any(operator.terms[0].orders)
         and operator.terms[0].coefficient.as_fraction() == 1
     )
+
+
+def _is_scalar_operator(
+    operator: ConstantCoefficientDifferentialOperator,
+) -> bool:
+    """Recognize one-term zeroth-order operators, whose action is pure scaling."""
+
+    return len(operator.terms) == 1 and not any(operator.terms[0].orders)
 
 
 def _bounded_multiset_count(term_count: int, iterations: int, limit: int) -> int:
@@ -194,11 +200,11 @@ def _coefficient_digit_bound(
     degree = _total_degree(polynomial)
     maximum_operator_order = max(sum(term.orders) for term in operator.terms)
     derivative_order = min(degree, iterations * maximum_operator_order)
-    falling_factor_bound = (
-        1
-        if derivative_order == 0
-        else min(math.factorial(degree), degree**derivative_order)
-    )
+    # Every per-axis falling factorial (e)_d satisfies (e)_d <= e^d, so the
+    # derivative multiplier's bit length is d * bits(e); this bounds rational
+    # coefficient growth without materializing degree-sized factorials when
+    # sparse sources carry exponents far above the derivative order.
+    falling_factor_bits = max(1, derivative_order * max(1, degree.bit_length()))
 
     numerator_bits = sum(
         (
@@ -206,7 +212,7 @@ def _coefficient_digit_bound(
             path_count_bits,
             max(1, source_numerator).bit_length(),
             _power_bit_bound(operator_numerator, iterations),
-            max(1, falling_factor_bound).bit_length(),
+            falling_factor_bits,
         )
     )
     denominator_bits = source_denominator.bit_length()
@@ -309,31 +315,32 @@ def _require_expansion_operator(
 
 
 def _require_expansion_source(polynomial: RationalPolynomial) -> None:
-    """Bound the source against the kernel's derivative-expansion input regime."""
+    """Bound the source against the kernel's derivative-expansion input regime.
+
+    Derivative work, coefficient growth, and exact output size are derived
+    from the source's actual exponents and coefficients downstream; only the
+    term count and input coefficient height stay capped here.
+    """
 
     require_polynomial_budget(
         polynomial,
         maximum_terms=MAX_APPLICATION_INPUT_TERMS,
-        maximum_exponent=MAX_APPLICATION_INPUT_EXPONENT,
+        maximum_exponent=MAX_POLYNOMIAL_EXPONENT,
         maximum_coefficient_digits=MAX_APPLICATION_INPUT_COEFFICIENT_DIGITS,
         label="differential-operator source polynomial",
     )
-    if _total_degree(polynomial) > MAX_APPLICATION_INPUT_TOTAL_DEGREE:
-        raise ValueError(
-            "differential-operator source polynomial exceeds the total-degree budget"
-        )
 
 
-def _require_identity_output(
+def _require_nonexpanding_output(
     polynomial: RationalPolynomial,
     expected: RationalPolynomial | None,
 ) -> None:
-    """Admit copy results by the output budgets they actually exercise.
+    """Admit copy and pure-rescale results by the output budgets they exercise.
 
-    With ``iterations == 0`` or the identity operator, the exact result is the
-    source itself and no expansion runs, so admission follows the copied result
-    (output support, digit, and aggregate-byte budgets) rather than the kernel
-    input regime.
+    With ``iterations == 0``, the identity operator, or a one-term zeroth-order
+    operator, the exact result is the source up to rational scaling and no
+    expansion runs, so admission follows the copied result (output support,
+    digit, and aggregate-byte budgets) rather than the kernel input regime.
     """
 
     require_polynomial_budget(
@@ -392,7 +399,7 @@ def validate_application_envelope(
         return ApplicationEnvelope(True, 0, 0)
 
     if iterations == 0 or _is_identity_operator(operator):
-        _require_identity_output(polynomial, expected)
+        _require_nonexpanding_output(polynomial, expected)
         _require_result_size(
             polynomial,
             operator,
@@ -402,11 +409,20 @@ def validate_application_envelope(
         )
         return ApplicationEnvelope(False, 1, len(polynomial.polynomial.terms))
 
-    if iterations > MAX_APPLICATION_ITERATIONS:
-        raise ValueError("differential-operator iterations exceed the operation limit")
-
-    _require_expansion_operator(operator)
-    _require_expansion_source(polynomial)
+    # A one-term zeroth-order operator only rescales existing coefficients:
+    # D^k(f) = c^k * f never expands derivative support, so its admission
+    # follows the scale-only result's support, coefficient growth, work, and
+    # size budgets rather than the derivative kernel's expansion regime.
+    scalar_action = _is_scalar_operator(operator)
+    if scalar_action:
+        _require_nonexpanding_output(polynomial, expected)
+    else:
+        if iterations > MAX_APPLICATION_ITERATIONS:
+            raise ValueError(
+                "differential-operator iterations exceed the operation limit"
+            )
+        _require_expansion_operator(operator)
+        _require_expansion_source(polynomial)
     _require_expected_output(expected)
 
     term_count = len(operator.terms)
@@ -480,9 +496,7 @@ def validate_application_envelope(
 
 __all__ = [
     "MAX_APPLICATION_INPUT_COEFFICIENT_DIGITS",
-    "MAX_APPLICATION_INPUT_EXPONENT",
     "MAX_APPLICATION_INPUT_TERMS",
-    "MAX_APPLICATION_INPUT_TOTAL_DEGREE",
     "MAX_APPLICATION_ITERATIONS",
     "MAX_APPLICATION_OPERATOR_COEFFICIENT_DIGITS",
     "MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS",

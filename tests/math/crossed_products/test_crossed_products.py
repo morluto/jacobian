@@ -387,9 +387,7 @@ def test_request_rejects_scalar_work_before_expansion() -> None:
         action=identity,
         cocycle_square=(0,) * dimension,
     )
-    support = {
-        (position,) + (0,) * (dimension - 1) for position in range(30)
-    }
+    support = {(position,) + (0,) * (dimension - 1) for position in range(30)}
     left = _element(presentation, {"e": support})
     right = _element(presentation, {"a": support})
 

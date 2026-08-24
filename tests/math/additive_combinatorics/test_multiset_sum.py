@@ -1,5 +1,6 @@
 """Tests for fixed-arity unordered multiset-sum profiles."""
 
+import tracemalloc
 from collections import Counter
 from itertools import combinations, combinations_with_replacement
 
@@ -11,6 +12,7 @@ from jacobian.canonical import CanonicalLimits, canonicalize_json
 from jacobian.math.additive_combinatorics._models import (
     _MAX_MULTISET_SUM_ARITY,
     _MAX_MULTISET_SUM_ELEMENT_DIGITS,
+    _MAX_MULTISET_SUM_ENUMERATION_WORK,
     _MAX_MULTISET_SUM_INTEGER_LENGTH,
     _MAX_MULTISET_SUM_RESULT_DIGITS,
     _MAX_MULTISET_SUM_SUPPORT_SIZE,
@@ -23,6 +25,7 @@ from jacobian.math.additive_combinatorics._models import (
 from jacobian.math.additive_combinatorics._multiset_sum import (
     MAX_ARITY,
     RESULT_BUDGET_BYTES,
+    _bar_position_tuples,
 )
 from jacobian.math.additive_combinatorics._operations import (
     compute_multiset_sum_representation_profile,
@@ -215,6 +218,49 @@ def test_singleton_sum_digits_stay_within_the_derived_result_bound() -> None:
 def test_costly_large_arity_is_rejected_by_work_not_by_an_arity_cap() -> None:
     with pytest.raises(ValidationError, match="coordinate steps"):
         _request((0, 1), 10**15)
+
+
+def test_bar_positions_match_the_itertools_combinations_oracle() -> None:
+    for pool_size in range(7):
+        for bars in range(pool_size + 2):
+            assert list(_bar_position_tuples(pool_size, bars)) == list(
+                combinations(range(pool_size), bars)
+            )
+
+
+def test_large_slot_pool_is_never_materialized_during_iteration() -> None:
+    # Before the lazy iterator, combinations(range(slots), bars) snapshotted
+    # the whole admitted slot range into memory (about 400 MB at the work
+    # boundary) before yielding a single candidate.
+    slots = _MAX_MULTISET_SUM_ENUMERATION_WORK // 2 + 1
+    tracemalloc.start()
+    try:
+        positions = _bar_position_tuples(slots, 2)
+        assert next(positions) == (0, 1)
+        assert next(positions) == (0, 2)
+        _, peak_bytes = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak_bytes < 1024 * 1024
+
+
+@pytest.mark.parametrize(
+    "window",
+    [(10**15, 10**15 + 7), (-(10**15), -(10**15) + 7)],
+)
+def test_disjoint_window_over_admitted_two_element_source_is_exactly_empty(
+    window: tuple[int, int],
+) -> None:
+    # Reported failure mode: an admitted two-element request whose window
+    # misses every attainable sum must return the exact empty profile without
+    # enumerating the candidate family.
+    arity = _MAX_MULTISET_SUM_ENUMERATION_WORK // 2 - 1
+    assert _profile((0, 1), arity, window) == {}
+
+
+def test_narrow_window_over_large_slot_family_matches_closed_form() -> None:
+    arity = 100_000
+    assert _profile((0, 1), arity, (0, 3)) == {0: 1, 1: 1, 2: 1, 3: 1}
 
 
 def test_reversed_sum_window_is_rejected() -> None:

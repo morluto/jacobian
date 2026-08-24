@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import math
 from collections import Counter
-from itertools import combinations, combinations_with_replacement
+from collections.abc import Iterator
+from itertools import combinations_with_replacement
 
 MAX_SOURCE_SIZE = 384
 MAX_ELEMENT_DIGITS = 64
@@ -73,6 +74,30 @@ def support_bound(
     return min(candidates, intersection_upper - intersection_lower + 1)
 
 
+def _bar_position_tuples(pool_size: int, bars: int) -> Iterator[tuple[int, ...]]:
+    # Lazy equivalent of combinations(range(pool_size), bars) that never
+    # materializes the slot pool: iteration keeps only the O(bars) working
+    # state, so an admitted request's intermediate memory is bounded by its
+    # source size rather than by its arity.
+    if bars == 0:
+        yield ()
+        return
+    if bars > pool_size:
+        return
+    positions = list(range(bars))
+    yield tuple(positions)
+    while True:
+        for index in range(bars - 1, -1, -1):
+            if positions[index] != index + pool_size - bars:
+                break
+        else:
+            return
+        positions[index] += 1
+        for follower in range(index + 1, bars):
+            positions[follower] = positions[follower - 1] + 1
+        yield tuple(positions)
+
+
 def count_sums(
     values: tuple[int, ...],
     arity: int,
@@ -89,6 +114,14 @@ def count_sums(
         value = arity * values[0]
         return Counter({value: 1}) if in_scope(value) else Counter()
 
+    # Every candidate sum lies in [arity*values[0], arity*values[-1]], so a
+    # window missing that whole interval has an exactly empty profile without
+    # inspecting any candidate.
+    if bounds is not None and (
+        arity * values[0] > bounds[1] or arity * values[-1] < bounds[0]
+    ):
+        return Counter()
+
     counts: Counter[int] = Counter()
     if arity <= len(values):
         for terms in combinations_with_replacement(values, arity):
@@ -98,9 +131,11 @@ def count_sums(
         return counts
 
     # When n < k, stars-and-bars emits the same C(n+k-1, k) multisets
-    # while materializing n multiplicities instead of k repeated values.
+    # while materializing n multiplicities instead of k repeated values; the
+    # bar positions are generated lazily in lexicographic order without
+    # snapshotting the slot range.
     slots = arity + len(values) - 1
-    for bars in combinations(range(slots), len(values) - 1):
+    for bars in _bar_position_tuples(slots, len(values) - 1):
         value = 0
         previous = -1
         for index, bar in enumerate(bars):

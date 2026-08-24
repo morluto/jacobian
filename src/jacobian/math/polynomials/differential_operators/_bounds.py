@@ -129,17 +129,6 @@ def _is_scalar_operator(
     return len(operator.terms) == 1 and not any(operator.terms[0].orders)
 
 
-def _is_signed_unit_scalar(
-    operator: ConstantCoefficientDifferentialOperator,
-) -> bool:
-    """Recognize scalar operators whose power is a pure sign, ``(±1)^k``."""
-
-    return (
-        _is_scalar_operator(operator)
-        and abs(operator.terms[0].coefficient.as_fraction()) == 1
-    )
-
-
 def _merged_unit_power_weights(
     operator: ConstantCoefficientDifferentialOperator,
     iterations: int,
@@ -507,9 +496,10 @@ def _per_exponent_height_bits(
         return None
     classes: dict[tuple[int, ...], tuple[int, int, int]] = {}
     for shift, weight in weights.items():
-        weight_numerator = abs(weight.numerator)
-        weight_denominator = weight.denominator
-        if weight_numerator.bit_length() > cap or weight_denominator.bit_length() > cap:
+        if (
+            abs(weight.numerator).bit_length() > cap
+            or weight.denominator.bit_length() > cap
+        ):
             return None
         for source_term in polynomial.polynomial.terms:
             if any(
@@ -525,23 +515,26 @@ def _per_exponent_height_bits(
                 _multiplier_bit_bound(exponent, order)
                 for exponent, order in zip(source_term.exponents, shift, strict=True)
             )
-            fraction = source_term.coefficient.as_fraction()
-            class_denominator = weight_denominator * fraction.denominator
-            scaled_numerator = weight_numerator * fraction.numerator
+            # The exact reduced contribution keeps cross-canceling factors -
+            # e.g. an N weight against a 1/N coefficient - from inflating the
+            # accounted heights.
+            contribution = weight * source_term.coefficient.as_fraction()
+            class_denominator = contribution.denominator
+            scaled_numerator = abs(contribution.numerator)
             entry = classes.get(target)
             if entry is None:
                 if class_denominator.bit_length() > cap:
                     return None
                 classes[target] = (
                     class_denominator,
-                    abs(scaled_numerator),
+                    scaled_numerator,
                     falling_bits,
                 )
                 continue
             lcm, numerator_sum, max_falling = entry
             new_lcm = math.lcm(lcm, class_denominator)
             scaled_existing = numerator_sum * (new_lcm // lcm)
-            scaled_new = abs(scaled_numerator) * (new_lcm // class_denominator)
+            scaled_new = scaled_numerator * (new_lcm // class_denominator)
             total = scaled_existing + scaled_new
             if new_lcm.bit_length() > cap or total.bit_length() > cap:
                 return None
@@ -916,8 +909,7 @@ def validate_application_envelope(
     # identity aggregate acts, so the power collapses to rescaling and the
     # unreachable expansion does not narrow the domain.
     scalar_action = _is_scalar_operator(operator)
-    signed_unit = scalar_action and _is_signed_unit_scalar(operator)
-    rescale_only = _rescale_only(polynomial, operator) or signed_unit
+    rescale_only = _rescale_only(polynomial, operator)
     if scalar_action or rescale_only:
         _require_nonexpanding_output(polynomial, expected)
     else:
@@ -935,12 +927,24 @@ def validate_application_envelope(
             iterations,
         )
 
-    # Signed-unit scalar powers only flip signs: (±1)^k f = ±f keeps every
-    # coefficient height unchanged, so their digit admission follows the
-    # copied result's own heights rather than the common-denominator scaling
-    # the generic estimate starts from.
-    if signed_unit:
-        coefficient_digits = _max_coefficient_digits(polynomial)
+    # Signed-unit scalar powers only flip signs, and every rescale-only regime
+    # applies exactly one zero-order coefficient to the k-th power: growth is
+    # bounded by that coefficient alone, excluding annihilating terms that
+    # _rescaled_source never evaluates.
+    if rescale_only:
+        zero_coefficient = next(
+            (
+                term.coefficient.as_fraction()
+                for term in operator.terms
+                if not any(term.orders)
+            ),
+            Fraction(0),
+        )
+        growth_bits = _multiplier_bit_bound(
+            abs(zero_coefficient.numerator), iterations
+        ) + _multiplier_bit_bound(zero_coefficient.denominator, iterations)
+        growth_digits = _decimal_digits_from_bits(growth_bits) if growth_bits else 0
+        coefficient_digits = _max_coefficient_digits(polynomial) + growth_digits
     elif not scalar_action and _derivative_regime_preserves_coefficient_heights(
         polynomial,
         operator,

@@ -1500,6 +1500,56 @@ def test_signed_unit_scalars_short_circuit_by_exponent_parity() -> None:
     assert odd.matches_expected is True
 
 
+def test_cross_canceling_operator_weights_keep_true_heights() -> None:
+    variables = ("x",)
+    numerator_n = 10**20000 + 1
+    source = _polynomial(variables, {(2,): Fraction(1, numerator_n)})
+    operator = _operator(variables, {(1,): numerator_n})
+    expected = _polynomial(variables, {(0,): 2 * numerator_n})
+
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=operator,
+            iterations=2,
+            expected=expected,
+        )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.output == expected
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    assert replayed == result
+
+
+def test_annihilating_rescale_terms_are_excluded_from_growth() -> None:
+    variables = ("x",)
+    numerator_n = 10**20000 + 1
+    source = _polynomial(variables, {(1,): 1})
+    operator = _operator(variables, {(0,): 1, (2,): numerator_n})
+    expected = _polynomial(variables, {(1,): 1})
+
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=operator,
+            iterations=2,
+            expected=expected,
+        )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.output == expected
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    assert replayed == result
+
+
 def test_iterations_stay_inside_the_interoperable_integer_range() -> None:
     schema = DifferentialOperatorApplyRequest.model_json_schema()
     assert schema["properties"]["iterations"]["maximum"] == (1 << 53) - 1

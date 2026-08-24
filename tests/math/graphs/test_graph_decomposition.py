@@ -591,6 +591,32 @@ class TestSPQRTree:
         with pytest.raises(ValueError, match="articulation witness"):
             SPQRTreeResult.model_validate(forged_negative)
 
+    def test_result_validation_rejects_forged_empty_positive_tree(self) -> None:
+        k4 = UndirectedGraph.model_validate(
+            {
+                "vertex_count": 4,
+                "edges": [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)],
+            }
+        )
+        with pytest.raises(ValidationError, match="at least one skeleton"):
+            SPQRTreeResult(source_graph=k4, status="SPQR_TREE")
+        forged = SPQRTreeResult.model_construct(
+            source_graph=k4,
+            status="SPQR_TREE",
+        )
+        with pytest.raises(ValidationError, match="at least one skeleton"):
+            SPQRTreeResult.model_validate(forged.model_dump(mode="json"))
+
+    def test_result_deserialization_round_trips_genuine_decomposition(self) -> None:
+        result = _spqr_tree(
+            {
+                "vertex_count": 5,
+                "edges": [(0, 2), (2, 1), (0, 3), (3, 1), (0, 4), (4, 1)],
+            }
+        )
+        replayed = SPQRTreeResult.model_validate(result.model_dump(mode="json"))
+        assert replayed == result
+
     def test_replays_every_biconnected_networkx_atlas_graph(self) -> None:
         """The finite atlas covers overlapping separator patterns through 7 vertices."""
         checked = 0

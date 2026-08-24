@@ -211,6 +211,26 @@ def _has_integral_coefficients(value: RationalFunction) -> bool:
     )
 
 
+def _scalar_constant_digits(value: RationalFunction) -> int | None:
+    """Coefficient height when the value is a nonzero rational constant.
+
+    Every nonzero element of QQ is a unit of the field, so multiplying by
+    one rescales coefficients without touching support or denominators.
+    """
+
+    terms = value.numerator.terms
+    if (
+        len(terms) == 1
+        and all(exponent == 0 for exponent in terms[0].exponents)
+        and _is_polynomial_entry(value)
+    ):
+        return max(
+            len(component.lstrip("-"))
+            for component in (terms[0].coefficient.num, terms[0].coefficient.den)
+        )
+    return None
+
+
 def _polynomial_pair_exponents(
     first: SparseRationalPolynomial, second: SparseRationalPolynomial
 ) -> tuple[tuple[int, ...], ...]:
@@ -228,6 +248,18 @@ def _polynomial_pair_exponents(
     )
 
 
+def _product_collision_counts(
+    expansions: Iterable[tuple[tuple[tuple[int, ...], ...], ...]],
+) -> Counter[tuple[int, ...]]:
+    """Count raw products landing on each collected monomial exponent."""
+
+    counts: Counter[tuple[int, ...]] = Counter()
+    for groups in expansions:
+        for chosen in product(*groups):
+            counts[tuple(map(sum, zip(*chosen, strict=True)))] += 1
+    return counts
+
+
 def _maximum_product_collisions(
     expansions: Iterable[tuple[tuple[tuple[int, ...], ...], ...]],
 ) -> int:
@@ -239,17 +271,13 @@ def _maximum_product_collisions(
     coefficient digit bound.
     """
 
-    counts: Counter[tuple[int, ...]] = Counter()
-    for groups in expansions:
-        for chosen in product(*groups):
-            counts[tuple(map(sum, zip(*chosen, strict=True)))] += 1
-    return max(counts.values(), default=1)
+    return max(_product_collision_counts(expansions).values(), default=1)
 
 
 def _product_cell_bounds(
     left: tuple[RationalFunction, ...],
     right: tuple[RationalFunction, ...],
-) -> tuple[int, int, tuple[int, ...], tuple[int, ...], int, bool]:
+) -> tuple[int, int, tuple[int, ...], tuple[int, ...], int, bool, int]:
     """Return raw work bounds and cancellation-safe canonical degree bounds.
 
     The cell is a finite sum of products ``a_i * b_i``. Each nonzero product
@@ -260,7 +288,10 @@ def _product_cell_bounds(
     by total support size. The final flag reports whether the cell stays
     inside the admitted cancellation domain: unit denominators never cancel,
     and a monomial common denominator only cancels by monomial factors, so
-    the raw bounds stay valid for the canonical value.
+    the raw bounds stay valid for the canonical value. The last element
+    bounds the cell's canonical result support: collected numerator exponents
+    plus exactly one canonical denominator term, since every admitted cell's
+    denominator is unit or monomial.
     """
 
     factors = tuple(
@@ -271,20 +302,30 @@ def _product_cell_bounds(
     if not factors:
         # The canonical zero has an empty numerator and a one-term denominator.
         zero_exponents = (0,) * len(left[0].variables)
-        return 0, 1, zero_exponents, zero_exponents, 1, True
+        return 0, 1, zero_exponents, zero_exponents, 1, True, 1
 
     if len(factors) == 1:
         left_value, right_value = factors[0]
+        scalar_digits = 0
         if _is_scalar_identity(right_value):
             effective = left_value
         elif _is_scalar_identity(left_value):
             effective = right_value
         else:
-            effective = None
+            right_digits = _scalar_constant_digits(right_value)
+            left_digits = _scalar_constant_digits(left_value)
+            if right_digits is not None:
+                effective, scalar_digits = left_value, right_digits
+            elif left_digits is not None:
+                effective, scalar_digits = right_value, left_digits
+            else:
+                effective = None
         if effective is not None:
             # Identity multiplication returns the other canonical operand
-            # verbatim, so its own shape is the exact bound and no expansion
-            # or cancellation can occur.
+            # verbatim, and a nonzero rational constant only rescales its
+            # coefficients by a unit of QQ: neither can cancel or densify,
+            # so the operand shape (plus the scalar height when scaling)
+            # bounds the result exactly and no expansion occurs.
             return (
                 len(effective.numerator.terms),
                 len(effective.denominator.terms),
@@ -293,8 +334,10 @@ def _product_cell_bounds(
                 max(
                     _maximum_coefficient_digits(effective, numerator=True),
                     _maximum_coefficient_digits(effective, numerator=False),
-                ),
+                )
+                + scalar_digits,
                 True,
+                len(effective.numerator.terms) + 1,
             )
 
     integral_coefficients = all(
@@ -382,6 +425,7 @@ def _product_cell_bounds(
     # conservative support-size estimate and are rejected by the term checks.
     numerator_collision_count = numerator_terms
     denominator_collision_count = denominator_terms
+    result_term_count = numerator_terms + 1
     if (
         numerator_terms <= MAX_SYMBOLIC_RESULT_TERMS
         and denominator_terms <= MAX_SYMBOLIC_RESULT_TERMS
@@ -401,8 +445,12 @@ def _product_cell_bounds(
                 if other_index != index
             )
             numerator_expansions.append(tuple(expansion))
-        denominator_collision_count = _maximum_product_collisions((denominator_groups,))
-        numerator_collision_count = _maximum_product_collisions(numerator_expansions)
+        denominator_collision_count = _maximum_product_collisions(
+            (denominator_groups,)
+        )
+        numerator_collisions = _product_collision_counts(numerator_expansions)
+        numerator_collision_count = max(numerator_collisions.values(), default=1)
+        result_term_count = len(numerator_collisions) + 1
 
     maximum_coefficient_digits = max(
         _sum_coefficient_digit_bound(
@@ -423,6 +471,7 @@ def _product_cell_bounds(
         denominator_exponent,
         maximum_coefficient_digits,
         unit_denominator_factors,
+        result_term_count,
     )
 
 
@@ -448,6 +497,7 @@ def _require_symbolic_product_admission(
         )
 
     aggregate_expansion_terms = 0
+    aggregate_result_terms = 0
     for left_row in left.entries:
         for right_column in zip(*right.entries, strict=True):
             (
@@ -457,6 +507,7 @@ def _require_symbolic_product_admission(
                 denominator_exponents,
                 maximum_coefficient_digits,
                 unit_denominator_factors,
+                result_term_count,
             ) = _product_cell_bounds(left_row, right_column)
             if (
                 numerator_terms > MAX_SYMBOLIC_RESULT_TERMS
@@ -496,9 +547,20 @@ def _require_symbolic_product_admission(
             aggregate_expansion_terms += numerator_terms
             if not unit_denominator_factors:
                 aggregate_expansion_terms += denominator_terms
+            # Canonical result support is bounded separately from expansion
+            # work: every admitted cell carries exactly one canonical
+            # denominator term (unit or monomial), and cancellation in the
+            # admitted domain can only shrink collected numerator support,
+            # so result_term_count bounds the terms the returned
+            # SymbolicMatrix will validate.
+            aggregate_result_terms += result_term_count
     if aggregate_expansion_terms > MAX_SYMBOLIC_MATRIX_TERMS:
         raise ValueError(
             "symbolic matrix product exceeds the 512-term aggregate expansion budget"
+        )
+    if aggregate_result_terms > MAX_SYMBOLIC_MATRIX_TERMS:
+        raise ValueError(
+            "symbolic matrix product exceeds the 512-term aggregate result budget"
         )
 
 

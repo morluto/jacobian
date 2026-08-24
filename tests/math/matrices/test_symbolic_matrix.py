@@ -326,6 +326,60 @@ def test_symbolic_matrix_product_rejects_aggregate_expansion_before_kernel(
         _product_request(left, right, variables)
 
 
+def test_symbolic_matrix_product_rejects_aggregate_canonical_support_before_kernel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Expansion work inside its budget can still overflow the result type."""
+
+    import jacobian.math.matrices.symbolic as symbolic
+
+    variables = ("x",)
+
+    paired = tuple(
+        _rf(
+            variables,
+            (1, 1, (exponent + 1,)),
+            (1, 1, (exponent,)),
+        )
+        for exponent in (6, 4, 2, 0)
+    )
+    left = tuple(paired for _ in range(8))
+    one = _rf(variables, (1, 1, (0,)))
+    right = tuple((one, one, one, one, one, one, one, one) for _ in range(4))
+
+    def fail_if_called(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("symbolic multiplication kernel ran during admission")
+
+    monkeypatch.setattr(symbolic, "symbolic_matrix_multiply", fail_if_called)
+    # The work accumulator charges exactly 512 scalar products, but every
+    # canonical cell collects eight distinct monomials plus one unit
+    # denominator, which the returned SymbolicMatrix would reject.
+    with pytest.raises(ValidationError, match="aggregate result"):
+        _product_request(left, right, variables)
+
+
+def test_symbolic_matrix_product_admits_boundary_aggregate_canonical_support() -> None:
+    """Exactly 512 canonical result terms still execute and return typed."""
+
+    variables = ("x",)
+
+    def sixty_three_terms() -> RationalFunction:
+        return _rf(
+            variables,
+            *((1, 1, (exponent,)) for exponent in range(62, -1, -1)),
+        )
+
+    dense = sixty_three_terms()
+    one = _rf(variables, (1, 1, (0,)))
+    left = ((dense,),)
+    right = (tuple(one for _ in range(8)),)
+    product = compute_symbolic_matrix_product(_product_request(left, right, variables))
+    assert product == SymbolicMatrix(
+        variables=variables,
+        entries=(tuple(dense for _ in range(8)),),
+    )
+
+
 def test_symbolic_matrix_product_rejects_coefficient_growth_before_kernel() -> None:
     digits = "9" * 65
     large = _rf((), (int(digits), 1, ()))
@@ -489,6 +543,57 @@ def test_symbolic_matrix_product_admits_dense_constant_matrices() -> None:
     assert product.entries == tuple(
         tuple(_constant(16) for _ in range(8)) for _ in range(8)
     )
+
+
+def test_symbolic_matrix_product_admits_scalar_constant_times_rational_entry() -> None:
+    """A nonzero rational scalar scales the operand without cancellation."""
+
+    variables = ("x", "y")
+    rational = _rf(
+        variables,
+        (1, 1, (16, 16)),
+        (1, 1, (0, 0)),
+        denominator=((1, 1, (1, 0)), (1, 1, (0, 0))),
+    )
+    two = _rf(variables, (2, 1, (0, 0)))
+    scaled = _rf(
+        variables,
+        (2, 1, (16, 16)),
+        (2, 1, (0, 0)),
+        denominator=((1, 1, (1, 0)), (1, 1, (0, 0))),
+    )
+    assert compute_symbolic_matrix_product(
+        _product_request(((rational,),), ((two,),), variables)
+    ).entries == ((scaled,),)
+    assert compute_symbolic_matrix_product(
+        _product_request(((two,),), ((rational,),), variables)
+    ).entries == ((scaled,),)
+
+
+def test_symbolic_matrix_product_admits_rational_scalar_at_coefficient_boundary() -> (
+    None
+):
+    """Scalar height adds to the operand height under the shared budget."""
+
+    variables = ("x",)
+    base = _rf(variables, (10**63, 1, (1,)), (10**63, 1, (0,)))
+    scalar = _rf(variables, (10**63, 97, (0,)))
+    product = compute_symbolic_matrix_product(
+        _product_request(((base,),), ((scalar,),), variables)
+    )
+    assert product.entries == (
+        (_rf(variables, (10**126, 97, (1,)), (10**126, 97, (0,))),),
+    )
+
+
+def test_symbolic_matrix_product_bounds_scalar_constant_coefficients() -> None:
+    """Scalar scaling is charged against the coefficient budget."""
+
+    variables = ("x",)
+    base = _rf(variables, (10**63, 1, (0,)))
+    oversized_scalar = _rf(variables, (10**65, 1, (0,)))
+    with pytest.raises(ValidationError, match="coefficient"):
+        _product_request(((base,),), ((oversized_scalar,),), variables)
 
 
 def test_rational_function_entries_use_the_advertised_field() -> None:

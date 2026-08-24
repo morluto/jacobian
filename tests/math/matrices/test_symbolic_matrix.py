@@ -585,17 +585,164 @@ def test_symbolic_matrix_product_keeps_monomial_denominator_support() -> None:
     assert product.entries == ((inverse,),)
 
 
-def test_symbolic_matrix_product_rejects_rational_entries_without_coefficient_bound() -> (
-    None
-):
+def test_symbolic_matrix_product_rejects_mixed_denominators_without_coefficient_bound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pairs over different non-monomial denominators still lack a bound."""
+
+    import jacobian.math.matrices.symbolic as symbolic
+
     variables = ("x", "y")
-    inverse = _rf(
+    inverse_x = _rf(
         variables,
         (1, 1, (0, 0)),
         denominator=((1, 1, (16, 0)), (1, 1, (0, 16))),
     )
+    inverse_shifted_x = _rf(
+        variables,
+        (1, 1, (0, 0)),
+        denominator=((1, 1, (15, 0)), (1, 1, (0, 16))),
+    )
+    one = _rf(variables, (1, 1, (0, 0)))
+
+    def fail_if_called(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("symbolic multiplication kernel ran during admission")
+
+    monkeypatch.setattr(symbolic, "symbolic_matrix_multiply", fail_if_called)
     with pytest.raises(ValidationError, match="coefficient growth"):
-        _product_request(((inverse,),), ((inverse,),), variables)
+        _product_request(((inverse_x, inverse_shifted_x),), ((one,), (one,)), variables)
+
+
+def test_symbolic_matrix_product_admits_shared_denominator_sums() -> None:
+    """Equal shared denominators admit the exact collected numerator sum."""
+
+    variables = ("x",)
+    inverse_successor = _rf(
+        variables,
+        (1, 1, (0,)),
+        denominator=((1, 1, (1,)), (1, 1, (0,))),
+    )
+    one = _rf(variables, (1, 1, (0,)))
+    product = compute_symbolic_matrix_product(
+        _product_request(
+            ((inverse_successor, inverse_successor),), ((one,), (one,)), variables
+        )
+    )
+    assert product.entries == (
+        (
+            _rf(
+                variables,
+                (2, 1, (0,)),
+                denominator=((1, 1, (1,)), (1, 1, (0,))),
+            ),
+        ),
+    )
+
+
+def test_symbolic_matrix_product_admits_single_pair_over_shared_denominator() -> None:
+    """One non-scalar pair with a multi-term denominator gets exact bounds."""
+
+    variables = ("x",)
+    x_over_successor = _rf(
+        variables,
+        (1, 1, (1,)),
+        denominator=((1, 1, (1,)), (1, 1, (0,))),
+    )
+    x = _rf(variables, (1, 1, (1,)))
+    product = compute_symbolic_matrix_product(
+        _product_request(((x_over_successor,),), ((x,),), variables)
+    )
+    assert product.entries == (
+        (
+            _rf(
+                variables,
+                (1, 1, (2,)),
+                denominator=((1, 1, (1,)), (1, 1, (0,))),
+            ),
+        ),
+    )
+
+
+def test_symbolic_matrix_product_admits_shared_denominators_on_both_sides() -> None:
+    """Shared left and right denominators form the exact monic quotient."""
+
+    variables = ("x",)
+    inverse_successor = _rf(
+        variables,
+        (1, 1, (0,)),
+        denominator=((1, 1, (1,)), (1, 1, (0,))),
+    )
+    x_over_shifted = _rf(
+        variables,
+        (1, 1, (1,)),
+        denominator=((1, 1, (1,)), (2, 1, (0,))),
+    )
+    product = compute_symbolic_matrix_product(
+        _product_request(((inverse_successor,),), ((x_over_shifted,),), variables)
+    )
+    assert product.entries == (
+        (
+            _rf(
+                variables,
+                (1, 1, (1,)),
+                denominator=((1, 1, (2,)), (3, 1, (1,)), (2, 1, (0,))),
+            ),
+        ),
+    )
+
+
+def test_symbolic_matrix_product_admits_shared_denominator_zero_sum() -> None:
+    """Collected numerators that cancel completely return canonical zero."""
+
+    variables = ("x",)
+    successor = ((1, 1, (1,)), (1, 1, (0,)))
+    forward = _rf(variables, (1, 1, (1,)), denominator=successor)
+    backward = _rf(variables, (-1, 1, (1,)), denominator=successor)
+    one = _rf(variables, (1, 1, (0,)))
+    product = compute_symbolic_matrix_product(
+        _product_request(((forward, backward),), ((one,), (one,)), variables)
+    )
+    assert product.entries == ((_rf(variables),),)
+
+
+def test_symbolic_matrix_product_rejects_shared_denominator_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A collected numerator sharing a factor keeps the conservative rejection."""
+
+    import jacobian.math.matrices.symbolic as symbolic
+
+    variables = ("x",)
+    successor = ((1, 1, (1,)), (1, 1, (0,)))
+    forward = _rf(variables, (1, 1, (1,)), denominator=successor)
+    inverse = _rf(variables, (1, 1, (0,)), denominator=successor)
+    one = _rf(variables, (1, 1, (0,)))
+
+    def fail_if_called(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("symbolic multiplication kernel ran during admission")
+
+    monkeypatch.setattr(symbolic, "symbolic_matrix_multiply", fail_if_called)
+    # The collected numerator (x + 1) shares the retained denominator's own
+    # factor, so the reduced quotient again lacks a pre-execution bound.
+    with pytest.raises(ValidationError, match="coefficient growth"):
+        _product_request(((forward, inverse),), ((one,), (one,)), variables)
+
+
+def test_symbolic_matrix_product_rejects_shared_denominators_without_result_budget() -> (
+    None
+):
+    """A common-denominator product beyond the result budget stays rejected."""
+
+    variables = ("x",)
+    dense_inverse = _rf(
+        variables,
+        (1, 1, (0,)),
+        denominator=tuple((1, 1, (exponent,)) for exponent in range(16, -1, -1)),
+    )
+    # The squared 17-term denominator needs up to 289 canonical terms, which
+    # exceeds the 256-term exact result budget.
+    with pytest.raises(ValidationError, match="coefficient growth"):
+        _product_request(((dense_inverse,),), ((dense_inverse,),), variables)
 
 
 def test_symbolic_matrix_product_admits_identity_times_rational_entry() -> None:

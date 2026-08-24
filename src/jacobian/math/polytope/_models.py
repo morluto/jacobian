@@ -170,9 +170,7 @@ def _require_raw_component_within_support_envelope(
         num, den = raw_num, raw_den
     else:
         return
-    if max(len(num.lstrip("-")), len(den.lstrip("-"))) > (
-        MAX_SUPPORT_COMPONENT_DIGITS
-    ):
+    if max(len(num.lstrip("-")), len(den.lstrip("-"))) > (MAX_SUPPORT_COMPONENT_DIGITS):
         raise ValueError(
             f"{label} exceeds the {MAX_SUPPORT_COMPONENT_DIGITS}-digit bound"
         )
@@ -564,6 +562,7 @@ class PolytopeSupportRequest(StrictModel):
 
         if not isinstance(data, dict):
             return data
+        data = _tuple_canonical_containers(data)
         for vertex in _iter_raw_entries(data.get("polytope"), "vertices"):
             for component in _iter_raw_entries(vertex, "coordinates"):
                 _require_raw_component_within_support_envelope(
@@ -619,16 +618,32 @@ class PolytopeSupportResult(StrictModel):
         return self
 
 
-def _canonical_v_polytope_vertices(polytope: RationalVPolytope) -> list[Vertex]:
+def _canonical_v_polytope_vertices(polytope: RationalVPolytope) -> tuple[Vertex, ...]:
     """Map the labelled canonical V-polytope onto bare volume vertices.
 
     The labelled coordinate space fixes the axis order, so vertex
     coordinates are carried over positionally and unchanged.
     """
 
-    return [
-        Vertex(coordinates=vertex.coordinates) for vertex in polytope.vertices
-    ]
+    return tuple(Vertex(coordinates=vertex.coordinates) for vertex in polytope.vertices)
+
+
+def _tuple_canonical_containers(value: object) -> object:
+    """Return raw JSON payloads with every sequence materialized as a tuple.
+
+    Dispatch parses each request through strict JSON validation, so a
+    preflight validator that hands back raw JSON arrays would make the
+    strict parser reject list-to-tuple coercion on canonical tuple fields.
+    Recursively converting containers keeps the preflight semantics while
+    preserving the declared canonical shapes; the payload size is already
+    bounded by the request's own container limits.
+    """
+
+    if isinstance(value, list):
+        return tuple(_tuple_canonical_containers(item) for item in value)
+    if isinstance(value, dict):
+        return {key: _tuple_canonical_containers(item) for key, item in value.items()}
+    return value
 
 
 class PolytopeVolumeRequest(StrictModel):
@@ -723,7 +738,7 @@ class PolytopeVolumeRequest(StrictModel):
         if isinstance(value, dict) and set(value) == {"space", "vertices"}:
             canonical = RationalVPolytope.model_validate(value)
             return {**data, "vertices": _canonical_v_polytope_vertices(canonical)}
-        return data
+        return _tuple_canonical_containers(data)
 
     @model_validator(mode="after")
     def validate_representation(self) -> Self:

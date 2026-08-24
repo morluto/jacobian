@@ -11,6 +11,15 @@ class _WitnessNode:
     index: int
 
 
+def _witness_indices(witness: _WitnessNode | None) -> tuple[int, ...]:
+    indices: list[int] = []
+    while witness is not None:
+        indices.append(witness.index)
+        witness = witness.previous
+    indices.reverse()
+    return tuple(indices)
+
+
 def _solve_subset_sum_target(
     values: tuple[int, ...],
     target: int,
@@ -22,6 +31,9 @@ def _solve_subset_sum_target(
     Each reachable sum retains the smallest binary incidence mask, with source
     index zero as the least-significant bit.  This gives repeated values and
     zeros a stable, deterministic witness without treating them as a set.
+    Every insertion returns immediately when it attains ``target``, so the
+    search stops at the first prefix that resolves it; witnesses inside that
+    prefix carry masks strictly below any witness of the later expansion.
     """
 
     states: dict[int, _WitnessNode | None] = {0: None} if allow_empty_subset else {}
@@ -38,23 +50,20 @@ def _solve_subset_sum_target(
         # Insert-only updates therefore retain the globally smallest mask
         # without constructing exponentially wide bit masks.
         if not allow_empty_subset and value not in states:
+            if value == target:
+                return (index,)
             states[value] = _WitnessNode(previous=None, index=index)
 
         for subtotal, witness in previous:
             candidate_sum = subtotal + value
+            if candidate_sum == target:
+                return _witness_indices(_WitnessNode(previous=witness, index=index))
             if candidate_sum not in states:
                 states[candidate_sum] = _WitnessNode(
                     previous=witness,
                     index=index,
                 )
 
-    if target not in states:
-        return None
-
-    indices: list[int] = []
-    witness = states[target]
-    while witness is not None:
-        indices.append(witness.index)
-        witness = witness.previous
-    indices.reverse()
-    return tuple(indices)
+    # Every attaining insertion above returned early, so exhausting the loop
+    # establishes exact non-attainment across the whole source.
+    return None

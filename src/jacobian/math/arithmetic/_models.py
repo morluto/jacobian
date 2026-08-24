@@ -22,6 +22,7 @@ from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 
 _MAX_BASE = 10_000
 _MAX_NONNEGATIVE = 1_000
+_MAX_NTH_ROOT_DEGREE = 100_000
 MAX_BASE_DIGITS = 1_024
 
 # A positional digit is a small non-negative canonical integer string.  The
@@ -89,7 +90,7 @@ class IntegerNthRootRequest(StrictModel):
     """
 
     value: CanonicalInteger
-    degree: int = Field(ge=1, le=_MAX_NONNEGATIVE)
+    degree: int = Field(ge=1, le=_MAX_NTH_ROOT_DEGREE)
 
     @model_validator(mode="after")
     def require_valid_root_domain(self) -> Self:

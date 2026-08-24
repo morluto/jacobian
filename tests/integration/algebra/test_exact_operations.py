@@ -227,9 +227,9 @@ def test_closed_form_contract_rejects_characteristic_polynomials_above_degree_fo
     with pytest.raises(ValidationError):
         ClosedFormRequest(
             characteristic_coefficients=tuple(
-                _r(value) for value in (1, 0, 0, 0, -1, -1)
+                _r(value) for value in (1,) + (0,) * 16 + (-1,)
             ),
-            initial_values=tuple(_r(0) for _ in range(5)),
+            initial_values=tuple(_r(0) for _ in range(17)),
         )
 
 

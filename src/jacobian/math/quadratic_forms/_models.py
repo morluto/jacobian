@@ -9,11 +9,16 @@ from pydantic import Field, model_validator
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 
-MAX_DIM = 10
+MAX_DIM = 50
 MAX_ENTRY_DIGITS = 100  # limit entry magnitude to ~10^100 for bounded eigenvalue work
 MAX_VECTOR_DIGITS = 100
 MAX_EVALUATION_DIGITS = MAX_ENTRY_DIGITS + 2 * MAX_VECTOR_DIGITS + 3
 MAX_DISCRIMINANT_DIGITS = MAX_DIM * (MAX_ENTRY_DIGITS + 1)
+# Representation-number enumeration remains bounded separately; see
+# MAX_REPRESENTATION_DIM below. Larger dimensions are served by O(n^3)
+# linear-algebra ops (discriminant, signature); enumeration ops will be
+# split to dedicated types in a follow-up.
+MAX_REPRESENTATION_DIM = 10
 
 
 def _require_integer_digits(value: CanonicalInteger, maximum: int, label: str) -> None:
@@ -134,6 +139,11 @@ class RepresentationNumbersRequest(StrictModel):
     def require_valid_bound(self) -> Self:
         if self.bound > 1000:
             raise ValueError("bound must not exceed 1000")
+        if len(self.form.matrix) > MAX_REPRESENTATION_DIM:
+            raise ValueError(
+                f"representation_numbers dimension must not exceed {MAX_REPRESENTATION_DIM} "
+                "(enumeration bound; larger dimensions need a dedicated operation)"
+            )
         return self
 
 
@@ -159,6 +169,17 @@ class ThetaSeriesPrefixRequest(StrictModel):
 
     form: SymmetricMatrix
     bound: int = Field(ge=0, le=1000)
+
+    @model_validator(mode="after")
+    def require_valid_bound(self) -> Self:
+        if self.bound > 1000:
+            raise ValueError("bound must not exceed 1000")
+        if len(self.form.matrix) > MAX_REPRESENTATION_DIM:
+            raise ValueError(
+                f"theta_series dimension must not exceed {MAX_REPRESENTATION_DIM} "
+                "(enumeration bound; larger dimensions need a dedicated operation)"
+            )
+        return self
 
 
 class ThetaSeriesPrefixResult(StrictModel):
@@ -207,6 +228,12 @@ class DirectSumRequest(StrictModel):
 
     form1: SymmetricMatrix
     form2: SymmetricMatrix
+
+    @model_validator(mode="after")
+    def require_bounded_sum(self) -> Self:
+        if len(self.form1.matrix) + len(self.form2.matrix) > MAX_DIM:
+            raise ValueError(f"combined dimension must not exceed {MAX_DIM}")
+        return self
 
 
 class DirectSumResult(StrictModel):

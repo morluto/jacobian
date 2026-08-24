@@ -55,6 +55,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
+    OperationAdmission(
+        "probability.local_lemma.asymmetric_witness.check",
+        AdmissionDecision.KEEP,
+        "exact source-bound numerical-witness relation with a complete replayable inequality ledger, distinct from dependency-graph proof or witness search",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

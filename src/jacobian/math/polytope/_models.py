@@ -254,6 +254,10 @@ def _preflight_raw_support_components(data: object) -> object:
                 component,
                 "polytope vertex coordinate",
             )
+            _require_raw_canonical_rational_component(
+                component,
+                "polytope vertex coordinate",
+            )
     for component in _iter_raw_entries(canonical.get("covector"), "components"):
         _require_raw_component_within_support_envelope(
             component,
@@ -603,6 +607,131 @@ def _require_raw_support_conclusions_admissible(canonical: Any) -> None:
     coordinate_rows = tuple(rows for _, rows in parsed)
     if len(set(coordinate_rows)) != len(coordinate_rows):
         raise ValueError("exposed-face vertices must have distinct coordinates")
+    _require_raw_support_conclusions_bound(canonical, parsed)
+
+
+def _raw_support_vertex_key(
+    vertex: RationalPolytopeVertex,
+) -> tuple[str, tuple[tuple[str, str], ...]]:
+    """Return one labelled vertex's identity as its reduced-component key."""
+
+    return (
+        vertex.vertex_id,
+        tuple((component.num, component.den) for component in vertex.coordinates),
+    )
+
+
+def _assemble_raw_support_source(
+    canonical: Any,
+) -> tuple[RationalVPolytope, RationalCovector] | None:
+    """Assemble the validated raw source without the extremality proof.
+
+    Every component has already been parsed as a canonical rational and
+    measured against the envelope, so ``model_construct`` assembles a
+    faithful value for exact arithmetic; structural faults the canonical
+    type would reject (ID ordering, dimension agreement, distinctness)
+    return ``None`` here and stay the business of ordinary nested
+    validation, which reports them with the published errors.
+    """
+
+    raw_polytope = canonical.get("polytope")
+    raw_covector = canonical.get("covector")
+    if not isinstance(raw_polytope, dict) or not isinstance(raw_covector, dict):
+        return None
+    axes = _raw_space_axes(raw_polytope.get("space"))
+    if axes is None:
+        return None
+    dimension = len(axes)
+    components = []
+    for component in raw_covector["components"]:
+        components.append(
+            component
+            if isinstance(component, CanonicalRational)
+            else CanonicalRational.model_validate(component)
+        )
+    if len(components) != dimension:
+        return None
+    vertices = []
+    for vertex in _iter_raw_entries(raw_polytope, "vertices"):
+        if (
+            not isinstance(vertex, dict)
+            or set(vertex) != {"vertex_id", "coordinates"}
+            or not isinstance(vertex["vertex_id"], str)
+            or len(vertex["coordinates"]) != dimension
+        ):
+            return None
+        coordinates = [
+            component
+            if isinstance(component, CanonicalRational)
+            else CanonicalRational.model_validate(component)
+            for component in vertex["coordinates"]
+        ]
+        vertices.append(
+            RationalPolytopeVertex.model_construct(
+                vertex_id=vertex["vertex_id"],
+                coordinates=tuple(coordinates),
+            )
+        )
+    if not vertices:
+        return None
+    space = RationalCoordinateSpace.model_construct(axes=tuple(axes))
+    return (
+        RationalVPolytope.model_construct(
+            space=space,
+            vertices=tuple(vertices),
+        ),
+        RationalCovector.model_construct(
+            space=space,
+            components=tuple(components),
+        ),
+    )
+
+
+def _require_raw_support_conclusions_bound(
+    canonical: Any,
+    face_keys: list[tuple[str, tuple[tuple[str, str], ...]]],
+) -> None:
+    """Bind well-formed raw conclusions to the raw source before replay.
+
+    Every local conclusion shape and invariant has passed, so the only
+    remaining fault a serialized result can carry is a forged
+    ``support_value`` or ``exposed_face`` - rejected by nested validation
+    only after reconstructing (and canonically proving) the retained
+    source. This gate evaluates the same ``support_data`` kernel over the
+    assembled raw values and raises the identical binding errors first;
+    the after-validator still recomputes the binding authoritatively on
+    the proven value, so the accept/reject boundary is unchanged.
+    """
+
+    from jacobian.math.polytope._operations import support_data
+
+    assembled = _assemble_raw_support_source(canonical)
+    if assembled is None:
+        return
+    polytope, covector = assembled
+
+    expected_value, expected_vertices = support_data(polytope, covector)
+    support_claim = canonical.get("support_value")
+    claim_value = (
+        support_claim
+        if isinstance(support_claim, CanonicalRational)
+        else CanonicalRational.model_validate(support_claim)
+    )
+    if claim_value != CanonicalRational.from_fraction(expected_value):
+        raise ValueError("support value must equal the exact maximum on every vertex")
+
+    exposed_face = canonical.get("exposed_face")
+    if isinstance(exposed_face, RationalExposedFace):
+        claimed_keys = [
+            _raw_support_vertex_key(vertex) for vertex in exposed_face.vertices
+        ]
+    else:
+        claimed_keys = face_keys
+    expected_keys = [_raw_support_vertex_key(vertex) for vertex in expected_vertices]
+    if claimed_keys != expected_keys:
+        raise ValueError(
+            "exposed face must be exactly the complete maximizing vertex family"
+        )
 
 
 def _require_interval_volume_within_result_bound(

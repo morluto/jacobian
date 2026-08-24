@@ -962,6 +962,57 @@ def test_result_preflights_built_foreign_exposed_face_space_before_nested_parsin
         PolytopeSupportResult.model_validate(payload)
 
 
+def test_result_preflights_forged_support_value_before_nested_parsing(
+    square_result: PolytopeSupportResult,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A well-formed but incorrect support value binds against the raw
+    source before nested validation reconstructs (and proves) it."""
+
+    _forbid_extremality_proof(monkeypatch)
+    payload = square_result.model_dump(mode="json")
+    payload["support_value"] = {"num": "2", "den": "1"}
+
+    with pytest.raises(
+        ValidationError,
+        match="support value must equal the exact maximum on every vertex",
+    ):
+        PolytopeSupportResult.model_validate(payload)
+
+
+def test_result_preflights_forged_exposed_face_before_nested_parsing(
+    square_result: PolytopeSupportResult,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A same-space face with wrong membership binds against the raw
+    source before nested validation reconstructs (and proves) it."""
+
+    _forbid_extremality_proof(monkeypatch)
+    payload = square_result.model_dump(mode="json")
+    payload["exposed_face"]["vertices"] = payload["exposed_face"]["vertices"][:1]
+
+    with pytest.raises(
+        ValidationError,
+        match="exposed face must be exactly the complete maximizing vertex family",
+    ):
+        PolytopeSupportResult.model_validate(payload)
+
+
+def test_result_preflight_binding_defers_unparsed_structural_faults(
+    square_result: PolytopeSupportResult,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A serialized source whose vertex rows are structurally malformed in
+    ways the binding assembly does not model still reaches ordinary nested
+    validation, which owns those published errors."""
+
+    payload = square_result.model_dump(mode="json")
+    del payload["polytope"]["vertices"][1]["vertex_id"]
+
+    with pytest.raises(ValidationError, match="vertex_id"):
+        PolytopeSupportResult.model_validate(payload)
+
+
 def test_constructed_result_rejects_foreign_exposed_face_space_at_construction(
     square_result: PolytopeSupportResult,
     monkeypatch: pytest.MonkeyPatch,

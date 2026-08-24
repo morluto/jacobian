@@ -126,12 +126,10 @@ def _sylvester_resultant_value(
 ) -> MultivariateScalarValue | MultivariatePolynomialValue:
     """Compute the exact resultant value of an admitted request.
 
-    Returns the classical Sylvester-determinant orientation.  SymPy's
-    subresultant PRS canonicalizes ``deg(left) >= deg(right)`` internally
-    without compensating the swap sign (upstream sympy/sympy#10666), so
-    whenever the left elimination degree is the smaller one the backend
-    value carries an extra ``(-1)^(m*n)`` factor relative to the declared
-    convention; this adapter restores the standard orientation.
+    Returns the classical Sylvester-determinant orientation.  The shared
+    ``polynomial_resultant`` backend helper owns the SymPy swap-sign
+    restoration (upstream sympy/sympy#10666), so no further compensation
+    happens here.
     """
     from sympy import QQ, Poly
 
@@ -144,20 +142,6 @@ def _sylvester_resultant_value(
     left = rational_polynomial_to_sympy(request.left)
     right = rational_polynomial_to_sympy(request.right)
     value = polynomial_resultant(left, right, generator)
-
-    left_elimination_degree = max(
-        (term.exponents[elimination_index] for term in request.left.polynomial.terms),
-        default=0,
-    )
-    right_elimination_degree = max(
-        (term.exponents[elimination_index] for term in request.right.polynomial.terms),
-        default=0,
-    )
-    if (
-        left_elimination_degree < right_elimination_degree
-        and (left_elimination_degree * right_elimination_degree) % 2
-    ):
-        value = -value
 
     remaining_variables = tuple(
         variable for variable in variables if variable != request.elimination_variable

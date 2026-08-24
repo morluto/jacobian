@@ -41,15 +41,20 @@ MATRIX_POLYNOMIAL_EVALUATION_PASSES = 2
 # with a 32,701-digit denominator costs about 700 billion units and one second.
 MAX_MATRIX_POLYNOMIAL_DIGIT_WORK = 1_000_000_000_000
 
-# Admission may materialize bounded powers to cross-cancel factors before
-# digit budgets are charged. Eight bits per canonical digit sits far above
-# log2(10), so the estimate never undercounts a power below the ceiling.
+# Admission may materialize bounded powers to prove shared numerator factors
+# before digit budgets are charged. Eight bits per canonical digit sits far
+# above log2(10), so the estimate never undercounts a power below the ceiling.
 _MAX_ADMISSION_POWER_BITS = 8 * MAX_CANONICAL_RATIONAL_DIGITS
 # Total estimated bigint word-work one admission may spend on materialized
 # powers and their reductions; exhaustion falls back to the dense capped
 # bound. Admits several full-width cancellations per call while bounding
 # repeated adversarial reduction work to milliseconds.
 _ADMISSION_REDUCTION_BIT_BUDGET = 64 * _MAX_ADMISSION_POWER_BITS
+# Conservative ceiling on how many full clearing-denominator powers one
+# admission peels out of a proven numerator factor. Realistic cancellations
+# need a handful of peels; exhaustion merely keeps the uncancelled (larger,
+# still safe) denominator bound.
+_MAX_PROVEN_DENOMINATOR_PEELS = 64
 
 _RESULT_ENTRY_OVERHEAD_BYTES: int = 32
 _RESULT_ENVELOPE_RESERVE_BYTES: int = 4_096
@@ -180,69 +185,167 @@ def _materialized_power(base: int, exponent: int) -> tuple[int | None, int]:
     return base**exponent, bits
 
 
-def _reduced_general_result_bound(
-    coefficient_ratios: tuple[tuple[int, int, int], ...],
-    cleared_matrix_height: int,
-    common_matrix_denominator: int,
-    dimension: int,
-    longest_walk: int | None,
-) -> tuple[int, int] | None:
-    """Bound live entries of ``f(A)`` with per-term cancelled fractions.
+def _proven_numerator_factor(
+    surviving_terms: tuple[tuple[int, int, int], ...],
+    common_coefficient_denominator: int,
+) -> int:
+    """Return a factor proven to divide every cleared result numerator.
 
-    Every structurally surviving term contributes the entry bound
-    ``|c_k| n^(k-1) h^k / Q^k`` as an exactly reduced fraction: the shared
-    factor ``gcd(h, Q)`` is divided out of the cleared height and clearing
-    denominator up front (equal exponents make ``gcd(h^k, Q^k) = gcd(h,Q)^k``
-    exact), and each term then cancels its coefficient, dimension-, and
-    height-power factors against its explicit denominator. The fractions are
-    summed with reduced rational arithmetic, so exact cancellation between
-    coefficient factors and matrix-power factors is never rejected as growth.
+    With ``D`` the highest surviving exponent and ``V`` the common
+    coefficient denominator, entry ``(i, j)`` of ``f(A)`` equals
 
-    Returns ``None`` when a required power exceeds the materialization
-    ceiling or the reduction budget is exhausted; callers must then fall
-    back to the dense capped bound.
+        ``N / (V Q^D)`` with ``N = sum_k w_k Q^(D-k) M^k[i,j]``,
+
+    where ``w_k = |c_k| (V // den c_k)`` is the exact lifted coefficient.
+    Every term of ``N`` is a multiple of its own ``w_k``, so the gcd of the
+    surviving ``w_k`` values divides every contributing numerator. Only such
+    proven factors may later be cancelled; matrix-side quantities such as the
+    cleared height ``h`` or the dimension count ``n^(k-1)`` bound entry
+    magnitudes but divide no numerator, so they are never cancelled.
+
+    The gcd chain is charged against the reduction budget; exhaustion returns
+    1, which cancels nothing and keeps every downstream bound valid.
     """
 
-    shared = gcd(cleared_matrix_height, common_matrix_denominator)
-    height_reduced = cleared_matrix_height // shared
-    denominator_reduced = common_matrix_denominator // shared
+    factor = 0
     budget = _ADMISSION_REDUCTION_BIT_BUDGET
-    terms: list[tuple[int, int]] = []
-    for exponent, numerator, denominator in coefficient_ratios:
-        if numerator == 0:
-            continue
-        if exponent and longest_walk is not None and exponent > longest_walk:
-            continue
+    for _exponent, numerator, denominator in surviving_terms:
+        lift = abs(numerator) * (common_coefficient_denominator // denominator)
+        budget -= min(factor.bit_length(), lift.bit_length()) ** 2 // 65_536
+        if budget < 0:
+            return 1
+        factor = gcd(factor, lift)
+    return factor
+
+
+def _reduced_general_result_bound(
+    surviving_terms: tuple[tuple[int, int, int], ...],
+    cleared_matrix_height: int,
+    common_matrix_denominator: int,
+    common_coefficient_denominator: int,
+    dimension: int,
+    highest_surviving_exponent: int,
+    proven_numerator_factor: int,
+) -> int | None:
+    """Bound reduced result numerators via the exact proven cancellation.
+
+    Every surviving term contributes at most
+    ``w_k n^(k-1) h^k Q^(D-k)`` to the cleared integer numerator, so the
+    exact integer sum ``S`` of those products bounds ``|N|`` from above.
+    Dividing by the proven ``(scale part, peeled powers)`` of
+    ``_proven_cancellation`` -- which divides every numerator and the whole
+    cleared denominator -- leaves ``floor(S / scale / Q^peeled)`` as a valid
+    bound on every reduced result numerator. Each summand is computed
+    exactly from powers that materialize below the admission ceiling, so
+    genuine cancellation between lifted coefficients and compounded
+    denominators survives without ever cancelling an upper-bound factor such
+    as the height maximum.
+
+    Returns ``None`` when there is no proven cancellation to apply, when a
+    required power exceeds the materialization ceiling, or when the reduction
+    budget is exhausted; callers then keep the dense capped numerator bound,
+    which rejects oversized growth outright.
+    """
+
+    if proven_numerator_factor <= 1:
+        return None
+    total = 0
+    budget = _ADMISSION_REDUCTION_BIT_BUDGET
+    for exponent, numerator, denominator in surviving_terms:
+        lift = abs(numerator) * (common_coefficient_denominator // denominator)
         dimension_power, dimension_bits = (
-            (1, 0) if exponent == 0 else _materialized_power(dimension, exponent - 1)
+            (1, 0) if exponent <= 1 else _materialized_power(dimension, exponent - 1)
         )
         height_power, height_bits = (
-            (1, 0) if exponent == 0 else _materialized_power(height_reduced, exponent)
+            (1, 0)
+            if not exponent
+            else _materialized_power(cleared_matrix_height, exponent)
         )
         clearing_power, clearing_bits = (
             (1, 0)
-            if exponent == 0
-            else _materialized_power(denominator_reduced, exponent)
+            if exponent == highest_surviving_exponent
+            else _materialized_power(
+                common_matrix_denominator,
+                highest_surviving_exponent - exponent,
+            )
         )
         if dimension_power is None or height_power is None or clearing_power is None:
             return None
         budget -= dimension_bits + height_bits + clearing_bits
-        denominator_total = denominator * clearing_power
-        term_numerator = 1
-        for factor in (abs(numerator), dimension_power, height_power):
-            # A Lehmer gcd costs on the order of (bits / 64) squared word
-            # operations; charging a quarter of that square keeps the budget
-            # an upper estimate of the reduction work actually performed.
-            budget -= (
-                min(factor.bit_length(), denominator_total.bit_length()) ** 2 // 4096
-            )
-            if budget < 0:
-                return None
-            common = gcd(factor, denominator_total)
-            denominator_total //= common
-            term_numerator = _capped_multiply(term_numerator, factor // common)
-        terms.append((term_numerator, denominator_total))
-    return _bounded_rational_sum(terms)
+        term = lift * dimension_power * height_power * clearing_power
+        # A schoolbook product of this many bits costs on the order of
+        # (bits / 64)^2 word operations; charging a 256th of that square
+        # keeps the budget an upper estimate of one exact term reduction.
+        budget -= term.bit_length() ** 2 // 65_536
+        if budget < 0:
+            return None
+        total += term
+    scale_part, peeled = _proven_cancellation(
+        proven_numerator_factor,
+        common_coefficient_denominator,
+        common_matrix_denominator,
+        highest_surviving_exponent,
+    )
+    total //= scale_part
+    for _ in range(peeled):
+        total //= common_matrix_denominator
+    return total
+
+
+def _proven_cancellation(
+    proven_numerator_factor: int,
+    common_coefficient_denominator: int,
+    common_matrix_denominator: int,
+    highest_surviving_exponent: int,
+) -> tuple[int, int]:
+    """Return the ``(scale part, peeled powers)`` proven against both sides.
+
+    A cleared result entry equals ``N / (V Q^D)``. Reducing that fraction can
+    only cancel divisor parts of ``N`` that also divide ``V Q^D``: whole
+    factors shared between the proven numerator factor and ``V``, plus whole
+    powers of ``Q`` peeled while they divide the remaining factor exactly.
+    Any partial remainder stays uncancelled, so every later bound derived
+    from this split never undercuts the true reduced components even when
+    ``V Q^D`` itself is far too large to materialize.
+    """
+
+    scale_part = gcd(proven_numerator_factor, common_coefficient_denominator)
+    remaining = proven_numerator_factor // scale_part
+    peeled = 0
+    while (
+        peeled < highest_surviving_exponent
+        and peeled < _MAX_PROVEN_DENOMINATOR_PEELS
+        and common_matrix_denominator > 1
+        and remaining % common_matrix_denominator == 0
+    ):
+        remaining //= common_matrix_denominator
+        peeled += 1
+    return scale_part, peeled
+
+
+def _proven_denominator_bound(
+    common_matrix_denominator: int,
+    common_coefficient_denominator: int,
+    highest_surviving_exponent: int,
+    proven_numerator_factor: int,
+) -> int:
+    """Bound the reduced result denominator using proven cancellations only.
+
+    The returned ``(V // scale_part) Q^(D - peeled)`` keeps every unproven
+    factor of ``V Q^D`` in place, so it remains a valid upper bound on the
+    true reduced denominator of every result entry.
+    """
+
+    scale_part, peeled = _proven_cancellation(
+        proven_numerator_factor,
+        common_coefficient_denominator,
+        common_matrix_denominator,
+        highest_surviving_exponent,
+    )
+    return _capped_multiply(
+        common_coefficient_denominator // scale_part,
+        _capped_power(common_matrix_denominator, highest_surviving_exponent - peeled),
+    )
 
 
 def _acyclic_support_longest_walk(
@@ -328,35 +431,48 @@ def _general_result_component_bounds(
     """Bound ``f(A)`` after clearing one exact global denominator.
 
     If ``Q`` clears every entry denominator and ``M = Q A``, then with ``V``
-    clearing the polynomial coefficients, ``V Q^d f(A)`` is the integer matrix
+    clearing the polynomial coefficients, ``V Q^D f(A)`` is the integer matrix
 
-    ``sum_k w_k Q^(d-k) M^k``.
+    ``sum_k w_k Q^(D-k) M^k``,
 
-    Entry ``(i, j)`` of ``M^k`` is nonzero only when the support digraph of
+    where ``D`` is any exponent at least the highest surviving one. Entry
+    ``(i, j)`` of ``M^k`` is nonzero only when the support digraph of
     the cleared integer entries carries a walk of length ``k`` from ``i`` to
     ``j``, so an acyclic support digraph with longest walk ``L`` makes every
-    exponent beyond ``L`` identically zero; structurally vanishing powers are
-    dropped from the result bound. When no nonconstant power survives,
-    ``f(A) = c(0) I`` reduces exactly to the constant coefficient and the
-    ``Q^d`` denominator factor is dropped with them.
+    exponent beyond ``L`` identically zero. Those structurally dead powers
+    are classified before any matrix-side quantity is derived: when no
+    nonconstant power survives, ``f(A) = c(0) I`` reduces exactly to the
+    constant coefficient and no global clearing denominator is constructed
+    at all, so coprime entry denominators of dead powers can never reject a
+    request whose admitted work and exact value are small.
 
-    The surviving-powers result bound charges reduced factors rather than
-    unreduced products: each live term contributes ``|c_k| n^(k-1) h^k / Q^k``
-    as an exactly reduced fraction (see
-    ``_reduced_general_result_bound``), so cancellations between coefficient
-    factors and matrix-power factors are not rejected as growth. When a
-    required power exceeds the admission materialization ceiling, the dense
-    capped entry bound takes over: for ``h = max |M_ij|``, each entry of
-    ``M^k`` is bounded by ``n^(k-1) h^k``, which reduction can only shrink.
-    The zero-matrix case is handled separately because its intermediates are
-    individual input coefficients.
+    When some nonconstant power survives, every nonzero entry lies on a walk
+    of length one, so the global clearing denominator ``Q`` is required and
+    its LCM stays within the canonical component cap or the request is
+    rejected here. The output bounds then charge compounded denominators
+    honestly: the numerator satisfies ``|N| <= S`` where ``S`` is the dense
+    capped sum over surviving terms of ``w_k Q^(D-k) n^(k-1) h^k``, and the
+    reduced denominator divides ``V Q^D``. Cancelling more than proven
+    factors would be unsound -- the cleared height ``h`` is a maximum over
+    entries and ``n^(k-1)`` is a count, so neither divides the contributing
+    numerators -- hence ``S`` is divided only by the exact gcd of the lifted
+    coefficients when its power products materialize within the admission
+    ceiling, and ``V Q^D`` only by the divisor parts of that same proven
+    factor (see ``_reduced_general_result_bound`` and
+    ``_proven_denominator_bound``). Whenever those reductions are
+    unavailable, the uncancelled dense bound stands and oversized growth is
+    rejected during request validation rather than after execution.
 
-    The dense sum over every surviving exponent is retained as a second,
-    never-structural work bound: every Horner intermediate equals one of its
-    sub-sums over surviving powers, since structurally vanishing powers
-    contribute identically zero matrices, with denominator at most ``V Q^d``,
-    so its digit size drives the coupled digit-work estimate independently of
-    how small the exact result is.
+    The dense sum over surviving exponents charged with ``Q^degree`` is
+    retained as a second, never-structural work bound: every Horner
+    intermediate equals one of its sub-sums over surviving powers, since
+    structurally vanishing powers contribute identically zero matrices, so
+    its digit size drives the coupled digit-work estimate independently of
+    how small the exact result is. In the constant-result branch no clearing
+    denominator exists; shifted Horner intermediates there carry rational
+    heights compounded over at most the longest support walk, driven by the
+    largest input entry height. The zero-matrix case is handled separately
+    because its intermediates are individual input coefficients.
     """
 
     matrix_ratios = tuple(
@@ -364,9 +480,6 @@ def _general_result_component_bounds(
     )
     dimension = len(matrix.entries)
     longest_walk = _acyclic_support_longest_walk(matrix_ratios, dimension)
-    common_matrix_denominator = _capped_lcm(
-        denominator for _numerator, denominator in matrix_ratios
-    )
     coefficient_ratios = tuple(
         (
             term.exponents[0],
@@ -377,55 +490,22 @@ def _general_result_component_bounds(
     common_coefficient_denominator = _capped_lcm(
         denominator for _exponent, _numerator, denominator in coefficient_ratios
     )
-    if (
-        common_matrix_denominator > _MAX_RESULT_COMPONENT
-        or common_coefficient_denominator > _MAX_RESULT_COMPONENT
-    ):
+    if common_coefficient_denominator > _MAX_RESULT_COMPONENT:
         raise ValueError(
             "matrix polynomial denominator growth exceeds the canonical "
             f"{MAX_CANONICAL_RATIONAL_DIGITS:,}-digit result bound"
         )
 
-    work_denominator_bound = _capped_multiply(
-        common_coefficient_denominator,
-        _capped_power(common_matrix_denominator, degree),
+    surviving_terms = tuple(
+        (exponent, numerator, denominator)
+        for exponent, numerator, denominator in coefficient_ratios
+        if longest_walk is None or exponent <= longest_walk
     )
-    # |numerator| * (Q // denominator) is at most the square of two canonical
-    # components, so the exact cleared height is always safe to materialize.
-    cleared_matrix_height = max(
-        abs(numerator) * (common_matrix_denominator // denominator)
-        for numerator, denominator in matrix_ratios
-    )
-    numerator_bound = 0
-    work_numerator_bound = 0
-    live_nonconstant_power = False
-    for exponent, numerator, denominator in coefficient_ratios:
-        coefficient_height = _capped_multiply(
-            abs(numerator), common_coefficient_denominator // denominator
-        )
-        matrix_power_height = 1
-        if exponent:
-            matrix_power_height = _capped_multiply(
-                _capped_power(cleared_matrix_height, exponent),
-                _capped_power(dimension, exponent - 1),
-            )
-        term_height = _capped_multiply(
-            coefficient_height,
-            _capped_power(common_matrix_denominator, degree - exponent),
-        )
-        term_height = _capped_multiply(term_height, matrix_power_height)
-        if exponent and longest_walk is not None and exponent > longest_walk:
-            # Structurally vanishing powers are identically zero, so neither
-            # the exact result nor any Horner intermediate contains them.
-            continue
-        if exponent:
-            live_nonconstant_power = True
-        work_numerator_bound = _capped_add(work_numerator_bound, term_height)
-        numerator_bound = _capped_add(numerator_bound, term_height)
 
-    if not live_nonconstant_power:
-        # Every nonconstant power vanishes structurally, so f(A) reduces to
-        # c(0) I exactly; no Q^d clearing factor is needed.
+    if all(exponent == 0 for exponent, _n, _d in surviving_terms):
+        # Every nonconstant power vanishes structurally, so f(A) equals
+        # c(0) I exactly; no Q^d clearing factor is needed and none may be
+        # demanded from entries whose denominators only dead powers touch.
         numerator_bound, denominator_bound = next(
             (
                 (abs(numerator), denominator)
@@ -434,18 +514,108 @@ def _general_result_component_bounds(
             ),
             (0, 1),
         )
+        # Work bound without a global clearing denominator: Horner
+        # intermediates are sub-sums over powers shifted down from each
+        # coefficient by at most the longest walk, so per-walk products
+        # compound rational entry heights over at most that shift while
+        # coefficient components enter additively through the sum.
+        entry_height = max(
+            max(abs(numerator), denominator) for numerator, denominator in matrix_ratios
+        )
+        shift_ceiling = max(longest_walk or 0, 0)
+        work_numerator_bound = 0
+        for exponent, numerator, denominator in coefficient_ratios:
+            shift = min(exponent, shift_ceiling)
+            work_numerator_bound = _capped_add(
+                work_numerator_bound,
+                _capped_multiply(
+                    max(abs(numerator), denominator),
+                    _capped_multiply(
+                        _capped_power(entry_height, shift),
+                        _capped_power(dimension, shift - 1 if shift else 0),
+                    ),
+                ),
+            )
+        work_denominator_bound = _capped_multiply(
+            max(
+                (
+                    denominator
+                    for _exponent, _numerator, denominator in coefficient_ratios
+                ),
+                default=1,
+            ),
+            _capped_power(entry_height, shift_ceiling),
+        )
     else:
-        reduced_bound = _reduced_general_result_bound(
-            coefficient_ratios,
+        common_matrix_denominator = _capped_lcm(
+            denominator for _numerator, denominator in matrix_ratios
+        )
+        if common_matrix_denominator > _MAX_RESULT_COMPONENT:
+            raise ValueError(
+                "matrix polynomial denominator growth exceeds the canonical "
+                f"{MAX_CANONICAL_RATIONAL_DIGITS:,}-digit result bound"
+            )
+        highest_surviving_exponent = max(
+            exponent for exponent, _numerator, _denominator in surviving_terms
+        )
+        work_denominator_bound = _capped_multiply(
+            common_coefficient_denominator,
+            _capped_power(common_matrix_denominator, degree),
+        )
+        # |numerator| * (Q // denominator) is at most the square of two canonical
+        # components, so the exact cleared height is always safe to materialize.
+        cleared_matrix_height = max(
+            abs(numerator) * (common_matrix_denominator // denominator)
+            for numerator, denominator in matrix_ratios
+        )
+        numerator_bound = 0
+        work_numerator_bound = 0
+        for exponent, numerator, denominator in surviving_terms:
+            coefficient_lift = abs(numerator) * (
+                common_coefficient_denominator // denominator
+            )
+            matrix_power_height = 1
+            if exponent:
+                matrix_power_height = _capped_multiply(
+                    _capped_power(cleared_matrix_height, exponent),
+                    _capped_power(dimension, exponent - 1),
+                )
+            output_term = _capped_multiply(
+                coefficient_lift,
+                _capped_power(
+                    common_matrix_denominator,
+                    highest_surviving_exponent - exponent,
+                ),
+            )
+            term_height = _capped_multiply(
+                coefficient_lift,
+                _capped_power(common_matrix_denominator, degree - exponent),
+            )
+            output_term = _capped_multiply(output_term, matrix_power_height)
+            term_height = _capped_multiply(term_height, matrix_power_height)
+            work_numerator_bound = _capped_add(work_numerator_bound, term_height)
+            numerator_bound = _capped_add(numerator_bound, output_term)
+
+        proven_numerator_factor = _proven_numerator_factor(
+            surviving_terms, common_coefficient_denominator
+        )
+        reduced_numerator_bound = _reduced_general_result_bound(
+            surviving_terms,
             cleared_matrix_height,
             common_matrix_denominator,
+            common_coefficient_denominator,
             dimension,
-            longest_walk,
+            highest_surviving_exponent,
+            proven_numerator_factor,
         )
-        if reduced_bound is not None:
-            numerator_bound, denominator_bound = reduced_bound
-        else:
-            denominator_bound = work_denominator_bound
+        if reduced_numerator_bound is not None:
+            numerator_bound = min(numerator_bound, reduced_numerator_bound)
+        denominator_bound = _proven_denominator_bound(
+            common_matrix_denominator,
+            common_coefficient_denominator,
+            highest_surviving_exponent,
+            proven_numerator_factor,
+        )
 
     maximum_work_digits = max(
         _decimal_digit_upper_bound(work_numerator_bound),

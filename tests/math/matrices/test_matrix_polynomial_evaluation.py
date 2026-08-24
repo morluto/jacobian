@@ -368,6 +368,107 @@ def test_structurally_nilpotent_powers_are_admitted_and_evaluate_to_zero() -> No
     assert result.scalar_product_terms == 16
 
 
+def test_height_maximum_is_not_cancelled_from_the_result_bound() -> None:
+    # diag(1, 1/q) with f = t^2 clears to Q = h = q, but h is only the
+    # maximum cleared height, not a factor of every M^k entry: the true
+    # second diagonal entry is 1/q^2 with compounded denominator digits.
+    # The squared output must be predicted and rejected during request
+    # validation instead of passing admission and failing result conversion.
+    denominator = "1" + "0" * 17_000
+    with pytest.raises(ValidationError, match="digit result bound"):
+        MatrixPolynomialEvaluationRequest(
+            matrix=RationalMatrix(
+                entries=(
+                    (_rational(1), _rational(0)),
+                    (_rational(0), _rational(1, denominator)),
+                )
+            ),
+            polynomial=_polynomial((1, 2)),
+        )
+
+
+def test_dead_powers_do_not_demand_a_global_clearing_denominator() -> None:
+    # A square-zero matrix whose only entries carry coprime 17,000-digit
+    # denominators: t^2 is structurally zero, so no global LCM of entry
+    # denominators may be required before the support analysis runs.
+    first_denominator = "1" + "0" * 17_000
+    second_denominator = format_canonical_integer(7**20_118)
+    request = MatrixPolynomialEvaluationRequest(
+        matrix=RationalMatrix(
+            entries=(
+                (
+                    _rational(0),
+                    _rational(1, first_denominator),
+                    _rational(1, second_denominator),
+                ),
+                (_rational(0), _rational(0), _rational(0)),
+                (_rational(0), _rational(0), _rational(0)),
+            )
+        ),
+        polynomial=_polynomial((1, 2)),
+    )
+
+    result = compute_matrix_polynomial_evaluation(request)
+
+    assert _fractions(result.value) == tuple(
+        tuple(Fraction(0) for _ in range(3)) for _ in range(3)
+    )
+    assert result.polynomial_degree == 2
+    assert result.matrix_multiplications == 2
+    assert result.scalar_product_terms == 54
+
+
+def test_proven_cancellations_survive_with_compounded_denominators() -> None:
+    # Swapped denominators put the full compounded height into one cleared
+    # row: h = q^2. With a matching lifted coefficient the proven factor
+    # cancels q^2 exactly, so both requests stay admitted while the bounds
+    # still charge the compounded denominators honestly.
+    base = format_canonical_integer(2**12_000)
+    swap = RationalMatrix(
+        entries=(
+            (_rational(0), _rational(base)),
+            (_rational(1, base), _rational(0)),
+        )
+    )
+
+    identity_result = compute_matrix_polynomial_evaluation(
+        MatrixPolynomialEvaluationRequest(matrix=swap, polynomial=_polynomial((1, 2)))
+    )
+    assert _fractions(identity_result.value) == (
+        (Fraction(1), Fraction(0)),
+        (Fraction(0), Fraction(1)),
+    )
+
+    scaled_result = compute_matrix_polynomial_evaluation(
+        MatrixPolynomialEvaluationRequest(
+            matrix=swap,
+            polynomial=_polynomial((format_canonical_integer(2**24_000), 2)),
+        )
+    )
+    assert scaled_result.value.entries[0][0].num == format_canonical_integer(2**24_000)
+    assert scaled_result.value.entries[1][1].num == format_canonical_integer(2**24_000)
+    assert scaled_result.value.entries[0][1].num == "0"
+
+
+def test_unprovable_height_growth_is_rejected_during_request_validation() -> None:
+    # Same swapped shape with a larger base and no cancellable coefficient:
+    # the honest compounded prediction n * h^2 exceeds the canonical component
+    # cap even though the exact value would be the identity. Admission cannot
+    # establish the tighter claim, so the request must be rejected here rather
+    # than admitted and rescued by result conversion.
+    base = format_canonical_integer(2**40_000)
+    with pytest.raises(ValidationError, match="digit result bound"):
+        MatrixPolynomialEvaluationRequest(
+            matrix=RationalMatrix(
+                entries=(
+                    (_rational(0), _rational(base)),
+                    (_rational(1, base), _rational(0)),
+                )
+            ),
+            polynomial=_polynomial((1, 2)),
+        )
+
+
 def test_structural_zero_reduces_to_surviving_terms_exactly() -> None:
     height = format_canonical_integer(7**18_000)
     nilpotent = RationalMatrix(

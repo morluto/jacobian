@@ -1116,11 +1116,60 @@ class EuclideanConvexPolygonTriangulationResult(StrictModel):
         return self
 
 
+def _replay_euclidean_split_choice(
+    entry: EuclideanTriangulationSplitEntry,
+    optimum: dict[tuple[int, int], tuple[Fraction, ...]],
+    points: tuple[tuple[Fraction, Fraction], ...],
+    count: int,
+) -> None:
+    """Re-decide one DP state against its running incumbent in pivot order."""
+
+    start, end = entry.start, entry.end
+    boundary = (
+        ()
+        if end == start + 1 or (start, end) == (0, count - 1)
+        else (_euclidean_squared_length(points, start, end),)
+    )
+    candidates = tuple(
+        (
+            tuple(sorted(optimum[start, pivot] + optimum[pivot, end] + boundary)),
+            pivot,
+        )
+        for pivot in range(start + 1, end)
+    )
+    chosen = tuple(term.as_fraction() for term in entry.optimum.squared_lengths)
+    expected = next(
+        (candidate for candidate, pivot in candidates if pivot == entry.split),
+        None,
+    )
+    if expected != chosen:
+        raise ValueError("split-table optimum must equal its selected recurrence")
+    incumbent: tuple[Fraction, ...] | None = None
+    incumbent_split: int | None = None
+    for candidate, pivot in candidates:
+        if incumbent is None:
+            incumbent, incumbent_split = candidate, pivot
+            continue
+        order = _compare_euclidean_root_sums(candidate, incumbent)
+        if order is None:
+            raise ValueError("certified split table contains an unresolved comparison")
+        if order < 0:
+            incumbent, incumbent_split = candidate, pivot
+    assert incumbent is not None and incumbent_split is not None
+    if incumbent != chosen or incumbent_split != entry.split:
+        raise ValueError("split-table choice is not the deterministic minimum")
+
+
 def _replay_euclidean_triangulation(
     result: EuclideanConvexPolygonTriangulationResult,
     points: tuple[tuple[Fraction, Fraction], ...],
 ) -> None:
-    """Replay the bounded recurrence that binds a certified result to its source."""
+    """Replay the bounded recurrence that binds a certified result to its source.
+
+    Each DP choice is re-decided against the running incumbent in execution's
+    pivot order, so a certificate is rejected wherever execution would have
+    returned its first unresolved comparison instead of certifying.
+    """
 
     count = len(points)
     expected_entries = tuple(
@@ -1137,36 +1186,11 @@ def _replay_euclidean_triangulation(
     }
     splits: dict[tuple[int, int], int] = {}
     for entry in result.split_table:
-        start, end = entry.start, entry.end
-        boundary = (
-            ()
-            if end == start + 1 or (start, end) == (0, count - 1)
-            else (_euclidean_squared_length(points, start, end),)
+        _replay_euclidean_split_choice(entry, optimum, points, count)
+        optimum[entry.start, entry.end] = tuple(
+            term.as_fraction() for term in entry.optimum.squared_lengths
         )
-        candidates = tuple(
-            (
-                tuple(sorted(optimum[start, pivot] + optimum[pivot, end] + boundary)),
-                pivot,
-            )
-            for pivot in range(start + 1, end)
-        )
-        chosen = tuple(term.as_fraction() for term in entry.optimum.squared_lengths)
-        expected = next(
-            (candidate for candidate, pivot in candidates if pivot == entry.split),
-            None,
-        )
-        if expected != chosen:
-            raise ValueError("split-table optimum must equal its selected recurrence")
-        for candidate, pivot in candidates:
-            order = _compare_euclidean_root_sums(candidate, chosen)
-            if order is None:
-                raise ValueError(
-                    "certified split table contains an unresolved comparison"
-                )
-            if order < 0 or (order == 0 and pivot < entry.split):
-                raise ValueError("split-table choice is not the deterministic minimum")
-        optimum[start, end] = chosen
-        splits[start, end] = entry.split
+        splits[entry.start, entry.end] = entry.split
 
     if result.optimum is None or optimum[0, count - 1] != tuple(
         term.as_fraction() for term in result.optimum.squared_lengths

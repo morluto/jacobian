@@ -285,10 +285,7 @@ def test_kronecker_product_rejects_structural_bounds_before_operand_conversion(
     fourth = MatrixSubsystem(label="fourth", dimension=1)
     fifth = MatrixSubsystem(label="fifth", dimension=1)
     crowded_left = _matrix(
-        [
-            [heavy if row == column else 0 for column in range(4)]
-            for row in range(4)
-        ],
+        [[heavy if row == column else 0 for column in range(4)] for row in range(4)],
         (first, second),
     )
     with pytest.raises(ValidationError, match="subsystem-factor bound"):

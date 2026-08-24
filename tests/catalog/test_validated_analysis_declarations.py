@@ -28,5 +28,8 @@ def test_subject_operation_groups_preserve_wire_contracts() -> None:
             "probability.gaussian_polynomial.moment.compute",
             "probability.graph_reliability.connection_probability.compute",
         ),
-        ("optimization.linear.rational_optimum.compute",),
+        (
+            "optimization.linear.rational_optimum.compute",
+            "optimization.linear.rational_general_optimum.compute",
+        ),
     )

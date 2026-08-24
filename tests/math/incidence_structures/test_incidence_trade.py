@@ -16,6 +16,7 @@ from jacobian.math.incidence_structures import (
     containment_profile,
 )
 from jacobian.math.incidence_structures._models import (
+    MAX_RESULT_BYTES,
     MAX_TRADE_ORDER,
     ContainmentProfileRequest,
     IncidenceMultiplicityDifference,
@@ -245,6 +246,36 @@ def test_trade_requires_identical_ordered_point_parents() -> None:
 
     with pytest.raises(ValidationError, match="same ordered point axis"):
         IncidenceTradeRequest(left=left, right=right, max_order=1)
+
+
+def _long_id_family(prefix: str, filler: str, id_length: int) -> IncidenceStructure:
+    return IncidenceStructure(
+        points=("a",),
+        block_ids=tuple(
+            f"{prefix}{index}-" + filler * (id_length - len(f"{prefix}{index}-"))
+            for index in range(100)
+        ),
+        blocks=((),) * 100,
+    )
+
+
+def test_trade_admission_reserves_output_for_every_source_echo() -> None:
+    left = _long_id_family("l", "x", 3_000)
+    right = _long_id_family("r", "y", 3_000)
+
+    with pytest.raises(ValidationError, match="output budget"):
+        IncidenceTradeRequest(left=left, right=right, max_order=1)
+
+
+def test_admitted_trade_returns_typed_result_within_output_budget() -> None:
+    left = _long_id_family("l", "x", 1_400)
+    right = _long_id_family("r", "y", 1_400)
+
+    result = check_incidence_trade(left, right, 1)
+
+    assert result.positive_moments_equal
+    assert all(comparison.equal for comparison in result.comparisons)
+    assert len(result.model_dump_json()) <= MAX_RESULT_BYTES
 
 
 def test_exported_native_values_compare_equal_across_member_orders() -> None:

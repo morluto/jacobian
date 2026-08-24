@@ -163,8 +163,10 @@ def _require_incidence_trade_admitted(
         for order in range(1, max_order + 1)
     )
     comparison_axis_bytes = max_order * (_label_wire_bytes(left.points) + 16)
+    source_pair_copies = max_order + 1
     estimated_result_bytes = (
-        max_order * (_incidence_wire_bytes(left) + _incidence_wire_bytes(right))
+        source_pair_copies
+        * (_incidence_wire_bytes(left) + _incidence_wire_bytes(right))
         + subset_label_bytes
         + sum(subset_counts) * _TRADE_DIFFERENCE_OVERHEAD_BYTES
         + max_order * 128

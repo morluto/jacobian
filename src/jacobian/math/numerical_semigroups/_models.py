@@ -72,6 +72,24 @@ def _require_canonical_minimal_axis(
     return values
 
 
+def _summary_invariants(
+    generators: tuple[int, ...],
+) -> tuple[int, int, int, int, int, tuple[int, ...]]:
+    """Replay the exact numerical-semigroup summary from its atom axis."""
+
+    apery = apery_set(generators)
+    conductor = max(apery) - generators[0] + 1
+    gaps = tuple(value for value in range(1, conductor) if not belongs(value, apery))
+    return (
+        generators[0],
+        len(generators),
+        conductor - 1,
+        conductor,
+        len(gaps),
+        gaps,
+    )
+
+
 def _require_bounded_value(value: str) -> int:
     parsed = parse_canonical_integer(value)
     if parsed > MAX_ELEMENT:
@@ -235,13 +253,42 @@ class NumericalSemigroupSummaryRequest(StrictModel):
 class NumericalSemigroupSummaryResult(StrictModel):
     """Summary of a numerical semigroup."""
 
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     multiplicity: CanonicalInteger
     embedding_dimension: int = Field(ge=1)
     frobenius_number: str
     conductor: str
     genus: int = Field(ge=0)
     gaps: tuple[CanonicalInteger, ...]
+
+    @model_validator(mode="after")
+    def require_exact_summary(self) -> Self:
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
+        (
+            multiplicity,
+            embedding_dimension,
+            frobenius_number,
+            conductor,
+            genus,
+            gaps,
+        ) = _summary_invariants(generators)
+        if parse_canonical_integer(self.multiplicity) != multiplicity:
+            raise ValueError("multiplicity does not match the minimal generators")
+        if self.embedding_dimension != embedding_dimension:
+            raise ValueError(
+                "embedding_dimension does not match the minimal generators"
+            )
+        if parse_canonical_integer(self.frobenius_number) != frobenius_number:
+            raise ValueError("frobenius_number does not match the minimal generators")
+        if parse_canonical_integer(self.conductor) != conductor:
+            raise ValueError("conductor does not match the minimal generators")
+        if self.genus != genus:
+            raise ValueError("genus does not match the minimal generators")
+        if tuple(map(parse_canonical_integer, self.gaps)) != gaps:
+            raise ValueError("gaps do not match the minimal generators")
+        return self
 
 
 class SemigroupMembershipRequest(StrictModel):
@@ -300,7 +347,9 @@ class FactorizationComputeResult(StrictModel):
     """Complete factorization family Z(s) for one element."""
 
     value: CanonicalInteger
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     in_semigroup: bool
     factorizations: tuple[tuple[int, ...], ...]
 
@@ -339,7 +388,9 @@ class FactorizationLengthsComputeResult(StrictModel):
     """Sorted length set of one element."""
 
     value: CanonicalInteger
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     in_semigroup: bool
     lengths: tuple[int, ...]
 
@@ -433,7 +484,9 @@ class FactorizationGraphComputeResult(StrictModel):
     """Standard factorization graph with connected components."""
 
     value: CanonicalInteger
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     in_semigroup: bool
     factorizations: tuple[tuple[int, ...], ...]
     edges: tuple[tuple[int, int], ...]
@@ -494,7 +547,9 @@ class ElementDeltaSetResult(StrictModel):
     """Delta set of one element."""
 
     value: CanonicalInteger
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     factorization_lengths: tuple[int, ...]
     delta_set: tuple[int, ...]
 
@@ -547,7 +602,9 @@ class ElementElasticityResult(StrictModel):
     """Elasticity of one element."""
 
     value: CanonicalInteger
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     minimum_length: int = Field(ge=1)
     maximum_length: int = Field(ge=1)
     elasticity: str
@@ -596,7 +653,9 @@ class ElementCatenaryDegreeResult(StrictModel):
     """Catenary degree of one element."""
 
     value: CanonicalInteger
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     factorization_count: int = Field(ge=1)
     catenary_degree: int = Field(ge=0)
 
@@ -633,7 +692,9 @@ class BettiElementsRequest(StrictModel):
 class BettiElementsResult(StrictModel):
     """Betti elements of a semigroup."""
 
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     apery_set: tuple[CanonicalInteger, ...]
     candidate_count: int = Field(ge=0)
     betti_elements: tuple[CanonicalInteger, ...]
@@ -692,7 +753,9 @@ class MinimalPresentationRelation(StrictModel):
 class MinimalPresentationResult(StrictModel):
     """One minimal presentation of the semigroup."""
 
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     betti_elements: tuple[CanonicalInteger, ...]
     relations: tuple[MinimalPresentationRelation, ...]
 
@@ -796,7 +859,9 @@ class PresentationBinomial(StrictModel):
 class PresentationBinomialsResult(StrictModel):
     """Presentation converted to sparse binomials."""
 
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     binomials: tuple[PresentationBinomial, ...]
 
     @model_validator(mode="after")
@@ -854,7 +919,9 @@ class DeltaSetRequest(StrictModel):
 class DeltaSetResult(StrictModel):
     """Global delta set of the semigroup."""
 
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     delta_set: tuple[int, ...]
     periodicity_bound: int = Field(ge=0)
     checked_through: int = Field(ge=0)
@@ -945,7 +1012,9 @@ class BettiCatenaryDegree(StrictModel):
 class CatenaryDegreeResult(StrictModel):
     """Global catenary degree of the semigroup."""
 
-    minimal_generators: tuple[CanonicalInteger, ...]
+    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     catenary_degree: int = Field(ge=0)
     betti_degrees: tuple[BettiCatenaryDegree, ...]
     witness_betti_elements: tuple[CanonicalInteger, ...]

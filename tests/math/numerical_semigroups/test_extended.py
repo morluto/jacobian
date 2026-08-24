@@ -194,6 +194,76 @@ def test_result_rejects_redundant_minimal_generator_axis(result_model, payload):
         result_model(minimal_generators=("3", "5", "6"), **payload)
 
 
+@pytest.mark.parametrize("axis", [(), tuple(map(str, range(30, 51)))])
+@pytest.mark.parametrize(
+    ("result_model", "payload"),
+    [
+        (
+            FactorizationComputeResult,
+            {"value": "-1", "in_semigroup": False, "factorizations": ()},
+        ),
+        (
+            FactorizationLengthsComputeResult,
+            {"value": "-1", "in_semigroup": False, "lengths": ()},
+        ),
+        (
+            FactorizationGraphComputeResult,
+            {
+                "value": "-1",
+                "in_semigroup": False,
+                "factorizations": (),
+                "edges": (),
+                "connected_components": (),
+                "is_connected": True,
+            },
+        ),
+        (
+            ElementDeltaSetResult,
+            {"value": "0", "factorization_lengths": (0,), "delta_set": ()},
+        ),
+        (
+            ElementElasticityResult,
+            {
+                "value": "30",
+                "minimum_length": 1,
+                "maximum_length": 1,
+                "elasticity": "1",
+            },
+        ),
+        (
+            ElementCatenaryDegreeResult,
+            {"value": "30", "factorization_count": 1, "catenary_degree": 0},
+        ),
+        (
+            BettiElementsResult,
+            {"apery_set": (), "candidate_count": 0, "betti_elements": ()},
+        ),
+        (
+            MinimalPresentationResult,
+            {"betti_elements": (), "relations": ()},
+        ),
+        (PresentationBinomialsResult, {"binomials": ()}),
+        (
+            DeltaSetResult,
+            {"delta_set": (), "periodicity_bound": 0, "checked_through": 0},
+        ),
+        (
+            CatenaryDegreeResult,
+            {
+                "catenary_degree": 0,
+                "betti_degrees": (),
+                "witness_betti_elements": (),
+            },
+        ),
+    ],
+)
+def test_result_rejects_empty_or_overlong_minimal_generator_axis(
+    axis, result_model, payload
+):
+    with pytest.raises(ValidationError):
+        result_model(minimal_generators=axis, **payload)
+
+
 class TestFactorizationLengths:
     def test_lengths_15_in_3_5(self):
         req = FactorizationLengthsComputeRequest(generators=("3", "5"), value="15")

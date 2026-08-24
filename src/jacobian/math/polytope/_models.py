@@ -662,6 +662,39 @@ def _canonical_v_polytope_vertices(polytope: RationalVPolytope) -> tuple[Vertex,
     return tuple(Vertex(coordinates=vertex.coordinates) for vertex in polytope.vertices)
 
 
+def _v_polytope_axis_count(value: object) -> int | None:
+    """Return the declared ambient dimension of one V-polytope payload.
+
+    Unrecognized payload shapes return ``None`` so ordinary canonical
+    validation reports them with the published schema errors.
+    """
+
+    if isinstance(value, RationalVPolytope):
+        return len(value.space.axes)
+    if isinstance(value, dict):
+        space = value.get("space")
+        if isinstance(space, RationalCoordinateSpace):
+            return len(space.axes)
+        if isinstance(space, dict) and isinstance(space.get("axes"), (list, tuple)):
+            return len(space["axes"])
+    return None
+
+
+def _require_projected_dimension_bound(dimension: int, dimension_bound: object) -> None:
+    """Reject a V-polytope wider than the declared bound before hull replay.
+
+    Malformed bound values stay untouched here so ordinary field validation
+    reports them with the published schema errors.
+    """
+
+    if isinstance(dimension_bound, bool) or not isinstance(dimension_bound, int):
+        return
+    if dimension > dimension_bound:
+        raise ValueError(
+            f"dimension {dimension} exceeds the dimension bound {dimension_bound}"
+        )
+
+
 VertexTuple = Annotated[
     tuple[Vertex, ...],
     Field(min_length=1, max_length=MAX_VERTICES),
@@ -765,12 +798,28 @@ class PolytopeVolumeRequest(StrictModel):
         positionally (the labelled axis fixes the coordinate order) before
         ordinary validation, so admission and the kernel see exactly the
         declared V-representation; a serialized value is re-validated as
-        the canonical type first.
+        the canonical type first.  Reconstructing that type replays its
+        exact extremality proof, so the cheap outer representation and
+        dimension constraints are preflighted first: an already-invalid
+        request must fail before any hull replay runs.
         """
 
         if not isinstance(data, dict):
             return data
         value = data.get("vertices")
+        carries_v_polytope = isinstance(value, RationalVPolytope) or (
+            isinstance(value, dict) and set(value) == {"space", "vertices"}
+        )
+        if carries_v_polytope:
+            if data.get("halfspaces") is not None:
+                raise ValueError(
+                    "exactly one of `vertices` or `halfspaces` must be provided"
+                )
+            axis_count = _v_polytope_axis_count(value)
+            if axis_count is not None:
+                _require_projected_dimension_bound(
+                    axis_count, data.get("dimension_bound")
+                )
         if isinstance(value, RationalVPolytope):
             return {**data, "vertices": _canonical_v_polytope_vertices(value)}
         if isinstance(value, dict) and set(value) == {"space", "vertices"}:

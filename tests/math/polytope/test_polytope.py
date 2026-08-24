@@ -1069,6 +1069,51 @@ class TestCanonicalVPolytopeComposition:
         with pytest.raises(ValidationError, match="exact extreme vertices"):
             PolytopeVolumeRequest.model_validate({"vertices": payload})
 
+    def test_outer_halfspace_conflict_rejects_before_the_hull_replay(self) -> None:
+        payload = _support_square_result().polytope.model_dump(mode="json")
+        payload["vertices"].insert(
+            2,
+            {
+                "vertex_id": "middle",
+                "coordinates": [{"num": "1", "den": "2"}, {"num": "0", "den": "1"}],
+            },
+        )
+
+        with pytest.raises(ValidationError, match="exactly one of"):
+            PolytopeVolumeRequest.model_validate(
+                {
+                    "vertices": payload,
+                    "halfspaces": [
+                        {
+                            "coefficients": [{"num": "1", "den": "1"}],
+                            "offset": {"num": "0", "den": "1"},
+                        }
+                    ],
+                }
+            )
+
+    def test_outer_dimension_bound_rejects_before_the_hull_replay(self) -> None:
+        ids = [f"v{a}{b}{c}" for a in (0, 1) for b in (0, 1) for c in (0, 1)]
+        cube = RationalVPolytope(
+            space=RationalCoordinateSpace(axes=("x", "y", "z")),
+            vertices=tuple(
+                RationalPolytopeVertex(
+                    vertex_id=vertex_id,
+                    coordinates=(
+                        _canonical_rational(int(vertex_id[1])),
+                        _canonical_rational(int(vertex_id[2])),
+                        _canonical_rational(int(vertex_id[3])),
+                    ),
+                )
+                for vertex_id in sorted(ids)
+            ),
+        )
+
+        with pytest.raises(ValidationError, match="exceeds the dimension bound"):
+            PolytopeVolumeRequest.model_validate(
+                {"vertices": cube.model_dump(mode="json"), "dimension_bound": 2}
+            )
+
     def test_canonical_value_still_respects_dimension_bound(self) -> None:
         ids = [f"v{a}{b}{c}" for a in (0, 1) for b in (0, 1) for c in (0, 1)]
         cube = RationalVPolytope(

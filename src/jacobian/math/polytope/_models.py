@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from fractions import Fraction
 from typing import Annotated, Self
 
-from pydantic import ConfigDict, Field, StringConstraints, model_validator
+from pydantic import Field, StringConstraints, model_validator
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
@@ -73,8 +73,9 @@ denominator clearing, and its active-normal rank proof has minors of at most
 ``6 * (36D + 3) + 3 = 216D + 21`` digits. With ``D = 150`` every exact
 intermediate stays below the 32,768-digit canonical rational limit (the
 largest bound is 32,421 digits). The support dot product is smaller at
-``2*d*D + 2`` digits. This one cap therefore bounds both value admission and
-the exact construction/replay work required by the public V-polytope value.
+``2*d*D + 2`` digits. This one cap therefore bounds the admitted support
+inputs and the exact construction/replay work required by the public
+V-polytope value.
 """
 
 MAX_SUPPORT_VERTEX_SUBSETS = 100_000
@@ -100,47 +101,6 @@ CoordinateAxis = Annotated[
     StringConstraints(min_length=1, max_length=64, strict=True),
 ]
 """One coordinate identifier in an ordered labelled rational space."""
-
-SupportBoundedInteger = Annotated[
-    str,
-    StringConstraints(
-        pattern=rf"^(?:0|-?[1-9][0-9]{{0,{MAX_SUPPORT_COMPONENT_DIGITS - 1}}})$",
-        strict=True,
-        max_length=MAX_SUPPORT_COMPONENT_DIGITS + 1,
-    ),
-]
-SupportBoundedPositiveInteger = Annotated[
-    str,
-    StringConstraints(
-        pattern=rf"^[1-9][0-9]{{0,{MAX_SUPPORT_COMPONENT_DIGITS - 1}}}$",
-        strict=True,
-        max_length=MAX_SUPPORT_COMPONENT_DIGITS,
-    ),
-]
-
-
-class SupportBoundedRational(CanonicalRational):
-    """Canonical rational whose components fit support-hull admission.
-
-    ``from_attributes`` lets canonical values supplied by another native
-    operation enter the support value unchanged while enforcing this
-    operation's smaller, schema-visible construction envelope.
-    """
-
-    model_config = ConfigDict(from_attributes=True)
-
-    num: SupportBoundedInteger = Field(
-        description=(
-            "Canonical reduced numerator with at most "
-            f"{MAX_SUPPORT_COMPONENT_DIGITS} digits."
-        )
-    )
-    den: SupportBoundedPositiveInteger = Field(
-        description=(
-            "Positive canonical reduced denominator with at most "
-            f"{MAX_SUPPORT_COMPONENT_DIGITS} digits."
-        )
-    )
 
 
 def _rational_pq(value: object) -> tuple[int, int]:
@@ -352,7 +312,7 @@ class RationalPolytopeVertex(StrictModel):
     """A labelled exact vertex in a rational coordinate space."""
 
     vertex_id: str = Field(min_length=1, max_length=64)
-    coordinates: tuple[SupportBoundedRational, ...] = Field(
+    coordinates: tuple[CanonicalRational, ...] = Field(
         min_length=1,
         max_length=MAX_DIMENSION,
     )
@@ -397,13 +357,6 @@ class RationalVPolytope(StrictModel):
             raise ValueError("every vertex must use the polytope coordinate axis")
         if len(set(coordinates)) != len(coordinates):
             raise ValueError("polytope vertices must have distinct coordinates")
-        for vertex in self.vertices:
-            for coordinate in vertex.coordinates:
-                require_bounded_rational(
-                    coordinate,
-                    max_digits=MAX_SUPPORT_COMPONENT_DIGITS,
-                    label="polytope vertex coordinate",
-                )
         from jacobian.math.polytope._operations import (
             require_full_dimensional_extreme_vertices,
         )
@@ -416,27 +369,20 @@ class RationalCovector(StrictModel):
     """An exact covector paired with one labelled rational coordinate space."""
 
     space: RationalCoordinateSpace
-    components: tuple[SupportBoundedRational, ...] = Field(
+    components: tuple[CanonicalRational, ...] = Field(
         min_length=1,
         max_length=MAX_DIMENSION,
         description=(
-            "Exact covector components in the declared coordinate-axis order; "
-            f"each component has at most {MAX_SUPPORT_COMPONENT_DIGITS} digits "
-            "per reduced numerator or denominator."
+            "Exact covector components in the declared coordinate-axis order, "
+            "each one canonical reduced rational."
         ),
     )
 
     @model_validator(mode="after")
-    def require_axis_and_component_bounds(self) -> Self:
+    def require_components_match_declared_axis(self) -> Self:
         if len(self.components) != len(self.space.axes):
             raise ValueError(
                 "covector components must use the declared coordinate axis"
-            )
-        for component in self.components:
-            require_bounded_rational(
-                component,
-                max_digits=MAX_SUPPORT_COMPONENT_DIGITS,
-                label="covector component",
             )
         return self
 
@@ -466,13 +412,6 @@ class RationalExposedFace(StrictModel):
             )
         if len({vertex.coordinates for vertex in self.vertices}) != len(self.vertices):
             raise ValueError("exposed-face vertices must have distinct coordinates")
-        for vertex in self.vertices:
-            for coordinate in vertex.coordinates:
-                require_bounded_rational(
-                    coordinate,
-                    max_digits=MAX_SUPPORT_COMPONENT_DIGITS,
-                    label="exposed-face vertex coordinate",
-                )
         return self
 
 
@@ -496,6 +435,34 @@ class Halfspace(StrictModel):
     offset: CanonicalRational
 
 
+def require_support_components_within_envelope(
+    polytope: RationalVPolytope,
+    covector: RationalCovector,
+) -> None:
+    """Enforce the support operation's per-component execution envelope.
+
+    Canonical polytope values admit every canonical rational coordinate;
+    this smaller operation-specific bound is the single admission decision
+    shared by the support request model and the native ``polytope_support``
+    entry point, keeping the exact hull intermediates of one accepted call
+    inside the bounded envelope derived for ``MAX_SUPPORT_COMPONENT_DIGITS``.
+    """
+
+    for vertex in polytope.vertices:
+        for coordinate in vertex.coordinates:
+            require_bounded_rational(
+                coordinate,
+                max_digits=MAX_SUPPORT_COMPONENT_DIGITS,
+                label="polytope vertex coordinate",
+            )
+    for component in covector.components:
+        require_bounded_rational(
+            component,
+            max_digits=MAX_SUPPORT_COMPONENT_DIGITS,
+            label="covector component",
+        )
+
+
 class PolytopeSupportRequest(StrictModel):
     """Compute one support value and its complete exposed vertex face.
 
@@ -503,15 +470,44 @@ class PolytopeSupportRequest(StrictModel):
     exact V-representation. Evaluation then performs one deterministic
     ``O(n*d)`` rational dot-product pass; no H/V conversion or optimization
     solver is introduced by this operation.
+
+    The polytope and the covector must declare one common labelled
+    coordinate space: their serialized ``space`` values must be identical
+    (same axis labels in the same order), and mismatched spaces are rejected
+    before any evaluation. Each vertex coordinate and covector component is
+    a canonical rational carrying at most 150 digits per reduced numerator
+    or denominator — an operation-specific envelope, stricter than the
+    global canonical limit.
     """
 
-    polytope: RationalVPolytope
-    covector: RationalCovector
+    polytope: RationalVPolytope = Field(
+        description=(
+            "Full-dimensional exact V-polytope whose serialized ``space`` "
+            "(axis labels and order) must be identical to the covector's "
+            "serialized ``space``; every vertex coordinate carries at most "
+            f"{MAX_SUPPORT_COMPONENT_DIGITS} digits per reduced numerator "
+            "or denominator."
+        )
+    )
+    covector: RationalCovector = Field(
+        description=(
+            "Exact covector whose serialized ``space`` (axis labels and "
+            "order) must be identical to the polytope's serialized "
+            "``space``; every component carries at most "
+            f"{MAX_SUPPORT_COMPONENT_DIGITS} digits per reduced numerator "
+            "or denominator."
+        )
+    )
 
     @model_validator(mode="after")
     def require_common_coordinate_space(self) -> Self:
         if self.polytope.space != self.covector.space:
             raise ValueError("polytope and covector must use the same coordinate space")
+        return self
+
+    @model_validator(mode="after")
+    def require_admitted_support_components(self) -> Self:
+        require_support_components_within_envelope(self.polytope, self.covector)
         return self
 
 

@@ -20,6 +20,7 @@ from jacobian.math.polytope._models import (
     PolytopeSupportRequest,
 )
 from jacobian.math.polytope._operations import compute_polytope_support
+from jacobian.math.polytope._tools import POLYTOPE_OPERATIONS
 
 
 def _rational(value: int) -> CanonicalRational:
@@ -50,6 +51,11 @@ def _covector(*components: int) -> RationalCovector:
         space=RationalCoordinateSpace(axes=("x", "y")),
         components=tuple(_rational(component) for component in components),
     )
+
+
+def _large_rational(digits: int) -> CanonicalRational:
+    numerator = "9" * digits
+    return CanonicalRational(num=numerator, den="8")
 
 
 def test_support_returns_exact_value_and_complete_exposed_edge() -> None:
@@ -155,39 +161,119 @@ def test_v_polytope_rejects_lower_dimensional_hull() -> None:
         )
 
 
-def test_support_component_bound_precedes_hull_expansion() -> None:
-    over_bound = CanonicalRational(
-        num="1" + "0" * MAX_SUPPORT_COMPONENT_DIGITS, den="1"
+def test_support_request_rejects_over_envelope_covector_component() -> None:
+    over_bound = _large_rational(MAX_SUPPORT_COMPONENT_DIGITS + 1)
+    covector = RationalCovector(
+        space=RationalCoordinateSpace(axes=("x", "y")),
+        components=(over_bound, _rational(0)),
     )
-    with pytest.raises(ValidationError, match="String should match pattern"):
-        RationalCovector(
-            space=RationalCoordinateSpace(axes=("x", "y")),
-            components=(over_bound, _rational(0)),
-        )
+
+    with pytest.raises(
+        ValidationError,
+        match=f"covector component exceeds the {MAX_SUPPORT_COMPONENT_DIGITS}-digit bound",
+    ):
+        PolytopeSupportRequest(polytope=_square(), covector=covector)
 
 
-def test_over_bound_vertex_coordinate_is_rejected_before_hull_predicates() -> None:
-    over_bound = CanonicalRational(
-        num="1" + "0" * MAX_SUPPORT_COMPONENT_DIGITS, den="1"
-    )
-    with pytest.raises(ValidationError, match="String should match pattern"):
-        RationalVPolytope(
-            space=RationalCoordinateSpace(axes=("x", "y")),
-            vertices=(
-                RationalPolytopeVertex(
-                    vertex_id="a",
-                    coordinates=(_rational(0), _rational(0)),
-                ),
-                RationalPolytopeVertex(
-                    vertex_id="b",
-                    coordinates=(over_bound, _rational(0)),
-                ),
-                RationalPolytopeVertex(
-                    vertex_id="c",
-                    coordinates=(_rational(0), _rational(1)),
-                ),
+def test_support_request_rejects_over_envelope_vertex_coordinates() -> None:
+    over_bound = _large_rational(MAX_SUPPORT_COMPONENT_DIGITS + 1)
+    polytope = RationalVPolytope(
+        space=RationalCoordinateSpace(axes=("x", "y")),
+        vertices=(
+            RationalPolytopeVertex(
+                vertex_id="a",
+                coordinates=(_rational(0), _rational(0)),
             ),
-        )
+            RationalPolytopeVertex(
+                vertex_id="b",
+                coordinates=(over_bound, _rational(0)),
+            ),
+            RationalPolytopeVertex(
+                vertex_id="c",
+                coordinates=(_rational(0), _rational(1)),
+            ),
+        ),
+    )
+
+    with pytest.raises(
+        ValidationError,
+        match=f"polytope vertex coordinate exceeds the {MAX_SUPPORT_COMPONENT_DIGITS}-digit bound",
+    ):
+        PolytopeSupportRequest(polytope=polytope, covector=_covector(1, 0))
+
+
+def test_native_support_rejects_over_envelope_components() -> None:
+    over_bound = _large_rational(MAX_SUPPORT_COMPONENT_DIGITS + 1)
+    covector = RationalCovector(
+        space=RationalCoordinateSpace(axes=("x", "y")),
+        components=(over_bound, _rational(0)),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=f"covector component exceeds the {MAX_SUPPORT_COMPONENT_DIGITS}-digit bound",
+    ):
+        polytope_support(_square(), covector)
+
+
+def test_support_accepts_components_at_the_envelope_boundary() -> None:
+    at_bound = _large_rational(MAX_SUPPORT_COMPONENT_DIGITS)
+    polytope = RationalVPolytope(
+        space=RationalCoordinateSpace(axes=("x", "y")),
+        vertices=(
+            RationalPolytopeVertex(
+                vertex_id="a",
+                coordinates=(_rational(0), _rational(0)),
+            ),
+            RationalPolytopeVertex(
+                vertex_id="b",
+                coordinates=(at_bound, _rational(0)),
+            ),
+            RationalPolytopeVertex(
+                vertex_id="c",
+                coordinates=(_rational(0), _rational(1)),
+            ),
+        ),
+    )
+
+    result = compute_polytope_support(
+        PolytopeSupportRequest(polytope=polytope, covector=_covector(1, 0))
+    )
+
+    assert result.support_value == at_bound
+    assert tuple(vertex.vertex_id for vertex in result.exposed_face.vertices) == ("b",)
+
+
+def test_large_coordinate_canonical_values_construct_and_round_trip() -> None:
+    beyond_envelope = MAX_SUPPORT_COMPONENT_DIGITS + 10
+    big = _large_rational(beyond_envelope)
+    bigger = _large_rational(beyond_envelope + 1)
+    polytope = RationalVPolytope(
+        space=RationalCoordinateSpace(axes=("x", "y")),
+        vertices=(
+            RationalPolytopeVertex(
+                vertex_id="origin",
+                coordinates=(_rational(0), _rational(0)),
+            ),
+            RationalPolytopeVertex(
+                vertex_id="right",
+                coordinates=(big, _rational(0)),
+            ),
+            RationalPolytopeVertex(
+                vertex_id="top",
+                coordinates=(_rational(0), bigger),
+            ),
+        ),
+    )
+    covector = RationalCovector(
+        space=RationalCoordinateSpace(axes=("x", "y")),
+        components=(big, bigger),
+    )
+
+    assert (
+        RationalVPolytope.model_validate(polytope.model_dump(mode="json")) == polytope
+    )
+    assert RationalCovector.model_validate(covector.model_dump(mode="json")) == covector
 
 
 def test_extremality_subfacet_bound_is_enforced_before_filtering() -> None:
@@ -220,12 +306,36 @@ def test_extremality_orientation_work_is_enforced_before_filtering() -> None:
 
 def test_support_schema_publishes_component_and_hull_work_bounds() -> None:
     schema = PolytopeSupportRequest.model_json_schema()
-    bounded_rational = schema["$defs"]["SupportBoundedRational"]["properties"]
     vertex_description = schema["$defs"]["RationalVPolytope"]["properties"]["vertices"][
         "description"
     ]
 
-    assert bounded_rational["num"]["maxLength"] == MAX_SUPPORT_COMPONENT_DIGITS + 1
-    assert bounded_rational["den"]["maxLength"] == MAX_SUPPORT_COMPONENT_DIGITS
+    assert str(MAX_SUPPORT_COMPONENT_DIGITS) in schema["description"]
+    for field in ("polytope", "covector"):
+        description = schema["properties"][field]["description"]
+        assert str(MAX_SUPPORT_COMPONENT_DIGITS) in description
     assert "C(n,d)" in vertex_description
     assert "orientation tests" in vertex_description
+
+
+def test_support_schema_publishes_common_space_requirement() -> None:
+    schema = PolytopeSupportRequest.model_json_schema()
+
+    descriptions = [schema["description"]]
+    descriptions.extend(
+        schema["properties"][field]["description"] for field in ("polytope", "covector")
+    )
+    for description in descriptions:
+        assert "space" in description
+        assert "identical" in description
+
+
+def test_support_example_teaches_common_space_precondition() -> None:
+    support_tool = next(
+        tool
+        for tool in POLYTOPE_OPERATIONS
+        if tool.operation_id == "polytope.rational.support.compute"
+    )
+    (only_example,) = support_tool.examples
+
+    assert "identical to the polytope's" in only_example.description

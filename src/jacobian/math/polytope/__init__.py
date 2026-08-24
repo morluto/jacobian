@@ -13,6 +13,7 @@ from jacobian.math.polytope._models import (
     RationalExposedFace,
     RationalPolytopeVertex,
     RationalVPolytope,
+    require_support_components_within_envelope,
 )
 
 
@@ -27,7 +28,15 @@ def polytope_support(
     full-dimensional vertex family, so the covector cannot be paired against
     an unrelated coordinate order. The returned source-bound result replays
     the maximum across every retained vertex.
+
+    Applies the operation's smaller construction envelope before invoking
+    the kernel: every vertex coordinate and covector component must carry at
+    most 150 digits per reduced numerator or denominator (canonical values
+    themselves admit up to the global canonical limit), and the two spaces
+    must be identical. Raises ``ValueError`` outside that admitted domain.
     """
+
+    require_support_components_within_envelope(polytope, covector)
 
     from jacobian.math.polytope._operations import polytope_support as _kernel
 

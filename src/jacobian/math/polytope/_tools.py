@@ -65,7 +65,9 @@ POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "unit_square_top_edge",
-                "The covector (0,1) exposes the complete top edge of the unit square.",
+                "Unit square on axes [x, y]; the covector (0,1) exposes the "
+                "complete top edge. The covector's serialized space must be "
+                "identical to the polytope's: same axis labels, same order.",
                 {
                     "polytope": {
                         "space": {"axes": ["x", "y"]},

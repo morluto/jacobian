@@ -575,9 +575,10 @@ def _coefficient_height(
     numerator and denominator digit budget, so a numerically smaller reciprocal
     branch cannot hide denominator growth from later scaling. Products multiply
     envelopes and signed sums merge them, matching every scalar the preserving
-    wrappers can derive downstream. Divisions by closed constants compose their
-    budgets into one coefficient, so they validate those budgets unless an
-    exact flattened form already validates every quotient.
+    wrappers can derive downstream. Divisions by closed constants and
+    composed signed sums merge branch budgets into one coefficient, so they
+    validate those budgets unless an exact flattened form already validates
+    every coefficient of the node.
     """
 
     import z3
@@ -593,7 +594,10 @@ def _coefficient_height(
     if kind == z3.Z3_OP_UMINUS:
         return child_envelopes[0]
     if kind == z3.Z3_OP_MUL:
-        return _multiplied_envelope(child_envelopes)
+        return _multiplied_envelope(
+            child_envelopes,
+            validate_budget=enforce_digit_budget,
+        )
     if (
         len(children) == 2
         and kind in (z3.Z3_OP_DIV, z3.Z3_OP_IDIV)
@@ -607,26 +611,44 @@ def _coefficient_height(
             validate_budget=enforce_digit_budget,
         )
     if kind in (z3.Z3_OP_ADD, z3.Z3_OP_SUB):
-        return _signed_sum_envelope(child_envelopes)
+        return _signed_sum_envelope(
+            child_envelopes,
+            validate_budget=enforce_digit_budget,
+        )
     height = Fraction(0)
     for envelope in child_envelopes:
         height += envelope.height
         _require_bounded_normalized_coefficient(height)
-    return _maximal_digit_envelope(
+    envelope = _maximal_digit_envelope(
         child_envelopes,
         height=height,
     )
+    if enforce_digit_budget:
+        _require_bounded_coefficient_digit_budget(
+            envelope.numerator_digits,
+            envelope.denominator_digits,
+        )
+    return envelope
 
 
 def _multiplied_envelope(
     envelopes: tuple[_CoefficientEnvelope, ...],
+    *,
+    validate_budget: bool,
 ) -> _CoefficientEnvelope:
     """Scale one envelope by every remaining envelope, as products do."""
 
+    numerator_digits = sum(envelope.numerator_digits for envelope in envelopes)
+    denominator_digits = sum(envelope.denominator_digits for envelope in envelopes)
+    if validate_budget:
+        _require_bounded_coefficient_digit_budget(
+            numerator_digits,
+            denominator_digits,
+        )
     return _CoefficientEnvelope(
         _bounded_fraction_product(tuple(envelope.height for envelope in envelopes)),
-        sum(envelope.numerator_digits for envelope in envelopes),
-        sum(envelope.denominator_digits for envelope in envelopes),
+        numerator_digits,
+        denominator_digits,
     )
 
 
@@ -656,6 +678,8 @@ def _divided_envelope(
 
 def _signed_sum_envelope(
     envelopes: tuple[_CoefficientEnvelope, ...],
+    *,
+    validate_budget: bool,
 ) -> _CoefficientEnvelope:
     """Merge child readings the way signed sums combine their coefficients."""
 
@@ -671,11 +695,13 @@ def _signed_sum_envelope(
         ),
         default=0,
     )
-    return _CoefficientEnvelope(
-        height,
-        widest_numerator + len(str(len(envelopes))),
-        denominator_digits,
-    )
+    numerator_digits = widest_numerator + len(str(len(envelopes)))
+    if validate_budget:
+        _require_bounded_coefficient_digit_budget(
+            numerator_digits,
+            denominator_digits,
+        )
+    return _CoefficientEnvelope(height, numerator_digits, denominator_digits)
 
 
 def _maximal_digit_envelope(

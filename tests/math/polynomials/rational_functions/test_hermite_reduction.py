@@ -18,6 +18,7 @@ from jacobian.math.polynomials.rational_functions._models import (
 from jacobian.math.polynomials.rational_functions._operations import (
     compute_hermite_reduction,
 )
+from jacobian.math.polynomials.rational_functions._tools import TOOLS
 
 x = Symbol("x")
 
@@ -170,6 +171,20 @@ def test_request_rejects_multivariate_function() -> None:
 
     with pytest.raises(ValidationError, match="exactly one variable"):
         HermiteReductionRequest(function=function)
+
+
+def test_example_description_states_input_preconditions() -> None:
+    """The published example teaches the canonical QQ(x) wire contract."""
+
+    (tool,) = TOOLS
+    assert "envelope admits numerator degree 6" in tool.description.lower()
+    for example_spec in tool.examples:
+        text = str(example_spec.description).lower()
+        assert "canonical univariate qq(x)" in text
+        assert "one variable x" in text
+        assert "numerator degree" in text
+        assert "denominator degree" in text
+        assert "two-digit rational coefficient components" in text
 
 
 def test_request_accepts_repeated_pole_work_envelope_boundary() -> None:

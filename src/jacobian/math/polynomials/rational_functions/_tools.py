@@ -30,7 +30,11 @@ TOOLS = (
         examples=(
             example(
                 "simple_and_repeated_poles",
-                "Separate the derivative of a repeated pole from a simple-pole remainder.",
+                "Separate the derivative of a repeated pole from a simple-pole "
+                "remainder; the function must be canonical univariate QQ(x) in "
+                "one variable x, with numerator degree at most 6, denominator "
+                "degree at most 3, and two-digit rational coefficient "
+                "components.",
                 {
                     "function": {
                         "variables": ["x"],

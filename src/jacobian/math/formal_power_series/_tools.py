@@ -552,7 +552,7 @@ FORMAL_POWER_SERIES_OPERATIONS = (
     ),
     MathTool(
         operation_id="formal_series.rational.identity.check",
-        version="1",
+        version="2",
         title="Check whether two truncated formal power series are identical",
         description=(
             "Check if two series are equal mod x^N, returning either EQUAL_MOD_X_TO_N "

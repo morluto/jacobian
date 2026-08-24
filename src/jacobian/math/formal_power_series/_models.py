@@ -388,8 +388,25 @@ class _SeriesMultiplyRequest(_SeriesPairRequest):
         return self
 
 
-class _SeriesIdentityCheckRequest(_SeriesMultiplyRequest):
-    pass
+class _SeriesIdentityCheckRequest(_SeriesPairRequest):
+    """Admit one identity check through its own linear work envelope.
+
+    The kernel compares N coefficient pairs and emits at most one pairwise
+    difference ``a_i - b_i``, so admission charges the coefficientwise
+    comparison and bounds that difference height; it never charges the
+    unrelated Cauchy-convolution growth that multiplication must preflight.
+    """
+
+    @model_validator(mode="after")
+    def require_bounded_difference_height(self) -> Self:
+        for left, right in zip(
+            self.left.coefficients, self.right.coefficients, strict=True
+        ):
+            _require_height(
+                sum_heights((_height(left), _height(right))),
+                "difference",
+            )
+        return self
 
 
 class SeriesDivideRequest(_SeriesPairRequest):

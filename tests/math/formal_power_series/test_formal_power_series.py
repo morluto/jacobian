@@ -203,6 +203,53 @@ def test_native_exports_still_admit_the_wire_boundary_order() -> None:
     assert to_polynomial(edge) == compute_to_polynomial(edge)
 
 
+def test_identity_check_admits_bounded_inputs_whose_product_would_overflow() -> None:
+    import pytest
+    from pydantic import ValidationError
+
+    from jacobian.math.formal_power_series._models import _SeriesIdentityCheckRequest
+
+    tall = tuple(_coeff("1", str(2**800)) for _ in range(20))
+    left = TruncatedSeries(variable="x", truncation_order=20, coefficients=tall)
+    right = TruncatedSeries(variable="x", truncation_order=20, coefficients=tall)
+
+    verdict = identity_check(left, right)
+    assert verdict.status == "EQUAL_MOD_X_TO_N"
+    assert verdict.first_differing_index is None
+
+    differing = TruncatedSeries(
+        variable="x",
+        truncation_order=20,
+        coefficients=(*tall[:7], _coeff("3", str(2**800)), *tall[8:]),
+    )
+    mismatch = identity_check(left, differing)
+    assert mismatch.status == "NOT_EQUAL"
+    assert mismatch.first_differing_index == 7
+    assert mismatch.exact_difference.as_fraction() == -2 / 2**800
+
+    payload = {
+        "left": left.model_dump(),
+        "right": differing.model_dump(),
+    }
+    admitted = _SeriesIdentityCheckRequest.model_validate(payload)
+    assert admitted.right.coefficients == differing.coefficients
+
+    with pytest.raises(ValidationError, match="same truncation order"):
+        _SeriesIdentityCheckRequest(
+            left=left.model_dump(),
+            right=TruncatedSeries(
+                variable="x", truncation_order=19, coefficients=tall[:19]
+            ).model_dump(),
+        )
+
+
+def test_relaxed_identity_check_request_is_versioned_as_version_two() -> None:
+    from jacobian.math.formal_power_series._tools import TOOLS
+
+    tools = {tool.operation_id: tool for tool in TOOLS}
+    assert tools["formal_series.rational.identity.check"].version == "2"
+
+
 def test_truncate_accepts_widened_carrier_orders_and_replays_the_prefix() -> None:
     source = _ascending(1477)
     request = SeriesTruncateRequest(

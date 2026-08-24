@@ -8,9 +8,17 @@ from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 
-MAX_EXACT_CODEWORDS = 65_536
-MAX_COVERING_RADIUS_STATES = 65_536
-MAX_COVERING_RADIUS_TRANSITIONS = 2_000_000
+# One source-bound call performs its exhaustive work twice: the domain
+# function computes the claimed value and the retained-source result
+# validator replays it. The enumeration and transition budgets below are
+# therefore totals charged across both passes per accepted call;
+# MAX_COVERING_RADIUS_STATES_PER_PASS stays a per-pass bound because each
+# BFS allocates its visited set independently.
+EXACT_ENUMERATION_PASSES = 2
+SYNDROME_BFS_PASSES = 2
+MAX_EXACT_CODEWORD_EVALUATIONS = 131_072
+MAX_COVERING_RADIUS_STATES_PER_PASS = 65_536
+MAX_COVERING_RADIUS_TRANSITIONS = 4_000_000
 
 
 def _validate_prime_field_matrix(
@@ -78,7 +86,10 @@ class LinearCodeRequest(StrictModel):
     @model_validator(mode="after")
     def require_bounded_prime_field_matrix(self) -> Self:
         _validate_prime_field_matrix(self.field_order, self.generator_matrix)
-        if self.field_order ** len(self.generator_matrix) > MAX_EXACT_CODEWORDS:
+        if (
+            EXACT_ENUMERATION_PASSES * self.field_order ** len(self.generator_matrix)
+            > MAX_EXACT_CODEWORD_EVALUATIONS
+        ):
             raise ValueError("generator matrix exceeds the exact enumeration bound")
         return self
 
@@ -186,13 +197,16 @@ class CoveringRadiusRequest(StrictModel):
         rank = _matrix_rank_mod_prime(self.generator_matrix, self.field_order)
         syndrome_dimension = width - rank
         state_count = self.field_order**syndrome_dimension
-        if state_count > MAX_COVERING_RADIUS_STATES:
+        if state_count > MAX_COVERING_RADIUS_STATES_PER_PASS:
             raise ValueError("syndrome space exceeds the exact state bound")
         move_count_bound = min(
             width * (self.field_order - 1),
             max(state_count - 1, 0),
         )
-        if state_count * move_count_bound > MAX_COVERING_RADIUS_TRANSITIONS:
+        if (
+            SYNDROME_BFS_PASSES * state_count * move_count_bound
+            > MAX_COVERING_RADIUS_TRANSITIONS
+        ):
             raise ValueError("syndrome graph exceeds the exact transition bound")
         return self
 

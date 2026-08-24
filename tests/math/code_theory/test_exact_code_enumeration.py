@@ -282,3 +282,64 @@ def test_dependent_generator_rows_rank_cardinality() -> None:
     request = LinearCodeRequest(field_order=2, generator_matrix=((1, 1), (1, 1)))
     profile = compute_weight_dist(request)
     assert sum(count for _weight, count in profile.weights) == 2
+
+
+def test_enumeration_budget_charges_kernel_and_replay_passes() -> None:
+    """Admission charges both exhaustive passes of a source-bound call.
+
+    The kernel pass in ``compute_*`` plus the retained-source replay in
+    result validation must jointly fit ``MAX_EXACT_CODEWORD_EVALUATIONS``,
+    so the per-pass envelope stays at half that total.
+    """
+
+    from jacobian.math.code_theory._models import (
+        EXACT_ENUMERATION_PASSES,
+        MAX_EXACT_CODEWORD_EVALUATIONS,
+    )
+
+    assert EXACT_ENUMERATION_PASSES == 2
+
+    per_pass = MAX_EXACT_CODEWORD_EVALUATIONS // EXACT_ENUMERATION_PASSES
+    boundary = LinearCodeRequest(field_order=251, generator_matrix=((1,), (0,)))
+    tuples_per_pass = boundary.field_order ** len(boundary.generator_matrix)
+    assert tuples_per_pass <= per_pass
+    assert compute_min_distance(boundary).minimum_distance == 1
+    assert compute_weight_dist(boundary).weights == ((0, 1), (1, 250))
+
+    with pytest.raises(ValidationError, match="enumeration"):
+        LinearCodeRequest(field_order=41, generator_matrix=((1,),) * 3)
+
+
+def test_covering_radius_budget_charges_bfs_and_replay_passes() -> None:
+    """Syndrome-graph admission charges both BFS passes' transitions.
+
+    A full-rank width-24 binary code keeps 65,536 syndrome states and
+    1,572,864 transitions per pass, so both passes fit the transition
+    total; one more column doubles the state space past its per-pass cap.
+    """
+
+    from jacobian.math.code_theory._models import (
+        MAX_COVERING_RADIUS_STATES_PER_PASS,
+        MAX_COVERING_RADIUS_TRANSITIONS,
+        SYNDROME_BFS_PASSES,
+    )
+
+    assert SYNDROME_BFS_PASSES == 2
+
+    identity = tuple(
+        tuple(1 if column == row else 0 for column in range(8)) for row in range(8)
+    )
+    boundary_matrix = tuple(row + (1,) * 16 for row in identity)
+    boundary = CoveringRadiusRequest(
+        field_order=2, generator_matrix=boundary_matrix
+    )
+    width = len(boundary.generator_matrix[0])
+    states = 2 ** (width - 8)
+    assert states == MAX_COVERING_RADIUS_STATES_PER_PASS
+    assert states * 24 * SYNDROME_BFS_PASSES <= MAX_COVERING_RADIUS_TRANSITIONS
+
+    with pytest.raises(ValidationError, match="syndrome space"):
+        CoveringRadiusRequest(
+            field_order=2,
+            generator_matrix=tuple(row + (1,) * 17 for row in identity),
+        )

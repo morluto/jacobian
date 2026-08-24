@@ -22,6 +22,7 @@ from jacobian.math.polynomials.values import (
 
 _MAX_COEFFICIENT_DIGITS = 256
 _MAX_GCD_TERMS = 512
+_MAX_REPLAY_QUOTIENT_TERMS = MAX_POLYNOMIAL_TERMS
 _MAX_INVARIANT_TERMS = 256
 _MAX_GCD_DEGREE = 127
 _MAX_ELIMINATION_DEGREE_SUM = 64
@@ -370,6 +371,12 @@ def _verify_exact_factor_product(
     multiplicity instead of forming the claimed product, so no intermediate
     grows beyond the retained source envelope and a mismatched payload is
     rejected at the first inexact division without expanding its claim.
+    Before each exact division, ``_require_bounded_replay_quotient``
+    derives from per-variable degree arithmetic alone a proven ceiling on
+    the support of the next quotient — and of any partial quotient the
+    backend could build while deciding divisibility — and rejects typedly,
+    before any expansion, when even that ceiling leaves the shared
+    representation envelope.
     """
 
     from sympy import Poly, Rational
@@ -393,13 +400,19 @@ def _verify_exact_factor_product(
         if _polynomial_total_degree(record.factor) == 0:
             raise ValueError(f"{label} factor must be non-constant")
         base = rational_polynomial_to_sympy(record.factor)
-        try:
-            for _ in range(record.multiplicity):
+        for _ in range(record.multiplicity):
+            _require_bounded_replay_quotient(
+                quotient,
+                base,
+                mismatch_message=mismatch_message,
+                label=label,
+            )
+            try:
                 quotient = quotient.exquo(base)
-        except ExactQuotientFailed as exc:
-            raise ValueError(mismatch_message) from exc
-        except Exception as exc:  # pragma: no cover - defensive
-            raise ValueError(f"invalid {label} factor replay") from exc
+            except ExactQuotientFailed as exc:
+                raise ValueError(mismatch_message) from exc
+            except Exception as exc:  # pragma: no cover - defensive
+                raise ValueError(f"invalid {label} factor replay") from exc
     expected = Poly(
         Rational(*coefficient.as_integer_ratio()),
         *source.gens,
@@ -407,6 +420,43 @@ def _verify_exact_factor_product(
     )
     if quotient != expected:
         raise ValueError(mismatch_message)
+
+
+def _require_bounded_replay_quotient(
+    quotient: Any, divisor: Any, *, mismatch_message: str, label: str
+) -> None:
+    """Preflight one exact division's quotient growth before ``exquo``.
+
+    Per-variable degrees add without cancellation over ``QQ``, so an exact
+    division ``A = B * Q`` forces ``deg_i(Q) = deg_i(A) - deg_i(B)``, and
+    every monomial of ``Q`` lies in the box with those degree differences;
+    hence ``prod(deg_i(A) - deg_i(B) + 1)`` is a proven upper bound on the
+    quotient's support.  The backend's division algorithm likewise only
+    builds partial quotients whose monomials stay inside that box, so the
+    same product bounds the work of an inexact attempt.  A negative degree
+    difference proves non-divisibility outright and rejects the claimed
+    reconstruction; a product beyond ``_MAX_REPLAY_QUOTIENT_TERMS`` cannot
+    guarantee bounded expansion and rejects the payload before any backend
+    work instead of materializing up to that many terms.
+    """
+
+    if quotient.is_zero:
+        return
+    support_bound = 1
+    for quotient_generator, divisor_generator in zip(
+        quotient.gens, divisor.gens, strict=True
+    ):
+        degree_room = quotient.degree(quotient_generator) - divisor.degree(
+            divisor_generator
+        )
+        if degree_room < 0:
+            raise ValueError(mismatch_message)
+        support_bound *= degree_room + 1
+        if support_bound > _MAX_REPLAY_QUOTIENT_TERMS:
+            raise ValueError(
+                f"{label} replay quotient exceeds the "
+                f"{_MAX_REPLAY_QUOTIENT_TERMS}-term exact-division preflight budget"
+            )
 
 
 class PolynomialGroebnerBudget(StrictModel):

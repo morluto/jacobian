@@ -528,3 +528,154 @@ def test_result_models_parse_coefficients_above_int_str_limit() -> None:
             reconstructed=source,
         )
         assert model.model_validate(result.model_dump()) == result
+
+
+# ---------------------------------------------------------------------------
+# Exact-division quotient preflight (#2298 replay boundedness)
+# ---------------------------------------------------------------------------
+
+
+def _multivariate_binomial_box(variables: tuple[str, ...], exponent: int) -> Any:
+    """``prod(x_i ** exponent - 1)`` or ``prod(x_i - 1)`` as a wire value."""
+
+    import itertools
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.polynomials.values import (
+        RationalPolynomial,
+        RationalPolynomialTerm,
+        SparseRationalPolynomial,
+    )
+
+    def build(exponent_for_selected: int) -> RationalPolynomial:
+        terms = {}
+        for mask in itertools.product((False, True), repeat=len(variables)):
+            exponents = tuple(
+                exponent_for_selected if selected else 0 for selected in mask
+            )
+            terms[exponents] = "-1" if sum(mask) % 2 else "1"
+        return RationalPolynomial(
+            variables=variables,
+            polynomial=SparseRationalPolynomial(
+                terms=tuple(
+                    RationalPolynomialTerm(
+                        coefficient=CanonicalRational(num=c, den="1"),
+                        exponents=e,
+                    )
+                    for e, c in sorted(terms.items(), reverse=True)
+                )
+            ),
+        )
+
+    return build(exponent_for_selected=exponent), build(exponent_for_selected=1)
+
+
+def test_square_free_replay_preflights_dense_multivariate_quotients(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The eight-variable binomial product payload is rejected before expansion.
+
+    The 256-term source ``prod(v_i^64 - 1)`` and the 256-term claimed factor
+    ``prod(v_i - 1)`` both pass the shared wire budgets, but their exact
+    quotient ``prod(1 + v_i + ... + v_i^63)`` would carry ``64^8`` monomials.
+    Per-variable degree arithmetic proves that ceiling before any division:
+    ``prod(deg_i(source) - deg_i(factor) + 1) = 64^8``, far beyond the
+    4,096-term representation envelope, so validation must reject typedly
+    without ever calling ``exquo``.
+    """
+
+    from pydantic import ValidationError
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.polynomials._models import (
+        PolynomialSquareFreeDecompositionResult,
+        PolynomialSquareFreeFactor,
+    )
+
+    variables = tuple(f"v{index}" for index in range(8))
+    source, factor = _multivariate_binomial_box(variables, 64)
+
+    def fail_fast(self, other):
+        raise AssertionError("exquo must not run once the preflight rejects")
+
+    monkeypatch.setattr(Poly, "exquo", fail_fast)
+    with pytest.raises(ValidationError, match="preflight budget"):
+        PolynomialSquareFreeDecompositionResult(
+            polynomial=source,
+            coefficient=CanonicalRational(num="1", den="1"),
+            factors=(PolynomialSquareFreeFactor(factor=factor, multiplicity=1),),
+            reconstructed=source,
+        )
+
+
+def test_square_free_replays_multivariate_pure_power_at_the_preflight_cap() -> None:
+    """``(x + y)^64`` replays exactly: its degree box is exactly 4,096.
+
+    The first replay division has per-variable degree room 63, so the proven
+    quotient support bound is ``(63 + 1) * (63 + 1) = 4096`` — exactly the
+    shared representation envelope.  A legitimate operation output at the
+    boundary must still validate and round-trip.
+    """
+
+    from math import comb
+
+    from jacobian.math.polynomials._models import (
+        PolynomialSquareFreeDecompositionResult,
+        PolynomialSquareFreeRequest,
+    )
+    from jacobian.math.polynomials._operations import (
+        polynomial_square_free_decomposition,
+    )
+
+    request = PolynomialSquareFreeRequest(
+        polynomial=_sparse_polynomial(
+            ("x", "y"),
+            {(64 - k, k): str(comb(64, k)) for k in range(65)},
+        )
+    )
+    result = polynomial_square_free_decomposition(request)
+    records = [
+        (len(record.factor.polynomial.terms), record.multiplicity)
+        for record in result.factors
+    ]
+    assert records == [(2, 64)]
+    assert (
+        PolynomialSquareFreeDecompositionResult.model_validate(result.model_dump())
+        == result
+    )
+
+
+def test_square_free_replay_narrows_conservatively_above_the_preflight_cap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A provably small true quotient just past the bound is still rejected.
+
+    Dividing ``x^64 y^64 - 1`` by ``x - 1`` would leave degree room 63 in
+    ``x`` and 64 in ``y``, so the proven support ceiling is ``64 * 65 =
+    4160 > 4096`` even though this particular quotient would hold only 65
+    terms.  The conservative envelope is derived from degrees alone and is
+    enforced typedly before any backend work; no exact division may run.
+    """
+
+    from pydantic import ValidationError
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.polynomials._models import (
+        PolynomialSquareFreeDecompositionResult,
+        PolynomialSquareFreeFactor,
+    )
+
+    source = _sparse_polynomial(("x", "y"), {(64, 64): "1", (0, 0): "-1"})
+    factor = _sparse_polynomial(("x", "y"), {(1, 0): "1", (0, 0): "-1"})
+
+    def fail_fast(self, other):
+        raise AssertionError("exquo must not run once the preflight rejects")
+
+    monkeypatch.setattr(Poly, "exquo", fail_fast)
+    with pytest.raises(ValidationError, match="preflight budget"):
+        PolynomialSquareFreeDecompositionResult(
+            polynomial=source,
+            coefficient=CanonicalRational(num="1", den="1"),
+            factors=(PolynomialSquareFreeFactor(factor=factor, multiplicity=1),),
+            reconstructed=source,
+        )

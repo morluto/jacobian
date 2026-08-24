@@ -190,6 +190,33 @@ def test_sparse_graph_above_sixteen_vertices_is_admitted() -> None:
     assert result.visited_states == 2
 
 
+def test_edgeless_graph_above_the_shared_vertex_cap_is_admitted() -> None:
+    """A 65-vertex edgeless source stays inside the derived work budget."""
+    result = _directed_bond_connection_probability(
+        _request(vertex_count=65, arcs=(), probabilities=(), source=0, target=1)
+    )
+
+    assert _probability(result) == 0
+    assert result.arc_count == 0
+    assert result.visited_states == 1
+
+
+def test_single_arc_above_the_shared_vertex_cap_is_admitted() -> None:
+    """Sparse sources above 64 vertices are not rejected by the shared graph."""
+    result = _directed_bond_connection_probability(
+        _request(
+            vertex_count=100,
+            arcs=((63, 64),),
+            probabilities=(Fraction(2, 7),),
+            source=63,
+            target=64,
+        )
+    )
+
+    assert _probability(result) == Fraction(2, 7)
+    assert result.visited_states == 2
+
+
 def test_edgeless_graph_has_exact_zero_connection_probability() -> None:
     """Zero arcs keep the complete single-state ledger with probability zero."""
     result = _directed_bond_connection_probability(

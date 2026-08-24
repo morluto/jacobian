@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import copy
+from fractions import Fraction
+
 import pytest
+from pydantic import ValidationError
 
 from jacobian.math.polynomials.multivariate._models import (
     MultivariateDivisionRequest,
     MultivariateGcdRequest,
     MultivariateResultantRequest,
+    MultivariateResultantResult,
 )
 from jacobian.math.polynomials.multivariate._operations import (
     compute_multivariate_division,
@@ -37,6 +42,19 @@ def _poly(
             },
         }
     )
+
+
+def _poly_from_sympy(expr) -> RationalPolynomial:
+    """Convert a small two-variable SymPy expression to a ``RationalPolynomial``."""
+
+    from sympy import Poly, symbols
+
+    x_symbol, y_symbol = symbols("x y")
+    poly = Poly(expr, x_symbol, y_symbol)
+    terms = []
+    for monomials, coefficient in sorted(poly.terms(), reverse=True):
+        terms.append((f"{coefficient.p}/{coefficient.q}", tuple(monomials)))
+    return _poly(("x", "y"), tuple(terms))
 
 
 def _scalar(
@@ -312,16 +330,207 @@ class TestMultivariateResultant:
         value = result.resultant.value
         assert value.variables == ("y", "z")
 
-    def test_resultant_rejects_zero_degree(self) -> None:
-        """The elimination variable must appear in both polynomials."""
+    def test_resultant_nonzero_constant_right_input(self) -> None:
+        """Atlas elimination case: res_x(x + y^2 - u, y - v) = y - v."""
 
-        # left has zero degree in x; right has zero degree in x
-        left = _poly(("x", "y"), (("1/1", (0, 1)),))
-        right = _poly(("x", "y"), (("1/1", (0, 1)),))
-        with pytest.raises(ValueError, match="zero degree in the elimination variable"):
+        left = _poly(
+            ("x", "y", "u", "v"),
+            (("1/1", (1, 0, 0, 0)), ("1/1", (0, 2, 0, 0)), ("-1/1", (0, 0, 1, 0))),
+        )
+        right = _poly(
+            ("x", "y", "u", "v"), (("1/1", (0, 1, 0, 0)), ("-1/1", (0, 0, 0, 1)))
+        )
+        result = compute_multivariate_resultant(
             MultivariateResultantRequest(
                 left=left, right=right, elimination_variable="x"
             )
+        )
+        assert result.resultant.kind == "POLYNOMIAL"
+        terms = {
+            t.exponents: t.coefficient.as_fraction()
+            for t in result.resultant.value.polynomial.terms
+        }
+        assert terms == {(1, 0, 0): Fraction(1), (0, 0, 1): Fraction(-1)}
+
+    def test_resultant_power_rule_over_constant_inputs(self) -> None:
+        """Res_x(f, c) = c^deg_x(f) and Res_x(c, g) = c^deg_x(g)."""
+
+        f = _poly(("x", "y"), (("3/1", (3, 0)), ("1/2", (0, 1))))
+        five = _poly(("x", "y"), (("5/1", (0, 0)),))
+        left_as_eliminated = compute_multivariate_resultant(
+            MultivariateResultantRequest(left=f, right=five, elimination_variable="x")
+        )
+        right_as_eliminated = compute_multivariate_resultant(
+            MultivariateResultantRequest(left=five, right=f, elimination_variable="x")
+        )
+        for record in (left_as_eliminated, right_as_eliminated):
+            assert record.resultant.kind == "POLYNOMIAL"
+            terms = {
+                t.exponents: t.coefficient.as_fraction()
+                for t in record.resultant.value.polynomial.terms
+            }
+            assert terms == {(0,): Fraction(125)}
+
+    def test_resultant_both_constant_gives_empty_determinant_value(self) -> None:
+        """Two inputs constant in the eliminated variable give exactly 1."""
+
+        left = _poly(("x", "y", "z"), (("1/2", (0, 1, 0)), ("5/1", (0, 0, 0))))
+        right = _poly(("x", "y", "z"), (("1/3", (0, 0, 1)), ("-7/1", (0, 0, 0))))
+        result = compute_multivariate_resultant(
+            MultivariateResultantRequest(
+                left=left, right=right, elimination_variable="x"
+            )
+        )
+        assert result.resultant.kind == "POLYNOMIAL"
+        terms = {
+            t.exponents: t.coefficient.as_fraction()
+            for t in result.resultant.value.polynomial.terms
+        }
+        assert terms == {(0, 0): Fraction(1)}
+
+    def test_resultant_zero_input_gives_zero(self) -> None:
+        """Either zero input gives the zero resultant."""
+
+        zero = _poly(("x", "y"), ())
+        g = _poly(("x", "y"), (("1/1", (2, 0)), ("-4/1", (0, 1))))
+        for left, right in ((zero, g), (g, zero), (zero, zero)):
+            result = compute_multivariate_resultant(
+                MultivariateResultantRequest(
+                    left=left, right=right, elimination_variable="x"
+                )
+            )
+            assert result.resultant.kind == "POLYNOMIAL"
+            assert len(result.resultant.value.polynomial.terms) == 0
+
+    def test_resultant_swap_law_with_degenerate_rows(self) -> None:
+        """Res(f, g) = (-1)^{mn} Res(g, f) across admitted degree profiles."""
+
+        cases = (
+            (
+                _poly(("x", "y"), (("1/1", (2, 0)), ("-3/1", (0, 0)))),
+                _poly(("x", "y"), (("1/1", (1, 1)), ("2/1", (0, 0)))),
+            ),
+            (
+                _poly(("x", "y"), (("1/1", (1, 0)),)),
+                _poly(("x", "y"), (("7/1", (0, 0)),)),
+            ),
+            (
+                _poly(("x", "y"), (("1/1", (0, 1)),)),
+                _poly(("x", "y"), (("1/1", (3, 0)), ("-1/1", (0, 0)))),
+            ),
+            (
+                _poly(("x", "y"), (("1/1", (1, 0)), ("5/1", (0, 0)))),
+                _poly(("x", "y"), (("1/1", (3, 0)), ("-4/1", (0, 0)))),
+            ),
+        )
+        for left, right in cases:
+            first = compute_multivariate_resultant(
+                MultivariateResultantRequest(
+                    left=left, right=right, elimination_variable="x"
+                )
+            )
+            second = compute_multivariate_resultant(
+                MultivariateResultantRequest(
+                    left=right, right=left, elimination_variable="x"
+                )
+            )
+            m = max((t.exponents[0] for t in left.polynomial.terms), default=0)
+            n = max((t.exponents[0] for t in right.polynomial.terms), default=0)
+            sign = -1 if (m * n) % 2 else 1
+            first_terms = {
+                t.exponents: sign * t.coefficient.as_fraction()
+                for t in first.resultant.value.polynomial.terms
+            }
+            second_terms = {
+                t.exponents: t.coefficient.as_fraction()
+                for t in second.resultant.value.polynomial.terms
+            }
+            assert first_terms == second_terms
+
+    def test_resultant_sign_matches_sylvester_orientation(self) -> None:
+        """deg(left) < deg(right) keeps the standard Sylvester orientation.
+
+        SymPy's PRS canonicalizes the degree order without compensating the
+        swap sign (upstream sympy/sympy#10666); these fixed cases flip under
+        the uncorrected backend value.
+        """
+
+        left = _poly(("x", "y"), (("1/1", (1, 0)), ("5/1", (0, 0))))
+        right = _poly(("x", "y"), (("1/1", (3, 0)),))
+        result = compute_multivariate_resultant(
+            MultivariateResultantRequest(
+                left=left, right=right, elimination_variable="x"
+            )
+        )
+        terms = {
+            t.exponents: t.coefficient.as_fraction()
+            for t in result.resultant.value.polynomial.terms
+        }
+        assert terms == {(0,): Fraction(-125)}
+
+        symbolic_left = _poly(("x", "y"), (("1/1", (1, 1)),))
+        symbolic_right = _poly(("x", "y"), (("1/1", (3, 0)), ("-1/1", (0, 3))))
+        result = compute_multivariate_resultant(
+            MultivariateResultantRequest(
+                left=symbolic_left, right=symbolic_right, elimination_variable="x"
+            )
+        )
+        terms = {
+            t.exponents: t.coefficient.as_fraction()
+            for t in result.resultant.value.polynomial.terms
+        }
+        assert terms == {(6,): Fraction(-1)}
+
+    def test_resultant_matches_sylvester_determinant_oracle(self) -> None:
+        """Differential oracle: the sparse value equals the Sylvester determinant."""
+
+        from sympy import Matrix, symbols, together
+        from sympy.polys.subresultants_qq_zz import sylvester as sympy_sylvester
+
+        x, y = symbols("x y")
+        cases = (
+            (x**2 + y * x + 1, 3 * x - y**2),
+            (x + 5, x**3 + y),
+            (2 * x**2 - 7, y * x + 3),
+            (y**2 + 1, x - 4),
+        )
+        for f_expr, g_expr in cases:
+            f = _poly_from_sympy(f_expr)
+            g = _poly_from_sympy(g_expr)
+            result = compute_multivariate_resultant(
+                MultivariateResultantRequest(left=f, right=g, elimination_variable="x")
+            )
+            expected = together(Matrix(sympy_sylvester(f_expr, g_expr, x)).det())
+            claimed = sum(
+                Fraction(int(t.coefficient.num), int(t.coefficient.den))
+                * y ** t.exponents[0]
+                for t in result.resultant.value.polynomial.terms
+            )
+            assert together(expected - claimed) == 0
+
+    def test_resultant_source_bound_replay_rejects_mutations(self) -> None:
+        """Serialized results replay against their retained source pair."""
+
+        left = _poly(("x", "y"), (("1/1", (1, 1)), ("-1/1", (0, 0))))
+        right = _poly(("x", "y"), (("1/1", (2, 0)), ("-1/1", (0, 0))))
+        request = MultivariateResultantRequest(
+            left=left, right=right, elimination_variable="x"
+        )
+        result = compute_multivariate_resultant(request)
+        dumped = result.model_dump()
+        assert MultivariateResultantResult.model_validate(dumped) == result
+
+        forged = copy.deepcopy(dumped)
+        forged["resultant"]["value"]["polynomial"]["terms"] = [
+            {"coefficient": {"num": "9999", "den": "1"}, "exponents": [0]}
+        ]
+        with pytest.raises(ValidationError, match="Sylvester determinant"):
+            MultivariateResultantResult.model_validate(forged)
+
+        swapped = copy.deepcopy(dumped)
+        swapped["left"] = dumped["right"]
+        with pytest.raises(ValidationError, match="Sylvester determinant"):
+            MultivariateResultantResult.model_validate(swapped)
 
     def test_resultant_rejects_univariate(self) -> None:
         """Univariate polynomials are rejected for multivariate operations."""

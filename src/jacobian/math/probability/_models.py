@@ -26,7 +26,7 @@ MAX_FINITE_DISTRIBUTION_ATOMS = 256
 MAX_FINITE_CONVOLUTION_PAIRS = 4096
 MAX_INPUT_RATIONAL_DIGITS = 128
 MAX_RESULT_RATIONAL_DIGITS = 512
-MAX_GAUSSIAN_VARIABLES = 8
+MAX_GAUSSIAN_VARIABLES = 16
 MAX_GAUSSIAN_POLYNOMIAL_TERMS = 16
 MAX_GAUSSIAN_TERM_DEGREE = 8
 MAX_GAUSSIAN_MOMENT_ORDER = 16
@@ -572,9 +572,7 @@ class DirectedBondConnectionProbabilitySource(StrictModel):
         # the corresponding sums over its selected factors, and each factor's
         # digits occur in exactly half of the powerset states.
         per_arc_numerator_bytes = sum(
-            len(
-                format_canonical_integer(item.open_probability.as_fraction().numerator)
-            )
+            len(format_canonical_integer(item.open_probability.as_fraction().numerator))
             + len(
                 format_canonical_integer(
                     (1 - item.open_probability.as_fraction()).numerator
@@ -627,15 +625,8 @@ class DirectedBondConnectionProbabilitySource(StrictModel):
             # Each record adds its index digits and at least one numerator
             # and denominator character beyond the empty template, plus one
             # ledger separator byte.
-            + state_count
-            * (
-                fixed_state_bytes
-                + len(str(state_count - 1))
-                + 2
-                + 1
-            )
-            + (state_count // 2)
-            * (per_arc_numerator_bytes + per_arc_denominator_bytes)
+            + state_count * (fixed_state_bytes + len(str(state_count - 1)) + 2 + 1)
+            + (state_count // 2) * (per_arc_numerator_bytes + per_arc_denominator_bytes)
             + 16 * 1024
         )
         if estimated_ledger_bytes > MAX_DIRECTED_BOND_RELIABILITY_LEDGER_BYTES:

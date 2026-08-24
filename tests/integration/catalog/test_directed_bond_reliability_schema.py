@@ -12,13 +12,15 @@ def test_directed_bond_reliability_schema_exposes_cross_field_contract() -> None
     schema = operation.request_type.model_json_schema()
     assert schema["description"] == (
         "Compute directed source-to-target bond connection probability.\n\n"
-        "The request admits at most 16 vertices and 12 arcs, requires one\n"
-        "probability for every arc exactly once, and requires distinct declared\n"
-        "source and target vertices.  It normalizes arc rows lexicographically, so\n"
-        "state indices and the source-bound result do not depend on input order."
+        "The request admits at most 12 arcs, requires one probability for every\n"
+        "arc exactly once (empty for an edgeless graph), and requires distinct\n"
+        "declared source and target vertices.  The derived work budget bounds the\n"
+        "vertex count, so sparse graphs may declare more vertices.  It normalizes\n"
+        "arc rows lexicographically, so state indices and the source-bound result\n"
+        "do not depend on input order."
     )
     properties = schema["properties"]
-    assert "at most 16 vertices and 12 arcs" in properties["graph"]["description"]
+    assert "at most 12 arcs" in properties["graph"]["description"]
     assert (
         "every graph arc exactly once" in properties["arc_probabilities"]["description"]
     )

@@ -201,9 +201,9 @@ def test_edgeless_graph_has_exact_zero_connection_probability() -> None:
     assert result.visited_states == 1
     assert tuple(state.open_arcs for state in result.states) == ((),)
     assert tuple(state.source_reaches_target for state in result.states) == (False,)
-    assert tuple(
-        state.state_probability.as_fraction() for state in result.states
-    ) == (Fraction(1),)
+    assert tuple(state.state_probability.as_fraction() for state in result.states) == (
+        Fraction(1),
+    )
 
 
 def test_ledger_estimate_bounds_subset_numerator_growth_not_per_state_maxima() -> None:

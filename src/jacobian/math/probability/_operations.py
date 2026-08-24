@@ -1,4 +1,4 @@
-"""Exact finite probability operations backed by Python-FLINT."""
+"""Exact finite probability operations."""
 
 from __future__ import annotations
 
@@ -909,6 +909,9 @@ __all__ = ["FINITE_PROBABILITY_OPERATIONS", "finite_probability_operations"]
 def finite_probability_operations() -> MathTools:
     from dataclasses import replace
 
+    from jacobian.math.probability._all_terminal_reliability import (
+        ALL_TERMINAL_RELIABILITY_OPERATION,
+    )
     from jacobian.math.probability._gaussian_inputs import (
         CanonicalGaussianPolynomialMomentRequest,
     )
@@ -930,4 +933,5 @@ def finite_probability_operations() -> MathTools:
             _with_canonical_gaussian_input(operation)
             for operation in FINITE_PROBABILITY_OPERATIONS
         ),
+        ALL_TERMINAL_RELIABILITY_OPERATION,
     )

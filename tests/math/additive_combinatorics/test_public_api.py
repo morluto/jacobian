@@ -9,8 +9,8 @@ def test_exact_public_api_symbols() -> None:
     """Keep canonical additive-combinatorics values and kernels explicit."""
 
     expected = (
-        "IndexedIntegerSequence",
         "IndexSubset",
+        "IndexedIntegerSequence",
         "SubsetSumProfile",
         "SubsetSumProfileEntry",
         "subset_sum_profile",

@@ -142,10 +142,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "incidence.trade.check",
         "Compare finite incidence trade moments",
         "Compare two indexed finite block families on the same ordered point "
-        "axis through order one or two. Return per-order totals and every "
-        "nonzero subset-multiplicity difference; omitted subsets have equal, "
-        "possibly zero, multiplicity. Report the zeroth block-count difference "
-        "separately.",
+        "axis through a requested maximum subset order, admitted order by "
+        "order from the subset-count, work, and output budgets. Return "
+        "per-order totals and every nonzero subset-multiplicity difference; "
+        "omitted subsets have equal, possibly zero, multiplicity. Report the "
+        "zeroth block-count difference separately.",
         IncidenceTradeRequest,
         IncidenceTradeResult,
         compute_incidence_trade,

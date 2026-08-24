@@ -19,7 +19,7 @@ MAX_MATRIX_CELLS = 10_000
 MAX_GRAPH_EDGES = 5_000
 MAX_LABEL_BYTES = 1_024
 MAX_RESULT_BYTES = 1_000_000
-MAX_TRADE_ORDER = 2
+MAX_TRADE_ORDER = MAX_T
 MAX_TRADE_DIFFERENCES = MAX_POINTS + MAX_SUBSETS
 
 _CONTAINMENT_RESULT_PASSES = 2
@@ -301,10 +301,13 @@ class IncidenceTradeRequest(StrictModel):
         json_schema_extra={
             "description": (
                 "Compare two indexed block families on exactly the same ordered "
-                "point axis through max_order (currently 1 or 2). Every positive-"
-                "order multiplicity is compared exactly; omitted result entries "
-                "have equal, possibly zero, multiplicity. The zeroth block-count "
-                "difference is reported separately."
+                "point axis through max_order. Every positive-order multiplicity "
+                "is compared exactly; omitted result entries have equal, "
+                "possibly zero, multiplicity. Each requested order must fit the "
+                "complete subset-count, operation-plus-replay work, and exact-"
+                "output budgets; the schema ceiling is only a conservative "
+                "fallback shared with containment profiles. The zeroth "
+                "block-count difference is reported separately."
             )
         }
     )
@@ -314,7 +317,11 @@ class IncidenceTradeRequest(StrictModel):
     max_order: StrictInt = Field(
         ge=1,
         le=MAX_TRADE_ORDER,
-        description="Largest positive subset order compared exactly.",
+        description=(
+            "Largest positive subset order compared exactly. Higher orders are "
+            "admitted whenever the cumulative subset-count, work, and output "
+            "budgets fit; the schema ceiling is a conservative fallback."
+        ),
     )
 
     @model_validator(mode="after")

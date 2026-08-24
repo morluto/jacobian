@@ -15,6 +15,7 @@ from jacobian.math.incidence_structures import (
     containment_profile,
 )
 from jacobian.math.incidence_structures._models import (
+    MAX_TRADE_ORDER,
     ContainmentProfileRequest,
     IncidenceTradeRequest,
 )
@@ -145,6 +146,40 @@ def test_second_order_difference_is_distinct_from_equal_first_moments() -> None:
     ) == ((("a", "b"), 1, 0),)
 
 
+def test_third_order_trade_is_admitted_when_budgets_fit() -> None:
+    left = _family(
+        (("a", "b"), ("a", "c"), ("b", "c")),
+        "l",
+        points=("a", "b", "c"),
+    )
+    right = _family(
+        (("a", "b", "c"), ("a",), ("b",), ("c",)),
+        "r",
+        points=("a", "b", "c"),
+    )
+
+    result = check_incidence_trade(left, right, 3)
+
+    assert result.zeroth_difference == -1
+    assert not result.positive_moments_equal
+    first, second, third = result.comparisons
+    assert tuple(comparison.order for comparison in result.comparisons) == (1, 2, 3)
+    assert first.equal
+    assert first.left_total == first.right_total == 6
+    assert second.equal
+    assert second.left_total == second.right_total == 3
+    assert third.left_total == 0
+    assert third.right_total == 1
+    assert tuple(
+        (
+            difference.subset,
+            difference.left_multiplicity,
+            difference.right_multiplicity,
+        )
+        for difference in third.differences
+    ) == ((("a", "b", "c"), 0, 1),)
+
+
 def test_empty_fixed_order_profile_has_explicit_zero_convention() -> None:
     incidence = _family((("a", "b"),), "b", points=("a", "b"))
 
@@ -175,6 +210,31 @@ def test_profile_admission_reserves_output_for_repeated_labels() -> None:
 
     with pytest.raises(ValidationError, match="output budget"):
         ContainmentProfileRequest(incidence=incidence, t=2)
+
+
+def test_trade_admission_is_budget_derived_with_conservative_order_ceiling() -> None:
+    points = tuple(f"p{index}" for index in range(33))
+    left = _family(((),), "l", points=points)
+    right = _family(((),), "r", points=points)
+
+    assert IncidenceTradeRequest(left=left, right=right, max_order=2)
+
+    with pytest.raises(ValidationError, match="subset-count budget"):
+        IncidenceTradeRequest(left=left, right=right, max_order=3)
+
+    tiny_left = _family((("a",),), "l", points=("a", "b"))
+    tiny_right = _family((("b",),), "r", points=("a", "b"))
+    assert IncidenceTradeRequest(
+        left=tiny_left,
+        right=tiny_right,
+        max_order=MAX_TRADE_ORDER,
+    )
+    with pytest.raises(ValidationError, match="less than or equal"):
+        IncidenceTradeRequest(
+            left=tiny_left,
+            right=tiny_right,
+            max_order=MAX_TRADE_ORDER + 1,
+        )
 
 
 def test_trade_requires_identical_ordered_point_parents() -> None:

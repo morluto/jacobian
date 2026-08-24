@@ -12,7 +12,10 @@ from jacobian.math.formal_power_series._operations import (
     compute_subtract,
 )
 from jacobian.math.modular_forms._models import LevelOneNamedQExpansionRequest
-from jacobian.math.modular_forms.kernel import MAX_LEVEL_ONE_TRUNCATION_ORDER
+from jacobian.math.modular_forms.kernel import (
+    MAX_LEVEL_ONE_TRUNCATION_ORDER,
+    require_level_one_admission,
+)
 from jacobian.math.modular_forms.operations import level_one_named_q_expansion
 from jacobian.math.modular_forms.values import LevelOneModularQExpansion
 
@@ -67,6 +70,19 @@ def test_full_public_precision_is_complete_and_carries_parent_metadata() -> None
     assert result.space_kind == "CUSP"
 
 
+def test_e4_and_e6_report_the_standard_holomorphic_space_kind() -> None:
+    assert level_one_named_q_expansion("E4", 3).space_kind == "HOLOMORPHIC"
+    assert level_one_named_q_expansion("E6", 3).space_kind == "HOLOMORPHIC"
+
+
+def test_value_rejects_the_misspelled_holomorphic_space_kind() -> None:
+    result = level_one_named_q_expansion("E4", 3)
+    payload = result.model_dump()
+    payload["space_kind"] = "HOLMORPHIC"
+    with pytest.raises(ValidationError, match="should be 'HOLOMORPHIC' or 'CUSP'"):
+        LevelOneModularQExpansion.model_validate(payload)
+
+
 def test_order_one_retains_the_known_constant_coefficient() -> None:
     assert _integers(level_one_named_q_expansion("E4", 1)) == (1,)
     assert _integers(level_one_named_q_expansion("DELTA", 1)) == (0,)
@@ -75,6 +91,18 @@ def test_order_one_retains_the_known_constant_coefficient() -> None:
 def test_request_rejects_precision_above_complete_public_envelope() -> None:
     with pytest.raises(ValidationError, match="less than or equal to 512"):
         LevelOneNamedQExpansionRequest(form="E4", truncation_order=513)
+
+
+def test_wire_request_rejects_boolean_truncation_orders() -> None:
+    with pytest.raises(ValidationError):
+        LevelOneNamedQExpansionRequest(form="E4", truncation_order=True)
+
+
+def test_native_admission_rejects_boolean_truncation_orders() -> None:
+    with pytest.raises(ValueError, match="plain integer"):
+        require_level_one_admission("DELTA", True)
+    with pytest.raises(ValueError, match="plain integer"):
+        level_one_named_q_expansion("E4", True)
 
 
 def test_value_rejects_forged_coefficient_during_replay() -> None:

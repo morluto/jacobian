@@ -27,7 +27,7 @@ class LevelOneModularQExpansion(StrictModel):
     congruence_subgroup: Literal["SL2Z"] = "SL2Z"
     level: Literal[1] = 1
     weight: Literal[4, 6, 12]
-    space_kind: Literal["HOLMORPHIC", "CUSP"]
+    space_kind: Literal["HOLOMORPHIC", "CUSP"]
     coefficient_domain: Literal["QQ"] = "QQ"
     normalization: str = Field(min_length=1, max_length=96)
     q_expansion: TruncatedSeries

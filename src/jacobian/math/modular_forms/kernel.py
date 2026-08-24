@@ -88,12 +88,12 @@ def expected_coefficients(
 
 def metadata(
     form: NamedLevelOneModularForm,
-) -> tuple[int, Literal["HOLMORPHIC", "CUSP"], str]:
+) -> tuple[int, Literal["HOLOMORPHIC", "CUSP"], str]:
     """Return the exact level-one parent and normalization for ``form``."""
     if form == "E4":
-        return 4, "HOLMORPHIC", "CONSTANT_TERM_ONE__E4_COEFFICIENT_240_SIGMA_3"
+        return 4, "HOLOMORPHIC", "CONSTANT_TERM_ONE__E4_COEFFICIENT_240_SIGMA_3"
     if form == "E6":
-        return 6, "HOLMORPHIC", "CONSTANT_TERM_ONE__E6_COEFFICIENT_MINUS_504_SIGMA_5"
+        return 6, "HOLOMORPHIC", "CONSTANT_TERM_ONE__E6_COEFFICIENT_MINUS_504_SIGMA_5"
     return 12, "CUSP", "DELTA_EQUALS_E4_CUBED_MINUS_E6_SQUARED_OVER_1728"
 
 
@@ -122,6 +122,8 @@ def require_level_one_admission(
     form: NamedLevelOneModularForm, truncation_order: int
 ) -> None:
     """Prove finite scan, series work, coefficient, and output envelopes."""
+    if isinstance(truncation_order, bool) or not isinstance(truncation_order, int):
+        raise ValueError("truncation_order must be a plain integer")
     if not 1 <= truncation_order <= MAX_LEVEL_ONE_TRUNCATION_ORDER:
         raise ValueError(
             "truncation_order must be within the supported level-one prefix bound"

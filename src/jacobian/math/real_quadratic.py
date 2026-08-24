@@ -149,15 +149,11 @@ class RealQuadraticEmbeddingProfile(StrictModel):
         radical_coefficient = self.source.radical_coefficient.as_fraction()
         conjugate = RealQuadraticValue(
             rational_part=self.source.rational_part,
-            radical_coefficient=CanonicalRational.from_fraction(
-                -radical_coefficient
-            ),
+            radical_coefficient=CanonicalRational.from_fraction(-radical_coefficient),
             radicand=self.source.radicand,
         )
         expected_images = (
-            RealQuadraticEmbeddingImage(
-                embedding="POSITIVE_ROOT", value=self.source
-            ),
+            RealQuadraticEmbeddingImage(embedding="POSITIVE_ROOT", value=self.source),
             RealQuadraticEmbeddingImage(embedding="NEGATIVE_ROOT", value=conjugate),
         )
         if self.images != expected_images:
@@ -179,8 +175,7 @@ class RealQuadraticEmbeddingProfile(StrictModel):
             )
         if self.trace != expected_trace_value or self.norm != expected_norm_value:
             raise ValueError(
-                "trace and norm must be the exact trace and norm of the retained "
-                "source"
+                "trace and norm must be the exact trace and norm of the retained source"
             )
         return self
 

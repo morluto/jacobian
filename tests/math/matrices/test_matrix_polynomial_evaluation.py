@@ -468,8 +468,9 @@ def _rational_polynomial(
     )
 
 
-def test_degree_two_admission_cross_cancels_coefficient_and_matrix_power_factors(
-) -> None:
+def test_degree_two_admission_cross_cancels_coefficient_and_matrix_power_factors() -> (
+    None
+):
     base_two = format_canonical_integer(2**53_179)
     base_three = format_canonical_integer(3**33_558)
     coefficient = _rational(
@@ -510,9 +511,7 @@ def test_degree_two_admission_still_rejects_uncancellable_power_growth() -> None
         )
 
 
-def test_admission_falls_back_to_dense_bound_beyond_materialization_ceiling() -> (
-    None
-):
+def test_admission_falls_back_to_dense_bound_beyond_materialization_ceiling() -> None:
     height = "1" + "0" * 20_000
     with pytest.raises(ValidationError, match="digit result bound"):
         MatrixPolynomialEvaluationRequest(

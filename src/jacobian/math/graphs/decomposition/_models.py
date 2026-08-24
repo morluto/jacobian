@@ -13,6 +13,7 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs.multigraph._models import LooplessMultigraph
 
 
 class UndirectedGraph(StrictModel):
@@ -134,49 +135,38 @@ class SPQRTreeRequest(StrictModel):
     )
 
 
-class SPQRSkeletonEdge(StrictModel):
-    """One real source edge or one paired virtual skeleton edge."""
-
-    edge_id: str = Field(min_length=1, max_length=96)
-    left: int = Field(ge=0, le=63)
-    right: int = Field(ge=0, le=63)
-    kind: Literal["REAL", "VIRTUAL"]
-    source_edge: tuple[int, int] | None = None
-
-    @model_validator(mode="after")
-    def require_tagged_edge_invariant(self) -> Self:
-        if self.left == self.right:
-            raise ValueError("SPQR skeleton edges must be loopless")
-        if self.kind == "REAL":
-            if self.source_edge != (
-                min(self.left, self.right),
-                max(self.left, self.right),
-            ):
-                raise ValueError("a real skeleton edge must name its source edge")
-        elif self.source_edge is not None:
-            raise ValueError("a virtual skeleton edge must not name a source edge")
-        return self
-
-
 class SPQRSkeleton(StrictModel):
     """One S, P, Q, or R skeleton with stable presentation identity."""
 
     node_id: str = Field(min_length=1, max_length=64)
     kind: Literal["S_NODE", "P_NODE", "Q_NODE", "R_NODE"]
     vertices: tuple[int, ...] = Field(min_length=2, max_length=64)
-    edges: tuple[SPQRSkeletonEdge, ...] = Field(min_length=1, max_length=1_536)
+    graph: LooplessMultigraph
+    real_edge_sources: tuple[tuple[str, tuple[int, int]], ...] = Field(default=())
+    virtual_edge_ids: tuple[str, ...] = Field(default=())
 
     @model_validator(mode="after")
     def require_canonical_skeleton_carrier(self) -> Self:
         if self.vertices != tuple(sorted(set(self.vertices))):
             raise ValueError("SPQR skeleton vertices must be sorted and unique")
-        if any(
-            edge.left not in self.vertices or edge.right not in self.vertices
-            for edge in self.edges
+        if self.graph.vertex_count != len(self.vertices):
+            raise ValueError(
+                "SPQR multigraph carrier must use the skeleton vertex axis"
+            )
+        edge_ids = self.graph.edge_id_set
+        real_ids = {edge_id for edge_id, _ in self.real_edge_sources}
+        virtual_ids = set(self.virtual_edge_ids)
+        if real_ids & virtual_ids or real_ids | virtual_ids != edge_ids:
+            raise ValueError("SPQR edge tags must partition the multigraph edge IDs")
+        if len(real_ids) != len(self.real_edge_sources) or len(virtual_ids) != len(
+            self.virtual_edge_ids
         ):
-            raise ValueError("SPQR skeleton edges must use declared skeleton vertices")
-        if len({edge.edge_id for edge in self.edges}) != len(self.edges):
-            raise ValueError("SPQR skeleton edge IDs must be unique")
+            raise ValueError("SPQR edge tags must not repeat edge IDs")
+        for edge_id, source_edge in self.real_edge_sources:
+            edge = self.graph.edge_by_id(edge_id)
+            endpoints = (self.vertices[edge.left], self.vertices[edge.right])
+            if tuple(sorted(endpoints)) != source_edge:
+                raise ValueError("a real skeleton edge must name its source edge")
         return self
 
 
@@ -217,4 +207,9 @@ class SPQRTreeResult(StrictModel):
                 raise ValueError("a non-biconnected result must not carry an SPQR tree")
         elif self.witness_kind is not None or self.witness_vertices:
             raise ValueError("an SPQR tree must not carry a negative witness")
+        # Keep source-bound replay at the ordinary deserialization boundary,
+        # not only in the producer. The lazy import avoids a module cycle.
+        from jacobian.math.graphs.decomposition._operations import _validate_spqr_tree
+
+        _validate_spqr_tree(self)
         return self

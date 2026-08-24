@@ -34,8 +34,12 @@ __all__ = [
 ]
 
 # Public bounds
-MAX_VERTICES = 32
-MAX_EDGES = 128
+# The shared carrier also transports bounded SPQR skeletons for the existing
+# 64-vertex / 512-edge simple-graph decomposition envelope. Individual flow
+# and cycle operations retain their own work admission; widening this passive
+# value does not widen an exhaustive search claim.
+MAX_VERTICES = 64
+MAX_EDGES = 512
 MAX_PARALLEL_MULTIPLICITY = 32
 MAX_GROUP_RANK = 6
 MAX_GROUP_MODULUS = 4096

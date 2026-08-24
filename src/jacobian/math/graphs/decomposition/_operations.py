@@ -18,11 +18,11 @@ from jacobian.math.graphs.decomposition._models import (
     EarDecompositionRequest,
     EarDecompositionResult,
     SPQRSkeleton,
-    SPQRSkeletonEdge,
     SPQRTreeRequest,
     SPQRTreeResult,
     UndirectedGraph,
 )
+from jacobian.math.graphs.multigraph._models import LooplessMultigraph, MultigraphEdge
 
 
 def _build_graph(graph: UndirectedGraph) -> nx.Graph[int]:
@@ -292,6 +292,37 @@ class _Anchor:
 type _SPQRKind = Literal["S_NODE", "P_NODE", "Q_NODE", "R_NODE"]
 
 
+def _as_public_skeleton(
+    node_id: str, kind: _SPQRKind, edges: tuple[_SPQREdge, ...]
+) -> SPQRSkeleton:
+    vertices = tuple(
+        sorted({vertex for edge in edges for vertex in (edge.left, edge.right)})
+    )
+    positions = {vertex: index for index, vertex in enumerate(vertices)}
+    return SPQRSkeleton(
+        node_id=node_id,
+        kind=kind,
+        vertices=vertices,
+        graph=LooplessMultigraph(
+            vertex_count=len(vertices),
+            edges=tuple(
+                MultigraphEdge(
+                    edge_id=edge.edge_id,
+                    left=positions[edge.left],
+                    right=positions[edge.right],
+                )
+                for edge in edges
+            ),
+        ),
+        real_edge_sources=tuple(
+            (edge.edge_id, edge.source_edge)
+            for edge in edges
+            if edge.source_edge is not None
+        ),
+        virtual_edge_ids=tuple(edge.edge_id for edge in edges if edge.is_virtual),
+    )
+
+
 class _SPQRBuilder:
     """Deterministic split-component SPQR construction for one small graph.
 
@@ -323,23 +354,7 @@ class _SPQRBuilder:
         self._decompose(source_edges, boundary_edge_id=None)
         self._normalize_adjacent_nodes()
         nodes = tuple(
-            SPQRSkeleton(
-                node_id=node_id,
-                kind=kind,
-                vertices=tuple(
-                    sorted({v for edge in edges for v in (edge.left, edge.right)})
-                ),
-                edges=tuple(
-                    SPQRSkeletonEdge(
-                        edge_id=edge.edge_id,
-                        left=edge.left,
-                        right=edge.right,
-                        kind="VIRTUAL" if edge.is_virtual else "REAL",
-                        source_edge=edge.source_edge,
-                    )
-                    for edge in edges
-                ),
-            )
+            _as_public_skeleton(node_id, kind, edges)
             for node_id, (kind, edges) in sorted(self._nodes.items())
         )
         owners = tuple(
@@ -368,7 +383,7 @@ class _SPQRBuilder:
         pairs = tuple(
             sorted((left, right) for left, right in self._pairs.items() if left < right)
         )
-        result = SPQRTreeResult(
+        return SPQRTreeResult(
             source_graph=graph,
             status="SPQR_TREE",
             nodes=nodes,
@@ -382,8 +397,6 @@ class _SPQRBuilder:
             source_vertex_incidence=vertex_incidence,
             source_edge_owners=owners,
         )
-        _validate_spqr_tree(result)
-        return result
 
     def _new_virtual(self, left: int, right: int) -> _SPQREdge:
         edge = _SPQREdge(
@@ -678,8 +691,14 @@ def compute_spqr_tree(request: SPQRTreeRequest) -> SPQRTreeResult:
 
 def _validate_spqr_tree(result: SPQRTreeResult) -> None:
     """Replay the defining SPQR source, tree, and skeleton invariants."""
-    if result.status != "SPQR_TREE":
+    if result.status == "NOT_BICONNECTED":
+        _validate_negative_spqr_result(result)
         return
+    source_value = _build_graph(result.source_graph)
+    if result.source_graph.vertex_count < 3 or not nx.is_biconnected(source_value):
+        raise ValueError(
+            "an SPQR tree requires a biconnected source graph of at least three vertices"
+        )
     nodes = {node.node_id: node for node in result.nodes}
     if not nodes:
         raise ValueError("an SPQR tree must contain at least one skeleton")
@@ -693,9 +712,9 @@ def _validate_spqr_tree(result: SPQRTreeResult) -> None:
         )
     expected_owners = tuple(
         sorted(
-            (edge.source_edge, node_id, edge.edge_id)
-            for node_id, edge in edge_locations.values()
-            if edge.source_edge is not None
+            (_real_source(node, edge), node_id, edge.edge_id)
+            for node_id, node, edge in edge_locations.values()
+            if edge.edge_id not in node.virtual_edge_ids
         )
     )
     if result.source_edge_owners != expected_owners:
@@ -721,25 +740,23 @@ def _validate_spqr_tree(result: SPQRTreeResult) -> None:
 
 def _collect_spqr_edges(
     result: SPQRTreeResult,
-) -> tuple[dict[str, tuple[str, SPQRSkeletonEdge]], list[tuple[int, int]]]:
-    edge_locations: dict[str, tuple[str, SPQRSkeletonEdge]] = {}
+) -> tuple[dict[str, tuple[str, SPQRSkeleton, MultigraphEdge]], list[tuple[int, int]]]:
+    edge_locations: dict[str, tuple[str, SPQRSkeleton, MultigraphEdge]] = {}
     real_sources: list[tuple[int, int]] = []
     for node in result.nodes:
-        for edge in node.edges:
+        for edge in node.graph.edges:
             if edge.edge_id in edge_locations:
                 raise ValueError("a skeleton edge must occur in exactly one node")
-            edge_locations[edge.edge_id] = (node.node_id, edge)
-            if edge.kind == "REAL":
-                if edge.source_edge is None:
-                    raise ValueError("real skeleton edge missing source map")
-                real_sources.append(edge.source_edge)
+            edge_locations[edge.edge_id] = (node.node_id, node, edge)
+            if edge.edge_id not in node.virtual_edge_ids:
+                real_sources.append(_real_source(node, edge))
         _validate_skeleton_kind(node)
     return edge_locations, real_sources
 
 
 def _validate_virtual_pairs(
     result: SPQRTreeResult,
-    edge_locations: dict[str, tuple[str, SPQRSkeletonEdge]],
+    edge_locations: dict[str, tuple[str, SPQRSkeleton, MultigraphEdge]],
 ) -> set[tuple[str, str]]:
     pair_edges: set[str] = set()
     derived_tree: set[tuple[str, str]] = set()
@@ -747,15 +764,17 @@ def _validate_virtual_pairs(
         if left_id == right_id or left_id in pair_edges or right_id in pair_edges:
             raise ValueError("virtual edges must occur in exactly one distinct pair")
         try:
-            left_node, left = edge_locations[left_id]
-            right_node, right = edge_locations[right_id]
+            left_node, left_skeleton, left = edge_locations[left_id]
+            right_node, right_skeleton, right = edge_locations[right_id]
         except KeyError as exc:
             raise ValueError("virtual pair references an absent skeleton edge") from exc
-        if left.kind != "VIRTUAL" or right.kind != "VIRTUAL":
+        if (
+            left_id not in left_skeleton.virtual_edge_ids
+            or right_id not in right_skeleton.virtual_edge_ids
+        ):
             raise ValueError("only virtual skeleton edges may be paired")
-        if (min(left.left, left.right), max(left.left, left.right)) != (
-            min(right.left, right.right),
-            max(right.left, right.right),
+        if _global_endpoints(left_skeleton, left) != _global_endpoints(
+            right_skeleton, right
         ):
             raise ValueError(
                 "paired virtual edges must share their separator endpoints"
@@ -766,8 +785,8 @@ def _validate_virtual_pairs(
         derived_tree.add((min(left_node, right_node), max(left_node, right_node)))
     all_virtual = {
         edge_id
-        for edge_id, (_, edge) in edge_locations.items()
-        if edge.kind == "VIRTUAL"
+        for edge_id, (_, node, _) in edge_locations.items()
+        if edge_id in node.virtual_edge_ids
     }
     if pair_edges != all_virtual:
         raise ValueError("every virtual skeleton edge must have exactly one mate")
@@ -790,20 +809,59 @@ def _validate_normalized_tree(
             )
 
 
+def _global_endpoints(node: SPQRSkeleton, edge: MultigraphEdge) -> tuple[int, int]:
+    left, right = node.vertices[edge.left], node.vertices[edge.right]
+    return (min(left, right), max(left, right))
+
+
+def _real_source(node: SPQRSkeleton, edge: MultigraphEdge) -> tuple[int, int]:
+    for edge_id, source_edge in node.real_edge_sources:
+        if edge_id == edge.edge_id:
+            return source_edge
+    raise ValueError("real skeleton edge missing source map")
+
+
+def _validate_negative_spqr_result(result: SPQRTreeResult) -> None:
+    graph = result.source_graph
+    if result.witness_kind == "MINIMUM_SIZE":
+        if graph.vertex_count >= 3 or result.witness_vertices != (0,):
+            raise ValueError(
+                "minimum-size witness must prove the published SPQR convention"
+            )
+        return
+    value = _build_graph(graph)
+    if result.witness_kind == "DISCONNECTED":
+        if len(result.witness_vertices) != 2:
+            raise ValueError("disconnectedness requires two concrete vertices")
+        left, right = result.witness_vertices
+        if left == right or nx.has_path(value, left, right):
+            raise ValueError("disconnectedness witness vertices must be disconnected")
+        return
+    if result.witness_kind == "ARTICULATION":
+        if len(result.witness_vertices) != 1 or result.witness_vertices[0] not in set(
+            nx.articulation_points(value)
+        ):
+            raise ValueError(
+                "articulation witness must be an articulation vertex of the source"
+            )
+        return
+    raise ValueError("non-biconnected result has an unknown witness kind")
+
+
 def _validate_skeleton_kind(node: SPQRSkeleton) -> None:
     degrees: dict[int, int] = dict.fromkeys(node.vertices, 0)
-    for edge in node.edges:
-        degrees[edge.left] += 1
-        degrees[edge.right] += 1
+    for edge in node.graph.edges:
+        degrees[node.vertices[edge.left]] += 1
+        degrees[node.vertices[edge.right]] += 1
     if node.kind == "Q_NODE":
-        if sum(edge.kind == "REAL" for edge in node.edges) != 1 or len(node.edges) > 2:
+        if len(node.real_edge_sources) != 1 or len(node.graph.edges) > 2:
             raise ValueError("a Q skeleton must contain exactly one source real edge")
         return
     if node.kind == "P_NODE":
         if (
             len(node.vertices) != 2
-            or len(node.edges) < 3
-            or any(edge.kind != "VIRTUAL" for edge in node.edges)
+            or len(node.graph.edges) < 3
+            or len(node.virtual_edge_ids) != len(node.graph.edges)
         ):
             raise ValueError(
                 "a P skeleton must be a bond of at least three virtual edges"
@@ -812,14 +870,14 @@ def _validate_skeleton_kind(node: SPQRSkeleton) -> None:
     if node.kind == "S_NODE":
         if (
             len(node.vertices) < 3
-            or len(node.edges) != len(node.vertices)
+            or len(node.graph.edges) != len(node.vertices)
             or any(value != 2 for value in degrees.values())
         ):
             raise ValueError("an S skeleton must be a cycle")
         return
     graph: nx.Graph[int] = nx.Graph()
     graph.add_nodes_from(node.vertices)
-    graph.add_edges_from((edge.left, edge.right) for edge in node.edges)
+    graph.add_edges_from(_global_endpoints(node, edge) for edge in node.graph.edges)
     if len(node.vertices) < 4 or not nx.is_biconnected(graph):
         raise ValueError("an R skeleton must be triconnected")
     for left, right in combinations(node.vertices, 2):

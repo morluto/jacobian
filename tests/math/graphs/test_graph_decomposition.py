@@ -15,18 +15,18 @@ from jacobian.math.graphs.decomposition._models import (
     BridgeBlockResult,
     EarDecompositionRequest,
     EarDecompositionResult,
-    SPQRSkeleton,
     SPQRTreeRequest,
+    SPQRTreeResult,
     UndirectedGraph,
 )
 from jacobian.math.graphs.decomposition._operations import (
-    _validate_spqr_tree,
     compute_biconnected_components,
     compute_block_cut_tree,
     compute_bridge_block_tree,
     compute_ear_decomposition,
     compute_spqr_tree,
 )
+from jacobian.math.graphs.multigraph._models import LooplessMultigraph
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -521,39 +521,75 @@ class TestSPQRTree:
         assert result.witness_kind == "ARTICULATION"
         assert result.witness_vertices == (1,)
 
-    def test_replay_rejects_missing_real_source_edge(self) -> None:
+    def test_skeletons_reuse_the_shared_edge_id_multigraph_carrier(self) -> None:
         result = _spqr_tree(
             {
                 "vertex_count": 4,
                 "edges": [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)],
             }
         )
-        node = result.nodes[0]
-        malformed = result.model_copy(
-            update={
-                "nodes": (
-                    SPQRSkeleton(
-                        node_id=node.node_id,
-                        kind=node.kind,
-                        vertices=node.vertices,
-                        edges=node.edges[:-1],
-                    ),
-                )
+        assert isinstance(result.nodes[0].graph, LooplessMultigraph)
+
+    def test_result_deserialization_rejects_missing_real_source_edge(self) -> None:
+        result = _spqr_tree(
+            {
+                "vertex_count": 4,
+                "edges": [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)],
             }
         )
+        malformed = result.model_dump(mode="json")
+        malformed["source_graph"]["edges"] = malformed["source_graph"]["edges"][:-1]
         with pytest.raises(ValueError):
-            _validate_spqr_tree(malformed)
+            SPQRTreeResult.model_validate(malformed)
 
-    def test_replay_rejects_unpaired_virtual_edge(self) -> None:
+    def test_result_deserialization_rejects_virtual_pairing_and_transport_mutations(
+        self,
+    ) -> None:
         result = _spqr_tree(
             {
                 "vertex_count": 5,
                 "edges": [(0, 2), (2, 1), (0, 3), (3, 1), (0, 4), (4, 1)],
             }
         )
-        malformed = result.model_copy(update={"virtual_edge_pairs": ()})
+        malformed = result.model_dump(mode="json")
+        malformed["virtual_edge_pairs"] = []
         with pytest.raises(ValueError, match="every virtual skeleton edge"):
-            _validate_spqr_tree(malformed)
+            SPQRTreeResult.model_validate(malformed)
+        malformed = result.model_dump(mode="json")
+        malformed["source_edge_owners"][0][1] = "missing-node"
+        with pytest.raises(ValueError, match="source edge ownership"):
+            SPQRTreeResult.model_validate(malformed)
+        malformed = result.model_dump(mode="json")
+        malformed["source_vertex_incidence"] = []
+        with pytest.raises(ValueError, match="source vertex incidence"):
+            SPQRTreeResult.model_validate(malformed)
+
+    def test_result_deserialization_rejects_forged_branches(self) -> None:
+        positive = _spqr_tree(
+            {
+                "vertex_count": 4,
+                "edges": [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)],
+            }
+        ).model_dump(mode="json")
+        positive["source_graph"] = {"vertex_count": 3, "edges": [[0, 1], [1, 2]]}
+        with pytest.raises(ValueError, match="biconnected source"):
+            SPQRTreeResult.model_validate(positive)
+        forged_negative = positive | {
+            "source_graph": {
+                "vertex_count": 4,
+                "edges": [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]],
+            },
+            "status": "NOT_BICONNECTED",
+            "witness_kind": "ARTICULATION",
+            "witness_vertices": [0],
+            "nodes": [],
+            "tree_edges": [],
+            "virtual_edge_pairs": [],
+            "source_vertex_incidence": [],
+            "source_edge_owners": [],
+        }
+        with pytest.raises(ValueError, match="articulation witness"):
+            SPQRTreeResult.model_validate(forged_negative)
 
     def test_replays_every_biconnected_networkx_atlas_graph(self) -> None:
         """The finite atlas covers overlapping separator patterns through 7 vertices."""

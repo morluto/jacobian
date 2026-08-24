@@ -20,6 +20,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "distinct rigorous bounded enclosure for composable user-defined expressions",
     ),
+    OperationAdmission(
+        "interval.expression.box_enclosure.compute",
+        AdmissionDecision.KEEP,
+        "distinct source-bound uniform enclosure over a complete rational box",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

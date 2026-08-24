@@ -65,29 +65,32 @@ _EDGE_ROW_OVERHEAD_BYTES = 128
 _RATIONAL_JSON_OVERHEAD_BYTES = 24
 _PROFILE_RESULT_HEADER_BYTES = 1_024
 
-# One pass performs at most 6F+E additions/subtractions, K negations, E
-# divisions, and K*V+4E comparisons. Each sparse entry performs three bucketed
-# numerator additions -- source divergence, sink divergence, and edge load --
-# and deposits its denominator into each of those three buckets, so the shared
-# combination adds at most one fraction per distinct (bucket, denominator)
-# pair: at most 3F denominator folds on top of the 3F numerator additions,
-# plus one slack subtraction per edge. Sparse entries are distinct
+# One pass performs at most 6F+E additions/subtractions, K negations, at
+# most E divisions, and K*V+3E comparisons. Each sparse entry performs three
+# bucketed numerator additions -- source divergence, sink divergence, and
+# edge load -- and deposits its denominator into each of those three buckets,
+# so the shared combination adds at most one fraction per distinct (bucket,
+# denominator) pair: at most 3F denominator folds on top of the 3F numerator
+# additions, plus one slack subtraction per edge. Sparse entries are distinct
 # commodity-by-edge cells of the conceptual tensor, so F <= K*E <= 256 * 512.
 # Every admitted commodity occupies V >= 2 distinct commodity-vertex cells
 # because its source and sink differ, so the 512-cell divergence budget
 # admits at most 256 commodities, one negation each, and FlowGraph's own
-# 512-edge tuple bounds E. Each edge is compared four times: load against
-# capacity and capacity against zero in the kernel loop, capacity against
-# zero in the shared derivative scan, then either load against zero or its
-# ratio against the running congestion maximum. With the admitted maxima
-# this is 790,272 logical steps per pass; producer plus exact result replay
-# therefore costs at most 1,580,544.
+# 512-edge tuple bounds E. The shared derivative scan also classifies each
+# edge's capacity with one zero-capacity comparison and checks each
+# zero-capacity edge's load once: when a loaded zero-capacity edge exists the
+# result's congestion is null, so no ratio is divided or compared at all;
+# otherwise those checks pair every edge either with a zero-capacity load
+# test or with one ratio division plus one running-maximum comparison, and
+# the kernel's own edge loop needs only its load-vs-capacity feasibility
+# test. With the admitted maxima this bounds each pass by 789,760 logical
+# steps; producer plus exact result replay therefore costs at most 1,579,520.
 MAX_SPARSE_FLOW_ENTRIES = (MAX_COMMODITY_VERTEX_CELLS // 2) * MAX_MULTICOMMODITY_EDGES
 MAX_PROFILE_ADDITIONS_PER_PASS = 6 * MAX_SPARSE_FLOW_ENTRIES + MAX_MULTICOMMODITY_EDGES
 MAX_PROFILE_NEGATIONS_PER_PASS = MAX_COMMODITY_VERTEX_CELLS // 2
 MAX_PROFILE_DIVISIONS_PER_PASS = MAX_MULTICOMMODITY_EDGES
 MAX_PROFILE_COMPARISONS_PER_PASS = (
-    MAX_COMMODITY_VERTEX_CELLS + 4 * MAX_MULTICOMMODITY_EDGES
+    MAX_COMMODITY_VERTEX_CELLS + 3 * MAX_MULTICOMMODITY_EDGES
 )
 MAX_PROFILE_LOGICAL_STEPS = 2 * (
     MAX_PROFILE_ADDITIONS_PER_PASS
@@ -327,43 +330,70 @@ def _measured_side_bounds(value: Fraction) -> tuple[int, int]:
 def _edge_slacks_and_max_congestion(
     flow: MulticommodityFlow,
     loads: dict[tuple[int, int], Fraction],
-) -> tuple[dict[tuple[int, int], Fraction], Fraction]:
-    """Return each exact edge slack and the maximum positive-capacity ratio.
+) -> tuple[dict[tuple[int, int], Fraction], Fraction | None, int, int]:
+    """Return each exact slack plus the congestion ratio when it is returned.
 
-    Every slack is subtracted here exactly once and every positive-capacity
-    congestion ratio divided exactly once, so the profile kernel reuses these
-    measured components instead of repeating that arithmetic in its own edge
-    loop.
+    Every slack is subtracted here exactly once. The same loop classifies
+    each edge with one zero-capacity comparison and tests each zero-capacity
+    edge's load once: a loaded zero-capacity edge forces the public result's
+    ``congestion`` to be null, so in that case no positive-capacity ratio is
+    divided, compared against a running maximum, capped, or priced -- the
+    returned ratio is None and the division count is zero. Otherwise every
+    positive-capacity edge contributes exactly one ratio division and one
+    running-maximum comparison. The returned counts are the comparisons and
+    divisions this scan executed, so the profile work ledger charges exactly
+    the arithmetic this scan performs.
     """
 
     slacks: dict[tuple[int, int], Fraction] = {}
-    max_ratio = Fraction(0)
+    positive_capacity_edges: list[tuple[Fraction, Fraction]] = []
+    zero_capacity_violation = False
+    comparisons = 0
     for edge in flow.network.edges:
         edge_key = (edge.source, edge.target)
         capacity = edge.capacity.as_fraction()
         slacks[edge_key] = capacity - loads[edge_key]
-        if capacity > 0:
-            max_ratio = max(max_ratio, loads[edge_key] / capacity)
-    return slacks, max_ratio
+        comparisons += 1
+        if capacity == 0:
+            comparisons += 1
+            if loads[edge_key] > 0:
+                zero_capacity_violation = True
+        else:
+            positive_capacity_edges.append((loads[edge_key], capacity))
+    if zero_capacity_violation:
+        return slacks, None, comparisons, 0
+    max_ratio = Fraction(0)
+    divisions = 0
+    for load, capacity in positive_capacity_edges:
+        candidate = load / capacity
+        divisions += 1
+        if candidate > max_ratio:
+            max_ratio = candidate
+        comparisons += 1
+    return slacks, max_ratio, comparisons, divisions
 
 
 def _measured_component_digit_bounds(
     divergences: dict[tuple[str, int], Fraction],
     loads: dict[tuple[int, int], Fraction],
     slacks: dict[tuple[int, int], Fraction],
-    max_ratio: Fraction,
+    congestion_ratio: Fraction | None,
 ) -> tuple[
     dict[tuple[str, int], tuple[int, int]],
     dict[tuple[int, int], tuple[int, int]],
     dict[tuple[int, int], tuple[int, int]],
-    tuple[int, int],
+    tuple[int, int] | None,
 ]:
     cell_bounds = {
         key: _measured_side_bounds(value) for key, value in divergences.items()
     }
     load_bounds = {key: _measured_side_bounds(value) for key, value in loads.items()}
     slack_bounds = {key: _measured_side_bounds(value) for key, value in slacks.items()}
-    congestion_bound = _measured_side_bounds(max_ratio)
+    # A null congestion ratio is exactly the loaded zero-capacity-edge case in
+    # which the result returns no congestion value: there is nothing to cap.
+    congestion_bound = (
+        None if congestion_ratio is None else _measured_side_bounds(congestion_ratio)
+    )
     return cell_bounds, load_bounds, slack_bounds, congestion_bound
 
 
@@ -378,7 +408,7 @@ def _profile_component_digit_bounds(
     dict[tuple[str, int], tuple[int, int]],
     dict[tuple[int, int], tuple[int, int]],
     dict[tuple[int, int], tuple[int, int]],
-    tuple[int, int],
+    tuple[int, int] | None,
 ]:
     """Measure the exact numerator/denominator sizes of every derived row.
 
@@ -386,13 +416,19 @@ def _profile_component_digit_bounds(
     far below any digit-count worst case, so each component is measured as
     the exact reduced rational the kernel will produce; any accumulation that
     crosses the canonical cap aborts immediately instead of growing further.
+    The congestion bound is None exactly when the result returns no
+    congestion value.
     """
 
     divergences, loads = (
         component_sums if component_sums is not None else (_component_sums(flow))
     )
-    slacks, max_ratio = _edge_slacks_and_max_congestion(flow, loads)
-    return _measured_component_digit_bounds(divergences, loads, slacks, max_ratio)
+    slacks, congestion_ratio, _comparisons, _divisions = (
+        _edge_slacks_and_max_congestion(flow, loads)
+    )
+    return _measured_component_digit_bounds(
+        divergences, loads, slacks, congestion_ratio
+    )
 
 
 class AdmittedProfileScan(NamedTuple):
@@ -402,6 +438,11 @@ class AdmittedProfileScan(NamedTuple):
     from it, and hands it to the producer pass, which otherwise recomputes
     it; the replay pass always rescans independently. Either way an
     accepted call executes exactly two arithmetic passes.
+
+    ``congestion_ratio`` is None exactly when a loaded zero-capacity edge
+    makes the public result's congestion null, so no ratio arithmetic ran;
+    ``scan_comparisons`` and ``scan_divisions`` count the comparisons and
+    divisions this scan executed for the exact work ledger.
     """
 
     divergences: dict[tuple[str, int], Fraction]
@@ -409,42 +450,51 @@ class AdmittedProfileScan(NamedTuple):
     denominator_folds: int
     budget: int
     slacks: dict[tuple[int, int], Fraction]
-    max_congestion_ratio: Fraction
+    congestion_ratio: Fraction | None
+    scan_divisions: int
+    scan_comparisons: int
     cell_bounds: dict[tuple[str, int], tuple[int, int]]
     load_bounds: dict[tuple[int, int], tuple[int, int]]
     slack_bounds: dict[tuple[int, int], tuple[int, int]]
-    congestion_bound: tuple[int, int]
+    congestion_bound: tuple[int, int] | None
 
 
 def measured_profile_components(flow: MulticommodityFlow) -> AdmittedProfileScan:
     """Run the single bucketed component scan and derive every priced bound.
 
-    The returned slacks and maximum congestion ratio are the same measured
-    components priced into the budget, so one producer or replay pass
-    subtracts each slack and divides each positive-capacity ratio exactly
-    once and the work ledger charges that single execution. The per-row
-    bound maps are those same measurements, letting envelope admission
-    price the result without any second arithmetic pass.
+    The returned slacks and congestion ratio are the same measured components
+    priced into the budget, so one producer or replay pass subtracts each
+    slack exactly once and divides each positive-capacity ratio exactly once
+    whenever the result returns a congestion value (and never divides one
+    when a loaded zero-capacity edge forces it to be null); the work ledger
+    charges that single execution. The per-row bound maps are those same
+    measurements, letting envelope admission price the result without any
+    second arithmetic pass.
     """
 
     divergences, loads, denominator_folds = _component_sums_with_folds(flow)
-    slacks, max_ratio = _edge_slacks_and_max_congestion(flow, loads)
+    slacks, congestion_ratio, scan_comparisons, scan_divisions = (
+        _edge_slacks_and_max_congestion(flow, loads)
+    )
     cell_bounds, load_bounds, slack_bounds, congestion_bound = (
-        _measured_component_digit_bounds(divergences, loads, slacks, max_ratio)
+        _measured_component_digit_bounds(divergences, loads, slacks, congestion_ratio)
     )
     component_sides = [
         *cell_bounds.values(),
         *load_bounds.values(),
         *slack_bounds.values(),
-        congestion_bound,
     ]
+    if congestion_bound is not None:
+        component_sides.append(congestion_bound)
     return AdmittedProfileScan(
         divergences=divergences,
         loads=loads,
         denominator_folds=denominator_folds,
         budget=max(max(sides) for sides in component_sides),
         slacks=slacks,
-        max_congestion_ratio=max_ratio,
+        congestion_ratio=congestion_ratio,
+        scan_divisions=scan_divisions,
+        scan_comparisons=scan_comparisons,
         cell_bounds=cell_bounds,
         load_bounds=load_bounds,
         slack_bounds=slack_bounds,
@@ -520,13 +570,15 @@ def _require_admitted_profile_rows(
     cell_bounds: dict[tuple[str, int], tuple[int, int]],
     load_bounds: dict[tuple[int, int], tuple[int, int]],
     slack_bounds: dict[tuple[int, int], tuple[int, int]],
-    congestion_bound: tuple[int, int],
+    congestion_bound: tuple[int, int] | None,
 ) -> None:
     """Price every returned row against the aggregate result envelope.
 
     The bounds are the ones the kernel's single measured scan already
     produced, so admission prices the result without a second arithmetic
-    pass and the two-pass work ledger stays exact.
+    pass and the two-pass work ledger stays exact. A null congestion bound
+    is the loaded zero-capacity-edge case whose result serializes a null:
+    the reserved rational overhead alone covers that field's bytes.
     """
 
     divergence_bytes = sum(
@@ -537,7 +589,11 @@ def _require_admitted_profile_rows(
         for num_digits, den_digits in cell_bounds.values()
     )
     edge_bytes = 0
-    congestion_bytes = sum(congestion_bound) + _RATIONAL_JSON_OVERHEAD_BYTES
+    congestion_bytes = (
+        _RATIONAL_JSON_OVERHEAD_BYTES
+        if congestion_bound is None
+        else (sum(congestion_bound) + _RATIONAL_JSON_OVERHEAD_BYTES)
+    )
     for edge in flow.network.edges:
         edge_key = (edge.source, edge.target)
         load_num, load_den = load_bounds[edge_key]

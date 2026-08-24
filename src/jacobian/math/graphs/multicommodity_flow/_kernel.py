@@ -70,7 +70,9 @@ def profile_components(
     denominator_folds = scan.denominator_folds
     budget = scan.budget
     slacks = scan.slacks
-    max_congestion_ratio = scan.max_congestion_ratio
+    congestion_ratio = scan.congestion_ratio
+    scan_divisions = scan.scan_divisions
+    scan_comparisons = scan.scan_comparisons
 
     divergence_rows = tuple(
         CommodityDivergence(
@@ -100,19 +102,11 @@ def profile_components(
 
     edge_rows: list[EdgeLoadProfile] = []
     capacity_feasible = True
-    zero_capacity_violation = False
-    positive_capacity_edges = 0
     for edge in flow.network.edges:
         edge_key = (edge.source, edge.target)
-        capacity = edge.capacity.as_fraction()
         load = loads[edge_key]
-        if load > capacity:
+        if load > edge.capacity.as_fraction():
             capacity_feasible = False
-        if capacity == 0:
-            if load > 0:
-                zero_capacity_violation = True
-        else:
-            positive_capacity_edges += 1
         edge_rows.append(
             EdgeLoadProfile(
                 source=edge.source,
@@ -131,19 +125,21 @@ def profile_components(
     # folds every distinct bucket denominator exactly once, counted inside
     # the fold loop itself, so ``denominator_folds`` equals the fraction
     # additions the scan executed. Each edge's slack is subtracted exactly
-    # once by the shared scan that returned the budget above, which also
-    # divides one ratio per positive-capacity edge; this loop reuses those
-    # measured components. One demand is negated per commodity for its sink
-    # target. Every edge is compared four times -- load against capacity and
-    # capacity against zero in this loop, capacity against zero in the shared
-    # scan, then either load against zero or its ratio against the running
-    # congestion maximum. The demand scan above compares all commodity/vertex
-    # cells rather than short-circuiting at the first mismatch, so every
-    # charged comparison is executed exactly once.
+    # once by the shared derivative scan that returned the budget above; that
+    # scan also owns the zero-capacity classification, so when a loaded
+    # zero-capacity edge makes the congestion value null it divides and
+    # compares no ratios at all, and otherwise each positive-capacity ratio
+    # is divided exactly once and compared against the running maximum once.
+    # Its reported comparison and division counts charge exactly the work it
+    # executed, and this loop adds only its load-vs-capacity feasibility test
+    # per edge. One demand is negated per commodity for its sink target, and
+    # the demand scan above compares all commodity/vertex cells rather than
+    # short-circuiting at the first mismatch, so every charged comparison is
+    # executed exactly once.
     additions = 3 * sparse_entries + denominator_folds + edge_cells
     negations = len(flow.commodities)
-    divisions = positive_capacity_edges
-    comparisons = divergence_cells + 4 * edge_cells
+    divisions = scan_divisions
+    comparisons = divergence_cells + edge_cells + scan_comparisons
     per_pass = additions + negations + divisions + comparisons
     work = MulticommodityFlowProfileWork(
         execution_passes_per_call=2,
@@ -162,8 +158,8 @@ def profile_components(
         all_demands_routed,
         capacity_feasible,
         None
-        if zero_capacity_violation
-        else _wire(max_congestion_ratio, max_digits=budget),
+        if congestion_ratio is None
+        else _wire(congestion_ratio, max_digits=budget),
         work,
     )
 

@@ -9,7 +9,7 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.graphs.flow._models import CapacitatedEdge, FlowGraph
 from jacobian.math.graphs.multicommodity_flow._models import (
@@ -141,15 +141,17 @@ def test_exact_shared_bottleneck_profile_replays_its_source() -> None:
     # Every entry shares denominator 1, so the bucket fold performs one
     # fraction addition per nonempty bucket: six touched divergence cells and
     # three edges add nine folds to the twelve numerator additions, plus the
-    # three slack subtractions.
+    # three slack subtractions. The shared derivative scan classifies each
+    # edge once and compares each positive-capacity ratio against its running
+    # maximum once; the kernel loop adds one feasibility test per edge.
     assert result.work.sparse_entries == 4
     assert result.work.commodity_vertex_cells == 8
     assert result.work.edge_cells == 3
     assert result.work.rational_additions_per_pass == 3 * 4 + (6 + 3) + 3
     assert result.work.rational_negations_per_pass == 2
     assert result.work.rational_divisions_per_pass == 3
-    assert result.work.exact_comparisons_per_pass == 20
-    assert result.work.logical_steps_per_call == 2 * (24 + 2 + 3 + 20)
+    assert result.work.exact_comparisons_per_pass == 8 + 3 * 3
+    assert result.work.logical_steps_per_call == 2 * (24 + 2 + 3 + 17)
 
 
 def test_profile_distinguishes_capacity_and_conservation_failures() -> None:
@@ -197,14 +199,14 @@ def test_zero_capacity_positive_load_has_no_finite_congestion() -> None:
     assert result.all_demands_routed is True
     assert result.capacity_feasible is False
     assert result.congestion is None
-    # A zero-capacity edge still compares load to capacity and capacity to
-    # zero in the edge loop, capacity to zero in the shared slack scan, then
-    # checks whether its load is positive; no ratio division is attempted.
-    # The lone entry folds one denominator into each of its two divergence
-    # cells and one edge bucket: three fold additions beyond 3*1 + 1.
+    # The shared derivative scan classifies the zero-capacity edge and checks
+    # its load; because that load is positive no ratio is ever divided, and
+    # the kernel loop adds only its load-vs-capacity feasibility test. The
+    # lone entry folds one denominator into each of its two divergence cells
+    # and one edge bucket: three fold additions beyond 3*1 + 1.
     assert result.work.rational_divisions_per_pass == 0
-    assert result.work.exact_comparisons_per_pass == 6
-    assert result.work.logical_steps_per_call == 2 * ((3 + 3 + 1) + 1 + 0 + 6)
+    assert result.work.exact_comparisons_per_pass == 2 + 1 + 2
+    assert result.work.logical_steps_per_call == 2 * ((3 + 3 + 1) + 1 + 0 + 5)
 
 
 def test_early_divergence_mismatch_still_executes_every_counted_comparison() -> None:
@@ -224,8 +226,8 @@ def test_early_divergence_mismatch_still_executes_every_counted_comparison() -> 
     assert result.capacity_feasible is True
     assert result.work.commodity_vertex_cells == 8
     assert result.work.edge_cells == 3
-    assert result.work.exact_comparisons_per_pass == 8 + 4 * 3
-    assert result.work.logical_steps_per_call == 2 * (24 + 2 + 3 + 20)
+    assert result.work.exact_comparisons_per_pass == 8 + 3 * 3
+    assert result.work.logical_steps_per_call == 2 * (24 + 2 + 3 + 17)
 
 
 def test_mixed_zero_and_positive_capacities_execute_every_counted_comparison() -> None:
@@ -256,13 +258,15 @@ def test_mixed_zero_and_positive_capacities_execute_every_counted_comparison() -
         )
         assert result.all_demands_routed is True
         assert result.capacity_feasible is False
-        # Both positive-capacity ratios are divided and compared against the
-        # running maximum even when a preceding zero-capacity edge has already
-        # made the congestion value null.
+        # The loaded zero-capacity edge makes the congestion value null, so
+        # the shared derivative scan divides no positive-capacity ratio at
+        # all: it classifies each of the three edges and checks the loaded
+        # zero-capacity load once, and the kernel loop adds one feasibility
+        # test per edge.
         assert result.congestion is None
-        assert result.work.rational_divisions_per_pass == 2
-        assert result.work.exact_comparisons_per_pass == 4 + 4 * 3
-        assert result.work.logical_steps_per_call == 2 * ((9 + 7 + 3) + 1 + 2 + 16)
+        assert result.work.rational_divisions_per_pass == 0
+        assert result.work.exact_comparisons_per_pass == 4 + 3 + (3 + 1)
+        assert result.work.logical_steps_per_call == 2 * ((9 + 7 + 3) + 1 + 0 + 11)
 
 
 def test_fractional_split_flow_uses_exact_rational_loads_and_congestion() -> None:
@@ -333,8 +337,8 @@ def test_low_commodity_networks_admit_vertices_up_to_the_cell_budget() -> None:
     assert result.congestion == q(1, 2)
     assert len(result.divergences) == 33
     assert result.work.commodity_vertex_cells == 33
-    assert result.work.exact_comparisons_per_pass == 33 + 4
-    assert result.work.logical_steps_per_call == 2 * ((3 + 3 + 1) + 1 + 1 + 37)
+    assert result.work.exact_comparisons_per_pass == 33 + 3
+    assert result.work.logical_steps_per_call == 2 * ((3 + 3 + 1) + 1 + 1 + 36)
 
     # Eight commodities over all 64 FlowGraph vertices reach exactly 512
     # returned cells; a ninth commodity exceeds the dense divergence budget.
@@ -389,8 +393,8 @@ def test_large_exact_scalars_are_admitted_when_derived_digits_stay_bounded() -> 
     assert result.work.rational_additions_per_pass == 1
     assert result.work.rational_negations_per_pass == 1
     assert result.work.rational_divisions_per_pass == 1
-    assert result.work.exact_comparisons_per_pass == 6
-    assert result.work.logical_steps_per_call == 18
+    assert result.work.exact_comparisons_per_pass == 5
+    assert result.work.logical_steps_per_call == 16
 
 
 def test_operand_digit_budget_bounds_the_canonical_boundary() -> None:
@@ -594,17 +598,17 @@ def test_derived_quantities_admit_edges_without_a_fixed_ceiling() -> None:
     assert len(result.edge_profiles) == 129
     assert result.work.edge_cells == 129
     assert result.work.rational_additions_per_pass == 129
-    assert result.work.exact_comparisons_per_pass == 12 + 4 * 129
-    assert result.work.logical_steps_per_call == 2 * (129 + 1 + 129 + 12 + 4 * 129)
+    assert result.work.exact_comparisons_per_pass == 12 + 3 * 129
+    assert result.work.logical_steps_per_call == 2 * (129 + 1 + 129 + 12 + 3 * 129)
 
     # The ledger and returned rows inherit FlowGraph's own 512-edge maximum:
     # a full 512-edge network is admitted and accounted exactly.
     full = compute_multicommodity_flow_profile(many_edge_flow(64, 512))
     assert len(full.edge_profiles) == 512
-    assert full.work.logical_steps_per_call == 2 * (512 + 1 + 512 + 64 + 4 * 512)
+    assert full.work.logical_steps_per_call == 2 * (512 + 1 + 512 + 64 + 3 * 512)
 
     # Eight commodities over the same full 512-edge graph fill the dense
-    # divergence budget alongside every edge: 512 cells plus four comparisons
+    # divergence budget alongside every edge: 512 cells plus three comparisons
     # per edge is exactly the published comparison envelope, and the widened
     # work fields must admit that worst case.
     crowded = MulticommodityFlow(
@@ -695,9 +699,9 @@ def test_entry_count_is_bounded_by_distinct_cells_not_a_fixed_ceiling() -> None:
     assert result.work.rational_additions_per_pass == (
         3 * 129 + unit_fold_additions(flow) + 129
     )
-    assert result.work.exact_comparisons_per_pass == 13 + 4 * 129
+    assert result.work.exact_comparisons_per_pass == 13 + 3 * 129
     assert result.work.logical_steps_per_call == 2 * (
-        3 * 129 + unit_fold_additions(flow) + 129 + 1 + 129 + (13 + 4 * 129)
+        3 * 129 + unit_fold_additions(flow) + 129 + 1 + 129 + (13 + 3 * 129)
     )
 
     # The entry count inherits the derived cell maxima: one commodity over a
@@ -747,8 +751,8 @@ def test_sparse_scan_admits_commodities_over_a_full_edge_graph() -> None:
     assert result.work.rational_additions_per_pass == 512
     assert result.work.rational_negations_per_pass == 5
     assert result.work.rational_divisions_per_pass == 512
-    assert result.work.exact_comparisons_per_pass == 120 + 4 * 512
-    assert result.work.logical_steps_per_call == 2 * (512 + 5 + 512 + 120 + 4 * 512)
+    assert result.work.exact_comparisons_per_pass == 120 + 3 * 512
+    assert result.work.logical_steps_per_call == 2 * (512 + 5 + 512 + 120 + 3 * 512)
 
 
 def test_cell_budgets_admit_commodities_without_a_fixed_ceiling() -> None:
@@ -776,7 +780,7 @@ def test_cell_budgets_admit_commodities_without_a_fixed_ceiling() -> None:
     assert len(unrouted.divergences) == 34
     assert unrouted.work.commodity_vertex_cells == 34
     assert unrouted.work.rational_negations_per_pass == 17
-    assert unrouted.work.logical_steps_per_call == 2 * (1 + 17 + 1 + 34 + 4)
+    assert unrouted.work.logical_steps_per_call == 2 * (1 + 17 + 1 + 34 + 3)
 
     # Each commodity occupies at least two distinct commodity-vertex cells,
     # so exactly half of the 512-cell divergence budget, 256 commodities, is
@@ -784,7 +788,7 @@ def test_cell_budgets_admit_commodities_without_a_fixed_ceiling() -> None:
     full = compute_multicommodity_flow_profile(dense_commodities(256))
     assert len(full.divergences) == MAX_COMMODITY_VERTEX_CELLS
     assert full.work.rational_negations_per_pass == 256
-    assert full.work.logical_steps_per_call == 2 * (1 + 256 + 1 + 512 + 4)
+    assert full.work.logical_steps_per_call == 2 * (1 + 256 + 1 + 512 + 3)
 
     with pytest.raises(ValidationError, match="commodity-by-vertex"):
         dense_commodities(257)
@@ -872,6 +876,135 @@ def test_congestion_bound_uses_the_capacity_denominator() -> None:
     assert congestion_bound == (4_000, 1)
     assert max(load_bounds.values()) == (1, 1)
     assert slack_bounds[(0, 1)] == (4_000, 4_000)
+
+
+def oversized_ratio_tensor() -> MulticommodityFlow:
+    # A load a/b over a capacity c/d whose reduced quotient has both sides
+    # far above the 32,768-digit canonical cap: the numerators are 30,000
+    # digits, the denominators 5,001 digits, and c*b - a*d stays below d, so
+    # every returned component -- divergences, load, slack -- remains inside
+    # the cap while only the congestion quotient exceeds it.
+    b = 10**5_000 + 3
+    d = 10**5_000 + 7
+    c = 10**30_000 + 9
+    a = (c * b) // d
+
+    def rational(value: Fraction) -> CanonicalRational:
+        return CanonicalRational.from_fraction(value)
+
+    load = Fraction(a, b)
+    capacity = Fraction(c, d)
+    return MulticommodityFlow(
+        network=FlowGraph(
+            vertex_count=2,
+            edges=(CapacitatedEdge(source=0, target=1, capacity=rational(capacity)),),
+        ),
+        commodities=(
+            CommodityDemand(commodity_id="a", source=0, sink=1, demand=rational(load)),
+        ),
+        entries=(
+            CommodityEdgeFlow(
+                commodity_id="a", source=0, target=1, amount=rational(load)
+            ),
+        ),
+    )
+
+
+def test_null_congestion_admits_ratios_the_result_omits() -> None:
+    # A positive-capacity edge whose reduced load/capacity quotient exceeds
+    # the canonical cap stands beside an unrelated loaded zero-capacity edge,
+    # so the public result's congestion is null exactly as its contract
+    # defines: the oversized ratio is a value the result omits, and admission
+    # must not reject a representable profile because of it. The shared
+    # derivative scan therefore divides no ratio at all, prices no congestion
+    # row beyond the null field's bytes, and excludes it from the budget.
+    from jacobian.canonical import encode_strict_json
+    from jacobian.math.graphs.multicommodity_flow._models import (
+        _RATIONAL_JSON_OVERHEAD_BYTES,
+        derived_profile_digit_budget,
+    )
+
+    b = 10**5_000 + 3
+    d = 10**5_000 + 7
+    c = 10**30_000 + 9
+    a = (c * b) // d
+
+    def rational(value: Fraction) -> CanonicalRational:
+        return CanonicalRational.from_fraction(value)
+
+    capacity = Fraction(c, d)
+    load = Fraction(a, b)
+    ratio = load / capacity
+    assert len(format_canonical_integer(abs(ratio.numerator))) > (
+        MAX_CANONICAL_RATIONAL_DIGITS
+    )
+    assert len(format_canonical_integer(load.numerator)) < MAX_CANONICAL_RATIONAL_DIGITS
+    assert len(format_canonical_integer(ratio.denominator)) > (
+        MAX_CANONICAL_RATIONAL_DIGITS
+    )
+    # The reserved overhead must cover the serialized null congestion field,
+    # otherwise null-priced envelopes would underprice their results.
+    assert (
+        len(encode_strict_json({"congestion": None})) <= _RATIONAL_JSON_OVERHEAD_BYTES
+    )
+    flow = MulticommodityFlow(
+        network=FlowGraph(
+            vertex_count=3,
+            edges=(
+                CapacitatedEdge(source=0, target=1, capacity=rational(capacity)),
+                CapacitatedEdge(
+                    source=1, target=2, capacity=CanonicalRational(num="0", den="1")
+                ),
+            ),
+        ),
+        commodities=(
+            CommodityDemand(commodity_id="a", source=0, sink=1, demand=rational(load)),
+            CommodityDemand(commodity_id="b", source=1, sink=2, demand=q(1)),
+        ),
+        entries=(
+            CommodityEdgeFlow(
+                commodity_id="a", source=0, target=1, amount=rational(load)
+            ),
+            CommodityEdgeFlow(commodity_id="b", source=1, target=2, amount=q(1)),
+        ),
+    )
+    # Every priced component is the operands' own size; the omitted ratio's
+    # 35,001-digit sides never enter the budget.
+    assert derived_profile_digit_budget(flow) == 30_000
+    result = compute_multicommodity_flow_profile(flow)
+    via_request = _run_multicommodity_flow_profile(
+        MulticommodityFlowProfileRequest(flow=flow)
+    )
+    assert result == via_request
+    assert result.all_demands_routed is True
+    assert result.capacity_feasible is False
+    assert result.congestion is None
+    assert [row.load for row in result.edge_profiles] == [
+        rational(load),
+        q(1),
+    ]
+    # Two sparse entries fold one denominator into each of their two
+    # divergence cells plus two edge buckets (six folds), two slack
+    # subtractions run, and the scan classifies each edge once and checks
+    # the loaded zero-capacity load once while dividing nothing; the kernel
+    # loop adds one feasibility test per edge.
+    assert result.work.sparse_entries == 2
+    assert result.work.rational_additions_per_pass == 3 * 2 + 6 + 2
+    assert result.work.rational_divisions_per_pass == 0
+    assert result.work.exact_comparisons_per_pass == 6 + 2 + (2 + 1)
+    assert result.work.logical_steps_per_call == 2 * (14 + 2 + 0 + 11)
+
+
+def test_returned_congestion_ratio_is_still_capped() -> None:
+    # Without a loaded zero-capacity edge the same oversized quotient is the
+    # value the result actually returns under "congestion", so the canonical
+    # cap still applies to it fail-closed on both surfaces: narrowing the
+    # scan to returned values did not widen the returned-value contract.
+    flow = oversized_ratio_tensor()
+    with pytest.raises(ValidationError, match="canonical cap"):
+        MulticommodityFlowProfileRequest(flow=flow)
+    with pytest.raises(ValueError, match="canonical cap"):
+        compute_multicommodity_flow_profile(flow)
 
 
 def test_shared_denominator_sums_stay_at_operand_size() -> None:
@@ -1148,8 +1281,8 @@ def test_ledger_charges_every_performed_bucket_fold_addition() -> None:
     assert result.work.rational_additions_per_pass == 3 * 5 + folds + 4
     assert result.work.rational_negations_per_pass == 2
     assert result.work.rational_divisions_per_pass == 4
-    assert result.work.exact_comparisons_per_pass == 8 + 4 * 4
-    assert result.work.logical_steps_per_call == 2 * (33 + 2 + 4 + 24)
+    assert result.work.exact_comparisons_per_pass == 8 + 3 * 4
+    assert result.work.logical_steps_per_call == 2 * (33 + 2 + 4 + 20)
     # The exact values stay the known answers even though the fold order
     # follows ascending denominator bit length rather than entry order.
     divergence = {
@@ -1273,8 +1406,8 @@ def test_folding_intermediates_cancel_beneath_the_completed_cap() -> None:
     assert result.work.sparse_entries == 4
     assert result.work.commodity_vertex_cells == 8
     assert result.work.rational_additions_per_pass == 3 * 4 + (8 + 4) + 1
-    assert result.work.exact_comparisons_per_pass == 8 + 4
-    assert result.work.logical_steps_per_call == 2 * (25 + 4 + 1 + 12)
+    assert result.work.exact_comparisons_per_pass == 8 + 3
+    assert result.work.logical_steps_per_call == 2 * (25 + 4 + 1 + 11)
 
 
 def test_folds_are_bounded_by_the_intermediate_budget_not_the_component_cap() -> None:

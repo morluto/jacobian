@@ -67,10 +67,12 @@ reconstruction or defining-invariant validation.
 
 ## Singular
 
-The commutative-algebra domain uses Singular as a private child-process backend
-for exact ideal operations. The adapter supplies an explicit rational
-polynomial ring, collision-proof internal identifiers, a fixed ordering, and a
-strict result encoding. Singular does not define the public request or result
+The commutative-algebra and polynomial-map domains use Singular as a private
+child-process backend for exact ideal and generic-fiber operations. The
+adapters supply an explicit rational polynomial ring, collision-proof internal
+identifiers, a fixed ordering, and a strict result encoding. Generic-fiber
+degree evidence also carries a lift matrix back to the source ideal and is
+replayed independently. Singular does not define the public request or result
 types.
 
 SageMath is the current development-time differential oracle for selected

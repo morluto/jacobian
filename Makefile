@@ -86,12 +86,14 @@ test-lean: ## Pinned Lean/Mathlib boundary (serial, 300s, kill-safe).
 		-m requires_lean $(if $(TESTS),$(TESTS),tests/process/logic) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
-test-singular: ## Pinned Singular ideal backend (serial, 120s, kill-safe).
+test-singular: ## Pinned Singular exact-algebra backend (serial, 120s, kill-safe).
 	@command -v Singular >/dev/null || { echo "Singular 4.4 is required" >&2; exit 1; }
 	$(PYTEST_RUNNER) --name singular --timeout-seconds 1200 -- \
 		-n 0 --timeout=120 --timeout-method=signal \
 		tests/math/commutative_algebra_ops \
+		tests/math/polynomials/test_polynomial_map_generic_degree.py \
 		tests/process/commutative_algebra_ops \
+		tests/process/polynomial_maps \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test: test-ordinary ## All ordinary Python tests.

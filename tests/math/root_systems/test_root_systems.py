@@ -9,6 +9,19 @@ from jacobian.math.root_systems._operations import compute_root_system_data
 A2 = [[2, -1], [-1, 2]]
 A3 = [[2, -1, 0], [-1, 2, -1], [0, -1, 2]]
 G2 = [[2, -3], [-1, 2]]
+B2 = [[2, -2], [-1, 2]]
+A1_X_A2 = [[2, 0, 0], [0, 2, -1], [0, -1, 2]]
+D4 = [[2, -1, 0, 0], [-1, 2, -1, -1], [0, -1, 2, 0], [0, -1, 0, 2]]
+E8 = [
+    [2, -1, 0, 0, 0, 0, 0, 0],
+    [-1, 2, -1, 0, 0, 0, 0, 0],
+    [0, -1, 2, -1, 0, 0, 0, -1],
+    [0, 0, -1, 2, -1, 0, 0, 0],
+    [0, 0, 0, -1, 2, -1, 0, 0],
+    [0, 0, 0, 0, -1, 2, -1, 0],
+    [0, 0, 0, 0, 0, -1, 2, 0],
+    [0, 0, -1, 0, 0, 0, 0, 2],
+]
 
 
 class TestCartanMatrix:
@@ -96,32 +109,45 @@ class TestSimpleReflection:
         assert result.reflected_vector == (1, 1, 0)
 
 
-class TestWeylGroupData:
-    """Tests for Weyl group data computation."""
+class TestWeylGroupOrder:
+    """Tests for exact Weyl-group order through the signed-root action."""
 
-    def test_a2_weyl_group(self) -> None:
-        """|W(A2)| = 6, h = 3."""
-        from jacobian.math.root_systems._models import WeylGroupDataRequest
-        from jacobian.math.root_systems._operations import compute_weyl_group_data
+    @pytest.mark.parametrize(
+        ("matrix", "expected"),
+        (
+            ([[2]], 2),
+            (A2, 6),
+            (B2, 8),
+            (G2, 12),
+            (A1_X_A2, 12),
+            (D4, 192),
+        ),
+    )
+    def test_known_orders(self, matrix: list[list[int]], expected: int) -> None:
+        from jacobian.math.root_systems._operations import compute_weyl_group_order
 
-        result = compute_weyl_group_data(WeylGroupDataRequest(matrix=A2))
-        assert result.group_order == 6
-        assert result.coxeter_number == 3
+        result = compute_weyl_group_order(CartanMatrixRequest(matrix=matrix))
 
-    def test_a3_weyl_group(self) -> None:
-        """|W(A3)| = 24, h = 4."""
-        from jacobian.math.root_systems._models import WeylGroupDataRequest
-        from jacobian.math.root_systems._operations import compute_weyl_group_data
+        assert result.group_order == expected
+        assert result.matrix == tuple(tuple(row) for row in matrix)
+        assert result.method == "SYMPY_SCHREIER_SIMS_SIGNED_ROOT_ACTION"
 
-        result = compute_weyl_group_data(WeylGroupDataRequest(matrix=A3))
-        assert result.group_order == 24
-        assert result.coxeter_number == 4
+    def test_e8_order_does_not_materialize_weyl_group_elements(self) -> None:
+        from jacobian.math.root_systems._operations import compute_weyl_group_order
 
-    def test_g2_weyl_group(self) -> None:
-        """|W(G2)| = 12, h = 6."""
-        from jacobian.math.root_systems._models import WeylGroupDataRequest
-        from jacobian.math.root_systems._operations import compute_weyl_group_data
+        result = compute_weyl_group_order(CartanMatrixRequest(matrix=E8))
 
-        result = compute_weyl_group_data(WeylGroupDataRequest(matrix=G2))
-        assert result.group_order == 12
-        assert result.coxeter_number == 6
+        assert result.group_order == 696_729_600
+
+    def test_result_replays_signed_root_action_order(self) -> None:
+        from jacobian.math.root_systems._models import WeylGroupOrderResult
+
+        with pytest.raises(ValidationError, match="group_order"):
+            WeylGroupOrderResult(matrix=A2, group_order=5)
+
+    def test_catalog_replaces_the_invalid_mixed_weyl_data_contract(self) -> None:
+        from jacobian.math.root_systems._tools import TOOLS
+
+        operation_ids = {tool.operation_id for tool in TOOLS}
+        assert "root_system.weyl_group_order.compute" in operation_ids
+        assert "root_system.weyl_group_data.compute" not in operation_ids

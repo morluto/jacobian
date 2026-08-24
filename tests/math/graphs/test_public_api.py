@@ -42,6 +42,7 @@ def test_graph_construction_functions_use_immutable_graph_values() -> None:
 def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the graphs public API."""
     expected = (
+        "ColoredUndirectedGraph",
         "GraphCompositionInput",
         "IndependenceNumberBudget",
         "IndependenceNumberRequest",

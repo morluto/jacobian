@@ -13,17 +13,23 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "code.covering_radius.compute",
         AdmissionDecision.KEEP,
-        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+        "exact covering radius bound to its retained source code and "
+        "replayed by bounded syndrome-graph BFS within the declared "
+        "state and transition bounds",
     ),
     OperationAdmission(
         "code.minimum_distance.compute",
         AdmissionDecision.KEEP,
-        "distinct exact or explicitly bounded search outcome with material computational leverage",
+        "exact minimum nonzero codeword weight bound to its retained "
+        "source code and replayed by exact enumeration, including the "
+        "documented zero-code length-n empty-code convention",
     ),
     OperationAdmission(
         "code.weight_distribution.compute",
         AdmissionDecision.KEEP,
-        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+        "exact codeword weight profile bound to its retained source "
+        "code and replayed by exact enumeration with strictly ascending "
+        "positive counts summing to q^rank",
     ),
     OperationAdmission(
         "code.dual_code.compute",

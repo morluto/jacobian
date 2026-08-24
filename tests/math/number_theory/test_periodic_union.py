@@ -13,6 +13,7 @@ from jacobian.math.number_theory._periodic_union import (
     MAX_PERIODIC_COMMON_PERIOD,
     MAX_PERIODIC_FAMILY_SIZE,
     MAX_PERIODIC_MATERIALIZED_RESIDUES,
+    MAX_PERIODIC_SOURCE_RESIDUES,
     PeriodicResidueSubset,
     PeriodicUnionProfileRequest,
     PeriodicUnionProfileResult,
@@ -455,6 +456,31 @@ def test_oversized_family_is_rejected_without_normalizing_entries() -> None:
     }
 
     with pytest.raises(ValidationError, match="family exceeds the 64-subset bound"):
+        PeriodicUnionProfileRequest.model_validate(payload)
+
+
+def test_oversized_row_is_rejected_before_copying_its_residues() -> None:
+    class UncopyableResidues(list[int]):
+        """A residue list whose copy would fail if it were ever materialized."""
+
+        def __iter__(self) -> Iterator[int]:
+            raise AssertionError(
+                "oversized residue list was copied past the source-residue bound"
+            )
+
+    payload = {
+        "subsets": [
+            {
+                "modulus": MAX_PERIODIC_SOURCE_RESIDUES,
+                "residues": UncopyableResidues(
+                    range(MAX_PERIODIC_SOURCE_RESIDUES + 1)
+                ),
+            }
+        ],
+        "result_mode": "count_only",
+    }
+
+    with pytest.raises(ValidationError, match="32,768-source-residue"):
         PeriodicUnionProfileRequest.model_validate(payload)
 
 

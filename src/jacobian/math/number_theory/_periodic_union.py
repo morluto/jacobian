@@ -162,11 +162,19 @@ class PeriodicUnionProfileRequest(StrictModel):
         for subset in subsets:
             if isinstance(subset, PeriodicResidueSubset):
                 total += len(subset.residues)
+                if total > MAX_PERIODIC_SOURCE_RESIDUES:
+                    raise ValueError(
+                        "the family exceeds the 32,768-source-residue bound"
+                    )
                 normalized_subsets.append(subset)
             elif isinstance(subset, Mapping):
                 residues = subset.get("residues")
                 if isinstance(residues, (list, tuple)):
                     total += len(residues)
+                    if total > MAX_PERIODIC_SOURCE_RESIDUES:
+                        raise ValueError(
+                            "the family exceeds the 32,768-source-residue bound"
+                        )
                     normalized_subset = dict(subset)
                     normalized_subset["residues"] = tuple(residues)
                     normalized_subsets.append(normalized_subset)
@@ -174,8 +182,6 @@ class PeriodicUnionProfileRequest(StrictModel):
                     normalized_subsets.append(subset)
             else:
                 normalized_subsets.append(subset)
-            if total > MAX_PERIODIC_SOURCE_RESIDUES:
-                raise ValueError("the family exceeds the 32,768-source-residue bound")
         normalized_data = dict(data)
         normalized_data["subsets"] = tuple(normalized_subsets)
         return normalized_data

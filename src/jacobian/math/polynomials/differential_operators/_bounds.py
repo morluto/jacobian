@@ -35,6 +35,31 @@ class ApplicationEnvelope:
     guaranteed_zero: bool
     expanded_operator_terms: int
     candidate_output_terms: int
+    rescale_only: bool = False
+
+
+def _rescale_only(
+    polynomial: RationalPolynomial,
+    operator: ConstantCoefficientDifferentialOperator,
+) -> bool:
+    """Recognize requests whose only acting aggregate is the identity order.
+
+    Every nonzero-order operator term must annihilate every source monomial,
+    so the powered operator's action collapses to rescaling the source by
+    the zero-order coefficient raised to the iteration count.
+    """
+
+    if not operator.terms or not polynomial.polynomial.terms:
+        return False
+    return all(
+        any(
+            order > exponent
+            for order, exponent in zip(term.orders, monomial.exponents, strict=True)
+        )
+        for term in operator.terms
+        if any(term.orders)
+        for monomial in polynomial.polynomial.terms
+    )
 
 
 def _total_degree(polynomial: RationalPolynomial) -> int:
@@ -471,53 +496,12 @@ def _require_expected_output(expected: RationalPolynomial | None) -> None:
     )
 
 
-def validate_application_envelope(
+def _expansion_support_candidates(
     polynomial: RationalPolynomial,
     operator: ConstantCoefficientDifferentialOperator,
     iterations: int,
-    expected: RationalPolynomial | None,
-) -> ApplicationEnvelope:
-    """Validate the complete public domain before FLINT expansion."""
-
-    _require_application_shape(polynomial, operator, expected, iterations)
-
-    # Degenerate shortcuts establish their exact results without running the
-    # kernel, so they are recognized before expansion-specific source limits
-    # and admitted by the result and work they actually have. Positive powers
-    # of the identity operator join the zero iterate: 1^k(f) = f for every k.
-    guaranteed_zero = _guaranteed_zero(polynomial, operator, iterations)
-    if guaranteed_zero:
-        _require_result_size(
-            polynomial,
-            operator,
-            expected,
-            candidate_terms=0,
-            coefficient_digits=1,
-        )
-        return ApplicationEnvelope(True, 0, 0)
-
-    if iterations == 0 or _is_identity_operator(operator):
-        _require_nonexpanding_output(polynomial, expected)
-        _require_result_size(
-            polynomial,
-            operator,
-            expected,
-            candidate_terms=len(polynomial.polynomial.terms),
-            coefficient_digits=_max_coefficient_digits(polynomial),
-        )
-        return ApplicationEnvelope(False, 1, len(polynomial.polynomial.terms))
-
-    # A one-term zeroth-order operator only rescales existing coefficients:
-    # D^k(f) = c^k * f never expands derivative support, so its admission
-    # follows the scale-only result's support, coefficient growth, work, and
-    # size budgets rather than the derivative kernel's expansion regime.
-    scalar_action = _is_scalar_operator(operator)
-    if scalar_action:
-        _require_nonexpanding_output(polynomial, expected)
-    else:
-        _require_expansion_operator(operator)
-        _require_expansion_source(polynomial)
-    _require_expected_output(expected)
+) -> tuple[int, int]:
+    """Bound the powered support and surviving output paths of one expansion."""
 
     term_count = len(operator.terms)
     maximum_axis_orders = tuple(
@@ -563,30 +547,94 @@ def validate_application_envelope(
                 raise ValueError(
                     "differential-operator output exceeds the candidate-term budget"
                 )
-    else:
-        maximum_exponents = tuple(
-            max(term.exponents[axis] for term in polynomial.polynomial.terms)
-            for axis in range(len(polynomial.variables))
-        )
-        acting_terms = min(
-            expanded_terms,
-            _bounded_box_count(
-                (
-                    min(exponent, iterations * order) + 1
-                    for exponent, order in zip(
-                        maximum_exponents,
-                        maximum_axis_orders,
-                        strict=True,
-                    )
-                ),
-                MAX_APPLICATION_OUTPUT_TERMS,
+        return expanded_terms, candidate_terms
+    maximum_exponents = tuple(
+        max(term.exponents[axis] for term in polynomial.polynomial.terms)
+        for axis in range(len(polynomial.variables))
+    )
+    acting_terms = min(
+        expanded_terms,
+        _bounded_box_count(
+            (
+                min(exponent, iterations * order) + 1
+                for exponent, order in zip(
+                    maximum_exponents,
+                    maximum_axis_orders,
+                    strict=True,
+                )
             ),
+            MAX_APPLICATION_OUTPUT_TERMS,
+        ),
+    )
+    candidate_terms = len(polynomial.polynomial.terms) * acting_terms
+    if candidate_terms > MAX_APPLICATION_OUTPUT_TERMS:
+        raise ValueError(
+            "differential-operator output exceeds the candidate-term budget"
         )
-        candidate_terms = len(polynomial.polynomial.terms) * acting_terms
-        if candidate_terms > MAX_APPLICATION_OUTPUT_TERMS:
-            raise ValueError(
-                "differential-operator output exceeds the candidate-term budget"
-            )
+    return expanded_terms, candidate_terms
+
+
+def validate_application_envelope(
+    polynomial: RationalPolynomial,
+    operator: ConstantCoefficientDifferentialOperator,
+    iterations: int,
+    expected: RationalPolynomial | None,
+) -> ApplicationEnvelope:
+    """Validate the complete public domain before FLINT expansion."""
+
+    _require_application_shape(polynomial, operator, expected, iterations)
+
+    # Degenerate shortcuts establish their exact results without running the
+    # kernel, so they are recognized before expansion-specific source limits
+    # and admitted by the result and work they actually have. Positive powers
+    # of the identity operator join the zero iterate: 1^k(f) = f for every k.
+    guaranteed_zero = _guaranteed_zero(polynomial, operator, iterations)
+    if guaranteed_zero:
+        _require_result_size(
+            polynomial,
+            operator,
+            expected,
+            candidate_terms=0,
+            coefficient_digits=1,
+        )
+        return ApplicationEnvelope(True, 0, 0)
+
+    if iterations == 0 or _is_identity_operator(operator):
+        _require_nonexpanding_output(polynomial, expected)
+        _require_result_size(
+            polynomial,
+            operator,
+            expected,
+            candidate_terms=len(polynomial.polynomial.terms),
+            coefficient_digits=_max_coefficient_digits(polynomial),
+        )
+        return ApplicationEnvelope(False, 1, len(polynomial.polynomial.terms))
+
+    # A one-term zeroth-order operator only rescales existing coefficients:
+    # D^k(f) = c^k * f never expands derivative support, so its admission
+    # follows the scale-only result's support, coefficient growth, work, and
+    # size budgets rather than the derivative kernel's expansion regime. The
+    # same holds whenever every nonzero-order term annihilates every source
+    # monomial: only the identity aggregate acts, so the power collapses to
+    # rescaling and the unreachable expansion does not narrow the domain.
+    scalar_action = _is_scalar_operator(operator)
+    rescale_only = not scalar_action and _rescale_only(polynomial, operator)
+    if scalar_action or rescale_only:
+        _require_nonexpanding_output(polynomial, expected)
+    else:
+        _require_expansion_operator(operator)
+        _require_expansion_source(polynomial)
+    _require_expected_output(expected)
+
+    if rescale_only:
+        expanded_terms = 0
+        candidate_terms = len(polynomial.polynomial.terms)
+    else:
+        expanded_terms, candidate_terms = _expansion_support_candidates(
+            polynomial,
+            operator,
+            iterations,
+        )
 
     # Signed-unit scalar powers only flip signs: (±1)^k f = ±f keeps every
     # coefficient height unchanged, so their digit admission follows the
@@ -606,24 +654,34 @@ def validate_application_envelope(
             "differential-operator output exceeds the coefficient-digit budget"
         )
 
-    maximum_operator_order = max(
-        (sum(term.orders) for term in operator.terms),
-        default=0,
-    )
-    derivative_order = min(
-        _total_degree(polynomial),
-        iterations * maximum_operator_order,
-    )
-    power_work = _operator_power_work(term_count, iterations, maximum_axis_orders)
-    derivative_work = (
-        len(polynomial.polynomial.terms) * expanded_terms * (1 + derivative_order)
-    )
-    conversion_work = 2 * (
-        len(polynomial.polynomial.terms) + term_count + candidate_terms
-    )
-    # Result validation replays the same defining relation, so the public path
-    # pays for two complete applications rather than hiding replay work.
-    work_units = 2 * (power_work + derivative_work) + conversion_work
+    if rescale_only:
+        # The result is c0^k * f: scaling costs one pass per source term and
+        # the replay doubles it; no operator power or derivative expansion runs.
+        work_units = 2 * 2 * len(polynomial.polynomial.terms)
+    else:
+        maximum_operator_order = max(
+            (sum(term.orders) for term in operator.terms),
+            default=0,
+        )
+        derivative_order = min(
+            _total_degree(polynomial),
+            iterations * maximum_operator_order,
+        )
+        term_count = len(operator.terms)
+        maximum_axis_orders = tuple(
+            max(term.orders[axis] for term in operator.terms)
+            for axis in range(len(polynomial.variables))
+        )
+        power_work = _operator_power_work(term_count, iterations, maximum_axis_orders)
+        derivative_work = (
+            len(polynomial.polynomial.terms) * expanded_terms * (1 + derivative_order)
+        )
+        conversion_work = 2 * (
+            len(polynomial.polynomial.terms) + term_count + candidate_terms
+        )
+        # Result validation replays the same defining relation, so the public path
+        # pays for two complete applications rather than hiding replay work.
+        work_units = 2 * (power_work + derivative_work) + conversion_work
     if work_units > MAX_APPLICATION_WORK_UNITS:
         raise ValueError(
             "differential-operator application exceeds the deterministic work budget"
@@ -645,6 +703,7 @@ def validate_application_envelope(
         guaranteed_zero=False,
         expanded_operator_terms=expanded_terms,
         candidate_output_terms=candidate_terms,
+        rescale_only=rescale_only,
     )
 
 

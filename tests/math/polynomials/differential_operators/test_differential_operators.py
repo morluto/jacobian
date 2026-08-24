@@ -1304,6 +1304,47 @@ def test_per_monomial_annihilation_is_counted_in_the_candidate_bound() -> None:
     assert replayed == result
 
 
+def test_scalar_on_source_regime_skips_unreachable_expansion() -> None:
+    variables = ("x",)
+    operator = _operator(variables, {(0,): 1, (1,): 1})
+
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(variables, {(0,): 1}),
+            operator=operator,
+            iterations=4_096,
+            expected=_polynomial(variables, {(0,): 1}),
+        )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.output == _polynomial(variables, {(0,): 1})
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    assert replayed == result
+
+    growing = _operator(variables, {(0,): 2, (1,): 1})
+    grown = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(variables, {(0,): 1}),
+            operator=growing,
+            iterations=20,
+            expected=_polynomial(variables, {(0,): 2**20}),
+        )
+    )
+    assert grown.output == _polynomial(variables, {(0,): 2**20})
+    assert grown.matches_expected is True
+
+    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(variables, {(0,): 1}),
+            operator=growing,
+            iterations=200_000,
+        )
+
+
 def test_coefficient_growth_boundary_is_admitted_then_rejected() -> None:
     source = _polynomial(("x",), {(0,): 1})
     coefficient = CanonicalRational(num=str(10**255), den="1")

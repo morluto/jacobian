@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Any
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
@@ -113,6 +114,48 @@ def _polynomial_from_backend(
     )
 
 
+def _rescaled_source(
+    polynomial: RationalPolynomial,
+    operator: ConstantCoefficientDifferentialOperator,
+    iterations: int,
+) -> RationalPolynomial:
+    """Scale the source by the zero-order coefficient raised to ``iterations``."""
+
+    zero_coefficient = next(
+        (
+            term.coefficient.as_fraction()
+            for term in operator.terms
+            if not any(term.orders)
+        ),
+        Fraction(0),
+    )
+    scaled = zero_coefficient**iterations
+    wire_terms = []
+    for term in polynomial.polynomial.terms:
+        value = term.coefficient.as_fraction() * scaled
+        if value == 0:
+            continue
+        rational = CanonicalRational(
+            num=format_canonical_integer(value.numerator),
+            den=format_canonical_integer(value.denominator),
+        )
+        require_bounded_rational(
+            rational,
+            max_digits=MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS,
+            label="differential-operator result coefficient",
+        )
+        wire_terms.append(
+            RationalPolynomialTerm(
+                coefficient=rational,
+                exponents=term.exponents,
+            )
+        )
+    return RationalPolynomial(
+        variables=polynomial.variables,
+        polynomial=SparseRationalPolynomial(terms=tuple(wire_terms)),
+    )
+
+
 def apply_with_flint(
     polynomial: RationalPolynomial,
     operator: ConstantCoefficientDifferentialOperator,
@@ -123,6 +166,8 @@ def apply_with_flint(
 
     if envelope.guaranteed_zero:
         return _zero_polynomial(polynomial.variables)
+    if envelope.rescale_only:
+        return _rescaled_source(polynomial, operator, iterations)
     if iterations == 0 or _is_identity_operator(operator):
         return polynomial
 

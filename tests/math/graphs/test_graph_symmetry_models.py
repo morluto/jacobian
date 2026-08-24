@@ -95,9 +95,7 @@ def _wide_orbit_payload(generators: int) -> dict[str, object]:
 
 def test_graph_symmetry_request_admission_bounds_retained_source_output() -> None:
     payload = _wide_orbit_payload(30)
-    assert (
-        len(encode_strict_json(payload)) <= CanonicalLimits().max_input_bytes
-    )
+    assert len(encode_strict_json(payload)) <= CanonicalLimits().max_input_bytes
 
     with pytest.raises(ValidationError, match="canonical output limit"):
         GraphSymmetryOrbitRequest.model_validate(payload)

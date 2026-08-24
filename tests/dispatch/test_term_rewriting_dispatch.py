@@ -116,9 +116,7 @@ def test_composed_mgu_depth_rejects_typed_at_request_parsing():
         ).model_dump(mode="json"),
     }
     with pytest.raises(OperationRequestValidationError) as error:
-        invoke_operation(
-            "term_rewriting.unification.compute", payload, Catalog.open()
-        )
+        invoke_operation("term_rewriting.unification.compute", payload, Catalog.open())
     assert "transport-safe" in str(error.value.errors())
 
 

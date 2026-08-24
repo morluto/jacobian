@@ -30,6 +30,7 @@ from jacobian.math.prime_affine_forms._kernel import (
     wheel_modulus,
 )
 from jacobian.math.prime_affine_forms.values import (
+    MAX_AFFINE_AGGREGATE_DIGITS,
     MAX_AFFINE_FORMS,
     PrimeAffineTuple,
 )
@@ -962,12 +963,19 @@ class PrimeAffineTranslationRequest(StrictModel):
                 f"translation shift must have at most {MAX_INTERVAL_ENDPOINT_DIGITS} digits"
             )
         shift = parse_canonical_integer(self.shift)
+        aggregate_digits = 0
         for form in self.source.forms:
             translated_constant = form.evaluate(shift)
             if _digits(translated_constant) > MAX_AFFINE_COMPONENT_DIGITS:
                 raise ValueError(
                     "translated constant exceeds the canonical affine component bound"
                 )
+            aggregate_digits += _digits(form.coefficient) + _digits(translated_constant)
+        if aggregate_digits > MAX_AFFINE_AGGREGATE_DIGITS:
+            raise ValueError(
+                "translated affine tuple exceeds the aggregate coefficient-digit "
+                f"bound {MAX_AFFINE_AGGREGATE_DIGITS}"
+            )
         return self
 
 

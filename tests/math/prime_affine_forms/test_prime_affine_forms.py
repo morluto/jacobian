@@ -301,6 +301,26 @@ def test_translation_preserves_local_factors_and_form_ids() -> None:
         PrimeAffineTranslationResult.model_validate(payload)
 
 
+def test_translation_rejects_translated_tuple_exceeding_aggregate_digit_bound() -> None:
+    source = _tuple(
+        *(_form(f"f{index:03d}", 10**127 + index, 1) for index in range(512))
+    )
+    with pytest.raises(ValidationError, match="aggregate coefficient-digit bound"):
+        PrimeAffineTranslationRequest(source=source, shift=str(10**63))
+
+
+def test_translation_admits_translated_tuple_at_the_aggregate_digit_bound() -> None:
+    source = _tuple(
+        *(_form(f"f{index:03d}", 10**127 + index, 1) for index in range(512))
+    )
+    result = compute_translation(
+        PrimeAffineTranslationRequest(source=source, shift="1")
+    )
+    assert result.translated.form_count == 512
+    assert result.translated.forms[0].form_id == "f000"
+    assert all(len(form.constant) == 128 for form in result.translated.forms)
+
+
 def test_residue_wheel_and_membership_compose_without_reconstruction() -> None:
     wheel = compute_residue_wheel(
         PrimeTupleResidueWheelRequest(source=TWIN_PRIMES, primes=(2, 3))

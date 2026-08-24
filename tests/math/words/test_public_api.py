@@ -10,18 +10,27 @@ def test_exact_public_api_symbols() -> None:
     expected = (
         "FactorAnalysis",
         "FiniteWord",
+        "FixedPointPrefixAnalysis",
         "PeriodAnalysis",
+        "PrimitivityAnalysis",
+        "ProlongableSubstitution",
+        "Substitution",
+        "SubstitutionDependencyEdge",
+        "SubstitutionDependencyGraph",
         "WordMorphism",
         "apply_morphism",
         "compose_morphisms",
         "conjugates",
         "factor_occurrences",
         "factors_of_length",
+        "fixed_point_prefix",
         "incidence_matrix",
         "parikh_vector",
         "periods",
         "prefix_function",
         "primitive_root",
+        "substitution_dependency_graph",
+        "substitution_primitivity_profile",
     )
     assert tuple(words.__all__) == expected
     assert len(words.__all__) == len(set(words.__all__))

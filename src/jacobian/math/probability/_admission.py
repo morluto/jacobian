@@ -41,6 +41,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
     OperationAdmission(
+        "probability.graph_reliability.all_terminal.compute",
+        AdmissionDecision.KEEP,
+        "the complete connected-spanning-subgraph profile and its uniform exact probability are distinct from two-terminal reliability and require bounded exhaustive computation",
+    ),
+    OperationAdmission(
         "probability.graph_reliability.connection_probability.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",

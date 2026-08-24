@@ -397,14 +397,18 @@ def test_operand_digit_budget_bounds_the_canonical_boundary() -> None:
     assert result.congestion == CanonicalRational(num="9" * 32_768, den="1")
 
     # Two such amounts on one edge genuinely add: their exact load has
-    # 32,769 digits, above the canonical cap, so admission fails closed.
-    with pytest.raises(ValidationError, match="canonical cap"):
-        unit_edge_amounts(
-            (
-                CanonicalRational(num="9" * 32_768, den="1"),
-                CanonicalRational(num="9" * 32_768, den="1"),
-            )
+    # 32,769 digits, above the canonical cap, so the profile boundary fails
+    # closed while the canonical tensor itself stays constructible.
+    over_boundary = unit_edge_amounts(
+        (
+            CanonicalRational(num="9" * 32_768, den="1"),
+            CanonicalRational(num="9" * 32_768, den="1"),
         )
+    )
+    with pytest.raises(ValidationError, match="canonical cap"):
+        MulticommodityFlowProfileRequest(flow=over_boundary)
+    with pytest.raises(ValueError, match="canonical cap"):
+        compute_multicommodity_flow_profile(over_boundary)
 
 
 def test_sole_operand_components_inherit_their_canonical_sides() -> None:
@@ -806,9 +810,10 @@ def test_result_envelope_prices_rows_at_their_actual_sides() -> None:
 
     # Unit-capacity edges carrying 22,000-digit amounts make the echoed
     # entries, divergence cells, loads, slacks, and congestion genuinely
-    # exceed 8 MiB together, so admission fails closed before any backend.
+    # exceed 8 MiB together, so the profile request boundary fails closed
+    # before any backend.
     with pytest.raises(ValidationError, match="aggregate result bound"):
-        comb_amount_tensor(22_000)
+        MulticommodityFlowProfileRequest(flow=comb_amount_tensor(22_000))
 
 
 def test_congestion_bound_uses_the_capacity_denominator() -> None:
@@ -933,8 +938,13 @@ def test_coprime_denominator_flood_fails_closed() -> None:
             amount=CanonicalRational(num="1", den="7" + "0" * 12_775 + "1"),
         ),
     )
+    flood = MulticommodityFlow(
+        network=network, commodities=commodities, entries=entries
+    )
     with pytest.raises(ValidationError, match="canonical cap"):
-        MulticommodityFlow(network=network, commodities=commodities, entries=entries)
+        MulticommodityFlowProfileRequest(flow=flood)
+    with pytest.raises(ValueError, match="canonical cap"):
+        compute_multicommodity_flow_profile(flood)
 
 
 def oversized_echo_flow() -> MulticommodityFlow:
@@ -984,7 +994,7 @@ def test_oversized_source_is_rejected_before_the_component_scan(
 
     monkeypatch.setattr(_models, "_profile_component_digit_bounds", spy)
     with pytest.raises(ValidationError, match="aggregate result bound"):
-        oversized_echo_flow()
+        MulticommodityFlowProfileRequest(flow=oversized_echo_flow())
     assert scanned == []
 
 
@@ -1001,40 +1011,41 @@ def test_oversized_source_rejection_precedes_a_doomed_exact_scan() -> None:
         if source != target and (source, target) != (0, 1)
     ][:268]
     big = CanonicalRational(num="9" * 32_000, den="1")
+    doomed_echo = MulticommodityFlow(
+        network=FlowGraph(
+            vertex_count=vertex_count,
+            edges=tuple(
+                CapacitatedEdge(source=source, target=target, capacity=q(1))
+                for source, target in [(0, 1), *bulk_pairs]
+            ),
+        ),
+        commodities=(
+            CommodityDemand(commodity_id="a", source=0, sink=16, demand=q(1)),
+            CommodityDemand(commodity_id="b", source=0, sink=1, demand=q(1)),
+        ),
+        entries=(
+            CommodityEdgeFlow(
+                commodity_id="a",
+                source=0,
+                target=1,
+                amount=CanonicalRational(num="1", den="3" + "0" * 19_999),
+            ),
+            *(
+                CommodityEdgeFlow(
+                    commodity_id="a", source=source, target=target, amount=big
+                )
+                for source, target in bulk_pairs
+            ),
+            CommodityEdgeFlow(
+                commodity_id="b",
+                source=0,
+                target=1,
+                amount=CanonicalRational(num="1", den="7" + "0" * 12_775 + "1"),
+            ),
+        ),
+    )
     with pytest.raises(ValidationError, match="aggregate result bound"):
-        MulticommodityFlow(
-            network=FlowGraph(
-                vertex_count=vertex_count,
-                edges=tuple(
-                    CapacitatedEdge(source=source, target=target, capacity=q(1))
-                    for source, target in [(0, 1), *bulk_pairs]
-                ),
-            ),
-            commodities=(
-                CommodityDemand(commodity_id="a", source=0, sink=16, demand=q(1)),
-                CommodityDemand(commodity_id="b", source=0, sink=1, demand=q(1)),
-            ),
-            entries=(
-                CommodityEdgeFlow(
-                    commodity_id="a",
-                    source=0,
-                    target=1,
-                    amount=CanonicalRational(num="1", den="3" + "0" * 19_999),
-                ),
-                *(
-                    CommodityEdgeFlow(
-                        commodity_id="a", source=source, target=target, amount=big
-                    )
-                    for source, target in bulk_pairs
-                ),
-                CommodityEdgeFlow(
-                    commodity_id="b",
-                    source=0,
-                    target=1,
-                    amount=CanonicalRational(num="1", den="7" + "0" * 12_775 + "1"),
-                ),
-            ),
-        )
+        MulticommodityFlowProfileRequest(flow=doomed_echo)
 
 
 def test_ledger_charges_every_performed_bucket_fold_addition() -> None:
@@ -1227,40 +1238,41 @@ def test_folds_are_bounded_by_the_intermediate_budget_not_the_component_cap() ->
     p_digits = "1" + "0" * 23_998 + "1"
     q_digits = "3" + "0" * 23_998 + "1"
     r_digits = "5" + "0" * 23_998 + "3"
+    cancelling_cell = MulticommodityFlow(
+        network=FlowGraph(
+            vertex_count=3,
+            edges=(
+                CapacitatedEdge(source=0, target=1, capacity=q(1)),
+                CapacitatedEdge(source=1, target=0, capacity=q(1)),
+                CapacitatedEdge(source=2, target=0, capacity=q(1)),
+            ),
+        ),
+        commodities=(CommodityDemand(commodity_id="a", source=0, sink=1, demand=q(1)),),
+        entries=(
+            CommodityEdgeFlow(
+                commodity_id="a",
+                source=0,
+                target=1,
+                amount=CanonicalRational(num="1", den=p_digits),
+            ),
+            CommodityEdgeFlow(
+                commodity_id="a",
+                source=1,
+                target=0,
+                amount=CanonicalRational(num="1", den=q_digits),
+            ),
+            CommodityEdgeFlow(
+                commodity_id="a",
+                source=2,
+                target=0,
+                amount=CanonicalRational(num="1", den=r_digits),
+            ),
+        ),
+    )
     with pytest.raises(ValidationError, match="fold-intermediate budget"):
-        MulticommodityFlow(
-            network=FlowGraph(
-                vertex_count=3,
-                edges=(
-                    CapacitatedEdge(source=0, target=1, capacity=q(1)),
-                    CapacitatedEdge(source=1, target=0, capacity=q(1)),
-                    CapacitatedEdge(source=2, target=0, capacity=q(1)),
-                ),
-            ),
-            commodities=(
-                CommodityDemand(commodity_id="a", source=0, sink=1, demand=q(1)),
-            ),
-            entries=(
-                CommodityEdgeFlow(
-                    commodity_id="a",
-                    source=0,
-                    target=1,
-                    amount=CanonicalRational(num="1", den=p_digits),
-                ),
-                CommodityEdgeFlow(
-                    commodity_id="a",
-                    source=1,
-                    target=0,
-                    amount=CanonicalRational(num="1", den=q_digits),
-                ),
-                CommodityEdgeFlow(
-                    commodity_id="a",
-                    source=2,
-                    target=0,
-                    amount=CanonicalRational(num="1", den=r_digits),
-                ),
-            ),
-        )
+        MulticommodityFlowProfileRequest(flow=cancelling_cell)
+    with pytest.raises(ValueError, match="fold-intermediate budget"):
+        compute_multicommodity_flow_profile(cancelling_cell)
 
 
 def test_near_cap_coprime_growth_aborts_within_budget_sized_arithmetic() -> None:
@@ -1278,38 +1290,40 @@ def test_near_cap_coprime_growth_aborts_within_budget_sized_arithmetic() -> None
     q_digits = "3" + "0" * 31_998 + "1"
     r_digits = "5" + "0" * 31_998 + "3"
     with pytest.raises(ValidationError, match="fold-intermediate budget"):
-        MulticommodityFlow(
-            network=FlowGraph(
-                vertex_count=3,
-                edges=(
-                    CapacitatedEdge(source=0, target=1, capacity=q(1)),
-                    CapacitatedEdge(source=1, target=0, capacity=q(1)),
-                    CapacitatedEdge(source=2, target=0, capacity=q(1)),
+        MulticommodityFlowProfileRequest(
+            flow=MulticommodityFlow(
+                network=FlowGraph(
+                    vertex_count=3,
+                    edges=(
+                        CapacitatedEdge(source=0, target=1, capacity=q(1)),
+                        CapacitatedEdge(source=1, target=0, capacity=q(1)),
+                        CapacitatedEdge(source=2, target=0, capacity=q(1)),
+                    ),
                 ),
-            ),
-            commodities=(
-                CommodityDemand(commodity_id="a", source=0, sink=1, demand=q(1)),
-            ),
-            entries=(
-                CommodityEdgeFlow(
-                    commodity_id="a",
-                    source=0,
-                    target=1,
-                    amount=CanonicalRational(num="1", den=p_digits),
+                commodities=(
+                    CommodityDemand(commodity_id="a", source=0, sink=1, demand=q(1)),
                 ),
-                CommodityEdgeFlow(
-                    commodity_id="a",
-                    source=1,
-                    target=0,
-                    amount=CanonicalRational(num="1", den=q_digits),
+                entries=(
+                    CommodityEdgeFlow(
+                        commodity_id="a",
+                        source=0,
+                        target=1,
+                        amount=CanonicalRational(num="1", den=p_digits),
+                    ),
+                    CommodityEdgeFlow(
+                        commodity_id="a",
+                        source=1,
+                        target=0,
+                        amount=CanonicalRational(num="1", den=q_digits),
+                    ),
+                    CommodityEdgeFlow(
+                        commodity_id="a",
+                        source=2,
+                        target=0,
+                        amount=CanonicalRational(num="1", den=r_digits),
+                    ),
                 ),
-                CommodityEdgeFlow(
-                    commodity_id="a",
-                    source=2,
-                    target=0,
-                    amount=CanonicalRational(num="1", den=r_digits),
-                ),
-            ),
+            )
         )
 
 

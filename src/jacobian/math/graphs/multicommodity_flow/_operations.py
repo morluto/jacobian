@@ -7,6 +7,7 @@ from jacobian.math.graphs.multicommodity_flow._models import (
     MulticommodityFlow,
     MulticommodityFlowProfileRequest,
     MulticommodityFlowProfileResult,
+    _require_profile_output_admission,
 )
 
 
@@ -15,6 +16,16 @@ def compute_multicommodity_flow_profile(
 ) -> MulticommodityFlowProfileResult:
     """Compute the exact bounded load and conservation profile of one tensor."""
 
+    # The canonical tensor carries only representation bounds, so this native
+    # boundary enforces the profile execution envelope itself. The MCP path
+    # has already admitted its flow once during request parsing.
+    _require_profile_output_admission(flow)
+    return _admitted_profile_result(flow)
+
+
+def _admitted_profile_result(
+    flow: MulticommodityFlow,
+) -> MulticommodityFlowProfileResult:
     (
         divergences,
         edge_profiles,
@@ -39,7 +50,7 @@ def _run_multicommodity_flow_profile(
 ) -> MulticommodityFlowProfileResult:
     """Run one parsed MCP request through the native profile computation."""
 
-    return compute_multicommodity_flow_profile(request.flow)
+    return _admitted_profile_result(request.flow)
 
 
 __all__ = ["compute_multicommodity_flow_profile"]

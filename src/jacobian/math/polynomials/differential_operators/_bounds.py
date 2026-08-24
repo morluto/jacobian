@@ -605,12 +605,17 @@ def _per_exponent_height_bits(
                 # True growth provably crosses the height envelope; the coarse
                 # global estimate rejects this request soundly.
                 return None
-            # The exact reduced contribution keeps cross-canceling factors -
-            # e.g. an N weight against a 1/N coefficient - from inflating the
-            # accounted heights.
-            contribution = weight * source_term.coefficient.as_fraction()
+            # The exact reduced contribution folds the falling factorial in
+            # before normalization, so cross-canceling factors - an N weight
+            # against a 1/N coefficient, or 10000! against a /2000!
+            # denominator - never inflate the accounted heights.
+            contribution = (
+                weight
+                * source_term.coefficient.as_fraction()
+                * falling_product
+            )
             class_denominator = contribution.denominator
-            scaled_numerator = abs(contribution.numerator) * falling_product
+            scaled_numerator = abs(contribution.numerator)
             entry = classes.get(target)
             if entry is None:
                 if class_denominator.bit_length() > cap:

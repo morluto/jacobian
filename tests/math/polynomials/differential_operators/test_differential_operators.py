@@ -1847,6 +1847,47 @@ def test_falling_factorial_growth_is_measured_exactly() -> None:
         )
 
 
+def test_falling_factorial_cancels_against_source_denominators() -> None:
+    variables = ("x",)
+    source = RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational.from_fraction(
+                        Fraction(1, math.factorial(2_000))
+                    ),
+                    exponents=(10_000,),
+                ),
+            )
+        ),
+    )
+    expected = _polynomial(
+        variables,
+        {
+            (0,): Fraction(math.factorial(10_000), math.factorial(2_000)),
+        },
+    )
+
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=_operator(variables, {(10_000,): 1}),
+            iterations=1,
+            expected=expected,
+        )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.output == expected
+    assert len(result.output.polynomial.terms[0].coefficient.num) == 29_924
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    assert replayed == result
+
+
 def test_iterations_stay_inside_the_interoperable_integer_range() -> None:
     schema = DifferentialOperatorApplyRequest.model_json_schema()
     assert schema["properties"]["iterations"]["maximum"] == (1 << 53) - 1

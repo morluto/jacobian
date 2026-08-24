@@ -11,7 +11,7 @@ from jacobian._models import StrictModel
 from jacobian.canonical import sha256_digest
 from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix, rank
 
-_MAX_FIELD_ORDER = 4096
+_MAX_FIELD_ORDER = 65536
 _MIN_MODULUS_COEFFICIENTS = 3
 _MAX_MODULUS_COEFFICIENTS = 17
 _MAX_AXIS_LABELS = 256

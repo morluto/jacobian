@@ -14,9 +14,10 @@ MAX_ELEMENT_DIGITS = 64
 # and support preflights, while compact cases (singleton or empty sources)
 # stay admissible at any represented arity. The digit bound alone fixes the
 # cost of admission arithmetic (binomial preflight, sum products) and of the
-# predicted worst-case sum below.
+# predicted worst-case sum below. The magnitude ceiling is the interoperable
+# JSON integer range, because the published schema exposes it as ``maximum``.
 MAX_ARITY_DIGITS = 18
-MAX_ARITY = 10**MAX_ARITY_DIGITS - 1
+MAX_ARITY = (1 << 53) - 1
 # The operation enumerates once and source-bound result validation replays once,
 # so an accepted call performs at most twice this many coordinate steps.
 MAX_ENUMERATION_WORK = 20_000_000

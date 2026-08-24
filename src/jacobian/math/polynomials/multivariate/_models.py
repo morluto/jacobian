@@ -279,8 +279,12 @@ def _subresultant_envelope(
     # it.  The first gap is higher_degree - lower_degree and every later gap
     # is at most lower_degree; every power base (a source or member leading
     # coefficient, or a scalar subresultant) has remaining degree at most the
-    # index-zero formal coefficient degree.  Folding this derived power
-    # support into ``maximum_support`` keeps the product invariant below true
+    # index-zero formal coefficient degree.  Pseudo-remainder running
+    # coefficients additionally retain exactly one source coefficient while
+    # appending one divisor-side factor per elimination step -- at most
+    # ``power_exponent`` of them -- so the power allowance carries one extra
+    # highest source remaining degree.  Folding this derived power support
+    # into ``maximum_support`` keeps the product invariant below true
     # for the scaling factors as well, and rejects the abnormal-gap nonscalar
     # regime whose powers would otherwise expand unboundedly.
     power_base_remaining_degree = (
@@ -288,7 +292,9 @@ def _subresultant_envelope(
     )
     power_exponent = max(higher_degree - lower_degree, lower_degree) + 1
     scaling_power_support = comb(
-        power_exponent * power_base_remaining_degree + remaining_variable_count,
+        power_exponent * power_base_remaining_degree
+        + max(higher_remaining_degree, lower_remaining_degree)
+        + remaining_variable_count,
         remaining_variable_count,
     )
     maximum_support = max(maximum_support, scaling_power_support)

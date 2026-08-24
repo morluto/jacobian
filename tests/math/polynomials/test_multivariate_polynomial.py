@@ -1170,6 +1170,27 @@ class TestMultivariateSubresultantSequence:
             == result
         )
 
+    def test_rejects_pseudo_remainder_chain_allowance_exceedance(self) -> None:
+        """The scaling-power envelope carries the pseudo-remainder chain headroom.
+
+        Every running pseudo-remainder coefficient keeps one source
+        coefficient while appending one divisor-side factor per elimination
+        step, so the folded power allowance adds one highest source
+        remaining-variable degree.  Without that headroom term this request
+        passes the support check and only the coarser term-pair proxy
+        rejects it.
+        """
+
+        left = _poly(("x", "y"), (("1/1", (7, 0)), ("1/1", (0, 1))))
+        right = _poly(("x", "y"), (("1/1", (6, 20)),))
+
+        with pytest.raises(ValueError, match="intermediate polynomial-term budget"):
+            MultivariateSubresultantSequenceRequest(
+                left=left,
+                right=right,
+                main_variable="x",
+            )
+
     def test_rejects_unbounded_aggregate_sequence_support(self) -> None:
         variables = ("x", "y1", "y2", "y3", "y4", "y5", "y6", "y7")
         zeroes = (0,) * len(variables)

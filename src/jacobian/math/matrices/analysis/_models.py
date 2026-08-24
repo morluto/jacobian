@@ -15,7 +15,7 @@ from jacobian.canonical import (
     encode_strict_json,
 )
 from jacobian.math.matrices.values import (
-    MAX_MATRIX_DIMENSION,
+    MAX_RATIONAL_MATRIX_ORDER,
     RationalMatrix,
     require_matrix_scalar_digits,
 )
@@ -241,7 +241,7 @@ class MatrixEntry(StrictModel):
 class SymmetricMatrixRequest(StrictModel):
     """A symmetric rational matrix for definiteness analysis."""
 
-    dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
+    dimension: int = Field(ge=1, le=MAX_RATIONAL_MATRIX_ORDER)
     entries: tuple[MatrixEntry, ...] = Field(min_length=1)
 
     @model_validator(mode="after")

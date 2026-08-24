@@ -17,7 +17,11 @@ from jacobian.math.matrices.analysis._operations import (
     check_farkas_certificate,
     compute_inertia,
 )
-from jacobian.math.matrices.values import MAX_MATRIX_DIMENSION, RationalMatrix
+from jacobian.math.matrices.values import (
+    MAX_MATRIX_DIMENSION,
+    MAX_RATIONAL_MATRIX_ORDER,
+    RationalMatrix,
+)
 
 
 class TestInertia:
@@ -296,9 +300,22 @@ def test_inertia_retained_matrix_reconstructs_the_source() -> None:
     ]
 
 
-def test_inertia_request_rejects_dimension_above_canonical_matrix_bound() -> None:
+def test_inertia_request_admits_order_33_diagonal_source() -> None:
+    # The canonical dense RationalMatrix retains sources up to its own order
+    # envelope, so a previously valid order 33 request must still parse,
+    # compute, and return a source-bound typed result.
+    request = _inertia_request(33, {(index, index): "1" for index in range(33)})
+    result = compute_inertia(request)
+
+    assert (result.n_positive, result.n_negative, result.n_zero) == (33, 0, 0)
+    assert result.definiteness == "positive_definite"
+    assert len(result.matrix.entries) == 33
+    assert isinstance(result.matrix, RationalMatrix)
+
+
+def test_inertia_request_rejects_dimensions_above_the_canonical_matrix_order() -> None:
     with pytest.raises(ValidationError):
-        _inertia_request(MAX_MATRIX_DIMENSION + 1, {(0, 0): "1"})
+        _inertia_request(MAX_RATIONAL_MATRIX_ORDER + 1, {(0, 0): "1"})
 
 
 def _encoded_inertia_payload_near_limit(offset: int) -> bytes:

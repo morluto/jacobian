@@ -89,6 +89,25 @@ def test_dispatch_rejects_unfittable_inertia_request_as_typed_error() -> None:
     assert "canonical output limit" in str(excinfo.value.cause)
 
 
+def test_dispatch_admits_order_33_diagonal_inertia_request() -> None:
+    # Order 33 exceeds the shared computation dimension but stays inside the
+    # canonical dense rational-matrix order envelope, so a small-entry source
+    # there must be admitted end to end with a typed source-bound result.
+    payload = {
+        "dimension": 33,
+        "entries": [
+            {"row": r, "col": r, "value": {"num": "1", "den": "1"}} for r in range(33)
+        ],
+    }
+    result = invoke_operation("matrix.inertia.compute", payload, Catalog.open())
+
+    assert result.output["n_positive"] == 33
+    assert result.output["n_negative"] == 0
+    assert result.output["n_zero"] == 0
+    assert result.output["definiteness"] == "positive_definite"
+    assert len(result.output["matrix"]["entries"]) == 33
+
+
 def test_large_fitting_inertia_request_returns_typed_result() -> None:
     digits = "9" * 4096
     payload = {

@@ -16,44 +16,50 @@ from jacobian.math.graphs.flow._models import FlowGraph
 # FlowGraph; admission controls the dense divergence table through the
 # commodity-vertex cell budget, the sparse tensor through the entry and
 # commodity-edge cell budgets, and the whole returned value through the
-# aggregate result envelope below.
+# aggregate result envelope below.  The commodity count is bounded by those
+# same derived quantities rather than an independent fixed ceiling.
 MAX_MULTICOMMODITY_EDGES = 128
-MAX_MULTICOMMODITIES = 16
 MAX_COMMODITY_EDGE_CELLS = 2_048
 MAX_COMMODITY_VERTEX_CELLS = 512
 MAX_SPARSE_FLOW_ENTRIES = 128
 
-# Entry amounts and edge capacities are the only arithmetic operands: every
-# divergence cell and edge load sums a subset of the amounts, every slack
-# subtracts one such sum from one capacity, and the congestion ratio divides
-# one load by one capacity.  Adding one operand to a running sum contributes
-# at most its numerator and denominator digits plus three carry digits, and
-# the slack subtraction and congestion division each compose one further
-# operand, so eight slack digits on top of the totaled operand digits bound
-# every intermediate and derived numerator and denominator exactly.  Demands
-# take part only in exact conservation comparisons, never in arithmetic, so
-# they are covered by the measured source echo instead of this budget.
+# Entry amounts and edge capacities are the only arithmetic operands, and each
+# derived component is computed independently from only the operands that can
+# reach it: a divergence cell sums the amounts incident to one
+# commodity/vertex pair, an edge load sums the amounts carried by that edge,
+# a slack subtracts one capacity from one such load, and the congestion ratio
+# divides one load by one capacity.  Adding one operand to a running sum
+# contributes at most its numerator and denominator digits plus three carry
+# digits, and the slack subtraction and congestion division each compose one
+# further operand, so eight slack digits on top of a component's own totaled
+# operand digits bound that component's intermediates and derived numerator
+# and denominator exactly.  Demands take part only in exact conservation
+# comparisons, never in arithmetic, so they are covered by the measured
+# source echo instead of these budgets.
 _DERIVED_DIGIT_SLACK = 8
 
 # A result echoes its source tensor, then includes at most 512 divergence rows
 # and 128 edge rows. A derived rational occupies at most 2*d+24 canonical JSON
-# bytes when its budget bounds d decimal digits per component; the conservative
-# row overhead reserves ASCII keys, labels, separators, and vertices. Admission
-# measures the echoed source exactly and estimates the derived rows from the
-# request's own digit budget against this aggregate envelope, keeping the
-# serialized result inside the envelope with headroom under the 10 MiB
-# transport limit.
+# bytes when its own component bound limits d decimal digits per component;
+# the conservative row overhead reserves ASCII keys, labels, separators, and
+# vertices. Admission measures the echoed source exactly and prices every
+# divergence row and edge row from its own component's digit bound against
+# this aggregate envelope, keeping the serialized result inside the envelope
+# with headroom under the 10 MiB transport limit.
 MAX_PROFILE_RESULT_BYTES = 8 * 1024 * 1024
 _DIVERGENCE_ROW_OVERHEAD_BYTES = 128
 _EDGE_ROW_OVERHEAD_BYTES = 128
 _PROFILE_RESULT_HEADER_BYTES = 1_024
 
 # One pass performs at most 3F+E additions/subtractions, K negations, E
-# divisions, and K*V+3E comparisons. With the admitted maxima this is 1,552
-# logical steps; producer plus exact result replay therefore costs at most 3,104.
-MAX_PROFILE_LOGICAL_STEPS = 3_104
+# divisions, and K*V+3E comparisons. Every admitted commodity occupies V >= 2
+# distinct commodity-vertex cells because its source and sink differ, so the
+# 512-cell divergence budget admits at most 256 commodities, one negation
+# each. With the admitted maxima this is 1,792 logical steps; producer plus
+# exact result replay therefore costs at most 3,584.
+MAX_PROFILE_LOGICAL_STEPS = 3_584
 MAX_PROFILE_ADDITIONS_PER_PASS = 512
-MAX_PROFILE_NEGATIONS_PER_PASS = 16
+MAX_PROFILE_NEGATIONS_PER_PASS = MAX_COMMODITY_VERTEX_CELLS // 2
 MAX_PROFILE_DIVISIONS_PER_PASS = 128
 MAX_PROFILE_COMPARISONS_PER_PASS = 896
 
@@ -165,15 +171,51 @@ def _require_canonical_entries(
             raise ValueError("flow entry references an undeclared directed edge")
 
 
+def _operand_digits(value: CanonicalRational) -> int:
+    return len(value.num) + len(value.den)
+
+
+def _profile_component_digit_bounds(
+    flow: MulticommodityFlow,
+) -> tuple[
+    dict[tuple[str, int], int],
+    dict[tuple[int, int], int],
+    dict[tuple[int, int], int],
+]:
+    """Return exact divergence-cell, edge-load, and edge-slack digit bounds."""
+
+    cell_bounds: dict[tuple[str, int], int] = {}
+    load_bounds: dict[tuple[int, int], int] = {}
+    slack_bounds: dict[tuple[int, int], int] = {}
+    for edge in flow.network.edges:
+        edge_key = (edge.source, edge.target)
+        load_bounds[edge_key] = _DERIVED_DIGIT_SLACK
+        slack_bounds[edge_key] = _DERIVED_DIGIT_SLACK + _operand_digits(edge.capacity)
+    for entry in flow.entries:
+        digits = _operand_digits(entry.amount)
+        edge_key = (entry.source, entry.target)
+        load_bounds[edge_key] += digits
+        slack_bounds[edge_key] += digits
+        for vertex in (entry.source, entry.target):
+            key = (entry.commodity_id, vertex)
+            cell_bounds[key] = cell_bounds.get(key, _DERIVED_DIGIT_SLACK) + digits
+    for commodity in flow.commodities:
+        for vertex in range(flow.network.vertex_count):
+            cell_bounds.setdefault(
+                (commodity.commodity_id, vertex),
+                _DERIVED_DIGIT_SLACK,
+            )
+    return cell_bounds, load_bounds, slack_bounds
+
+
 def derived_profile_digit_budget(flow: MulticommodityFlow) -> int:
     """Return the exact digit bound shared by every derived profile component."""
 
-    return _DERIVED_DIGIT_SLACK + sum(
-        len(operand.num) + len(operand.den)
-        for operand in (
-            *(entry.amount for entry in flow.entries),
-            *(edge.capacity for edge in flow.network.edges),
-        )
+    cell_bounds, load_bounds, slack_bounds = _profile_component_digit_bounds(flow)
+    return max(
+        max(cell_bounds.values(), default=_DERIVED_DIGIT_SLACK),
+        max(load_bounds.values(), default=_DERIVED_DIGIT_SLACK),
+        max(slack_bounds.values(), default=_DERIVED_DIGIT_SLACK),
     )
 
 
@@ -190,20 +232,22 @@ def _require_derived_digit_budget(flow: MulticommodityFlow) -> int:
     return budget
 
 
-def _require_profile_output_admission(
-    flow: MulticommodityFlow,
-    *,
-    digit_budget: int,
-) -> None:
+def _require_profile_output_admission(flow: MulticommodityFlow) -> None:
+    """Reject tensors whose echoed source and priced rows exceed the envelope."""
+
+    cell_bounds, load_bounds, slack_bounds = _profile_component_digit_bounds(flow)
     source_bytes = len(encode_strict_json(flow.model_dump(mode="json")))
-    derived_rational_bytes = 2 * digit_budget + 24
-    divergence_bytes = (
-        len(flow.commodities)
-        * flow.network.vertex_count
-        * (derived_rational_bytes + _DIVERGENCE_ROW_OVERHEAD_BYTES)
+    divergence_bytes = sum(
+        2 * bound + 24 + _DIVERGENCE_ROW_OVERHEAD_BYTES
+        for bound in cell_bounds.values()
     )
-    edge_bytes = len(flow.network.edges) * (
-        2 * derived_rational_bytes + _EDGE_ROW_OVERHEAD_BYTES
+    edge_bytes = sum(
+        2 * load_bounds[(edge.source, edge.target)]
+        + 24
+        + 2 * slack_bounds[(edge.source, edge.target)]
+        + 24
+        + _EDGE_ROW_OVERHEAD_BYTES
+        for edge in flow.network.edges
     )
     estimated_bytes = (
         source_bytes + divergence_bytes + edge_bytes + _PROFILE_RESULT_HEADER_BYTES
@@ -232,9 +276,10 @@ class MulticommodityFlow(StrictModel):
     )
     commodities: tuple[CommodityDemand, ...] = Field(
         min_length=1,
-        max_length=MAX_MULTICOMMODITIES,
         description=(
-            "Distinct commodity records sorted lexicographically by commodity_id."
+            "Distinct commodity records sorted lexicographically by commodity_id. "
+            "The count is bounded by the commodity-vertex and commodity-edge "
+            "cell budgets rather than a fixed ceiling."
         ),
     )
     entries: tuple[CommodityEdgeFlow, ...] = Field(
@@ -255,8 +300,8 @@ class MulticommodityFlow(StrictModel):
             edge_keys=edge_keys,
             commodity_ids=commodity_ids,
         )
-        digit_budget = _require_derived_digit_budget(self)
-        _require_profile_output_admission(self, digit_budget=digit_budget)
+        _require_derived_digit_budget(self)
+        _require_profile_output_admission(self)
         return self
 
 
@@ -265,11 +310,12 @@ class MulticommodityFlowProfileRequest(StrictModel):
 
     flow: MulticommodityFlow = Field(
         description=(
-            "Canonical sparse tensor with at most 16 commodities, 128 nonzero "
-            "entries, 2,048 conceptual commodity-edge cells, 512 returned "
-            "commodity-vertex cells, an operand-derived exact digit budget for "
-            "every input and derived rational, and an admitted aggregate "
-            "result envelope below 8 MiB."
+            "Canonical sparse tensor bounded by derived quantities: at most "
+            "2,048 conceptual commodity-edge cells, 512 returned "
+            "commodity-vertex cells (hence at most 256 commodities), 128 "
+            "nonzero entries, a per-component exact digit budget derived from "
+            "each component's own operands, and an admitted aggregate result "
+            "envelope below 8 MiB."
         )
     )
 
@@ -357,7 +403,6 @@ class MulticommodityFlowProfileResult(StrictModel):
 __all__ = [
     "MAX_COMMODITY_EDGE_CELLS",
     "MAX_COMMODITY_VERTEX_CELLS",
-    "MAX_MULTICOMMODITIES",
     "MAX_MULTICOMMODITY_EDGES",
     "MAX_PROFILE_ADDITIONS_PER_PASS",
     "MAX_PROFILE_COMPARISONS_PER_PASS",

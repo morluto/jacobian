@@ -18,12 +18,18 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "combinatorics.set_function.monotonicity",
         AdmissionDecision.KEEP,
-        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+        "version-2 re-admission: kernel is the covering-relation scan (n*2^n exact "
+        "inequalities) with the ground set widened to 16 and a 128-digit per-value "
+        "height bound keeping every comparison on small big-ints; distinct exact "
+        "bounded decision with materially wider leverage",
     ),
     OperationAdmission(
         "combinatorics.set_function.submodularity",
         AdmissionDecision.KEEP,
-        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+        "version-2 re-admission: kernel swapped from the O(4^n) all-pairs scan to "
+        "the exact local characterization (C(n,2)*2^n inequalities) with the ground "
+        "set widened to 16 and a 128-digit per-value height bound; distinct exact "
+        "bounded decision with materially wider leverage",
     ),
 )
 

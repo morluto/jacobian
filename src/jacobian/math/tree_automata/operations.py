@@ -78,7 +78,7 @@ def reachable_state_profile(
     if total_witness_nodes > MAX_REACHABILITY_WITNESS_NODES:
         raise ValueError("reachable-state witness output exceeds the node bound")
 
-    return ReachableStateProfile(
+    return ReachableStateProfile.model_construct(
         automaton=automaton,
         reachable_states=reachable_states,
         unreachable_states=tuple(
@@ -106,6 +106,30 @@ def _constructible_state_count(automaton: BottomUpTreeAutomaton) -> int:
         known = grown
 
 
+def _reachability_price_components(
+    automaton: BottomUpTreeAutomaton,
+) -> tuple[int, int, int, int]:
+    """Return (sort work, per-scan work, scan rounds, admission closure res cans)."""
+
+    transition_count = len(automaton.transitions)
+    maximum_arity = max(
+        (len(row.child_states) for row in automaton.transitions), default=0
+    )
+    sort_rounds = max(1, (transition_count - 1).bit_length())
+    sort_work = transition_count * sort_rounds * (4 + maximum_arity)
+    per_scan_work = 2 * automaton.state_count + sum(
+        6 + 4 * len(row.child_states) for row in automaton.transitions
+    )
+    if any(not row.child_states for row in automaton.transitions):
+        constructible = _constructible_state_count(automaton)
+        scan_rounds = 2 * (constructible + 1)
+        closure_rescans = constructible + 1
+    else:
+        scan_rounds = 1
+        closure_rescans = 0
+    return sort_work, per_scan_work, scan_rounds, closure_rescans
+
+
 def _reachability_execution_work_bound(automaton: BottomUpTreeAutomaton) -> int:
     """Conservatively bound one native reachability profile's execution work.
 
@@ -130,35 +154,34 @@ def _reachability_execution_work_bound(automaton: BottomUpTreeAutomaton) -> int:
     Native callers perform exactly one profile per call.
     """
 
-    transition_count = len(automaton.transitions)
-    maximum_arity = max(
-        (len(row.child_states) for row in automaton.transitions), default=0
-    )
-    sort_rounds = max(1, (transition_count - 1).bit_length())
-    sort_work = transition_count * sort_rounds * (4 + maximum_arity)
-    if any(not row.child_states for row in automaton.transitions):
-        scan_rounds = 2 * (_constructible_state_count(automaton) + 1)
-    else:
-        scan_rounds = 1
-    scan_work = scan_rounds * (
-        2 * automaton.state_count
-        + sum(6 + 4 * len(row.child_states) for row in automaton.transitions)
+    sort_work, per_scan_work, scan_rounds, _ = _reachability_price_components(
+        automaton
     )
     witness_work = 3 * MAX_REACHABILITY_WITNESS_NODES
-    return sort_work + scan_work + witness_work
+    return sort_work + scan_rounds * per_scan_work + witness_work
 
 
 def _reachability_public_path_work_bound(automaton: BottomUpTreeAutomaton) -> int:
-    """Price the public path's three profile invocations against one budget.
+    """Price the public path's admission evaluation plus its three profiles.
 
     The MCP request boundary performs one profile for request admission, one
     for execution, and one for source-bound result replay, so it admits the
     shared ``MAX_TREE_AUTOMATON_REACHABILITY_WORK`` envelope only when three
-    single-profile executions fit inside it.  Native calls perform one
-    profile and are priced by ``_reachability_execution_work_bound`` alone.
+    single-profile executions fit inside it.  Evaluating that admission bound
+    itself already runs the constructible-state closure prepass once, and the
+    closure stabilizes within ``constructible + 1`` whole-set rescans at the
+    same per-scan cost as a saturation scan, so that first evaluation is
+    charged on top of the three executions instead of escaping the budget.
+    Native calls perform one profile and are priced by
+    ``_reachability_execution_work_bound`` alone.
     """
 
-    return 3 * _reachability_execution_work_bound(automaton)
+    sort_work, per_scan_work, scan_rounds, closure_rescans = (
+        _reachability_price_components(automaton)
+    )
+    witness_work = 3 * MAX_REACHABILITY_WITNESS_NODES
+    one_profile = sort_work + scan_rounds * per_scan_work + witness_work
+    return 3 * one_profile + closure_rescans * per_scan_work
 
 
 def _transition_key(

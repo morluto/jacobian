@@ -97,11 +97,13 @@ class TreeAutomatonReachabilityRequest(StrictModel):
     A schema-valid automaton can still exceed two coupled work envelopes that
     validation enforces before execution:
 
-    - ``MAX_TREE_AUTOMATON_REACHABILITY_WORK`` (30,000,000 units) prices
-      transition sorting, one constructible-state closure prepass plus the
+    - ``MAX_TREE_AUTOMATON_REACHABILITY_WORK`` (30,000,000 units) prices one
+      profile's transition sorting, constructible-state closure prepass plus
       saturation scans over every transition row, and witness materialization
-      and recount, multiplied across the three public-path invocations:
-      request admission, execution, and source-bound result replay.
+      and recount, multiplied across the three public-path invocations of the
+      profile (request admission, execution, and source-bound result replay)
+      together with the constructible-state closure that request admission
+      itself evaluates.
     - ``MAX_REACHABILITY_WITNESS_NODES`` (4096 nodes) bounds the total node
       count summed over the minimum witnesses of all reachable states: it is
       an aggregate output limit across states, not a per-witness limit.
@@ -117,10 +119,11 @@ class TreeAutomatonReachabilityRequest(StrictModel):
             "Requests are additionally rejected when the coupled "
             "reachability work envelope (MAX_TREE_AUTOMATON_REACHABILITY_"
             "WORK = 30,000,000 units, priced across request admission, "
-            "execution, and source-bound result replay) or the aggregate "
-            "witness output envelope (MAX_REACHABILITY_WITNESS_NODES = "
-            "4096 nodes summed across every reachable state's minimum "
-            "witness) is exceeded"
+            "execution, and source-bound result replay together with "
+            "request admission's own constructible-state closure) or the "
+            "aggregate witness output envelope (MAX_REACHABILITY_WITNESS_"
+            "NODES = 4096 nodes summed across every reachable state's "
+            "minimum witness) is exceeded"
         ),
     )
 

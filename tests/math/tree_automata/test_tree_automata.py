@@ -403,27 +403,34 @@ class TestReachableStates:
     def test_result_binding_replay_rejects_non_minimum_witness(self):
         automaton = _simple_automaton()
         profile = reachable_state_profile(automaton)
-        forged = ReachableStateProfile.model_validate(
-            {
-                **profile.model_dump(),
-                "witnesses": [
-                    [
-                        0,
-                        {
-                            "symbol": 1,
-                            "children": [
-                                {"symbol": 0, "children": []},
-                                {"symbol": 0, "children": []},
-                            ],
-                        },
-                    ]
-                ],
-            }
-        )
-        assert tuple(state for state, _ in forged.witnesses) == (0,)
+        forged_payload = {
+            **profile.model_dump(),
+            "witnesses": [
+                [
+                    0,
+                    {
+                        "symbol": 1,
+                        "children": [
+                            {"symbol": 0, "children": []},
+                            {"symbol": 0, "children": []},
+                        ],
+                    },
+                ]
+            ],
+        }
 
-        with pytest.raises(ValueError, match="not bound"):
-            forged.require_source_binding()
+        with pytest.raises(ValidationError, match="not bound"):
+            ReachableStateProfile.model_validate(forged_payload)
+
+    def test_deserialized_profile_replays_binding_automatically(self):
+        automaton = _simple_automaton()
+        profile = reachable_state_profile(automaton)
+
+        payload = profile.model_dump()
+        revalidated = ReachableStateProfile.model_validate(payload)
+
+        assert revalidated == profile
+        assert revalidated == reachable_state_profile(automaton)
 
     def test_profile_shape_validators_reject_independent_forgeries(self):
         automaton = _simple_automaton()
@@ -657,9 +664,25 @@ class TestValidation:
         automaton = _seeded_chain_with_padded_rows(16)
 
         public_path = _reachability_public_path_work_bound(automaton)
-        assert public_path == 3 * _reachability_execution_work_bound(automaton)
+        assert public_path > 3 * _reachability_execution_work_bound(automaton)
+        assert public_path == 37_006_180
         assert public_path > 30_000_000
 
+        with pytest.raises(ValidationError, match="reachability work bound"):
+            TreeAutomatonReachabilityRequest(automaton=automaton)
+
+    def test_admission_closure_is_charged_against_shared_envelope(self):
+        automaton = _seeded_chain_with_padded_rows(14)
+
+        per_profile = _reachability_execution_work_bound(automaton)
+        assert per_profile == 9_575_448
+        assert 3 * per_profile <= 30_000_000
+
+        public_path = _reachability_public_path_work_bound(automaton)
+        assert public_path == 33_016_404
+        assert public_path > 30_000_000
+
+        assert isinstance(reachable_state_profile(automaton), ReachableStateProfile)
         with pytest.raises(ValidationError, match="reachability work bound"):
             TreeAutomatonReachabilityRequest(automaton=automaton)
 

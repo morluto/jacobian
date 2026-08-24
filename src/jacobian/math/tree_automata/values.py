@@ -187,13 +187,20 @@ class ReachableStateProfile(StrictModel):
             raise ValueError("reachable-state witness output exceeds the node bound")
         return self
 
+    @model_validator(mode="after")
+    def require_source_bound_profile(self) -> Self:
+        self.require_source_binding()
+        return self
+
     def require_source_binding(self) -> None:
         """Replay the exact least fixed point against the retained automaton.
 
-        The producing kernel skips this replay so one admitted execution
-        performs and prices exactly one profile; the public path invokes it
-        once as its source-bound result replay, and independently supplied
-        profiles can verify themselves through the same check.
+        Model validation invokes this replay automatically, so any
+        deserialized or independently supplied profile proves itself against
+        its automaton before being accepted as the declared exact result
+        type.  The producing kernel instead constructs via ``model_construct``
+        so one admitted execution performs exactly one profile; the public
+        path invokes this method once as its source-bound result replay.
         """
         from jacobian.math.tree_automata.operations import reachable_state_profile
 

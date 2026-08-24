@@ -184,9 +184,12 @@ class PolynomialSquareFreeDecompositionResult(StrictModel):
     """The square-free decomposition bound to its source polynomial.
 
     Retains the canonical source polynomial so validation replays
-    ``reconstructed = polynomial`` and, by exact division, the defining
-    relation ``polynomial = coefficient * product(factor^multiplicity)``
-    without ever forming a claimed product intermediate.
+    ``reconstructed = polynomial`` and the defining relation
+    ``polynomial = coefficient * product(factor^multiplicity)`` without
+    ever forming a claimed product intermediate: univariate sources replay
+    by bounded exact division, while multivariate sources — whose sparse
+    divisors can force exponentially dense exact quotients — replay by
+    comparing against the recomputed canonical monic decomposition.
     """
 
     polynomial: RationalPolynomial
@@ -367,16 +370,27 @@ def _verify_exact_factor_product(
 ) -> None:
     """Replay ``coefficient * product(factor ** multiplicity) == source``.
 
-    The replay divides the retained source by each factor once per unit of
-    multiplicity instead of forming the claimed product, so no intermediate
-    grows beyond the retained source envelope and a mismatched payload is
-    rejected at the first inexact division without expanding its claim.
-    Before each exact division, ``_require_bounded_replay_quotient``
-    derives from per-variable degree arithmetic alone a proven ceiling on
-    the support of the next quotient — and of any partial quotient the
-    backend could build while deciding divisibility — and rejects typedly,
-    before any expansion, when even that ceiling leaves the shared
-    representation envelope.
+    Univariate replays divide the retained source by each factor once per
+    unit of multiplicity instead of forming the claimed product, so a
+    mismatched payload is rejected at the first inexact division without
+    expanding its claim.  Before each exact division,
+    ``_require_bounded_replay_quotient`` derives from per-variable degree
+    arithmetic alone a proven ceiling on the support of the next quotient —
+    and of any partial quotient the backend could build while deciding
+    divisibility — and rejects typedly, before any expansion, when even
+    that ceiling leaves the shared representation envelope.
+
+    A sparse multivariate divisor can force an exact quotient exponentially
+    denser than its inputs, and the degree-box ceiling then also
+    overestimates genuinely sparse cofactors of admitted sources, so
+    rejecting above the envelope would crash valid operation outputs.
+    Multivariate replays therefore never divide: they recompute the
+    canonical monic decomposition of the retained source with the same
+    bounded backend invocation the operation itself performs and compare
+    the coefficient and the multiplicity-weighted monic records against
+    the claim.  Unique monic factorization makes that match equivalent to
+    the defining relation, so neither lane materializes an unreconstructed
+    intermediate.
     """
 
     from sympy import Poly, Rational
@@ -385,10 +399,13 @@ def _verify_exact_factor_product(
     from jacobian.math.polynomials._conversions import (
         rational_polynomial_to_sympy,
     )
+    from jacobian.math.polynomials._sympy import (
+        polynomial_square_free_decomposition,
+    )
 
     if coefficient.as_fraction() == 0 and factors:
         raise ValueError("results with zero content retain no factors")
-    quotient = source
+    claimed = []
     for record in factors:
         require_polynomial_budget(
             record.factor,
@@ -399,8 +416,32 @@ def _verify_exact_factor_product(
         )
         if _polynomial_total_degree(record.factor) == 0:
             raise ValueError(f"{label} factor must be non-constant")
-        base = rational_polynomial_to_sympy(record.factor)
-        for _ in range(record.multiplicity):
+        claimed.append(
+            (rational_polynomial_to_sympy(record.factor), record.multiplicity)
+        )
+    if len(source.gens) > 1:
+        try:
+            recomputed_coefficient, recomputed_factors, _ = (
+                polynomial_square_free_decomposition(source)
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            raise ValueError(f"invalid {label} factor replay") from exc
+        replayed = sorted(
+            (multiplicity, tuple(base.terms())) for base, multiplicity in claimed
+        )
+        canonical = sorted(
+            (multiplicity, tuple(factor.terms()))
+            for factor, multiplicity in recomputed_factors
+        )
+        if (
+            Rational(*coefficient.as_integer_ratio()) != recomputed_coefficient
+            or replayed != canonical
+        ):
+            raise ValueError(mismatch_message)
+        return
+    quotient = source
+    for base, multiplicity in claimed:
+        for _ in range(multiplicity):
             _require_bounded_replay_quotient(
                 quotient,
                 base,
@@ -425,19 +466,15 @@ def _verify_exact_factor_product(
 def _require_bounded_replay_quotient(
     quotient: Any, divisor: Any, *, mismatch_message: str, label: str
 ) -> None:
-    """Preflight one exact division's quotient growth before ``exquo``.
+    """Preflight one univariate replay division before ``exquo``.
 
-    Per-variable degrees add without cancellation over ``QQ``, so an exact
-    division ``A = B * Q`` forces ``deg_i(Q) = deg_i(A) - deg_i(B)``, and
-    every monomial of ``Q`` lies in the box with those degree differences;
-    hence ``prod(deg_i(A) - deg_i(B) + 1)`` is a proven upper bound on the
-    quotient's support.  The backend's division algorithm likewise only
-    builds partial quotients whose monomials stay inside that box, so the
-    same product bounds the work of an inexact attempt.  A negative degree
+    Degrees add without cancellation over ``QQ``, so an exact division
+    ``A = B * Q`` forces ``deg(Q) = deg(A) - deg(B)``; a negative
     difference proves non-divisibility outright and rejects the claimed
-    reconstruction; a product beyond ``_MAX_REPLAY_QUOTIENT_TERMS`` cannot
-    guarantee bounded expansion and rejects the payload before any backend
-    work instead of materializing up to that many terms.
+    reconstruction.  The support bound also covers any partial quotient
+    the backend builds while deciding divisibility, so the shared
+    ``_MAX_REPLAY_QUOTIENT_TERMS`` envelope bounds the work of every
+    division this lane performs.
     """
 
     if quotient.is_zero:

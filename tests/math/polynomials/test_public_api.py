@@ -543,7 +543,7 @@ def test_result_models_parse_coefficients_above_int_str_limit() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Exact-division quotient preflight (#2298 replay boundedness)
+# Bounded source-bound replay (#2298)
 # ---------------------------------------------------------------------------
 
 
@@ -582,18 +582,17 @@ def _multivariate_binomial_box(variables: tuple[str, ...], exponent: int) -> Any
     return build(exponent_for_selected=exponent), build(exponent_for_selected=1)
 
 
-def test_square_free_replay_preflights_dense_multivariate_quotients(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_square_free_replay_rejects_dense_multivariate_claims_without_dividing() -> (
+    None
+):
     """The eight-variable binomial product payload is rejected before expansion.
 
     The 256-term source ``prod(v_i^64 - 1)`` and the 256-term claimed factor
     ``prod(v_i - 1)`` both pass the shared wire budgets, but their exact
     quotient ``prod(1 + v_i + ... + v_i^63)`` would carry ``64^8`` monomials.
-    Per-variable degree arithmetic proves that ceiling before any division:
-    ``prod(deg_i(source) - deg_i(factor) + 1) = 64^8``, far beyond the
-    4,096-term representation envelope, so validation must reject typedly
-    without ever calling ``exquo``.
+    Multivariate validation therefore never divides: it recomputes the
+    canonical monic decomposition of the retained source and rejects the
+    mismatched records typedly without materializing any quotient.
     """
 
     from pydantic import ValidationError
@@ -606,12 +605,7 @@ def test_square_free_replay_preflights_dense_multivariate_quotients(
 
     variables = tuple(f"v{index}" for index in range(8))
     source, factor = _multivariate_binomial_box(variables, 64)
-
-    def fail_fast(self, other):
-        raise AssertionError("exquo must not run once the preflight rejects")
-
-    monkeypatch.setattr(Poly, "exquo", fail_fast)
-    with pytest.raises(ValidationError, match="preflight budget"):
+    with pytest.raises(ValidationError, match="must reconstruct"):
         PolynomialSquareFreeDecompositionResult(
             polynomial=source,
             coefficient=CanonicalRational(num="1", den="1"),
@@ -620,13 +614,13 @@ def test_square_free_replay_preflights_dense_multivariate_quotients(
         )
 
 
-def test_square_free_replays_multivariate_pure_power_at_the_preflight_cap() -> None:
-    """``(x + y)^64`` replays exactly: its degree box is exactly 4,096.
+def test_multivariate_square_free_results_still_replay_against_source() -> None:
+    """Multivariate decompositions keep validating under bounded replay.
 
-    The first replay division has per-variable degree room 63, so the proven
-    quotient support bound is ``(63 + 1) * (63 + 1) = 4096`` — exactly the
-    shared representation envelope.  A legitimate operation output at the
-    boundary must still validate and round-trip.
+    The canonical recomparison lane must admit exactly what the producer
+    emits: a pure power at the former degree-box boundary, a smaller
+    multiplicity-bearing bivariate part, and a content-carrying
+    decomposition round-trip through the operation and the validator.
     """
 
     from math import comb
@@ -639,34 +633,128 @@ def test_square_free_replays_multivariate_pure_power_at_the_preflight_cap() -> N
         polynomial_square_free_decomposition,
     )
 
-    request = PolynomialSquareFreeRequest(
-        polynomial=_sparse_polynomial(
+    requests = (
+        _sparse_polynomial(
             ("x", "y"),
             {(64 - k, k): str(comb(64, k)) for k in range(65)},
-        )
+        ),
+        _sparse_polynomial(("x", "y"), {(2, 2): "1", (1, 1): "-2", (0, 0): "1"}),
+        _sparse_polynomial(
+            ("x", "y"),
+            {(2, 2): "3", (2, 0): "-3", (0, 2): "-3", (0, 0): "3"},
+        ),
     )
-    result = polynomial_square_free_decomposition(request)
-    records = [
-        (len(record.factor.polynomial.terms), record.multiplicity)
-        for record in result.factors
-    ]
-    assert records == [(2, 64)]
+    expected_records = ([(2, 64)], [(2, 2)], [(4, 1)])
+    for request, expected in zip(requests, expected_records, strict=True):
+        result = polynomial_square_free_decomposition(
+            PolynomialSquareFreeRequest(polynomial=request)
+        )
+        records = [
+            (len(record.factor.polynomial.terms), record.multiplicity)
+            for record in result.factors
+        ]
+        assert records == expected
+        assert result.reconstructed == result.polynomial
+        assert (
+            PolynomialSquareFreeDecompositionResult.model_validate(result.model_dump())
+            == result
+        )
+
+
+def test_square_free_replay_admits_sparse_cofactors_above_the_division_box() -> None:
+    """A legitimate output whose degree box exceeds the envelope validates.
+
+    For ``(x_1^16 + x_3^16) * (x_2 + ... + x_8)^3`` the first replay
+    division's degree box is ``4^7 = 16384`` terms while the true cofactor
+    is the 84-term cube, so an envelope-rejected division replay crashed
+    the operation on this admitted 168-term request.  The recomparison
+    lane verifies such outputs against the recomputed canonical parts
+    without dividing, and a forged claim over the same source still fails.
+    """
+
+    from collections import defaultdict
+    from itertools import repeat
+
+    from pydantic import ValidationError
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.polynomials._models import (
+        PolynomialSquareFreeDecompositionResult,
+        PolynomialSquareFreeFactor,
+    )
+
+    def multiply(left, right):
+        product: dict[tuple[int, ...], int] = defaultdict(int)
+        for left_exponents, left_coefficient in left.items():
+            for right_exponents, right_coefficient in right.items():
+                product[
+                    tuple(
+                        a + b
+                        for a, b in zip(left_exponents, right_exponents, strict=True)
+                    )
+                ] += left_coefficient * right_coefficient
+        return dict(product)
+
+    size = 8
+    linear = {
+        tuple(1 if index == j else 0 for index in range(size)): 1
+        for j in range(1, size)
+    }
+    cube = {tuple(repeat(0, size)): 1}
+    for _ in range(3):
+        cube = multiply(cube, linear)
+    binomials = {
+        tuple(16 if index == peak else 0 for index in range(size)): 1 for peak in (0, 2)
+    }
+    source_terms = multiply(binomials, cube)
+    assert len(source_terms) == 168
+    source = _sparse_polynomial(
+        tuple(f"x{index}" for index in range(1, size + 1)),
+        {exponents: str(value) for exponents, value in source_terms.items()},
+    )
+    result = PolynomialSquareFreeDecompositionResult(
+        polynomial=source,
+        coefficient=CanonicalRational(num="1", den="1"),
+        factors=(
+            PolynomialSquareFreeFactor(
+                factor=_sparse_polynomial(
+                    source.variables,
+                    {exponents: str(value) for exponents, value in binomials.items()},
+                ),
+                multiplicity=1,
+            ),
+            PolynomialSquareFreeFactor(
+                factor=_sparse_polynomial(
+                    source.variables,
+                    {exponents: str(value) for exponents, value in linear.items()},
+                ),
+                multiplicity=3,
+            ),
+        ),
+        reconstructed=source,
+    )
     assert (
         PolynomialSquareFreeDecompositionResult.model_validate(result.model_dump())
         == result
     )
 
+    forged_factor = _sparse_polynomial(source.variables, {(1,) * size: "1"})
+    with pytest.raises(ValidationError, match="must reconstruct"):
+        PolynomialSquareFreeDecompositionResult(
+            polynomial=source,
+            coefficient=CanonicalRational(num="1", den="1"),
+            factors=(PolynomialSquareFreeFactor(factor=forged_factor, multiplicity=1),),
+            reconstructed=source,
+        )
 
-def test_square_free_replay_narrows_conservatively_above_the_preflight_cap(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A provably small true quotient just past the bound is still rejected.
 
-    Dividing ``x^64 y^64 - 1`` by ``x - 1`` would leave degree room 63 in
-    ``x`` and 64 in ``y``, so the proven support ceiling is ``64 * 65 =
-    4160 > 4096`` even though this particular quotient would hold only 65
-    terms.  The conservative envelope is derived from degrees alone and is
-    enforced typedly before any backend work; no exact division may run.
+def test_square_free_results_require_canonical_square_free_parts() -> None:
+    """A product-correct but non-coprime grouping is not the decomposition.
+
+    ``(x - 1) * ((x - 1)(y - 1))**2`` equals the retained source
+    ``(x - 1)**3 * (y - 1)**2``, so every exact-division step would
+    succeed; only the unique canonical monic square-free parts
+    authenticate the claimed records.
     """
 
     from pydantic import ValidationError
@@ -677,17 +765,34 @@ def test_square_free_replay_narrows_conservatively_above_the_preflight_cap(
         PolynomialSquareFreeFactor,
     )
 
-    source = _sparse_polynomial(("x", "y"), {(64, 64): "1", (0, 0): "-1"})
-    factor = _sparse_polynomial(("x", "y"), {(1, 0): "1", (0, 0): "-1"})
-
-    def fail_fast(self, other):
-        raise AssertionError("exquo must not run once the preflight rejects")
-
-    monkeypatch.setattr(Poly, "exquo", fail_fast)
-    with pytest.raises(ValidationError, match="preflight budget"):
+    source = _sparse_polynomial(
+        ("x", "y"),
+        {
+            (3, 2): "1",
+            (3, 1): "-2",
+            (3, 0): "1",
+            (2, 2): "-3",
+            (2, 1): "6",
+            (2, 0): "-3",
+            (1, 2): "3",
+            (1, 1): "-6",
+            (1, 0): "3",
+            (0, 2): "-1",
+            (0, 1): "2",
+            (0, 0): "-1",
+        },
+    )
+    linear = _sparse_polynomial(("x", "y"), {(1, 0): "1", (0, 0): "-1"})
+    mixed = _sparse_polynomial(
+        ("x", "y"), {(1, 1): "1", (1, 0): "-1", (0, 1): "-1", (0, 0): "1"}
+    )
+    with pytest.raises(ValidationError, match="must reconstruct"):
         PolynomialSquareFreeDecompositionResult(
             polynomial=source,
             coefficient=CanonicalRational(num="1", den="1"),
-            factors=(PolynomialSquareFreeFactor(factor=factor, multiplicity=1),),
+            factors=(
+                PolynomialSquareFreeFactor(factor=linear, multiplicity=1),
+                PolynomialSquareFreeFactor(factor=mixed, multiplicity=2),
+            ),
             reconstructed=source,
         )

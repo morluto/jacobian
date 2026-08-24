@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
-
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
-from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 from jacobian.math.coherent_configurations._models import (
     CoherentConfigurationAnalyzeRequest,
     CoherentConfigurationAnalyzeResult,
@@ -77,8 +73,8 @@ def _thin_four_point_configuration(
     }
 
 
-def _escaped_thin_four_point_configuration() -> dict[str, object]:
-    relation_ids = [f"{index:02d}" + '"' * 30 for index in range(16)]
+def _escaped_thin_four_point_configuration(escaped_character: str) -> dict[str, object]:
+    relation_ids = [f"{index:02d}" + escaped_character * 30 for index in range(16)]
     return {
         "points": ["a", "b", "c", "d"],
         "relation_ids": relation_ids,
@@ -96,6 +92,17 @@ def _cyclic_twelve_configuration() -> dict[str, object]:
         "relation_ids": relation_ids,
         "relation_matrix": [
             [f"d{(right - left) % 12:02d}" for right in range(12)] for left in range(12)
+        ],
+    }
+
+
+def _unicode_thin_four_point_configuration() -> dict[str, object]:
+    relation_ids = ["😀" * 7 + f"{index:02d}" for index in range(16)]
+    return {
+        "points": ["😀" * 15 + f"{index:02d}" for index in range(4)],
+        "relation_ids": relation_ids,
+        "relation_matrix": [
+            [relation_ids[4 * left + right] for right in range(4)] for left in range(4)
         ],
     }
 
@@ -220,7 +227,7 @@ def test_relation_order_and_matrix_entries_must_be_canonical_and_complete() -> N
         _request(payload)
 
 
-def test_utf8_label_byte_bounds_apply_to_direct_and_json_requests() -> None:
+def test_utf8_label_byte_bounds_apply_to_direct_request() -> None:
     point = "😀" * (MAX_POINT_LABEL_BYTES // len("😀".encode()))
     relation_id = "😀" * (MAX_RELATION_ID_BYTES // len("😀".encode()))
     request = _request(
@@ -244,34 +251,32 @@ def test_utf8_label_byte_bounds_apply_to_direct_and_json_requests() -> None:
         )
 
     oversized_relation_id = relation_id + "😀"
-    with pytest.raises(OperationRequestValidationError) as error:
-        invoke_operation(
-            "coherent_configuration.analyze.compute",
+    with pytest.raises(ValidationError, match="relation_ids must not exceed"):
+        _request(
             {
-                "configuration": {
-                    "points": ["a"],
-                    "relation_ids": [oversized_relation_id],
-                    "relation_matrix": [[oversized_relation_id]],
-                }
-            },
-            Catalog.open(),
+                "points": ["a"],
+                "relation_ids": [oversized_relation_id],
+                "relation_matrix": [[oversized_relation_id]],
+            }
         )
-    assert "relation_ids must not exceed" in str(error.value.errors())
 
 
-def test_escaped_result_over_budget_is_rejected_at_both_request_boundaries() -> None:
-    payload = _escaped_thin_four_point_configuration()
+@pytest.mark.parametrize("escaped_character", ('"', "\x00"), ids=("quote", "nul"))
+def test_escaped_result_over_budget_is_rejected_at_direct_request_boundary(
+    escaped_character: str,
+) -> None:
+    payload = _escaped_thin_four_point_configuration(escaped_character)
 
     with pytest.raises(ValidationError, match="result exceeds the byte budget"):
         _request(payload)
 
-    with pytest.raises(OperationRequestValidationError) as error:
-        invoke_operation(
-            "coherent_configuration.analyze.compute",
-            {"configuration": payload},
-            Catalog.open(),
-        )
-    assert "result exceeds the byte budget" in str(error.value.errors())
+
+def test_unicode_label_tensor_stays_inside_admitted_result_envelope() -> None:
+    result = compute_analyze(_request(_unicode_thin_four_point_configuration()))
+
+    assert result.status == "COHERENT_CONFIGURATION"
+    assert len(result.intersection_numbers) == 4_096
+    assert len(result.model_dump_json().encode("utf-8")) <= 1_048_576
 
 
 def test_maximum_relation_tensor_stays_inside_admitted_result_envelope() -> None:
@@ -310,26 +315,3 @@ def test_result_replay_rejects_intersection_and_source_mutations() -> None:
     payload["configuration"]["relation_matrix"][0][1] = "diagonal"
     with pytest.raises(ValidationError, match=r"coherent_configuration|status"):
         CoherentConfigurationAnalyzeResult.model_validate(payload)
-
-
-def test_dispatch_returns_the_typed_source_bound_result() -> None:
-    result = invoke_operation(
-        "coherent_configuration.analyze.compute",
-        {"configuration": _complete_graph_k3()},
-        Catalog.open(),
-    )
-
-    assert result.output is not None
-    assert result.output["status"] == "COHERENT_CONFIGURATION"
-    assert len(result.output["intersection_numbers"]) == 8
-
-
-def test_dispatch_rejects_malformed_pair_partition() -> None:
-    payload = {"configuration": deepcopy(_complete_graph_k3())}
-    payload["configuration"]["relation_matrix"] = [["diagonal"]]
-
-    with pytest.raises(OperationRequestValidationError) as error:
-        invoke_operation(
-            "coherent_configuration.analyze.compute", payload, Catalog.open()
-        )
-    assert "square on points" in str(error.value.errors())

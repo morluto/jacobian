@@ -62,7 +62,7 @@ def _source_bytes(source: CoherentConfigurationInput) -> int:
 def _json_string_byte_bound(value: str) -> int:
     """Conservatively bound one JSON string scalar, including escapes."""
 
-    return len(json.dumps(value, ensure_ascii=True).encode("utf-8"))
+    return len(json.dumps(value, ensure_ascii=False).encode("utf-8"))
 
 
 def _estimate_result_bytes(source: CoherentConfigurationInput) -> int:

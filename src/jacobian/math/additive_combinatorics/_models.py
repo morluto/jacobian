@@ -372,13 +372,14 @@ class SubsetSumProfileRequest(StrictModel):
             items = source.get("items")
             if isinstance(items, list):
                 source["items"] = tuple(items)
-            prepared["source"] = source
-            raw_items = source["items"]
-            if isinstance(raw_items, tuple) and len(raw_items) > MAX_SUBSET_SUM_ITEMS:
-                raise ValueError(
-                    "subset-sum profile source exceeds the "
-                    f"{MAX_SUBSET_SUM_ITEMS:,}-item profile bound"
-                )
+                prepared["source"] = source
+                if len(items) > MAX_SUBSET_SUM_ITEMS:
+                    raise ValueError(
+                        "subset-sum profile source exceeds the "
+                        f"{MAX_SUBSET_SUM_ITEMS:,}-item profile bound"
+                    )
+            else:
+                prepared["source"] = source
         return prepared
 
     @model_validator(mode="after")

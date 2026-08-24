@@ -52,13 +52,17 @@ def reachable_state_profile(
     child's witness satisfies the same rule recursively.
     """
 
-    if _reachability_execution_work_bound(automaton) > (
+    (
+        _sorted_transitions,
+        sort_work,
+        per_scan_work,
+        scan_rounds,
+        choices,
+    ) = _priced_saturation(automaton)
+    if sort_work + scan_rounds * per_scan_work + 3 * MAX_REACHABILITY_WITNESS_NODES > (
         MAX_TREE_AUTOMATON_REACHABILITY_WORK
     ):
         raise ValueError("tree automaton reachability work bound exceeded")
-
-    transitions = tuple(sorted(automaton.transitions, key=_transition_key))
-    choices, _scans = _saturate_choices(transitions, automaton.state_count)
 
     reachable_choices = tuple(
         (state, choice) for state, choice in enumerate(choices) if choice is not None
@@ -116,10 +120,24 @@ def _saturate_choices(
     )
 
 
-def _reachability_price_components(
+def _priced_saturation(
     automaton: BottomUpTreeAutomaton,
-) -> tuple[int, int, int]:
-    """Return (sort work, per-scan work, measured saturation scan rounds)."""
+) -> tuple[
+    tuple[TreeAutomatonTransition, ...],
+    int,
+    int,
+    int,
+    list[_WitnessChoice | None],
+]:
+    """Sort once, saturate once, and return rows, prices, rounds, and choices.
+
+    One invocation performs exactly one transition sort followed by one
+    saturation run to the fixed point, so a caller that consumes the returned
+    sorted rows, measured scan count, and choices has executed precisely one
+    priced pass: ``sort_work + scan_rounds * per_scan_work``.  Bound
+    evaluation and profile execution share this single pass, so the priced
+    quantity and the executed quantity cannot drift apart.
+    """
 
     transition_count = len(automaton.transitions)
     maximum_arity = max(
@@ -131,66 +149,94 @@ def _reachability_price_components(
         6 + 4 * len(row.child_states) for row in automaton.transitions
     )
     sorted_transitions = tuple(sorted(automaton.transitions, key=_transition_key))
-    _, scan_rounds = _saturate_choices(sorted_transitions, automaton.state_count)
+    choices, scan_rounds = _saturate_choices(sorted_transitions, automaton.state_count)
+    return (
+        sorted_transitions,
+        sort_work,
+        per_scan_work,
+        scan_rounds,
+        choices,
+    )
+
+
+def _reachability_price_components(
+    automaton: BottomUpTreeAutomaton,
+) -> tuple[int, int, int]:
+    """Return (sort work, per-scan work, measured saturation scan rounds)."""
+
+    (
+        _sorted_transitions,
+        sort_work,
+        per_scan_work,
+        scan_rounds,
+        _choices,
+    ) = _priced_saturation(automaton)
     return sort_work, per_scan_work, scan_rounds
 
 
 def _reachability_execution_work_bound(automaton: BottomUpTreeAutomaton) -> int:
     """Conservatively bound one native reachability profile's execution work.
 
-    Each call first evaluates this very bound, which prices one saturation
-    probe: the shared kernel loop run once over sorted rows to measure the
-    exact number of scan rounds the fixed point needs.  The probe is the same
-    code path the profile executes, so the measured round count equals the
-    profile's actual convergence depth by construction rather than by estimate;
-    it replaces the former worst-case charge of two rounds per constructible
+    One native call performs exactly one priced pass -- a single transition
+    sort followed by a single saturation whose scan count that pass itself
+    measures -- and then materializes and recounts at most the admitted
+    witness nodes, so the bound charges one pass plus witness work.
+    ``reachable_state_profile`` obtains both its bound decision and its
+    result from the same pass, so the priced quantity equals the executed
+    quantity by construction rather than by parallel bookkeeping; this
+    replaces the former worst-case charge of two rounds per constructible
     state, which rejected automata whose nullary seeds saturate immediately.
-    The probe itself always terminates inside the input schema alone: a scan
-    round repeats only when some choice was defined or improved, a
-    minimum-node witness never repeats a state along a root-to-leaf path
-    (substituting the higher occurrence of a repeated state for the lower one
-    would strictly shrink the tree while preserving the derived state), so the
-    witness heights -- and hence the rounds -- stay within ``state_count + 1``
-    no matter which automaton the request model admitted.  One native call
-    then executes the profile once more (sorting plus the measured scans) and
-    materializes then recounts at most the admitted witness nodes, so the
-    bound charges two probes' worth of sorting and scanning plus witness
-    work.  Every row scan visits its child-state tuple independently to
-    construct the lookup tuple, test that all children are known, add their
-    node counts, and compare an equal-size candidate's canonical transition
-    key.
+    The pass always terminates inside the input schema alone: a scan round
+    repeats only when some choice was defined or improved, a minimum-node
+    witness never repeats a state along a root-to-leaf path (substituting the
+    higher occurrence of a repeated state for the lower one would strictly
+    shrink the tree while preserving the derived state), so the witness
+    heights -- and hence the rounds -- stay within ``state_count + 1`` no
+    matter which automaton the request model admitted.  Every row scan visits
+    its child-state tuple independently to construct the lookup tuple, test
+    that all children are known, add their node counts, and compare an
+    equal-size candidate's canonical transition key.
 
     Native callers perform exactly one profile per call.
     """
 
-    sort_work, per_scan_work, scan_rounds = _reachability_price_components(automaton)
+    (
+        _sorted_transitions,
+        sort_work,
+        per_scan_work,
+        scan_rounds,
+        _choices,
+    ) = _priced_saturation(automaton)
     witness_work = 3 * MAX_REACHABILITY_WITNESS_NODES
-    return 2 * sort_work + 2 * scan_rounds * per_scan_work + witness_work
+    return sort_work + scan_rounds * per_scan_work + witness_work
 
 
 def _reachability_public_path_work_bound(automaton: BottomUpTreeAutomaton) -> int:
     """Price the public path's admission evaluation plus its three profiles.
 
     The MCP request boundary performs one profile for request admission, one
-    for execution, and one for source-bound result replay.  Each of those
-    three invocations sorts the transitions twice -- once inside its own
-    execution-bound evaluation, whose saturation probe measures the
-    convergence depth before any witness is materialized, and once when the
-    kernel sorts rows for its actual profile -- so together with the sort
-    performed while evaluating this very public bound the path performs seven
-    sorts in total, not one per profile.  Each invocation also runs two
-    probes' worth of scanning (its bound-evaluation probe plus its actual
-    saturation), so with the public bound's own probe the path again performs
-    seven probes' worth of scanning across three witness materializations,
-    all charged against the shared
-    ``MAX_TREE_AUTOMATON_REACHABILITY_WORK`` envelope instead of escaping the
-    budget.  Native calls perform one profile and are priced by
-    ``_reachability_execution_work_bound`` alone.
+    for execution, and one for source-bound result replay, and evaluating
+    this bound itself runs one more priced pass to measure the convergence
+    depth before admitting.  Each of those four passes performs exactly one
+    transition sort and one measured saturation -- every profile consumes its
+    own pass's sorted rows, measured rounds, and fixed-point choices, so no
+    additional sort or probe executes anywhere on the public path -- and the
+    three profiles additionally materialize witnesses.  The bound therefore
+    charges all four passes plus three witness materializations against the
+    shared ``MAX_TREE_AUTOMATON_REACHABILITY_WORK`` envelope, and the charged
+    counts equal the executed counts structurally.  Native calls perform one
+    profile and are priced by ``_reachability_execution_work_bound`` alone.
     """
 
-    sort_work, per_scan_work, scan_rounds = _reachability_price_components(automaton)
+    (
+        _sorted_transitions,
+        sort_work,
+        per_scan_work,
+        scan_rounds,
+        _choices,
+    ) = _priced_saturation(automaton)
     witness_work = 3 * MAX_REACHABILITY_WITNESS_NODES
-    return 7 * sort_work + 7 * scan_rounds * per_scan_work + 3 * witness_work
+    return 4 * sort_work + 4 * scan_rounds * per_scan_work + 3 * witness_work
 
 
 def _transition_key(

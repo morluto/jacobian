@@ -99,12 +99,15 @@ class TreeAutomatonReachabilityRequest(StrictModel):
 
     - ``MAX_TREE_AUTOMATON_REACHABILITY_WORK`` (30,000,000 units) prices one
       profile's transition sorting, saturation scans measured to their exact
-      convergence depth by a shared-code-path probe, and witness
-      materialization and recount, multiplied across the three public-path
-      invocations of the profile (request admission, execution, and
-      source-bound result replay) together with the convergence probes that
-      work admission itself evaluates.  The probe always terminates within
-      ``state_count + 1`` rounds for any schema-valid automaton.
+      convergence depth by a shared-code-path pass, and witness
+      materialization and recount, charged across the four priced passes the
+      public path performs: work admission's own convergence-measuring pass
+      plus one pass consumed by each of the three profile invocations
+      (request admission, execution, and source-bound result replay).  Each
+      pass performs exactly one sort and one saturation, and each profile
+      reuses its own pass's result, so no unpriced sort or probe executes.
+      The pass always terminates within ``state_count + 1`` rounds for any
+      schema-valid automaton.
     - ``MAX_REACHABILITY_WITNESS_NODES`` (4096 nodes) bounds the total node
       count summed over the minimum witnesses of all reachable states: it is
       an aggregate output limit across states, not a per-witness limit.
@@ -119,9 +122,10 @@ class TreeAutomatonReachabilityRequest(StrictModel):
             "states, 32 ranked symbols, and 4096 unique transitions. "
             "Requests are additionally rejected when the coupled "
             "reachability work envelope (MAX_TREE_AUTOMATON_REACHABILITY_"
-            "WORK = 30,000,000 units, priced across request admission, "
-            "execution, and source-bound result replay together with "
-            "request admission's own saturation convergence probes) or the "
+            "WORK = 30,000,000 units, priced across the four passes behind "
+            "request admission, execution, and source-bound result replay "
+            "together with request admission's own saturation convergence "
+            "pass) or the "
             "aggregate witness output envelope (MAX_REACHABILITY_WITNESS_"
             "NODES = 4096 nodes summed across every reachable state's "
             "minimum witness) is exceeded"

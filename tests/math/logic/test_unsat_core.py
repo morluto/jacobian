@@ -485,9 +485,7 @@ def test_request_bounds_nested_coefficients_through_preserving_wrappers(
 ) -> None:
     outer = "9" * 200
     inner = "9" * 200
-    declaration = (
-        "(declare-const x Int)" if logic == "QF_LIA" else ""
-    )
+    declaration = "(declare-const x Int)" if logic == "QF_LIA" else ""
     source = (
         f"(set-logic {logic})\n"
         f"{declaration}\n"

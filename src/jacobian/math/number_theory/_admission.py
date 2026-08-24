@@ -18,7 +18,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "congruence.periodic_union.profile.compute",
         AdmissionDecision.KEEP,
-        "distinct complete canonical common-period residue set with exact reconstruction and a separately bounded output obligation",
+        "distinct complete exact finite-period union profile with composable count, density, and residues",
     ),
     OperationAdmission(
         "integer.factor.certified_compute",

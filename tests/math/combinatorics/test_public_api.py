@@ -8,6 +8,12 @@ from jacobian.math import combinatorics
 def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the combinatorics public API."""
     expected = (
+        "ExactCoverItemMultiplicity",
+        "ExactCoverRow",
+        "ExactCoverSearchStatus",
+        "GeneralizedExactCoverInstance",
+        "GeneralizedExactCoverRequest",
+        "GeneralizedExactCoverResult",
         "IndexedRecurrenceResidual",
         "PolynomialCoefficientRecurrenceTableRequest",
         "PolynomialCoefficientRecurrenceTableResult",
@@ -17,6 +23,7 @@ def test_exact_public_api_symbols() -> None:
         "derangement_number",
         "double_factorial",
         "fibonacci_number",
+        "find_generalized_exact_cover",
         "integer_partitions",
         "lucas_number",
         "motzkin_number",

@@ -20,6 +20,13 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "exact vertex-degree map and degree histogram of a finite hypergraph",
     ),
     OperationAdmission(
+        "hypergraph.edge_intersections.compute",
+        AdmissionDecision.KEEP,
+        "complete exact source-bound indexed edge-pair intersection ledger, size "
+        "histogram, and canonical linearity violation with material reliability "
+        "leverage over caller-authored pair enumeration",
+    ),
+    OperationAdmission(
         "hypergraph.dual.compute",
         AdmissionDecision.KEEP,
         "exact dual hypergraph transposing vertices and edges",

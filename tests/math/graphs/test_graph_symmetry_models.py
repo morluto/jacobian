@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
@@ -9,13 +11,15 @@ from jacobian.canonical import (
     encode_strict_json,
 )
 from jacobian.math.graphs.symmetry._models import (
+    GraphEdgeOrbit,
     GraphSymmetryOrbitRequest,
     GraphSymmetryOrbitResult,
+    GraphVertexOrbit,
     _estimate_orbit_result_wire_bytes,
 )
 
 
-def _path_request() -> dict[str, object]:
+def _path_request() -> dict[str, Any]:
     return {
         "graph": {
             "vertices": ["a", "b", "c"],
@@ -24,7 +28,7 @@ def _path_request() -> dict[str, object]:
         "generators": [
             {
                 "generator_id": "reflection",
-                "mapping": {"a": "c", "b": "b", "c": "a"},
+                "mapping": [["a", "c"], ["b", "b"], ["c", "a"]],
             }
         ],
         "vertex_colors": [
@@ -38,13 +42,34 @@ def _path_request() -> dict[str, object]:
 def test_graph_symmetry_request_binds_total_color_preserving_generators() -> None:
     request = GraphSymmetryOrbitRequest.model_validate(_path_request())
 
-    assert request.generators[0].mapping["a"] == "c"
+    assert request.generators[0].mapping == (("a", "c"), ("b", "b"), ("c", "a"))
     assert request.vertex_colors[1].color == "middle"
+
+
+def test_graph_symmetry_request_rejects_object_shaped_mapping() -> None:
+    payload = _path_request()
+    payload["generators"] = [
+        {
+            "generator_id": "reflection",
+            "mapping": {"a": "c", "b": "b", "c": "a"},
+        }
+    ]
+
+    with pytest.raises(ValidationError, match="mapping"):
+        GraphSymmetryOrbitRequest.model_validate(payload)
 
 
 def test_graph_symmetry_request_rejects_incomplete_permutation() -> None:
     payload = _path_request()
-    payload["generators"][0]["mapping"].pop("c")  # type: ignore[index]
+    del payload["generators"][0]["mapping"][2]
+
+    with pytest.raises(ValidationError, match="total vertex permutation"):
+        GraphSymmetryOrbitRequest.model_validate(payload)
+
+
+def test_graph_symmetry_request_requires_declared_vertex_order_mapping() -> None:
+    payload = _path_request()
+    payload["generators"][0]["mapping"] = [["b", "b"], ["a", "c"], ["c", "a"]]
 
     with pytest.raises(ValidationError, match="total vertex permutation"):
         GraphSymmetryOrbitRequest.model_validate(payload)
@@ -52,7 +77,7 @@ def test_graph_symmetry_request_rejects_incomplete_permutation() -> None:
 
 def test_graph_symmetry_request_rejects_color_breaking_generator() -> None:
     payload = _path_request()
-    payload["vertex_colors"][2]["color"] = "distinguished"  # type: ignore[index]
+    payload["vertex_colors"][2]["color"] = "distinguished"
 
     with pytest.raises(ValidationError, match="preserve declared vertex colors"):
         GraphSymmetryOrbitRequest.model_validate(payload)
@@ -86,7 +111,7 @@ def _wide_orbit_payload(generators: int) -> dict[str, object]:
         "generators": [
             {
                 "generator_id": f"{'g' * 62}{index:02d}",
-                "mapping": {vertex: vertex for vertex in vertices},
+                "mapping": [[vertex, vertex] for vertex in vertices],
             }
             for index in range(generators)
         ],
@@ -150,11 +175,16 @@ def test_graph_symmetry_estimate_bounds_heterogeneous_representatives() -> None:
     ring = vertices[1:]
     successor = dict(zip(ring, [*ring[1:], ring[0]], strict=True))
     edges = sorted([a, b] if a < b else [b, a] for a, b in successor.items())
-    mapping = {"h" * 64: "h" * 64}
-    mapping.update(successor)
     payload = {
         "graph": {"vertices": vertices, "edges": edges},
-        "generators": [{"generator_id": "rotation", "mapping": mapping}],
+        "generators": [
+            {
+                "generator_id": "rotation",
+                "mapping": [
+                    [vertex, successor.get(vertex, vertex)] for vertex in vertices
+                ],
+            }
+        ],
     }
     request = GraphSymmetryOrbitRequest.model_validate(payload)
     result = _generator_orbits(request)
@@ -166,7 +196,7 @@ def test_graph_symmetry_estimate_bounds_heterogeneous_representatives() -> None:
 
 def test_graph_symmetry_request_requires_nfc_generator_identifiers() -> None:
     payload = _path_request()
-    payload["generators"][0]["generator_id"] = "refle\u0301ction"  # type: ignore[index]
+    payload["generators"][0]["generator_id"] = "refle\u0301ction"
 
     with pytest.raises(ValidationError, match="must use Unicode NFC"):
         GraphSymmetryOrbitRequest.model_validate(payload)
@@ -174,7 +204,7 @@ def test_graph_symmetry_request_requires_nfc_generator_identifiers() -> None:
 
 def test_graph_symmetry_request_requires_nfc_vertex_colors() -> None:
     payload = _path_request()
-    payload["vertex_colors"][0]["color"] = "\u0344endpoint"  # type: ignore[index]
+    payload["vertex_colors"][0]["color"] = "\u0344endpoint"
 
     with pytest.raises(ValidationError, match="vertex colors must use Unicode NFC"):
         GraphSymmetryOrbitRequest.model_validate(payload)
@@ -190,6 +220,41 @@ def test_graph_symmetry_request_requires_nfc_edge_colors() -> None:
 
     with pytest.raises(ValidationError, match="edge colors must use Unicode NFC"):
         GraphSymmetryOrbitRequest.model_validate(payload)
+
+
+def test_graph_symmetry_schema_publishes_nfc_requirement() -> None:
+    """math.find callers must see the NFC requirement before math.run rejects."""
+
+    from jacobian.math.graphs.symmetry._models import (
+        GraphAutomorphismGenerator,
+        GraphEdgeColor,
+        GraphSymmetryOrbitRequest,
+        GraphVertexColor,
+    )
+
+    generator_schema = GraphAutomorphismGenerator.model_json_schema()
+    vertex_color_schema = GraphVertexColor.model_json_schema()
+    edge_color_schema = GraphEdgeColor.model_json_schema()
+    request_schema = GraphSymmetryOrbitRequest.model_json_schema()
+
+    assert "NFC" in request_schema["$defs"]["GraphAutomorphismGenerator"]["properties"][
+        "generator_id"
+    ]["description"]
+    assert "NFC" in request_schema["$defs"]["GraphVertexColor"]["properties"]["color"][
+        "description"
+    ]
+    assert "NFC" in request_schema["$defs"]["GraphEdgeColor"]["properties"]["color"][
+        "description"
+    ]
+    assert (
+        "NFC"
+        in generator_schema["properties"]["generator_id"]["description"]
+        == request_schema["$defs"]["GraphAutomorphismGenerator"]["properties"][
+            "generator_id"
+        ]["description"]
+    )
+    assert "NFC" in vertex_color_schema["properties"]["color"]["description"]
+    assert "NFC" in edge_color_schema["properties"]["color"]["description"]
 
 
 def test_graph_symmetry_nfc_request_wire_matches_canonicalized_result() -> None:
@@ -222,18 +287,18 @@ def test_graph_symmetry_result_rejects_incomplete_orbit_partition() -> None:
             generator_ids=(),
             generator_count=0,
             vertex_orbits=(
-                {
-                    "orbit_index": 0,
-                    "representative": "a",
-                    "members": ["a"],
-                },
+                GraphVertexOrbit(
+                    orbit_index=0,
+                    representative="a",
+                    members=("a",),
+                ),
             ),
             edge_orbits=(
-                {
-                    "orbit_index": 0,
-                    "representative": ["a", "b"],
-                    "members": [["a", "b"]],
-                },
+                GraphEdgeOrbit(
+                    orbit_index=0,
+                    representative=("a", "b"),
+                    members=(("a", "b"),),
+                ),
             ),
             vertex_orbit_count=1,
             edge_orbit_count=1,
@@ -274,7 +339,11 @@ def _reflection_path_result_payload() -> dict[str, object]:
 def test_graph_symmetry_result_retains_declared_source_action() -> None:
     result = GraphSymmetryOrbitResult.model_validate(_reflection_path_result_payload())
 
-    assert result.source.generators[0].mapping == {"a": "c", "b": "b", "c": "a"}
+    assert result.source.generators[0].mapping == (
+        ("a", "c"),
+        ("b", "b"),
+        ("c", "a"),
+    )
     assert result.source.vertex_colors[1].color == "middle"
     assert result.action == "DECLARED_GENERATED_SUBGROUP"
     assert (
@@ -301,6 +370,45 @@ def test_graph_symmetry_operation_produces_source_bound_result() -> None:
     assert tuple(orbit.members for orbit in result.edge_orbits) == (
         (("a", "b"), ("b", "c")),
     )
+
+
+def test_graph_symmetry_retained_source_action_is_deeply_immutable() -> None:
+    """A validated result must stay bound to its declared action forever."""
+
+    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+
+    request = _reflection_path_source()
+    result = _generator_orbits(request)
+
+    mapping = result.source.generators[0].mapping
+    assert isinstance(mapping, tuple)
+    assert all(
+        isinstance(pair, tuple) and all(isinstance(item, str) for item in pair)
+        for pair in mapping
+    )
+    with pytest.raises(ValidationError, match="frozen"):
+        result.source.generators[0].mapping = ()
+
+
+def test_graph_symmetry_den_num_identity_generator_canonicalizes() -> None:
+    """Labels spelling the canonical rational keys must not collide."""
+
+    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+
+    payload = {
+        "graph": {"vertices": ["den", "num"], "edges": [["den", "num"]]},
+        "generators": [
+            {
+                "generator_id": "identity",
+                "mapping": [["den", "den"], ["num", "num"]],
+            }
+        ],
+    }
+    request = GraphSymmetryOrbitRequest.model_validate(payload)
+    result = _generator_orbits(request)
+
+    encoded = canonicalize_json(result.model_dump(mode="json"))
+    assert b"vertex_orbit_count" in encoded
 
 
 def test_graph_symmetry_result_rejects_singletons_contradicting_reflection() -> None:
@@ -377,7 +485,7 @@ def test_graph_symmetry_result_rejects_color_modes_contradicting_source() -> Non
         "generators": [
             {
                 "generator_id": "reflection",
-                "mapping": {"a": "c", "b": "b", "c": "a"},
+                "mapping": [["a", "c"], ["b", "b"], ["c", "a"]],
             }
         ],
     }

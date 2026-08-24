@@ -16,7 +16,14 @@ MAX_GRAPH_SYMMETRY_EDGES = 4_096
 MAX_GRAPH_SYMMETRY_GENERATORS = 64
 
 GraphSymmetryLabel = Annotated[str, Field(min_length=1, max_length=64)]
-GraphSymmetryColor = Annotated[str, Field(min_length=1, max_length=128)]
+GraphSymmetryColor = Annotated[
+    str,
+    Field(
+        min_length=1,
+        max_length=128,
+        description="Declared color label; must already be normalized to Unicode NFC.",
+    ),
+]
 GraphSymmetryEdge = tuple[GraphSymmetryLabel, GraphSymmetryLabel]
 
 
@@ -25,9 +32,19 @@ def _canonical_edge(left: str, right: str) -> tuple[str, str]:
 
 
 class GraphAutomorphismGenerator(StrictModel):
-    generator_id: GraphSymmetryLabel
-    mapping: dict[GraphSymmetryLabel, GraphSymmetryLabel] = Field(
-        max_length=MAX_GRAPH_SYMMETRY_VERTICES
+    generator_id: GraphSymmetryLabel = Field(
+        description=(
+            "Unique identifier of this declared generator; must already be "
+            "normalized to Unicode NFC."
+        )
+    )
+    mapping: tuple[tuple[GraphSymmetryLabel, GraphSymmetryLabel], ...] = Field(
+        max_length=MAX_GRAPH_SYMMETRY_VERTICES,
+        description=(
+            "Total vertex permutation as (vertex, image) pairs covering every "
+            "declared vertex exactly once in the graph's declared vertex "
+            "order; labels must already be normalized to Unicode NFC."
+        ),
     )
 
 
@@ -94,10 +111,15 @@ def _validate_automorphism_generator(
     vertex_colors: dict[GraphSymmetryLabel, GraphSymmetryColor],
     edge_colors: dict[GraphSymmetryEdge, GraphSymmetryColor],
 ) -> None:
-    mapping = generator.mapping
-    if set(mapping) != vertex_set or set(mapping.values()) != vertex_set:
+    mapping = dict(generator.mapping)
+    if (
+        tuple(vertex for vertex, _ in generator.mapping) != vertices
+        or set(mapping.values()) != vertex_set
+    ):
         raise ValueError(
-            "every graph symmetry generator must be a total vertex permutation"
+            "every graph symmetry generator must be a total vertex permutation "
+            "declared as one (vertex, image) pair per declared vertex in the "
+            "graph's declared vertex order"
         )
     if any(
         vertex_colors[vertex] != vertex_colors[mapping[vertex]] for vertex in vertices

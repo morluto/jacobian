@@ -74,7 +74,7 @@ def _declared_orbit_partitions(
     """
     vertices = tuple(sorted(request.graph.vertices))
     edges = tuple(sorted(request.graph.edges))
-    vertex_actions = tuple(generator.mapping for generator in request.generators)
+    vertex_actions = tuple(dict(generator.mapping) for generator in request.generators)
     edge_actions = tuple(
         {edge: _canonical_edge(mapping[edge[0]], mapping[edge[1]]) for edge in edges}
         for mapping in vertex_actions
@@ -130,8 +130,12 @@ GRAPH_SYMMETRY_OPERATIONS: MathTools = (
         version="6",
         title="Exact declared graph-symmetry orbit partitions",
         description=(
-            "Validate explicit color-preserving graph automorphism generators and "
-            "compute the complete vertex and edge orbits of their generated subgroup."
+            "Validate explicit color-preserving graph automorphism generators "
+            "and compute the complete vertex and edge orbits of their "
+            "generated subgroup. Each generator is a total vertex permutation "
+            "declared as (vertex, image) pairs covering every declared vertex "
+            "once in the graph's declared vertex order; generator identifiers "
+            "and declared colors must already be normalized to Unicode NFC."
         ),
         request_type=GraphSymmetryOrbitRequest,
         result_type=GraphSymmetryOrbitResult,
@@ -161,11 +165,11 @@ GRAPH_SYMMETRY_OPERATIONS: MathTools = (
                     "generators": [
                         {
                             "generator_id": "reflection",
-                            "mapping": {
-                                "a": "c",
-                                "b": "b",
-                                "c": "a",
-                            },
+                            "mapping": [
+                                ["a", "c"],
+                                ["b", "b"],
+                                ["c", "a"],
+                            ],
                         }
                     ],
                     "vertex_colors": [

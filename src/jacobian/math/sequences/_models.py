@@ -12,9 +12,11 @@ from jacobian._exact import (
     CanonicalRational,
 )
 from jacobian._models import StrictModel
+from jacobian.canonical import CanonicalLimits
 
-_MAX_SEQUENCE_LENGTH = 10_000
+_MAX_SEQUENCE_LENGTH = 100_000
 MAX_INTEGER_SEQUENCE_ITEM_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
+_MAX_SEQUENCE_WIRE_BYTES = CanonicalLimits().max_output_bytes // 2
 
 
 class IntegerSequenceRequest(StrictModel):
@@ -34,6 +36,17 @@ class IntegerSequenceRequest(StrictModel):
             raise ValueError(
                 "sequence item exceeds the "
                 f"{MAX_INTEGER_SEQUENCE_ITEM_DIGITS}-digit bound"
+            )
+        # Result-sensitive transport guard: estimate wire bytes before allocation.
+        # Small 1-digit values at 100k ~400KB pass; 10k x 256-digit ~2.5MB pass;
+        # 400k x 256-digit would exceed 10MiB and is rejected here with a
+        # composition hint rather than a coarse n ceiling.
+        estimated = sum(len(value) + 3 for value in self.values) + 64
+        if estimated > _MAX_SEQUENCE_WIRE_BYTES:
+            raise ValueError(
+                "sequence request exceeds the "
+                f"{_MAX_SEQUENCE_WIRE_BYTES}-byte transport envelope; "
+                "chunk the sequence into ≤10MiB pieces and compose via typed values"
             )
         return self
 

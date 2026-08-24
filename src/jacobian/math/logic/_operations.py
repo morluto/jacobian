@@ -278,15 +278,22 @@ class _SmtLibStructure(NamedTuple):
 
 
 def _atom_numeral_weight(atom: str) -> int:
-    """Return the widest digit run in one atom; bit-vector literals count whole."""
+    """Return the digit width of one classified numeric-literal token.
+
+    Numeral, decimal, and bit-vector spellings expand into big integers or
+    rationals inside the solver. Digits inside simple symbols are interned
+    names and carry no weight; malformed tokens remain the backend parser's
+    typed rejection.
+    """
 
     if atom.startswith("#"):
         return max(len(atom) - 2, 0)
-    longest = current = 0
-    for character in atom:
-        current = current + 1 if character.isdigit() else 0
-        longest = max(longest, current)
-    return longest
+    if atom.isdigit():
+        return len(atom)
+    head, separator, tail = atom.partition(".")
+    if separator and head.isdigit() and (not tail or tail.isdigit()):
+        return len(head) + len(tail)
+    return 0
 
 
 def _smtlib_structure(source: str) -> _SmtLibStructure:

@@ -245,6 +245,68 @@ def test_smt_request_admits_a_numeral_at_the_digit_boundary_and_still_solves() -
     assert result.model_smtlib is not None
 
 
+def test_atom_numeral_weight_classifies_literal_tokens_not_symbols() -> None:
+    assert operations._atom_numeral_weight("9" * 193) == 193
+    assert operations._atom_numeral_weight("007") == 3
+    assert operations._atom_numeral_weight("1234.5678") == 8
+    assert operations._atom_numeral_weight("1.") == 1
+    assert operations._atom_numeral_weight("#xdeadbeef") == 8
+    assert operations._atom_numeral_weight("#b1010") == 4
+    assert operations._atom_numeral_weight("v" + "0" * 193) == 0
+    assert operations._atom_numeral_weight("a1.b2") == 0
+    assert operations._atom_numeral_weight(":named") == 0
+    assert operations._atom_numeral_weight("1.2.3") == 0
+
+
+def test_smt_request_admits_digits_inside_simple_symbols_and_still_solves() -> None:
+    symbol = "v" + "0" * 193
+    result = solve_smt(
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib=(
+                "(set-logic QF_LIA)\n"
+                f"(declare-const {symbol} Int)\n"
+                f"(assert (> {symbol} 0))\n"
+                "(check-sat)\n"
+            ),
+        )
+    )
+
+    assert result.outcome == "SAT"
+    assert result.model_smtlib is not None
+
+
+def test_smt_request_rejects_a_decimal_wider_than_the_digit_budget() -> None:
+    for numeral in ("9" * 193 + ".5", "0." + "9" * 193):
+        with pytest.raises(ValueError, match="numeral wider"):
+            SmtSolveRequest(
+                logic=SmtLogic.QF_LRA,
+                smtlib=(
+                    "(set-logic QF_LRA)\n"
+                    "(declare-const x Real)\n"
+                    f"(assert (= x {numeral}))\n"
+                    "(check-sat)\n"
+                ),
+            )
+
+
+def test_smt_request_admits_a_decimal_at_the_digit_boundary_and_still_solves() -> None:
+    result = solve_smt(
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LRA,
+            smtlib=(
+                "(set-logic QF_LRA)\n"
+                "(declare-const x Real)\n"
+                f"(assert (= x 99.{'9' * 190}))\n"
+                "(check-sat)\n"
+            ),
+        )
+    )
+
+    assert result.outcome == "SAT"
+    assert result.model_smtlib is not None
+
+
 def test_smt_request_rejects_more_than_the_declaration_budget() -> None:
     declarations = "\n".join(f"(declare-const v{index} Int)" for index in range(4_097))
     with pytest.raises(ValueError, match="declares more than"):

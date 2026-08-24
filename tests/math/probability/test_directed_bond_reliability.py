@@ -12,6 +12,10 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.math.graphs.directed._models import DirectedGraph
 from jacobian.math.probability._models import (
+    MAX_DIRECTED_BOND_RELIABILITY_ARCS,
+    MAX_DIRECTED_BOND_RELIABILITY_LOGICAL_WORK,
+    MAX_DIRECTED_BOND_RELIABILITY_STATES,
+    MAX_DIRECTED_BOND_RELIABILITY_VERTICES,
     DirectedBondConnectionProbabilityRequest,
     DirectedBondConnectionProbabilityResult,
     DirectedBondReliabilityArcProbability,
@@ -220,6 +224,22 @@ def test_probability_bound_rejects_thirteenth_arc_before_enumeration() -> None:
             source=0,
             target=13,
         )
+
+
+def test_logical_work_bound_covers_two_pass_reachability_and_state_records() -> None:
+    """The 12-arc, 16-vertex envelope charges both complete passes."""
+    per_state_kernel_work = (
+        4 * MAX_DIRECTED_BOND_RELIABILITY_ARCS
+        + 4 * MAX_DIRECTED_BOND_RELIABILITY_VERTICES
+    )
+    per_state_record_work = MAX_DIRECTED_BOND_RELIABILITY_ARCS + 3
+
+    assert (
+        2
+        * MAX_DIRECTED_BOND_RELIABILITY_STATES
+        * (per_state_kernel_work + per_state_record_work)
+        + 8
+    ) == MAX_DIRECTED_BOND_RELIABILITY_LOGICAL_WORK
 
 
 def test_ledger_bound_rejects_large_exact_probability_products_before_enumeration() -> (

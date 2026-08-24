@@ -47,16 +47,23 @@ MAX_DIRECTED_BOND_RELIABILITY_RATIONAL_DIGITS = (
     + MAX_DIRECTED_BOND_RELIABILITY_ARCS
 )
 # The producer enumerates every arc subset and result validation replays it.
-# Per state and pass it scans arcs to select the state, scans probabilities,
-# constructs a directed graph, and traverses it: at most four arc and two
-# vertex visits.
+# Per state and pass it selects open arcs, evaluates every probability, adds
+# open arcs to the directed graph, and traverses them: at most four arc visits.
+# It also adds every graph vertex, visits vertices during descendants, and
+# materializes both the reachable and unreachable partitions: four vertex
+# visits.  The producer constructs one complete state record and validation
+# compares one; each records or compares at most every open arc and its three
+# scalar fields.  The final result also compares a fixed set of aggregate
+# fields, charged below.
 MAX_DIRECTED_BOND_RELIABILITY_LOGICAL_WORK = (
     2
     * MAX_DIRECTED_BOND_RELIABILITY_STATES
     * (
-        4 * MAX_DIRECTED_BOND_RELIABILITY_ARCS
-        + 2 * MAX_DIRECTED_BOND_RELIABILITY_VERTICES
+        5 * MAX_DIRECTED_BOND_RELIABILITY_ARCS
+        + 4 * MAX_DIRECTED_BOND_RELIABILITY_VERTICES
+        + 3
     )
+    + 8
 )
 
 
@@ -551,7 +558,9 @@ class DirectedBondConnectionProbabilitySource(StrictModel):
 
         arc_count = len(canonical_arcs)
         state_count = 1 << arc_count
-        logical_work = 2 * state_count * (4 * arc_count + 2 * self.graph.vertex_count)
+        logical_work = (
+            2 * state_count * (5 * arc_count + 4 * self.graph.vertex_count + 3) + 8
+        )
         if logical_work > MAX_DIRECTED_BOND_RELIABILITY_LOGICAL_WORK:
             raise ValueError(
                 "directed bond reliability exceeds the complete producer and "

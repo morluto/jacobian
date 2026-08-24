@@ -502,6 +502,94 @@ def test_signed_unit_scalar_iterate_keeps_multiterm_heights_unchanged() -> None:
     )
 
 
+def test_no_growth_derivative_regime_keeps_multivariate_heights() -> None:
+    variables = ("x", "y")
+    tall = 10**32_767
+    source = _polynomial(variables, {(1, 1): tall})
+
+    crossed = apply_constant_coefficient_differential_operator(
+        source,
+        _operator(variables, {(1, 1): 1}),
+    )
+    split = apply_constant_coefficient_differential_operator(
+        source,
+        _operator(variables, {(1, 0): 1, (0, 1): 1}),
+    )
+
+    assert crossed == _polynomial(variables, {(0, 0): tall})
+    assert split == _polynomial(variables, {(1, 0): tall, (0, 1): tall})
+
+
+def test_no_growth_derivative_mixed_survival_and_annihilation_keeps_heights() -> None:
+    variables = ("x",)
+    tall = 10**32_767
+
+    output = apply_constant_coefficient_differential_operator(
+        _polynomial(variables, {(1,): tall, (0,): tall}),
+        _operator(variables, {(1,): 1}),
+    )
+
+    assert output == _polynomial(variables, {(0,): tall})
+
+
+def test_merged_unit_paths_still_gate_at_the_coefficient_budget() -> None:
+    variables = ("x", "y")
+    tall = 10**32_767
+
+    # Under 1 + ∂x the monomials x·y and y both contribute a unit-height
+    # copy to the output monomial y, so its merged coefficient 2·10^32767
+    # carries 32,769 digits even though each path alone preserves height.
+    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(variables, {(1, 1): tall, (0, 1): tall}),
+            operator=_operator(variables, {(0, 0): 1, (1, 0): 1}),
+            iterations=1,
+        )
+
+
+def test_growing_derivatives_still_gate_at_the_coefficient_budget() -> None:
+    variables = ("x",)
+    coefficient = CanonicalRational(num="1" + "0" * 32_767, den="1")
+
+    def boundary_source(exponent: int) -> RationalPolynomial:
+        return RationalPolynomial(
+            variables=variables,
+            polynomial=SparseRationalPolynomial(
+                terms=(
+                    RationalPolynomialTerm(
+                        coefficient=coefficient,
+                        exponents=(exponent,),
+                    ),
+                )
+            ),
+        )
+
+    # A small multiplier keeps the boundary height inside its digit count.
+    doubled = apply_constant_coefficient_differential_operator(
+        boundary_source(2),
+        _operator(variables, {(1,): 1}),
+    )
+    assert doubled == _polynomial(variables, {(1,): 2 * 10**32_767})
+
+    # Differentiating x^11 multiplies the boundary height by 11, producing a
+    # 32,769-digit coefficient that exceeds the budget.
+    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+        DifferentialOperatorApplyRequest(
+            polynomial=boundary_source(11),
+            operator=_operator(variables, {(1,): 1}),
+            iterations=1,
+        )
+
+    # A coefficient-10 derivative scales the surviving height to 10^32768,
+    # whose 32,769 digits also exceed the budget.
+    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+        DifferentialOperatorApplyRequest(
+            polynomial=boundary_source(1),
+            operator=_operator(variables, {(1,): 10}),
+            iterations=1,
+        )
+
+
 def test_nonunit_scalar_growth_still_gates_at_the_coefficient_budget() -> None:
     variables = ("x",)
     coefficient = CanonicalRational(num="1" + "0" * 32_767, den="1")

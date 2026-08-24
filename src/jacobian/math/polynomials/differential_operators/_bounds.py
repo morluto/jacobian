@@ -107,6 +107,123 @@ def _is_signed_unit_scalar(
     )
 
 
+def _merged_unit_power_weights(
+    operator: ConstantCoefficientDifferentialOperator,
+    iterations: int,
+    cap: int,
+) -> dict[tuple[int, ...], int] | None:
+    """Enumerate the powered operator's shifts with exact merged weights.
+
+    The caller has established that every operator coefficient is the integer
+    unit ``±1``, so each composition ``m`` of ``iterations`` among the operator
+    terms contributes the signed multinomial coefficient
+    ``(k!/m_1!...m_t!)·Π(±1)^m_j`` to the shift ``Σ m_j·orders_j``, and no
+    other magnitude enters. The expanded-support budget bounds the composition
+    family; exceeding ``cap`` returns ``None`` so admission falls back to the
+    conservative generic estimate instead of trusting a partial enumeration.
+    """
+
+    weights: dict[tuple[int, ...], int] = {}
+    visited = 0
+    frames: list[tuple[int, int, tuple[int, ...], int, int]] = [
+        (0, iterations, (0,) * len(operator.variables), 0, 1)
+    ]
+    while frames:
+        index, remaining, shift, chosen, weight = frames.pop()
+        if index == len(operator.terms):
+            if remaining:
+                continue
+            visited += 1
+            if visited > cap:
+                return None
+            weights[shift] = weights.get(shift, 0) + weight
+            continue
+        orders = operator.terms[index].orders
+        continuations: tuple[tuple[int, int], ...]
+        if index + 1 == len(operator.terms):
+            # The final term must consume every remaining iteration, so the
+            # composition family stays exactly at the counted support size.
+            continuations = ((remaining, math.comb(chosen + remaining, remaining)),)
+        else:
+            continuations = tuple(
+                (taken, math.comb(chosen + taken, taken))
+                for taken in range(remaining + 1)
+            )
+        for taken, factor in continuations:
+            frames.append(
+                (
+                    index + 1,
+                    remaining - taken,
+                    tuple(
+                        current + taken * order
+                        for current, order in zip(shift, orders, strict=True)
+                    ),
+                    chosen + taken,
+                    weight * factor,
+                )
+            )
+    return weights
+
+
+def _derivative_regime_preserves_coefficient_heights(
+    polynomial: RationalPolynomial,
+    operator: ConstantCoefficientDifferentialOperator,
+    iterations: int,
+) -> bool:
+    """Recognize derivative powers that provably preserve coefficient height.
+
+    With unit integer operator coefficients, each merged shift weight is an
+    exact integer, so every surviving output coefficient is an input
+    coefficient times that integer times a falling-factorial product. When
+    every such product along every admitted shift annihilates its monomial or
+    equals one, no merged weight exceeds one in absolute value, and no output
+    monomial receives more than one surviving contribution, each output
+    coefficient is zero or the unchanged source coefficient: no numerator
+    grows and no denominator appears. Differentiation then cannot raise the
+    height, so admission follows the input's own heights rather than any
+    residual estimate slack. The composition family itself bounds the exact
+    enumeration, and overflowing it conservatively reports a growing regime.
+    """
+
+    if any(term.coefficient.as_fraction() not in (1, -1) for term in operator.terms):
+        return False
+    compositions = _bounded_multiset_count(
+        len(operator.terms),
+        iterations,
+        MAX_APPLICATION_OUTPUT_TERMS,
+    )
+    if compositions > MAX_APPLICATION_OUTPUT_TERMS:
+        return False
+    weights = _merged_unit_power_weights(operator, iterations, compositions)
+    if weights is None:
+        return False
+    seen_outputs: set[tuple[int, ...]] = set()
+    for term in polynomial.polynomial.terms:
+        for shift, weight in weights.items():
+            multiplier = abs(weight)
+            for order, exponent in zip(shift, term.exponents, strict=True):
+                if not order:
+                    continue
+                if exponent < order:
+                    multiplier = 0
+                    break
+                if order != 1 or exponent != 1:
+                    return False
+            if multiplier > 1:
+                return False
+            if multiplier:
+                # Two source monomials merging onto one output coefficient can
+                # double the height even when each path alone preserves it.
+                output = tuple(
+                    exponent - order
+                    for exponent, order in zip(term.exponents, shift, strict=True)
+                )
+                if output in seen_outputs:
+                    return False
+                seen_outputs.add(output)
+    return True
+
+
 def _bounded_multiset_count(term_count: int, iterations: int, limit: int) -> int:
     """Bound the support of a commuting operator power.
 
@@ -593,6 +710,16 @@ def validate_application_envelope(
     # copied result's own heights rather than the common-denominator scaling
     # the generic estimate starts from.
     if scalar_action and _is_signed_unit_scalar(operator):
+        coefficient_digits = _max_coefficient_digits(polynomial)
+    elif not scalar_action and _derivative_regime_preserves_coefficient_heights(
+        polynomial,
+        operator,
+        iterations,
+    ):
+        # Unit derivative powers that only keep or annihilate each source
+        # coefficient preserve every height exactly, so a boundary request
+        # such as f = 10^32767·x, D = ∂x, k = 1 is admitted at the input's
+        # own height instead of any residual estimate slack.
         coefficient_digits = _max_coefficient_digits(polynomial)
     else:
         coefficient_digits = _coefficient_digit_bound(

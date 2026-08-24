@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from math import comb
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
@@ -205,6 +206,173 @@ class GradedJacobianKernelWitness(StrictModel):
         return self
 
 
+def _require_replayed_derivatives(
+    result: GradedJacobianSyzygyResult,
+) -> Any:
+    """Replay the partial derivatives against the retained source polynomial."""
+
+    from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
+
+    if any(
+        partial.variables != result.variables for partial in result.partial_derivatives
+    ):
+        raise ValueError("partial derivatives must use the declared variable order")
+    source = rational_polynomial_to_sympy(result.expanded_polynomial)
+    replayed_partials = tuple(source.diff(generator) for generator in source.gens)
+    for component, (claimed, replayed) in enumerate(
+        zip(result.partial_derivatives, replayed_partials, strict=True)
+    ):
+        if rational_polynomial_to_sympy(claimed) != replayed:
+            raise ValueError(
+                f"partial derivative {component} does not equal the exact "
+                "derivative of the retained source polynomial"
+            )
+    return replayed_partials
+
+
+def _require_replayed_degree_maps(
+    result: GradedJacobianSyzygyResult,
+    replayed_partials: tuple[Any, Any, Any],
+) -> list[Any]:
+    """Rebuild every graded map and re-check its exact evidence ledger."""
+
+    from jacobian.math.polynomials._jacobian_syzygy import (
+        _coefficient_matrix,
+        _matrix_digest,
+    )
+
+    matrices: list[Any] = []
+    for item in result.degree_maps:
+        source_basis, target_basis, matrix, entries = _coefficient_matrix(
+            replayed_partials,
+            item.multiplier_degree,
+            result.homogeneous_degree,
+        )
+        matrices.append(matrix)
+        if (
+            item.source_monomial_basis != source_basis
+            or item.target_monomial_basis != target_basis
+            or item.row_count != len(target_basis)
+            or item.column_count != 3 * len(source_basis)
+        ):
+            raise ValueError(
+                "graded map must use the canonical homogeneous bases of the "
+                "retained source degree"
+            )
+        if item.matrix_digest != _matrix_digest(
+            multiplier_degree=item.multiplier_degree,
+            source_basis=source_basis,
+            target_basis=target_basis,
+            entries=entries,
+        ):
+            raise ValueError(
+                "coefficient-map digest does not bind the replayed graded map"
+            )
+        if result.coefficient_map_detail == "SPARSE_ENTRIES":
+            claimed_entries = tuple(
+                (entry.row, entry.column, entry.coefficient.as_fraction())
+                for entry in item.sparse_entries
+            )
+            derived_entries = tuple(
+                (row, column, Fraction(value)) for row, column, value in entries
+            )
+            if claimed_entries != derived_entries:
+                raise ValueError("sparse entries do not equal the replayed graded map")
+
+        _, pivot_columns = matrix.rref()
+        rank = len(pivot_columns)
+        if (
+            item.rank != rank
+            or item.nullity != matrix.cols - rank
+            or item.pivot_columns != tuple(int(column) for column in pivot_columns)
+        ):
+            raise ValueError("rank claims do not match the replayed graded map")
+        if not rank:
+            continue
+        independent_rows = matrix[:, list(pivot_columns)].T.rref()[1]
+        row_indices = tuple(int(index) for index in independent_rows)
+        column_indices = tuple(int(index) for index in pivot_columns)
+        determinant = matrix.extract(row_indices, column_indices).det()
+        minor = item.rank_minor
+        if (
+            minor is None
+            or minor.row_indices != row_indices
+            or minor.column_indices != column_indices
+            or minor.determinant.as_fraction() != Fraction(determinant)
+        ):
+            raise ValueError("rank minor does not certify the replayed map")
+    return matrices
+
+
+def _require_replayed_kernel_witness(
+    result: GradedJacobianSyzygyResult,
+    replayed_partials: tuple[Any, Any, Any],
+    matrices: list[Any],
+) -> None:
+    """Replay the kernel vector, multiplier encoding, and syzygy identity."""
+
+    from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
+
+    witness = result.kernel_witness
+    if witness is None:
+        return
+    bound_map = result.degree_maps[witness.multiplier_degree]
+    matrix = matrices[witness.multiplier_degree]
+    vector = tuple(value.as_fraction() for value in witness.coefficient_vector)
+    for row in range(matrix.rows):
+        if sum(
+            Fraction(matrix[row, column]) * vector[column]
+            for column in range(matrix.cols)
+        ):
+            raise ValueError(
+                "kernel coefficient vector does not annihilate the replayed map"
+            )
+    block_size = len(bound_map.source_monomial_basis)
+    for component, multiplier in enumerate(witness.multipliers):
+        if multiplier.variables != result.variables:
+            raise ValueError("kernel multipliers must use the declared variable order")
+        expected = {
+            exponents: vector[component * block_size + offset]
+            for offset, exponents in enumerate(bound_map.source_monomial_basis)
+            if vector[component * block_size + offset]
+        }
+        encoded = {
+            term.exponents: term.coefficient.as_fraction()
+            for term in multiplier.polynomial.terms
+        }
+        if encoded != expected:
+            raise ValueError(
+                "kernel multipliers must encode the kernel coefficient vector"
+            )
+    annihilated = None
+    for multiplier, replayed_partial in zip(
+        witness.multipliers, replayed_partials, strict=True
+    ):
+        product = rational_polynomial_to_sympy(multiplier) * replayed_partial
+        annihilated = product if annihilated is None else annihilated + product
+    if annihilated is None or not annihilated.is_zero:
+        raise ValueError(
+            "multipliers do not annihilate the retained partial derivatives exactly"
+        )
+
+
+def _require_replayed_syzygy_evidence(result: GradedJacobianSyzygyResult) -> None:
+    """Replay every exact claim against the retained source polynomial.
+
+    Each accepted result carries its own evidence ledger.  This replay
+    re-derives the partial derivatives from ``expanded_polynomial``, rebuilds
+    every graded coefficient map from those derivatives, and re-checks the
+    digest, sparse entries, rank bookkeeping, rank-minor determinant, kernel
+    vector, multiplier encoding, and the polynomial identity
+    ``sum_i m_i * partial_i(h) == 0``.  Independently authored or mutated
+    evidence is rejected unless it still matches the exact replay.
+    """
+
+    replayed_partials = _require_replayed_derivatives(result)
+    matrices = _require_replayed_degree_maps(result, replayed_partials)
+    _require_replayed_kernel_witness(result, replayed_partials, matrices)
+
+
 class GradedJacobianSyzygyResult(StrictModel):
     """Exact rank ledger and first kernel through the requested finite bound."""
 
@@ -274,6 +442,11 @@ class GradedJacobianSyzygyResult(StrictModel):
             raise ValueError(
                 "NONE_THROUGH_BOUND may not claim or expose a kernel witness"
             )
+        return self
+
+    @model_validator(mode="after")
+    def require_source_bound_exact_evidence(self) -> Self:
+        _require_replayed_syzygy_evidence(self)
         return self
 
 

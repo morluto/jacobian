@@ -8,11 +8,15 @@ from jacobian.math import term_rewriting
 def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the term_rewriting public API."""
     expected = (
+        "CriticalOverlapCandidate",
+        "CriticalPair",
+        "CriticalPairProfile",
         "RankedSignature",
         "RewriteApplication",
         "RewriteRule",
         "Term",
         "apply_substitution",
+        "critical_pairs",
         "match",
         "normal_form",
         "rewrite_steps",

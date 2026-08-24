@@ -4,10 +4,25 @@ from __future__ import annotations
 
 from typing import Literal
 
-from jacobian.math.term_rewriting.values import RewriteApplication, RewriteRule, Term
+from jacobian.math.term_rewriting.values import (
+    MAX_CRITICAL_PAIR_CANDIDATES,
+    MAX_CRITICAL_PAIR_RESULT_BYTES,
+    MAX_CRITICAL_PAIR_RESULT_NODES,
+    MAX_CRITICAL_PAIR_RULE_NODES,
+    MAX_CRITICAL_PAIR_RULES,
+    MAX_CRITICAL_PAIR_VARIABLE_ID,
+    CriticalOverlapCandidate,
+    CriticalPair,
+    CriticalPairProfile,
+    RankedSignature,
+    RewriteApplication,
+    RewriteRule,
+    Term,
+)
 
 __all__ = [
     "apply_substitution",
+    "critical_pairs",
     "match",
     "normal_form",
     "rewrite_steps",
@@ -138,6 +153,196 @@ def _positions(term: Term, prefix: tuple[int, ...] = ()) -> tuple[tuple[int, ...
             for position in _positions(child, (*prefix, child_index))
         ),
     )
+
+
+def _nonvariable_positions(
+    term: Term, prefix: tuple[int, ...] = ()
+) -> tuple[tuple[int, ...], ...]:
+    """Return exactly the positions whose subterm is a function application."""
+    if term.is_variable:
+        return ()
+    return (
+        prefix,
+        *(
+            position
+            for child_index, child in enumerate(term.children)
+            for position in _nonvariable_positions(child, (*prefix, child_index))
+        ),
+    )
+
+
+def _term_node_count(term: Term) -> int:
+    return 1 + sum(_term_node_count(child) for child in term.children)
+
+
+def _require_bounded_variable_ids(term: Term) -> None:
+    if term.is_variable and term.symbol > MAX_CRITICAL_PAIR_VARIABLE_ID:
+        raise ValueError("critical-pair variable IDs exceed the supported bound")
+    for child in term.children:
+        _require_bounded_variable_ids(child)
+
+
+def _critical_pair_result_node_upper_bound(
+    rule_count: int, candidate_count: int
+) -> int:
+    rule_nodes = MAX_CRITICAL_PAIR_RULE_NODES
+    pair_nodes = (
+        (2 * rule_nodes - 1) * rule_nodes
+        + rule_nodes * rule_nodes
+        + 2 * rule_nodes * rule_nodes
+    )
+    return (
+        2 * rule_count * rule_nodes
+        + candidate_count * pair_nodes
+        + 4 * candidate_count * rule_nodes
+    )
+
+
+def _validate_critical_pair_source(
+    signature: RankedSignature, rules: tuple[RewriteRule, ...]
+) -> None:
+    """Admit the complete overlap/replay envelope before enumerating it."""
+    if not 1 <= len(rules) <= MAX_CRITICAL_PAIR_RULES:
+        raise ValueError("critical-pair rule count exceeds the supported bound")
+    for rule in rules:
+        signature.validate_term(rule.lhs)
+        signature.validate_term(rule.rhs)
+        _require_bounded_variable_ids(rule.lhs)
+        _require_bounded_variable_ids(rule.rhs)
+        if (
+            _term_node_count(rule.lhs) > MAX_CRITICAL_PAIR_RULE_NODES
+            or _term_node_count(rule.rhs) > MAX_CRITICAL_PAIR_RULE_NODES
+        ):
+            raise ValueError("critical-pair rule sides exceed the supported node bound")
+    canonical_rules = {_canonical_rule(rule).model_dump_json() for rule in rules}
+    if len(canonical_rules) != len(rules):
+        raise ValueError("critical-pair rules must be duplicate-free up to renaming")
+    candidates = len(rules) * sum(
+        len(_nonvariable_positions(rule.lhs)) for rule in rules
+    ) - len(rules)
+    if candidates > MAX_CRITICAL_PAIR_CANDIDATES:
+        raise ValueError("critical-pair overlap candidates exceed the supported bound")
+    result_nodes = _critical_pair_result_node_upper_bound(len(rules), candidates)
+    if result_nodes > MAX_CRITICAL_PAIR_RESULT_NODES:
+        raise ValueError("critical-pair result nodes exceed the supported bound")
+    if result_nodes * 96 > MAX_CRITICAL_PAIR_RESULT_BYTES:
+        raise ValueError("critical-pair result bytes exceed the supported bound")
+
+
+def _preorder_variables(term: Term) -> tuple[int, ...]:
+    """Return each variable once, in structural preorder."""
+    seen: set[int] = set()
+    ordered: list[int] = []
+    for position in _positions(term):
+        subterm = term_at_position(term, position)
+        if subterm.is_variable and subterm.symbol not in seen:
+            seen.add(subterm.symbol)
+            ordered.append(subterm.symbol)
+    return tuple(ordered)
+
+
+def _rename_variables(term: Term, renaming: dict[int, int]) -> Term:
+    if term.is_variable:
+        return Term(is_variable=True, symbol=renaming[term.symbol])
+    return Term(
+        symbol=term.symbol,
+        children=tuple(_rename_variables(child, renaming) for child in term.children),
+    )
+
+
+def _canonical_rule(rule: RewriteRule) -> RewriteRule:
+    variables = _preorder_variables(rule.lhs)
+    renaming = {variable: index for index, variable in enumerate(variables)}
+    return RewriteRule(
+        lhs=_rename_variables(rule.lhs, renaming),
+        rhs=_rename_variables(rule.rhs, renaming),
+    )
+
+
+def _standardize_apart(
+    outer: RewriteRule, inner: RewriteRule
+) -> tuple[RewriteRule, RewriteRule, dict[int, int], dict[int, int]]:
+    """Canonically rename one ordered pair of rules to disjoint variables."""
+    outer_variables = _preorder_variables(outer.lhs)
+    outer_renaming = {variable: index for index, variable in enumerate(outer_variables)}
+    inner_renaming = {
+        variable: len(outer_variables) + index
+        for index, variable in enumerate(_preorder_variables(inner.lhs))
+    }
+    return (
+        RewriteRule(
+            lhs=_rename_variables(outer.lhs, outer_renaming),
+            rhs=_rename_variables(outer.rhs, outer_renaming),
+        ),
+        RewriteRule(
+            lhs=_rename_variables(inner.lhs, inner_renaming),
+            rhs=_rename_variables(inner.rhs, inner_renaming),
+        ),
+        outer_renaming,
+        inner_renaming,
+    )
+
+
+def critical_pairs(
+    signature: RankedSignature, rules: tuple[RewriteRule, ...]
+) -> CriticalPairProfile:
+    """Enumerate all unifiable nonvariable overlaps of a finite TRS.
+
+    Rows are ordered by outer rule, position, then inner rule.  The tautological
+    root overlap of a rule with itself is excluded; all other source-indexed
+    overlaps are retained, even if their displayed reducts coincide.
+    """
+    _validate_critical_pair_source(signature, rules)
+    candidates: list[CriticalOverlapCandidate] = []
+    pairs: list[CriticalPair] = []
+    for outer_index, outer in enumerate(rules):
+        for position in _nonvariable_positions(outer.lhs):
+            for inner_index, inner in enumerate(rules):
+                if outer_index == inner_index and not position:
+                    continue
+                (
+                    standardized_outer,
+                    standardized_inner,
+                    outer_renaming,
+                    inner_renaming,
+                ) = _standardize_apart(outer, inner)
+                substitution = unify(
+                    standardized_inner.lhs,
+                    term_at_position(standardized_outer.lhs, position),
+                )
+                candidate_index = len(candidates)
+                candidates.append(
+                    CriticalOverlapCandidate(
+                        outer_rule_index=outer_index,
+                        inner_rule_index=inner_index,
+                        position=position,
+                        outer_variable_renaming=outer_renaming,
+                        inner_variable_renaming=inner_renaming,
+                        unifiable=substitution is not None,
+                    )
+                )
+                if substitution is None:
+                    continue
+                inner_reduct = apply_substitution(
+                    _replace_at_position(
+                        standardized_outer.lhs,
+                        position,
+                        standardized_inner.rhs,
+                    ),
+                    substitution,
+                )
+                outer_reduct = apply_substitution(standardized_outer.rhs, substitution)
+                pairs.append(
+                    CriticalPair(
+                        candidate_index=candidate_index,
+                        outer_variable_renaming=outer_renaming,
+                        inner_variable_renaming=inner_renaming,
+                        substitution=substitution,
+                        inner_reduct=inner_reduct,
+                        outer_reduct=outer_reduct,
+                    )
+                )
+    return CriticalPairProfile(candidates=tuple(candidates), pairs=tuple(pairs))
 
 
 def selected_rewrite_step(

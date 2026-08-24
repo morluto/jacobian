@@ -12,6 +12,12 @@ MAX_TERMS = 32
 MAX_SYMBOLS = 64
 MAX_ARITY = 16
 MAX_RULES = 64
+MAX_CRITICAL_PAIR_RULES = 8
+MAX_CRITICAL_PAIR_RULE_NODES = 16
+MAX_CRITICAL_PAIR_CANDIDATES = 32
+MAX_CRITICAL_PAIR_RESULT_NODES = 42_752
+MAX_CRITICAL_PAIR_RESULT_BYTES = 4 * 1024 * 1024
+MAX_CRITICAL_PAIR_VARIABLE_ID = 999_999
 
 
 class RankedSignature(StrictModel):
@@ -89,6 +95,42 @@ class RewriteApplication(StrictModel):
     term: Term
 
 
+class CriticalPair(StrictModel):
+    """One source-indexed first-order critical pair.
+
+    The two reducts are formed after the deterministic standardize-apart
+    convention used by :func:`critical_pairs`: variables of the outer rule
+    receive consecutive IDs in left-hand-side preorder, followed by variables
+    of the inner rule.  ``inner_reduct`` rewrites at ``position`` first and
+    ``outer_reduct`` rewrites the outer root first.
+    """
+
+    candidate_index: int = Field(ge=0)
+    outer_variable_renaming: dict[int, int]
+    inner_variable_renaming: dict[int, int]
+    substitution: dict[int, Term]
+    inner_reduct: Term
+    outer_reduct: Term
+
+
+class CriticalOverlapCandidate(StrictModel):
+    """One checked source overlap, including an exact unifiability outcome."""
+
+    outer_rule_index: int = Field(ge=0)
+    inner_rule_index: int = Field(ge=0)
+    position: tuple[int, ...]
+    outer_variable_renaming: dict[int, int]
+    inner_variable_renaming: dict[int, int]
+    unifiable: bool
+
+
+class CriticalPairProfile(StrictModel):
+    """Complete source-indexed overlap ledger and its unifiable critical pairs."""
+
+    candidates: tuple[CriticalOverlapCandidate, ...]
+    pairs: tuple[CriticalPair, ...]
+
+
 Term.model_rebuild()
 
 
@@ -100,9 +142,18 @@ class Substitution(StrictModel):
 
 __all__ = [
     "MAX_ARITY",
+    "MAX_CRITICAL_PAIR_CANDIDATES",
+    "MAX_CRITICAL_PAIR_RESULT_BYTES",
+    "MAX_CRITICAL_PAIR_RESULT_NODES",
+    "MAX_CRITICAL_PAIR_RULES",
+    "MAX_CRITICAL_PAIR_RULE_NODES",
+    "MAX_CRITICAL_PAIR_VARIABLE_ID",
     "MAX_RULES",
     "MAX_SYMBOLS",
     "MAX_TERMS",
+    "CriticalOverlapCandidate",
+    "CriticalPair",
+    "CriticalPairProfile",
     "RankedSignature",
     "RewriteApplication",
     "RewriteRule",

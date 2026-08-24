@@ -7,6 +7,8 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.term_rewriting._models import (
+    CriticalPairsRequest,
+    CriticalPairsResult,
     MatchingRequest,
     MatchingResult,
     RewriteStepRequest,
@@ -15,6 +17,7 @@ from jacobian.math.term_rewriting._models import (
     UnificationResult,
 )
 from jacobian.math.term_rewriting._operations import (
+    compute_critical_pairs,
     compute_matching,
     compute_rewrite_step,
     compute_unification,
@@ -89,6 +92,51 @@ _UNIFY_EXAMPLE = {
 }
 
 _TERM_REWRITING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
+    _op(
+        "term_rewriting.critical_pairs.compute",
+        "Compute first-order critical pairs",
+        "Enumerate every unifiable nonvariable overlap of a bounded finite "
+        "term-rewrite system. Each source-indexed pair records its overlap "
+        "position, deterministic rename-apart MGU, and both peak reducts.",
+        CriticalPairsRequest,
+        CriticalPairsResult,
+        compute_critical_pairs,
+        "term-rewriting",
+        "critical-pairs",
+        "exact",
+        examples=(
+            example(
+                "overlap_at_nested_function",
+                "Overlap g(y) -> y into f(g(x)) -> x.",
+                {
+                    "signature": {"arities": [1, 1, 0]},
+                    "rules": [
+                        {
+                            "lhs": {
+                                "symbol": 0,
+                                "children": [
+                                    {
+                                        "symbol": 1,
+                                        "children": [
+                                            {"is_variable": True, "symbol": 0}
+                                        ],
+                                    }
+                                ],
+                            },
+                            "rhs": {"is_variable": True, "symbol": 0},
+                        },
+                        {
+                            "lhs": {
+                                "symbol": 1,
+                                "children": [{"is_variable": True, "symbol": 1}],
+                            },
+                            "rhs": {"is_variable": True, "symbol": 1},
+                        },
+                    ],
+                },
+            ),
+        ),
+    ),
     _op(
         "term_rewriting.matching.compute",
         "Match a pattern against a subject term",

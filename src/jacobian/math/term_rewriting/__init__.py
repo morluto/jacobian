@@ -2,6 +2,7 @@
 
 from jacobian.math.term_rewriting.operations import (
     apply_substitution,
+    critical_pairs,
     match,
     normal_form,
     rewrite_steps,
@@ -10,6 +11,9 @@ from jacobian.math.term_rewriting.operations import (
     unify,
 )
 from jacobian.math.term_rewriting.values import (
+    CriticalOverlapCandidate,
+    CriticalPair,
+    CriticalPairProfile,
     RankedSignature,
     RewriteApplication,
     RewriteRule,
@@ -17,11 +21,15 @@ from jacobian.math.term_rewriting.values import (
 )
 
 __all__ = [
+    "CriticalOverlapCandidate",
+    "CriticalPair",
+    "CriticalPairProfile",
     "RankedSignature",
     "RewriteApplication",
     "RewriteRule",
     "Term",
     "apply_substitution",
+    "critical_pairs",
     "match",
     "normal_form",
     "rewrite_steps",

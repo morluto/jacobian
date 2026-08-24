@@ -8,7 +8,9 @@ from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.term_rewriting.operations import (
+    _validate_critical_pair_source,
     apply_substitution,
+    critical_pairs,
     normal_form,
     rewrite_steps,
     selected_rewrite_step,
@@ -16,7 +18,9 @@ from jacobian.math.term_rewriting.operations import (
     unify,
 )
 from jacobian.math.term_rewriting.values import (
+    MAX_CRITICAL_PAIR_RULES,
     MAX_RULES,
+    CriticalPairProfile,
     RankedSignature,
     RewriteApplication,
     RewriteRule,
@@ -236,7 +240,57 @@ class NormalFormResult(StrictModel):
         return self
 
 
+class CriticalPairsRequest(StrictModel):
+    """Enumerate every nontrivial source-indexed critical pair of a finite TRS."""
+
+    signature: RankedSignature = Field(
+        description=(
+            "Finite ranked signature for every rule; function symbols must use "
+            "these arities exactly."
+        )
+    )
+    rules: tuple[RewriteRule, ...] = Field(
+        min_length=1,
+        max_length=MAX_CRITICAL_PAIR_RULES,
+        description=(
+            "Duplicate-free ordered rules. Each side has at most 16 nodes, each "
+            "variable ID is at most 999999, and the complete ordered nonvariable "
+            "overlap ledger has at most 32 candidates. The retained result and "
+            "its exact replay are bounded by 42752 structural nodes and 4MiB."
+        ),
+        json_schema_extra={
+            "x-jacobian-bounds": {
+                "max_rule_side_nodes": 16,
+                "max_variable_id": 999999,
+                "max_overlap_candidates": 32,
+                "max_result_nodes": 42752,
+                "max_result_bytes": 4194304,
+            }
+        },
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_critical_pair_source(self) -> Self:
+        _validate_critical_pair_source(self.signature, self.rules)
+        return self
+
+
+class CriticalPairsResult(CriticalPairsRequest):
+    """The complete exact critical-pair family for a bounded finite TRS."""
+
+    profile: CriticalPairProfile
+
+    @model_validator(mode="after")
+    def bind_critical_pairs(self) -> Self:
+        expected = critical_pairs(self.signature, self.rules)
+        if self.profile != expected:
+            raise ValueError("critical pairs do not replay from the source rules")
+        return self
+
+
 __all__ = [
+    "CriticalPairsRequest",
+    "CriticalPairsResult",
     "MatchingRequest",
     "MatchingResult",
     "NormalFormRequest",

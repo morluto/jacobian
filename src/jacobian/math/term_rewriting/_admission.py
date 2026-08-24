@@ -11,6 +11,12 @@ from jacobian.math.term_rewriting._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "term_rewriting.critical_pairs.compute",
+        AdmissionDecision.KEEP,
+        "complete bounded first-order overlap family with replayable peak reducts; "
+        "source, overlap work, output, and replay are preflight-bounded",
+    ),
+    OperationAdmission(
         "term_rewriting.matching.compute",
         AdmissionDecision.KEEP,
         "typed first-order term matching with a complete substitution result",

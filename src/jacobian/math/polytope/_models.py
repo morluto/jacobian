@@ -628,6 +628,12 @@ def _canonical_v_polytope_vertices(polytope: RationalVPolytope) -> tuple[Vertex,
     return tuple(Vertex(coordinates=vertex.coordinates) for vertex in polytope.vertices)
 
 
+VertexTuple = Annotated[
+    tuple[Vertex, ...],
+    Field(min_length=1, max_length=MAX_VERTICES),
+]
+
+
 def _tuple_canonical_containers(value: Any) -> Any:
     """Return raw JSON payloads with every sequence materialized as a tuple.
 
@@ -664,10 +670,8 @@ class PolytopeVolumeRequest(StrictModel):
     descriptions for the exact published rules).
     """
 
-    vertices: tuple[Vertex, ...] | None = Field(
+    vertices: VertexTuple | RationalVPolytope | None = Field(
         default=None,
-        min_length=1,
-        max_length=MAX_VERTICES,
         description=(
             "V-representation: the vertices of the convex hull, either as "
             "bare coordinate vertices or as one canonical labelled "
@@ -749,8 +753,9 @@ class PolytopeVolumeRequest(StrictModel):
                 "exactly one of `vertices` or `halfspaces` must be provided"
             )
         if has_v:
-            assert self.vertices is not None  # for type checkers
-            _validate_vertices(self.vertices, self.dimension_bound)
+            vertices = self.vertices
+            assert isinstance(vertices, tuple)  # the before-validator projects it
+            _validate_vertices(vertices, self.dimension_bound)
         else:
             assert self.halfspaces is not None  # for type checkers
             _validate_halfspaces(self.halfspaces, self.dimension_bound)

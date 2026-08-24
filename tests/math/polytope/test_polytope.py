@@ -1108,6 +1108,26 @@ class TestCanonicalVPolytopeComposition:
         assert "RationalVPolytope" in description
         assert "space" in description
 
+    def test_schema_advertises_the_canonical_object_alternative(self) -> None:
+        """A schema-constrained client must be able to submit the serialized
+        ``RationalVPolytope`` produced by a support result without leaving
+        the published contract."""
+        schema = PolytopeVolumeRequest.model_json_schema()
+        alternatives = schema["properties"]["vertices"]["anyOf"]
+        refs = {alternative.get("$ref") for alternative in alternatives}
+        arrays = [
+            alternative
+            for alternative in alternatives
+            if alternative.get("type") == "array"
+        ]
+
+        assert len(arrays) == 1
+        assert arrays[0]["items"]["$ref"] == "#/$defs/Vertex"
+        assert arrays[0]["minItems"] == 1
+        assert arrays[0]["maxItems"] == 64
+        assert "#/$defs/RationalVPolytope" in refs
+        assert "RationalVPolytope" in schema["$defs"]
+
     def test_operation_description_publishes_canonical_acceptance(self) -> None:
         from jacobian.math.polytope._tools import POLYTOPE_OPERATIONS
 

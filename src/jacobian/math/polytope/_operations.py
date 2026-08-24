@@ -766,9 +766,10 @@ def compute_polytope_volume(
     representation: Literal["vertices", "halfspaces"]
     if request.vertices is not None:
         representation = "vertices"
+        vertices = request.vertices
+        assert isinstance(vertices, tuple)  # projected by the request validator
         raw_vertices = tuple(
-            tuple(c.as_fraction() for c in vertex.coordinates)
-            for vertex in request.vertices
+            tuple(c.as_fraction() for c in vertex.coordinates) for vertex in vertices
         )
     else:
         assert request.halfspaces is not None

@@ -1550,6 +1550,68 @@ def test_annihilating_rescale_terms_are_excluded_from_growth() -> None:
     assert replayed == result
 
 
+def test_weight_enumeration_aborts_before_huge_powers_materialize() -> None:
+    variables = ("x",)
+    numerator_n = CanonicalRational(num="1" + "0" * 32_767, den="1")
+    source = _polynomial(variables, {(400,): 1})
+    operator = ConstantCoefficientDifferentialOperator(
+        variables=variables,
+        terms=(
+            DifferentialOperatorTerm(coefficient=_rational(1), orders=(1,)),
+            DifferentialOperatorTerm(coefficient=numerator_n, orders=(0,)),
+        ),
+    )
+
+    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=operator,
+            iterations=400,
+        )
+
+
+def test_rescale_scaling_reduces_against_source_denominators() -> None:
+    variables = ("x",)
+    numerator_n = "1" + "0" * 19999 + "1"
+    source = RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num="1", den=numerator_n),
+                    exponents=(1,),
+                ),
+            )
+        ),
+    )
+    scaled_operator = ConstantCoefficientDifferentialOperator(
+        variables=variables,
+        terms=(
+            DifferentialOperatorTerm(
+                coefficient=CanonicalRational(num=numerator_n, den="1"),
+                orders=(0,),
+            ),
+        ),
+    )
+
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=scaled_operator,
+            iterations=1,
+            expected=_polynomial(variables, {(1,): 1}),
+        )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.output == _polynomial(variables, {(1,): 1})
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    assert replayed == result
+
+
 def test_iterations_stay_inside_the_interoperable_integer_range() -> None:
     schema = DifferentialOperatorApplyRequest.model_json_schema()
     assert schema["properties"]["iterations"]["maximum"] == (1 << 53) - 1

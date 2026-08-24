@@ -314,6 +314,7 @@ def _powered_support_bound(
 
 
 ENUMERATION_WORK_CAP = 250_000
+_HEIGHT_CAP_BITS = 64 * MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS
 
 
 def _distinct_powered_orders(
@@ -462,7 +463,14 @@ def _shift_weights(
                     contribution if entry is None else entry + contribution
                 )
                 work += 1
-                if len(merged) > support_cap or work > ENUMERATION_WORK_CAP:
+                if (
+                    len(merged) > support_cap
+                    or work > ENUMERATION_WORK_CAP
+                    or contribution.numerator.bit_length() > _HEIGHT_CAP_BITS
+                    or contribution.denominator.bit_length() > _HEIGHT_CAP_BITS
+                    or merged[shifted].numerator.bit_length() > _HEIGHT_CAP_BITS
+                    or merged[shifted].denominator.bit_length() > _HEIGHT_CAP_BITS
+                ):
                     exhausted = True
                     break
             if exhausted:
@@ -864,6 +872,62 @@ def _expansion_support_candidates(
     return expanded_terms, candidate_terms, powered_orders
 
 
+def _rescaled_height_digits(
+    polynomial: RationalPolynomial,
+    operator: ConstantCoefficientDifferentialOperator,
+    iterations: int,
+) -> int | None:
+    """Digits of the largest reduced coefficient of ``c0**k * f``.
+
+    Binary exponentiation normalizes at every step, so cross-canceling
+    factors - a scalar weight against a source denominator - reduce
+    immediately. Scaling preserves the source's nonzero pattern, so no two
+    terms merge and the per-term maximum is exact. Returns ``None`` when an
+    intermediate provably exceeds the height cap; callers then fall back to
+    the sound additive bound.
+    """
+
+    cap_bits = _HEIGHT_CAP_BITS
+    zero_coefficient = next(
+        (
+            term.coefficient.as_fraction()
+            for term in operator.terms
+            if not any(term.orders)
+        ),
+        Fraction(0),
+    )
+    worst_digits = 0
+    for term in polynomial.polynomial.terms:
+        value = term.coefficient.as_fraction()
+        result = Fraction(1)
+        base = abs(zero_coefficient)
+        exponent = iterations
+        while exponent:
+            if exponent & 1:
+                result *= base
+                if (
+                    result.numerator.bit_length() > cap_bits
+                    or result.denominator.bit_length() > cap_bits
+                ):
+                    return None
+            exponent >>= 1
+            if exponent:
+                base *= base
+                if (
+                    base.numerator.bit_length() > cap_bits
+                    or base.denominator.bit_length() > cap_bits
+                ):
+                    return None
+        value *= result
+        worst_digits = max(
+            worst_digits,
+            _decimal_digits_from_bits(
+                max(value.numerator.bit_length(), value.denominator.bit_length())
+            ),
+        )
+    return worst_digits
+
+
 def validate_application_envelope(
     polynomial: RationalPolynomial,
     operator: ConstantCoefficientDifferentialOperator,
@@ -928,23 +992,29 @@ def validate_application_envelope(
         )
 
     # Signed-unit scalar powers only flip signs, and every rescale-only regime
-    # applies exactly one zero-order coefficient to the k-th power: growth is
-    # bounded by that coefficient alone, excluding annihilating terms that
-    # _rescaled_source never evaluates.
+    # applies exactly one zero-order coefficient to the k-th power per source
+    # term. The exact reduced product bounds each output height - excluding
+    # annihilating coefficients and capturing cancellations with source
+    # denominators - and falls back to the sound additive bound when an
+    # intermediate provably overflows the height cap.
     if rescale_only:
-        zero_coefficient = next(
-            (
-                term.coefficient.as_fraction()
-                for term in operator.terms
-                if not any(term.orders)
-            ),
-            Fraction(0),
-        )
-        growth_bits = _multiplier_bit_bound(
-            abs(zero_coefficient.numerator), iterations
-        ) + _multiplier_bit_bound(zero_coefficient.denominator, iterations)
-        growth_digits = _decimal_digits_from_bits(growth_bits) if growth_bits else 0
-        coefficient_digits = _max_coefficient_digits(polynomial) + growth_digits
+        exact_digits = _rescaled_height_digits(polynomial, operator, iterations)
+        if exact_digits is not None:
+            coefficient_digits = exact_digits
+        else:
+            zero_coefficient = next(
+                (
+                    term.coefficient.as_fraction()
+                    for term in operator.terms
+                    if not any(term.orders)
+                ),
+                Fraction(0),
+            )
+            growth_bits = _multiplier_bit_bound(
+                abs(zero_coefficient.numerator), iterations
+            ) + _multiplier_bit_bound(zero_coefficient.denominator, iterations)
+            growth_digits = _decimal_digits_from_bits(growth_bits) if growth_bits else 0
+            coefficient_digits = _max_coefficient_digits(polynomial) + growth_digits
     elif not scalar_action and _derivative_regime_preserves_coefficient_heights(
         polynomial,
         operator,

@@ -1110,3 +1110,99 @@ def test_accepted_result_encodes_strict_json(square_result) -> None:
     from jacobian.canonical import CanonicalLimits, encode_strict_json
 
     encode_strict_json(square_result.model_dump(mode="json"), limits=CanonicalLimits())
+
+
+def _oversized_face_payload() -> dict[str, object]:
+    """A serialized face at the declared container maxima whose aggregate
+    coordinates alone encode past the strict JSON transport limit.
+
+    Sixty-four vertices in six dimensions, five near-canonical-limit
+    components per row (rows stay distinct through their first coordinate),
+    so the payload is individually well-formed but cannot cross the
+    supported serialization boundary as a whole.
+    """
+    big = {"num": "9" * 32_768, "den": "8"}
+    return {
+        "space": {"axes": [f"x{axis}" for axis in range(6)]},
+        "vertices": [
+            {
+                "vertex_id": f"{index:02d}",
+                "coordinates": [
+                    {"num": str(index), "den": "1"},
+                    *[{"num": big["num"], "den": big["den"]}] * 5,
+                ],
+            }
+            for index in range(64)
+        ],
+    }
+
+
+def test_oversized_aggregate_face_rejected_before_nested_parsing() -> None:
+    """A face whose coordinates alone exceed the transport envelope can
+    never compose across the supported serialization boundary, so the
+    aggregate bound must reject it as a typed validation error before any
+    coordinate is parsed."""
+    from jacobian.canonical import CanonicalLimits, encode_strict_json
+
+    payload = _oversized_face_payload()
+    encoded = len(
+        encode_strict_json(payload, limits=CanonicalLimits(max_output_bytes=2**30))
+    )
+    assert encoded > CanonicalLimits().max_output_bytes
+
+    with pytest.raises(
+        ValidationError,
+        match="exposed face exceeds the canonical JSON output bound",
+    ):
+        RationalExposedFace.model_validate(payload)
+
+
+def test_built_component_shapes_are_measured_by_the_aggregate_bound() -> None:
+    """The aggregate gate measures authored reduced components the same way
+    whether they arrive as raw payloads or as built canonical values."""
+    from jacobian.math.polytope._models import _estimate_face_wire_bytes
+
+    big = CanonicalRational(num="9" * 32_768, den="8")
+    space = RationalCoordinateSpace(axes=("x", "y"))
+    vertices = (
+        RationalPolytopeVertex(vertex_id="a", coordinates=(big, big)),
+        RationalPolytopeVertex(vertex_id="b", coordinates=(big, big)),
+    )
+
+    built_estimate = _estimate_face_wire_bytes({"space": space, "vertices": vertices})
+    raw_estimate = _estimate_face_wire_bytes(
+        {
+            "space": {"axes": ["x", "y"]},
+            "vertices": [
+                {
+                    "vertex_id": "a",
+                    "coordinates": [{"num": big.num, "den": big.den}] * 2,
+                },
+                {
+                    "vertex_id": "b",
+                    "coordinates": [{"num": big.num, "den": big.den}] * 2,
+                },
+            ],
+        }
+    )
+
+    assert built_estimate == raw_estimate
+    assert built_estimate > 2 * 2 * (len(big.num) + len(big.den))
+
+
+def test_single_vertex_face_with_maximal_components_still_composes() -> None:
+    """The aggregate bound admits faces under the transport limit: maximal
+    per-component heights alone do not trigger it, and the accepted value
+    encodes strictly."""
+    from jacobian.canonical import CanonicalLimits, encode_strict_json
+
+    big = _large_rational(32_768)
+    face = RationalExposedFace(
+        space=RationalCoordinateSpace(axes=("x", "y")),
+        vertices=(RationalPolytopeVertex(vertex_id="v00", coordinates=(big, big)),),
+    )
+
+    encoded = len(
+        encode_strict_json(face.model_dump(mode="json"), limits=CanonicalLimits())
+    )
+    assert encoded < CanonicalLimits().max_output_bytes

@@ -235,11 +235,12 @@ def _preflight_raw_support_components(data: object) -> object:
     return canonical
 
 
-def _require_raw_component_within_support_envelope(
+def _require_raw_component_digit_bound(
     component: object,
     label: str,
+    max_digits: int,
 ) -> None:
-    """Measure one authored rational payload against the support envelope.
+    """Measure one authored rational payload against a per-component bound.
 
     The reduced numerator/denominator strings are read exactly as
     ``require_bounded_rational`` measures them, but without constructing
@@ -257,10 +258,44 @@ def _require_raw_component_within_support_envelope(
         num, den = raw_num, raw_den
     else:
         return
-    if max(len(num.lstrip("-")), len(den.lstrip("-"))) > (MAX_SUPPORT_COMPONENT_DIGITS):
-        raise ValueError(
-            f"{label} exceeds the {MAX_SUPPORT_COMPONENT_DIGITS}-digit bound"
-        )
+    if max(len(num.lstrip("-")), len(den.lstrip("-"))) > max_digits:
+        raise ValueError(f"{label} exceeds the {max_digits}-digit bound")
+
+
+def _require_raw_component_within_support_envelope(
+    component: object,
+    label: str,
+) -> None:
+    """Measure one authored rational payload against the support envelope."""
+
+    _require_raw_component_digit_bound(
+        component,
+        label,
+        MAX_SUPPORT_COMPONENT_DIGITS,
+    )
+
+
+def _require_raw_v_polytope_coordinates_within_facet_envelope(value: object) -> None:
+    """Measure authored V-polytope coordinates against the facet envelope.
+
+    Reconstructing the canonical value replays its exact extremality proof —
+    up to the published orientation-test bound on large-height determinants —
+    while this operation admits at most ``MAX_FACET_COORDINATE_DIGITS`` digits
+    per reduced coordinate component. A serialized support-source polytope may
+    lawfully carry components between the two bounds, so without this gate a
+    ``math.run`` composition guaranteed to fail would still pay for the proof.
+    Measuring the authored coordinates here keeps even a rejected request
+    inside the admitted execution envelope; unrecognized shapes fall through
+    to ordinary nested validation errors.
+    """
+
+    for vertex in _iter_raw_entries(value, "vertices"):
+        for component in _iter_raw_entries(vertex, "coordinates"):
+            _require_raw_component_digit_bound(
+                component,
+                "facet-profile vertex coordinate",
+                MAX_FACET_COORDINATE_DIGITS,
+            )
 
 
 def _raw_space_axes(space: object) -> tuple[object, ...] | None:
@@ -864,9 +899,10 @@ class FacetIncidenceRequest(StrictModel):
         declared V-representation; a serialized value is re-validated as
         the canonical type first.  Reconstructing that type replays its
         exact extremality proof, so every cheap outer field — the closed
-        field set and the whole published ``dimension_bound`` schema — is
-        preflighted first: an already-invalid request must fail before any
-        hull replay runs.
+        field set, the whole published ``dimension_bound`` schema, and this
+        operation's per-component coordinate envelope — is preflighted
+        first: an already-invalid request must fail before any hull replay
+        runs.
         """
 
         if not isinstance(data, dict):
@@ -893,6 +929,7 @@ class FacetIncidenceRequest(StrictModel):
         if isinstance(value, RationalVPolytope):
             return {**data, "vertices": _canonical_v_polytope_vertices(value)}
         if isinstance(value, dict) and set(value) == {"space", "vertices"}:
+            _require_raw_v_polytope_coordinates_within_facet_envelope(value)
             canonical = RationalVPolytope.model_validate(value)
             return {**data, "vertices": _canonical_v_polytope_vertices(canonical)}
         return _tuple_canonical_containers(data)
@@ -1032,14 +1069,104 @@ class RationalCovector(StrictModel):
         return self
 
 
+_FACE_WIRE_RESERVE_BYTES = 65_536
+"""Fixed encoded-size allowance for a face's labels and JSON structure.
+
+Axis labels and vertex IDs are short Unicode scalar strings whose RFC 8785
+escaping expands each code point to at most twelve characters, so the
+combined worst case across the declared container maxima — plus every
+structural token of the encoded face — stays inside this reserve.
+"""
+
+_FACE_VERTEX_WIRE_OVERHEAD_BYTES = 256
+"""Encoded-size allowance for one vertex's structural JSON tokens."""
+
+_FACE_COORDINATE_WIRE_OVERHEAD_BYTES = 48
+"""Encoded-size allowance beyond its two canonical integer strings for one
+serialized rational coordinate."""
+
+
+def _face_coordinate_wire_bytes(component: object) -> int | None:
+    """Return one authored coordinate's conservative serialized height.
+
+    The reduced numerator/denominator strings are measured exactly as the
+    strict JSON encoding writes them; unrecognized shapes return ``None``
+    so ordinary nested validation reports them with the published schema
+    errors.
+    """
+
+    if isinstance(component, CanonicalRational):
+        num, den = component.num, component.den
+    elif isinstance(component, dict):
+        raw_num = component.get("num")
+        raw_den = component.get("den")
+        if not isinstance(raw_num, str) or not isinstance(raw_den, str):
+            return None
+        num, den = raw_num, raw_den
+    else:
+        return None
+    return len(num) + len(den) + _FACE_COORDINATE_WIRE_OVERHEAD_BYTES
+
+
+def _estimate_face_wire_bytes(data: object) -> int:
+    """Conservatively upper-bound one authored exposed face's encoded size.
+
+    Every recognized coordinate contributes the length of both canonical
+    integer strings plus per-element overhead; unrecognized shapes
+    contribute nothing here and remain the business of ordinary nested
+    validation and the exact strict JSON replay. The estimate may only
+    over-count, so an accepted aggregate always encodes at or under it.
+    """
+
+    total = _FACE_WIRE_RESERVE_BYTES
+    for vertex in _iter_raw_entries(data, "vertices"):
+        total += _FACE_VERTEX_WIRE_OVERHEAD_BYTES
+        for component in _iter_raw_entries(vertex, "coordinates"):
+            coordinate_bytes = _face_coordinate_wire_bytes(component)
+            if coordinate_bytes is not None:
+                total += coordinate_bytes
+    return total
+
+
 class RationalExposedFace(StrictModel):
-    """The complete vertex family of one exposed face of a V-polytope."""
+    """The complete vertex family of one exposed face of a V-polytope.
+
+    The aggregate encoded payload must fit the domain's strict JSON
+    transport limit: an accepted face composes unchanged across the
+    supported serialization boundary, so a face whose coordinates alone
+    exceed ``CanonicalLimits().max_output_bytes`` is rejected here as a
+    typed validation error.
+    """
 
     space: RationalCoordinateSpace
     vertices: tuple[RationalPolytopeVertex, ...] = Field(
         min_length=1,
         max_length=MAX_VERTICES,
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_aggregate_wire_size_within_transport_bound(cls, data: object) -> object:
+        """Reject faces whose aggregate payload overflows the transport limit.
+
+        Declared container maxima admit faces whose canonical coordinates
+        alone encode far past ``CanonicalLimits().max_output_bytes``, yet a
+        value only composes through boundaries ``encode_strict_json``
+        supports. Nested canonical-rational parsing validates every authored
+        coordinate before parent after-validators run, so gating there would
+        pay the complete parse of a guaranteed-to-fail payload. This gate
+        conservatively estimates the encoded height from the authored
+        reduced-component strings — dict or built value alike — and rejects
+        an over-limit aggregate before any coordinate is parsed; the
+        residual gap between the estimate and the exact encoded size stays
+        covered by the strict JSON replay in
+        ``require_canonical_face_vertices``.
+        """
+
+        estimated = _estimate_face_wire_bytes(data)
+        if estimated > CanonicalLimits().max_output_bytes:
+            raise ValueError("exposed face exceeds the canonical JSON output bound")
+        return data
 
     @model_validator(mode="after")
     def require_canonical_face_vertices(self) -> Self:
@@ -1057,6 +1184,12 @@ class RationalExposedFace(StrictModel):
             )
         if len({vertex.coordinates for vertex in self.vertices}) != len(self.vertices):
             raise ValueError("exposed-face vertices must have distinct coordinates")
+        try:
+            encode_strict_json(self.model_dump(mode="json"), limits=CanonicalLimits())
+        except ValueError as exc:
+            raise ValueError(
+                "exposed face exceeds the canonical JSON output bound"
+            ) from exc
         return self
 
 

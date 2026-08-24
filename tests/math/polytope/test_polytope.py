@@ -10,8 +10,10 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.polytope import _operations as polytope_operations
 from jacobian.math.polytope._models import (
     MAX_COMPUTED_FACETS,
+    MAX_FACET_COORDINATE_DIGITS,
     MAX_FACET_INCIDENCES,
     MAX_FACET_SIGN_TESTS,
     MAX_FACET_TOTAL_SIGN_TESTS,
@@ -1743,6 +1745,70 @@ class TestCanonicalVPolytopeFacetComposition:
 
         with pytest.raises(ValidationError, match="exact extreme vertices"):
             FacetIncidenceRequest.model_validate({"vertices": payload})
+
+    def _serialized_support_simplex(self, digits: int) -> dict[str, object]:
+        """A six-dimensional simplex as a serialized support-source value.
+
+        Every vertex is an exact extreme vertex of the full-dimensional
+        hull, so reconstructing the canonical type would run the complete
+        extremality proof at any coordinate height; the first axis carries
+        the requested digit count.
+        """
+        zero = {"num": "0", "den": "1"}
+        one = {"num": "1", "den": "1"}
+        big = {"num": "9" * digits, "den": "1"}
+        rows = [("v00", [zero] * 6)]
+        for axis in range(6):
+            coordinates = [zero] * 6
+            coordinates[axis] = big if axis == 0 else one
+            rows.append((f"v{axis + 1:02d}", coordinates))
+        return {
+            "space": {"axes": [f"x{axis}" for axis in range(6)]},
+            "vertices": [
+                {"vertex_id": vertex_id, "coordinates": coordinates}
+                for vertex_id, coordinates in rows
+            ],
+        }
+
+    def test_oversized_support_coordinates_reject_before_the_hull_replay(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A serialized V-polytope whose coordinates are lawful canonical
+        values but outside this operation's facet envelope is guaranteed to
+        fail after reconstruction, so the per-component envelope must be
+        measured before the exact extremality proof can run."""
+
+        def unexpected_proof(polytope: object) -> None:
+            raise AssertionError("extremality proof ran before the envelope preflight")
+
+        monkeypatch.setattr(
+            polytope_operations,
+            "require_full_dimensional_extreme_vertices",
+            unexpected_proof,
+        )
+        payload = self._serialized_support_simplex(MAX_FACET_COORDINATE_DIGITS + 1)
+
+        with pytest.raises(
+            ValidationError,
+            match=(
+                "facet-profile vertex coordinate exceeds the "
+                f"{MAX_FACET_COORDINATE_DIGITS}-digit bound"
+            ),
+        ):
+            FacetIncidenceRequest.model_validate({"vertices": payload})
+
+    def test_support_coordinates_at_the_facet_envelope_still_compose(self) -> None:
+        """The preflight admits exactly the published envelope: a simplex
+        whose every component sits at the digit bound reconstructs through
+        the canonical proof and projects onto bare vertices."""
+        payload = self._serialized_support_simplex(MAX_FACET_COORDINATE_DIGITS)
+        request = FacetIncidenceRequest.model_validate({"vertices": payload})
+        vertices = request.vertices
+        assert isinstance(vertices, tuple)
+
+        assert len(vertices[0].coordinates) == 6
+        assert len(vertices) == 7
 
     def test_outer_extra_field_rejects_before_the_hull_replay(self) -> None:
         with pytest.raises(ValidationError, match="unexpected fields"):

@@ -19,9 +19,14 @@ from jacobian.math.words.values import FiniteWord
 
 def word_payload_bytes(word: FiniteWord) -> int:
     """Return the UTF-8 bytes carried by the alphabet and positioned letters."""
-    return sum(len(symbol.encode("utf-8")) for symbol in word.alphabet) + sum(
-        len(letter.encode("utf-8")) for letter in word.letters
-    )
+    try:
+        alphabet_bytes = sum(len(symbol.encode("utf-8")) for symbol in word.alphabet)
+        letter_bytes = sum(len(letter.encode("utf-8")) for letter in word.letters)
+    except UnicodeEncodeError as error:
+        raise ValueError(
+            "RSK word symbols must be Unicode scalar values without surrogates"
+        ) from error
+    return alphabet_bytes + letter_bytes
 
 
 def require_rsk_word_budget(word: FiniteWord) -> None:

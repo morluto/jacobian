@@ -258,7 +258,9 @@ def test_word_length_and_utf8_payload_bounds_are_closed() -> None:
     deepest_shape = _pair(
         FiniteWord(
             alphabet=ordered_symbols,
-            letters=tuple(symbol for symbol in reversed(ordered_symbols) for _ in (0, 1)),
+            letters=tuple(
+                symbol for symbol in reversed(ordered_symbols) for _ in (0, 1)
+            ),
         )
     )
     assert deepest_shape.shape.parts == (2,) * 50
@@ -298,9 +300,7 @@ def test_canonical_tableau_cell_bound_admits_boundary_pairs_end_to_end() -> None
     assert reconstructed == FiniteWord(alphabet=("a",), letters=("a",) * 100)
 
     wide = tuple(f"s{index:02d}" for index in range(50))
-    descending_pairs = tuple(
-        symbol for symbol in reversed(wide) for _ in (0, 1)
-    )
+    descending_pairs = tuple(symbol for symbol in reversed(wide) for _ in (0, 1))
     pair = _pair(FiniteWord(alphabet=wide, letters=descending_pairs))
     assert pair.shape.parts == (2,) * 50
     assert inverse_row_insertion_rsk(pair) == FiniteWord(
@@ -350,7 +350,9 @@ def test_surrogate_json_decode_reaches_typed_request_rejection() -> None:
         RSKInverseWordRequest(pair=RSKTableauPair.model_validate(raw_pair))
 
 
-def test_unicode_scalar_validator_rejects_surrogates_and_admits_astral_symbols() -> None:
+def test_unicode_scalar_validator_rejects_surrogates_and_admits_astral_symbols() -> (
+    None
+):
     for symbol in ("\ud800", "\udfff", "a\ud800b"):
         with pytest.raises(ValueError, match="Unicode scalar values"):
             _require_unicode_scalar_string(symbol)
@@ -365,6 +367,12 @@ def test_astral_scalar_symbols_round_trip_through_both_directions() -> None:
     pair = row_insertion_rsk(word)
     assert pair.alphabet == alphabet
     assert inverse_row_insertion_rsk(pair) == word
+
+
+def test_kernel_converts_unencodable_payloads_into_request_validation() -> None:
+    fabricated = FiniteWord.model_construct(alphabet=("\ud800",), letters=("\ud800",))
+    with pytest.raises(ValueError, match="Unicode scalar values"):
+        row_insertion_rsk(fabricated)
 
 
 def test_comparison_bound_boundary_word_round_trips() -> None:
@@ -405,6 +413,7 @@ def test_public_operations_are_admitted_and_examples_execute() -> None:
     decisions = {admission.operation_id: admission.decision for admission in ADMISSIONS}
     assert public_ids <= tools.keys()
     assert tools["combinatorics.rsk.permutation.compute"].version == "2"
+    assert tools["tableau.rsk.word.compute"].version == "2"
     assert tools["tableau.rsk.inverse_word.compute"].version == "2"
     assert all(
         decisions[operation_id] is AdmissionDecision.KEEP for operation_id in public_ids

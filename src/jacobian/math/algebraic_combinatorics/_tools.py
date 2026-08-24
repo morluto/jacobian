@@ -169,6 +169,7 @@ ALGEBRAIC_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
+        version="2",
     ),
     ac_operation(
         "tableau.rsk.inverse_word.compute",

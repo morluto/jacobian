@@ -25,9 +25,7 @@ MAX_RSK_WORD_LENGTH = MAX_PARTITION_SIZE
 # A word at the length boundary over an alphabet of MAX_ALPHABET_SIZE symbols
 # can use MAX_SYMBOL_LENGTH Unicode scalar values per symbol, each encoded in
 # four UTF-8 bytes.
-MAX_RSK_WORD_BYTES = (
-    (MAX_RSK_WORD_LENGTH + MAX_ALPHABET_SIZE) * MAX_SYMBOL_LENGTH * 4
-)
+MAX_RSK_WORD_BYTES = (MAX_RSK_WORD_LENGTH + MAX_ALPHABET_SIZE) * MAX_SYMBOL_LENGTH * 4
 RSKConvention = Literal["ROW_INSERTION_RSK_V1"]
 
 

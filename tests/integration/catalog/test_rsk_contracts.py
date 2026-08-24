@@ -24,3 +24,14 @@ def test_inverse_word_rsk_descriptor_publishes_canonical_word_result() -> None:
     assert descriptor is not None
     assert descriptor.version == "2"
     assert set(descriptor.output_schema["properties"]) == {"alphabet", "letters"}
+
+
+def test_word_rsk_descriptor_publishes_version_two() -> None:
+    descriptor = Catalog.open().inspect("tableau.rsk.word.compute")
+
+    assert descriptor is not None
+    assert descriptor.version == "2"
+    assert (
+        descriptor.input_schema["properties"]["convention"]["const"]
+        == "ROW_INSERTION_RSK_V1"
+    )

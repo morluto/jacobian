@@ -9,7 +9,7 @@ from typing import Literal
 
 import networkx as nx
 
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_ALL_TERMINAL_RELIABILITY_EDGES = 20
@@ -20,19 +20,16 @@ MAX_ALL_TERMINAL_RELIABILITY_INPUT_DIGITS = 128
 MAX_ALL_TERMINAL_RELIABILITY_RESULT_DIGITS = (
     MAX_ALL_TERMINAL_RELIABILITY_EDGES * MAX_ALL_TERMINAL_RELIABILITY_INPUT_DIGITS + 1
 )
-# One NetworkX connectivity traversal costs at most n vertex visits plus 2m
-# undirected adjacency visits. The factor two charges the operation and
-# source-bound result replay. This conservative ceiling admits the 16-vertex,
-# 20-edge literature case at the edge limit.
-MAX_ALL_TERMINAL_RELIABILITY_WORK = (
-    2
-    * MAX_ALL_TERMINAL_RELIABILITY_STATES
-    * (16 + 2 * MAX_ALL_TERMINAL_RELIABILITY_EDGES + 2)
+_MAX_ALL_TERMINAL_RELIABILITY_INPUT_ABS = (
+    10**MAX_ALL_TERMINAL_RELIABILITY_INPUT_DIGITS
 )
-
-
-def _integer_digits(value: int) -> int:
-    return len(format_canonical_integer(abs(value)))
+_MAX_ALL_TERMINAL_RELIABILITY_RESULT_ABS = (
+    10**MAX_ALL_TERMINAL_RELIABILITY_RESULT_DIGITS
+)
+# The largest non-graph fields contain two 128-digit probability components,
+# two 2,561-digit result components, 21 seven-digit coefficients, and fixed
+# JSON field names. Eight KiB leaves conservative headroom for that payload.
+_RESULT_ENVELOPE_RESERVE_BYTES = 8_192
 
 
 def _require_bounded_problem(
@@ -55,33 +52,35 @@ def _require_bounded_problem(
     if not 0 <= open_probability <= 1:
         raise ValueError("open_probability must lie in [0, 1]")
     if (
-        _integer_digits(open_probability.numerator)
-        > MAX_ALL_TERMINAL_RELIABILITY_INPUT_DIGITS
-        or _integer_digits(open_probability.denominator)
-        > MAX_ALL_TERMINAL_RELIABILITY_INPUT_DIGITS
+        abs(open_probability.numerator) >= _MAX_ALL_TERMINAL_RELIABILITY_INPUT_ABS
+        or open_probability.denominator >= _MAX_ALL_TERMINAL_RELIABILITY_INPUT_ABS
     ):
         raise ValueError(
             "open_probability exceeds the "
             f"{MAX_ALL_TERMINAL_RELIABILITY_INPUT_DIGITS}-digit bound"
         )
 
-    # A state with fewer than n-1 open edges cannot be connected, so the kernel
-    # skips its NetworkX traversal. Charge every Gray-code update and exactly
-    # the subset-cardinality classes that can reach the connectivity backend,
-    # for both the computation and source-bound result replay.
-    states = 1 << edge_count
-    connectivity_states = sum(
-        comb(edge_count, open_edges)
-        for open_edges in range(min(vertex_count - 1, edge_count + 1), edge_count + 1)
+    output_limit = CanonicalLimits().max_output_bytes
+    output_error = (
+        "the all-terminal reliability result retains its source graph and "
+        f"would exceed the {output_limit}-byte canonical output limit; "
+        "shorten vertex labels"
     )
-    total_work = 2 * (
-        2 * states + connectivity_states * (vertex_count + 2 * edge_count)
+    # Every label code point occupies at least one output byte. This cheap lower
+    # bound rejects arbitrarily large native values before RFC 8785 expansion.
+    # Once it passes, JSON escaping can expand by at most a fixed factor within
+    # the canonical output limit, so the exact serialization below is bounded.
+    retained_label_code_points = sum(len(vertex) for vertex in graph.vertices) + sum(
+        len(left) + len(right) for left, right in graph.edges
     )
-    if total_work > MAX_ALL_TERMINAL_RELIABILITY_WORK:
-        raise ValueError(
-            "all-terminal reliability exceeds the "
-            f"{MAX_ALL_TERMINAL_RELIABILITY_WORK}-step two-pass work budget"
-        )
+    if retained_label_code_points + _RESULT_ENVELOPE_RESERVE_BYTES > output_limit:
+        raise ValueError(output_error)
+    try:
+        graph_bytes = len(encode_strict_json(graph.model_dump(mode="json")))
+    except ValueError as exc:
+        raise ValueError(output_error) from exc
+    if graph_bytes + _RESULT_ENVELOPE_RESERVE_BYTES > output_limit:
+        raise ValueError(output_error)
 
 
 def _indexed_graph(
@@ -152,10 +151,10 @@ def _require_source_bound_result(
 ) -> None:
     _require_bounded_problem(graph, open_probability)
     if (
-        _integer_digits(reliability_probability.numerator)
-        > MAX_ALL_TERMINAL_RELIABILITY_RESULT_DIGITS
-        or _integer_digits(reliability_probability.denominator)
-        > MAX_ALL_TERMINAL_RELIABILITY_RESULT_DIGITS
+        abs(reliability_probability.numerator)
+        >= _MAX_ALL_TERMINAL_RELIABILITY_RESULT_ABS
+        or reliability_probability.denominator
+        >= _MAX_ALL_TERMINAL_RELIABILITY_RESULT_ABS
     ):
         raise ValueError(
             "all-terminal reliability result probability exceeds the "
@@ -200,7 +199,6 @@ class AllTerminalReliabilityResult:
     event: Literal["ALL_VERTICES_CONNECTED"] = "ALL_VERTICES_CONNECTED"
 
     def __post_init__(self) -> None:
-        _require_bounded_problem(self.graph, self.open_probability)
         if type(self.connected_spanning_subgraph_counts) is not tuple or any(
             type(count) is not int for count in self.connected_spanning_subgraph_counts
         ):

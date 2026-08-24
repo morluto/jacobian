@@ -14,7 +14,9 @@ result includes the connected-spanning-subgraph counts by open-edge cardinality,
 so its probability reconstructs as
 `sum(c[k] * p^k * (1-p)^(m-k))`. The operation accepts nonempty canonical
 simple graphs with at most 20 edges when the complete enumeration and
-validation replay fit its vertex-sensitive work budget.
+validation replay each fit the `2^20`-state cap. Because the exact result retains
+its source, the graph plus fixed probability/profile headroom must also fit the
+canonical output limit.
 
 These are different events: two chosen vertices can remain connected while an
 isolated third vertex makes all-terminal reliability fail.

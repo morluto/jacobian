@@ -13,12 +13,7 @@ from jacobian._exact import (
     require_bounded_rational,
 )
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    format_canonical_integer,
-    parse_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -32,19 +27,6 @@ from jacobian.math.probability.all_terminal_reliability import (
     _require_source_bound_result,
 )
 
-_RESULT_ENVELOPE_RESERVE_BYTES = 8_192
-
-
-def _require_output_headroom(graph: SimpleUndirectedGraph) -> None:
-    graph_bytes = len(encode_strict_json(graph.model_dump(mode="json")))
-    output_limit = CanonicalLimits().max_output_bytes
-    if graph_bytes + _RESULT_ENVELOPE_RESERVE_BYTES > output_limit:
-        raise ValueError(
-            "the all-terminal reliability result retains its source graph and "
-            f"would exceed the {output_limit}-byte canonical output limit; "
-            "shorten vertex labels"
-        )
-
 
 class AllTerminalReliabilityRequest(StrictModel):
     """One nonempty bounded graph and one uniform exact edge-up probability."""
@@ -55,8 +37,9 @@ class AllTerminalReliabilityRequest(StrictModel):
                 "Compute all-terminal reliability for one nonempty canonical "
                 "simple undirected graph. Every edge is independently open with "
                 "the same exact rational `open_probability`. The graph may have "
-                "at most 20 edges, and the complete enumeration plus result "
-                "replay must fit the vertex-sensitive two-pass work budget."
+                "at most 20 edges, bounding each complete enumeration to 2^20 "
+                "states. The retained graph plus the fixed exact-result envelope "
+                "must fit the canonical output limit."
             )
         }
     )
@@ -64,8 +47,9 @@ class AllTerminalReliabilityRequest(StrictModel):
     graph: SimpleUndirectedGraph = Field(
         description=(
             "Nonempty canonical simple undirected graph with at most 20 edges. "
-            "Isolated declared vertices participate in the all-terminal event "
-            "and in the vertex-sensitive work bound."
+            "Isolated declared vertices participate in the all-terminal event. "
+            "The retained graph plus fixed result headroom must fit the canonical "
+            "output limit."
         )
     )
     open_probability: CanonicalRational = Field(
@@ -82,7 +66,6 @@ class AllTerminalReliabilityRequest(StrictModel):
         all_terminal_reliability_input = self.open_probability.as_fraction()
         # The native boundary owns all mathematical and two-pass work admission.
         _require_bounded_problem(self.graph, all_terminal_reliability_input)
-        _require_output_headroom(self.graph)
         return self
 
 
@@ -148,7 +131,6 @@ class AllTerminalReliabilityWireResult(StrictModel):
             max_digits=MAX_ALL_TERMINAL_RELIABILITY_INPUT_DIGITS,
             label="all-terminal reliability open probability",
         )
-        _require_bounded_problem(self.graph, probability)
         require_bounded_rational(
             self.reliability_probability,
             max_digits=MAX_ALL_TERMINAL_RELIABILITY_RESULT_DIGITS,
@@ -209,7 +191,6 @@ ALL_TERMINAL_RELIABILITY_OPERATION = MathTool(
         "connected-spanning-subgraph",
         "exact",
         "bounded",
-        "networkx",
     ),
     examples=(
         example(
@@ -218,7 +199,7 @@ ALL_TERMINAL_RELIABILITY_OPERATION = MathTool(
                 "Compute the exact probability that a fair-edge triangle is "
                 "connected on all declared vertices; the graph must be nonempty, "
                 "have at most 20 edges, use one rational edge probability, and "
-                "fit the vertex-sensitive two-pass budget."
+                "fit the retained-result output limit."
             ),
             {
                 "graph": {

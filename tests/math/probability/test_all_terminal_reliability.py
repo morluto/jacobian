@@ -10,6 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import CanonicalLimits
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.probability._all_terminal_reliability import (
     ALL_TERMINAL_RELIABILITY_OPERATION,
@@ -347,19 +348,24 @@ def test_request_rejects_outside_complete_domain(
         AllTerminalReliabilityRequest.model_validate(payload)
 
 
-def test_request_accepts_the_twenty_edge_enumeration_boundary() -> None:
-    vertices = tuple(f"v{index:02d}" for index in range(16))
-    graph = _graph(
-        vertices,
-        tuple(combinations(vertices, 2))[:MAX_ALL_TERMINAL_RELIABILITY_EDGES],
-    )
-
+def test_operation_executes_the_twenty_edge_enumeration_boundary() -> None:
+    vertices = tuple(f"v{index:02d}" for index in range(21))
     request = AllTerminalReliabilityRequest(
-        graph=graph,
+        graph=_graph(
+            vertices,
+            tuple((vertices[index], vertices[index + 1]) for index in range(20)),
+        ),
         open_probability=CanonicalRational(num="1", den="2"),
     )
 
-    assert len(request.graph.edges) == MAX_ALL_TERMINAL_RELIABILITY_EDGES
+    result = compute_all_terminal_reliability(request)
+
+    assert result.connected_spanning_subgraph_counts == (
+        *("0" for _ in range(MAX_ALL_TERMINAL_RELIABILITY_EDGES)),
+        "1",
+    )
+    assert result.reliability_probability.as_fraction() == Fraction(1, 1 << 20)
+    assert result.visited_states == 1 << 20
 
 
 def test_request_allows_more_vertices_when_the_state_space_is_small() -> None:
@@ -374,6 +380,33 @@ def test_request_allows_more_vertices_when_the_state_space_is_small() -> None:
     assert len(request.graph.vertices) == 256
     assert result.connected_spanning_subgraph_counts == ("0",)
     assert result.reliability_probability.as_fraction() == 0
+
+
+def test_native_boundary_rejects_an_oversized_retained_graph() -> None:
+    graph = _graph(("x" * CanonicalLimits().max_output_bytes,), ())
+
+    with pytest.raises(ValueError, match="canonical output limit"):
+        all_terminal_reliability(graph, Fraction(1, 2))
+
+
+def test_native_boundary_rejects_huge_probability_components_preflight() -> None:
+    graph = _graph(("v",), ())
+    at_limit = all_terminal_reliability(graph, Fraction(1, 10**127))
+
+    assert at_limit.reliability_probability == 1
+    with pytest.raises(ValueError, match="128-digit bound"):
+        all_terminal_reliability(graph, Fraction(1, 10**200_000 + 3))
+
+
+def test_request_schema_exposes_the_retained_result_limit() -> None:
+    schema = AllTerminalReliabilityRequest.model_json_schema()
+
+    assert "retained graph plus the fixed exact-result envelope" in str(
+        schema["description"]
+    ).lower()
+    assert "retained graph plus fixed result headroom" in str(
+        schema["properties"]["graph"]["description"]
+    ).lower()
 
 
 def test_operation_declares_and_executes_copyable_example() -> None:

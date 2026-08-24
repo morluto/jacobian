@@ -2,21 +2,33 @@
 
 from __future__ import annotations
 
+import math
 from fractions import Fraction
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.polytope._models import (
+    MAX_COMPUTED_FACETS,
+    MAX_FACET_INCIDENCES,
+    MAX_FACET_SIGN_TESTS,
+    MAX_FACET_TOTAL_SIGN_TESTS,
     MAX_FACETS,
     MAX_VERTICES,
+    FacetIncidenceRequest,
+    FacetIncidenceResult,
     Halfspace,
     PolytopeVolumeRequest,
     PolytopeVolumeResult,
+    PrimitiveFacet,
     Vertex,
 )
-from jacobian.math.polytope._operations import compute_polytope_volume
+from jacobian.math.polytope._operations import (
+    compute_facet_incidence,
+    compute_polytope_volume,
+)
 
 
 def _cr0() -> CanonicalRational:
@@ -70,6 +82,410 @@ def _volume_via_halfspaces(
     halfspaces: tuple[Halfspace, ...],
 ) -> PolytopeVolumeResult:
     return compute_polytope_volume(PolytopeVolumeRequest(halfspaces=halfspaces))
+
+
+def _facet_profile(vertices: tuple[Vertex, ...]) -> FacetIncidenceResult:
+    return compute_facet_incidence(FacetIncidenceRequest(vertices=vertices))
+
+
+class TestFacetIncidence:
+    def test_schema_exposes_the_admission_execution_and_replay_budget(self) -> None:
+        schema = FacetIncidenceRequest.model_json_schema()
+
+        description = schema["properties"]["vertices"]["description"]
+        assert str(MAX_FACET_SIGN_TESTS) in description
+        assert str(MAX_FACET_TOTAL_SIGN_TESTS) in description
+
+    def test_schema_publishes_where_the_result_bounds_attach(self) -> None:
+        """The facet and incidence caps are enforced exactly on the
+        materialized profile of the bounded enumeration -- which request
+        admission itself runs -- and the schema must say so rather than
+        promise a row-count upper-bound proof that no admission step
+        performs."""
+        schema = FacetIncidenceRequest.model_json_schema()
+
+        description = schema["properties"]["vertices"]["description"]
+        assert f"{MAX_COMPUTED_FACETS}-facet" in description
+        assert f"{MAX_FACET_INCIDENCES}-incidence" in description
+
+    def test_unit_square_returns_canonical_complete_source_incidences(self) -> None:
+        vertices = (
+            _v((0, 1), (0, 1)),
+            _v((1, 1), (0, 1)),
+            _v((1, 1), (1, 1)),
+            _v((0, 1), (1, 1)),
+        )
+
+        result = _facet_profile(vertices)
+
+        assert result.vertices == vertices
+        assert result.dimension == 2
+        assert [
+            (
+                tuple((c.num, c.den) for c in facet.halfspace.coefficients),
+                (facet.halfspace.offset.num, facet.halfspace.offset.den),
+                facet.source_vertex_indices,
+            )
+            for facet in result.facets
+        ] == [
+            ((("-1", "1"), ("0", "1")), ("0", "1"), (0, 3)),
+            ((("0", "1"), ("-1", "1")), ("0", "1"), (0, 1)),
+            ((("0", "1"), ("1", "1")), ("1", "1"), (2, 3)),
+            ((("1", "1"), ("0", "1")), ("1", "1"), (1, 2)),
+        ]
+
+    def test_nonsimplicial_pentagonal_prism_merges_coplanar_subfacets(self) -> None:
+        base = ((0, 0), (2, 0), (3, 1), (1, 3), (-1, 1))
+        vertices = tuple(_v((x, 1), (y, 1), (z, 1)) for z in (0, 1) for x, y in base)
+
+        result = _facet_profile(vertices)
+
+        assert len(result.facets) == 7
+        assert sorted(len(facet.source_vertex_indices) for facet in result.facets) == [
+            4,
+            4,
+            4,
+            4,
+            4,
+            5,
+            5,
+        ]
+
+    def test_duplicate_source_rows_remain_bound_to_every_incident_facet(self) -> None:
+        vertices = (
+            _v((0, 1), (0, 1)),
+            _v((1, 1), (0, 1)),
+            _v((1, 1), (1, 1)),
+            _v((0, 1), (1, 1)),
+            _v((0, 1), (0, 1)),
+        )
+
+        result = _facet_profile(vertices)
+
+        assert len(result.facets) == 4
+        assert any(facet.source_vertex_indices == (0, 3, 4) for facet in result.facets)
+        assert any(facet.source_vertex_indices == (0, 1, 4) for facet in result.facets)
+
+    def test_duplicate_rows_do_not_create_lower_dimensional_facets(self) -> None:
+        vertices = (
+            _v((0, 1), (0, 1)),
+            _v((0, 1), (0, 1)),
+            _v((1, 1), (2, 1)),
+            _v((2, 1), (1, 1)),
+        )
+
+        result = _facet_profile(vertices)
+
+        assert len(result.facets) == 3
+        assert all(len(facet.source_vertex_indices) >= 2 for facet in result.facets)
+
+    def test_result_rejects_missing_facet_and_wrong_source(self) -> None:
+        vertices = (
+            _v((0, 1), (0, 1)),
+            _v((1, 1), (0, 1)),
+            _v((1, 1), (1, 1)),
+            _v((0, 1), (1, 1)),
+        )
+        result = _facet_profile(vertices)
+
+        with pytest.raises(ValidationError, match="complete canonical"):
+            FacetIncidenceResult(
+                vertices=vertices,
+                dimension=2,
+                facets=result.facets[:-1],
+            )
+        changed_source = (_v((0, 1), (0, 1)), _v((2, 1), (0, 1)), *vertices[2:])
+        with pytest.raises(ValidationError, match="complete canonical"):
+            FacetIncidenceResult(
+                vertices=changed_source,
+                dimension=2,
+                facets=result.facets,
+            )
+
+    def test_facet_profile_composes_unchanged_into_volume_request(self) -> None:
+        """Each computed facet's shared half-space value feeds
+        ``PolytopeVolumeRequest`` verbatim -- no coefficient reconstruction."""
+
+        square = (
+            _v((0, 1), (0, 1)),
+            _v((1, 1), (0, 1)),
+            _v((1, 1), (1, 1)),
+            _v((0, 1), (1, 1)),
+        )
+        cube = tuple(
+            _v((x, 1), (y, 1), (z, 1)) for x in (0, 1) for y in (0, 1) for z in (0, 1)
+        )
+        for vertices, dimension, volume in (
+            (square, 2, ("1", "1")),
+            (cube, 3, ("1", "1")),
+        ):
+            result = _facet_profile(vertices)
+            composed = compute_polytope_volume(
+                PolytopeVolumeRequest(
+                    halfspaces=tuple(facet.halfspace for facet in result.facets)
+                )
+            )
+            assert composed.volume == CanonicalRational(num=volume[0], den=volume[1])
+            assert composed.dimension == dimension
+            assert composed.representation == "halfspaces"
+
+    def test_seven_dimensional_rows_do_not_feed_the_volume_consumer(self) -> None:
+        """The volume consumer caps ambient dimension at 6, so a d = 7
+        profile's shared half-space rows are typed values that only compose
+        into consumers admitting dimension 7."""
+
+        simplex = (
+            _v(*((0, 1) for _ in range(7))),
+            *(
+                _v(*((1 if index == axis else 0, 1) for axis in range(7)))
+                for index in range(7)
+            ),
+        )
+        result = _facet_profile(simplex)
+        assert result.dimension == 7
+        assert {len(facet.halfspace.coefficients) for facet in result.facets} == {7}
+
+        with pytest.raises(ValidationError, match="exceeds the dimension bound"):
+            PolytopeVolumeRequest(
+                halfspaces=tuple(facet.halfspace for facet in result.facets)
+            )
+
+    def test_forged_rescaled_facet_inequality_is_rejected(self) -> None:
+        """A positively rescaled supporting inequality leaves the primitive
+        canonical form and must fail typed validation."""
+
+        vertices = (
+            _v((0, 1), (0, 1)),
+            _v((1, 1), (0, 1)),
+            _v((1, 1), (1, 1)),
+            _v((0, 1), (1, 1)),
+        )
+        result = _facet_profile(vertices)
+
+        with pytest.raises(ValidationError, match="primitive over the integers"):
+            PrimitiveFacet(
+                halfspace=_scaled_halfspace(result.facets[0].halfspace, 3),
+                source_vertex_indices=result.facets[0].source_vertex_indices,
+            )
+
+    def test_non_integer_facet_inequality_is_rejected(self) -> None:
+        """A rational row whose cleared form is coprime is still not the
+        canonical integral supporting inequality."""
+
+        with pytest.raises(ValidationError, match="entries must be integers"):
+            PrimitiveFacet(
+                halfspace=Halfspace(
+                    coefficients=(CanonicalRational(num="1", den="1"),),
+                    offset=CanonicalRational(num="1", den="2"),
+                ),
+                source_vertex_indices=(0, 3),
+            )
+
+    def test_zero_normal_facet_inequality_is_rejected(self) -> None:
+        """A tautology row is not a supporting inequality even though its
+        primitive form is trivially coprime (offset +/-1)."""
+
+        with pytest.raises(ValidationError, match="nonzero normal"):
+            PrimitiveFacet(
+                halfspace=Halfspace(
+                    coefficients=(
+                        CanonicalRational(num="0", den="1"),
+                        CanonicalRational(num="0", den="1"),
+                    ),
+                    offset=CanonicalRational(num="1", den="1"),
+                ),
+                source_vertex_indices=(0, 3),
+            )
+
+    def test_lower_dimensional_input_and_work_overflow_reject_before_enumeration(
+        self,
+    ) -> None:
+        with pytest.raises(ValidationError, match="not full-dimensional"):
+            FacetIncidenceRequest(
+                vertices=(
+                    _v((0, 1), (0, 1)),
+                    _v((1, 1), (0, 1)),
+                )
+            )
+        vertices = (
+            _v(*((0, 1),) * 7),
+            *(
+                _v(*((1 if index == axis else 0, 1) for axis in range(7)))
+                for index in range(7)
+            ),
+            *(_v(*(((index, 1),) * 7)) for index in range(1, 57)),
+        )
+        with pytest.raises(ValidationError, match="side-test bound"):
+            FacetIncidenceRequest(vertices=vertices)
+
+    def test_interior_source_rows_are_admitted_and_bind_no_facet(self) -> None:
+        """Reviewer counterexample: a 7-simplex plus eight distinct strict
+        interior points (1/k, ..., 1/k) for k = 9..16 needs only
+        16*C(16,7) = 183040 candidate-side tests and its exact profile has
+        eight facets. Deduplication cannot remove interior rows, so the
+        cyclic-polytope upper bound on all distinct rows (440 > 256) must
+        not reject this safely bounded request."""
+        simplex = (
+            _v(*((0, 1) for _ in range(7))),
+            *(
+                _v(*((1 if index == axis else 0, 1) for axis in range(7)))
+                for index in range(7)
+            ),
+        )
+        unpadded = _facet_profile(simplex)
+        vertices = simplex + tuple(_v(*(((1, k),) * 7)) for k in range(9, 17))
+
+        result = _facet_profile(vertices)
+
+        assert len(result.facets) == len(unpadded.facets) == 8
+        assert {facet.halfspace for facet in result.facets} == {
+            facet.halfspace for facet in unpadded.facets
+        }
+        assert sorted(
+            {index for facet in result.facets for index in facet.source_vertex_indices}
+        ) == list(range(8))
+
+    def test_cyclic_profile_beyond_the_facet_cap_is_rejected_at_request_admission(
+        self,
+    ) -> None:
+        """The moment-curve polytope with 15 vertices in d = 7 attains the
+        upper-bound-theorem count of 330 facets: its bounded enumeration is
+        within the 15*C(15,7) side-test budget, and admission materializes
+        that enumeration so the profile is rejected against the published
+        facet result limit as a typed request error -- not accepted and
+        failed only inside execution."""
+        vertices = tuple(_v(*((t**k, 1) for k in range(1, 8))) for t in range(1, 16))
+
+        with pytest.raises(
+            ValidationError, match=f"{MAX_COMPUTED_FACETS}-facet result bound"
+        ):
+            FacetIncidenceRequest(vertices=vertices)
+
+    def test_padded_seven_simplex_admits_distinct_candidates_and_binds_every_row(
+        self,
+    ) -> None:
+        simplex = (
+            _v(*((0, 1) for _ in range(7))),
+            *(
+                _v(*((1 if index == axis else 0, 1) for axis in range(7)))
+                for index in range(7)
+            ),
+        )
+        vertices = simplex + (_v(*((0, 1) for _ in range(7))),) * 56
+        unpadded = _facet_profile(simplex)
+
+        result = _facet_profile(vertices)
+
+        assert len(result.facets) == len(unpadded.facets) == 8
+        assert {facet.halfspace for facet in result.facets} == {
+            facet.halfspace for facet in unpadded.facets
+        }
+        assert result.facets[-1].source_vertex_indices == tuple(range(1, 8))
+        incident_positions: set[int] = set()
+        for facet in result.facets[:-1]:
+            excluded = [c.num for c in facet.halfspace.coefficients].index("-1") + 1
+            assert facet.source_vertex_indices == tuple(
+                position for position in range(64) if position != excluded
+            )
+            incident_positions.update(facet.source_vertex_indices)
+        assert sorted(incident_positions) == list(range(64))
+        assert sum(len(facet.source_vertex_indices) for facet in result.facets) == 448
+
+    def test_padded_distinct_interior_rows_are_charged_per_distinct_row(self) -> None:
+        """Reviewer counterexample: a 7-simplex plus 13 distinct strict
+        interior points (1/k, ..., 1/k) for k = 9..21, padded to 64 rows
+        with duplicate copies. The enumeration receives only the m = 21
+        distinct rows and executes 21*C(21,7) = 2441880 candidate-side
+        tests, so charging every candidate against the raw 64 source rows
+        -- 64*C(21,7) = 7441920 tests -- would reject a request whose real
+        work fits the published side-test budget purely because of its
+        padding representation."""
+        from jacobian.math.polytope._operations import _require_facet_preflight
+
+        simplex = (
+            _v(*((0, 1) for _ in range(7))),
+            *(
+                _v(*((1 if index == axis else 0, 1) for axis in range(7)))
+                for index in range(7)
+            ),
+        )
+        interior = tuple(_v(*(((1, k),) * 7)) for k in range(9, 22))
+        vertices = simplex + interior + (_v(*((0, 1) for _ in range(7))),) * 43
+
+        assert len(vertices) == MAX_VERTICES == 64
+        candidate_count = math.comb(21, 7)
+        assert candidate_count * len(vertices) > MAX_FACET_SIGN_TESTS
+        assert candidate_count * 21 <= MAX_FACET_SIGN_TESTS
+
+        # Admission charges only the rows the enumeration actually
+        # side-tests; the padded request is no longer representation-
+        # rejected before its bounded enumeration starts.
+        _require_facet_preflight(vertices, 7)
+
+    def test_padded_duplicates_admit_when_distinct_row_work_fits_the_budget(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """End-to-end flip of the same charging defect at a test-scale
+        budget: padding a hull with m = 10 distinct rows to n = 64 rows
+        pushes a per-raw-row charge of 64*C(10,2) = 2880 side tests over
+        the patched 450-test budget although the enumeration actually
+        executes exactly 10*C(10,2) = 450. The full request-validate ->
+        execute -> replay path must admit the padded request and bind
+        duplicate positions to their incident facets."""
+        import jacobian.math.polytope._operations as operations
+
+        square = (
+            _v((0, 1), (0, 1)),
+            _v((1, 1), (0, 1)),
+            _v((1, 1), (1, 1)),
+            _v((0, 1), (1, 1)),
+        )
+        interior = tuple(_v((1, k), (1, k)) for k in range(2, 8))
+        vertices = square + interior + (_v((0, 1), (0, 1)),) * 54
+
+        assert len(vertices) == MAX_VERTICES
+        executed_side_tests = 10 * math.comb(10, 2)
+        monkeypatch.setattr(operations, "MAX_FACET_SIGN_TESTS", executed_side_tests)
+
+        result = _facet_profile(vertices)
+        unpadded = _facet_profile(square + interior)
+
+        assert len(result.facets) == len(unpadded.facets) == 4
+        assert {facet.halfspace for facet in result.facets} == {
+            facet.halfspace for facet in unpadded.facets
+        }
+        # Facets sort lexicographically: x >= 0, y >= 0, y <= 1, x <= 1.
+        # Interior rows bind nothing; the origin and its 54 duplicates sit
+        # on both lower facets.
+        assert result.facets[0].source_vertex_indices == (0, 3, *range(10, 64))
+        assert result.facets[1].source_vertex_indices == (0, 1, *range(10, 64))
+        assert result.facets[2].source_vertex_indices == (2, 3)
+        assert result.facets[3].source_vertex_indices == (1, 2)
+
+    def test_seven_dimensional_counterexample_has_136_simplicial_facets(self) -> None:
+        rows = (
+            "0010110",
+            "1011101",
+            "1000100",
+            "1001010",
+            "0111000",
+            "1100001",
+            "0010001",
+            "0001100",
+            "0100010",
+            "1001111",
+            "1101110",
+            "0110101",
+            "1110011",
+            "0111011",
+        )
+        vertices = tuple(_v(*((int(bit), 1) for bit in row)) for row in rows)
+
+        result = _facet_profile(vertices)
+
+        assert result.dimension == 7
+        assert len(result.facets) == 136
+        assert {len(facet.source_vertex_indices) for facet in result.facets} == {7}
 
 
 class TestUnitCube:
@@ -799,7 +1215,11 @@ class TestNonzeroNormalContractPublished:
     def test_operation_example_demonstrates_halfspace_input(self) -> None:
         from jacobian.math.polytope._tools import POLYTOPE_OPERATIONS
 
-        (operation,) = POLYTOPE_OPERATIONS
+        operation = next(
+            item
+            for item in POLYTOPE_OPERATIONS
+            if item.operation_id == "polytope.volume.compute"
+        )
         names = [e.name for e in operation.examples]
         assert "unit_square_halfspaces" in names
 

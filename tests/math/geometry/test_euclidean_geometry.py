@@ -1,6 +1,15 @@
 """Tests for Euclidean geometry operations."""
 
-from jacobian.math.geometry._models import ConvexPolygonTriangulationRequest
+from fractions import Fraction
+
+import pytest
+from pydantic import ValidationError
+
+from jacobian.canonical import format_canonical_integer
+from jacobian.math.geometry._models import (
+    ConvexPolygonTriangulationRequest,
+    ConvexPolygonTriangulationResult,
+)
 from jacobian.math.geometry._triangulation import minimum_weight_triangulation
 from jacobian.math.geometry.euclidean._models import (
     AngleEqualityRequest,
@@ -49,6 +58,13 @@ class TestSegmentRatio:
 
 
 class TestRationalWeightTriangulation:
+    @staticmethod
+    def _ring(*coordinates: tuple[int, int]):
+        return tuple(
+            {"x": {"num": str(x), "den": "1"}, "y": {"num": str(y), "den": "1"}}
+            for x, y in coordinates
+        )
+
     def test_charges_a_selected_diagonal_once(self):
         request = ConvexPolygonTriangulationRequest(
             polygon={
@@ -71,6 +87,118 @@ class TestRationalWeightTriangulation:
         assert tuple((edge.first, edge.second) for edge in result.diagonals) == (
             (0, 2),
         )
+
+    @staticmethod
+    def _weights(pairs, assignments: dict[tuple[int, int], tuple[str, str]]):
+        return tuple(
+            {
+                "first": first,
+                "second": second,
+                "weight": {
+                    "num": assignments.get((first, second), ("0", "1"))[0],
+                    "den": assignments.get((first, second), ("0", "1"))[1],
+                },
+            }
+            for first, second in pairs
+        )
+
+    _PENTAGON = ((0, 0), (1, 0), (2, 1), (1, 2), (0, 1))
+    _HEXAGON = ((0, 0), (1, 0), (2, 1), (2, 2), (1, 2), (0, 1))
+    _PENTAGON_DIAGONALS = ((0, 2), (0, 3), (1, 3), (1, 4), (2, 4))
+    _HEXAGON_DIAGONALS = (
+        (0, 2),
+        (0, 3),
+        (0, 4),
+        (1, 3),
+        (1, 4),
+        (1, 5),
+        (2, 4),
+        (2, 5),
+        (3, 5),
+    )
+
+    def test_boundary_ledger_overflow_is_rejected_at_request_validation(self):
+        weights = self._weights(
+            self._PENTAGON_DIAGONALS,
+            {
+                (0, 2): ("1", format_canonical_integer(10**20000 + 1)),
+                (0, 3): ("1", format_canonical_integer(10**20000 + 3)),
+                (1, 3): ("1", "1"),
+            },
+        )
+
+        with pytest.raises(ValidationError, match="split-table ledger sums"):
+            ConvexPolygonTriangulationRequest(
+                polygon={"points": self._ring(*self._PENTAGON)},
+                diagonal_weights=weights,
+            )
+
+    def test_single_large_weight_remains_admitted(self):
+        denominator = 10**30000 + 3
+        weights = self._weights(
+            self._HEXAGON_DIAGONALS,
+            {(0, 2): ("1", format_canonical_integer(denominator))},
+        )
+
+        request = ConvexPolygonTriangulationRequest(
+            polygon={"points": self._ring(*self._HEXAGON)},
+            diagonal_weights=weights,
+        )
+        result = minimum_weight_triangulation(request)
+
+        assert result.optimum.as_fraction() == 0
+        entry = next(
+            item for item in result.split_table if (item.start, item.end) == (0, 2)
+        )
+        assert entry.optimum.as_fraction() == Fraction(1, denominator)
+        validated = ConvexPolygonTriangulationResult.model_validate(
+            result.model_dump(mode="json")
+        )
+        assert validated.optimum.as_fraction() == 0
+        assert tuple(edge.weight for edge in validated.diagonals) == tuple(
+            edge.weight for edge in result.diagonals
+        )
+
+    def test_boundary_height_pair_stays_admitted_with_ledger_invariant(self):
+        small = 10**16383 + 1
+        large = 10**16383 + 7
+        huge = 10**100 + 9
+        weights = self._weights(
+            self._PENTAGON_DIAGONALS,
+            {
+                (0, 2): ("1", format_canonical_integer(small)),
+                (0, 3): ("1", format_canonical_integer(large)),
+                (1, 3): (format_canonical_integer(huge), "1"),
+            },
+        )
+
+        request = ConvexPolygonTriangulationRequest(
+            polygon={"points": self._ring(*self._PENTAGON)},
+            diagonal_weights=weights,
+        )
+        result = minimum_weight_triangulation(request)
+
+        entry = next(
+            item for item in result.split_table if (item.start, item.end) == (0, 3)
+        )
+        assert entry.optimum.as_fraction() == Fraction(1, small) + Fraction(1, large)
+        assert len(entry.optimum.den) <= 32_768
+        assert result.optimum.as_fraction() == 0
+
+    def test_one_digit_taller_pair_is_rejected_at_request_validation(self):
+        weights = self._weights(
+            self._PENTAGON_DIAGONALS,
+            {
+                (0, 2): ("1", format_canonical_integer(10**16383 + 1)),
+                (0, 3): ("1", format_canonical_integer(10**16384 + 3)),
+            },
+        )
+
+        with pytest.raises(ValidationError, match="split-table ledger sums"):
+            ConvexPolygonTriangulationRequest(
+                polygon={"points": self._ring(*self._PENTAGON)},
+                diagonal_weights=weights,
+            )
 
 
 class TestAngleEquality:

@@ -783,10 +783,100 @@ class WeightedPolygonDiagonal(StrictModel):
         return self
 
 
+def _require_bounded_split_table_rationals(
+    count: int,
+    diagonal_weights: tuple[WeightedPolygonDiagonal, ...],
+) -> None:
+    """Preflight every derived split-table rational against the canonical cap.
+
+    Under the boundary-inclusive recurrence one split-table entry - and each
+    pre-selection candidate behind it - is the exact sum of the weights of
+    one subpolygon's selected triangulation: at most ``m = count - 3``
+    distinct nonzero terms, because every subpolygon triangulates with fewer
+    diagonals than the full polygon. For a term set ``T`` whose term ``i``
+    has numerator height ``nd_i`` and denominator height ``dd_i``, any such
+    reduced sum obeys
+
+    - ``digits(den) <= sum(dd_i for i in T)``, since the reduced denominator
+      divides the product common denominator; and
+    - ``digits(num) <= max(nd_i - dd_i) + sum(dd_i) + log10(|T|) + 1``,
+      since the unreduced numerator over that common denominator is
+      ``sum(a_i * prod(b_j for j != i))``, canonical reduction only shrinks
+      it, and the height-dominating anchor contributes ``nd_i - dd_i`` of
+      the aggregate.
+
+    The first bound is maximized by the ``m`` tallest denominators and the
+    second by anchoring any single weight against the ``m - 1`` tallest
+    remaining denominators, so admission evaluates exactly those two
+    quantities here and rejects requests that could materialize an
+    unrepresentable ledger value even when their final optimum would be
+    small.
+    """
+
+    terms = tuple(
+        item.weight for item in diagonal_weights if item.weight.as_fraction() != 0
+    )
+    max_terms = min(count - 3, len(terms))
+    if max_terms <= 0:
+        return
+    paired = sorted(
+        ((len(term.den), len(term.num.lstrip("-"))) for term in terms),
+        reverse=True,
+    )
+    prefix = [0]
+    for height, _ in paired:
+        prefix.append(prefix[-1] + height)
+
+    def _tallest_excluding(rank: int, take: int) -> int:
+        if rank < take:
+            return prefix[take + 1] - paired[rank][0]
+        return prefix[take]
+
+    den_bound = prefix[max_terms]
+    num_bound = max(
+        numerator + _tallest_excluding(rank, max_terms - 1)
+        for rank, (_, numerator) in enumerate(paired)
+    )
+    slack = len(str(max_terms)) + 1
+    worst = max(den_bound, num_bound + slack)
+    if worst > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise ValueError(
+            "triangulation split-table ledger sums reach "
+            f"{worst}-digit rational components in the worst case "
+            f"(subset-sum growth over {max_terms} selected diagonal "
+            f"weights), exceeding the canonical "
+            f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit rational limit; reduce "
+            "diagonal-weight component height or vertex count"
+        )
+
+
 class ConvexPolygonTriangulationRequest(StrictModel):
+    """One strict CCW convex rational polygon and its complete diagonal weights."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Minimum-weight triangulation of one strict CCW convex "
+                "rational polygon under a complete nonnegative exact rational "
+                "weight per non-hull diagonal. Each split-table state sums at "
+                "most vertex_count - 3 selected weights, so admission "
+                "preflights the worst-case subset-sum digit growth and "
+                "rejects requests whose intermediate ledger rationals could "
+                "exceed the canonical 32,768-digit rational limit."
+            ),
+        },
+    )
+
     polygon: PolygonRequest
     diagonal_weights: tuple[WeightedPolygonDiagonal, ...] = Field(
-        min_length=1, max_length=464
+        min_length=1,
+        max_length=464,
+        description=(
+            "Exactly one nonnegative exact rational weight per non-hull "
+            "diagonal in lexicographic pair order; subset-sum growth over "
+            "these heights must keep every derived split-table rational "
+            "inside the canonical 32,768-digit limit."
+        ),
     )
     objective: Literal["NON_HULL_DIAGONAL_WEIGHT_SUM"] = "NON_HULL_DIAGONAL_WEIGHT_SUM"
 
@@ -816,6 +906,7 @@ class ConvexPolygonTriangulationRequest(StrictModel):
         pairs = tuple((item.first, item.second) for item in self.diagonal_weights)
         if pairs != tuple(sorted(pairs)):
             raise ValueError("diagonal weights must use lexicographic pair order")
+        _require_bounded_split_table_rationals(len(points), self.diagonal_weights)
         return self
 
 

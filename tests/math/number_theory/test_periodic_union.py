@@ -449,9 +449,7 @@ def test_oversized_family_is_rejected_without_normalizing_entries() -> None:
             return len(self._data)
 
     payload = {
-        "subsets": [
-            UnnormalizableEntry() for _ in range(MAX_PERIODIC_FAMILY_SIZE + 1)
-        ],
+        "subsets": [UnnormalizableEntry() for _ in range(MAX_PERIODIC_FAMILY_SIZE + 1)],
         "result_mode": "count_only",
     }
 
@@ -472,9 +470,7 @@ def test_oversized_row_is_rejected_before_copying_its_residues() -> None:
         "subsets": [
             {
                 "modulus": MAX_PERIODIC_SOURCE_RESIDUES,
-                "residues": UncopyableResidues(
-                    range(MAX_PERIODIC_SOURCE_RESIDUES + 1)
-                ),
+                "residues": UncopyableResidues(range(MAX_PERIODIC_SOURCE_RESIDUES + 1)),
             }
         ],
         "result_mode": "count_only",

@@ -17,6 +17,7 @@ from jacobian.math.matrices.subsystems._models import (
     PsdOrderResult,
     SubsystemKroneckerProductRequest,
     SubsystemPartialTraceRequest,
+    SubsystemPartialTraceResult,
 )
 from jacobian.math.matrices.subsystems._operations import (
     compute_kronecker_product,
@@ -181,6 +182,68 @@ def test_partial_trace_rejects_unknown_and_repeated_factor_labels() -> None:
         SubsystemPartialTraceRequest(matrix=source, traced_factor_labels=("r",))
     with pytest.raises(ValidationError, match="unique"):
         SubsystemPartialTraceRequest(matrix=source, traced_factor_labels=("q", "q"))
+
+
+def test_partial_trace_result_admits_sources_before_replaying_the_trace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.matrices.subsystems import _models
+
+    q16 = MatrixSubsystem(label="q", dimension=16)
+    q = MatrixSubsystem(label="q", dimension=2)
+    base = compute_partial_trace(
+        SubsystemPartialTraceRequest(
+            matrix=_matrix([[1, 0], [0, 2]], (q,)), traced_factor_labels=("q",)
+        )
+    )
+    heavy_entries = [
+        [Fraction(1, 10**300) if row == column else Fraction(0) for column in range(16)]
+        for row in range(16)
+    ]
+
+    forged = base.model_dump(mode="python")
+    forged["source_matrix"] = _matrix(heavy_entries, (q16,))
+    replayed: list[object] = []
+
+    def guard(*args: object) -> tuple[tuple[Fraction, ...], ...]:
+        replayed.append(args)
+        return ((Fraction(0),),)
+
+    monkeypatch.setattr(_models, "partial_trace_entries", guard)
+    with pytest.raises(ValidationError, match="4098"):
+        SubsystemPartialTraceResult.model_validate(forged)
+    assert not replayed
+
+
+def test_partial_trace_boundary_trace_bound_round_trips_as_a_result() -> None:
+    q = MatrixSubsystem(label="q", dimension=2)
+    boundary_denominator = 10**2048 - 1
+    over_denominator = 10**2049 - 1
+    boundary_source = _matrix(
+        [
+            [Fraction(1, boundary_denominator), 0],
+            [0, Fraction(1, boundary_denominator)],
+        ],
+        (q,),
+    )
+    over_source = _matrix(
+        [[Fraction(1, over_denominator), 0], [0, Fraction(1, over_denominator)]],
+        (q,),
+    )
+
+    reduced = partial_trace(boundary_source, ("q",))
+    assert len(reduced.matrix.entries[0][0].den) == 2048
+    wire = compute_partial_trace(
+        SubsystemPartialTraceRequest(
+            matrix=boundary_source, traced_factor_labels=("q",)
+        )
+    )
+    assert (
+        SubsystemPartialTraceResult.model_validate(wire.model_dump(mode="python"))
+        == wire
+    )
+    with pytest.raises(ValidationError, match="4098"):
+        SubsystemPartialTraceRequest(matrix=over_source, traced_factor_labels=("q",))
 
 
 def test_psd_order_is_source_bound_and_returns_a_replayable_negative_witness() -> None:

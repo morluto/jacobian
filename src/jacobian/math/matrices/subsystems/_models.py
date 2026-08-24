@@ -101,6 +101,31 @@ def _require_psd_pair_admission(
         )
 
 
+def _require_trace_admission(
+    matrix: FactorizedHermitianMatrix,
+    *,
+    traced_factor_labels: tuple[str, ...],
+) -> None:
+    """Admit one trace pair only inside the derived trace envelope.
+
+    Both request validation and result replay call this before any backend
+    work, so a transported or authored result can never drive the exact
+    common-denominator sums with sources outside the admitted trace bound.
+    """
+
+    if (
+        _trace_component_digit_bound(
+            matrix,
+            traced_factor_labels=traced_factor_labels,
+        )
+        > MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS
+    ):
+        raise ValueError(
+            "partial-trace coefficient growth exceeds the "
+            f"{MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS}-digit result bound"
+        )
+
+
 class SubsystemKroneckerProductRequest(StrictModel):
     """Two factorized rational Hermitian matrices for one product."""
 
@@ -182,17 +207,10 @@ class SubsystemPartialTraceRequest(StrictModel):
         )
         if self.traced_factor_labels != expected_order:
             raise ValueError("traced subsystem labels must follow source factor order")
-        if (
-            _trace_component_digit_bound(
-                self.matrix,
-                traced_factor_labels=self.traced_factor_labels,
-            )
-            > MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS
-        ):
-            raise ValueError(
-                "partial-trace coefficient growth exceeds the "
-                f"{MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS}-digit result bound"
-            )
+        _require_trace_admission(
+            self.matrix,
+            traced_factor_labels=self.traced_factor_labels,
+        )
         return self
 
 
@@ -215,6 +233,10 @@ class SubsystemPartialTraceResult(StrictModel):
         )
         if self.traced_factor_labels != expected_order:
             raise ValueError("traced subsystem labels must follow source factor order")
+        _require_trace_admission(
+            self.source_matrix,
+            traced_factor_labels=self.traced_factor_labels,
+        )
         expected = tuple(
             factor
             for factor in self.source_matrix.factors

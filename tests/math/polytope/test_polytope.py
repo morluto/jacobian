@@ -340,11 +340,7 @@ class TestFacetIncidence:
             facet.halfspace for facet in unpadded.facets
         }
         assert sorted(
-            {
-                index
-                for facet in result.facets
-                for index in facet.source_vertex_indices
-            }
+            {index for facet in result.facets for index in facet.source_vertex_indices}
         ) == list(range(8))
 
     def test_cyclic_profile_beyond_the_facet_cap_is_rejected_after_enumeration(
@@ -355,9 +351,7 @@ class TestFacetIncidence:
         admitted at 15*C(15,7) side tests, and the materialized profile is
         then rejected against the published facet result limit instead of
         any preflight row-count estimate."""
-        vertices = tuple(
-            _v(*((t**k, 1) for k in range(1, 8))) for t in range(1, 16)
-        )
+        vertices = tuple(_v(*((t**k, 1) for k in range(1, 8))) for t in range(1, 16))
         request = FacetIncidenceRequest(vertices=vertices)
 
         with pytest.raises(

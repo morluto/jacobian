@@ -7,8 +7,7 @@ from itertools import permutations
 from math import factorial
 
 from jacobian.canonical import encode_strict_json
-from jacobian.math.graphs.isomorphism.values import ColoredUndirectedGraph
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import ColoredUndirectedGraph, SimpleUndirectedGraph
 
 MAX_CANONICAL_PERMUTATIONS = factorial(9)
 MAX_CANONICAL_REPLAY_WORK = 100_000_000
@@ -18,9 +17,10 @@ _RESULT_ENVELOPE_RESERVE_BYTES = 1_024
 
 
 def _canonical_vertex_labels(vertex_count: int) -> tuple[str, ...]:
-    """Return a fixed-width canonical axis for the admitted order (at most 64)."""
+    """Return a fixed-width canonical axis whose labels sort in index order."""
 
-    return tuple(f"v{index:02d}" for index in range(vertex_count))
+    width = max(2, len(str(max(0, vertex_count - 1))))
+    return tuple(f"v{index:0{width}d}" for index in range(vertex_count))
 
 
 def _vertex_classes(graph: ColoredUndirectedGraph) -> tuple[tuple[int, ...], ...]:

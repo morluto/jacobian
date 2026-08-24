@@ -312,6 +312,43 @@ def test_request_admits_by_color_class_size_not_only_vertex_count() -> None:
         ColoredGraphCanonicalizationRequest(colored_graph=_graph(ten, ()))
 
 
+def test_edgeless_distinguished_carrier_admits_past_the_fixed_order_cap() -> None:
+    """A 65-vertex edgeless graph with distinct vertex colors must be admitted.
+
+    Distinct colors leave one candidate labeling, only ``2 * 65`` replay-work
+    units, and a small exact result, so the derived work and result admission
+    accepts what a fixed 64-vertex carrier cap would have rejected.
+    """
+    count = 65
+    vertices = tuple(f"w{index:03d}" for index in range(count))
+    colors = tuple(f"c{index:03d}" for index in range(count))
+
+    result = _canonicalize(_graph(vertices, (), vertex_colors=colors))
+
+    assert result.canonical_graph.graph.vertices == tuple(
+        f"v{index:02d}" for index in range(count)
+    )
+    assert result.canonical_graph.vertex_colors == tuple(sorted(colors))
+    assert tuple(
+        (item.source_vertex, item.canonical_vertex) for item in result.relabeling
+    ) == tuple((source, f"v{index:02d}") for index, source in enumerate(vertices))
+
+
+def test_canonical_labels_stay_sorted_across_the_three_digit_boundary() -> None:
+    count = 105
+    vertices = tuple(f"w{index:03d}" for index in range(count))
+    colors = tuple(sorted((f"c{index:03d}" for index in range(count)), reverse=True))
+
+    result = _canonicalize(_graph(vertices, (), vertex_colors=colors))
+
+    expected_labels = tuple(f"v{index:03d}" for index in range(count))
+    assert tuple(sorted(expected_labels)) == expected_labels
+    assert result.canonical_graph.graph.vertices == expected_labels
+    assert result.canonical_graph.vertex_colors == tuple(sorted(colors))
+
+    ColoredGraphCanonicalizationResult.model_validate(result.model_dump(mode="json"))
+
+
 def test_request_rejects_edge_key_work_before_enumeration() -> None:
     eight_vertices = tuple(f"v{index:02d}" for index in range(8))
     nine_vertices = tuple(f"v{index:02d}" for index in range(9))
@@ -415,6 +452,20 @@ def test_request_enforces_source_bound_result_byte_boundary(monkeypatch) -> None
             {"graph": {"vertices": [""], "edges": []}},
             "must not be empty",
         ),
+        (
+            {
+                "graph": {"vertices": ["a"], "edges": []},
+                "vertex_colors": ["e\u0301"],
+            },
+            "Unicode NFC",
+        ),
+        (
+            {
+                "graph": {"vertices": ["a", "b"], "edges": [["a", "b"]]},
+                "edge_colors": ["\U0001f384" * 17],
+            },
+            "64 UTF-8 bytes",
+        ),
     ],
 )
 def test_colored_graph_rejects_noncanonical_presentations(
@@ -430,6 +481,21 @@ def test_schema_explains_alignment_and_work_admission() -> None:
 
     assert "aligned" in graph_schema["description"]
     assert "execution-plus-validation replay work" in schema["description"]
+
+
+def test_schema_documents_nfc_and_byte_limits_for_color_names() -> None:
+    """The published schema must reveal the byte and normalization constraints.
+
+    ``maxLength`` counts characters while the validator binds UTF-8 bytes, so a
+    64-character emoji color passes the schema length but not the value check;
+    the field descriptions must state both requirements.
+    """
+    schema = ColoredUndirectedGraph.model_json_schema()
+
+    for field in ("vertex_colors", "edge_colors", "graph"):
+        description = schema["properties"][field]["description"]
+        assert "NFC" in description, field
+        assert "UTF-8 bytes" in description, field
 
 
 def test_canonical_value_is_hash_seed_independent() -> None:

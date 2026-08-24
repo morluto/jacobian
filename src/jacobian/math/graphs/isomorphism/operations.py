@@ -9,7 +9,7 @@ from jacobian.math.graphs.isomorphism._models import (
 from jacobian.math.graphs.isomorphism._operations import (
     compute_colored_graph_canonicalization,
 )
-from jacobian.math.graphs.isomorphism.values import ColoredUndirectedGraph
+from jacobian.math.graphs.values import ColoredUndirectedGraph
 
 
 def canonicalize_colored_graph(

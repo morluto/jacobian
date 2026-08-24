@@ -17,10 +17,7 @@ from jacobian.math.graphs.isomorphism._canonicalization import (
     canonicalization_result_wire_bytes,
     canonicalize_colored_graph_data,
 )
-from jacobian.math.graphs.isomorphism.values import (
-    ColoredUndirectedGraph,
-    GraphVertexLabel,
-)
+from jacobian.math.graphs.values import ColoredUndirectedGraph, GraphVertexLabel
 
 
 class SimpleGraph(StrictModel):
@@ -154,7 +151,9 @@ class GraphRelabelingPair(StrictModel):
 class ColoredGraphCanonicalizationResult(StrictModel):
     """A canonical colored graph and its source-bound relabeling.
 
-    Canonical vertices are ``v00`` through ``v63``. Vertex-color classes occupy
+    Canonical vertices are zero-padded ``v``-prefixed labels (``v00``,
+    ``v01``, ...) that sort in index order up to the shared carrier's
+    256-vertex bound. Vertex-color classes occupy
     positions in increasing exact color-name order; among all relabelings inside
     those classes, the canonical graph has the least sorted sequence of endpoint
     positions and edge-color names. An automorphism tie uses the least target
@@ -166,7 +165,7 @@ class ColoredGraphCanonicalizationResult(StrictModel):
     source_graph: ColoredUndirectedGraph
     canonical_graph: ColoredUndirectedGraph
     relabeling: tuple[GraphRelabelingPair, ...] = Field(
-        max_length=64,
+        max_length=256,
         description=(
             "One source-to-canonical pair per source vertex, in the source "
             "graph's authoritative vertex order."

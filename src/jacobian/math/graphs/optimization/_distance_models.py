@@ -8,16 +8,16 @@ from pydantic import Field, StrictBool, StrictInt, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.optimization._coloring_models import (
-    ChromaticGraph,
     GraphVertex,
+    PolynomialTimeGraph,
 )
 
-MAX_GRAPH_DISTANCE_MATRIX_ORDER = 64
-MAX_GRAPH_DISTANCE_MATRIX_EDGES = 2_016
+MAX_GRAPH_DISTANCE_MATRIX_ORDER = 256
+MAX_GRAPH_DISTANCE_MATRIX_EDGES = 32_640
 MAX_GRAPH_DISTANCE = MAX_GRAPH_DISTANCE_MATRIX_ORDER - 1
 
 
-class GraphDistanceMatrixGraph(ChromaticGraph):
+class GraphDistanceMatrixGraph(PolynomialTimeGraph):
     """A simple graph bounded for polynomial-time all-source BFS replay."""
 
     vertices: tuple[GraphVertex, ...] = Field(

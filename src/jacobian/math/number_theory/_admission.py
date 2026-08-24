@@ -11,6 +11,11 @@ from jacobian.math.number_theory._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "congruence.periodic_union.profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct complete exact finite-period union profile with composable count, density, and residues",
+    ),
+    OperationAdmission(
         "integer.factor.certified_compute",
         AdmissionDecision.KEEP,
         "distinct bounded subexponential factorization with per-factor Pratt primality certificates",
@@ -157,8 +162,8 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     ),
     OperationAdmission(
         "integer.decide.powerful",
-        AdmissionDecision.DROP,
-        "ordinary arithmetic or cheap projection of a retained exact factorization/divisor result",
+        AdmissionDecision.KEEP,
+        "bounded partial-factor and rough-cofactor certificate decides 25-digit inputs without complete factorization",
     ),
     OperationAdmission(
         "integer.decide.prime",
@@ -229,6 +234,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "number_theory.compute.legendre_symbol",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+    ),
+    OperationAdmission(
+        "number_theory.friable.count.compute",
+        AdmissionDecision.KEEP,
+        "complete exact friable count with result-sensitive materialized and generated regimes, avoiding caller-side factorization of every source integer",
     ),
 )
 

@@ -8,9 +8,12 @@ from math import lcm
 from jacobian._exact import CanonicalRational
 from jacobian.math.finite_game_theory._models import (
     BestResponseResult,
+    DeterministicTerminalGameRequest,
     NashEquilibriumResult,
     ZeroSumGameRequest,
 )
+from jacobian.math.finite_game_theory.operations import solve_terminal_game
+from jacobian.math.finite_game_theory.values import DeterministicTerminalGameSolution
 
 
 def _wire_rational(value: Fraction) -> CanonicalRational:
@@ -114,4 +117,16 @@ def compute_nash_equilibrium(request: ZeroSumGameRequest) -> NashEquilibriumResu
     )
 
 
-__all__ = ["compute_best_response", "compute_nash_equilibrium"]
+def compute_deterministic_terminal_game(
+    request: DeterministicTerminalGameRequest,
+) -> DeterministicTerminalGameSolution:
+    """Compute every value and canonical optimal stationary strategy pair."""
+
+    return solve_terminal_game(request.game)
+
+
+__all__ = [
+    "compute_best_response",
+    "compute_deterministic_terminal_game",
+    "compute_nash_equilibrium",
+]

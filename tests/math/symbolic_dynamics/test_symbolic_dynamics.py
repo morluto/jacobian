@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import random
+from fractions import Fraction
 
 import pytest
 from pydantic import ValidationError
@@ -12,12 +13,15 @@ from jacobian.math.symbolic_dynamics import (
     AdjacencyShift,
     ForbiddenBlockShift,
     adjacency_shift,
+    artin_mazur_zeta,
     block_language,
     finite_type_presentation,
     normalize_forbidden_blocks,
     periodic_point_profile,
 )
 from jacobian.math.symbolic_dynamics._models import (
+    ArtinMazurZetaRequest,
+    ArtinMazurZetaResult,
     BlockLanguageRequest,
     BlockLanguageResult,
     FiniteTypeShiftRequest,
@@ -28,6 +32,7 @@ from jacobian.math.symbolic_dynamics._models import (
     PeriodicPointProfileResult,
 )
 from jacobian.math.symbolic_dynamics._operations import (
+    compute_artin_mazur_zeta,
     compute_block_language,
     compute_higher_block,
     compute_periodic_point_profile,
@@ -40,11 +45,142 @@ def _golden_mean() -> ForbiddenBlockShift:
     return ForbiddenBlockShift(alphabet=("0", "1"), forbidden_blocks=(("1", "1"),))
 
 
+def test_golden_mean_artin_mazur_zeta_is_bound_to_periodic_traces() -> None:
+    request = ArtinMazurZetaRequest(
+        shift=AdjacencyShift(matrix=((1, 1), (1, 0))),
+        replay_period=5,
+    )
+
+    result = compute_artin_mazur_zeta(request)
+
+    assert tuple(
+        (term.coefficient.as_fraction(), term.exponents)
+        for term in result.determinant_polynomial.polynomial.terms
+    ) == ((-1, (2,)), (-1, (1,)), (1, (0,)))
+    assert tuple(
+        (term.coefficient.as_fraction(), term.exponents)
+        for term in result.zeta_function.denominator.terms
+    ) == ((1, (2,)), (1, (1,)), (-1, (0,)))
+    assert result.zeta_function.numerator.terms[0].coefficient.as_fraction() == -1
+    assert tuple(row.trace_fixed_points for row in result.replay) == (
+        "1",
+        "3",
+        "4",
+        "7",
+        "11",
+    )
+    assert tuple(row.logarithmic_derivative_coefficient for row in result.replay) == (
+        "1",
+        "3",
+        "4",
+        "7",
+        "11",
+    )
+
+    payload = result.model_dump()
+    payload["replay"][2]["logarithmic_derivative_coefficient"] = "5"
+    with pytest.raises(ValidationError, match="not bound"):
+        ArtinMazurZetaResult.model_validate(payload)
+
+    payload = result.model_dump()
+    payload["determinant_polynomial"]["polynomial"]["terms"][0]["coefficient"][
+        "num"
+    ] = "-2"
+    with pytest.raises(ValidationError, match="not bound"):
+        ArtinMazurZetaResult.model_validate(payload)
+
+
+def test_zeta_distinguishes_full_shift_cycle_and_disjoint_components() -> None:
+    empty = compute_artin_mazur_zeta(
+        ArtinMazurZetaRequest(shift=AdjacencyShift(matrix=((0,),)), replay_period=4)
+    )
+    full_shift = compute_artin_mazur_zeta(
+        ArtinMazurZetaRequest(shift=AdjacencyShift(matrix=((2,),)), replay_period=4)
+    )
+    cycle = compute_artin_mazur_zeta(
+        ArtinMazurZetaRequest(
+            shift=AdjacencyShift(matrix=((0, 1), (1, 0))), replay_period=4
+        )
+    )
+    disjoint = compute_artin_mazur_zeta(
+        ArtinMazurZetaRequest(
+            shift=AdjacencyShift(matrix=((2, 0), (0, 3))), replay_period=4
+        )
+    )
+
+    assert tuple(row.trace_fixed_points for row in empty.replay) == (
+        "0",
+        "0",
+        "0",
+        "0",
+    )
+    assert (
+        empty.determinant_polynomial.polynomial.terms[0].coefficient.as_fraction() == 1
+    )
+    assert empty.zeta_function.numerator == empty.zeta_function.denominator
+    assert tuple(row.trace_fixed_points for row in full_shift.replay) == (
+        "2",
+        "4",
+        "8",
+        "16",
+    )
+    assert tuple(row.trace_fixed_points for row in cycle.replay) == (
+        "0",
+        "2",
+        "0",
+        "2",
+    )
+    assert tuple(
+        (term.coefficient.as_fraction(), term.exponents)
+        for term in disjoint.determinant_polynomial.polynomial.terms
+    ) == ((6, (2,)), (-5, (1,)), (1, (0,)))
+    assert disjoint.zeta_function.numerator.terms[0].coefficient.as_fraction() == (
+        Fraction(1, 6)
+    )
+
+
+def test_zeta_is_invariant_under_state_relabeling() -> None:
+    original = compute_artin_mazur_zeta(
+        ArtinMazurZetaRequest(
+            shift=AdjacencyShift(matrix=((1, 2, 0), (0, 1, 1), (1, 0, 0))),
+            replay_period=6,
+        )
+    )
+    relabeled = compute_artin_mazur_zeta(
+        ArtinMazurZetaRequest(
+            shift=AdjacencyShift(matrix=((0, 1, 0), (0, 1, 2), (1, 0, 1))),
+            replay_period=6,
+        )
+    )
+
+    assert relabeled.determinant_polynomial == original.determinant_polynomial
+    assert relabeled.zeta_function == original.zeta_function
+    assert relabeled.replay == original.replay
+
+
+def test_zeta_admission_bounds_coefficient_growth_before_backend() -> None:
+    identity = tuple(
+        tuple(1 if row == column else 0 for column in range(50)) for row in range(50)
+    )
+    boundary = compute_artin_mazur_zeta(
+        ArtinMazurZetaRequest(shift=AdjacencyShift(matrix=identity), replay_period=50)
+    )
+    assert len(boundary.determinant_polynomial.polynomial.terms) == 51
+    assert len(boundary.replay) == 50
+
+    dense_large = (tuple((1_000_000,) * 50),) * 50
+    with pytest.raises(ValidationError, match="coefficient digit bound"):
+        ArtinMazurZetaRequest(shift=AdjacencyShift(matrix=dense_large), replay_period=1)
+    with pytest.raises(ValueError, match="coefficient digit bound"):
+        artin_mazur_zeta(AdjacencyShift(matrix=dense_large), 1)
+
+
 def test_public_surface_excludes_adjacency_carrier_invariants() -> None:
     assert tuple(tool.operation_id for tool in TOOLS) == (
         "symbolic_dynamics.finite_type_shift.construct",
         "symbolic_dynamics.block_language.compute",
         "symbolic_dynamics.periodic_point_profile.compute",
+        "symbolic_dynamics.artin_mazur_zeta.compute",
         "symbolic_dynamics.higher_block.compute",
     )
     carrier = adjacency_shift(((1, 1), (1, 0)))

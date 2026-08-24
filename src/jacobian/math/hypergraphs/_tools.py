@@ -11,6 +11,8 @@ from jacobian.math.hypergraphs._models import (
     CliqueExpansionResult,
     DualRequest,
     DualResult,
+    EdgeIntersectionsRequest,
+    EdgeIntersectionsResult,
     IncidenceGraphRequest,
     IncidenceGraphResult,
     ParametersRequest,
@@ -21,6 +23,7 @@ from jacobian.math.hypergraphs._models import (
 from jacobian.math.hypergraphs._operations import (
     compute_clique_expansion,
     compute_dual,
+    compute_edge_intersections,
     compute_incidence_graph,
     compute_parameters,
     compute_vertex_degrees,
@@ -104,6 +107,30 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     _op(
+        "hypergraph.edge_intersections.compute",
+        "Compute indexed hypergraph edge-intersection profiles",
+        "Return the exact intersection of every unordered pair of distinct "
+        "indexed edges, the complete size histogram, maximum intersection, "
+        "and linearity with the first canonical violating pair.",
+        EdgeIntersectionsRequest,
+        EdgeIntersectionsResult,
+        compute_edge_intersections,
+        "combinatorics",
+        "hypergraph",
+        "intersection",
+        "linearity",
+        "exact",
+        examples=(
+            example(
+                "edge_intersections_of_4_vertex_hypergraph",
+                "Compute every indexed edge-pair intersection and the linearity "
+                "profile of a 4-vertex, 3-edge hypergraph; the complete "
+                "worst-case intersection ledger must fit the advertised bounds.",
+                {"hypergraph": _HYPERGRAPH},
+            ),
+        ),
+    ),
+    _op(
         "hypergraph.dual.compute",
         "Compute the dual of a finite hypergraph",
         "Compute the dual hypergraph, transposing vertices and edges so "
@@ -145,8 +172,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "hypergraph.clique_expansion.compute",
         "Compute the 2-section (clique expansion) of a hypergraph",
-        "Compute the primal/2-section graph where two vertices are "
-        "adjacent if and only if they share a hyperedge.",
+        "Compute the primal/2-section of a finite hypergraph as a canonical "
+        "simple undirected graph: two vertices are adjacent if and only if "
+        "they share a hyperedge, with edge endpoints in lexical order.",
         CliqueExpansionRequest,
         CliqueExpansionResult,
         compute_clique_expansion,

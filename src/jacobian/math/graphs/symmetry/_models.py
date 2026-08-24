@@ -104,10 +104,12 @@ def _estimate_orbit_result_wire_bytes(request: GraphSymmetryOrbitRequest) -> int
     ``members`` keys with their punctuation, that orbit index's digit width,
     and one separating comma - so singleton-orbit results carry no per-orbit
     padding beyond the representatives they must retain. The bound also
-    charges two member separators per declared vertex or edge (one for each
-    repetition beyond the echo), each retained generator identifier, and the
-    envelope reserve, so every accepted request serializes inside the
-    canonical output limit.
+    charges the exact list separators implied by the computed partition -
+    one comma between consecutive members of each repetition beyond the
+    echo, so singleton orbit blocks contribute no phantom separator bytes -
+    together with each retained generator identifier and the envelope
+    reserve, so every accepted request serializes inside the canonical
+    output limit.
     """
     from jacobian.math.graphs.symmetry._operations import _declared_orbit_partitions
 
@@ -128,11 +130,20 @@ def _estimate_orbit_result_wire_bytes(request: GraphSymmetryOrbitRequest) -> int
     )
     vertex_orbit_count = len(declared_vertex_members)
     edge_orbit_count = len(declared_edge_members)
+    vertex_separator_bytes = (
+        max(len(vertex_label_bytes) - 1, 0)
+        + len(vertex_label_bytes)
+        - vertex_orbit_count
+    )
+    edge_separator_bytes = (
+        max(len(edge_pair_bytes) - 1, 0) + len(edge_pair_bytes) - edge_orbit_count
+    )
     return (
         len(encode_strict_json(request.model_dump(mode="json")))
         + 2 * sum(vertex_label_bytes)
         + 2 * sum(edge_pair_bytes)
-        + 2 * (len(vertex_label_bytes) + len(edge_pair_bytes))
+        + vertex_separator_bytes
+        + edge_separator_bytes
         + (vertex_orbit_count + edge_orbit_count) * (_ORBIT_OBJECT_FIXED_WIRE_BYTES + 1)
         + sum(len(str(index)) for index in range(vertex_orbit_count))
         + sum(len(str(index)) for index in range(edge_orbit_count))

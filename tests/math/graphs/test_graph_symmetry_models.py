@@ -271,6 +271,38 @@ def test_colored_singleton_orbits_price_exact_fixed_structure() -> None:
     assert limit - len(encoded) >= 40_000
 
 
+def test_singleton_orbit_separators_price_from_computed_blocks() -> None:
+    """Edge colors on the maximal singleton payload must stay admitted.
+
+    Charging two member separators per declared vertex and edge priced one
+    nonexistent comma into every singleton orbit block, so adding a
+    six-character edge color to every edge pushed this fitting canonical
+    result past the output limit; the separator term must come from the
+    computed partition's block sizes instead.
+    """
+
+    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+
+    payload = _wide_orbit_payload(14)
+    payload["graph"]["vertex_colors"] = [  # type: ignore[index]
+        "c"
+        for vertex in payload["graph"]["graph"]["vertices"]  # type: ignore[index]
+    ]
+    payload["graph"]["edge_colors"] = [  # type: ignore[index]
+        "colors" for edge in payload["graph"]["graph"]["edges"]  # type: ignore[index]
+    ]
+    request = GraphSymmetryOrbitRequest.model_validate(payload)
+    result = _generator_orbits(request)
+
+    assert result.vertex_orbit_count == 256
+    assert result.edge_orbit_count == 4096
+    encoded = canonicalize_json(result.model_dump(mode="json"))
+    estimate = _estimate_orbit_result_wire_bytes(request)
+    limit = CanonicalLimits().max_output_bytes
+    assert len(encoded) <= limit
+    assert len(encoded) <= estimate <= limit
+
+
 def test_graph_symmetry_estimate_bounds_heterogeneous_representatives() -> None:
     """One large label among tiny ones must not inflate the estimate by a maximum."""
 

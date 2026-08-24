@@ -831,6 +831,52 @@ def test_result_preflights_broken_face_invariants_before_nested_parsing(
         PolytopeSupportResult.model_validate(payload)
 
 
+def test_result_preflights_foreign_exposed_face_space_before_nested_parsing(
+    square_result: PolytopeSupportResult,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An exposed face declaring a different, individually valid raw space
+    is rejected before the retained source pays its exact extremality
+    proof, exactly as the covector space is compared in the same gate."""
+
+    _forbid_extremality_proof(monkeypatch)
+    payload = square_result.model_dump(mode="json")
+    payload["exposed_face"]["space"] = {"axes": ["u", "v"]}
+
+    with pytest.raises(
+        ValidationError,
+        match="exposed face must use the same coordinate space as the polytope",
+    ):
+        PolytopeSupportResult.model_validate(payload)
+
+    payload = square_result.model_dump(mode="json")
+    payload["exposed_face"]["space"] = {"axes": ["y", "x"]}
+
+    with pytest.raises(
+        ValidationError,
+        match="exposed face must use the same coordinate space as the polytope",
+    ):
+        PolytopeSupportResult.model_validate(payload)
+
+
+def test_constructed_result_rejects_foreign_exposed_face_space_at_bind(
+    square_result: PolytopeSupportResult,
+) -> None:
+    """An already-built face is bound to the source coordinate space by
+    the after-validator instead of the raw-payload preflight."""
+
+    with pytest.raises(ValidationError, match="exposed face must be exactly"):
+        PolytopeSupportResult(
+            polytope=square_result.polytope,
+            covector=square_result.covector,
+            support_value=square_result.support_value,
+            exposed_face=RationalExposedFace(
+                space=RationalCoordinateSpace(axes=("u", "v")),
+                vertices=square_result.exposed_face.vertices,
+            ),
+        )
+
+
 def test_result_rejects_forbidden_extra_field_before_nested_parsing(
     square_result: PolytopeSupportResult,
     monkeypatch: pytest.MonkeyPatch,
@@ -948,6 +994,51 @@ def test_extremality_orientation_work_is_enforced_before_filtering() -> None:
 
     with pytest.raises(ValidationError, match="orientation-test bound"):
         RationalVPolytope(space=RationalCoordinateSpace(axes=axes), vertices=vertices)
+
+
+def test_extremality_budget_bounds_are_enforced_before_exact_conversion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A vertex family over either published work bound is rejected before
+    any canonical coordinate is converted or row-reduced: the budgets
+    depend only on the vertex count and dimension."""
+
+    def unexpected_conversion(polytope: object) -> None:
+        raise AssertionError("exact conversion ran before the budget gate")
+
+    monkeypatch.setattr(
+        polytope_operations, "_support_sympy_points", unexpected_conversion
+    )
+
+    six_axes = tuple(f"x{axis}" for axis in range(6))
+    vertices_64_by_6 = tuple(
+        RationalPolytopeVertex(
+            vertex_id=f"v{index:02d}",
+            coordinates=tuple(_rational(index ** (power + 1)) for power in range(6)),
+        )
+        for index in range(64)
+    )
+
+    with pytest.raises(ValidationError, match="subfacet bound"):
+        RationalVPolytope(
+            space=RationalCoordinateSpace(axes=six_axes),
+            vertices=vertices_64_by_6,
+        )
+
+    four_axes = ("w", "x", "y", "z")
+    vertices_40_by_4 = tuple(
+        RationalPolytopeVertex(
+            vertex_id=f"v{index:02d}",
+            coordinates=tuple(_rational(index ** (power + 1)) for power in range(4)),
+        )
+        for index in range(40)
+    )
+
+    with pytest.raises(ValidationError, match="orientation-test bound"):
+        RationalVPolytope(
+            space=RationalCoordinateSpace(axes=four_axes),
+            vertices=vertices_40_by_4,
+        )
 
 
 def test_support_schema_publishes_component_and_hull_work_bounds() -> None:

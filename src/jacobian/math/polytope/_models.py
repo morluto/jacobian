@@ -436,7 +436,8 @@ def _require_raw_support_conclusions_admissible(canonical: Any) -> None:
     mirrors only the result-level constraints nested validation rejects
     anyway: the closed field set and the published shape of both
     conclusion fields, including the exposed face's defining ordering
-    and distinctness invariants.
+    and distinctness invariants and its raw space agreement with the
+    retained polytope.
     """
 
     if not isinstance(canonical, dict):
@@ -468,6 +469,17 @@ def _require_raw_support_conclusions_admissible(canonical: Any) -> None:
     }:
         raise ValueError("exposed face must be an object with space and vertices")
     axes = _require_raw_coordinate_space(exposed_face["space"], "exposed face")
+    polytope_axes = _raw_space_axes(
+        _raw_field_value(canonical.get("polytope"), "space")
+    )
+    if (
+        polytope_axes is not None
+        and all(isinstance(axis, str) for axis in polytope_axes)
+        and tuple(polytope_axes) != axes
+    ):
+        raise ValueError(
+            "exposed face must use the same coordinate space as the polytope"
+        )
     vertices = exposed_face["vertices"]
     if not isinstance(vertices, (list, tuple)):
         raise ValueError("exposed face vertices must be a sequence")

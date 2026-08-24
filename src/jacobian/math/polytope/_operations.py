@@ -582,10 +582,26 @@ def require_full_dimensional_extreme_vertices(polytope: RationalVPolytope) -> No
     The support operation uses a direct finite maximum only after the value
     has established that its labelled generators are exactly the polytope's
     vertices.  The existing hull-facet code gives the latter proof by the
-    active-normal rank characterization of extreme vertices.
+    active-normal rank characterization of extreme vertices.  The published
+    subfacet and orientation-test budgets depend only on the vertex count
+    and dimension, so they are enforced before any canonical coordinate is
+    converted or any exact linear algebra runs.
     """
 
     dimension = len(polytope.space.axes)
+    vertex_count = len(polytope.vertices)
+    subset_count = math.comb(vertex_count, dimension)
+    if subset_count > MAX_SUPPORT_VERTEX_SUBSETS:
+        raise ValueError(
+            "V-polytope extremality proof exceeds the subfacet bound "
+            f"({subset_count} > {MAX_SUPPORT_VERTEX_SUBSETS})"
+        )
+    orientation_tests = subset_count * (vertex_count - dimension)
+    if orientation_tests > MAX_SUPPORT_ORIENTATION_TESTS:
+        raise ValueError(
+            "V-polytope extremality proof exceeds the orientation-test bound "
+            f"({orientation_tests} > {MAX_SUPPORT_ORIENTATION_TESTS})"
+        )
     points = _support_sympy_points(polytope)
     differences = [
         [point[coordinate] - points[0][coordinate] for coordinate in range(dimension)]
@@ -593,18 +609,6 @@ def require_full_dimensional_extreme_vertices(polytope: RationalVPolytope) -> No
     ]
     if Matrix(differences).rank() != dimension:
         raise ValueError("V-polytope vertices must affinely span the coordinate space")
-    subset_count = math.comb(len(points), dimension)
-    if subset_count > MAX_SUPPORT_VERTEX_SUBSETS:
-        raise ValueError(
-            "V-polytope extremality proof exceeds the subfacet bound "
-            f"({subset_count} > {MAX_SUPPORT_VERTEX_SUBSETS})"
-        )
-    orientation_tests = subset_count * (len(points) - dimension)
-    if orientation_tests > MAX_SUPPORT_ORIENTATION_TESTS:
-        raise ValueError(
-            "V-polytope extremality proof exceeds the orientation-test bound "
-            f"({orientation_tests} > {MAX_SUPPORT_ORIENTATION_TESTS})"
-        )
     if len(_filter_redundant_vertices(points, dimension)) != len(points):
         raise ValueError("V-polytope vertices must all be exact extreme vertices")
 

@@ -13,8 +13,9 @@ from jacobian.math.universal_algebra._models import (
     EquationProfileResult,
     EvaluateRequest,
     EvaluateResult,
+    HomomorphismProfileRequest,
+    HomomorphismProfileResult,
     QuotientRequest,
-    QuotientResult,
     SubalgebraRequest,
     SubalgebraResult,
 )
@@ -23,8 +24,10 @@ from jacobian.math.universal_algebra._operations import (
     compute_equation_profile,
     compute_evaluate,
     compute_generated_subalgebra,
+    compute_homomorphism_profile,
     compute_quotient,
 )
+from jacobian.math.universal_algebra.values import FiniteAlgebraHomomorphism
 
 
 def _op[
@@ -166,6 +169,37 @@ UNIVERSAL_ALGEBRA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         version="2",
     ),
     _op(
+        "universal_algebra.map.homomorphism_profile.compute",
+        "Profile a supplied finite-algebra carrier map",
+        "Check every basic-operation table cell under one total carrier map. "
+        "Return a reusable checked homomorphism with canonical kernel and image, "
+        "or the first exact preservation obstruction in deterministic signature "
+        "and source-tuple order.",
+        HomomorphismProfileRequest,
+        HomomorphismProfileResult,
+        compute_homomorphism_profile,
+        "universal-algebra",
+        "homomorphism",
+        "carrier-map",
+        "exact",
+        examples=(
+            example(
+                "boolean_identity_map",
+                "Check the identity carrier map between two copies of the "
+                "2-element Boolean algebra; source and target operation "
+                "identifiers and arities must match exactly and the map must "
+                "cover every source carrier position.",
+                {
+                    "carrier_map": {
+                        "source": _ALGEBRA,
+                        "target": _ALGEBRA,
+                        "mapping": [0, 1],
+                    }
+                },
+            ),
+        ),
+    ),
+    _op(
         "universal_algebra.congruence.check.compute",
         "Check whether a carrier partition is a congruence",
         "Return whether a carrier partition is a compatible equivalence "
@@ -190,11 +224,12 @@ UNIVERSAL_ALGEBRA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "universal_algebra.quotient.compute",
         "Compute the quotient algebra A/theta",
-        "Return the quotient algebra induced by a congruence. The quotient "
-        "carrier is the set of blocks; return a directly composable "
-        "FiniteAlgebra together with the quotient map.",
+        "Return the canonical checked homomorphism from a finite algebra onto "
+        "the quotient induced by a congruence. The target carrier is the set "
+        "of blocks, and the retained source, target, and mapping pass directly "
+        "to homomorphism-profile consumers.",
         QuotientRequest,
-        QuotientResult,
+        FiniteAlgebraHomomorphism,
         compute_quotient,
         "universal-algebra",
         "quotient",
@@ -206,7 +241,7 @@ UNIVERSAL_ALGEBRA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {"algebra": _ALGEBRA, "partition": [[0, 1]]},
             ),
         ),
-        version="2",
+        version="3",
     ),
 )
 

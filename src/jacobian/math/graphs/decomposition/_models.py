@@ -192,6 +192,9 @@ class SPQRTreeResult(StrictModel):
     virtual_edge_pairs: tuple[tuple[str, str], ...] = Field(
         default=(), max_length=1_536
     )
+    source_vertex_incidence: tuple[tuple[int, tuple[str, ...]], ...] = Field(
+        default=(), max_length=64
+    )
     source_edge_owners: tuple[tuple[tuple[int, int], str, str], ...] = Field(
         default=(), max_length=512
     )
@@ -208,6 +211,7 @@ class SPQRTreeResult(StrictModel):
                 self.nodes
                 or self.tree_edges
                 or self.virtual_edge_pairs
+                or self.source_vertex_incidence
                 or self.source_edge_owners
             ):
                 raise ValueError("a non-biconnected result must not carry an SPQR tree")

@@ -354,6 +354,17 @@ class _SPQRBuilder:
                 if edge.source_edge is not None
             )
         )
+        vertex_incidence = tuple(
+            (
+                vertex,
+                tuple(
+                    node_id
+                    for node_id, (_, edges) in sorted(self._nodes.items())
+                    if any(vertex in (edge.left, edge.right) for edge in edges)
+                ),
+            )
+            for vertex in range(graph.vertex_count)
+        )
         pairs = tuple(
             sorted((left, right) for left, right in self._pairs.items() if left < right)
         )
@@ -368,6 +379,7 @@ class _SPQRBuilder:
                 )
             ),
             virtual_edge_pairs=pairs,
+            source_vertex_incidence=vertex_incidence,
             source_edge_owners=owners,
         )
         _validate_spqr_tree(result)
@@ -688,6 +700,19 @@ def _validate_spqr_tree(result: SPQRTreeResult) -> None:
     )
     if result.source_edge_owners != expected_owners:
         raise ValueError("source edge ownership must match the skeleton real edges")
+    expected_incidence = tuple(
+        (
+            vertex,
+            tuple(
+                node_id
+                for node_id, node in sorted(nodes.items())
+                if vertex in node.vertices
+            ),
+        )
+        for vertex in range(result.source_graph.vertex_count)
+    )
+    if result.source_vertex_incidence != expected_incidence:
+        raise ValueError("source vertex incidence must match the skeleton carriers")
     derived_tree = _validate_virtual_pairs(result, edge_locations)
     if tuple(sorted(derived_tree)) != result.tree_edges:
         raise ValueError("SPQR tree edges must be induced by virtual-edge pairs")

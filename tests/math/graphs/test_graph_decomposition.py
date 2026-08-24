@@ -506,6 +506,13 @@ class TestSPQRTree:
         assert result.status == "SPQR_TREE"
         assert [node.kind for node in result.nodes].count("P_NODE") == 1
         assert len(result.virtual_edge_pairs) == 3
+        assert result.source_vertex_incidence == (
+            (0, ("node:0", "node:1", "node:2", "node:3")),
+            (1, ("node:0", "node:1", "node:2", "node:3")),
+            (2, ("node:0",)),
+            (3, ("node:1",)),
+            (4, ("node:2",)),
+        )
         assert len(result.source_edge_owners) == 6
 
     def test_non_biconnected_graph_returns_articulation_witness(self) -> None:

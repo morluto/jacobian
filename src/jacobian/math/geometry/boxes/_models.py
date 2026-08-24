@@ -37,44 +37,53 @@ def _endpoint_values(
     )
 
 
+def _axis_endpoints(
+    boxes: tuple[RationalAxisAlignedBox, ...],
+    axis: int,
+) -> tuple[CanonicalRational, ...]:
+    return tuple(
+        endpoint
+        for box in boxes
+        if box.intervals is not None
+        for endpoint in (box.intervals[axis].lower, box.intervals[axis].upper)
+    )
+
+
 def _digit_bounds(
     boxes: tuple[RationalAxisAlignedBox, ...],
     dimension: int,
     candidate_count: int,
 ) -> tuple[int, int, int, int]:
-    endpoints = _endpoint_values(boxes)
-    maximum_numerator_digits = max(
-        (len(value.num.lstrip("-")) for value in endpoints),
-        default=1,
-    )
-    maximum_denominator_digits = max(
-        (len(value.den) for value in endpoints),
-        default=1,
-    )
+    maximum_numerator_digits = 1
+    maximum_denominator_digits = 1
 
     # For one width a/b-c/d, numerator and denominator carry at most
     # num_digits+den_digits+1 and 2*den_digits digits. Multiplication across
-    # the declared axes gives the per-intersection-volume bounds.
-    volume_numerator_digits = (
-        dimension * (maximum_numerator_digits + maximum_denominator_digits + 1) + 1
-    )
-    volume_denominator_digits = 2 * dimension * maximum_denominator_digits + 1
-
+    # the declared axes sums these per-axis bounds, so one large axis cannot
+    # multiply its growth onto every other axis.
+    volume_numerator_digits = 1
+    volume_denominator_digits = 1
     # On each axis, every width denominator divides the product of the distinct
     # source endpoint denominators on that axis. The common denominator for all
     # box-cell volumes therefore divides the product of those per-axis products.
     common_denominator_digits = 1
     for axis in range(dimension):
-        denominators = {
-            endpoint.den
-            for box in boxes
-            if box.intervals is not None
-            for endpoint in (
-                box.intervals[axis].lower,
-                box.intervals[axis].upper,
-            )
-        }
-        common_denominator_digits += sum(len(value) for value in denominators)
+        endpoints = _axis_endpoints(boxes, axis)
+        numerator_digits = max(
+            (len(value.num.lstrip("-")) for value in endpoints),
+            default=1,
+        )
+        denominator_digits = max(
+            (len(value.den) for value in endpoints),
+            default=1,
+        )
+        maximum_numerator_digits = max(maximum_numerator_digits, numerator_digits)
+        maximum_denominator_digits = max(maximum_denominator_digits, denominator_digits)
+        volume_numerator_digits += numerator_digits + denominator_digits + 1
+        volume_denominator_digits += 2 * denominator_digits
+        common_denominator_digits += sum(
+            len(value) for value in {endpoint.den for endpoint in endpoints}
+        )
 
     # A partial inclusion-exclusion sum has at most candidate_count terms.
     # This additionally bounds Fraction intermediates before canonical output.

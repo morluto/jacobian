@@ -373,7 +373,15 @@ def test_boxes_admit_the_full_canonical_dimension_range_and_no_more() -> None:
 
 def test_high_dimension_families_remain_bounded_by_derived_budgets() -> None:
     endpoint = Fraction(10**255, 10**255 + 1)
-    wide_box = _box((0, endpoint), *((0, 1),) * (MAX_CANONICAL_BOX_DIMENSION - 1))
+    wide_axis = (0, endpoint)
+    mixed_box = _box(wide_axis, *((0, 1),) * (MAX_CANONICAL_BOX_DIMENSION - 1))
+    result = compute_box_union_volume((mixed_box,))
+
+    assert result.union_volume.as_fraction() == endpoint
+    assert tuple(entry.box_indices for entry in result.intersections) == ((0,),)
+    assert result.intersections[0].volume.as_fraction() == endpoint
+
+    wide_box = _box(*((0, endpoint),) * MAX_CANONICAL_BOX_DIMENSION)
     with pytest.raises(ValidationError, match="exact rational intermediate bound"):
         compute_box_union_volume((wide_box,))
 

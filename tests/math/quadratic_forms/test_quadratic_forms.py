@@ -72,6 +72,27 @@ def test_zero_form_is_a_complete_exact_value() -> None:
     ).value == CanonicalRational(num="0", den="1")
 
 
+def test_zero_dimensional_form_evaluates_to_zero() -> None:
+    request = EvaluationRequest.model_validate(
+        {
+            "form": {"axis": [], "diagonal_coefficients": []},
+            "vector": {"axis": [], "coordinates": []},
+        }
+    )
+
+    assert evaluate_rational_quadratic_form(request.form, request.vector) == Fraction(0)
+    assert evaluate_form(request).value == CanonicalRational(num="0", den="1")
+
+
+def test_zero_dimensional_axis_keeps_coupled_length_validation() -> None:
+    with pytest.raises(ValidationError, match="must match"):
+        RationalQuadraticForm.model_validate(
+            {"axis": [], "diagonal_coefficients": [_rational(1)]}
+        )
+    with pytest.raises(ValidationError, match="must match"):
+        RationalCoordinateVector.model_validate({"axis": ["u"], "coordinates": []})
+
+
 def test_axis_mismatch_is_rejected_before_arithmetic() -> None:
     with pytest.raises(ValidationError, match="vector axis"):
         EvaluationRequest.model_validate(

@@ -54,6 +54,8 @@ class RationalQuadraticForm(StrictModel):
     The associated polar matrix is therefore ``B_ii=2*a_i`` and
     ``B_ij=c_ij``; its half-polar Gram matrix has diagonal ``a_i`` and
     off-diagonal ``c_ij/2``.  Neither derived matrix is independently stored.
+    The empty axis is the unique zero-dimensional form, whose evaluation is
+    always ``0``.
 
     Axis labels must be unique, ``diagonal_coefficients`` carries exactly one
     coefficient per axis label, and every cross-term index must lie within
@@ -64,14 +66,12 @@ class RationalQuadraticForm(StrictModel):
     quadratic_form_schema_version: Literal["1"] = "1"
     domain: Literal["QQ"] = "QQ"
     axis: tuple[OpaqueLabel, ...] = Field(
-        min_length=1,
         description=(
             "Ordered coordinate labels for the polynomial variables; "
             "labels must be unique."
         ),
     )
     diagonal_coefficients: tuple[CanonicalRational, ...] = Field(
-        min_length=1,
         description=(
             "Coefficient a_i of x_i^2 in the declared axis order; exactly "
             f"one coefficient per axis label, and each numerator and "
@@ -117,20 +117,19 @@ class RationalCoordinateVector(StrictModel):
     """One exact coordinate vector on an explicitly ordered rational axis.
 
     Axis labels must be unique, and ``coordinates`` carries exactly one
-    bounded rational per label in the declared order;
+    bounded rational per label in the declared order; the empty axis is the
+    unique zero-dimensional vector.
     ``require_axis_bound_coordinates`` enforces these coupled rules.
     """
 
     vector_schema_version: Literal["1"] = "1"
     domain: Literal["QQ"] = "QQ"
     axis: tuple[OpaqueLabel, ...] = Field(
-        min_length=1,
         description=(
             "Ordered labels of the rational coordinate axis; labels must be unique."
         ),
     )
     coordinates: tuple[CanonicalRational, ...] = Field(
-        min_length=1,
         description=(
             "Exact values x_i in the declared axis order; exactly one "
             "coordinate per axis label, and each numerator and denominator "

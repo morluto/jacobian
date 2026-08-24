@@ -19,7 +19,6 @@ if TYPE_CHECKING:
 
 MAX_FINITE_GROUP_ORDER = 4_096
 MAX_FINITE_GROUP_RANK = 6
-MAX_FINITE_PRODUCT_GROUP_RANK = 64
 MAX_FINITE_GROUP_FACTOR_SIZE = 256
 MAX_FINITE_GROUP_MODULUS = (1 << 53) - 1
 MAX_FINITE_GROUP_COORDINATE = (1 << 53) - 1
@@ -65,16 +64,13 @@ class FiniteAbelianProductGroup(StrictModel):
 
     Moduli and canonical residues serialize as raw JSON integers inside exact
     results, so this reusable value is bounded by the interoperable
-    safe-integer range rather than any operation's work envelope. The 64-axis
-    ceiling is a defensive materialization fallback in the same spirit as the
-    spectral row cap; consuming operations bound their own work by supplied
-    rows, group exponent, and serialized-result size.
+    safe-integer range rather than any operation's work envelope. The axis
+    count carries no ceiling of its own: consuming operations derive their
+    execution envelope from the supplied rows, the group exponent, and the
+    serialized-result size that already scales with the rank.
     """
 
-    moduli: tuple[FiniteGroupModulus, ...] = Field(
-        min_length=1,
-        max_length=MAX_FINITE_PRODUCT_GROUP_RANK,
-    )
+    moduli: tuple[FiniteGroupModulus, ...] = Field(min_length=1)
 
     @property
     def order(self) -> int:
@@ -222,18 +218,9 @@ class FiniteAbelianNonorthogonalityWitness(StrictModel):
     cyclotomic polynomial. The tuple is dense and has length ``phi(N)``.
     """
 
-    left_frequency: CanonicalGroupElement = Field(
-        min_length=1,
-        max_length=MAX_FINITE_PRODUCT_GROUP_RANK,
-    )
-    right_frequency: CanonicalGroupElement = Field(
-        min_length=1,
-        max_length=MAX_FINITE_PRODUCT_GROUP_RANK,
-    )
-    difference: CanonicalGroupElement = Field(
-        min_length=1,
-        max_length=MAX_FINITE_PRODUCT_GROUP_RANK,
-    )
+    left_frequency: CanonicalGroupElement = Field(min_length=1)
+    right_frequency: CanonicalGroupElement = Field(min_length=1)
+    difference: CanonicalGroupElement = Field(min_length=1)
     remainder_coefficients: tuple[BoundedRemainderInteger, ...] = Field(
         min_length=1,
         max_length=MAX_SPECTRAL_CYCLOTOMIC_DEGREE,
@@ -341,29 +328,34 @@ def _decimal_digits_from_bits(bits: int) -> int:
     return (bits * 30_103 + 99_999) // 100_000 + 1
 
 
-def _predicted_spectral_result_bytes(
-    source: FiniteAbelianSpectralPairSource,
-    *,
-    cyclotomic_degree: int,
-    remainder_coefficient_bits: int,
-) -> int:
-    """Bound the largest canonical JSON failure result before execution."""
+def _predicted_spectral_source_bytes(source: FiniteAbelianSpectralPairSource) -> int:
+    """Bound the serialized canonical source retained in any result."""
 
     coordinate_digits = max(len(str(modulus - 1)) for modulus in source.group.moduli)
     rank = len(source.group.moduli)
     row_bytes = 4 + rank * (coordinate_digits + 3)
-    source_bytes = (
+    return (
         2_048
         + rank * (coordinate_digits + 3)
         + (len(source.points) + len(source.frequencies)) * row_bytes
     )
-    witness_bytes = (
+
+
+def _predicted_spectral_witness_bytes(
+    *,
+    rank: int,
+    coordinate_digits: int,
+    cyclotomic_degree: int,
+    remainder_coefficient_bits: int,
+) -> int:
+    """Bound the largest canonical failure-witness serialization."""
+
+    return (
         512
         + 3 * rank * (coordinate_digits + 3)
         + cyclotomic_degree
         * (_decimal_digits_from_bits(remainder_coefficient_bits) + 4)
     )
-    return source_bytes + witness_bytes
 
 
 def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPairWork:
@@ -376,6 +368,12 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
     Each pass checks at most ``C(|Lambda|, 2)`` pairs and ``|A|`` character
     terms per pair. No check depends on the ambient group order or modulus
     size, only on the supplied rows, the rank, and the group exponent.
+
+    The serialized-source bound is enforced before any exponent arithmetic.
+    It depends only on the declared moduli and supplied rows, so an oversized
+    request never runs superlinear preflight work: once it holds, the axis
+    count fits the result budget and every intermediate least common multiple
+    stays below the product of the admitted moduli.
 
     Every coefficient of ``Phi_N`` is at most ``2**phi(N)`` in absolute value:
     it is an elementary symmetric sum of ``phi(N)`` unit-modulus roots. SymPy's
@@ -393,6 +391,12 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
     itself trivially bounded.
     """
 
+    source_bytes = _predicted_spectral_source_bytes(source)
+    if source_bytes > MAX_SPECTRAL_RESULT_BYTES:
+        raise ValueError("spectral-pair result exceeds its serialized byte bound")
+    coordinate_digits = max(len(str(modulus - 1)) for modulus in source.group.moduli)
+    rank = len(source.group.moduli)
+
     exponent = source.group.exponent
     needs_reduction = (
         len(source.points) == len(source.frequencies) and len(source.frequencies) > 1
@@ -407,10 +411,14 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
             cyclotomic_coefficient_bits=0,
             cyclotomic_intermediate_bits=0,
             remainder_coefficient_bits=0,
-            predicted_result_bytes=_predicted_spectral_result_bytes(
-                source,
-                cyclotomic_degree=0,
-                remainder_coefficient_bits=0,
+            predicted_result_bytes=(
+                source_bytes
+                + _predicted_spectral_witness_bytes(
+                    rank=rank,
+                    coordinate_digits=coordinate_digits,
+                    cyclotomic_degree=0,
+                    remainder_coefficient_bits=0,
+                )
             ),
         )
         if work.predicted_result_bytes > MAX_SPECTRAL_RESULT_BYTES:
@@ -432,8 +440,9 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
     remainder_coefficient_bits = len(source.points).bit_length() + (degree + 1) * (
         exponent - degree
     )
-    predicted_result_bytes = _predicted_spectral_result_bytes(
-        source,
+    predicted_result_bytes = source_bytes + _predicted_spectral_witness_bytes(
+        rank=rank,
+        coordinate_digits=coordinate_digits,
         cyclotomic_degree=degree,
         remainder_coefficient_bits=remainder_coefficient_bits,
     )

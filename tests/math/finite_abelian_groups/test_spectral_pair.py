@@ -363,8 +363,11 @@ def test_group_rank_and_order_boundaries() -> None:
     assert FiniteAbelianProductGroup(moduli=(4_096, 2)).order == 8_192
     assert FiniteAbelianProductGroup(moduli=(2,) * 7).order == 128
 
-    with pytest.raises(ValidationError, match="at most 64 items"):
-        FiniteAbelianProductGroup(moduli=(2,) * 65)
+    # The reusable group value carries no axis ceiling; consuming operations
+    # derive their rank envelope from serialized output size and work.
+    wide_group = FiniteAbelianProductGroup(moduli=(2,) * 65)
+    assert wide_group.order == 2**65
+    assert wide_group.exponent == 2
 
     # The rank and order ceilings stay operation-specific on the exhaustive
     # factorization path, whose kernel materializes the ambient group.
@@ -417,6 +420,107 @@ def test_equal_size_pair_beyond_the_former_rank_cap_fits_budgets() -> None:
     # 1 + X modulo Phi_2 = X + 1 vanishes exactly.
     assert result.is_spectral is True
     assert result.reason == "SPECTRAL"
+
+
+def test_singleton_pair_in_z2_power_65_is_decided_without_reduction() -> None:
+    zero = (0,) * 65
+    unit = (1,) + (0,) * 64
+    source = _source((2,) * 65, (zero,), (unit,))
+    work = domain._spectral_pair_work(source)
+
+    assert work.cyclotomic_degree is None
+    assert work.character_terms == 0
+    assert work.predicted_result_bytes == 4_128
+    assert work.predicted_result_bytes <= domain.MAX_SPECTRAL_RESULT_BYTES
+
+    request = FiniteAbelianSpectralPairRequest(source=source)
+    result = FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION.run(request)
+
+    assert result.is_spectral is True
+    assert result.reason == "SPECTRAL"
+    assert result.source.group.exponent == 2
+    assert result.first_nonorthogonal_pair is None
+
+
+def test_nonorthogonality_witness_admits_axes_beyond_the_former_rank_cap() -> None:
+    zero = (0,) * 65
+    shifted = (0, 1) + (0,) * 63
+    points = (zero, (1,) + (0,) * 64)
+    result = decide_finite_abelian_spectral_pair(
+        _source((2,) * 65, points, (zero, shifted))
+    )
+
+    assert result.is_spectral is False
+    assert result.reason == "NONORTHOGONAL_FREQUENCIES"
+    witness = result.first_nonorthogonal_pair
+    assert witness is not None
+    assert witness.left_frequency == zero
+    assert witness.right_frequency == shifted
+    assert witness.difference == shifted
+    assert witness.remainder_coefficients == ("2",)
+
+
+def test_singleton_axis_envelope_boundary_is_admitted() -> None:
+    # Singleton envelope: 2,568 + 24 * rank <= 32,768 serialized bytes.
+    rank = 1_258
+    source = _source(
+        (2,) * rank,
+        ((0,) * rank,),
+        ((1,) + (0,) * (rank - 1),),
+    )
+
+    result = decide_finite_abelian_spectral_pair(source)
+
+    assert result.is_spectral is True
+    assert domain._spectral_pair_work(source).predicted_result_bytes == 32_760
+
+
+def test_singleton_axis_envelope_boundary_is_rejected() -> None:
+    rank = 1_259
+    source = _source(
+        (2,) * rank,
+        ((0,) * rank,),
+        ((1,) + (0,) * (rank - 1),),
+    )
+
+    with pytest.raises(
+        ValidationError,
+        match="spectral-pair result exceeds its serialized byte bound",
+    ):
+        FiniteAbelianSpectralPairRequest(source=source)
+
+
+def test_singleton_source_over_the_source_byte_bound_is_rejected_before_lcm() -> None:
+    # At this rank the serialized source alone exceeds the byte budget, so
+    # rejection precedes any exponent arithmetic on the declared moduli.
+    rank = 4_000
+    source = _source(
+        (2,) * rank,
+        ((0,) * rank,),
+        ((1,) + (0,) * (rank - 1),),
+    )
+
+    with pytest.raises(
+        ValidationError,
+        match="spectral-pair result exceeds its serialized byte bound",
+    ):
+        FiniteAbelianSpectralPairRequest(source=source)
+    with pytest.raises(
+        ValueError,
+        match="spectral-pair result exceeds its serialized byte bound",
+    ):
+        decide_finite_abelian_spectral_pair(source)
+
+
+def test_forged_witness_elements_beyond_source_rank_are_rejected() -> None:
+    result = decide_finite_abelian_spectral_pair(
+        _source((4,), ((0,), (1,)), ((0,), (1,)))
+    )
+    payload = result.model_dump(mode="json")
+    payload["first_nonorthogonal_pair"]["left_frequency"] = [0] * 200
+
+    with pytest.raises(ValidationError, match="replayed exact decision"):
+        FiniteAbelianSpectralPairResult.model_validate(payload)
 
 
 def test_singleton_beyond_the_former_modulus_ceiling_is_admitted() -> None:

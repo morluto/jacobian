@@ -170,9 +170,7 @@ def test_lpr_refutation_rejects_out_of_axis_literals_and_non_live_hints() -> Non
 
 def test_lpr_refutation_admits_sparse_solver_assigned_clause_labels() -> None:
     request = SatRefutationCheckRequest(
-        cnf=CanonicalCnf(
-            variables=("x", "y"), clauses=((-1,), (1,), (-2,), (2,))
-        ),
+        cnf=CanonicalCnf(variables=("x", "y"), clauses=((-1,), (1,), (-2,), (2,))),
         refutation=SatLprRefutation(
             steps=(
                 LprAddition(
@@ -232,9 +230,7 @@ def test_lpr_refutation_still_binds_sparse_labels_to_live_clauses() -> None:
                         clause=(),
                         at_hint_clause_ids=(1, 2),
                         propagation_hints=(
-                            LprPropagationHint(
-                                clause_id=60_000, at_hint_clause_ids=()
-                            ),
+                            LprPropagationHint(clause_id=60_000, at_hint_clause_ids=()),
                         ),
                     ),
                 )

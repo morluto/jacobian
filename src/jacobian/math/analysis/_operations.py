@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
@@ -13,7 +14,10 @@ from jacobian.math.analysis._models import (
     MAX_DYADIC_EXPONENT,
     ArbPointEnclosureRequest,
     ArbPointEnclosureResult,
+    DyadicClosedInterval,
     ExactDyadic,
+    FirstPartialEnclosure,
+    HessianEntryEnclosure,
     IntervalExpressionBoxEnclosureRequest,
     IntervalExpressionBoxEnclosureResult,
     IntervalExpressionBoxEnclosureStatus,
@@ -21,6 +25,9 @@ from jacobian.math.analysis._models import (
     IntervalExpressionEnclosureRequest,
     IntervalExpressionEnclosureResult,
     IntervalExpressionNode,
+    IntervalExpressionSecondJetEnclosureRequest,
+    IntervalExpressionSecondJetEnclosureResult,
+    IntervalExpressionSecondJetEnclosureStatus,
     RationalClosedInterval,
     _preflight_box_expression,
     _rational_box_bounds,
@@ -34,6 +41,10 @@ class _EvaluationFailure(StrEnum):
 
 
 class _BoxEvaluationFailure(StrEnum):
+    BACKEND_ERROR = "BACKEND_ERROR"
+
+
+class _SecondJetEvaluationFailure(StrEnum):
     BACKEND_ERROR = "BACKEND_ERROR"
 
 
@@ -451,6 +462,352 @@ def _box_expression_enclosure(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class _SecondJet:
+    """One private Arb value with all forward derivatives through order two."""
+
+    value: Any
+    gradient: tuple[Any, ...]
+    hessian: tuple[tuple[Any, ...], ...]
+
+
+def _second_jet_is_finite(jet: _SecondJet) -> bool:
+    return jet.value.is_finite() and all(
+        value.is_finite()
+        for value in (*jet.gradient, *(entry for row in jet.hessian for entry in row))
+    )
+
+
+def _constant_second_jet(value: Any, dimension: int) -> _SecondJet:
+    from flint import arb
+
+    zero = arb(0)
+    return _SecondJet(
+        value=value,
+        gradient=(zero,) * dimension,
+        hessian=tuple((zero,) * dimension for _ in range(dimension)),
+    )
+
+
+def _compose_second_jet_unary(
+    value: Any, first: Any, second: Any, child: _SecondJet
+) -> _SecondJet:
+    return _SecondJet(
+        value=value,
+        gradient=tuple(first * partial for partial in child.gradient),
+        hessian=tuple(
+            tuple(
+                first * child.hessian[row][column]
+                + second * child.gradient[row] * child.gradient[column]
+                for column in range(len(child.gradient))
+            )
+            for row in range(len(child.gradient))
+        ),
+    )
+
+
+def _add_second_jets(left: _SecondJet, right: _SecondJet) -> _SecondJet:
+    return _SecondJet(
+        value=left.value + right.value,
+        gradient=tuple(
+            left_partial + right_partial
+            for left_partial, right_partial in zip(
+                left.gradient, right.gradient, strict=True
+            )
+        ),
+        hessian=tuple(
+            tuple(
+                left_entry + right_entry
+                for left_entry, right_entry in zip(left_row, right_row, strict=True)
+            )
+            for left_row, right_row in zip(left.hessian, right.hessian, strict=True)
+        ),
+    )
+
+
+def _negate_second_jet(child: _SecondJet) -> _SecondJet:
+    return _SecondJet(
+        value=-child.value,
+        gradient=tuple(-partial for partial in child.gradient),
+        hessian=tuple(tuple(-entry for entry in row) for row in child.hessian),
+    )
+
+
+def _multiply_second_jets(left: _SecondJet, right: _SecondJet) -> _SecondJet:
+    return _SecondJet(
+        value=left.value * right.value,
+        gradient=tuple(
+            left_partial * right.value + left.value * right_partial
+            for left_partial, right_partial in zip(
+                left.gradient, right.gradient, strict=True
+            )
+        ),
+        hessian=tuple(
+            tuple(
+                left.hessian[row][column] * right.value
+                + left.gradient[row] * right.gradient[column]
+                + left.gradient[column] * right.gradient[row]
+                + left.value * right.hessian[row][column]
+                for column in range(len(left.gradient))
+            )
+            for row in range(len(left.gradient))
+        ),
+    )
+
+
+def _power_second_jet(child: _SecondJet, exponent: int) -> _SecondJet:
+    """Apply the exact integer-power chain rules to one second-order jet."""
+
+    from flint import arb
+
+    value = child.value**exponent
+    if exponent == 1:
+        return _compose_second_jet_unary(value, arb(1), arb(0), child)
+    first = exponent * child.value ** (exponent - 1)
+    if exponent == -1:
+        second = 2 * child.value**-3
+    else:
+        second = exponent * (exponent - 1) * child.value ** (exponent - 2)
+    return _compose_second_jet_unary(value, first, second, child)
+
+
+def _unary_second_jet(
+    node: IntervalExpressionNode, child: _SecondJet
+) -> _SecondJet | _SecondJetEvaluationFailure:
+    if node.op == "neg":
+        return _negate_second_jet(child)
+    if node.op == "pow":
+        assert node.exponent is not None
+        if node.exponent < 0 and child.value.contains(0):
+            return _SecondJetEvaluationFailure.BACKEND_ERROR
+        return _power_second_jet(child, node.exponent)
+    if node.op == "exp":
+        value = child.value.exp()
+        return _compose_second_jet_unary(value, value, value, child)
+    if node.op == "log":
+        if not child.value > 0:
+            return _SecondJetEvaluationFailure.BACKEND_ERROR
+        value = child.value.log()
+        return _compose_second_jet_unary(
+            value, 1 / child.value, -1 / child.value**2, child
+        )
+    if node.op == "sqrt":
+        if not child.value > 0:
+            return _SecondJetEvaluationFailure.BACKEND_ERROR
+        value = child.value.sqrt()
+        return _compose_second_jet_unary(
+            value,
+            1 / (2 * value),
+            -1 / (4 * child.value * value),
+            child,
+        )
+    if node.op == "sin":
+        value = child.value.sin()
+        return _compose_second_jet_unary(value, child.value.cos(), -value, child)
+    if node.op == "cos":
+        value = child.value.cos()
+        return _compose_second_jet_unary(value, -child.value.sin(), -value, child)
+    raise AssertionError(f"unsupported unary expression operation: {node.op}")
+
+
+def _evaluate_second_jet(
+    node: IntervalExpressionNode, variables: dict[str, Any], dimension: int
+) -> _SecondJet | _SecondJetEvaluationFailure:
+    from flint import arb, fmpq
+
+    if node.op == "const":
+        assert node.value is not None
+        return _constant_second_jet(
+            arb(fmpq(*node.value.as_integer_ratio())), dimension
+        )
+    if node.op == "var":
+        assert node.variable is not None
+        zero = arb(0)
+        one = arb(1)
+        index = tuple(variables).index(node.variable)
+        return _SecondJet(
+            value=variables[node.variable],
+            gradient=tuple(
+                one if coordinate == index else zero for coordinate in range(dimension)
+            ),
+            hessian=tuple((zero,) * dimension for _ in range(dimension)),
+        )
+
+    children: list[_SecondJet] = []
+    for child_node in node.children:
+        child = _evaluate_second_jet(child_node, variables, dimension)
+        if isinstance(child, _SecondJetEvaluationFailure) or not _second_jet_is_finite(
+            child
+        ):
+            return _SecondJetEvaluationFailure.BACKEND_ERROR
+        children.append(child)
+    left = children[0]
+    if len(children) == 1:
+        result = _unary_second_jet(node, left)
+    else:
+        right = children[1]
+        assert isinstance(right, _SecondJet)
+        if node.op == "add":
+            result = _add_second_jets(left, right)
+        elif node.op == "sub":
+            result = _add_second_jets(left, _negate_second_jet(right))
+        elif node.op == "mul":
+            result = _multiply_second_jets(left, right)
+        elif node.op == "div":
+            if right.value.contains(0):
+                return _SecondJetEvaluationFailure.BACKEND_ERROR
+            result = _multiply_second_jets(left, _power_second_jet(right, -1))
+        else:
+            raise AssertionError(f"unsupported binary expression operation: {node.op}")
+    if isinstance(result, _SecondJetEvaluationFailure) or not _second_jet_is_finite(
+        result
+    ):
+        return _SecondJetEvaluationFailure.BACKEND_ERROR
+    return result
+
+
+def _dyadic_closed_interval(value: Any) -> DyadicClosedInterval | None:
+    lower_mantissa, lower_exponent = value.lower().man_exp()
+    upper_mantissa, upper_exponent = value.upper().man_exp()
+    endpoints = _dyadic_endpoints(
+        lower_mantissa, lower_exponent, upper_mantissa, upper_exponent
+    )
+    if endpoints is None:
+        return None
+    return DyadicClosedInterval(lower=endpoints[0], upper=endpoints[1])
+
+
+def _constructed_second_jet_result(
+    request: IntervalExpressionSecondJetEnclosureRequest,
+    *,
+    status: IntervalExpressionSecondJetEnclosureStatus,
+    detail: str,
+    value: DyadicClosedInterval | None = None,
+    gradient: tuple[FirstPartialEnclosure, ...] = (),
+    hessian: tuple[HessianEntryEnclosure, ...] = (),
+    domain_failure: IntervalExpressionDomainFailure | None = None,
+) -> IntervalExpressionSecondJetEnclosureResult:
+    return IntervalExpressionSecondJetEnclosureResult.model_construct(
+        expression=request.expression,
+        box=request.box,
+        precision_bits=request.precision_bits,
+        status=status,
+        value=value,
+        gradient=gradient,
+        hessian=hessian,
+        domain_failure=domain_failure,
+        method="ARB_FORWARD_SECOND_ORDER_JET",
+        detail=detail,
+    )
+
+
+def _second_jet_enclosure(
+    request: IntervalExpressionSecondJetEnclosureRequest,
+) -> IntervalExpressionSecondJetEnclosureResult:
+    from jacobian.math.analysis._models import _preflight_second_jet_expression
+
+    preflight = _preflight_second_jet_expression(
+        request.expression, _rational_box_bounds(request.box)
+    )
+    if isinstance(preflight, IntervalExpressionDomainFailure):
+        return _constructed_second_jet_result(
+            request,
+            status="DOMAIN_UNPROVEN",
+            domain_failure=preflight,
+            detail=(
+                "The exact admission interval extension could not establish twice "
+                "differentiability at the reported source node."
+            ),
+        )
+
+    try:
+        from flint import ctx
+
+        with ctx.workprec(request.precision_bits):
+            variables = {
+                variable: _arb_source_interval(interval)
+                for variable, interval in zip(
+                    request.box.variables, request.box.intervals, strict=True
+                )
+            }
+            jet = _evaluate_second_jet(
+                request.expression, variables, len(request.box.variables)
+            )
+            if isinstance(jet, _SecondJetEvaluationFailure):
+                return _constructed_second_jet_result(
+                    request,
+                    status="BACKEND_ERROR",
+                    detail=(
+                        "Pinned Arb returned no finite second-order enclosure within "
+                        "the admitted fixed-precision envelope."
+                    ),
+                )
+            value = _dyadic_closed_interval(jet.value)
+            gradient_intervals = tuple(
+                _dyadic_closed_interval(entry) for entry in jet.gradient
+            )
+            hessian_intervals = tuple(
+                tuple(_dyadic_closed_interval(entry) for entry in row)
+                for row in jet.hessian
+            )
+    except (OverflowError, ValueError, ZeroDivisionError):
+        return _constructed_second_jet_result(
+            request,
+            status="BACKEND_ERROR",
+            detail=(
+                "Pinned Arb rejected an admitted bounded second-order computation; "
+                "no enclosure conclusion is available."
+            ),
+        )
+
+    if (
+        value is None
+        or any(entry is None for entry in gradient_intervals)
+        or any(entry is None for row in hessian_intervals for entry in row)
+    ):
+        return _constructed_second_jet_result(
+            request,
+            status="BACKEND_ERROR",
+            detail=(
+                "Pinned Arb produced endpoints outside the admitted dyadic wire "
+                "envelope; no enclosure conclusion is available."
+            ),
+        )
+
+    gradient = tuple(
+        FirstPartialEnclosure(variable=variable, enclosure=entry)
+        for variable, entry in zip(
+            request.box.variables, gradient_intervals, strict=True
+        )
+        if entry is not None
+    )
+    hessian_entries: list[HessianEntryEnclosure] = []
+    for first_index, first in enumerate(request.box.variables):
+        for second_index, second in enumerate(
+            request.box.variables[first_index:], first_index
+        ):
+            enclosure = hessian_intervals[first_index][second_index]
+            assert enclosure is not None
+            hessian_entries.append(
+                HessianEntryEnclosure(
+                    first_variable=first,
+                    second_variable=second,
+                    enclosure=enclosure,
+                )
+            )
+    return _constructed_second_jet_result(
+        request,
+        status="ENCLOSED",
+        value=value,
+        gradient=gradient,
+        hessian=tuple(hessian_entries),
+        detail=(
+            "Pinned Arb forward automatic differentiation returned outward-rounded "
+            "value, gradient, and symmetric Hessian enclosures with exact dyadic endpoints."
+        ),
+    )
+
+
 def _point_enclosure(
     request: ArbPointEnclosureRequest,
 ) -> ArbPointEnclosureResult:
@@ -620,8 +977,77 @@ BOX_EXPRESSION_ENCLOSURE_OPERATIONS = (
     ),
 )
 
+SECOND_JET_ENCLOSURE_OPERATIONS = (
+    MathTool(
+        operation_id="interval.expression.second_jet_enclosure.compute",
+        version="1",
+        title="Enclose an expression, gradient, and Hessian over a rational box",
+        description=(
+            "Use pinned Arb forward automatic differentiation to enclose one bounded "
+            "named-variable elementary expression, every first partial, and its "
+            "symmetric Hessian over a complete ordered rational box. The fixed "
+            "envelope admits at most 3 variables, 64 nodes, depth 16, 128-digit "
+            "rationals, absolute power exponents up to 64, 4,096-bit Arb precision, "
+            "and 8,192 bounded forward-jet scalar arithmetic units."
+        ),
+        request_type=IntervalExpressionSecondJetEnclosureRequest,
+        result_type=IntervalExpressionSecondJetEnclosureResult,
+        run=_second_jet_enclosure,
+        tags=(
+            "analysis",
+            "interval",
+            "expression",
+            "box",
+            "gradient",
+            "hessian",
+            "automatic-differentiation",
+            "arb",
+            "validated",
+            "bounded",
+        ),
+        examples=(
+            example(
+                "quadratic_unit_box",
+                "Enclose x^2 + y^2 and all derivatives over the unit square.",
+                {
+                    "expression": {
+                        "op": "add",
+                        "children": [
+                            {
+                                "op": "pow",
+                                "exponent": 2,
+                                "children": [{"op": "var", "variable": "x"}],
+                            },
+                            {
+                                "op": "pow",
+                                "exponent": 2,
+                                "children": [{"op": "var", "variable": "y"}],
+                            },
+                        ],
+                    },
+                    "box": {
+                        "variables": ["x", "y"],
+                        "intervals": [
+                            {
+                                "lower": {"num": "0", "den": "1"},
+                                "upper": {"num": "1", "den": "1"},
+                            },
+                            {
+                                "lower": {"num": "0", "den": "1"},
+                                "upper": {"num": "1", "den": "1"},
+                            },
+                        ],
+                    },
+                    "precision_bits": 128,
+                },
+            ),
+        ),
+    ),
+)
+
 __all__ = [
     "BOX_EXPRESSION_ENCLOSURE_OPERATIONS",
     "EXPRESSION_ENCLOSURE_OPERATIONS",
     "POINT_ENCLOSURE_OPERATIONS",
+    "SECOND_JET_ENCLOSURE_OPERATIONS",
 ]

@@ -25,6 +25,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "distinct source-bound uniform enclosure over a complete rational box",
     ),
+    OperationAdmission(
+        "interval.expression.second_jet_enclosure.compute",
+        AdmissionDecision.KEEP,
+        "distinct source-bound uniform value, gradient, and Hessian enclosure over a rational box",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

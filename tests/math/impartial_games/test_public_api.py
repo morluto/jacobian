@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from jacobian.math import impartial_games
+from jacobian.math.impartial_games import values
 
 
 def test_exact_public_api_symbols() -> None:
@@ -11,6 +12,7 @@ def test_exact_public_api_symbols() -> None:
         "GameMove",
         "GrundyAnalysis",
         "ImpartialGame",
+        "NimPosition",
         "SubtractionGrundyAnalysis",
         "birthdays",
         "grundy_classes",
@@ -27,3 +29,9 @@ def test_exact_public_api_symbols() -> None:
     assert len(impartial_games.__all__) == len(set(impartial_games.__all__))
     assert all(not name.startswith("_") for name in impartial_games.__all__)
     assert all(hasattr(impartial_games, name) for name in impartial_games.__all__)
+
+
+def test_nim_option_rows_are_not_public_canonical_values() -> None:
+    """Option rows are context-dependent and stay behind the result boundary."""
+    assert "NimOption" not in values.__all__
+    assert "NimOption" not in impartial_games.__all__

@@ -15,6 +15,12 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "points of one bounded permutation group element",
     ),
     OperationAdmission(
+        "group_action.subset.canonicalize",
+        AdmissionDecision.KEEP,
+        "exact canonical subset image with a generated-group transporter and "
+        "orbit-stabilizer sizes under one bounded finite permutation action",
+    ),
+    OperationAdmission(
         "group_action.cycle_index.compute",
         AdmissionDecision.KEEP,
         "exact cycle-index polynomial as cycle-type multiplicity data",

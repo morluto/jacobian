@@ -68,12 +68,12 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "polynomial.jacobian_syzygy.coefficients.compute",
         AdmissionDecision.KEEP,
-        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+        "dimension-parametric exact sparse ledger with separately bounded SymPy rank replay and material certificate leverage; labelled projective-line factors remain the compatible three-variable input",
     ),
     OperationAdmission(
         "polynomial.jacobian_syzygy.minimum_degree.compute",
         AdmissionDecision.KEEP,
-        "distinct exact or explicitly bounded search outcome with material computational leverage",
+        "dimension-parametric exact first-kernel search with separately bounded SymPy rank replay and material computational leverage; labelled projective-line factors remain the compatible three-variable input",
     ),
     OperationAdmission(
         "polynomial.rational.compute.derivative",

@@ -14,6 +14,7 @@ from jacobian._exact import (
 )
 from jacobian._models import StrictModel
 from jacobian.canonical import parse_canonical_integer
+from jacobian.math.real_quadratic import RealQuadraticValue
 
 MAX_MATRIX_DIMENSION = 32
 MAX_MATRIX_SCALAR_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
@@ -58,6 +59,35 @@ class RationalMatrix(StrictModel):
             maximum=MAX_MATRIX_SCALAR_DIGITS,
             label="matrix",
         )
+        return self
+
+
+class RealQuadraticMatrix(StrictModel):
+    """One nonempty rectangular matrix over a shared real quadratic field."""
+
+    matrix_schema_version: Literal["1"] = "1"
+    domain: Literal["QQ_SQRT_D"] = "QQ_SQRT_D"
+    entries: tuple[tuple[RealQuadraticValue, ...], ...] = Field(
+        min_length=1,
+        max_length=MAX_MATRIX_DIMENSION,
+        description=(
+            "Nonempty rectangular rows of a+b*sqrt(d) values. Every entry "
+            "must carry the same square-free positive radicand d."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_rectangular_shared_field(self) -> Self:
+        column_count = len(self.entries[0])
+        if column_count == 0 or column_count > MAX_MATRIX_DIMENSION:
+            raise ValueError("matrix rows must contain between 1 and 32 entries")
+        if any(len(row) != column_count for row in self.entries):
+            raise ValueError("matrix rows must all have the same length")
+        radicand = self.entries[0][0].radicand
+        if any(entry.radicand != radicand for row in self.entries for entry in row):
+            raise ValueError(
+                "every matrix entry must belong to one shared real quadratic field"
+            )
         return self
 
 
@@ -142,6 +172,7 @@ __all__ = [
     "MAX_MATRIX_SCALAR_DIGITS",
     "IntegerMatrix",
     "RationalMatrix",
+    "RealQuadraticMatrix",
     "SmithNormalForm",
     "require_matrix_scalar_digits",
 ]

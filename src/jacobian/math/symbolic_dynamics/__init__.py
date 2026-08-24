@@ -2,6 +2,7 @@
 
 from jacobian.math.symbolic_dynamics.operations import (
     adjacency_shift,
+    artin_mazur_zeta,
     block_language,
     finite_type_presentation,
     higher_block_presentation,
@@ -21,6 +22,7 @@ __all__ = [
     "ForbiddenBlockShift",
     "LabeledTransition",
     "adjacency_shift",
+    "artin_mazur_zeta",
     "block_language",
     "finite_type_presentation",
     "higher_block_presentation",

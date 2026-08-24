@@ -83,7 +83,10 @@ ROOT_ISOLATION_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ri_operation(
         "algebraic_number.compare",
         "Compare two algebraic numbers",
-        "Decide the exact order (LT, EQ, GT) of two algebraic numbers defined by minimal polynomials and isolating intervals.",
+        "Decide the exact order (LT, EQ, GT) of two bounded real algebraic "
+        "numbers. Each value uses its primitive irreducible integer minimal "
+        "polynomial and increasing real-root index; the source-bound result "
+        "returns exact rational root-isolation evidence.",
         AlgebraicCompareRequest,
         AlgebraicCompareResult,
         compute_algebraic_compare,
@@ -93,29 +96,23 @@ ROOT_ISOLATION_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "compare_sqrt_two_and_three",
-                "Compare sqrt(2) with sqrt(3) from their isolating intervals.",
+                "Compare sqrt(2) with sqrt(3) using canonical minimal "
+                "polynomials and increasing real-root indices; each polynomial "
+                "must be primitive, irreducible, degree at most eight, and use "
+                "coefficients of at most 1,000 digits.",
                 {
                     "left": {
-                        "polynomial": [
-                            {"num": "1", "den": "1"},
-                            {"num": "0", "den": "1"},
-                            {"num": "-2", "den": "1"},
-                        ],
-                        "isolating_interval_lower": {"num": "1", "den": "1"},
-                        "isolating_interval_upper": {"num": "2", "den": "1"},
+                        "polynomial": ["1", "0", "-2"],
+                        "real_root_index": 1,
                     },
                     "right": {
-                        "polynomial": [
-                            {"num": "1", "den": "1"},
-                            {"num": "0", "den": "1"},
-                            {"num": "-3", "den": "1"},
-                        ],
-                        "isolating_interval_lower": {"num": "1", "den": "1"},
-                        "isolating_interval_upper": {"num": "2", "den": "1"},
+                        "polynomial": ["1", "0", "-3"],
+                        "real_root_index": 1,
                     },
                 },
             ),
         ),
+        version="2",
     ),
 )
 

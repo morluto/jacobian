@@ -194,6 +194,18 @@ def test_search_finds_lattice_hnf_in_matrix_domain() -> None:
     }
 
 
+def test_search_finds_generalized_exact_cover() -> None:
+    catalog = Catalog.open()
+
+    result = catalog.search(
+        OperationDiscoveryRequest(query="generalized exact cover", limit=5)
+    )
+
+    assert result.matches[0].operation_id == (
+        "combinatorics.generalized_exact_cover.find"
+    )
+
+
 def test_browse_includes_lattice_hnf_in_matrix_domain() -> None:
     catalog = Catalog.open()
 

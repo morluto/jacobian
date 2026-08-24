@@ -5,8 +5,9 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import encode_strict_json, format_canonical_integer
 from jacobian.math.geometry._models import (
+    MAX_TRIANGULATION_OUTPUT_CHARS,
     ConvexPolygonTriangulationRequest,
     ConvexPolygonTriangulationResult,
 )
@@ -350,6 +351,60 @@ class TestRationalWeightTriangulation:
             result.model_dump(mode="json")
         )
         assert validated.optimum == result.optimum
+
+    _UNIFORM_RING = tuple((index, index * index) for index in range(32))
+    _UNIFORM_RING_DIAGONALS = tuple(
+        (first, second)
+        for first in range(32)
+        for second in range(first + 1, 32)
+        if second != first + 1 and (first, second) != (0, 31)
+    )
+
+    def _uniform_ring_weights(self, numerator: str):
+        return self._weights(
+            self._UNIFORM_RING_DIAGONALS,
+            dict.fromkeys(self._UNIFORM_RING_DIAGONALS, (numerator, "1")),
+        )
+
+    def test_uniform_heavy_ring_aggregate_overflow_rejected_at_request_validation(
+        self,
+    ):
+        # Regression: every non-hull diagonal carries the same 22,000-digit
+        # integer 10^21999, so each derived ledger optimum stays far below
+        # the canonical component cap while the aggregate serialization of
+        # the full split table and echoed diagonals overflows the output
+        # envelope. Admission must reject the request typedly before
+        # execution instead of failing canonical output validation after
+        # computing the triangulation.
+        weights = self._uniform_ring_weights(format_canonical_integer(10**21999))
+
+        with pytest.raises(ValidationError, match="output bound"):
+            ConvexPolygonTriangulationRequest(
+                polygon={"points": self._ring(*self._UNIFORM_RING)},
+                diagonal_weights=weights,
+            )
+
+    def test_uniform_ring_with_fitting_aggregate_stays_certified(self):
+        # The same uniform ring with materially lighter weights keeps the
+        # per-entry bound times the entry count inside the published budget,
+        # so the request executes, certifies, round-trips, and its encoded
+        # result fits the aggregate envelope admission predicted.
+        weight = 10**4000
+        request = ConvexPolygonTriangulationRequest(
+            polygon={"points": self._ring(*self._UNIFORM_RING)},
+            diagonal_weights=self._uniform_ring_weights(
+                format_canonical_integer(weight)
+            ),
+        )
+        result = minimum_weight_triangulation(request)
+
+        assert result.optimum.as_fraction() == 29 * weight
+        validated = ConvexPolygonTriangulationResult.model_validate(
+            result.model_dump(mode="json")
+        )
+        assert validated.optimum == result.optimum
+        encoded = encode_strict_json(result.model_dump(mode="json"))
+        assert len(encoded) <= MAX_TRIANGULATION_OUTPUT_CHARS
 
 
 class TestAngleEquality:

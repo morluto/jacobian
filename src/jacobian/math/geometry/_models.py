@@ -817,6 +817,15 @@ def _triangulation_subproblem_costs(
     return optimum, split
 
 
+# Serialized-output budget for the weighted triangulation result, kept below
+# the 10 MiB canonical transport envelope to leave room for request and
+# JSON envelope overhead.
+MAX_TRIANGULATION_OUTPUT_CHARS = 8_000_000
+_TRIANGULATION_ENTRY_OVERHEAD_CHARS = 96
+_TRIANGULATION_TRIANGLE_ENTRY_CHARS = 32
+_TRIANGULATION_RESULT_SLACK_CHARS = 512
+
+
 def _require_bounded_split_table_rationals(
     count: int,
     diagonal_weights: tuple[WeightedPolygonDiagonal, ...],
@@ -830,6 +839,19 @@ def _require_bounded_split_table_rationals(
     heights would reject requests whose actual ledger values remain
     representable. A request is rejected only when a state the result must
     serialize genuinely exceeds the cap.
+
+    Per-entry caps alone cannot bound the aggregate payload: every retained
+    optimum may sit just under the cap while their combined serialization
+    outgrows the transport envelope. The same exact replay therefore also
+    measures the largest retained component height, and admission charges
+    its per-entry serialized bound - numerator plus denominator digits
+    beside fixed punctuation - against every split-table state, every echoed
+    selected-diagonal weight, and the duplicated top-level optimum, then
+    adds fixed triangle and header slack. Execution replays the identical
+    deterministic derivation, so this estimate soundly bounds the complete
+    serialized result and a genuinely oversized aggregate is rejected at
+    request validation instead of failing canonical output validation
+    after computation.
     """
 
     weights = {
@@ -843,6 +865,7 @@ def _require_bounded_split_table_rationals(
         return weights[first, second]
 
     optimum, _ = _triangulation_subproblem_costs(count, diagonal_cost)
+    max_optimum_digits = 1
     for start, end in sorted(optimum):
         value = optimum[start, end]
         digits = max(
@@ -855,6 +878,25 @@ def _require_bounded_split_table_rationals(
                 f"rational components, exceeding the canonical "
                 f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit rational limit"
             )
+        max_optimum_digits = max(max_optimum_digits, digits)
+    max_weight_digits = max(
+        max(len(item.weight.num.lstrip("-")), len(item.weight.den))
+        for item in diagonal_weights
+    )
+    entry_chars = 2 * max_optimum_digits + _TRIANGULATION_ENTRY_OVERHEAD_CHARS
+    estimated_chars = (
+        ((count - 1) * (count - 2) // 2) * entry_chars
+        + (count - 3) * (2 * max_weight_digits + _TRIANGULATION_ENTRY_OVERHEAD_CHARS)
+        + entry_chars
+        + (count - 2) * _TRIANGULATION_TRIANGLE_ENTRY_CHARS
+        + _TRIANGULATION_RESULT_SLACK_CHARS
+    )
+    if estimated_chars > MAX_TRIANGULATION_OUTPUT_CHARS:
+        raise ValueError(
+            f"weighted triangulation result can serialize up to "
+            f"{estimated_chars} characters, exceeding the "
+            f"{MAX_TRIANGULATION_OUTPUT_CHARS}-character output bound"
+        )
 
 
 class ConvexPolygonTriangulationRequest(StrictModel):
@@ -870,7 +912,9 @@ class ConvexPolygonTriangulationRequest(StrictModel):
                 "- 3 pairwise noncrossing selected weights - so admission "
                 "replays the bounded recurrence exactly and rejects requests "
                 "whose derived split-table rationals exceed the canonical "
-                "32,768-digit rational limit."
+                "32,768-digit rational limit or whose complete serialized "
+                "result exceeds the "
+                f"{MAX_TRIANGULATION_OUTPUT_CHARS}-character output bound."
             ),
         },
     )
@@ -883,7 +927,9 @@ class ConvexPolygonTriangulationRequest(StrictModel):
             "Exactly one nonnegative exact rational weight per non-hull "
             "diagonal in lexicographic pair order; the exact derived "
             "split-table rationals must stay inside the canonical "
-            "32,768-digit limit."
+            "32,768-digit limit and the aggregate serialized result must "
+            f"stay inside the {MAX_TRIANGULATION_OUTPUT_CHARS}-character "
+            "output bound."
         ),
     )
     objective: Literal["NON_HULL_DIAGONAL_WEIGHT_SUM"] = "NON_HULL_DIAGONAL_WEIGHT_SUM"

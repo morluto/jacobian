@@ -910,9 +910,12 @@ def _validate_skeleton_kind(node: SPQRSkeleton) -> None:
         ):
             raise ValueError("an S skeleton must be one cycle")
         return
+    endpoint_pairs = [_global_endpoints(node, edge) for edge in node.graph.edges]
+    if len(set(endpoint_pairs)) != len(endpoint_pairs):
+        raise ValueError("an R skeleton must not repeat an endpoint pair")
     graph: nx.Graph[int] = nx.Graph()
     graph.add_nodes_from(node.vertices)
-    graph.add_edges_from(_global_endpoints(node, edge) for edge in node.graph.edges)
+    graph.add_edges_from(endpoint_pairs)
     if len(node.vertices) < 4 or not nx.is_biconnected(graph):
         raise ValueError("an R skeleton must be triconnected")
     for left, right in combinations(node.vertices, 2):

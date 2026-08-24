@@ -747,7 +747,12 @@ class TestSPQRTree:
             SPQRTreeResult.model_validate(malformed)
 
     def test_replay_rejects_duplicate_virtual_pair_on_one_tree_edge(self) -> None:
-        """Two K4 blocks glued along {0,1}: one tree adjacency, one gluing pair."""
+        """Two K4 blocks glued along {0,1}: one tree adjacency, one gluing pair.
+
+        The forged second gluing copies a virtual edge onto the same R
+        skeleton endpoint pair, so the simpler parallel-edge invariant
+        rejects it before the duplicate-tree-edge check is reached.
+        """
         edges = [
             (0, 1),
             (0, 2),
@@ -794,8 +799,111 @@ class TestSPQRTree:
             *malformed["virtual_edge_pairs"],
             [f"virtual:forged-{p_id}", f"virtual:forged-{r_id}"],
         ]
-        with pytest.raises(ValidationError, match="exactly one virtual-edge pair"):
+        with pytest.raises(ValidationError, match="repeat an endpoint pair"):
             SPQRTreeResult.model_validate(malformed)
+
+    def test_replay_rejects_parallel_edges_inside_r_skeleton(self) -> None:
+        """Two K4 blocks sharing {0,1}: a forged R/R split without the P junction."""
+        edges = [
+            (0, 1),
+            (0, 2),
+            (0, 3),
+            (1, 2),
+            (1, 3),
+            (2, 3),
+            (0, 4),
+            (0, 5),
+            (1, 4),
+            (1, 5),
+            (4, 5),
+        ]
+        genuine = _spqr_tree({"vertex_count": 6, "edges": edges})
+        assert genuine.status == "SPQR_TREE"
+        kinds = [node.kind for node in genuine.nodes]
+        assert kinds.count("P_NODE") == 1
+        assert kinds.count("Q_NODE") == 1
+
+        def forged_rigid(
+            node_id: str,
+            vertices: tuple[int, ...],
+            real: list[tuple[int, int]],
+            virtual_id: str,
+        ) -> SPQRSkeleton:
+            positions = {vertex: index for index, vertex in enumerate(vertices)}
+            return SPQRSkeleton(
+                node_id=node_id,
+                kind="R_NODE",
+                vertices=vertices,
+                graph=LooplessMultigraph(
+                    vertex_count=len(vertices),
+                    edges=(
+                        *(
+                            MultigraphEdge(
+                                edge_id=f"real:{left}:{right}",
+                                left=positions[left],
+                                right=positions[right],
+                            )
+                            for left, right in real
+                        ),
+                        MultigraphEdge(
+                            edge_id=virtual_id, left=positions[0], right=positions[1]
+                        ),
+                    ),
+                ),
+                real_edge_sources=tuple(
+                    (f"real:{left}:{right}", (min(left, right), max(left, right)))
+                    for left, right in real
+                ),
+                virtual_edge_ids=(virtual_id,),
+            )
+
+        shared_block = forged_rigid(
+            "node:a",
+            (0, 1, 2, 3),
+            [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)],
+            "virtual:a",
+        )
+        other_block = forged_rigid(
+            "node:b",
+            (0, 1, 4, 5),
+            [(0, 4), (0, 5), (1, 4), (1, 5), (4, 5)],
+            "virtual:b",
+        )
+        shared_endpoint_pairs = [
+            (shared_block.vertices[edge.left], shared_block.vertices[edge.right])
+            for edge in shared_block.graph.edges
+        ]
+        assert len(shared_endpoint_pairs) > len(set(shared_endpoint_pairs))
+        owners = tuple(
+            sorted(
+                (source_edge, skeleton.node_id, edge_id)
+                for skeleton in (shared_block, other_block)
+                for edge_id, source_edge in skeleton.real_edge_sources
+            )
+        )
+        incidence = tuple(
+            (
+                vertex,
+                tuple(
+                    skeleton.node_id
+                    for skeleton in sorted(
+                        (shared_block, other_block), key=lambda s: s.node_id
+                    )
+                    if vertex in skeleton.vertices
+                ),
+            )
+            for vertex in range(6)
+        )
+        with pytest.raises(ValidationError, match="repeat an endpoint pair"):
+            SPQRTreeResult(
+                source_graph=genuine.source_graph,
+                status="SPQR_TREE",
+                nodes=(shared_block, other_block),
+                tree_edges=(("node:a", "node:b"),),
+                virtual_edge_pairs=(("virtual:a", "virtual:b"),),
+                source_vertex_incidence=incidence,
+                source_edge_owners=owners,
+            )
 
     def test_replay_rejects_disconnected_s_skeleton_of_two_cycles(self) -> None:
         """K6 plus an ear at {0,1}: a forged S skeleton of two disjoint triangles."""

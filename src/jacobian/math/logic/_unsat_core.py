@@ -39,7 +39,9 @@ class SmtUnsatCoreRequest(SmtSolveRequest):
     nesting depth 256, 512 top-level ``assert`` commands, 4,096 distinct parsed AST
     nodes, 256 digits per numeral, and 256 digits in the numerator or denominator
     of any closed arithmetic coefficient, including the complete scalar coefficient
-    obtained by flattening nested products. Assertion source order is the
+    obtained by flattening nested products and coefficient-preserving wrappers
+    (negation, unary addition, and exact division by closed constants).
+    Assertion source order is the
     public zero-based index. Parsing constructs Z3 syntax trees only; it does not
     evaluate the source as Python or as a host command. Execution performs one
     tracked check and at most one direct result-validation replay, each under the
@@ -394,15 +396,69 @@ def _normalize_closed_expression(
     if closed_value is not None:
         candidate = _exact_arithmetic_value(closed_value, template=candidate)
 
+    scalar = closed_value if closed_value is not None else folded_coefficient
+    if scalar is None:
+        scalar = _wrapped_linear_scalar(
+            candidate,
+            children,
+            child_values,
+            scalar_by_id=scalar_by_id,
+            residual_by_id=residual_by_id,
+        )
+
     normalized_by_id[expression_id] = candidate
     closed_value_by_id[expression_id] = closed_value
-    scalar_by_id[expression_id] = (
-        closed_value if closed_value is not None else folded_coefficient
-    )
+    scalar_by_id[expression_id] = scalar
     if folded_dependent is not None:
         residual_by_id[expression_id] = folded_dependent
         residual_by_id[candidate.get_id()] = folded_dependent
     return candidate
+
+
+def _chased_residual(dependent: Any, residual_by_id: dict[int, Any]) -> Any:
+    core = dependent
+    while (residual := residual_by_id.get(core.get_id())) is not None:
+        core = residual
+    return core
+
+
+def _wrapped_linear_scalar(
+    candidate: Any,
+    children: tuple[Any, ...],
+    child_values: tuple[Fraction | None, ...],
+    *,
+    scalar_by_id: dict[int, Fraction | None],
+    residual_by_id: dict[int, Any],
+) -> Fraction | None:
+    """Carry one child's folded linear scalar through coefficient-preserving wrappers."""
+
+    import z3
+
+    kind = candidate.decl().kind()
+    if len(children) == 1 and kind in (z3.Z3_OP_UMINUS, z3.Z3_OP_ADD):
+        child_scalar = scalar_by_id[children[0].get_id()]
+        if child_scalar is None:
+            return None
+        scalar = -child_scalar if kind == z3.Z3_OP_UMINUS else child_scalar
+        residual = _chased_residual(children[0], residual_by_id)
+    elif (
+        len(children) == 2
+        and kind == z3.Z3_OP_DIV
+        and child_values[0] is None
+        and child_values[1] is not None
+        and child_values[1] != 0
+    ):
+        dividend_scalar = scalar_by_id[children[0].get_id()]
+        if dividend_scalar is None:
+            return None
+        scalar = dividend_scalar / child_values[1]
+        _require_bounded_normalized_coefficient(scalar)
+        residual = _chased_residual(children[0], residual_by_id)
+    else:
+        return None
+    residual_by_id[children[0].get_id()] = residual
+    residual_by_id[candidate.get_id()] = residual
+    return scalar
 
 
 def _evaluate_closed_arithmetic(

@@ -1612,6 +1612,54 @@ def test_rescale_scaling_reduces_against_source_denominators() -> None:
     assert replayed == result
 
 
+def test_boundary_scalar_coefficient_is_measured_exactly() -> None:
+    variables = ("x",)
+    coefficient = CanonicalRational(num="9" * 32_768, den="1")
+    source = _polynomial(variables, {(0,): 1})
+    operator = ConstantCoefficientDifferentialOperator(
+        variables=variables,
+        terms=(DifferentialOperatorTerm(coefficient=coefficient, orders=(0,)),),
+    )
+
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=operator,
+            iterations=1,
+            expected=_polynomial(variables, {(0,): Fraction(10**32_768 - 1)}),
+        )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.output == _polynomial(variables, {(0,): 10**32_768 - 1})
+    assert len(result.output.polynomial.terms[0].coefficient.num) == 32_768
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    assert replayed == result
+
+
+def test_wide_operator_weight_growth_gates_at_the_height_cap() -> None:
+    variables = ("x",)
+    n_coefficient = CanonicalRational(num="1" + "0" * 1_499, den="1")
+    source = _polynomial(variables, {(400,): 1})
+    operator = ConstantCoefficientDifferentialOperator(
+        variables=variables,
+        terms=(
+            DifferentialOperatorTerm(coefficient=n_coefficient, orders=(2,)),
+            DifferentialOperatorTerm(coefficient=_rational(1), orders=(1,)),
+        ),
+    )
+
+    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=operator,
+            iterations=400,
+        )
+
+
 def test_iterations_stay_inside_the_interoperable_integer_range() -> None:
     schema = DifferentialOperatorApplyRequest.model_json_schema()
     assert schema["properties"]["iterations"]["maximum"] == (1 << 53) - 1

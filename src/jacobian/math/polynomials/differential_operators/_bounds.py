@@ -315,6 +315,7 @@ def _powered_support_bound(
 
 ENUMERATION_WORK_CAP = 250_000
 _HEIGHT_CAP_BITS = 64 * MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS
+_RETAINED_WEIGHT_BITS = MAX_APPLICATION_RESULT_BYTES * 8
 
 
 def _distinct_powered_orders(
@@ -415,6 +416,28 @@ def _decimal_digits_from_bits(bits: int) -> int:
     return max(1, (bits * 30_103 + 99_999) // 100_000)
 
 
+def _height_decimal_digits(bits: int, value: int) -> int:
+    """Exact decimal length of ``value`` without string conversion.
+
+    The bit-based estimate is a strict upper bound, so it answers directly
+    whenever it sits below the output budget; near or above the budget the
+    exact length is resolved by comparing against powers of ten.
+    """
+
+    estimate = _decimal_digits_from_bits(bits)
+    if estimate < MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS:
+        return estimate
+    magnitude = abs(value)
+    if magnitude == 0:
+        return 1
+    digits = estimate
+    threshold = 10 ** (digits - 1)
+    while magnitude < threshold:
+        digits -= 1
+        threshold //= 10
+    return digits
+
+
 def _max_coefficient_digits(polynomial: RationalPolynomial) -> int:
     return max(
         (
@@ -423,9 +446,6 @@ def _max_coefficient_digits(polynomial: RationalPolynomial) -> int:
         ),
         default=1,
     )
-
-
-_OVERFLOW_BITS = 1 << 40
 
 
 def _shift_weights(
@@ -448,6 +468,7 @@ def _shift_weights(
     zero_shift = tuple(0 for _ in range(len(terms[0][0])))
     weights = {zero_shift: Fraction(1)}
     work = 1
+    retained_bits = 1
     for _ in range(iterations):
         merged: dict[tuple[int, ...], Fraction] = {}
         exhausted = False
@@ -476,6 +497,13 @@ def _shift_weights(
             if exhausted:
                 break
         if exhausted:
+            return None
+        retained_bits += sum(
+            shifted_weight.numerator.bit_length()
+            + shifted_weight.denominator.bit_length()
+            for shifted_weight in merged.values()
+        )
+        if retained_bits > _RETAINED_WEIGHT_BITS:
             return None
         weights = merged
     return weights
@@ -921,9 +949,8 @@ def _rescaled_height_digits(
         value *= result
         worst_digits = max(
             worst_digits,
-            _decimal_digits_from_bits(
-                max(value.numerator.bit_length(), value.denominator.bit_length())
-            ),
+            _height_decimal_digits(value.numerator.bit_length(), abs(value.numerator)),
+            _height_decimal_digits(value.denominator.bit_length(), value.denominator),
         )
     return worst_digits
 

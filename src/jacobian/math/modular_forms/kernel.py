@@ -13,6 +13,8 @@ from typing import Literal
 
 NamedLevelOneModularForm = Literal["E4", "E6", "DELTA"]
 
+NAMED_LEVEL_ONE_FORMS = frozenset(("E4", "E6", "DELTA"))
+
 # Delta needs five finite convolutions to construct and three more to replay
 # its defining identity in the result value.  The factor eleven also leaves
 # room for the operation boundary to validate that value once more.
@@ -130,6 +132,8 @@ def require_level_one_admission(
     form: NamedLevelOneModularForm, truncation_order: int
 ) -> None:
     """Prove finite scan, series work, coefficient, and output envelopes."""
+    if form not in NAMED_LEVEL_ONE_FORMS:
+        raise ValueError("form must be one of 'E4', 'E6', or 'DELTA'")
     if isinstance(truncation_order, bool) or not isinstance(truncation_order, int):
         raise ValueError("truncation_order must be a plain integer")
     if truncation_order < 1:
@@ -159,6 +163,8 @@ def require_level_one_replay(
     coefficientwise.  This is the value type's own envelope: it deliberately
     does not reuse the producer's compute or serialized-result budgets.
     """
+    if form not in NAMED_LEVEL_ONE_FORMS:
+        raise ValueError("form must be one of 'E4', 'E6', or 'DELTA'")
     if isinstance(truncation_order, bool) or not isinstance(truncation_order, int):
         raise ValueError("truncation_order must be a plain integer")
     if truncation_order < 1:
@@ -176,6 +182,7 @@ __all__ = [
     "MAX_LEVEL_ONE_REPLAY_WORK_TERMS",
     "MAX_LEVEL_ONE_SERIALIZED_CHARACTERS",
     "MAX_LEVEL_ONE_WORK_TERMS",
+    "NAMED_LEVEL_ONE_FORMS",
     "NamedLevelOneModularForm",
     "coefficient_digit_bound",
     "divisor_power_sum",

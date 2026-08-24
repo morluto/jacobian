@@ -11,8 +11,10 @@ from jacobian.math.formal_power_series._operations import (
     compute_scalar_multiply,
     compute_subtract,
 )
+from jacobian.math.modular_forms import kernel as level_one_kernel
 from jacobian.math.modular_forms._models import LevelOneNamedQExpansionRequest
 from jacobian.math.modular_forms.kernel import (
+    NAMED_LEVEL_ONE_FORMS,
     divisor_power_sum,
     eisenstein_coefficients,
     metadata,
@@ -126,6 +128,34 @@ def test_native_admission_rejects_boolean_truncation_orders() -> None:
         require_level_one_admission("DELTA", True)
     with pytest.raises(ValueError, match="plain integer"):
         level_one_named_q_expansion("E4", True)
+
+
+@pytest.mark.parametrize("form", ["E5", "delta", "e4", "SIGMA", ""])
+def test_native_admission_rejects_unknown_forms_before_any_scan(
+    monkeypatch: pytest.MonkeyPatch, form: str
+) -> None:
+    def fail(_index: int, _exponent: int) -> int:
+        raise AssertionError("an unknown form must never reach a divisor scan")
+
+    monkeypatch.setattr(level_one_kernel, "divisor_power_sum", fail)
+    with pytest.raises(ValueError, match="form must be one of 'E4', 'E6', or 'DELTA'"):
+        level_one_named_q_expansion(form, 8)
+    with pytest.raises(ValueError, match="form must be one of 'E4', 'E6', or 'DELTA'"):
+        require_level_one_admission(form, 8)
+    with pytest.raises(ValueError, match="form must be one of 'E4', 'E6', or 'DELTA'"):
+        require_level_one_replay(form, 8)
+
+
+@pytest.mark.parametrize("form", ["E4", "E6", "DELTA"])
+def test_every_closed_family_member_is_admitted_at_order_one(form: str) -> None:
+    assert form in NAMED_LEVEL_ONE_FORMS
+    assert require_level_one_admission(form, 1) is None
+    assert require_level_one_replay(form, 1) is None
+
+
+def test_wire_request_rejects_unknown_form_names() -> None:
+    with pytest.raises(ValidationError, match="should be 'E4', 'E6' or 'DELTA'"):
+        LevelOneNamedQExpansionRequest(form="E5", truncation_order=8)
 
 
 def test_value_rejects_forged_coefficient_during_replay() -> None:

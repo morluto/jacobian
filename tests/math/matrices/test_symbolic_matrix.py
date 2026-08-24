@@ -276,10 +276,7 @@ def test_symbolic_matrix_product_rejects_cancellation_coefficient_amplification(
     )
     amplified = _rf(
         variables,
-        *(
-            (visible[power], 1, (power,))
-            for power in range(len(visible) - 1, -1, -1)
-        ),
+        *((visible[power], 1, (power,)) for power in range(len(visible) - 1, -1, -1)),
     )
     one_over_successor = _rf(
         variables,
@@ -313,9 +310,7 @@ def test_symbolic_matrix_product_rejects_aggregate_expansion_before_kernel(
             *((1, 1, (exponent,)) for exponent in range(6, -1, -1)),
         )
 
-    left = tuple(
-        tuple(seven_terms() for _ in range(2)) for _ in range(8)
-    )
+    left = tuple(tuple(seven_terms() for _ in range(2)) for _ in range(8))
     right = tuple((seven_terms(),) for _ in range(2))
 
     def fail_if_called(*_args: object, **_kwargs: object) -> None:
@@ -449,7 +444,9 @@ def test_symbolic_matrix_product_keeps_monomial_denominator_support() -> None:
     assert product.entries == ((inverse,),)
 
 
-def test_symbolic_matrix_product_rejects_rational_entries_without_coefficient_bound() -> None:
+def test_symbolic_matrix_product_rejects_rational_entries_without_coefficient_bound() -> (
+    None
+):
     variables = ("x", "y")
     inverse = _rf(
         variables,

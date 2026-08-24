@@ -15,6 +15,7 @@ from jacobian.math.polytope import (
     RationalVPolytope,
     polytope_support,
 )
+from jacobian.math.polytope import _operations as polytope_operations
 from jacobian.math.polytope._models import (
     MAX_SUPPORT_COMPONENT_DIGITS,
     PolytopeSupportRequest,
@@ -56,6 +57,29 @@ def _covector(*components: int) -> RationalCovector:
 def _large_rational(digits: int) -> CanonicalRational:
     numerator = "9" * digits
     return CanonicalRational(num=numerator, den="8")
+
+
+def _oversized_simplex_payload() -> dict:
+    """A six-dimensional simplex whose first axis carries 151 digits."""
+    axes = ["x1", "x2", "x3", "x4", "x5", "x6"]
+    zero = {"num": "0", "den": "1"}
+    one = {"num": "1", "den": "1"}
+    oversized = _large_rational(MAX_SUPPORT_COMPONENT_DIGITS + 1).model_dump()
+    vertices = [{"vertex_id": "origin", "coordinates": [zero] * 6}]
+    vertices.extend(
+        {
+            "vertex_id": f"e{axis}",
+            "coordinates": [
+                one if coordinate == axis else zero for coordinate in range(6)
+            ],
+        }
+        for axis in range(6)
+    )
+    vertices[1]["coordinates"][0] = oversized
+    return {
+        "polytope": {"space": {"axes": axes}, "vertices": vertices},
+        "covector": {"space": {"axes": axes}, "components": [one] * 6},
+    }
 
 
 def test_support_returns_exact_value_and_complete_exposed_edge() -> None:
@@ -200,6 +224,110 @@ def test_support_request_rejects_over_envelope_vertex_coordinates() -> None:
         match=f"polytope vertex coordinate exceeds the {MAX_SUPPORT_COMPONENT_DIGITS}-digit bound",
     ):
         PolytopeSupportRequest(polytope=polytope, covector=_covector(1, 0))
+
+
+def test_request_preflights_oversized_coordinates_before_hull_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A raw payload with canonical-but-over-envelope coordinates is
+    rejected by the pre-parsing envelope check; the exact extremality
+    proof inside nested V-polytope construction is never reached."""
+
+    def unexpected_proof(polytope: object) -> None:
+        raise AssertionError("extremality proof ran before the envelope preflight")
+
+    monkeypatch.setattr(
+        polytope_operations,
+        "require_full_dimensional_extreme_vertices",
+        unexpected_proof,
+    )
+
+    with pytest.raises(
+        ValidationError,
+        match=f"polytope vertex coordinate exceeds the {MAX_SUPPORT_COMPONENT_DIGITS}-digit bound",
+    ):
+        PolytopeSupportRequest.model_validate(_oversized_simplex_payload())
+
+
+def test_request_preflights_oversized_covector_payload_before_nested_parsing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The covector half of a raw payload is preflighted the same way."""
+
+    def unexpected_proof(polytope: object) -> None:
+        raise AssertionError("extremality proof ran before the envelope preflight")
+
+    monkeypatch.setattr(
+        polytope_operations,
+        "require_full_dimensional_extreme_vertices",
+        unexpected_proof,
+    )
+    payload = {
+        "polytope": {
+            "space": {"axes": ["x", "y"]},
+            "vertices": [
+                {
+                    "vertex_id": name,
+                    "coordinates": [
+                        {"num": str(a), "den": "1"},
+                        {"num": str(b), "den": "1"},
+                    ],
+                }
+                for name, a, b in (
+                    ("bottom_left", 0, 0),
+                    ("bottom_right", 1, 0),
+                    ("top_left", 0, 1),
+                    ("top_right", 1, 1),
+                )
+            ],
+        },
+        "covector": {
+            "space": {"axes": ["x", "y"]},
+            "components": [
+                _large_rational(MAX_SUPPORT_COMPONENT_DIGITS + 1).model_dump(),
+                {"num": "0", "den": "1"},
+            ],
+        },
+    }
+
+    with pytest.raises(
+        ValidationError,
+        match=f"covector component exceeds the {MAX_SUPPORT_COMPONENT_DIGITS}-digit bound",
+    ):
+        PolytopeSupportRequest.model_validate(payload)
+
+
+def test_serialized_request_accepts_components_at_the_envelope_boundary() -> None:
+    """The serialized math.run path admits exactly-150-digit components."""
+    at_bound = _large_rational(MAX_SUPPORT_COMPONENT_DIGITS)
+    polytope = RationalVPolytope(
+        space=RationalCoordinateSpace(axes=("x", "y")),
+        vertices=(
+            RationalPolytopeVertex(
+                vertex_id="a",
+                coordinates=(_rational(0), _rational(0)),
+            ),
+            RationalPolytopeVertex(
+                vertex_id="b",
+                coordinates=(at_bound, _rational(0)),
+            ),
+            RationalPolytopeVertex(
+                vertex_id="c",
+                coordinates=(_rational(0), _rational(1)),
+            ),
+        ),
+    )
+    request = PolytopeSupportRequest.model_validate(
+        {
+            "polytope": polytope.model_dump(mode="json"),
+            "covector": _covector(1, 0).model_dump(mode="json"),
+        }
+    )
+
+    result = compute_polytope_support(request)
+
+    assert result.support_value == at_bound
+    assert tuple(vertex.vertex_id for vertex in result.exposed_face.vertices) == ("b",)
 
 
 def test_native_support_rejects_over_envelope_components() -> None:

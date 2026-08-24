@@ -117,8 +117,10 @@ POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "polytope.volume.compute",
         "Compute the exact rational volume of a bounded polytope",
         "Compute the exact rational volume of a bounded rational polytope "
-        "from its V-representation (vertices) or H-representation (half-spaces) "
-        "for ambient dimension d <= 6, via triangulation and SymPy exact "
+        "from its V-representation — bare vertices or an unchanged "
+        "labelled ``RationalVPolytope`` value such as a support result's "
+        "``polytope`` — or H-representation (half-spaces) for ambient "
+        "dimension d <= 6, via triangulation and SymPy exact "
         "determinant-based simplex volume. Every half-space must carry a "
         "nonzero normal: rows whose coefficients are all zero are rejected.",
         PolytopeVolumeRequest,

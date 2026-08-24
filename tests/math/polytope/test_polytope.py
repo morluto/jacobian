@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
@@ -12,11 +13,19 @@ from jacobian.math.polytope._models import (
     MAX_FACETS,
     MAX_VERTICES,
     Halfspace,
+    PolytopeSupportRequest,
     PolytopeVolumeRequest,
     PolytopeVolumeResult,
+    RationalCoordinateSpace,
+    RationalCovector,
+    RationalPolytopeVertex,
+    RationalVPolytope,
     Vertex,
 )
-from jacobian.math.polytope._operations import compute_polytope_volume
+from jacobian.math.polytope._operations import (
+    compute_polytope_support,
+    compute_polytope_volume,
+)
 
 
 def _cr0() -> CanonicalRational:
@@ -975,3 +984,137 @@ class TestHalfspaceDuplicateRowAdmission:
         result = _volume_via_halfspaces(padded)
         assert result.volume == CanonicalRational(num="1", den="1")
         assert result.dimension == 2
+
+
+def _canonical_rational(value: int) -> CanonicalRational:
+    return CanonicalRational(num=str(value), den="1")
+
+
+def _canonical_square() -> RationalVPolytope:
+    """The unit square as the domain's canonical labelled V-polytope."""
+    corners = (
+        ("bottom_left", 0, 0),
+        ("bottom_right", 1, 0),
+        ("top_left", 0, 1),
+        ("top_right", 1, 1),
+    )
+    return RationalVPolytope(
+        space=RationalCoordinateSpace(axes=("x", "y")),
+        vertices=tuple(
+            RationalPolytopeVertex(
+                vertex_id=name,
+                coordinates=(_canonical_rational(a), _canonical_rational(b)),
+            )
+            for name, a, b in corners
+        ),
+    )
+
+
+def _support_square_result():
+    covector = RationalCovector(
+        space=RationalCoordinateSpace(axes=("x", "y")),
+        components=(_canonical_rational(0), _canonical_rational(1)),
+    )
+    return compute_polytope_support(
+        PolytopeSupportRequest(polytope=_canonical_square(), covector=covector)
+    )
+
+
+def _plain_vertices(polytope: RationalVPolytope) -> tuple[Vertex, ...]:
+    return tuple(Vertex(coordinates=v.coordinates) for v in polytope.vertices)
+
+
+class TestCanonicalVPolytopeComposition:
+    """The canonical labelled V-polytope value must compose into the
+    volume request unchanged (review thread: support results produce
+    RationalVPolytope, so volume must accept it without discarding the
+    labelled space and rebuilding every vertex)."""
+
+    def test_support_result_polytope_feeds_volume_unchanged(self) -> None:
+        result = _support_square_result()
+        composed = compute_polytope_volume(
+            PolytopeVolumeRequest(vertices=result.polytope)
+        )
+
+        assert composed.representation == "vertices"
+        assert composed.dimension == 2
+        assert composed.volume == CanonicalRational(num="1", den="1")
+        assert composed == compute_polytope_volume(
+            PolytopeVolumeRequest(vertices=_plain_vertices(result.polytope))
+        )
+
+    def test_serialized_canonical_value_composes_like_the_typed_value(self) -> None:
+        polytope = _support_square_result().polytope
+        request = PolytopeVolumeRequest.model_validate(
+            {"vertices": polytope.model_dump(mode="json")}
+        )
+
+        assert request.vertices == _plain_vertices(polytope)
+        assert compute_polytope_volume(request).volume == CanonicalRational(
+            num="1", den="1"
+        )
+
+    def test_forged_serialized_value_rejected_by_defining_invariant(self) -> None:
+        """A mutated dump is re-validated as the canonical type, so a
+        forged non-extreme vertex is rejected by the extremality proof."""
+        payload = _support_square_result().polytope.model_dump(mode="json")
+        payload["vertices"].insert(
+            2,
+            {
+                "vertex_id": "middle",
+                "coordinates": [{"num": "1", "den": "2"}, {"num": "0", "den": "1"}],
+            },
+        )
+
+        with pytest.raises(ValidationError, match="exact extreme vertices"):
+            PolytopeVolumeRequest.model_validate({"vertices": payload})
+
+    def test_canonical_value_still_respects_dimension_bound(self) -> None:
+        ids = [f"v{a}{b}{c}" for a in (0, 1) for b in (0, 1) for c in (0, 1)]
+        cube = RationalVPolytope(
+            space=RationalCoordinateSpace(axes=("x", "y", "z")),
+            vertices=tuple(
+                RationalPolytopeVertex(
+                    vertex_id=vertex_id,
+                    coordinates=(
+                        _canonical_rational(int(vertex_id[1])),
+                        _canonical_rational(int(vertex_id[2])),
+                        _canonical_rational(int(vertex_id[3])),
+                    ),
+                )
+                for vertex_id in sorted(ids)
+            ),
+        )
+
+        with pytest.raises(ValueError, match="exceeds the dimension bound"):
+            PolytopeVolumeRequest(vertices=cube, dimension_bound=2)
+
+    def test_canonical_value_remains_mutually_exclusive_with_halfspaces(self) -> None:
+        with pytest.raises(ValueError, match="exactly one of"):
+            PolytopeVolumeRequest(
+                vertices=_support_square_result().polytope,
+                halfspaces=(
+                    Halfspace(
+                        coefficients=(_canonical_rational(1),),
+                        offset=_canonical_rational(0),
+                    ),
+                ),
+            )
+
+    def test_schema_publishes_canonical_v_polytope_acceptance(self) -> None:
+        schema = PolytopeVolumeRequest.model_json_schema()
+        description = schema["properties"]["vertices"]["description"]
+
+        assert "RationalVPolytope" in description
+        assert "space" in description
+
+    def test_operation_description_publishes_canonical_acceptance(self) -> None:
+        from jacobian.math.polytope._tools import POLYTOPE_OPERATIONS
+
+        operation = next(
+            tool
+            for tool in POLYTOPE_OPERATIONS
+            if tool.operation_id == "polytope.volume.compute"
+        )
+
+        assert "RationalVPolytope" in operation.description

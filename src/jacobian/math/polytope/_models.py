@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from fractions import Fraction
 from typing import Annotated, Self
 
@@ -130,6 +130,52 @@ def _point_digit_lengths(point: Sequence[object]) -> list[tuple[int, int]]:
             )
         )
     return row
+
+
+def _raw_field_value(owner: object, name: str) -> object:
+    """Read one named field from a raw dict or an already-built model."""
+
+    if isinstance(owner, dict):
+        return owner.get(name)
+    return getattr(owner, name, None)
+
+
+def _iter_raw_entries(owner: object, name: str) -> Iterator[object]:
+    """Yield one raw payload collection's entries when it is a sequence."""
+
+    entries = _raw_field_value(owner, name)
+    if isinstance(entries, (list, tuple)):
+        yield from entries
+
+
+def _require_raw_component_within_support_envelope(
+    component: object,
+    label: str,
+) -> None:
+    """Measure one authored rational payload against the support envelope.
+
+    The reduced numerator/denominator strings are read exactly as
+    ``require_bounded_rational`` measures them, but without constructing
+    any model; unrecognized shapes fall through to ordinary nested
+    validation errors.
+    """
+
+    if isinstance(component, CanonicalRational):
+        num, den = component.num, component.den
+    elif isinstance(component, dict):
+        raw_num = component.get("num")
+        raw_den = component.get("den")
+        if not isinstance(raw_num, str) or not isinstance(raw_den, str):
+            return
+        num, den = raw_num, raw_den
+    else:
+        return
+    if max(len(num.lstrip("-")), len(den.lstrip("-"))) > (
+        MAX_SUPPORT_COMPONENT_DIGITS
+    ):
+        raise ValueError(
+            f"{label} exceeds the {MAX_SUPPORT_COMPONENT_DIGITS}-digit bound"
+        )
 
 
 def _require_interval_volume_within_result_bound(
@@ -499,6 +545,38 @@ class PolytopeSupportRequest(StrictModel):
         )
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_components_within_support_envelope(cls, data: object) -> object:
+        """Reject over-envelope components before nested V-polytope parsing.
+
+        Pydantic constructs (and canonically proves) nested values before
+        parent after-validators run, so a raw ``math.run`` payload whose
+        components sit between this operation's 150-digit envelope and the
+        global canonical limit would reach the exact hull-facet proof
+        inside ``RationalVPolytope`` construction before
+        ``require_admitted_support_components`` could reject it. This
+        preflight measures only the authored reduced components of the raw
+        payload — dict or already-built values alike — so even a rejected
+        request stays inside the advertised execution envelope; the
+        canonical V-polytope value's broader domain is unchanged.
+        """
+
+        if not isinstance(data, dict):
+            return data
+        for vertex in _iter_raw_entries(data.get("polytope"), "vertices"):
+            for component in _iter_raw_entries(vertex, "coordinates"):
+                _require_raw_component_within_support_envelope(
+                    component,
+                    "polytope vertex coordinate",
+                )
+        for component in _iter_raw_entries(data.get("covector"), "components"):
+            _require_raw_component_within_support_envelope(
+                component,
+                "covector component",
+            )
+        return data
+
     @model_validator(mode="after")
     def require_common_coordinate_space(self) -> Self:
         if self.polytope.space != self.covector.space:
@@ -541,8 +619,25 @@ class PolytopeSupportResult(StrictModel):
         return self
 
 
+def _canonical_v_polytope_vertices(polytope: RationalVPolytope) -> list[Vertex]:
+    """Map the labelled canonical V-polytope onto bare volume vertices.
+
+    The labelled coordinate space fixes the axis order, so vertex
+    coordinates are carried over positionally and unchanged.
+    """
+
+    return [
+        Vertex(coordinates=vertex.coordinates) for vertex in polytope.vertices
+    ]
+
+
 class PolytopeVolumeRequest(StrictModel):
     """A bounded rational polytope in exactly one of the two representations.
+
+    The V-representation is given either as bare vertices or unchanged as
+    the domain's canonical labelled ``RationalVPolytope`` value (for
+    example the ``polytope`` of a support result), constructed or
+    serialized; admission enforces the same work bound on both forms.
 
     Admission enforces a work bound that couples vertex count with ambient
     dimension: after duplicate points are removed, the exact hull
@@ -559,7 +654,11 @@ class PolytopeVolumeRequest(StrictModel):
         min_length=1,
         max_length=MAX_VERTICES,
         description=(
-            "V-representation: the vertices of the convex hull. "
+            "V-representation: the vertices of the convex hull, either as "
+            "bare coordinate vertices or as one canonical labelled "
+            "``RationalVPolytope`` value (its serialized ``space``/"
+            "``vertices`` shape is accepted too), such as the ``polytope`` "
+            "of a support result. "
             "Mutually exclusive with ``halfspaces``. "
             f"Coupled hull-work bound: after duplicate points are removed, "
             f"admission requires C(n, d) <= {MAX_HULL_SUBFACETS} on the n "
@@ -599,6 +698,32 @@ class PolytopeVolumeRequest(StrictModel):
             "when the representation implies a larger dimension."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_canonical_v_polytope_value(cls, data: object) -> object:
+        """Project the canonical labelled V-polytope onto bare vertices.
+
+        Support results carry ``RationalVPolytope`` as the domain's
+        canonical V-polytope value, so composing one into a volume request
+        must not force callers to discard the labelled space and rebuild
+        every vertex. Both the constructed value and its serialized
+        ``space``/``vertices`` shape are accepted unchanged and mapped
+        positionally (the labelled axis fixes the coordinate order) before
+        ordinary validation, so admission and the kernel see exactly the
+        declared V-representation; a serialized value is re-validated as
+        the canonical type first.
+        """
+
+        if not isinstance(data, dict):
+            return data
+        value = data.get("vertices")
+        if isinstance(value, RationalVPolytope):
+            return {**data, "vertices": _canonical_v_polytope_vertices(value)}
+        if isinstance(value, dict) and set(value) == {"space", "vertices"}:
+            canonical = RationalVPolytope.model_validate(value)
+            return {**data, "vertices": _canonical_v_polytope_vertices(canonical)}
+        return data
 
     @model_validator(mode="after")
     def validate_representation(self) -> Self:

@@ -343,9 +343,7 @@ def _fold_scaled_product(
 
     if candidate.decl().kind() != z3.Z3_OP_MUL:
         return candidate, None
-    open_indices = [
-        index for index, value in enumerate(child_values) if value is None
-    ]
+    open_indices = [index for index, value in enumerate(child_values) if value is None]
     if len(open_indices) != 1:
         return candidate, None
     dependent = children[open_indices[0]]

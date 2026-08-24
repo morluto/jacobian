@@ -679,9 +679,7 @@ def test_request_bounds_integer_division_translated_constant_digits() -> None:
         logic="QF_LIA", smtlib=template.format(constant=constant)
     )
     with pytest.raises(ValidationError, match="normalized SMT coefficient"):
-        SmtUnsatCoreRequest(
-            logic="QF_LIA", smtlib=template.format(constant="9" * 256)
-        )
+        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=template.format(constant="9" * 256))
 
 
 def test_translated_nested_coefficients_flatten_and_still_solve() -> None:

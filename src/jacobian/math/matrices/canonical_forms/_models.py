@@ -155,10 +155,46 @@ def _bounded_rational_sum(terms: Iterable[tuple[int, int]]) -> tuple[int, int]:
     return numerator, denominator
 
 
+def _acyclic_support_longest_walk(
+    ratios: tuple[tuple[int, int], ...],
+    dimension: int,
+) -> int | None:
+    """Return the longest walk length in the entry-support digraph of ``M``.
+
+    Entry ``(i, j)`` of ``M^k`` is nonzero only when the digraph of nonzero
+    matrix entries carries a walk of length ``k`` from ``i`` to ``j``, so
+    every power longer than the returned bound is identically zero. A support
+    cycle keeps arbitrarily long walks alive and yields ``None``.
+    """
+
+    indegree = [0] * dimension
+    longest = [0] * dimension
+    for row_index in range(dimension):
+        row_offset = row_index * dimension
+        for column_index in range(dimension):
+            if ratios[row_offset + column_index][0] != 0:
+                indegree[column_index] += 1
+    queue = [node for node in range(dimension) if indegree[node] == 0]
+    processed = 0
+    while processed < len(queue):
+        node = queue[processed]
+        processed += 1
+        row_offset = node * dimension
+        for column_index in range(dimension):
+            if ratios[row_offset + column_index][0] != 0:
+                longest[column_index] = max(longest[column_index], longest[node] + 1)
+                indegree[column_index] -= 1
+                if indegree[column_index] == 0:
+                    queue.append(column_index)
+    if processed < dimension:
+        return None
+    return max(longest)
+
+
 def _linear_result_component_bounds(
     matrix: RationalMatrix,
     coefficients: dict[int, tuple[int, int]],
-) -> tuple[tuple[int, int], ...]:
+) -> tuple[tuple[tuple[int, int], ...], int]:
     """Bound every entry of ``c_1 A + c_0 I`` independently.
 
     Products are reduced before digit budgets are charged so exact
@@ -188,14 +224,17 @@ def _linear_result_component_bounds(
                     _decimal_digit_upper_bound(denominator),
                 )
             )
-    return tuple(bounds)
+    return (
+        tuple(bounds),
+        max(max(numerator, denominator) for numerator, denominator in bounds),
+    )
 
 
 def _general_result_component_bounds(
     matrix: RationalMatrix,
     polynomial: RationalPolynomial,
     degree: int,
-) -> tuple[tuple[int, int], ...]:
+) -> tuple[tuple[tuple[int, int], ...], int]:
     """Bound ``f(A)`` after clearing one exact global denominator.
 
     If ``Q`` clears every entry denominator and ``M = Q A``, then with ``V``
@@ -203,16 +242,30 @@ def _general_result_component_bounds(
 
     ``sum_k w_k Q^(d-k) M^k``.
 
-    For ``h = max |M_ij|``, each entry of ``M^k`` is bounded by
-    ``n^(k-1) h^k``. For a nonzero integer matrix ``M``, the resulting numerator
-    and denominator bounds cover every Horner intermediate as well as the exact
-    result; reduction can only shrink them. The zero-matrix case is handled
-    separately because its intermediates are individual input coefficients.
+    Entry ``(i, j)`` of ``M^k`` is nonzero only when the support digraph of
+    the cleared integer entries carries a walk of length ``k`` from ``i`` to
+    ``j``, so an acyclic support digraph with longest walk ``L`` makes every
+    exponent beyond ``L`` identically zero; structurally vanishing powers are
+    dropped from the result bound. When no nonconstant power survives,
+    ``f(A) = c(0) I`` reduces exactly to the constant coefficient and the
+    ``Q^d`` denominator factor is dropped with them. Surviving powers keep
+    the dense entry bound: for ``h = max |M_ij|``, each entry of ``M^k`` is
+    bounded by ``n^(k-1) h^k``, which reduction can only shrink. The
+    zero-matrix case is handled separately because its intermediates are
+    individual input coefficients.
+
+    The dense sum over every exponent is retained as a second, never-
+    structural work bound: every Horner intermediate equals one of its
+    sub-sums with denominator at most ``V Q^d``, so its digit size drives
+    the coupled digit-work estimate independently of how small the exact
+    result is.
     """
 
     matrix_ratios = tuple(
         entry.as_integer_ratio() for row in matrix.entries for entry in row
     )
+    dimension = len(matrix.entries)
+    longest_walk = _acyclic_support_longest_walk(matrix_ratios, dimension)
     common_matrix_denominator = _capped_lcm(
         denominator for _numerator, denominator in matrix_ratios
     )
@@ -235,7 +288,7 @@ def _general_result_component_bounds(
             f"{MAX_CANONICAL_RATIONAL_DIGITS:,}-digit result bound"
         )
 
-    denominator_bound = _capped_multiply(
+    work_denominator_bound = _capped_multiply(
         common_coefficient_denominator,
         _capped_power(common_matrix_denominator, degree),
     )
@@ -243,12 +296,16 @@ def _general_result_component_bounds(
         _capped_multiply(abs(numerator), common_matrix_denominator // denominator)
         for numerator, denominator in matrix_ratios
     )
-    dimension = len(matrix.entries)
     numerator_bound = 0
+    work_numerator_bound = 0
+    constant_coefficient_height = 0
+    live_nonconstant_power = False
     for exponent, numerator, denominator in coefficient_ratios:
         coefficient_height = _capped_multiply(
             abs(numerator), common_coefficient_denominator // denominator
         )
+        if exponent == 0:
+            constant_coefficient_height = coefficient_height
         matrix_power_height = 1
         if exponent:
             matrix_power_height = _capped_multiply(
@@ -260,8 +317,29 @@ def _general_result_component_bounds(
             _capped_power(common_matrix_denominator, degree - exponent),
         )
         term_height = _capped_multiply(term_height, matrix_power_height)
+        work_numerator_bound = _capped_add(work_numerator_bound, term_height)
+        if (
+            exponent
+            and longest_walk is not None
+            and exponent > longest_walk
+        ):
+            continue
+        if exponent:
+            live_nonconstant_power = True
         numerator_bound = _capped_add(numerator_bound, term_height)
 
+    if live_nonconstant_power:
+        denominator_bound = work_denominator_bound
+    else:
+        # Every nonconstant power vanishes structurally, so f(A) reduces to
+        # c(0) I and no Q^d clearing factor is needed.
+        numerator_bound = constant_coefficient_height
+        denominator_bound = common_coefficient_denominator
+
+    maximum_work_digits = max(
+        _decimal_digit_upper_bound(work_numerator_bound),
+        _decimal_digit_upper_bound(work_denominator_bound),
+    )
     if numerator_bound == 0:
         component_bound = (1, 1)
     else:
@@ -277,7 +355,10 @@ def _general_result_component_bounds(
             _decimal_digit_upper_bound(numerator_bound),
             _decimal_digit_upper_bound(denominator_bound),
         )
-    return (component_bound,) * (dimension * dimension)
+    return (
+        (component_bound,) * (dimension * dimension),
+        maximum_work_digits,
+    )
 
 
 def _require_matrix_polynomial_output_budget(
@@ -288,9 +369,13 @@ def _require_matrix_polynomial_output_budget(
     coefficients = _coefficient_ratios(polynomial)
     matrix_is_zero = all(entry.num == "0" for row in matrix.entries for entry in row)
     if degree <= 1 or matrix_is_zero:
-        component_bounds = _linear_result_component_bounds(matrix, coefficients)
+        component_bounds, maximum_arithmetic_digits = (
+            _linear_result_component_bounds(matrix, coefficients)
+        )
     else:
-        component_bounds = _general_result_component_bounds(matrix, polynomial, degree)
+        component_bounds, maximum_arithmetic_digits = (
+            _general_result_component_bounds(matrix, polynomial, degree)
+        )
     if any(
         numerator_digits > MAX_CANONICAL_RATIONAL_DIGITS
         or denominator_digits > MAX_CANONICAL_RATIONAL_DIGITS
@@ -327,9 +412,7 @@ def _require_matrix_polynomial_output_budget(
         for term in polynomial.polynomial.terms
         for component in (term.coefficient.num, term.coefficient.den)
     )
-    arithmetic_component_digits.extend(
-        max(numerator, denominator) for numerator, denominator in component_bounds
-    )
+    arithmetic_component_digits.append(maximum_arithmetic_digits)
     return max(arithmetic_component_digits)
 
 
@@ -353,7 +436,12 @@ class MatrixPolynomialEvaluationRequest(StrictModel):
             "products across both Horner passes, so the largest admitted "
             "ordinary degree at matrix order 32 is "
             f"{MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS // (MATRIX_POLYNOMIAL_EVALUATION_PASSES * MAX_MATRIX_DIMENSION**3)}. "
-            "Exact result component growth is budgeted separately during validation."
+            "Exact admission additionally multiplies the total "
+            "(2 * degree * order^3) scalar products by the square of the "
+            "largest decimal-digit component among the matrix entries, the "
+            "polynomial coefficients, and the predicted exact-result "
+            "components; that digit-work product must stay within "
+            f"{MAX_MATRIX_POLYNOMIAL_DIGIT_WORK:,} units."
         )
     )
 

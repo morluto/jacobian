@@ -12,6 +12,7 @@ from jacobian.math.matrices._operation_models import SquareRationalMatrixRequest
 from jacobian.math.matrices._operations import compute_characteristic_polynomial
 from jacobian.math.matrices.canonical_forms._models import (
     MATRIX_POLYNOMIAL_EVALUATION_PASSES,
+    MAX_MATRIX_POLYNOMIAL_DIGIT_WORK,
     MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS,
     MatrixPolynomialEvaluationRequest,
     MatrixPolynomialEvaluationResult,
@@ -342,6 +343,112 @@ def test_request_rejects_predicted_scalar_and_aggregate_output_overflow() -> Non
             matrix=dense,
             polynomial=_polynomial((huge_coefficient, 1)),
         )
+
+
+def test_structurally_nilpotent_powers_are_admitted_and_evaluate_to_zero() -> None:
+    height = "1" + "0" * 20_000
+    request = MatrixPolynomialEvaluationRequest(
+        matrix=RationalMatrix(
+            entries=(
+                (_rational(0), _rational(height)),
+                (_rational(0), _rational(0)),
+            )
+        ),
+        polynomial=_polynomial((1, 2)),
+    )
+
+    result = compute_matrix_polynomial_evaluation(request)
+
+    assert _fractions(result.value) == (
+        (Fraction(0), Fraction(0)),
+        (Fraction(0), Fraction(0)),
+    )
+    assert result.polynomial_degree == 2
+    assert result.matrix_multiplications == 2
+    assert result.scalar_product_terms == 16
+
+
+def test_structural_zero_reduces_to_surviving_terms_exactly() -> None:
+    height = format_canonical_integer(7**18_000)
+    nilpotent = RationalMatrix(
+        entries=(
+            (_rational(0), _rational(height)),
+            (_rational(0), _rational(0)),
+        )
+    )
+    with_constant = compute_matrix_polynomial_evaluation(
+        MatrixPolynomialEvaluationRequest(
+            matrix=nilpotent,
+            polynomial=_polynomial((1, 2), (5, 0)),
+        )
+    )
+    assert _fractions(with_constant.value) == (
+        (Fraction(5), Fraction(0)),
+        (Fraction(0), Fraction(5)),
+    )
+
+    fractional = RationalMatrix(
+        entries=((_rational(0), _rational(1, 3)), (_rational(0), _rational(0)))
+    )
+    rational_constant = compute_matrix_polynomial_evaluation(
+        MatrixPolynomialEvaluationRequest(
+            matrix=fractional,
+            polynomial=_polynomial((1, 2), (5, 0)),
+        )
+    )
+    assert _fractions(rational_constant.value) == (
+        (Fraction(5), Fraction(0)),
+        (Fraction(0), Fraction(5)),
+    )
+
+    surviving_power = compute_matrix_polynomial_evaluation(
+        MatrixPolynomialEvaluationRequest(
+            matrix=nilpotent,
+            polynomial=_polynomial((1, 2), (1, 1)),
+        )
+    )
+    assert surviving_power.value.entries[0][1].num == height
+    assert surviving_power.value.entries[1][0].num == "0"
+
+
+def test_admission_still_charges_live_structural_growth() -> None:
+    height = "1" + "0" * 20_000
+    cyclic = RationalMatrix(
+        entries=(
+            (_rational(0), _rational(height)),
+            (_rational(height), _rational(0)),
+        )
+    )
+    with pytest.raises(ValidationError, match="coefficient growth"):
+        MatrixPolynomialEvaluationRequest(matrix=cyclic, polynomial=_polynomial((1, 2)))
+
+    chain = RationalMatrix(
+        entries=(
+            (_rational(0), _rational(height), _rational(0)),
+            (_rational(0), _rational(0), _rational(height)),
+            (_rational(0), _rational(0), _rational(0)),
+        )
+    )
+    with pytest.raises(ValidationError, match="coefficient growth"):
+        MatrixPolynomialEvaluationRequest(matrix=chain, polynomial=_polynomial((1, 2)))
+
+    vanishing_chain_value = compute_matrix_polynomial_evaluation(
+        MatrixPolynomialEvaluationRequest(matrix=chain, polynomial=_polynomial((1, 3)))
+    )
+    assert _fractions(vanishing_chain_value.value) == (
+        (Fraction(0), Fraction(0), Fraction(0)),
+        (Fraction(0), Fraction(0), Fraction(0)),
+        (Fraction(0), Fraction(0), Fraction(0)),
+    )
+
+
+def test_request_schema_publishes_coupled_digit_work_bound() -> None:
+    schema = MatrixPolynomialEvaluationRequest.model_json_schema()
+
+    polynomial_description = schema["properties"]["polynomial"]["description"]
+    assert "(2 * degree * order^3) scalar products" in polynomial_description
+    assert "largest decimal-digit component" in polynomial_description
+    assert f"{MAX_MATRIX_POLYNOMIAL_DIGIT_WORK:,}" in polynomial_description
 
 
 def _linear_rational_polynomial(

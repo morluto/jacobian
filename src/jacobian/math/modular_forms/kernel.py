@@ -19,6 +19,15 @@ NamedLevelOneModularForm = Literal["E4", "E6", "DELTA"]
 MAX_LEVEL_ONE_WORK_TERMS = 4_000_000
 MAX_LEVEL_ONE_SERIALIZED_CHARACTERS = 65_536
 
+# Canonical-value replay owns this budget independently of the compute
+# request envelope: re-deriving one presented prefix costs two divisor scans
+# per index plus three length-p Cauchy convolutions for Delta instead of
+# construction's five, and the TruncatedSeries carrier already bounds each
+# presented coefficient's height while coefficient_digit_bound derives the
+# expected heights from p.  Changing the compute or serialized-result
+# budget therefore cannot change which exact expansions are representable.
+MAX_LEVEL_ONE_REPLAY_WORK_TERMS = 4_000_000
+
 
 def divisor_power_sum(index: int, exponent: int) -> int:
     """Return ``sigma_exponent(index)`` by its complete divisor-pair scan."""
@@ -141,7 +150,30 @@ def require_level_one_admission(
         raise ValueError("level-one q-expansion exceeds the serialized result bound")
 
 
+def require_level_one_replay(
+    form: NamedLevelOneModularForm, truncation_order: int
+) -> None:
+    """Prove the bounded re-derivation of one presented canonical value.
+
+    Replay recomputes the expected normalized prefix and compares it
+    coefficientwise.  This is the value type's own envelope: it deliberately
+    does not reuse the producer's compute or serialized-result budgets.
+    """
+    if isinstance(truncation_order, bool) or not isinstance(truncation_order, int):
+        raise ValueError("truncation_order must be a plain integer")
+    if truncation_order < 1:
+        raise ValueError("truncation_order must be positive")
+
+    p = truncation_order
+    divisor_scans = p * isqrt(p)
+    formula_scans = divisor_scans if form in {"E4", "E6"} else 2 * divisor_scans
+    replay_terms = 0 if form in {"E4", "E6"} else 3 * p * p
+    if formula_scans + replay_terms > MAX_LEVEL_ONE_REPLAY_WORK_TERMS:
+        raise ValueError("level-one q-expansion replay exceeds its exact work bound")
+
+
 __all__ = [
+    "MAX_LEVEL_ONE_REPLAY_WORK_TERMS",
     "MAX_LEVEL_ONE_SERIALIZED_CHARACTERS",
     "MAX_LEVEL_ONE_WORK_TERMS",
     "NamedLevelOneModularForm",
@@ -151,4 +183,5 @@ __all__ = [
     "expected_coefficients",
     "metadata",
     "require_level_one_admission",
+    "require_level_one_replay",
 ]

@@ -12,7 +12,7 @@ from jacobian.math.modular_forms.kernel import (
     NamedLevelOneModularForm,
     expected_coefficients,
     metadata,
-    require_level_one_admission,
+    require_level_one_replay,
 )
 
 
@@ -35,7 +35,7 @@ class LevelOneModularQExpansion(StrictModel):
 
     @model_validator(mode="after")
     def require_normalized_replayable_form(self) -> Self:
-        require_level_one_admission(self.form, self.q_expansion.truncation_order)
+        require_level_one_replay(self.form, self.q_expansion.truncation_order)
         weight, space_kind, normalization = metadata(self.form)
         if (
             self.weight != weight

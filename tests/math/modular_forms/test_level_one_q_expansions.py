@@ -14,9 +14,12 @@ from jacobian.math.formal_power_series._operations import (
 from jacobian.math.modular_forms._models import LevelOneNamedQExpansionRequest
 from jacobian.math.modular_forms.kernel import (
     divisor_power_sum,
+    eisenstein_coefficients,
+    metadata,
     require_level_one_admission,
+    require_level_one_replay,
 )
-from jacobian.math.modular_forms.operations import level_one_named_q_expansion
+from jacobian.math.modular_forms.operations import _series, level_one_named_q_expansion
 from jacobian.math.modular_forms.values import LevelOneModularQExpansion
 
 
@@ -145,3 +148,44 @@ def test_value_rejects_forged_coefficient_at_widened_precision() -> None:
     payload["q_expansion"]["coefficients"] = tuple(coefficients)
     with pytest.raises(ValidationError, match="does not match"):
         LevelOneModularQExpansion.model_validate(payload)
+
+
+def _beyond_budget_e4_payload() -> dict[str, object]:
+    weight, space_kind, normalization = metadata("E4")
+    return {
+        "form": "E4",
+        "weight": weight,
+        "space_kind": space_kind,
+        "normalization": normalization,
+        "q_expansion": _series(eisenstein_coefficients("E4", 1478)).model_dump(),
+    }
+
+
+def test_value_replays_exact_expansions_beyond_the_producer_envelope() -> None:
+    with pytest.raises(ValueError, match="serialized result bound"):
+        require_level_one_admission("E4", 1478)
+
+    value = LevelOneModularQExpansion.model_validate(_beyond_budget_e4_payload())
+    assert value.q_expansion.truncation_order == 1478
+    assert value.q_expansion.coefficients[-1].as_fraction() == 240 * divisor_power_sum(
+        1477, 3
+    )
+    assert LevelOneModularQExpansion.model_validate(value.model_dump()) == value
+
+
+def test_value_rejects_forged_coefficients_beyond_the_producer_envelope() -> None:
+    payload = _beyond_budget_e4_payload()
+    coefficients = list(payload["q_expansion"]["coefficients"])
+    coefficients[-1] = {"num": str(int(coefficients[-1]["num"]) + 1), "den": "1"}
+    payload["q_expansion"]["coefficients"] = tuple(coefficients)
+    with pytest.raises(ValidationError, match="does not match"):
+        LevelOneModularQExpansion.model_validate(payload)
+
+
+def test_replay_envelope_names_its_own_controlling_quantity() -> None:
+    assert require_level_one_replay("DELTA", 1143) is None
+    with pytest.raises(ValueError, match="replay exceeds its exact work bound"):
+        require_level_one_replay("DELTA", 1144)
+    with pytest.raises(ValueError, match="plain integer"):
+        require_level_one_replay("E4", True)
+    assert require_level_one_replay("E4", 20000) is None

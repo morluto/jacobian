@@ -10,6 +10,7 @@ from jacobian.math.formal_power_series import (
 )
 from jacobian.math.formal_power_series._models import (
     MAX_RATIONAL_DIGITS,
+    MAX_TRUNCATE_SOURCE_ORDER,
     MAX_TRUNCATION_ORDER,
     InputTruncatedSeries,
     SeriesInverseRequest,
@@ -198,7 +199,9 @@ def test_native_exports_still_admit_the_wire_boundary_order() -> None:
 
 def test_truncate_accepts_widened_carrier_orders_and_replays_the_prefix() -> None:
     source = _ascending(1477)
-    request = SeriesTruncateRequest(series=source, target_order=MAX_TRUNCATION_ORDER)
+    request = SeriesTruncateRequest(
+        series=source.model_dump(), target_order=MAX_TRUNCATION_ORDER
+    )
     result = compute_truncate(request.series, request.target_order)
     assert result.result.truncation_order == MAX_TRUNCATION_ORDER
     assert result.result.coefficients == source.coefficients[:MAX_TRUNCATION_ORDER]
@@ -210,7 +213,33 @@ def test_truncate_accepts_widened_carrier_orders_and_replays_the_prefix() -> Non
     from pydantic import ValidationError
 
     with pytest.raises(ValidationError, match="public bound"):
-        SeriesTruncateRequest(series=source, target_order=MAX_TRUNCATION_ORDER + 1)
+        SeriesTruncateRequest(
+            series=source.model_dump(), target_order=MAX_TRUNCATION_ORDER + 1
+        )
+
+
+def test_truncate_source_admission_bounds_the_request_before_parsing() -> None:
+    import pytest
+    from pydantic import ValidationError
+
+    edge = _ascending(MAX_TRUNCATE_SOURCE_ORDER)
+    request = SeriesTruncateRequest(series=edge.model_dump(), target_order=1)
+    assert (
+        compute_truncate(request.series, request.target_order).result.coefficients
+        == edge.coefficients[:1]
+    )
+
+    oversized = _ascending(MAX_TRUNCATE_SOURCE_ORDER + 1)
+    with pytest.raises(ValidationError, match=str(MAX_TRUNCATE_SOURCE_ORDER)):
+        SeriesTruncateRequest(series=oversized.model_dump(), target_order=1)
+
+
+def test_truncate_source_order_bound_is_schema_visible() -> None:
+    schema = SeriesTruncateRequest.model_json_schema()
+    source_property = schema["$defs"]["TruncateSourceSeries"]["properties"][
+        "truncation_order"
+    ]
+    assert source_property["maximum"] == MAX_TRUNCATE_SOURCE_ORDER
 
 
 def test_level_one_q_expansion_results_are_consumable_through_truncate() -> None:

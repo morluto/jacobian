@@ -28,6 +28,7 @@ from jacobian.math.formal_power_series._models import (
     SeriesTruncateRequest,
     SeriesTruncateResult,
     TruncatedSeries,
+    TruncateSourceSeries,
     _SeriesAddSubtractRequest,
     _SeriesIdentityCheckRequest,
     _SeriesMultiplyRequest,
@@ -141,8 +142,15 @@ def integral_zero_constant(
 
 
 def truncate(series: TruncatedSeries, target_order: int) -> SeriesTruncateResult:
-    """Truncate a series of any carrier order to a smaller bounded order."""
-    request = SeriesTruncateRequest(series=series, target_order=target_order)
+    """Truncate an admitted source series to a smaller bounded order."""
+    request = SeriesTruncateRequest(
+        series=TruncateSourceSeries(
+            variable=series.variable,
+            truncation_order=series.truncation_order,
+            coefficients=series.coefficients,
+        ),
+        target_order=target_order,
+    )
     return compute_truncate(request.series, request.target_order)
 
 

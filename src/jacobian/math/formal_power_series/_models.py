@@ -20,6 +20,14 @@ MAX_RATIONAL_DIGITS = 256
 MAX_RESULT_RATIONAL_DIGITS = 4_096
 MAX_POWER_EXPONENT = 1_000
 
+# Truncation sources are admitted through the widest carrier current
+# producers can emit: formal-series results keep the 512-order input
+# envelope and level-one modular q-expansions reach order 1477 under their
+# serialized-result budget.  Request admission still materializes and
+# height-validates every source coefficient before the prefix is read, so
+# 2048 bounds that linear admission work with documented headroom.
+MAX_TRUNCATE_SOURCE_ORDER = 2_048
+
 CoefficientHeight = RationalHeight | None
 
 
@@ -314,6 +322,27 @@ def as_input_series(series: TruncatedSeries) -> InputTruncatedSeries:
         variable=series.variable,
         truncation_order=series.truncation_order,
         coefficients=series.coefficients,
+    )
+
+
+class TruncateSourceSeries(TruncatedSeries):
+    """A truncated series admitted as a truncation source.
+
+    Request admission materializes and height-validates every source
+    coefficient before only the requested prefix is read, so admission work
+    and memory scale with the source order.  The order ceiling admits every
+    carrier current producers emit while bounding that admission; the kernel
+    itself still touches only the first ``target_order`` coefficients.
+    """
+
+    truncation_order: StrictInt = Field(
+        ge=1,
+        le=MAX_TRUNCATE_SOURCE_ORDER,
+        description=(
+            "Source truncation order N (coefficients a_0..a_{N-1}); bounded "
+            "because request admission validates all N coefficients before "
+            "the prefix is read."
+        ),
     )
 
 
@@ -760,10 +789,10 @@ class SeriesIntegralResult(StrictModel):
 class SeriesTruncateRequest(StrictModel):
     """Extract a prefix of at most the public order bound from one series."""
 
-    series: TruncatedSeries = Field(
+    series: TruncateSourceSeries = Field(
         description=(
-            "Source series of any carrier order; only the requested "
-            "target_order prefix is read, so no work scales with N."
+            "Source series whose every coefficient request admission "
+            "validates before only the first target_order entries are read."
         ),
     )
     target_order: StrictInt = Field(ge=1)

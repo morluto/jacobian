@@ -396,6 +396,38 @@ def test_request_preflights_malformed_covector_components_before_hull_proof(
         PolytopeSupportRequest.model_validate(payload)
 
 
+def test_request_preflights_noncanonical_covector_strings_before_hull_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Exact-key string-shaped components must also parse as canonical
+    rationals: a payload retaining a valid near-limit V-polytope is
+    rejected before the hull proof instead of paying up to the full
+    orientation-test bound for a covector nested validation rejects."""
+
+    _forbid_extremality_proof(monkeypatch)
+    for malformed in (
+        {"num": "invalid", "den": "1"},
+        {"num": "1.5", "den": "1"},
+        {"num": "01", "den": "1"},
+        {"num": "", "den": "1"},
+        {"num": "1", "den": "0"},
+        {"num": "1", "den": "-2"},
+        {"num": "2", "den": "4"},
+        {"num": "0", "den": "2"},
+    ):
+        payload = _square_payload()
+        payload["covector"]["components"] = [
+            malformed,
+            {"num": "0", "den": "1"},
+        ]
+
+        with pytest.raises(
+            ValidationError,
+            match="covector component must be a canonical rational",
+        ):
+            PolytopeSupportRequest.model_validate(payload)
+
+
 def test_request_preflights_covector_dimension_mismatch_before_hull_proof(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -697,6 +729,24 @@ def test_result_preflights_malformed_support_value_before_nested_parsing(
     ):
         PolytopeSupportResult.model_validate(payload)
 
+    payload = square_result.model_dump(mode="json")
+    payload["support_value"] = {"num": "invalid", "den": "1"}
+
+    with pytest.raises(
+        ValidationError,
+        match="support value must be a canonical rational",
+    ):
+        PolytopeSupportResult.model_validate(payload)
+
+    payload = square_result.model_dump(mode="json")
+    payload["support_value"] = {"num": "2", "den": "4"}
+
+    with pytest.raises(
+        ValidationError,
+        match="support value must be a canonical rational",
+    ):
+        PolytopeSupportResult.model_validate(payload)
+
 
 def test_result_preflights_missing_exposed_face_before_nested_parsing(
     square_result: PolytopeSupportResult,
@@ -736,6 +786,18 @@ def test_result_preflights_malformed_exposed_face_before_nested_parsing(
     with pytest.raises(
         ValidationError,
         match="exposed face vertex must be an object with a short vertex_id",
+    ):
+        PolytopeSupportResult.model_validate(payload)
+
+    payload = square_result.model_dump(mode="json")
+    payload["exposed_face"]["vertices"][0]["coordinates"][0] = {
+        "num": "invalid",
+        "den": "1",
+    }
+
+    with pytest.raises(
+        ValidationError,
+        match="exposed face vertex coordinate must be a canonical rational",
     ):
         PolytopeSupportResult.model_validate(payload)
 

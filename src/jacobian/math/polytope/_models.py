@@ -233,10 +233,13 @@ def _require_raw_canonical_rational_component(
     """Reject component shapes that cannot construct ``CanonicalRational``.
 
     A canonical rational parses only from its serialized ``num``/``den``
-    object or an already-built value — the component fields are strict
-    canonical strings and the model forbids extra keys — so any other
-    authored shape is certain to be rejected by nested validation, only
-    after the polytope field has paid its exact hull proof.
+    object or an already-built value, so this gate constructs one from
+    every raw ``{num, den}`` payload: the strict canonical-integer
+    grammar, the global digit bound, and the reduced positive-denominator
+    invariant are all enforced here, before nested validation would run
+    them only after the polytope field has paid its exact hull proof.
+    Any other authored shape is certain to be rejected by nested
+    validation too, so it raises immediately.
     """
 
     if isinstance(component, CanonicalRational):
@@ -247,6 +250,10 @@ def _require_raw_canonical_rational_component(
         and isinstance(component["num"], str)
         and isinstance(component["den"], str)
     ):
+        try:
+            CanonicalRational.model_validate(component)
+        except ValidationError as exc:
+            raise ValueError(f"{label} must be a canonical rational") from exc
         return
     raise ValueError(f"{label} must be a canonical rational")
 

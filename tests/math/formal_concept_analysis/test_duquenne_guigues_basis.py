@@ -328,7 +328,7 @@ def test_candidate_work_and_output_envelopes_at_boundary() -> None:
     result = compute_duquenne_guigues_basis(request)
     assert result.work.candidate_states == MAX_DG_CANDIDATE_STATES
     assert result.work.context_object_row_checks == (
-        4 * MAX_DG_CANDIDATE_STATES * MAX_DG_ATTRIBUTES
+        3 * MAX_DG_CANDIDATE_STATES * MAX_DG_ATTRIBUTES
     )
     assert 0 < result.work.reserved_logical_work < MAX_DG_LOGICAL_WORK
     assert result.work.reserved_result_bytes <= MAX_DG_RESULT_BYTES
@@ -394,11 +394,13 @@ def test_work_accounting_includes_every_probe_pass_and_replay() -> None:
 
     work = result.work
 
-    assert work.context_object_row_checks == (4 * states * len(context.objects))
-    assert work.context_incidence_loads == 4 * len(context.incidence)
-    assert work.context_row_intersections == 5 * row_intersections
-    assert work.pseudo_intent_subset_comparisons == 5 * subset_comparisons
-    assert work.pseudo_intent_closure_comparisons == 5 * closure_comparisons
+    assert work.context_closure_queries == 4 * states
+    assert work.context_object_row_checks == (3 * states * len(context.objects))
+    assert work.context_incidence_loads == 3 * len(context.incidence)
+    assert work.context_row_intersections == 4 * row_intersections
+    assert work.pseudo_intent_subset_comparisons == 3 * subset_comparisons
+    assert work.pseudo_intent_closure_comparisons == 3 * closure_comparisons
+    assert work.basis_closure_queries == 2 * states
     assert work.accounted_logical_work == (
         work.context_object_row_checks
         + work.context_incidence_loads
@@ -412,6 +414,18 @@ def test_work_accounting_includes_every_probe_pass_and_replay() -> None:
         + work.implication_memberships
     )
     assert work.reserved_logical_work >= work.accounted_logical_work
+
+
+def test_native_and_catalog_invocations_report_identical_exact_work() -> None:
+    context = _context(((0, 3), (0, 2), (1, 2), (1, 2, 3)), 4)
+
+    native = duquenne_guigues_basis(context)
+    via_request = compute_duquenne_guigues_basis(
+        DuquenneGuiguesBasisRequest(context=context)
+    )
+
+    assert native == via_request
+    assert native.work.context_closure_queries == 4 * len(native.closure_matrix)
 
 
 def test_result_byte_reservation_accepts_its_last_byte_and_rejects_the_next() -> None:

@@ -32,16 +32,19 @@ from jacobian.math.formal_concept_analysis.values import (
 #     state) bounded before execution;
 #   * logical work -- the probe reports the exact enumeration counts
 #     (object-row checks, incidence loads, row intersections, lectic
-#     comparisons) and the exact basis shape.  One served request probes the
-#     complete context closure matrix four times (request validation,
-#     producer preflight, producer enumeration, result validation) and runs
-#     the recursive pseudo-intent replay five times (those four probes plus
-#     the result validator's independent reconstruction), so both the
-#     reservation and the reported exact accounting charge every probe.  The
-#     reserve adds one conservative term on top: four exhaustive passes over
-#     one canonical closure query per candidate state, each query costing at
-#     most (attribute_count + 1) productive rounds times the retained basis
-#     size.  The carrier-fit check below keeps that basis inside #2267's
+#     comparisons) and the exact basis shape.  The kernel execution and its
+#     result validation probe the complete context closure matrix three times
+#     (producer preflight, producer enumeration, result-validation preflight)
+#     and the result validator independently reconstructs every state's
+#     context closure once more, so the reported exact accounting charges
+#     exactly those passes; request-model admission probing precedes the
+#     kernel and stays outside the reported result, so native and catalog
+#     invocations report identical counts.  The reserve is one conservative
+#     term on top: it also charges the catalog path's request-validation
+#     probe, plus four exhaustive passes over one canonical closure query per
+#     candidate state, each query costing at most (attribute_count + 1)
+#     productive rounds times the retained basis size.  The carrier-fit check
+#     below keeps that basis inside #2267's
 #     MAX_IMPLICATIONS rows and MAX_IMPLICATION_MEMBERSHIPS memberships, so
 #     every admitted query also stays under MAX_CANONICAL_REPLAY_WORK;
 #   * serialized result bytes -- a worst-case payload shaped by the probed
@@ -167,15 +170,17 @@ def _reserved_dg_logical_work(
     object_count = len(context.objects)
     incidence_count = len(context.incidence)
     return (
-        # One served request probes the complete context closure matrix four
-        # times (request validation, producer preflight, producer
-        # enumeration, result validation) and executes the recursive
-        # pseudo-intent replay five times: those four probes plus the result
-        # validator's independent reconstruction.  Every closure-matrix pass
-        # loads the incidence pairs once, scans every candidate state against
-        # every retained object row, and intersects exactly the matching
-        # rows; the fifth replay adds one more set of matching-row
-        # intersections.
+        # Conservative serving envelope.  The reported exact accounting covers
+        # the three kernel-executed closure-matrix passes (producer preflight,
+        # producer enumeration, result-validation preflight), the result
+        # validator's independent per-state reconstruction, and the recursive
+        # pseudo-intent replays those passes run.  This reserve additionally
+        # charges the catalog path's request-validation probe and one more
+        # set of matching-row intersections, so it stays strictly above the
+        # exact accounting for every admitted invocation path.  Every
+        # closure-matrix pass loads the incidence pairs once, scans every
+        # candidate state against every retained object row, and intersects
+        # exactly the matching rows.
         4 * states * object_count
         + 4 * incidence_count
         + 5 * row_intersections
@@ -350,29 +355,32 @@ class PseudoIntent(StrictModel):
 class DGBasisWork(StrictModel):
     """Exact logical counts for one served request plus its reservations.
 
-    Counts cover every exhaustive pass the served request performs: the four
-    complete context closure-matrix probes (request validation, producer
-    preflight, producer enumeration, result validation), the five recursive
-    pseudo-intent replays (those four probes plus the result validator's
-    independent reconstruction), and both basis closure-equivalence passes.
+    Counts cover every exhaustive pass the kernel execution and its result
+    validation perform: the three complete context closure-matrix probes
+    (producer preflight, producer enumeration, result-validation preflight),
+    the result validator's independent per-state context-closure
+    reconstruction, the three recursive pseudo-intent replays those passes
+    run, and both basis closure-equivalence passes.  Request-model admission
+    probing precedes the kernel and stays outside the reported result, so
+    native and catalog invocations report identical counts.
     """
 
     candidate_states: StrictInt = Field(ge=1, le=MAX_DG_CANDIDATE_STATES)
     context_closure_queries: StrictInt = Field(
-        ge=2,
-        le=2 * MAX_DG_CANDIDATE_STATES,
+        ge=4,
+        le=4 * MAX_DG_CANDIDATE_STATES,
     )
     context_object_row_checks: StrictInt = Field(
-        ge=4,
-        le=4 * MAX_DG_CANDIDATE_STATES * MAX_OBJECTS,
+        ge=3,
+        le=3 * MAX_DG_CANDIDATE_STATES * MAX_OBJECTS,
     )
     context_incidence_loads: StrictInt = Field(
         ge=0,
-        le=4 * MAX_OBJECTS * MAX_DG_ATTRIBUTES,
+        le=3 * MAX_OBJECTS * MAX_DG_ATTRIBUTES,
     )
     context_row_intersections: StrictInt = Field(
         ge=0,
-        le=5 * MAX_DG_CANDIDATE_STATES * MAX_OBJECTS,
+        le=4 * MAX_DG_CANDIDATE_STATES * MAX_OBJECTS,
     )
     context_incidence_checks: StrictInt = Field(
         ge=0,
@@ -387,11 +395,11 @@ class DGBasisWork(StrictModel):
     )
     pseudo_intent_subset_comparisons: StrictInt = Field(
         ge=0,
-        le=5 * MAX_DG_CANDIDATE_STATES**2,
+        le=3 * MAX_DG_CANDIDATE_STATES**2,
     )
     pseudo_intent_closure_comparisons: StrictInt = Field(
         ge=0,
-        le=5 * MAX_DG_CANDIDATE_STATES**2,
+        le=3 * MAX_DG_CANDIDATE_STATES**2,
     )
     basis_closure_queries: StrictInt = Field(
         ge=2,
@@ -629,12 +637,12 @@ class CanonicalImplicationBasisResult(StrictModel):
         )
         implication_memberships = self.basis.total_memberships
         expected_accounted_work = (
-            4 * states * len(self.context.objects)
-            + 4 * incidence_count
-            + 5 * row_intersections
+            3 * states * len(self.context.objects)
+            + 3 * incidence_count
+            + 4 * row_intersections
             + incidence_checks
-            + 5 * subset_comparisons
-            + 5 * closure_comparisons
+            + 3 * subset_comparisons
+            + 3 * closure_comparisons
             + 4 * basis_replay_work
             + closure_matrix_memberships
             + pseudo_intent_memberships
@@ -642,13 +650,13 @@ class CanonicalImplicationBasisResult(StrictModel):
         )
         expected_fields = {
             "candidate_states": states,
-            "context_closure_queries": 2 * states,
-            "context_object_row_checks": 4 * states * len(self.context.objects),
-            "context_incidence_loads": 4 * incidence_count,
-            "context_row_intersections": 5 * row_intersections,
+            "context_closure_queries": 4 * states,
+            "context_object_row_checks": 3 * states * len(self.context.objects),
+            "context_incidence_loads": 3 * incidence_count,
+            "context_row_intersections": 4 * row_intersections,
             "context_incidence_checks": incidence_checks,
-            "pseudo_intent_subset_comparisons": 5 * subset_comparisons,
-            "pseudo_intent_closure_comparisons": 5 * closure_comparisons,
+            "pseudo_intent_subset_comparisons": 3 * subset_comparisons,
+            "pseudo_intent_closure_comparisons": 3 * closure_comparisons,
             "basis_closure_queries": 2 * states,
             "basis_canonical_replay_work": 2 * basis_replay_work,
             "closure_matrix_memberships": closure_matrix_memberships,

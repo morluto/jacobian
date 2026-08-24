@@ -204,8 +204,9 @@ SYMBOLIC_MATRIX_OPERATIONS = (
             "Compute the row-by-column product of two compatible symbolic matrices "
             "over one explicitly ordered rational-function field. Every product "
             "entry is returned as a canonical reduced rational function; admission "
-            "bounds the unreduced numerator, denominator, exponents, coefficients, "
-            "and aggregate result before SymPy multiplication."
+            "bounds unreduced expansion plus cancellation-safe canonical and "
+            "aggregate support, exponents, coefficients, and result before SymPy "
+            "multiplication."
         ),
         SymbolicMatrixProductRequest,
         SymbolicMatrix,

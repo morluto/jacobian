@@ -143,11 +143,11 @@ class SymbolicMatrix(StrictModel):
         return self
 
 
-def _maximum_exponent(value: RationalFunction, *, numerator: bool) -> int:
+def _maximum_exponents(value: RationalFunction, *, numerator: bool) -> tuple[int, ...]:
     polynomial = value.numerator if numerator else value.denominator
-    return max(
-        (exponent for term in polynomial.terms for exponent in term.exponents),
-        default=0,
+    return tuple(
+        max((term.exponents[axis] for term in polynomial.terms), default=0)
+        for axis in range(len(value.variables))
     )
 
 
@@ -173,17 +173,34 @@ def _sum_coefficient_digit_bound(
     return term_count * product_coefficient_digits + len(str(term_count))
 
 
+def _monomial_box_term_bound(exponents: tuple[int, ...]) -> int:
+    """Bound sparse support from independent degree bounds on every axis.
+
+    Cancellation can divide a sparse polynomial by a sparse common factor and
+    leave a denser quotient.  Degree in each declared variable cannot increase
+    under that exact division, so its full monomial box bounds the canonical
+    numerator or denominator support even when raw expansion term counts do
+    not.
+    """
+
+    bound = 1
+    for exponent in exponents:
+        bound *= exponent + 1
+    return bound
+
+
 def _product_cell_bounds(
     left: tuple[RationalFunction, ...],
     right: tuple[RationalFunction, ...],
-) -> tuple[int, int, int, int]:
-    """Return unreduced numerator/denominator term, exponent, and digit bounds.
+) -> tuple[int, int, tuple[int, ...], tuple[int, ...], int]:
+    """Return raw work bounds and cancellation-safe canonical degree bounds.
 
     The cell is a finite sum of products ``a_i * b_i``. Each nonzero product
     is first written over its own canonical denominator, then all products are
-    put over the product common denominator. Cancellation can only make the
-    final canonical rational function smaller, so these bounds admit every
-    backend expansion before SymPy receives the request.
+    put over the product common denominator. The raw term and coefficient
+    bounds admit that expansion before SymPy receives the request. A separate
+    per-axis monomial-box bound accounts for a canonical quotient becoming
+    denser after exact cancellation.
     """
 
     factors = tuple(
@@ -193,15 +210,22 @@ def _product_cell_bounds(
     )
     if not factors:
         # The canonical zero has an empty numerator and a one-term denominator.
-        return 0, 1, 0, 1
+        zero_exponents = (0,) * len(left[0].variables)
+        return 0, 1, zero_exponents, zero_exponents, 1
 
     denominator_term_counts = tuple(
         len(left_value.denominator.terms) * len(right_value.denominator.terms)
         for left_value, right_value in factors
     )
     denominator_exponents = tuple(
-        _maximum_exponent(left_value, numerator=False)
-        + _maximum_exponent(right_value, numerator=False)
+        tuple(
+            left_exponent + right_exponent
+            for left_exponent, right_exponent in zip(
+                _maximum_exponents(left_value, numerator=False),
+                _maximum_exponents(right_value, numerator=False),
+                strict=True,
+            )
+        )
         for left_value, right_value in factors
     )
     denominator_coefficient_digits = tuple(
@@ -212,11 +236,13 @@ def _product_cell_bounds(
     denominator_terms = 1
     for count in denominator_term_counts:
         denominator_terms *= count
-    denominator_exponent = sum(denominator_exponents)
+    denominator_exponent = tuple(
+        sum(exponents) for exponents in zip(*denominator_exponents, strict=True)
+    )
     denominator_product_digits = sum(denominator_coefficient_digits)
 
     numerator_terms = 0
-    numerator_exponent = 0
+    numerator_exponent = (0,) * len(factors[0][0].variables)
     numerator_product_digits = 1
     for index, (left_value, right_value) in enumerate(factors):
         numerator_term_count = len(left_value.numerator.terms) * len(
@@ -226,12 +252,28 @@ def _product_cell_bounds(
             if other_index != index:
                 numerator_term_count *= denominator_term_count
         numerator_terms += numerator_term_count
-        numerator_exponent = max(
-            numerator_exponent,
-            _maximum_exponent(left_value, numerator=True)
-            + _maximum_exponent(right_value, numerator=True)
-            + denominator_exponent
-            - denominator_exponents[index],
+        numerator_exponent = tuple(
+            max(
+                accumulated_exponent,
+                left_exponent
+                + right_exponent
+                + common_denominator_exponent
+                - own_denominator_exponent,
+            )
+            for (
+                accumulated_exponent,
+                left_exponent,
+                right_exponent,
+                common_denominator_exponent,
+                own_denominator_exponent,
+            ) in zip(
+                numerator_exponent,
+                _maximum_exponents(left_value, numerator=True),
+                _maximum_exponents(right_value, numerator=True),
+                denominator_exponent,
+                denominator_exponents[index],
+                strict=True,
+            )
         )
         numerator_product_digits = max(
             numerator_product_digits,
@@ -241,7 +283,6 @@ def _product_cell_bounds(
             - denominator_coefficient_digits[index],
         )
 
-    maximum_exponent = max(numerator_exponent, denominator_exponent)
     maximum_coefficient_digits = max(
         _sum_coefficient_digit_bound(
             term_count=numerator_terms,
@@ -255,7 +296,8 @@ def _product_cell_bounds(
     return (
         numerator_terms,
         denominator_terms,
-        maximum_exponent,
+        numerator_exponent,
+        denominator_exponent,
         maximum_coefficient_digits,
     )
 
@@ -276,13 +318,15 @@ def _require_symbolic_product_admission(
             "the right row count"
         )
 
-    aggregate_terms = 0
+    aggregate_expansion_terms = 0
+    aggregate_canonical_terms = 0
     for left_row in left.entries:
         for right_column in zip(*right.entries, strict=True):
             (
                 numerator_terms,
                 denominator_terms,
-                maximum_exponent,
+                numerator_exponents,
+                denominator_exponents,
                 maximum_coefficient_digits,
             ) = _product_cell_bounds(left_row, right_column)
             if (
@@ -292,6 +336,21 @@ def _require_symbolic_product_admission(
                 raise ValueError(
                     "symbolic matrix product exceeds the 256-term exact result budget"
                 )
+            canonical_numerator_terms = _monomial_box_term_bound(numerator_exponents)
+            canonical_denominator_terms = _monomial_box_term_bound(
+                denominator_exponents
+            )
+            if (
+                canonical_numerator_terms > MAX_SYMBOLIC_RESULT_TERMS
+                or canonical_denominator_terms > MAX_SYMBOLIC_RESULT_TERMS
+            ):
+                raise ValueError(
+                    "symbolic matrix product can exceed the 256-term canonical "
+                    "result budget after cancellation"
+                )
+            maximum_exponent = max(
+                (*numerator_exponents, *denominator_exponents), default=0
+            )
             if maximum_exponent > MAX_SYMBOLIC_RESULT_EXPONENT:
                 raise ValueError(
                     "symbolic matrix product exceeds the result exponent budget"
@@ -300,10 +359,18 @@ def _require_symbolic_product_admission(
                 raise ValueError(
                     "symbolic matrix product exceeds the result coefficient budget"
                 )
-            aggregate_terms += numerator_terms + denominator_terms
-    if aggregate_terms > MAX_SYMBOLIC_MATRIX_TERMS:
+            aggregate_expansion_terms += numerator_terms + denominator_terms
+            aggregate_canonical_terms += (
+                canonical_numerator_terms + canonical_denominator_terms
+            )
+    if aggregate_expansion_terms > MAX_SYMBOLIC_MATRIX_TERMS:
         raise ValueError(
-            "symbolic matrix product exceeds the 512-term aggregate result budget"
+            "symbolic matrix product exceeds the 512-term aggregate expansion budget"
+        )
+    if aggregate_canonical_terms > MAX_SYMBOLIC_MATRIX_TERMS:
+        raise ValueError(
+            "symbolic matrix product can exceed the 512-term canonical aggregate "
+            "result budget after cancellation"
         )
 
 

@@ -9,8 +9,8 @@ from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 
-MAX_CODEWORDS = 1024
-MAX_LENGTH = 16
+MAX_CODEWORDS = 4096
+MAX_LENGTH = 64
 
 
 class BinaryCodeRequest(StrictModel):
@@ -26,7 +26,7 @@ class BinaryCodeRequest(StrictModel):
             raise ValueError("codewords must not be empty")
         width = len(self.codewords[0])
         if width == 0 or width > MAX_LENGTH:
-            raise ValueError("codeword length must be between 1 and 16")
+            raise ValueError(f"codeword length must be between 1 and {MAX_LENGTH}")
         if any(len(w) != width for w in self.codewords):
             raise ValueError("all codewords must have equal length")
         if any(b not in (0, 1) for w in self.codewords for b in w):
@@ -116,7 +116,7 @@ class ExplicitProfileRequest(StrictModel):
     def require_valid_codewords(self) -> Self:
         width = len(self.codewords[0])
         if width == 0 or width > MAX_LENGTH:
-            raise ValueError("codeword length must be between 1 and 16")
+            raise ValueError(f"codeword length must be between 1 and {MAX_LENGTH}")
         if any(len(w) != width for w in self.codewords):
             raise ValueError("all codewords must have equal length")
         if any(b not in (0, 1) for w in self.codewords for b in w):
@@ -168,7 +168,7 @@ class ConstantWeightProfileRequest(StrictModel):
             raise ValueError("codewords must not be empty")
         width = len(self.codewords[0])
         if width == 0 or width > MAX_LENGTH:
-            raise ValueError("codeword length must be between 1 and 16")
+            raise ValueError(f"codeword length must be between 1 and {MAX_LENGTH}")
         if any(len(w) != width for w in self.codewords):
             raise ValueError("all codewords must have equal length")
         if any(b not in (0, 1) for w in self.codewords for b in w):
@@ -214,7 +214,7 @@ class ToSetSystemRequest(StrictModel):
     def require_valid(self) -> Self:
         width = len(self.codewords[0])
         if width == 0 or width > MAX_LENGTH:
-            raise ValueError("codeword length must be between 1 and 16")
+            raise ValueError(f"codeword length must be between 1 and {MAX_LENGTH}")
         if any(len(w) != width for w in self.codewords):
             raise ValueError("all codewords must have equal length")
         if any(b not in (0, 1) for w in self.codewords for b in w):

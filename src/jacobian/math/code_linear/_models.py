@@ -15,8 +15,8 @@ from jacobian.math.code_linear.values import (
     PrimeFieldLinearEncoder,
 )
 
-MAX_CODEWORDS = 4096
-MAX_LENGTH = MAX_LINEAR_CODE_LENGTH
+MAX_CODEWORDS = 16384  # binary k=14 (2^14), ternary k=8 (3^8=6561); mainly for equal.decide witness enumeration
+MAX_LENGTH = MAX_LINEAR_CODE_LENGTH  # rowspace operations are O(k^2 n) and remain cheap; raised from 32
 MAX_RECEIVED_PROFILE_CODEWORDS = 4_096
 MAX_RECEIVED_PROFILE_REPLAY_WORK = 3_000_000
 MAX_RECEIVED_PROFILE_WITNESS_CELLS = 65_536
@@ -219,7 +219,7 @@ def _validate_prime_matrix(
         raise ValueError("field_order must be prime")
     width = len(generator_matrix[0])
     if width == 0 or width > MAX_LENGTH:
-        raise ValueError("generator rows must have between 1 and 32 entries")
+        raise ValueError(f"generator rows must have between 1 and {MAX_LENGTH} entries")
     if any(len(row) != width for row in generator_matrix):
         raise ValueError("generator matrix rows must have equal length")
     if any(not 0 <= entry < field_order for row in generator_matrix for entry in row):

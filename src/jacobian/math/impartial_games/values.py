@@ -100,7 +100,13 @@ class NimPosition(StrictModel):
 
 
 class NimOption(StrictModel):
-    """One distinct canonical option with every indexed source-heap witness."""
+    """One distinct one-heap reduction row with every indexed source witness.
+
+    This is a context-dependent row of ``NimOptionsResult``, not a standalone
+    canonical value: each row is validated against the request position by
+    the result's exact reconstruction binding, so callers obtain rows only
+    from that typed result boundary.
+    """
 
     source_heap_indices: tuple[NimHeapIndex, ...] = Field(
         min_length=1,
@@ -141,6 +147,5 @@ __all__ = [
     "ImpartialGame",
     "NimHeapIndex",
     "NimHeapSize",
-    "NimOption",
     "NimPosition",
 ]

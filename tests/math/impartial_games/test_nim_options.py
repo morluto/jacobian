@@ -157,6 +157,19 @@ def test_nim_options_result_is_source_bound_and_canonical_json_bounded() -> None
     with pytest.raises(ValidationError, match="exact complete Nim option family"):
         NimOptionsResult.model_validate(option_mutation)
 
+    witness_mutation = deepcopy(payload)
+    witness_mutation["options"][0]["resulting_position"]["heaps"] = [0, 0, 2]
+    with pytest.raises(ValidationError, match="exact complete Nim option family"):
+        NimOptionsResult.model_validate(witness_mutation)
+
+    order_mutation = deepcopy(payload)
+    order_mutation["options"][0], order_mutation["options"][1] = (
+        order_mutation["options"][1],
+        order_mutation["options"][0],
+    )
+    with pytest.raises(ValidationError, match="exact complete Nim option family"):
+        NimOptionsResult.model_validate(order_mutation)
+
     index_bound_mutation = deepcopy(payload)
     index_bound_mutation["options"][0]["source_heap_indices"] = [50]
     with pytest.raises(ValidationError, match="less than 50"):

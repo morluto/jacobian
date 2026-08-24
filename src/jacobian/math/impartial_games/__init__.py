@@ -17,7 +17,6 @@ from jacobian.math.impartial_games.operations import (
 from jacobian.math.impartial_games.values import (
     GameMove,
     ImpartialGame,
-    NimOption,
     NimPosition,
 )
 
@@ -25,7 +24,6 @@ __all__ = [
     "GameMove",
     "GrundyAnalysis",
     "ImpartialGame",
-    "NimOption",
     "NimPosition",
     "SubtractionGrundyAnalysis",
     "birthdays",

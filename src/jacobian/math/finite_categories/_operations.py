@@ -1,11 +1,15 @@
 """Exact finite category operations."""
 
 from jacobian.math.finite_categories._models import (
+    CategoryProductRequest,
+    CategoryProductResult,
     CategoryProfileResult,
     FiniteCategoryRequest,
     MorphismSpec,
     OppositeCategoryResult,
 )
+from jacobian.math.finite_categories.operations import product
+from jacobian.math.finite_categories.values import CategoryIdentifier
 
 
 def compute_category_profile(request: FiniteCategoryRequest) -> CategoryProfileResult:
@@ -14,12 +18,12 @@ def compute_category_profile(request: FiniteCategoryRequest) -> CategoryProfileR
     morphisms = request.morphisms
 
     # Build hom-sets: Hom(a,b) = count of morphisms from a to b.
-    hom_counts: dict[tuple[str, str], int] = {}
+    hom_counts: dict[tuple[CategoryIdentifier, CategoryIdentifier], int] = {}
     for m in morphisms:
         key = (m.source, m.target)
         hom_counts[key] = hom_counts.get(key, 0) + 1
 
-    hom_list: list[tuple[str, str, int]] = []
+    hom_list: list[tuple[CategoryIdentifier, CategoryIdentifier, int]] = []
     for a in objects:
         for b in objects:
             count = hom_counts.get((a, b), 0)
@@ -27,7 +31,7 @@ def compute_category_profile(request: FiniteCategoryRequest) -> CategoryProfileR
                 hom_list.append((a, b, count))
 
     # Endomorphisms: morphisms where source == target.
-    endo_counts: dict[str, int] = {}
+    endo_counts: dict[CategoryIdentifier, int] = {}
     for m in morphisms:
         if m.source == m.target:
             endo_counts[m.source] = endo_counts.get(m.source, 0) + 1
@@ -72,3 +76,18 @@ def compute_opposite_category(request: FiniteCategoryRequest) -> OppositeCategor
         identities=request.identities,
         composition=opposite_composition,
     )
+
+
+def compute_category_product(
+    request: CategoryProductRequest,
+) -> CategoryProductResult:
+    """Compute the exact Cartesian product of two finite categories."""
+
+    return product(request.left, request.right)
+
+
+__all__ = [
+    "compute_category_product",
+    "compute_category_profile",
+    "compute_opposite_category",
+]

@@ -42,6 +42,17 @@ def test_native_polynomial_api_uses_exact_sympy_values() -> None:
     assert polynomials.resultant(left, right, x) == 0
 
 
+def test_native_resultant_preserves_source_orientation() -> None:
+    """Unequal odd degrees retain the Sylvester determinant sign."""
+
+    x = symbols("x")
+    linear = Poly(x + 2, x, domain="QQ")
+    cubic = Poly(x**3 + 1, x, domain="QQ")
+
+    assert polynomials.resultant(linear, cubic, x) == -7
+    assert polynomials.resultant(cubic, linear, x) == 7
+
+
 @pytest.mark.parametrize(
     "decompose",
     (polynomials.factorization, polynomials.square_free_decomposition),
@@ -87,6 +98,7 @@ def test_exact_public_api_symbols() -> None:
         "factorization",
         "gcdex",
         "groebner_basis",
+        "hermite_reduction",
         "integral",
         "partial_fractions",
         "resultant",

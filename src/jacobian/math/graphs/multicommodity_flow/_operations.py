@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from jacobian.math.graphs.multicommodity_flow._kernel import profile_components
 from jacobian.math.graphs.multicommodity_flow._models import (
+    MulticommodityFlow,
     MulticommodityFlowProfileRequest,
     MulticommodityFlowProfileResult,
 )
 
 
 def compute_multicommodity_flow_profile(
-    request: MulticommodityFlowProfileRequest,
+    flow: MulticommodityFlow,
 ) -> MulticommodityFlowProfileResult:
     """Compute the exact bounded load and conservation profile of one tensor."""
 
@@ -21,9 +22,9 @@ def compute_multicommodity_flow_profile(
         capacity_feasible,
         congestion,
         work,
-    ) = profile_components(request.flow)
+    ) = profile_components(flow)
     return MulticommodityFlowProfileResult(
-        flow=request.flow,
+        flow=flow,
         divergences=divergences,
         edge_profiles=edge_profiles,
         all_demands_routed=all_demands_routed,
@@ -31,6 +32,14 @@ def compute_multicommodity_flow_profile(
         congestion=congestion,
         work=work,
     )
+
+
+def _run_multicommodity_flow_profile(
+    request: MulticommodityFlowProfileRequest,
+) -> MulticommodityFlowProfileResult:
+    """Run one parsed MCP request through the native profile computation."""
+
+    return compute_multicommodity_flow_profile(request.flow)
 
 
 __all__ = ["compute_multicommodity_flow_profile"]

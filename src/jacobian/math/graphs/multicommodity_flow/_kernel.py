@@ -76,13 +76,16 @@ def profile_components(
         for demand in (commodity.demand.as_fraction(),)
         for vertex in range(flow.network.vertex_count)
     }
-    all_demands_routed = all(
-        divergences[key] == expected for key, expected in expected_divergences.items()
+    mismatched_divergence_cells = sum(
+        divergences[key] != expected
+        for key, expected in expected_divergences.items()
     )
+    all_demands_routed = mismatched_divergence_cells == 0
 
     edge_rows: list[EdgeLoadProfile] = []
     capacity_feasible = True
-    congestion: Fraction | None = Fraction(0)
+    max_congestion_ratio = Fraction(0)
+    zero_capacity_violation = False
     positive_capacity_edges = 0
     for edge in flow.network.edges:
         edge_key = (edge.source, edge.target)
@@ -92,12 +95,12 @@ def profile_components(
             capacity_feasible = False
         if capacity == 0:
             if load > 0:
-                congestion = None
+                zero_capacity_violation = True
         else:
             positive_capacity_edges += 1
             ratio = load / capacity
-            if congestion is not None and ratio > congestion:
-                congestion = ratio
+            if ratio > max_congestion_ratio:
+                max_congestion_ratio = ratio
         edge_rows.append(
             EdgeLoadProfile(
                 source=edge.source,
@@ -114,7 +117,9 @@ def profile_components(
     # load. Each edge then subtracts its load from capacity. One demand is
     # negated per commodity for its sink target. Every edge compares load to
     # capacity and capacity to zero, then compares either load to zero or its
-    # ratio to the running congestion maximum.
+    # ratio to the running congestion maximum. The demand scan above compares
+    # all commodity/vertex cells rather than short-circuiting at the first
+    # mismatch, so every charged comparison is executed exactly once.
     additions = 3 * sparse_entries + edge_cells
     negations = len(flow.commodities)
     divisions = positive_capacity_edges
@@ -136,7 +141,7 @@ def profile_components(
         tuple(edge_rows),
         all_demands_routed,
         capacity_feasible,
-        None if congestion is None else _wire(congestion),
+        None if zero_capacity_violation else _wire(max_congestion_ratio),
         work,
     )
 

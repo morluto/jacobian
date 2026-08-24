@@ -7,7 +7,7 @@ from jacobian.math.graphs.multicommodity_flow._models import (
     MulticommodityFlowProfileResult,
 )
 from jacobian.math.graphs.multicommodity_flow._operations import (
-    compute_multicommodity_flow_profile,
+    _run_multicommodity_flow_profile,
 )
 
 TOOLS: MathTools = (
@@ -24,7 +24,7 @@ TOOLS: MathTools = (
         ),
         request_type=MulticommodityFlowProfileRequest,
         result_type=MulticommodityFlowProfileResult,
-        run=compute_multicommodity_flow_profile,
+        run=_run_multicommodity_flow_profile,
         tags=(
             "network",
             "multicommodity-flow",

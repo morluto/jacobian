@@ -18,6 +18,7 @@ from jacobian.math.graphs.multicommodity_flow._models import (
     MulticommodityFlowProfileResult,
 )
 from jacobian.math.graphs.multicommodity_flow._operations import (
+    _run_multicommodity_flow_profile,
     compute_multicommodity_flow_profile,
 )
 from jacobian.math.graphs.multicommodity_flow._tools import TOOLS
@@ -56,10 +57,21 @@ def test_catalog_contains_the_audited_multicommodity_profile() -> None:
     }
 
 
-def test_exact_shared_bottleneck_profile_replays_its_source() -> None:
-    result = compute_multicommodity_flow_profile(
-        MulticommodityFlowProfileRequest(flow=shared_bottleneck_flow())
+def test_native_api_accepts_the_canonical_flow_value_directly() -> None:
+    flow = shared_bottleneck_flow()
+
+    native = compute_multicommodity_flow_profile(flow)
+    via_request = _run_multicommodity_flow_profile(
+        MulticommodityFlowProfileRequest(flow=flow)
     )
+
+    assert native == via_request
+    assert native.flow == flow
+    assert native.congestion == q(1)
+
+
+def test_exact_shared_bottleneck_profile_replays_its_source() -> None:
+    result = compute_multicommodity_flow_profile(shared_bottleneck_flow())
 
     assert result.all_demands_routed is True
     assert result.capacity_feasible is True
@@ -110,9 +122,7 @@ def test_profile_distinguishes_capacity_and_conservation_failures() -> None:
             )
         }
     )
-    capacity_result = compute_multicommodity_flow_profile(
-        MulticommodityFlowProfileRequest(flow=capacity_only)
-    )
+    capacity_result = compute_multicommodity_flow_profile(capacity_only)
     assert capacity_result.all_demands_routed is True
     assert capacity_result.capacity_feasible is False
     assert capacity_result.congestion == q(3, 2)
@@ -126,9 +136,7 @@ def test_profile_distinguishes_capacity_and_conservation_failures() -> None:
             )
         }
     )
-    conservation_result = compute_multicommodity_flow_profile(
-        MulticommodityFlowProfileRequest(flow=conservation_only)
-    )
+    conservation_result = compute_multicommodity_flow_profile(conservation_only)
     assert conservation_result.all_demands_routed is False
     assert conservation_result.capacity_feasible is True
 
@@ -142,9 +150,7 @@ def test_zero_capacity_positive_load_has_no_finite_congestion() -> None:
         commodities=(CommodityDemand(commodity_id="a", source=0, sink=1, demand=q(1)),),
         entries=(CommodityEdgeFlow(commodity_id="a", source=0, target=1, amount=q(1)),),
     )
-    result = compute_multicommodity_flow_profile(
-        MulticommodityFlowProfileRequest(flow=flow)
-    )
+    result = compute_multicommodity_flow_profile(flow)
     assert result.all_demands_routed is True
     assert result.capacity_feasible is False
     assert result.congestion is None
@@ -153,6 +159,66 @@ def test_zero_capacity_positive_load_has_no_finite_congestion() -> None:
     assert result.work.rational_divisions_per_pass == 0
     assert result.work.exact_comparisons_per_pass == 5
     assert result.work.logical_steps_per_call == 20
+
+
+def test_early_divergence_mismatch_still_executes_every_counted_comparison() -> None:
+    # Commodity "a" already mismatches at the very first divergence cell, yet
+    # the demand scan must compare all eight commodity/vertex cells rather
+    # than short-circuiting while still charging them.
+    flow = shared_bottleneck_flow().model_copy(
+        update={
+            "commodities": (
+                CommodityDemand(commodity_id="a", source=0, sink=3, demand=q(2)),
+                CommodityDemand(commodity_id="b", source=1, sink=3, demand=q(2)),
+            )
+        }
+    )
+    result = compute_multicommodity_flow_profile(flow)
+    assert result.all_demands_routed is False
+    assert result.capacity_feasible is True
+    assert result.work.commodity_vertex_cells == 8
+    assert result.work.edge_cells == 3
+    assert result.work.exact_comparisons_per_pass == 8 + 3 * 3
+    assert result.work.logical_steps_per_call == 74
+
+
+def test_mixed_zero_and_positive_capacities_execute_every_counted_comparison() -> None:
+    def mixed_flow(zero_capacity_edge_first: bool) -> MulticommodityFlow:
+        capacities = ((q(0), q(1), q(1)), (q(1), q(1), q(0)))[
+            zero_capacity_edge_first
+        ]
+        return MulticommodityFlow(
+            network=FlowGraph(
+                vertex_count=4,
+                edges=(
+                    CapacitatedEdge(source=0, target=1, capacity=capacities[0]),
+                    CapacitatedEdge(source=1, target=2, capacity=capacities[1]),
+                    CapacitatedEdge(source=2, target=3, capacity=capacities[2]),
+                ),
+            ),
+            commodities=(
+                CommodityDemand(commodity_id="a", source=0, sink=3, demand=q(1)),
+            ),
+            entries=(
+                CommodityEdgeFlow(commodity_id="a", source=0, target=1, amount=q(1)),
+                CommodityEdgeFlow(commodity_id="a", source=1, target=2, amount=q(1)),
+                CommodityEdgeFlow(commodity_id="a", source=2, target=3, amount=q(1)),
+            ),
+        )
+
+    for zero_capacity_edge_first in (True, False):
+        result = compute_multicommodity_flow_profile(
+            mixed_flow(zero_capacity_edge_first)
+        )
+        assert result.all_demands_routed is True
+        assert result.capacity_feasible is False
+        # Both positive-capacity ratios are divided and compared against the
+        # running maximum even when a preceding zero-capacity edge has already
+        # made the congestion value null.
+        assert result.congestion is None
+        assert result.work.rational_divisions_per_pass == 2
+        assert result.work.exact_comparisons_per_pass == 4 + 3 * 3
+        assert result.work.logical_steps_per_call == 56
 
 
 def test_fractional_split_flow_uses_exact_rational_loads_and_congestion() -> None:
@@ -174,9 +240,7 @@ def test_fractional_split_flow_uses_exact_rational_loads_and_congestion() -> Non
             CommodityEdgeFlow(commodity_id="a", source=2, target=3, amount=q(1, 2)),
         ),
     )
-    result = compute_multicommodity_flow_profile(
-        MulticommodityFlowProfileRequest(flow=flow)
-    )
+    result = compute_multicommodity_flow_profile(flow)
     assert result.all_demands_routed is True
     assert result.capacity_feasible is True
     assert result.congestion == q(1)
@@ -225,9 +289,7 @@ def test_tighter_multicommodity_envelope_rejects_vertex_and_rational_overflow() 
 
 
 def test_result_replay_rejects_forged_source_and_derived_ledger_fields() -> None:
-    result = compute_multicommodity_flow_profile(
-        MulticommodityFlowProfileRequest(flow=shared_bottleneck_flow())
-    )
+    result = compute_multicommodity_flow_profile(shared_bottleneck_flow())
     payload = result.model_dump(mode="json")
 
     forged_load = deepcopy(payload)

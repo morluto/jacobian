@@ -9,6 +9,7 @@ from jacobian.math.graphs.optimization._coloring_models import (
     ChromaticGraph,
     ChromaticSearchStep,
     GraphChromaticNumberOutput,
+    PolynomialTimeGraph,
 )
 
 
@@ -59,12 +60,14 @@ def coloring_cnf(
     return variable_names, tuple(clauses)
 
 
-def build_simple_graph(graph: ChromaticGraph) -> Any:
-    """Build a networkx Graph from a validated :class:`ChromaticGraph`.
+def build_simple_graph(graph: ChromaticGraph | PolynomialTimeGraph) -> Any:
+    """Build a networkx Graph from a validated graph.
 
-    The contract has already enforced uniqueness, no self-loops, and edge
-    endpoints within the vertex set, so this is a thin structural
-    projection.  It raises only on a contract-internal inconsistency.
+    Accepts either :class:`ChromaticGraph` (NP-hard, 32 vertices) or
+    :class:`PolynomialTimeGraph` (256 vertices) - both have already enforced
+    uniqueness, no self-loops, and edge endpoints within the vertex set, so
+    this is a thin structural projection.  It raises only on a contract-
+    internal inconsistency.
     """
 
     import networkx as nx

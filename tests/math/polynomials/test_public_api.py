@@ -87,6 +87,7 @@ def test_exact_public_api_symbols() -> None:
         "factorization",
         "gcdex",
         "groebner_basis",
+        "hermite_reduction",
         "integral",
         "partial_fractions",
         "resultant",

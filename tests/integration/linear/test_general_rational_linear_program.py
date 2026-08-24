@@ -277,3 +277,109 @@ def test_general_lp_preflights_private_sign_split_and_slack_expansion() -> None:
                 )
             }
         )
+
+
+@pytest.mark.parametrize(
+    ("coefficients", "lower", "expected_point", "expected_objective"),
+    [
+        (q(1), q(10000000), Fraction(10000000), Fraction(10000000)),
+        (
+            q(1),
+            q(12345678901, 97531),
+            Fraction(12345678901, 97531),
+            Fraction(12345678901, 97531),
+        ),
+        (
+            q(3),
+            q(-98765432109, 97531),
+            Fraction(-98765432109, 97531),
+            Fraction(-296296296327, 97531),
+        ),
+    ],
+)
+def test_general_lp_returns_offset_shifted_optima_within_the_mapped_height_bound(
+    coefficients: dict[str, str],
+    lower: dict[str, str],
+    expected_point: Fraction,
+    expected_objective: Fraction,
+) -> None:
+    result = _run(
+        _program(
+            variables=[_variable("x", lower)],
+            sense="MINIMIZE",
+            objective=[coefficients],
+            constraints=[],
+        )
+    )
+
+    assert result.status == "OPTIMAL"
+    assert _fractions(result.primal_candidate) == (expected_point,)
+    assert result.primal_objective is not None
+    assert result.primal_objective.as_fraction() == expected_objective
+    assert result.dual_objective is not None
+    assert result.dual_objective.as_fraction() == expected_objective
+    assert _fractions(result.stationarity_residuals) == (Fraction(),)
+
+
+def test_general_lp_rejects_source_values_taller_than_the_mapped_result_bound() -> None:
+    result = _run(
+        _program(
+            variables=[_variable("x", q(10000000))],
+            sense="MINIMIZE",
+            objective=[q(1)],
+            constraints=[],
+        )
+    )
+    forged = deepcopy(result.model_dump(mode="json"))
+    forged["primal_candidate"] = [{"num": "9" * 400, "den": "1"}]
+    with pytest.raises(ValidationError, match="result exceeds the"):
+        GeneralRationalLinearProgramResult.model_validate(forged)
+
+
+def test_general_lp_admits_the_full_one_sided_variable_envelope() -> None:
+    variables = [_variable(f"x{index}", q(index)) for index in range(32)]
+    result = _run(
+        _program(
+            variables=variables,
+            sense="MINIMIZE",
+            objective=[q(1) for _ in variables],
+            constraints=[],
+        )
+    )
+
+    assert result.status == "OPTIMAL"
+    assert _fractions(result.primal_candidate) == tuple(
+        Fraction(index) for index in range(32)
+    )
+    assert result.primal_objective is not None
+    assert result.primal_objective.as_fraction() == Fraction(496)
+
+
+def test_general_lp_rejects_variables_beyond_the_public_envelope() -> None:
+    variables = [_variable(f"x{index}", q(0)) for index in range(33)]
+    with pytest.raises(ValidationError, match="variables exceed the 32-entry bound"):
+        GeneralRationalLinearProgramRequest.model_validate(
+            {
+                "program": _program(
+                    variables=variables,
+                    sense="MINIMIZE",
+                    objective=[q(1) for _ in variables],
+                    constraints=[],
+                )
+            }
+        )
+
+
+def test_general_lp_defers_free_split_admission_to_the_normalized_columns() -> None:
+    variables = [_variable(f"x{index}") for index in range(17)]
+    with pytest.raises(ValidationError, match="normalized variables exceed"):
+        GeneralRationalLinearProgramRequest.model_validate(
+            {
+                "program": _program(
+                    variables=variables,
+                    sense="MINIMIZE",
+                    objective=[q(1) for _ in variables],
+                    constraints=[],
+                )
+            }
+        )

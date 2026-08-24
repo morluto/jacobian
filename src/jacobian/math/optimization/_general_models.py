@@ -24,7 +24,7 @@ from jacobian.math.optimization._models import (
 type RationalLinearRelation = Literal["LE", "EQ", "GE"]
 type RationalObjectiveSense = Literal["MINIMIZE", "MAXIMIZE"]
 
-MAX_GENERAL_LINEAR_PROGRAM_VARIABLES = 16
+MAX_GENERAL_LINEAR_PROGRAM_VARIABLES = 32
 MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS = 48
 
 

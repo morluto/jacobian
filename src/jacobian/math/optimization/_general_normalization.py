@@ -11,6 +11,7 @@ from jacobian.math.optimization._general_models import (
 )
 from jacobian.math.optimization._models import (
     MAX_LINEAR_PROGRAM_RESULT_BYTES,
+    MAX_RATIONAL_DIGITS,
     StandardFormRationalLinearProgram,
     _result_digit_bound,
 )
@@ -160,8 +161,29 @@ def normalize_general_program(
     )
 
 
+_MAPPED_RESULT_HEIGHT_SLACK = 16
+
+
+def _mapped_result_digit_bound(normalization: GeneralLinearNormalization) -> int:
+    """Bound every source-coordinate value a mapped outcome can carry.
+
+    Standard coordinates stay within ``_result_digit_bound`` of the private
+    program.  Mapped source values stack at most two input-height products on
+    one standard coordinate -- objective and residual offset terms, then bound
+    multipliers against bounds -- and sum at most ``2n + m`` such terms with
+    chained differences, so the slack covers summation carries and those
+    chains.
+    """
+
+    return (
+        _result_digit_bound(normalization.standard_program)
+        + 2 * MAX_RATIONAL_DIGITS
+        + _MAPPED_RESULT_HEIGHT_SLACK
+    )
+
+
 def normalized_result_digit_bound(program: GeneralFormRationalLinearProgram) -> int:
-    return _result_digit_bound(normalize_general_program(program).standard_program)
+    return _mapped_result_digit_bound(normalize_general_program(program))
 
 
 def require_admitted_general_normalization(
@@ -170,7 +192,7 @@ def require_admitted_general_normalization(
     """Preflight the whole standard expansion and the mapped public result."""
 
     normalization = normalize_general_program(program)
-    digits = _result_digit_bound(normalization.standard_program)
+    digits = _mapped_result_digit_bound(normalization)
     # An optimal general result has five source-coordinate vectors over variables
     # and two over rows plus two scalar objectives.  This is conservative because
     # only one status-specific certificate family is present in any actual result.

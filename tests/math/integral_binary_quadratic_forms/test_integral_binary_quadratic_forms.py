@@ -187,9 +187,11 @@ class TestProperEquivalence:
 
 class TestReducedClasses:
     def test_schema_exposes_the_reduced_class_scan_admission_condition(self) -> None:
-        discriminant_schema = BinaryQuadraticFormReducedClassesRequest.model_json_schema()[
-            "properties"
-        ]["discriminant"]
+        discriminant_schema = (
+            BinaryQuadraticFormReducedClassesRequest.model_json_schema()["properties"][
+                "discriminant"
+            ]
+        )
         assert "A*(A+2)" in discriminant_schema["description"]
         assert "floor_sqrt((-D)//3)+1" in discriminant_schema["description"]
 

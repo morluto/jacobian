@@ -17,8 +17,9 @@ def compute_multicommodity_flow_profile(
 
     The canonical tensor value carries only representation bounds; this
     execution boundary admits the profile work and result envelope inside
-    the kernel's single measured scan, for native calls and parsed MCP
-    requests alike.
+    the kernel's single measured scan, so a native call executes exactly the
+    two charged passes. Parsed MCP requests were already validated with the
+    same admission at request parsing.
     """
 
     (

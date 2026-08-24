@@ -54,10 +54,10 @@ MAX_COMMODITY_VERTEX_CELLS = 512
 # when its own component bounds limit the two sides separately; the
 # conservative row overhead reserves ASCII keys, labels, separators, and
 # vertices. This envelope belongs to the profile operation, not to the
-# canonical tensor value: the profile kernel measures the echoed source
-# before its scan and prices every returned row from the same measured
-# bounds afterwards, so admission adds no arithmetic pass of its own and
-# the two-pass work ledger stays an exact per-call accounting.
+# canonical tensor value: request parsing validates it completely so every
+# accepted request is admissible before execution, and the kernel prices
+# its result from its own measured components, adding no arithmetic pass
+# of its own and keeping the two-pass work ledger exact.
 MAX_PROFILE_RESULT_BYTES = 8 * 1024 * 1024
 _DIVERGENCE_ROW_OVERHEAD_BYTES = 128
 _EDGE_ROW_OVERHEAD_BYTES = 128
@@ -529,6 +529,26 @@ def _require_admitted_profile_rows(
         )
 
 
+def _require_profile_output_admission(flow: MulticommodityFlow) -> None:
+    """Reject tensors whose derived rows or echoed source exceed the envelope.
+
+    Request parsing runs this complete mathematical validation so every
+    accepted ``math.run`` request reaches the kernel guaranteed admissible,
+    and native callers get the same typed rejection before any result
+    construction. The kernel still prices its result from its own measured
+    components, so an accepted request's execution remains exactly the two
+    charged passes.
+    """
+
+    _require_profile_source_room(flow)
+    cell_bounds, load_bounds, slack_bounds, congestion_bound = (
+        _profile_component_digit_bounds(flow)
+    )
+    _require_admitted_profile_rows(
+        flow, cell_bounds, load_bounds, slack_bounds, congestion_bound
+    )
+
+
 class MulticommodityFlow(StrictModel):
     """A canonical sparse exact commodity-by-edge tensor over one FlowGraph.
 
@@ -589,6 +609,11 @@ class MulticommodityFlowProfileRequest(StrictModel):
             "result envelope below 8 MiB."
         )
     )
+
+    @model_validator(mode="after")
+    def require_admitted_profile_work_and_result(self) -> Self:
+        _require_profile_output_admission(self.flow)
+        return self
 
 
 class CommodityDivergence(StrictModel):

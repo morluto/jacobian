@@ -445,9 +445,7 @@ def _product_cell_bounds(
                 if other_index != index
             )
             numerator_expansions.append(tuple(expansion))
-        denominator_collision_count = _maximum_product_collisions(
-            (denominator_groups,)
-        )
+        denominator_collision_count = _maximum_product_collisions((denominator_groups,))
         numerator_collisions = _product_collision_counts(numerator_expansions)
         numerator_collision_count = max(numerator_collisions.values(), default=1)
         result_term_count = len(numerator_collisions) + 1

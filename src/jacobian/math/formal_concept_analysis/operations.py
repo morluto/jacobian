@@ -10,6 +10,7 @@ from .basis import (
     PseudoIntent,
     _basis_attribute_labels,
     _duquenne_guigues_preflight,
+    _enumerate_dg_masks,
     _subset_for_state,
 )
 from .values import (
@@ -125,48 +126,20 @@ def _enumerate_dg_basis(
     """Enumerate all closures and pseudo-intents with bounded integer bitsets."""
 
     attribute_count = len(context.attributes)
-    states = 1 << attribute_count
-    full_mask = states - 1
-    object_rows = [0] * len(context.objects)
-    for object_index, attribute_index in context.incidence:
-        object_rows[object_index] |= 1 << attribute_index
-
-    closure_rows: list[DGBasisClosureRow] = []
-    pseudo_intents: list[tuple[int, int]] = []
-    subset_comparisons = 0
-    closure_comparisons = 0
-    row_intersections = 0
-    for state in range(states):
-        closure = full_mask
-        for object_row in object_rows:
-            if object_row & state == state:
-                closure &= object_row
-                row_intersections += 1
-        closure_rows.append(
-            DGBasisClosureRow(
-                candidate_state=state,
-                subset=_subset_for_state(state, attribute_count),
-                closure=_subset_for_state(closure, attribute_count),
-            )
+    closure_masks, pseudo_intent_masks, subset_comparisons, closure_comparisons, (
+        row_intersections
+    ) = _enumerate_dg_masks(context)
+    closure_rows = tuple(
+        DGBasisClosureRow(
+            candidate_state=state,
+            subset=_subset_for_state(state, attribute_count),
+            closure=_subset_for_state(closure_mask, attribute_count),
         )
-        if state == closure:
-            continue
-
-        is_pseudo_intent = True
-        for previous_state, previous_closure in pseudo_intents:
-            subset_comparisons += 1
-            if previous_state & state != previous_state:
-                continue
-            closure_comparisons += 1
-            if previous_closure & state != previous_closure:
-                is_pseudo_intent = False
-                break
-        if is_pseudo_intent:
-            pseudo_intents.append((state, closure))
-
+        for state, closure_mask in enumerate(closure_masks)
+    )
     return (
-        tuple(closure_rows),
-        tuple(pseudo_intents),
+        closure_rows,
+        pseudo_intent_masks,
         subset_comparisons,
         closure_comparisons,
         row_intersections,

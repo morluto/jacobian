@@ -13,20 +13,42 @@ from jacobian.canonical import (
     encode_strict_json,
 )
 from jacobian.math.formal_concept_analysis.values import (
+    MAX_IMPLICATION_MEMBERSHIPS,
+    MAX_IMPLICATIONS,
     MAX_OBJECTS,
     AttributeImplication,
     FiniteAttributeImplicationSystem,
     FormalContext,
 )
 
-# The first public envelope enumerates the complete subset carrier.  Eight
-# attributes give 256 candidate states and also keep the worst possible basis
-# inside #2267's 256-implication canonical value.
-MAX_DG_ATTRIBUTES = 8
-MAX_DG_CANDIDATE_STATES = 1 << MAX_DG_ATTRIBUTES
-# Exact worst-case reserve for 256 states over an admitted dense 64-by-8
-# context, including both producer/replay passes and #2267 result validation.
-MAX_DG_LOGICAL_WORK = 30_468_608
+# Admission bounds three operation-specific quantities instead of a coarse
+# attribute count (AGENTS.md, "Mathematical boundedness is a proof
+# obligation"):
+#
+#   * candidate states N = 2^attribute_count -- the exhaustive closure-matrix
+#     carrier and the finite candidate space of the lectic scan.  The fixed
+#     MAX_DG_CANDIDATE_STATES is a documented conservative fallback that keeps
+#     the exact admission probe itself (one context closure per candidate
+#     state) bounded before execution;
+#   * logical work -- the probe reports the exact enumeration counts
+#     (object-row checks, incidence loads, row intersections, lectic
+#     comparisons) and the exact basis shape, so the reserve adds only one
+#     conservative term: four exhaustive passes over one canonical closure
+#     query per candidate state, each query costing at most
+#     (attribute_count + 1) productive rounds times the retained basis size.
+#     The carrier-fit check below keeps that basis inside #2267's
+#     MAX_IMPLICATIONS rows and MAX_IMPLICATION_MEMBERSHIPS memberships, so
+#     every admitted query also stays under MAX_CANONICAL_REPLAY_WORK;
+#   * serialized result bytes -- a worst-case payload shaped by the probed
+#     basis size with full-width rows, measured through the strict-JSON
+#     canonical encoder.
+#
+# Contexts whose exact basis exceeds the #2267 canonical implication carrier
+# are rejected on the probe, so every accepted request returns the declared
+# typed result.
+MAX_DG_CANDIDATE_STATES = 4_096
+MAX_DG_ATTRIBUTES = MAX_DG_CANDIDATE_STATES.bit_length() - 1
+MAX_DG_LOGICAL_WORK = 1 << 30
 MAX_DG_RESULT_BYTES = 1 * 1_024 * 1_024
 
 _DGAttributeIndex = Annotated[
@@ -66,35 +88,110 @@ def _require_dg_subset(
         raise ValueError(f"{name} contains an attribute outside the source context")
 
 
-def _max_context_incidence_replay_work(context: FormalContext, states: int) -> int:
-    attribute_count = len(context.attributes)
-    subset_memberships = attribute_count * states // 2
-    maximum_extent_memberships = len(context.objects) * states
-    return len(context.incidence) * (subset_memberships + maximum_extent_memberships)
+def _context_closure_masks(context: FormalContext) -> tuple[tuple[int, ...], int]:
+    """Return every candidate state's context closure plus row intersections."""
+
+    object_rows = [0] * len(context.objects)
+    for object_index, attribute_index in context.incidence:
+        object_rows[object_index] |= 1 << attribute_index
+    full_mask = (1 << len(context.attributes)) - 1
+    masks: list[int] = []
+    row_intersections = 0
+    for state in range(1 << len(context.attributes)):
+        closure = full_mask
+        for object_row in object_rows:
+            if object_row & state == state:
+                closure &= object_row
+                row_intersections += 1
+        masks.append(closure)
+    return tuple(masks), row_intersections
 
 
-def _reserved_dg_logical_work(context: FormalContext, states: int) -> int:
+def _enumerate_dg_masks(
+    context: FormalContext,
+) -> tuple[tuple[int, ...], tuple[tuple[int, int], ...], int, int, int]:
+    """Enumerate exact closures, pseudo-intents, and lectic comparison counts."""
+
+    closure_masks, row_intersections = _context_closure_masks(context)
+    pseudo_intent_pairs, subset_comparisons, closure_comparisons = (
+        _replay_pseudo_intents(closure_masks)
+    )
+    return (
+        closure_masks,
+        pseudo_intent_pairs,
+        subset_comparisons,
+        closure_comparisons,
+        row_intersections,
+    )
+
+
+def _require_dg_canonical_carrier_fit(
+    pseudo_intent_pairs: tuple[tuple[int, int], ...],
+) -> int:
+    """Reject exact bases beyond #2267's canonical implication-system carrier."""
+
+    count = len(pseudo_intent_pairs)
+    if count > MAX_IMPLICATIONS:
+        raise ValueError(
+            "exact Duquenne-Guigues basis of "
+            f"{count} implications exceeds the bounded canonical "
+            f"implication-system carrier of {MAX_IMPLICATIONS} implications"
+        )
+    memberships = sum(closure.bit_count() for _, closure in pseudo_intent_pairs)
+    if memberships > MAX_IMPLICATION_MEMBERSHIPS:
+        raise ValueError(
+            "exact Duquenne-Guigues basis of "
+            f"{memberships} premise and conclusion memberships exceeds the "
+            f"bounded canonical implication-system carrier of "
+            f"{MAX_IMPLICATION_MEMBERSHIPS} memberships"
+        )
+    return memberships
+
+
+def _reserved_dg_logical_work(
+    context: FormalContext,
+    states: int,
+    closure_masks: tuple[int, ...],
+    pseudo_intent_pairs: tuple[tuple[int, int], ...],
+    implication_memberships: int,
+    subset_comparisons: int,
+    closure_comparisons: int,
+    row_intersections: int,
+) -> int:
     attribute_count = len(context.attributes)
     object_count = len(context.objects)
-    maximum_basis_replay = states * states * (attribute_count + 1) ** 2
-    maximum_output_memberships = 5 * states * attribute_count
+    incidence_count = len(context.incidence)
     return (
-        # Producer subset checks plus producer and result-replay row intersections.
+        # Producer subset checks plus producer and result-replay row
+        # intersections over the retained object rows.
         3 * states * object_count
-        + len(context.incidence)
-        + 4 * states * states
-        + _max_context_incidence_replay_work(context, states)
+        + incidence_count
+        + 2 * row_intersections
+        + incidence_count
+        * (attribute_count * states // 2 + row_intersections)
+        + 2 * (subset_comparisons + closure_comparisons)
         # Each of the two exhaustive DG-basis passes invokes #2267's closure
-        # kernel and its source-bound result replay, hence four scans of the
-        # canonical implication semantics in total.
-        + 4 * maximum_basis_replay
-        + maximum_output_memberships
+        # kernel twice (producer plus source-bound replay), hence four scans
+        # in total; each query costs at most (attribute_count + 1) rounds
+        # times the retained basis size.
+        + 4
+        * states
+        * (attribute_count + 1)
+        * (len(pseudo_intent_pairs) + implication_memberships)
+        + attribute_count * states // 2
+        + sum(mask.bit_count() for mask in closure_masks)
+        + sum(
+            state.bit_count() + closure.bit_count()
+            for state, closure in pseudo_intent_pairs
+        )
+        + implication_memberships
     )
 
 
 def _dg_output_reservation_payload(
     context: FormalContext,
     states: int,
+    pseudo_intent_count: int,
     reserved_logical_work: int,
 ) -> dict[str, object]:
     attribute_count = len(context.attributes)
@@ -112,17 +209,18 @@ def _dg_output_reservation_payload(
         "basis_implication_index": largest_state,
     }
     implication = {"premise": full_subset, "conclusion": full_subset}
-    maximum_incidence_work = _max_context_incidence_replay_work(context, states)
-    maximum_basis_replay = states * states * (attribute_count + 1) ** 2
+    maximum_incidence_work = len(context.incidence) * (
+        attribute_count * states // 2 + states * len(context.objects)
+    )
     return {
         "context": context.model_dump(mode="json"),
         "source_attribute_indices": list(range(attribute_count)),
         "lectic_order": "BINARY_LECTIC_BY_MAXIMUM_DIFFERENCE",
         "closure_matrix": [closure_row for _ in range(states)],
-        "pseudo_intents": [pseudo_intent for _ in range(states)],
+        "pseudo_intents": [pseudo_intent for _ in range(pseudo_intent_count)],
         "basis": {
             "attributes": list(_basis_attribute_labels(attribute_count)),
-            "implications": [implication for _ in range(states)],
+            "implications": [implication for _ in range(pseudo_intent_count)],
         },
         "work": {
             "candidate_states": states,
@@ -134,11 +232,14 @@ def _dg_output_reservation_payload(
             "pseudo_intent_subset_comparisons": 2 * states * states,
             "pseudo_intent_closure_comparisons": 2 * states * states,
             "basis_closure_queries": 2 * states,
-            "basis_canonical_replay_work": 2 * maximum_basis_replay,
+            "basis_canonical_replay_work": 2
+            * MAX_DG_CANDIDATE_STATES
+            * (attribute_count + 1)
+            * (MAX_IMPLICATIONS + MAX_IMPLICATION_MEMBERSHIPS),
             "closure_matrix_memberships": 2 * states * attribute_count,
             "pseudo_intent_memberships": 2 * states * attribute_count,
-            "implication_count": states,
-            "implication_memberships": states * attribute_count,
+            "implication_count": pseudo_intent_count,
+            "implication_memberships": MAX_IMPLICATION_MEMBERSHIPS,
             "accounted_logical_work": reserved_logical_work,
             "reserved_logical_work": reserved_logical_work,
             "reserved_result_bytes": MAX_DG_RESULT_BYTES,
@@ -153,12 +254,32 @@ def _duquenne_guigues_preflight(context: FormalContext) -> tuple[int, int, int]:
     attribute_count = len(context.attributes)
     if attribute_count > MAX_DG_ATTRIBUTES:
         raise ValueError(
-            "Duquenne-Guigues basis candidate-state domain exceeds the public "
-            f"limit of {MAX_DG_CANDIDATE_STATES} states "
+            "Duquenne-Guigues basis candidate-state domain exceeds the "
+            "bounded conservative-fallback carrier of "
+            f"{MAX_DG_CANDIDATE_STATES} candidate states "
             f"({MAX_DG_ATTRIBUTES} attributes)"
         )
     states = 1 << attribute_count
-    reserved_logical_work = _reserved_dg_logical_work(context, states)
+    (
+        closure_masks,
+        pseudo_intent_pairs,
+        subset_comparisons,
+        closure_comparisons,
+        row_intersections,
+    ) = _enumerate_dg_masks(context)
+    implication_memberships = _require_dg_canonical_carrier_fit(
+        pseudo_intent_pairs
+    )
+    reserved_logical_work = _reserved_dg_logical_work(
+        context,
+        states,
+        closure_masks,
+        pseudo_intent_pairs,
+        implication_memberships,
+        subset_comparisons,
+        closure_comparisons,
+        row_intersections,
+    )
     if reserved_logical_work > MAX_DG_LOGICAL_WORK:
         raise ValueError(
             "Duquenne-Guigues basis replay exceeds the bounded logical-work "
@@ -168,6 +289,7 @@ def _duquenne_guigues_preflight(context: FormalContext) -> tuple[int, int, int]:
     payload = _dg_output_reservation_payload(
         context,
         states,
+        len(pseudo_intent_pairs),
         reserved_logical_work,
     )
     try:
@@ -261,7 +383,12 @@ class DGBasisWork(StrictModel):
     )
     basis_canonical_replay_work: StrictInt = Field(
         ge=0,
-        le=(2 * MAX_DG_CANDIDATE_STATES**2 * (MAX_DG_ATTRIBUTES + 1) ** 2),
+        le=(
+            2
+            * MAX_DG_CANDIDATE_STATES
+            * (MAX_DG_ATTRIBUTES + 1)
+            * (MAX_IMPLICATIONS + MAX_IMPLICATION_MEMBERSHIPS)
+        ),
         description=(
             "Exact finite-implication canonical replay work reported by the producer and "
             "independent DG-basis closure-equivalence passes. Aggregate work "
@@ -276,10 +403,10 @@ class DGBasisWork(StrictModel):
         ge=0,
         le=2 * MAX_DG_CANDIDATE_STATES * MAX_DG_ATTRIBUTES,
     )
-    implication_count: StrictInt = Field(ge=0, le=MAX_DG_CANDIDATE_STATES)
+    implication_count: StrictInt = Field(ge=0, le=MAX_IMPLICATIONS)
     implication_memberships: StrictInt = Field(
         ge=0,
-        le=MAX_DG_CANDIDATE_STATES * MAX_DG_ATTRIBUTES,
+        le=MAX_IMPLICATION_MEMBERSHIPS,
     )
     accounted_logical_work: StrictInt = Field(ge=0, le=MAX_DG_LOGICAL_WORK)
     reserved_logical_work: StrictInt = Field(ge=0, le=MAX_DG_LOGICAL_WORK)

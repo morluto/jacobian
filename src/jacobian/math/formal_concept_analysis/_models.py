@@ -15,6 +15,8 @@ from jacobian.math.formal_concept_analysis.basis import (
     _duquenne_guigues_preflight,
 )
 from jacobian.math.formal_concept_analysis.values import (
+    MAX_IMPLICATION_MEMBERSHIPS,
+    MAX_IMPLICATIONS,
     FiniteAttributeImplicationSystem,
     FormalContext,
 )
@@ -81,11 +83,16 @@ class DuquenneGuiguesBasisRequest(StrictModel):
         json_schema_extra={
             "description": (
                 "Compute all pseudo-intents and the complete Duquenne-Guigues "
-                f"basis for a FormalContext with at most {MAX_DG_ATTRIBUTES} "
-                f"attributes ({MAX_DG_CANDIDATE_STATES} candidate states). "
-                "Admission reserves producer and independent replay work before "
-                f"enumeration, bounded by {MAX_DG_LOGICAL_WORK:,} logical "
-                f"steps and {MAX_DG_RESULT_BYTES:,} serialized result bytes."
+                "basis for a FormalContext whose exhaustive candidate carrier "
+                f"is at most {MAX_DG_CANDIDATE_STATES} states "
+                f"({MAX_DG_ATTRIBUTES} attributes; documented conservative "
+                "fallback). Admission probes the exact closure matrix and "
+                "basis size, rejects bases beyond the "
+                f"{MAX_IMPLICATIONS}-implication canonical implication-system "
+                f"carrier ({MAX_IMPLICATION_MEMBERSHIPS:,} memberships), and "
+                "reserves producer and independent replay work bounded by "
+                f"{MAX_DG_LOGICAL_WORK:,} logical steps plus a worst-case "
+                f"{MAX_DG_RESULT_BYTES:,}-byte serialized result."
             )
         }
     )

@@ -170,6 +170,30 @@ def _require_canonical_entries(
             raise ValueError("flow entry references an undeclared directed edge")
 
 
+def _component_sums(
+    flow: MulticommodityFlow,
+) -> tuple[dict[tuple[str, int], Fraction], dict[tuple[int, int], Fraction]]:
+    """Return the exact divergence-cell and edge-load sums for one tensor.
+
+    Accumulation order is irrelevant to admission: partial sums may grow
+    arbitrarily and later cancel, so the canonical cap is applied only to the
+    completed reduced components.
+    """
+
+    divergences = {
+        (commodity.commodity_id, vertex): Fraction(0)
+        for commodity in flow.commodities
+        for vertex in range(flow.network.vertex_count)
+    }
+    loads = {(edge.source, edge.target): Fraction(0) for edge in flow.network.edges}
+    for entry in flow.entries:
+        amount = entry.amount.as_fraction()
+        divergences[(entry.commodity_id, entry.source)] += amount
+        divergences[(entry.commodity_id, entry.target)] -= amount
+        loads[(entry.source, entry.target)] += amount
+    return divergences, loads
+
+
 def _rational_side_bounds(value: Fraction) -> tuple[int, int]:
     return len(format_canonical_integer(abs(value.numerator))), len(
         format_canonical_integer(value.denominator)
@@ -194,6 +218,11 @@ def _measured_side_bounds(value: Fraction) -> tuple[int, int]:
 
 def _profile_component_digit_bounds(
     flow: MulticommodityFlow,
+    component_sums: tuple[
+        dict[tuple[str, int], Fraction],
+        dict[tuple[int, int], Fraction],
+    ]
+    | None = None,
 ) -> tuple[
     dict[tuple[str, int], tuple[int, int]],
     dict[tuple[int, int], tuple[int, int]],
@@ -208,27 +237,9 @@ def _profile_component_digit_bounds(
     crosses the canonical cap aborts immediately instead of growing further.
     """
 
-    divergences = {
-        (commodity.commodity_id, vertex): Fraction(0)
-        for commodity in flow.commodities
-        for vertex in range(flow.network.vertex_count)
-    }
-    loads = {(edge.source, edge.target): Fraction(0) for edge in flow.network.edges}
-
-    def _absorb(current: Fraction, amount: Fraction) -> Fraction:
-        total = current + amount
-        for digits in _rational_side_bounds(total):
-            _require_side_within_cap(digits)
-        return total
-
-    for entry in flow.entries:
-        amount = entry.amount.as_fraction()
-        source_key = (entry.commodity_id, entry.source)
-        target_key = (entry.commodity_id, entry.target)
-        divergences[source_key] = _absorb(divergences[source_key], amount)
-        divergences[target_key] = _absorb(divergences[target_key], -amount)
-        edge_key = (entry.source, entry.target)
-        loads[edge_key] = _absorb(loads[edge_key], amount)
+    divergences, loads = (
+        component_sums if component_sums is not None else (_component_sums(flow))
+    )
 
     cell_bounds = {
         key: _rational_side_bounds(value) for key, value in divergences.items()
@@ -249,8 +260,18 @@ def _profile_component_digit_bounds(
 def derived_profile_digit_budget(flow: MulticommodityFlow) -> int:
     """Return the exact digit bound shared by every derived profile component."""
 
+    return derived_profile_digit_budget_from_sums(flow, *_component_sums(flow))
+
+
+def derived_profile_digit_budget_from_sums(
+    flow: MulticommodityFlow,
+    divergences: dict[tuple[str, int], Fraction],
+    loads: dict[tuple[int, int], Fraction],
+) -> int:
+    """Return the shared digit budget from already-computed component sums."""
+
     cell_bounds, load_bounds, slack_bounds, congestion_bound = (
-        _profile_component_digit_bounds(flow)
+        _profile_component_digit_bounds(flow, (divergences, loads))
     )
     component_sides = [
         *cell_bounds.values(),
@@ -259,19 +280,6 @@ def derived_profile_digit_budget(flow: MulticommodityFlow) -> int:
         congestion_bound,
     ]
     return max(max(sides) for sides in component_sides)
-
-
-def _require_derived_digit_budget(flow: MulticommodityFlow) -> int:
-    """Reject operands whose implied profile cannot remain a canonical value."""
-
-    budget = derived_profile_digit_budget(flow)
-    if budget > MAX_CANONICAL_RATIONAL_DIGITS:
-        raise ValueError(
-            "multicommodity-flow arithmetic operands imply a "
-            f"{budget}-digit derived-profile bound above the "
-            f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit canonical cap"
-        )
-    return budget
 
 
 def _require_profile_output_admission(flow: MulticommodityFlow) -> None:
@@ -357,7 +365,6 @@ class MulticommodityFlow(StrictModel):
             edge_keys=edge_keys,
             commodity_ids=commodity_ids,
         )
-        _require_derived_digit_budget(self)
         _require_profile_output_admission(self)
         return self
 

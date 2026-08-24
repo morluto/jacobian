@@ -802,6 +802,42 @@ def test_shared_denominator_sums_stay_at_operand_size() -> None:
     assert result.edge_profiles[0].slack == q(0)
 
 
+def test_cancelling_amounts_are_admitted_regardless_of_entry_order() -> None:
+    # Canonical entry order processes both edges leaving vertex 0 before the
+    # incoming ones, so the partial divergence at vertex 0 is 2A. The
+    # canonical cap applies to completed components only: every final
+    # divergence cancels to at most one digit, each large edge has exactly
+    # zero slack and unit congestion, and the tensor is admitted.
+    big = CanonicalRational(num="9" * 32_768, den="1")
+    flow = MulticommodityFlow(
+        network=FlowGraph(
+            vertex_count=3,
+            edges=(
+                CapacitatedEdge(source=0, target=1, capacity=big),
+                CapacitatedEdge(source=0, target=2, capacity=big),
+                CapacitatedEdge(source=1, target=0, capacity=big),
+                CapacitatedEdge(source=1, target=2, capacity=q(1)),
+                CapacitatedEdge(source=2, target=0, capacity=big),
+            ),
+        ),
+        commodities=(CommodityDemand(commodity_id="a", source=0, sink=2, demand=q(1)),),
+        entries=(
+            CommodityEdgeFlow(commodity_id="a", source=0, target=1, amount=big),
+            CommodityEdgeFlow(commodity_id="a", source=0, target=2, amount=big),
+            CommodityEdgeFlow(commodity_id="a", source=1, target=0, amount=big),
+            CommodityEdgeFlow(commodity_id="a", source=1, target=2, amount=q(1)),
+            CommodityEdgeFlow(commodity_id="a", source=2, target=0, amount=big),
+        ),
+    )
+    result = compute_multicommodity_flow_profile(flow)
+    assert len(result.divergences) == 3
+    assert {row.divergence for row in result.divergences} <= {q(1), q(-1), q(0)}
+    assert [row.slack for row in result.edge_profiles[:4]] == [q(0)] * 4
+    assert result.edge_profiles[4].slack == q(0)
+    assert result.congestion == q(1)
+    assert result.capacity_feasible is True
+
+
 def test_result_replay_rejects_forged_source_and_derived_ledger_fields() -> None:
     result = compute_multicommodity_flow_profile(shared_bottleneck_flow())
     payload = result.model_dump(mode="json")

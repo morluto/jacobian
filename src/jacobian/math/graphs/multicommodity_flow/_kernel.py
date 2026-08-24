@@ -10,7 +10,8 @@ from jacobian.math.graphs.multicommodity_flow._models import (
     EdgeLoadProfile,
     MulticommodityFlow,
     MulticommodityFlowProfileWork,
-    derived_profile_digit_budget,
+    _component_sums,
+    derived_profile_digit_budget_from_sums,
 )
 
 
@@ -42,19 +43,8 @@ def profile_components(
     """
 
     commodity_ids = tuple(commodity.commodity_id for commodity in flow.commodities)
-    edge_keys = tuple((edge.source, edge.target) for edge in flow.network.edges)
-    budget = derived_profile_digit_budget(flow)
-    divergences = {
-        (commodity_id, vertex): Fraction(0)
-        for commodity_id in commodity_ids
-        for vertex in range(flow.network.vertex_count)
-    }
-    loads = {edge_key: Fraction(0) for edge_key in edge_keys}
-    for entry in flow.entries:
-        amount = entry.amount.as_fraction()
-        divergences[(entry.commodity_id, entry.source)] += amount
-        divergences[(entry.commodity_id, entry.target)] -= amount
-        loads[(entry.source, entry.target)] += amount
+    divergences, loads = _component_sums(flow)
+    budget = derived_profile_digit_budget_from_sums(flow, divergences, loads)
 
     divergence_rows = tuple(
         CommodityDivergence(

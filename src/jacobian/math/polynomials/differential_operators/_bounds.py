@@ -328,9 +328,10 @@ def _require_expansion_operator(
 def _require_expansion_source(polynomial: RationalPolynomial) -> None:
     """Bound the source against the kernel's derivative-expansion input regime.
 
-    Derivative work, coefficient growth, exact output support, and serialized
-    size are derived from the source's actual terms downstream; only the input
-    coefficient height stays capped here beyond the shared representation.
+    Derivative work, coefficient growth, and exact output size are derived
+    from the source's actual support, exponents, and coefficients downstream;
+    input admission follows the shared canonical polynomial representation
+    while the input coefficient height stays capped here.
     """
 
     require_polynomial_budget(

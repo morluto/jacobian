@@ -9,15 +9,16 @@ from pydantic import Field, StrictInt, model_validator
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.polynomials.values import (
-    MAX_POLYNOMIAL_EXPONENT,
     MAX_POLYNOMIAL_TERMS,
     MAX_POLYNOMIAL_VARIABLES,
     PolynomialVariable,
 )
 
+MAX_DIFFERENTIAL_ORDER = (1 << 53) - 1
+
 DifferentialOrder = Annotated[
     StrictInt,
-    Field(ge=0, le=MAX_POLYNOMIAL_EXPONENT),
+    Field(ge=0, le=MAX_DIFFERENTIAL_ORDER),
 ]
 
 
@@ -30,7 +31,8 @@ class DifferentialOperatorTerm(StrictModel):
         max_length=MAX_POLYNOMIAL_VARIABLES,
         description=(
             "Derivative orders on the operator's complete ordered variable axis. "
-            "For variables (x, y), orders (2, 1) denotes partial_x^2 partial_y."
+            "For variables (x, y), orders (2, 1) denotes partial_x^2 partial_y. "
+            "Each order stays inside the strict-JSON interoperable integer range."
         ),
         examples=[(2, 1)],
     )

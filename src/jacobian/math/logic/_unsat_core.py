@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from fractions import Fraction
-from typing import Any, Literal, Self
+from typing import Any, Literal, NamedTuple, Self
 
 from pydantic import ConfigDict, Field, StrictInt, ValidationError, model_validator
 
@@ -29,6 +29,23 @@ _AffineTerms = tuple[tuple[Fraction, Any], ...]
 _AffineForm = tuple[_AffineTerms, Fraction]
 
 
+class _CoefficientEnvelope(NamedTuple):
+    """Numeric height plus reachable coefficient digit budgets for one expression.
+
+    Every coefficient reachable while reading the expression linearly has
+    magnitude at most ``height``, numerator digit count at most
+    ``numerator_digits``, and denominator digit count at most
+    ``denominator_digits``.
+    """
+
+    height: Fraction
+    numerator_digits: int
+    denominator_digits: int
+
+
+_UNIT_COEFFICIENT_ENVELOPE = _CoefficientEnvelope(Fraction(1), 1, 1)
+
+
 class SmtUnsatCoreRequest(SmtSolveRequest):
     """One bounded SMT-LIB query whose top-level assertions are indexed from zero.
 
@@ -46,8 +63,9 @@ class SmtUnsatCoreRequest(SmtSolveRequest):
     subtractions over closed and variable-carrying operands, exact division
     by closed nonzero constants, integer division included when every divided
     coefficient remains exactly divisible, and arithmetic if-then-else
-    selections, where scaling is bounded by the largest coefficient reachable
-    through any branch).
+    selections, where scaling is validated against every branch's reachable
+    coefficient digits, so a numerically smaller branch cannot hide reciprocal
+    growth beyond the digit budget).
     Assertion source order is the public zero-based index. Parsing constructs Z3
     syntax trees only; it does not evaluate the source as Python or as a host
     command. Execution performs one tracked check and at most one direct
@@ -300,14 +318,14 @@ def _normalize_closed_coefficients(assertions: tuple[Any, ...]) -> tuple[Any, ..
     normalized_by_id: dict[int, Any] = {}
     closed_value_by_id: dict[int, Fraction | None] = {}
     form_by_id: dict[int, _AffineForm | None] = {}
-    height_by_id: dict[int, Fraction] = {}
+    envelope_by_id: dict[int, _CoefficientEnvelope] = {}
     return tuple(
         _normalize_closed_expression(
             assertion,
             normalized_by_id=normalized_by_id,
             closed_value_by_id=closed_value_by_id,
             form_by_id=form_by_id,
-            height_by_id=height_by_id,
+            envelope_by_id=envelope_by_id,
         )
         for assertion in assertions
     )
@@ -340,25 +358,29 @@ def _fold_scaled_product(
     child_values: tuple[Fraction | None, ...],
     *,
     form_by_id: dict[int, _AffineForm | None],
-    height_by_id: dict[int, Fraction],
-) -> tuple[Any, _AffineForm | None]:
+    envelope_by_id: dict[int, _CoefficientEnvelope],
+) -> tuple[Any, _AffineForm | None, _CoefficientEnvelope | None]:
     """Flatten one product with a single variable-carrying affine child."""
 
     import z3
 
     if candidate.decl().kind() != z3.Z3_OP_MUL:
-        return candidate, None
+        return candidate, None, None
     open_indices = [index for index, value in enumerate(child_values) if value is None]
     if len(open_indices) != 1:
-        return candidate, None
+        return candidate, None, None
     dependent = children[open_indices[0]]
     coefficient = _bounded_fraction_product(
         tuple(value for value in child_values if value is not None)
     )
+    scaled_envelope = None
     child_form = form_by_id.get(dependent.get_id())
     if child_form is None:
-        scaled_height = coefficient * height_by_id.get(dependent.get_id(), Fraction(1))
-        _require_bounded_normalized_coefficient(scaled_height)
+        scaled_envelope = _scaled_coefficient_envelope(
+            coefficient,
+            envelope_by_id.get(dependent.get_id(), _UNIT_COEFFICIENT_ENVELOPE),
+        )
+        _require_bounded_normalized_coefficient(scaled_envelope.height)
         child_form = (((Fraction(1), dependent),), Fraction(0))
     terms, offset = child_form
     scaled_terms: list[tuple[Fraction, Any]] = []
@@ -372,7 +394,7 @@ def _fold_scaled_product(
         _require_bounded_normalized_coefficient(scaled_offset)
     folded_terms = tuple(scaled_terms)
     folded = _affine_expression(folded_terms, scaled_offset, template=candidate)
-    return folded, (folded_terms, scaled_offset)
+    return folded, (folded_terms, scaled_offset), scaled_envelope
 
 
 def _normalize_closed_expression(
@@ -381,7 +403,7 @@ def _normalize_closed_expression(
     normalized_by_id: dict[int, Any],
     closed_value_by_id: dict[int, Fraction | None],
     form_by_id: dict[int, _AffineForm | None],
-    height_by_id: dict[int, Fraction],
+    envelope_by_id: dict[int, _CoefficientEnvelope],
 ) -> Any:
     """Normalize one expression without retaining a recursive closure over its AST."""
 
@@ -399,19 +421,19 @@ def _normalize_closed_expression(
         normalized_by_id[expression_id] = expression
         closed_value_by_id[expression_id] = value
         form_by_id[expression_id] = ((), value)
-        height_by_id[expression_id] = abs(value)
+        envelope_by_id[expression_id] = _closed_value_envelope(value)
         return expression
     if not z3.is_app(expression):
         normalized_by_id[expression_id] = expression
         closed_value_by_id[expression_id] = None
         form_by_id[expression_id] = None
-        height_by_id[expression_id] = Fraction(1)
+        envelope_by_id[expression_id] = _UNIT_COEFFICIENT_ENVELOPE
         return expression
     if z3.is_arith(expression) and not expression.children():
         normalized_by_id[expression_id] = expression
         closed_value_by_id[expression_id] = None
         form_by_id[expression_id] = (((Fraction(1), expression),), Fraction(0))
-        height_by_id[expression_id] = Fraction(1)
+        envelope_by_id[expression_id] = _UNIT_COEFFICIENT_ENVELOPE
         return expression
 
     children = expression.children()
@@ -421,7 +443,7 @@ def _normalize_closed_expression(
             normalized_by_id=normalized_by_id,
             closed_value_by_id=closed_value_by_id,
             form_by_id=form_by_id,
-            height_by_id=height_by_id,
+            envelope_by_id=envelope_by_id,
         )
         for child in children
     )
@@ -434,12 +456,12 @@ def _normalize_closed_expression(
         candidate = expression
 
     child_values = tuple(closed_value_by_id[child.get_id()] for child in children)
-    candidate, form = _fold_scaled_product(
+    candidate, form, scaled_envelope = _fold_scaled_product(
         candidate,
         children,
         child_values,
         form_by_id=form_by_id,
-        height_by_id=height_by_id,
+        envelope_by_id=envelope_by_id,
     )
 
     closed_value = _evaluate_closed_arithmetic(candidate.decl().kind(), child_values)
@@ -450,21 +472,27 @@ def _normalize_closed_expression(
         form = _wrapped_linear_form(
             candidate, children, child_values, form_by_id=form_by_id
         )
-    height = (
-        abs(closed_value)
-        if closed_value is not None
-        else _coefficient_height(
-            candidate.decl().kind(), children, child_values, height_by_id=height_by_id
+    if closed_value is not None:
+        envelope = _closed_value_envelope(closed_value)
+    else:
+        envelope = _coefficient_height(
+            candidate.decl().kind(),
+            children,
+            child_values,
+            envelope_by_id=envelope_by_id,
         )
-    )
+        if scaled_envelope is not None:
+            envelope = scaled_envelope
+        elif form is not None:
+            envelope = _affine_form_envelope(form, height=envelope.height)
 
     normalized_by_id[expression_id] = candidate
     closed_value_by_id[expression_id] = closed_value
     form_by_id[expression_id] = form
-    height_by_id[expression_id] = height
+    envelope_by_id[expression_id] = envelope
     if not candidate.eq(expression):
         form_by_id[candidate.get_id()] = form
-        height_by_id[candidate.get_id()] = height
+        envelope_by_id[candidate.get_id()] = envelope
     return candidate
 
 
@@ -527,49 +555,156 @@ def _coefficient_height(
     children: tuple[Any, ...],
     child_values: tuple[Fraction | None, ...],
     *,
-    height_by_id: dict[int, Fraction],
-) -> Fraction:
+    envelope_by_id: dict[int, _CoefficientEnvelope],
+) -> _CoefficientEnvelope:
     """Bound every coefficient reachable in one expression's linear reading.
 
     Arithmetic if-then-else selects exactly one branch, so its envelope is the
-    largest branch envelope; products multiply envelopes and signed sums merge
-    them, matching every scalar the preserving wrappers can derive downstream.
+    componentwise maximum of the branch envelopes: each branch keeps its own
+    numerator and denominator digit budget, so a numerically smaller reciprocal
+    branch cannot hide denominator growth from later scaling. Products multiply
+    envelopes and signed sums merge them, matching every scalar the preserving
+    wrappers can derive downstream.
     """
 
     import z3
 
-    child_heights = tuple(height_by_id[child.get_id()] for child in children)
-    if kind == z3.Z3_OP_ITE and len(child_heights) == 3:
-        return max(child_heights[1], child_heights[2])
+    child_envelopes = tuple(envelope_by_id[child.get_id()] for child in children)
+    if kind == z3.Z3_OP_ITE and len(child_envelopes) == 3:
+        left, right = child_envelopes[1], child_envelopes[2]
+        return _CoefficientEnvelope(
+            max(left.height, right.height),
+            max(left.numerator_digits, right.numerator_digits),
+            max(left.denominator_digits, right.denominator_digits),
+        )
     if kind == z3.Z3_OP_UMINUS:
-        return child_heights[0]
-    total = Fraction(0)
-    if kind == z3.Z3_OP_SUB:
-        total += child_heights[0]
-        _require_bounded_normalized_coefficient(total)
-        child_heights = child_heights[1:]
-    if kind in (z3.Z3_OP_ADD, z3.Z3_OP_SUB):
-        for height in child_heights:
-            total += height
-            _require_bounded_normalized_coefficient(total)
-        return total
+        return child_envelopes[0]
     if kind == z3.Z3_OP_MUL:
-        return _bounded_fraction_product(child_heights)
+        return _multiplied_envelope(child_envelopes)
     if (
         len(children) == 2
         and kind in (z3.Z3_OP_DIV, z3.Z3_OP_IDIV)
         and child_values[1] is not None
         and child_values[1] != 0
     ):
-        scaled = child_heights[0] / abs(child_values[1])
-        if kind == z3.Z3_OP_IDIV:
-            scaled += 1
-        _require_bounded_normalized_coefficient(scaled)
-        return scaled
-    for height in child_heights:
-        total += height
-        _require_bounded_normalized_coefficient(total)
-    return total
+        return _divided_envelope(
+            child_envelopes[0], child_values[1], exact=kind == z3.Z3_OP_DIV
+        )
+    if kind in (z3.Z3_OP_ADD, z3.Z3_OP_SUB):
+        return _signed_sum_envelope(child_envelopes)
+    height = Fraction(0)
+    for envelope in child_envelopes:
+        height += envelope.height
+        _require_bounded_normalized_coefficient(height)
+    return _maximal_digit_envelope(
+        child_envelopes,
+        height=height,
+    )
+
+
+def _multiplied_envelope(
+    envelopes: tuple[_CoefficientEnvelope, ...],
+) -> _CoefficientEnvelope:
+    """Scale one envelope by every remaining envelope, as products do."""
+
+    return _CoefficientEnvelope(
+        _bounded_fraction_product(tuple(envelope.height for envelope in envelopes)),
+        sum(envelope.numerator_digits for envelope in envelopes),
+        sum(envelope.denominator_digits for envelope in envelopes),
+    )
+
+
+def _divided_envelope(
+    dividend: _CoefficientEnvelope,
+    divisor: Fraction,
+    *,
+    exact: bool,
+) -> _CoefficientEnvelope:
+    """Divide one envelope by a closed nonzero constant, SMT-LIB div included."""
+
+    scaled = dividend.height / abs(divisor)
+    numerator_digits = dividend.numerator_digits + len(str(divisor.denominator))
+    denominator_digits = dividend.denominator_digits + len(str(abs(divisor.numerator)))
+    if not exact:
+        scaled += 1
+        numerator_digits += 1
+    _require_bounded_normalized_coefficient(scaled)
+    return _CoefficientEnvelope(scaled, numerator_digits, denominator_digits)
+
+
+def _signed_sum_envelope(
+    envelopes: tuple[_CoefficientEnvelope, ...],
+) -> _CoefficientEnvelope:
+    """Merge child readings the way signed sums combine their coefficients."""
+
+    height = Fraction(0)
+    for envelope in envelopes:
+        height += envelope.height
+        _require_bounded_normalized_coefficient(height)
+    denominator_digits = sum(envelope.denominator_digits for envelope in envelopes)
+    widest_numerator = max(
+        (
+            envelope.numerator_digits + denominator_digits - envelope.denominator_digits
+            for envelope in envelopes
+        ),
+        default=0,
+    )
+    return _CoefficientEnvelope(
+        height,
+        widest_numerator + len(str(len(envelopes))),
+        denominator_digits,
+    )
+
+
+def _maximal_digit_envelope(
+    envelopes: tuple[_CoefficientEnvelope, ...],
+    *,
+    height: Fraction,
+) -> _CoefficientEnvelope:
+    """Carry the widest child digit budgets without compounding them."""
+
+    return _CoefficientEnvelope(
+        height,
+        max((envelope.numerator_digits for envelope in envelopes), default=0),
+        max((envelope.denominator_digits for envelope in envelopes), default=0),
+    )
+
+
+def _closed_value_envelope(value: Fraction) -> _CoefficientEnvelope:
+    return _CoefficientEnvelope(
+        abs(value),
+        len(str(abs(value.numerator))),
+        len(str(value.denominator)),
+    )
+
+
+def _affine_form_envelope(
+    form: _AffineForm, *, height: Fraction
+) -> _CoefficientEnvelope:
+    """Read exact digit budgets off the flattened coefficients of one form."""
+
+    coefficients = (form[1], *(coefficient for coefficient, _core in form[0]))
+    return _CoefficientEnvelope(
+        height,
+        max(len(str(abs(value.numerator))) for value in coefficients),
+        max(len(str(value.denominator)) for value in coefficients),
+    )
+
+
+def _scaled_coefficient_envelope(
+    coefficient: Fraction,
+    envelope: _CoefficientEnvelope,
+) -> _CoefficientEnvelope:
+    """Validate a scalar against a dependent's budget before scaling it."""
+
+    numerator_digits = len(str(abs(coefficient.numerator))) + envelope.numerator_digits
+    denominator_digits = len(str(coefficient.denominator)) + envelope.denominator_digits
+    _require_bounded_coefficient_digit_budget(numerator_digits, denominator_digits)
+    return _CoefficientEnvelope(
+        coefficient * envelope.height,
+        numerator_digits,
+        denominator_digits,
+    )
 
 
 def _combined_signed_form(
@@ -687,6 +822,20 @@ def _exact_arithmetic_value(value: Fraction, *, template: Any) -> Any:
             ctx=template.ctx,
         )
     raise ValueError("normalized coefficient must have an arithmetic sort")
+
+
+def _require_bounded_coefficient_digit_budget(
+    numerator_digits: int,
+    denominator_digits: int,
+) -> None:
+    if (
+        numerator_digits > _MAX_CORE_NUMERAL_DIGITS
+        or denominator_digits > _MAX_CORE_NUMERAL_DIGITS
+    ):
+        raise ValueError(
+            "normalized SMT coefficient numerator and denominator may contain at "
+            f"most {_MAX_CORE_NUMERAL_DIGITS} digits"
+        )
 
 
 def _require_bounded_normalized_coefficient(value: Fraction) -> None:

@@ -741,6 +741,46 @@ def test_request_bounds_deeply_nested_ite_branch_coefficients(nesting: int) -> N
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source)
 
 
+@pytest.mark.parametrize(
+    "assertion_template",
+    (
+        "(assert (= (* {outer} (ite p (* {inner} x) x)) 0))",
+        "(assert (= (* {outer} (ite p x (* {inner} x))) 0))",
+        "(assert (= (* {outer} (ite p (* {inner} x) (* {inner} x))) 0))",
+    ),
+)
+def test_request_bounds_reciprocal_ite_branch_denominator_digits(
+    assertion_template: str,
+) -> None:
+    outer = "0." + "9" * 150
+    inner = "0." + "9" * 150
+    source = (
+        "(set-logic QF_LRA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const x Real)\n"
+        f"{assertion_template.format(outer=outer, inner=inner)}\n"
+        "(check-sat)\n"
+    )
+
+    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+
+
+def test_request_bounds_ite_branch_digits_when_scalars_cancel_the_height() -> None:
+    larger = "9" * 150
+    smaller = "0." + "9" * 150
+    source = (
+        "(set-logic QF_LRA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const x Real)\n"
+        f"(assert (= (* {smaller} (ite p (* {larger} x) (* {smaller} x))) 0))\n"
+        "(check-sat)\n"
+    )
+
+    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+
+
 def test_translated_nested_coefficients_flatten_and_still_solve() -> None:
     source = (
         "(set-logic QF_LIA)\n"
@@ -889,6 +929,39 @@ def test_small_ite_branch_scalars_remain_admitted_and_satisfiable() -> None:
     )
 
     result = compute_smt_unsat_core(SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source))
+
+    assert result.outcome == "SAT"
+    assert result.core_indices == ()
+
+
+def test_bounded_reciprocal_ite_branches_flatten_and_still_solve() -> None:
+    larger = "9" * 100
+    smaller = "0." + "9" * 100
+    source = (
+        "(set-logic QF_LRA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const x Real)\n"
+        f"(assert (= (* {smaller} (ite p (* {larger} x) (* {smaller} x))) 0))\n"
+        "(assert (distinct x 0))\n"
+        "(check-sat)\n"
+    )
+
+    result = compute_smt_unsat_core(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
+
+    assert result.outcome == "UNSAT"
+    assert result.core_indices == (0, 1)
+
+
+def test_small_reciprocal_ite_scalars_remain_admitted_and_satisfiable() -> None:
+    source = (
+        "(set-logic QF_LRA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const x Real)\n"
+        "(assert (>= (* 0.5 (ite p (* 0.25 x) x)) 0))\n"
+        "(check-sat)\n"
+    )
+
+    result = compute_smt_unsat_core(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
 
     assert result.outcome == "SAT"
     assert result.core_indices == ()

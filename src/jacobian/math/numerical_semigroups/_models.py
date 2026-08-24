@@ -51,15 +51,23 @@ def _require_positive_bounded_generators(generators: tuple[str, ...]) -> None:
 
 
 def _require_minimal_generators(generators: tuple[str, ...]) -> tuple[int, ...]:
+    """Normalize a valid presentation to its increasing minimal atom axis."""
+
+    _require_positive_bounded_generators(generators)
+    values = tuple(sorted({parse_canonical_integer(value) for value in generators}))
+    return minimal_generating_system(values)
+
+
+def _require_canonical_minimal_axis(
+    generators: tuple[str, ...],
+) -> tuple[int, ...]:
+    """Reject results whose coordinate axis is not the semigroup's atom axis."""
+
     _require_positive_bounded_generators(generators)
     values = tuple(parse_canonical_integer(value) for value in generators)
-    if values != tuple(sorted(set(values))):
-        raise ValueError("generators must be distinct and strictly increasing")
-    minimal = minimal_generating_system(values)
-    if values != minimal:
+    if values != _require_minimal_generators(generators):
         raise ValueError(
-            "generators must be the minimal generating system; "
-            f"expected {list(minimal)}"
+            "minimal_generators must use the canonical minimal generator axis"
         )
     return values
 
@@ -268,7 +276,13 @@ class FactorizationComputeRequest(StrictModel):
     """Compute the complete factorization family Z(s) for one element."""
 
     generators: tuple[CanonicalInteger, ...] = Field(
-        min_length=1, max_length=MAX_GENERATORS
+        min_length=1,
+        max_length=MAX_GENERATORS,
+        description=(
+            "Positive generators with gcd 1. The presentation may be reordered "
+            "or redundant; returned coordinates use its increasing minimal "
+            "generator axis."
+        ),
     )
     value: CanonicalInteger
 
@@ -292,7 +306,7 @@ class FactorizationComputeResult(StrictModel):
 
     @model_validator(mode="after")
     def require_exact_family(self) -> Self:
-        generators = tuple(map(parse_canonical_integer, self.minimal_generators))
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
         value = parse_canonical_integer(self.value)
         if self.in_semigroup != bool(self.factorizations):
             raise ValueError("membership must agree with the factorization family")
@@ -384,7 +398,12 @@ class FactorizationGraphComputeRequest(StrictModel):
     """Compute the standard factorization graph of one element."""
 
     generators: tuple[CanonicalInteger, ...] = Field(
-        min_length=1, max_length=MAX_GENERATORS
+        min_length=1,
+        max_length=MAX_GENERATORS,
+        description=(
+            "Positive generators with gcd 1. The presentation may be reordered "
+            "or redundant; graph vertices use its increasing minimal generator axis."
+        ),
     )
     value: CanonicalInteger
 
@@ -411,7 +430,7 @@ class FactorizationGraphComputeResult(StrictModel):
 
     @model_validator(mode="after")
     def require_graph_partition(self) -> Self:
-        generators = tuple(map(parse_canonical_integer, self.minimal_generators))
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
         value = parse_canonical_integer(self.value)
         vertex_count = len(self.factorizations)
         if self.in_semigroup != bool(self.factorizations):
@@ -487,8 +506,9 @@ class ElementElasticityRequest(StrictModel):
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
-            f"Distinct, strictly increasing minimal generators, each at most "
-            f"{MAX_GENERATOR}."
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; results use its "
+            "increasing minimal generator axis."
         ),
     )
     value: CanonicalInteger = Field(
@@ -608,7 +628,12 @@ class MinimalPresentationRequest(StrictModel):
     """One minimal presentation of a numerical semigroup."""
 
     generators: tuple[CanonicalInteger, ...] = Field(
-        min_length=1, max_length=MAX_GENERATORS
+        min_length=1,
+        max_length=MAX_GENERATORS,
+        description=(
+            "Positive generators with gcd 1. The presentation may be reordered "
+            "or redundant; returned relations use its increasing minimal generator axis."
+        ),
     )
 
     @model_validator(mode="after")
@@ -644,7 +669,7 @@ class MinimalPresentationResult(StrictModel):
 
     @model_validator(mode="after")
     def require_minimal_relation_counts(self) -> Self:
-        generators = tuple(map(parse_canonical_integer, self.minimal_generators))
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
         _, _, disconnected = betti_data(generators)
         if tuple(map(parse_canonical_integer, self.betti_elements)) != tuple(
             disconnected
@@ -693,7 +718,13 @@ class PresentationBinomialsRequest(StrictModel):
     """Convert a minimal presentation to sparse binomial form."""
 
     generators: tuple[CanonicalInteger, ...] = Field(
-        min_length=1, max_length=MAX_GENERATORS
+        min_length=1,
+        max_length=MAX_GENERATORS,
+        description=(
+            "Positive generators with gcd 1. The presentation may be reordered "
+            "or redundant; relation coordinates must use its increasing minimal "
+            "generator axis."
+        ),
     )
     relations: tuple[MinimalPresentationRelation, ...]
 
@@ -738,6 +769,36 @@ class PresentationBinomialsResult(StrictModel):
 
     minimal_generators: tuple[CanonicalInteger, ...]
     binomials: tuple[PresentationBinomial, ...]
+
+    @model_validator(mode="after")
+    def require_canonical_axis_and_homogeneous_binomials(self) -> Self:
+        generators = _require_canonical_minimal_axis(self.minimal_generators)
+        for binomial in self.binomials:
+            if (
+                len(binomial.left_exponents) != len(generators)
+                or len(binomial.right_exponents) != len(generators)
+            ):
+                raise ValueError("binomial exponents must match the minimal generator axis")
+            if any(
+                exponent < 0
+                for exponent in (*binomial.left_exponents, *binomial.right_exponents)
+            ):
+                raise ValueError("binomial exponents must be non-negative")
+            left_degree = sum(
+                exponent * generator
+                for exponent, generator in zip(
+                    binomial.left_exponents, generators, strict=True
+                )
+            )
+            right_degree = sum(
+                exponent * generator
+                for exponent, generator in zip(
+                    binomial.right_exponents, generators, strict=True
+                )
+            )
+            if left_degree != right_degree:
+                raise ValueError("binomial terms must have the same semigroup degree")
+        return self
 
 
 class DeltaSetRequest(StrictModel):
@@ -787,8 +848,9 @@ class ElasticityRequest(StrictModel):
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
-            f"Distinct, strictly increasing minimal generators, each at most "
-            f"{MAX_GENERATOR}."
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; the ratio uses its "
+            "increasing minimal generator axis."
         ),
     )
 

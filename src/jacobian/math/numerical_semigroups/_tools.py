@@ -115,10 +115,10 @@ NUMERICAL_SEMIGROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _operation(
         "number_theory.numerical_semigroup.factorizations.compute",
         "Compute complete factorization family Z(s)",
-        "Given an ordered minimal generating system and an element, compute "
-        "the complete bounded factorization family Z(s), expressed as tuples "
-        "of generator multiplicities. Oversized exact outputs fail request "
-        "validation before computation.",
+        "Given a finite positive generator presentation and an element, compute "
+        "the complete bounded factorization family Z(s) on the increasing minimal "
+        "generator axis. Redundant or reordered generators normalize before exact "
+        "output validation.",
         FactorizationComputeRequest,
         FactorizationComputeResult,
         compute_factorizations,
@@ -197,8 +197,8 @@ NUMERICAL_SEMIGROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _operation(
         "number_theory.numerical_semigroup.presentation_binomials.compute",
         "Convert presentation to sparse binomials",
-        "Validate presentation relations against the declared minimal "
-        "generators and convert each relation (u,v) to the toric binomial "
+        "Normalize a generator presentation to its minimal axis, validate relations "
+        "against that axis, and convert each relation (u,v) to the toric binomial "
         "X^u-X^v with coefficients 1 and -1.",
         PresentationBinomialsRequest,
         PresentationBinomialsResult,
@@ -274,8 +274,8 @@ NUMERICAL_SEMIGROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "elasticity_15_in_3_5",
-                "Elasticity of 15 in <3,5> with minimal generators (distinct, "
-                "strictly increasing, gcd 1) and positive member value.",
+                "Elasticity of 15 in <3,5>; positive gcd-one generators normalize "
+                "to the minimal axis and the value must be a positive member.",
                 {"generators": ["3", "5"], "value": "15"},
             ),
         ),
@@ -295,8 +295,8 @@ NUMERICAL_SEMIGROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "global_elasticity_3_5",
-                "Global elasticity of <3,5> with minimal generators (distinct, "
-                "strictly increasing, gcd 1).",
+                "Global elasticity of <3,5>; positive gcd-one generators normalize "
+                "to the minimal axis.",
                 {"generators": ["3", "5"]},
             ),
         ),

@@ -12,11 +12,15 @@ from jacobian.math.numerical_semigroups._models import (
     ElementDeltaSetRequest,
     ElementElasticityRequest,
     FactorizationComputeRequest,
+    FactorizationComputeResult,
     FactorizationDistanceRequest,
     FactorizationGraphComputeRequest,
+    FactorizationGraphComputeResult,
     FactorizationLengthsComputeRequest,
     MinimalPresentationRequest,
+    MinimalPresentationResult,
     PresentationBinomialsRequest,
+    PresentationBinomialsResult,
 )
 from jacobian.math.numerical_semigroups._operations import (
     compute_betti_elements,
@@ -62,10 +66,23 @@ class TestFactorizations:
         with pytest.raises(ValidationError, match="positive"):
             FactorizationComputeRequest(generators=("0", "5"), value="10")
 
-    def test_factorizations_non_minimal_generators(self):
-        """Coordinate-bearing requests reject ambiguous redundant generators."""
-        with pytest.raises(ValidationError, match="minimal generating system"):
-            FactorizationComputeRequest(generators=("3", "5", "8"), value="15")
+    def test_factorizations_normalize_redundant_permuted_generators(self):
+        """Factorizations always use the canonical minimal-generator axis."""
+        result = compute_factorizations(
+            FactorizationComputeRequest(generators=("8", "5", "3"), value="15")
+        )
+
+        assert result.minimal_generators == ("3", "5")
+        assert result.factorizations == ((0, 3), (5, 0))
+
+    def test_factorization_result_rejects_a_redundant_coordinate_axis(self):
+        with pytest.raises(ValidationError, match="canonical minimal"):
+            FactorizationComputeResult(
+                value="15",
+                minimal_generators=("3", "5", "8"),
+                in_semigroup=True,
+                factorizations=((0, 3, 0), (5, 0, 0)),
+            )
 
     def test_factorization_materialization_is_complete_past_old_silent_cap(self):
         generators = ("6", "7", "8", "9", "10", "11")
@@ -123,7 +140,7 @@ class TestFactorizationDistance:
         assert result.distance == 0
 
     def test_distance_rejects_mismatched_lengths(self):
-        with pytest.raises(ValidationError, match="minimal generating system"):
+        with pytest.raises(ValidationError, match="coordinates must match"):
             FactorizationDistanceRequest(
                 generators=("3", "5"), value="15", first=(5, 0, 0), second=(0, 3)
             )
@@ -142,6 +159,26 @@ class TestFactorizationDistance:
 
 
 class TestFactorizationGraph:
+    def test_graph_normalizes_redundant_generators(self):
+        result = compute_factorization_graph(
+            FactorizationGraphComputeRequest(generators=("8", "3", "5"), value="15")
+        )
+
+        assert result.minimal_generators == ("3", "5")
+        assert result.factorizations == ((0, 3), (5, 0))
+
+    def test_graph_result_rejects_a_redundant_coordinate_axis(self):
+        with pytest.raises(ValidationError, match="canonical minimal"):
+            FactorizationGraphComputeResult(
+                value="15",
+                minimal_generators=("3", "5", "8"),
+                in_semigroup=True,
+                factorizations=((0, 3, 0), (5, 0, 0)),
+                edges=(),
+                connected_components=((0,), (1,)),
+                is_connected=False,
+            )
+
     def test_graph_15_in_3_5_disconnected(self):
         req = FactorizationGraphComputeRequest(generators=("3", "5"), value="15")
         result = compute_factorization_graph(req)
@@ -259,6 +296,26 @@ class TestBettiElements:
 
 
 class TestMinimalPresentation:
+    def test_presentation_normalizes_redundant_permuted_generators(self):
+        result = compute_minimal_presentation(
+            MinimalPresentationRequest(generators=("10", "9", "6", "4"))
+        )
+
+        assert result.minimal_generators == ("4", "6", "9")
+        assert all(
+            len(relation.first) == len(result.minimal_generators)
+            and len(relation.second) == len(result.minimal_generators)
+            for relation in result.relations
+        )
+
+    def test_presentation_result_rejects_a_redundant_coordinate_axis(self):
+        with pytest.raises(ValidationError, match="canonical minimal"):
+            MinimalPresentationResult(
+                minimal_generators=("3", "5", "8"),
+                betti_elements=("15",),
+                relations=({"first": [5, 0, 0], "second": [0, 3, 0]},),
+            )
+
     def test_presentation_3_5(self):
         req = MinimalPresentationRequest(generators=("3", "5"))
         result = compute_minimal_presentation(req)
@@ -301,6 +358,32 @@ class TestMinimalPresentation:
 
 
 class TestPresentationBinomials:
+    def test_binomials_accept_relations_on_the_normalized_axis(self):
+        presentation = compute_minimal_presentation(
+            MinimalPresentationRequest(generators=("8", "5", "3"))
+        )
+        result = compute_presentation_binomials(
+            PresentationBinomialsRequest(
+                generators=("3", "8", "5"), relations=presentation.relations
+            )
+        )
+
+        assert result.minimal_generators == ("3", "5")
+        assert result.binomials[0].left_exponents == (5, 0)
+        assert result.binomials[0].right_exponents == (0, 3)
+
+    def test_binomial_result_rejects_a_redundant_coordinate_axis(self):
+        with pytest.raises(ValidationError, match="canonical minimal"):
+            PresentationBinomialsResult(
+                minimal_generators=("3", "5", "8"),
+                binomials=(
+                    {
+                        "left_exponents": [5, 0, 0],
+                        "right_exponents": [0, 3, 0],
+                    },
+                ),
+            )
+
     def test_binomials_3_5(self):
         req = PresentationBinomialsRequest(
             generators=("3", "5"),

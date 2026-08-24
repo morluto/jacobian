@@ -223,11 +223,14 @@ def compute_optimal_discrepancy(
     """Minimize the maximum imbalance via an exact integer program.
 
     Variables ``x_u in {-1, +1}`` and a shared nonnegative integer ``D``
-    with ``D >= |sum_{u in S} x_u|`` for every set ``S``.  Minimizing ``D``
-    with Z3's complete integer optimization is exact: a sat answer carries
-    a coloring whose replayed discrepancy equals the proven lower bound.
-    An exhausted solver budget returns ``BUDGET_EXCEEDED`` with no
-    mathematical claim; the empty ground set has the single empty coloring
+    with ``D >= |sum_{u in S} x_u|`` for every set ``S``.  A sat answer is
+    only trusted as OPTIMAL when Z3's objective handle proves it: its
+    lower and upper bounds must coincide with each other, with the model's
+    objective value, and with an independent Python replay of the
+    coloring's exact maximum imbalance.  An incumbent found after an
+    exhausted budget has open bounds and is reported as
+    ``BUDGET_EXCEEDED`` with no mathematical claim; likewise any
+    non-sat outcome.  The empty ground set has the single empty coloring
     with discrepancy zero.
     """
     n = request.set_system.ground_set_size
@@ -251,12 +254,40 @@ def compute_optimal_discrepancy(
             else z3.IntVal(0)
         )
         optimizer.add(objective >= signed_sum, objective >= -signed_sum)
-    optimizer.minimize(objective)
+    objective_handle = optimizer.minimize(objective)
+
+    def _bound_digits(expression: object) -> int | None:
+        """Return the integer value of a numeral bound, or None if open."""
+
+        as_long = getattr(expression, "as_long", None)
+        if callable(as_long):
+            try:
+                return int(as_long())
+            except Exception:
+                return None
+        return None
 
     outcome = optimizer.check()
     if outcome != z3.sat:
         return _budget_exceeded_result(request.set_system)
     model = optimizer.model()
     coloring = tuple(int(model.evaluate(variable).as_long()) for variable in variables)
-    optimum = int(model.evaluate(objective).as_long())
-    return _proven_optimal_result(request.set_system, coloring, optimum)
+    model_objective = int(model.evaluate(objective).as_long())
+    lower_bound = _bound_digits(optimizer.lower(objective_handle))
+    upper_bound = _bound_digits(optimizer.upper(objective_handle))
+    replayed_optimum = max(
+        (abs(sum(coloring[element] for element in subset)) for subset in sets),
+        default=0,
+    )
+    proven = (
+        lower_bound is not None
+        and upper_bound is not None
+        and lower_bound == upper_bound == model_objective == replayed_optimum
+    )
+    if not proven:
+        return _budget_exceeded_result(request.set_system)
+    return _proven_optimal_result(
+        request.set_system,
+        coloring,
+        model_objective,
+    )

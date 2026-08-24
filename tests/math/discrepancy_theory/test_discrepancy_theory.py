@@ -702,3 +702,44 @@ class TestDiscrepancyOptimum:
         payload = compute_optimal_discrepancy(req).model_dump()
         with pytest.raises(ValidationError, match="replay budget"):
             DiscrepancyOptimumResult.model_validate(payload)
+
+    def test_easy_instance_still_proves_bounds_after_bound_check(self):
+        """The bound-checking kernel still reports OPTIMAL with replay."""
+        system = FiniteSetSystem(ground_set_size=4, sets=((0, 1), (2, 3)))
+        result = compute_optimal_discrepancy(
+            DiscrepancyOptimumRequest(set_system=system)
+        )
+        assert result.status == "OPTIMAL"
+        assert result.optimal_discrepancy == 0
+        replayed = max(
+            abs(sum(result.optimal_coloring[element] for element in subset))
+            for subset in system.sets
+        )
+        assert replayed == result.optimal_discrepancy
+
+    def test_hard_instance_outcome_is_always_honest(self):
+        """Whatever the budget outcome, an OPTIMAL claim replays exactly and
+        BUDGET_EXCEEDED carries no witness — a timed-out incumbent must not
+        be labeled optimal."""
+        import random
+
+        generator = random.Random(7)
+        n = 36
+        sets = tuple(tuple(sorted(generator.sample(range(n), 18))) for _ in range(24))
+        system = FiniteSetSystem(ground_set_size=n, sets=sets)
+        result = compute_optimal_discrepancy(
+            DiscrepancyOptimumRequest(set_system=system)
+        )
+        if result.status == "OPTIMAL":
+            replayed = max(
+                abs(sum(result.optimal_coloring[element] for element in subset))
+                for subset in sets
+            )
+            assert replayed == result.optimal_discrepancy
+            # The claimed optimum is achievable, so it upper-bounds every
+            # coloring; optimality itself was established by coinciding
+            # solver bounds before this branch could run.
+            assert result.optimal_discrepancy >= 0
+        else:
+            assert result.optimal_coloring == ()
+            assert result.optimal_discrepancy is None

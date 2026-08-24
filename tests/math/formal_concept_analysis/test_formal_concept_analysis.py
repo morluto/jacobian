@@ -153,16 +153,82 @@ class TestEnumeration:
         result = compute_enumerate_concepts(
             EnumerateConceptsRequest(context=_cross_context())
         )
-        # Cross context: (�{}, {a0,a1}), ({o0}, {a0}), ({o1}, {a1})
+        # Cross context: ({}, {a0,a1}), ({o0}, {a0}), ({o1}, {a1})
         assert result.count == 4
 
-    def test_diagonal_context_has_three_concepts(self) -> None:
+    def test_diagonal_context_has_two_concepts(self) -> None:
+        """cl(empty) = {a1} here, so the empty intent is not a concept."""
         result = compute_enumerate_concepts(
             EnumerateConceptsRequest(context=_diagonal_context())
         )
         # Diagonal: o0 has both a0 and a1; o1 has a1.
-        # Concepts: ({o0,o1}, {}), ({o0,o1}, {a1}), ({o0}, {a0,a1})
-        assert result.count == 3
+        # Concepts: ({o0,o1}, {a1}), ({o0}, {a0,a1})
+        assert result.count == 2
+
+
+# ---------------------------------------------------------------------------
+# Defining-equation replay (#2266)
+# ---------------------------------------------------------------------------
+
+
+def _assert_defining_equations(context: FormalContext) -> None:
+    from jacobian.math.formal_concept_analysis import (
+        attribute_derivation,
+        object_derivation,
+    )
+
+    for extent_tuple, intent_tuple in compute_enumerate_concepts(
+        EnumerateConceptsRequest(context=context)
+    ).concepts:
+        extent = frozenset(extent_tuple)
+        intent = frozenset(intent_tuple)
+        assert object_derivation(context, extent) == intent
+        assert attribute_derivation(context, intent) == extent
+
+
+@pytest.mark.parametrize(
+    "incidence",
+    (
+        ((0, 0), (0, 1), (1, 1)),
+        ((0, 0), (1, 1)),
+        ((0, 0), (0, 1), (1, 0), (1, 1)),
+        ((0, 1), (1, 0), (1, 1)),
+        ((0, 0),),
+        ((0, 0), (0, 1), (0, 2), (1, 1), (2, 2)),
+    ),
+)
+def test_every_emitted_concept_satisfies_defining_equations(
+    incidence: tuple[tuple[int, int], ...],
+) -> None:
+    object_count = max((o for o, _a in incidence), default=-1) + 1
+    attribute_count = max((a for _o, a in incidence), default=-1) + 1
+    context = FormalContext(
+        objects=tuple(f"o{i}" for i in range(object_count)),
+        attributes=tuple(f"a{j}" for j in range(attribute_count)),
+        incidence=incidence,
+    )
+    _assert_defining_equations(context)
+
+
+def test_lattice_embedded_concepts_replay_defining_equations() -> None:
+    from jacobian.math.formal_concept_analysis import (
+        attribute_derivation,
+        object_derivation,
+    )
+
+    context = _diagonal_context()
+    result = compute_concept_lattice(
+        EnumerateConceptsRequest(context=_diagonal_context())
+    )
+    assert len(result.concepts) == 2
+    for extent_tuple, intent_tuple in result.concepts:
+        extent = frozenset(extent_tuple)
+        intent = frozenset(intent_tuple)
+        assert object_derivation(context, extent) == intent
+        assert attribute_derivation(context, intent) == extent
+    # Extents are pairwise distinct, so no two concepts compare equal.
+    extents = [frozenset(extent_tuple) for extent_tuple, _intent in result.concepts]
+    assert len(set(extents)) == len(extents)
 
 
 # ---------------------------------------------------------------------------

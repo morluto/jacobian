@@ -984,6 +984,90 @@ def test_request_bounds_compared_pairless_chain_denominator_digits() -> None:
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
 
 
+def test_request_bounds_scaled_formless_ite_nested_division_digits() -> None:
+    scalar = "9" * 150
+    outer = "9" * 150
+    inner = "9" * 100
+    source = (
+        "(set-logic QF_LRA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const x Real)\n"
+        "(assert (= (/ (/ (/ "
+        f"(ite p (* {scalar} {outer} x) (* {outer} x)) "
+        f"{outer}) {scalar}) {inner}) 0))\n"
+        "(check-sat)\n"
+    )
+
+    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+
+
+def test_bounded_scaled_formless_ite_nested_division_still_admitted() -> None:
+    scalar = "9" * 60
+    outer = "7" * 60
+    inner = "3" * 60
+    source = (
+        "(set-logic QF_LRA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const x Real)\n"
+        "(assert (= (/ (/ (/ "
+        f"(ite p (* {scalar} {outer} x) (* {outer} x)) "
+        f"{outer}) {scalar}) {inner}) 0))\n"
+        "(assert (>= x 1))\n"
+        "(assert (<= x 1))\n"
+        "(check-sat)\n"
+    )
+
+    assert SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+
+    result = compute_smt_unsat_core(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
+
+    assert result.outcome == "UNSAT"
+    assert result.core_indices == (0, 1)
+
+
+def test_request_bounds_sum_division_of_formless_ite_denominator_digits() -> None:
+    inner = "9" * 200
+    outer = "9" * 100
+    source = (
+        "(set-logic QF_LRA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const q Bool)\n"
+        "(declare-const x Real)\n"
+        "(assert (= (/ (/ "
+        f"(+ (ite p (* {inner} x) x) (ite q (* {inner} x) x)) "
+        f"(* 2 {inner})) {outer}) 0))\n"
+        "(check-sat)\n"
+    )
+
+    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+
+
+def test_bounded_sum_division_of_formless_ite_still_admitted() -> None:
+    inner = "3" * 60
+    outer = "9" * 60
+    source = (
+        "(set-logic QF_LRA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const q Bool)\n"
+        "(declare-const x Real)\n"
+        "(assert (= (/ (/ "
+        f"(+ (ite p (* {inner} x) x) (ite q (* {inner} x) x)) "
+        f"(* 2 {inner})) {outer}) 0))\n"
+        "(assert (>= x 1))\n"
+        "(assert (<= x 1))\n"
+        "(check-sat)\n"
+    )
+
+    assert SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+
+    result = compute_smt_unsat_core(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
+
+    assert result.outcome == "UNSAT"
+    assert result.core_indices == (0, 1)
+
+
 def test_request_keeps_shared_denominator_formless_ite_sums_admitted() -> None:
     digits = "9" * 100
     source = (

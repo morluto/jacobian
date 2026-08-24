@@ -54,16 +54,11 @@ _MAX_ENVELOPE_PAIRS = 16
 
 
 def _capped_pairs(
-    numerators_by_denominator: dict[int, int],
+    pairs: set[tuple[int, int]],
 ) -> tuple[tuple[int, int], ...] | None:
-    if len(numerators_by_denominator) > _MAX_ENVELOPE_PAIRS:
+    if len(pairs) > _MAX_ENVELOPE_PAIRS:
         return None
-    return tuple(
-        sorted(
-            (numerator, denominator)
-            for denominator, numerator in numerators_by_denominator.items()
-        )
-    )
+    return tuple(sorted(pairs))
 
 
 def _merged_pairs(
@@ -76,9 +71,7 @@ def _merged_pairs(
         if pair_list is None:
             return None
         merged.update(pair_list)
-    if len(merged) > _MAX_ENVELOPE_PAIRS:
-        return None
-    return tuple(sorted(merged))
+    return _capped_pairs(merged)
 
 
 def _pairs_common_denominator(
@@ -95,14 +88,15 @@ def _scaled_pairs(
 ) -> tuple[tuple[int, int], ...] | None:
     if pairs is None:
         return None
-    numerators_by_denominator: dict[int, int] = {}
-    for numerator, denominator in pairs:
-        scaled = Fraction(numerator, denominator) * scalar
-        numerators_by_denominator[scaled.denominator] = max(
-            numerators_by_denominator.get(scaled.denominator, 0),
-            abs(scaled.numerator),
-        )
-    return _capped_pairs(numerators_by_denominator)
+    return _capped_pairs(
+        {
+            (
+                abs((Fraction(numerator, denominator) * scalar).numerator),
+                (Fraction(numerator, denominator) * scalar).denominator,
+            )
+            for numerator, denominator in pairs
+        }
+    )
 
 
 class SmtUnsatCoreRequest(SmtSolveRequest):
@@ -732,26 +726,21 @@ def _multiplied_envelope(
 def _product_pairs(
     pair_lists: tuple[tuple[tuple[int, int], ...] | None, ...],
 ) -> tuple[tuple[int, int], ...] | None:
-    result: dict[int, int] = {1: 1}
+    result: set[tuple[int, int]] = {(1, 1)}
     for pair_list in pair_lists:
         if pair_list is None:
             return None
-        combined: dict[int, int] = {}
+        combined: set[tuple[int, int]] = set()
         for numerator, denominator in pair_list:
             left = Fraction(numerator, denominator)
-            for shared_denominator, shared_numerator in result.items():
+            for shared_numerator, shared_denominator in result:
                 right = Fraction(shared_numerator, shared_denominator)
                 product = left * right
-                combined[product.denominator] = max(
-                    combined.get(product.denominator, 0),
-                    abs(product.numerator),
-                )
+                combined.add((abs(product.numerator), product.denominator))
         result = combined
         if len(result) > _MAX_ENVELOPE_PAIRS:
             return None
-    return tuple(
-        sorted((numerator, denominator) for denominator, numerator in result.items())
-    )
+    return _capped_pairs(result)
 
 
 def _divided_envelope(
@@ -804,18 +793,30 @@ def _signed_sum_envelope(
     numerator_digits = widest_numerator + len(str(len(envelopes)))
     shared = _shared_denominator_of_pairs(envelopes)
     if shared is not None:
-        merged_numerator = 0
+        lifted: list[set[Fraction]] = []
         for envelope in envelopes:
-            merged_numerator += max(
-                (
-                    numerator * (shared // denominator)
+            lifted.append(
+                {
+                    Fraction(numerator, denominator) * shared
                     for numerator, denominator in envelope.pairs or ()
-                ),
-                default=0,
+                }
             )
-        denominator_digits = min(denominator_digits, len(str(shared)))
-        numerator_digits = min(numerator_digits, len(str(merged_numerator)))
-        pairs: tuple[tuple[int, int], ...] | None = ((merged_numerator, shared),)
+        totals: set[Fraction] = {Fraction(0)}
+        for values in lifted:
+            totals = {total + value for total in totals for value in values}
+            if len(totals) > _MAX_ENVELOPE_PAIRS:
+                break
+        else:
+            pairs = _capped_pairs(
+                {(abs(value.numerator), value.denominator) for value in totals}
+            )
+            common_denominator = _pairs_common_denominator(pairs)
+            if common_denominator is not None:
+                denominator_digits = min(
+                    denominator_digits, len(str(common_denominator))
+                )
+            widest_merged = max(abs(value.numerator) for value in totals)
+            numerator_digits = min(numerator_digits, len(str(widest_merged)))
     else:
         pairs = None
     if validate_budget:
@@ -920,17 +921,13 @@ def _affine_form_envelope(
     """Read exact digit budgets off the flattened coefficients of one form."""
 
     coefficients = (form[1], *(coefficient for coefficient, _core in form[0]))
-    numerators_by_denominator: dict[int, int] = {}
-    for value in coefficients:
-        key = value.denominator
-        numerators_by_denominator[key] = max(
-            numerators_by_denominator.get(key, 0), abs(value.numerator)
-        )
     return _CoefficientEnvelope(
         height,
         max(len(str(abs(value.numerator))) for value in coefficients),
         max(len(str(value.denominator)) for value in coefficients),
-        _capped_pairs(numerators_by_denominator),
+        _capped_pairs(
+            {(abs(value.numerator), value.denominator) for value in coefficients}
+        ),
     )
 
 

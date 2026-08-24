@@ -34,9 +34,9 @@ TOOLS: MathTools = (
         version="1",
         title="Enclose a rational polynomial on a rational box",
         description=(
-            "Exact rational natural interval extension of one sparse scalar QQ "
-            "polynomial on a complete axis-aligned box. It contains the full image, "
-            "need not be the exact range, and containing zero does not prove a root. "
+            "Deterministic exact rational enclosure of one sparse scalar QQ polynomial "
+            "on a complete axis-aligned box. It contains the full image, need not be "
+            "the exact range, and containing zero does not prove a root. "
             f"{BOX_ENCLOSURE_ADMISSION_SUMMARY}"
         ),
         request_type=PolynomialBoxEnclosureRequest,

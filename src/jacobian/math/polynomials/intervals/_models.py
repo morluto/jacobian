@@ -4,36 +4,41 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import gcd
-from typing import Literal, Self
+from typing import Self
 
 from pydantic import ConfigDict, model_validator
 
+from jacobian._digest import Sha256Digest
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.canonical import (
     CanonicalLimits,
     encode_strict_json,
     format_canonical_integer,
+    sha256_digest,
 )
+from jacobian.math.intervals import ClosedRationalInterval, RationalBox
 from jacobian.math.polynomials.intervals._kernel import (
     natural_interval_extension,
     term_is_zero_on_box,
 )
-from jacobian.math.polynomials.intervals.values import (
-    ClosedRationalInterval,
-    RationalBox,
-)
 from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_EXPONENT,
+    MAX_POLYNOMIAL_TERMS,
+    MAX_POLYNOMIAL_VARIABLES,
     RationalPolynomial,
     RationalPolynomialTerm,
     require_polynomial_budget,
 )
 
-MAX_BOX_ENCLOSURE_TERMS = 1_024
-MAX_BOX_ENCLOSURE_PER_VARIABLE_DEGREE = 64
-MAX_BOX_ENCLOSURE_TOTAL_DEGREE = 128
-MAX_BOX_ENCLOSURE_COEFFICIENT_DIGITS = 128
-MAX_BOX_ENCLOSURE_ENDPOINT_DIGITS = 128
+MAX_BOX_ENCLOSURE_TERMS = MAX_POLYNOMIAL_TERMS
+MAX_BOX_ENCLOSURE_PER_VARIABLE_DEGREE = MAX_POLYNOMIAL_EXPONENT
+MAX_BOX_ENCLOSURE_TOTAL_DEGREE = (
+    MAX_POLYNOMIAL_VARIABLES * MAX_BOX_ENCLOSURE_PER_VARIABLE_DEGREE
+)
+MAX_BOX_ENCLOSURE_TERM_AXIS_PAIRS = MAX_BOX_ENCLOSURE_TERMS * MAX_POLYNOMIAL_VARIABLES
+MAX_BOX_ENCLOSURE_COEFFICIENT_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
+MAX_BOX_ENCLOSURE_ENDPOINT_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
 # Shared interval values validate before this operation's narrower source
 # preflight. Ordering two maximum-size canonical rationals may therefore
 # cross-multiply one numerator and the opposite denominator. The intermediate
@@ -50,6 +55,7 @@ BOX_ENCLOSURE_ADMISSION_SUMMARY = (
     f"{MAX_BOX_ENCLOSURE_TOTAL_DEGREE} total; "
     f"{MAX_BOX_ENCLOSURE_COEFFICIENT_DIGITS}-digit coefficient and "
     f"{MAX_BOX_ENCLOSURE_ENDPOINT_DIGITS}-digit input-endpoint components; "
+    f"{MAX_BOX_ENCLOSURE_TERM_AXIS_PAIRS:,} term-axis pairs; "
     f"{MAX_BOX_ENCLOSURE_INTERMEDIATE_DIGITS:,}-digit intermediate components; "
     f"{MAX_BOX_ENCLOSURE_RESULT_DIGITS:,}-digit result components; "
     f"{MAX_BOX_ENCLOSURE_RESULT_BYTES:,}-byte canonical retained-source result."
@@ -112,9 +118,36 @@ def _coefficient_lcm_contribution(
 def _endpoint_lcm_contribution(interval: ClosedRationalInterval) -> int:
     lower_denominator = interval.lower.as_integer_ratio()[1]
     upper_denominator = interval.upper.as_integer_ratio()[1]
-    common = lower_denominator // gcd(lower_denominator, upper_denominator)
-    common *= upper_denominator
+    factor = lower_denominator // gcd(lower_denominator, upper_denominator)
+    predicted_product_digits = _integer_digits(factor) + _integer_digits(
+        upper_denominator
+    )
+    if predicted_product_digits > MAX_BOX_ENCLOSURE_INTERMEDIATE_DIGITS:
+        raise ValueError(
+            "polynomial-box endpoint denominator LCM exceeds the "
+            f"{MAX_BOX_ENCLOSURE_INTERMEDIATE_DIGITS}-digit intermediate bound"
+        )
+    common = factor * upper_denominator
     return 0 if common == 1 else _integer_digits(common)
+
+
+def _source_payload(
+    polynomial: RationalPolynomial,
+    box: RationalBox,
+) -> dict[str, object]:
+    return {
+        "polynomial": polynomial.model_dump(mode="json"),
+        "box": box.model_dump(mode="json"),
+    }
+
+
+def polynomial_box_source_digest(
+    polynomial: RationalPolynomial,
+    box: RationalBox,
+) -> Sha256Digest:
+    """Return the strict-wire digest binding one polynomial and ordered box."""
+
+    return sha256_digest(encode_strict_json(_source_payload(polynomial, box)))
 
 
 def _term_component_bounds(
@@ -150,14 +183,7 @@ def _estimate_growth(
     polynomial: RationalPolynomial,
     box: RationalBox,
 ) -> _GrowthEstimate:
-    source_bytes = len(
-        encode_strict_json(
-            {
-                "polynomial": polynomial.model_dump(mode="json"),
-                "box": box.model_dump(mode="json"),
-            }
-        )
-    )
+    source_bytes = len(encode_strict_json(_source_payload(polynomial, box)))
     effective_terms = tuple(
         term
         for term in polynomial.polynomial.terms
@@ -244,14 +270,6 @@ def _require_enclosure_preflight(
         maximum_coefficient_digits=MAX_BOX_ENCLOSURE_COEFFICIENT_DIGITS,
         label="polynomial-box polynomial",
     )
-    if any(
-        sum(term.exponents) > MAX_BOX_ENCLOSURE_TOTAL_DEGREE
-        for term in polynomial.polynomial.terms
-    ):
-        raise ValueError(
-            "polynomial-box polynomial exceeds total degree "
-            f"{MAX_BOX_ENCLOSURE_TOTAL_DEGREE}"
-        )
     for variable, interval in zip(box.variables, box.intervals, strict=True):
         for endpoint in (interval.lower, interval.upper):
             require_bounded_rational(
@@ -289,8 +307,8 @@ class PolynomialBoxEnclosureRequest(StrictModel):
             "description": (
                 "Enclose one canonical scalar QQ polynomial on a complete closed "
                 "rational box. The box must use exactly the polynomial's ordered "
-                "variables. The natural interval extension is deterministic and "
-                "sound but need not be the exact range. "
+                "variables. The returned exact rational interval is deterministic "
+                "and sound but need not be the exact range. "
                 f"{BOX_ENCLOSURE_ADMISSION_SUMMARY}"
             )
         }
@@ -310,17 +328,20 @@ class PolynomialBoxEnclosureResult(StrictModel):
 
     polynomial: RationalPolynomial
     box: RationalBox
+    source_digest: Sha256Digest
     enclosure: ClosedRationalInterval
-    method: Literal["NATURAL_INTERVAL_EXTENSION"] = "NATURAL_INTERVAL_EXTENSION"
 
     @model_validator(mode="after")
     def require_replayable_enclosure(self) -> Self:
+        if self.source_digest != polynomial_box_source_digest(
+            self.polynomial,
+            self.box,
+        ):
+            raise ValueError("source digest does not bind the polynomial and box")
         _require_enclosure_preflight(self.polynomial, self.box)
         expected = natural_interval_extension(self.polynomial, self.box)
         if self.enclosure != expected:
-            raise ValueError(
-                "enclosure does not match the source's natural interval extension"
-            )
+            raise ValueError("enclosure does not match the bounded source replay")
         return self
 
 
@@ -333,7 +354,9 @@ __all__ = [
     "MAX_BOX_ENCLOSURE_RESULT_BYTES",
     "MAX_BOX_ENCLOSURE_RESULT_DIGITS",
     "MAX_BOX_ENCLOSURE_TERMS",
+    "MAX_BOX_ENCLOSURE_TERM_AXIS_PAIRS",
     "MAX_BOX_ENCLOSURE_TOTAL_DEGREE",
     "PolynomialBoxEnclosureRequest",
     "PolynomialBoxEnclosureResult",
+    "polynomial_box_source_digest",
 ]

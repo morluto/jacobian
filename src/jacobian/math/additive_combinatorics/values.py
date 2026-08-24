@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from itertools import pairwise
-from typing import Annotated, Self
+from typing import Annotated, Any, Self
 
 from pydantic import Field, StrictInt, StringConstraints, model_validator
+from pydantic.json_schema import WithJsonSchema
 
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
@@ -83,6 +84,30 @@ class IndexedIntegerSequence(StrictModel):
         return tuple(parse_canonical_integer(item) for item in self.items)
 
 
+def indexed_sequence_item_ceiling(maximum_items: int) -> dict[str, Any]:
+    """Return the shared sequence definition tightened to ``maximum_items``.
+
+    The canonical sequence value advertises the widest consumer envelope, so a
+    verbatim shared definition would make every consumer publish
+    ``maxItems: 500000`` even when its validator admits fewer items. Consumers
+    attach the returned schema through ``WithJsonSchema`` so their own schema
+    documents advertise exactly the item ceiling their validators enforce;
+    validation itself stays with the canonical value.
+    """
+
+    schema: dict[str, Any] = IndexedIntegerSequence.model_json_schema()
+    schema.pop("$defs", None)
+    items_schema = schema["properties"]["items"]
+    items_schema["maxItems"] = maximum_items
+    items_schema["description"] = (
+        f"An ordered tuple of at most {maximum_items:,} canonical integers. "
+        "Repeated values and zeros remain distinct indexed items; each "
+        f"integer has at most {MAX_SUBSET_SUM_ITEM_DIGITS:,} decimal digits, "
+        "excluding its optional sign."
+    )
+    return schema
+
+
 class SubsetSumProfileEntry(StrictModel):
     """One attainable sum and its positive indexed-subset multiplicity."""
 
@@ -105,7 +130,10 @@ class SubsetSumProfile(StrictModel):
     bounded dynamic program, binding every row and multiplicity to ``source``.
     """
 
-    source: IndexedIntegerSequence
+    source: Annotated[
+        IndexedIntegerSequence,
+        WithJsonSchema(indexed_sequence_item_ceiling(MAX_SUBSET_SUM_ITEMS)),
+    ]
     entries: tuple[SubsetSumProfileEntry, ...] = Field(
         min_length=1,
         max_length=MAX_SUBSET_SUM_PROFILE_ENTRIES,

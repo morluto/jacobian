@@ -21,7 +21,15 @@ from jacobian.math.additive_combinatorics.values import (
 MAX_SUBSET_SUM_INTEGER_DIGITS = 256
 MAX_SUBSET_SUM_REACHABLE_STATES = 65_536
 MAX_SUBSET_SUM_TRANSITIONS_PER_PASS = 500_000
-MAX_SUBSET_SUM_TOTAL_TRANSITIONS = 2 * MAX_SUBSET_SUM_TRANSITIONS_PER_PASS
+# One complete public call performs four charged DP-equivalent passes: the
+# request admission scan, the solver kernel, and their source-binding replays
+# inside result validation. Each pass inspects the same reachable states
+# through the same resolving prefix, so charging four identical per-pass
+# ceilings bounds every accepted complete call.
+MAX_SUBSET_SUM_COMPLETE_CALL_PASSES = 4
+MAX_SUBSET_SUM_TOTAL_TRANSITIONS = (
+    MAX_SUBSET_SUM_COMPLETE_CALL_PASSES * MAX_SUBSET_SUM_TRANSITIONS_PER_PASS
+)
 MAX_SUBSET_SUM_SOURCE_WIRE_BYTES = 4 * 1024 * 1024
 MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS = 262
 
@@ -77,7 +85,8 @@ def _raw_source_item_count(source: object) -> int | None:
         raise ValueError(
             "subset-sum request exceeds the "
             f"{MAX_SUBSET_SUM_TOTAL_TRANSITIONS:,}-transition complete-call "
-            "bound across computation and source-binding replay"
+            "bound across admission, computation, and both source-binding "
+            "replays"
         )
 
     source_wire_bound = 64
@@ -101,17 +110,36 @@ def _require_admitted_work(
 ) -> None:
     """Bound the kernel's insert-only passes with their exact reachable sums.
 
-    Admission replays the same reachable-sum growth the kernel performs and
-    stops at the first source prefix whose canonical witness resolves the
-    target. A resolved request is bounded only by the work through that
-    prefix, because every witness inside a resolving prefix carries a
-    strictly smaller incidence mask than any witness of the later expansion;
-    the resolving scan itself is charged before its prefix is accepted, so
-    the charged work includes every scanned state. A request the prefix
-    replay never resolves must fit the exhaustive reachable-state and
+    Every subset sum lies in ``[negative_span, positive_span]``, so a target
+    outside that closed interval is exactly unattainable before any state
+    exists. Admission resolves such targets with no expansion, and the kernel
+    returns the same decision without building any state.
+
+    Otherwise admission replays the same reachable-sum growth the kernel
+    performs and stops at the first source prefix whose canonical witness
+    resolves the target. A resolved request is bounded only by the work
+    through that prefix, because every witness inside a resolving prefix
+    carries a strictly smaller incidence mask than any witness of the later
+    expansion; the resolving scan itself is charged before its prefix is
+    accepted, so the charged work includes every scanned state. A request the
+    prefix replay never resolves must fit the exhaustive reachable-state and
     transition bounds across the whole source before execution.
+
+    The public path performs this scan twice (request admission and its
+    source-binding replay inside result validation) and runs the kernel
+    equally often (computation and validation replay). Each pass inspects the
+    same reachable states through the same prefix, so charging four identical
+    per-pass ceilings bounds every accepted complete call by
+    ``MAX_SUBSET_SUM_TOTAL_TRANSITIONS``.
     """
 
+    if not (
+        sum(value for value in values if value < 0)
+        <= target
+        <= sum(value for value in values if value > 0)
+    ):
+        # Outside the attained interval no subset sum can equal the target.
+        return
     states: set[int] = {0} if allow_empty_subset else set()
     if target in states:
         # The retained empty witness is already the globally smallest mask.
@@ -125,7 +153,8 @@ def _require_admitted_work(
             raise ValueError(
                 "subset-sum request exceeds the "
                 f"{MAX_SUBSET_SUM_TOTAL_TRANSITIONS:,}-transition complete-call "
-                "bound across computation and source-binding replay"
+                "bound across admission, computation, and both source-binding "
+                "replays"
             )
         if any(subtotal + value == target for subtotal in states):
             return

@@ -15,15 +15,13 @@ from jacobian.math.additive_combinatorics import (
 from jacobian.math.additive_combinatorics._subset_sum_residue import (
     MAX_RESIDUE_PROFILE_DP_CELLS,
     MAX_RESIDUE_PROFILE_INPUT_INTEGER_DIGITS,
+    MAX_RESIDUE_PROFILE_ITEMS,
     MAX_RESIDUE_PROFILE_MODULUS,
     MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS,
     MAX_RESIDUE_PROFILE_RESULT_BYTES,
     SubsetSumResidueProfileRequest,
     SubsetSumResidueProfileResult,
     compute_subset_sum_residue_profile,
-)
-from jacobian.math.additive_combinatorics.values import (
-    MAX_INDEXED_INTEGER_SEQUENCE_ITEMS,
 )
 
 
@@ -320,15 +318,25 @@ def test_request_bounds_raw_source_before_nested_parsing() -> None:
         )
 
 
-def test_source_schema_admits_the_advertised_shared_envelope() -> None:
+def test_source_schema_publishes_the_consumer_item_ceiling() -> None:
     schema = SubsetSumResidueProfileRequest.model_json_schema()
-    items_schema = schema["$defs"]["IndexedIntegerSequence"]["properties"]["items"]
+    items_schema = schema["properties"]["source"]["properties"]["items"]
 
-    assert items_schema["maxItems"] == MAX_INDEXED_INTEGER_SEQUENCE_ITEMS
+    assert items_schema["maxItems"] == MAX_RESIDUE_PROFILE_ITEMS
     assert (
         items_schema["items"]["maxLength"]
         == MAX_RESIDUE_PROFILE_INPUT_INTEGER_DIGITS + 1
     )
+
+
+def test_schema_item_ceiling_matches_validator_at_the_boundary() -> None:
+    at_ceiling = _request(
+        (0,) * MAX_RESIDUE_PROFILE_ITEMS, 1, include_empty_subset=False
+    )
+    assert len(at_ceiling.source.items) == MAX_RESIDUE_PROFILE_ITEMS
+
+    with pytest.raises(ValidationError, match="4,096-bit intermediate bound"):
+        _request((0,) * (MAX_RESIDUE_PROFILE_ITEMS + 1), 1, include_empty_subset=False)
 
 
 def test_positions_beyond_legacy_source_cap_are_admitted() -> None:
@@ -398,10 +406,8 @@ def test_modulus_boundary_and_schema_are_explicit() -> None:
     schema = SubsetSumResidueProfileRequest.model_json_schema()
     assert schema["properties"]["modulus"]["maximum"] == (MAX_RESIDUE_PROFILE_MODULUS)
     assert "include_empty_subset" in schema["required"]
-    source_schema = schema["$defs"]["IndexedIntegerSequence"]
-    assert (
-        "distinct indexed items" in source_schema["properties"]["items"]["description"]
-    )
+    items_schema = schema["properties"]["source"]["properties"]["items"]
+    assert "distinct indexed items" in items_schema["description"]
 
     with pytest.raises(ValidationError):
         SubsetSumResidueProfileRequest(

@@ -6,12 +6,14 @@ from collections.abc import Mapping
 from typing import Annotated, Self
 
 from pydantic import Field, StrictBool, StringConstraints, model_validator
+from pydantic.json_schema import WithJsonSchema
 
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.additive_combinatorics.values import (
     IndexedIntegerSequence,
     IndexSubset,
+    indexed_sequence_item_ceiling,
 )
 
 # The dense residue recurrence visits exactly n*m cells per pass.  Ordinary
@@ -24,6 +26,7 @@ MAX_RESIDUE_PROFILE_DP_CELLS = 1_000_000
 MAX_RESIDUE_PROFILE_TOTAL_DP_CELLS = 2 * MAX_RESIDUE_PROFILE_DP_CELLS
 MAX_RESIDUE_PROFILE_MODULUS = 65_536
 MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS = 4_096
+MAX_RESIDUE_PROFILE_ITEMS = MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS - 1
 MAX_RESIDUE_PROFILE_INPUT_INTEGER_DIGITS = 32_768
 
 # A count-only result may use the broader DP envelope.  Canonical witnesses
@@ -190,7 +193,10 @@ def _bound_raw_witnesses(
 class SubsetSumResidueProfileRequest(StrictModel):
     """Request a complete indexed-subset multiplicity profile in ``Z/mZ``."""
 
-    source: IndexedIntegerSequence = Field(
+    source: Annotated[
+        IndexedIntegerSequence,
+        WithJsonSchema(indexed_sequence_item_ceiling(MAX_RESIDUE_PROFILE_ITEMS)),
+    ] = Field(
         description=(
             "A materialized indexed integer tuple. At most 4,095 positions are "
             "admitted; every integer carries at most 32,768 digits, and the "
@@ -298,7 +304,10 @@ class SubsetSumResidueProfileRequest(StrictModel):
 class SubsetSumResidueProfileResult(StrictModel):
     """A complete exact residue profile bound to its indexed source."""
 
-    source: IndexedIntegerSequence
+    source: Annotated[
+        IndexedIntegerSequence,
+        WithJsonSchema(indexed_sequence_item_ceiling(MAX_RESIDUE_PROFILE_ITEMS)),
+    ]
     modulus: int = Field(ge=1, le=MAX_RESIDUE_PROFILE_MODULUS, strict=True)
     include_empty_subset: StrictBool
     include_witnesses: StrictBool
@@ -483,6 +492,7 @@ def compute_subset_sum_residue_profile(
 __all__ = [
     "MAX_RESIDUE_PROFILE_DP_CELLS",
     "MAX_RESIDUE_PROFILE_INPUT_INTEGER_DIGITS",
+    "MAX_RESIDUE_PROFILE_ITEMS",
     "MAX_RESIDUE_PROFILE_MODULUS",
     "MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS",
     "MAX_RESIDUE_PROFILE_RESULT_BYTES",

@@ -27,7 +27,6 @@ from jacobian.math.additive_combinatorics.operations import (
     MAX_SUBSET_SUM_PROFILE_RESULT_BYTES,
 )
 from jacobian.math.additive_combinatorics.values import (
-    MAX_INDEXED_INTEGER_SEQUENCE_ITEMS,
     MAX_SUBSET_SUM_ITEM_DIGITS,
     MAX_SUBSET_SUM_ITEMS,
     MAX_SUBSET_SUM_SUM_DIGITS,
@@ -246,12 +245,23 @@ def test_profile_entry_sum_digit_bound_applies_to_either_sign(
 
 def test_request_schema_exposes_source_shape_and_character_bounds() -> None:
     schema = SubsetSumProfileRequest.model_json_schema()
-    source_schema = schema["$defs"]["IndexedIntegerSequence"]
-    items_schema = source_schema["properties"]["items"]
+    items_schema = schema["properties"]["source"]["properties"]["items"]
     source_description = schema["properties"]["source"]["description"]
 
-    assert items_schema["maxItems"] == MAX_INDEXED_INTEGER_SEQUENCE_ITEMS
+    assert items_schema["maxItems"] == MAX_SUBSET_SUM_ITEMS
     assert items_schema["items"]["maxLength"] == MAX_SUBSET_SUM_ITEM_DIGITS + 1
     assert "4*n*S" in source_description
     assert "4,000,000" in source_description
     assert "4,194,304 bytes" in source_description
+
+
+def test_schema_item_ceiling_matches_validator_at_the_boundary() -> None:
+    at_ceiling = IndexedIntegerSequence(items=("0",) * MAX_SUBSET_SUM_ITEMS)
+    admitted = SubsetSumProfileRequest(source=at_ceiling)
+    assert len(admitted.source.items) == MAX_SUBSET_SUM_ITEMS
+
+    beyond = IndexedIntegerSequence(items=("0",) * (MAX_SUBSET_SUM_ITEMS + 1))
+    with pytest.raises(
+        ValidationError, match=f"{MAX_SUBSET_SUM_ITEMS:,}-item profile bound"
+    ):
+        SubsetSumProfileRequest(source=beyond)

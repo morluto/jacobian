@@ -124,7 +124,8 @@ ADDITIVE_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             "For a bounded indexed integer sequence and one integer target, "
             "return the canonical attaining index subset or establish exact "
             "non-attainment after exhausting the admitted reachable-sum state space. "
-            "The complete computation and source-binding replay perform at most "
+            "The complete call charges admission, computation, and both "
+            "source-binding replays, performing at most "
             f"{MAX_SUBSET_SUM_TOTAL_TRANSITIONS:,} state transitions."
         ),
         SubsetSumTargetRequest,

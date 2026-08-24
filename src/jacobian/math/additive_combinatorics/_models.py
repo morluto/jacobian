@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from typing import Annotated, Self
 
 from pydantic import Field, StringConstraints, model_validator
+from pydantic.json_schema import WithJsonSchema
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -17,8 +18,10 @@ from jacobian.math.additive_combinatorics.operations import (
     _subset_sum_profile_envelope,
 )
 from jacobian.math.additive_combinatorics.values import (
+    MAX_SUBSET_SUM_ITEMS,
     MAX_SUBSET_SUM_PROFILE_ENTRIES,
     IndexedIntegerSequence,
+    indexed_sequence_item_ceiling,
 )
 
 _MAX_SET_SIZE = 4096
@@ -331,7 +334,10 @@ class SubsetSumProfileRequest(StrictModel):
     worst-case serialized profile before the dynamic program begins.
     """
 
-    source: IndexedIntegerSequence = Field(
+    source: Annotated[
+        IndexedIntegerSequence,
+        WithJsonSchema(indexed_sequence_item_ceiling(MAX_SUBSET_SUM_ITEMS)),
+    ] = Field(
         description=(
             "The ordered indexed integer sequence, at most 4,095 items. Each "
             "position is selectable at most once; repeated values and zeros "

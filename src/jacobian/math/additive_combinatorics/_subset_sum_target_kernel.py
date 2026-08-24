@@ -28,6 +28,10 @@ def _solve_subset_sum_target(
 ) -> tuple[int, ...] | None:
     """Return the canonical index subset summing to ``target``, if one exists.
 
+    A target outside ``[negative_span, positive_span]`` misses every subset
+    sum, so it is resolved exactly without building any state; admission
+    resolves the same requests before expansion.
+
     Each reachable sum retains the smallest binary incidence mask, with source
     index zero as the least-significant bit.  This gives repeated values and
     zeros a stable, deterministic witness without treating them as a set.
@@ -36,6 +40,13 @@ def _solve_subset_sum_target(
     prefix carry masks strictly below any witness of the later expansion.
     """
 
+    if not (
+        sum(value for value in values if value < 0)
+        <= target
+        <= sum(value for value in values if value > 0)
+    ):
+        # Outside the attained interval no subset sum can equal the target.
+        return None
     states: dict[int, _WitnessNode | None] = {0: None} if allow_empty_subset else {}
     if target in states:
         # The retained empty witness is already the globally smallest mask,

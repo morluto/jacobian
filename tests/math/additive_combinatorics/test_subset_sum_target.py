@@ -17,7 +17,10 @@ from jacobian.math.additive_combinatorics._subset_sum_residue import (
     compute_subset_sum_residue_profile,
 )
 from jacobian.math.additive_combinatorics._subset_sum_target import (
+    MAX_SUBSET_SUM_COMPLETE_CALL_PASSES,
     MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS,
+    MAX_SUBSET_SUM_TOTAL_TRANSITIONS,
+    MAX_SUBSET_SUM_TRANSITIONS_PER_PASS,
     SubsetSumTargetRequest,
     SubsetSumTargetResult,
 )
@@ -277,8 +280,61 @@ def test_request_rejects_immediately_above_each_search_bound() -> None:
             allow_empty_subset=False,
         )
 
-    with pytest.raises(ValidationError, match="1,000,000-transition complete-call"):
-        _request((1,) * 1001, -1, allow_empty_subset=True)
+    with pytest.raises(ValidationError, match="2,000,000-transition complete-call"):
+        _request((2,) * 1000, 3, allow_empty_subset=True)
+
+
+def test_out_of_range_targets_resolve_before_state_expansion() -> None:
+    # Every subset sum of a positive-only source is nonnegative, so -1 is
+    # exactly unattainable even though an exhaustive expansion would push
+    # 2**17 reachable states past the 65,536-state bound.
+    powers = tuple(1 << exponent for exponent in range(17))
+    below = _operation().run(_request(powers, -1, allow_empty_subset=True))
+    assert below.status == "NOT_ATTAINED"
+    assert below.witness is None
+    assert below.reconstructed_sum is None
+
+    replayed = SubsetSumTargetResult.model_validate_json(below.model_dump_json())
+    assert replayed == below
+
+    # Mirror image: every subset sum of a negative-only source is
+    # nonpositive, so +1 is exactly unattainable without any expansion.
+    mirrored = _operation().run(
+        _request(tuple(-value for value in powers), 1, allow_empty_subset=True)
+    )
+    assert mirrored.status == "NOT_ATTAINED"
+    assert mirrored.witness is None
+
+    above = _operation().run(_request((1,) * 999, -1, allow_empty_subset=False))
+    assert above.status == "NOT_ATTAINED"
+
+    # Targets on the attained interval boundary stay inside the search:
+    # the negative span itself is attained by selecting every negative item.
+    negatives = (-2, -3, -7)
+    edge = _operation().run(_request(negatives, -12, allow_empty_subset=False))
+    assert edge.status == "ATTAINED"
+    assert edge.witness == IndexSubset(indices=(0, 1, 2))
+
+    just_inside = _operation().run(_request(negatives, -11, allow_empty_subset=True))
+    assert just_inside.status == "NOT_ATTAINED"
+
+
+def test_complete_call_charges_all_four_reachable_state_passes() -> None:
+    assert (
+        MAX_SUBSET_SUM_TOTAL_TRANSITIONS
+        == MAX_SUBSET_SUM_COMPLETE_CALL_PASSES * MAX_SUBSET_SUM_TRANSITIONS_PER_PASS
+    )
+
+    # An in-range exhausting request whose single pass scans 499,500 states
+    # stays admitted: its four charged passes (admission, kernel, and both
+    # source-binding replays) fit the advertised complete-call budget.
+    dense = (2,) * 999
+    unattained = _operation().run(_request(dense, 3, allow_empty_subset=True))
+    assert unattained.status == "NOT_ATTAINED"
+    assert unattained.witness is None
+
+    replayed = SubsetSumTargetResult.model_validate_json(unattained.model_dump_json())
+    assert replayed == unattained
 
 
 def test_request_admits_sources_at_the_profile_item_ceiling() -> None:

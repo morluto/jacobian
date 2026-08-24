@@ -31,9 +31,7 @@ class CategoryProfileResult(StrictModel):
     num_morphisms: int
     hom_sets: tuple[tuple[CategoryIdentifier, CategoryIdentifier, int], ...]
     endomorphisms: tuple[tuple[CategoryIdentifier, int], ...]
-    identity_morphisms: tuple[
-        tuple[CategoryIdentifier, CategoryIdentifier], ...
-    ]
+    identity_morphisms: tuple[tuple[CategoryIdentifier, CategoryIdentifier], ...]
 
 
 class CategoryProductRequest(StrictModel):

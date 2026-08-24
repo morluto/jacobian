@@ -60,9 +60,7 @@ def _discrete_category(size: int, prefix: str) -> FiniteCategory:
             for object_id, identity in identities
         ),
         identities=identities,
-        composition=tuple(
-            (identity, identity, identity) for _, identity in identities
-        ),
+        composition=tuple((identity, identity, identity) for _, identity in identities),
     )
 
 
@@ -71,8 +69,7 @@ def _cyclic_group_category(order: int) -> FiniteCategory:
     return FiniteCategory(
         objects=("*",),
         morphisms=tuple(
-            {"morphism_id": item, "source": "*", "target": "*"}
-            for item in morphism_ids
+            {"morphism_id": item, "source": "*", "target": "*"} for item in morphism_ids
         ),
         identities=(("*", "g0"),),
         composition=tuple(
@@ -320,9 +317,7 @@ class TestProduct:
         assert composition[(("f", "f"), ("id_A", "id_A"))] == ("f", "f")
 
     def test_product_value_serializes_into_a_later_product_unchanged(self) -> None:
-        first = product(
-            FiniteCategory(**CATEGORY), FiniteCategory(**TERMINAL_CATEGORY)
-        )
+        first = product(FiniteCategory(**CATEGORY), FiniteCategory(**TERMINAL_CATEGORY))
         serialized = first.product.model_dump(mode="json")
         restored = FiniteCategory.model_validate(serialized)
 
@@ -332,9 +327,7 @@ class TestProduct:
         assert second.product.objects[0] == (("A", "T"), "T")
 
     def test_empty_factor_retains_both_sources(self) -> None:
-        empty = FiniteCategory(
-            objects=(), morphisms=(), identities=(), composition=()
-        )
+        empty = FiniteCategory(objects=(), morphisms=(), identities=(), composition=())
         terminal = FiniteCategory(**TERMINAL_CATEGORY)
 
         result = product(empty, terminal)

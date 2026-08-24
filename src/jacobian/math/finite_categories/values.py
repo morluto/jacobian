@@ -38,9 +38,7 @@ def _identifier_wire_size(identifier: CategoryIdentifier) -> int:
     if isinstance(identifier, str):
         return len(encode_strict_json(identifier))
     return (
-        3
-        + _identifier_wire_size(identifier[0])
-        + _identifier_wire_size(identifier[1])
+        3 + _identifier_wire_size(identifier[0]) + _identifier_wire_size(identifier[1])
     )
 
 
@@ -277,9 +275,7 @@ def _category_wire_size(category: FiniteCategory) -> int:
                 "composition",
                 _json_array_size(
                     tuple(
-                        _json_array_size(
-                            tuple(identifier_sizes[item] for item in row)
-                        )
+                        _json_array_size(tuple(identifier_sizes[item] for item in row))
                         for row in category.composition
                     )
                 ),
@@ -297,15 +293,11 @@ class FiniteCategory(StrictModel):
     ``(g, f, result)`` and mean ``g ∘ f = result``.
     """
 
-    objects: tuple[CategoryIdentifier, ...] = Field(
+    objects: tuple[CategoryIdentifier, ...] = Field(max_length=MAX_CATEGORY_OBJECTS)
+    morphisms: tuple[MorphismSpec, ...] = Field(max_length=MAX_CATEGORY_MORPHISMS)
+    identities: tuple[tuple[CategoryIdentifier, CategoryIdentifier], ...] = Field(
         max_length=MAX_CATEGORY_OBJECTS
     )
-    morphisms: tuple[MorphismSpec, ...] = Field(
-        max_length=MAX_CATEGORY_MORPHISMS
-    )
-    identities: tuple[
-        tuple[CategoryIdentifier, CategoryIdentifier], ...
-    ] = Field(max_length=MAX_CATEGORY_OBJECTS)
     composition: tuple[
         tuple[CategoryIdentifier, CategoryIdentifier, CategoryIdentifier], ...
     ] = Field(max_length=MAX_CATEGORY_COMPOSABLE_PAIRS)
@@ -353,9 +345,7 @@ class FiniteCategory(StrictModel):
         by_id = _morphism_index(objects, morphisms)
         composable_pairs, composable_triples = _category_counts(objects, morphisms)
         if composable_pairs > MAX_CATEGORY_COMPOSABLE_PAIRS:
-            raise ValueError(
-                "category exceeds the bounded composable-pair work budget"
-            )
+            raise ValueError("category exceeds the bounded composable-pair work budget")
         if composable_triples > MAX_CATEGORY_COMPOSABLE_TRIPLES:
             raise ValueError(
                 "category exceeds the bounded composable-triple work budget"

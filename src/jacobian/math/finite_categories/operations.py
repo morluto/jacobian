@@ -49,9 +49,7 @@ def _source_identifier_sizes(
         | set(right.objects)
         | {morphism.morphism_id for morphism in right.morphisms}
     )
-    return {
-        identifier: _identifier_wire_size(identifier) for identifier in identifiers
-    }
+    return {identifier: _identifier_wire_size(identifier) for identifier in identifiers}
 
 
 def _array_size(count: int, item_bytes: int) -> int:
@@ -89,8 +87,10 @@ def _require_pair_identifier_budget(
     leaves = max(shape[1] for shape in left_shapes) + max(
         shape[1] for shape in right_shapes
     )
-    wire_size = 3 + max(identifier_sizes[item] for item in left) + max(
-        identifier_sizes[item] for item in right
+    wire_size = (
+        3
+        + max(identifier_sizes[item] for item in left)
+        + max(identifier_sizes[item] for item in right)
     )
     if depth > MAX_CATEGORY_IDENTIFIER_DEPTH:
         raise ValueError(f"{label} exceed the structural identifier-depth budget")
@@ -257,9 +257,7 @@ def _product_plan(left: FiniteCategory, right: FiniteCategory) -> _CategoryProdu
             f"budget of {MAX_CATEGORY_PRODUCT_REPLAY_STEPS} steps"
         )
 
-    product_category_size = _product_category_wire_size(
-        left, right, identifier_sizes
-    )
+    product_category_size = _product_category_wire_size(left, right, identifier_sizes)
     if product_category_size > MAX_CATEGORY_VALUE_BYTES:
         raise ValueError(
             "product category exceeds the bounded canonical category wire size of "

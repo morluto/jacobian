@@ -7,6 +7,7 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.numerical_semigroups._models import (
+    MAX_GENERATOR,
     BettiElementsRequest,
     BettiElementsResult,
     CatenaryDegreeRequest,
@@ -115,10 +116,10 @@ NUMERICAL_SEMIGROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _operation(
         "number_theory.numerical_semigroup.factorizations.compute",
         "Compute complete factorization family Z(s)",
-        "Given a finite positive generator presentation and an element, compute "
-        "the complete bounded factorization family Z(s) on the increasing minimal "
-        "generator axis. Redundant or reordered generators normalize before exact "
-        "output validation.",
+        f"Given positive gcd-one generators, each at most {MAX_GENERATOR}, and "
+        "an element, compute the complete bounded factorization family Z(s) on "
+        "the increasing minimal generator axis. Redundant or reordered generators "
+        "normalize before exact output validation.",
         FactorizationComputeRequest,
         FactorizationComputeResult,
         compute_factorizations,
@@ -197,9 +198,10 @@ NUMERICAL_SEMIGROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _operation(
         "number_theory.numerical_semigroup.presentation_binomials.compute",
         "Convert presentation to sparse binomials",
-        "Normalize a generator presentation to its minimal axis, validate relations "
-        "against that axis, and convert each relation (u,v) to the toric binomial "
-        "X^u-X^v with coefficients 1 and -1.",
+        "Normalize a positive gcd-one generator presentation, each at most "
+        f"{MAX_GENERATOR}, to its minimal axis, validate relations against that "
+        "axis, and convert each relation (u,v) to the toric binomial X^u-X^v "
+        "with coefficients 1 and -1.",
         PresentationBinomialsRequest,
         PresentationBinomialsResult,
         compute_presentation_binomials,
@@ -274,8 +276,9 @@ NUMERICAL_SEMIGROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "elasticity_15_in_3_5",
-                "Elasticity of 15 in <3,5>; positive gcd-one generators normalize "
-                "to the minimal axis and the value must be a positive member.",
+                "Elasticity of 15 in <3,5>; positive gcd-one generators, each at "
+                f"most {MAX_GENERATOR}, normalize to the minimal axis and the "
+                "value must be a positive member.",
                 {"generators": ["3", "5"], "value": "15"},
             ),
         ),
@@ -295,8 +298,8 @@ NUMERICAL_SEMIGROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "global_elasticity_3_5",
-                "Global elasticity of <3,5>; positive gcd-one generators normalize "
-                "to the minimal axis.",
+                "Global elasticity of <3,5>; positive gcd-one generators, each at "
+                f"most {MAX_GENERATOR}, normalize to the minimal axis.",
                 {"generators": ["3", "5"]},
             ),
         ),

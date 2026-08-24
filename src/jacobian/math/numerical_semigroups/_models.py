@@ -326,9 +326,9 @@ class FactorizationComputeRequest(StrictModel):
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
-            "Positive generators with gcd 1. The presentation may be reordered "
-            "or redundant; returned coordinates use its increasing minimal "
-            "generator axis."
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; returned "
+            "coordinates use its increasing minimal generator axis."
         ),
     )
     value: CanonicalInteger
@@ -370,9 +370,9 @@ class FactorizationLengthsComputeRequest(StrictModel):
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
-            "Positive generators with gcd 1. The presentation may be reordered "
-            "or redundant; factorization lengths use its increasing minimal "
-            "generator axis."
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; factorization "
+            "lengths use its increasing minimal generator axis."
         ),
     )
     value: CanonicalInteger
@@ -416,9 +416,10 @@ class FactorizationDistanceRequest(StrictModel):
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
-            "Positive generators with gcd 1. The presentation may be reordered "
-            "or redundant, but both factorization coordinate tuples must use its "
-            "increasing minimal generator axis."
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant, but both "
+            "factorization coordinate tuples must use its increasing minimal "
+            "generator axis."
         ),
     )
     value: CanonicalInteger
@@ -464,8 +465,9 @@ class FactorizationGraphComputeRequest(StrictModel):
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
-            "Positive generators with gcd 1. The presentation may be reordered "
-            "or redundant; graph vertices use its increasing minimal generator axis."
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; graph vertices use "
+            "its increasing minimal generator axis."
         ),
     )
     value: CanonicalInteger
@@ -528,9 +530,9 @@ class ElementDeltaSetRequest(StrictModel):
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
-            "Positive generators with gcd 1. The presentation may be reordered "
-            "or redundant; factorization lengths use its increasing minimal "
-            "generator axis."
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; factorization "
+            "lengths use its increasing minimal generator axis."
         ),
     )
     value: CanonicalInteger
@@ -631,9 +633,9 @@ class ElementCatenaryDegreeRequest(StrictModel):
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
-            "Positive generators with gcd 1. The presentation may be reordered "
-            "or redundant; factorization coordinates use its increasing minimal "
-            "generator axis."
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; factorization "
+            "coordinates use its increasing minimal generator axis."
         ),
     )
     value: CanonicalInteger
@@ -677,8 +679,9 @@ class BettiElementsRequest(StrictModel):
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
-            "Positive generators with gcd 1. The presentation may be reordered "
-            "or redundant; derived data uses its increasing minimal generator axis."
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; derived data uses "
+            "its increasing minimal generator axis."
         ),
     )
 
@@ -721,8 +724,9 @@ class MinimalPresentationRequest(StrictModel):
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
-            "Positive generators with gcd 1. The presentation may be reordered "
-            "or redundant; returned relations use its increasing minimal generator axis."
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; returned relations "
+            "use its increasing minimal generator axis."
         ),
     )
 
@@ -813,9 +817,9 @@ class PresentationBinomialsRequest(StrictModel):
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
-            "Positive generators with gcd 1. The presentation may be reordered "
-            "or redundant; relation coordinates must use its increasing minimal "
-            "generator axis."
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; relation "
+            "coordinates must use its increasing minimal generator axis."
         ),
     )
     relations: tuple[MinimalPresentationRelation, ...]
@@ -903,9 +907,9 @@ class DeltaSetRequest(StrictModel):
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
-            "Positive generators with gcd 1. The presentation may be reordered "
-            "or redundant; the complete delta set uses its increasing minimal "
-            "generator axis."
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; the complete delta "
+            "set uses its increasing minimal generator axis."
         ),
     )
 
@@ -989,9 +993,9 @@ class CatenaryDegreeRequest(StrictModel):
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
-            "Positive generators with gcd 1. The presentation may be reordered "
-            "or redundant; factorization coordinates use its increasing minimal "
-            "generator axis."
+            f"Positive generators with gcd 1, each at most {MAX_GENERATOR}. "
+            "The presentation may be reordered or redundant; factorization "
+            "coordinates use its increasing minimal generator axis."
         ),
     )
 

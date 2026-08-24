@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.numerical_semigroups._models import (
+    MAX_GENERATOR,
     BettiElementsRequest,
     BettiElementsResult,
     CatenaryDegreeRequest,
@@ -645,3 +646,50 @@ class TestGlobalCatenaryDegree:
         result = compute_catenary_degree(req)
         assert result.catenary_degree == 3
         assert result.witness_betti_elements == ("12", "18")
+
+
+class TestGeneratorEnvelopeIsSchemaVisible:
+    """The per-generator ceiling is published wherever acceptance is advertised."""
+
+    def test_request_schemas_state_the_per_generator_ceiling(self):
+        for model in (
+            BettiElementsRequest,
+            CatenaryDegreeRequest,
+            DeltaSetRequest,
+            ElementCatenaryDegreeRequest,
+            ElementDeltaSetRequest,
+            ElementElasticityRequest,
+            FactorizationComputeRequest,
+            FactorizationDistanceRequest,
+            FactorizationGraphComputeRequest,
+            FactorizationLengthsComputeRequest,
+            MinimalPresentationRequest,
+            PresentationBinomialsRequest,
+        ):
+            schema = model.model_json_schema()
+            description = schema["properties"]["generators"]["description"]
+            assert f"each at most {MAX_GENERATOR}" in description
+
+    def test_rejects_a_generator_above_the_published_ceiling(self):
+        with pytest.raises(ValidationError, match=f"at most {MAX_GENERATOR}"):
+            FactorizationComputeRequest(generators=("2", "501"), value="503")
+
+    def test_broadened_declarations_state_the_per_generator_ceiling(self):
+        from jacobian.math.numerical_semigroups._tools import TOOLS
+
+        tools = {tool.operation_id: tool for tool in TOOLS}
+        for operation_id in (
+            "number_theory.numerical_semigroup.factorizations.compute",
+            "number_theory.numerical_semigroup.presentation_binomials.compute",
+        ):
+            assert f"each at most {MAX_GENERATOR}" in tools[operation_id].description
+        for operation_id in (
+            "number_theory.numerical_semigroup.elasticity.compute",
+            "number_theory.numerical_semigroup.elasticity.global_compute",
+        ):
+            examples = tools[operation_id].examples
+            assert examples
+            assert all(
+                f"each at most {MAX_GENERATOR}" in example.description
+                for example in examples
+            )

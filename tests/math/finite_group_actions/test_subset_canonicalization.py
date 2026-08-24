@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from sympy.combinatorics import Permutation, PermutationGroup
 
 from jacobian.math.finite_group_actions._models import (
+    MAX_GROUP_ORDER,
     ActionBoundSubset,
     FinitePermutationAction,
     SubsetCanonicalizationRequest,
@@ -410,6 +411,11 @@ def test_public_declaration_exposes_and_executes_copyable_example() -> None:
     assert (
         "generated group must have order at most 10000"
         in schema["properties"]["subset"]["description"]
+    )
+    # The copyable example must advertise the implemented group-order bound.
+    assert (
+        f"generated group must have order at most {MAX_GROUP_ORDER}"
+        in operation.examples[0].description
     )
     # The example is one copyable request whose subset carries its action.
     assert set(operation.examples[0].input) == {"subset"}

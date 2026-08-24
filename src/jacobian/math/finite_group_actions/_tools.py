@@ -7,6 +7,7 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.finite_group_actions._models import (
+    MAX_GROUP_ORDER,
     BurnsideCountRequest,
     BurnsideCountResult,
     CycleIndexRequest,
@@ -113,7 +114,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "Canonicalize the singleton at position 2 under C_3; subset "
                 "positions are bound to the declared action and must be "
                 "distinct indices into its domain, and the generated group "
-                "must have order at most 720.",
+                f"must have order at most {MAX_GROUP_ORDER}.",
                 {
                     "subset": {
                         "action": _ACTION,

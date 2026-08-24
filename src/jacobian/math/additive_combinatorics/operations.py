@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.additive_combinatorics.values import (
+    MAX_SUBSET_SUM_ITEMS,
     MAX_SUBSET_SUM_PROFILE_ENTRIES,
     IndexedIntegerSequence,
     SubsetSumProfile,
@@ -43,6 +44,11 @@ def _subset_sum_profile_envelope(
 
     values = source.as_int_tuple()
     item_count = len(values)
+    if item_count > MAX_SUBSET_SUM_ITEMS:
+        raise ValueError(
+            "subset-sum profile source exceeds the "
+            f"{MAX_SUBSET_SUM_ITEMS}-item bound"
+        )
     total_subsets = 1 << item_count
 
     negative_sum = sum(value for value in values if value < 0)

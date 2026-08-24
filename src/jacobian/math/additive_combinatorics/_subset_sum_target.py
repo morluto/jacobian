@@ -28,10 +28,31 @@ MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS = 262
 _SUBSET_COUNT_EXACT_ITEM_LIMIT = MAX_SUBSET_SUM_REACHABLE_STATES.bit_length() - 1
 
 
-def _require_integer_digits(value: str, label: str) -> None:
-    if len(value.lstrip("-")) > MAX_SUBSET_SUM_INTEGER_DIGITS:
+def _require_integer_digits(value: str, label: str, maximum_digits: int) -> None:
+    if len(value.lstrip("-")) > maximum_digits:
+        raise ValueError(f"{label} exceeds the {maximum_digits}-digit bound")
+
+
+def _require_target_within_subset_sum_width(
+    target: str,
+    values: tuple[int, ...],
+) -> None:
+    """Bound the target by the widest subset sum the parsed source can attain.
+
+    Every subset sum lies in ``[negative_span, positive_span]``, so its
+    canonical width never exceeds the wider endpoint of that attained range.
+    """
+
+    positive_span = sum(value for value in values if value > 0)
+    negative_span = sum(value for value in values if value < 0)
+    attainable_width = max(
+        len(format_canonical_integer(positive_span).lstrip("-")),
+        len(format_canonical_integer(negative_span).lstrip("-")),
+    )
+    if len(target.lstrip("-")) > attainable_width:
         raise ValueError(
-            f"{label} exceeds the {MAX_SUBSET_SUM_INTEGER_DIGITS}-digit bound"
+            f"target exceeds the {attainable_width}-digit attainable "
+            "subset-sum width bound"
         )
 
 
@@ -62,7 +83,9 @@ def _raw_source_item_count(source: object) -> int | None:
             continue
         digit_count = len(value) - value.startswith("-")
         if digit_count > MAX_SUBSET_SUM_INTEGER_DIGITS:
-            _require_integer_digits(value, "source item")
+            _require_integer_digits(
+                value, "source item", MAX_SUBSET_SUM_INTEGER_DIGITS
+            )
         source_wire_bound += len(value) + 4
         if source_wire_bound > MAX_SUBSET_SUM_SOURCE_WIRE_BYTES:
             raise ValueError("subset-sum source exceeds the 4 MiB wire-size bound")
@@ -112,8 +135,9 @@ class SubsetSumTargetRequest(StrictModel):
     )
     target: CanonicalInteger = Field(
         description=(
-            "The canonical signed decimal sum to decide exactly, with at most 256 "
-            "digits."
+            "The canonical signed decimal sum to decide exactly; its digit "
+            "width must fit the attainable subset-sum width derived from this "
+            "source, which stays at most 262 digits for every admitted source."
         )
     )
     allow_empty_subset: StrictBool = Field(
@@ -145,14 +169,19 @@ class SubsetSumTargetRequest(StrictModel):
         _raw_source_item_count(prepared.get("source"))
         raw_target = prepared.get("target")
         if isinstance(raw_target, str):
-            _require_integer_digits(raw_target, "target")
+            # Admitted sources hold at most 500,000 items of 256 digits each,
+            # so no attainable subset sum is wider than this raw bound.
+            _require_integer_digits(
+                raw_target, "target", MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS
+            )
         return prepared
 
     @model_validator(mode="after")
     def require_bounded_exact_search(self) -> Self:
         for value in self.source.items:
-            _require_integer_digits(value, "source item")
-        _require_integer_digits(self.target, "target")
+            _require_integer_digits(
+                value, "source item", MAX_SUBSET_SUM_INTEGER_DIGITS
+            )
 
         # Exact ASCII digits plus conservative JSON string/container overhead.
         # Retaining this source and a maximal 65,536-index witness stays below
@@ -162,7 +191,12 @@ class SubsetSumTargetRequest(StrictModel):
             raise ValueError("subset-sum source exceeds the 4 MiB wire-size bound")
 
         values = tuple(parse_canonical_integer(value) for value in self.source.items)
-        _require_admitted_work(values, self.allow_empty_subset)
+        target = parse_canonical_integer(self.target)
+        _require_target_within_subset_sum_width(self.target, values)
+        if not (self.allow_empty_subset and target == 0):
+            # The empty witness already resolves this target exactly, so the
+            # exhaustive reachable-state bound applies only to real searches.
+            _require_admitted_work(values, self.allow_empty_subset)
         return self
 
 
@@ -211,7 +245,9 @@ class SubsetSumTargetResult(StrictModel):
         item_count = _raw_source_item_count(prepared.get("source"))
         raw_target = prepared.get("target")
         if isinstance(raw_target, str):
-            _require_integer_digits(raw_target, "target")
+            _require_integer_digits(
+                raw_target, "target", MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS
+            )
         raw_sum = prepared.get("reconstructed_sum")
         if isinstance(raw_sum, str) and (
             len(raw_sum) - raw_sum.startswith("-") > MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS

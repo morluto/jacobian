@@ -334,7 +334,8 @@ class SubsetSumProfileRequest(StrictModel):
     source: IndexedIntegerSequence = Field(
         description=(
             "The ordered indexed integer sequence. Each position is selectable "
-            "at most once; repeated values and zeros remain distinct positions. "
+            "at most once; repeated values and zeros remain distinct positions, "
+            "and the retained sequence carries at most 256 items. "
             "Before execution, S=min(2^n, positive_sum-negative_sum+1, "
             "product(m_v+1) over distinct nonzero values v) must fit "
             f"{MAX_SUBSET_SUM_PROFILE_ENTRIES:,} "

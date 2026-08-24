@@ -25,6 +25,10 @@ def _solve_subset_sum_target(
     """
 
     states: dict[int, _WitnessNode | None] = {0: None} if allow_empty_subset else {}
+    if target in states:
+        # The retained empty witness is already the globally smallest mask,
+        # and insert-only updates can never improve it later.
+        return ()
     for index, value in enumerate(values):
         previous = tuple(states.items())
 

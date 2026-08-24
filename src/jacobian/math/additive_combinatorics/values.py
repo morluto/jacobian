@@ -53,11 +53,11 @@ class IndexedIntegerSequence(StrictModel):
     """
 
     items: tuple[IndexedInteger, ...] = Field(
-        max_length=MAX_SUBSET_SUM_ITEMS,
         description=(
-            "An ordered tuple of at most 256 canonical integers. Repeated values "
+            "An ordered tuple of canonical integers. Repeated values "
             "and zeros remain distinct indexed items; each integer has at most "
-            "256 decimal digits, excluding its optional sign."
+            "256 decimal digits, excluding its optional sign. Consumers bound "
+            "the item count through their own admission envelopes."
         ),
         examples=[("1", "1", "3")],
     )

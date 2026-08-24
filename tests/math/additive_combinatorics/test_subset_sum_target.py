@@ -21,6 +21,7 @@ from jacobian.math.additive_combinatorics._subset_sum_target_kernel import (
 from jacobian.math.additive_combinatorics._tools import (
     ADDITIVE_COMBINATORICS_OPERATIONS,
 )
+from jacobian.math.additive_combinatorics.values import MAX_SUBSET_SUM_ITEMS
 
 
 def _operation() -> MathTool[SubsetSumTargetRequest, SubsetSumTargetResult]:
@@ -232,11 +233,17 @@ def test_request_rejects_immediately_above_each_search_bound() -> None:
             target="0",
             allow_empty_subset=False,
         )
-    with pytest.raises(ValidationError, match="256-digit"):
+    with pytest.raises(ValidationError, match="attainable"):
         SubsetSumTargetRequest(
             source={"items": []},
             target="1" + "0" * 256,
             allow_empty_subset=False,
+        )
+    with pytest.raises(ValidationError, match="262-digit"):
+        SubsetSumTargetRequest(
+            source={"items": ["-" + "9" * 256]},
+            target="-" + "9" * 263,
+            allow_empty_subset=True,
         )
 
     widest = "9" * 256
@@ -260,13 +267,112 @@ def test_request_rejects_immediately_above_each_search_bound() -> None:
     with pytest.raises(ValidationError, match="65,536-reachable-state"):
         _request(
             tuple(1 << exponent for exponent in range(17)),
-            0,
+            1,
             allow_empty_subset=True,
+        )
+
+    with pytest.raises(ValidationError, match="65,536-reachable-state"):
+        _request(
+            tuple(1 << exponent for exponent in range(17)),
+            0,
+            allow_empty_subset=False,
         )
 
     with pytest.raises(ValidationError, match="1,000,000-transition complete-call"):
         _request(
             tuple(1 << exponent for exponent in range(16)) + (0,) * 7,
             0,
+            allow_empty_subset=False,
+        )
+
+
+def test_request_admits_sources_beyond_the_profile_item_ceiling() -> None:
+    wide_source = IndexedIntegerSequence(items=("0",) * (MAX_SUBSET_SUM_ITEMS + 1))
+    assert len(wide_source.items) == MAX_SUBSET_SUM_ITEMS + 1
+
+    zeros = _operation().run(
+        SubsetSumTargetRequest(
+            source=wide_source,
+            target="0",
+            allow_empty_subset=False,
+        )
+    )
+    assert zeros.status == "ATTAINED"
+    assert zeros.witness == IndexSubset(indices=(0,))
+    assert zeros.reconstructed_sum == "0"
+
+    ones = _operation().run(_request((1,) * 300, 299, allow_empty_subset=True))
+    assert ones.status == "ATTAINED"
+    assert ones.witness == IndexSubset(indices=tuple(range(299)))
+    assert ones.reconstructed_sum == "299"
+
+
+def test_request_accepts_targets_at_the_derived_subset_sum_width() -> None:
+    widest = "9" * 256
+    attained_total = str(2 * int(widest))
+    assert len(attained_total) == 257
+
+    attained = _operation().run(
+        SubsetSumTargetRequest(
+            source=IndexedIntegerSequence(items=(widest, widest)),
+            target=attained_total,
+            allow_empty_subset=False,
+        )
+    )
+    assert attained.status == "ATTAINED"
+    assert attained.witness == IndexSubset(indices=(0, 1))
+    assert attained.reconstructed_sum == attained_total
+
+    negative_width = _operation().run(
+        SubsetSumTargetRequest(
+            source=IndexedIntegerSequence(items=(widest, widest)),
+            target="-" + attained_total,
             allow_empty_subset=True,
         )
+    )
+    assert negative_width.status == "NOT_ATTAINED"
+
+    same_width = _operation().run(
+        SubsetSumTargetRequest(
+            source=IndexedIntegerSequence(items=("5", "5")),
+            target="99",
+            allow_empty_subset=True,
+        )
+    )
+    assert same_width.status == "NOT_ATTAINED"
+
+
+def test_request_rejects_targets_beyond_the_derived_subset_sum_width() -> None:
+    with pytest.raises(ValidationError, match="attainable"):
+        SubsetSumTargetRequest(
+            source={"items": ["5"]},
+            target="99",
+            allow_empty_subset=True,
+        )
+
+    with pytest.raises(ValidationError, match="1-digit attainable"):
+        SubsetSumTargetRequest(
+            source={"items": []},
+            target="10",
+            allow_empty_subset=True,
+        )
+
+
+def test_resolved_empty_witness_skips_state_expansion_admission() -> None:
+    resolved = _operation().run(
+        _request(
+            tuple(1 << exponent for exponent in range(20)),
+            0,
+            allow_empty_subset=True,
+        )
+    )
+    assert resolved.status == "ATTAINED"
+    assert resolved.witness == IndexSubset(indices=())
+    assert resolved.reconstructed_sum == "0"
+
+    replayed = SubsetSumTargetResult.model_validate_json(resolved.model_dump_json())
+    assert replayed == resolved
+
+    saturated = _operation().run(_request((0,) * 500_000, 0, allow_empty_subset=True))
+    assert saturated.status == "ATTAINED"
+    assert saturated.witness == IndexSubset(indices=())

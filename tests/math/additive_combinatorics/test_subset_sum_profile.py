@@ -198,9 +198,15 @@ def test_source_digit_bound_is_enforced_before_integer_conversion() -> None:
     assert error.value.errors()[0]["type"] == "string_too_long"
 
 
-def test_source_item_count_bound_is_enforced_by_schema() -> None:
-    with pytest.raises(ValidationError, match="at most 256 items"):
-        IndexedIntegerSequence(items=("0",) * (MAX_SUBSET_SUM_ITEMS + 1))
+def test_profile_item_count_bound_is_owned_by_the_profile_envelope() -> None:
+    source = IndexedIntegerSequence(items=("0",) * (MAX_SUBSET_SUM_ITEMS + 1))
+    assert len(source.items) == MAX_SUBSET_SUM_ITEMS + 1
+
+    with pytest.raises(ValidationError, match="256-item"):
+        SubsetSumProfileRequest(source=source)
+
+    with pytest.raises(ValueError, match="256-item"):
+        subset_sum_profile(source)
 
 
 @pytest.mark.parametrize(
@@ -227,8 +233,9 @@ def test_request_schema_exposes_source_shape_and_character_bounds() -> None:
     items_schema = source_schema["properties"]["items"]
     source_description = schema["properties"]["source"]["description"]
 
-    assert items_schema["maxItems"] == MAX_SUBSET_SUM_ITEMS
+    assert "maxItems" not in items_schema
     assert items_schema["items"]["maxLength"] == MAX_SUBSET_SUM_ITEM_DIGITS + 1
+    assert "at most 256 items" in source_description
     assert "4*n*S" in source_description
     assert "4,000,000" in source_description
     assert "4,194,304 bytes" in source_description

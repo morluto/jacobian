@@ -109,6 +109,33 @@ def test_value_request_rejects_noncanonical_negative_zero() -> None:
         )
 
 
+def test_integer_fields_publish_the_shared_canonical_pattern() -> None:
+    from pydantic import BaseModel
+
+    from jacobian._exact import CanonicalInteger
+
+    class SharedCanonicalIntegerProbe(BaseModel):
+        value: CanonicalInteger
+
+    expected = SharedCanonicalIntegerProbe.model_json_schema()["properties"]["value"][
+        "pattern"
+    ]
+    for model in (
+        PrincipalDirichletCharacterValueRequest,
+        PrincipalDirichletCharacterValueResult,
+    ):
+        published = model.model_json_schema()["properties"]["integer"]
+        assert published["pattern"] == expected
+
+
+@pytest.mark.parametrize("integer", ["007", "+25", " 25", "2_5", "0x19"])
+def test_value_request_rejects_noncanonical_integer_syntax(integer: str) -> None:
+    with pytest.raises(ValidationError, match="String should match pattern"):
+        PrincipalDirichletCharacterValueRequest(
+            character=principal_dirichlet_character(12), integer=integer
+        )
+
+
 def test_integer_digit_bound_ignores_the_minus_sign() -> None:
     character = principal_dirichlet_character(12)
     digits = "9" * MAX_INTEGER_DIGITS

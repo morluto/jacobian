@@ -10,10 +10,10 @@ from pydantic import (
     Field,
     StrictBool,
     StrictInt,
-    StringConstraints,
     model_validator,
 )
 
+from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.math.dirichlet_characters.values import (
     MAX_PRINCIPAL_CHARACTER_MODULUS,
@@ -29,12 +29,8 @@ def _require_bounded_digits(value: str) -> str:
     return value
 
 
-CanonicalInteger = Annotated[
-    str,
-    StringConstraints(
-        pattern=r"^(?:0|-?[1-9][0-9]*)$",
-        strict=True,
-    ),
+BoundedCanonicalInteger = Annotated[
+    CanonicalInteger,
     AfterValidator(_require_bounded_digits),
 ]
 
@@ -56,7 +52,7 @@ class PrincipalDirichletCharacterValueRequest(StrictModel):
     """Evaluate a canonical principal-character value at one exact integer."""
 
     character: PrincipalDirichletCharacter
-    integer: CanonicalInteger = Field(
+    integer: BoundedCanonicalInteger = Field(
         description="Canonical base-10 integer syntax, reduced modulo character.modulus."
     )
 
@@ -68,7 +64,7 @@ class PrincipalDirichletCharacterValueResult(StrictModel):
     """A source-bound principal-character evaluation with canonical residue data."""
 
     character: PrincipalDirichletCharacter
-    integer: CanonicalInteger
+    integer: BoundedCanonicalInteger
     canonical_residue: StrictInt = Field(ge=0, lt=MAX_PRINCIPAL_CHARACTER_MODULUS)
     is_unit: StrictBool
     value: Literal[0, 1]
@@ -91,7 +87,7 @@ class PrincipalDirichletCharacterValueResult(StrictModel):
 
 __all__ = [
     "MAX_INTEGER_DIGITS",
-    "CanonicalInteger",
+    "BoundedCanonicalInteger",
     "PrincipalDirichletCharacterRequest",
     "PrincipalDirichletCharacterValueRequest",
     "PrincipalDirichletCharacterValueResult",

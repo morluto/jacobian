@@ -353,8 +353,7 @@ def test_request_admits_transport_bounded_dense_results() -> None:
     dense_graph = _dense_complete_colored_graph(49)
 
     assert (
-        isomorphism_models.canonicalization_result_wire_bytes(dense_graph)
-        > 512 * 1024
+        isomorphism_models.canonicalization_result_wire_bytes(dense_graph) > 512 * 1024
     )
     result = compute_colored_graph_canonicalization(
         ColoredGraphCanonicalizationRequest(colored_graph=dense_graph)
@@ -362,12 +361,8 @@ def test_request_admits_transport_bounded_dense_results() -> None:
     assert canonicalize_colored_graph(dense_graph) == result
 
     labels = tuple(f"{index:02d}-" + "x" * (49 - 3) for index in range(64))
-    mapping = {
-        item.source_vertex: item.canonical_vertex for item in result.relabeling
-    }
-    assert mapping == {
-        label: f"v{index:02d}" for index, label in enumerate(labels)
-    }
+    mapping = {item.source_vertex: item.canonical_vertex for item in result.relabeling}
+    assert mapping == {label: f"v{index:02d}" for index, label in enumerate(labels)}
 
 
 def test_request_enforces_source_bound_result_byte_boundary(monkeypatch) -> None:

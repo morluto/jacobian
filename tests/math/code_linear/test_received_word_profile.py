@@ -131,12 +131,7 @@ def test_dual_encoder_serializes_directly_into_profile() -> None:
 
 def test_punctured_encoder_serializes_directly_into_profile() -> None:
     punctured = compute_puncture(
-        PunctureRequest(
-            field_order=2,
-            generator_matrix=((1, 0, 1), (0, 1, 1)),
-            coordinate_axis=("left", "middle", "right"),
-            coordinate=1,
-        )
+        PunctureRequest(encoder=_encoder(((1, 0, 1), (0, 1, 1))), coordinate=1)
     )
 
     request = ReceivedWordProfileRequest.model_validate(
@@ -148,18 +143,13 @@ def test_punctured_encoder_serializes_directly_into_profile() -> None:
     result = compute_received_word_profile(request)
 
     assert request.encoder == punctured.encoder
-    assert request.encoder.coordinate_axis == ("left", "right")
+    assert request.encoder.coordinate_axis == ("x0", "x2")
     assert result.distance_histogram == (1, 2, 1)
 
 
 def test_shortened_encoder_serializes_directly_into_profile() -> None:
     shortened = compute_shorten(
-        ShortenRequest(
-            field_order=2,
-            generator_matrix=((1, 1, 0), (1, 0, 1)),
-            coordinate_axis=("left", "middle", "right"),
-            coordinate=0,
-        )
+        ShortenRequest(encoder=_encoder(((1, 1, 0), (1, 0, 1))), coordinate=0)
     )
 
     request = ReceivedWordProfileRequest.model_validate(
@@ -171,18 +161,13 @@ def test_shortened_encoder_serializes_directly_into_profile() -> None:
     result = compute_received_word_profile(request)
 
     assert request.encoder == shortened.encoder
-    assert request.encoder.coordinate_axis == ("middle", "right")
+    assert request.encoder.coordinate_axis == ("x1", "x2")
     assert result.distance_histogram == (0, 2, 0)
 
 
 def test_length_one_puncture_composes_into_length_zero_profile() -> None:
     punctured = compute_puncture(
-        PunctureRequest(
-            field_order=2,
-            generator_matrix=((1,),),
-            coordinate_axis=("only",),
-            coordinate=0,
-        )
+        PunctureRequest(encoder=_encoder(((1,),)), coordinate=0)
     )
     request = ReceivedWordProfileRequest.model_validate(
         {

@@ -370,51 +370,49 @@ class MacWilliamsRequest(StrictModel):
         return self
 
 
+def _require_selected_coordinate(
+    encoder: PrimeFieldLinearEncoder,
+    coordinate: int,
+) -> None:
+    if not encoder.coordinate_axis:
+        raise ValueError("encoder must have at least one coordinate to select")
+    if coordinate >= len(encoder.coordinate_axis):
+        raise ValueError("coordinate index out of range")
+
+
 class PunctureRequest(StrictModel):
     """Puncture a linear code by deleting one coordinate."""
 
-    field_order: int = Field(ge=2, le=251)
-    generator_matrix: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=16)
-    coordinate_axis: tuple[OpaqueLabel, ...] = Field(
-        min_length=1,
-        max_length=MAX_LENGTH,
-        description="Ordered unique labels for generator-matrix columns.",
-    )
+    encoder: PrimeFieldLinearEncoder
     coordinate: int = Field(
         ge=0,
-        description="Zero-based index into coordinate_axis to delete.",
+        description=(
+            "Zero-based index into encoder.coordinate_axis identifying the "
+            "single coordinate to delete."
+        ),
     )
 
     @model_validator(mode="after")
     def require_valid_request(self) -> Self:
-        width = _validate_prime_matrix(self.field_order, self.generator_matrix)
-        _validate_coordinate_axis(self.coordinate_axis, width=width)
-        if self.coordinate >= width:
-            raise ValueError("coordinate index out of range")
+        _require_selected_coordinate(self.encoder, self.coordinate)
         return self
 
 
 class ShortenRequest(StrictModel):
     """Shorten a linear code by fixing one coordinate to zero and puncturing it."""
 
-    field_order: int = Field(ge=2, le=251)
-    generator_matrix: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=16)
-    coordinate_axis: tuple[OpaqueLabel, ...] = Field(
-        min_length=1,
-        max_length=MAX_LENGTH,
-        description="Ordered unique labels for generator-matrix columns.",
-    )
+    encoder: PrimeFieldLinearEncoder
     coordinate: int = Field(
         ge=0,
-        description="Zero-based index into coordinate_axis to fix and delete.",
+        description=(
+            "Zero-based index into encoder.coordinate_axis identifying the "
+            "single coordinate to fix and delete."
+        ),
     )
 
     @model_validator(mode="after")
     def require_valid_request(self) -> Self:
-        width = _validate_prime_matrix(self.field_order, self.generator_matrix)
-        _validate_coordinate_axis(self.coordinate_axis, width=width)
-        if self.coordinate >= width:
-            raise ValueError("coordinate index out of range")
+        _require_selected_coordinate(self.encoder, self.coordinate)
         return self
 
 

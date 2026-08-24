@@ -25,6 +25,27 @@ from jacobian.math.code_linear._operations import (
     compute_syndrome,
 )
 from jacobian.math.code_linear._tools import TOOLS
+from jacobian.math.code_linear.values import PrimeFieldLinearEncoder
+
+
+def _encoder(
+    generator: tuple[tuple[int, ...], ...],
+    *,
+    field_order: int = 2,
+    coordinate_axis: tuple[str, ...] | None = None,
+) -> PrimeFieldLinearEncoder:
+    dimension = len(generator)
+    length = len(generator[0]) if generator else 0
+    return PrimeFieldLinearEncoder(
+        field_order=field_order,
+        message_axis=tuple(f"m{index}" for index in range(dimension)),
+        coordinate_axis=(
+            tuple(f"x{index}" for index in range(length))
+            if coordinate_axis is None
+            else coordinate_axis
+        ),
+        generator_matrix=generator,
+    )
 
 
 def test_catalog_contains_only_audited_operations() -> None:
@@ -181,9 +202,7 @@ def test_macwilliams_self_dual_repetition_code() -> None:
 
 def test_puncture_reduces_length() -> None:
     request = PunctureRequest(
-        field_order=2,
-        generator_matrix=((1, 1),),
-        coordinate_axis=("left", "right"),
+        encoder=_encoder(((1, 1),), coordinate_axis=("left", "right")),
         coordinate=0,
     )
     result = compute_puncture(request)
@@ -197,9 +216,7 @@ def test_shorten_reduces_dimension_and_length() -> None:
     # Shortening the length-3 binary repetition code at coordinate 0
     # keeps codewords with c[0]=0 (only the zero word), so dimension drops to 0.
     request = ShortenRequest(
-        field_order=2,
-        generator_matrix=((1, 1, 1),),
-        coordinate_axis=("left", "middle", "right"),
+        encoder=_encoder(((1, 1, 1),), coordinate_axis=("left", "middle", "right")),
         coordinate=0,
     )
     result = compute_shorten(request)
@@ -215,14 +232,94 @@ def test_shorten_2d_code() -> None:
     # Shortening at coordinate 0: keep codewords with c[0]=0: {000, 011}.
     # Delete coordinate 0: {00, 11} -> dimension 1, length 2.
     request = ShortenRequest(
-        field_order=2,
-        generator_matrix=((1, 1, 0), (1, 0, 1)),
-        coordinate_axis=("left", "middle", "right"),
+        encoder=_encoder(
+            ((1, 1, 0), (1, 0, 1)), coordinate_axis=("left", "middle", "right")
+        ),
         coordinate=0,
     )
     result = compute_shorten(request)
     assert result.length == 2
     assert result.dimension == 1
+
+
+def test_requests_accept_serialized_producer_encoders_unchanged() -> None:
+    from_generator = compute_from_generator(
+        GeneratorMatrixRequest(
+            field_order=2,
+            generator_matrix=((1, 0, 1), (0, 1, 1)),
+            coordinate_axis=("left", "middle", "right"),
+        )
+    )
+    dual = compute_dual_code(
+        GeneratorMatrixRequest(
+            field_order=2,
+            generator_matrix=((1, 1, 1),),
+            coordinate_axis=("left", "middle", "right"),
+        )
+    )
+
+    puncture_request = PunctureRequest.model_validate(
+        {"encoder": from_generator.model_dump(mode="json")["encoder"], "coordinate": 2}
+    )
+    assert puncture_request.encoder == from_generator.encoder
+
+    punctured = compute_puncture(puncture_request)
+    chained_request = ShortenRequest.model_validate(
+        {"encoder": punctured.model_dump(mode="json")["encoder"], "coordinate": 0}
+    )
+    assert chained_request.encoder == punctured.encoder
+
+    dual_request = ShortenRequest.model_validate(
+        {"encoder": dual.model_dump(mode="json")["encoder"], "coordinate": 0}
+    )
+    assert dual_request.encoder == dual.encoder
+
+    chained_result = compute_shorten(chained_request)
+    assert chained_result.dimension == 1
+    assert chained_result.encoder.coordinate_axis == ("middle",)
+    assert chained_result.encoder.generator_matrix == ((1,),)
+
+    dual_result = compute_shorten(dual_request)
+    assert dual_result.dimension == 1
+    assert dual_result.encoder.generator_matrix == ((1, 1),)
+
+
+def test_puncture_and_shorten_requests_reject_unselectable_coordinates() -> None:
+    empty_encoder = _encoder(())
+    with pytest.raises(ValidationError, match="at least one coordinate"):
+        PunctureRequest(encoder=empty_encoder, coordinate=0)
+    with pytest.raises(ValidationError, match="at least one coordinate"):
+        ShortenRequest(encoder=empty_encoder, coordinate=0)
+
+    full_rank = _encoder(((1, 1),))
+    with pytest.raises(ValidationError, match="greater than or equal"):
+        PunctureRequest(encoder=full_rank, coordinate=-1)
+    with pytest.raises(ValidationError, match="out of range"):
+        PunctureRequest(encoder=full_rank, coordinate=2)
+    with pytest.raises(ValidationError, match="out of range"):
+        ShortenRequest(encoder=full_rank, coordinate=5)
+
+
+def test_requests_reject_rank_deficient_or_ambiguous_encoders() -> None:
+    ambiguous = {
+        "field_order": 2,
+        "message_axis": ["m0"],
+        "coordinate_axis": ["x0", "x0"],
+        "generator_matrix": [[1, 1]],
+    }
+    with pytest.raises(ValidationError, match="unique"):
+        PunctureRequest(encoder=ambiguous, coordinate=0)
+
+    dependent = {
+        "field_order": 2,
+        "message_axis": ["m0", "m1"],
+        "coordinate_axis": ["x0", "x1"],
+        "generator_matrix": [[1, 1], [1, 1]],
+    }
+    with pytest.raises(ValidationError, match="full row rank"):
+        PunctureRequest(encoder=dependent, coordinate=0)
+    with pytest.raises(ValidationError, match="full row rank"):
+        ShortenRequest(encoder=dependent, coordinate=1)
 
 
 def test_macwilliams_ternary() -> None:
@@ -263,13 +360,6 @@ def test_code_producer_requests_reject_ambiguous_coordinate_axes() -> None:
             field_order=2,
             generator_matrix=((1, 1),),
             coordinate_axis=("x",),
-        )
-    with pytest.raises(ValidationError, match="unique"):
-        PunctureRequest(
-            field_order=2,
-            generator_matrix=((1, 1),),
-            coordinate_axis=("x", "x"),
-            coordinate=0,
         )
 
 

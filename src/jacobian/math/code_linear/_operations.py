@@ -413,36 +413,35 @@ def compute_macwilliams_transform(request: MacWilliamsRequest) -> MacWilliamsRes
 
 
 def compute_puncture(request: PunctureRequest) -> PunctureResult:
-    matrix = [list(row) for row in request.generator_matrix]
+    encoder = request.encoder
+    column = request.coordinate
     punctured = [
-        row[: request.coordinate] + row[request.coordinate + 1 :] for row in matrix
+        list(row[:column] + row[column + 1 :]) for row in encoder.generator_matrix
     ]
-    rref, rank = _rref(punctured, request.field_order)
-    new_len = len(matrix[0]) - 1
+    rref, rank = _rref(punctured, encoder.field_order)
     gen = tuple(tuple(row) for row in rref[:rank]) if rank > 0 else ()
     return PunctureResult(
         encoder=_canonical_encoder(
-            field_order=request.field_order,
+            field_order=encoder.field_order,
             coordinate_axis=(
-                request.coordinate_axis[: request.coordinate]
-                + request.coordinate_axis[request.coordinate + 1 :]
+                encoder.coordinate_axis[:column] + encoder.coordinate_axis[column + 1 :]
             ),
             generator_matrix=[list(row) for row in gen],
         ),
         dimension=rank,
-        length=new_len,
+        length=len(encoder.coordinate_axis) - 1,
     )
 
 
 def compute_shorten(request: ShortenRequest) -> ShortenResult:
-    matrix = [list(row) for row in request.generator_matrix]
-    q = request.field_order
+    encoder = request.encoder
+    q = encoder.field_order
     col = request.coordinate
 
     # Shortening: keep codewords c with c[col] = 0, then delete col.
     # RREF the generator to get a basis, then find the subcode vanishing at col.
-    rref, rank = _rref([list(row) for row in matrix], q)
-    n = len(matrix[0])
+    rref, rank = _rref([list(row) for row in encoder.generator_matrix], q)
+    n = len(encoder.coordinate_axis)
 
     # Build the column of coordinate values from the RREF basis
     col_values = [rref[i][col] % q for i in range(rank)]
@@ -473,14 +472,13 @@ def compute_shorten(request: ShortenRequest) -> ShortenResult:
         shortened_result = shortened_rows
 
     final_rref, final_rank = _rref(shortened_result, q) if shortened_result else ([], 0)
-    new_len = len(matrix[0]) - 1
+    new_len = n - 1
     gen = tuple(tuple(row) for row in final_rref[:final_rank]) if final_rank > 0 else ()
     return ShortenResult(
         encoder=_canonical_encoder(
-            field_order=request.field_order,
+            field_order=q,
             coordinate_axis=(
-                request.coordinate_axis[: request.coordinate]
-                + request.coordinate_axis[request.coordinate + 1 :]
+                encoder.coordinate_axis[:col] + encoder.coordinate_axis[col + 1 :]
             ),
             generator_matrix=[list(row) for row in gen],
         ),

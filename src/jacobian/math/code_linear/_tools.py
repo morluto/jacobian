@@ -291,23 +291,31 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "code.linear.puncture.compute",
         "Puncture a linear code at one coordinate",
-        "Delete one indexed coordinate and its axis label, then return the "
-        "punctured code as a canonical linear encoder whose basis rows receive "
-        "deterministic message-axis labels m0, m1, and so on.",
+        "Delete one indexed coordinate and its axis label from a canonical "
+        "linear encoder, then return the punctured code as a canonical linear "
+        "encoder whose basis rows receive deterministic message-axis labels "
+        "m0, m1, and so on. The source encoder must be full rank, and the "
+        "coordinate must index its ordered coordinate axis.",
         PunctureRequest,
         PunctureResult,
         compute_puncture,
         "code",
         "puncture",
         "exact",
+        version="2",
         examples=(
             example(
                 "binary_repetition",
-                "Puncture the binary length-2 repetition code at coordinate 0.",
+                "Puncture the binary length-2 repetition code at coordinate 0; "
+                "supply any producer's canonical full-rank encoder unchanged, "
+                "with the coordinate indexing its ordered axis.",
                 {
-                    "field_order": 2,
-                    "generator_matrix": [[1, 1]],
-                    "coordinate_axis": ["x0", "x1"],
+                    "encoder": {
+                        "field_order": 2,
+                        "message_axis": ["m0"],
+                        "coordinate_axis": ["x0", "x1"],
+                        "generator_matrix": [[1, 1]],
+                    },
                     "coordinate": 0,
                 },
             ),
@@ -316,24 +324,32 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "code.linear.shorten.compute",
         "Shorten a linear code at one coordinate",
-        "Shorten a code by fixing one coordinate to zero and then puncturing "
-        "it, deleting that coordinate's axis label and returning a canonical "
-        "linear encoder. Canonical basis rows receive deterministic message-axis "
-        "labels m0, m1, and so on.",
+        "Shorten a canonical linear encoder by fixing one coordinate to zero "
+        "and then puncturing it, deleting that coordinate's axis label and "
+        "returning a canonical linear encoder. Canonical basis rows receive "
+        "deterministic message-axis labels m0, m1, and so on. The source "
+        "encoder must be full rank, and the coordinate must index its ordered "
+        "coordinate axis.",
         ShortenRequest,
         ShortenResult,
         compute_shorten,
         "code",
         "shorten",
         "exact",
+        version="2",
         examples=(
             example(
                 "binary_repetition",
-                "Shorten the binary length-3 repetition code at coordinate 0.",
+                "Shorten the binary length-3 repetition code at coordinate 0; "
+                "supply any producer's canonical full-rank encoder unchanged, "
+                "with the coordinate indexing its ordered axis.",
                 {
-                    "field_order": 2,
-                    "generator_matrix": [[1, 1, 1]],
-                    "coordinate_axis": ["x0", "x1", "x2"],
+                    "encoder": {
+                        "field_order": 2,
+                        "message_axis": ["m0"],
+                        "coordinate_axis": ["x0", "x1", "x2"],
+                        "generator_matrix": [[1, 1, 1]],
+                    },
                     "coordinate": 0,
                 },
             ),

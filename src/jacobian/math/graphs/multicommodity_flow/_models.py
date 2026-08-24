@@ -60,19 +60,22 @@ _RATIONAL_JSON_OVERHEAD_BYTES = 24
 _PROFILE_RESULT_HEADER_BYTES = 1_024
 
 # One pass performs at most 3F+E additions/subtractions, K negations, E
-# divisions, and K*V+3E comparisons. Sparse entries are distinct
+# divisions, and K*V+4E comparisons. Sparse entries are distinct
 # commodity-by-edge cells of the conceptual tensor, so F <= K*E <= 256 * 512.
 # Every admitted commodity occupies V >= 2 distinct commodity-vertex cells
 # because its source and sink differ, so the 512-cell divergence budget
 # admits at most 256 commodities, one negation each, and FlowGraph's own
-# 512-edge tuple bounds E. With the admitted maxima this is 396,544 logical
-# steps per pass; producer plus exact result replay therefore costs at most
-# 793,088.
-MAX_PROFILE_LOGICAL_STEPS = 793_088
+# 512-edge tuple bounds E. Each edge is compared four times: load against
+# capacity and capacity against zero in the kernel loop, capacity against
+# zero in the shared derivative scan, then either load against zero or its
+# ratio against the running congestion maximum. With the admitted maxima
+# this is 397,056 logical steps per pass; producer plus exact result replay
+# therefore costs at most 794,112.
+MAX_PROFILE_LOGICAL_STEPS = 794_112
 MAX_PROFILE_ADDITIONS_PER_PASS = 393_728
 MAX_PROFILE_NEGATIONS_PER_PASS = MAX_COMMODITY_VERTEX_CELLS // 2
 MAX_PROFILE_DIVISIONS_PER_PASS = 512
-MAX_PROFILE_COMPARISONS_PER_PASS = 2_048
+MAX_PROFILE_COMPARISONS_PER_PASS = 2_560
 MAX_SPARSE_FLOW_ENTRIES = (MAX_COMMODITY_VERTEX_CELLS // 2) * MAX_MULTICOMMODITY_EDGES
 
 
@@ -243,6 +246,49 @@ def _measured_side_bounds(value: Fraction) -> tuple[int, int]:
     return sides
 
 
+def _edge_slacks_and_max_congestion(
+    flow: MulticommodityFlow,
+    loads: dict[tuple[int, int], Fraction],
+) -> tuple[dict[tuple[int, int], Fraction], Fraction]:
+    """Return each exact edge slack and the maximum positive-capacity ratio.
+
+    Every slack is subtracted here exactly once and every positive-capacity
+    congestion ratio divided exactly once, so the profile kernel reuses these
+    measured components instead of repeating that arithmetic in its own edge
+    loop.
+    """
+
+    slacks: dict[tuple[int, int], Fraction] = {}
+    max_ratio = Fraction(0)
+    for edge in flow.network.edges:
+        edge_key = (edge.source, edge.target)
+        capacity = edge.capacity.as_fraction()
+        slacks[edge_key] = capacity - loads[edge_key]
+        if capacity > 0:
+            max_ratio = max(max_ratio, loads[edge_key] / capacity)
+    return slacks, max_ratio
+
+
+def _measured_component_digit_bounds(
+    divergences: dict[tuple[str, int], Fraction],
+    loads: dict[tuple[int, int], Fraction],
+    slacks: dict[tuple[int, int], Fraction],
+    max_ratio: Fraction,
+) -> tuple[
+    dict[tuple[str, int], tuple[int, int]],
+    dict[tuple[int, int], tuple[int, int]],
+    dict[tuple[int, int], tuple[int, int]],
+    tuple[int, int],
+]:
+    cell_bounds = {
+        key: _measured_side_bounds(value) for key, value in divergences.items()
+    }
+    load_bounds = {key: _measured_side_bounds(value) for key, value in loads.items()}
+    slack_bounds = {key: _measured_side_bounds(value) for key, value in slacks.items()}
+    congestion_bound = _measured_side_bounds(max_ratio)
+    return cell_bounds, load_bounds, slack_bounds, congestion_bound
+
+
 def _profile_component_digit_bounds(
     flow: MulticommodityFlow,
     component_sums: tuple[
@@ -267,38 +313,32 @@ def _profile_component_digit_bounds(
     divergences, loads = (
         component_sums if component_sums is not None else (_component_sums(flow))
     )
-
-    cell_bounds = {
-        key: _measured_side_bounds(value) for key, value in divergences.items()
-    }
-    load_bounds = {key: _measured_side_bounds(value) for key, value in loads.items()}
-    slack_bounds: dict[tuple[int, int], tuple[int, int]] = {}
-    max_ratio = Fraction(0)
-    for edge in flow.network.edges:
-        edge_key = (edge.source, edge.target)
-        capacity = edge.capacity.as_fraction()
-        slack_bounds[edge_key] = _measured_side_bounds(capacity - loads[edge_key])
-        if capacity > 0:
-            max_ratio = max(max_ratio, loads[edge_key] / capacity)
-    congestion_bound = _measured_side_bounds(max_ratio)
-    return cell_bounds, load_bounds, slack_bounds, congestion_bound
+    slacks, max_ratio = _edge_slacks_and_max_congestion(flow, loads)
+    return _measured_component_digit_bounds(divergences, loads, slacks, max_ratio)
 
 
 def derived_profile_digit_budget(flow: MulticommodityFlow) -> int:
     """Return the exact digit bound shared by every derived profile component."""
 
-    return derived_profile_digit_budget_from_sums(flow, *_component_sums(flow))
+    return derived_profile_components_from_sums(flow, *_component_sums(flow))[0]
 
 
-def derived_profile_digit_budget_from_sums(
+def derived_profile_components_from_sums(
     flow: MulticommodityFlow,
     divergences: dict[tuple[str, int], Fraction],
     loads: dict[tuple[int, int], Fraction],
-) -> int:
-    """Return the shared digit budget from already-computed component sums."""
+) -> tuple[int, dict[tuple[int, int], Fraction], Fraction]:
+    """Return the shared digit budget with each once-computed edge derivative.
 
+    The returned slacks and maximum congestion ratio are the same measured
+    components priced into the budget, so one producer or replay pass
+    subtracts each slack and divides each positive-capacity ratio exactly
+    once and the work ledger charges that single execution.
+    """
+
+    slacks, max_ratio = _edge_slacks_and_max_congestion(flow, loads)
     cell_bounds, load_bounds, slack_bounds, congestion_bound = (
-        _profile_component_digit_bounds(flow, (divergences, loads))
+        _measured_component_digit_bounds(divergences, loads, slacks, max_ratio)
     )
     component_sides = [
         *cell_bounds.values(),
@@ -306,7 +346,7 @@ def derived_profile_digit_budget_from_sums(
         *slack_bounds.values(),
         congestion_bound,
     ]
-    return max(max(sides) for sides in component_sides)
+    return max(max(sides) for sides in component_sides), slacks, max_ratio
 
 
 def _require_profile_output_admission(flow: MulticommodityFlow) -> None:

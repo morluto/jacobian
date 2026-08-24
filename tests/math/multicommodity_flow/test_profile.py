@@ -12,6 +12,8 @@ from jacobian._exact import CanonicalRational
 from jacobian.math.graphs.flow._models import CapacitatedEdge, FlowGraph
 from jacobian.math.graphs.multicommodity_flow._models import (
     MAX_COMMODITY_VERTEX_CELLS,
+    MAX_PROFILE_COMPARISONS_PER_PASS,
+    MAX_PROFILE_LOGICAL_STEPS,
     CommodityDemand,
     CommodityEdgeFlow,
     MulticommodityFlow,
@@ -108,8 +110,8 @@ def test_exact_shared_bottleneck_profile_replays_its_source() -> None:
     assert result.work.rational_additions_per_pass == 15
     assert result.work.rational_negations_per_pass == 2
     assert result.work.rational_divisions_per_pass == 3
-    assert result.work.exact_comparisons_per_pass == 17
-    assert result.work.logical_steps_per_call == 74
+    assert result.work.exact_comparisons_per_pass == 20
+    assert result.work.logical_steps_per_call == 80
 
 
 def test_profile_distinguishes_capacity_and_conservation_failures() -> None:
@@ -157,11 +159,12 @@ def test_zero_capacity_positive_load_has_no_finite_congestion() -> None:
     assert result.all_demands_routed is True
     assert result.capacity_feasible is False
     assert result.congestion is None
-    # A zero-capacity edge still compares load to capacity and capacity to zero,
-    # then checks whether its load is positive; no ratio division is attempted.
+    # A zero-capacity edge still compares load to capacity and capacity to
+    # zero in the edge loop, capacity to zero in the shared slack scan, then
+    # checks whether its load is positive; no ratio division is attempted.
     assert result.work.rational_divisions_per_pass == 0
-    assert result.work.exact_comparisons_per_pass == 5
-    assert result.work.logical_steps_per_call == 20
+    assert result.work.exact_comparisons_per_pass == 6
+    assert result.work.logical_steps_per_call == 22
 
 
 def test_early_divergence_mismatch_still_executes_every_counted_comparison() -> None:
@@ -181,8 +184,8 @@ def test_early_divergence_mismatch_still_executes_every_counted_comparison() -> 
     assert result.capacity_feasible is True
     assert result.work.commodity_vertex_cells == 8
     assert result.work.edge_cells == 3
-    assert result.work.exact_comparisons_per_pass == 8 + 3 * 3
-    assert result.work.logical_steps_per_call == 74
+    assert result.work.exact_comparisons_per_pass == 8 + 4 * 3
+    assert result.work.logical_steps_per_call == 80
 
 
 def test_mixed_zero_and_positive_capacities_execute_every_counted_comparison() -> None:
@@ -218,8 +221,8 @@ def test_mixed_zero_and_positive_capacities_execute_every_counted_comparison() -
         # made the congestion value null.
         assert result.congestion is None
         assert result.work.rational_divisions_per_pass == 2
-        assert result.work.exact_comparisons_per_pass == 4 + 3 * 3
-        assert result.work.logical_steps_per_call == 56
+        assert result.work.exact_comparisons_per_pass == 4 + 4 * 3
+        assert result.work.logical_steps_per_call == 62
 
 
 def test_fractional_split_flow_uses_exact_rational_loads_and_congestion() -> None:
@@ -290,8 +293,8 @@ def test_low_commodity_networks_admit_vertices_up_to_the_cell_budget() -> None:
     assert result.congestion == q(1, 2)
     assert len(result.divergences) == 33
     assert result.work.commodity_vertex_cells == 33
-    assert result.work.exact_comparisons_per_pass == 33 + 3
-    assert result.work.logical_steps_per_call == 2 * (4 + 1 + 1 + 36)
+    assert result.work.exact_comparisons_per_pass == 33 + 4
+    assert result.work.logical_steps_per_call == 2 * (4 + 1 + 1 + 37)
 
     # Eight commodities over all 64 FlowGraph vertices reach exactly 512
     # returned cells; a ninth commodity exceeds the dense divergence budget.
@@ -323,7 +326,10 @@ def test_low_commodity_networks_admit_vertices_up_to_the_cell_budget() -> None:
 def test_large_exact_scalars_are_admitted_when_derived_digits_stay_bounded() -> None:
     # A 33-digit capacity performs constant work here and returns only a
     # 33-digit slack; operand-derived digit budgets, not a fixed input cap,
-    # decide whether such exact scalars are admitted.
+    # decide whether such exact scalars are admitted. Even on this one-edge
+    # flow the single slack subtraction and the single congestion division
+    # execute exactly once per pass because the kernel reuses the measured
+    # components of the shared derivative scan.
     big_capacity = q(10**32)
     flow = MulticommodityFlow(
         network=FlowGraph(
@@ -343,8 +349,8 @@ def test_large_exact_scalars_are_admitted_when_derived_digits_stay_bounded() -> 
     assert result.work.rational_additions_per_pass == 1
     assert result.work.rational_negations_per_pass == 1
     assert result.work.rational_divisions_per_pass == 1
-    assert result.work.exact_comparisons_per_pass == 5
-    assert result.work.logical_steps_per_call == 16
+    assert result.work.exact_comparisons_per_pass == 6
+    assert result.work.logical_steps_per_call == 18
 
 
 def test_operand_digit_budget_bounds_the_canonical_boundary() -> None:
@@ -513,7 +519,7 @@ def test_per_component_digit_bounds_admit_unrelated_large_operands() -> None:
 def test_derived_quantities_admit_edges_without_a_fixed_ceiling() -> None:
     # FlowGraph owns the structural edge domain; this operation controls only
     # the ledger and result envelope. A one-commodity 129-edge network over 12
-    # vertices executes 658 steps per pass with a tiny result, so no
+    # vertices executes 787 steps per pass with a tiny result, so no
     # independent edge ceiling may reject it.
     def many_edge_flow(vertex_count: int, edge_count: int) -> MulticommodityFlow:
         pairs = [
@@ -544,14 +550,48 @@ def test_derived_quantities_admit_edges_without_a_fixed_ceiling() -> None:
     assert len(result.edge_profiles) == 129
     assert result.work.edge_cells == 129
     assert result.work.rational_additions_per_pass == 129
-    assert result.work.exact_comparisons_per_pass == 12 + 3 * 129
-    assert result.work.logical_steps_per_call == 2 * (129 + 1 + 129 + 12 + 387)
+    assert result.work.exact_comparisons_per_pass == 12 + 4 * 129
+    assert result.work.logical_steps_per_call == 2 * (129 + 1 + 129 + 12 + 4 * 129)
 
     # The ledger and returned rows inherit FlowGraph's own 512-edge maximum:
     # a full 512-edge network is admitted and accounted exactly.
     full = compute_multicommodity_flow_profile(many_edge_flow(64, 512))
     assert len(full.edge_profiles) == 512
-    assert full.work.logical_steps_per_call == 2 * (512 + 1 + 512 + 64 + 3 * 512)
+    assert full.work.logical_steps_per_call == 2 * (512 + 1 + 512 + 64 + 4 * 512)
+
+    # Eight commodities over the same full 512-edge graph fill the dense
+    # divergence budget alongside every edge: 512 cells plus four comparisons
+    # per edge is exactly the published comparison envelope, and the widened
+    # work fields must admit that worst case.
+    crowded = MulticommodityFlow(
+        network=FlowGraph(
+            vertex_count=64,
+            edges=tuple(
+                CapacitatedEdge(source=source, target=target, capacity=q(1))
+                for source, target in [
+                    (source, target)
+                    for source in range(64)
+                    for target in range(64)
+                    if source != target
+                ][:512]
+            ),
+        ),
+        commodities=tuple(
+            CommodityDemand(
+                commodity_id=chr(ord("a") + index), source=0, sink=63, demand=q(1)
+            )
+            for index in range(8)
+        ),
+    )
+    crowded_result = compute_multicommodity_flow_profile(crowded)
+    assert crowded_result.capacity_feasible is True
+    assert crowded_result.congestion == q(0)
+    assert crowded_result.work.commodity_vertex_cells == MAX_COMMODITY_VERTEX_CELLS
+    assert crowded_result.work.edge_cells == 512
+    assert crowded_result.work.exact_comparisons_per_pass == (
+        MAX_PROFILE_COMPARISONS_PER_PASS
+    )
+    assert crowded_result.work.logical_steps_per_call <= MAX_PROFILE_LOGICAL_STEPS
 
     with pytest.raises(ValidationError, match=r"at most 512 item"):
         many_edge_flow(64, 513)
@@ -560,7 +600,7 @@ def test_derived_quantities_admit_edges_without_a_fixed_ceiling() -> None:
 def test_entry_count_is_bounded_by_distinct_cells_not_a_fixed_ceiling() -> None:
     # Sparse entries are distinct commodity-by-edge cells, so a one-commodity
     # network with 129 sorted unit edges carries 129 admissible unit entries:
-    # 13 divergence rows, 129 edge rows, and 1,046 steps per pass sit well
+    # 13 divergence rows, 129 edge rows, and 1,175 steps per pass sit well
     # inside the published addition, comparison, work, and output envelopes.
     def filled_network(vertex_count: int, edge_count: int) -> MulticommodityFlow:
         pairs = [
@@ -597,8 +637,8 @@ def test_entry_count_is_bounded_by_distinct_cells_not_a_fixed_ceiling() -> None:
     assert len(result.edge_profiles) == 129
     assert all(row.load == q(1) for row in result.edge_profiles)
     assert result.work.rational_additions_per_pass == 3 * 129 + 129
-    assert result.work.exact_comparisons_per_pass == 13 + 3 * 129
-    assert result.work.logical_steps_per_call == 2 * (516 + 1 + 129 + 400)
+    assert result.work.exact_comparisons_per_pass == 13 + 4 * 129
+    assert result.work.logical_steps_per_call == 2 * (516 + 1 + 129 + 529)
 
     # The entry count inherits the derived cell maxima: one commodity over a
     # full 512-edge graph admits exactly 512 distinct entries.
@@ -611,7 +651,7 @@ def test_sparse_scan_admits_commodities_over_a_full_edge_graph() -> None:
     # The kernel scans sparse entries and per-edge sums; it never materializes
     # a dense commodity-by-edge tensor, so five commodities over a full
     # 512-edge graph are admitted on the quantities actually consumed and
-    # returned: 120 divergence rows, 512 small edge rows, 5,370 steps.
+    # returned: 120 divergence rows, 512 small edge rows, 6,394 steps.
     def wide_network(commodity_count: int) -> MulticommodityFlow:
         pairs = [
             (source, target)
@@ -644,8 +684,8 @@ def test_sparse_scan_admits_commodities_over_a_full_edge_graph() -> None:
     assert result.work.rational_additions_per_pass == 512
     assert result.work.rational_negations_per_pass == 5
     assert result.work.rational_divisions_per_pass == 512
-    assert result.work.exact_comparisons_per_pass == 120 + 3 * 512
-    assert result.work.logical_steps_per_call == 2 * (512 + 5 + 512 + 120 + 3 * 512)
+    assert result.work.exact_comparisons_per_pass == 120 + 4 * 512
+    assert result.work.logical_steps_per_call == 2 * (512 + 5 + 512 + 120 + 4 * 512)
 
 
 def test_cell_budgets_admit_commodities_without_a_fixed_ceiling() -> None:
@@ -673,7 +713,7 @@ def test_cell_budgets_admit_commodities_without_a_fixed_ceiling() -> None:
     assert len(unrouted.divergences) == 34
     assert unrouted.work.commodity_vertex_cells == 34
     assert unrouted.work.rational_negations_per_pass == 17
-    assert unrouted.work.logical_steps_per_call == 2 * (1 + 17 + 1 + 34 + 3)
+    assert unrouted.work.logical_steps_per_call == 2 * (1 + 17 + 1 + 34 + 4)
 
     # Each commodity occupies at least two distinct commodity-vertex cells,
     # so exactly half of the 512-cell divergence budget, 256 commodities, is
@@ -681,7 +721,7 @@ def test_cell_budgets_admit_commodities_without_a_fixed_ceiling() -> None:
     full = compute_multicommodity_flow_profile(dense_commodities(256))
     assert len(full.divergences) == MAX_COMMODITY_VERTEX_CELLS
     assert full.work.rational_negations_per_pass == 256
-    assert full.work.logical_steps_per_call == 2 * (1 + 256 + 1 + 512 + 3)
+    assert full.work.logical_steps_per_call == 2 * (1 + 256 + 1 + 512 + 4)
 
     with pytest.raises(ValidationError, match="commodity-by-vertex"):
         dense_commodities(257)

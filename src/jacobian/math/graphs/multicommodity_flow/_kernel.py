@@ -11,7 +11,7 @@ from jacobian.math.graphs.multicommodity_flow._models import (
     MulticommodityFlow,
     MulticommodityFlowProfileWork,
     _component_sums,
-    derived_profile_digit_budget_from_sums,
+    derived_profile_components_from_sums,
 )
 
 
@@ -44,7 +44,9 @@ def profile_components(
 
     commodity_ids = tuple(commodity.commodity_id for commodity in flow.commodities)
     divergences, loads = _component_sums(flow)
-    budget = derived_profile_digit_budget_from_sums(flow, divergences, loads)
+    budget, slacks, max_congestion_ratio = derived_profile_components_from_sums(
+        flow, divergences, loads
+    )
 
     divergence_rows = tuple(
         CommodityDivergence(
@@ -74,7 +76,6 @@ def profile_components(
 
     edge_rows: list[EdgeLoadProfile] = []
     capacity_feasible = True
-    max_congestion_ratio = Fraction(0)
     zero_capacity_violation = False
     positive_capacity_edges = 0
     for edge in flow.network.edges:
@@ -88,15 +89,12 @@ def profile_components(
                 zero_capacity_violation = True
         else:
             positive_capacity_edges += 1
-            ratio = load / capacity
-            if ratio > max_congestion_ratio:
-                max_congestion_ratio = ratio
         edge_rows.append(
             EdgeLoadProfile(
                 source=edge.source,
                 target=edge.target,
                 load=_wire(load, max_digits=budget),
-                slack=_wire(capacity - load, max_digits=budget),
+                slack=_wire(slacks[edge_key], max_digits=budget),
             )
         )
 
@@ -104,16 +102,20 @@ def profile_components(
     divergence_cells = len(divergence_rows)
     edge_cells = len(edge_rows)
     # Each sparse entry adds to source divergence, sink divergence, and edge
-    # load. Each edge then subtracts its load from capacity. One demand is
-    # negated per commodity for its sink target. Every edge compares load to
-    # capacity and capacity to zero, then compares either load to zero or its
-    # ratio to the running congestion maximum. The demand scan above compares
-    # all commodity/vertex cells rather than short-circuiting at the first
-    # mismatch, so every charged comparison is executed exactly once.
+    # load. Each edge's slack is subtracted exactly once by the shared scan
+    # that returned the budget above, which also divides one ratio per
+    # positive-capacity edge; this loop reuses those measured components. One
+    # demand is negated per commodity for its sink target. Every edge is
+    # compared four times -- load against capacity and capacity against zero
+    # in this loop, capacity against zero in the shared scan, then either
+    # load against zero or its ratio against the running congestion maximum.
+    # The demand scan above compares all commodity/vertex cells rather than
+    # short-circuiting at the first mismatch, so every charged comparison is
+    # executed exactly once.
     additions = 3 * sparse_entries + edge_cells
     negations = len(flow.commodities)
     divisions = positive_capacity_edges
-    comparisons = divergence_cells + 3 * edge_cells
+    comparisons = divergence_cells + 4 * edge_cells
     per_pass = additions + negations + divisions + comparisons
     work = MulticommodityFlowProfileWork(
         execution_passes_per_call=2,

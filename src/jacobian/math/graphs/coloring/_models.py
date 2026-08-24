@@ -72,7 +72,7 @@ def _run_k_colorability_solver(
     incomplete outcome.
     """
 
-    import z3  # type: ignore[import-untyped]
+    import z3
 
     solver = z3.Solver()
     solver.set("max_conflicts", solver_conflicts)

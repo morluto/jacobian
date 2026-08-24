@@ -40,6 +40,46 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "exact link of a simplex with maximal facets of the link complex",
     ),
+    OperationAdmission(
+        "topology.simplicial_complex.star.compute",
+        AdmissionDecision.KEEP,
+        "exact closed star of a simplex: all facets containing the simplex",
+    ),
+    OperationAdmission(
+        "topology.simplicial_complex.deletion.compute",
+        AdmissionDecision.KEEP,
+        "exact vertex deletion: the induced subcomplex on the undeclared vertices",
+    ),
+    OperationAdmission(
+        "topology.simplicial_complex.skeleton.compute",
+        AdmissionDecision.KEEP,
+        "exact k-skeleton subcomplex of a simplicial complex",
+    ),
+    OperationAdmission(
+        "topology.simplicial_complex.join.compute",
+        AdmissionDecision.KEEP,
+        "exact join of two simplicial complexes on disjoint vertex sets",
+    ),
+    OperationAdmission(
+        "topology.simplicial_complex.barycentric_subdivision.compute",
+        AdmissionDecision.KEEP,
+        "exact barycentric subdivision (order complex) of a simplicial complex",
+    ),
+    OperationAdmission(
+        "topology.simplicial_complex.pseudomanifold.decide",
+        AdmissionDecision.KEEP,
+        "exact pseudomanifold decision with closed/boundary distinction",
+    ),
+    OperationAdmission(
+        "topology.simplicial_complex.shelling.check",
+        AdmissionDecision.KEEP,
+        "exact shelling order checker for a submitted facet permutation",
+    ),
+    OperationAdmission(
+        "topology.simplicial_complex.elementary_collapse.check",
+        AdmissionDecision.KEEP,
+        "exact elementary collapse: verify a free face and remove it with its coface",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

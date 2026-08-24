@@ -13,7 +13,6 @@ from .basis import (
     _subset_for_state,
 )
 from .values import (
-    MAX_ATTRIBUTES,
     AttributeImplication,
     FiniteAttributeImplicationSystem,
     FormalContext,
@@ -44,10 +43,6 @@ def _require_implication_seed(
     system: FiniteAttributeImplicationSystem,
     seed: frozenset[int],
 ) -> None:
-    if len(seed) > MAX_ATTRIBUTES:
-        raise ValueError(
-            f"implication seed supports at most {MAX_ATTRIBUTES} attributes"
-        )
     for attribute in seed:
         if type(attribute) is not int:
             raise TypeError("implication seed attributes must be integers")

@@ -15,7 +15,6 @@ from jacobian.math.formal_concept_analysis.basis import (
     _duquenne_guigues_preflight,
 )
 from jacobian.math.formal_concept_analysis.values import (
-    MAX_ATTRIBUTES,
     FiniteAttributeImplicationSystem,
     FormalContext,
 )
@@ -55,7 +54,6 @@ class ImplicationClosureRequest(StrictModel):
     system: FiniteAttributeImplicationSystem
     seed: tuple[StrictInt, ...] = Field(
         default=(),
-        max_length=MAX_ATTRIBUTES,
         description=(
             "Attribute indices initially present. Order is immaterial, duplicate "
             "indices are invalid, and every index refers to system.attributes."

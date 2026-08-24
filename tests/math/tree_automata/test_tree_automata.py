@@ -461,9 +461,7 @@ class TestValidation:
             )
 
         no_nullary = automaton_for(
-            (
-                TreeAutomatonTransition(symbol=0, child_states=(0,), target_state=1),
-            ),
+            (TreeAutomatonTransition(symbol=0, child_states=(0,), target_state=1),),
             2,
             (1,),
         )
@@ -570,9 +568,7 @@ class TestValidation:
         assert "4096" in request_description
         assert "summed" in request_description
 
-        automaton_description = request_schema["properties"]["automaton"][
-            "description"
-        ]
+        automaton_description = request_schema["properties"]["automaton"]["description"]
         assert "30,000,000 units" in automaton_description
         assert "summed" in automaton_description
 

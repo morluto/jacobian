@@ -97,6 +97,9 @@ def test_request_and_result_compose_through_strict_json_parsing() -> None:
         ((0,), 0, True, ()),
         ((0,), 0, False, (0,)),
         ((4, -7, 3), -4, False, (1, 2)),
+        ((2, 3), 0, False, None),
+        ((-2, -3), 0, False, None),
+        ((0, 3), 0, False, (0,)),
     ),
 )
 def test_target_kernel_known_answers(
@@ -273,15 +276,57 @@ def test_request_rejects_immediately_above_each_search_bound() -> None:
             }
         )
 
+    # Powers of two below 2**16 plus a 2**17 item leave the gap
+    # (65,535, 131,072) unattainable: target 100000 exhausts the scan and
+    # pushes 2**17 reachable states past the 65,536-state bound.
     with pytest.raises(ValidationError, match="65,536-reachable-state"):
-        _request(
-            tuple(1 << exponent for exponent in range(17)),
-            0,
-            allow_empty_subset=False,
+        SubsetSumTargetRequest(
+            source={
+                "items": [str(1 << exponent) for exponent in range(16)] + ["131072"]
+            },
+            target="100000",
+            allow_empty_subset=True,
         )
 
     with pytest.raises(ValidationError, match="2,000,000-transition complete-call"):
         _request((2,) * 1000, 3, allow_empty_subset=True)
+
+
+def test_zero_targets_resolve_before_expansion_without_the_empty_subset() -> None:
+    # With the empty subset inadmissible, every admissible subset of a
+    # strictly positive source has positive sum, so target 0 is exactly
+    # unattainable even though expanding 2**17 reachable states would exceed
+    # the 65,536-state bound.
+    powers = tuple(1 << exponent for exponent in range(17))
+    positive = _operation().run(_request(powers, 0, allow_empty_subset=False))
+    assert positive.status == "NOT_ATTAINED"
+    assert positive.witness is None
+    assert positive.reconstructed_sum is None
+
+    replayed = SubsetSumTargetResult.model_validate_json(positive.model_dump_json())
+    assert replayed == positive
+
+    # Mirror image: every admissible subset of a strictly negative source has
+    # negative sum, so target 0 is again exactly unattainable.
+    negative = _operation().run(
+        _request(tuple(-value for value in powers), 0, allow_empty_subset=False)
+    )
+    assert negative.status == "NOT_ATTAINED"
+    assert negative.witness is None
+    assert negative.reconstructed_sum is None
+
+    # A zero item still attains zero without the empty subset.
+    zero_item = _operation().run(_request((3, 0, 5), 0, allow_empty_subset=False))
+    assert zero_item.status == "ATTAINED"
+    assert zero_item.witness == IndexSubset(indices=(1,))
+    assert zero_item.reconstructed_sum == "0"
+
+    # The empty subset remains admissible here, so the same request resolves
+    # to it instead of expanding.
+    empty_witness = _operation().run(_request(powers, 0, allow_empty_subset=True))
+    assert empty_witness.status == "ATTAINED"
+    assert empty_witness.witness == IndexSubset(indices=())
+    assert empty_witness.reconstructed_sum == "0"
 
 
 def test_out_of_range_targets_resolve_before_state_expansion() -> None:

@@ -11,6 +11,7 @@ from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.additive_combinatorics._subset_sum_target_kernel import (
+    _attained_sum_interval,
     _solve_subset_sum_target,
 )
 from jacobian.math.additive_combinatorics.values import (
@@ -110,10 +111,13 @@ def _require_admitted_work(
 ) -> None:
     """Bound the kernel's insert-only passes with their exact reachable sums.
 
-    Every subset sum lies in ``[negative_span, positive_span]``, so a target
-    outside that closed interval is exactly unattainable before any state
-    exists. Admission resolves such targets with no expansion, and the kernel
-    returns the same decision without building any state.
+    Every admissible subset sum lies in the attained interval from
+    ``_attained_sum_interval``, so a target outside that closed interval is
+    exactly unattainable before any state exists; with the empty subset
+    inadmissible the interval excludes its zero, so strictly one-signed
+    sources resolve a zero target without expansion. Admission resolves such
+    targets with no expansion, and the kernel returns the same decision
+    without building any state.
 
     Otherwise admission replays the same reachable-sum growth the kernel
     performs and stops at the first source prefix whose canonical witness
@@ -133,12 +137,13 @@ def _require_admitted_work(
     ``MAX_SUBSET_SUM_TOTAL_TRANSITIONS``.
     """
 
-    if not (
-        sum(value for value in values if value < 0)
-        <= target
-        <= sum(value for value in values if value > 0)
-    ):
-        # Outside the attained interval no subset sum can equal the target.
+    lower, upper = _attained_sum_interval(
+        values,
+        allow_empty_subset=allow_empty_subset,
+    )
+    if not lower <= target <= upper:
+        # Outside the attained interval no admissible subset sum can equal
+        # the target.
         return
     states: set[int] = {0} if allow_empty_subset else set()
     if target in states:

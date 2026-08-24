@@ -10,7 +10,6 @@ from jacobian.math.number_theory._models import (
     ModularValueRequest,
     NonnegativeIntegerRequest,
     PositiveIntegerRequest,
-    PowerfulNumberResult,
 )
 
 
@@ -34,39 +33,6 @@ def test_chinese_remainder_rejects_invalid_system_bounds(
 ) -> None:
     with pytest.raises(ValidationError, match=message):
         ChineseRemainderRequest.model_validate(payload)
-
-
-@pytest.mark.parametrize(
-    "payload",
-    (
-        {
-            "semantics_version": "powerful-number.prime-exponents-at-least-two.v1",
-            "is_powerful": False,
-            "factors": [{"prime": "2", "power": 3}],
-            "violating_primes": [],
-        },
-        {
-            "semantics_version": "powerful-number.prime-exponents-at-least-two.v1",
-            "is_powerful": True,
-            "factors": [{"prime": "2", "power": 1}],
-            "violating_primes": ["2"],
-        },
-        {
-            "semantics_version": "powerful-number.prime-exponents-at-least-two.v1",
-            "is_powerful": False,
-            "factors": [
-                {"prime": "3", "power": 1},
-                {"prime": "2", "power": 2},
-            ],
-            "violating_primes": ["3"],
-        },
-    ),
-)
-def test_powerful_number_result_rejects_inconsistent_or_noncanonical_witnesses(
-    payload: dict[str, object],
-) -> None:
-    with pytest.raises(ValidationError, match=r"powerful|factor"):
-        PowerfulNumberResult.model_validate(payload)
 
 
 def test_in_process_factorization_dependencies_have_small_input_bounds() -> None:

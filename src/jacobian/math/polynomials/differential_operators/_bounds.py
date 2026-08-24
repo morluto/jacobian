@@ -296,18 +296,98 @@ def _max_coefficient_digits(polynomial: RationalPolynomial) -> int:
     )
 
 
+_OVERFLOW_BITS = 1 << 40
+
+
+def _per_exponent_height_bits(
+    polynomial: RationalPolynomial,
+    operator: ConstantCoefficientDifferentialOperator,
+    iterations: int,
+    powered_orders: tuple[tuple[int, ...], ...],
+) -> tuple[int, int] | None:
+    """Bound output coefficient heights per colliding exponent class.
+
+    Contributions merge only when differentiated source monomials land on the
+    same output exponent, so denominators are combined per exponent class via
+    their exact least common multiple instead of one global source LCM.
+    Returns ``None`` when the accounting itself would overflow its cap, in
+    which case the caller falls back to the coarser global bound.
+    """
+
+    cap = 64 * MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS
+    op_denominator, op_numerator = _common_denominator_height(
+        term.coefficient.as_fraction() for term in operator.terms
+    )
+    op_numerator_bits = _multiplier_bit_bound(op_numerator, iterations)
+    op_denominator_bits = _multiplier_bit_bound(op_denominator, iterations)
+    multiplicity_bits = _multiplier_bit_bound(len(operator.terms), iterations)
+    classes: dict[tuple[int, ...], tuple[int, int, int]] = {}
+    for orders in powered_orders:
+        for source_term in polynomial.polynomial.terms:
+            if any(
+                order > exponent
+                for order, exponent in zip(orders, source_term.exponents, strict=True)
+            ):
+                continue
+            target = tuple(
+                exponent - order
+                for exponent, order in zip(source_term.exponents, orders, strict=True)
+            )
+            falling_bits = sum(
+                _multiplier_bit_bound(exponent, order)
+                for exponent, order in zip(source_term.exponents, orders, strict=True)
+            )
+            fraction = source_term.coefficient.as_fraction()
+            entry = classes.get(target)
+            if entry is None:
+                if (
+                    fraction.denominator.bit_length() > cap
+                    or abs(fraction.numerator).bit_length() > cap
+                ):
+                    return None
+                classes[target] = (
+                    fraction.denominator,
+                    abs(fraction.numerator),
+                    falling_bits,
+                )
+                continue
+            lcm, numerator_sum, max_falling = entry
+            new_lcm = math.lcm(lcm, fraction.denominator)
+            scaled_existing = numerator_sum * (new_lcm // lcm)
+            scaled_new = abs(fraction.numerator) * (new_lcm // fraction.denominator)
+            merged = scaled_existing + scaled_new
+            if new_lcm.bit_length() > cap or merged.bit_length() > cap:
+                return None
+            classes[target] = (
+                new_lcm,
+                merged,
+                max(max_falling, falling_bits),
+            )
+    worst_numerator_bits = 0
+    worst_denominator_bits = 0
+    for lcm, numerator_sum, max_falling in classes.values():
+        denominator_bits = lcm.bit_length() + op_denominator_bits
+        numerator_bits = (
+            numerator_sum.bit_length()
+            + op_numerator_bits
+            + multiplicity_bits
+            + max_falling
+        )
+        worst_numerator_bits = max(worst_numerator_bits, numerator_bits)
+        worst_denominator_bits = max(worst_denominator_bits, denominator_bits)
+    return worst_numerator_bits, worst_denominator_bits
+
+
 def _coefficient_digit_bound(
     polynomial: RationalPolynomial,
     operator: ConstantCoefficientDifferentialOperator,
     iterations: int,
     candidate_terms: int,
+    powered_orders: tuple[tuple[int, ...], ...] | None,
 ) -> int:
     if iterations == 0:
         return _max_coefficient_digits(polynomial)
 
-    source_denominator, source_numerator = _common_denominator_height(
-        term.coefficient.as_fraction() for term in polynomial.polynomial.terms
-    )
     operator_denominator, operator_numerator = _common_denominator_height(
         term.coefficient.as_fraction() for term in operator.terms
     )
@@ -325,16 +405,32 @@ def _coefficient_digit_bound(
     # term sequence of the power that produces it, so the coefficient bound
     # carries the multinomial path multiplicity, at most term_count **
     # iterations sequences.
-    numerator_bits = source_numerator.bit_length() + (
+    shared_numerator_bits = (
         _multiplier_bit_bound(candidate_terms, 1)
         + _multiplier_bit_bound(len(operator.terms), iterations)
         + _multiplier_bit_bound(operator_numerator, iterations)
         + falling_factor_bits
     )
-    denominator_bits = source_denominator.bit_length() + _multiplier_bit_bound(
-        operator_denominator,
-        iterations,
+    shared_denominator_bits = _multiplier_bit_bound(operator_denominator, iterations)
+
+    if powered_orders is not None:
+        per_exponent = _per_exponent_height_bits(
+            polynomial,
+            operator,
+            iterations,
+            powered_orders,
+        )
+        if per_exponent is not None:
+            return max(
+                _decimal_digits_from_bits(per_exponent[0]),
+                _decimal_digits_from_bits(per_exponent[1]),
+            )
+
+    source_denominator, source_numerator = _common_denominator_height(
+        term.coefficient.as_fraction() for term in polynomial.polynomial.terms
     )
+    numerator_bits = source_numerator.bit_length() + shared_numerator_bits
+    denominator_bits = source_denominator.bit_length() + shared_denominator_bits
     return max(
         _decimal_digits_from_bits(numerator_bits),
         _decimal_digits_from_bits(denominator_bits),
@@ -500,7 +596,7 @@ def _expansion_support_candidates(
     polynomial: RationalPolynomial,
     operator: ConstantCoefficientDifferentialOperator,
     iterations: int,
-) -> tuple[int, int]:
+) -> tuple[int, int, tuple[tuple[int, ...], ...] | None]:
     """Bound the powered support and surviving output paths of one expansion."""
 
     term_count = len(operator.terms)
@@ -547,7 +643,7 @@ def _expansion_support_candidates(
                 raise ValueError(
                     "differential-operator output exceeds the candidate-term budget"
                 )
-        return expanded_terms, candidate_terms
+        return expanded_terms, candidate_terms, powered_orders
     maximum_exponents = tuple(
         max(term.exponents[axis] for term in polynomial.polynomial.terms)
         for axis in range(len(polynomial.variables))
@@ -571,7 +667,7 @@ def _expansion_support_candidates(
         raise ValueError(
             "differential-operator output exceeds the candidate-term budget"
         )
-    return expanded_terms, candidate_terms
+    return expanded_terms, candidate_terms, powered_orders
 
 
 def validate_application_envelope(
@@ -614,11 +710,13 @@ def validate_application_envelope(
     # D^k(f) = c^k * f never expands derivative support, so its admission
     # follows the scale-only result's support, coefficient growth, work, and
     # size budgets rather than the derivative kernel's expansion regime. The
-    # same holds whenever every nonzero-order term annihilates every source
-    # monomial: only the identity aggregate acts, so the power collapses to
-    # rescaling and the unreachable expansion does not narrow the domain.
+    # same holds for signed-unit scalars at any exponent parity, and whenever
+    # every nonzero-order term annihilates every source monomial: only the
+    # identity aggregate acts, so the power collapses to rescaling and the
+    # unreachable expansion does not narrow the domain.
     scalar_action = _is_scalar_operator(operator)
-    rescale_only = not scalar_action and _rescale_only(polynomial, operator)
+    signed_unit = scalar_action and _is_signed_unit_scalar(operator)
+    rescale_only = _rescale_only(polynomial, operator) or signed_unit
     if scalar_action or rescale_only:
         _require_nonexpanding_output(polynomial, expected)
     else:
@@ -630,7 +728,7 @@ def validate_application_envelope(
         expanded_terms = 0
         candidate_terms = len(polynomial.polynomial.terms)
     else:
-        expanded_terms, candidate_terms = _expansion_support_candidates(
+        expanded_terms, candidate_terms, powered_orders = _expansion_support_candidates(
             polynomial,
             operator,
             iterations,
@@ -640,7 +738,7 @@ def validate_application_envelope(
     # coefficient height unchanged, so their digit admission follows the
     # copied result's own heights rather than the common-denominator scaling
     # the generic estimate starts from.
-    if scalar_action and _is_signed_unit_scalar(operator):
+    if signed_unit:
         coefficient_digits = _max_coefficient_digits(polynomial)
     else:
         coefficient_digits = _coefficient_digit_bound(
@@ -648,6 +746,7 @@ def validate_application_envelope(
             operator,
             iterations,
             candidate_terms,
+            powered_orders if not rescale_only else None,
         )
     if coefficient_digits > MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS:
         raise ValueError(

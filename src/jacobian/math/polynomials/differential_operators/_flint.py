@@ -129,7 +129,12 @@ def _rescaled_source(
         ),
         Fraction(0),
     )
-    scaled = zero_coefficient**iterations
+    if zero_coefficient == 1:
+        scaled = Fraction(1)
+    elif zero_coefficient == -1:
+        scaled = Fraction(-1 if iterations % 2 else 1)
+    else:
+        scaled = zero_coefficient**iterations
     wire_terms = []
     for term in polynomial.polynomial.terms:
         value = term.coefficient.as_fraction() * scaled

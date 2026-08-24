@@ -1345,6 +1345,73 @@ def test_scalar_on_source_regime_skips_unreachable_expansion() -> None:
         )
 
 
+def test_distinct_source_denominators_are_not_merged_without_collision() -> None:
+    variables = ("x",)
+    numerator_p = 10**20000 + 1
+    numerator_q = 10**20000 + 3
+    source = _polynomial(
+        variables,
+        {
+            (2,): Fraction(1, numerator_p),
+            (1,): Fraction(1, numerator_q),
+        },
+    )
+    expected = _polynomial(
+        variables,
+        {
+            (1,): Fraction(2, numerator_p),
+            (0,): Fraction(1, numerator_q),
+        },
+    )
+
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=_operator(variables, {(1,): 1}),
+            iterations=1,
+            expected=expected,
+        )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.output == expected
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    assert replayed == result
+
+
+def test_signed_unit_scalars_short_circuit_by_exponent_parity() -> None:
+    variables = ("x",)
+    source = _polynomial(variables, {(5,): 3})
+    negation = _operator(variables, {(0,): -1})
+    even_iterations = 2**1_000_000
+    odd_iterations = even_iterations + 1
+
+    even = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=negation,
+            iterations=even_iterations,
+            expected=source,
+        )
+    )
+    assert even.output == source
+    assert even.matches_expected is True
+
+    odd = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=negation,
+            iterations=odd_iterations,
+            expected=_polynomial(variables, {(5,): -3}),
+        )
+    )
+    assert odd.output == _polynomial(variables, {(5,): -3})
+    assert odd.matches_expected is True
+
+
 def test_coefficient_growth_boundary_is_admitted_then_rejected() -> None:
     source = _polynomial(("x",), {(0,): 1})
     coefficient = CanonicalRational(num=str(10**255), den="1")

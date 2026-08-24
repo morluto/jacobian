@@ -24,6 +24,7 @@ _MAX_COEFFICIENT_DIGITS = 256
 _MAX_GCD_TERMS = 1024
 _MAX_INVARIANT_TERMS = 256
 _MAX_REPLAY_WORK = 1 << 24
+_MAX_REPLAY_INTERMEDIATE_TERMS = 262_144
 _MAX_GCD_DEGREE = 500
 _MAX_ELIMINATION_DEGREE_SUM = 128
 _MAX_DISCRIMINANT_DEGREE = 64
@@ -376,30 +377,37 @@ def _canonical_poly_key(polynomial: Any) -> Any:
 def _require_bounded_replay_step(
     accumulated: Any, base: Any, work: int, *, label: str
 ) -> tuple[Any, int]:
-    """Multiply one reconstruction step under proven work and support caps.
+    """Multiply one reconstruction step under proven preflight bounds.
 
-    The exact sparse product costs ``len(accumulated) * len(base)``
-    monomial multiplications, counted before the backend runs; the running
-    count is capped by ``_MAX_REPLAY_WORK`` and the product's support by the
-    shared representation envelope.  For an authentic claim every prefix
-    product divides the retained source, so a guard trip proves the claim
-    cannot be authenticated within the representation envelope rather than
-    asserting a mathematical mismatch.
+    ``len(accumulated) * len(base)`` counts every exact monomial
+    multiplication the sparse product can perform and upper-bounds the
+    product's support, because every output monomial arises from exactly one
+    input pair.  Both budgets are therefore checked before any backend
+    multiplication runs: this step's support bound against
+    ``_MAX_REPLAY_INTERMEDIATE_TERMS`` and the running total against
+    ``_MAX_REPLAY_WORK``.  Authentic reconstruction prefixes can transiently
+    out-density the retained source — later records cancel a dense prefix
+    back into the request envelope — so the per-step ceiling is a documented
+    conservative replay bound above the serialization envelope instead of
+    the envelope itself.  For an authentic claim every partial product
+    divides the retained source, so a guard trip proves only that the claim
+    cannot be authenticated within bounded work, never a mathematical
+    mismatch.
     """
 
-    work += len(accumulated.terms()) * len(base.terms())
+    step_work = len(accumulated.terms()) * len(base.terms())
+    if step_work > _MAX_REPLAY_INTERMEDIATE_TERMS:
+        raise ValueError(
+            f"{label} factor replay would materialize more than "
+            f"{_MAX_REPLAY_INTERMEDIATE_TERMS} intermediate terms"
+        )
+    work += step_work
     if work > _MAX_REPLAY_WORK:
         raise ValueError(
             f"{label} factor replay exceeds the "
             f"{_MAX_REPLAY_WORK}-operation reconstruction budget"
         )
-    candidate = accumulated * base
-    if len(candidate.terms()) > MAX_POLYNOMIAL_TERMS:
-        raise ValueError(
-            f"{label} factor reconstruction leaves the "
-            f"{MAX_POLYNOMIAL_TERMS}-term representation envelope"
-        )
-    return candidate, work
+    return accumulated * base, work
 
 
 def _validated_replay_records(
@@ -502,11 +510,13 @@ def _verify_exact_factor_product(
     unrepresentable (the multiplicity-one part of
     ``prod((x_i^63 - 1)(x_i - 1))`` holds ``63^5`` terms inside a 1,024-term
     request envelope), so validation must not materialize it to compare.
-    Every operation here touches only the claimed records or prefix products
-    of them; for an authentic claim each prefix divides the retained source,
-    the exact sparse multiplication cost is counted before it runs against a
-    total work budget, and any support beyond the shared representation
-    envelope rejects typedly instead of materializing.
+    Every operation here touches only the claimed records or bounded
+    products of them; for an authentic claim every such partial product
+    divides the retained source.  Each sparse multiplication's exact cost
+    and support bound are counted before the backend runs — per step against
+    ``_MAX_REPLAY_INTERMEDIATE_TERMS`` and cumulatively against
+    ``_MAX_REPLAY_WORK`` — so nothing larger than those proven bounds ever
+    materializes.
     """
 
     from sympy import Poly, Rational
@@ -526,10 +536,17 @@ def _verify_exact_factor_product(
     )
     work = 0
     for base, multiplicity in claimed:
-        for _ in range(multiplicity):
+        if multiplicity == 1:
             accumulated, work = _require_bounded_replay_step(
                 accumulated, base, work, label=label
             )
+            continue
+        power = base
+        for _ in range(multiplicity - 1):
+            power, work = _require_bounded_replay_step(power, base, work, label=label)
+        accumulated, work = _require_bounded_replay_step(
+            accumulated, power, work, label=label
+        )
     if accumulated != source:
         raise ValueError(mismatch_message)
     if require_square_free_parts:

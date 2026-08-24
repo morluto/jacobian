@@ -390,9 +390,9 @@ def test_source_bound_results_reject_combinatorial_replay_claims() -> None:
     """Forged factor records are rejected without expanding their product.
 
     The claimed factor is a dense-box multivariate sum within the shared wire
-    limits whose multiplicity-64 power densifies past the shared
-    representation envelope; bounded prefix-product reconstruction counts its
-    exact work and stops typedly at the envelope instead of materializing it.
+    limits whose multiplicity-64 power densifies past any replayable
+    support; bounded reconstruction counts each step's exact work and
+    support bound and stops typedly before materializing it.
     """
 
     from pydantic import ValidationError
@@ -404,14 +404,14 @@ def test_source_bound_results_reject_combinatorial_replay_claims() -> None:
         # The factorization contract is univariate, so a forged QQ[x, y]
         # source is rejected by the semantic-domain check before any replay
         # work; square-free decomposition admits several variables, and the
-        # monster's multiplicity-64 power densifies past the shared
-        # representation envelope during bounded prefix-product
-        # reconstruction, so the envelope guard rejects the claim before
-        # any comparison could authenticate it.
+        # monster's multiplicity-64 power densifies past the per-step replay
+        # support bound during bounded prefix-product reconstruction, so the
+        # preflight guard rejects the claim before any multiplication could
+        # materialize it.
         expected = (
             "one variable over QQ"
             if "Factorization" in result_model.__name__
-            else "representation envelope"
+            else "materialize more than"
         )
         with pytest.raises(ValidationError, match=expected):
             result_model.model_validate(forged)
@@ -1104,6 +1104,126 @@ def test_square_free_replay_never_recomputes_unrepresentable_decompositions(
             factors=(),
             reconstructed=source,
         )
+
+
+def test_square_free_operation_admits_transiently_dense_prefixes() -> None:
+    """An admitted request stays admitted when a replay prefix densifies.
+
+    For the accepted source ``A(x) * B(y, z)^2 * (x - 1)^3`` the canonical
+    records hold only 62, 48, and 2 terms and the 930-term source fits its
+    request envelope, yet multiplicity-ordered replay forms the transient
+    prefix ``A * B^2`` with 9,610 terms before ``(x - 1)^3`` cancels it back
+    into the envelope.  Replay prefixes are bounded per step by a dedicated
+    replay ceiling rather than by the serialization envelope, so the
+    operation must return its typed result instead of failing validation.
+    """
+
+    from sympy import Poly, symbols
+
+    from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
+    from jacobian.math.polynomials._models import (
+        PolynomialSquareFreeDecompositionResult,
+        PolynomialSquareFreeRequest,
+    )
+    from jacobian.math.polynomials._operations import (
+        polynomial_square_free_decomposition,
+    )
+
+    x, y, z = symbols("x,y,z")
+    geometric_x = Poly(sum(x**i for i in range(62)), x, y, z, domain="QQ")
+    geometric_yz = Poly(
+        sum(y**j for j in range(16)) * sum(z**k for k in range(3)),
+        x,
+        y,
+        z,
+        domain="QQ",
+    )
+    source = Poly(
+        (geometric_x * geometric_yz**2 * (x - 1) ** 3).as_expr(),
+        x,
+        y,
+        z,
+        domain="QQ",
+    )
+    assert len(source.terms()) == 930
+    request = PolynomialSquareFreeRequest(
+        polynomial=_sparse_polynomial(
+            ("x", "y", "z"),
+            {monom: str(int(coeff)) for monom, coeff in source.terms()},
+        )
+    )
+    result = polynomial_square_free_decomposition(request)
+    records = sorted(
+        (len(rational_polynomial_to_sympy(r.factor).terms()), r.multiplicity)
+        for r in result.factors
+    )
+    assert records == [(2, 3), (48, 2), (62, 1)]
+    assert (
+        PolynomialSquareFreeDecompositionResult.model_validate(result.model_dump())
+        == result
+    )
+
+
+def test_replay_preflights_support_before_multiplying(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Forged disjoint-support claims reject before any large materialization.
+
+    Two schema-valid square-free factors each hold all 4,095 monomials of
+    ``[0, 7]^4`` minus one on disjoint variable groups, at multiplicities 1
+    and 2.  Their Cartesian product bound is 16,769,025 terms while the
+    running work counter stays inside ``_MAX_REPLAY_WORK``, so only a
+    per-step support preflight can stop the replay before it materializes
+    the product; every multiplication that does run must respect the bound.
+    """
+
+    import itertools
+
+    from pydantic import ValidationError
+    from sympy import Poly
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.polynomials import _models
+    from jacobian.math.polynomials._models import (
+        PolynomialSquareFreeDecompositionResult,
+        PolynomialSquareFreeFactor,
+    )
+
+    variables = tuple(f"x{index}" for index in range(8))
+    box = [
+        exponents
+        for exponents in itertools.product(range(8), repeat=4)
+        if exponents != (0, 0, 0, 0)
+    ]
+    assert len(box) == 4_095
+    left = _sparse_polynomial(
+        variables, {exponents + (0,) * 4: "1" for exponents in box}
+    )
+    right = _sparse_polynomial(
+        variables, {(0,) * 4 + exponents: "1" for exponents in box}
+    )
+    constant = _sparse_polynomial(variables, {(0,) * 8: "1"})
+
+    original_mul = Poly.__mul__
+    observed: list[int] = []
+
+    def spy_mul(self, other):
+        observed.append(len(self.terms()) * len(other.terms()))
+        return original_mul(self, other)
+
+    monkeypatch.setattr(Poly, "__mul__", spy_mul)
+    with pytest.raises(ValidationError, match="materialize more than"):
+        PolynomialSquareFreeDecompositionResult(
+            polynomial=constant,
+            coefficient=CanonicalRational(num="1", den="1"),
+            factors=(
+                PolynomialSquareFreeFactor(factor=left, multiplicity=1),
+                PolynomialSquareFreeFactor(factor=right, multiplicity=2),
+            ),
+            reconstructed=constant,
+        )
+    assert observed
+    assert max(observed) <= _models._MAX_REPLAY_INTERMEDIATE_TERMS
 
 
 def test_square_free_operation_admits_envelope_scale_parts() -> None:

@@ -1202,7 +1202,14 @@ class IntervalExpressionBoxEnclosureResult(IntervalExpressionBoxEnclosureRequest
         return self
 
 
-class ArbPointEnclosureResult(StrictModel):
+class ArbPointEnclosureResult(ArbPointEnclosureRequest):
+    """A source-bound Arb ball enclosure of one real function value.
+
+    Every outcome retains the request's function, argument, and precision;
+    ``enclosure`` carries the canonical ``ClaimedPointEnclosure`` only when
+    ``status`` is ``ENCLOSED``, and must restate that retained source.
+    """
+
     status: Literal[
         "ENCLOSED", "NONFINITE", "TIMEOUT", "BACKEND_ERROR", "OUTPUT_MAGNITUDE_EXCEEDED"
     ]
@@ -1221,6 +1228,12 @@ class ArbPointEnclosureResult(StrictModel):
         if enclosed:
             enclosure = self.enclosure
             assert enclosure is not None
+            if (
+                enclosure.function,
+                enclosure.argument,
+                enclosure.precision_bits,
+            ) != (self.function, self.argument, self.precision_bits):
+                raise ValueError("the enclosure must restate the retained request")
             if enclosure.lower.compare(enclosure.upper) > 0:
                 raise ValueError("enclosure lower endpoint exceeds upper endpoint")
             if self.exact != (self.relative_accuracy_bits is None):

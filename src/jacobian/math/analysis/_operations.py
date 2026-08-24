@@ -825,6 +825,9 @@ def _point_enclosure(
         result = getattr(value, request.function.value.lower())()
         if not result.is_finite():
             return ArbPointEnclosureResult(
+                function=request.function,
+                argument=request.argument,
+                precision_bits=request.precision_bits,
                 status="NONFINITE",
                 detail="Arb returned a non-finite ball; no enclosure conclusion is available.",
             )
@@ -836,10 +839,16 @@ def _point_enclosure(
         )
     if endpoints is None:
         return ArbPointEnclosureResult(
+            function=request.function,
+            argument=request.argument,
+            precision_bits=request.precision_bits,
             status="OUTPUT_MAGNITUDE_EXCEEDED",
             detail="Arb produced finite endpoints outside the interoperable dyadic exponent range.",
         )
     return ArbPointEnclosureResult(
+        function=request.function,
+        argument=request.argument,
+        precision_bits=request.precision_bits,
         status="ENCLOSED",
         enclosure=ClaimedPointEnclosure(
             function=request.function,

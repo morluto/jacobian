@@ -161,6 +161,91 @@ def test_producer_enclosure_crosses_the_checker_boundary_unchanged() -> None:
     )
 
 
+def test_nonenclosure_outcomes_retain_the_request_source() -> None:
+    from jacobian.math.analysis._operations import _point_enclosure
+
+    nonfinite = _point_enclosure(
+        ArbPointEnclosureRequest.model_validate(
+            {
+                "function": "LOG",
+                "argument": {"num": "-1", "den": "1"},
+                "precision_bits": 128,
+            }
+        )
+    )
+    exceeded = _point_enclosure(
+        ArbPointEnclosureRequest.model_validate(
+            {
+                "function": "EXP",
+                "argument": {"num": "1" + "0" * 17, "den": "1"},
+                "precision_bits": 32,
+            }
+        )
+    )
+
+    assert nonfinite.status == "NONFINITE"
+    assert exceeded.status == "OUTPUT_MAGNITUDE_EXCEEDED"
+    for result in (nonfinite, exceeded):
+        assert result.enclosure is None
+        assert result.relative_accuracy_bits is None
+        assert not result.exact
+
+    assert nonfinite.function == "LOG"
+    assert nonfinite.argument.as_fraction() == Fraction(-1, 1)
+    assert nonfinite.precision_bits == 128
+    assert exceeded.function == "EXP"
+    assert exceeded.argument.as_fraction() == Fraction(10**17, 1)
+    assert exceeded.precision_bits == 32
+
+    serialized = [result.model_dump(mode="json") for result in (nonfinite, exceeded)]
+    assert len({repr(payload) for payload in serialized}) == 2
+    replayed = [
+        ArbPointEnclosureResult.model_validate_json(result.model_dump_json())
+        for result in (nonfinite, exceeded)
+    ]
+    assert [payload.model_dump(mode="json") for payload in replayed] == serialized
+
+
+def test_enclosed_result_must_restate_the_retained_request_source() -> None:
+    from jacobian.math.analysis._operations import _point_enclosure
+
+    producer_result = _point_enclosure(
+        ArbPointEnclosureRequest.model_validate(
+            {
+                "function": "SQRT",
+                "argument": {"num": "2", "den": "1"},
+                "precision_bits": 128,
+            }
+        )
+    )
+    assert producer_result.status == "ENCLOSED"
+    serialized = producer_result.model_dump(mode="json")
+
+    mismatched_function = {**serialized, "function": "LOG"}
+    with pytest.raises(ValidationError, match="restate the retained request"):
+        ArbPointEnclosureResult.model_validate(mismatched_function)
+
+    mismatched_argument = {**serialized, "argument": {"num": "3", "den": "1"}}
+    with pytest.raises(ValidationError, match="restate the retained request"):
+        ArbPointEnclosureResult.model_validate(mismatched_argument)
+
+    mismatched_precision = {**serialized, "precision_bits": 256}
+    with pytest.raises(ValidationError, match="restate the retained request"):
+        ArbPointEnclosureResult.model_validate(mismatched_precision)
+
+    dropped_source = {
+        key: value
+        for key, value in serialized.items()
+        if key not in {"function", "argument", "precision_bits"}
+    }
+    with pytest.raises(ValidationError):
+        ArbPointEnclosureResult.model_validate(dropped_source)
+
+    forged_status = {**serialized, "status": "NONFINITE"}
+    with pytest.raises(ValidationError, match="only an enclosed result"):
+        ArbPointEnclosureResult.model_validate(forged_status)
+
+
 def test_checker_rejects_unsupported_claim_functions_at_admission() -> None:
     claim = _claim("EXP", "1", "1", _integer_dyadic(2), _integer_dyadic(3))
 

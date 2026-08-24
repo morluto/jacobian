@@ -914,6 +914,48 @@ def test_square_free_replay_admits_sparse_multivariate_pure_powers() -> None:
     )
 
 
+def test_square_free_replay_returns_typed_records_for_trivariate_residual() -> None:
+    """``(x*y*z - 1)**20 * (x + y + z)`` returns a typed decomposition.
+
+    This admitted 63-term trivariate request was the residual host-exception
+    report against the division-based replay lanes; canonical recomparison
+    must return the producer's records and revalidate their serialized form
+    instead of raising on an accepted request.
+    """
+
+    from math import comb
+
+    from jacobian.math.polynomials._models import (
+        PolynomialSquareFreeDecompositionResult,
+        PolynomialSquareFreeRequest,
+    )
+    from jacobian.math.polynomials._operations import (
+        polynomial_square_free_decomposition,
+    )
+
+    terms: dict[tuple[int, int, int], str] = {}
+    for power in range(21):
+        coefficient = comb(20, power) * (-1) ** (20 - power)
+        for shifted in range(3):
+            exponents = [power, power, power]
+            exponents[shifted] += 1
+            terms[tuple(exponents)] = str(coefficient)
+    assert len(terms) == 63
+    request = _sparse_polynomial(("x", "y", "z"), terms)
+    result = polynomial_square_free_decomposition(
+        PolynomialSquareFreeRequest(polynomial=request)
+    )
+    assert [
+        (len(record.factor.polynomial.terms), record.multiplicity)
+        for record in result.factors
+    ] == [(3, 1), (2, 20)]
+    assert result.reconstructed == request
+    assert (
+        PolynomialSquareFreeDecompositionResult.model_validate(result.model_dump())
+        == result
+    )
+
+
 def test_square_free_replay_rejects_inexact_multivariate_divisors() -> None:
     """A forged divisor with a tiny degree box is rejected without dividing.
 

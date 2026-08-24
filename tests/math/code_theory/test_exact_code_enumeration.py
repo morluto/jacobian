@@ -240,6 +240,16 @@ def test_forged_profiles_are_rejected() -> None:
         WeightDistributionResult.model_validate(forged_profile)
 
 
+def test_source_bound_result_versions_track_wire_shape() -> None:
+    from jacobian.math.code_theory._tools import TOOLS
+
+    versions = {tool.operation_id: tool.version for tool in TOOLS}
+
+    assert versions["code.minimum_distance.compute"] == "2"
+    assert versions["code.weight_distribution.compute"] == "2"
+    assert versions["code.covering_radius.compute"] == "2"
+
+
 def test_dependent_generator_rows_rank_cardinality() -> None:
     """Dependent rows deduplicate: cardinality is q^rank, not q^rows."""
 

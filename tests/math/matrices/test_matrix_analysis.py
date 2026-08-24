@@ -17,6 +17,7 @@ from jacobian.math.matrices.analysis._operations import (
     check_farkas_certificate,
     compute_inertia,
 )
+from jacobian.math.matrices.values import MAX_MATRIX_DIMENSION, RationalMatrix
 
 
 class TestInertia:
@@ -190,7 +191,7 @@ def test_inertia_results_replay_known_answers(
 def test_inertia_result_rejects_mutations() -> None:
     request = _inertia_request(2, {(0, 0): "1"})
     result = compute_inertia(request)
-    dumped = result.model_dump()
+    dumped = result.model_dump(mode="json")
 
     count_sum = copy.deepcopy(dumped)
     count_sum["n_zero"] = 5
@@ -203,9 +204,22 @@ def test_inertia_result_rejects_mutations() -> None:
         InertiaResult.model_validate(wrong_label)
 
     foreign_source = copy.deepcopy(dumped)
-    foreign_source["matrix"]["entries"][0]["value"] = {"num": "-1", "den": "1"}
+    foreign_source["matrix"]["entries"][0][0] = {"num": "-1", "den": "1"}
     with pytest.raises(ValidationError, match="Sylvester inertia"):
         InertiaResult.model_validate(foreign_source)
+
+    asymmetric_source = copy.deepcopy(dumped)
+    asymmetric_source["matrix"]["entries"][0][1] = {"num": "3", "den": "1"}
+    with pytest.raises(ValidationError, match="must be symmetric"):
+        InertiaResult.model_validate(asymmetric_source)
+
+    nonsquare_source = copy.deepcopy(dumped)
+    nonsquare_source["matrix"]["entries"] = (
+        ({"num": "1", "den": "1"},),
+        ({"num": "0", "den": "1"},),
+    )
+    with pytest.raises(ValidationError, match="must be square"):
+        InertiaResult.model_validate(nonsquare_source)
 
     forged_counts = copy.deepcopy(dumped)
     forged_counts["n_positive"] = 0
@@ -243,11 +257,55 @@ def test_inertia_congruence_invariance() -> None:
     ) == (result.n_positive, result.n_negative, result.n_zero)
 
 
+def test_inertia_result_retains_domain_canonical_matrix() -> None:
+    request = _inertia_request(2, {(0, 0): "3/2"})
+    result = compute_inertia(request)
+    assert isinstance(result.matrix, RationalMatrix)
+    assert result.matrix.domain == "QQ"
+    assert result.matrix.entries == (
+        (CanonicalRational(num="3", den="2"), CanonicalRational(num="0", den="1")),
+        (CanonicalRational(num="0", den="1"), CanonicalRational(num="0", den="1")),
+    )
+
+
+def test_inertia_results_are_representation_invariant() -> None:
+    upper = compute_inertia(_inertia_request(3, {(0, 1): "2", (2, 2): "-5"}))
+    lower = compute_inertia(_inertia_request(3, {(1, 0): "2", (2, 2): "-5"}))
+    reordered = compute_inertia(_inertia_request(3, {(2, 2): "-5", (0, 1): "2"}))
+    padded = compute_inertia(
+        _inertia_request(
+            3,
+            {(0, 0): "0", (0, 1): "2", (1, 1): "0", (2, 2): "-5"},
+        )
+    )
+    results = [upper, lower, reordered, padded]
+    assert all(result == upper for result in results[1:])
+    assert len({result.model_dump_json() for result in results}) == 1
+    assert (upper.n_positive, upper.n_negative, upper.n_zero) == (1, 2, 0)
+
+
+def test_inertia_retained_matrix_reconstructs_the_source() -> None:
+    from jacobian.math.matrices.analysis._operations import _dense_fractions
+
+    request = _inertia_request(3, {(0, 1): "2/3", (2, 2): "-5"})
+    dense = _dense_fractions(compute_inertia(request).matrix)
+    assert dense == [
+        [Fraction(0), Fraction(2, 3), Fraction(0)],
+        [Fraction(2, 3), Fraction(0), Fraction(0)],
+        [Fraction(0), Fraction(0), Fraction(-5)],
+    ]
+
+
+def test_inertia_request_rejects_dimension_above_canonical_matrix_bound() -> None:
+    with pytest.raises(ValidationError):
+        _inertia_request(MAX_MATRIX_DIMENSION + 1, {(0, 0): "1"})
+
+
 def _encoded_inertia_payload_near_limit(offset: int) -> bytes:
-    """Encode an inertia request whose echoed source matrix lands exactly
-    ``offset`` bytes below the canonical output limit, so the payload fits
-    the identical input limit while the result echo plus the reserved
-    envelope may not."""
+    """Encode an inertia request whose normalized dense source echo lands
+    exactly ``offset`` bytes below the canonical output limit, so the echo
+    plus the reserved envelope may exceed the identical output limit while
+    the payload still fits the input limit."""
 
     import functools
 
@@ -257,46 +315,54 @@ def _encoded_inertia_payload_near_limit(offset: int) -> bytes:
     @functools.cache
     def build(offset: int) -> bytes:
         limits = CanonicalLimits()
-        digits = "9" * MAX_CANONICAL_RATIONAL_DIGITS
-        template = {"row": 0, "col": 0, "value": {"num": digits, "den": "1"}}
-        base = len(encode_strict_json({"dimension": 50, "entries": []}))
-        step = len(encode_strict_json({"dimension": 50, "entries": [template]})) - base
-        target = limits.max_output_bytes - offset
-        count = max(0, (target - base) // step)
-        cells = [(r, c) for r in range(50) for c in range(r, 50)]
-        assert count + 2 <= len(cells)
-        fixed_entries = [
-            {"row": r, "col": c, "value": {"num": digits, "den": "1"}}
-            for r, c in cells[:count]
-        ]
-        trim_cells = cells[count : count + 2]
-        trim_lengths = [1, 1]
-        encoded = b""
-        for _ in range(6):
-            trimmed = [
-                {
-                    "row": r,
-                    "col": c,
-                    "value": {"num": "9" * length, "den": "1"},
-                }
-                for (r, c), length in zip(trim_cells, trim_lengths, strict=True)
+        dimension = MAX_MATRIX_DIMENSION
+        cells = [(r, c) for r in range(dimension) for c in range(r, dimension)]
+
+        def dense_echo(digits: dict[tuple[int, int], int]) -> bytes:
+            rows = [
+                [
+                    {
+                        "num": "9" * digits[(min(r, c), max(r, c))],
+                        "den": "1",
+                    }
+                    for c in range(dimension)
+                ]
+                for r in range(dimension)
             ]
-            encoded = encode_strict_json(
-                {"dimension": 50, "entries": fixed_entries + trimmed}
+            return encode_strict_json(
+                {"matrix_schema_version": "1", "domain": "QQ", "entries": rows}
             )
-            delta = target - len(encoded)
-            if not delta:
-                break
-            first = trim_lengths[0] + delta
-            if first < 1:
-                trim_lengths[1] += first - 1
-                first = 1
-            elif first > MAX_CANONICAL_RATIONAL_DIGITS:
-                trim_lengths[1] += first - MAX_CANONICAL_RATIONAL_DIGITS
-                first = MAX_CANONICAL_RATIONAL_DIGITS
-            assert 1 <= trim_lengths[1] <= MAX_CANONICAL_RATIONAL_DIGITS
-            trim_lengths[0] = first
-        assert len(encoded) == target
+
+        target = limits.max_output_bytes - offset
+        low = len(dense_echo(dict.fromkeys(cells, 1)))
+        uniform = max(1, (target - low) // (dimension * dimension))
+        digits = dict.fromkeys(cells, uniform)
+        gap = target - len(dense_echo(digits))
+        first, second = cells[0], cells[1]
+        adjusted = digits[first] + gap
+        if adjusted < 1:
+            digits[second] += adjusted - 1
+            adjusted = 1
+        elif adjusted > MAX_CANONICAL_RATIONAL_DIGITS:
+            digits[second] += adjusted - MAX_CANONICAL_RATIONAL_DIGITS
+            adjusted = MAX_CANONICAL_RATIONAL_DIGITS
+        assert 1 <= digits[second] <= MAX_CANONICAL_RATIONAL_DIGITS
+        digits[first] = adjusted
+        assert len(dense_echo(digits)) == target
+        encoded = encode_strict_json(
+            {
+                "dimension": dimension,
+                "entries": [
+                    {
+                        "row": r,
+                        "col": c,
+                        "value": {"num": "9" * digits[(r, c)], "den": "1"},
+                    }
+                    for (r, c) in cells
+                ],
+            }
+        )
+        assert len(encoded) <= limits.max_input_bytes
         return encoded
 
     return build(offset)
@@ -314,7 +380,29 @@ def test_inertia_request_admission_reserves_output_headroom_for_source_echo() ->
 def test_inertia_request_admission_accepts_payload_inside_reserved_budget() -> None:
     encoded = _encoded_inertia_payload_near_limit(offset=2048)
     request = SymmetricMatrixRequest.model_validate_json(encoded)
-    assert request.dimension == 50
+    assert request.dimension == MAX_MATRIX_DIMENSION
+
+
+def test_inertia_request_admission_rejects_echo_beyond_output_limit_as_typed_error() -> None:
+    """A fitting sparse request whose dense echo exceeds the whole output
+    budget must still be rejected as a typed error, not overflow encoding."""
+
+    from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
+    from jacobian.canonical import CanonicalLimits, encode_strict_json
+
+    digits = "9" * (MAX_CANONICAL_RATIONAL_DIGITS // 3)
+    payload = {
+        "dimension": MAX_MATRIX_DIMENSION,
+        "entries": [
+            {"row": r, "col": c, "value": {"num": digits, "den": "1"}}
+            for r in range(MAX_MATRIX_DIMENSION)
+            for c in range(r, MAX_MATRIX_DIMENSION)
+        ],
+    }
+    encoded = encode_strict_json(payload)
+    assert len(encoded) <= CanonicalLimits().max_input_bytes
+    with pytest.raises(ValidationError, match="canonical output limit"):
+        SymmetricMatrixRequest.model_validate_json(encoded)
 
 
 def test_dispatch_rejects_unfittable_inertia_request_as_typed_error() -> None:
@@ -339,15 +427,18 @@ def test_large_fitting_inertia_request_returns_typed_result() -> None:
 
     digits = "9" * 4096
     payload = {
-        "dimension": 50,
+        "dimension": MAX_MATRIX_DIMENSION,
         "entries": [
             {"row": r, "col": r, "value": {"num": digits, "den": "1"}}
-            for r in range(50)
+            for r in range(MAX_MATRIX_DIMENSION)
         ],
     }
     assert len(canonicalize_json(payload)) > 100_000
     result = invoke_operation("matrix.inertia.compute", payload, Catalog.open())
-    assert result.output["n_positive"] == 50
+    assert result.output["n_positive"] == MAX_MATRIX_DIMENSION
     assert result.output["n_negative"] == 0
     assert result.output["n_zero"] == 0
     assert result.output["definiteness"] == "positive_definite"
+    matrix = result.output["matrix"]
+    assert matrix["domain"] == "QQ"
+    assert len(matrix["entries"]) == MAX_MATRIX_DIMENSION

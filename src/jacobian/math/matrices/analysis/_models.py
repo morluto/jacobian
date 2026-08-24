@@ -8,12 +8,18 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.canonical import (
+    CanonicalizationError,
+    CanonicalLimits,
+    encode_strict_json,
+)
+from jacobian.math.matrices.values import MAX_MATRIX_DIMENSION, RationalMatrix
 
-# The inertia result echoes its retained source matrix, so a request near
-# the canonical input limit can produce a response past the identical
-# output limit. Admission reserves this much for the inertia counts,
-# definiteness label, and operation envelope beyond the echoed matrix.
+# The inertia result echoes its source matrix in the domain's dense
+# canonical form, so a request whose normalized echo is near the canonical
+# output limit can produce a response past the identical limit. Admission
+# reserves this much for the inertia counts, definiteness label, and
+# operation envelope beyond the echoed matrix.
 _RESULT_ENVELOPE_RESERVE_BYTES = 1_024
 
 
@@ -28,11 +34,15 @@ class MatrixEntry(StrictModel):
 class SymmetricMatrixRequest(StrictModel):
     """A symmetric rational matrix for definiteness analysis."""
 
-    dimension: int = Field(ge=1, le=50)
+    dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
     entries: tuple[MatrixEntry, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
+        from jacobian.math.matrices.analysis._operations import (
+            _canonical_source_matrix,
+        )
+
         seen: set[tuple[int, int]] = set()
         for e in self.entries:
             if e.row >= self.dimension or e.col >= self.dimension:
@@ -41,8 +51,14 @@ class SymmetricMatrixRequest(StrictModel):
             if key in seen:
                 raise ValueError("symmetric matrix entries must not conflict")
             seen.add(key)
+        source = _canonical_source_matrix(self)
         output_limit = CanonicalLimits().max_output_bytes
-        retained_bytes = len(encode_strict_json(self.model_dump(mode="json")))
+        try:
+            retained_bytes = len(
+                encode_strict_json(source.model_dump(mode="json"))
+            )
+        except CanonicalizationError:
+            retained_bytes = output_limit + 1
         if retained_bytes + _RESULT_ENVELOPE_RESERVE_BYTES > output_limit:
             raise ValueError(
                 "the inertia result retains its source matrix and would "
@@ -55,9 +71,12 @@ class SymmetricMatrixRequest(StrictModel):
 class InertiaResult(StrictModel):
     """Sylvester inertia (n_pos, n_neg, n_zero) of a symmetric matrix.
 
-    Retains the canonical symmetric rational source matrix so validation
-    replays the exact congruence-diagonal counts and enforces the
-    definiteness label against them:
+    Retains the source matrix in the domain's canonical dense
+    ``RationalMatrix`` form, so every payload describing the same symmetric
+    matrix yields identical outputs and digests regardless of entry order,
+    triangular coordinates, or explicit zeros. Validation replays the exact
+    congruence-diagonal counts and enforces the definiteness label against
+    them:
 
     - ``n_positive + n_negative + n_zero`` equals the dimension;
     - positive_definite iff all eigenvalues are positive, negative_definite
@@ -66,7 +85,7 @@ class InertiaResult(StrictModel):
       opposite sign; indefinite requires both nonzero sign classes.
     """
 
-    matrix: SymmetricMatrixRequest
+    matrix: RationalMatrix
     n_positive: int = Field(ge=0)
     n_negative: int = Field(ge=0)
     n_zero: int = Field(ge=0)
@@ -75,14 +94,23 @@ class InertiaResult(StrictModel):
     @model_validator(mode="after")
     def require_source_bound(self) -> Self:
         from jacobian.math.matrices.analysis._operations import (
-            _build_matrix,
             _definiteness_label,
+            _dense_fractions,
             _symmetric_inertia,
         )
 
-        if self.n_positive + self.n_negative + self.n_zero != self.matrix.dimension:
+        dimension = len(self.matrix.entries)
+        if any(len(row) != dimension for row in self.matrix.entries):
+            raise ValueError("retained source matrix must be square")
+        if any(
+            self.matrix.entries[row][col] != self.matrix.entries[col][row]
+            for row in range(dimension)
+            for col in range(row + 1, dimension)
+        ):
+            raise ValueError("retained source matrix must be symmetric")
+        if self.n_positive + self.n_negative + self.n_zero != dimension:
             raise ValueError("inertia counts must sum to the matrix dimension")
-        replayed = _symmetric_inertia(_build_matrix(self.matrix))
+        replayed = _symmetric_inertia(_dense_fractions(self.matrix))
         if replayed != (self.n_positive, self.n_negative, self.n_zero):
             raise ValueError(
                 "inertia counts must be the exact Sylvester inertia of the "

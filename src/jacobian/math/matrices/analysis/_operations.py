@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.matrices.analysis._models import (
     FarkasCertificateRequest,
@@ -11,6 +12,7 @@ from jacobian.math.matrices.analysis._models import (
     InertiaResult,
     SymmetricMatrixRequest,
 )
+from jacobian.math.matrices.values import RationalMatrix
 
 
 def _build_matrix(request: SymmetricMatrixRequest) -> list[list[Fraction]]:
@@ -23,6 +25,26 @@ def _build_matrix(request: SymmetricMatrixRequest) -> list[list[Fraction]]:
         if entry.row != entry.col:
             mat[entry.col][entry.row] = value
     return mat
+
+
+def _rational_matrix(matrix: list[list[Fraction]]) -> RationalMatrix:
+    """Convert a dense Fraction matrix into the domain's canonical value."""
+    return RationalMatrix(
+        entries=tuple(
+            tuple(CanonicalRational.from_fraction(value) for value in row)
+            for row in matrix
+        )
+    )
+
+
+def _canonical_source_matrix(request: SymmetricMatrixRequest) -> RationalMatrix:
+    """Normalize the sparse symmetric request into the canonical dense value."""
+    return _rational_matrix(_build_matrix(request))
+
+
+def _dense_fractions(matrix: RationalMatrix) -> list[list[Fraction]]:
+    """Convert a canonical rational matrix into dense Fractions."""
+    return [[entry.as_fraction() for entry in row] for row in matrix.entries]
 
 
 def _swap_symmetric(matrix: list[list[Fraction]], left: int, right: int) -> None:
@@ -152,7 +174,7 @@ def compute_inertia(request: SymmetricMatrixRequest) -> InertiaResult:
     """Compute the Sylvester inertia of a symmetric rational matrix."""
     n_pos, n_neg, n_zero = _symmetric_inertia(_build_matrix(request))
     return InertiaResult(
-        matrix=request,
+        matrix=_canonical_source_matrix(request),
         n_positive=n_pos,
         n_negative=n_neg,
         n_zero=n_zero,

@@ -373,10 +373,32 @@ def test_symbolic_matrix_product_admits_partial_exponent_collisions() -> None:
     )
 
 
-def test_symbolic_matrix_product_still_charges_colliding_products() -> None:
+def test_symbolic_matrix_product_admits_integral_coefficient_collisions() -> None:
+    """Integral colliding products add only an addition carry digit."""
+
     variables = ("x",)
     scaled = _rf(variables, (10**63, 1, (1,)), (10**63, 1, (0,)))
     shifted = _rf(variables, (1, 1, (1,)), (1, 1, (0,)))
+    request = _product_request(((scaled,),), ((shifted,),), variables)
+    product = compute_symbolic_matrix_product(request)
+    assert product.entries == (
+        (
+            _rf(
+                variables,
+                (10**63, 1, (2,)),
+                (2 * 10**63, 1, (1,)),
+                (10**63, 1, (0,)),
+            ),
+        ),
+    )
+
+
+def test_symbolic_matrix_product_still_charges_rational_collisions() -> None:
+    """Rational colliding products still charge unrelated denominator growth."""
+
+    variables = ("x",)
+    scaled = _rf(variables, (10**63, 97, (1,)), (10**63, 97, (0,)))
+    shifted = _rf(variables, (1, 1, (1,)), (1, 89, (0,)))
     with pytest.raises(ValidationError, match="coefficient"):
         _product_request(((scaled,),), ((shifted,),), variables)
 
@@ -392,12 +414,41 @@ def test_symbolic_matrix_product_admits_sparse_support_without_cancellation() ->
     assert product.entries == ((_rf(variables, (1, 1, (32, 32))),),)
 
 
-def test_symbolic_matrix_product_keeps_dense_box_for_rational_entries() -> None:
+def test_symbolic_matrix_product_ignores_zero_partner_for_support_path() -> None:
+    """A zero partner drops its pair before the support path is chosen."""
+
+    variables = ("x", "y")
+    monomial = _rf(variables, (1, 1, (16, 16)))
+    inverse_x = _rf(variables, (1, 1, (0, 0)), denominator=((1, 1, (1, 0)),))
+    zero = _rf(variables)
+    product = compute_symbolic_matrix_product(
+        _product_request(((monomial, inverse_x),), ((monomial,), (zero,)), variables)
+    )
+    assert product.entries == ((_rf(variables, (1, 1, (32, 32))),),)
+
+
+def test_symbolic_matrix_product_keeps_monomial_denominator_support() -> None:
+    """A monomial common denominator cannot densify under cancellation."""
+
     variables = ("x", "y")
     inverse = _rf(
         variables,
         (1, 1, (0, 0)),
         denominator=((1, 1, (16, 16)),),
+    )
+    one = _rf(variables, (1, 1, (0, 0)))
+    product = compute_symbolic_matrix_product(
+        _product_request(((inverse,),), ((one,),), variables)
+    )
+    assert product.entries == ((inverse,),)
+
+
+def test_symbolic_matrix_product_keeps_dense_box_for_rational_entries() -> None:
+    variables = ("x", "y")
+    inverse = _rf(
+        variables,
+        (1, 1, (0, 0)),
+        denominator=((1, 1, (16, 0)), (1, 1, (0, 16))),
     )
     with pytest.raises(ValidationError, match="canonical result budget"):
         _product_request(((inverse,),), ((inverse,),), variables)

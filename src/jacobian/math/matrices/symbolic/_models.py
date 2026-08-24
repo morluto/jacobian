@@ -170,13 +170,34 @@ def _maximum_coefficient_digits(value: RationalFunction, *, numerator: bool) -> 
 
 
 def _sum_coefficient_digit_bound(
-    *, term_count: int, product_coefficient_digits: int
+    *,
+    term_count: int,
+    product_coefficient_digits: int,
+    integral_coefficients: bool,
 ) -> int:
-    """Bound one coefficient after collecting ``term_count`` rational products."""
+    """Bound one coefficient after collecting ``term_count`` rational products.
+
+    Integral products only add an addition carry to the collected
+    coefficient. Rational products can also multiply unrelated
+    denominators while reaching the common denominator, which the
+    conservative rational bound charges for.
+    """
 
     if term_count <= 1:
         return product_coefficient_digits
+    if integral_coefficients:
+        return product_coefficient_digits + len(str(term_count))
     return term_count * product_coefficient_digits + len(str(term_count))
+
+
+def _has_integral_coefficients(value: RationalFunction) -> bool:
+    """Report whether every coefficient of both polynomial sides is an integer."""
+
+    return all(
+        term.coefficient.den == "1"
+        for polynomial in (value.numerator, value.denominator)
+        for term in polynomial.terms
+    )
 
 
 def _monomial_box_term_bound(exponents: tuple[int, ...]) -> int:
@@ -233,7 +254,7 @@ def _maximum_product_collisions(
 def _product_cell_bounds(
     left: tuple[RationalFunction, ...],
     right: tuple[RationalFunction, ...],
-) -> tuple[int, int, tuple[int, ...], tuple[int, ...], int]:
+) -> tuple[int, int, tuple[int, ...], tuple[int, ...], int, bool]:
     """Return raw work bounds and cancellation-safe canonical degree bounds.
 
     The cell is a finite sum of products ``a_i * b_i``. Each nonzero product
@@ -242,7 +263,9 @@ def _product_cell_bounds(
     bounds admit that expansion before SymPy receives the request. Coefficient
     digits are bounded by the products colliding at one exponent rather than
     by total support size. A separate per-axis monomial-box bound accounts for
-    a canonical quotient becoming denser after exact cancellation.
+    a canonical quotient becoming denser after exact cancellation. The final
+    flag reports whether every contributing pair has unit denominators, so no
+    cancellation can occur and the raw expansion bounds stay canonical.
     """
 
     factors = tuple(
@@ -253,7 +276,16 @@ def _product_cell_bounds(
     if not factors:
         # The canonical zero has an empty numerator and a one-term denominator.
         zero_exponents = (0,) * len(left[0].variables)
-        return 0, 1, zero_exponents, zero_exponents, 1
+        return 0, 1, zero_exponents, zero_exponents, 1, True
+
+    integral_coefficients = all(
+        _has_integral_coefficients(left_value) and _has_integral_coefficients(right_value)
+        for left_value, right_value in factors
+    )
+    unit_denominator_factors = all(
+        _is_polynomial_entry(left_value) and _is_polynomial_entry(right_value)
+        for left_value, right_value in factors
+    )
 
     denominator_term_counts = tuple(
         len(left_value.denominator.terms) * len(right_value.denominator.terms)
@@ -356,10 +388,12 @@ def _product_cell_bounds(
         _sum_coefficient_digit_bound(
             term_count=numerator_collision_count,
             product_coefficient_digits=numerator_product_digits,
+            integral_coefficients=integral_coefficients,
         ),
         _sum_coefficient_digit_bound(
             term_count=denominator_collision_count,
             product_coefficient_digits=denominator_product_digits,
+            integral_coefficients=integral_coefficients,
         ),
     )
     return (
@@ -368,6 +402,7 @@ def _product_cell_bounds(
         numerator_exponent,
         denominator_exponent,
         maximum_coefficient_digits,
+        unit_denominator_factors,
     )
 
 
@@ -397,6 +432,7 @@ def _require_symbolic_product_admission(
                 numerator_exponents,
                 denominator_exponents,
                 maximum_coefficient_digits,
+                unit_denominator_factors,
             ) = _product_cell_bounds(left_row, right_column)
             if (
                 numerator_terms > MAX_SYMBOLIC_RESULT_TERMS
@@ -405,7 +441,7 @@ def _require_symbolic_product_admission(
                 raise ValueError(
                     "symbolic matrix product exceeds the 256-term exact result budget"
                 )
-            if all(_is_polynomial_entry(value) for value in (*left_row, *right_column)):
+            if unit_denominator_factors:
                 # Unit denominators cannot cancel against the collected
                 # numerator, so support can only shrink below the raw
                 # expansion already bounded above.
@@ -415,8 +451,13 @@ def _require_symbolic_product_admission(
                 canonical_numerator_terms = _monomial_box_term_bound(
                     numerator_exponents
                 )
-                canonical_denominator_terms = _monomial_box_term_bound(
-                    denominator_exponents
+                # A monomial common denominator only loses monomial factors
+                # during cancellation and every divisor of a monomial is a
+                # monomial, so its canonical support stays a single term.
+                canonical_denominator_terms = (
+                    1
+                    if denominator_terms == 1
+                    else _monomial_box_term_bound(denominator_exponents)
                 )
             if (
                 canonical_numerator_terms > MAX_SYMBOLIC_RESULT_TERMS

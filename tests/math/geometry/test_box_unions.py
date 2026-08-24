@@ -56,18 +56,20 @@ def _volume_by_integer_cells(boxes: tuple[RationalAxisAlignedBox, ...]) -> int:
     return len(cells)
 
 
-def _three_box_source() -> BoxUnionVolumeRequest:
-    return BoxUnionVolumeRequest(
-        boxes=(
-            _box((0, 2), (0, 1), (0, 1)),
-            _box((1, 3), (0, 1), (0, 1)),
-            _box((0, 3), (0, 1), (Fraction(1, 2), Fraction(3, 2))),
-        )
+def _three_boxes() -> tuple[RationalAxisAlignedBox, ...]:
+    return (
+        _box((0, 2), (0, 1), (0, 1)),
+        _box((1, 3), (0, 1), (0, 1)),
+        _box((0, 3), (0, 1), (Fraction(1, 2), Fraction(3, 2))),
     )
 
 
+def _three_box_source() -> BoxUnionVolumeRequest:
+    return BoxUnionVolumeRequest(boxes=_three_boxes())
+
+
 def test_three_box_inclusion_exclusion_fixture() -> None:
-    result = compute_box_union_volume(_three_box_source())
+    result = compute_box_union_volume(_three_boxes())
 
     assert result.union_volume.as_fraction() == Fraction(9, 2)
     assert tuple(entry.box_indices for entry in result.intersections) == (
@@ -106,21 +108,22 @@ def test_three_box_inclusion_exclusion_fixture() -> None:
 def test_union_volume_matches_independent_cell_oracle(
     boxes: tuple[RationalAxisAlignedBox, ...],
 ) -> None:
-    result = compute_box_union_volume(BoxUnionVolumeRequest(boxes=boxes))
+    result = compute_box_union_volume(boxes)
     assert result.union_volume.as_fraction() == _volume_by_integer_cells(boxes)
 
 
 def test_disjoint_intersections_are_omitted() -> None:
-    request = BoxUnionVolumeRequest(boxes=(_box((0, 1)), _box((2, 4))))
-    result = compute_box_union_volume(request)
+    boxes = (_box((0, 1)), _box((2, 4)))
+    result = compute_box_union_volume(boxes)
 
+    assert result.source == BoxUnionVolumeRequest(boxes=boxes)
     assert result.union_volume.as_fraction() == 3
     assert tuple(entry.box_indices for entry in result.intersections) == ((0,), (1,))
 
 
 def test_duplicate_boxes_replay_by_source_index() -> None:
     box = _box((0, 2), (0, 1))
-    result = compute_box_union_volume(BoxUnionVolumeRequest(boxes=(box, box)))
+    result = compute_box_union_volume((box, box))
 
     assert result.union_volume.as_fraction() == 2
     assert tuple(entry.box_indices for entry in result.intersections) == (
@@ -132,10 +135,9 @@ def test_duplicate_boxes_replay_by_source_index() -> None:
 
 
 def test_empty_boxes_are_pruned_without_losing_source_indices() -> None:
-    request = BoxUnionVolumeRequest(
-        boxes=(_empty_box(1), _box((0, 2)), _empty_box(1), _box((1, 3)))
-    )
-    result = compute_box_union_volume(request)
+    boxes = (_empty_box(1), _box((0, 2)), _empty_box(1), _box((1, 3)))
+    request = BoxUnionVolumeRequest(boxes=boxes)
+    result = compute_box_union_volume(boxes)
 
     assert result.source == request
     assert result.union_volume.as_fraction() == 3
@@ -147,18 +149,16 @@ def test_empty_boxes_are_pruned_without_losing_source_indices() -> None:
 
 
 def test_all_empty_boxes_have_empty_ledger_and_zero_volume() -> None:
-    request = BoxUnionVolumeRequest(
-        boxes=tuple(_empty_box(3) for _ in range(MAX_BOX_UNION_SOURCE_BOXES))
+    result = compute_box_union_volume(
+        tuple(_empty_box(3) for _ in range(MAX_BOX_UNION_SOURCE_BOXES))
     )
-    result = compute_box_union_volume(request)
 
     assert result.intersections == ()
     assert result.union_volume.as_fraction() == 0
 
 
 def test_touching_and_degenerate_boxes_remain_nonempty() -> None:
-    request = BoxUnionVolumeRequest(boxes=(_box((0, 1)), _box((1, 2)), _box((3, 3))))
-    result = compute_box_union_volume(request)
+    result = compute_box_union_volume((_box((0, 1)), _box((1, 2)), _box((3, 3))))
     ledger = {entry.box_indices: entry for entry in result.intersections}
 
     assert result.union_volume.as_fraction() == 2
@@ -169,17 +169,16 @@ def test_touching_and_degenerate_boxes_remain_nonempty() -> None:
 
 
 def test_input_order_changes_indices_but_not_union_volume() -> None:
-    source = _three_box_source()
-    reversed_source = BoxUnionVolumeRequest(boxes=tuple(reversed(source.boxes)))
+    boxes = _three_boxes()
 
     assert (
-        compute_box_union_volume(source).union_volume
-        == compute_box_union_volume(reversed_source).union_volume
+        compute_box_union_volume(boxes).union_volume
+        == compute_box_union_volume(tuple(reversed(boxes))).union_volume
     )
 
 
 def test_result_rejects_wrong_union_volume() -> None:
-    result = compute_box_union_volume(_three_box_source())
+    result = compute_box_union_volume(_three_boxes())
     payload = result.model_dump(mode="json")
     payload["union_volume"] = {"num": "5", "den": "1"}
 
@@ -188,7 +187,7 @@ def test_result_rejects_wrong_union_volume() -> None:
 
 
 def test_result_rejects_omitted_intersection() -> None:
-    result = compute_box_union_volume(_three_box_source())
+    result = compute_box_union_volume(_three_boxes())
     payload = result.model_dump(mode="json")
     payload["intersections"] = payload["intersections"][:-1]
 
@@ -197,7 +196,7 @@ def test_result_rejects_omitted_intersection() -> None:
 
 
 def test_result_rejects_corrupted_intersection() -> None:
-    result = compute_box_union_volume(_three_box_source())
+    result = compute_box_union_volume(_three_boxes())
     payload = result.model_dump(mode="json")
     payload["intersections"][3]["intersection"] = _box(
         (0, 1), (0, 1), (0, 1)
@@ -209,7 +208,7 @@ def test_result_rejects_corrupted_intersection() -> None:
 
 
 def test_result_rejects_intersection_index_mutation() -> None:
-    result = compute_box_union_volume(_three_box_source())
+    result = compute_box_union_volume(_three_boxes())
     payload = result.model_dump(mode="json")
     payload["intersections"][3]["box_indices"] = [0, 2]
 
@@ -218,7 +217,7 @@ def test_result_rejects_intersection_index_mutation() -> None:
 
 
 def test_result_rejects_source_mutation() -> None:
-    result = compute_box_union_volume(_three_box_source())
+    result = compute_box_union_volume(_three_boxes())
     payload = result.model_dump(mode="json")
     payload["source"]["boxes"][0] = _box((0, 1), (0, 1), (0, 1)).model_dump(mode="json")
 
@@ -235,15 +234,72 @@ def test_entry_rejects_volume_not_matching_intersection() -> None:
         )
 
 
+def test_native_api_accepts_canonical_box_tuple_without_request_wrapper() -> None:
+    boxes = (_box((0, 2)), _box((1, 3)))
+
+    result = compute_box_union_volume(boxes)
+
+    assert result.source == BoxUnionVolumeRequest(boxes=boxes)
+    assert result.union_volume.as_fraction() == 3
+    assert tuple(entry.box_indices for entry in result.intersections) == (
+        (0,),
+        (1,),
+        (0, 1),
+    )
+
+
+def test_native_call_admits_the_family_before_the_kernel() -> None:
+    large = "1" + "0" * 256
+
+    with pytest.raises(ValidationError, match="256-digit"):
+        compute_box_union_volume((_box((0, large)),))
+
+    with pytest.raises(ValidationError, match="same dimension"):
+        compute_box_union_volume((_box((0, 1)), _box((0, 1), (0, 1))))
+
+
+def test_math_tool_consumes_parsed_request_without_reconstruction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.geometry.boxes._operations as operations
+    from jacobian.math.geometry.boxes._tools import TOOLS
+
+    tool = next(
+        entry
+        for entry in TOOLS
+        if entry.operation_id == "geometry.box_union.volume.compute"
+    )
+    request = _three_box_source()
+
+    constructions = 0
+    request_type = operations.BoxUnionVolumeRequest
+
+    def counting_request(*args: object, **kwargs: object) -> BoxUnionVolumeRequest:
+        nonlocal constructions
+        constructions += 1
+        return request_type(*args, **kwargs)
+
+    monkeypatch.setattr(operations, "BoxUnionVolumeRequest", counting_request)
+    tool_result = tool.run(request)
+    assert constructions == 0
+
+    native_result = compute_box_union_volume(request.boxes)
+    assert constructions == 1
+    monkeypatch.undo()
+
+    assert tool_result == native_result
+    assert native_result.source == request
+
+
 def test_returned_intersections_compose_unchanged_as_box_inputs() -> None:
-    result = compute_box_union_volume(_three_box_source())
+    result = compute_box_union_volume(_three_boxes())
     pair_intersections = tuple(
         entry.intersection
         for entry in result.intersections
         if len(entry.box_indices) == 2
     )
 
-    replay = compute_box_union_volume(BoxUnionVolumeRequest(boxes=pair_intersections))
+    replay = compute_box_union_volume(pair_intersections)
 
     assert replay.source.boxes == pair_intersections
     assert replay.union_volume.as_fraction() == 2

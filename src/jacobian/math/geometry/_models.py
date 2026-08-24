@@ -853,7 +853,9 @@ def _require_euclidean_triangulation_envelope(
 ) -> tuple[tuple[Fraction, Fraction], ...]:
     """Validate the bounded exact source and return its rational coordinates.
 
-    A dynamic-programming state retains at most ``n - 3`` diagonal lengths.  A
+    Positive consecutive turns establish strict convexity only for a simple
+    ring, so global simplicity is checked before the recurrence runs.  A
+    dynamic-programming state retains at most ``n - 3`` diagonal lengths.  A
     squared distance between ``d``-digit rational coordinates has at most
     ``8d`` digits in each component.  The complete split table has
     ``(n - 1)(n - 2)/2`` states, so the conservative serialized-expression
@@ -886,6 +888,8 @@ def _require_euclidean_triangulation_envelope(
     )
     if any(turn <= 0 for turn in turns):
         raise ValueError("Euclidean triangulation requires strict CCW convexity")
+    if not _is_simple_ring(polygon.points):
+        raise ValueError("Euclidean triangulation requires a simple ring")
     states = (count - 1) * (count - 2) // 2
     estimated_chars = states * (count - 3) * (16 * max_digits + 128)
     if estimated_chars > _MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS:
@@ -1073,6 +1077,11 @@ class EuclideanConvexPolygonTriangulationResult(StrictModel):
                     "optimum expression must list the selected diagonal lengths"
                 )
             _replay_euclidean_triangulation(self, points)
+        else:
+            assert self.unresolved_comparison is not None
+            _replay_euclidean_unresolved_comparison(
+                self.unresolved_comparison, points
+            )
         return self
 
 
@@ -1157,6 +1166,87 @@ def _replay_euclidean_triangulation(
             points, diagonal.first, diagonal.second
         ):
             raise ValueError("diagonal squared length must match the source polygon")
+
+
+def _replay_euclidean_unresolved_comparison(
+    comparison: EuclideanComparisonUnresolved,
+    points: tuple[tuple[Fraction, Fraction], ...],
+) -> None:
+    """Replay the bounded recurrence that binds one unresolved comparison to its source.
+
+    The replay re-derives every DP choice at the declared precision, so the
+    claimed span and splits must name the recurrence's first comparison whose
+    rigorous Arb enclosure overlaps zero, and both expressions must equal the
+    exact candidates that comparison weighed.
+    """
+
+    count = len(points)
+    start, end = comparison.start, comparison.end
+    if end > count - 1 or end - start < 2:
+        raise ValueError(
+            "unresolved comparison must name a nontrivial DP subproblem span"
+        )
+    if not start < comparison.right_split < comparison.left_split < end:
+        raise ValueError(
+            "unresolved comparison splits must lie strictly inside its span "
+            "with the incumbent split first"
+        )
+
+    optimum: dict[tuple[int, int], tuple[Fraction, ...]] = {
+        (index, index + 1): () for index in range(count - 1)
+    }
+    for span in range(2, count):
+        for state_start in range(count - span):
+            state_end = state_start + span
+            boundary = (
+                ()
+                if state_end == state_start + 1
+                or (state_start, state_end) == (0, count - 1)
+                else (_euclidean_squared_length(points, state_start, state_end),)
+            )
+            chosen: tuple[Fraction, ...] | None = None
+            chosen_pivot: int | None = None
+            for pivot in range(state_start + 1, state_end):
+                candidate = tuple(
+                    sorted(
+                        optimum[state_start, pivot]
+                        + optimum[pivot, state_end]
+                        + boundary
+                    )
+                )
+                if chosen is None:
+                    chosen = candidate
+                    chosen_pivot = pivot
+                    continue
+                order = _compare_euclidean_root_sums(candidate, chosen)
+                if order is None:
+                    if (
+                        state_start,
+                        state_end,
+                        pivot,
+                        chosen_pivot,
+                    ) != (start, end, comparison.left_split, comparison.right_split):
+                        raise ValueError(
+                            "unresolved comparison must be the first "
+                            "unresolved DP comparison"
+                        )
+                    if candidate != tuple(
+                        term.as_fraction() for term in comparison.left.squared_lengths
+                    ) or chosen != tuple(
+                        term.as_fraction() for term in comparison.right.squared_lengths
+                    ):
+                        raise ValueError(
+                            "unresolved expressions must equal their DP candidates"
+                        )
+                    return
+                if order < 0:
+                    chosen = candidate
+                    chosen_pivot = pivot
+            assert chosen is not None and chosen_pivot is not None
+            optimum[state_start, state_end] = chosen
+    raise ValueError(
+        "unresolved comparison must occur during the replayed recurrence"
+    )
 
 
 # ---------------------------------------------------------------------------

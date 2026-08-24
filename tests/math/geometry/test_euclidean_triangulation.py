@@ -98,6 +98,118 @@ class TestEuclideanTriangulation:
         assert result.unresolved_comparison.left_split == 2
         assert result.unresolved_comparison.right_split == 1
 
+    def test_unresolved_result_round_trips_through_model_validate(self) -> None:
+        scale = 10**30
+        result = minimum_euclidean_weight_triangulation(
+            _request(
+                (
+                    _point(0, 0),
+                    _point(scale, 0),
+                    _point(scale, 1),
+                    _point(0, 2),
+                )
+            )
+        )
+        assert result.unresolved_comparison is not None
+
+        validated = EuclideanConvexPolygonTriangulationResult.model_validate(
+            result.model_dump(mode="json")
+        )
+
+        assert validated.status == "COMPARISON_UNRESOLVED"
+        assert validated.unresolved_comparison is not None
+        assert validated.unresolved_comparison.start == 0
+        assert validated.unresolved_comparison.end == 3
+        assert validated.unresolved_comparison.left_split == 2
+        assert validated.unresolved_comparison.right_split == 1
+
+    def test_unresolved_result_rejects_forged_expressions(self) -> None:
+        scale = 10**30
+        result = minimum_euclidean_weight_triangulation(
+            _request(
+                (
+                    _point(0, 0),
+                    _point(scale, 0),
+                    _point(scale, 1),
+                    _point(0, 2),
+                )
+            )
+        )
+        payload = result.model_dump(mode="json")
+        payload["unresolved_comparison"]["left"]["squared_lengths"] = [
+            {"num": "5", "den": "1"}
+        ]
+        payload["unresolved_comparison"]["right"]["squared_lengths"] = [
+            {"num": "7", "den": "1"}
+        ]
+
+        with pytest.raises(ValidationError, match="equal their DP candidates"):
+            EuclideanConvexPolygonTriangulationResult.model_validate(payload)
+
+    def test_unresolved_result_rejects_an_inverted_split_order(self) -> None:
+        scale = 10**30
+        result = minimum_euclidean_weight_triangulation(
+            _request(
+                (
+                    _point(0, 0),
+                    _point(scale, 0),
+                    _point(scale, 1),
+                    _point(0, 2),
+                )
+            )
+        )
+        payload = result.model_dump(mode="json")
+        payload["unresolved_comparison"]["left_split"] = 1
+        payload["unresolved_comparison"]["right_split"] = 2
+
+        with pytest.raises(ValidationError, match="strictly inside its span"):
+            EuclideanConvexPolygonTriangulationResult.model_validate(payload)
+
+    def test_unresolved_result_rejects_a_span_outside_the_polygon(self) -> None:
+        scale = 10**30
+        result = minimum_euclidean_weight_triangulation(
+            _request(
+                (
+                    _point(0, 0),
+                    _point(scale, 0),
+                    _point(scale, 1),
+                    _point(0, 2),
+                )
+            )
+        )
+        payload = result.model_dump(mode="json")
+        payload["unresolved_comparison"]["end"] = 4
+
+        with pytest.raises(ValidationError, match="subproblem span"):
+            EuclideanConvexPolygonTriangulationResult.model_validate(payload)
+
+    def test_unresolved_claim_on_a_resolvable_recurrence_is_rejected(self) -> None:
+        payload = {
+            "status": "COMPARISON_UNRESOLVED",
+            "polygon": {
+                "points": (
+                    _point(0, 0),
+                    _point(1, 0),
+                    _point(1, 1),
+                    _point(0, 1),
+                )
+            },
+            "vertex_count": 4,
+            "comparison_precision_bits": 128,
+            "unresolved_comparison": {
+                "start": 0,
+                "end": 3,
+                "left_split": 2,
+                "right_split": 1,
+                "left": {"squared_lengths": [{"num": "2", "den": "1"}]},
+                "right": {"squared_lengths": [{"num": "2", "den": "1"}]},
+                "precision_bits": 128,
+            },
+        }
+
+        with pytest.raises(ValidationError, match="replayed recurrence"):
+            EuclideanConvexPolygonTriangulationResult.model_validate(payload)
+
     def test_certified_result_rejects_a_mutated_diagonal_length(self) -> None:
         result = minimum_euclidean_weight_triangulation(
             _request((_point(0, 0), _point(1, 0), _point(1, 1), _point(0, 1)))
@@ -121,6 +233,18 @@ class TestEuclideanTriangulation:
     def test_rejects_a_nonconvex_polygon_before_arb(self) -> None:
         with pytest.raises(ValidationError, match="strict CCW convexity"):
             _request((_point(0, 0), _point(2, 0), _point(1, 1), _point(2, 2)))
+
+    def test_rejects_a_self_intersecting_ring_despite_positive_turns(self) -> None:
+        with pytest.raises(ValidationError, match="simple ring"):
+            _request(
+                (
+                    _point(0, 3),
+                    _point(-2, -3),
+                    _point(3, 1),
+                    _point(-3, 1),
+                    _point(2, -3),
+                )
+            )
 
     def test_catalog_example_returns_a_replayable_public_result(self) -> None:
         catalog = Catalog.open()

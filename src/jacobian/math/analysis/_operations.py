@@ -986,9 +986,9 @@ SECOND_JET_ENCLOSURE_OPERATIONS = (
             "Use pinned Arb forward automatic differentiation to enclose one bounded "
             "named-variable elementary expression, every first partial, and its "
             "symmetric Hessian over a complete ordered rational box. The fixed "
-            "envelope admits at most 3 variables, 64 nodes, depth 16, 128-digit "
+            "envelope admits at most 8 variables, 64 nodes, depth 16, 128-digit "
             "rationals, absolute power exponents up to 64, 4,096-bit Arb precision, "
-            "and 8,192 bounded forward-jet scalar arithmetic units."
+            "and 16,384 forward-jet scalar arithmetic units charged by dimension."
         ),
         request_type=IntervalExpressionSecondJetEnclosureRequest,
         result_type=IntervalExpressionSecondJetEnclosureResult,

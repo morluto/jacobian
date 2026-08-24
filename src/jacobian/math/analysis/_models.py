@@ -24,17 +24,31 @@ MAX_EXPRESSION_DEPTH = 16
 MAX_EXPRESSION_NODES = 64
 MAX_INTEGER_EXPONENT = 64
 MAX_BOX_VARIABLES = 8
-MAX_SECOND_JET_VARIABLES = 3
+MAX_SECOND_JET_VARIABLES = MAX_BOX_VARIABLES
 MAX_SECOND_JET_RESULT_INTERVALS = (
     1
     + MAX_SECOND_JET_VARIABLES
     + MAX_SECOND_JET_VARIABLES * (MAX_SECOND_JET_VARIABLES + 1) // 2
 )
-# A division evaluates one reciprocal jet and then one product jet.  At the
-# three-variable limit, 128 scalar Arb arithmetic steps per source node is a
-# conservative bound for that most expensive chain-rule path.
-MAX_SECOND_JET_NODE_ARITHMETIC_UNITS = 128
-MAX_SECOND_JET_WORK_UNITS = MAX_EXPRESSION_NODES * MAX_SECOND_JET_NODE_ARITHMETIC_UNITS
+
+
+def _second_jet_node_arithmetic_units(dimension: int) -> int:
+    """Bound the scalar Arb steps of one source node's dense second-order jet.
+
+    Every jet carries a value, gradient, and dense Hessian, so one node's
+    arithmetic grows quadratically in the jet dimension.  A division is the
+    most expensive node: one reciprocal power jet followed by one product jet
+    costs about ``10 * dimension**2 + 4 * dimension`` scalar steps, and the
+    padded constant covers transcendental chain-rule values.  At three
+    variables this reproduces the former flat 128-unit bound.
+    """
+    return 10 * dimension * dimension + 4 * dimension + 16
+
+
+# Twice the former 64-node x 128-unit envelope.  Every previously accepted
+# three-variable request stays admitted while the dimension-derived charge
+# admits small full-axis jets such as an eight-variable affine form.
+MAX_SECOND_JET_WORK_UNITS = 16_384
 # Cap every retained exact preflight numerator and denominator at twice the
 # maximum Arb work precision.  One Fraction binary operation or comparison can
 # transiently combine two such components, so its temporary size is separately
@@ -674,23 +688,20 @@ class IntervalExpressionSecondJetEnclosureRequest(
     @model_validator(mode="after")
     def require_small_twice_differentiable_source(self) -> Self:
         dimension = len(self.box.variables)
-        if dimension > MAX_SECOND_JET_VARIABLES:
-            raise ValueError(
-                "second-jet enclosure admits at most "
-                f"{MAX_SECOND_JET_VARIABLES} variables because it returns a dense "
-                "symmetric Hessian"
-            )
         result_intervals = 1 + dimension + dimension * (dimension + 1) // 2
         if result_intervals > MAX_SECOND_JET_RESULT_INTERVALS:
             raise AssertionError(
                 "second-jet result interval accounting is inconsistent"
             )
-        work_units = (
-            len(_bounded_expression_nodes(self.expression))
-            * MAX_SECOND_JET_NODE_ARITHMETIC_UNITS
-        )
+        work_units = len(
+            _bounded_expression_nodes(self.expression)
+        ) * _second_jet_node_arithmetic_units(dimension)
         if work_units > MAX_SECOND_JET_WORK_UNITS:
-            raise ValueError("second-jet forward arithmetic work exceeds its bound")
+            raise ValueError(
+                f"second-jet forward arithmetic work of {work_units} scalar "
+                f"units exceeds its {MAX_SECOND_JET_WORK_UNITS}-unit bound at "
+                "this dimension"
+            )
         _preflight_second_jet_expression(
             self.expression, _rational_box_bounds(self.box)
         )

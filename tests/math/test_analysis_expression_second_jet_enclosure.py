@@ -262,7 +262,7 @@ def test_source_bound_result_round_trips_and_rejects_mutated_partial() -> None:
         IntervalExpressionSecondJetEnclosureResult.model_validate(payload)
 
 
-def test_request_strict_json_transport_and_dense_dimension_bound() -> None:
+def test_request_strict_json_transport_round_trip() -> None:
     request = _request(
         {"op": "exp", "children": [_var("x")]},
         (("x", Fraction(0), Fraction(1)),),
@@ -274,15 +274,78 @@ def test_request_strict_json_transport_and_dense_dimension_bound() -> None:
         == request
     )
 
-    variables = ("a", "b", "c", "d")
+
+def _balanced_binary_tree(op: str, leaf_cycle: tuple[str, ...]) -> dict[str, Any]:
+    leaves = tuple(leaf_cycle[index % len(leaf_cycle)] for index in range(32))
+
+    def build(names: tuple[str, ...]) -> dict[str, Any]:
+        if len(names) == 1:
+            return _var(names[0])
+        middle = len(names) // 2
+        return {
+            "op": op,
+            "children": [build(names[:middle]), build(names[middle:])],
+        }
+
+    return build(leaves)
+
+
+def test_four_variable_affine_jet_fits_its_dimension_derived_budget() -> None:
+    expression: dict[str, Any] = _var("a")
+    for variable in ("b", "c", "d"):
+        expression = {"op": "add", "children": [expression, _var(variable)]}
+    result = _run(
+        expression,
+        tuple(
+            (variable, Fraction(0), Fraction(1)) for variable in ("a", "b", "c", "d")
+        ),
+    )
+
+    assert result.status == "ENCLOSED"
+    assert result.value is not None
+    assert _contains(result.value, Fraction(4))
+    gradient = _gradient(result)
+    assert tuple(gradient) == ("a", "b", "c", "d")
+    for variable in ("a", "b", "c", "d"):
+        assert _contains(gradient[variable], Fraction(1))
+    hessian = _hessian(result)
+    assert len(hessian) == 10
+    for pair in hessian:
+        assert _contains(hessian[pair], Fraction(0))
+
+
+def test_full_box_affine_jet_encloses_all_eight_variables() -> None:
+    variables = tuple("abcdefgh")
     expression: dict[str, Any] = _var(variables[0])
     for variable in variables[1:]:
         expression = {"op": "add", "children": [expression, _var(variable)]}
-    with pytest.raises(ValidationError, match="at most 3 variables"):
-        _request(
-            expression,
-            tuple((variable, Fraction(0), Fraction(1)) for variable in variables),
-        )
+    result = _run(
+        expression,
+        tuple((variable, Fraction(0), Fraction(1)) for variable in variables),
+    )
+
+    assert result.status == "ENCLOSED"
+    assert result.value is not None
+    assert _contains(result.value, Fraction(4))
+    gradient = _gradient(result)
+    assert tuple(gradient) == variables
+    hessian = _hessian(result)
+    assert len(hessian) == 36
+
+
+def test_work_budget_scales_with_the_jet_dimension() -> None:
+    box = tuple((variable, Fraction(2), Fraction(3)) for variable in "abcdefgh")
+    wide_tree = _balanced_binary_tree("div", tuple("abcdefgh"))
+    with pytest.raises(ValidationError, match="exceeds its"):
+        _request(wide_tree, box)
+
+    narrow_box = (
+        ("a", Fraction(2), Fraction(3)),
+        ("b", Fraction(2), Fraction(3)),
+        ("c", Fraction(2), Fraction(3)),
+    )
+    same_shaped_tree = _balanced_binary_tree("mul", ("a", "b", "c"))
+    assert _run(same_shaped_tree, narrow_box).status == "ENCLOSED"
 
 
 def test_backend_failure_returns_a_typed_nonconclusion(

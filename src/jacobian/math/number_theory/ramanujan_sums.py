@@ -6,6 +6,13 @@ from typing import SupportsIndex
 
 __all__ = ["ramanujan_sum"]
 
+# SymPy factors the modulus once and the frequency only participates in
+# bounded modular reductions, while the exact result has absolute value at
+# most the modulus.  The digit bound is therefore a pure factorization-work
+# bound: it keeps synchronous factoring of hard semiprimes bounded while
+# covering materially large useful moduli.
+_MAX_MODULUS_DIGITS = 12
+
 
 def ramanujan_sum(modulus: SupportsIndex, frequency: SupportsIndex) -> int:
     """Return the exact Ramanujan sum ``c_modulus(frequency)``.
@@ -13,6 +20,8 @@ def ramanujan_sum(modulus: SupportsIndex, frequency: SupportsIndex) -> int:
     The zero modulus denotes the empty reduced-residue sum.  Positive moduli
     are evaluated multiplicatively from their prime-power factorization, so
     no approximate roots of unity or reduced-residue enumeration is involved.
+    A positive modulus must have at most 12 decimal digits so that the
+    factorization work stays bounded for every entry point.
     """
 
     q = modulus.__index__()
@@ -21,6 +30,11 @@ def ramanujan_sum(modulus: SupportsIndex, frequency: SupportsIndex) -> int:
         raise ValueError("a Ramanujan-sum modulus must be nonnegative")
     if q == 0:
         return 0
+    if q >= 10**_MAX_MODULUS_DIGITS:
+        raise ValueError(
+            "a Ramanujan-sum modulus must have at most "
+            f"{_MAX_MODULUS_DIGITS} decimal digits"
+        )
 
     from sympy import factorint
 

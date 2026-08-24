@@ -167,6 +167,41 @@ def test_frequency_grammar_is_owned_by_canonical_integer(encoding: str) -> None:
 
 
 @pytest.mark.parametrize(
+    "encoding",
+    ("0", "7", "9" * 12, "-0", "+0", "00", "-007", "", "-", "+1"),
+)
+def test_modulus_grammar_is_owned_by_canonical_integer(encoding: str) -> None:
+    owner = TypeAdapter(CanonicalInteger)
+    try:
+        expected = owner.validate_python(encoding)
+        owner_accepts = True
+    except ValidationError:
+        owner_accepts = False
+        expected = None
+
+    try:
+        request = RamanujanSumRequest(modulus=encoding, frequency="0")
+    except ValidationError:
+        assert not owner_accepts
+    else:
+        assert owner_accepts
+        assert request.modulus == expected
+
+
+@pytest.mark.parametrize("negative", ("-1", "-4", "-" + "9" * 11))
+def test_owner_grammar_admits_negative_moduli_the_operation_rejects(
+    negative: str,
+) -> None:
+    assert TypeAdapter(CanonicalInteger).validate_python(negative) == negative
+    with pytest.raises(ValidationError, match="nonnegative"):
+        RamanujanSumRequest(modulus=negative, frequency="0")
+    with pytest.raises(ValidationError, match="nonnegative"):
+        RamanujanSumResult.model_validate(
+            {"modulus": negative, "frequency": "2", "value": "-2"}
+        )
+
+
+@pytest.mark.parametrize(
     ("modulus", "frequency", "value"),
     (
         ("4", "-2", "-2"),
@@ -225,3 +260,9 @@ def test_ramanujan_sum_request_bounds_factorization_and_frequency_work() -> None
 def test_ramanujan_sum_rejects_negative_native_modulus() -> None:
     with pytest.raises(ValueError, match="nonnegative"):
         ramanujan_sum(-1, 0)
+
+
+def test_native_ramanujan_sum_bounds_factorization_work() -> None:
+    with pytest.raises(ValueError, match=r"at most 12"):
+        ramanujan_sum(10**12, 1)
+    assert ramanujan_sum(549755813888, 274877906944) == -274877906944

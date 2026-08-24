@@ -4,36 +4,31 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.math.number_theory._models import _MAX_INTEGER_LENGTH
 from jacobian.math.number_theory._support import number_theory_operation
-from jacobian.math.number_theory.ramanujan_sums import ramanujan_sum
-
-# This matches the established in-process factorization envelope.  SymPy
-# factors the modulus once; the frequency only participates in bounded modular
-# reductions.  The exact result has absolute value at most the modulus.
-_MAX_MODULUS_DIGITS = 12
+from jacobian.math.number_theory.ramanujan_sums import (
+    _MAX_MODULUS_DIGITS,
+    ramanujan_sum,
+)
 
 RamanujanModulus = Annotated[
-    str,
-    StringConstraints(
-        pattern=r"^(?:0|[1-9][0-9]*)$",
-        max_length=_MAX_MODULUS_DIGITS,
-        strict=True,
-    ),
+    CanonicalInteger,
+    Field(max_length=_MAX_MODULUS_DIGITS),
 ]
 
-# The frequency and exact sum bind through ``jacobian._exact.CanonicalInteger``,
-# the owner of Jacobian's canonical signed-decimal integer encoding: zero is
-# exactly "0" and every other value carries an optional minus sign on a
-# nonzero leading digit, so negative zero cannot bind and mathematically equal
-# inputs share one serialized identity across request and result.  The
-# operation-specific 256-character execution bound is applied on top of the
-# owner type, never by restating its grammar.
+# Every field binds through ``jacobian._exact.CanonicalInteger``, the owner of
+# Jacobian's canonical signed-decimal integer encoding: zero is exactly "0" and
+# every other value carries an optional minus sign on a nonzero leading digit,
+# so negative zero cannot bind and mathematically equal inputs share one
+# serialized identity across request and result.  Operation-specific execution
+# bounds are applied on top of the owner type, never by restating its grammar;
+# the modulus's nonnegativity is a mathematical precondition enforced by model
+# validation rather than part of the owned encoding.
 RamanujanSumInteger = Annotated[
     CanonicalInteger,
     Field(max_length=_MAX_INTEGER_LENGTH),
@@ -57,6 +52,12 @@ class RamanujanSumRequest(StrictModel):
         )
     )
 
+    @model_validator(mode="after")
+    def require_nonnegative_modulus(self) -> Self:
+        if int(self.modulus) < 0:
+            raise ValueError("modulus must be nonnegative")
+        return self
+
 
 class RamanujanSumResult(StrictModel):
     """An exact Ramanujan sum bound to its modulus and frequency."""
@@ -70,6 +71,12 @@ class RamanujanSumResult(StrictModel):
             "minus sign with no leading zeros."
         )
     )
+
+    @model_validator(mode="after")
+    def require_nonnegative_modulus(self) -> Self:
+        if int(self.modulus) < 0:
+            raise ValueError("modulus must be nonnegative")
+        return self
 
     @model_validator(mode="after")
     def bind_value_to_source(self) -> Self:

@@ -781,6 +781,45 @@ def test_request_bounds_ite_branch_digits_when_scalars_cancel_the_height() -> No
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
 
 
+def test_request_bounds_division_of_formless_ite_branch_denominator_digits() -> None:
+    digits = "9" * 200
+    source = (
+        "(set-logic QF_LRA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const x Real)\n"
+        f"(assert (= (/ (ite p (/ x {digits}) x) {digits}) 0))\n"
+        "(check-sat)\n"
+    )
+
+    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+
+
+def test_bounded_division_of_formless_ite_branches_still_admitted() -> None:
+    digits = "9" * 100
+    source = (
+        "(set-logic QF_LRA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const x Real)\n"
+        f"(assert (= (/ (ite p (/ x {digits}) x) {digits}) 0))\n"
+        f"(assert (= (/ x {digits}) 1))\n"
+        "(check-sat)\n"
+    )
+
+    assert SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+
+
+def test_request_keeps_exact_division_by_boundary_digit_divisor() -> None:
+    source = (
+        "(set-logic QF_LRA)\n"
+        "(declare-const x Real)\n"
+        f"(assert (= (/ x {'9' * 256}) 0))\n"
+        "(check-sat)\n"
+    )
+
+    assert SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+
+
 def test_translated_nested_coefficients_flatten_and_still_solve() -> None:
     source = (
         "(set-logic QF_LIA)\n"

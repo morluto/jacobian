@@ -474,17 +474,27 @@ def _normalize_closed_expression(
         )
     if closed_value is not None:
         envelope = _closed_value_envelope(closed_value)
+    elif scaled_envelope is not None:
+        envelope = scaled_envelope
+    elif form is not None:
+        envelope = _affine_form_envelope(
+            form,
+            height=_coefficient_height(
+                candidate.decl().kind(),
+                children,
+                child_values,
+                envelope_by_id=envelope_by_id,
+                enforce_digit_budget=False,
+            ).height,
+        )
     else:
         envelope = _coefficient_height(
             candidate.decl().kind(),
             children,
             child_values,
             envelope_by_id=envelope_by_id,
+            enforce_digit_budget=True,
         )
-        if scaled_envelope is not None:
-            envelope = scaled_envelope
-        elif form is not None:
-            envelope = _affine_form_envelope(form, height=envelope.height)
 
     normalized_by_id[expression_id] = candidate
     closed_value_by_id[expression_id] = closed_value
@@ -556,6 +566,7 @@ def _coefficient_height(
     child_values: tuple[Fraction | None, ...],
     *,
     envelope_by_id: dict[int, _CoefficientEnvelope],
+    enforce_digit_budget: bool,
 ) -> _CoefficientEnvelope:
     """Bound every coefficient reachable in one expression's linear reading.
 
@@ -564,7 +575,9 @@ def _coefficient_height(
     numerator and denominator digit budget, so a numerically smaller reciprocal
     branch cannot hide denominator growth from later scaling. Products multiply
     envelopes and signed sums merge them, matching every scalar the preserving
-    wrappers can derive downstream.
+    wrappers can derive downstream. Divisions by closed constants compose their
+    budgets into one coefficient, so they validate those budgets unless an
+    exact flattened form already validates every quotient.
     """
 
     import z3
@@ -588,7 +601,10 @@ def _coefficient_height(
         and child_values[1] != 0
     ):
         return _divided_envelope(
-            child_envelopes[0], child_values[1], exact=kind == z3.Z3_OP_DIV
+            child_envelopes[0],
+            child_values[1],
+            exact=kind == z3.Z3_OP_DIV,
+            validate_budget=enforce_digit_budget,
         )
     if kind in (z3.Z3_OP_ADD, z3.Z3_OP_SUB):
         return _signed_sum_envelope(child_envelopes)
@@ -619,6 +635,7 @@ def _divided_envelope(
     divisor: Fraction,
     *,
     exact: bool,
+    validate_budget: bool,
 ) -> _CoefficientEnvelope:
     """Divide one envelope by a closed nonzero constant, SMT-LIB div included."""
 
@@ -629,6 +646,11 @@ def _divided_envelope(
         scaled += 1
         numerator_digits += 1
     _require_bounded_normalized_coefficient(scaled)
+    if validate_budget:
+        _require_bounded_coefficient_digit_budget(
+            numerator_digits,
+            denominator_digits,
+        )
     return _CoefficientEnvelope(scaled, numerator_digits, denominator_digits)
 
 

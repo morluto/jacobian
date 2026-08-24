@@ -165,6 +165,37 @@ class TestEnumeration:
         # Concepts: ({o0,o1}, {}), ({o0,o1}, {a1}), ({o0}, {a0,a1})
         assert result.count == 3
 
+    def test_sparse_context_beyond_twenty_attributes_is_enumerated(self) -> None:
+        # One object with no incidences over 21 attributes carries exactly the
+        # two trivial concepts, so admission must not reject it by attribute
+        # count before considering actual enumeration work.
+        context = FormalContext(
+            objects=("o0",),
+            attributes=tuple(f"a{index}" for index in range(21)),
+            incidence=(),
+        )
+        result = compute_enumerate_concepts(EnumerateConceptsRequest(context=context))
+        assert result.count == 2
+
+    def test_attribute_fallback_boundary_is_admitted_and_rejected(self) -> None:
+        wide = FormalContext(
+            objects=("o0",),
+            attributes=tuple(f"a{index}" for index in range(64)),
+            incidence=(),
+        )
+        assert (
+            compute_enumerate_concepts(EnumerateConceptsRequest(context=wide)).count
+            == 2
+        )
+        with pytest.raises(ValidationError):
+            EnumerateConceptsRequest(
+                context=FormalContext(
+                    objects=("o0",),
+                    attributes=tuple(f"a{index}" for index in range(65)),
+                    incidence=(),
+                )
+            )
+
 
 # ---------------------------------------------------------------------------
 # Concept lattice
@@ -179,6 +210,17 @@ class TestConceptLattice:
         assert result.top is not None
         assert result.bottom is not None
         assert len(result.concepts) == 4
+
+    def test_sparse_lattice_beyond_twenty_attributes_is_computed(self) -> None:
+        context = FormalContext(
+            objects=("o0",),
+            attributes=tuple(f"a{index}" for index in range(21)),
+            incidence=(),
+        )
+        result = compute_concept_lattice(EnumerateConceptsRequest(context=context))
+        assert len(result.concepts) == 2
+        assert result.top is not None
+        assert result.bottom is not None
 
 
 # ---------------------------------------------------------------------------

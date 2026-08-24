@@ -406,6 +406,59 @@ class TestRationalWeightTriangulation:
         encoded = encode_strict_json(result.model_dump(mode="json"))
         assert len(encoded) <= MAX_TRIANGULATION_OUTPUT_CHARS
 
+    def test_lone_heavy_weight_ring_aggregate_is_measured_exactly(self):
+        # Regression: charging every retained state and echoed diagonal at
+        # the largest component height estimated ~29.7 MB here, although
+        # only the (0,2) ledger entry retains the 30,001-digit denominator,
+        # the root selects zero-weight fan diagonals, and the canonical
+        # result encodes to ~62 KB. Admission must sum the exact serialized
+        # sizes from the recurrence values and reconstructed selected
+        # weights instead, so this ring is admitted and its encoded result
+        # stays inside the aggregate envelope.
+        denominator = format_canonical_integer(10**30000 + 1)
+        request = ConvexPolygonTriangulationRequest(
+            polygon={"points": self._ring(*self._UNIFORM_RING)},
+            diagonal_weights=self._weights(
+                self._UNIFORM_RING_DIAGONALS,
+                {(0, 2): ("1", denominator)},
+            ),
+        )
+        result = minimum_weight_triangulation(request)
+
+        assert result.optimum.as_fraction() == 0
+        assert len(result.split_table) == 465
+        assert len(result.diagonals) == 29
+        assert len(result.triangles) == 30
+        assert all(edge.weight.as_fraction() == 0 for edge in result.diagonals)
+        entry = next(
+            item for item in result.split_table if (item.start, item.end) == (0, 2)
+        )
+        assert entry.optimum.as_fraction() == Fraction(1, 10**30000 + 1)
+        validated = ConvexPolygonTriangulationResult.model_validate(
+            result.model_dump(mode="json")
+        )
+        assert validated.optimum == result.optimum
+        encoded = encode_strict_json(result.model_dump(mode="json"))
+        assert len(encoded) <= MAX_TRIANGULATION_OUTPUT_CHARS
+
+    def test_uniform_heavy_denominator_ring_aggregate_overflow_rejected(self):
+        # Every non-hull diagonal carries the same 16,001-digit denominator,
+        # so each shared-denominator ledger optimum stays far below the
+        # canonical component cap while their combined serialization
+        # genuinely overflows the output envelope. Exact size summation must
+        # still reject this request at request validation.
+        denominator = format_canonical_integer(10**16000 + 1)
+        weights = self._weights(
+            self._UNIFORM_RING_DIAGONALS,
+            dict.fromkeys(self._UNIFORM_RING_DIAGONALS, ("1", denominator)),
+        )
+
+        with pytest.raises(ValidationError, match="output bound"):
+            ConvexPolygonTriangulationRequest(
+                polygon={"points": self._ring(*self._UNIFORM_RING)},
+                diagonal_weights=weights,
+            )
+
 
 class TestAngleEquality:
     def test_right_angles(self):

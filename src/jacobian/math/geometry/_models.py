@@ -817,6 +817,36 @@ def _triangulation_subproblem_costs(
     return optimum, split
 
 
+def _reconstruct_split_triangulation(
+    count: int,
+    split: dict[tuple[int, int], int],
+) -> tuple[tuple[tuple[int, int], ...], tuple[tuple[int, int, int], ...]]:
+    """Replay one stored split table into its deterministic triangulation.
+
+    Both execution and admission reconstruct the selected triangles and
+    non-hull diagonals through this single walk, so the echoed diagonal set
+    can never diverge between computing a result and bounding its payload.
+    """
+
+    triangles: list[tuple[int, int, int]] = []
+    diagonals: set[tuple[int, int]] = set()
+
+    def walk(start: int, end: int) -> None:
+        if end == start + 1:
+            return
+        pivot = split[start, end]
+        triangles.append((start, pivot, end))
+        for pair in ((start, pivot), (pivot, end)):
+            ordered = pair if pair[0] < pair[1] else (pair[1], pair[0])
+            if pair[1] != pair[0] + 1 and ordered != (0, count - 1):
+                diagonals.add(ordered)
+        walk(start, pivot)
+        walk(pivot, end)
+
+    walk(0, count - 1)
+    return tuple(sorted(diagonals)), tuple(sorted(triangles))
+
+
 # Serialized-output budget for the weighted triangulation result, kept below
 # the 10 MiB canonical transport envelope to leave room for request and
 # JSON envelope overhead.
@@ -843,15 +873,16 @@ def _require_bounded_split_table_rationals(
     Per-entry caps alone cannot bound the aggregate payload: every retained
     optimum may sit just under the cap while their combined serialization
     outgrows the transport envelope. The same exact replay therefore also
-    measures the largest retained component height, and admission charges
-    its per-entry serialized bound - numerator plus denominator digits
-    beside fixed punctuation - against every split-table state, every echoed
-    selected-diagonal weight, and the duplicated top-level optimum, then
-    adds fixed triangle and header slack. Execution replays the identical
-    deterministic derivation, so this estimate soundly bounds the complete
-    serialized result and a genuinely oversized aggregate is rejected at
-    request validation instead of failing canonical output validation
-    after computation.
+    sums each retained optimum's own serialized size - numerator plus
+    denominator digits beside fixed punctuation - and charges every echoed
+    weight at its own height: admission reconstructs the deterministic
+    selected-diagonal set from the shared split table, adds the duplicated
+    top-level optimum, then fixed triangle and header slack. Execution
+    replays the identical deterministic derivation and reconstruction, so
+    this estimate soundly bounds the complete serialized result without
+    charging unselected or small entries at the largest component height,
+    and a genuinely oversized aggregate is rejected at request validation
+    instead of failing canonical output validation after computation.
     """
 
     weights = {
@@ -864,30 +895,43 @@ def _require_bounded_split_table_rationals(
             return Fraction()
         return weights[first, second]
 
-    optimum, _ = _triangulation_subproblem_costs(count, diagonal_cost)
-    max_optimum_digits = 1
-    for start, end in sorted(optimum):
-        value = optimum[start, end]
-        digits = max(
-            len(format_canonical_integer(value.numerator)),
-            len(format_canonical_integer(value.denominator)),
-        )
-        if digits > MAX_CANONICAL_RATIONAL_DIGITS:
-            raise ValueError(
-                f"split-table state ({start}, {end}) carries {digits}-digit "
-                f"rational components, exceeding the canonical "
-                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit rational limit"
+    optimum, split = _triangulation_subproblem_costs(count, diagonal_cost)
+    ledger_chars = 0
+    for span in range(2, count):
+        for start in range(count - span):
+            end = start + span
+            value = optimum[start, end]
+            digits = max(
+                len(format_canonical_integer(value.numerator)),
+                len(format_canonical_integer(value.denominator)),
             )
-        max_optimum_digits = max(max_optimum_digits, digits)
-    max_weight_digits = max(
-        max(len(item.weight.num.lstrip("-")), len(item.weight.den))
-        for item in diagonal_weights
+            if digits > MAX_CANONICAL_RATIONAL_DIGITS:
+                raise ValueError(
+                    f"split-table state ({start}, {end}) carries {digits}-digit "
+                    f"rational components, exceeding the canonical "
+                    f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit rational limit"
+                )
+            ledger_chars += 2 * digits + _TRIANGULATION_ENTRY_OVERHEAD_CHARS
+    selected_diagonals, _ = _reconstruct_split_triangulation(count, split)
+    selected_weight_chars = sum(
+        2
+        * max(
+            len(format_canonical_integer(weights[pair].numerator)),
+            len(format_canonical_integer(weights[pair].denominator)),
+        )
+        + _TRIANGULATION_ENTRY_OVERHEAD_CHARS
+        for pair in selected_diagonals
     )
-    entry_chars = 2 * max_optimum_digits + _TRIANGULATION_ENTRY_OVERHEAD_CHARS
+    root = optimum[0, count - 1]
     estimated_chars = (
-        ((count - 1) * (count - 2) // 2) * entry_chars
-        + (count - 3) * (2 * max_weight_digits + _TRIANGULATION_ENTRY_OVERHEAD_CHARS)
-        + entry_chars
+        ledger_chars
+        + selected_weight_chars
+        + 2
+        * max(
+            len(format_canonical_integer(root.numerator)),
+            len(format_canonical_integer(root.denominator)),
+        )
+        + _TRIANGULATION_ENTRY_OVERHEAD_CHARS
         + (count - 2) * _TRIANGULATION_TRIANGLE_ENTRY_CHARS
         + _TRIANGULATION_RESULT_SLACK_CHARS
     )

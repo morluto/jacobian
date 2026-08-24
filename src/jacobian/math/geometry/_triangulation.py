@@ -12,6 +12,7 @@ from jacobian.math.geometry._models import (
     PolygonTriangle,
     TriangulationSplitEntry,
     WeightedPolygonDiagonal,
+    _reconstruct_split_triangulation,
     _triangulation_subproblem_costs,
 )
 
@@ -52,32 +53,17 @@ def minimum_weight_triangulation(
                 )
             )
 
-    triangles: list[PolygonTriangle] = []
-    diagonals: set[tuple[int, int]] = set()
-
-    def reconstruct(start: int, end: int) -> None:
-        if end == start + 1:
-            return
-        pivot = split[start, end]
-        triangles.append(PolygonTriangle(vertices=(start, pivot, end)))
-        for pair in ((start, pivot), (pivot, end)):
-            ordered = pair if pair[0] < pair[1] else (pair[1], pair[0])
-            if pair[1] != pair[0] + 1 and ordered != (0, count - 1):
-                diagonals.add(ordered)
-        reconstruct(start, pivot)
-        reconstruct(pivot, end)
-
-    reconstruct(0, count - 1)
+    diagonal_pairs, triangle_vertices = _reconstruct_split_triangulation(count, split)
     return ConvexPolygonTriangulationResult(
         vertex_count=count,
         diagonals=tuple(
             WeightedPolygonDiagonal(
                 first=first, second=second, weight=_wire(weights[pair])
             )
-            for pair in sorted(diagonals)
+            for pair in diagonal_pairs
             for first, second in (pair,)
         ),
-        triangles=tuple(sorted(triangles, key=lambda item: item.vertices)),
+        triangles=tuple(PolygonTriangle(vertices=item) for item in triangle_vertices),
         split_table=tuple(ledger),
         optimum=_wire(optimum[0, count - 1]),
     )

@@ -11,6 +11,7 @@ from jacobian._models import StrictModel
 from jacobian.math.matrices.values import (
     MAX_MATRIX_DIMENSION,
     MAX_MATRIX_SCALAR_DIGITS,
+    MAX_RATIONAL_MATRIX_ORDER,
     IntegerMatrix,
     RationalMatrix,
     require_matrix_scalar_digits,
@@ -25,6 +26,16 @@ DeterminantRow = Annotated[
 ]
 
 
+def _require_computation_dimensions(
+    entries: tuple[tuple[CanonicalRational, ...], ...],
+) -> None:
+    if len(entries) > MAX_MATRIX_DIMENSION or len(entries[0]) > MAX_MATRIX_DIMENSION:
+        raise ValueError(
+            "matrix computation dimensions are limited to "
+            f"{MAX_MATRIX_DIMENSION} rows and columns"
+        )
+
+
 def _check_integer_digits(
     value: str, *, maximum: int = MAX_INPUT_SCALAR_DIGITS
 ) -> None:
@@ -37,6 +48,7 @@ class RationalMatrixRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_rref_input_budget(self) -> Self:
+        _require_computation_dimensions(self.matrix.entries)
         require_matrix_scalar_digits(
             self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
         )
@@ -56,6 +68,8 @@ class RationalMatrixProductRequest(StrictModel):
                 "matrix multiplication requires the left column count to equal "
                 "the right row count"
             )
+        _require_computation_dimensions(self.left.entries)
+        _require_computation_dimensions(self.right.entries)
         require_matrix_scalar_digits(
             self.left.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
         )
@@ -72,6 +86,7 @@ class SquareRationalMatrixRequest(StrictModel):
     def require_square(self) -> Self:
         if len(self.matrix.entries) != len(self.matrix.entries[0]):
             raise ValueError("characteristic polynomial requires a square matrix")
+        _require_computation_dimensions(self.matrix.entries)
         require_matrix_scalar_digits(
             self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
         )
@@ -123,6 +138,7 @@ class MatrixRankRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_input_budget(self) -> Self:
+        _require_computation_dimensions(self.matrix.entries)
         require_matrix_scalar_digits(
             self.matrix.entries,
             maximum=MAX_INPUT_SCALAR_DIGITS,
@@ -437,6 +453,17 @@ class MatrixKroneckerProductRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_input_budget(self) -> Self:
+        _require_computation_dimensions(self.left.entries)
+        _require_computation_dimensions(self.right.entries)
+        if len(self.left.entries) * len(self.right.entries) > (
+            MAX_RATIONAL_MATRIX_ORDER
+        ) or len(self.left.entries[0]) * len(self.right.entries[0]) > (
+            MAX_RATIONAL_MATRIX_ORDER
+        ):
+            raise ValueError(
+                "kronecker products must fit within "
+                f"{MAX_RATIONAL_MATRIX_ORDER} rows and columns"
+            )
         require_matrix_scalar_digits(
             self.left.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
         )
@@ -491,6 +518,7 @@ class MatrixPartialTraceRequest(StrictModel):
             raise ValueError(
                 "composite matrix must be square: traced_dimension * kept_dimension"
             )
+        _require_computation_dimensions(self.matrix.entries)
         require_matrix_scalar_digits(
             self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
         )

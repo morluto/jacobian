@@ -19,11 +19,18 @@ from jacobian.math.matrices._operations import (
     compute_partial_trace,
     compute_permanent,
 )
-from jacobian.math.matrices.values import RationalMatrix
+from jacobian.math.matrices.values import MAX_MATRIX_DIMENSION, RationalMatrix
 
 
 def _cr(num: int, den: int = 1) -> CanonicalRational:
     return CanonicalRational.from_integer_ratio(num, den)
+
+
+def _identity_entries(size: int) -> tuple[tuple[CanonicalRational, ...], ...]:
+    return tuple(
+        tuple(_cr(1) if index == column else _cr(0) for column in range(size))
+        for index in range(size)
+    )
 
 
 def _matrix(entries: list[list[dict[str, str]]]) -> RationalMatrix:
@@ -68,6 +75,59 @@ def test_matrix_permanent_requires_square() -> None:
         SquareRationalMatrixRequest.model_validate(
             {"matrix": {"entries": [[q(1), q(2)]]}}
         )
+
+
+def test_square_request_rejects_order_above_the_computation_dimension() -> None:
+    from pydantic import ValidationError
+
+    oversized = RationalMatrix(entries=_identity_entries(MAX_MATRIX_DIMENSION + 1))
+    with pytest.raises(ValidationError, match="rows and columns"):
+        SquareRationalMatrixRequest(matrix=oversized)
+
+
+def test_square_request_admits_the_boundary_computation_dimension() -> None:
+    boundary = RationalMatrix(entries=_identity_entries(MAX_MATRIX_DIMENSION))
+    assert SquareRationalMatrixRequest(matrix=boundary).matrix == boundary
+
+
+def test_kronecker_request_rejects_operands_above_the_computation_dimension() -> None:
+    from pydantic import ValidationError
+
+    tall = RationalMatrix(
+        entries=tuple((_cr(1),) for _ in range(MAX_MATRIX_DIMENSION + 1))
+    )
+    unit = RationalMatrix(entries=((_cr(1),),))
+    with pytest.raises(ValidationError, match="rows and columns"):
+        MatrixKroneckerProductRequest(left=tall, right=unit)
+    with pytest.raises(ValidationError, match="rows and columns"):
+        MatrixKroneckerProductRequest(left=unit, right=tall)
+
+
+def test_kronecker_request_rejects_products_beyond_the_canonical_matrix_order() -> None:
+    from pydantic import ValidationError
+
+    from jacobian.math.matrices.values import MAX_RATIONAL_MATRIX_ORDER
+
+    factor = RationalMatrix(entries=_identity_entries(8))
+    with pytest.raises(ValidationError, match="kronecker products must fit within"):
+        MatrixKroneckerProductRequest(left=factor, right=factor)
+    assert MAX_RATIONAL_MATRIX_ORDER < 8 * 8
+
+
+def test_kronecker_product_at_the_canonical_matrix_order_boundary() -> None:
+    from jacobian.math.matrices.values import MAX_RATIONAL_MATRIX_ORDER
+
+    side = 7
+    request = MatrixKroneckerProductRequest(
+        left=RationalMatrix(entries=_identity_entries(side)),
+        right=RationalMatrix(entries=_identity_entries(side)),
+    )
+    result = compute_kronecker_product(request)
+    order = side * side
+    assert order <= MAX_RATIONAL_MATRIX_ORDER
+    assert result.left_rows == result.right_rows == side
+    assert len(result.product.entries) == order
+    assert result.product.entries[0][0] == _cr(1)
 
 
 def test_kronecker_product_of_two_by_two() -> None:

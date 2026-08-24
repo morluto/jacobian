@@ -286,7 +286,7 @@ def _validate_critical_pair_source(
     signature: RankedSignature, rules: tuple[RewriteRule, ...]
 ) -> None:
     """Admit the complete overlap/replay envelope before enumerating it."""
-    if not 1 <= len(rules) <= MAX_CRITICAL_PAIR_RULES:
+    if len(rules) > MAX_CRITICAL_PAIR_RULES:
         raise ValueError("critical-pair rule count exceeds the supported bound")
     for rule in rules:
         signature.validate_term(rule.lhs)

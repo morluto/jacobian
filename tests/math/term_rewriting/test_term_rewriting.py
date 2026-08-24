@@ -349,6 +349,24 @@ class TestNormalForm:
 
 
 class TestCriticalPairs:
+    def test_empty_rewrite_system_yields_the_empty_profile(self):
+        # An empty finite TRS has an unambiguously empty overlap ledger and
+        # pair family, so admission must accept it without work.
+        signature = term_rewriting.RankedSignature(arities=(1,))
+        profile = critical_pairs(signature, ())
+        assert profile.candidates == ()
+        assert profile.pairs == ()
+
+        result = compute_critical_pairs(
+            CriticalPairsRequest(signature={"arities": [1]}, rules=())
+        )
+        assert result.rules == ()
+        assert result.profile.candidates == ()
+        assert result.profile.pairs == ()
+        assert (
+            CriticalPairsResult.model_validate_json(result.model_dump_json()) == result
+        )
+
     def test_nested_overlap_records_both_peak_reducts(self):
         # f(g(x)) -> x overlaps g(y) -> y at the nested g-position.
         rules = (

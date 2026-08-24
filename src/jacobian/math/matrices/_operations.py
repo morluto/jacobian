@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.math import matrices
@@ -32,7 +34,7 @@ from jacobian.math.matrices._operation_models import (
     SquareIntegerMatrixRequest,
     SquareRationalMatrixRequest,
 )
-from jacobian.math.matrices.values import SmithNormalForm
+from jacobian.math.matrices.values import RationalMatrix, SmithNormalForm
 
 
 def compute_determinant(
@@ -46,11 +48,27 @@ def compute_determinant(
     )
 
 
+def _rref_replay(matrix: RationalMatrix) -> tuple[Any, tuple[int, ...]]:
+    """Return the exact RREF and pivot columns of a retained source matrix."""
+    reduced, pivots = matrices.rref(conversions.rational_matrix_to_sympy(matrix))
+    return reduced, tuple(int(pivot) for pivot in pivots)
+
+
+def _rank_replay(matrix: RationalMatrix) -> tuple[int, tuple[int, ...]]:
+    """Return the exact rank and RREF pivot columns of a retained source matrix."""
+    rank, pivots = matrices.rank(conversions.rational_matrix_to_sympy(matrix))
+    return int(rank), tuple(int(pivot) for pivot in pivots)
+
+
 def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
     rank, pivot_columns = matrices.rank(
         conversions.rational_matrix_to_sympy(request.matrix)
     )
-    return MatrixRankResult(rank=rank, pivot_columns=pivot_columns)
+    return MatrixRankResult(
+        matrix=request.matrix,
+        rank=rank,
+        pivot_columns=tuple(int(column) for column in pivot_columns),
+    )
 
 
 def compute_rref(request: RationalMatrixRequest) -> RrefResult:
@@ -60,6 +78,7 @@ def compute_rref(request: RationalMatrixRequest) -> RrefResult:
     columns = reduced.cols
     pivot_columns = tuple(int(column) for column in pivots)
     return RrefResult(
+        matrix=request.matrix,
         reduced_matrix=conversions.rational_matrix_from_sympy(reduced),
         rank=len(pivot_columns),
         pivot_columns=pivot_columns,
@@ -89,6 +108,7 @@ def compute_nullspace(request: RationalMatrixRequest) -> NullspaceResult:
             vector[pivot_column] = -reduced[row, free_column]
         basis.append(tuple(conversions.rational_from_sympy(value) for value in vector))
     return NullspaceResult(
+        matrix=request.matrix,
         ambient_dimension=matrix.cols,
         rank=len(pivot_columns),
         nullity=len(basis),

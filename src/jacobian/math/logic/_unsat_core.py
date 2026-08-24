@@ -25,6 +25,8 @@ _MAX_CORE_NUMERAL_DIGITS = 256
 _MAX_CORE_AST_NODES = 4_096
 _MAX_CORE_RLIMIT = 10_000_000
 _NUMERAL = re.compile(r"(?:-?[0-9]+(?:\.[0-9]+)?|#x[0-9a-fA-F]+|#b[01]+)")
+_AffineTerms = tuple[tuple[Fraction, Any], ...]
+_AffineForm = tuple[_AffineTerms, Fraction]
 
 
 class SmtUnsatCoreRequest(SmtSolveRequest):
@@ -39,9 +41,11 @@ class SmtUnsatCoreRequest(SmtSolveRequest):
     nesting depth 256, 512 top-level ``assert`` commands, 4,096 distinct parsed AST
     nodes, 256 digits per numeral, and 256 digits in the numerator or denominator
     of any closed arithmetic coefficient, including every scalar coefficient and
-    translated constant obtained by flattening nested products through
-    coefficient-preserving wrappers (negation, additions and subtractions whose
-    remaining operands are closed, and exact division by closed constants).
+    translated constant obtained by flattening nested products and signed affine
+    sums through coefficient-preserving wrappers (negation, additions and
+    subtractions over closed and variable-carrying operands, and exact division
+    by closed nonzero constants, integer division included when every divided
+    coefficient remains exactly divisible).
     Assertion source order is the public zero-based index. Parsing constructs Z3
     syntax trees only; it does not evaluate the source as Python or as a host
     command. Execution performs one tracked check and at most one direct
@@ -293,80 +297,77 @@ def _normalize_closed_coefficients(assertions: tuple[Any, ...]) -> tuple[Any, ..
 
     normalized_by_id: dict[int, Any] = {}
     closed_value_by_id: dict[int, Fraction | None] = {}
-    scalar_by_id: dict[int, Fraction | None] = {}
-    offset_by_id: dict[int, Fraction] = {}
-    residual_by_id: dict[int, Any] = {}
+    form_by_id: dict[int, _AffineForm | None] = {}
     return tuple(
         _normalize_closed_expression(
             assertion,
             normalized_by_id=normalized_by_id,
             closed_value_by_id=closed_value_by_id,
-            scalar_by_id=scalar_by_id,
-            offset_by_id=offset_by_id,
-            residual_by_id=residual_by_id,
+            form_by_id=form_by_id,
         )
         for assertion in assertions
     )
 
 
+def _affine_expression(
+    terms: _AffineTerms,
+    offset: Fraction,
+    *,
+    template: Any,
+) -> Any:
+    """Rebuild one bounded flat affine sum, or its constant when it has no terms."""
+
+    if not terms:
+        return _exact_arithmetic_value(offset, template=template)
+    lead_coefficient, lead_core = terms[0]
+    total: Any = (
+        _exact_arithmetic_value(lead_coefficient, template=lead_core) * lead_core
+    )
+    for coefficient, core in terms[1:]:
+        total = total + _exact_arithmetic_value(coefficient, template=core) * core
+    if offset:
+        total = total + _exact_arithmetic_value(offset, template=template)
+    return total
+
+
 def _fold_scaled_product(
     candidate: Any,
     children: tuple[Any, ...],
-    normalized_children: tuple[Any, ...],
     child_values: tuple[Fraction | None, ...],
     *,
-    scalar_by_id: dict[int, Fraction | None],
-    offset_by_id: dict[int, Fraction],
-    residual_by_id: dict[int, Any],
-) -> tuple[Any, Fraction | None, Any | None, Fraction]:
+    form_by_id: dict[int, _AffineForm | None],
+) -> tuple[Any, _AffineForm | None]:
     """Flatten one product with a single variable-carrying affine child."""
 
     import z3
 
     if candidate.decl().kind() != z3.Z3_OP_MUL:
-        return candidate, None, None, Fraction(0)
-    dependent_children = tuple(
-        normalized_child
-        for normalized_child, value in zip(
-            normalized_children, child_values, strict=True
-        )
-        if value is None
+        return candidate, None
+    open_indices = [
+        index for index, value in enumerate(child_values) if value is None
+    ]
+    if len(open_indices) != 1:
+        return candidate, None
+    dependent = children[open_indices[0]]
+    child_form = form_by_id.get(dependent.get_id())
+    if child_form is None:
+        child_form = (((Fraction(1), dependent),), Fraction(0))
+    coefficient = _bounded_fraction_product(
+        tuple(value for value in child_values if value is not None)
     )
-    closed_factors = tuple(value for value in child_values if value is not None)
-    dependent_scalar: Fraction | None = None
-    dependent_offset = Fraction(0)
-    for child, child_value in zip(children, child_values, strict=True):
-        if child_value is None:
-            dependent_scalar = scalar_by_id[child.get_id()]
-            if dependent_scalar is not None:
-                dependent_offset = offset_by_id[child.get_id()]
-            break
-    if len(dependent_children) != 1 or not closed_factors:
-        return candidate, None, None, Fraction(0)
-    factors = (
-        (*closed_factors, dependent_scalar)
-        if dependent_scalar is not None
-        else closed_factors
-    )
-    coefficient = _bounded_fraction_product(factors)
+    terms, offset = child_form
+    scaled_terms: list[tuple[Fraction, Any]] = []
+    for term_coefficient, core in terms:
+        scaled = coefficient * term_coefficient
+        _require_bounded_normalized_coefficient(scaled)
+        scaled_terms.append((scaled, core))
     scaled_offset = Fraction(0)
-    if dependent_offset:
-        scaled_offset = _bounded_fraction_product((*closed_factors, dependent_offset))
-    dependent = dependent_children[0]
-    while (residual := residual_by_id.get(dependent.get_id())) is not None:
-        dependent = residual
-    folded_term = candidate.decl()(
-        _exact_arithmetic_value(coefficient, template=candidate),
-        dependent,
-    )
-    folded_offset = Fraction(0)
-    folded_candidate: Any = folded_term
-    if dependent_offset:
-        folded_candidate = folded_term + _exact_arithmetic_value(
-            scaled_offset, template=folded_term
-        )
-        folded_offset = scaled_offset
-    return folded_candidate, coefficient, dependent, folded_offset
+    if offset:
+        scaled_offset = coefficient * offset
+        _require_bounded_normalized_coefficient(scaled_offset)
+    folded_terms = tuple(scaled_terms)
+    folded = _affine_expression(folded_terms, scaled_offset, template=candidate)
+    return folded, (folded_terms, scaled_offset)
 
 
 def _normalize_closed_expression(
@@ -374,9 +375,7 @@ def _normalize_closed_expression(
     *,
     normalized_by_id: dict[int, Any],
     closed_value_by_id: dict[int, Fraction | None],
-    scalar_by_id: dict[int, Fraction | None],
-    offset_by_id: dict[int, Fraction],
-    residual_by_id: dict[int, Any],
+    form_by_id: dict[int, _AffineForm | None],
 ) -> Any:
     """Normalize one expression without retaining a recursive closure over its AST."""
 
@@ -385,24 +384,25 @@ def _normalize_closed_expression(
     expression_id = expression.get_id()
     if expression_id in normalized_by_id:
         return normalized_by_id[expression_id]
-    if z3.is_int_value(expression):
-        value = Fraction(expression.as_long())
+    if z3.is_int_value(expression) or z3.is_rational_value(expression):
+        value = (
+            Fraction(expression.as_long())
+            if z3.is_int_value(expression)
+            else expression.as_fraction()
+        )
         normalized_by_id[expression_id] = expression
         closed_value_by_id[expression_id] = value
-        scalar_by_id[expression_id] = value
-        offset_by_id[expression_id] = Fraction(0)
-        return expression
-    if z3.is_rational_value(expression):
-        value = expression.as_fraction()
-        normalized_by_id[expression_id] = expression
-        closed_value_by_id[expression_id] = value
-        scalar_by_id[expression_id] = value
-        offset_by_id[expression_id] = Fraction(0)
+        form_by_id[expression_id] = ((), value)
         return expression
     if not z3.is_app(expression):
         normalized_by_id[expression_id] = expression
         closed_value_by_id[expression_id] = None
-        scalar_by_id[expression_id] = None
+        form_by_id[expression_id] = None
+        return expression
+    if z3.is_arith(expression) and not expression.children():
+        normalized_by_id[expression_id] = expression
+        closed_value_by_id[expression_id] = None
+        form_by_id[expression_id] = (((Fraction(1), expression),), Fraction(0))
         return expression
 
     children = expression.children()
@@ -411,9 +411,7 @@ def _normalize_closed_expression(
             child,
             normalized_by_id=normalized_by_id,
             closed_value_by_id=closed_value_by_id,
-            scalar_by_id=scalar_by_id,
-            offset_by_id=offset_by_id,
-            residual_by_id=residual_by_id,
+            form_by_id=form_by_id,
         )
         for child in children
     )
@@ -426,126 +424,142 @@ def _normalize_closed_expression(
         candidate = expression
 
     child_values = tuple(closed_value_by_id[child.get_id()] for child in children)
-    candidate, folded_coefficient, folded_dependent, folded_offset = (
-        _fold_scaled_product(
-            candidate,
-            children,
-            normalized_children,
-            child_values,
-            scalar_by_id=scalar_by_id,
-            offset_by_id=offset_by_id,
-            residual_by_id=residual_by_id,
-        )
+    candidate, form = _fold_scaled_product(
+        candidate, children, child_values, form_by_id=form_by_id
     )
 
     closed_value = _evaluate_closed_arithmetic(candidate.decl().kind(), child_values)
     if closed_value is not None:
         candidate = _exact_arithmetic_value(closed_value, template=candidate)
-
-    scalar = closed_value if closed_value is not None else folded_coefficient
-    offset: Fraction | None = Fraction(0) if closed_value is not None else folded_offset
-    if scalar is None:
-        scalar, offset = _wrapped_linear_scalar(
-            candidate,
-            children,
-            child_values,
-            scalar_by_id=scalar_by_id,
-            offset_by_id=offset_by_id,
-            residual_by_id=residual_by_id,
+        form = ((), closed_value)
+    elif form is None:
+        form = _wrapped_linear_form(
+            candidate, children, child_values, form_by_id=form_by_id
         )
 
     normalized_by_id[expression_id] = candidate
     closed_value_by_id[expression_id] = closed_value
-    scalar_by_id[expression_id] = scalar
-    if offset is not None:
-        offset_by_id[expression_id] = offset
-    if folded_dependent is not None:
-        residual_by_id[expression_id] = folded_dependent
-        residual_by_id[candidate.get_id()] = folded_dependent
-        offset_by_id[candidate.get_id()] = folded_offset
+    form_by_id[expression_id] = form
+    if not candidate.eq(expression):
+        form_by_id[candidate.get_id()] = form
     return candidate
 
 
-def _chased_residual(dependent: Any, residual_by_id: dict[int, Any]) -> Any:
-    core = dependent
-    while (residual := residual_by_id.get(core.get_id())) is not None:
-        core = residual
-    return core
-
-
-def _folded_offset(offset_by_id: dict[int, Fraction], child: Any) -> Fraction:
-    """Return the recorded translated constant of a scalar-bearing child."""
-
-    return offset_by_id.get(child.get_id(), Fraction(0))
-
-
-def _wrapped_linear_scalar(
+def _wrapped_linear_form(
     candidate: Any,
     children: tuple[Any, ...],
     child_values: tuple[Fraction | None, ...],
     *,
-    scalar_by_id: dict[int, Fraction | None],
-    offset_by_id: dict[int, Fraction],
-    residual_by_id: dict[int, Any],
-) -> tuple[Fraction | None, Fraction | None]:
-    """Carry one child's folded linear scalar through coefficient-preserving wrappers."""
+    form_by_id: dict[int, _AffineForm | None],
+) -> _AffineForm | None:
+    """Combine children's affine forms through coefficient-preserving wrappers."""
 
     import z3
 
     kind = candidate.decl().kind()
-    if kind == z3.Z3_OP_ADD and len(children) >= 2:
+    if len(children) == 1 and kind == z3.Z3_OP_UMINUS:
+        child_form = form_by_id.get(children[0].get_id())
+        if child_form is None:
+            return None
+        terms, offset = child_form
+        return (
+            tuple((-coefficient, core) for coefficient, core in terms),
+            -offset,
+        )
+    if kind == z3.Z3_OP_ADD and children:
         signs: tuple[int, ...] = (1,) * len(children)
     elif kind == z3.Z3_OP_SUB and len(children) >= 2:
         signs = (1,) + (-1,) * (len(children) - 1)
     else:
         signs = ()
-    if len(children) == 1 and kind in (z3.Z3_OP_UMINUS, z3.Z3_OP_ADD):
-        child_scalar = scalar_by_id[children[0].get_id()]
-        if child_scalar is None:
-            return None, None
-        scalar = -child_scalar if kind == z3.Z3_OP_UMINUS else child_scalar
-        child_offset = _folded_offset(offset_by_id, children[0])
-        offset = -child_offset if kind == z3.Z3_OP_UMINUS else child_offset
-        residual = _chased_residual(children[0], residual_by_id)
-    elif signs:
-        open_indices = [
-            index for index, value in enumerate(child_values) if value is None
-        ]
-        if len(open_indices) != 1:
-            return None, None
-        open_index = open_indices[0]
-        child_scalar = scalar_by_id[children[open_index].get_id()]
-        if child_scalar is None:
-            return None, None
-        sign = signs[open_index]
-        scalar = sign * child_scalar
-        total: Fraction = sign * _folded_offset(offset_by_id, children[open_index])
-        for index, value in enumerate(child_values):
-            if value is not None:
-                total += signs[index] * value
-        _require_bounded_normalized_coefficient(total)
-        offset = total
-        residual = _chased_residual(children[open_index], residual_by_id)
-    elif (
+    if signs:
+        return _combined_signed_form(children, signs, form_by_id=form_by_id)
+    if (
         len(children) == 2
-        and kind == z3.Z3_OP_DIV
+        and kind in (z3.Z3_OP_DIV, z3.Z3_OP_IDIV)
         and child_values[0] is None
         and child_values[1] is not None
         and child_values[1] != 0
     ):
-        dividend_scalar = scalar_by_id[children[0].get_id()]
-        if dividend_scalar is None:
-            return None, None
+        dividend_form = form_by_id.get(children[0].get_id())
+        if dividend_form is None:
+            return None
         divisor = child_values[1]
-        scalar = dividend_scalar / divisor
-        _require_bounded_normalized_coefficient(scalar)
-        offset = _folded_offset(offset_by_id, children[0]) / divisor
-        _require_bounded_normalized_coefficient(offset)
-        residual = _chased_residual(children[0], residual_by_id)
-    else:
-        return None, None
-    residual_by_id[candidate.get_id()] = residual
-    return scalar, offset
+        if kind == z3.Z3_OP_IDIV:
+            return _exact_integer_division_form(dividend_form, divisor)
+        terms, offset = dividend_form
+        scaled_terms: list[tuple[Fraction, Any]] = []
+        for coefficient, core in terms:
+            scaled = coefficient / divisor
+            _require_bounded_normalized_coefficient(scaled)
+            scaled_terms.append((scaled, core))
+        scaled_offset = offset / divisor
+        _require_bounded_normalized_coefficient(scaled_offset)
+        return (tuple(scaled_terms), scaled_offset)
+    return None
+
+
+def _combined_signed_form(
+    children: tuple[Any, ...],
+    signs: tuple[int, ...],
+    *,
+    form_by_id: dict[int, _AffineForm | None],
+) -> _AffineForm | None:
+    """Add signed affine forms, bounding every merged coefficient and constant."""
+
+    merged: dict[int, list[Any]] = {}
+    total = Fraction(0)
+    for child, sign in zip(children, signs, strict=True):
+        child_form = form_by_id.get(child.get_id())
+        if child_form is None:
+            return None
+        terms, offset = child_form
+        for coefficient, core in terms:
+            entry = merged.setdefault(core.get_id(), [Fraction(0), core])
+            entry[0] += sign * coefficient
+            _require_bounded_normalized_coefficient(entry[0])
+        total += sign * offset
+        _require_bounded_normalized_coefficient(total)
+    return (
+        tuple((entry[0], entry[1]) for entry in merged.values() if entry[0] != 0),
+        total,
+    )
+
+
+def _exact_integer_division_form(
+    form: _AffineForm,
+    divisor: Fraction,
+) -> _AffineForm | None:
+    """Divide an affine form by an integer constant under SMT-LIB div semantics.
+
+    Exact whenever the divisor divides every coefficient: for integers s, o, d
+    with d dividing s, ``(div (+ (* s x) o) d)`` equals ``(* (/ s d) x)``
+    plus the Euclidean quotient of ``o`` by ``d``, since the constant remainder
+    ``o mod d`` already satisfies the Euclidean range on its own.
+    """
+
+    if divisor.denominator != 1:
+        return None
+    terms, offset = form
+    if offset.denominator != 1:
+        return None
+    divided_terms: list[tuple[Fraction, Any]] = []
+    for coefficient, core in terms:
+        if coefficient.denominator != 1 or coefficient.numerator % divisor.numerator:
+            return None
+        quotient = coefficient / divisor
+        _require_bounded_normalized_coefficient(quotient)
+        divided_terms.append((quotient, core))
+    quotient_offset = _euclidean_quotient(offset, divisor)
+    _require_bounded_normalized_coefficient(quotient_offset)
+    return (tuple(divided_terms), quotient_offset)
+
+
+def _euclidean_quotient(value: Fraction, divisor: Fraction) -> Fraction:
+    quotient = Fraction(value // divisor)
+    if value - divisor * quotient < 0:
+        quotient += 1
+    return quotient
 
 
 def _evaluate_closed_arithmetic(

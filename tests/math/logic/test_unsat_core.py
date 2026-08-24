@@ -572,6 +572,118 @@ def test_request_bounds_translated_constant_digits() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("logic", "declarations", "assertion_template"),
+    (
+        (
+            "QF_LIA",
+            "(declare-const x Int)\n(declare-const y Int)",
+            "(assert (= (* {outer} (+ (* {inner} x) (* {inner} y))) 0))",
+        ),
+        (
+            "QF_LIA",
+            "(declare-const x Int)\n(declare-const y Int)\n(declare-const z Int)",
+            "(assert (= (* {outer} (+ (* {inner} x) (- (* {inner} y)) (* {inner} z))) 0))",
+        ),
+        (
+            "QF_LRA",
+            "(declare-const x Real)\n(declare-const y Real)",
+            "(assert (= (* {outer}.0 (+ (* {inner}.0 x) (* {inner}.0 y))) 0.0))",
+        ),
+    ),
+)
+def test_request_bounds_multi_term_affine_sum_coefficient_digits(
+    logic: str,
+    declarations: str,
+    assertion_template: str,
+) -> None:
+    outer = "9" * 200
+    inner = "9" * 200
+    source = (
+        f"(set-logic {logic})\n"
+        f"{declarations}\n"
+        f"{assertion_template.format(outer=outer, inner=inner)}\n"
+        "(check-sat)\n"
+    )
+
+    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+        SmtUnsatCoreRequest(logic=logic, smtlib=source)
+
+
+def test_request_bounds_multi_term_boundary_coefficients() -> None:
+    factor = "9" * 128
+    boundary = (
+        "(set-logic QF_LIA)\n"
+        "(declare-const x Int)\n"
+        "(declare-const y Int)\n"
+        f"(assert (= (* {factor} (+ (* {factor} x) (* {factor} y))) 0))\n"
+        "(check-sat)\n"
+    )
+    over = boundary.replace(factor, "9" * 129, 1)
+
+    assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=boundary)
+    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=over)
+
+
+def test_request_bounds_merged_duplicate_summand_coefficients() -> None:
+    summand = "9" * 128
+    outer = "9" * 127
+    boundary = (
+        "(set-logic QF_LIA)\n"
+        "(declare-const x Int)\n"
+        f"(assert (= (* {outer} (+ (* {summand} x) (* {summand} x))) 0))\n"
+        "(check-sat)\n"
+    )
+    over = boundary.replace(outer, "9" * 128, 1)
+
+    assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=boundary)
+    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=over)
+
+
+@pytest.mark.parametrize(
+    "assertion_template",
+    (
+        "(assert (= (* {outer} (div (* {inner} x) 1)) 0))",
+        "(assert (= (* {outer} (div (+ (* {inner} x) 7) 1)) 0))",
+        "(assert (= (* {outer} (div (* {inner} x) (- 1))) 0))",
+    ),
+)
+def test_request_bounds_exact_integer_division_coefficient_digits(
+    assertion_template: str,
+) -> None:
+    outer = "9" * 200
+    inner = "9" * 200
+    source = (
+        "(set-logic QF_LIA)\n"
+        "(declare-const x Int)\n"
+        f"{assertion_template.format(outer=outer, inner=inner)}\n"
+        "(check-sat)\n"
+    )
+
+    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+        SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source)
+
+
+def test_request_bounds_integer_division_translated_constant_digits() -> None:
+    constant = "9" * 255
+    template = (
+        "(set-logic QF_LIA)\n"
+        "(declare-const x Int)\n"
+        "(assert (= (* 4 (div (+ (* 2 x) {constant}) 1)) 0))\n"
+        "(check-sat)\n"
+    )
+
+    assert SmtUnsatCoreRequest(
+        logic="QF_LIA", smtlib=template.format(constant=constant)
+    )
+    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+        SmtUnsatCoreRequest(
+            logic="QF_LIA", smtlib=template.format(constant="9" * 256)
+        )
+
+
 def test_translated_nested_coefficients_flatten_and_still_solve() -> None:
     source = (
         "(set-logic QF_LIA)\n"
@@ -627,6 +739,68 @@ def test_wrapped_lra_coefficients_flatten_and_still_solve() -> None:
     )
 
     result = compute_smt_unsat_core(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
+
+    assert result.outcome == "UNSAT"
+    assert result.core_indices == (0, 1)
+
+
+def test_multi_term_affine_sums_flatten_and_still_solve() -> None:
+    source = (
+        "(set-logic QF_LIA)\n"
+        "(declare-const x Int)\n"
+        "(declare-const y Int)\n"
+        "(assert (>= (* 2 (+ (* 2 x) (* 3 y))) 13))\n"
+        "(assert (<= x 1))\n"
+        "(assert (<= y 1))\n"
+        "(check-sat)\n"
+    )
+
+    result = compute_smt_unsat_core(SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source))
+
+    assert result.outcome == "UNSAT"
+    assert result.core_indices == (0, 1, 2)
+
+
+def test_cancelled_affine_sums_normalize_and_still_solve() -> None:
+    source = (
+        "(set-logic QF_LIA)\n"
+        "(declare-const x Int)\n"
+        "(assert (>= (* 2 (+ (* 3 x) (- (* 3 x)))) 0))\n"
+        "(assert (> x 0))\n"
+        "(check-sat)\n"
+    )
+
+    result = compute_smt_unsat_core(SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source))
+
+    assert result.outcome == "SAT"
+    assert result.core_indices == ()
+
+
+def test_exact_integer_division_flattens_and_still_solve() -> None:
+    source = (
+        "(set-logic QF_LIA)\n"
+        "(declare-const x Int)\n"
+        "(assert (= (div (+ (* 6 x) 7) 2) 10))\n"
+        "(assert (= x 2))\n"
+        "(check-sat)\n"
+    )
+
+    result = compute_smt_unsat_core(SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source))
+
+    assert result.outcome == "UNSAT"
+    assert result.core_indices == (0, 1)
+
+
+def test_non_exact_integer_division_remains_admitted() -> None:
+    source = (
+        "(set-logic QF_LIA)\n"
+        "(declare-const x Int)\n"
+        "(assert (>= (div (* 3 x) 2) 2))\n"
+        "(assert (<= x 1))\n"
+        "(check-sat)\n"
+    )
+
+    result = compute_smt_unsat_core(SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source))
 
     assert result.outcome == "UNSAT"
     assert result.core_indices == (0, 1)

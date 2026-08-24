@@ -8,7 +8,6 @@ from pydantic import Field, StrictBool, StrictInt, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.polynomials.differential_operators._bounds import (
-    MAX_APPLICATION_ITERATIONS,
     validate_application_envelope,
 )
 from jacobian.math.polynomials.differential_operators._flint import apply_with_flint
@@ -34,10 +33,11 @@ class DifferentialOperatorApplyRequest(StrictModel):
     iterations: StrictInt = Field(
         default=1,
         ge=0,
-        le=MAX_APPLICATION_ITERATIONS,
         description=(
             "Finite exponent k in D^k(f). Zero returns the source unchanged; "
-            "admission also bounds the exact power expansion and replay work."
+            "requests whose exact result needs no operator-power expansion are "
+            "admitted by their actual work and result size, and every expanding "
+            "request is bounded by the operation iteration limit."
         ),
         examples=[2],
     )

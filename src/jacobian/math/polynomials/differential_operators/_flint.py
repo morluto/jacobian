@@ -10,6 +10,7 @@ from jacobian.math.polynomials.differential_operators._bounds import (
     MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS,
     MAX_APPLICATION_OUTPUT_TERMS,
     ApplicationEnvelope,
+    _is_identity_operator,
 )
 from jacobian.math.polynomials.differential_operators.values import (
     ConstantCoefficientDifferentialOperator,
@@ -122,7 +123,7 @@ def apply_with_flint(
 
     if envelope.guaranteed_zero:
         return _zero_polynomial(polynomial.variables)
-    if iterations == 0:
+    if iterations == 0 or _is_identity_operator(operator):
         return polynomial
 
     active = _context(polynomial.variables)

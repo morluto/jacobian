@@ -174,6 +174,56 @@ def test_positive_order_short_circuits_a_large_vanishing_iterate() -> None:
     assert output == _polynomial(variables, {})
 
 
+def test_iteration_cap_admits_non_expanding_requests_beyond_the_limit() -> None:
+    variables = ("x", "y")
+    zero_operator = _operator(variables, {})
+    tall_iterations = MAX_APPLICATION_ITERATIONS + 1
+
+    request = DifferentialOperatorApplyRequest(
+        polynomial=_polynomial(variables, {(1, 1): 1}),
+        operator=zero_operator,
+        iterations=tall_iterations,
+    )
+    result = compute_differential_operator_application(request)
+
+    assert result.is_zero is True
+    assert result.output == _polynomial(variables, {})
+    assert apply_constant_coefficient_differential_operator(
+        _polynomial(variables, {}),
+        _operator(variables, {(1, 0): 1}),
+        iterations=tall_iterations,
+    ) == _polynomial(variables, {})
+
+
+def test_iteration_cap_boundary_is_admitted_then_rejected_on_expansion_paths() -> None:
+    variables = ("x",)
+    scaling = _operator(variables, {(0,): 2})
+    source = _polynomial(variables, {(3,): 1})
+
+    accepted = DifferentialOperatorApplyRequest(
+        polynomial=source,
+        operator=scaling,
+        iterations=MAX_APPLICATION_ITERATIONS,
+    )
+    assert compute_differential_operator_application(accepted).output == _polynomial(
+        variables,
+        {(3,): 2**MAX_APPLICATION_ITERATIONS},
+    )
+
+    with pytest.raises(ValidationError, match="operation limit"):
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=scaling,
+            iterations=MAX_APPLICATION_ITERATIONS + 1,
+        )
+    with pytest.raises(ValueError, match="nonnegative"):
+        apply_constant_coefficient_differential_operator(
+            source,
+            scaling,
+            iterations=-1,
+        )
+
+
 def test_identity_iterate_admits_sources_beyond_expansion_caps() -> None:
     variables = ("x",)
     source = _polynomial(variables, {(MAX_APPLICATION_INPUT_EXPONENT + 1,): 1})
@@ -213,6 +263,56 @@ def test_identity_result_retains_expected_and_replays_bound() -> None:
         result.model_dump(mode="json")
     )
     assert replayed == result
+
+
+def test_identity_power_admits_sources_beyond_expansion_caps() -> None:
+    variables = ("x",)
+    tall_source = _polynomial(variables, {(MAX_APPLICATION_INPUT_EXPONENT + 1,): 1})
+    unit = _operator(variables, {(0,): 1})
+
+    identity = apply_constant_coefficient_differential_operator(
+        tall_source,
+        unit,
+        iterations=1,
+    )
+
+    assert identity == tall_source
+
+
+def test_identity_power_retains_expected_and_replays_bound() -> None:
+    variables = ("x",)
+    tall_source = _polynomial(variables, {(MAX_APPLICATION_INPUT_EXPONENT + 1,): 1})
+
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=tall_source,
+            operator=_operator(variables, {(0,): 1}),
+            iterations=7,
+            expected=tall_source,
+        )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.output == tall_source
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    assert replayed == result
+
+
+def test_non_identity_scalar_operator_still_follows_expansion_caps() -> None:
+    variables = ("x",)
+
+    with pytest.raises(ValidationError, match="degree operation budget"):
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(
+                variables,
+                {(MAX_APPLICATION_INPUT_EXPONENT + 1,): 1},
+            ),
+            operator=_operator(variables, {(0,): 2}),
+            iterations=1,
+        )
 
 
 def test_componentwise_annihilation_admits_off_axis_sources_beyond_caps() -> None:
@@ -313,10 +413,15 @@ def test_input_digit_budget_only_gates_paths_that_expand() -> None:
 
     assert copied == source
     assert vanished == _polynomial(variables, {})
+    assert apply_constant_coefficient_differential_operator(
+        source,
+        _operator(variables, {(0,): 1}),
+        iterations=1,
+    ) == source
     with pytest.raises(ValueError, match="256-digit bound"):
         apply_constant_coefficient_differential_operator(
             source,
-            _operator(variables, {(0,): 1}),
+            _operator(variables, {(0,): 2}),
             iterations=1,
         )
 

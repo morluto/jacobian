@@ -78,6 +78,18 @@ def _guaranteed_zero(
     )
 
 
+def _is_identity_operator(
+    operator: ConstantCoefficientDifferentialOperator,
+) -> bool:
+    """Recognize the multiplicative identity operator ``1``."""
+
+    return (
+        len(operator.terms) == 1
+        and not any(operator.terms[0].orders)
+        and operator.terms[0].coefficient.as_fraction() == 1
+    )
+
+
 def _bounded_multiset_count(term_count: int, iterations: int, limit: int) -> int:
     """Bound the support of a commuting operator power.
 
@@ -279,8 +291,8 @@ def _require_application_shape(
         raise ValueError(
             "expected polynomial must use the source polynomial's ordered variables"
         )
-    if not 0 <= iterations <= MAX_APPLICATION_ITERATIONS:
-        raise ValueError("differential-operator iterations exceed the operation limit")
+    if iterations < 0:
+        raise ValueError("differential-operator iterations must be nonnegative")
 
 
 def _require_expansion_operator(
@@ -316,11 +328,12 @@ def _require_identity_output(
     polynomial: RationalPolynomial,
     expected: RationalPolynomial | None,
 ) -> None:
-    """Admit the zero-iterate copy by the output budgets it actually exercises.
+    """Admit copy results by the output budgets they actually exercise.
 
-    With ``iterations == 0`` the exact result is the source itself and no
-    expansion runs, so admission follows the copied result (output support,
-    digit, and aggregate-byte budgets) rather than the kernel input regime.
+    With ``iterations == 0`` or the identity operator, the exact result is the
+    source itself and no expansion runs, so admission follows the copied result
+    (output support, digit, and aggregate-byte budgets) rather than the kernel
+    input regime.
     """
 
     require_polynomial_budget(
@@ -365,7 +378,8 @@ def validate_application_envelope(
 
     # Degenerate shortcuts establish their exact results without running the
     # kernel, so they are recognized before expansion-specific source limits
-    # and admitted by the result and work they actually have.
+    # and admitted by the result and work they actually have. Positive powers
+    # of the identity operator join the zero iterate: 1^k(f) = f for every k.
     guaranteed_zero = _guaranteed_zero(polynomial, operator, iterations)
     if guaranteed_zero:
         _require_result_size(
@@ -377,7 +391,7 @@ def validate_application_envelope(
         )
         return ApplicationEnvelope(True, 0, 0)
 
-    if iterations == 0:
+    if iterations == 0 or _is_identity_operator(operator):
         _require_identity_output(polynomial, expected)
         _require_result_size(
             polynomial,
@@ -387,6 +401,9 @@ def validate_application_envelope(
             coefficient_digits=_max_coefficient_digits(polynomial),
         )
         return ApplicationEnvelope(False, 1, len(polynomial.polynomial.terms))
+
+    if iterations > MAX_APPLICATION_ITERATIONS:
+        raise ValueError("differential-operator iterations exceed the operation limit")
 
     _require_expansion_operator(operator)
     _require_expansion_source(polynomial)

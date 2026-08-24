@@ -37,8 +37,11 @@ POLYGON_OPERATIONS = (
         (
             "Compute one deterministic minimum triangulation of a strict CCW convex "
             "simple rational polygon of 4 to 28 vertices, charging each selected "
-            "non-hull diagonal once by its Euclidean length; coordinates carry at "
-            "most 32 decimal digits per component. Returns the exact "
+            "non-hull diagonal once by its Euclidean length; admission derives "
+            "the split-table output bound from exact pairwise coordinate "
+            "differences, so it is invariant under translation and every raw "
+            "coordinate stays inside the shared canonical rational cap. Returns "
+            "the exact "
             "sum-of-square-roots cost expression only when every finite DP "
             "comparison is separated by a pinned 128-bit outward-rounded Arb "
             "interval; otherwise returns the first unresolved exact comparison "
@@ -59,8 +62,9 @@ POLYGON_OPERATIONS = (
                 (
                     "Triangulate a unit square under the non-hull Euclidean "
                     "diagonal-length objective; the polygon must be simple and "
-                    "strictly CCW convex with 4 to 28 vertices and at most "
-                    "32-digit rational coordinates."
+                    "strictly CCW convex with 4 to 28 vertices whose pairwise "
+                    "coordinate differences keep the split table inside its "
+                    "serialized-output bound."
                 ),
                 {"polygon": {"points": _UNIT_SQUARE}},
             ),

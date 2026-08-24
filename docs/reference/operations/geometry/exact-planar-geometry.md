@@ -21,8 +21,11 @@ diagonal exactly once, when it is the boundary of its non-root subproblem.
 
 `geometry.polygon.triangulation.minimum_euclidean_weight.compute` instead owns
 the non-hull Euclidean-length objective for one strict counter-clockwise convex
-rational polygon with 4 to 28 vertices and coordinates of at most 32 decimal
-digits. A successful result retains every selected diagonal's exact rational
+rational polygon with 4 to 28 vertices. Admission derives the serialized
+split-table output bound from the exact pairwise coordinate differences that
+control the dynamic program, so it is invariant under translation; every raw
+coordinate stays inside the shared canonical rational cap. A successful result
+retains every selected diagonal's exact rational
 squared length and represents the source-bound optimum exactly as the ordered
 sum of their positive square roots. It never labels a decimal approximation as
 exact.

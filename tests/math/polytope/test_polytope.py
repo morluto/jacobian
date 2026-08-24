@@ -19,6 +19,7 @@ from jacobian.math.polytope._models import (
     Halfspace,
     PolytopeVolumeRequest,
     PolytopeVolumeResult,
+    PrimitiveFacet,
     Vertex,
 )
 from jacobian.math.polytope._operations import (
@@ -105,13 +106,17 @@ class TestFacetIncidence:
         assert result.vertices == vertices
         assert result.dimension == 2
         assert [
-            (facet.coefficients, facet.offset, facet.source_vertex_indices)
+            (
+                tuple((c.num, c.den) for c in facet.halfspace.coefficients),
+                (facet.halfspace.offset.num, facet.halfspace.offset.den),
+                facet.source_vertex_indices,
+            )
             for facet in result.facets
         ] == [
-            (("-1", "0"), "0", (0, 3)),
-            (("0", "-1"), "0", (0, 1)),
-            (("0", "1"), "1", (2, 3)),
-            (("1", "0"), "1", (1, 2)),
+            ((("-1", "1"), ("0", "1")), ("0", "1"), (0, 3)),
+            ((("0", "1"), ("-1", "1")), ("0", "1"), (0, 1)),
+            ((("0", "1"), ("1", "1")), ("1", "1"), (2, 3)),
+            ((("1", "1"), ("0", "1")), ("1", "1"), (1, 2)),
         ]
 
     def test_nonsimplicial_pentagonal_prism_merges_coplanar_subfacets(self) -> None:
@@ -182,6 +187,80 @@ class TestFacetIncidence:
                 facets=result.facets,
             )
 
+    def test_facet_profile_composes_unchanged_into_volume_request(self) -> None:
+        """Each computed facet's shared half-space value feeds
+        ``PolytopeVolumeRequest`` verbatim -- no coefficient reconstruction."""
+
+        square = (
+            _v((0, 1), (0, 1)),
+            _v((1, 1), (0, 1)),
+            _v((1, 1), (1, 1)),
+            _v((0, 1), (1, 1)),
+        )
+        cube = tuple(
+            _v((x, 1), (y, 1), (z, 1)) for x in (0, 1) for y in (0, 1) for z in (0, 1)
+        )
+        for vertices, dimension, volume in (
+            (square, 2, ("1", "1")),
+            (cube, 3, ("1", "1")),
+        ):
+            result = _facet_profile(vertices)
+            composed = compute_polytope_volume(
+                PolytopeVolumeRequest(
+                    halfspaces=tuple(facet.halfspace for facet in result.facets)
+                )
+            )
+            assert composed.volume == CanonicalRational(num=volume[0], den=volume[1])
+            assert composed.dimension == dimension
+            assert composed.representation == "halfspaces"
+
+    def test_forged_rescaled_facet_inequality_is_rejected(self) -> None:
+        """A positively rescaled supporting inequality leaves the primitive
+        canonical form and must fail typed validation."""
+
+        vertices = (
+            _v((0, 1), (0, 1)),
+            _v((1, 1), (0, 1)),
+            _v((1, 1), (1, 1)),
+            _v((0, 1), (1, 1)),
+        )
+        result = _facet_profile(vertices)
+
+        with pytest.raises(ValidationError, match="primitive over the integers"):
+            PrimitiveFacet(
+                halfspace=_scaled_halfspace(result.facets[0].halfspace, 3),
+                source_vertex_indices=result.facets[0].source_vertex_indices,
+            )
+
+    def test_non_integer_facet_inequality_is_rejected(self) -> None:
+        """A rational row whose cleared form is coprime is still not the
+        canonical integral supporting inequality."""
+
+        with pytest.raises(ValidationError, match="entries must be integers"):
+            PrimitiveFacet(
+                halfspace=Halfspace(
+                    coefficients=(CanonicalRational(num="1", den="1"),),
+                    offset=CanonicalRational(num="1", den="2"),
+                ),
+                source_vertex_indices=(0, 3),
+            )
+
+    def test_zero_normal_facet_inequality_is_rejected(self) -> None:
+        """A tautology row is not a supporting inequality even though its
+        primitive form is trivially coprime (offset +/-1)."""
+
+        with pytest.raises(ValidationError, match="nonzero normal"):
+            PrimitiveFacet(
+                halfspace=Halfspace(
+                    coefficients=(
+                        CanonicalRational(num="0", den="1"),
+                        CanonicalRational(num="0", den="1"),
+                    ),
+                    offset=CanonicalRational(num="1", den="1"),
+                ),
+                source_vertex_indices=(0, 3),
+            )
+
     def test_lower_dimensional_input_and_work_overflow_reject_before_enumeration(
         self,
     ) -> None:
@@ -234,13 +313,13 @@ class TestFacetIncidence:
         result = _facet_profile(vertices)
 
         assert len(result.facets) == len(unpadded.facets) == 8
-        assert {(facet.coefficients, facet.offset) for facet in result.facets} == {
-            (facet.coefficients, facet.offset) for facet in unpadded.facets
+        assert {facet.halfspace for facet in result.facets} == {
+            facet.halfspace for facet in unpadded.facets
         }
         assert result.facets[-1].source_vertex_indices == tuple(range(1, 8))
         incident_positions: set[int] = set()
         for facet in result.facets[:-1]:
-            excluded = facet.coefficients.index("-1") + 1
+            excluded = [c.num for c in facet.halfspace.coefficients].index("-1") + 1
             assert facet.source_vertex_indices == tuple(
                 position for position in range(64) if position != excluded
             )

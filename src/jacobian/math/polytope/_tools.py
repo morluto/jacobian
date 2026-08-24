@@ -50,13 +50,12 @@ POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "polytope.facets.compute",
         "Compute the complete exact facet-incidence profile of a rational polytope",
         "Compute every maximal supporting facet of the convex hull of an ordered "
-        "rational V-representation, returning primitive integer inequalities and "
-        "the complete source-row incidence of each facet. The V-representation "
-        "must affinely span its ambient dimension (d <= 7); lower-dimensional "
-        "hulls are rejected because this operation uses ambient codimension-one "
-        "facets. The exact bounded SymPy kernel enumerates candidate supporting "
-        "hyperplanes once and the source-bound result replays the same bounded "
-        "profile once.",
+        "rational V-representation (d <= 7); lower-dimensional hulls are "
+        "rejected. Each facet returns its canonical primitive supporting "
+        "inequality as the shared half-space value, directly reusable as a "
+        "polytope.volume.compute H-representation row, plus the complete "
+        "source-row incidence. The exact bounded SymPy kernel enumerates "
+        "candidates once and the source-bound result replays once.",
         FacetIncidenceRequest,
         FacetIncidenceResult,
         compute_facet_incidence,

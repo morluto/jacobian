@@ -9,17 +9,9 @@ from typing import Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import (
-    CanonicalInteger,
-    CanonicalRational,
-    require_bounded_rational,
-)
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    parse_canonical_integer,
-)
+from jacobian.canonical import CanonicalLimits, encode_strict_json
 
 MAX_DIMENSION = 6
 """Absolute upper bound on the ambient dimension of a polytope."""
@@ -295,23 +287,21 @@ class Vertex(StrictModel):
 class PrimitiveFacet(StrictModel):
     """One canonically scaled supporting inequality and its source incidences.
 
-    The inequality is ``sum(coefficients[i] * x[i]) <= offset``. Its entries
-    are primitive integers, and its orientation is the unique one satisfied
-    by every source vertex. ``source_vertex_indices`` is the sorted complete
-    set of positions in the ordered source V-representation lying on the
-    supporting hyperplane; repeated source rows remain distinct positions.
+    ``halfspace`` carries the supporting inequality ``<a, x> <= b`` in the
+    domain's shared H-representation value, so a computed facet composes
+    unchanged into H-representation consumers such as
+    ``polytope.volume.compute``. Its entries are integers whose only common
+    divisor is one, and its orientation is the unique one satisfied by every
+    source vertex. ``source_vertex_indices`` is the sorted complete set of
+    positions in the ordered source V-representation lying on the supporting
+    hyperplane; repeated source rows remain distinct positions.
     """
 
-    coefficients: tuple[CanonicalInteger, ...] = Field(
-        min_length=1,
-        max_length=MAX_FACET_DIMENSION,
+    halfspace: Halfspace = Field(
         description=(
-            "Primitive integer normal of the canonical supporting inequality "
-            "sum(coefficients[i] * x[i]) <= offset."
+            "Supporting inequality <a, x> <= b with primitive integer entries, "
+            "oriented so every source vertex satisfies it."
         ),
-    )
-    offset: CanonicalInteger = Field(
-        description="Primitive integer right-hand side of the supporting inequality."
     )
     source_vertex_indices: tuple[int, ...] = Field(
         min_length=1,
@@ -324,15 +314,20 @@ class PrimitiveFacet(StrictModel):
 
     @model_validator(mode="after")
     def require_primitive_normal_and_indices(self) -> Self:
-        coefficients = tuple(
-            parse_canonical_integer(value) for value in self.coefficients
-        )
-        offset = parse_canonical_integer(self.offset)
-        if not any(coefficients):
-            raise ValueError("facet coefficients must not all be zero")
+        if all(
+            coefficient.as_fraction() == 0
+            for coefficient in self.halfspace.coefficients
+        ):
+            raise ValueError("facet inequality must have a nonzero normal")
+        entries = [
+            Fraction(*value.as_integer_ratio())
+            for value in (*self.halfspace.coefficients, self.halfspace.offset)
+        ]
+        if any(entry.denominator != 1 for entry in entries):
+            raise ValueError("facet inequality entries must be integers")
         gcd = 0
-        for value in (*coefficients, offset):
-            gcd = math.gcd(gcd, abs(value))
+        for entry in entries:
+            gcd = math.gcd(gcd, abs(int(entry)))
         if gcd != 1:
             raise ValueError("facet inequality must be primitive over the integers")
         if any(
@@ -465,7 +460,7 @@ class Halfspace(StrictModel):
 
     coefficients: tuple[CanonicalRational, ...] = Field(
         min_length=1,
-        max_length=MAX_DIMENSION,
+        max_length=MAX_FACET_DIMENSION,
         description=(
             "Normal vector a of the half-space <a, x> <= b; at least one "
             "entry must be nonzero (all-zero rows are rejected)."

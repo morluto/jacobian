@@ -213,6 +213,17 @@ def _primitive_facet_key(
     return coefficients, integers[-1] // divisor
 
 
+def _primitive_halfspace(coefficients: tuple[int, ...], rhs: int) -> Halfspace:
+    """Wrap a primitive integer supporting inequality in the shared value."""
+
+    return Halfspace(
+        coefficients=tuple(
+            CanonicalRational.from_integer_ratio(value, 1) for value in coefficients
+        ),
+        offset=CanonicalRational.from_integer_ratio(rhs, 1),
+    )
+
+
 def _computed_facets_from_vertices(
     vertices: tuple[Vertex, ...], dim: int
 ) -> tuple[PrimitiveFacet, ...]:
@@ -245,10 +256,7 @@ def _computed_facets_from_vertices(
         )
         key = coefficients, rhs
         canonical[key] = PrimitiveFacet(
-            coefficients=tuple(
-                format_canonical_integer(value) for value in coefficients
-            ),
-            offset=format_canonical_integer(rhs),
+            halfspace=_primitive_halfspace(coefficients, rhs),
             source_vertex_indices=incidence,
         )
     facets = tuple(canonical[key] for key in sorted(canonical))

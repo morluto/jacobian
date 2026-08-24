@@ -214,6 +214,27 @@ class TestFacetIncidence:
             assert composed.dimension == dimension
             assert composed.representation == "halfspaces"
 
+    def test_seven_dimensional_rows_do_not_feed_the_volume_consumer(self) -> None:
+        """The volume consumer caps ambient dimension at 6, so a d = 7
+        profile's shared half-space rows are typed values that only compose
+        into consumers admitting dimension 7."""
+
+        simplex = (
+            _v(*((0, 1) for _ in range(7))),
+            *(
+                _v(*((1 if index == axis else 0, 1) for axis in range(7)))
+                for index in range(7)
+            ),
+        )
+        result = _facet_profile(simplex)
+        assert result.dimension == 7
+        assert {len(facet.halfspace.coefficients) for facet in result.facets} == {7}
+
+        with pytest.raises(ValidationError, match="exceeds the dimension bound"):
+            PolytopeVolumeRequest(
+                halfspaces=tuple(facet.halfspace for facet in result.facets)
+            )
+
     def test_forged_rescaled_facet_inequality_is_rejected(self) -> None:
         """A positively rescaled supporting inequality leaves the primitive
         canonical form and must fail typed validation."""

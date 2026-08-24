@@ -288,9 +288,11 @@ class PrimitiveFacet(StrictModel):
     """One canonically scaled supporting inequality and its source incidences.
 
     ``halfspace`` carries the supporting inequality ``<a, x> <= b`` in the
-    domain's shared H-representation value, so a computed facet composes
-    unchanged into H-representation consumers such as
-    ``polytope.volume.compute``. Its entries are integers whose only common
+    domain's shared H-representation value. A computed facet composes
+    unchanged into any H-representation consumer whose admitted ambient
+    dimension covers this profile's: ``polytope.volume.compute`` caps
+    dimension at ``MAX_DIMENSION = 6``, while profiles here may reach
+    ``MAX_FACET_DIMENSION = 7``. Its entries are integers whose only common
     divisor is one, and its orientation is the unique one satisfied by every
     source vertex. ``source_vertex_indices`` is the sorted complete set of
     positions in the ordered source V-representation lying on the supporting

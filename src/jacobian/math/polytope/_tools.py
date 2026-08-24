@@ -52,9 +52,10 @@ POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "Compute every maximal supporting facet of the convex hull of an ordered "
         "rational V-representation (d <= 7); lower-dimensional hulls are "
         "rejected. Each facet returns its canonical primitive supporting "
-        "inequality as the shared half-space value, directly reusable as a "
-        "polytope.volume.compute H-representation row, plus the complete "
-        "source-row incidence. The exact bounded SymPy kernel enumerates "
+        "inequality as the shared half-space value plus the complete "
+        "source-row incidence. For d <= 6 each row composes verbatim into "
+        "polytope.volume.compute; that consumer caps dimension at 6 and "
+        "rejects d = 7 rows. The exact bounded SymPy kernel enumerates "
         "candidates once and the source-bound result replays once.",
         FacetIncidenceRequest,
         FacetIncidenceResult,

@@ -302,9 +302,7 @@ def test_request_admits_sources_at_the_shared_item_ceiling() -> None:
     assert zeros.reconstructed_sum == "0"
 
     dense = 512
-    ones = _operation().run(
-        _request((1,) * dense, dense - 1, allow_empty_subset=True)
-    )
+    ones = _operation().run(_request((1,) * dense, dense - 1, allow_empty_subset=True))
     assert ones.status == "ATTAINED"
     assert ones.witness == IndexSubset(indices=tuple(range(dense - 1)))
     assert ones.reconstructed_sum == str(dense - 1)

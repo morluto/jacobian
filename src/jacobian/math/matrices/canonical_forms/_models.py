@@ -14,7 +14,11 @@ from jacobian._exact import (
 )
 from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalLimits, encode_strict_json
-from jacobian.math.matrices.values import RationalMatrix, require_matrix_scalar_digits
+from jacobian.math.matrices.values import (
+    MAX_MATRIX_DIMENSION,
+    RationalMatrix,
+    require_matrix_scalar_digits,
+)
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_EXPONENT,
     MAX_POLYNOMIAL_TERMS,
@@ -83,6 +87,22 @@ def _capped_lcm(values: Iterable[int]) -> int:
     return result
 
 
+def _cancelled_product(
+    left_numerator: int,
+    left_denominator: int,
+    right_numerator: int,
+    right_denominator: int,
+) -> tuple[int, int]:
+    """Return the reduced numerator and denominator of one product of ratios."""
+
+    top = gcd(left_numerator, right_denominator)
+    bottom = gcd(right_numerator, left_denominator)
+    return (
+        _capped_multiply(left_numerator // top, right_numerator // bottom),
+        _capped_multiply(left_denominator // bottom, right_denominator // top),
+    )
+
+
 def _decimal_digit_upper_bound(value: int) -> int:
     """Return a conservative decimal digit count without converting huge ints."""
 
@@ -139,7 +159,12 @@ def _linear_result_component_bounds(
     matrix: RationalMatrix,
     coefficients: dict[int, tuple[int, int]],
 ) -> tuple[tuple[int, int], ...]:
-    """Bound every entry of ``c_1 A + c_0 I`` independently."""
+    """Bound every entry of ``c_1 A + c_0 I`` independently.
+
+    Products are reduced before digit budgets are charged so exact
+    cancellations between coefficients and matrix entries are not rejected as
+    growth; the SymPy kernel keeps every intermediate reduced as well.
+    """
 
     linear_numerator, linear_denominator = coefficients.get(1, (0, 1))
     constant_numerator, constant_denominator = coefficients.get(0, (0, 1))
@@ -147,11 +172,11 @@ def _linear_result_component_bounds(
     for row_index, row in enumerate(matrix.entries):
         for column_index, entry in enumerate(row):
             entry_numerator, entry_denominator = entry.as_integer_ratio()
-            product_numerator = _capped_multiply(
-                abs(linear_numerator), abs(entry_numerator)
-            )
-            product_denominator = _capped_multiply(
-                linear_denominator, entry_denominator
+            product_numerator, product_denominator = _cancelled_product(
+                abs(linear_numerator),
+                linear_denominator,
+                abs(entry_numerator),
+                entry_denominator,
             )
             terms = [(product_numerator, product_denominator)]
             if row_index == column_index:
@@ -313,14 +338,22 @@ class MatrixPolynomialEvaluationRequest(StrictModel):
 
     matrix: RationalMatrix = Field(
         description=(
-            "Nonempty square matrix over QQ through order 32. Matrix and "
-            "polynomial coefficients share the exact rational field."
+            "Nonempty square matrix over QQ through order "
+            f"{MAX_MATRIX_DIMENSION}. Matrix and polynomial coefficients "
+            "share the exact rational field."
         )
     )
     polynomial: RationalPolynomial = Field(
         description=(
             "Sparse polynomial over QQ in exactly one declared variable; terms "
-            "use the canonical descending exponent order of RationalPolynomial."
+            "use the canonical descending exponent order of RationalPolynomial. "
+            "Exact admission couples the ordinary degree to the matrix order: "
+            f"{MATRIX_POLYNOMIAL_EVALUATION_PASSES} * degree * order^3 must "
+            f"stay within {MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS:,} scalar "
+            "products across both Horner passes, so the largest admitted "
+            "ordinary degree at matrix order 32 is "
+            f"{MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS // (MATRIX_POLYNOMIAL_EVALUATION_PASSES * MAX_MATRIX_DIMENSION**3)}. "
+            "Exact result component growth is budgeted separately during validation."
         )
     )
 

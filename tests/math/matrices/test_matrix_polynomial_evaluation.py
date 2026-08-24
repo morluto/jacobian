@@ -342,3 +342,70 @@ def test_request_rejects_predicted_scalar_and_aggregate_output_overflow() -> Non
             matrix=dense,
             polynomial=_polynomial((huge_coefficient, 1)),
         )
+
+
+def _linear_rational_polynomial(
+    coefficient: CanonicalRational,
+    constant: CanonicalRational | None = None,
+) -> RationalPolynomial:
+    terms = [
+        RationalPolynomialTerm(coefficient=coefficient, exponents=(1,)),
+    ]
+    if constant is not None:
+        terms.append(RationalPolynomialTerm(coefficient=constant, exponents=(0,)))
+    return RationalPolynomial(
+        variables=("t",),
+        polynomial=SparseRationalPolynomial(terms=tuple(terms)),
+    )
+
+
+def test_linear_admission_cross_cancels_rational_product_factors() -> None:
+    numerator = format_canonical_integer(2**66_037)
+    denominator = format_canonical_integer(3**42_017)
+    matrix = RationalMatrix(entries=((_rational(denominator, numerator),),))
+    coefficient = _rational(numerator, denominator)
+
+    request = MatrixPolynomialEvaluationRequest(
+        matrix=matrix,
+        polynomial=_linear_rational_polynomial(coefficient),
+    )
+    result = compute_matrix_polynomial_evaluation(request)
+
+    assert request.polynomial.polynomial.terms[0].exponents == (1,)
+    assert result.value.entries[0][0].num == "1"
+    assert result.value.entries[0][0].den == "1"
+
+    cancelled_with_constant = MatrixPolynomialEvaluationRequest(
+        matrix=matrix,
+        polynomial=_linear_rational_polynomial(coefficient, _rational(5, 7)),
+    )
+    constant_result = compute_matrix_polynomial_evaluation(cancelled_with_constant)
+
+    assert constant_result.value.entries[0][0].as_fraction() == Fraction(12, 7)
+
+
+def test_linear_admission_still_rejects_uncancellable_product_growth() -> None:
+    coefficient_numerator = format_canonical_integer(2**66_037)
+    coefficient_denominator = format_canonical_integer(3**42_017)
+    entry_numerator = format_canonical_integer(7**24_048)
+    entry_denominator = format_canonical_integer(5**28_072)
+
+    with pytest.raises(ValidationError, match="rational result bound"):
+        MatrixPolynomialEvaluationRequest(
+            matrix=RationalMatrix(
+                entries=((_rational(entry_numerator, entry_denominator),),)
+            ),
+            polynomial=_linear_rational_polynomial(
+                _rational(coefficient_numerator, coefficient_denominator)
+            ),
+        )
+
+
+def test_request_schema_publishes_coupled_degree_order_work_bound() -> None:
+    schema = MatrixPolynomialEvaluationRequest.model_json_schema()
+
+    polynomial_description = schema["properties"]["polynomial"]["description"]
+    assert "2 * degree * order^3" in polynomial_description
+    assert "4,000,000" in polynomial_description
+    matrix_description = schema["properties"]["matrix"]["description"]
+    assert "order 32" in matrix_description

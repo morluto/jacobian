@@ -8,8 +8,10 @@ from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 
-MAX_DIM = 32
-MAX_ENTRIES = 1024
+MAX_DIM = 128
+MAX_ENTRIES = (
+    MAX_DIM * MAX_DIM
+)  # 16384; outer tensor bound (n <= 128, logical n^3 entries)
 
 
 class StructureConstants(StrictModel):

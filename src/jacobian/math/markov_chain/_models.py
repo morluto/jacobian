@@ -121,8 +121,8 @@ class MixingTimeRequest(TransitionMatrixRequest):
 
     @model_validator(mode="after")
     def require_bounded_search(self) -> Self:
-        if len(self.matrix) > 8:
-            raise ValueError("mixing-time search supports at most 8 states")
+        if len(self.matrix) > 32:
+            raise ValueError("mixing-time search supports at most 32 states")
         if not 0 < self.epsilon.as_fraction() <= 1:
             raise ValueError("epsilon must lie in (0, 1]")
         for value in (self.epsilon, *(item for row in self.matrix for item in row)):

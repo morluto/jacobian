@@ -115,11 +115,18 @@ def compute_multivariate_division(
     )
 
 
-def compute_multivariate_resultant(
+def _sylvester_resultant_value(
     request: MultivariateResultantRequest,
-) -> MultivariateResultantResult:
-    """Compute the resultant of two multivariate polynomials w.r.t. one variable."""
+) -> MultivariateScalarValue | MultivariatePolynomialValue:
+    """Compute the exact resultant value of an admitted request.
 
+    Returns the classical Sylvester-determinant orientation.  SymPy's
+    subresultant PRS canonicalizes ``deg(left) >= deg(right)`` internally
+    without compensating the swap sign (upstream sympy/sympy#10666), so
+    whenever the left elimination degree is the smaller one the backend
+    value carries an extra ``(-1)^(m*n)`` factor relative to the declared
+    convention; this adapter restores the standard orientation.
+    """
     from sympy import QQ, Poly
     from sympy import resultant as sympy_resultant
 
@@ -131,6 +138,20 @@ def compute_multivariate_resultant(
     right = rational_polynomial_to_sympy(request.right)
     value = sympy_resultant(left.as_expr(), right.as_expr(), generator)
 
+    left_elimination_degree = max(
+        (term.exponents[elimination_index] for term in request.left.polynomial.terms),
+        default=0,
+    )
+    right_elimination_degree = max(
+        (term.exponents[elimination_index] for term in request.right.polynomial.terms),
+        default=0,
+    )
+    if (
+        left_elimination_degree < right_elimination_degree
+        and (left_elimination_degree * right_elimination_degree) % 2
+    ):
+        value = -value
+
     remaining_variables = tuple(
         variable for variable in variables if variable != request.elimination_variable
     )
@@ -138,18 +159,24 @@ def compute_multivariate_resultant(
         # The resultant is a rational scalar.
         from jacobian.math.polynomials._conversions import rational_from_sympy
 
-        return MultivariateResultantResult(
-            elimination_variable=request.elimination_variable,
-            resultant=MultivariateScalarValue(
-                value=rational_from_sympy(value),
-            ),
+        return MultivariateScalarValue(
+            value=rational_from_sympy(value),
         )
     resultant_poly = Poly(value, *symbols_for_variables(remaining_variables), domain=QQ)
+    return MultivariatePolynomialValue(
+        value=_result_polynomial(resultant_poly, remaining_variables),
+    )
+
+
+def compute_multivariate_resultant(
+    request: MultivariateResultantRequest,
+) -> MultivariateResultantResult:
+    """Compute the resultant of two multivariate polynomials w.r.t. one variable."""
     return MultivariateResultantResult(
+        left=request.left,
+        right=request.right,
         elimination_variable=request.elimination_variable,
-        resultant=MultivariatePolynomialValue(
-            value=_result_polynomial(resultant_poly, remaining_variables),
-        ),
+        resultant=_sylvester_resultant_value(request),
     )
 
 

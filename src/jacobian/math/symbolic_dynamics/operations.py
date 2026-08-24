@@ -8,14 +8,27 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import networkx as nx
 
+from jacobian.math.polynomials._conversions import (
+    rational_function_from_sympy,
+    rational_polynomial_from_sympy,
+)
+from jacobian.math.polynomials.values import RationalFunction, RationalPolynomial
 from jacobian.math.symbolic_dynamics.values import (
+    MAX_ADJACENCY_STATES,
     MAX_ENUMERATED_BLOCKS,
+    MAX_PERIOD,
     MAX_PRESENTATION_CELLS,
     AdjacencyShift,
     BlockPresentation,
     ForbiddenBlockShift,
     LabeledTransition,
 )
+
+MAX_ZETA_REPLAY_PERIOD = MAX_PERIOD
+MAX_ZETA_COEFFICIENT_DIGITS = 128
+MAX_ZETA_RESULT_DIGITS = 100_000
+MAX_ZETA_RESULT_BYTES = 512_000
+MAX_ZETA_WORK = 13_000_000
 
 
 def _contains(word: tuple[str, ...], factor: tuple[str, ...]) -> bool:
@@ -298,8 +311,103 @@ def periodic_point_profile(
     return tuple(fixed), exact, orbits
 
 
+def _determinant_coefficients(shift: AdjacencyShift) -> tuple[int, ...]:
+    """Return ascending coefficients of ``det(I - t A)``."""
+
+    from sympy import Matrix
+
+    characteristic = Matrix(shift.matrix).charpoly()
+    # det(lambda I - A) = sum(c_k lambda^(n-k)), so the same coefficient
+    # sequence in ascending powers of t is det(I - t A).
+    return tuple(int(coefficient) for coefficient in characteristic.all_coeffs())
+
+
+def _require_zeta_budget(shift: AdjacencyShift, replay_period: int) -> None:
+    if not 1 <= replay_period <= MAX_ZETA_REPLAY_PERIOD:
+        raise ValueError("replay period is outside the supported bounds")
+    states = len(shift.matrix)
+    maximum_entry = max(entry for row in shift.matrix for entry in row)
+    # The degree-k coefficient is a sum of principal k-minors. Its absolute
+    # value is at most C(states,k) k! M^k <= (states M)^k.
+    coefficient_digits = states * len(str(states * max(1, maximum_entry))) + 1
+    if coefficient_digits > MAX_ZETA_COEFFICIENT_DIGITS:
+        raise ValueError("zeta polynomial exceeds the coefficient digit bound")
+    work = states**4 + states**3 * replay_period
+    if work > MAX_ZETA_WORK:
+        raise ValueError("zeta determinant and replay exceed the work bound")
+    maximum_row_sum = max(sum(row) for row in shift.matrix)
+    count_bound = states * max(1, maximum_row_sum) ** replay_period
+    count_digits = len(str(count_bound))
+    result_digits = (
+        2 * (states + 1) * coefficient_digits + 2 * replay_period * count_digits
+    )
+    if result_digits > MAX_ZETA_RESULT_DIGITS:
+        raise ValueError("zeta result exceeds the aggregate digit bound")
+    source_bytes = 4096 + states**2 * (len(str(maximum_entry)) + 3)
+    polynomial_bytes = 2 * (states + 1) * (2 * coefficient_digits + 160)
+    replay_bytes = replay_period * (2 * count_digits + 160)
+    if source_bytes + polynomial_bytes + replay_bytes > MAX_ZETA_RESULT_BYTES:
+        raise ValueError("zeta result exceeds the byte bound")
+
+
+def _logarithmic_derivative_coefficients(
+    determinant_coefficients: tuple[int, ...], period_count: int
+) -> tuple[int, ...]:
+    """Return coefficients of ``-t D'(t) / D(t)`` through ``period_count``."""
+
+    result: list[int] = []
+    degree = len(determinant_coefficients) - 1
+    for period in range(1, period_count + 1):
+        derivative_term = (
+            -period * determinant_coefficients[period] if period <= degree else 0
+        )
+        convolution = sum(
+            determinant_coefficients[offset] * result[period - offset - 1]
+            for offset in range(1, min(degree, period - 1) + 1)
+        )
+        result.append(derivative_term - convolution)
+    return tuple(result)
+
+
+def artin_mazur_zeta(
+    shift: AdjacencyShift, replay_period: int
+) -> tuple[RationalPolynomial, RationalFunction, tuple[int, ...]]:
+    """Return ``det(I-tA)``, ``1/det(I-tA)``, and its fixed-point replay."""
+
+    _require_zeta_budget(shift, replay_period)
+    from sympy import QQ, Poly, Symbol
+
+    variable = Symbol("t")
+    coefficients = _determinant_coefficients(shift)
+    determinant = Poly.from_dict(
+        {(exponent,): coefficient for exponent, coefficient in enumerate(coefficients)},
+        variable,
+        domain=QQ,
+    )
+    logarithmic_derivative = _logarithmic_derivative_coefficients(
+        coefficients, replay_period
+    )
+    fixed_points, _, _ = periodic_point_profile(shift, replay_period)
+    if logarithmic_derivative != fixed_points:
+        raise RuntimeError(
+            "zeta logarithmic derivative disagrees with periodic-point traces"
+        )
+    return (
+        rational_polynomial_from_sympy(
+            determinant, ("t",), maximum_terms=MAX_ADJACENCY_STATES + 1
+        ),
+        rational_function_from_sympy(
+            1 / determinant.as_expr(),
+            ("t",),
+            maximum_terms=MAX_ADJACENCY_STATES + 1,
+        ),
+        logarithmic_derivative,
+    )
+
+
 __all__ = [
     "adjacency_shift",
+    "artin_mazur_zeta",
     "block_language",
     "enumeration_size",
     "finite_type_presentation",

@@ -77,6 +77,18 @@ value mathematically valid. Then name the smallest set of tests that establishes
 that invariant and rejects plausible results that satisfy only a weaker
 mathematical claim.
 
+When authoring or changing an operation's contract or backend adapter, derive
+at least one expected value from the mathematical definition rather than from
+the maintained backend before merging: a worked computation, brute-force
+enumeration on a small admitted slice, or an independently constructed object
+such as a determinant assembled directly from coefficients. Agreement with the
+backend is not independent evidence — every code path in one backend can share
+one defect. Where the operation already advertises an identity, such as
+reconstruction, a swap law, or invariance under a change of basis, test that
+identity against the same change. Before trusting backend output for a new
+claim, consult the [known backend defects](backend-known-defects.md) registry;
+add an entry whenever an adapter compensates for backend behavior.
+
 Classify each fixture by the evidence it contributes:
 
 | Fixture role | What it establishes |

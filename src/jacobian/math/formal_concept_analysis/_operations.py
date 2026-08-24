@@ -12,6 +12,7 @@ from jacobian.math.formal_concept_analysis._models import (
     DerivationResult,
     EnumerateConceptsRequest,
     EnumerateConceptsResult,
+    ImplicationClosureRequest,
     ObjectSubsetRequest,
 )
 from jacobian.math.formal_concept_analysis.operations import (
@@ -20,8 +21,10 @@ from jacobian.math.formal_concept_analysis.operations import (
     concept_from_objects,
     concept_lattice,
     enumerate_concepts,
+    implication_closure,
     object_derivation,
 )
+from jacobian.math.formal_concept_analysis.values import ImplicationClosureResult
 
 __all__ = [
     "compute_attribute_derivation",
@@ -29,6 +32,7 @@ __all__ = [
     "compute_concept_from_objects",
     "compute_concept_lattice",
     "compute_enumerate_concepts",
+    "compute_implication_closure",
     "compute_object_closure",
     "compute_object_derivation",
 ]
@@ -68,6 +72,12 @@ def compute_attribute_closure(request: AttributeSubsetRequest) -> ClosureResult:
         added=added,
         is_closed=set(fs) == set(closure),
     )
+
+
+def compute_implication_closure(
+    request: ImplicationClosureRequest,
+) -> ImplicationClosureResult:
+    return implication_closure(request.system, frozenset(request.seed))
 
 
 def compute_concept_from_objects(request: ObjectSubsetRequest) -> ConceptResult:

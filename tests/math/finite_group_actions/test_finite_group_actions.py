@@ -481,11 +481,11 @@ class TestBounds:
             PolyaInventoryRequest(action=_cyclic_c3(), colors=0)
 
     def test_group_order_bound_exceeded(self) -> None:
-        # S_7 has order 5040 > 720 and acts on only 7 points, so it fits
+        # S_8 has order 40320 > 10000 and acts on only 8 points, so it fits
         # the domain-size cap but exceeds the group-order bound.
         action = FinitePermutationAction(
-            domain=tuple(f"p{i}" for i in range(7)),
-            generators=((1, 2, 3, 4, 5, 6, 0), (1, 0, 2, 3, 4, 5, 6)),
+            domain=tuple(f"p{i}" for i in range(8)),
+            generators=((1, 2, 3, 4, 5, 6, 7, 0), (1, 0, 2, 3, 4, 5, 6, 7)),
         )
         with pytest.raises(ValueError, match="exceeds the bounded maximum"):
             compute_cycle_index(CycleIndexRequest(action=action))

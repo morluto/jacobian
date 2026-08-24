@@ -10,6 +10,9 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
+from jacobian.math.number_theory._periodic_kernel import (
+    require_admitted_periodic_source,
+)
 from jacobian.math.number_theory._periodic_models import (
     MAX_INTERSECTION_MERGES,
     MAX_INTERSECTION_STATES,
@@ -21,6 +24,7 @@ from jacobian.math.number_theory._periodic_models import (
     MAX_PERIODIC_RESULT_BYTES,
     MAX_PERIODIC_SOURCE_ROWS,
     MAX_SPARSE_LIFTED_ROWS,
+    PERIODIC_EXECUTION_PASSES_PER_CALL,
     PERIODIC_PROFILE_RESULT_ENVELOPE_BYTES,
     PeriodicCongruenceUnionMeasureResult,
     PeriodicCongruenceUnionProfileRequest,
@@ -453,18 +457,28 @@ def test_request_schemas_publish_aggregate_execution_and_profile_bounds() -> Non
             schema["aggregate_normalized_residue_row_limit"] == MAX_PERIODIC_SOURCE_ROWS
         )
         assert schema["common_period_digit_limit"] == MAX_PERIODIC_INTEGER_DIGITS
+        assert schema["execution_passes_per_call"] == PERIODIC_EXECUTION_PASSES_PER_CALL
         assert schema["execution_regime_limits"] == {
             "period_lift": {
                 "max_common_period": MAX_PERIOD_SCAN,
-                "max_period_plus_lifted_rows": MAX_PERIOD_LIFT_WORK,
+                "max_period_plus_lifted_rows_per_pass": MAX_PERIOD_LIFT_WORK,
+                "max_period_plus_lifted_rows_per_call": (
+                    PERIODIC_EXECUTION_PASSES_PER_CALL * MAX_PERIOD_LIFT_WORK
+                ),
             },
             "sparse_lift": {
-                "max_lifted_rows": MAX_SPARSE_LIFTED_ROWS,
-                "max_retained_states": MAX_SPARSE_LIFTED_ROWS,
+                "max_lifted_rows_per_pass": MAX_SPARSE_LIFTED_ROWS,
+                "max_lifted_rows_per_call": (
+                    PERIODIC_EXECUTION_PASSES_PER_CALL * MAX_SPARSE_LIFTED_ROWS
+                ),
+                "max_retained_states_per_pass": MAX_SPARSE_LIFTED_ROWS,
             },
             "inclusion_exclusion": {
-                "max_retained_states": MAX_INTERSECTION_STATES,
-                "max_merges": MAX_INTERSECTION_MERGES,
+                "max_retained_states_per_pass": MAX_INTERSECTION_STATES,
+                "max_merges_per_pass": MAX_INTERSECTION_MERGES,
+                "max_merges_per_call": (
+                    PERIODIC_EXECUTION_PASSES_PER_CALL * MAX_INTERSECTION_MERGES
+                ),
             },
         }
 
@@ -680,3 +694,36 @@ def test_compressed_intersection_work_boundary_rejects_before_backend() -> None:
     rejected_payload["subsets"].append({"modulus": str(primes[-1]), "residues": ["0"]})
     with pytest.raises(ValidationError, match="all exact execution regimes"):
         PeriodicCongruenceUnionRequest.model_validate(rejected_payload)
+
+
+def test_non_coprime_generalized_crt_replays_scaled_union() -> None:
+    base_payload: dict[str, object] = {
+        "subsets": [
+            {"modulus": "4", "residues": ["0", "1"]},
+            {"modulus": "6", "residues": ["1", "2"]},
+        ]
+    }
+    base_residues = _brute_residues(base_payload)
+    assert base_residues == (0, 1, 2, 4, 5, 7, 8, 9)
+
+    scale = MAX_PERIOD_SCAN // 12 + 1
+    large_multiple = 12 * scale
+    payload = {
+        "subsets": [
+            {"modulus": "4", "residues": ["0", "1"]},
+            {"modulus": "6", "residues": ["1", "2"]},
+            {"modulus": str(large_multiple), "residues": []},
+        ]
+    }
+    request = PeriodicCongruenceUnionRequest.model_validate(payload)
+    assert require_admitted_periodic_source(request.normalized_source()).method == (
+        "INCLUSION_EXCLUSION"
+    )
+
+    union = compute_periodic_congruence_union_measure(request)
+    assert union.common_period == str(large_multiple)
+    assert union.occupied_count == str(len(base_residues) * scale)
+
+    complement = _measure({**payload, "complement": True})
+    assert complement.common_period == str(large_multiple)
+    assert complement.occupied_count == str((12 - len(base_residues)) * scale)

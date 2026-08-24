@@ -782,17 +782,33 @@ def check_sat_assignment(
     return SatAssignmentCheckResult(satisfies=True)
 
 
+_EXHAUSTION_DETAILS: dict[_UnknownResource, str] = {
+    "work": "the bounded solver work budget was exhausted",
+    "memory": "the bounded solver memory budget was exhausted",
+    "time": "the bounded solver time budget was exhausted",
+}
+
+
+def _classify_exhaustion(message: str) -> _UnknownResource | None:
+    """Classify one Z3 reason or exception message onto the exhausted budgets."""
+
+    lowered = message.strip().lower()
+    if "resource limit" in lowered or "canceled" in lowered:
+        return "work"
+    if "memory" in lowered:
+        return "memory"
+    if "timeout" in lowered or "time limit" in lowered:
+        return "time"
+    return None
+
+
 def _project_unknown(reason: str | None) -> tuple[_UnknownResource | None, str]:
     """Project one Z3 unknown reason onto the typed exhausted-budget taxonomy."""
 
     text = (reason or "").strip()
-    lowered = text.lower()
-    if "resource limit" in lowered or "canceled" in lowered:
-        return "work", "the bounded solver work budget was exhausted"
-    if "memory" in lowered:
-        return "memory", "the bounded solver memory budget was exhausted"
-    if "timeout" in lowered or "time limit" in lowered:
-        return "time", "the bounded solver time budget was exhausted"
+    classified = _classify_exhaustion(text)
+    if classified is not None:
+        return classified, _EXHAUSTION_DETAILS[classified]
     if not text:
         return None, "the solver returned no completeness evidence"
     return None, text[:1_024]
@@ -836,6 +852,13 @@ def solve_sat(request: SatSolveRequest) -> SatSolveResult:
         if outcome == z3.unsat:
             return SatSolveResult(outcome="UNSAT")
     except z3.Z3Exception as exc:
+        exhausted = _classify_exhaustion(str(exc))
+        if exhausted is not None:
+            return SatSolveResult(
+                outcome="UNKNOWN",
+                exhausted=exhausted,
+                detail=_EXHAUSTION_DETAILS[exhausted],
+            )
         detail = f"the Z3 backend failed during the bounded solve: {exc}"
         return SatSolveResult(outcome="UNKNOWN", detail=detail[:1_024])
     exhausted, detail = _project_unknown(solver.reason_unknown())
@@ -1011,6 +1034,13 @@ def solve_smt(request: SmtSolveRequest) -> SmtSolveResult:
         if outcome == z3.unsat:
             return SmtSolveResult(outcome="UNSAT")
     except z3.Z3Exception as exc:
+        exhausted = _classify_exhaustion(str(exc))
+        if exhausted is not None:
+            return SmtSolveResult(
+                outcome="UNKNOWN",
+                exhausted=exhausted,
+                detail=_EXHAUSTION_DETAILS[exhausted],
+            )
         detail = f"the Z3 backend failed during the bounded solve: {exc}"
         return SmtSolveResult(outcome="UNKNOWN", detail=detail[:1_024])
     exhausted, detail = _project_unknown(solver.reason_unknown())

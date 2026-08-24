@@ -879,6 +879,153 @@ def test_smt_solver_wraps_backend_failure_during_the_solve(monkeypatch) -> None:
     assert result.detail is not None and "backend exploded" in result.detail
 
 
+@pytest.mark.parametrize(
+    ("message", "exhausted"),
+    (
+        ("out of memory", "memory"),
+        ("max. memory limit exceeded", "memory"),
+        ("max. resource limit exceeded", "work"),
+        ("canceled during solve", "work"),
+        ("exceeded the time limit before a verdict", "time"),
+    ),
+)
+def test_sat_solver_projects_exhaustion_messages_from_z3_exceptions(
+    monkeypatch,
+    message: str,
+    exhausted: str,
+) -> None:
+    import z3
+
+    class ExhaustingSolver:
+        def set(self, **_settings: int) -> None:
+            return None
+
+        def add(self, _assertions: object) -> None:
+            raise z3.Z3Exception(message)
+
+        def check(self) -> object:
+            raise AssertionError("check must not run after a failed assertion add")
+
+    monkeypatch.setattr(z3, "Solver", ExhaustingSolver)
+    result = solve_sat(
+        SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),)))
+    )
+
+    assert result.outcome == "UNKNOWN"
+    assert result.exhausted == exhausted
+    assert result.assignment is None
+    assert result.detail == operations._EXHAUSTION_DETAILS[exhausted]
+
+
+@pytest.mark.parametrize(
+    ("message", "exhausted"),
+    (
+        ("out of memory", "memory"),
+        ("max. resource limit exceeded", "work"),
+        ("timeout exceeded while checking", "time"),
+    ),
+)
+def test_smt_solver_projects_exhaustion_messages_from_z3_exceptions(
+    monkeypatch,
+    message: str,
+    exhausted: str,
+) -> None:
+    import z3
+
+    class ExhaustingSolver:
+        def set(self, **_settings: int) -> None:
+            return None
+
+        def add(self, _assertions: object) -> None:
+            raise z3.Z3Exception(message)
+
+        def check(self) -> object:
+            raise AssertionError("check must not run after a failed assertion add")
+
+    monkeypatch.setattr(z3, "SolverFor", lambda _logic: ExhaustingSolver())
+    result = solve_smt(
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
+        )
+    )
+
+    assert result.outcome == "UNKNOWN"
+    assert result.exhausted == exhausted
+    assert result.model_smtlib is None
+    assert result.detail == operations._EXHAUSTION_DETAILS[exhausted]
+
+
+def test_smt_solver_projects_exhaustion_from_model_serialization(monkeypatch) -> None:
+    import z3
+
+    class ExhaustingModel:
+        def sexpr(self) -> str:
+            raise z3.Z3Exception("out of memory")
+
+    class SolvingThenExhaustingSolver:
+        def set(self, **_settings: int) -> None:
+            return None
+
+        def add(self, _assertions: object) -> None:
+            return None
+
+        def check(self) -> object:
+            return z3.sat
+
+        def model(self) -> object:
+            return ExhaustingModel()
+
+    monkeypatch.setattr(z3, "SolverFor", lambda _logic: SolvingThenExhaustingSolver())
+    result = solve_smt(
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
+        )
+    )
+
+    assert result.outcome == "UNKNOWN"
+    assert result.exhausted == "memory"
+    assert result.detail == "the bounded solver memory budget was exhausted"
+
+
+def test_solver_wraps_unrecognized_z3_exceptions_without_typed_exhaustion(
+    monkeypatch,
+) -> None:
+    import z3
+
+    class ExplodingSolver:
+        def set(self, **_settings: int) -> None:
+            return None
+
+        def add(self, _assertions: object) -> None:
+            raise z3.Z3Exception("backend exploded")
+
+        def check(self) -> object:
+            raise AssertionError("check must not run after a failed assertion add")
+
+    monkeypatch.setattr(z3, "Solver", ExplodingSolver)
+    sat_result = solve_sat(
+        SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),)))
+    )
+    monkeypatch.setattr(z3, "SolverFor", lambda _logic: ExplodingSolver())
+    smt_result = solve_smt(
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
+        )
+    )
+
+    for result in (sat_result, smt_result):
+        assert result.outcome == "UNKNOWN"
+        assert result.exhausted is None
+        assert result.detail is not None
+        assert (
+            "the Z3 backend failed during the bounded solve: backend exploded"
+            in result.detail
+        )
+
+
 def test_unknown_projection_maps_every_exhausted_resource() -> None:
     assert operations._project_unknown("max. resource limit exceeded") == (
         "work",

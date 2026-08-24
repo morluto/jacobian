@@ -908,6 +908,21 @@ def test_bounded_comparison_of_formless_ite_branches_still_admitted() -> None:
     assert result.core_indices == ()
 
 
+def test_request_bounds_shared_denominator_comparison_numerator_digits() -> None:
+    odd = "9" * 255
+    small = "9" * 50
+    power = "3" * 170
+    source = (
+        "(set-logic QF_LRA)\n"
+        "(declare-const x Real)\n"
+        f"(assert (= (* (/ {odd} 2) x) (* (/ {small} {power}) x)))\n"
+        "(check-sat)\n"
+    )
+
+    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+
+
 def test_request_keeps_shared_denominator_formless_ite_sums_admitted() -> None:
     digits = "9" * 100
     source = (

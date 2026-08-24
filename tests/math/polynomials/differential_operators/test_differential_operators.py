@@ -215,6 +215,50 @@ def test_identity_result_retains_expected_and_replays_bound() -> None:
     assert replayed == result
 
 
+def test_componentwise_annihilation_admits_off_axis_sources_beyond_caps() -> None:
+    variables = ("x", "y")
+    tall_source = _polynomial(variables, {(0, MAX_APPLICATION_INPUT_EXPONENT + 1): 1})
+
+    vanished = apply_constant_coefficient_differential_operator(
+        tall_source,
+        _operator(variables, {(1, 0): 1}),
+    )
+    crossed_axes = apply_constant_coefficient_differential_operator(
+        _polynomial(variables, {(0, 200): 1}),
+        _operator(variables, {(1, 1): 1}),
+    )
+
+    assert vanished == _polynomial(variables, {})
+    assert crossed_axes == _polynomial(variables, {})
+
+
+def test_per_axis_annihilation_requires_strict_exponent_excess() -> None:
+    variables = ("x", "y")
+
+    annihilated = apply_constant_coefficient_differential_operator(
+        _polynomial(variables, {(0, 200): 1}),
+        _operator(variables, {(1, 1): 1}),
+    )
+    boundary = apply_constant_coefficient_differential_operator(
+        _polynomial(variables, {(1, 1): 1}),
+        _operator(variables, {(1, 1): 1}),
+    )
+    mixed_operator = apply_constant_coefficient_differential_operator(
+        _polynomial(variables, {(1, 1): 1}),
+        _operator(variables, {(1, 0): 1, (0, 1): 1}),
+    )
+
+    assert annihilated == _polynomial(variables, {})
+    assert boundary == _polynomial(variables, {(0, 0): 1})
+    assert mixed_operator == _polynomial(variables, {(1, 0): 1, (0, 1): 1})
+    with pytest.raises(ValidationError, match="degree operation budget"):
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(variables, {(0, 200): 1}),
+            operator=_operator(variables, {(0, 1): 1}),
+            iterations=1,
+        )
+
+
 def test_guaranteed_zero_admits_sources_beyond_expansion_caps() -> None:
     variables = ("x", "y")
     wide_source = _polynomial(
@@ -277,6 +321,33 @@ def test_input_digit_budget_only_gates_paths_that_expand() -> None:
         )
 
 
+def test_operator_digit_budget_only_gates_paths_that_power_the_operator() -> None:
+    variables = ("x",)
+    coefficient = CanonicalRational(num=str(10**300 - 1), den="1")
+    operator = ConstantCoefficientDifferentialOperator(
+        variables=variables,
+        terms=(DifferentialOperatorTerm(coefficient=coefficient, orders=(1,)),),
+    )
+
+    copied = apply_constant_coefficient_differential_operator(
+        _polynomial(variables, {(5,): 1}),
+        operator,
+        iterations=0,
+    )
+    vanished = apply_constant_coefficient_differential_operator(
+        _polynomial(variables, {(0,): 1}),
+        operator,
+    )
+
+    assert copied == _polynomial(variables, {(5,): 1})
+    assert vanished == _polynomial(variables, {})
+    with pytest.raises(ValueError, match="256-digit bound"):
+        apply_constant_coefficient_differential_operator(
+            _polynomial(variables, {(5,): 1}),
+            operator,
+        )
+
+
 def test_degenerate_shortcuts_still_honor_the_retained_byte_budget() -> None:
     coefficient = CanonicalRational(num="1" + "0" * 32_767, den="1")
 
@@ -328,6 +399,51 @@ def test_expected_polynomial_uses_the_same_axis() -> None:
             polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
             operator=_operator(("x", "y"), {(1, 0): 1}),
             expected=_polynomial(("y", "x"), {(0, 0): 1}),
+        )
+
+
+def test_expected_comparison_admits_values_beyond_the_kernel_regime() -> None:
+    variables = ("x",)
+    unreachable = _polynomial(variables, {(MAX_APPLICATION_INPUT_EXPONENT + 1,): 1})
+
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(variables, {(1,): 1}),
+            operator=_operator(variables, {(1,): 1}),
+            iterations=1,
+            expected=unreachable,
+        )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.output == _polynomial(variables, {(0,): 1})
+    assert result.matches_expected is False
+    assert replayed == result
+
+
+def test_expected_retention_still_honors_the_retained_byte_budget() -> None:
+    coefficient = CanonicalRational(num="1" + "0" * 32_767, den="1")
+    heavy_expected = RationalPolynomial(
+        variables=("x",),
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=coefficient,
+                    exponents=(exponent,),
+                )
+                for exponent in reversed(range(300))
+            )
+        ),
+    )
+
+    with pytest.raises(ValidationError, match="serialized-output budget"):
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(("x",), {(1,): 1}),
+            operator=_operator(("x",), {(1,): 1}),
+            iterations=1,
+            expected=heavy_expected,
         )
 
 

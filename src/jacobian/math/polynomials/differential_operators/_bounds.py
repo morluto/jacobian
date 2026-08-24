@@ -57,8 +57,26 @@ def _guaranteed_zero(
         return False
     if not operator.terms:
         return True
-    minimum_order = min(sum(term.orders) for term in operator.terms)
-    return minimum_order > 0 and minimum_order * iterations > _total_degree(polynomial)
+    # Every composition of k operator terms has at least k times the per-axis
+    # minimum order on each axis, so a strict per-axis excess over the source's
+    # widest exponent annihilates every monomial without any cancellation.
+    axes = range(len(polynomial.variables))
+    exponent_bounds = [
+        max(term.exponents[axis] for term in polynomial.polynomial.terms)
+        for axis in axes
+    ]
+    minimum_axis_orders = [
+        min(term.orders[axis] for term in operator.terms) for axis in axes
+    ]
+    if any(
+        iterations * minimum_axis_orders[axis] > exponent_bounds[axis]
+        for axis in axes
+    ):
+        return True
+    minimum_total_order = min(sum(term.orders) for term in operator.terms)
+    return minimum_total_order > 0 and (
+        minimum_total_order * iterations > _total_degree(polynomial)
+    )
 
 
 def _bounded_multiset_count(term_count: int, iterations: int, limit: int) -> int:
@@ -262,14 +280,21 @@ def _require_application_shape(
         raise ValueError(
             "expected polynomial must use the source polynomial's ordered variables"
         )
+    if not 0 <= iterations <= MAX_APPLICATION_ITERATIONS:
+        raise ValueError("differential-operator iterations exceed the operation limit")
+
+
+def _require_expansion_operator(
+    operator: ConstantCoefficientDifferentialOperator,
+) -> None:
+    """Bound the operator against the kernel's derivative-powering input regime."""
+
     for term in operator.terms:
         require_bounded_rational(
             term.coefficient,
             max_digits=MAX_APPLICATION_OPERATOR_COEFFICIENT_DIGITS,
             label="differential-operator coefficient",
         )
-    if not 0 <= iterations <= MAX_APPLICATION_ITERATIONS:
-        raise ValueError("differential-operator iterations exceed the operation limit")
 
 
 def _require_expansion_source(polynomial: RationalPolynomial) -> None:
@@ -307,32 +332,26 @@ def _require_identity_output(
         label="differential-operator source polynomial",
     )
     if expected is not None:
-        require_polynomial_budget(
-            expected,
-            maximum_terms=MAX_APPLICATION_OUTPUT_TERMS,
-            maximum_exponent=MAX_POLYNOMIAL_EXPONENT,
-            maximum_coefficient_digits=MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS,
-            label="expected differential-operator output",
-        )
+        _require_expected_output(expected)
 
 
-def _require_expected_output(
-    polynomial: RationalPolynomial,
-    expected: RationalPolynomial | None,
-) -> None:
+def _require_expected_output(expected: RationalPolynomial | None) -> None:
+    """Bound the retained comparison value, which never enters the expansion.
+
+    ``expected`` is only retained in the result and compared for exact
+    equality, so admission follows the shared canonical representation plus
+    the aggregate retained-byte budget rather than the kernel's input regime.
+    """
+
     if expected is None:
         return
     require_polynomial_budget(
         expected,
         maximum_terms=MAX_APPLICATION_OUTPUT_TERMS,
-        maximum_exponent=MAX_APPLICATION_INPUT_EXPONENT,
+        maximum_exponent=MAX_POLYNOMIAL_EXPONENT,
         maximum_coefficient_digits=MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS,
         label="expected differential-operator output",
     )
-    if _total_degree(expected) > MAX_APPLICATION_INPUT_TOTAL_DEGREE:
-        raise ValueError(
-            "expected differential-operator output exceeds the total-degree budget"
-        )
 
 
 def validate_application_envelope(
@@ -370,8 +389,9 @@ def validate_application_envelope(
         )
         return ApplicationEnvelope(False, 1, len(polynomial.polynomial.terms))
 
+    _require_expansion_operator(operator)
     _require_expansion_source(polynomial)
-    _require_expected_output(polynomial, expected)
+    _require_expected_output(expected)
 
     term_count = len(operator.terms)
     expanded_terms = _bounded_multiset_count(

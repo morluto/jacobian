@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, Literal
+from typing import Any
 
 from jacobian.canonical import parse_canonical_integer
+from jacobian.math.real_algebraic import (
+    RealAlgebraicOrderValue,
+    RealAlgebraicValue,
+    compare_real_algebraic,
+)
 
 __all__ = ["compare_algebraic", "isolate_real_roots"]
 
@@ -30,42 +35,9 @@ def isolate_real_roots(coeffs_desc: Sequence[dict[str, str]]) -> Any:
 
 
 def compare_algebraic(
-    left_poly: Sequence[dict[str, str]],
-    left_lower: Any,
-    left_upper: Any,
-    right_poly: Sequence[dict[str, str]],
-    right_lower: Any,
-    right_upper: Any,
-) -> Literal["LT", "EQ", "GT"]:
-    import sympy
+    left: RealAlgebraicValue,
+    right: RealAlgebraicValue,
+) -> RealAlgebraicOrderValue:
+    """Compare canonical real algebraic values exactly."""
 
-    def selected_real_root(poly: Any, lower: Any, upper: Any) -> Any:
-        roots = {
-            root for root in poly.all_roots() if root.is_real and lower <= root <= upper
-        }
-        if len(roots) != 1:
-            raise ValueError("isolating interval must contain exactly one real root")
-        return roots.pop()
-
-    left_lower = sympy.Rational(
-        parse_canonical_integer(left_lower.num), parse_canonical_integer(left_lower.den)
-    )
-    left_upper = sympy.Rational(
-        parse_canonical_integer(left_upper.num), parse_canonical_integer(left_upper.den)
-    )
-    right_lower = sympy.Rational(
-        parse_canonical_integer(right_lower.num),
-        parse_canonical_integer(right_lower.den),
-    )
-    right_upper = sympy.Rational(
-        parse_canonical_integer(right_upper.num),
-        parse_canonical_integer(right_upper.den),
-    )
-    lr = selected_real_root(_polynomial(left_poly), left_lower, left_upper)
-    rr = selected_real_root(_polynomial(right_poly), right_lower, right_upper)
-    cmp = sympy.sign(lr - rr)
-    if cmp < 0:
-        return "LT"
-    if cmp > 0:
-        return "GT"
-    return "EQ"
+    return compare_real_algebraic(left, right)

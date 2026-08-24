@@ -11,6 +11,13 @@ from jacobian.math.arithmetic._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "arithmetic.real_quadratic.embeddings.compute",
+        AdmissionDecision.NATIVE_ONLY,
+        "cheap deterministic projection (conjugate image b -> -b, trace = 2a, "
+        "norm = a^2 - d*b^2) without material computational or reliability leverage",
+        native_symbol="jacobian.math.real_quadratic.real_quadratic_embeddings",
+    ),
+    OperationAdmission(
         "arithmetic.real_quadratic.order.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",

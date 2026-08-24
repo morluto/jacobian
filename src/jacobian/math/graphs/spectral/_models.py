@@ -47,11 +47,53 @@ class GraphSpectrumRequest(StrictModel):
 
 
 class GraphSpectrumResult(StrictModel):
-    """The exact eigenvalues with algebraic multiplicities of a graph matrix."""
+    """The exact eigenvalues with algebraic multiplicities of a graph matrix.
 
+    Retains the source graph and matrix convention so validation replays
+    the exact spectrum of the same matrix.  Each ``eigenvalues`` entry is
+    the canonical exact SymPy rendering (over the algebraic closure of QQ,
+    never a float) of one distinct eigenvalue; multiplicities are positive
+    and sum to the graph order, so the claimed spectrum reconstructs
+    ``det(xI - M)`` exactly, where ``M`` is the adjacency matrix A for
+    ``matrix_convention="ADJACENCY"`` and the Laplacian matrix L for
+    ``matrix_convention="LAPLACIAN"``.  Pair order carries no mathematical
+    meaning: validation compares ``(eigenvalue, multiplicity)`` pairs as a
+    multiset rather than by backend iteration order.
+    """
+
+    graph: GraphEdgeList
+    matrix_convention: Literal["ADJACENCY", "LAPLACIAN"]
     eigenvalues: tuple[str, ...]
     multiplicities: tuple[int, ...]
     convention: Literal["SYMPY_EIGENVALS"] = "SYMPY_EIGENVALS"
+
+    @model_validator(mode="after")
+    def require_source_bound(self) -> Self:
+        from jacobian.math.graphs.spectral.operations import (
+            adjacency_spectrum,
+            laplacian_spectrum,
+        )
+
+        order = self.graph.vertex_count
+        if len(self.eigenvalues) != len(self.multiplicities):
+            raise ValueError(
+                "eigenvalue and multiplicity tuples must have equal length"
+            )
+        if len(set(self.eigenvalues)) != len(self.eigenvalues):
+            raise ValueError("eigenvalues must be distinct")
+        if any(multiplicity < 1 for multiplicity in self.multiplicities):
+            raise ValueError("algebraic multiplicities must be positive")
+        if sum(self.multiplicities) != order:
+            raise ValueError("multiplicities must sum to the graph order")
+        replayed = (
+            adjacency_spectrum(self.graph)
+            if self.matrix_convention == "ADJACENCY"
+            else laplacian_spectrum(self.graph)
+        )
+        claimed = dict(zip(self.eigenvalues, self.multiplicities, strict=True))
+        if dict(replayed) != claimed:
+            raise ValueError("spectrum must be the exact spectrum of the source graph")
+        return self
 
 
 def _dense_to_canonical_polynomial(

@@ -204,15 +204,17 @@ def enumerate_concepts(ctx: FormalContext) -> list[dict[str, frozenset[int]]]:
     """Return every formal concept exactly once using Ganter's NextClosure
     algorithm over the declared attribute order.
 
-    The algorithm enumerates closed attribute intents in lectic order.
-    Each step requires O(n) derivation operations, so the total cost is
-    proportional to the number of concepts times n, not to 2^n.
+    The algorithm enumerates closed attribute intents in lectic order,
+    starting from ``attribute_closure(ctx, frozenset())`` because in a
+    general context the empty attribute set need not be closed; the least
+    closed intent is ``cl(∅) = ∅''``.  Each step requires O(n) derivation
+    operations, so the total cost is proportional to the number of concepts
+    times n, not to 2^n.
     """
     n = len(ctx.attributes)
     concepts: list[dict[str, frozenset[int]]] = []
 
-    # The empty set is always closed (it is the intent of the top concept).
-    current: frozenset[int] | None = frozenset()
+    current: frozenset[int] | None = attribute_closure(ctx, frozenset())
     while current is not None:
         intent = current
         extent = attribute_derivation(ctx, intent)

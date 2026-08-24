@@ -2,12 +2,35 @@
 
 from __future__ import annotations
 
+from math import lcm
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+
+# Derived integer scales that make rational capacities and costs exact
+# integers are intermediate growth, not input size: each denominator is
+# already bounded by the canonical rational limit, but the least common
+# multiple of up to 1,024 such denominators can grow far beyond what the
+# integer backend can expand. Requests whose derived scale exceeds this
+# documented conservative digit budget are rejected before any backend graph
+# is constructed.
+MAX_MIN_COST_FLOW_DERIVED_SCALE_DIGITS = 4096
+
+
+def _bounded_denominator_scale(denominators: tuple[int, ...], kind: str) -> int:
+    """Return the LCM of ``denominators`` under the derived-scale digit budget."""
+    scale = 1
+    for denominator in denominators:
+        scale = lcm(scale, abs(denominator))
+        if len(str(scale)) > MAX_MIN_COST_FLOW_DERIVED_SCALE_DIGITS:
+            raise ValueError(
+                f"the least common multiple of {kind} denominators exceeds the "
+                f"{MAX_MIN_COST_FLOW_DERIVED_SCALE_DIGITS}-digit derived-scale limit"
+            )
+    return scale
 
 
 class CapacitatedEdge(StrictModel):
@@ -187,6 +210,14 @@ class MinCostFlowRequest(StrictModel):
             raise ValueError("demands length must match vertex_count")
         if sum(self.demands) != 0:
             raise ValueError("demands must sum to zero")
+        capacity_denominators = tuple(
+            edge.capacity.as_integer_ratio()[1] for edge in self.graph.edges
+        )
+        cost_denominators = tuple(
+            edge.cost.as_integer_ratio()[1] for edge in self.graph.edges
+        )
+        _bounded_denominator_scale(capacity_denominators, "capacity")
+        _bounded_denominator_scale(cost_denominators, "cost")
         return self
 
 
@@ -199,10 +230,75 @@ class FlowEdgeResult(StrictModel):
 
 
 class MinCostFlowResult(StrictModel):
+    """The exact minimum-cost-flow outcome bound to its complete source network.
+
+    Retains the source graph and demands so validation replays the defining
+    relations instead of trusting an independently authored claim: every edge
+    flow lies between zero and its source capacity, every node balance equals
+    its source demand, and the objective is the exact cost of the returned
+    source-unit flows.  Infeasibility carries no flow or cost data.
+    """
+
+    graph: CostedFlowGraph
+    demands: tuple[int, ...] = Field(default=(), max_length=64)
     total_cost: CanonicalRational
     flow_edges: tuple[FlowEdgeResult, ...] = Field(default=())
     feasible: bool
     convention: Literal["NETWORKX_MIN_COST_FLOW"] = "NETWORKX_MIN_COST_FLOW"
+
+    @model_validator(mode="after")
+    def require_source_bound(self) -> Self:
+        from fractions import Fraction
+
+        if len(self.demands) != self.graph.vertex_count:
+            raise ValueError("demands length must match graph.vertex_count")
+        if sum(self.demands) != 0:
+            raise ValueError("demands must sum to zero")
+        if not self.feasible:
+            if self.flow_edges or self.total_cost.as_fraction() != 0:
+                raise ValueError(
+                    "an infeasible result carries no flow edges or nonzero cost"
+                )
+            return self
+
+        capacities: dict[tuple[int, int], Fraction] = {}
+        costs: dict[tuple[int, int], Fraction] = {}
+        for edge in self.graph.edges:
+            endpoints = (edge.source, edge.target)
+            capacities[endpoints] = edge.capacity.as_fraction()
+            costs[endpoints] = edge.cost.as_fraction()
+        balance = [Fraction(0)] * self.graph.vertex_count
+        objective = Fraction(0)
+        seen: set[tuple[int, int]] = set()
+        for flow_edge in self.flow_edges:
+            endpoints = (flow_edge.source, flow_edge.target)
+            if endpoints not in capacities:
+                raise ValueError(
+                    f"flow reported on undeclared edge {endpoints[0]}->{endpoints[1]}"
+                )
+            if endpoints in seen:
+                raise ValueError(
+                    f"edge {endpoints[0]}->{endpoints[1]} reported more than once"
+                )
+            seen.add(endpoints)
+            flow = flow_edge.flow.as_fraction()
+            if not 0 <= flow <= capacities[endpoints]:
+                raise ValueError(
+                    f"flow {flow} on edge {endpoints[0]}->{endpoints[1]} "
+                    f"violates the source capacity {capacities[endpoints]}"
+                )
+            balance[flow_edge.source] -= flow
+            balance[flow_edge.target] += flow
+            objective += costs[endpoints] * flow
+        for node, demand in enumerate(self.demands):
+            if balance[node] != demand:
+                raise ValueError(
+                    f"node {node} balance {balance[node]} does not equal "
+                    f"its source demand {demand}"
+                )
+        if objective != self.total_cost.as_fraction():
+            raise ValueError("total cost does not equal the cost of the returned flows")
+        return self
 
 
 class CirculationResult(StrictModel):

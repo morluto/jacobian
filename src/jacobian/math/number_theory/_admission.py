@@ -167,8 +167,8 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     ),
     OperationAdmission(
         "integer.decide.powerful",
-        AdmissionDecision.DROP,
-        "ordinary arithmetic or cheap projection of a retained exact factorization/divisor result",
+        AdmissionDecision.KEEP,
+        "bounded partial-factor and rough-cofactor certificate decides 25-digit inputs without complete factorization",
     ),
     OperationAdmission(
         "integer.decide.prime",
@@ -239,6 +239,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "number_theory.compute.legendre_symbol",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+    ),
+    OperationAdmission(
+        "number_theory.friable.count.compute",
+        AdmissionDecision.KEEP,
+        "complete exact friable count with result-sensitive materialized and generated regimes, avoiding caller-side factorization of every source integer",
     ),
 )
 

@@ -159,3 +159,27 @@ def test_evaluation_preflights_the_aggregate_denominator() -> None:
 
     with pytest.raises(ValidationError, match="aggregate denominator"):
         EvaluationRequest.model_validate({"form": form, "vector": vector})
+
+
+def test_form_schema_documents_coupled_axis_invariants() -> None:
+    properties = RationalQuadraticForm.model_json_schema()["properties"]
+
+    assert "labels must be unique" in properties["axis"]["description"]
+    assert (
+        "exactly one coefficient per axis label"
+        in properties["diagonal_coefficients"]["description"]
+    )
+    assert (
+        "every cross-term index must lie within the declared axis"
+        in properties["cross_terms"]["description"]
+    )
+
+
+def test_vector_schema_documents_coupled_axis_invariants() -> None:
+    properties = RationalCoordinateVector.model_json_schema()["properties"]
+
+    assert "labels must be unique" in properties["axis"]["description"]
+    assert (
+        "exactly one coordinate per axis label"
+        in properties["coordinates"]["description"]
+    )

@@ -54,6 +54,11 @@ class RationalQuadraticForm(StrictModel):
     The associated polar matrix is therefore ``B_ii=2*a_i`` and
     ``B_ij=c_ij``; its half-polar Gram matrix has diagonal ``a_i`` and
     off-diagonal ``c_ij/2``.  Neither derived matrix is independently stored.
+
+    Axis labels must be unique, ``diagonal_coefficients`` carries exactly one
+    coefficient per axis label, and every cross-term index must lie within
+    the declared axis; ``require_canonical_polynomial_presentation`` enforces
+    these coupled rules.
     """
 
     quadratic_form_schema_version: Literal["1"] = "1"
@@ -61,19 +66,28 @@ class RationalQuadraticForm(StrictModel):
     axis: tuple[OpaqueLabel, ...] = Field(
         min_length=1,
         max_length=MAX_QUADRATIC_FORM_DIMENSION,
-        description="Ordered coordinate labels for the polynomial variables.",
+        description=(
+            "Ordered coordinate labels for the polynomial variables; "
+            "labels must be unique."
+        ),
     )
     diagonal_coefficients: tuple[CanonicalRational, ...] = Field(
         min_length=1,
         max_length=MAX_QUADRATIC_FORM_DIMENSION,
-        description="Coefficient a_i of x_i^2 in the declared axis order.",
+        description=(
+            "Coefficient a_i of x_i^2 in the declared axis order; exactly "
+            "one coefficient per axis label."
+        ),
     )
     cross_terms: tuple[QuadraticCrossTerm, ...] = Field(
         default=(),
         max_length=MAX_QUADRATIC_FORM_DIMENSION
         * (MAX_QUADRATIC_FORM_DIMENSION - 1)
         // 2,
-        description="Nonzero x_i*x_j coefficients, strictly ordered by (left, right).",
+        description=(
+            "Nonzero x_i*x_j coefficients, strictly ordered by (left, right); "
+            "every cross-term index must lie within the declared axis."
+        ),
     )
 
     @model_validator(mode="after")
@@ -101,17 +115,30 @@ class RationalQuadraticForm(StrictModel):
 
 
 class RationalCoordinateVector(StrictModel):
-    """One exact coordinate vector on an explicitly ordered rational axis."""
+    """One exact coordinate vector on an explicitly ordered rational axis.
+
+    Axis labels must be unique, and ``coordinates`` carries exactly one
+    bounded rational per label in the declared order;
+    ``require_axis_bound_coordinates`` enforces these coupled rules.
+    """
 
     vector_schema_version: Literal["1"] = "1"
     domain: Literal["QQ"] = "QQ"
     axis: tuple[OpaqueLabel, ...] = Field(
         min_length=1,
         max_length=MAX_QUADRATIC_FORM_DIMENSION,
+        description=(
+            "Ordered labels of the rational coordinate axis; labels must "
+            "be unique."
+        ),
     )
     coordinates: tuple[CanonicalRational, ...] = Field(
         min_length=1,
         max_length=MAX_QUADRATIC_FORM_DIMENSION,
+        description=(
+            "Exact values x_i in the declared axis order; exactly one "
+            "coordinate per axis label."
+        ),
     )
 
     @model_validator(mode="after")

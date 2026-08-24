@@ -123,7 +123,35 @@ def test_result_bound_is_proved_from_the_accepted_input_envelope() -> None:
         _element(10**256, 0, 2)
 
 
-def test_embedding_operation_is_admitted_with_a_schema_visible_contract() -> None:
+def test_embedding_declaration_is_native_only_with_a_supported_symbol() -> None:
+    import importlib
+
+    from jacobian.catalog.admission import AdmissionDecision
+    from jacobian.math.arithmetic._admission import REGISTRATION
+
+    record = next(
+        admission
+        for admission in REGISTRATION.admissions
+        if admission.operation_id == "arithmetic.real_quadratic.embeddings.compute"
+    )
+
+    assert record.decision is AdmissionDecision.NATIVE_ONLY
+    module_name, _, symbol_name = record.native_symbol.rpartition(".")
+    module = importlib.import_module(module_name)
+    assert symbol_name in module.__all__
+    assert callable(getattr(module, symbol_name))
+
+
+def test_embedding_profile_is_not_served_by_the_public_catalog() -> None:
+    from jacobian.catalog.builtins import BUILTIN_TOOLS
+
+    ids = {tool.operation_id for tool in BUILTIN_TOOLS}
+
+    assert "arithmetic.real_quadratic.embeddings.compute" not in ids
+    assert "arithmetic.real_quadratic.order.compute" in ids
+
+
+def test_embedding_candidate_keeps_a_schema_visible_contract() -> None:
     tools = {tool.operation_id: tool for tool in REAL_QUADRATIC_OPERATIONS}
     tool = tools["arithmetic.real_quadratic.embeddings.compute"]
 

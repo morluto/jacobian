@@ -149,9 +149,7 @@ def test_graph_symmetry_estimate_bounds_heterogeneous_representatives() -> None:
     vertices = ["h" * 64] + [f"t{index:03d}" for index in range(255)]
     ring = vertices[1:]
     successor = dict(zip(ring, [*ring[1:], ring[0]], strict=True))
-    edges = sorted(
-        [a, b] if a < b else [b, a] for a, b in successor.items()
-    )
+    edges = sorted([a, b] if a < b else [b, a] for a, b in successor.items())
     mapping = {"h" * 64: "h" * 64}
     mapping.update(successor)
     payload = {
@@ -204,10 +202,7 @@ def test_graph_symmetry_nfc_request_wire_matches_canonicalized_result() -> None:
 
     dumped = result.model_dump(mode="json")
     assert len(encode_strict_json(dumped)) == len(canonicalize_json(dumped))
-    assert (
-        _estimate_orbit_result_wire_bytes(request)
-        >= len(canonicalize_json(dumped))
-    )
+    assert _estimate_orbit_result_wire_bytes(request) >= len(canonicalize_json(dumped))
 
 
 def test_graph_symmetry_result_rejects_incomplete_orbit_partition() -> None:

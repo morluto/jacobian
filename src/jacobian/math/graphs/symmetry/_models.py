@@ -154,8 +154,7 @@ def _estimate_orbit_result_wire_bytes(request: GraphSymmetryOrbitRequest) -> int
         len(encode_strict_json(request.model_dump(mode="json")))
         + 3 * sum(vertex_label_bytes)
         + 3 * sum(edge_pair_bytes)
-        + (len(vertex_label_bytes) + len(edge_pair_bytes))
-        * _ORBIT_STRUCTURE_WIRE_BYTES
+        + (len(vertex_label_bytes) + len(edge_pair_bytes)) * _ORBIT_STRUCTURE_WIRE_BYTES
         + sum(
             len(encode_strict_json(generator.generator_id)) + 4
             for generator in request.generators

@@ -218,6 +218,48 @@ def test_prime_factorization_result_rejects_mutations() -> None:
         PrimeFactorizationResult(value="0", factors=())
 
 
+def test_prime_factorization_result_bounds_reconstruction_work() -> None:
+    """Replay rejects reconstructions larger than the source before expanding."""
+
+    from jacobian.math.number_theory._models import PrimeFactorizationResult, PrimePower
+
+    with pytest.raises(ValidationError, match="multiply to abs"):
+        PrimeFactorizationResult(
+            value="3", factors=(PrimePower(prime="2", power=1000),)
+        )
+    with pytest.raises(ValidationError, match="multiply to abs"):
+        PrimeFactorizationResult(
+            value="6",
+            factors=(PrimePower(prime="2", power=1), PrimePower(prime="3", power=1000)),
+        )
+    with pytest.raises(ValidationError, match="multiply to abs"):
+        PrimeFactorizationResult(
+            value="1024",
+            factors=(
+                PrimePower(prime="2", power=10),
+                PrimePower(prime="3", power=999),
+                PrimePower(prime="5", power=999),
+            ),
+        )
+
+
+def test_prime_factorization_result_admits_full_width_source_power() -> None:
+    """A source-width prime power still reconstructs exactly."""
+
+    from jacobian.math.number_theory._models import PrimeFactorizationResult
+
+    width = 256
+    exponent = 849
+    result = PrimeFactorizationResult.model_validate(
+        {
+            "value": str(2**exponent),
+            "factors": [{"prime": "2", "power": exponent}],
+        }
+    )
+    assert len(result.value) == width
+    assert int(result.factors[0].prime) ** result.factors[0].power == 2**exponent
+
+
 def test_producer_results_serialize_and_reconstruct() -> None:
     """Producer output round-trips and reconstructs its exact source."""
 

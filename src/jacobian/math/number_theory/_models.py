@@ -527,6 +527,7 @@ class PrimeFactorizationResult(StrictModel):
         value = int(self.value)
         if value == 0:
             raise ValueError("zero has no finite prime factorization")
+        target = abs(value)
         product = 1
         previous_prime = 0
         for factor in self.factors:
@@ -535,9 +536,16 @@ class PrimeFactorizationResult(StrictModel):
                 raise ValueError("prime bases must be strictly ascending")
             if prime < 2 or not isprime(prime):
                 raise ValueError(f"{factor.prime} is not prime")
-            product *= prime**factor.power
+            power_value = 1
+            for _ in range(factor.power):
+                power_value *= prime
+                if power_value > target:
+                    raise ValueError("prime powers must multiply to abs(value)")
+            product *= power_value
+            if product > target:
+                raise ValueError("prime powers must multiply to abs(value)")
             previous_prime = prime
-        if product != abs(value):
+        if product != target:
             raise ValueError("prime powers must multiply to abs(value)")
         return self
 

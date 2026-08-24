@@ -189,16 +189,24 @@ def require_set_system_output_bound(code: ExplicitBinaryCode) -> int:
     return bound
 
 
-def require_word_distance_output_bound(length: int) -> int:
-    bound = (
-        2 * _binary_word_wire_bytes(length)
-        + _coordinate_axis_wire_bytes(length)
-        + 1_024
-    )
+def _differing_coordinate_wire_bytes(word1: BinaryWord, word2: BinaryWord) -> int:
+    coordinate_digits = 0
+    differing_count = 0
+    for coordinate, (left, right) in enumerate(zip(word1, word2, strict=True)):
+        if left != right:
+            differing_count += 1
+            coordinate_digits += _digits(coordinate)
+    return 2 + coordinate_digits + max(0, differing_count - 1)
+
+
+def require_word_distance_output_bound(word1: BinaryWord, word2: BinaryWord) -> int:
+    differing_bytes = _differing_coordinate_wire_bytes(word1, word2)
+    bound = 2 * _binary_word_wire_bytes(len(word1)) + differing_bytes + 1_024
     if bound > MAX_CODE_RESULT_BYTES:
         raise ValueError(
             "word-distance result can use up to "
-            f"{bound} canonical JSON bytes, exceeding the "
+            f"{bound} canonical JSON bytes including {differing_bytes} bytes of "
+            f"differing coordinates, exceeding the "
             f"{MAX_CODE_RESULT_BYTES}-byte result bound"
         )
     return bound

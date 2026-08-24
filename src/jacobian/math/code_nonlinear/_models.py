@@ -145,7 +145,7 @@ class WordDistanceRequest(StrictModel):
     def require_valid_words(self) -> Self:
         if len(self.word1) != len(self.word2):
             raise ValueError("words must have equal length")
-        require_word_distance_output_bound(len(self.word1))
+        require_word_distance_output_bound(self.word1, self.word2)
         return self
 
 
@@ -166,7 +166,7 @@ class WordDistanceResult(StrictModel):
 
         if not self.word1 or len(self.word1) != len(self.word2):
             raise ValueError("result words must be nonempty and have equal length")
-        require_word_distance_output_bound(len(self.word1))
+        require_word_distance_output_bound(self.word1, self.word2)
         expected = _word_distance_data(self.word1, self.word2)
         if (
             self.distance,

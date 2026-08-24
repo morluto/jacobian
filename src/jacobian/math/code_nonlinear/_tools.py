@@ -101,7 +101,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "code.binary.word_distance.compute",
         "Compute Hamming distance between two binary words",
-        "Compute the exact Hamming distance, differing coordinates, weights, and support intersection of two equal-length binary words.",
+        "Compute the exact Hamming distance, differing coordinates, weights, and support intersection of two equal-length binary words; the exact result is bounded by the retained words plus their actual differing coordinates.",
         WordDistanceRequest,
         WordDistanceResult,
         compute_word_distance,

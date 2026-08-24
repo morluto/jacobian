@@ -19,6 +19,7 @@ from jacobian.math.code_nonlinear._budget import (
     PROFILE_PAIR_PASSES,
     require_constant_weight_admission,
     require_profile_admission,
+    require_word_distance_output_bound,
     source_wire_upper_bound,
 )
 from jacobian.math.code_nonlinear._models import (
@@ -33,6 +34,7 @@ from jacobian.math.code_nonlinear._models import (
     ToSetSystemRequest,
     ToSetSystemResult,
     WordDistanceRequest,
+    WordDistanceResult,
 )
 from jacobian.math.code_nonlinear._operations import (
     compute_constant_weight,
@@ -207,6 +209,60 @@ class TestWordDistance:
             if tool.operation_id == "code.binary.word_distance.compute"
         )
         assert operation.version == "2"
+
+    def test_identical_maximal_words_admit_result_sensitive_bound(self) -> None:
+        word = [0] * MAX_EXPLICIT_CODE_LENGTH
+        result = compute_word_distance(WordDistanceRequest(word1=word, word2=word))
+        assert result.distance == 0
+        assert result.differing_coordinates == ()
+        assert result.weight1 == result.weight2 == 0
+        assert result.support_intersection == 0
+        replayed = WordDistanceResult.model_validate(result.model_dump(mode="json"))
+        assert replayed == result
+
+    def test_word_distance_output_bound_covers_the_canonical_result(self) -> None:
+        word = [0] * MAX_EXPLICIT_CODE_LENGTH
+        result = compute_word_distance(WordDistanceRequest(word1=word, word2=word))
+        bound = require_word_distance_output_bound(word, word)
+        assert len(encode_strict_json(result.model_dump(mode="json"))) <= bound
+        assert bound <= MAX_CODE_RESULT_BYTES
+
+    def test_all_different_maximal_words_still_exceed_the_result_bound(self) -> None:
+        left = [0] * MAX_EXPLICIT_CODE_LENGTH
+        right = [1] * MAX_EXPLICIT_CODE_LENGTH
+        with pytest.raises(ValidationError, match="5657085"):
+            WordDistanceRequest(word1=left, word2=right)
+        payload = {
+            "word1": left,
+            "word2": right,
+            "distance": MAX_EXPLICIT_CODE_LENGTH,
+            "differing_coordinates": list(range(MAX_EXPLICIT_CODE_LENGTH)),
+            "weight1": 0,
+            "weight2": MAX_EXPLICIT_CODE_LENGTH,
+            "support_intersection": 0,
+        }
+        with pytest.raises(ValidationError, match="result bound"):
+            WordDistanceResult.model_validate(payload)
+
+    def test_differing_coordinate_wire_size_tracks_actual_difference_positions(
+        self,
+    ) -> None:
+        left = [0] * MAX_EXPLICIT_CODE_LENGTH
+        low = [0] * MAX_EXPLICIT_CODE_LENGTH
+        for index in range(200_000):
+            low[index] = 1
+        admitted = WordDistanceRequest(word1=left, word2=low)
+        assert (
+            sum(a != b for a, b in zip(admitted.word1, admitted.word2, strict=True))
+            == 200_000
+        )
+        high = [0] * MAX_EXPLICIT_CODE_LENGTH
+        for index in range(
+            MAX_EXPLICIT_CODE_LENGTH - 300_000, MAX_EXPLICIT_CODE_LENGTH
+        ):
+            high[index] = 1
+        with pytest.raises(ValidationError, match="result bound"):
+            WordDistanceRequest(word1=left, word2=high)
 
 
 class TestExplicitProfile:

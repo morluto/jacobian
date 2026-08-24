@@ -28,6 +28,13 @@ EXPANDED_XYZ_TERMS = [
     {"coefficient": {"num": "1", "den": "1"}, "exponents": [0, 1, 1]},
 ]
 
+CUBIC_WITH_XYZ_TERMS = [
+    {"coefficient": {"num": "1", "den": "1"}, "exponents": [3, 0, 0]},
+    {"coefficient": {"num": "1", "den": "1"}, "exponents": [1, 1, 1]},
+    {"coefficient": {"num": "1", "den": "1"}, "exponents": [0, 3, 0]},
+    {"coefficient": {"num": "1", "den": "1"}, "exponents": [0, 0, 3]},
+]
+
 
 def _sparse_request(terms: list[dict[str, Any]], max_degree: int) -> dict[str, Any]:
     return {
@@ -58,6 +65,13 @@ def _ledger_payload() -> dict[str, Any]:
         _sparse_request(FERMAT_QUADRATIC_TERMS, 0)
     )
     return compute_graded_jacobian_syzygy_coefficients(request).model_dump(mode="json")
+
+
+def _cubic_none_payload() -> dict[str, Any]:
+    request = GradedJacobianSyzygyRequest.model_validate(
+        _sparse_request(CUBIC_WITH_XYZ_TERMS, 0)
+    )
+    return compute_graded_jacobian_syzygy(request).model_dump(mode="json")
 
 
 def _swap_in_foreign_source(payload: dict[str, Any]) -> None:
@@ -96,6 +110,32 @@ def _mutate_kernel_multiplier_encoding(payload: dict[str, Any]) -> None:
     payload["kernel_witness"]["multipliers"][0]["polynomial"]["terms"][0][
         "coefficient"
     ]["num"] = "2"
+
+
+def _claim_alternate_full_rank_minor(payload: dict[str, Any]) -> None:
+    payload["degree_maps"][0]["rank_minor"] = {
+        "row_indices": [3, 4, 5],
+        "column_indices": [0, 1, 2],
+        "determinant": {"num": "-9", "den": "1"},
+    }
+
+
+def _forge_alternate_minor_determinant(payload: dict[str, Any]) -> None:
+    _claim_alternate_full_rank_minor(payload)
+    payload["degree_maps"][0]["rank_minor"]["determinant"] = {
+        "num": "999",
+        "den": "1",
+    }
+
+
+def _claim_rank_deficient_minor_with_nonzero_determinant(
+    payload: dict[str, Any],
+) -> None:
+    payload["degree_maps"][0]["rank_minor"] = {
+        "row_indices": [0, 1, 4],
+        "column_indices": [0, 1, 2],
+        "determinant": {"num": "27", "den": "1"},
+    }
 
 
 def test_syzygy_kernel_rejects_an_incomplete_linear_factor_request() -> None:
@@ -189,6 +229,36 @@ def test_syzygy_result_rejects_an_altered_rank_minor_determinant() -> None:
         "num": "999",
         "den": "1",
     }
+
+    with pytest.raises(ValueError, match="rank minor"):
+        GradedJacobianSyzygyResult.model_validate(payload)
+
+
+def test_syzygy_result_accepts_any_replayed_full_rank_minor() -> None:
+    payload = _cubic_none_payload()
+    assert payload["degree_maps"][0]["rank_minor"]["row_indices"] == [0, 1, 2]
+    _claim_alternate_full_rank_minor(payload)
+
+    validated = GradedJacobianSyzygyResult.model_validate(payload)
+
+    minor = validated.degree_maps[0].rank_minor
+    assert minor is not None
+    assert minor.row_indices == (3, 4, 5)
+    assert minor.column_indices == (0, 1, 2)
+    assert minor.determinant.num == "-9"
+
+
+def test_syzygy_result_rejects_a_forged_alternate_minor_determinant() -> None:
+    payload = _cubic_none_payload()
+    _forge_alternate_minor_determinant(payload)
+
+    with pytest.raises(ValueError, match="rank minor"):
+        GradedJacobianSyzygyResult.model_validate(payload)
+
+
+def test_syzygy_result_rejects_a_rank_deficient_claimed_minor() -> None:
+    payload = _cubic_none_payload()
+    _claim_rank_deficient_minor_with_nonzero_determinant(payload)
 
     with pytest.raises(ValueError, match="rank minor"):
         GradedJacobianSyzygyResult.model_validate(payload)

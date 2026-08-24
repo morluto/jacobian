@@ -289,17 +289,13 @@ def _require_replayed_degree_maps(
             raise ValueError("rank claims do not match the replayed graded map")
         if not rank:
             continue
-        independent_rows = matrix[:, list(pivot_columns)].T.rref()[1]
-        row_indices = tuple(int(index) for index in independent_rows)
-        column_indices = tuple(int(index) for index in pivot_columns)
-        determinant = matrix.extract(row_indices, column_indices).det()
         minor = item.rank_minor
-        if (
-            minor is None
-            or minor.row_indices != row_indices
-            or minor.column_indices != column_indices
-            or minor.determinant.as_fraction() != Fraction(determinant)
-        ):
+        if minor is None:
+            raise ValueError("positive rank requires one bound full-rank minor")
+        claimed_determinant = matrix.extract(
+            minor.row_indices, minor.column_indices
+        ).det()
+        if minor.determinant.as_fraction() != Fraction(claimed_determinant):
             raise ValueError("rank minor does not certify the replayed map")
     return matrices
 

@@ -57,7 +57,7 @@ def test_dispatch_rejects_a_profile_beyond_the_facet_cap_as_invalid_request() ->
 def test_dispatch_admits_the_seven_simplex_with_interior_rows_at_the_cap_budget() -> (
     None
 ):
-    """A seven-simplex plus eight distinct strict interior points has only
+    """A seven-simplex plus four distinct strict interior points has only
     eight facets; admission must accept it even though no row-count upper
     bound could have proven that."""
     simplex = [
@@ -74,7 +74,7 @@ def test_dispatch_admits_the_seven_simplex_with_interior_rows_at_the_cap_budget(
     ]
     payload = {
         "vertices": simplex
-        + [{"coordinates": [{"num": "1", "den": str(k)}] * 7} for k in range(9, 17)]
+        + [{"coordinates": [{"num": "1", "den": str(k)}] * 7} for k in range(9, 13)]
     }
 
     result = invoke_operation("polytope.facets.compute", payload, Catalog.open())

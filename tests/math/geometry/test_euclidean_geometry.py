@@ -127,7 +127,7 @@ class TestRationalWeightTriangulation:
             },
         )
 
-        with pytest.raises(ValidationError, match="split-table ledger sums"):
+        with pytest.raises(ValidationError, match="split-table state"):
             ConvexPolygonTriangulationRequest(
                 polygon={"points": self._ring(*self._PENTAGON)},
                 diagonal_weights=weights,
@@ -188,17 +188,40 @@ class TestRationalWeightTriangulation:
         )
         assert validated.optimum.as_fraction() == 0
 
-    def test_noncrossing_large_weight_pair_is_still_rejected(self):
-        # The same two large denominators on the noncrossing pair
-        # ((0,2), (0,3)) fit inside one feasible triangulation, so their
-        # combined ledger growth genuinely exceeds the canonical cap.
+    def test_shared_denominator_weights_stay_admitted_with_ledger_invariant(self):
+        # Every non-hull diagonal carries the same 20,001-digit denominator,
+        # so each retained ledger optimum is k/P with that same denominator -
+        # shared factors cancel and height multiplication would over-reject.
         denominator = format_canonical_integer(10**20000 + 5)
         weights = self._weights(
             self._PENTAGON_DIAGONALS,
-            {(0, 2): ("1", denominator), (0, 3): ("1", denominator)},
+            dict.fromkeys(self._PENTAGON_DIAGONALS, ("1", denominator)),
         )
 
-        with pytest.raises(ValidationError, match="split-table ledger sums"):
+        request = ConvexPolygonTriangulationRequest(
+            polygon={"points": self._ring(*self._PENTAGON)},
+            diagonal_weights=weights,
+        )
+        result = minimum_weight_triangulation(request)
+
+        assert result.optimum.as_fraction() == Fraction(2, 10**20000 + 5)
+        for entry in result.split_table:
+            assert len(entry.optimum.den) == 20001
+
+    def test_noncrossing_large_weight_pair_is_still_rejected(self):
+        # Distinct large denominators on the noncrossing pair ((0,2), (0,3))
+        # are forced into one retained ledger sum by w(1,3)=1, so their
+        # reduced product denominator genuinely exceeds the canonical cap.
+        weights = self._weights(
+            self._PENTAGON_DIAGONALS,
+            {
+                (0, 2): ("1", format_canonical_integer(10**20000 + 5)),
+                (0, 3): ("1", format_canonical_integer(10**20000 + 7)),
+                (1, 3): ("1", "1"),
+            },
+        )
+
+        with pytest.raises(ValidationError, match="split-table state"):
             ConvexPolygonTriangulationRequest(
                 polygon={"points": self._ring(*self._PENTAGON)},
                 diagonal_weights=weights,
@@ -230,20 +253,49 @@ class TestRationalWeightTriangulation:
         assert len(entry.optimum.den) <= 32_768
         assert result.optimum.as_fraction() == 0
 
-    def test_one_digit_taller_pair_is_rejected_at_request_validation(self):
+    def test_cap_crossing_forced_sum_is_rejected_at_request_validation(self):
+        # w(1,3)=1 forces the (0,3) ledger optimum onto the sum of two
+        # 16,385-digit denominators whose reduced product has 32,769 digits.
+        weights = self._weights(
+            self._PENTAGON_DIAGONALS,
+            {
+                (0, 2): ("1", format_canonical_integer(10**16384 + 1)),
+                (0, 3): ("1", format_canonical_integer(10**16384 + 3)),
+                (1, 3): ("1", "1"),
+            },
+        )
+
+        with pytest.raises(ValidationError, match="split-table state"):
+            ConvexPolygonTriangulationRequest(
+                polygon={"points": self._ring(*self._PENTAGON)},
+                diagonal_weights=weights,
+            )
+
+    def test_boundary_height_pair_stays_admitted_at_the_exact_cap(self):
+        # The same forced shape one digit below the cap stays admitted: the
+        # retained (0,3) optimum is the exact two-term sum, still representable.
         weights = self._weights(
             self._PENTAGON_DIAGONALS,
             {
                 (0, 2): ("1", format_canonical_integer(10**16383 + 1)),
                 (0, 3): ("1", format_canonical_integer(10**16384 + 3)),
+                (1, 3): ("1", "1"),
             },
         )
 
-        with pytest.raises(ValidationError, match="split-table ledger sums"):
-            ConvexPolygonTriangulationRequest(
-                polygon={"points": self._ring(*self._PENTAGON)},
-                diagonal_weights=weights,
-            )
+        request = ConvexPolygonTriangulationRequest(
+            polygon={"points": self._ring(*self._PENTAGON)},
+            diagonal_weights=weights,
+        )
+        result = minimum_weight_triangulation(request)
+
+        entry = next(
+            item for item in result.split_table if (item.start, item.end) == (0, 3)
+        )
+        assert entry.optimum.as_fraction() == Fraction(1, 10**16383 + 1) + Fraction(
+            1, 10**16384 + 3
+        )
+        assert len(entry.optimum.den) <= 32_768
 
     _REVIEW_PENTAGON = ((0, 0), (2, 0), (3, 1), (2, 3), (0, 2))
     _REVIEW_PENTAGON_DIAGONALS = ((0, 2), (0, 3), (1, 3), (1, 4), (2, 4))
@@ -275,7 +327,7 @@ class TestRationalWeightTriangulation:
         # so anchoring (0,2) hid the coexisting 20,001-digit denominator on
         # (0,3); admission accepted these weights and serializing the ledger
         # sum later raised inside CanonicalRational instead.
-        with pytest.raises(ValidationError, match="split-table ledger sums"):
+        with pytest.raises(ValidationError, match="split-table state"):
             ConvexPolygonTriangulationRequest(
                 polygon={"points": self._ring(*self._REVIEW_PENTAGON)},
                 diagonal_weights=self._mixed_extreme_weights(10**20000),

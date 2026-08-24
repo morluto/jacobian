@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from fractions import Fraction
 from itertools import combinations
 from typing import Literal, Self
@@ -783,99 +784,77 @@ class WeightedPolygonDiagonal(StrictModel):
         return self
 
 
+def _triangulation_subproblem_costs(
+    count: int,
+    weight: Callable[[int, int], Fraction],
+) -> tuple[dict[tuple[int, int], Fraction], dict[tuple[int, int], int]]:
+    """Derive every convex-subpolygon minimum and split for one polygon size.
+
+    The recurrence charges ``weight(start, end)`` at state ``(start, end)``
+    itself: every non-hull diagonal is the boundary of exactly one non-root
+    subpolygon, so each selected diagonal is counted exactly once and the
+    root optimum equals the minimum non-hull-diagonal weight sum. Admission
+    replays this same derivation so it can never diverge from execution.
+    """
+
+    optimum: dict[tuple[int, int], Fraction] = {
+        (index, index + 1): Fraction() for index in range(count - 1)
+    }
+    split: dict[tuple[int, int], int] = {}
+    for span in range(2, count):
+        for start in range(count - span):
+            end = start + span
+            candidates = [
+                (
+                    optimum[start, pivot] + optimum[pivot, end] + weight(start, end),
+                    pivot,
+                )
+                for pivot in range(start + 1, end)
+            ]
+            value, pivot = min(candidates)
+            optimum[start, end] = value
+            split[start, end] = pivot
+    return optimum, split
+
+
 def _require_bounded_split_table_rationals(
     count: int,
     diagonal_weights: tuple[WeightedPolygonDiagonal, ...],
 ) -> None:
     """Preflight every derived split-table rational against the canonical cap.
 
-    Under the boundary-inclusive recurrence one split-table entry - and each
-    pre-selection candidate behind it - is the exact sum of the weights of
-    one subpolygon's selected triangulation: at most ``m = count - 3``
-    distinct nonzero terms whose diagonal set is pairwise noncrossing, and
-    every noncrossing diagonal set extends to a full triangulation, so the
-    feasible term sets are exactly the subpolygon triangulations of this
-    ring. Arbitrary weight subsets are not feasible: crossing diagonals
-    cannot share one ledger sum. For a term set ``T`` whose term ``i`` has
-    numerator height ``nd_i`` and denominator height ``dd_i``, any such
-    reduced sum obeys
-
-    - ``digits(den) <= sum(dd_i for i in T)``, since the reduced denominator
-      divides the product common denominator; and
-    - ``digits(num) <= max(nd_i - dd_i) + sum(dd_i) + log10(|T|) + 1``,
-      since the unreduced numerator over that common denominator is
-      ``sum(a_i * prod(b_j for j != i))``, canonical reduction only shrinks
-      it, and the height-dominating anchor contributes ``nd_i - dd_i`` of
-      the aggregate.
-
-    Both sums are therefore maximized - over exactly the feasible sets - by
-    maximum-height triangulations, which the classic cubic interval DP
-    decides for a convex ring: the first bound is the tallest full
-    triangulation under denominator heights, and the second anchors each
-    single weight against the tallest triangulations of its two open sides
-    (whose total already contains the anchor's denominator height).
-    Admission evaluates exactly those two quantities here and rejects
-    requests that could materialize an unrepresentable ledger value even
-    when their final optimum would be small.
+    Admission replays the bounded recurrence exactly and checks each retained
+    ledger optimum - the values the result model serializes - against the
+    shared canonical rational cap. Reduced sums of compatible weights need
+    not grow: shared denominator factors cancel, so multiplying component
+    heights would reject requests whose actual ledger values remain
+    representable. A request is rejected only when a state the result must
+    serialize genuinely exceeds the cap.
     """
 
-    if all(item.weight.as_fraction() == 0 for item in diagonal_weights):
-        return
-    heights = {
-        (item.first, item.second): (
-            len(item.weight.den),
-            len(item.weight.num.lstrip("-")),
-        )
+    weights = {
+        (item.first, item.second): item.weight.as_fraction()
         for item in diagonal_weights
     }
 
-    def _closing_height(start: int, length: int) -> int:
-        pair = (start % count, (start + length - 1) % count)
-        ordered = (min(pair), max(pair))
-        if ordered[1] == ordered[0] + 1 or ordered == (0, count - 1):
-            return 0
-        return heights[ordered][0]
+    def diagonal_cost(first: int, second: int) -> Fraction:
+        if second == first + 1 or (first, second) == (0, count - 1):
+            return Fraction()
+        return weights[first, second]
 
-    # Region states over cyclic intervals: ``open_region`` bounds one
-    # region's interior triangulation height, excluding the region's own
-    # closing chord; ``closed_region`` charges that closing chord once, so
-    # each genuine diagonal is counted by exactly one region - the same
-    # once-per-boundary accounting the recurrence itself performs.
-    open_region: dict[tuple[int, int], int] = {}
-    closed_region: dict[tuple[int, int], int] = {}
-    for length in range(1, count + 1):
-        for start in range(count):
-            if length <= 2:
-                open_region[start, length] = 0
-                closed_region[start, length] = 0
-                continue
-            best_interior = max(
-                closed_region[start, split + 1]
-                + closed_region[(start + split) % count, length - split]
-                for split in range(1, length - 1)
-            )
-            closing = _closing_height(start, length)
-            open_region[start, length] = best_interior
-            closed_region[start, length] = best_interior + closing
-
-    den_bound = closed_region[0, count]
-    anchored = max(
-        heights[pair][1]
-        + open_region[pair[0], pair[1] - pair[0] + 1]
-        + open_region[pair[1], count - pair[1] + pair[0] + 1]
-        for pair in heights
-    )
-    slack = len(str(count - 3)) + 1
-    worst = max(den_bound, anchored + slack)
-    if worst > MAX_CANONICAL_RATIONAL_DIGITS:
-        raise ValueError(
-            "triangulation split-table ledger sums reach "
-            f"{worst}-digit rational components in the worst case "
-            f"(maximum feasible-triangulation growth over {count - 3} "
-            f"selected diagonal weights), exceeding the canonical "
-            f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit rational limit; reduce "
-            "diagonal-weight component height or vertex count"
+    optimum, _ = _triangulation_subproblem_costs(count, diagonal_cost)
+    for start, end in sorted(optimum):
+        value = optimum[start, end]
+        digits = max(
+            len(format_canonical_integer(value.numerator)),
+            len(format_canonical_integer(value.denominator)),
         )
+        if digits > MAX_CANONICAL_RATIONAL_DIGITS:
+            raise ValueError(
+                f"split-table state ({start}, {end}) carries {digits}-digit "
+                f"rational components, exceeding the canonical "
+                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit rational limit"
+            )
 
 
 class ConvexPolygonTriangulationRequest(StrictModel):
@@ -889,9 +868,8 @@ class ConvexPolygonTriangulationRequest(StrictModel):
                 "weight per non-hull diagonal. Each split-table state sums "
                 "one feasible subpolygon triangulation - at most vertex_count "
                 "- 3 pairwise noncrossing selected weights - so admission "
-                "preflights the worst-case digit growth over maximum-height "
-                "feasible triangulations and rejects requests whose "
-                "intermediate ledger rationals could exceed the canonical "
+                "replays the bounded recurrence exactly and rejects requests "
+                "whose derived split-table rationals exceed the canonical "
                 "32,768-digit rational limit."
             ),
         },
@@ -903,9 +881,9 @@ class ConvexPolygonTriangulationRequest(StrictModel):
         max_length=464,
         description=(
             "Exactly one nonnegative exact rational weight per non-hull "
-            "diagonal in lexicographic pair order; feasible-triangulation "
-            "growth over these heights must keep every derived split-table "
-            "rational inside the canonical 32,768-digit limit."
+            "diagonal in lexicographic pair order; the exact derived "
+            "split-table rationals must stay inside the canonical "
+            "32,768-digit limit."
         ),
     )
     objective: Literal["NON_HULL_DIAGONAL_WEIGHT_SUM"] = "NON_HULL_DIAGONAL_WEIGHT_SUM"

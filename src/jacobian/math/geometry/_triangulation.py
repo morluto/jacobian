@@ -12,6 +12,7 @@ from jacobian.math.geometry._models import (
     PolygonTriangle,
     TriangulationSplitEntry,
     WeightedPolygonDiagonal,
+    _triangulation_subproblem_costs,
 )
 
 
@@ -37,36 +38,17 @@ def minimum_weight_triangulation(
             return Fraction()
         return weights[pair]
 
-    optimum: dict[tuple[int, int], Fraction] = {
-        (index, index + 1): Fraction() for index in range(count - 1)
-    }
-    split: dict[tuple[int, int], int] = {}
+    optimum, split = _triangulation_subproblem_costs(count, edge_weight)
     ledger: list[TriangulationSplitEntry] = []
     for span in range(2, count):
         for start in range(count - span):
             end = start + span
-            candidates = [
-                (
-                    optimum[start, pivot]
-                    + optimum[pivot, end]
-                    # Every non-hull diagonal is the boundary of exactly one
-                    # non-root subproblem.  Charging that boundary here counts
-                    # it once; charging the two child boundaries counts a
-                    # selected diagonal again when it becomes a child boundary.
-                    + edge_weight(start, end),
-                    pivot,
-                )
-                for pivot in range(start + 1, end)
-            ]
-            value, pivot = min(candidates)
-            optimum[start, end] = value
-            split[start, end] = pivot
             ledger.append(
                 TriangulationSplitEntry(
                     start=start,
                     end=end,
-                    split=pivot,
-                    optimum=_wire(value),
+                    split=split[start, end],
+                    optimum=_wire(optimum[start, end]),
                 )
             )
 

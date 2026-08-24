@@ -17,8 +17,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     ),
     OperationAdmission(
         "dirichlet_character.principal.value.compute",
-        AdmissionDecision.KEEP,
-        "source-bound exact character evaluation preserves the supplied canonical character identity",
+        AdmissionDecision.NATIVE_ONLY,
+        "cheap deterministic projection of the retained exact principal-character table, kept through the supported native API",
+        native_symbol=(
+            "jacobian.math.dirichlet_characters.principal_dirichlet_character_value"
+        ),
     ),
 )
 

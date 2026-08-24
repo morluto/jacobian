@@ -10,6 +10,7 @@ from jacobian.math.dirichlet_characters import (
     principal_dirichlet_character_value,
 )
 from jacobian.math.dirichlet_characters._models import (
+    MAX_INTEGER_DIGITS,
     PrincipalDirichletCharacterRequest,
     PrincipalDirichletCharacterValueRequest,
     PrincipalDirichletCharacterValueResult,
@@ -108,6 +109,37 @@ def test_value_request_rejects_noncanonical_negative_zero() -> None:
         )
 
 
+def test_integer_digit_bound_ignores_the_minus_sign() -> None:
+    character = principal_dirichlet_character(12)
+    digits = "9" * MAX_INTEGER_DIGITS
+
+    positive = compute_principal_dirichlet_character_value(
+        PrincipalDirichletCharacterValueRequest(character=character, integer=digits)
+    )
+    negative = compute_principal_dirichlet_character_value(
+        PrincipalDirichletCharacterValueRequest(
+            character=character, integer=f"-{digits}"
+        )
+    )
+
+    assert positive.canonical_residue == 3
+    assert negative.canonical_residue == 9
+    assert not positive.is_unit
+    assert not negative.is_unit
+    assert positive.value == negative.value == 0
+
+
+@pytest.mark.parametrize(
+    "integer",
+    ["9" * (MAX_INTEGER_DIGITS + 1), "-" + "9" * (MAX_INTEGER_DIGITS + 1)],
+)
+def test_value_request_rejects_integers_beyond_the_digit_bound(integer: str) -> None:
+    with pytest.raises(ValidationError, match="digit bound"):
+        PrincipalDirichletCharacterValueRequest(
+            character=principal_dirichlet_character(12), integer=integer
+        )
+
+
 def test_modulus_boundary_is_complete_and_next_value_is_rejected() -> None:
     character = principal_dirichlet_character(MAX_PRINCIPAL_CHARACTER_MODULUS)
 
@@ -129,3 +161,38 @@ def test_catalog_declares_the_composable_principal_operations() -> None:
         "dirichlet_character.principal.value.compute",
     )
     assert all(tool.version == "1" for tool in TOOLS)
+
+
+def test_admission_classifies_table_lookup_as_native_only() -> None:
+    from jacobian.catalog.admission import AdmissionDecision
+    from jacobian.math.dirichlet_characters._admission import ADMISSIONS
+
+    record = next(
+        entry
+        for entry in ADMISSIONS
+        if entry.operation_id == "dirichlet_character.principal.value.compute"
+    )
+
+    assert record.decision is AdmissionDecision.NATIVE_ONLY
+    assert (
+        record.native_symbol
+        == "jacobian.math.dirichlet_characters.principal_dirichlet_character_value"
+    )
+
+
+def test_published_catalog_keeps_only_the_complete_table_operation() -> None:
+    from jacobian.catalog.admission import curate_public_tools
+    from jacobian.math.dirichlet_characters._admission import ADMISSIONS
+
+    published = tuple(
+        tool.operation_id for tool in curate_public_tools(TOOLS, ADMISSIONS)
+    )
+
+    assert published == ("dirichlet_character.principal.compute",)
+
+
+def test_value_native_symbol_is_supported_by_the_public_module() -> None:
+    import jacobian.math.dirichlet_characters as public_module
+
+    assert "principal_dirichlet_character_value" in public_module.__all__
+    assert callable(public_module.principal_dirichlet_character_value)

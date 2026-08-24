@@ -5,7 +5,14 @@ from __future__ import annotations
 import math
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
+from pydantic import (
+    AfterValidator,
+    Field,
+    StrictBool,
+    StrictInt,
+    StringConstraints,
+    model_validator,
+)
 
 from jacobian._models import StrictModel
 from jacobian.math.dirichlet_characters.values import (
@@ -14,13 +21,21 @@ from jacobian.math.dirichlet_characters.values import (
 )
 
 MAX_INTEGER_DIGITS = 256
+
+
+def _require_bounded_digits(value: str) -> str:
+    if len(value.lstrip("-")) > MAX_INTEGER_DIGITS:
+        raise ValueError(f"integer exceeds the {MAX_INTEGER_DIGITS}-digit bound")
+    return value
+
+
 CanonicalInteger = Annotated[
     str,
     StringConstraints(
         pattern=r"^(?:0|-?[1-9][0-9]*)$",
-        max_length=MAX_INTEGER_DIGITS,
         strict=True,
     ),
+    AfterValidator(_require_bounded_digits),
 ]
 
 

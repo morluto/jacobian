@@ -250,6 +250,32 @@ def test_source_bound_result_versions_track_wire_shape() -> None:
     assert versions["code.covering_radius.compute"] == "2"
 
 
+def test_zero_code_result_replays_the_documented_length_convention() -> None:
+    from jacobian.math.code_theory._models import MinimumDistanceResult
+
+    request = LinearCodeRequest(field_order=2, generator_matrix=((0, 0, 0),))
+    result = compute_min_distance(request)
+
+    assert result.minimum_distance == 3
+    assert MinimumDistanceResult.model_validate(result.model_dump()) == result
+    description = MinimumDistanceResult.model_json_schema()["description"]
+    assert "empty-code convention" in description
+
+
+def test_forged_zero_code_distance_is_rejected() -> None:
+    from jacobian.math.code_theory._models import MinimumDistanceResult
+
+    request = LinearCodeRequest(field_order=2, generator_matrix=((0, 0, 0),))
+    forged = {
+        "request": request.model_dump(),
+        "method": "EXACT_ENUMERATION",
+        "minimum_distance": 2,
+    }
+
+    with pytest.raises(ValidationError, match="exact enumeration"):
+        MinimumDistanceResult.model_validate(forged)
+
+
 def test_dependent_generator_rows_rank_cardinality() -> None:
     """Dependent rows deduplicate: cardinality is q^rank, not q^rows."""
 

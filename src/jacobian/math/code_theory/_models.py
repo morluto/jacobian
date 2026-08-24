@@ -89,7 +89,11 @@ class MinimumDistanceResult(StrictModel):
     Retains the canonical source code (prime field order and generator
     matrix) so validation replays the exact enumeration: the claimed
     distance lies in ``[0, n]`` and equals the minimum nonzero Hamming
-    weight over the distinct generated codewords of the retained generator.
+    weight over the distinct generated codewords of the retained
+    generator. For the zero code (rank 0) the generated codeword set is
+    ``{0}``, so no nonzero codeword exists; the claimed distance is then
+    the code length ``n`` by the empty-code convention and is not the
+    weight of any generated word.
     """
 
     request: LinearCodeRequest

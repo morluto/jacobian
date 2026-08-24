@@ -37,8 +37,9 @@ npx jacobian@latest setup
 ```
 
 Choose detected agents and review the changes before they are written. Setup
-writes only a `jacobian` MCP entry for selected agents; existing unowned
-entries are protected unless you explicitly pass `--force`.
+writes a `jacobian` MCP entry and installs the `jacobian-math` skill for each
+selected agent. Existing unowned MCP entries and skills are protected unless
+you explicitly pass `--force`.
 
 The generated launcher pins the Jacobian version that ran setup. Setup itself
 does not install or upgrade Node.js, `uv`, Python, or an agent.

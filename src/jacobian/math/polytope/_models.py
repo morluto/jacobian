@@ -9,11 +9,50 @@ from typing import Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    CanonicalInteger,
+    CanonicalRational,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    parse_canonical_integer,
+)
 
 MAX_DIMENSION = 6
 """Absolute upper bound on the ambient dimension of a polytope."""
+
+MAX_FACET_DIMENSION = 7
+"""Ambient-dimension bound for complete V-representation facet profiles.
+
+This is deliberately one dimension wider than exact volume: the 14-vertex
+0/1 counterexample motivating the facet operation is seven-dimensional.
+``Vertex`` is the shared V-representation value, while individual operations
+still publish and enforce their own dimensional envelopes.
+"""
+
+MAX_FACET_COORDINATE_DIGITS = 32
+"""Per-component input-height bound for exact facet enumeration.
+
+Candidate supporting hyperplanes are determinants of rational coordinate
+differences. This conservative height keeps those private intermediates and
+the primitive integer facet rows comfortably inside the canonical transport
+limit for the complete returned profile.
+"""
+
+MAX_FACET_SIGN_TESTS = 5_000_000
+"""Maximum candidate-hyperplane/vertex side tests in one enumeration pass."""
+
+MAX_FACET_TOTAL_SIGN_TESTS = 2 * MAX_FACET_SIGN_TESTS
+"""Maximum candidate-side tests for execution and exact result replay together."""
+
+MAX_COMPUTED_FACETS = 256
+"""Maximum number of canonical facets materialized by one result."""
+
+MAX_FACET_INCIDENCES = 16_384
+"""Maximum total source-row/facet incidences materialized by one result."""
 
 MAX_VERTICES = 64
 """Absolute upper bound on the number of vertices in a V-representation.
@@ -249,8 +288,167 @@ class Vertex(StrictModel):
     """One rational vertex of a V-representation."""
 
     coordinates: tuple[CanonicalRational, ...] = Field(
-        min_length=1, max_length=MAX_DIMENSION
+        min_length=1, max_length=MAX_FACET_DIMENSION
     )
+
+
+class PrimitiveFacet(StrictModel):
+    """One canonically scaled supporting inequality and its source incidences.
+
+    The inequality is ``sum(coefficients[i] * x[i]) <= offset``. Its entries
+    are primitive integers, and its orientation is the unique one satisfied
+    by every source vertex. ``source_vertex_indices`` is the sorted complete
+    set of positions in the ordered source V-representation lying on the
+    supporting hyperplane; repeated source rows remain distinct positions.
+    """
+
+    coefficients: tuple[CanonicalInteger, ...] = Field(
+        min_length=1,
+        max_length=MAX_FACET_DIMENSION,
+        description=(
+            "Primitive integer normal of the canonical supporting inequality "
+            "sum(coefficients[i] * x[i]) <= offset."
+        ),
+    )
+    offset: CanonicalInteger = Field(
+        description="Primitive integer right-hand side of the supporting inequality."
+    )
+    source_vertex_indices: tuple[int, ...] = Field(
+        min_length=1,
+        max_length=MAX_VERTICES,
+        description=(
+            "Strictly increasing positions of all source V-representation rows "
+            "on this facet."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_primitive_normal_and_indices(self) -> Self:
+        coefficients = tuple(
+            parse_canonical_integer(value) for value in self.coefficients
+        )
+        offset = parse_canonical_integer(self.offset)
+        if not any(coefficients):
+            raise ValueError("facet coefficients must not all be zero")
+        gcd = 0
+        for value in (*coefficients, offset):
+            gcd = math.gcd(gcd, abs(value))
+        if gcd != 1:
+            raise ValueError("facet inequality must be primitive over the integers")
+        if any(
+            right <= left
+            for left, right in zip(
+                self.source_vertex_indices,
+                self.source_vertex_indices[1:],
+                strict=False,
+            )
+        ):
+            raise ValueError("facet source vertex indices must be strictly increasing")
+        return self
+
+
+class FacetIncidenceResult(StrictModel):
+    """Complete source-bound facet profile of a full-dimensional rational polytope."""
+
+    vertices: tuple[Vertex, ...] = Field(
+        min_length=2,
+        max_length=MAX_VERTICES,
+        description=(
+            "The exact ordered V-representation from which the profile was computed; "
+            "facet incidences index this tuple."
+        ),
+    )
+    dimension: int = Field(ge=1, le=MAX_FACET_DIMENSION)
+    facets: tuple[PrimitiveFacet, ...] = Field(
+        min_length=2,
+        max_length=MAX_COMPUTED_FACETS,
+        description=(
+            "All maximal codimension-one faces, sorted lexicographically by their "
+            "canonical primitive supporting inequalities."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_complete_source_bound_profile(self) -> Self:
+        if any(len(vertex.coordinates) != self.dimension for vertex in self.vertices):
+            raise ValueError(
+                "every source vertex must have exactly `dimension` coordinates"
+            )
+        for vertex in self.vertices:
+            for coordinate in vertex.coordinates:
+                require_bounded_rational(
+                    coordinate,
+                    max_digits=MAX_FACET_COORDINATE_DIGITS,
+                    label="facet-profile vertex coordinate",
+                )
+        if (
+            sum(len(facet.source_vertex_indices) for facet in self.facets)
+            > MAX_FACET_INCIDENCES
+        ):
+            raise ValueError(
+                "facet profile exceeds the "
+                f"{MAX_FACET_INCIDENCES}-incidence result bound"
+            )
+        from jacobian.math.polytope._operations import _computed_facets_from_vertices
+
+        expected = _computed_facets_from_vertices(self.vertices, self.dimension)
+        if self.facets != expected:
+            raise ValueError(
+                "facets must be the complete canonical source-bound facet profile"
+            )
+        try:
+            encode_strict_json(self.model_dump(mode="json"), limits=CanonicalLimits())
+        except ValueError as exc:
+            raise ValueError(
+                "facet profile exceeds the canonical JSON output bound"
+            ) from exc
+        return self
+
+
+class FacetIncidenceRequest(StrictModel):
+    """A full-dimensional bounded rational V-representation for facet enumeration."""
+
+    vertices: tuple[Vertex, ...] = Field(
+        min_length=2,
+        max_length=MAX_VERTICES,
+        description=(
+            "Ordered rational V-representation. The points must affinely span their "
+            "ambient dimension; lower-dimensional hulls are rejected because this "
+            "operation returns ambient codimension-one facets. After exact duplicate "
+            "rows are retained for source binding, admission requires n*C(n,d) <= "
+            f"{MAX_FACET_SIGN_TESTS} candidate-side tests in each of execution and "
+            f"exact result replay ({MAX_FACET_TOTAL_SIGN_TESTS} total), and uses the "
+            "cyclic-polytope upper bound to prove the complete facet and incidence "
+            "result fits its published limits."
+        ),
+    )
+    dimension_bound: int = Field(
+        default=MAX_FACET_DIMENSION,
+        ge=1,
+        le=MAX_FACET_DIMENSION,
+        description="Maximum admitted ambient dimension for this facet profile.",
+    )
+
+    @model_validator(mode="after")
+    def require_admissible_full_dimensional_profile(self) -> Self:
+        dimension = len(self.vertices[0].coordinates)
+        if dimension > self.dimension_bound:
+            raise ValueError(
+                f"dimension {dimension} exceeds the dimension bound {self.dimension_bound}"
+            )
+        if any(len(vertex.coordinates) != dimension for vertex in self.vertices):
+            raise ValueError("all vertices must share one dimension")
+        for vertex in self.vertices:
+            for coordinate in vertex.coordinates:
+                require_bounded_rational(
+                    coordinate,
+                    max_digits=MAX_FACET_COORDINATE_DIGITS,
+                    label="facet-profile vertex coordinate",
+                )
+        from jacobian.math.polytope._operations import _require_facet_preflight
+
+        _require_facet_preflight(self.vertices, dimension)
+        return self
 
 
 class Halfspace(StrictModel):
@@ -464,12 +662,21 @@ class PolytopeVolumeResult(StrictModel):
 
 __all__ = [
     "MAX_BOUNDEDNESS_COMBINATIONS",
+    "MAX_COMPUTED_FACETS",
     "MAX_DIMENSION",
     "MAX_FACETS",
+    "MAX_FACET_COORDINATE_DIGITS",
+    "MAX_FACET_DIMENSION",
+    "MAX_FACET_INCIDENCES",
+    "MAX_FACET_SIGN_TESTS",
+    "MAX_FACET_TOTAL_SIGN_TESTS",
     "MAX_HULL_SUBFACETS",
     "MAX_VERTICES",
+    "FacetIncidenceRequest",
+    "FacetIncidenceResult",
     "Halfspace",
     "PolytopeVolumeRequest",
     "PolytopeVolumeResult",
+    "PrimitiveFacet",
     "Vertex",
 ]

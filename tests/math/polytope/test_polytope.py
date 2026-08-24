@@ -5,18 +5,26 @@ from __future__ import annotations
 from fractions import Fraction
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.polytope._models import (
+    MAX_FACET_SIGN_TESTS,
+    MAX_FACET_TOTAL_SIGN_TESTS,
     MAX_FACETS,
     MAX_VERTICES,
+    FacetIncidenceRequest,
+    FacetIncidenceResult,
     Halfspace,
     PolytopeVolumeRequest,
     PolytopeVolumeResult,
     Vertex,
 )
-from jacobian.math.polytope._operations import compute_polytope_volume
+from jacobian.math.polytope._operations import (
+    compute_facet_incidence,
+    compute_polytope_volume,
+)
 
 
 def _cr0() -> CanonicalRational:
@@ -70,6 +78,166 @@ def _volume_via_halfspaces(
     halfspaces: tuple[Halfspace, ...],
 ) -> PolytopeVolumeResult:
     return compute_polytope_volume(PolytopeVolumeRequest(halfspaces=halfspaces))
+
+
+def _facet_profile(vertices: tuple[Vertex, ...]) -> FacetIncidenceResult:
+    return compute_facet_incidence(FacetIncidenceRequest(vertices=vertices))
+
+
+class TestFacetIncidence:
+    def test_schema_exposes_the_execution_and_replay_budget(self) -> None:
+        schema = FacetIncidenceRequest.model_json_schema()
+
+        description = schema["properties"]["vertices"]["description"]
+        assert str(MAX_FACET_SIGN_TESTS) in description
+        assert str(MAX_FACET_TOTAL_SIGN_TESTS) in description
+
+    def test_unit_square_returns_canonical_complete_source_incidences(self) -> None:
+        vertices = (
+            _v((0, 1), (0, 1)),
+            _v((1, 1), (0, 1)),
+            _v((1, 1), (1, 1)),
+            _v((0, 1), (1, 1)),
+        )
+
+        result = _facet_profile(vertices)
+
+        assert result.vertices == vertices
+        assert result.dimension == 2
+        assert [
+            (facet.coefficients, facet.offset, facet.source_vertex_indices)
+            for facet in result.facets
+        ] == [
+            (("-1", "0"), "0", (0, 3)),
+            (("0", "-1"), "0", (0, 1)),
+            (("0", "1"), "1", (2, 3)),
+            (("1", "0"), "1", (1, 2)),
+        ]
+
+    def test_nonsimplicial_pentagonal_prism_merges_coplanar_subfacets(self) -> None:
+        base = ((0, 0), (2, 0), (3, 1), (1, 3), (-1, 1))
+        vertices = tuple(_v((x, 1), (y, 1), (z, 1)) for z in (0, 1) for x, y in base)
+
+        result = _facet_profile(vertices)
+
+        assert len(result.facets) == 7
+        assert sorted(len(facet.source_vertex_indices) for facet in result.facets) == [
+            4,
+            4,
+            4,
+            4,
+            4,
+            5,
+            5,
+        ]
+
+    def test_duplicate_source_rows_remain_bound_to_every_incident_facet(self) -> None:
+        vertices = (
+            _v((0, 1), (0, 1)),
+            _v((1, 1), (0, 1)),
+            _v((1, 1), (1, 1)),
+            _v((0, 1), (1, 1)),
+            _v((0, 1), (0, 1)),
+        )
+
+        result = _facet_profile(vertices)
+
+        assert len(result.facets) == 4
+        assert any(facet.source_vertex_indices == (0, 3, 4) for facet in result.facets)
+        assert any(facet.source_vertex_indices == (0, 1, 4) for facet in result.facets)
+
+    def test_duplicate_rows_do_not_create_lower_dimensional_facets(self) -> None:
+        vertices = (
+            _v((0, 1), (0, 1)),
+            _v((0, 1), (0, 1)),
+            _v((1, 1), (2, 1)),
+            _v((2, 1), (1, 1)),
+        )
+
+        result = _facet_profile(vertices)
+
+        assert len(result.facets) == 3
+        assert all(len(facet.source_vertex_indices) >= 2 for facet in result.facets)
+
+    def test_result_rejects_missing_facet_and_wrong_source(self) -> None:
+        vertices = (
+            _v((0, 1), (0, 1)),
+            _v((1, 1), (0, 1)),
+            _v((1, 1), (1, 1)),
+            _v((0, 1), (1, 1)),
+        )
+        result = _facet_profile(vertices)
+
+        with pytest.raises(ValidationError, match="complete canonical"):
+            FacetIncidenceResult(
+                vertices=vertices,
+                dimension=2,
+                facets=result.facets[:-1],
+            )
+        changed_source = (_v((0, 1), (0, 1)), _v((2, 1), (0, 1)), *vertices[2:])
+        with pytest.raises(ValidationError, match="complete canonical"):
+            FacetIncidenceResult(
+                vertices=changed_source,
+                dimension=2,
+                facets=result.facets,
+            )
+
+    def test_lower_dimensional_input_and_work_overflow_reject_before_enumeration(
+        self,
+    ) -> None:
+        with pytest.raises(ValidationError, match="not full-dimensional"):
+            FacetIncidenceRequest(
+                vertices=(
+                    _v((0, 1), (0, 1)),
+                    _v((1, 1), (0, 1)),
+                )
+            )
+        vertices = (
+            tuple(
+                _v(*((1 if index == axis else 0, 1) for axis in range(7)))
+                for index in range(7)
+            )
+            + (_v(*((0, 1) for _ in range(7))),) * 57
+        )
+        with pytest.raises(ValidationError, match="side-test bound"):
+            FacetIncidenceRequest(vertices=vertices)
+
+    def test_facet_result_upper_bound_rejects_before_enumeration(self) -> None:
+        vertices = (
+            tuple(
+                _v(*((1 if index == axis else 0, 1) for axis in range(7)))
+                for index in range(7)
+            )
+            + (_v(*((0, 1) for _ in range(7))),) * 8
+        )
+
+        with pytest.raises(ValidationError, match="facet result bound"):
+            FacetIncidenceRequest(vertices=vertices)
+
+    def test_seven_dimensional_counterexample_has_136_simplicial_facets(self) -> None:
+        rows = (
+            "0010110",
+            "1011101",
+            "1000100",
+            "1001010",
+            "0111000",
+            "1100001",
+            "0010001",
+            "0001100",
+            "0100010",
+            "1001111",
+            "1101110",
+            "0110101",
+            "1110011",
+            "0111011",
+        )
+        vertices = tuple(_v(*((int(bit), 1) for bit in row)) for row in rows)
+
+        result = _facet_profile(vertices)
+
+        assert result.dimension == 7
+        assert len(result.facets) == 136
+        assert {len(facet.source_vertex_indices) for facet in result.facets} == {7}
 
 
 class TestUnitCube:
@@ -799,7 +967,11 @@ class TestNonzeroNormalContractPublished:
     def test_operation_example_demonstrates_halfspace_input(self) -> None:
         from jacobian.math.polytope._tools import POLYTOPE_OPERATIONS
 
-        (operation,) = POLYTOPE_OPERATIONS
+        operation = next(
+            item
+            for item in POLYTOPE_OPERATIONS
+            if item.operation_id == "polytope.volume.compute"
+        )
         names = [e.name for e in operation.examples]
         assert "unit_square_halfspaces" in names
 

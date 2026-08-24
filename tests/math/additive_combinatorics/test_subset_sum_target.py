@@ -286,9 +286,9 @@ def test_request_rejects_immediately_above_each_search_bound() -> None:
         )
 
 
-def test_request_admits_sources_beyond_the_profile_item_ceiling() -> None:
-    wide_source = IndexedIntegerSequence(items=("0",) * (MAX_SUBSET_SUM_ITEMS + 1))
-    assert len(wide_source.items) == MAX_SUBSET_SUM_ITEMS + 1
+def test_request_admits_sources_at_the_shared_item_ceiling() -> None:
+    wide_source = IndexedIntegerSequence(items=("0",) * MAX_SUBSET_SUM_ITEMS)
+    assert len(wide_source.items) == MAX_SUBSET_SUM_ITEMS
 
     zeros = _operation().run(
         SubsetSumTargetRequest(
@@ -301,10 +301,13 @@ def test_request_admits_sources_beyond_the_profile_item_ceiling() -> None:
     assert zeros.witness == IndexSubset(indices=(0,))
     assert zeros.reconstructed_sum == "0"
 
-    ones = _operation().run(_request((1,) * 300, 299, allow_empty_subset=True))
+    dense = 512
+    ones = _operation().run(
+        _request((1,) * dense, dense - 1, allow_empty_subset=True)
+    )
     assert ones.status == "ATTAINED"
-    assert ones.witness == IndexSubset(indices=tuple(range(299)))
-    assert ones.reconstructed_sum == "299"
+    assert ones.witness == IndexSubset(indices=tuple(range(dense - 1)))
+    assert ones.reconstructed_sum == str(dense - 1)
 
 
 def test_request_accepts_targets_at_the_derived_subset_sum_width() -> None:
@@ -373,6 +376,8 @@ def test_resolved_empty_witness_skips_state_expansion_admission() -> None:
     replayed = SubsetSumTargetResult.model_validate_json(resolved.model_dump_json())
     assert replayed == resolved
 
-    saturated = _operation().run(_request((0,) * 500_000, 0, allow_empty_subset=True))
+    saturated = _operation().run(
+        _request((0,) * MAX_SUBSET_SUM_ITEMS, 0, allow_empty_subset=True)
+    )
     assert saturated.status == "ATTAINED"
     assert saturated.witness == IndexSubset(indices=())

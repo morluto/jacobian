@@ -30,7 +30,10 @@ def solve_independence_number(
     charged against the same request deadline, so every returned result
     validates; a replay that cannot certify the solver optimum demotes to
     the typed ``UNKNOWN`` outcome instead of an ``EXACT`` payload that
-    would fail revalidation.
+    would fail revalidation.  Every incomplete outcome, including a
+    ``sat`` optimize whose objective bounds stay open, reports the graph
+    order as its upper bound, matching the validating source-binding
+    contract.
     """
 
     started = time.monotonic()
@@ -150,9 +153,6 @@ def solve_independence_number(
             detail="bounded Z3 optimization returned unsat, which is unexpected "
             "for an independence-number problem that always has a feasible witness",
         )
-    else:
-        upper_bound = order
-
     termination: Literal["WALL_TIME", "SOLVER_UNKNOWN"] = (
         "WALL_TIME"
         if time.monotonic() - started >= request.resource_budget.wall_seconds
@@ -166,7 +166,7 @@ def solve_independence_number(
         optimum_value=None,
         incumbent_value=len(incumbent),
         lower_bound=len(incumbent),
-        upper_bound=upper_bound,
+        upper_bound=order,
         witness_vertices=incumbent,
         termination_reason=termination,
         detail="bounded Z3 optimization did not establish an exact optimum",

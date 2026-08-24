@@ -10,6 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.math.graphs import _independence_z3 as z3_backend
 from jacobian.math.graphs import independence as independence_models
 from jacobian.math.graphs._independence_z3 import solve_independence_number
 from jacobian.math.graphs.independence import (
@@ -272,6 +273,112 @@ def test_unreplayable_solver_optimum_demotes_to_unknown(
     assert result.termination_reason == "REPLAY_INCOMPLETE"
     assert result.lower_bound == result.incumbent_value
     assert result.upper_bound == 4
+    assert IndependenceNumberResult.model_validate(result.model_dump()) == result
+
+
+class _StubBound:
+    """A Z3 objective bound carrying a concrete integer estimate."""
+
+    def __init__(self, value: int) -> None:
+        self._value = value
+
+    def as_long(self) -> int:
+        return self._value
+
+
+class _StubVariable:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+class _StubModel:
+    def eval(self, variable: _StubVariable, model_completion: bool) -> bool:
+        return variable.name.endswith("_0")
+
+
+class _StubObjective:
+    """Open Optimize bounds: proven incumbent 1, unproven estimate 2."""
+
+    def lower(self) -> _StubBound:
+        return _StubBound(1)
+
+    def upper(self) -> _StubBound:
+        return _StubBound(2)
+
+
+class _StubOptimizer:
+    def set(self, *args: object, **kwargs: object) -> None:
+        return None
+
+    def add(self, *args: object) -> None:
+        return None
+
+    def maximize(self, expression: object) -> _StubObjective:
+        return _StubObjective()
+
+    def check(self) -> int:
+        return _StubZ3.sat
+
+    def model(self) -> _StubModel:
+        return _StubModel()
+
+
+class _StubZ3:
+    """Minimal Optimize surface: sat with one selected vertex, open bounds."""
+
+    sat = 1
+    unsat = -1
+
+    def Bool(self, name: str) -> _StubVariable:  # noqa: N802 (z3 API mirror)
+        return _StubVariable(name)
+
+    @staticmethod
+    def Or(*expressions: object) -> object:  # noqa: N802 (z3 API mirror)
+        return expressions
+
+    @staticmethod
+    def Not(expression: object) -> object:  # noqa: N802 (z3 API mirror)
+        return expression
+
+    @staticmethod
+    def Sum(expressions: list[object]) -> object:  # noqa: N802 (z3 API mirror)
+        return expressions
+
+    @staticmethod
+    def If(  # noqa: N802 (z3 API mirror)
+        condition: object, then: object, otherwise: object
+    ) -> object:
+        return then
+
+    @staticmethod
+    def is_true(value: object) -> bool:
+        return value is True
+
+    @staticmethod
+    def is_int_value(value: object) -> bool:
+        return isinstance(value, _StubBound)
+
+    Optimize = _StubOptimizer
+
+
+def test_sat_with_open_objective_bounds_reports_order_as_upper_bound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An incomplete ``sat`` optimize still validates against the order bound.
+
+    Z3 can return ``sat`` with a feasible incumbent while its objective
+    bounds remain open, so the producing fallthrough must normalize the
+    upper bound to the independently safe graph order instead of echoing
+    the optimizer's intermediate estimate through ``model_construct``.
+    """
+
+    monkeypatch.setattr(z3_backend, "z3", _StubZ3())
+    result = solve_independence_number(IndependenceNumberRequest(graph=_path_graph()))
+    assert result.status == "UNKNOWN"
+    assert result.optimum_value is None
+    assert result.incumbent_value == 1
+    assert result.lower_bound == 1
+    assert result.upper_bound == result.order == 3
     assert IndependenceNumberResult.model_validate(result.model_dump()) == result
 
 

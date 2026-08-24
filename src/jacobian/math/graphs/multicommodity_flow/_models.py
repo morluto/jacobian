@@ -15,11 +15,11 @@ from jacobian.math.graphs.flow._models import FlowGraph
 # divergence value for every commodity/vertex pair.  Vertex count and edge
 # count are owned by FlowGraph; admission controls the dense divergence table
 # through the commodity-vertex cell budget, the sparse tensor through the
-# entry and commodity-edge cell budgets, and the whole returned value through
-# the aggregate result envelope below.  The commodity count is bounded by
-# those same derived quantities rather than an independent fixed ceiling.
+# entry budget, and the whole returned value through the aggregate result
+# envelope below.  Commodity and edge counts are never capped independently:
+# the kernel consumes sparse entries and per-edge sums rather than a dense
+# commodity-by-edge tensor.
 MAX_MULTICOMMODITY_EDGES = 512
-MAX_COMMODITY_EDGE_CELLS = 2_048
 MAX_COMMODITY_VERTEX_CELLS = 512
 MAX_SPARSE_FLOW_ENTRIES = 128
 
@@ -136,10 +136,6 @@ def _require_canonical_commodities(
             and commodity.sink < network.vertex_count
         ):
             raise ValueError("commodity terminals must be in 0..network.vertex_count-1")
-    if len(commodities) * len(network.edges) > MAX_COMMODITY_EDGE_CELLS:
-        raise ValueError(
-            f"commodity-by-edge cell count exceeds {MAX_COMMODITY_EDGE_CELLS}"
-        )
     if len(commodities) * network.vertex_count > MAX_COMMODITY_VERTEX_CELLS:
         raise ValueError(
             "commodity-by-vertex divergence cell count exceeds "
@@ -338,12 +334,11 @@ class MulticommodityFlowProfileRequest(StrictModel):
     flow: MulticommodityFlow = Field(
         description=(
             "Canonical sparse tensor bounded by derived quantities: at most "
-            "2,048 conceptual commodity-edge cells, 512 returned "
-            "commodity-vertex cells (hence at most 256 commodities), at most "
-            "the 512 network edges FlowGraph itself admits, 128 nonzero "
-            "entries, a per-component exact digit budget derived from each "
-            "component's own operands, and an admitted aggregate result "
-            "envelope below 8 MiB."
+            "512 returned commodity-vertex cells (hence at most 256 "
+            "commodities), at most the 512 network edges FlowGraph itself "
+            "admits, 128 nonzero entries, a per-component exact digit budget "
+            "derived from each component's own operands, and an admitted "
+            "aggregate result envelope below 8 MiB."
         )
     )
 
@@ -429,7 +424,6 @@ class MulticommodityFlowProfileResult(StrictModel):
 
 
 __all__ = [
-    "MAX_COMMODITY_EDGE_CELLS",
     "MAX_COMMODITY_VERTEX_CELLS",
     "MAX_MULTICOMMODITY_EDGES",
     "MAX_PROFILE_ADDITIONS_PER_PASS",

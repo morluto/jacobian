@@ -457,9 +457,9 @@ def test_per_component_digit_bounds_admit_unrelated_large_operands() -> None:
 
 def test_derived_quantities_admit_edges_without_a_fixed_ceiling() -> None:
     # FlowGraph owns the structural edge domain; this operation controls only
-    # the derived commodity-edge cells, ledger, and result envelope. A
-    # one-commodity 129-edge network over 12 vertices executes 658 steps per
-    # pass with a tiny result, so no independent edge ceiling may reject it.
+    # the ledger and result envelope. A one-commodity 129-edge network over 12
+    # vertices executes 658 steps per pass with a tiny result, so no
+    # independent edge ceiling may reject it.
     def many_edge_flow(vertex_count: int, edge_count: int) -> MulticommodityFlow:
         pairs = [
             (source, target)
@@ -502,10 +502,51 @@ def test_derived_quantities_admit_edges_without_a_fixed_ceiling() -> None:
         many_edge_flow(64, 513)
 
 
+def test_sparse_scan_admits_commodities_over_a_full_edge_graph() -> None:
+    # The kernel scans sparse entries and per-edge sums; it never materializes
+    # a dense commodity-by-edge tensor, so five commodities over a full
+    # 512-edge graph are admitted on the quantities actually consumed and
+    # returned: 120 divergence rows, 512 small edge rows, 5,370 steps.
+    def wide_network(commodity_count: int) -> MulticommodityFlow:
+        pairs = [
+            (source, target)
+            for source in range(24)
+            for target in range(24)
+            if source != target
+        ][:512]
+        return MulticommodityFlow(
+            network=FlowGraph(
+                vertex_count=24,
+                edges=tuple(
+                    CapacitatedEdge(source=source, target=target, capacity=q(1))
+                    for source, target in pairs
+                ),
+            ),
+            commodities=tuple(
+                CommodityDemand(
+                    commodity_id=f"c{index:04d}", source=0, sink=23, demand=q(1)
+                )
+                for index in range(commodity_count)
+            ),
+        )
+
+    result = compute_multicommodity_flow_profile(wide_network(5))
+    assert result.all_demands_routed is False
+    assert result.capacity_feasible is True
+    assert result.congestion == q(0)
+    assert len(result.divergences) == 120
+    assert len(result.edge_profiles) == 512
+    assert result.work.rational_additions_per_pass == 512
+    assert result.work.rational_negations_per_pass == 5
+    assert result.work.rational_divisions_per_pass == 512
+    assert result.work.exact_comparisons_per_pass == 120 + 3 * 512
+    assert result.work.logical_steps_per_call == 2 * (512 + 5 + 512 + 120 + 3 * 512)
+
+
 def test_cell_budgets_admit_commodities_without_a_fixed_ceiling() -> None:
-    # Commodity count is bounded by the derived commodity-vertex and
-    # commodity-edge cell budgets rather than an independent fixed ceiling:
-    # 17 commodities over two vertices occupy only 34 cells of constant size.
+    # Commodity count is bounded by the derived commodity-vertex cell budget
+    # rather than an independent fixed ceiling: 17 commodities over two
+    # vertices occupy only 34 cells of constant size.
     def dense_commodities(commodity_count: int) -> MulticommodityFlow:
         return MulticommodityFlow(
             network=FlowGraph(

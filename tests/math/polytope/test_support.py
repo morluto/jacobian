@@ -571,14 +571,14 @@ def test_constructed_result_rejects_unadmitted_source() -> None:
         ),
     ):
         PolytopeSupportResult(
-                polytope=polytope,
-                covector=_covector(0, 0),
-                support_value=_rational(0),
-                exposed_face=RationalExposedFace(
-                    space=polytope.space,
-                    vertices=polytope.vertices,
-                ),
-            )
+            polytope=polytope,
+            covector=_covector(0, 0),
+            support_value=_rational(0),
+            exposed_face=RationalExposedFace(
+                space=polytope.space,
+                vertices=polytope.vertices,
+            ),
+        )
 
 
 def test_result_preflights_oversized_covector_before_nested_parsing(
@@ -618,8 +618,7 @@ def test_result_preflights_oversized_covector_before_nested_parsing(
     with pytest.raises(
         ValidationError,
         match=(
-            f"covector component exceeds the "
-            f"{MAX_SUPPORT_COMPONENT_DIGITS}-digit bound"
+            f"covector component exceeds the {MAX_SUPPORT_COMPONENT_DIGITS}-digit bound"
         ),
     ):
         PolytopeSupportResult.model_validate(payload)

@@ -12,6 +12,7 @@ from jacobian._models import StrictModel
 from jacobian.math._exact_linear_algebra import symmetric_inertia
 from jacobian.math.matrices.subsystems.values import (
     MAX_SUBSYSTEM_DIMENSION,
+    MAX_SUBSYSTEM_FACTORS,
     FactorizedHermitianMatrix,
     partial_trace_entries,
 )
@@ -189,6 +190,7 @@ class SubsystemPartialTraceRequest(StrictModel):
     matrix: FactorizedHermitianMatrix
     traced_factor_labels: tuple[str, ...] = Field(
         min_length=1,
+        max_length=MAX_SUBSYSTEM_FACTORS,
         description=(
             "Distinct subsystem labels to trace out; every label must occur in "
             "matrix.factors, and remaining factors retain their source order."
@@ -218,7 +220,10 @@ class SubsystemPartialTraceResult(StrictModel):
     """An exact partial trace retaining its untraced subsystem coordinates."""
 
     source_matrix: FactorizedHermitianMatrix
-    traced_factor_labels: tuple[str, ...] = Field(min_length=1)
+    traced_factor_labels: tuple[str, ...] = Field(
+        min_length=1,
+        max_length=MAX_SUBSYSTEM_FACTORS,
+    )
     reduced_matrix: FactorizedHermitianMatrix
 
     @model_validator(mode="after")

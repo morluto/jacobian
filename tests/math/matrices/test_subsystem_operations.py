@@ -246,6 +246,23 @@ def test_partial_trace_boundary_trace_bound_round_trips_as_a_result() -> None:
         SubsystemPartialTraceRequest(matrix=over_source, traced_factor_labels=("q",))
 
 
+def test_traced_label_arrays_are_bounded_during_parsing() -> None:
+    q = MatrixSubsystem(label="q", dimension=2)
+    source = _matrix([[1, 0], [0, 2]], (q,))
+    oversized = {
+        "matrix": source.model_dump(mode="json"),
+        "traced_factor_labels": ["q", "r", "s", "t", "u"],
+    }
+
+    with pytest.raises(ValidationError, match="at most 4"):
+        SubsystemPartialTraceRequest.model_validate(oversized)
+
+    request_schema = SubsystemPartialTraceRequest.model_json_schema()
+    assert request_schema["properties"]["traced_factor_labels"]["maxItems"] == 4
+    result_schema = SubsystemPartialTraceResult.model_json_schema()
+    assert result_schema["properties"]["traced_factor_labels"]["maxItems"] == 4
+
+
 def test_psd_order_is_source_bound_and_returns_a_replayable_negative_witness() -> None:
     q = MatrixSubsystem(label="q", dimension=2)
     zero = _matrix([[0, 0], [0, 0]], (q,))

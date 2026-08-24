@@ -126,14 +126,33 @@ def test_invalid_delta_matroid_value_is_rejected_at_its_value_boundary() -> None
         )
 
 
-def test_request_rejects_ground_sets_outside_exchange_work_envelope() -> None:
-    with pytest.raises(ValidationError, match="ground size"):
-        DeltaMatroidFromFeasibleSetsRequest(
-            system=FiniteFeasibleSetSystem(
-                ground=tuple(f"e{index}" for index in range(17)),
-                feasible=((),),
-            )
-        )
+def test_sparse_family_uses_the_full_shared_ground_carrier_bound() -> None:
+    system = FiniteFeasibleSetSystem(
+        ground=tuple(f"e{index}" for index in range(64)),
+        feasible=((),),
+    )
+
+    result = delta_matroids.from_feasible_sets(system)
+
+    assert result.status == "DELTA_MATROID"
+    assert result.delta_matroid == FiniteDeltaMatroid(
+        ground=system.ground,
+        feasible=((),),
+    )
+
+
+def test_request_schema_exposes_every_delta_specific_admission_limit() -> None:
+    schema = DeltaMatroidFromFeasibleSetsRequest.model_json_schema()
+
+    assert schema["admission_limits"] == {
+        "max_ground_elements": 64,
+        "max_feasible_sets": 128,
+        "max_feasible_set_memberships": 1_024,
+        "max_ground_label_utf8_bytes": 2_048,
+        "max_symmetric_exchange_candidate_checks": 250_000,
+        "max_result_bytes": 65_536,
+    }
+    assert "no separate delta-specific ground-size cap" in schema["description"]
 
 
 def test_request_rejects_exchange_candidate_space_before_axiom_replay() -> None:

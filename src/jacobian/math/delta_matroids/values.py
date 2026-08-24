@@ -10,7 +10,6 @@ from jacobian._models import StrictModel
 from jacobian.canonical import canonicalize_json
 from jacobian.math.greedoids.values import FiniteFeasibleSetSystem
 
-MAX_DELTA_GROUND_SIZE = 16
 MAX_DELTA_FEASIBLE_SETS = 128
 MAX_DELTA_MEMBERSHIPS = 1_024
 MAX_DELTA_LABEL_BYTES = 2_048
@@ -86,12 +85,6 @@ def _wire_size(system: FiniteFeasibleSetSystem) -> int:
 def require_delta_matroid_admission(system: FiniteFeasibleSetSystem) -> None:
     """Bound all work and the canonical recognition result before replay."""
 
-    ground_size = len(system.ground)
-    if ground_size > MAX_DELTA_GROUND_SIZE:
-        raise ValueError(
-            "delta-matroid ground size exceeds the "
-            f"{MAX_DELTA_GROUND_SIZE}-element exchange-work envelope"
-        )
     feasible_count = len(system.feasible)
     if feasible_count > MAX_DELTA_FEASIBLE_SETS:
         raise ValueError(
@@ -167,7 +160,7 @@ class FiniteDeltaMatroid(StrictModel):
     format: Literal["jacobian.finite-delta-matroid/v1"] = (
         "jacobian.finite-delta-matroid/v1"
     )
-    ground: tuple[str, ...] = Field(max_length=MAX_DELTA_GROUND_SIZE)
+    ground: tuple[str, ...] = Field()
     feasible: tuple[tuple[int, ...], ...] = Field(
         min_length=1,
         max_length=MAX_DELTA_FEASIBLE_SETS,
@@ -205,7 +198,6 @@ def canonical_delta_matroid(system: FiniteFeasibleSetSystem) -> FiniteDeltaMatro
 __all__ = [
     "MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS",
     "MAX_DELTA_FEASIBLE_SETS",
-    "MAX_DELTA_GROUND_SIZE",
     "MAX_DELTA_LABEL_BYTES",
     "MAX_DELTA_MEMBERSHIPS",
     "MAX_DELTA_RESULT_BYTES",

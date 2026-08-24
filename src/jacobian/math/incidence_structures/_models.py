@@ -337,9 +337,7 @@ class IncidenceMomentComparison(StrictModel):
                 )
             indices = tuple(axis_index[label] for label in subset)
             if list(indices) != sorted(indices):
-                raise ValueError(
-                    "difference subsets must follow point-axis order"
-                )
+                raise ValueError("difference subsets must follow point-axis order")
             if subset in seen_subsets:
                 raise ValueError("difference subsets must be unique")
             seen_subsets.add(subset)

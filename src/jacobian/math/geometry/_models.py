@@ -15,7 +15,7 @@ from jacobian._exact import (
     require_bounded_rational,
 )
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import encode_strict_json, format_canonical_integer
 
 MAX_CONFIGURATION_POINTS = 32
 MAX_COORDINATE_DIGITS = 256
@@ -947,6 +947,8 @@ class ConvexPolygonTriangulationResult(StrictModel):
 
 MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS = 7_000_000
 _MIN_EUCLIDEAN_SPLIT_TERM_CHARS = 2 * (4 * 1 + 1) + 128
+_EUCLIDEAN_TRIANGLE_ENTRY_CHARS = 32
+_EUCLIDEAN_RESULT_ENVELOPE_SLACK_CHARS = 512
 
 
 def _span_term_occurrences(count: int) -> int:
@@ -967,6 +969,38 @@ def _span_term_occurrences(count: int) -> int:
     )
 
 
+def _echoed_result_envelope_chars(polygon: PolygonRequest) -> int:
+    """Canonical characters charged for the echoed source and fixed envelope.
+
+    Every certified or unresolved result repeats the complete source ring
+    beside literal header fields, so admission measures that echo directly;
+    the difference-based estimates below are translation-invariant and
+    cannot see absolute positions. The returned charge adds slack for the
+    status-specific fields the shared template cannot carry: an unresolved
+    comparison swaps a longer status string and carries its comparison
+    skeleton, while a certified result lists per-entry ledgers charged
+    separately by the caller.
+    """
+
+    return (
+        len(
+            encode_strict_json(
+                {
+                    "comparison_basis": "ARB_OUTWARD_ROUNDED_INTERVAL",
+                    "comparison_precision_bits": (
+                        EUCLIDEAN_TRIANGULATION_COMPARISON_PRECISION_BITS
+                    ),
+                    "objective": "NON_HULL_EUCLIDEAN_LENGTH_SUM",
+                    "polygon": polygon.model_dump(mode="json"),
+                    "status": "CERTIFIED_OPTIMUM",
+                    "vertex_count": 0,
+                }
+            )
+        )
+        + _EUCLIDEAN_RESULT_ENVELOPE_SLACK_CHARS
+    )
+
+
 def _euclidean_envelope_vertex_ceiling() -> int:
     """Largest vertex count that admission could ever accept.
 
@@ -976,8 +1010,10 @@ def _euclidean_envelope_vertex_ceiling() -> int:
     product evaluated at the one-digit floor is a necessary condition for
     every admitted source. The returned ceiling restates this closed-form
     consequence of ``MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS`` for schemas
-    that need static bounds; it can never reject a source whose estimate
-    fits the budget, so the derived envelope alone decides admission.
+    that need static bounds; the echoed-source and metadata charges in the
+    full envelope are strictly positive, so it can never reject a source
+    whose estimate fits the budget and the derived envelope alone decides
+    admission.
     """
 
     count = 4
@@ -1005,17 +1041,27 @@ def _require_euclidean_triangulation_envelope(
     positions control no kernel quantity: every turn, diagonal squared
     length, and serialized expression depends only on pairwise coordinate
     differences, so admission derives ``d``, the maximum decimal digits in
-    any pairwise-difference component, from the source itself and admits
-    harmless translations for free.  A squared length then has at most
-    ``4d + 1`` digits in each component (each product doubles its side and
-    the final sum adds one digit), and each split-table expression term is
-    charged twice that plus fixed punctuation slack.  A non-root span-``s``
-    table state carries at most ``s - 1`` terms, the root span carries
-    ``count - 3``, and the top-level optimum duplicates the root expression,
-    so summing those span-specific term counts over all retained expression
-    serializations gives the conservative serialized-expression estimate
-    below, bounding every retained exact sum before Arb is invoked; each raw
-    input coordinate stays inside the shared canonical rational cap.
+    any pairwise-difference component, from the source itself.  A squared
+    length then has at most ``4d + 1`` digits in each component (each
+    product doubles its side and the final sum adds one digit), and each
+    split-table expression term is charged twice that plus fixed punctuation
+    slack.  A non-root span-``s`` table state carries at most ``s - 1``
+    terms, the root span carries ``count - 3``, and the top-level optimum
+    duplicates the root expression, so summing those span-specific term
+    counts over all retained expression serializations gives the conservative
+    serialized-expression estimate below, bounding every retained exact sum
+    before Arb is invoked; each raw input coordinate stays inside the shared
+    canonical rational cap.
+
+    The bound covers the complete deterministic result envelope, not just
+    the split table.  Every result echoes the full source polygon beside
+    fixed literal header fields, and a pure translation inflates that echo
+    without touching any difference, so admission measures the canonical
+    encoding of the echoed source directly.  Each certified diagonal's
+    squared length stays within one term-scale serialization plus its entry
+    skeleton, each triangle is charged a fixed skeleton cost, two further
+    root-scale terms cover the largest possible unresolved comparison pair,
+    and named slack absorbs the remaining status-specific fields.
     Every candidate diagonal's exact squared length is also checked against
     the canonical rational cap, because the aggregate serialized estimate
     alone admits sources whose derived values cannot be represented at all.
@@ -1070,10 +1116,16 @@ def _require_euclidean_triangulation_envelope(
                     f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit rational limit"
                 )
     term_chars = 2 * (4 * difference_digits + 1) + 128
-    estimated_chars = _span_term_occurrences(count) * term_chars
+    estimated_chars = (
+        _span_term_occurrences(count) * term_chars
+        + _echoed_result_envelope_chars(polygon)
+        + (count - 3) * term_chars
+        + (count - 2) * _EUCLIDEAN_TRIANGLE_ENTRY_CHARS
+        + 2 * term_chars
+    )
     if estimated_chars > MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS:
         raise ValueError(
-            "Euclidean triangulation split table can serialize up to "
+            "Euclidean triangulation result can serialize up to "
             f"{estimated_chars} characters, exceeding the "
             f"{MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS}-character output bound"
         )
@@ -1116,12 +1168,16 @@ class EuclideanTriangulationPolygonRequest(PolygonRequest):
         max_length=MAX_EUCLIDEAN_TRIANGULATION_VERTICES,
         description=(
             "Ring vertices listed counterclockwise; the closed ring must be "
-            "simple and strictly convex. Admission derives the exact split-"
-            "table output bound from the pairwise coordinate differences, so "
-            "absolute positions stay inside the shared canonical rational cap."
+            "simple and strictly convex. Admission bounds the complete "
+            "serialized result - the split table, the echoed source ring, "
+            "and fixed result metadata - from the exact source, so absolute "
+            "positions consume the published output budget even though the "
+            "mathematical work depends only on pairwise differences."
         ),
         json_schema_extra={
-            "maximum_split_table_characters": MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS,
+            "maximum_serialized_result_characters": (
+                MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS
+            ),
         },
     )
 
@@ -1135,8 +1191,8 @@ class EuclideanConvexPolygonTriangulationRequest(StrictModel):
                 "Minimum Euclidean triangulation of one strict CCW convex "
                 "simple rational polygon. Admitted requests contain 4 to "
                 f"{MAX_EUCLIDEAN_TRIANGULATION_VERTICES} vertices whose "
-                "pairwise coordinate differences keep the exact split table "
-                "inside the published serialized-output bound; strict "
+                "complete serialized result, including the echoed source "
+                "ring, stays inside the published output bound; strict "
                 "counterclockwise convexity and ring simplicity are enforced "
                 "by the request validator after parsing."
             ),

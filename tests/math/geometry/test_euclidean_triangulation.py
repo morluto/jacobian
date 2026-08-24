@@ -7,14 +7,16 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import canonicalize_json, format_canonical_integer
 from jacobian.math.geometry._euclidean_triangulation import (
     minimum_euclidean_weight_triangulation,
 )
 from jacobian.math.geometry._models import (
+    MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS,
     MAX_EUCLIDEAN_TRIANGULATION_VERTICES,
     EuclideanConvexPolygonTriangulationRequest,
     EuclideanConvexPolygonTriangulationResult,
+    _echoed_result_envelope_chars,
     _span_term_occurrences,
 )
 
@@ -54,6 +56,37 @@ def _fraction_point(x: Fraction, y: Fraction) -> dict[str, dict[str, str]]:
         "x": {"num": str(x.numerator), "den": str(x.denominator)},
         "y": {"num": str(y.numerator), "den": str(y.denominator)},
     }
+
+
+def _big_fraction_point(x: Fraction, y: Fraction) -> dict[str, dict[str, str]]:
+    return {
+        "x": {
+            "num": format_canonical_integer(x.numerator),
+            "den": format_canonical_integer(x.denominator),
+        },
+        "y": {
+            "num": format_canonical_integer(y.numerator),
+            "den": format_canonical_integer(y.denominator),
+        },
+    }
+
+
+def _translated_parabola_ring(
+    count: int, digits: int
+) -> tuple[dict[str, dict[str, str]], ...]:
+    # The review-thread shape: an anchored rational Q/P with huge components
+    # translated along a parabola, so pairwise differences stay four digits
+    # while every echoed coordinate carries ``digits``-digit components.
+    multiple = 9001 * 8009
+    denominator = ((10**digits + multiple - 1) // multiple) * multiple
+    anchor = Fraction(denominator + 1, denominator)
+    return tuple(
+        _big_fraction_point(
+            anchor + Fraction(139 * index, 9001),
+            anchor + Fraction(2 * index * index, 8009),
+        )
+        for index in range(count)
+    )
 
 
 def _request(points: tuple[dict[str, dict[str, str]], ...]):
@@ -607,6 +640,74 @@ class TestEuclideanTriangulation:
         assert len(result.split_table) == (49 - 1) * (49 - 2) // 2
         assert len(result.diagonals) == result.vertex_count - 3
 
+    def test_request_rejects_a_translation_ring_whose_echo_exceeds_the_output_bound(
+        self,
+    ) -> None:
+        # Regression: the estimate charged only the split table, whose
+        # serialized size is invariant under translation. The review-thread
+        # ring keeps every pairwise difference at four digits - base
+        # estimate 6,759,288 characters - so a ~32768-digit anchored source
+        # passed admission, ran the kernel, and only then exceeded the
+        # canonical output limit on its echoed polygon. Admission now
+        # measures the echoed source and result metadata directly.
+        assert _span_term_occurrences(64) * (2 * (4 * 4 + 1) + 128) == 6_759_288
+        with pytest.raises(ValidationError, match="character output bound"):
+            _request(_translated_parabola_ring(64, 1200))
+
+    def test_request_admits_a_translation_ring_on_the_refined_envelope_boundary(
+        self,
+    ) -> None:
+        # The same shape at an 801-digit anchor: the split-table share alone
+        # stays at 6,759,288 characters, and the measured echo keeps the
+        # whole deterministic envelope just inside the published bound.
+        request = _request(_translated_parabola_ring(64, 800))
+
+        assert len(request.polygon.points) == 64
+
+    def test_request_rejects_a_translation_ring_one_step_past_the_refined_boundary(
+        self,
+    ) -> None:
+        # A 901-digit anchor adds about twenty-six thousand echo characters
+        # and crosses the published bound by roughly six thousand, so the
+        # boundary is tight rather than a coarse fallback.
+        with pytest.raises(ValidationError, match="character output bound"):
+            _request(_translated_parabola_ring(64, 900))
+
+    def test_translated_source_completes_inside_the_published_result_bound(
+        self,
+    ) -> None:
+        # Translation still composes end to end when the complete envelope
+        # fits: an 8001-digit translation of the (i, i**2) ring is admitted,
+        # produces the untranslated split table, and its canonical output
+        # stays within both the admission estimate and every transport limit.
+        plain = minimum_euclidean_weight_triangulation(
+            _request(tuple(_point(index, index * index) for index in range(29)))
+        )
+        scale = 10**8000
+        shifted = minimum_euclidean_weight_triangulation(
+            _request(
+                tuple(
+                    _big_point(scale + index, scale + index * index)
+                    for index in range(29)
+                )
+            )
+        )
+
+        assert shifted.status == "CERTIFIED_OPTIMUM"
+        assert shifted.split_table == plain.split_table
+        encoded = canonicalize_json(shifted.model_dump(mode="json"))
+        term_chars = 2 * (4 * 3 + 1) + 128
+        estimate = (
+            _span_term_occurrences(29) * term_chars
+            + _echoed_result_envelope_chars(shifted.polygon)
+            + (29 - 3) * term_chars
+            + (29 - 2) * 32
+            + 2 * term_chars
+        )
+        assert len(encoded) <= estimate
+        assert estimate <= MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS
+        assert len(encoded) <= 10 * 1024 * 1024
+
     def test_schema_publishes_the_admitted_envelope_and_preconditions(self) -> None:
         schema = EuclideanConvexPolygonTriangulationRequest.model_json_schema()
         points = schema["$defs"]["EuclideanTriangulationPolygonRequest"]["properties"][
@@ -619,10 +720,10 @@ class TestEuclideanTriangulation:
             == _expected_vertex_ceiling()
         )
         assert points["maxItems"] >= 29
-        assert points["maximum_split_table_characters"] == 7_000_000
+        assert points["maximum_serialized_result_characters"] == 7_000_000
         assert "strictly convex" in points["description"]
         assert "simple" in points["description"]
-        assert "pairwise coordinate differences" in points["description"]
+        assert "echoed source ring" in points["description"]
         description = schema.get("description", "")
         assert f"4 to {MAX_EUCLIDEAN_TRIANGULATION_VERTICES} vertices" in description
         assert "convexity and ring simplicity are enforced" in description

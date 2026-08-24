@@ -13,6 +13,8 @@ from jacobian.math.impartial_games._models import (
     DisjunctiveSumResult,
     GrundyTableRequest,
     GrundyTableResult,
+    NimOptionsRequest,
+    NimOptionsResult,
     NimSumRequest,
     NimSumResult,
     OutcomeProfileRequest,
@@ -24,6 +26,7 @@ from jacobian.math.impartial_games._operations import (
     compute_birthday,
     compute_disjunctive_sum,
     compute_grundy_table,
+    compute_nim_options,
     compute_nim_sum,
     compute_outcome_profile,
     compute_subtraction_grundy_prefix,
@@ -41,11 +44,12 @@ def _op[
     result_model: type[ResultT],
     operation: Callable[[RequestT], ResultT],
     *tags: str,
+    version: str = "1",
     examples: tuple[OperationExample, ...],
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version="1",
+        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -144,20 +148,43 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "game.nim.nim_sum.compute",
         "Compute the nim sum of a Nim position",
-        "Compute the exact bitwise xor of heap sizes, determining "
-        "the P/N outcome of a finite Nim position under normal play.",
+        "Compute the exact bitwise xor of a canonical sorted heap multiset, "
+        "determining the P/N outcome under normal play.",
         NimSumRequest,
         NimSumResult,
         compute_nim_sum,
         "game-theory",
         "nim",
         "exact",
+        version="2",
         examples=(
             example(
                 "nim_sum_1_2_3",
                 "Compute the nim sum of heaps (1, 2, 3); "
-                "heaps must be nonnegative integers.",
-                {"heaps": [1, 2, 3]},
+                "heaps must be nonnegative integers in nondecreasing order.",
+                {"position": {"heaps": [1, 2, 3]}},
+            ),
+        ),
+    ),
+    _op(
+        "game.nim.options.compute",
+        "Enumerate every distinct legal Nim option",
+        "Return the complete canonical one-move option family of a sorted Nim "
+        "heap multiset, retaining every source heap index collapsed by "
+        "multiset deduplication.",
+        NimOptionsRequest,
+        NimOptionsResult,
+        compute_nim_options,
+        "game-theory",
+        "nim",
+        "options",
+        "exact",
+        examples=(
+            example(
+                "deduplicated_equal_heaps",
+                "Enumerate every distinct option of Nim heaps (1,2,2); heaps "
+                "must be nondecreasing, and zero heaps are retained.",
+                {"position": {"heaps": [1, 2, 2]}},
             ),
         ),
     ),

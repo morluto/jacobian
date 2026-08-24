@@ -19,6 +19,7 @@ from jacobian.math.polynomials.multivariate._models import (
     _MAX_FACTOR_OUTPUT_TERMS as _MAX_OUTPUT_TERMS,
 )
 from jacobian.math.polynomials.multivariate._models import (
+    _MAX_SUBRESULTANT_SEQUENCE_TERMS,
     MultivariateDivisionRequest,
     MultivariateDivisionResult,
     MultivariateFactorRequest,
@@ -27,9 +28,14 @@ from jacobian.math.polynomials.multivariate._models import (
     MultivariateGcdResult,
     MultivariateIrreducibleFactor,
     MultivariatePolynomialValue,
+    MultivariatePrincipalSubresultantCoefficient,
     MultivariateResultantRequest,
     MultivariateResultantResult,
     MultivariateScalarValue,
+    MultivariateSubresultantMember,
+    MultivariateSubresultantSequenceRequest,
+    MultivariateSubresultantSequenceResult,
+    _degree_in_variable,
     _monic_content_fraction,
 )
 from jacobian.math.polynomials.values import RationalPolynomial
@@ -120,15 +126,14 @@ def _sylvester_resultant_value(
 ) -> MultivariateScalarValue | MultivariatePolynomialValue:
     """Compute the exact resultant value of an admitted request.
 
-    Returns the classical Sylvester-determinant orientation.  SymPy's
-    subresultant PRS canonicalizes ``deg(left) >= deg(right)`` internally
-    without compensating the swap sign (upstream sympy/sympy#10666), so
-    whenever the left elimination degree is the smaller one the backend
-    value carries an extra ``(-1)^(m*n)`` factor relative to the declared
-    convention; this adapter restores the standard orientation.
+    Returns the classical Sylvester-determinant orientation.  The shared
+    ``polynomial_resultant`` backend helper owns the SymPy swap-sign
+    restoration (upstream sympy/sympy#10666), so no further compensation
+    happens here.
     """
     from sympy import QQ, Poly
-    from sympy import resultant as sympy_resultant
+
+    from jacobian.math.polynomials._sympy import polynomial_resultant
 
     variables = request.left.variables
     elimination_index = variables.index(request.elimination_variable)
@@ -136,21 +141,7 @@ def _sylvester_resultant_value(
 
     left = rational_polynomial_to_sympy(request.left)
     right = rational_polynomial_to_sympy(request.right)
-    value = sympy_resultant(left.as_expr(), right.as_expr(), generator)
-
-    left_elimination_degree = max(
-        (term.exponents[elimination_index] for term in request.left.polynomial.terms),
-        default=0,
-    )
-    right_elimination_degree = max(
-        (term.exponents[elimination_index] for term in request.right.polynomial.terms),
-        default=0,
-    )
-    if (
-        left_elimination_degree < right_elimination_degree
-        and (left_elimination_degree * right_elimination_degree) % 2
-    ):
-        value = -value
+    value = polynomial_resultant(left, right, generator)
 
     remaining_variables = tuple(
         variable for variable in variables if variable != request.elimination_variable
@@ -177,6 +168,77 @@ def compute_multivariate_resultant(
         right=request.right,
         elimination_variable=request.elimination_variable,
         resultant=_sylvester_resultant_value(request),
+    )
+
+
+def compute_multivariate_subresultant_sequence(
+    request: MultivariateSubresultantSequenceRequest,
+) -> MultivariateSubresultantSequenceResult:
+    """Return the exact nonzero Brown PRS in one declared main variable."""
+
+    from jacobian.math.polynomials.multivariate._subresultants import (
+        polynomial_leading_coefficient_in_remaining_ring,
+        polynomial_resultant_in_remaining_ring,
+        polynomial_subresultant_sequence,
+    )
+
+    source_order, polynomials, principal_coefficients = (
+        polynomial_subresultant_sequence(
+            request.left,
+            request.right,
+            request.main_variable,
+            maximum_terms=_MAX_SUBRESULTANT_SEQUENCE_TERMS,
+        )
+    )
+    variable_index = request.left.variables.index(request.main_variable)
+    members = tuple(
+        MultivariateSubresultantMember(
+            polynomial=polynomial,
+            degree_in_main_variable=_degree_in_variable(polynomial, variable_index),
+        )
+        for polynomial in polynomials
+    )
+    degrees = {member.degree_in_main_variable for member in members}
+    greatest_degree = max(degrees)
+    resultant = polynomial_resultant_in_remaining_ring(
+        request.left,
+        request.right,
+        request.main_variable,
+        maximum_terms=_MAX_SUBRESULTANT_SEQUENCE_TERMS,
+    )
+    gcd_degree = members[-1].degree_in_main_variable
+    gcd_leading_coefficient = polynomial_leading_coefficient_in_remaining_ring(
+        members[-1].polynomial,
+        request.main_variable,
+        maximum_terms=_MAX_SUBRESULTANT_SEQUENCE_TERMS,
+    )
+    left_degree = _degree_in_variable(request.left, variable_index)
+    right_degree = _degree_in_variable(request.right, variable_index)
+    return MultivariateSubresultantSequenceResult(
+        left=request.left,
+        right=request.right,
+        main_variable=request.main_variable,
+        source_order=source_order,
+        members=members,
+        skipped_member_degrees=tuple(
+            degree for degree in range(greatest_degree + 1) if degree not in degrees
+        ),
+        principal_subresultant_coefficients=tuple(
+            MultivariatePrincipalSubresultantCoefficient(
+                index=index,
+                coefficient=coefficient,
+            )
+            for index, coefficient in enumerate(principal_coefficients)
+        ),
+        resultant=resultant,
+        resultant_sign_from_sequence_order=(
+            -1
+            if source_order == "RIGHT_LEFT" and left_degree * right_degree % 2 == 1
+            else 1
+        ),
+        gcd_member_index=len(members) - 1,
+        gcd_degree_in_main_variable=gcd_degree,
+        gcd_member_leading_coefficient=gcd_leading_coefficient,
     )
 
 

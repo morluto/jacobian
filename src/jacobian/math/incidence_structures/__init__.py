@@ -1,3 +1,21 @@
-"""Incidence structure operations."""
+"""Supported native exact finite-incidence APIs."""
 
-__all__: list[str] = []
+from jacobian.math.incidence_structures._models import (
+    ContainmentProfileResult,
+    IncidenceMomentComparison,
+    IncidenceStructure,
+    IncidenceTradeResult,
+)
+from jacobian.math.incidence_structures.operations import (
+    check_incidence_trade,
+    containment_profile,
+)
+
+__all__ = [
+    "ContainmentProfileResult",
+    "IncidenceMomentComparison",
+    "IncidenceStructure",
+    "IncidenceTradeResult",
+    "check_incidence_trade",
+    "containment_profile",
+]

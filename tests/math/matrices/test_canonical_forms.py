@@ -12,7 +12,11 @@ from jacobian.math.matrices.canonical_forms import (
     primary_decomposition,
 )
 from jacobian.math.matrices.canonical_forms._models import (
+    InvariantFactorEntry,
+    MinimalPolynomialResult,
     MonicPolynomial,
+    PrimaryDecompositionResult,
+    RationalCanonicalFormResult,
     SquareMatrixRequest,
 )
 from jacobian.math.matrices.canonical_forms._operations import (
@@ -47,6 +51,29 @@ def _diagonal(*values: str) -> SquareMatrixRequest:
         for row in range(len(values))
     )
     return SquareMatrixRequest(matrix=RationalMatrix(entries=entries))
+
+
+def _mono(*coefficients: Fraction | int) -> MonicPolynomial:
+    return MonicPolynomial(
+        coefficients=tuple(
+            R.from_fraction(Fraction(coefficient)) for coefficient in coefficients
+        )
+    )
+
+
+def _companion(*tail: tuple[str, str]) -> SquareMatrixRequest:
+    """Companion matrix of x^n + tail[-1] x^{n-1} + ... + tail[0]."""
+    constants = [Fraction(int(num), int(den)) for num, den in tail]
+    n = len(constants)
+    entries = [
+        tuple(
+            R.from_fraction(Fraction(1) if j == i + 1 else Fraction(0))
+            for j in range(n)
+        )
+        for i in range(n - 1)
+    ]
+    entries.append(tuple(R.from_fraction(-constant) for constant in constants))
+    return SquareMatrixRequest(matrix=RationalMatrix(entries=tuple(entries)))
 
 
 def test_nilpotent_jordan_block_minimal_polynomial_is_t_squared() -> None:
@@ -305,3 +332,377 @@ def test_public_kernels_return_monic_coefficient_lists() -> None:
     assert minimal_polynomial(entries) == (Fraction(0), Fraction(0), Fraction(1))
     assert invariant_factors(entries) == ((Fraction(0), Fraction(0), Fraction(1)),)
     assert primary_decomposition(entries) == ((Fraction(0), Fraction(0), Fraction(1)),)
+
+
+def _block_diagonal(*blocks: SquareMatrixRequest) -> SquareMatrixRequest:
+    n = sum(len(block.matrix.entries) for block in blocks)
+    grid = [[Fraction(0)] * n for _ in range(n)]
+    offset = 0
+    for block in blocks:
+        entries = [
+            [entry.as_fraction() for entry in row] for row in block.matrix.entries
+        ]
+        for i, row in enumerate(entries):
+            for j, value in enumerate(row):
+                grid[offset + i][offset + j] = value
+        offset += len(entries)
+    return SquareMatrixRequest(
+        matrix=RationalMatrix(
+            entries=tuple(
+                tuple(R.from_fraction(value) for value in row) for row in grid
+            )
+        )
+    )
+
+
+def _conjugate(
+    request: SquareMatrixRequest,
+    change_of_basis: tuple[tuple[Fraction, ...], ...],
+) -> SquareMatrixRequest:
+    """Return S A S^{-1} for an invertible rational change of basis."""
+    import sympy
+
+    matrix = sympy.Matrix(
+        [[entry.as_fraction() for entry in row] for row in request.matrix.entries]
+    )
+    similarity = sympy.Matrix([list(row) for row in change_of_basis])
+    transformed = similarity * matrix * similarity.inv()
+    return SquareMatrixRequest(
+        matrix=RationalMatrix(
+            entries=tuple(
+                tuple(R.from_fraction(Fraction(int(v.p), int(v.q))) for v in row)
+                for row in transformed.tolist()
+            )
+        )
+    )
+
+
+def test_source_binding_across_matrix_families() -> None:
+    """Scalar, companion, diagonal, repeated-block, and noncyclic sources all bind."""
+    families = (
+        _diagonal("1", "1", "1"),
+        _companion(("6", "1"), ("-5", "1")),
+        _diagonal("2", "3"),
+        _mat(
+            (_pair("2", "1"), _pair("1", "1")),
+            (_pair("0", "1"), _pair("2", "1")),
+        ),
+        _block_diagonal(
+            _mat(
+                (_pair("0", "1"), _pair("1", "1")),
+                (_pair("0", "1"), _pair("0", "1")),
+            ),
+            _mat(
+                (_pair("0", "1"), _pair("1", "1")),
+                (_pair("0", "1"), _pair("0", "1")),
+            ),
+        ),
+    )
+    for family in families:
+        assert compute_minimal_polynomial(family).matrix == family
+        assert compute_rational_canonical_form(family).matrix == family
+        assert compute_primary_decomposition(family).matrix == family
+
+
+def test_noncyclic_components_multiply_to_minimal_not_characteristic() -> None:
+    """J2 + J2 has components [t^2]; their product is t^2 = minpoly, not t^4."""
+    req = _block_diagonal(
+        _mat(
+            (_pair("0", "1"), _pair("1", "1")),
+            (_pair("0", "1"), _pair("0", "1")),
+        ),
+        _mat(
+            (_pair("0", "1"), _pair("1", "1")),
+            (_pair("0", "1"), _pair("0", "1")),
+        ),
+    )
+    result = compute_primary_decomposition(req)
+    assert len(result.components) == 1
+    assert _coeffs(result.components[0]) == [Fraction(0), Fraction(0), Fraction(1)]
+    assert _coeffs(result.minimal_polynomial) == [Fraction(0), Fraction(0), Fraction(1)]
+    characteristic = _coeffs(compute_minimal_polynomial(req).characteristic_polynomial)
+    assert len(characteristic) == 5  # t^4: degree four, distinct from minpoly
+
+
+def test_minimal_polynomial_rejects_annihilating_but_nonminimal() -> None:
+    """t^3 annihilates the J2 source but must not be accepted as its minimal poly."""
+    req = _mat(
+        (_pair("0", "1"), _pair("1", "1")),
+        (_pair("0", "1"), _pair("0", "1")),
+    )
+    with pytest.raises(ValidationError, match="exact minimal polynomial"):
+        MinimalPolynomialResult(
+            matrix=req,
+            minimal_polynomial=_mono(0, 0, 0, 1),
+            characteristic_polynomial=_mono(0, 0, 1),
+            degree=3,
+        )
+
+
+def test_minimal_polynomial_rejects_field_and_source_mutations() -> None:
+    req = _mat(
+        (_pair("0", "1"), _pair("1", "1")),
+        (_pair("0", "1"), _pair("0", "1")),
+    )
+    result = compute_minimal_polynomial(req)
+    with pytest.raises(ValidationError, match="degree"):
+        MinimalPolynomialResult(
+            matrix=result.matrix,
+            minimal_polynomial=result.minimal_polynomial,
+            characteristic_polynomial=result.characteristic_polynomial,
+            degree=1,
+        )
+    with pytest.raises(ValidationError, match="characteristic"):
+        MinimalPolynomialResult(
+            matrix=result.matrix,
+            minimal_polynomial=result.minimal_polynomial,
+            characteristic_polynomial=_mono(6, -5, 1),
+            degree=result.degree,
+        )
+    other = _diagonal("2", "3")
+    with pytest.raises(ValidationError, match="minimal polynomial"):
+        MinimalPolynomialResult(
+            matrix=other,
+            minimal_polynomial=result.minimal_polynomial,
+            characteristic_polynomial=result.characteristic_polynomial,
+            degree=result.degree,
+        )
+
+
+def test_rational_canonical_form_rejects_structural_mutations() -> None:
+    req = _diagonal("2", "3")
+    result = compute_rational_canonical_form(req)
+    with pytest.raises(ValidationError, match="block size must equal"):
+        RationalCanonicalFormResult(
+            matrix=result.matrix,
+            invariant_factors=(
+                InvariantFactorEntry(factor=_mono(6, -5, 1), block_size=1),
+                InvariantFactorEntry(factor=_mono(6, -5, 1), block_size=1),
+            ),
+            characteristic_polynomial=result.characteristic_polynomial,
+            minimal_polynomial=result.minimal_polynomial,
+            total_block_size=2,
+        )
+    with pytest.raises(ValidationError, match="total"):
+        RationalCanonicalFormResult(
+            matrix=result.matrix,
+            invariant_factors=result.invariant_factors,
+            characteristic_polynomial=result.characteristic_polynomial,
+            minimal_polynomial=result.minimal_polynomial,
+            total_block_size=result.total_block_size + 1,
+        )
+    with pytest.raises(ValidationError, match="dimension"):
+        RationalCanonicalFormResult(
+            matrix=result.matrix,
+            invariant_factors=(
+                InvariantFactorEntry(factor=_mono(-2, 1), block_size=1),
+            ),
+            characteristic_polynomial=result.characteristic_polynomial,
+            minimal_polynomial=result.minimal_polynomial,
+            total_block_size=1,
+        )
+
+
+def test_rational_canonical_form_rejects_divisibility_break() -> None:
+    """(t-2) does not divide (t-3): successive divisibility fails."""
+    req = _diagonal("2", "3")
+    result = compute_rational_canonical_form(req)
+    with pytest.raises(ValidationError, match="divide successively"):
+        RationalCanonicalFormResult(
+            matrix=result.matrix,
+            invariant_factors=(
+                InvariantFactorEntry(factor=_mono(-2, 1), block_size=1),
+                InvariantFactorEntry(factor=_mono(-3, 1), block_size=1),
+            ),
+            characteristic_polynomial=result.characteristic_polynomial,
+            minimal_polynomial=result.minimal_polynomial,
+            total_block_size=2,
+        )
+
+
+def test_rational_canonical_form_rejects_polynomial_mutations() -> None:
+    req = _diagonal("2", "3")
+    result = compute_rational_canonical_form(req)
+    with pytest.raises(ValidationError, match="characteristic polynomial"):
+        RationalCanonicalFormResult(
+            matrix=result.matrix,
+            invariant_factors=result.invariant_factors,
+            characteristic_polynomial=_mono(0, 0, 1),
+            minimal_polynomial=result.minimal_polynomial,
+            total_block_size=result.total_block_size,
+        )
+    with pytest.raises(ValidationError, match="exact minimal polynomial"):
+        RationalCanonicalFormResult(
+            matrix=result.matrix,
+            invariant_factors=result.invariant_factors,
+            characteristic_polynomial=result.characteristic_polynomial,
+            minimal_polynomial=_mono(0, 0, 1),
+            total_block_size=result.total_block_size,
+        )
+
+
+def test_rational_canonical_form_rejects_source_mutation() -> None:
+    req = _diagonal("2", "3")
+    result = compute_rational_canonical_form(req)
+    with pytest.raises(ValidationError, match="exact minimal polynomial"):
+        RationalCanonicalFormResult(
+            matrix=_diagonal("2", "5"),
+            invariant_factors=result.invariant_factors,
+            characteristic_polynomial=result.characteristic_polynomial,
+            minimal_polynomial=result.minimal_polynomial,
+            total_block_size=result.total_block_size,
+        )
+
+
+def _nilpotent_jordan_blocks(block_size: int) -> SquareMatrixRequest:
+    """Direct sum of two nilpotent Jordan blocks J_block_size(0)."""
+    dimension = 2 * block_size
+    values = [[R.from_fraction(Fraction(0))] * dimension for _ in range(dimension)]
+    for start in (0, block_size):
+        for offset in range(block_size - 1):
+            values[start + offset][start + offset + 1] = R.from_fraction(Fraction(1))
+    return SquareMatrixRequest(
+        matrix=RationalMatrix(entries=tuple(tuple(row) for row in values))
+    )
+
+
+def test_rational_canonical_form_j3_plus_j3_has_two_x_cubed_factors() -> None:
+    """J3(0) + J3(0) has exact invariant factors (x^3, x^3)."""
+    result = compute_rational_canonical_form(_nilpotent_jordan_blocks(3))
+    assert len(result.invariant_factors) == 2
+    for entry in result.invariant_factors:
+        assert entry.block_size == 3
+        assert _coeffs(entry.factor) == [
+            Fraction(0),
+            Fraction(0),
+            Fraction(0),
+            Fraction(1),
+        ]
+    assert _coeffs(result.minimal_polynomial) == [
+        Fraction(0),
+        Fraction(0),
+        Fraction(0),
+        Fraction(1),
+    ]
+    assert _coeffs(result.characteristic_polynomial) == [Fraction(0)] * 6 + [
+        Fraction(1)
+    ]
+
+
+def test_rational_canonical_form_rejects_relationally_consistent_tuple() -> None:
+    """(x, x^2, x^3) satisfies degree, divisibility, product, and
+    last-factor checks against J3(0) + J3(0) yet is not the exact
+    invariant-factor tuple (x^3, x^3); validation must bind the tuple."""
+    result = compute_rational_canonical_form(_nilpotent_jordan_blocks(3))
+    forged = (
+        InvariantFactorEntry(factor=_mono(0, 1), block_size=1),
+        InvariantFactorEntry(factor=_mono(0, 0, 1), block_size=2),
+        InvariantFactorEntry(factor=_mono(0, 0, 0, 1), block_size=3),
+    )
+    with pytest.raises(ValidationError, match="exact invariant factors"):
+        RationalCanonicalFormResult(
+            matrix=result.matrix,
+            invariant_factors=forged,
+            characteristic_polynomial=result.characteristic_polynomial,
+            minimal_polynomial=result.minimal_polynomial,
+            total_block_size=6,
+        )
+
+
+def test_primary_decomposition_rejects_reducible_component() -> None:
+    """t^2 - t factors over QQ, so it is not one irreducible-power component."""
+    req = _diagonal("0", "1")
+    result = compute_primary_decomposition(req)
+    with pytest.raises(ValidationError, match="irreducible power"):
+        PrimaryDecompositionResult(
+            matrix=result.matrix,
+            components=(_mono(0, -1, 1),),
+            minimal_polynomial=result.minimal_polynomial,
+        )
+
+
+def test_primary_decomposition_rejects_duplicate_prime_components() -> None:
+    """[t, t] has lcm t^2 yet shares the prime t; only [t^2] reconstructs t^2."""
+    req = _mat(
+        (_pair("0", "1"), _pair("1", "1")),
+        (_pair("0", "1"), _pair("0", "1")),
+    )
+    result = compute_primary_decomposition(req)
+    with pytest.raises(ValidationError, match="coprime"):
+        PrimaryDecompositionResult(
+            matrix=result.matrix,
+            components=(_mono(0, 1), _mono(0, 1)),
+            minimal_polynomial=result.minimal_polynomial,
+        )
+
+
+def test_primary_decomposition_rejects_product_and_source_mutations() -> None:
+    req = _mat(
+        (_pair("0", "1"), _pair("1", "1")),
+        (_pair("0", "1"), _pair("0", "1")),
+    )
+    result = compute_primary_decomposition(req)
+    with pytest.raises(ValidationError, match="multiply to the claimed minimal"):
+        PrimaryDecompositionResult(
+            matrix=result.matrix,
+            components=(_mono(0, 1),),
+            minimal_polynomial=result.minimal_polynomial,
+        )
+    with pytest.raises(ValidationError, match="minimal polynomial"):
+        PrimaryDecompositionResult(
+            matrix=_diagonal("2", "3"),
+            components=result.components,
+            minimal_polynomial=result.minimal_polynomial,
+        )
+
+
+def test_results_are_similarity_invariant_under_rational_change_of_basis() -> None:
+    swap = ((Fraction(0), Fraction(1)), (Fraction(1), Fraction(0)))
+    shear = ((Fraction(1), Fraction(1, 2)), (Fraction(0), Fraction(1)))
+    req = _diagonal("2", "3")
+    jordan = _mat(
+        (_pair("2", "1"), _pair("1", "1")),
+        (_pair("0", "1"), _pair("2", "1")),
+    )
+    for source in (req, jordan):
+        expected = compute_rational_canonical_form(source).invariant_factors
+        expected_minimal = compute_minimal_polynomial(source).minimal_polynomial
+        expected_decomposition = compute_primary_decomposition(source).components
+        for basis in (swap, shear):
+            conjugated = _conjugate(source, basis)
+            assert (
+                compute_rational_canonical_form(conjugated).invariant_factors
+                == expected
+            )
+            assert compute_minimal_polynomial(conjugated).minimal_polynomial == (
+                expected_minimal
+            )
+            assert (
+                compute_primary_decomposition(conjugated).components
+                == expected_decomposition
+            )
+
+
+def test_serialization_round_trip_preserves_source_and_axis() -> None:
+    req = _mat(
+        (_pair("1", "2"), _pair("1", "1")),
+        (_pair("0", "1"), _pair("1", "3")),
+    )
+    minimal = compute_minimal_polynomial(req)
+    canonical = compute_rational_canonical_form(req)
+    decomposition = compute_primary_decomposition(req)
+    for result in (minimal, canonical, decomposition):
+        restored = type(result).model_validate(result.model_dump())
+        assert restored == result
+        assert restored.matrix == req
+
+
+def test_source_bound_result_contracts_are_versioned_as_version_two() -> None:
+    from jacobian.math.matrices.canonical_forms._tools import TOOLS
+
+    tools = {tool.operation_id: tool for tool in TOOLS}
+    # Each result gained a required source matrix, which old strict consumers
+    # reject; the breaking output change must be distinguishable by version.
+    assert tools["matrix.minimal_polynomial.compute"].version == "2"
+    assert tools["matrix.rational_canonical_form.compute"].version == "2"
+    assert tools["matrix.primary_decomposition.compute"].version == "2"

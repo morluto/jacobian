@@ -10,31 +10,36 @@ from jacobian.canonical import (
     canonicalize_json,
     encode_strict_json,
 )
+from jacobian.math.graphs.isomorphism import (
+    ColoredUndirectedGraph,
+    canonicalize_colored_graph,
+)
 from jacobian.math.graphs.symmetry._models import (
+    MAX_GRAPH_SYMMETRY_GENERATORS,
     GraphEdgeOrbit,
     GraphSymmetryOrbitRequest,
     GraphSymmetryOrbitResult,
     GraphVertexOrbit,
     _estimate_orbit_result_wire_bytes,
 )
+from jacobian.math.graphs.symmetry._operations import _generator_orbits
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
 def _path_request() -> dict[str, Any]:
     return {
         "graph": {
-            "vertices": ["a", "b", "c"],
-            "edges": [["a", "b"], ["b", "c"]],
+            "graph": {
+                "vertices": ["a", "b", "c"],
+                "edges": [["a", "b"], ["b", "c"]],
+            },
+            "vertex_colors": ["endpoint", "middle", "endpoint"],
         },
         "generators": [
             {
                 "generator_id": "reflection",
                 "mapping": [["a", "c"], ["b", "b"], ["c", "a"]],
             }
-        ],
-        "vertex_colors": [
-            {"vertex": "a", "color": "endpoint"},
-            {"vertex": "b", "color": "middle"},
-            {"vertex": "c", "color": "endpoint"},
         ],
     }
 
@@ -43,7 +48,7 @@ def test_graph_symmetry_request_binds_total_color_preserving_generators() -> Non
     request = GraphSymmetryOrbitRequest.model_validate(_path_request())
 
     assert request.generators[0].mapping == (("a", "c"), ("b", "b"), ("c", "a"))
-    assert request.vertex_colors[1].color == "middle"
+    assert request.graph.vertex_colors[1] == "middle"
 
 
 def test_graph_symmetry_request_rejects_object_shaped_mapping() -> None:
@@ -77,7 +82,7 @@ def test_graph_symmetry_request_requires_declared_vertex_order_mapping() -> None
 
 def test_graph_symmetry_request_rejects_color_breaking_generator() -> None:
     payload = _path_request()
-    payload["vertex_colors"][2]["color"] = "distinguished"
+    payload["graph"]["vertex_colors"][2] = "distinguished"  # type: ignore[index]
 
     with pytest.raises(ValidationError, match="preserve declared vertex colors"):
         GraphSymmetryOrbitRequest.model_validate(payload)
@@ -85,18 +90,18 @@ def test_graph_symmetry_request_rejects_color_breaking_generator() -> None:
 
 def test_graph_symmetry_request_rejects_labels_outside_artifact_budget() -> None:
     payload = {
-        "graph": {"vertices": ["a" * 65], "edges": []},
+        "graph": {"graph": {"vertices": ["a" * 65], "edges": []}},
         "generators": [],
     }
 
-    with pytest.raises(ValidationError, match="1-64 characters"):
+    with pytest.raises(ValidationError, match="at most 64 UTF-8 bytes"):
         GraphSymmetryOrbitRequest.model_validate(payload)
 
 
 def _wide_orbit_payload(generators: int) -> dict[str, object]:
-    """A 256-vertex, 4096-edge graph with maximal 64-character labels."""
+    """A 256-vertex, 4096-edge graph with maximal 64-byte labels."""
 
-    prefix = "\U0001d552" * 60
+    prefix = "a" * 60
     vertices = [f"{prefix}{index:04d}" for index in range(256)]
     edges: list[list[str]] = []
     for left in range(256):
@@ -107,7 +112,7 @@ def _wide_orbit_payload(generators: int) -> dict[str, object]:
         if len(edges) == 4096:
             break
     return {
-        "graph": {"vertices": vertices, "edges": edges},
+        "graph": {"graph": {"vertices": vertices, "edges": edges}},
         "generators": [
             {
                 "generator_id": f"{'g' * 62}{index:02d}",
@@ -119,11 +124,24 @@ def _wide_orbit_payload(generators: int) -> dict[str, object]:
 
 
 def test_graph_symmetry_request_admission_bounds_retained_source_output() -> None:
-    payload = _wide_orbit_payload(30)
+    """The maximal admissible envelope keeps its retained source inside budget.
+
+    The canonical colored-graph value caps every retained string at 64
+    UTF-8 bytes and the operation admits at most 64 generators, so even the
+    maximal request's echoed source plus priced orbit result stays inside
+    the canonical output limit while the strict estimate upper-bounds the
+    actual canonicalized wire size.
+    """
+
+    payload = _wide_orbit_payload(MAX_GRAPH_SYMMETRY_GENERATORS)
     assert len(encode_strict_json(payload)) <= CanonicalLimits().max_input_bytes
 
-    with pytest.raises(ValidationError, match="canonical output limit"):
-        GraphSymmetryOrbitRequest.model_validate(payload)
+    request = GraphSymmetryOrbitRequest.model_validate(payload)
+    encoded = canonicalize_json(request.model_dump(mode="json"))
+    assert len(encoded) <= _estimate_orbit_result_wire_bytes(request)
+    assert (
+        _estimate_orbit_result_wire_bytes(request) <= CanonicalLimits().max_output_bytes
+    )
 
 
 def test_graph_symmetry_admitted_request_result_fits_canonical_output() -> None:
@@ -178,7 +196,7 @@ def test_transitive_action_charges_only_possible_representatives() -> None:
 
     from jacobian.math.graphs.symmetry._operations import _generator_orbits
 
-    prefix = "\U0001d552" * 60
+    prefix = "a" * 60
     vertices = [f"{prefix}{index:04d}" for index in range(256)]
     edges: list[list[str]] = []
     for distance in range(1, 17):
@@ -194,7 +212,7 @@ def test_transitive_action_charges_only_possible_representatives() -> None:
             break
     edges = sorted(edges)[:4096]
     payload = {
-        "graph": {"vertices": vertices, "edges": edges},
+        "graph": {"graph": {"vertices": vertices, "edges": edges}},
         "generators": [
             {
                 "generator_id": "rotation",
@@ -237,8 +255,9 @@ def test_colored_singleton_orbits_price_exact_fixed_structure() -> None:
     from jacobian.math.graphs.symmetry._operations import _generator_orbits
 
     payload = _wide_orbit_payload(14)
-    payload["vertex_colors"] = [
-        {"vertex": vertex, "color": "c"} for vertex in payload["graph"]["vertices"]
+    payload["graph"]["vertex_colors"] = [  # type: ignore[index]
+        "c"
+        for vertex in payload["graph"]["graph"]["vertices"]  # type: ignore[index]
     ]
     request = GraphSymmetryOrbitRequest.model_validate(payload)
     result = _generator_orbits(request)
@@ -262,7 +281,7 @@ def test_graph_symmetry_estimate_bounds_heterogeneous_representatives() -> None:
     successor = dict(zip(ring, [*ring[1:], ring[0]], strict=True))
     edges = sorted([a, b] if a < b else [b, a] for a, b in successor.items())
     payload = {
-        "graph": {"vertices": vertices, "edges": edges},
+        "graph": {"graph": {"vertices": vertices, "edges": edges}},
         "generators": [
             {
                 "generator_id": "rotation",
@@ -290,21 +309,17 @@ def test_graph_symmetry_request_requires_nfc_generator_identifiers() -> None:
 
 def test_graph_symmetry_request_requires_nfc_vertex_colors() -> None:
     payload = _path_request()
-    payload["vertex_colors"][0]["color"] = "\u0344endpoint"
+    payload["graph"]["vertex_colors"][0] = "\u0344endpoint"  # type: ignore[index]
 
-    with pytest.raises(ValidationError, match="vertex colors must use Unicode NFC"):
+    with pytest.raises(ValidationError, match="must use Unicode NFC"):
         GraphSymmetryOrbitRequest.model_validate(payload)
 
 
 def test_graph_symmetry_request_requires_nfc_edge_colors() -> None:
     payload = _path_request()
-    del payload["vertex_colors"]
-    payload["edge_colors"] = [
-        {"edge": ["a", "b"], "color": "\u0344" * 128},
-        {"edge": ["b", "c"], "color": "\u0344" * 128},
-    ]
+    payload["graph"]["edge_colors"] = ["\u0344" * 64, "\u0344" * 64]  # type: ignore[index]
 
-    with pytest.raises(ValidationError, match="edge colors must use Unicode NFC"):
+    with pytest.raises(ValidationError, match="must use Unicode NFC"):
         GraphSymmetryOrbitRequest.model_validate(payload)
 
 
@@ -313,14 +328,10 @@ def test_graph_symmetry_schema_publishes_nfc_requirement() -> None:
 
     from jacobian.math.graphs.symmetry._models import (
         GraphAutomorphismGenerator,
-        GraphEdgeColor,
         GraphSymmetryOrbitRequest,
-        GraphVertexColor,
     )
 
     generator_schema = GraphAutomorphismGenerator.model_json_schema()
-    vertex_color_schema = GraphVertexColor.model_json_schema()
-    edge_color_schema = GraphEdgeColor.model_json_schema()
     request_schema = GraphSymmetryOrbitRequest.model_json_schema()
 
     assert (
@@ -331,25 +342,63 @@ def test_graph_symmetry_schema_publishes_nfc_requirement() -> None:
     )
     assert (
         "NFC"
-        in request_schema["$defs"]["GraphVertexColor"]["properties"]["color"][
-            "description"
-        ]
-    )
-    assert (
-        "NFC"
-        in request_schema["$defs"]["GraphEdgeColor"]["properties"]["color"][
-            "description"
-        ]
-    )
-    assert (
-        "NFC"
         in generator_schema["properties"]["generator_id"]["description"]
         == request_schema["$defs"]["GraphAutomorphismGenerator"]["properties"][
             "generator_id"
         ]["description"]
     )
-    assert "NFC" in vertex_color_schema["properties"]["color"]["description"]
-    assert "NFC" in edge_color_schema["properties"]["color"]["description"]
+    assert (
+        "NFC"
+        in request_schema["$defs"]["ColoredUndirectedGraph"]["properties"][
+            "vertex_colors"
+        ]["description"]
+    )
+    assert (
+        "NFC"
+        in request_schema["$defs"]["ColoredUndirectedGraph"]["properties"][
+            "edge_colors"
+        ]["description"]
+    )
+
+
+def test_graph_symmetry_request_rejects_non_nfc_color_names() -> None:
+    payload = _path_request()
+    payload["graph"]["vertex_colors"] = ["endpo\u0069\u0301nt", "middle", "endpoint"]  # type: ignore[index]
+
+    with pytest.raises(ValidationError, match="Unicode NFC"):
+        GraphSymmetryOrbitRequest.model_validate(payload)
+
+
+def test_canonicalization_result_passes_unchanged_into_symmetry_request() -> None:
+    source = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(
+            vertices=("a", "b", "c"),
+            edges=(("a", "b"), ("b", "c")),
+        ),
+        vertex_colors=("endpoint", "middle", "endpoint"),
+        edge_colors=("outer", "outer"),
+    )
+    canonical = canonicalize_colored_graph(source).canonical_graph
+
+    request = GraphSymmetryOrbitRequest(
+        graph=canonical,
+        generators=(
+            {
+                "generator_id": "reflection",
+                "mapping": (("v00", "v01"), ("v01", "v00"), ("v02", "v02")),
+            },
+        ),
+    )
+
+    assert request.graph is canonical
+    assert request.action == "DECLARED_AUTOMORPHISM_GENERATORS"
+
+    result = _generator_orbits(request)
+    assert tuple(orbit.members for orbit in result.vertex_orbits) == (
+        ("v00", "v01"),
+        ("v02",),
+    )
+    assert len(result.edge_orbits) == 1
 
 
 def test_graph_symmetry_nfc_request_wire_matches_canonicalized_result() -> None:
@@ -371,8 +420,10 @@ def test_graph_symmetry_result_rejects_incomplete_orbit_partition() -> None:
             source=GraphSymmetryOrbitRequest.model_validate(
                 {
                     "graph": {
-                        "vertices": ["a", "b"],
-                        "edges": [["a", "b"]],
+                        "graph": {
+                            "vertices": ["a", "b"],
+                            "edges": [["a", "b"]],
+                        },
                     },
                     "generators": [],
                 }
@@ -439,7 +490,7 @@ def test_graph_symmetry_result_retains_declared_source_action() -> None:
         ("b", "b"),
         ("c", "a"),
     )
-    assert result.source.vertex_colors[1].color == "middle"
+    assert result.source.graph.vertex_colors[1] == "middle"
     assert result.action == "DECLARED_GENERATED_SUBGROUP"
     assert (
         result.generator_validation
@@ -491,7 +542,7 @@ def test_graph_symmetry_den_num_identity_generator_canonicalizes() -> None:
     from jacobian.math.graphs.symmetry._operations import _generator_orbits
 
     payload = {
-        "graph": {"vertices": ["den", "num"], "edges": [["den", "num"]]},
+        "graph": {"graph": {"vertices": ["den", "num"], "edges": [["den", "num"]]}},
         "generators": [
             {
                 "generator_id": "identity",
@@ -576,7 +627,9 @@ def test_graph_symmetry_result_rejects_color_modes_contradicting_source() -> Non
 
     uncolored_payload = _reflection_path_result_payload()
     uncolored_payload["source"] = {
-        "graph": {"vertices": ["a", "b", "c"], "edges": [["a", "b"], ["b", "c"]]},
+        "graph": {
+            "graph": {"vertices": ["a", "b", "c"], "edges": [["a", "b"], ["b", "c"]]},
+        },
         "generators": [
             {
                 "generator_id": "reflection",

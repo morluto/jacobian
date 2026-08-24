@@ -8,9 +8,12 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.canonical import CanonicalLimits
 
 MAX_DIMENSION = 100
 MAX_PIECES = 10_000
+_MAX_CONVEX_WORK_CELLS = 1_000_000
+_MAX_CONVEX_WIRE_BYTES = CanonicalLimits().max_output_bytes
 
 
 class AffinePiece(StrictModel):
@@ -37,6 +40,20 @@ class MaxAffineFunction(StrictModel):
         ids = [p.piece_id for p in self.pieces]
         if len(ids) != len(set(ids)):
             raise ValueError("piece IDs must be unique")
+        work_cells = len(self.pieces) * dim
+        if work_cells > _MAX_CONVEX_WORK_CELLS:
+            raise ValueError(
+                f"max-affine work p·d={work_cells} exceeds the "
+                f"{_MAX_CONVEX_WORK_CELLS}-cell result-sensitive bound; "
+                "partition the function and compose"
+            )
+        # Transport-sensitive: p·d small but digits huge could still exceed 10MiB
+        estimated = work_cells * 16 + len(self.pieces) * 64
+        if estimated > _MAX_CONVEX_WIRE_BYTES:
+            raise ValueError(
+                "max-affine function exceeds the "
+                f"{_MAX_CONVEX_WIRE_BYTES}-byte transport envelope"
+            )
         return self
 
 

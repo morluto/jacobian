@@ -11,6 +11,12 @@ from jacobian.math.probability._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "probability.digraph_bond_reliability.connection_probability.compute",
+        AdmissionDecision.KEEP,
+        "exact directed source-to-target finite bond connection probability with "
+        "a source-bound complete arc-subset ledger",
+    ),
+    OperationAdmission(
         "probability.finite_distribution.condition.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
@@ -54,6 +60,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "probability.joint.mutual_information.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+    ),
+    OperationAdmission(
+        "probability.local_lemma.asymmetric_witness.check",
+        AdmissionDecision.KEEP,
+        "exact source-bound numerical-witness relation with a complete replayable inequality ledger, distinct from dependency-graph proof or witness search",
     ),
 )
 

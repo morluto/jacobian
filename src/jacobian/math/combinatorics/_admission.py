@@ -128,6 +128,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         native_symbol="jacobian.math.combinatorics.integer_partitions",
     ),
     OperationAdmission(
+        "combinatorics.generalized_exact_cover.find",
+        AdmissionDecision.KEEP,
+        "one checked primary/secondary exact-cover witness or exact bounded nonexistence over materialized incidence rows",
+    ),
+    OperationAdmission(
         "combinatorics.generating_function.coefficients.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",

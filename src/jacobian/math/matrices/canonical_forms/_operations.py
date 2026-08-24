@@ -45,6 +45,7 @@ def compute_minimal_polynomial(
     minimal = minimal_polynomial(entries)
     characteristic = characteristic_polynomial(entries)
     return MinimalPolynomialResult(
+        matrix=request,
         minimal_polynomial=_to_monic_polynomial(minimal),
         characteristic_polynomial=_to_monic_polynomial(characteristic),
         degree=len(minimal) - 1,
@@ -68,6 +69,7 @@ def compute_rational_canonical_form(
     )
 
     return RationalCanonicalFormResult(
+        matrix=request,
         invariant_factors=invariant_entries,
         characteristic_polynomial=_to_monic_polynomial(characteristic),
         minimal_polynomial=_to_monic_polynomial(minimal),
@@ -82,6 +84,7 @@ def compute_primary_decomposition(
     components = primary_decomposition(entries)
     minimal = minimal_polynomial(entries)
     return PrimaryDecompositionResult(
+        matrix=request,
         components=tuple(
             _to_monic_polynomial(coefficient) for coefficient in components
         ),

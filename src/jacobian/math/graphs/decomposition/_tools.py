@@ -15,12 +15,15 @@ from jacobian.math.graphs.decomposition._models import (
     BridgeBlockResult,
     EarDecompositionRequest,
     EarDecompositionResult,
+    SPQRTreeRequest,
+    SPQRTreeResult,
 )
 from jacobian.math.graphs.decomposition._operations import (
     compute_biconnected_components,
     compute_block_cut_tree,
     compute_bridge_block_tree,
     compute_ear_decomposition,
+    compute_spqr_tree,
 )
 
 
@@ -52,6 +55,43 @@ def graph_decomposition_operation[
 
 
 GRAPH_DECOMPOSITION_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
+    graph_decomposition_operation(
+        "graph.decomposition.spqr_tree.compute",
+        "Compute a normalized SPQR tree of an undirected graph",
+        "Compute a deterministic normalized S/P/Q/R decomposition of a"
+        " biconnected finite simple graph. Real source edges occur in exactly"
+        " one skeleton; paired virtual edges encode each separator gluing and"
+        " the returned tree replays to exactly the source graph. A graph outside"
+        " the biconnected minimum-size convention returns a concrete witness.",
+        SPQRTreeRequest,
+        SPQRTreeResult,
+        compute_spqr_tree,
+        "graph",
+        "decomposition",
+        "spqr",
+        "triconnected",
+        "exact",
+        examples=(
+            example(
+                "k4_rigid",
+                "Compute the rigid SPQR skeleton of K4; the source graph is"
+                " biconnected and has at least three vertices.",
+                {
+                    "graph": {
+                        "vertex_count": 4,
+                        "edges": [
+                            [0, 1],
+                            [0, 2],
+                            [0, 3],
+                            [1, 2],
+                            [1, 3],
+                            [2, 3],
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
     graph_decomposition_operation(
         "graph.decomposition.block_cut_tree.compute",
         "Compute the block-cut tree of an undirected graph",

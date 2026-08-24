@@ -63,7 +63,9 @@ def test_invoke_operation_wraps_den_num_orbit_result() -> None:
     result = invoke_operation(
         "graph.symmetry.generator_orbits.compute",
         {
-            "graph": {"vertices": ["den", "num"], "edges": [["den", "num"]]},
+            "graph": {
+                "graph": {"vertices": ["den", "num"], "edges": [["den", "num"]]},
+            },
             "generators": [
                 {
                     "generator_id": "identity",

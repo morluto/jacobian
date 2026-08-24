@@ -8,7 +8,11 @@ from itertools import product
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import CanonicalLimits, canonicalize_json
+from jacobian.canonical import (
+    CanonicalLimits,
+    canonicalize_json,
+    format_canonical_integer,
+)
 from jacobian.math.additive_combinatorics import (
     IndexedIntegerSequence,
     SubsetSumProfile,
@@ -31,7 +35,7 @@ from jacobian.math.additive_combinatorics.values import (
 
 def _request(*items: int) -> SubsetSumProfileRequest:
     return SubsetSumProfileRequest(
-        source={"items": [str(item) for item in items]},
+        source={"items": [format_canonical_integer(item) for item in items]},
     )
 
 
@@ -154,6 +158,16 @@ def test_result_sensitive_admission_accepts_many_repeated_zeros() -> None:
     assert result.total_subsets == str(1 << MAX_SUBSET_SUM_ITEMS)
 
 
+def test_widened_source_contract_admits_beyond_legacy_multiplicity_digits() -> None:
+    source = IndexedIntegerSequence(items=("0",) * 300)
+
+    result = subset_sum_profile(source)
+
+    assert _numeric_profile(result) == {0: 1 << 300}
+    assert result.total_subsets == str(1 << 300)
+    assert len(result.total_subsets) > len(str(1 << 256))
+
+
 def test_profile_work_above_bound_is_rejected_before_execution() -> None:
     items = tuple(1 << exponent for exponent in range(14)) + (0,) * (
         MAX_SUBSET_SUM_ITEMS - 14
@@ -173,7 +187,7 @@ def test_profile_result_above_bound_is_rejected_before_execution() -> None:
 
 def test_large_accepted_profile_stays_inside_declared_result_budget() -> None:
     offset = 10 ** (MAX_SUBSET_SUM_ITEM_DIGITS - 1)
-    source = tuple(offset + (1 << exponent) for exponent in range(13))
+    source = tuple(offset + (1 << exponent) for exponent in range(6))
     result = compute_subset_sum_profile(_request(*source))
 
     encoded = canonicalize_json(
@@ -183,12 +197,12 @@ def test_large_accepted_profile_stays_inside_declared_result_budget() -> None:
         ),
     )
 
-    assert result.support_size == 1 << 13
+    assert result.support_size == 1 << 6
     assert len(encoded) <= MAX_SUBSET_SUM_PROFILE_RESULT_BYTES
 
 
 def test_source_digit_bound_is_enforced_before_integer_conversion() -> None:
-    with pytest.raises(ValidationError, match="256-digit"):
+    with pytest.raises(ValidationError, match=f"{MAX_SUBSET_SUM_ITEM_DIGITS:,}-digit"):
         SubsetSumProfileRequest(
             source={"items": ["9" * (MAX_SUBSET_SUM_ITEM_DIGITS + 1)]},
         )
@@ -199,7 +213,7 @@ def test_source_digit_bound_is_enforced_before_integer_conversion() -> None:
 
 
 def test_source_item_count_bound_is_enforced_by_schema() -> None:
-    with pytest.raises(ValidationError, match="at most 256 items"):
+    with pytest.raises(ValidationError, match=f"at most {MAX_SUBSET_SUM_ITEMS} items"):
         IndexedIntegerSequence(items=("0",) * (MAX_SUBSET_SUM_ITEMS + 1))
 
 

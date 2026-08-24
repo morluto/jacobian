@@ -10,10 +10,15 @@ from jacobian._models import StrictModel
 
 
 class DirectedGraph(StrictModel):
-    """A simple directed graph for reachability, SCC, and related analyses."""
+    """A simple directed graph for reachability, SCC, and related analyses.
 
-    vertex_count: int = Field(ge=2, le=64)
-    edges: tuple[tuple[int, int], ...] = Field(min_length=1, max_length=512)
+    ``vertex_count`` carries a conservative admission fallback bounding
+    linear-time traversal work and vertex-sized results; consumers with
+    sharper derived budgets refine admission further.
+    """
+
+    vertex_count: int = Field(ge=2, le=256)
+    edges: tuple[tuple[int, int], ...] = Field(max_length=512)
 
     @model_validator(mode="after")
     def require_valid_edges(self) -> Self:
@@ -34,7 +39,7 @@ class DirectedGraph(StrictModel):
 
 class ReachabilityRequest(StrictModel):
     graph: DirectedGraph
-    source: int = Field(ge=0, le=63)
+    source: int = Field(ge=0, le=255)
 
     @model_validator(mode="after")
     def require_valid_source(self) -> Self:
@@ -44,7 +49,7 @@ class ReachabilityRequest(StrictModel):
 
 
 class ReachabilityResult(StrictModel):
-    source: int = Field(ge=0, le=63)
+    source: int = Field(ge=0, le=255)
     reachable: tuple[int, ...]
     unreachable: tuple[int, ...]
     convention: Literal["NETWORKX_DESCENDANTS"] = "NETWORKX_DESCENDANTS"

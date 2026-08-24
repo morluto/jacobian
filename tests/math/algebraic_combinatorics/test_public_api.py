@@ -8,8 +8,11 @@ from jacobian.math import algebraic_combinatorics
 def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the algebraic_combinatorics public API."""
     expected = (
+        "RSKTableauPair",
         "conjugate_partition",
         "hook_lengths",
+        "inverse_row_insertion_rsk",
+        "row_insertion_rsk",
         "standard_young_tableaux_count",
     )
     assert tuple(algebraic_combinatorics.__all__) == expected

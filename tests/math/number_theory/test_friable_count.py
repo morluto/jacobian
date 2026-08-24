@@ -172,5 +172,9 @@ def test_operation_is_discoverable_with_one_executable_example() -> None:
 def test_number_theory_native_api_is_explicit() -> None:
     from jacobian.math import number_theory
 
-    assert tuple(number_theory.__all__) == ("FriableCountResult", "count_friable")
+    assert tuple(number_theory.__all__) == (
+        "FriableCountResult",
+        "count_friable",
+        "ramanujan_sum",
+    )
     assert all(hasattr(number_theory, name) for name in number_theory.__all__)

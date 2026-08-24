@@ -72,8 +72,8 @@ def _declared_orbit_partitions(
     Shared by execution and result-model validation so both replay the exact
     same orbit computation on the retained source action.
     """
-    vertices = tuple(sorted(request.graph.vertices))
-    edges = tuple(sorted(request.graph.edges))
+    vertices = tuple(sorted(request.graph.graph.vertices))
+    edges = tuple(sorted(request.graph.graph.edges))
     vertex_actions = tuple(dict(generator.mapping) for generator in request.generators)
     edge_actions = tuple(
         {edge: _canonical_edge(mapping[edge[0]], mapping[edge[1]]) for edge in edges}
@@ -88,8 +88,8 @@ def _declared_orbit_partitions(
 def _generator_orbits(
     request: GraphSymmetryOrbitRequest,
 ) -> GraphSymmetryOrbitResult:
-    vertices = tuple(sorted(request.graph.vertices))
-    edges = tuple(sorted(request.graph.edges))
+    vertices = tuple(sorted(request.graph.graph.vertices))
+    edges = tuple(sorted(request.graph.graph.edges))
     vertex_orbit_members, edge_orbit_members = _declared_orbit_partitions(request)
     vertex_orbits = tuple(
         GraphVertexOrbit(
@@ -119,8 +119,8 @@ def _generator_orbits(
         edge_orbits=edge_orbits,
         vertex_orbit_count=len(vertex_orbits),
         edge_orbit_count=len(edge_orbits),
-        vertex_color_mode=("DECLARED" if request.vertex_colors else "UNCOLORED"),
-        edge_color_mode="DECLARED" if request.edge_colors else "UNCOLORED",
+        vertex_color_mode=("DECLARED" if request.graph.vertex_colors else "UNCOLORED"),
+        edge_color_mode="DECLARED" if request.graph.edge_colors else "UNCOLORED",
     )
 
 
@@ -156,11 +156,14 @@ GRAPH_SYMMETRY_OPERATIONS: MathTools = (
                 "Compute path vertex and edge orbits; the generator must be a total vertex permutation preserving colors and edges.",
                 {
                     "graph": {
-                        "vertices": ["a", "b", "c"],
-                        "edges": [
-                            ["a", "b"],
-                            ["b", "c"],
-                        ],
+                        "graph": {
+                            "vertices": ["a", "b", "c"],
+                            "edges": [
+                                ["a", "b"],
+                                ["b", "c"],
+                            ],
+                        },
+                        "vertex_colors": ["endpoint", "middle", "endpoint"],
                     },
                     "generators": [
                         {
@@ -171,11 +174,6 @@ GRAPH_SYMMETRY_OPERATIONS: MathTools = (
                                 ["c", "a"],
                             ],
                         }
-                    ],
-                    "vertex_colors": [
-                        {"vertex": "a", "color": "endpoint"},
-                        {"vertex": "b", "color": "middle"},
-                        {"vertex": "c", "color": "endpoint"},
                     ],
                 },
             ),

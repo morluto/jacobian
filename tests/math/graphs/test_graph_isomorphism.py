@@ -433,9 +433,8 @@ class TestOperationMetadata:
     def test_operation_registered(self) -> None:
         from jacobian.math.graphs.isomorphism._tools import TOOLS
 
-        ops = TOOLS
-        assert len(ops) == 1
-        op = ops[0]
+        ops = {operation.operation_id: operation for operation in TOOLS}
+        op = ops["graph.isomorphism.decide.compute"]
         assert op.operation_id == "graph.isomorphism.decide.compute"
         assert op.request_type.__name__ == "GraphIsomorphismRequest"
         assert op.result_type.__name__ == "GraphIsomorphismResult"
@@ -448,8 +447,8 @@ class TestOperationMetadata:
         """The operation's declared examples must validate and execute."""
         from jacobian.math.graphs.isomorphism._tools import TOOLS
 
-        ops = TOOLS
-        op = ops[0]
+        ops = {operation.operation_id: operation for operation in TOOLS}
+        op = ops["graph.isomorphism.decide.compute"]
         for ex in op.examples:
             req = op.request_type.model_validate(ex.input)
             result = op.run(req)

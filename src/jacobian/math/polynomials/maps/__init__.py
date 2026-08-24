@@ -1,3 +1,5 @@
-"""Polynomial-map operation ownership."""
+"""Canonical polynomial-map values."""
 
-__all__: list[str] = []
+from jacobian.math.polynomials.maps.values import RationalPolynomialMap
+
+__all__ = ["RationalPolynomialMap"]

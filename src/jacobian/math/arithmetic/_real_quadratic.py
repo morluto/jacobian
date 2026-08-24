@@ -3,12 +3,59 @@
 from jacobian.catalog._examples import example
 from jacobian.math.arithmetic._support import arithmetic_operation
 from jacobian.math.real_quadratic import (
+    RealQuadraticEmbeddingProfile,
+    RealQuadraticEmbeddingsRequest,
     RealQuadraticOrderRequest,
     RealQuadraticOrderValue,
+    real_quadratic_embeddings,
     real_quadratic_order,
 )
 
+
+def _compute_real_quadratic_embeddings(
+    request: RealQuadraticEmbeddingsRequest,
+) -> RealQuadraticEmbeddingProfile:
+    return real_quadratic_embeddings(request.element)
+
+
 REAL_QUADRATIC_OPERATIONS = (
+    arithmetic_operation(
+        "arithmetic.real_quadratic.embeddings.compute",
+        "Compute all exact embeddings of a real quadratic element",
+        (
+            "Return the two ordered exact real embedding images of "
+            "a+b*sqrt(d), along with its exact trace and norm. Images retain "
+            "the source and explicitly identify the maps sqrt(d) -> +sqrt(d) "
+            "and sqrt(d) -> -sqrt(d); the profile is available only for a "
+            "square-free positive radicand with 256-digit input components and "
+            "a trace and norm within the 1,032-digit result bound."
+        ),
+        RealQuadraticEmbeddingsRequest,
+        RealQuadraticEmbeddingProfile,
+        _compute_real_quadratic_embeddings,
+        "arithmetic",
+        "real-quadratic",
+        "number-field",
+        "embedding",
+        "trace",
+        "norm",
+        "exact",
+        examples=(
+            example(
+                "sqrt2_embedding_profile",
+                "Compute both exact embeddings, trace, and norm of 1+sqrt(2). "
+                "The radicand must be positive and square-free, and the derived "
+                "trace and norm must fit the 1,032-digit result bound.",
+                {
+                    "element": {
+                        "rational_part": {"num": "1", "den": "1"},
+                        "radical_coefficient": {"num": "1", "den": "1"},
+                        "radicand": 2,
+                    }
+                },
+            ),
+        ),
+    ),
     arithmetic_operation(
         "arithmetic.real_quadratic.order.compute",
         "Compare exact real quadratic values",

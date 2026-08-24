@@ -14,12 +14,17 @@ from jacobian.math.impartial_games.operations import (
     subtraction_game,
     subtraction_grundy_prefix,
 )
-from jacobian.math.impartial_games.values import GameMove, ImpartialGame
+from jacobian.math.impartial_games.values import (
+    GameMove,
+    ImpartialGame,
+    NimPosition,
+)
 
 __all__ = [
     "GameMove",
     "GrundyAnalysis",
     "ImpartialGame",
+    "NimPosition",
     "SubtractionGrundyAnalysis",
     "birthdays",
     "grundy_classes",

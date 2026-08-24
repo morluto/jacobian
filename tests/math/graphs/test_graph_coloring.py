@@ -216,7 +216,7 @@ class TestEdgeKColorability:
 
 
 class TestEdgeColoringRequestSchema:
-    MAX_VERTICES = 20
+    MAX_VERTICES = 64
 
     def _path_graph(self, vertex_count: int):
         from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -235,8 +235,8 @@ class TestEdgeColoringRequestSchema:
             "graph"
         ]
         assert decide_graph["properties"]["vertices"]["maxItems"] == self.MAX_VERTICES
-        assert decide_graph["properties"]["edges"]["maxItems"] == 190
-        assert "at most 20 vertices" in decide_graph["description"]
+        assert decide_graph["properties"]["edges"]["maxItems"] == 2016
+        assert "at most 64 vertices" in decide_graph["description"]
 
         check_schema = EdgeColoringCheckRequest.model_json_schema()
         assignment = check_schema["$defs"]["EdgeColoringAssignment"]
@@ -251,19 +251,19 @@ class TestEdgeColoringRequestSchema:
             EdgeKColorabilityRequest,
         )
 
-        g = self._path_graph(21)
-        assert len(g.vertices) == 21 < 256
-        with pytest.raises(ValidationError, match="at most 20 vertices"):
+        g = self._path_graph(65)
+        assert len(g.vertices) == 65 < 256
+        with pytest.raises(ValidationError, match="at most 64 vertices"):
             EdgeKColorabilityRequest.model_validate(
                 {"graph": g.model_dump(), "colors": 3}
             )
-        with pytest.raises(ValidationError, match="at most 20 vertices"):
+        with pytest.raises(ValidationError, match="at most 64 vertices"):
             EdgeColoringCheckRequest.model_validate(
                 {
                     "assignment": {
                         "graph": g.model_dump(),
                         "colors": 3,
-                        "coloring": tuple(range(20)),
+                        "coloring": tuple(range(64)),
                     }
                 }
             )
@@ -271,8 +271,8 @@ class TestEdgeColoringRequestSchema:
     def test_direct_construction_still_enforces_vertex_bound(self):
         from jacobian.math.graphs.coloring._models import EdgeKColorabilityRequest
 
-        with pytest.raises(ValidationError, match="at most 20 vertices"):
-            EdgeKColorabilityRequest(graph=self._path_graph(21), colors=3)
+        with pytest.raises(ValidationError, match="at most 64 vertices"):
+            EdgeKColorabilityRequest(graph=self._path_graph(65), colors=3)
 
     def test_20_vertex_boundary_request_is_admitted(self):
         from jacobian.math.graphs.coloring._models import (

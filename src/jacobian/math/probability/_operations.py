@@ -9,10 +9,16 @@ from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
+from jacobian.math.graphs.directed._models import ReachabilityRequest
+from jacobian.math.graphs.directed._operations import compute_reachability
 from jacobian.math.probability._gaussian_inputs import (
     CanonicalGaussianPolynomialMomentRequest,
 )
 from jacobian.math.probability._models import (
+    DirectedBondConnectionProbabilityRequest,
+    DirectedBondConnectionProbabilityResult,
+    DirectedBondConnectionProbabilitySource,
+    DirectedBondReliabilityState,
     ExactComplexRational,
     FiniteConditionalContribution,
     FiniteConditionRequest,
@@ -402,6 +408,104 @@ def _graph_connection_probability(
     )
 
 
+def _directed_bond_connection_probability_data(
+    source: DirectedBondConnectionProbabilitySource,
+) -> tuple[Fraction, tuple[tuple[tuple[tuple[int, int], ...], bool, Fraction], ...]]:
+    """Replay the full directed bond-percolation source with exact rationals.
+
+    Directed reachability is delegated to the directed-graph owner.  The
+    standard-library ``Fraction`` replay is deliberately independent from the
+    Python-FLINT producer used by the public operation below.
+    """
+
+    probabilities = tuple(
+        item.open_probability.as_fraction() for item in source.arc_probabilities
+    )
+    states: list[tuple[tuple[tuple[int, int], ...], bool, Fraction]] = []
+    connection_probability = Fraction()
+    for state_index in range(1 << len(source.graph.edges)):
+        open_arcs = tuple(
+            arc
+            for index, arc in enumerate(source.graph.edges)
+            if state_index & (1 << index)
+        )
+        state_probability = Fraction(1)
+        for index, probability in enumerate(probabilities):
+            state_probability *= (
+                probability if state_index & (1 << index) else 1 - probability
+            )
+        reaches_target = (
+            source.target
+            in compute_reachability(
+                ReachabilityRequest(
+                    graph=source.graph.model_copy(update={"edges": open_arcs}),
+                    source=source.source,
+                )
+            ).reachable
+        )
+        if reaches_target:
+            connection_probability += state_probability
+        states.append((open_arcs, reaches_target, state_probability))
+    return connection_probability, tuple(states)
+
+
+def _directed_bond_connection_probability(
+    request: DirectedBondConnectionProbabilityRequest,
+) -> DirectedBondConnectionProbabilityResult:
+    """Compute exact directed source-to-target bond reliability with FLINT."""
+
+    from flint import fmpq
+
+    source = DirectedBondConnectionProbabilitySource(
+        graph=request.graph,
+        arc_probabilities=request.arc_probabilities,
+        source=request.source,
+        target=request.target,
+    )
+    probabilities = tuple(
+        _fmpq(item.open_probability) for item in source.arc_probabilities
+    )
+    states: list[DirectedBondReliabilityState] = []
+    connection_probability = fmpq(0)
+    for state_index in range(1 << len(source.graph.edges)):
+        open_arcs = tuple(
+            arc
+            for index, arc in enumerate(source.graph.edges)
+            if state_index & (1 << index)
+        )
+        state_probability = fmpq(1)
+        for index, probability in enumerate(probabilities):
+            state_probability *= (
+                probability if state_index & (1 << index) else 1 - probability
+            )
+        reaches_target = (
+            source.target
+            in compute_reachability(
+                ReachabilityRequest(
+                    graph=source.graph.model_copy(update={"edges": open_arcs}),
+                    source=source.source,
+                )
+            ).reachable
+        )
+        if reaches_target:
+            connection_probability += state_probability
+        states.append(
+            DirectedBondReliabilityState(
+                state_index=state_index,
+                open_arcs=open_arcs,
+                source_reaches_target=reaches_target,
+                state_probability=_wire(state_probability),
+            )
+        )
+    return DirectedBondConnectionProbabilityResult(
+        source=source,
+        connection_probability=_wire(connection_probability),
+        arc_count=len(source.graph.edges),
+        visited_states=len(states),
+        states=tuple(states),
+    )
+
+
 _FAIR_BIT = {
     "atoms": [
         {
@@ -741,6 +845,59 @@ FINITE_PROBABILITY_OPERATIONS = (
                 "square_terminal_reliability",
                 "Compute square-graph terminal reliability; edge probabilities cover edges canonically and terminals are distinct declared vertices.",
                 _SQUARE_GRAPH,
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id=(
+            "probability.digraph_bond_reliability.connection_probability.compute"
+        ),
+        version="1",
+        title="Exact finite directed bond connection probability",
+        description=(
+            "Compute the exact probability of a directed path from one stated "
+            "source vertex to one stated target vertex in a bounded directed "
+            "graph with independent rational arc-open probabilities. The complete "
+            "arc-subset ledger is source-bound and replayed."
+        ),
+        request_type=DirectedBondConnectionProbabilityRequest,
+        result_type=DirectedBondConnectionProbabilityResult,
+        run=_directed_bond_connection_probability,
+        tags=(
+            "probability",
+            "directed-graph",
+            "reliability",
+            "bond-percolation",
+            "connection",
+            "reachability",
+            "exact",
+            "bounded",
+            "networkx",
+            "python-flint",
+        ),
+        examples=(
+            example(
+                "two_arc_directed_series",
+                "Compute the exact probability of the directed path 0 -> 1 -> 2; "
+                "each directed graph arc has one independent rational open probability.",
+                {
+                    "graph": {
+                        "vertex_count": 3,
+                        "edges": [[0, 1], [1, 2]],
+                    },
+                    "arc_probabilities": [
+                        {
+                            "arc": [0, 1],
+                            "open_probability": {"num": "2", "den": "3"},
+                        },
+                        {
+                            "arc": [1, 2],
+                            "open_probability": {"num": "3", "den": "5"},
+                        },
+                    ],
+                    "source": 0,
+                    "target": 2,
+                },
             ),
         ),
     ),

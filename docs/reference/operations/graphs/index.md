@@ -13,4 +13,5 @@ there is no graph artifact carrier or invariant-batch registry.
 - [Diameter and radius](graph-metric-verification.md)
 - [Exact weighted minimum spanning tree](graph-minimum-spanning-tree.md)
 - [Small exact graph reliability](graph-reliability.md)
+- [Exact finite directed bond reliability](directed-bond-reliability.md)
 - [Declared graph-symmetry orbits](graph-symmetry-orbits.md)

@@ -14,7 +14,12 @@ from jacobian._exact import (
     require_bounded_rational,
 )
 from jacobian._models import StrictModel
-from jacobian.canonical import canonicalize_json, format_canonical_integer
+from jacobian.canonical import (
+    canonicalize_json,
+    encode_strict_json,
+    format_canonical_integer,
+)
+from jacobian.math.graphs.directed._models import DirectedGraph
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_FINITE_DISTRIBUTION_ATOMS = 256
@@ -31,6 +36,28 @@ MAX_GRAPH_RELIABILITY_VERTICES = 16
 MAX_GRAPH_RELIABILITY_EDGES = 12
 MAX_GRAPH_RELIABILITY_STATES = 1 << MAX_GRAPH_RELIABILITY_EDGES
 MAX_GRAPH_RELIABILITY_LEDGER_BYTES = 9 * 1024 * 1024
+MAX_DIRECTED_BOND_RELIABILITY_VERTICES = 16
+MAX_DIRECTED_BOND_RELIABILITY_ARCS = 12
+MAX_DIRECTED_BOND_RELIABILITY_STATES = 1 << MAX_DIRECTED_BOND_RELIABILITY_ARCS
+MAX_DIRECTED_BOND_RELIABILITY_LEDGER_BYTES = 9 * 1024 * 1024
+# One state mass has at most one numerator and denominator factor per arc.
+# Summing at most 2**arcs masses can add at most ``arcs`` decimal digits.
+MAX_DIRECTED_BOND_RELIABILITY_RATIONAL_DIGITS = (
+    MAX_INPUT_RATIONAL_DIGITS * MAX_DIRECTED_BOND_RELIABILITY_ARCS
+    + MAX_DIRECTED_BOND_RELIABILITY_ARCS
+)
+# The producer enumerates every arc subset and result validation replays it.
+# Per state and pass it scans arcs to select the state, scans probabilities,
+# constructs a directed graph, and traverses it: at most four arc and two
+# vertex visits.
+MAX_DIRECTED_BOND_RELIABILITY_LOGICAL_WORK = (
+    2
+    * MAX_DIRECTED_BOND_RELIABILITY_STATES
+    * (
+        4 * MAX_DIRECTED_BOND_RELIABILITY_ARCS
+        + 2 * MAX_DIRECTED_BOND_RELIABILITY_VERTICES
+    )
+)
 
 
 def _require_bounded_fraction(
@@ -415,6 +442,322 @@ class GraphConnectionProbabilityResult(StrictModel):
             raise ValueError("graph reliability state probabilities must sum to one")
         if self.connection_probability.as_fraction() != connected:
             raise ValueError("connection probability does not match connected states")
+        return self
+
+
+class DirectedBondReliabilityArcProbability(StrictModel):
+    """The independent open probability attached to one directed arc."""
+
+    arc: tuple[StrictInt, StrictInt]
+    open_probability: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_bounded_directed_arc_probability(self) -> Self:
+        if self.arc[0] == self.arc[1]:
+            raise ValueError("directed reliability arcs must not be self-loops")
+        require_bounded_rational(
+            self.open_probability,
+            max_digits=MAX_INPUT_RATIONAL_DIGITS,
+            label="directed bond reliability arc probability",
+        )
+        if not 0 <= self.open_probability.as_fraction() <= 1:
+            raise ValueError(
+                "directed bond reliability probabilities must lie in [0, 1]"
+            )
+        return self
+
+
+class DirectedBondConnectionProbabilitySource(StrictModel):
+    """One finite directed bond-percolation source in canonical arc order.
+
+    Sources have at most 16 vertices and 12 arcs.  The probability map must
+    contain every graph arc exactly once, and source/target are distinct
+    declared vertices.  Input arc rows are normalized to lexicographic arc
+    order before state indices and result records are assigned.
+    """
+
+    graph: DirectedGraph = Field(
+        description=(
+            "A directed graph with at most 16 vertices and 12 arcs for this "
+            "complete-enumeration operation."
+        )
+    )
+    arc_probabilities: tuple[DirectedBondReliabilityArcProbability, ...] = Field(
+        min_length=1,
+        max_length=MAX_DIRECTED_BOND_RELIABILITY_ARCS,
+        description=(
+            "One independent open probability for every graph arc exactly once. "
+            "Input rows are accepted in any order and normalized to lexicographic "
+            "arc order."
+        ),
+    )
+    source: StrictInt = Field(
+        description="A declared source vertex, distinct from target."
+    )
+    target: StrictInt = Field(
+        description="A declared target vertex, distinct from source."
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_fully_weighted_directed_graph(self) -> Self:
+        if self.graph.vertex_count > MAX_DIRECTED_BOND_RELIABILITY_VERTICES:
+            raise ValueError(
+                "directed bond reliability exceeds the "
+                f"{MAX_DIRECTED_BOND_RELIABILITY_VERTICES}-vertex bound"
+            )
+        if len(self.graph.edges) > MAX_DIRECTED_BOND_RELIABILITY_ARCS:
+            raise ValueError(
+                "directed bond reliability exceeds the "
+                f"{MAX_DIRECTED_BOND_RELIABILITY_ARCS}-arc bound"
+            )
+        if self.source == self.target or any(
+            vertex < 0 or vertex >= self.graph.vertex_count
+            for vertex in (self.source, self.target)
+        ):
+            raise ValueError(
+                "source and target must be distinct declared graph vertices"
+            )
+
+        probabilities_by_arc = {
+            item.arc: item.open_probability for item in self.arc_probabilities
+        }
+        if len(probabilities_by_arc) != len(self.arc_probabilities) or frozenset(
+            probabilities_by_arc
+        ) != frozenset(self.graph.edges):
+            raise ValueError(
+                "arc probabilities must contain every directed graph arc exactly once"
+            )
+
+        canonical_arcs = tuple(sorted(self.graph.edges))
+        object.__setattr__(
+            self,
+            "graph",
+            DirectedGraph(
+                vertex_count=self.graph.vertex_count,
+                edges=canonical_arcs,
+            ),
+        )
+        object.__setattr__(
+            self,
+            "arc_probabilities",
+            tuple(
+                DirectedBondReliabilityArcProbability(
+                    arc=arc,
+                    open_probability=probabilities_by_arc[arc],
+                )
+                for arc in canonical_arcs
+            ),
+        )
+
+        arc_count = len(canonical_arcs)
+        state_count = 1 << arc_count
+        logical_work = 2 * state_count * (4 * arc_count + 2 * self.graph.vertex_count)
+        if logical_work > MAX_DIRECTED_BOND_RELIABILITY_LOGICAL_WORK:
+            raise ValueError(
+                "directed bond reliability exceeds the complete producer and "
+                "replay work budget"
+            )
+        repeated_arc_bytes = (1 << (arc_count - 1)) * sum(
+            len(encode_strict_json(list(arc))) + 1 for arc in canonical_arcs
+        )
+        probability_numerator_digits = sum(
+            max(
+                len(
+                    format_canonical_integer(
+                        item.open_probability.as_fraction().numerator
+                    )
+                ),
+                len(
+                    format_canonical_integer(
+                        (1 - item.open_probability.as_fraction()).numerator
+                    )
+                ),
+            )
+            for item in self.arc_probabilities
+        )
+        probability_denominator_digits = sum(
+            len(
+                format_canonical_integer(
+                    item.open_probability.as_fraction().denominator
+                )
+            )
+            for item in self.arc_probabilities
+        )
+        maximum_state = {
+            "state_index": state_count - 1,
+            "open_arcs": [],
+            "source_reaches_target": False,
+            "state_probability": {
+                "num": "9" * max(1, probability_numerator_digits),
+                "den": "9" * max(1, probability_denominator_digits),
+            },
+        }
+        source_bytes = len(
+            encode_strict_json(
+                {
+                    "graph": {
+                        "vertex_count": self.graph.vertex_count,
+                        "edges": [list(arc) for arc in canonical_arcs],
+                    },
+                    "arc_probabilities": [
+                        {
+                            "arc": list(item.arc),
+                            "open_probability": item.open_probability.model_dump(),
+                        }
+                        for item in self.arc_probabilities
+                    ],
+                    "source": self.source,
+                    "target": self.target,
+                }
+            )
+        )
+        estimated_ledger_bytes = (
+            source_bytes
+            + repeated_arc_bytes
+            + state_count * (len(encode_strict_json(maximum_state)) + 1)
+            + 16 * 1024
+        )
+        if estimated_ledger_bytes > MAX_DIRECTED_BOND_RELIABILITY_LEDGER_BYTES:
+            raise ValueError(
+                "directed bond reliability request can exceed the complete ledger "
+                f"budget of {MAX_DIRECTED_BOND_RELIABILITY_LEDGER_BYTES} bytes"
+            )
+        return self
+
+
+class DirectedBondConnectionProbabilityRequest(StrictModel):
+    """Compute directed source-to-target bond connection probability.
+
+    The request admits at most 16 vertices and 12 arcs, requires one
+    probability for every arc exactly once, and requires distinct declared
+    source and target vertices.  It normalizes arc rows lexicographically, so
+    state indices and the source-bound result do not depend on input order.
+    """
+
+    graph: DirectedGraph = Field(
+        description=(
+            "A directed graph with at most 16 vertices and 12 arcs for this "
+            "complete-enumeration operation."
+        )
+    )
+    arc_probabilities: tuple[DirectedBondReliabilityArcProbability, ...] = Field(
+        min_length=1,
+        max_length=MAX_DIRECTED_BOND_RELIABILITY_ARCS,
+        description=(
+            "One independent open probability for every graph arc exactly once. "
+            "Input rows are accepted in any order and normalized to lexicographic "
+            "arc order."
+        ),
+    )
+    source: StrictInt = Field(
+        description="A declared source vertex, distinct from target."
+    )
+    target: StrictInt = Field(
+        description="A declared target vertex, distinct from source."
+    )
+    event: Literal["DIRECTED_PATH_EXISTS"] = "DIRECTED_PATH_EXISTS"
+
+    @model_validator(mode="after")
+    def require_canonical_source(self) -> Self:
+        canonical_source = DirectedBondConnectionProbabilitySource(
+            graph=self.graph,
+            arc_probabilities=self.arc_probabilities,
+            source=self.source,
+            target=self.target,
+        )
+        object.__setattr__(self, "graph", canonical_source.graph)
+        object.__setattr__(
+            self, "arc_probabilities", canonical_source.arc_probabilities
+        )
+        return self
+
+
+class DirectedBondReliabilityState(StrictModel):
+    """One exact directed arc-subset state from a bond-percolation source."""
+
+    state_index: StrictInt = Field(
+        ge=0,
+        lt=MAX_DIRECTED_BOND_RELIABILITY_STATES,
+    )
+    open_arcs: tuple[tuple[StrictInt, StrictInt], ...] = Field(
+        max_length=MAX_DIRECTED_BOND_RELIABILITY_ARCS
+    )
+    source_reaches_target: bool
+    state_probability: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_bounded_probability(self) -> Self:
+        require_bounded_rational(
+            self.state_probability,
+            max_digits=MAX_DIRECTED_BOND_RELIABILITY_RATIONAL_DIGITS,
+            label="directed bond reliability state probability",
+        )
+        if not 0 <= self.state_probability.as_fraction() <= 1:
+            raise ValueError(
+                "directed bond reliability state probability must lie in [0, 1]"
+            )
+        return self
+
+
+class DirectedBondConnectionProbabilityResult(StrictModel):
+    """An exact, complete, source-bound directed bond reliability result."""
+
+    source: DirectedBondConnectionProbabilitySource
+    connection_probability: CanonicalRational
+    arc_count: StrictInt = Field(ge=1, le=MAX_DIRECTED_BOND_RELIABILITY_ARCS)
+    visited_states: StrictInt = Field(
+        ge=1,
+        le=MAX_DIRECTED_BOND_RELIABILITY_STATES,
+    )
+    states: tuple[DirectedBondReliabilityState, ...] = Field(
+        min_length=1,
+        max_length=MAX_DIRECTED_BOND_RELIABILITY_STATES,
+    )
+    event: Literal["DIRECTED_PATH_EXISTS"] = "DIRECTED_PATH_EXISTS"
+    arc_independence: Literal["INDEPENDENT_BERNOULLI"] = "INDEPENDENT_BERNOULLI"
+    enumeration: Literal["COMPLETE_ARC_SUBSETS"] = "COMPLETE_ARC_SUBSETS"
+    completeness: Literal["COMPLETE"] = "COMPLETE"
+    truncated: Literal[False] = False
+    termination_reason: Literal["EXHAUSTED"] = "EXHAUSTED"
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
+
+    @model_validator(mode="after")
+    def bind_to_directed_bond_source(self) -> Self:
+        require_bounded_rational(
+            self.connection_probability,
+            max_digits=MAX_DIRECTED_BOND_RELIABILITY_RATIONAL_DIGITS,
+            label="directed bond connection probability",
+        )
+        from jacobian.math.probability._operations import (
+            _directed_bond_connection_probability_data,
+        )
+
+        connection_probability, expected_states = (
+            _directed_bond_connection_probability_data(self.source)
+        )
+        if self.arc_count != len(self.source.graph.edges):
+            raise ValueError("arc_count must match the source graph")
+        if self.visited_states != 1 << self.arc_count:
+            raise ValueError("visited state count is not the full arc powerset")
+        if len(self.states) != self.visited_states:
+            raise ValueError("state ledger length does not match visited states")
+        if tuple(item.state_index for item in self.states) != tuple(
+            range(self.visited_states)
+        ):
+            raise ValueError("state ledger indices must be complete and canonical")
+        if len(expected_states) != len(self.states):
+            raise ValueError("state ledger length does not match source replay")
+        for state, expected in zip(self.states, expected_states, strict=True):
+            open_arcs, reaches_target, state_probability = expected
+            if state.open_arcs != open_arcs:
+                raise ValueError("state open arcs do not match source subset")
+            if state.source_reaches_target != reaches_target:
+                raise ValueError("state reachability does not match source subset")
+            if state.state_probability.as_fraction() != state_probability:
+                raise ValueError("state probability does not match source subset")
+        if self.connection_probability.as_fraction() != connection_probability:
+            raise ValueError("connection probability does not match source replay")
         return self
 
 
@@ -892,6 +1235,9 @@ class FiniteConvolutionResult(StrictModel):
 
 
 __all__ = [
+    "MAX_DIRECTED_BOND_RELIABILITY_ARCS",
+    "MAX_DIRECTED_BOND_RELIABILITY_STATES",
+    "MAX_DIRECTED_BOND_RELIABILITY_VERTICES",
     "MAX_FINITE_CONVOLUTION_PAIRS",
     "MAX_FINITE_DISTRIBUTION_ATOMS",
     "MAX_GAUSSIAN_EXPANSION_PATHS",
@@ -902,6 +1248,11 @@ __all__ = [
     "MAX_GRAPH_RELIABILITY_EDGES",
     "MAX_GRAPH_RELIABILITY_STATES",
     "MAX_GRAPH_RELIABILITY_VERTICES",
+    "DirectedBondConnectionProbabilityRequest",
+    "DirectedBondConnectionProbabilityResult",
+    "DirectedBondConnectionProbabilitySource",
+    "DirectedBondReliabilityArcProbability",
+    "DirectedBondReliabilityState",
     "ExactComplexRational",
     "FiniteConditionResult",
     "FiniteConditionalContribution",

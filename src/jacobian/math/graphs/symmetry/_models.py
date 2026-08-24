@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -23,9 +24,19 @@ def _canonical_edge(left: str, right: str) -> tuple[str, str]:
 
 
 class GraphAutomorphismGenerator(StrictModel):
-    generator_id: GraphSymmetryLabel
-    mapping: dict[GraphSymmetryLabel, GraphSymmetryLabel] = Field(
-        max_length=MAX_GRAPH_SYMMETRY_VERTICES
+    generator_id: GraphSymmetryLabel = Field(
+        description=(
+            "Unique identifier of this declared generator; must already be "
+            "normalized to Unicode NFC."
+        )
+    )
+    mapping: tuple[tuple[GraphSymmetryLabel, GraphSymmetryLabel], ...] = Field(
+        max_length=MAX_GRAPH_SYMMETRY_VERTICES,
+        description=(
+            "Total vertex permutation as (vertex, image) pairs covering every "
+            "declared vertex exactly once in the graph's declared vertex "
+            "order; labels must already be normalized to Unicode NFC."
+        ),
     )
 
 
@@ -38,10 +49,15 @@ def _validate_automorphism_generator(
     vertex_colors: dict[GraphSymmetryLabel, str],
     edge_colors: dict[GraphSymmetryEdge, str],
 ) -> None:
-    mapping = generator.mapping
-    if set(mapping) != vertex_set or set(mapping.values()) != vertex_set:
+    mapping = dict(generator.mapping)
+    if (
+        tuple(vertex for vertex, _ in generator.mapping) != vertices
+        or set(mapping.values()) != vertex_set
+    ):
         raise ValueError(
-            "every graph symmetry generator must be a total vertex permutation"
+            "every graph symmetry generator must be a total vertex permutation "
+            "declared as one (vertex, image) pair per declared vertex in the "
+            "graph's declared vertex order"
         )
     if any(
         vertex_colors[vertex] != vertex_colors[mapping[vertex]] for vertex in vertices
@@ -89,6 +105,13 @@ class GraphSymmetryOrbitRequest(StrictModel):
         generator_ids = tuple(generator.generator_id for generator in self.generators)
         if len(set(generator_ids)) != len(generator_ids):
             raise ValueError("graph symmetry generator identifiers must be unique")
+        if any(
+            not unicodedata.is_normalized("NFC", generator_id)
+            for generator_id in generator_ids
+        ):
+            raise ValueError(
+                "graph symmetry generator identifiers must use Unicode NFC"
+            )
 
         vertex_set = set(vertices)
         edge_set = set(edges)
@@ -155,6 +178,17 @@ class GraphEdgeOrbit(StrictModel):
 
 
 class GraphSymmetryOrbitResult(StrictModel):
+    """Complete vertex and edge orbits of one declared generated subgroup.
+
+    The result retains its complete declared source action - the canonical
+    graph, the generator mappings, and the declared colors - through the
+    domain-owned request value. Validation binds every claim to that source:
+    the retained graph and generators must equal it, the color modes must
+    match its declared colors, and both returned partitions must equal a
+    replay of the exact orbits of the declared generators.
+    """
+
+    source: GraphSymmetryOrbitRequest
     vertices: tuple[GraphSymmetryLabel, ...] = Field(
         max_length=MAX_GRAPH_SYMMETRY_VERTICES
     )
@@ -204,6 +238,29 @@ class GraphSymmetryOrbitResult(StrictModel):
             raise ValueError(
                 "result generator identifiers must be unique and canonical"
             )
+        declared_generator_ids = tuple(
+            sorted(generator.generator_id for generator in self.source.generators)
+        )
+        if (
+            self.vertices != tuple(sorted(self.source.graph.graph.vertices))
+            or self.edges != tuple(sorted(self.source.graph.graph.edges))
+            or self.generator_ids != declared_generator_ids
+        ):
+            raise ValueError(
+                "result graph and generators must equal the retained source action"
+            )
+        if self.vertex_color_mode != (
+            "DECLARED" if self.source.graph.vertex_colors else "UNCOLORED"
+        ):
+            raise ValueError(
+                "vertex color mode must match the retained source vertex colors"
+            )
+        if self.edge_color_mode != (
+            "DECLARED" if self.source.graph.edge_colors else "UNCOLORED"
+        ):
+            raise ValueError(
+                "edge color mode must match the retained source edge colors"
+            )
         vertex_members = tuple(
             member for orbit in self.vertex_orbits for member in orbit.members
         )
@@ -232,6 +289,25 @@ class GraphSymmetryOrbitResult(StrictModel):
             or set(edge_members) != set(self.edges)
         ):
             raise ValueError("edge orbits must be a complete canonical edge partition")
+        from jacobian.math.graphs.symmetry._operations import (
+            _declared_orbit_partitions,
+        )
+
+        expected_vertex_members, expected_edge_members = _declared_orbit_partitions(
+            self.source
+        )
+        if tuple(orbit.members for orbit in self.vertex_orbits) != (
+            expected_vertex_members
+        ):
+            raise ValueError(
+                "vertex orbits must be the exact orbits of the declared generators"
+            )
+        if tuple(orbit.members for orbit in self.edge_orbits) != (
+            expected_edge_members
+        ):
+            raise ValueError(
+                "edge orbits must be the exact orbits of the declared generators"
+            )
         return self
 
 

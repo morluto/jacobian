@@ -330,9 +330,7 @@ def test_covering_radius_budget_charges_bfs_and_replay_passes() -> None:
         tuple(1 if column == row else 0 for column in range(8)) for row in range(8)
     )
     boundary_matrix = tuple(row + (1,) * 16 for row in identity)
-    boundary = CoveringRadiusRequest(
-        field_order=2, generator_matrix=boundary_matrix
-    )
+    boundary = CoveringRadiusRequest(field_order=2, generator_matrix=boundary_matrix)
     width = len(boundary.generator_matrix[0])
     states = 2 ** (width - 8)
     assert states == MAX_COVERING_RADIUS_STATES_PER_PASS

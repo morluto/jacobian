@@ -132,35 +132,23 @@ def test_inline_homology_rejects_basis_that_exceeds_its_inline_budget() -> None:
 
 
 def test_integral_homology_has_tighter_certificate_size_bounds() -> None:
-    too_many_vertices = tuple(f"v{index}" for index in range(17))
+    too_many_vertices = tuple(f"v{index}" for index in range(51))
     vertex_complex = _canonical_complex(
         too_many_vertices,
         tuple((vertex,) for vertex in too_many_vertices),
     )
-    with pytest.raises(ValidationError, match="at most 16 simplices"):
+    with pytest.raises(ValidationError, match="at most 50 simplices"):
         IntegralSimplicialHomologyRequest(complex=vertex_complex)
 
-    projective_plane_facets = (
-        ("0", "1", "2"),
-        ("0", "1", "3"),
-        ("0", "2", "4"),
-        ("0", "3", "5"),
-        ("0", "4", "5"),
-        ("1", "2", "5"),
-        ("1", "3", "4"),
-        ("1", "4", "5"),
-        ("2", "3", "4"),
-        ("2", "3", "5"),
-        ("6",),
-        ("7",),
+    # 15 disjoint triangles: 45 vertices, f = (45,45,15), sum 105 >100, max 45 ≤50
+    tri_vertices = tuple(f"v{index}" for index in range(45))
+    tri_facets = tuple(
+        tuple(f"v{3 * tri + offset}" for offset in range(3)) for tri in range(15)
     )
-    total_rank_too_large = _canonical_complex(
-        tuple(str(index) for index in range(8)),
-        projective_plane_facets,
-    )
-    assert max(total_rank_too_large.f_vector) <= 16
-    assert sum(total_rank_too_large.f_vector) == 33  # exceeds the 32-bound
-    with pytest.raises(ValidationError, match="total chain rank at most 32"):
+    total_rank_too_large = _canonical_complex(tri_vertices, tri_facets)
+    assert max(total_rank_too_large.f_vector) <= 50
+    assert sum(total_rank_too_large.f_vector) == 105  # exceeds the 100-bound
+    with pytest.raises(ValidationError, match="total chain rank at most 100"):
         IntegralSimplicialHomologyRequest(complex=total_rank_too_large)
 
 

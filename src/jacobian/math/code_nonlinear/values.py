@@ -99,7 +99,16 @@ class ExplicitBinaryCode(StrictModel):
                         f"{total_bits} bits, exceeding the "
                         f"{MAX_EXPLICIT_CODE_BITS}-bit source bound"
                     )
-        return data
+        # Running a before validator moves field validation into Python
+        # mode, where decoded JSON arrays no longer coerce to the declared
+        # tuple shapes; normalize the raw containers on a copied path so
+        # JSON invocation keeps working while stored values stay canonical.
+        return {
+            **data,
+            "codewords": tuple(
+                tuple(word) if isinstance(word, list) else word for word in words
+            ),
+        }
 
     @model_validator(mode="after")
     def require_canonical_code(self) -> Self:

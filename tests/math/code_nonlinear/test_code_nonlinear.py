@@ -167,16 +167,12 @@ class TestCanonicalExplicitBinaryCode:
         codewords: list[list[int]] = [[0] * 1_000] * 2_000
         codewords[-1][-1] = 2
         with pytest.raises(ValidationError, match="bit source bound"):
-            ExplicitBinaryCode.model_validate(
-                {"length": 1_000, "codewords": codewords}
-            )
+            ExplicitBinaryCode.model_validate({"length": 1_000, "codewords": codewords})
 
     def test_enormous_single_word_rejected_before_nested_conversion(self) -> None:
         codewords: list[list[str]] = [["x"] * (MAX_EXPLICIT_CODE_LENGTH + 1)]
         with pytest.raises(ValidationError, match="bit source bound"):
-            ExplicitBinaryCode.model_validate(
-                {"length": 3, "codewords": codewords}
-            )
+            ExplicitBinaryCode.model_validate({"length": 3, "codewords": codewords})
 
 
 class TestWordDistance:

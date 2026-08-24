@@ -48,6 +48,12 @@ def test_math_find_does_not_acquire_an_execution_runtime() -> None:
     assert result.root.kind == "discovery"
 
 
+def test_math_find_search_accepts_a_long_mathematical_query() -> None:
+    request = OperationSearchRequest(op="search", query="q" * 513)
+
+    assert len(request.query) == 513
+
+
 def test_math_find_browse_does_not_acquire_an_execution_runtime() -> None:
     state = AppState(
         operation_catalog=_Catalog(),

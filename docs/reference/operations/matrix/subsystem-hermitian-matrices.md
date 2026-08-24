@@ -22,10 +22,11 @@ The bounded operations consume and produce this value directly:
 
 The admitted product dimension is at most 16, with at most four factors. A
 Kronecker operand component has at most 128 decimal digits and the product
-preflight proves every resulting component has at most 256. Partial trace and
-PSD order accept those 256-digit produced components; their own preflight
-accounts respectively for the traced common-denominator sum and for the
-`right - left` difference plus a replayable rational witness. The kernels are
-exact rational computations; they do not use floating-point matrix predicates
-or a tensor registry. The catalog schemas and invocation examples are
-authoritative for wire shapes.
+preflight proves every resulting component has at most 256. Partial trace
+accepts those produced components subject to its traced common-denominator
+sum bound. PSD order accepts components up to 256 digits only when its
+dimension-sensitive `right - left` and replayable-witness bounds also fit; a
+large product therefore does not imply that every downstream decision fits in
+one bounded call. The kernels are exact rational computations; they do not use
+floating-point matrix predicates or a tensor registry. The catalog schemas and
+invocation examples are authoritative for wire shapes.

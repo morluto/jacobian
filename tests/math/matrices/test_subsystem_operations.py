@@ -278,3 +278,31 @@ def test_kronecker_product_replays_through_trace_and_psd_order_at_derived_bound(
         PsdOrderRequest(left=product_matrix, right=product_matrix)
     )
     assert ordered.is_less_or_equal is True
+
+
+def test_psd_order_rejects_a_large_product_before_witness_expansion() -> None:
+    q = MatrixSubsystem(label="q", dimension=4)
+    r = MatrixSubsystem(label="r", dimension=4)
+    left_value = Fraction(1, 10**127 + 159)
+    right_value = Fraction(1, 10**127 + 197)
+    left = _matrix(
+        [
+            [left_value if row == column else 0 for column in range(4)]
+            for row in range(4)
+        ],
+        (q,),
+    )
+    right = _matrix(
+        [
+            [right_value if row == column else 0 for column in range(4)]
+            for row in range(4)
+        ],
+        (r,),
+    )
+    product_matrix = compute_kronecker_product(
+        SubsystemKroneckerProductRequest(left=left, right=right)
+    ).product
+    assert len(product_matrix.matrix.entries[0][0].den) == 255
+
+    with pytest.raises(ValidationError, match="witness growth"):
+        PsdOrderRequest(left=product_matrix, right=product_matrix)

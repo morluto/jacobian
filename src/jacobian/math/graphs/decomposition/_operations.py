@@ -897,12 +897,18 @@ def _validate_skeleton_kind(node: SPQRSkeleton) -> None:
             )
         return
     if node.kind == "S_NODE":
+        skeleton_graph: nx.Graph[int] = nx.Graph()
+        skeleton_graph.add_nodes_from(node.vertices)
+        skeleton_graph.add_edges_from(
+            _global_endpoints(node, edge) for edge in node.graph.edges
+        )
         if (
             len(node.vertices) < 3
             or len(node.graph.edges) != len(node.vertices)
             or any(value != 2 for value in degrees.values())
+            or not nx.is_connected(skeleton_graph)
         ):
-            raise ValueError("an S skeleton must be a cycle")
+            raise ValueError("an S skeleton must be one cycle")
         return
     graph: nx.Graph[int] = nx.Graph()
     graph.add_nodes_from(node.vertices)

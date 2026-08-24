@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 import networkx as nx
 import pytest
 from pydantic import ValidationError
@@ -794,6 +796,99 @@ class TestSPQRTree:
         ]
         with pytest.raises(ValidationError, match="exactly one virtual-edge pair"):
             SPQRTreeResult.model_validate(malformed)
+
+    def test_replay_rejects_disconnected_s_skeleton_of_two_cycles(self) -> None:
+        """K6 plus an ear at {0,1}: a forged S skeleton of two disjoint triangles."""
+        source_edges = [(i, j) for i in range(6) for j in range(i + 1, 6)]
+        source_edges += [(0, 6), (1, 6)]
+        genuine = _spqr_tree(
+            {"vertex_count": 7, "edges": sorted(tuple(edge) for edge in source_edges)}
+        )
+        assert genuine.status == "SPQR_TREE"
+
+        def forged_skeleton(
+            node_id: str,
+            kind: Literal["S_NODE", "R_NODE"],
+            vertices: tuple[int, ...],
+            real: list[tuple[int, int]],
+            virtual_id: str,
+        ) -> SPQRSkeleton:
+            positions = {vertex: index for index, vertex in enumerate(vertices)}
+            return SPQRSkeleton(
+                node_id=node_id,
+                kind=kind,
+                vertices=vertices,
+                graph=LooplessMultigraph(
+                    vertex_count=len(vertices),
+                    edges=(
+                        *(
+                            MultigraphEdge(
+                                edge_id=f"real:{left}:{right}",
+                                left=positions[left],
+                                right=positions[right],
+                            )
+                            for left, right in real
+                        ),
+                        MultigraphEdge(
+                            edge_id=virtual_id,
+                            left=positions[0],
+                            right=positions[1],
+                        ),
+                    ),
+                ),
+                real_edge_sources=tuple(
+                    (f"real:{left}:{right}", (min(left, right), max(left, right)))
+                    for left, right in real
+                ),
+                virtual_edge_ids=(virtual_id,),
+            )
+
+        ear_triangle = forged_skeleton(
+            "node:s-forged",
+            "S_NODE",
+            (0, 1, 2, 3, 4, 6),
+            [(0, 6), (1, 6), (2, 3), (2, 4), (3, 4)],
+            "virtual:s",
+        )
+        remaining = [
+            (a, b)
+            for a, b in source_edges
+            if {a, b} <= {0, 1, 2, 3, 4, 5} and (a, b) not in {(2, 3), (2, 4), (3, 4)}
+        ]
+        rigid = forged_skeleton(
+            "node:r-forged", "R_NODE", (0, 1, 2, 3, 4, 5), remaining, "virtual:r"
+        )
+        assert len(ear_triangle.graph.edges) == len(ear_triangle.vertices) == 6
+        owners = tuple(
+            sorted(
+                (source_edge, skeleton.node_id, edge_id)
+                for skeleton in (ear_triangle, rigid)
+                for edge_id, source_edge in skeleton.real_edge_sources
+            )
+        )
+        incidence = tuple(
+            (
+                vertex,
+                tuple(
+                    skeleton.node_id
+                    for skeleton in sorted(
+                        (ear_triangle, rigid), key=lambda s: s.node_id
+                    )
+                    if vertex in skeleton.vertices
+                ),
+            )
+            for vertex in range(7)
+        )
+        with pytest.raises(ValidationError, match="S skeleton"):
+            SPQRTreeResult(
+                source_graph=genuine.source_graph,
+                status="SPQR_TREE",
+                nodes=(ear_triangle, rigid),
+                tree_edges=(("node:r-forged", "node:s-forged"),),
+                virtual_edge_pairs=(("virtual:s", "virtual:r"),),
+                source_vertex_incidence=incidence,
+                source_edge_owners=owners,
+            )
 
     def test_request_admits_complete_graphs_on_the_declared_vertex_axis(self) -> None:
         k33_edges = [(i, j) for i in range(33) for j in range(i + 1, 33)]

@@ -47,10 +47,15 @@ _MAX_CERTIFIED_FACTORIZATION_LENGTH = 30
 # (totient, Möbius, divisor sigma, square-free predicates, and
 # multiplicative order).  The 10_000 bound keeps SymPy factoring safe for
 # in-process execution while admitting materially larger useful cases than
-# the prior 1_000 cap.  Primorial output is separately guarded by
-# ``_MAX_PRIMORIAL_DIGITS`` (3_400), so the larger ``n`` does not admit
-# unbounded output.
+# the prior 1_000 cap.  Primorial has its own request bound derived from
+# the declared result digit budget (see ``_MAX_PRIMORIAL_N``).
 _MAX_N_SMALL = 10_000
+# primorial(n) carries n(ln n + ln ln n)/ln 10 digits.  The declared
+# result budget is ``_MAX_PRIMORIAL_DIGITS`` (3_400), and primorial(1001)
+# already has 3397 digits while primorial(1002) has 3401, so the exact
+# admitted boundary is n <= 1001.  Defined here so ``PrimorialRequest``
+# can derive its own request-side guard from the output contract.
+_MAX_PRIMORIAL_N = 1001
 # ``_MAX_MODULUS`` is shared across modular inverse, multiplicative order,
 # quadratic residues, CRT, Jacobi symbol, and brute-force discrete log.
 # Raised to 1_000_000 for non-enumeration ops (inverse, order, CRT, Jacobi
@@ -299,6 +304,19 @@ class PositiveIntegerRequest(StrictModel):
     """One bounded positive integer (1 <= n <= 10 000)."""
 
     n: StrictInt = Field(ge=1, le=_MAX_N_SMALL)
+
+
+class PrimorialRequest(StrictModel):
+    """One bounded positive integer whose primorial fits the result contract.
+
+    ``primorial(n)`` grows like ``exp(n log n)``: the product of the first
+    ``n`` primes carries ``n(log n + log log n) / ln 10`` digits.  The
+    shared arithmetic-function bound admits values whose primorial would
+    exceed the declared ``_MAX_PRIMORIAL_DIGITS``-digit result, so this
+    request derives its own conservative ceiling from the digit bound.
+    """
+
+    n: StrictInt = Field(ge=1, le=_MAX_PRIMORIAL_N)
 
 
 class PreviousPrimeRequest(StrictModel):
@@ -611,17 +629,31 @@ class ExtendedGcdResult(StrictModel):
 class DivisorListResult(StrictModel):
     """An ordered list of positive divisors of one nonzero integer.
 
-    The list may be empty: ``proper_divisors(±1)`` has no positive proper
-    divisors.  Zero remains not-applicable (handled at the operation layer).
+    Retains the canonical source integer and the operation's divisor
+    convention so validation replays the exact enumeration: the list is
+    exactly all positive divisors of ``abs(value)`` (proper ones exclude
+    ``abs(value)`` itself) in ascending order.  The list may be empty:
+    ``proper_divisors(±1)`` has no positive proper divisors.  Zero remains
+    not-applicable (handled at the operation layer).  The source carries the
+    same 20-digit factorization bound as the producing requests, so replay
+    never factors outside the operation's admitted work envelope.
     """
 
+    value: FactorizationInteger
     divisors: tuple[BoundedInteger, ...] = Field(
         min_length=0,
         max_length=_MAX_DIVISORS,
     )
+    convention: Literal["ALL_POSITIVE_DIVISORS", "PROPER_DIVISORS"] = (
+        "ALL_POSITIVE_DIVISORS"
+    )
 
     @model_validator(mode="after")
-    def require_positive_ascending_unique(self) -> Self:
+    def require_source_enumeration(self) -> Self:
+        from jacobian.math.number_theory._factorization_kernels import (
+            _replayed_divisors,
+        )
+
         values = [int(divisor) for divisor in self.divisors]
         if any(value < 1 for value in values):
             raise ValueError("divisors must be positive")
@@ -629,6 +661,13 @@ class DivisorListResult(StrictModel):
             raise ValueError("divisors must be ascending")
         if len(set(values)) != len(values):
             raise ValueError("divisors must be unique")
+        value = int(self.value)
+        if value == 0:
+            raise ValueError("zero has infinitely many divisors")
+        if self.divisors != _replayed_divisors(
+            value, proper=self.convention == "PROPER_DIVISORS"
+        ):
+            raise ValueError("divisor list must enumerate the divisors of the source")
         return self
 
 
@@ -642,20 +681,49 @@ class PrimePower(StrictModel):
 class PrimeFactorizationResult(StrictModel):
     """The complete prime-power factorization of one nonzero integer.
 
+    Retains the canonical source integer so validation replays the defining
+    invariant: prime bases are strictly increasing proven primes with
+    positive exponents whose product reconstructs ``abs(value)`` exactly.
     The factor list may be empty: ``±1`` has no prime factors.  Zero remains
     not-applicable (handled at the operation layer).
     """
 
+    value: BoundedInteger
     factors: tuple[PrimePower, ...] = Field(
         min_length=0,
         max_length=_MAX_FACTOR_ENTRIES,
     )
 
     @model_validator(mode="after")
-    def require_unique_primes(self) -> Self:
+    def require_source_factorization(self) -> Self:
+        from sympy import isprime
+
         primes = [factor.prime for factor in self.factors]
         if len(set(primes)) != len(primes):
             raise ValueError("prime factors must be unique")
+        value = int(self.value)
+        if value == 0:
+            raise ValueError("zero has no finite prime factorization")
+        target = abs(value)
+        product = 1
+        previous_prime = 0
+        for factor in self.factors:
+            prime = int(factor.prime)
+            if prime <= previous_prime:
+                raise ValueError("prime bases must be strictly ascending")
+            if prime < 2 or not isprime(prime):
+                raise ValueError(f"{factor.prime} is not prime")
+            power_value = 1
+            for _ in range(factor.power):
+                power_value *= prime
+                if power_value > target:
+                    raise ValueError("prime powers must multiply to abs(value)")
+            product *= power_value
+            if product > target:
+                raise ValueError("prime powers must multiply to abs(value)")
+            previous_prime = prime
+        if product != target:
+            raise ValueError("prime powers must multiply to abs(value)")
         return self
 
 

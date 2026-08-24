@@ -10,6 +10,9 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
+from jacobian.math.optimization._general_operations import (
+    GENERAL_RATIONAL_LINEAR_OPERATIONS,
+)
 from jacobian.math.optimization._models import (
     RationalLinearProgramRequest,
     RationalLinearProgramResult,
@@ -580,6 +583,11 @@ RATIONAL_LINEAR_OPERATIONS: MathTools = (
             ),
         ),
     ),
+)
+
+RATIONAL_LINEAR_OPERATIONS = (
+    *RATIONAL_LINEAR_OPERATIONS,
+    *GENERAL_RATIONAL_LINEAR_OPERATIONS,
 )
 
 __all__ = ["RATIONAL_LINEAR_OPERATIONS"]

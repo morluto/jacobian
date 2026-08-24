@@ -7,7 +7,7 @@ from fractions import Fraction
 from math import comb, factorial
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationInfo, model_validator
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
@@ -20,6 +20,20 @@ MAX_RATIONAL_DIGITS = 128
 MAX_LINEAR_PROGRAM_RESULT_BYTES = 10 * 1024 * 1024
 MAX_LINEAR_PROGRAM_SIMPLEX_BASES = 1_000_000
 MAX_LINEAR_PROGRAM_SIMPLEX_SCALAR_UPDATES = 50_000_000
+_INTERMEDIATE_SCALAR_DIGITS = "standard_intermediate_scalar_digits"
+
+
+def _scalar_digit_cap(info: ValidationInfo) -> int:
+    """Read a derived intermediate scalar cap, defaulting to the source bound."""
+
+    context = info.context
+    if isinstance(context, Mapping):
+        digits = context.get(_INTERMEDIATE_SCALAR_DIGITS)
+        if isinstance(digits, int) and 0 < digits <= MAX_CANONICAL_RATIONAL_DIGITS:
+            return digits
+    return MAX_RATIONAL_DIGITS
+
+
 type RationalLinearProgramStatus = Literal[
     "OPTIMAL",
     "PRIMAL_FEASIBLE",
@@ -86,7 +100,11 @@ def _prepare_raw_rational_vector(
     return tuple(value) if isinstance(value, list) else value
 
 
-def _prepare_raw_program(value: object) -> object:
+def _prepare_raw_program(
+    value: object,
+    *,
+    maximum_digits: int = MAX_RATIONAL_DIGITS,
+) -> object:
     """Bound and normalize an LP source before nested model construction."""
 
     if not isinstance(value, Mapping):
@@ -102,11 +120,13 @@ def _prepare_raw_program(value: object) -> object:
     objective = _prepare_raw_rational_vector(
         value.get("objective"),
         maximum_length=32,
+        maximum_digits=maximum_digits,
         label="rational linear-program objective",
     )
     rhs = _prepare_raw_rational_vector(
         value.get("rhs"),
         maximum_length=64,
+        maximum_digits=maximum_digits,
         label="rational linear-program rhs",
     )
     rows = value.get("coefficients")
@@ -118,6 +138,7 @@ def _prepare_raw_program(value: object) -> object:
         _prepare_raw_rational_vector(
             row,
             maximum_length=32,
+            maximum_digits=maximum_digits,
             label="rational linear-program coefficient row",
         )
         for row in rows
@@ -382,8 +403,8 @@ class StandardFormRationalLinearProgram(StrictModel):
 
     @model_validator(mode="before")
     @classmethod
-    def bound_raw_program(cls, value: object) -> object:
-        return _prepare_raw_program(value)
+    def bound_raw_program(cls, value: object, info: ValidationInfo) -> object:
+        return _prepare_raw_program(value, maximum_digits=_scalar_digit_cap(info))
 
     @model_validator(mode="after")
     def require_canonical_dimensions(self) -> Self:
@@ -404,16 +425,6 @@ class StandardFormRationalLinearProgram(StrictModel):
             raise ValueError("coefficient row count must equal the rhs length")
         if any(len(row) != width for row in self.coefficients):
             raise ValueError("every coefficient row must match the variable count")
-        for value in (
-            *self.objective,
-            *self.rhs,
-            *(item for row in self.coefficients for item in row),
-        ):
-            require_bounded_rational(
-                value,
-                max_digits=MAX_RATIONAL_DIGITS,
-                label="rational linear-program input",
-            )
 
         result_digits = _result_digit_bound(self)
         if result_digits > MAX_CANONICAL_RATIONAL_DIGITS:
@@ -451,6 +462,20 @@ class StandardFormRationalLinearProgram(StrictModel):
                 f"{MAX_LINEAR_PROGRAM_RESULT_BYTES}-byte result bound"
             )
         return self
+
+    @classmethod
+    def admit_derived_intermediate(cls, value: object, *, maximum_digits: int) -> Self:
+        """Construct one privately derived program under a proven scalar envelope.
+
+        Public requests keep the ``MAX_RATIONAL_DIGITS`` source-scalar cap.
+        A normalization step that derives its intermediates from admitted
+        inputs may pass the envelope its own derivation proves; every derived
+        result-height, simplex-work, and byte check above still runs unchanged.
+        """
+
+        return cls.model_validate(
+            value, context={_INTERMEDIATE_SCALAR_DIGITS: maximum_digits}
+        )
 
 
 class RationalLinearProgramRequest(StrictModel):

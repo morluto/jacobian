@@ -11,6 +11,16 @@ from jacobian.math.number_theory._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "congruence.periodic_union.measure.compute",
+        AdmissionDecision.KEEP,
+        "distinct exact source-bound union count and density with a compressed generalized-CRT regime that avoids materializing a large common period",
+    ),
+    OperationAdmission(
+        "congruence.periodic_union.profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct complete exact finite-period union profile with composable count, density, and residues",
+    ),
+    OperationAdmission(
         "integer.factor.certified_compute",
         AdmissionDecision.KEEP,
         "distinct bounded subexponential factorization with per-factor Pratt primality certificates",
@@ -24,6 +34,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "finite_abelian_group.exact_factorization.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+    ),
+    OperationAdmission(
+        "finite_abelian_group.spectral_pair.decide",
+        AdmissionDecision.KEEP,
+        "exact spectral-basis predicate not supplied by Boolean Walsh transforms or additive factorization",
     ),
     OperationAdmission(
         "integer.compute.aliquot_sum",
@@ -103,7 +118,10 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "integer.compute.primorial",
         AdmissionDecision.KEEP,
-        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage; "
+        "re-admitted for the v4 result-derived envelope: PrimorialRequest bounds n <= 1001 from the declared "
+        "3,400-digit result budget (primorial(1001) carries 3397 digits, primorial(1002) 3401), so admitted "
+        "work is n-1 big-integer multiplications whose intermediates and exact result stay inside that budget",
     ),
     OperationAdmission(
         "integer.compute.proper_divisors",
@@ -229,6 +247,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "number_theory.compute.legendre_symbol",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+    ),
+    OperationAdmission(
+        "number_theory.ramanujan_sum.compute",
+        AdmissionDecision.KEEP,
+        "classical exact arithmetic function whose factorization-backed evaluation replaces a variable-length composition of divisor and Mobius calls",
     ),
     OperationAdmission(
         "number_theory.friable.count.compute",

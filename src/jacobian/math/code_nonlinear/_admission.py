@@ -13,12 +13,16 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "code.nonlinear.distance_profile.compute",
         AdmissionDecision.KEEP,
-        "exact source-bound minimum Hamming distance and weight profile",
+        "exact minimum Hamming distance and weight profile by brute-force enumeration",
     ),
     OperationAdmission(
         "code.nonlinear.constant_weight.compute",
         AdmissionDecision.KEEP,
-        "exact bounded generation of the canonical constant-weight binary code",
+        "exact generation of all constant-weight binary words; re-admitted for the "
+        "narrowed binomial envelope: ConstantWeightRequest bounds the admitted candidate "
+        "space to C(length, weight) <= 4096 (rejected before enumeration otherwise), so "
+        "the materialized output is at most 4,096 words of length <= 64 and admitted work "
+        "is one O(length) bit-write pass per word with no intermediate beyond a single word",
     ),
     OperationAdmission(
         "code.binary.word_distance.compute",
@@ -28,17 +32,17 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "code.binary.explicit.profile.compute",
         AdmissionDecision.KEEP,
-        "exact source-replayed distance profile under derived pair-work and result bounds",
+        "exact complete distance profile with histogram and extremal witnesses",
     ),
     OperationAdmission(
         "code.binary.constant_weight.profile.compute",
         AdmissionDecision.KEEP,
-        "exact source-replayed distance and intersection profile under derived bounds",
+        "exact profile of a constant-weight binary code with support-intersection distances",
     ),
     OperationAdmission(
         "code.binary.explicit.to_set_system.compute",
         AdmissionDecision.NATIVE_ONLY,
-        "source-bound projection to the complete coordinate axis and support blocks",
+        "trivial projection enumerating support indices already supplied by caller",
         native_symbol="jacobian.math.code_nonlinear.to_set_system",
     ),
 )

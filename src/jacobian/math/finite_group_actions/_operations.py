@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from jacobian.math.finite_group_actions._models import (
+    MAX_GROUP_ORDER,
+    ActionBoundSubset,
     BurnsideCountRequest,
     BurnsideCountResult,
     CycleIndexRequest,
@@ -12,9 +14,9 @@ from jacobian.math.finite_group_actions._models import (
     FinitePermutationAction,
     PolyaInventoryRequest,
     PolyaInventoryResult,
+    SubsetCanonicalizationRequest,
+    SubsetCanonicalizationResult,
 )
-
-MAX_GROUP_ORDER = 10000
 
 CycleTypeCount = tuple[tuple[int, ...], int]
 
@@ -52,12 +54,43 @@ def _enumerate_group(
                     seen[composed] = len(elements)
                     elements.append(composed)
                     new_frontier.append(composed)
+                    if len(elements) > MAX_GROUP_ORDER:
+                        raise ValueError(
+                            f"group order exceeds the bounded maximum {MAX_GROUP_ORDER}"
+                        )
         frontier = new_frontier
-    if len(elements) > MAX_GROUP_ORDER:
-        raise ValueError(
-            f"group order {len(elements)} exceeds the bounded maximum {MAX_GROUP_ORDER}"
-        )
     return tuple(elements)
+
+
+def _transport_subset(
+    permutation: tuple[int, ...],
+    subset: tuple[int, ...],
+) -> tuple[int, ...]:
+    return tuple(sorted(permutation[position] for position in subset))
+
+
+def _subset_canonicalization_data(
+    action: FinitePermutationAction,
+    source_subset: tuple[int, ...],
+) -> tuple[tuple[int, ...], tuple[int, ...], int, int]:
+    """Return canonical image, transporter, orbit size, and stabilizer size."""
+    group = _enumerate_group(action)
+    image_transporters: dict[tuple[int, ...], tuple[int, ...]] = {}
+    stabilizer_size = 0
+    for permutation in group:
+        image = _transport_subset(permutation, source_subset)
+        previous = image_transporters.get(image)
+        if previous is None or permutation < previous:
+            image_transporters[image] = permutation
+        if image == source_subset:
+            stabilizer_size += 1
+
+    canonical_subset = min(image_transporters)
+    transporter = image_transporters[canonical_subset]
+    orbit_size = len(image_transporters)
+    if orbit_size * stabilizer_size != len(group):
+        raise ValueError("subset orbit and stabilizer sizes violate orbit-stabilizer")
+    return canonical_subset, transporter, orbit_size, stabilizer_size
 
 
 def _cycle_decomposition(
@@ -226,6 +259,23 @@ def compute_element_cycles(
         fixed_points=fixed,
         fixed_point_count=len(fixed),
         support=support,
+    )
+
+
+def compute_subset_canonicalization(
+    request: SubsetCanonicalizationRequest,
+) -> SubsetCanonicalizationResult:
+    """Canonicalize one action-bound subset under its permutation action."""
+    action = request.subset.action
+    canonical, transporter, orbit_size, stabilizer_size = _subset_canonicalization_data(
+        action, request.subset.positions
+    )
+    return SubsetCanonicalizationResult(
+        source_subset=request.subset,
+        canonical_subset=ActionBoundSubset(action=action, positions=canonical),
+        transporter=transporter,
+        orbit_size=orbit_size,
+        stabilizer_size=stabilizer_size,
     )
 
 

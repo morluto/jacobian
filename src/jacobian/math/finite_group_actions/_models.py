@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import Field, model_validator
 
@@ -10,9 +10,16 @@ from jacobian._models import StrictModel
 
 MAX_DOMAIN_SIZE = 50
 MAX_GROUP_ORDER = 10000
+MAX_GENERATORS = 50
 MAX_LABEL_LENGTH = 64
 MAX_COLORS = 50
 MAX_TERMS = 5000
+
+DomainPosition = Annotated[int, Field(ge=0, le=MAX_DOMAIN_SIZE - 1)]
+FiniteActionSubset = Annotated[
+    tuple[DomainPosition, ...],
+    Field(max_length=MAX_DOMAIN_SIZE),
+]
 
 
 class FinitePermutationAction(StrictModel):
@@ -26,7 +33,14 @@ class FinitePermutationAction(StrictModel):
     """
 
     domain: tuple[str, ...] = Field(min_length=1, max_length=MAX_DOMAIN_SIZE)
-    generators: tuple[tuple[int, ...], ...] = Field(min_length=1)
+    generators: tuple[tuple[int, ...], ...] = Field(
+        min_length=1,
+        max_length=MAX_GENERATORS,
+        description=(
+            f"One to {MAX_GENERATORS} generator permutations in array form; "
+            "each must have length equal to the domain size."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_valid_action(self) -> Self:
@@ -47,10 +61,164 @@ class FinitePermutationAction(StrictModel):
         return self
 
 
+def _canonical_subset_positions(
+    action: FinitePermutationAction,
+    subset: FiniteActionSubset,
+) -> tuple[int, ...]:
+    if len(set(subset)) != len(subset):
+        raise ValueError("subset positions must be distinct")
+    if any(position >= len(action.domain) for position in subset):
+        raise ValueError("every subset position must index the action domain")
+    return tuple(sorted(subset))
+
+
+def _generated_group_order(action: FinitePermutationAction) -> int:
+    """Return the exact generated-group order without enumerating its elements."""
+    from sympy.combinatorics import Permutation, PermutationGroup
+
+    generators = [Permutation(list(generator)) for generator in action.generators]
+    return int(PermutationGroup(generators).order())
+
+
 class _ActionRequest(StrictModel):
     """Shared request shape: one finite permutation action."""
 
     action: FinitePermutationAction
+
+
+# ---------------------------------------------------------------------------
+# group_action.subset.canonicalize
+# ---------------------------------------------------------------------------
+
+
+class ActionBoundSubset(StrictModel):
+    """A subset of the acted-on labelled set, bound to its permutation action.
+
+    ``positions`` are distinct 0-based indices into ``action.domain``, so the
+    value denotes the exact labelled subset
+    ``{action.domain[position] for position in positions}``.  Because the
+    action travels inside the value, serializing and reloading it cannot
+    silently reinterpret the same positions under a different labelled
+    domain.  Wire order is immaterial and is normalized to increasing domain
+    position.
+    """
+
+    action: FinitePermutationAction
+    positions: FiniteActionSubset = Field(
+        description=(
+            "Distinct 0-based positions in action.domain; input order is "
+            "normalized to increasing domain position."
+        )
+    )
+
+    @model_validator(mode="after")
+    def bind_positions_to_domain(self) -> Self:
+        object.__setattr__(
+            self,
+            "positions",
+            _canonical_subset_positions(self.action, self.positions),
+        )
+        return self
+
+
+class SubsetCanonicalizationRequest(StrictModel):
+    """Request a canonical image of an action-bound subset under its action.
+
+    The subset carries the action giving its positions meaning, so a dumped
+    canonical result replays into this request as one unchanged canonical
+    value.  The generated group must have order at most 10000; validation
+    establishes that bound with SymPy's Schreier--Sims order computation
+    before the kernel enumerates any group elements.
+    """
+
+    subset: ActionBoundSubset = Field(
+        description=(
+            "The subset to canonicalize, bound to its permutation action. "
+            f"The generated group must have order at most {MAX_GROUP_ORDER}."
+        )
+    )
+
+    @model_validator(mode="after")
+    def bound_generated_group_order(self) -> Self:
+        order = _generated_group_order(self.subset.action)
+        if order > MAX_GROUP_ORDER:
+            raise ValueError(
+                f"group order {order} exceeds the bounded maximum {MAX_GROUP_ORDER}"
+            )
+        return self
+
+
+class SubsetCanonicalizationResult(StrictModel):
+    """Action-bound canonical subset image, transporter, and orbit--stabilizer data.
+
+    ``source_subset`` and ``canonical_subset`` share one action and carry it
+    inside the value; their positions are increasing tuples indexing that
+    action's domain.  The canonical image is the lexicographically least
+    transported position tuple.  ``transporter`` is the lexicographically
+    least array-form group element sending ``source_subset`` to
+    ``canonical_subset``.  The result is bound to its source by replaying
+    those relations and ``orbit_size * stabilizer_size = |G|``.
+    """
+
+    source_subset: ActionBoundSubset = Field(
+        description="Source subset in increasing action-domain position order."
+    )
+    canonical_subset: ActionBoundSubset = Field(
+        description=(
+            "Lexicographically least increasing position tuple among all "
+            "images of source_subset under the generated group, bound to "
+            "the source action."
+        )
+    )
+    transporter: tuple[DomainPosition, ...] = Field(
+        min_length=1,
+        max_length=MAX_DOMAIN_SIZE,
+        description=(
+            "Lexicographically least generated-group permutation mapping "
+            "source_subset exactly to canonical_subset."
+        ),
+    )
+    orbit_size: int = Field(
+        ge=1,
+        le=MAX_GROUP_ORDER,
+        description="Number of distinct images of source_subset under the group.",
+    )
+    stabilizer_size: int = Field(
+        ge=1,
+        le=MAX_GROUP_ORDER,
+        description=(
+            "Order of the subgroup fixing source_subset setwise; its product "
+            "with orbit_size equals the generated group order."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def bind_subset_canonicalization(self) -> Self:
+        from jacobian.math.finite_group_actions._operations import (
+            _subset_canonicalization_data,
+        )
+
+        action = self.source_subset.action
+        if self.canonical_subset.action != action:
+            raise ValueError("canonical_subset must be bound to the source action")
+        canonical, transporter, orbit_size, stabilizer_size = (
+            _subset_canonicalization_data(action, self.source_subset.positions)
+        )
+        if self.canonical_subset.positions != canonical:
+            raise ValueError(
+                "canonical_subset must be the lexicographically least orbit image"
+            )
+        if self.transporter != transporter:
+            raise ValueError(
+                "transporter must be the exact canonical generated-group witness"
+            )
+        if self.orbit_size != orbit_size:
+            raise ValueError("orbit_size must equal the exact subset-orbit size")
+        if self.stabilizer_size != stabilizer_size:
+            raise ValueError(
+                "stabilizer_size must equal the exact setwise-stabilizer order"
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------

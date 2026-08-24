@@ -4,16 +4,20 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, WithJsonSchema, model_validator
+from pydantic.json_schema import JsonSchemaValue
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
+from jacobian.math.symmetric_functions.values import (
+    MAX_PARTITION_SIZE,
+    IntegerPartition,
+)
 
-_MAX_PARTITION_SIZE = 500
-_MAX_PARTITION_PARTS = 200
 _MAX_POINT_COORDINATE_DIGITS = 6
 _MAX_POINT_COORDINATE_ABS = 10**_MAX_POINT_COORDINATE_DIGITS - 1
 _MAX_SCHUR_RESULT_DIGITS = 4000
+_MAX_SCHUR_PARTITION_LENGTH = 50
 
 PointCoordinate = Annotated[
     int,
@@ -29,33 +33,19 @@ PointCoordinate = Annotated[
 """One bounded evaluation coordinate: ``abs(value) <= 10**6 - 1``."""
 
 
-class IntegerPartition(StrictModel):
-    """A partition of a positive integer as a weakly decreasing tuple.
+def _schur_partition_schema() -> JsonSchemaValue:
+    """Project the Jacobi-Trudi part bound onto the shared partition schema."""
 
-    Parts must be positive and weakly decreasing, there are at most 200
-    parts, and the total size (sum of the parts) is capped at 500.
-    """
-
-    parts: tuple[int, ...] = Field(
-        min_length=0,
-        max_length=_MAX_PARTITION_PARTS,
+    schema = IntegerPartition.model_json_schema()
+    schema["properties"]["parts"].update(
+        maxItems=_MAX_SCHUR_PARTITION_LENGTH,
         description=(
-            f"Positive weakly-decreasing parts with a total size (sum) of at "
-            f"most {_MAX_PARTITION_SIZE}; at most {_MAX_PARTITION_PARTS} parts."
+            "Positive weakly-decreasing parts with a total size (sum) of at "
+            f"most {MAX_PARTITION_SIZE}; at most {_MAX_SCHUR_PARTITION_LENGTH} "
+            "parts for this operation."
         ),
     )
-
-    @model_validator(mode="after")
-    def require_valid_partition(self) -> Self:
-        if not self.parts:
-            return self
-        if any(p <= 0 for p in self.parts):
-            raise ValueError("partition parts must be positive")
-        if any(self.parts[i] < self.parts[i + 1] for i in range(len(self.parts) - 1)):
-            raise ValueError("partition parts must be weakly decreasing")
-        if sum(self.parts) > _MAX_PARTITION_SIZE:
-            raise ValueError("partition size exceeds the supported bound")
-        return self
+    return schema
 
 
 class PartitionRequest(StrictModel):
@@ -75,7 +65,16 @@ class SchurExpansionRequest(StrictModel):
     total size is capped at 500.
     """
 
-    partition: IntegerPartition
+    partition: Annotated[
+        IntegerPartition,
+        WithJsonSchema(_schur_partition_schema()),
+    ] = Field(
+        description=(
+            "A canonical partition of total size at most "
+            f"{MAX_PARTITION_SIZE} with at most {_MAX_SCHUR_PARTITION_LENGTH} "
+            "parts for the admitted Jacobi-Trudi determinant."
+        )
+    )
     variables: tuple[str, ...] = Field(
         min_length=1,
         max_length=20,
@@ -97,6 +96,11 @@ class SchurExpansionRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_matching_dimensions(self) -> Self:
+        if len(self.partition.parts) > _MAX_SCHUR_PARTITION_LENGTH:
+            raise ValueError(
+                "Schur evaluation partition length must not exceed "
+                f"{_MAX_SCHUR_PARTITION_LENGTH}"
+            )
         if len(self.variables) != len(self.point):
             raise ValueError("variables and point must have the same length")
         if len(set(self.variables)) != len(self.variables):

@@ -17,10 +17,12 @@ from jacobian.math.symmetric_functions._tools import TOOLS
 
 
 def test_operations_in_catalog() -> None:
-    ids = {tool.operation_id for tool in TOOLS}
-    assert "symmetric_function.schur.evaluate.compute" in ids
+    tools = {tool.operation_id: tool for tool in TOOLS}
+    assert "symmetric_function.schur.evaluate.compute" in tools
+    # The narrowed request envelope (50 parts) is a versioned contract change.
+    assert tools["symmetric_function.schur.evaluate.compute"].version == "2"
     # conjugate is NATIVE_ONLY via algebraic_combinatorics; not a distinct public operation
-    assert "symmetric_function.partition.conjugate.compute" not in ids
+    assert "symmetric_function.partition.conjugate.compute" not in tools
 
 
 def test_conjugate_self_conjugate_partition() -> None:
@@ -42,6 +44,18 @@ def test_conjugate_single_row() -> None:
         PartitionRequest(partition=IntegerPartition(parts=(5,)))
     )
     assert result.conjugate.parts == (1, 1, 1, 1, 1)
+
+
+def test_partition_domain_is_closed_under_boundary_conjugation() -> None:
+    source = IntegerPartition(parts=(500,))
+    result = compute_partition_conjugate(PartitionRequest(partition=source))
+    assert result.conjugate.parts == (1,) * 500
+    assert (
+        compute_partition_conjugate(
+            PartitionRequest(partition=result.conjugate)
+        ).conjugate
+        == source
+    )
 
 
 def test_conjugate_empty() -> None:
@@ -128,10 +142,14 @@ def test_request_schema_publishes_schur_invariants() -> None:
     assert point["items"]["minimum"] == -999_999
     assert point["items"]["maximum"] == 999_999
     assert "decimal digits" in point["items"]["description"]
-    partition = schema["$defs"]["IntegerPartition"]["properties"]["parts"]
+    partition = schema["properties"]["partition"]
+    assert partition["title"] == "IntegerPartition"
     assert "500" in partition["description"]
-    assert schema["$defs"]["IntegerPartition"]["properties"]["parts"]["maxItems"] == 200
-    assert "500" in schema["$defs"]["IntegerPartition"]["description"]
+    assert "at most 50" in partition["description"]
+    parts = partition["properties"]["parts"]
+    assert parts["maxItems"] == 50
+    assert "at most 50" in parts["description"]
+    assert "500" in parts["description"]
 
 
 def test_schur_rejects_coordinate_exceeding_digit_bound() -> None:
@@ -155,3 +173,22 @@ def test_schur_accepts_boundary_coordinate() -> None:
 def test_partition_schema_rejects_size_above_cap() -> None:
     with pytest.raises(ValueError, match="bound"):
         IntegerPartition(parts=(251, 250))
+
+
+def test_schur_request_retains_its_operation_specific_length_bound() -> None:
+    with pytest.raises(ValueError, match="length must not exceed 50"):
+        SchurExpansionRequest(
+            partition=IntegerPartition(parts=(1,) * 51),
+            variables=("x",),
+            point=(1,),
+        )
+
+
+def test_schur_accepts_boundary_partition_length() -> None:
+    request = SchurExpansionRequest(
+        partition=IntegerPartition(parts=(1,) * 50),
+        variables=("x",),
+        point=(0,),
+    )
+    assert isinstance(request.partition, IntegerPartition)
+    assert compute_schur_evaluation(request).value == "0"

@@ -11,6 +11,14 @@ from pathlib import Path
 from typing import Literal
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian.math._singular import (
+    SingularProtocolReader,
+    UnsupportedSingularVersionError,
+    format_singular_version,
+    read_singular_version,
+    run_bounded_singular,
+    singular_version_preamble,
+)
 from jacobian.math.commutative_algebra_ops._models import IdealComputationBudget
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
@@ -26,15 +34,20 @@ from jacobian.process import (
 )
 
 _PROTOCOL_HEADER = "JACOBIAN_SINGULAR_IDEAL_V1"
+_COEFFICIENT = re.compile(r"^(0|-?[1-9][0-9]*)(?:/([1-9][0-9]*))?$")
 _SUPPORTED_VERSION_MIN = 44000
 _SUPPORTED_VERSION_MAX = 45000
-_COEFFICIENT = re.compile(r"^(0|-?[1-9][0-9]*)(?:/([1-9][0-9]*))?$")
 _STDOUT_LIMIT = 512 * 1024
 _STDERR_LIMIT = 64 * 1024
 
 SingularOperation = Literal["radical", "quotient", "saturation"]
 SingularOutcome = Literal[
-    "COMPUTED", "UNAVAILABLE", "TIMEOUT", "LIMIT_EXCEEDED", "ERROR"
+    "COMPUTED",
+    "UNAVAILABLE",
+    "TIMEOUT",
+    "CANCELLED",
+    "LIMIT_EXCEEDED",
+    "ERROR",
 ]
 SaturationVerificationVerdict = Literal[
     "VERIFIED", "REFUTED", "UNAVAILABLE", "TIMEOUT", "ERROR"
@@ -51,26 +64,6 @@ class SingularIdealResult:
     ideal: RationalPolynomialIdeal | None = None
     backend_version: str | None = None
     detail: str | None = None
-
-
-@dataclass(slots=True)
-class _ProtocolReader:
-    lines: list[str]
-    cursor: int = 0
-
-    def pop(self) -> str:
-        if self.cursor >= len(self.lines):
-            raise ValueError("Singular output ended unexpectedly")
-        line = self.lines[self.cursor]
-        self.cursor += 1
-        return line
-
-    def expect(self, expected: str) -> None:
-        if self.pop() != expected:
-            raise ValueError(f"Singular output is missing {expected!r}")
-
-    def finished(self) -> bool:
-        return self.cursor == len(self.lines)
 
 
 def _singular_polynomial(polynomial: RationalPolynomial) -> str:
@@ -129,14 +122,13 @@ def _script(
         libs = ['LIB "primdec.lib";']
     source = "\n".join(
         [
+            *singular_version_preamble(_PROTOCOL_HEADER),
             *libs,
             "option(redSB);",
             f"ring jacobian_ring=0,({variables}),dp;",
             *declarations,
             operation_line,
             "jacobian_result=std(jacobian_result);",
-            f'print("{_PROTOCOL_HEADER}");',
-            'system("version");',
             "print(size(jacobian_result));",
             "int jacobian_i;",
             "poly jacobian_poly;",
@@ -199,7 +191,7 @@ def _parse_term(line: str, variable_count: int) -> RationalPolynomialTerm:
 
 
 def _parse_generator(
-    reader: _ProtocolReader,
+    reader: SingularProtocolReader,
     variables: tuple[str, ...],
 ) -> tuple[RationalPolynomial, int]:
     reader.expect("GENERATOR")
@@ -222,13 +214,6 @@ def _parse_generator(
     )
 
 
-def _format_version(version_number: int) -> str:
-    major, remainder = divmod(version_number, 10_000)
-    minor, patch_code = divmod(remainder, 1_000)
-    patch = patch_code // 100
-    return f"{major}.{minor}.{patch}"
-
-
 def _parse_output(
     output: bytes,
     *,
@@ -239,15 +224,15 @@ def _parse_output(
         text = output.decode("ascii")
     except UnicodeDecodeError as exc:
         raise ValueError("Singular output is not ASCII") from exc
-    reader = _ProtocolReader(text.splitlines())
-    reader.expect(_PROTOCOL_HEADER)
+    reader = SingularProtocolReader(text.splitlines())
+    version_number = read_singular_version(
+        reader,
+        protocol_header=_PROTOCOL_HEADER,
+    )
     try:
-        version_number = int(reader.pop())
         generator_count = int(reader.pop())
     except ValueError as exc:
         raise ValueError("Singular output has invalid numeric metadata") from exc
-    if not _SUPPORTED_VERSION_MIN <= version_number < _SUPPORTED_VERSION_MAX:
-        raise ValueError("Singular backend version is unsupported")
     if not 0 <= generator_count <= budget.maximum_output_generators:
         raise _ResultLimitExceededError(
             "Singular generator count exceeds the exact-result limit"
@@ -275,7 +260,7 @@ def _parse_output(
         raise ValueError("Singular output has invalid trailing data")
     return (
         RationalPolynomialIdeal(variables=variables, generators=tuple(generators)),
-        _format_version(version_number),
+        format_singular_version(version_number),
     )
 
 
@@ -287,37 +272,14 @@ def run_singular_ideal_operation(
 ) -> SingularIdealResult:
     """Run one exact ideal operation in a bounded, request-scoped process."""
 
-    resolved = shutil.which("Singular")
-    if resolved is None:
+    completed = run_bounded_singular(
+        _script(operation, left, right),
+        wall_seconds=budget.wall_seconds,
+    )
+    if completed is None:
         return SingularIdealResult(
             outcome="UNAVAILABLE",
             detail="The supported Singular 4.4 backend is not installed.",
-        )
-    resolved = str(Path(resolved).resolve())
-    prlimit = shutil.which("prlimit")
-    if prlimit is not None:
-        prlimit = str(Path(prlimit).resolve())
-    try:
-        with tempfile.TemporaryDirectory(prefix="jacobian-singular-") as directory:
-            completed = run_bounded_process(
-                [resolved, "-q"],
-                input_bytes=_script(operation, left, right),
-                timeout_seconds=float(budget.wall_seconds),
-                environment=worker_environment(locale="C.UTF-8"),
-                stdout_limit=_STDOUT_LIMIT,
-                stderr_limit=_STDERR_LIMIT,
-                resource_limits=ProcessResourceLimits(
-                    cpu_seconds=budget.wall_seconds,
-                    address_space_bytes=1024 * 1024 * 1024,
-                    file_size_bytes=1024 * 1024,
-                ),
-                platform_tools=ProcessPlatformTools(prlimit_executable=prlimit),
-                cwd=directory,
-            )
-    except OSError:
-        return SingularIdealResult(
-            outcome="UNAVAILABLE",
-            detail="The supported Singular backend could not be started.",
         )
     if completed.timed_out:
         return SingularIdealResult(
@@ -326,7 +288,7 @@ def run_singular_ideal_operation(
         )
     if completed.cancelled:
         return SingularIdealResult(
-            outcome="ERROR",
+            outcome="CANCELLED",
             detail="Singular execution was cancelled before producing a result.",
         )
     if completed.stdout_exceeded or completed.stderr_exceeded:
@@ -348,6 +310,11 @@ def run_singular_ideal_operation(
             completed.stdout,
             variables=left.variables,
             budget=budget,
+        )
+    except UnsupportedSingularVersionError:
+        return SingularIdealResult(
+            outcome="UNAVAILABLE",
+            detail="The installed Singular release is unsupported.",
         )
     except _ResultLimitExceededError:
         return SingularIdealResult(
@@ -419,7 +386,7 @@ def _parse_verification_verdict(output: bytes) -> SaturationVerificationVerdict:
         text = output.decode("ascii")
     except UnicodeDecodeError:
         return "ERROR"
-    lines = _ProtocolReader(text.splitlines())
+    lines = SingularProtocolReader(text.splitlines())
     try:
         lines.expect(_PROTOCOL_HEADER)
         version_number = int(lines.pop())

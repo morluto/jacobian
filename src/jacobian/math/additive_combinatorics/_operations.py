@@ -12,6 +12,8 @@ from jacobian.math.additive_combinatorics._models import (
     DirectSumPredicateRequest,
     DirectSumPredicateResult,
     FiniteIntegerSet,
+    MultisetSumRepresentationProfileRequest,
+    MultisetSumRepresentationProfileResult,
     OrderedDifferenceEntry,
     OrderedDifferencePair,
     OrderedDifferenceProfileRequest,
@@ -22,8 +24,10 @@ from jacobian.math.additive_combinatorics._models import (
     SubsetSumProfileRequest,
     SumsetCardinalityRequest,
     SumsetCardinalityResult,
+    _multiset_sum_source_values,
     _vector_from_ints,
 )
+from jacobian.math.additive_combinatorics._multiset_sum import count_sums
 from jacobian.math.additive_combinatorics.operations import subset_sum_profile
 from jacobian.math.additive_combinatorics.values import SubsetSumProfile
 
@@ -65,6 +69,34 @@ def compute_representation_profile(
         for count in (counts[value],)
     )
     return RepresentationProfileResult(entries=entries)
+
+
+def compute_multiset_sum_representation_profile(
+    request: MultisetSumRepresentationProfileRequest,
+) -> MultisetSumRepresentationProfileResult:
+    """Count fixed-arity unordered source multisets by their exact sum.
+
+    The source's numeric order is the index order. Every nondecreasing index
+    tuple of the requested arity is counted once, including repeated indices.
+    An optional closed window filters sums but not candidate inspection, so the
+    returned rows remain complete for that exact mathematical scope.
+    """
+    values = _multiset_sum_source_values(request.source)
+    bounds = request.window.as_integer_bounds() if request.window is not None else None
+    counts = count_sums(values, request.arity, bounds)
+    entries = tuple(
+        RepresentationProfileEntry(
+            sum=format_canonical_integer(value),
+            multiplicity=counts[value],
+        )
+        for value in sorted(counts)
+    )
+    return MultisetSumRepresentationProfileResult(
+        source=request.source,
+        arity=request.arity,
+        window=request.window,
+        entries=entries,
+    )
 
 
 def compute_subset_sum_profile(
@@ -164,6 +196,7 @@ def decide_direct_sum_predicate(
 
 __all__ = [
     "compute_additive_energy",
+    "compute_multiset_sum_representation_profile",
     "compute_ordered_difference_profile",
     "compute_representation_profile",
     "compute_subset_sum_profile",

@@ -40,12 +40,4 @@ def compute_root_isolation(request: UnivariatePolynomialRequest) -> RootIsolatio
 def compute_algebraic_compare(
     request: AlgebraicCompareRequest,
 ) -> AlgebraicCompareResult:
-    order = compare_algebraic(
-        [{"num": c.num, "den": c.den} for c in request.left.polynomial],
-        request.left.isolating_interval_lower,
-        request.left.isolating_interval_upper,
-        [{"num": c.num, "den": c.den} for c in request.right.polynomial],
-        request.right.isolating_interval_lower,
-        request.right.isolating_interval_upper,
-    )
-    return AlgebraicCompareResult(order=order)
+    return compare_algebraic(request.left, request.right)

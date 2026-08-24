@@ -1,4 +1,4 @@
-"""Thin operation binding for finite abelian group factorization."""
+"""Thin catalog bindings for finite-Abelian product-group operations."""
 
 from __future__ import annotations
 
@@ -6,6 +6,9 @@ from jacobian.catalog._examples import example
 from jacobian.math.finite_abelian_groups import (
     FiniteAbelianGroupFactorizationRequest,
     FiniteAbelianGroupFactorizationResult,
+    FiniteAbelianSpectralPairRequest,
+    FiniteAbelianSpectralPairResult,
+    _run_finite_abelian_spectral_pair,
     finite_abelian_group_factorization,
 )
 from jacobian.math.number_theory._support import number_theory_operation
@@ -51,4 +54,45 @@ FINITE_ABELIAN_GROUP_FACTORIZATION_OPERATION = number_theory_operation(
     ),
 )
 
-__all__ = ["FINITE_ABELIAN_GROUP_FACTORIZATION_OPERATION"]
+FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION = number_theory_operation(
+    "finite_abelian_group.spectral_pair.decide",
+    "Decide an exact finite-Abelian spectral pair",
+    (
+        "Decide whether a canonical residue-tuple frequency set is a spectrum "
+        "of a point set in an explicit product of cyclic groups, including "
+        "empty and singleton degenerate cases. Uses "
+        "the fixed positive dual pairing chi_lambda(a) = exp(2*pi*i*sum_j "
+        "lambda_j*a_j/m_j), proves every required character sum zero by exact "
+        "integer-polynomial reduction modulo Phi_lcm(m_j), and returns the "
+        "first nonzero exact remainder on failure."
+    ),
+    FiniteAbelianSpectralPairRequest,
+    FiniteAbelianSpectralPairResult,
+    _run_finite_abelian_spectral_pair,
+    "harmonic-analysis",
+    "finite-abelian-group",
+    "spectral-pair",
+    "fourier",
+    "character-orthogonality",
+    "cyclotomic-polynomial",
+    "exact",
+    version="1",
+    examples=(
+        example(
+            "z4_even_pair",
+            "Decide the two-point spectral pair A={0,2}, Lambda={0,1} in Z/4.",
+            {
+                "source": {
+                    "group": {"moduli": [4]},
+                    "points": [[0], [2]],
+                    "frequencies": [[0], [1]],
+                }
+            },
+        ),
+    ),
+)
+
+__all__ = [
+    "FINITE_ABELIAN_GROUP_FACTORIZATION_OPERATION",
+    "FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION",
+]

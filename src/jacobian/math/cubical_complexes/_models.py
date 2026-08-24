@@ -8,8 +8,8 @@ from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 
-MAX_DIM = 5
-MAX_CELLS = 200
+MAX_DIM = 10
+MAX_CELLS = 5000
 
 
 class CubicalCell(StrictModel):

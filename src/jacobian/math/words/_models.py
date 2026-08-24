@@ -7,8 +7,24 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.math.words.operations import factors_of_length, incidence_matrix, periods
-from jacobian.math.words.values import FiniteWord, WordMorphism
+from jacobian.math.words.operations import (
+    _require_fixed_point_prefix_budget,
+    factors_of_length,
+    fixed_point_prefix,
+    incidence_matrix,
+    periods,
+    substitution_dependency_graph,
+    substitution_primitivity_profile,
+)
+from jacobian.math.words.values import (
+    MAX_MORPHISM_OUTPUT_LENGTH,
+    FiniteWord,
+    ProlongableSubstitution,
+    Substitution,
+    SubstitutionDependencyGraph,
+    WordMorphism,
+    _require_dependency_occurrence_bound,
+)
 
 
 class FactorsLengthRequest(StrictModel):
@@ -111,6 +127,120 @@ class IncidenceMatrixResult(IncidenceMatrixRequest):
         return self
 
 
+class SubstitutionDependencyGraphRequest(StrictModel):
+    """Construct the exact dependency graph of one bounded substitution."""
+
+    substitution: Substitution
+
+    @model_validator(mode="after")
+    def require_bounded_occurrence_output(self) -> Self:
+        _require_dependency_occurrence_bound(self.substitution)
+        return self
+
+
+class SubstitutionDependencyGraphResult(SubstitutionDependencyGraphRequest):
+    """Exact source-bound letter graph, including every occurrence position."""
+
+    graph: SubstitutionDependencyGraph
+    complete: Literal[True] = True
+    method: Literal["EXACT_IMAGE_OCCURRENCE_ENUMERATION"] = (
+        "EXACT_IMAGE_OCCURRENCE_ENUMERATION"
+    )
+    edge_convention: Literal["SOURCE_TO_OCCURRING_TARGET"] = (
+        "SOURCE_TO_OCCURRING_TARGET"
+    )
+
+    @model_validator(mode="after")
+    def bind_exact_dependency_graph(self) -> Self:
+        if self.graph != substitution_dependency_graph(self.substitution):
+            raise ValueError("dependency graph result is not bound to the substitution")
+        return self
+
+
+class SubstitutionPrimitivityProfileRequest(StrictModel):
+    """Decide primitivity from a canonical substitution dependency graph."""
+
+    dependency_graph: SubstitutionDependencyGraph
+
+    @model_validator(mode="after")
+    def require_bounded_dependency_source(self) -> Self:
+        _require_dependency_occurrence_bound(self.dependency_graph.substitution)
+        return self
+
+
+class SubstitutionPrimitivityProfileResult(SubstitutionPrimitivityProfileRequest):
+    """Complete Boolean-power primitivity profile with graph obstruction."""
+
+    strongly_connected_components: tuple[tuple[str, ...], ...]
+    irreducible: bool
+    aperiodic: bool | None
+    primitive: bool
+    least_positive_power: int | None = Field(default=None, ge=1)
+    exponent_upper_bound: int = Field(ge=1)
+    obstruction: Literal[
+        "NONE", "REDUCIBLE_DEPENDENCY_GRAPH", "PERIODIC_DEPENDENCY_GRAPH"
+    ]
+    complete: Literal[True] = True
+    method: Literal["BOOLEAN_POWERS_THROUGH_WIELANDT_BOUND"] = (
+        "BOOLEAN_POWERS_THROUGH_WIELANDT_BOUND"
+    )
+
+    @model_validator(mode="after")
+    def bind_exact_primitivity_profile(self) -> Self:
+        expected = substitution_primitivity_profile(self.dependency_graph)
+        if (
+            self.strongly_connected_components != expected.strongly_connected_components
+            or self.irreducible != expected.irreducible
+            or self.aperiodic != expected.aperiodic
+            or self.primitive != expected.primitive
+            or self.least_positive_power != expected.least_positive_power
+            or self.exponent_upper_bound != expected.exponent_upper_bound
+            or self.obstruction != expected.obstruction
+        ):
+            raise ValueError("primitivity result is not bound to the dependency graph")
+        return self
+
+
+class SubstitutionFixedPointPrefixRequest(StrictModel):
+    """Request one bounded prefix of a certified prolongable substitution."""
+
+    source: ProlongableSubstitution
+    prefix_length: int = Field(ge=0, le=MAX_MORPHISM_OUTPUT_LENGTH)
+
+    @model_validator(mode="after")
+    def require_bounded_source_work_and_result(self) -> Self:
+        _require_fixed_point_prefix_budget(self.source, self.prefix_length)
+        return self
+
+
+class SubstitutionFixedPointPrefixResult(SubstitutionFixedPointPrefixRequest):
+    """Exact fixed-point prefix from the least sufficient iterate."""
+
+    prefix: FiniteWord
+    least_iterate_depth: int = Field(ge=0, le=MAX_MORPHISM_OUTPUT_LENGTH)
+    retained_prefix_lengths: tuple[int, ...] = Field(
+        min_length=1, max_length=MAX_MORPHISM_OUTPUT_LENGTH
+    )
+    complete: Literal[True] = True
+    scope: Literal["FIRST_REQUESTED_LETTERS_OF_ONE_SIDED_FIXED_POINT"] = (
+        "FIRST_REQUESTED_LETTERS_OF_ONE_SIDED_FIXED_POINT"
+    )
+    method: Literal["LEAST_TRUNCATED_SUBSTITUTION_ITERATE"] = (
+        "LEAST_TRUNCATED_SUBSTITUTION_ITERATE"
+    )
+
+    @model_validator(mode="after")
+    def bind_exact_fixed_point_prefix(self) -> Self:
+        expected = fixed_point_prefix(self.source, self.prefix_length)
+        if (
+            self.prefix != expected.prefix
+            or self.least_iterate_depth != expected.least_iterate_depth
+            or self.retained_prefix_lengths != expected.retained_prefix_lengths
+        ):
+            raise ValueError("fixed-point prefix is not bound to the request")
+        return self
+
+
 __all__ = [
     "FactorsLengthRequest",
     "FactorsLengthResult",
@@ -118,4 +248,10 @@ __all__ = [
     "IncidenceMatrixResult",
     "PeriodsRequest",
     "PeriodsResult",
+    "SubstitutionDependencyGraphRequest",
+    "SubstitutionDependencyGraphResult",
+    "SubstitutionFixedPointPrefixRequest",
+    "SubstitutionFixedPointPrefixResult",
+    "SubstitutionPrimitivityProfileRequest",
+    "SubstitutionPrimitivityProfileResult",
 ]

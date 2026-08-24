@@ -10,10 +10,13 @@ from jacobian.math.matrices.analysis._models import (
     FarkasCertificateRequest,
     FarkasCertificateResult,
     InertiaResult,
+    RationalSpectrumClaimRequest,
+    RationalSpectrumClaimResult,
     SymmetricMatrixRequest,
 )
 from jacobian.math.matrices.analysis._operations import (
     check_farkas_certificate,
+    check_rational_spectrum_claim,
     compute_inertia,
 )
 
@@ -46,6 +49,63 @@ def _op[
 
 
 MATRIX_ANALYSIS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
+    _op(
+        "matrix.symmetric.rational_spectrum_claim.check",
+        "Check a complete rational spectrum claim for a symmetric matrix",
+        "For a bounded symmetric matrix over QQ and pairwise-distinct rational "
+        "eigenvalue claims, return the retained source and exact shifted-nullity "
+        "ledger, and decide whether the claimed multiplicities give the complete "
+        "spectrum. A claim is complete exactly when every multiplicity equals its "
+        "nullity and the multiplicities sum to the matrix order.",
+        RationalSpectrumClaimRequest,
+        RationalSpectrumClaimResult,
+        check_rational_spectrum_claim,
+        "matrix",
+        "symmetric",
+        "spectrum",
+        "eigenvalue",
+        "multiplicity",
+        "exact",
+        "check",
+        examples=(
+            example(
+                "repeated_diagonal_rational_spectrum",
+                "Check that diag(2, 2, -1) has complete spectrum 2^2, (-1)^1; "
+                "the matrix must be symmetric and claimed eigenvalues distinct.",
+                {
+                    "matrix": {
+                        "entries": [
+                            [
+                                {"num": "2", "den": "1"},
+                                {"num": "0", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "2", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "0", "den": "1"},
+                                {"num": "-1", "den": "1"},
+                            ],
+                        ]
+                    },
+                    "claimed_profile": [
+                        {
+                            "eigenvalue": {"num": "2", "den": "1"},
+                            "multiplicity": 2,
+                        },
+                        {
+                            "eigenvalue": {"num": "-1", "den": "1"},
+                            "multiplicity": 1,
+                        },
+                    ],
+                },
+            ),
+        ),
+    ),
     _op(
         "matrix.inertia.compute",
         "Compute Sylvester inertia of a symmetric rational matrix",

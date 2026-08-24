@@ -3,8 +3,14 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian.math.graphs.independence import (
+    IndependenceNumberRequest,
+    independence_number,
+)
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.hypergraphs._models import (
     CliqueExpansionRequest,
+    CliqueExpansionResult,
     DualRequest,
     FiniteHypergraph,
     IncidenceGraphRequest,
@@ -50,6 +56,12 @@ NO_EDGES = {
 SINGLETON = {
     "vertices": ["v"],
     "edges": [["e", ["v"]]],
+}
+
+# Declared vertex order disagrees with lexical order (issue #2300).
+REVERSED_ORDER = {
+    "vertices": ["z", "a"],
+    "edges": [["e", ["z", "a"]]],
 }
 
 
@@ -255,18 +267,11 @@ class TestIncidenceGraph:
 
 
 class TestCliqueExpansion:
-    def test_basic(self) -> None:
+    def test_canonical_graph(self) -> None:
         r = compute_clique_expansion(CliqueExpansionRequest(hypergraph=HYPERGRAPH))
-        assert r.vertices == ("a", "b", "c", "d")
-        adj = dict(r.adjacency)
-        assert adj["a"] == ("b", "c", "d")
-        assert adj["b"] == ("a", "c", "d")
-        assert adj["c"] == ("a", "b", "d")
-        assert adj["d"] == ("a", "b", "c")
-
-    def test_edges(self) -> None:
-        r = compute_clique_expansion(CliqueExpansionRequest(hypergraph=HYPERGRAPH))
-        assert set(r.edges) == {
+        assert isinstance(r.graph, SimpleUndirectedGraph)
+        assert r.graph.vertices == ("a", "b", "c", "d")
+        assert set(r.graph.edges) == {
             ("a", "b"),
             ("a", "c"),
             ("a", "d"),
@@ -275,43 +280,110 @@ class TestCliqueExpansion:
             ("c", "d"),
         }
 
-    def test_uniform_no_overlap(self) -> None:
+    def test_endpoint_order_follows_graph_convention(self) -> None:
+        """The ('z', 'a') reproduction: endpoints are lexical, not declared."""
+
+        r = compute_clique_expansion(CliqueExpansionRequest(hypergraph=REVERSED_ORDER))
+        assert r.graph.vertices == ("z", "a")
+        assert r.graph.edges == (("a", "z"),)
+
+    def test_defining_property_against_source(self) -> None:
+        for hypergraph in (HYPERGRAPH, UNIFORM):
+            hg = FiniteHypergraph(**hypergraph)
+            r = compute_clique_expansion(CliqueExpansionRequest(hypergraph=hg))
+            members = [set(members) for _, members in hg.edges]
+            adjacent = set(r.graph.edges)
+            vertices = hg.vertices
+            for i, u in enumerate(vertices):
+                for v in vertices[i + 1 :]:
+                    shared = any(u in m and v in m for m in members)
+                    pair = (min(u, v), max(u, v))
+                    assert (pair in adjacent) == shared
+
+    def test_degenerate_edges_admitted(self) -> None:
         hg = {
-            "vertices": ["a", "b", "c", "d"],
+            "vertices": ["a", "b", "c"],
             "edges": [
-                ["e1", ["a", "b"]],
-                ["e2", ["c", "d"]],
+                ["empty", []],
+                ["one", ["a"]],
+                ["dup1", ["a", "b"]],
+                ["dup2", ["b", "a"]],
+                ["pair", ["b", "c"]],
             ],
         }
         r = compute_clique_expansion(CliqueExpansionRequest(hypergraph=hg))
-        adj = dict(r.adjacency)
-        assert adj["a"] == ("b",)
-        assert adj["b"] == ("a",)
-        assert adj["c"] == ("d",)
-        assert adj["d"] == ("c",)
-        assert set(r.edges) == {("a", "b"), ("c", "d")}
+        assert r.graph.vertices == ("a", "b", "c")
+        assert r.graph.edges == (("a", "b"), ("b", "c"))
 
-    def test_no_edges_no_adjacency(self) -> None:
+    def test_no_edges(self) -> None:
         r = compute_clique_expansion(CliqueExpansionRequest(hypergraph=NO_EDGES))
-        assert dict(r.adjacency) == {"a": (), "b": ()}
-        assert r.edges == ()
+        assert r.graph.vertices == ("a", "b")
+        assert r.graph.edges == ()
 
     def test_singleton(self) -> None:
         r = compute_clique_expansion(CliqueExpansionRequest(hypergraph=SINGLETON))
-        assert dict(r.adjacency) == {"v": ()}
-        assert r.edges == ()
+        assert r.graph.vertices == ("v",)
+        assert r.graph.edges == ()
 
-    def test_edges_sorted_by_vertex_order(self) -> None:
-        hg = {
-            "vertices": ["d", "c", "b", "a"],
-            "edges": [["e", ["a", "b", "c", "d"]]],
-        }
-        r = compute_clique_expansion(CliqueExpansionRequest(hypergraph=hg))
-        idx = {v: i for i, v in enumerate(r.vertices)}
-        for u, v in r.edges:
-            assert idx[u] < idx[v]
-        edge_keys = [(idx[u], idx[v]) for u, v in r.edges]
-        assert edge_keys == sorted(edge_keys)
+    def test_non_nfc_vertex_label_rejected(self) -> None:
+        decomposed = "e\u0301"
+        with pytest.raises(ValidationError, match="NFC-normalized"):
+            CliqueExpansionRequest(
+                hypergraph={
+                    "vertices": [decomposed, "a"],
+                    "edges": [["e", [decomposed, "a"]]],
+                }
+            )
+
+    def test_nfc_vertex_label_accepted(self) -> None:
+        composed = "\u00e9"
+        r = compute_clique_expansion(
+            CliqueExpansionRequest(
+                hypergraph={
+                    "vertices": [composed, "a"],
+                    "edges": [["e", [composed, "a"]]],
+                }
+            )
+        )
+        assert r.graph.vertices == ("\u00e9", "a")
+        assert r.graph.edges == (("a", "\u00e9"),)
+
+    def test_dual_expansion_independence_composition(self) -> None:
+        """Dual -> clique expansion -> independence number, with no rewriting.
+
+        The expansion of the dual is the intersection graph on the original
+        indexed hyperedges; a maximum independent set is exactly a maximum
+        pairwise-disjoint family of source hyperedges.
+        """
+
+        hg = FiniteHypergraph(
+            vertices=["a", "b", "c", "d", "e", "f"],
+            edges=[
+                ["e1", ["a", "b"]],
+                ["e2", ["c", "d"]],
+                ["e3", ["e", "f"]],
+                ["e4", ["a", "c"]],
+            ],
+        )
+        dual = compute_dual(DualRequest(hypergraph=hg)).dual
+        expansion = compute_clique_expansion(CliqueExpansionRequest(hypergraph=dual))
+
+        consumer_request = IndependenceNumberRequest(graph=expansion.graph.model_dump())
+        result = independence_number(consumer_request)
+        assert result.status == "EXACT"
+        assert result.optimum_value == 3
+
+        members = dict(hg.edges)
+        witnesses = result.witness_vertices
+        assert len(witnesses) == 3
+        for i, u in enumerate(witnesses):
+            for v in witnesses[i + 1 :]:
+                assert not set(members[u]) & set(members[v])
+
+    def test_serialization_round_trip(self) -> None:
+        r = compute_clique_expansion(CliqueExpansionRequest(hypergraph=HYPERGRAPH))
+        restored = CliqueExpansionResult.model_validate_json(r.model_dump_json())
+        assert restored == r
 
 
 class TestBindingSafety:
@@ -352,27 +424,35 @@ class TestBindingSafety:
             )
 
     def test_clique_expansion_binding(self) -> None:
-        from jacobian.math.hypergraphs._models import (
-            CliqueExpansionResult,
-        )
-
         hg = FiniteHypergraph(**HYPERGRAPH)
-        with pytest.raises(ValidationError, match="adjacency"):
-            CliqueExpansionResult(
-                hypergraph=hg,
-                vertices=("a", "b", "c", "d"),
-                adjacency=(
-                    ("a", ("b",)),
-                    ("b", ("a", "c", "d")),
-                    ("c", ("a", "b", "d")),
-                    ("d", ("a", "b", "c")),
-                ),
-                edges=(
-                    ("a", "b"),
-                    ("a", "c"),
-                    ("a", "d"),
-                    ("b", "c"),
-                    ("b", "d"),
-                    ("c", "d"),
-                ),
-            )
+        missing_edge = SimpleUndirectedGraph(
+            vertices=("a", "b", "c", "d"),
+            edges=(
+                ("a", "b"),
+                ("a", "c"),
+                ("a", "d"),
+                ("b", "c"),
+                ("b", "d"),
+            ),
+        )
+        with pytest.raises(ValidationError, match="exact 2-section"):
+            CliqueExpansionResult(hypergraph=hg, graph=missing_edge)
+
+    def test_clique_expansion_binding_rejects_declared_order_endpoints(self) -> None:
+        with pytest.raises(
+            ValidationError,
+            match="edges must contain two declared vertices in order",
+        ):
+            SimpleUndirectedGraph(vertices=("z", "a"), edges=(("z", "a"),))
+
+    def test_clique_expansion_binding_rejects_spurious_adjacency(self) -> None:
+        disjoint = FiniteHypergraph(
+            vertices=["u", "v", "w"],
+            edges=[["p", ["u", "v"]]],
+        )
+        spurious = SimpleUndirectedGraph(
+            vertices=("u", "v", "w"),
+            edges=(("u", "v"), ("u", "w")),
+        )
+        with pytest.raises(ValidationError, match="exact 2-section"):
+            CliqueExpansionResult(hypergraph=disjoint, graph=spurious)

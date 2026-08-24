@@ -1,161 +1,179 @@
 """Tests for graph morphism operations."""
 
+import pytest
+from pydantic import ValidationError
+
+from jacobian.canonical import CanonicalLimits
+from jacobian.math.graphs.morphisms import _models as morphism_models
 from jacobian.math.graphs.morphisms._models import (
-    CoreCheckRequest,
+    GraphHomomorphism,
+    GraphHomomorphismObstruction,
+    GraphVertexMap,
+    GraphVertexMapRow,
     HomomorphismCheckRequest,
-    HomomorphismFindRequest,
-    RetractionCheckRequest,
-    SimpleGraph,
+    HomomorphismCheckResult,
 )
-from jacobian.math.graphs.morphisms._operations import (
-    compute_core_check,
-    compute_homomorphism_check,
-    compute_homomorphism_find,
-    compute_retraction_check,
-)
+from jacobian.math.graphs.morphisms._operations import compute_homomorphism_check
 from jacobian.math.graphs.morphisms._tools import TOOLS
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
 def test_catalog_contains_only_audited_operations() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
-        "graph.core.check",
         "graph.cycle.fixed_length.decide",
         "graph.homomorphism.check",
-        "graph.homomorphism.find",
-        "graph.retraction.check",
         "graph.subgraph_pattern.find",
     }
 
 
-def test_homomorphism_check_identity() -> None:
-    request = HomomorphismCheckRequest(
-        source_graph=SimpleGraph(vertex_count=2, edges=((0, 1),)),
-        target_graph=SimpleGraph(vertex_count=2, edges=((0, 1),)),
-        vertex_map=(0, 1),
+def _vertex_map(
+    source_vertices: tuple[str, ...],
+    source_edges: tuple[tuple[str, str], ...],
+    target_vertices: tuple[str, ...],
+    target_edges: tuple[tuple[str, str], ...],
+    rows: tuple[tuple[str, str], ...],
+) -> GraphVertexMap:
+    return GraphVertexMap(
+        source_graph=SimpleUndirectedGraph(
+            vertices=source_vertices,
+            edges=source_edges,
+        ),
+        target_graph=SimpleUndirectedGraph(
+            vertices=target_vertices,
+            edges=target_edges,
+        ),
+        rows=tuple(
+            GraphVertexMapRow(source_vertex=source, target_vertex=target)
+            for source, target in rows
+        ),
     )
-    result = compute_homomorphism_check(request)
-    assert result.is_homomorphism is True
 
 
-def test_homomorphism_check_non_homomorphism() -> None:
-    request = HomomorphismCheckRequest(
-        source_graph=SimpleGraph(vertex_count=2, edges=((0, 1),)),
-        target_graph=SimpleGraph(vertex_count=2, edges=()),
-        vertex_map=(0, 0),
+def test_homomorphism_check_returns_source_bound_checked_map() -> None:
+    """Rows are canonical by label even when a graph's display order is not."""
+
+    vertex_map = _vertex_map(
+        ("b", "a"),
+        (("a", "b"),),
+        ("y", "x"),
+        (("x", "y"),),
+        (("a", "x"), ("b", "y")),
     )
-    result = compute_homomorphism_check(request)
-    assert result.is_homomorphism is False
+    result = compute_homomorphism_check(HomomorphismCheckRequest(vertex_map=vertex_map))
+    assert result.status == "HOMOMORPHISM"
+    assert result.obstruction is None
+    assert result.homomorphism == GraphHomomorphism(vertex_map=vertex_map)
 
 
-def test_homomorphism_find_k2_to_k2() -> None:
-    request = HomomorphismFindRequest(
-        source_graph=SimpleGraph(vertex_count=2, edges=((0, 1),)),
-        target_graph=SimpleGraph(vertex_count=2, edges=((0, 1),)),
+def test_homomorphism_check_returns_first_edge_image_nonedge() -> None:
+    vertex_map = _vertex_map(
+        ("a", "b", "c"),
+        (("a", "b"), ("a", "c")),
+        ("x", "y"),
+        (("x", "y"),),
+        (("a", "x"), ("b", "x"), ("c", "y")),
     )
-    result = compute_homomorphism_find(request)
-    assert result.found is True
-    assert len(result.vertex_map) == 2
-
-
-def test_homomorphism_find_no_homomorphism() -> None:
-    request = HomomorphismFindRequest(
-        source_graph=SimpleGraph(vertex_count=2, edges=((0, 1),)),
-        target_graph=SimpleGraph(vertex_count=1, edges=()),
+    result = compute_homomorphism_check(HomomorphismCheckRequest(vertex_map=vertex_map))
+    assert result.status == "EDGE_IMAGE_NOT_EDGE"
+    assert result.homomorphism is None
+    assert result.obstruction == GraphHomomorphismObstruction(
+        vertex_map=vertex_map,
+        source_edge=("a", "b"),
+        image_vertices=("x", "x"),
     )
-    result = compute_homomorphism_find(request)
-    assert result.found is False
 
 
-def test_core_check_k2_is_core() -> None:
-    request = CoreCheckRequest(graph=SimpleGraph(vertex_count=2, edges=((0, 1),)))
-    result = compute_core_check(request)
-    assert result.is_core is True
-
-
-def test_core_check_independent_set_is_not_core() -> None:
-    request = CoreCheckRequest(graph=SimpleGraph(vertex_count=3, edges=()))
-    result = compute_core_check(request)
-    assert result.is_core is False
-
-
-def test_retraction_check_k3_to_edge() -> None:
-    request = RetractionCheckRequest(
-        graph=SimpleGraph(vertex_count=3, edges=((0, 1), (1, 2), (0, 2))),
-        subgraph_vertices=(0, 1),
+def test_homomorphism_check_accepts_edgeless_noninjective_map() -> None:
+    vertex_map = _vertex_map(
+        ("a", "b"),
+        (),
+        ("x",),
+        (),
+        (("a", "x"), ("b", "x")),
     )
-    result = compute_retraction_check(request)
-    assert result.is_retraction is False
+    result = compute_homomorphism_check(HomomorphismCheckRequest(vertex_map=vertex_map))
+    assert result.status == "HOMOMORPHISM"
+    assert result.homomorphism is not None
 
 
-def test_core_check_p3_is_not_core() -> None:
-    """P3 (3-vertex path) retracts onto an edge, so it is not a core."""
-    request = CoreCheckRequest(
-        graph=SimpleGraph(vertex_count=3, edges=((0, 1), (1, 2)))
-    )
-    result = compute_core_check(request)
-    assert result.is_core is False
+def test_vertex_map_rejects_incomplete_out_of_order_and_foreign_rows() -> None:
+    source = SimpleUndirectedGraph(vertices=("a", "b"), edges=(("a", "b"),))
+    target = SimpleUndirectedGraph(vertices=("x", "y"), edges=(("x", "y"),))
 
-
-def test_core_check_c4_is_not_core() -> None:
-    """C4 (4-cycle) retracts onto an edge, so it is not a core."""
-    request = CoreCheckRequest(
-        graph=SimpleGraph(vertex_count=4, edges=((0, 1), (1, 2), (2, 3), (0, 3)))
-    )
-    result = compute_core_check(request)
-    assert result.is_core is False
-
-
-def test_core_check_k3_is_core() -> None:
-    """K3 (complete graph on 3 vertices) is a core."""
-    request = CoreCheckRequest(
-        graph=SimpleGraph(vertex_count=3, edges=((0, 1), (1, 2), (0, 2)))
-    )
-    result = compute_core_check(request)
-    assert result.is_core is True
-
-
-def test_retraction_check_p3_to_edge() -> None:
-    """P3 retracts onto the edge {0,1}: vertex 2 maps to 0."""
-    request = RetractionCheckRequest(
-        graph=SimpleGraph(vertex_count=3, edges=((0, 1), (1, 2))),
-        subgraph_vertices=(0, 1),
-    )
-    result = compute_retraction_check(request)
-    assert result.is_retraction is True
-
-
-def test_core_check_c5_is_core() -> None:
-    """C5 (5-cycle, odd) is a core: every endomorphism is an automorphism."""
-    request = CoreCheckRequest(
-        graph=SimpleGraph(
-            vertex_count=5, edges=((0, 1), (1, 2), (2, 3), (3, 4), (4, 0))
+    with pytest.raises(ValidationError, match="cover every source vertex"):
+        GraphVertexMap(
+            source_graph=source,
+            target_graph=target,
+            rows=(GraphVertexMapRow(source_vertex="a", target_vertex="x"),),
         )
-    )
-    result = compute_core_check(request)
-    assert result.is_core is True
-
-
-def test_core_check_k4_is_core() -> None:
-    """K4 (complete graph on 4 vertices) is a core."""
-    request = CoreCheckRequest(
-        graph=SimpleGraph(
-            vertex_count=4,
-            edges=((0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)),
+    with pytest.raises(ValidationError, match="canonical source-label order"):
+        GraphVertexMap(
+            source_graph=source,
+            target_graph=target,
+            rows=(
+                GraphVertexMapRow(source_vertex="b", target_vertex="y"),
+                GraphVertexMapRow(source_vertex="a", target_vertex="x"),
+            ),
         )
-    )
-    result = compute_core_check(request)
-    assert result.is_core is True
+    with pytest.raises(ValidationError, match="declared target-graph"):
+        GraphVertexMap(
+            source_graph=source,
+            target_graph=target,
+            rows=(
+                GraphVertexMapRow(source_vertex="a", target_vertex="x"),
+                GraphVertexMapRow(source_vertex="b", target_vertex="z"),
+            ),
+        )
 
 
-def test_retraction_check_c4_to_edge() -> None:
-    """C4 retracts onto any of its edges: vertex 2 maps to 0, vertex 3 maps to 1."""
-    request = RetractionCheckRequest(
-        graph=SimpleGraph(vertex_count=4, edges=((0, 1), (1, 2), (2, 3), (0, 3))),
-        subgraph_vertices=(0, 1),
+def test_homomorphism_result_replays_and_rejects_forged_conclusions() -> None:
+    with pytest.raises(ValidationError, match="requires its first obstruction"):
+        HomomorphismCheckResult(
+            status="EDGE_IMAGE_NOT_EDGE",
+        )
+
+
+def test_homomorphism_check_orders_edge_obstructions_canonically() -> None:
+    def first_obstruction(
+        source_edges: tuple[tuple[str, str], ...],
+    ) -> GraphHomomorphismObstruction:
+        vertex_map = _vertex_map(
+            ("a", "b", "c"),
+            source_edges,
+            ("x", "y"),
+            (("x", "y"),),
+            (("a", "x"), ("b", "x"), ("c", "x")),
+        )
+        result = compute_homomorphism_check(
+            HomomorphismCheckRequest(vertex_map=vertex_map)
+        )
+        assert result.obstruction is not None
+        return result.obstruction
+
+    assert first_obstruction((("a", "b"), ("a", "c"))).source_edge == (
+        "a",
+        "b",
     )
-    result = compute_retraction_check(request)
-    assert result.is_retraction is True
+    assert first_obstruction((("a", "c"), ("a", "b"))).source_edge == (
+        "a",
+        "b",
+    )
+
+
+def test_homomorphism_check_preflights_retained_result_bytes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    small_limit = CanonicalLimits(max_output_bytes=400)
+    monkeypatch.setattr(morphism_models, "CanonicalLimits", lambda: small_limit)
+
+    with pytest.raises(ValidationError, match="canonical output limit"):
+        _vertex_map(
+            ("a" * 100,),
+            (),
+            ("b" * 100,),
+            (),
+            (("a" * 100, "b" * 100),),
+        )
 
 
 def _canonical_graph(

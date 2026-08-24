@@ -470,13 +470,18 @@ def test_producer_rejects_forged_optimum_below_greedy_incumbent(
         return z3.sat, ("a",), ""
 
     monkeypatch.setattr(_independence_z3, "_check_threshold", regressed)
-    with pytest.raises(ValidationError, match="below a feasible witness"):
-        _compute(
-            {
-                "vertices": ["a", "b", "c"],
-                "edges": [["triple", ["a", "b", "c"]]],
-            }
-        )
+    result = _compute(
+        {
+            "vertices": ["a", "b", "c"],
+            "edges": [["triple", ["a", "b", "c"]]],
+        }
+    )
+    assert result.status == "UNKNOWN"
+    assert result.independence_number is None
+    assert result.incumbent_vertices == ("a", "b")
+    assert result.upper_bound == 3
+    assert result.solver_calls == 1
+    assert result.termination_reason == "SOLVER_ERROR"
 
 
 def test_producer_rejects_solver_calls_inconsistent_with_established_bounds(
@@ -488,17 +493,72 @@ def test_producer_rejects_solver_calls_inconsistent_with_established_bounds(
         return z3.sat, ("b", "c"), ""
 
     monkeypatch.setattr(_independence_z3, "_check_threshold", regressed)
-    with pytest.raises(ValidationError, match="descending thresholds"):
-        _compute(
-            {
-                "vertices": ["a", "b", "c", "d"],
-                "edges": [
-                    ["ab", ["a", "b"]],
-                    ["ac", ["a", "c"]],
-                    ["ad", ["a", "d"]],
-                ],
-            }
-        )
+    result = _compute(
+        {
+            "vertices": ["a", "b", "c", "d"],
+            "edges": [
+                ["ab", ["a", "b"]],
+                ["ac", ["a", "c"]],
+                ["ad", ["a", "d"]],
+            ],
+        }
+    )
+    assert result.status == "UNKNOWN"
+    assert result.independence_number is None
+    assert result.upper_bound == 4
+    assert result.solver_calls == 1
+    assert result.termination_reason == "SOLVER_ERROR"
+
+
+def test_producer_projects_solver_error_when_witness_misses_threshold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.hypergraphs import _independence_z3
+
+    thresholds: list[int] = []
+
+    def regressed(
+        _solver: object,
+        _selected: object,
+        _cardinality: object,
+        threshold: int,
+        *_rest: object,
+    ) -> object:
+        thresholds.append(threshold)
+        if threshold == 3:
+            return z3.unsat, (), ""
+        return z3.sat, ("c",), ""
+
+    monkeypatch.setattr(_independence_z3, "_check_threshold", regressed)
+    result = _compute(
+        {
+            "vertices": ["c", "a", "b"],
+            "edges": [["ca", ["c", "a"]], ["cb", ["c", "b"]]],
+        }
+    )
+    assert thresholds == [3, 2]
+    assert result.status == "UNKNOWN"
+    assert result.independence_number is None
+    assert result.incumbent_vertices == ("c",)
+    assert result.lower_bound == 1
+    assert result.upper_bound == 3
+    assert result.solver_calls == 2
+    assert not result.wall_budget_exhausted
+    assert result.termination_reason == "SOLVER_ERROR"
+    assert HypergraphIndependenceResult.model_validate(result.model_dump(mode="json"))
+
+
+def test_produced_exact_result_meets_the_queried_threshold() -> None:
+    source = FiniteHypergraph(
+        vertices=["c", "a", "b"],
+        edges=[["ca", ["c", "a"]], ["cb", ["c", "b"]]],
+    )
+    result = _compute(source)
+    assert result.status == "EXACT"
+    assert result.independence_number == 2
+    assert len(result.incumbent_vertices) >= 2
+    brute_force = _brute_force_witness(result.hypergraph)
+    assert result.independence_number == len(brute_force)
 
 
 def test_backend_witness_choice_is_repeatable() -> None:

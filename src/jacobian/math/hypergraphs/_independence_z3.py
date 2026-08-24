@@ -215,6 +215,21 @@ def solve_independence_number(
             upper_bound = threshold - 1
             continue
         if solver_status == z3.sat:
+            if len(candidate) < threshold:
+                return _result(
+                    request,
+                    status="UNKNOWN",
+                    independence_number=None,
+                    incumbent=incumbent,
+                    upper_bound=source_upper_bound,
+                    solver_calls=solver_calls,
+                    wall_budget_exhausted=False,
+                    termination_reason="SOLVER_ERROR",
+                    detail=(
+                        "the exact backend returned a satisfying witness below "
+                        f"the submitted threshold {threshold}"
+                    ),
+                )
             return _result(
                 request,
                 status="EXACT",

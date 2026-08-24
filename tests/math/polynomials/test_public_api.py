@@ -748,6 +748,91 @@ def test_square_free_replay_admits_sparse_cofactors_above_the_division_box() -> 
         )
 
 
+def test_square_free_results_require_canonical_univariate_parts() -> None:
+    """A product-correct but overlapping univariate grouping is not the result.
+
+    ``(x - 1) * ((x - 1)(x + 1))**2`` equals the retained source
+    ``(x - 1)**3 * (x + 1)**2``, so every univariate exact-division step
+    succeeds while the claimed parts overlap; a scalar shuffle across the
+    records also reconstructs exactly yet breaks ``MONIC_FACTORS``.  Only
+    the recomputed canonical monic square-free parts authenticate either
+    claim.
+    """
+
+    from pydantic import ValidationError
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.polynomials._models import (
+        PolynomialSquareFreeDecompositionResult,
+        PolynomialSquareFreeFactor,
+    )
+
+    source = _univariate("x", {5: "1", 4: "-1", 3: "-2", 2: "2", 1: "1", 0: "-1"})
+    linear = _univariate("x", {1: "1", 0: "-1"})
+    mixed = _univariate("x", {2: "1", 0: "-1"})
+    with pytest.raises(ValidationError, match="must reconstruct"):
+        PolynomialSquareFreeDecompositionResult(
+            polynomial=source,
+            coefficient=CanonicalRational(num="1", den="1"),
+            factors=(
+                PolynomialSquareFreeFactor(factor=linear, multiplicity=1),
+                PolynomialSquareFreeFactor(factor=mixed, multiplicity=2),
+            ),
+            reconstructed=source,
+        )
+    with pytest.raises(ValidationError, match="must reconstruct"):
+        PolynomialSquareFreeDecompositionResult(
+            polynomial=source,
+            coefficient=CanonicalRational(num="1", den="2"),
+            factors=(
+                PolynomialSquareFreeFactor(
+                    factor=_univariate("x", {1: "1/2", 0: "1/2"}), multiplicity=2
+                ),
+                PolynomialSquareFreeFactor(
+                    factor=_univariate("x", {1: "2", 0: "-2"}), multiplicity=3
+                ),
+            ),
+            reconstructed=source,
+        )
+
+
+def test_square_free_operation_round_trips_distinct_univariate_multiplicities() -> None:
+    """The producer's records stay canonical under univariate revalidation.
+
+    ``(x - 1)**3 * (x + 1)**2`` decomposes into the distinct-multiplicity
+    parts ``(x + 1, 2)`` and ``(x - 1, 3)``, so the canonical-recomparison
+    lane must admit exactly that emitted decomposition and its serialized
+    round trip.
+    """
+
+    from sympy import symbols
+
+    from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
+    from jacobian.math.polynomials._models import (
+        PolynomialSquareFreeDecompositionResult,
+        PolynomialSquareFreeRequest,
+    )
+    from jacobian.math.polynomials._operations import (
+        polynomial_square_free_decomposition,
+    )
+
+    request = _univariate("x", {5: "1", 4: "-1", 3: "-2", 2: "2", 1: "1", 0: "-1"})
+    result = polynomial_square_free_decomposition(
+        PolynomialSquareFreeRequest(polynomial=request)
+    )
+    x = symbols("x")
+    records = [
+        (rational_polynomial_to_sympy(record.factor).as_expr(), record.multiplicity)
+        for record in result.factors
+    ]
+    assert records == [(x + 1, 2), (x - 1, 3)]
+    assert result.reconstructed == request
+    assert (
+        PolynomialSquareFreeDecompositionResult.model_validate(result.model_dump())
+        == result
+    )
+
+
 def test_square_free_results_require_canonical_square_free_parts() -> None:
     """A product-correct but non-coprime grouping is not the decomposition.
 

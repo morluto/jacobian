@@ -184,12 +184,15 @@ class PolynomialSquareFreeDecompositionResult(StrictModel):
     """The square-free decomposition bound to its source polynomial.
 
     Retains the canonical source polynomial so validation replays
-    ``reconstructed = polynomial`` and the defining relation
-    ``polynomial = coefficient * product(factor^multiplicity)`` without
-    ever forming a claimed product intermediate: univariate sources replay
-    by bounded exact division, while multivariate sources — whose sparse
-    divisors can force exponentially dense exact quotients — replay by
-    comparing against the recomputed canonical monic decomposition.
+    ``reconstructed = polynomial`` and authenticates the defining relation
+    ``polynomial = coefficient * product(factor^multiplicity)`` together
+    with the uniqueness of the monic square-free parts: an exact product
+    at distinct multiplicities does not force pairwise-coprime square-free
+    factors, so validation recomputes the canonical monic decomposition of
+    the retained source with the same bounded backend invocation the
+    operation itself performs and compares the coefficient and the
+    multiplicity-weighted monic records against the claim for every ring
+    arity. Neither arity materializes a claimed product intermediate.
     """
 
     polynomial: RationalPolynomial
@@ -241,6 +244,7 @@ class PolynomialSquareFreeDecompositionResult(StrictModel):
             ),
             label="square-free",
             maximum_exponent=_MAX_SQUARE_FREE_EXPONENT,
+            require_canonical_records=True,
         )
         return self
 
@@ -354,6 +358,7 @@ class PolynomialFactorizationResult(StrictModel):
             ),
             label="irreducible",
             maximum_exponent=_MAX_GCD_DEGREE,
+            require_canonical_records=False,
         )
         return self
 
@@ -367,30 +372,29 @@ def _verify_exact_factor_product(
     mismatch_message: str,
     label: str,
     maximum_exponent: int,
+    require_canonical_records: bool,
 ) -> None:
     """Replay ``coefficient * product(factor ** multiplicity) == source``.
 
-    Univariate replays divide the retained source by each factor once per
-    unit of multiplicity instead of forming the claimed product, so a
-    mismatched payload is rejected at the first inexact division without
-    expanding its claim.  Before each exact division,
+    A claimed product whose records must be the canonical decomposition —
+    the square-free result's pairwise-coprime monic square-free parts at
+    distinct multiplicities — is authenticated by recomputing that
+    decomposition of the retained source with the same bounded backend
+    invocation the operation itself performs and comparing the coefficient
+    and multiplicity-weighted monic records; unique monic factorization
+    makes the match equivalent to the defining relation. This lane never
+    divides, so no claim can force quotient expansion and every arity takes
+    it.
+
+    The univariate irreducible-factorization result instead replays by
+    dividing the retained source by each factor once per unit of
+    multiplicity, so a mismatched payload is rejected at the first inexact
+    division without expanding its claim.  Before each exact division,
     ``_require_bounded_replay_quotient`` derives from per-variable degree
     arithmetic alone a proven ceiling on the support of the next quotient —
     and of any partial quotient the backend could build while deciding
     divisibility — and rejects typedly, before any expansion, when even
     that ceiling leaves the shared representation envelope.
-
-    A sparse multivariate divisor can force an exact quotient exponentially
-    denser than its inputs, and the degree-box ceiling then also
-    overestimates genuinely sparse cofactors of admitted sources, so
-    rejecting above the envelope would crash valid operation outputs.
-    Multivariate replays therefore never divide: they recompute the
-    canonical monic decomposition of the retained source with the same
-    bounded backend invocation the operation itself performs and compare
-    the coefficient and the multiplicity-weighted monic records against
-    the claim.  Unique monic factorization makes that match equivalent to
-    the defining relation, so neither lane materializes an unreconstructed
-    intermediate.
     """
 
     from sympy import Poly, Rational
@@ -419,7 +423,7 @@ def _verify_exact_factor_product(
         claimed.append(
             (rational_polynomial_to_sympy(record.factor), record.multiplicity)
         )
-    if len(source.gens) > 1:
+    if require_canonical_records or len(source.gens) > 1:
         try:
             recomputed_coefficient, recomputed_factors, _ = (
                 polynomial_square_free_decomposition(source)

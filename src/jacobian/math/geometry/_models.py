@@ -792,9 +792,12 @@ def _require_bounded_split_table_rationals(
     Under the boundary-inclusive recurrence one split-table entry - and each
     pre-selection candidate behind it - is the exact sum of the weights of
     one subpolygon's selected triangulation: at most ``m = count - 3``
-    distinct nonzero terms, because every subpolygon triangulates with fewer
-    diagonals than the full polygon. For a term set ``T`` whose term ``i``
-    has numerator height ``nd_i`` and denominator height ``dd_i``, any such
+    distinct nonzero terms whose diagonal set is pairwise noncrossing, and
+    every noncrossing diagonal set extends to a full triangulation, so the
+    feasible term sets are exactly the subpolygon triangulations of this
+    ring. Arbitrary weight subsets are not feasible: crossing diagonals
+    cannot share one ledger sum. For a term set ``T`` whose term ``i`` has
+    numerator height ``nd_i`` and denominator height ``dd_i``, any such
     reduced sum obeys
 
     - ``digits(den) <= sum(dd_i for i in T)``, since the reduced denominator
@@ -805,46 +808,71 @@ def _require_bounded_split_table_rationals(
       it, and the height-dominating anchor contributes ``nd_i - dd_i`` of
       the aggregate.
 
-    The first bound is maximized by the ``m`` tallest denominators and the
-    second by anchoring any single weight against the ``m - 1`` tallest
-    remaining denominators, so admission evaluates exactly those two
-    quantities here and rejects requests that could materialize an
-    unrepresentable ledger value even when their final optimum would be
-    small.
+    Both sums are therefore maximized - over exactly the feasible sets - by
+    maximum-height triangulations, which the classic cubic interval DP
+    decides for a convex ring: the first bound is the tallest full
+    triangulation under denominator heights, and the second anchors each
+    single weight against the tallest triangulations of its two open sides
+    (whose total already contains the anchor's denominator height).
+    Admission evaluates exactly those two quantities here and rejects
+    requests that could materialize an unrepresentable ledger value even
+    when their final optimum would be small.
     """
 
-    terms = tuple(
-        item.weight for item in diagonal_weights if item.weight.as_fraction() != 0
-    )
-    max_terms = min(count - 3, len(terms))
-    if max_terms <= 0:
+    if all(item.weight.as_fraction() == 0 for item in diagonal_weights):
         return
-    paired = sorted(
-        ((len(term.den), len(term.num.lstrip("-"))) for term in terms),
-        reverse=True,
-    )
-    prefix = [0]
-    for height, _ in paired:
-        prefix.append(prefix[-1] + height)
+    heights = {
+        (item.first, item.second): (
+            len(item.weight.den),
+            len(item.weight.num.lstrip("-")),
+        )
+        for item in diagonal_weights
+    }
 
-    def _tallest_excluding(rank: int, take: int) -> int:
-        if rank < take:
-            return prefix[take + 1] - paired[rank][0]
-        return prefix[take]
+    def _closing_height(start: int, length: int) -> int:
+        pair = (start % count, (start + length - 1) % count)
+        ordered = (min(pair), max(pair))
+        if ordered[1] == ordered[0] + 1 or ordered == (0, count - 1):
+            return 0
+        return heights[ordered][0]
 
-    den_bound = prefix[max_terms]
-    num_bound = max(
-        numerator + _tallest_excluding(rank, max_terms - 1)
-        for rank, (_, numerator) in enumerate(paired)
+    # Region states over cyclic intervals: ``open_region`` bounds one
+    # region's interior triangulation height, excluding the region's own
+    # closing chord; ``closed_region`` charges that closing chord once, so
+    # each genuine diagonal is counted by exactly one region - the same
+    # once-per-boundary accounting the recurrence itself performs.
+    open_region: dict[tuple[int, int], int] = {}
+    closed_region: dict[tuple[int, int], int] = {}
+    for length in range(1, count + 1):
+        for start in range(count):
+            if length <= 2:
+                open_region[start, length] = 0
+                closed_region[start, length] = 0
+                continue
+            best_interior = max(
+                closed_region[start, split + 1]
+                + closed_region[(start + split) % count, length - split]
+                for split in range(1, length - 1)
+            )
+            closing = _closing_height(start, length)
+            open_region[start, length] = best_interior
+            closed_region[start, length] = best_interior + closing
+
+    den_bound = closed_region[0, count]
+    anchored = max(
+        heights[pair][1]
+        + open_region[pair[0], pair[1] - pair[0] + 1]
+        + open_region[pair[1], count - pair[1] + pair[0]]
+        for pair in heights
     )
-    slack = len(str(max_terms)) + 1
-    worst = max(den_bound, num_bound + slack)
+    slack = len(str(count - 3)) + 1
+    worst = max(den_bound, anchored + slack)
     if worst > MAX_CANONICAL_RATIONAL_DIGITS:
         raise ValueError(
             "triangulation split-table ledger sums reach "
             f"{worst}-digit rational components in the worst case "
-            f"(subset-sum growth over {max_terms} selected diagonal "
-            f"weights), exceeding the canonical "
+            f"(maximum feasible-triangulation growth over {count - 3} "
+            f"selected diagonal weights), exceeding the canonical "
             f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit rational limit; reduce "
             "diagonal-weight component height or vertex count"
         )
@@ -858,11 +886,13 @@ class ConvexPolygonTriangulationRequest(StrictModel):
             "description": (
                 "Minimum-weight triangulation of one strict CCW convex "
                 "rational polygon under a complete nonnegative exact rational "
-                "weight per non-hull diagonal. Each split-table state sums at "
-                "most vertex_count - 3 selected weights, so admission "
-                "preflights the worst-case subset-sum digit growth and "
-                "rejects requests whose intermediate ledger rationals could "
-                "exceed the canonical 32,768-digit rational limit."
+                "weight per non-hull diagonal. Each split-table state sums "
+                "one feasible subpolygon triangulation - at most vertex_count "
+                "- 3 pairwise noncrossing selected weights - so admission "
+                "preflights the worst-case digit growth over maximum-height "
+                "feasible triangulations and rejects requests whose "
+                "intermediate ledger rationals could exceed the canonical "
+                "32,768-digit rational limit."
             ),
         },
     )
@@ -873,9 +903,9 @@ class ConvexPolygonTriangulationRequest(StrictModel):
         max_length=464,
         description=(
             "Exactly one nonnegative exact rational weight per non-hull "
-            "diagonal in lexicographic pair order; subset-sum growth over "
-            "these heights must keep every derived split-table rational "
-            "inside the canonical 32,768-digit limit."
+            "diagonal in lexicographic pair order; feasible-triangulation "
+            "growth over these heights must keep every derived split-table "
+            "rational inside the canonical 32,768-digit limit."
         ),
     )
     objective: Literal["NON_HULL_DIAGONAL_WEIGHT_SUM"] = "NON_HULL_DIAGONAL_WEIGHT_SUM"
@@ -941,25 +971,37 @@ MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS = 7_000_000
 _MIN_EUCLIDEAN_SPLIT_TERM_CHARS = 2 * (4 * 1 + 1) + 128
 
 
+def _span_term_occurrences(count: int) -> int:
+    """Total split-table term occurrences charged by a ``count``-vertex source.
+
+    A span-``s`` state carries at most ``s - 1`` terms - its subpolygon
+    triangulates with ``s - 2`` diagonals plus one charged boundary - and
+    spans ``1..count - 2`` each occur ``count - s`` times, so the retained
+    table sums exactly these span-specific counts rather than charging
+    every state the root's ``count - 3`` terms.
+    """
+
+    return sum((count - span) * (span - 1) for span in range(1, count - 1))
+
+
 def _euclidean_envelope_vertex_ceiling() -> int:
     """Largest vertex count that admission could ever accept.
 
-    The split-table estimate multiplies ``term_chars``, which grows with the
-    pairwise-difference digit count derived from the source and never drops
-    below one digit, so ``(n - 1)(n - 2)/2 * (n - 3)`` evaluated at that floor
-    is a necessary condition for every admitted source. The returned ceiling
-    restates this closed-form consequence of
-    ``MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS`` for schemas that need static
-    bounds; it can never reject a source whose estimate fits the budget, so
-    the derived envelope alone decides admission.
+    The split-table estimate multiplies ``_span_term_occurrences`` by
+    ``term_chars``, which grows with the pairwise-difference digit count
+    derived from the source and never drops below one digit, so that
+    product evaluated at the one-digit floor is a necessary condition for
+    every admitted source. The returned ceiling restates this closed-form
+    consequence of ``MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS`` for schemas
+    that need static bounds; it can never reject a source whose estimate
+    fits the budget, so the derived envelope alone decides admission.
     """
 
     count = 4
     while True:
         candidate = count + 1
-        states = (candidate - 1) * (candidate - 2) // 2
         if (
-            states * (candidate - 3) * _MIN_EUCLIDEAN_SPLIT_TERM_CHARS
+            _span_term_occurrences(candidate) * _MIN_EUCLIDEAN_SPLIT_TERM_CHARS
             > MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS
         ):
             return count
@@ -984,10 +1026,12 @@ def _require_euclidean_triangulation_envelope(
     harmless translations for free.  A squared length then has at most
     ``4d + 1`` digits in each component (each product doubles its side and
     the final sum adds one digit), and each split-table expression term is
-    charged twice that plus fixed punctuation slack.  The complete table has
-    ``(n - 1)(n - 2)/2`` states, so the conservative serialized-expression
-    estimate below bounds every retained exact sum before Arb is invoked;
-    each raw input coordinate stays inside the shared canonical rational cap.
+    charged twice that plus fixed punctuation slack.  A span-``s`` table
+    state carries at most ``s - 1`` terms, so summing the span-specific
+    term counts over all ``(n - 1)(n - 2)/2`` states gives the conservative
+    serialized-expression estimate below, bounding every retained exact sum
+    before Arb is invoked; each raw input coordinate stays inside the shared
+    canonical rational cap.
     Every candidate diagonal's exact squared length is also checked against
     the canonical rational cap, because the aggregate serialized estimate
     alone admits sources whose derived values cannot be represented at all.
@@ -1041,9 +1085,8 @@ def _require_euclidean_triangulation_envelope(
                     f"{digits} digits, exceeding the canonical "
                     f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit rational limit"
                 )
-    states = (count - 1) * (count - 2) // 2
     term_chars = 2 * (4 * difference_digits + 1) + 128
-    estimated_chars = states * (count - 3) * term_chars
+    estimated_chars = _span_term_occurrences(count) * term_chars
     if estimated_chars > MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS:
         raise ValueError(
             "Euclidean triangulation split table can serialize up to "

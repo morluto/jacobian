@@ -21,7 +21,10 @@ _FLOOR_TERM_CHARS = 2 * (4 * 1 + 1) + 128
 
 
 def _floor_estimate_chars(vertices: int) -> int:
-    return (vertices - 1) * (vertices - 2) // 2 * (vertices - 3) * _FLOOR_TERM_CHARS
+    return (
+        sum((vertices - span) * (span - 1) for span in range(1, vertices - 1))
+        * _FLOOR_TERM_CHARS
+    )
 
 
 def _expected_vertex_ceiling() -> int:
@@ -559,9 +562,23 @@ class TestEuclideanTriangulation:
             _request(
                 tuple(
                     _point(index * spread, index * index * spread)
-                    for index in range(28)
+                    for index in range(38)
                 )
             )
+
+    def test_request_admits_a_ring_sized_by_span_specific_term_counts(self) -> None:
+        # A strict convex (i, i^2) ring of 49 vertices carries four-digit
+        # pairwise differences: charging every DP state the root's 46 terms
+        # rejected it, while the span-specific sum keeps its serialized
+        # split table inside the output budget.
+        result = minimum_euclidean_weight_triangulation(
+            _request(tuple(_point(index, index * index) for index in range(49)))
+        )
+
+        assert result.status == "CERTIFIED_OPTIMUM"
+        assert result.vertex_count == 49
+        assert len(result.split_table) == (49 - 1) * (49 - 2) // 2
+        assert len(result.diagonals) == result.vertex_count - 3
 
     def test_schema_publishes_the_admitted_envelope_and_preconditions(self) -> None:
         schema = EuclideanConvexPolygonTriangulationRequest.model_json_schema()

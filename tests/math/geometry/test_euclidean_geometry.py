@@ -159,6 +159,51 @@ class TestRationalWeightTriangulation:
             edge.weight for edge in result.diagonals
         )
 
+    def test_crossing_large_weights_remain_admitted(self):
+        # (0,2) and (1,3) cross, so no triangulation - and therefore no
+        # split-table ledger sum - can contain both 20,001-digit
+        # denominators; feasibility-aware admission must accept them.
+        denominator = 10**20000 + 5
+        weights = self._weights(
+            self._PENTAGON_DIAGONALS,
+            {
+                (0, 2): ("1", format_canonical_integer(denominator)),
+                (1, 3): ("1", format_canonical_integer(denominator)),
+            },
+        )
+
+        request = ConvexPolygonTriangulationRequest(
+            polygon={"points": self._ring(*self._PENTAGON)},
+            diagonal_weights=weights,
+        )
+        result = minimum_weight_triangulation(request)
+
+        assert result.optimum.as_fraction() == 0
+        entry = next(
+            item for item in result.split_table if (item.start, item.end) == (0, 2)
+        )
+        assert entry.optimum.as_fraction() == Fraction(1, denominator)
+        validated = ConvexPolygonTriangulationResult.model_validate(
+            result.model_dump(mode="json")
+        )
+        assert validated.optimum.as_fraction() == 0
+
+    def test_noncrossing_large_weight_pair_is_still_rejected(self):
+        # The same two large denominators on the noncrossing pair
+        # ((0,2), (0,3)) fit inside one feasible triangulation, so their
+        # combined ledger growth genuinely exceeds the canonical cap.
+        denominator = format_canonical_integer(10**20000 + 5)
+        weights = self._weights(
+            self._PENTAGON_DIAGONALS,
+            {(0, 2): ("1", denominator), (0, 3): ("1", denominator)},
+        )
+
+        with pytest.raises(ValidationError, match="split-table ledger sums"):
+            ConvexPolygonTriangulationRequest(
+                polygon={"points": self._ring(*self._PENTAGON)},
+                diagonal_weights=weights,
+            )
+
     def test_boundary_height_pair_stays_admitted_with_ledger_invariant(self):
         small = 10**16383 + 1
         large = 10**16383 + 7

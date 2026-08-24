@@ -29,12 +29,12 @@ __all__ = [
 
 
 def row_insertion_rsk(word: FiniteWord) -> RSKTableauPair:
-    """Compute ordinary row-insertion RSK for a word of at most 100 letters."""
+    """Compute ordinary row-insertion RSK for a word of at most 500 letters."""
     return _row_insertion_rsk(word)
 
 
 def inverse_row_insertion_rsk(pair: RSKTableauPair) -> FiniteWord:
-    """Reconstruct the unique word represented by a pair of at most 100 cells."""
+    """Reconstruct the unique word represented by a pair of at most 500 cells."""
     return _inverse_row_insertion_rsk(pair)
 
 

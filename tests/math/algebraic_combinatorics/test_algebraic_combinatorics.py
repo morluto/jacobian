@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from itertools import permutations
 
 import pytest
@@ -176,6 +177,29 @@ def test_native_partition_functions_are_closed_at_conjugate_boundary() -> None:
     assert algebraic_combinatorics.standard_young_tableaux_count(column) == 1
 
 
+def test_partition_operations_return_typed_results_at_the_size_boundary() -> None:
+    """The canonical domain admits the conjugate of every admitted partition."""
+    row = IntegerPartition(parts=(500,))
+    conjugate_result = compute_conjugate_partition(
+        ConjugatePartitionRequest(partition=row)
+    )
+    assert conjugate_result.conjugate.parts == (1,) * 500
+    round_trip = compute_conjugate_partition(
+        ConjugatePartitionRequest(partition=conjugate_result.conjugate)
+    )
+    assert round_trip.conjugate == row
+
+    hook_result = compute_hook_lengths(HookLengthRequest(partition=row))
+    assert hook_result.hooks == (tuple(range(500, 0, -1)),)
+    assert int(hook_result.total_product) == math.factorial(500)
+
+    count_result = compute_syt_count(
+        StandardYoungTableauCountRequest(partition=conjugate_result.conjugate)
+    )
+    assert count_result.count == "1"
+    assert count_result.n == 500
+
+
 def test_contract_rejects_non_decreasing() -> None:
     with pytest.raises(ValidationError, match="weakly decreasing"):
         IntegerPartition(parts=(1, 2, 3))
@@ -189,7 +213,7 @@ def test_contract_rejects_non_positive() -> None:
 def test_contract_rejects_partition_exceeding_size_bound() -> None:
     """A single-part partition summing above MAX_PARTITION_SIZE is rejected."""
     with pytest.raises(ValidationError, match="partition size exceeds"):
-        IntegerPartition(parts=(101,))
+        IntegerPartition(parts=(501,))
 
 
 def test_contract_rejects_non_integer_parts() -> None:

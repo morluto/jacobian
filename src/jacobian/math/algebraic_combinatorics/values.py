@@ -22,6 +22,9 @@ from jacobian.math.words.values import (
 # An N-letter word produces two N-cell tableaux, so the canonical tableau
 # cell bound derives the word-length envelope.
 MAX_RSK_WORD_LENGTH = MAX_PARTITION_SIZE
+# Every insertion or reverse-insertion step binary-searches one row of at
+# most MAX_RSK_WORD_LENGTH entries.
+MAX_RSK_ROW_SEARCH_COMPARISONS = MAX_RSK_WORD_LENGTH.bit_length()
 # A word at the length boundary over an alphabet of MAX_ALPHABET_SIZE symbols
 # can use MAX_SYMBOL_LENGTH Unicode scalar values per symbol, each encoded in
 # four UTF-8 bytes.
@@ -35,7 +38,7 @@ class RSKTableauPair(StrictModel):
     Insertion-tableau entries are one-based ranks in ``alphabet``.  The
     alphabet therefore remains attached to the pair and makes inverse RSK an
     exact operation even when symbols are not integers.  The common shape has
-    at most 100 cells, the canonical tableau bound.
+    at most 500 cells, the canonical partition-size bound.
     """
 
     alphabet: tuple[Symbol, ...] = Field(
@@ -76,6 +79,7 @@ class RSKTableauPair(StrictModel):
 
 
 __all__ = [
+    "MAX_RSK_ROW_SEARCH_COMPARISONS",
     "MAX_RSK_WORD_BYTES",
     "MAX_RSK_WORD_LENGTH",
     "RSKConvention",

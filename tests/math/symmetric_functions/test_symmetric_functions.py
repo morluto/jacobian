@@ -45,9 +45,9 @@ def test_conjugate_single_row() -> None:
 
 
 def test_partition_domain_is_closed_under_boundary_conjugation() -> None:
-    source = IntegerPartition(parts=(100,))
+    source = IntegerPartition(parts=(500,))
     result = compute_partition_conjugate(PartitionRequest(partition=source))
-    assert result.conjugate.parts == (1,) * 100
+    assert result.conjugate.parts == (1,) * 500
     assert (
         compute_partition_conjugate(
             PartitionRequest(partition=result.conjugate)

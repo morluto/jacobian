@@ -137,8 +137,8 @@ class RSKWordRequest(StrictModel):
     """One bounded word under the ordinary row-insertion convention.
 
     Forward and replayed reverse insertion each perform at most
-    ``N(N-1)/2 <= 4950`` binary row searches, with at most seven integer
-    comparisons per search for ``N <= 100``.  The compact result contains
+    ``N(N-1)/2 <= 124750`` binary row searches, with at most nine integer
+    comparisons per search for ``N <= 500``.  The compact result contains
     exactly ``2N`` tableau cells; no insertion ledger is materialized.
     """
 
@@ -160,10 +160,10 @@ class RSKWordRequest(StrictModel):
 
 
 class RSKInverseWordRequest(StrictModel):
-    """One compatible compact word-RSK pair of at most 100 cells to invert.
+    """One compatible compact word-RSK pair of at most 500 cells to invert.
 
     Reverse insertion and its forward replay each perform at most
-    ``N(N-1)/2 <= 4950`` binary row searches, with at most seven integer
+    ``N(N-1)/2 <= 124750`` binary row searches, with at most nine integer
     comparisons per search.
     """
 

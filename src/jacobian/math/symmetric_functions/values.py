@@ -9,7 +9,10 @@ from pydantic import Field, StrictInt, model_validator
 from jacobian._models import StrictModel
 
 MAX_PARTITION_SIZE = 500
-MAX_PARTITION_PARTS = 200
+# A positive partition of size at most N has at most N parts, so admitting one
+# part per unit of size keeps the canonical domain closed under Ferrers
+# transpose (conjugation) and under tableau shape construction.
+MAX_PARTITION_PARTS = MAX_PARTITION_SIZE
 # Positive-integer tableau labels are mathematical values, not cell indices.
 # Keep them exactly interoperable as JSON numbers while bounding comparison and
 # serialized-output work independently of the tableau cell-count envelope.
@@ -36,8 +39,9 @@ TableauRow = Annotated[
 class IntegerPartition(StrictModel):
     """A partition as a weakly decreasing tuple of positive integers.
 
-    There are at most 200 parts and their sum is at most 500.  The empty
-    tuple is the unique partition of zero.
+    There are at most 500 parts and their sum is at most 500, so the domain is
+    closed under conjugation.  The empty tuple is the unique partition of
+    zero.
     """
 
     parts: tuple[StrictInt, ...] = Field(

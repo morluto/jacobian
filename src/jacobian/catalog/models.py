@@ -42,7 +42,7 @@ class OperationExample(StrictModel):
 class OperationDiscoveryRequest(StrictModel):
     """Compact installed-portfolio search, independent of any transport."""
 
-    query: str = Field(min_length=1, max_length=512)
+    query: str = Field(min_length=1)
     domain: str | None = Field(
         default=None,
         pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,127}$",
@@ -64,7 +64,7 @@ class OperationDiscoveryMatch(StrictModel):
 
     operation_id: OperationId
     title: str = Field(min_length=1, max_length=128)
-    description: str = Field(min_length=1, max_length=512)
+    description: str = Field(min_length=1)
     tags: tuple[str, ...] = ()
     relevance_score: int = Field(default=0, ge=0, strict=True)
     applicability: Literal[
@@ -106,7 +106,7 @@ class OperationBrowseCard(StrictModel):
 
     operation_id: OperationId
     title: str = Field(min_length=1, max_length=128)
-    description: str = Field(min_length=1, max_length=512)
+    description: str = Field(min_length=1)
     tags: tuple[str, ...] = ()
 
 
@@ -145,7 +145,7 @@ class OperationDescriptor(StrictModel):
     operation_id: OperationId
     version: str = Field(min_length=1, max_length=64)
     title: str = Field(min_length=1, max_length=128)
-    description: str = Field(min_length=1, max_length=512)
+    description: str = Field(min_length=1)
     input_schema: dict[str, Any]
     output_schema: dict[str, Any]
     read_only: bool = False

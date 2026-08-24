@@ -7,11 +7,11 @@ from fractions import Fraction
 from math import comb
 from typing import TYPE_CHECKING, Literal
 
-if TYPE_CHECKING:
-    import networkx as nx
-
 from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+if TYPE_CHECKING:
+    import networkx as nx
 
 MAX_ALL_TERMINAL_RELIABILITY_EDGES = 20
 MAX_ALL_TERMINAL_RELIABILITY_STATES = 1 << MAX_ALL_TERMINAL_RELIABILITY_EDGES

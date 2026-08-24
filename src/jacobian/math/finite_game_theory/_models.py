@@ -10,7 +10,7 @@ from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 
 MAX_PLAYERS = 10
-MAX_STRATEGIES = 8
+MAX_STRATEGIES = 50
 
 
 class PayoffMatrix(StrictModel):

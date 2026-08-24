@@ -25,7 +25,7 @@ from jacobian.canonical import (
     parse_canonical_integer,
 )
 
-_MAX_N = 1_000
+_MAX_N = 10_000
 MAX_BINOMIAL_N = 10_000
 _MAX_PARTS = 256
 _MAX_PARTITION_N = 30

@@ -101,6 +101,10 @@ public request
 - Each mathematical value has one domain-owned canonical type. Producers return
   that type and consumers accept it unchanged, including for empty and
   degenerate values; operation-specific models must not recreate it.
+- Before adding a mathematical value, search for an existing owner by meaning
+  and fields, not just by class name. Reuse it whenever possible. If a new
+  type is necessary, document the distinction, define an explicit conversion,
+  and test serialized producer-consumer composition.
 - Backends never define the accepted public domain through runtime exceptions.
 - Intentional changes of ring, field, parent, or axis require explicit typed
   maps; implicit coercion is forbidden.

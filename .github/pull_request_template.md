@@ -27,6 +27,13 @@ compatibility, packaging, and the ordinary Python surface. See
 <!-- Does this change alter an operation ID, request/result schema, native API,
 MCP contract, or mathematical semantics? State "none" when it does not. -->
 
+## Canonical value audit
+<!-- Complete when this change adds or changes a mathematical value, request,
+result, producer, or consumer. -->
+- [ ] Existing canonical values searched
+- [ ] Owner or intentional distinction documented
+- [ ] Producer→consumer serialization tested
+
 ## Public operation admission
 <!-- Complete only when adding or materially changing a public operation. -->
 

@@ -13,9 +13,13 @@ retains the canonical graph, terminal pair, and arc-probability map, then
 replays the complete enumeration during result validation. Reversing the
 terminals is therefore a different event.
 
-The current exact envelope admits at most 16 vertices and 12 arcs. The arc
-limit bounds all 4096 states, the full ledger, rational-product digit growth,
-and both the producer and replay passes. Python-FLINT performs producer
+The current exact envelope admits at most 12 arcs; the derived
+producer-and-replay work budget bounds the vertex count, so sparse graphs can
+declare more vertices. The arc limit bounds all 4096 states, the full ledger,
+rational-product digit growth, and both the producer and replay passes.
+Edgeless directed graphs are admitted: with two distinct terminals the event
+has exact probability zero and the ledger holds the single empty state.
+Python-FLINT performs producer
 rational arithmetic; the standard-library `Fraction` replay checks those
 values independently, while the existing directed-graph NetworkX operation
 defines each state’s forward reachability predicate.

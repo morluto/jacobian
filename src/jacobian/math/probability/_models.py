@@ -36,6 +36,8 @@ MAX_GRAPH_RELIABILITY_VERTICES = 16
 MAX_GRAPH_RELIABILITY_EDGES = 12
 MAX_GRAPH_RELIABILITY_STATES = 1 << MAX_GRAPH_RELIABILITY_EDGES
 MAX_GRAPH_RELIABILITY_LEDGER_BYTES = 9 * 1024 * 1024
+# Reference vertex count used only to derive the work budget below; admission
+# is bounded by that derived budget, not by this count.
 MAX_DIRECTED_BOND_RELIABILITY_VERTICES = 16
 MAX_DIRECTED_BOND_RELIABILITY_ARCS = 12
 MAX_DIRECTED_BOND_RELIABILITY_STATES = 1 << MAX_DIRECTED_BOND_RELIABILITY_ARCS
@@ -477,20 +479,21 @@ class DirectedBondReliabilityArcProbability(StrictModel):
 class DirectedBondConnectionProbabilitySource(StrictModel):
     """One finite directed bond-percolation source in canonical arc order.
 
-    Sources have at most 16 vertices and 12 arcs.  The probability map must
-    contain every graph arc exactly once, and source/target are distinct
-    declared vertices.  Input arc rows are normalized to lexicographic arc
-    order before state indices and result records are assigned.
+    Sources have at most 12 arcs; the derived producer-and-replay work budget
+    bounds the vertex count, so sparse sources may declare more vertices.  The
+    probability map must contain every graph arc exactly once and is empty for
+    an edgeless source, and source/target are distinct declared vertices.
+    Input arc rows are normalized to lexicographic arc order before state
+    indices and result records are assigned.
     """
 
     graph: DirectedGraph = Field(
         description=(
-            "A directed graph with at most 16 vertices and 12 arcs for this "
+            "A directed graph with at most 12 arcs for this "
             "complete-enumeration operation."
         )
     )
     arc_probabilities: tuple[DirectedBondReliabilityArcProbability, ...] = Field(
-        min_length=1,
         max_length=MAX_DIRECTED_BOND_RELIABILITY_ARCS,
         description=(
             "One independent open probability for every graph arc exactly once. "
@@ -507,11 +510,6 @@ class DirectedBondConnectionProbabilitySource(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_fully_weighted_directed_graph(self) -> Self:
-        if self.graph.vertex_count > MAX_DIRECTED_BOND_RELIABILITY_VERTICES:
-            raise ValueError(
-                "directed bond reliability exceeds the "
-                f"{MAX_DIRECTED_BOND_RELIABILITY_VERTICES}-vertex bound"
-            )
         if len(self.graph.edges) > MAX_DIRECTED_BOND_RELIABILITY_ARCS:
             raise ValueError(
                 "directed bond reliability exceeds the "
@@ -566,41 +564,44 @@ class DirectedBondConnectionProbabilitySource(StrictModel):
                 "directed bond reliability exceeds the complete producer and "
                 "replay work budget"
             )
-        repeated_arc_bytes = (1 << (arc_count - 1)) * sum(
+        repeated_arc_bytes = (state_count // 2) * sum(
             len(encode_strict_json(list(arc))) + 1 for arc in canonical_arcs
         )
-        probability_numerator_digits = sum(
-            max(
-                len(
-                    format_canonical_integer(
-                        item.open_probability.as_fraction().numerator
-                    )
-                ),
-                len(
-                    format_canonical_integer(
-                        (1 - item.open_probability.as_fraction()).numerator
-                    )
-                ),
+        # Every state mass multiplies one open or one closed factor per arc,
+        # so a state's numerator and denominator digit counts are bounded by
+        # the corresponding sums over its selected factors, and each factor's
+        # digits occur in exactly half of the powerset states.
+        per_arc_numerator_bytes = sum(
+            len(
+                format_canonical_integer(item.open_probability.as_fraction().numerator)
+            )
+            + len(
+                format_canonical_integer(
+                    (1 - item.open_probability.as_fraction()).numerator
+                )
             )
             for item in self.arc_probabilities
         )
-        probability_denominator_digits = sum(
+        per_arc_denominator_bytes = sum(
             len(
                 format_canonical_integer(
                     item.open_probability.as_fraction().denominator
                 )
             )
+            + len(
+                format_canonical_integer(
+                    (1 - item.open_probability.as_fraction()).denominator
+                )
+            )
             for item in self.arc_probabilities
         )
-        maximum_state = {
-            "state_index": state_count - 1,
+        maximum_state_template = {
+            "state_index": 0,
             "open_arcs": [],
             "source_reaches_target": False,
-            "state_probability": {
-                "num": "9" * max(1, probability_numerator_digits),
-                "den": "9" * max(1, probability_denominator_digits),
-            },
+            "state_probability": {"num": "", "den": ""},
         }
+        fixed_state_bytes = len(encode_strict_json(maximum_state_template))
         source_bytes = len(
             encode_strict_json(
                 {
@@ -623,7 +624,18 @@ class DirectedBondConnectionProbabilitySource(StrictModel):
         estimated_ledger_bytes = (
             source_bytes
             + repeated_arc_bytes
-            + state_count * (len(encode_strict_json(maximum_state)) + 1)
+            # Each record adds its index digits and at least one numerator
+            # and denominator character beyond the empty template, plus one
+            # ledger separator byte.
+            + state_count
+            * (
+                fixed_state_bytes
+                + len(str(state_count - 1))
+                + 2
+                + 1
+            )
+            + (state_count // 2)
+            * (per_arc_numerator_bytes + per_arc_denominator_bytes)
             + 16 * 1024
         )
         if estimated_ledger_bytes > MAX_DIRECTED_BOND_RELIABILITY_LEDGER_BYTES:
@@ -637,20 +649,21 @@ class DirectedBondConnectionProbabilitySource(StrictModel):
 class DirectedBondConnectionProbabilityRequest(StrictModel):
     """Compute directed source-to-target bond connection probability.
 
-    The request admits at most 16 vertices and 12 arcs, requires one
-    probability for every arc exactly once, and requires distinct declared
-    source and target vertices.  It normalizes arc rows lexicographically, so
-    state indices and the source-bound result do not depend on input order.
+    The request admits at most 12 arcs, requires one probability for every
+    arc exactly once (empty for an edgeless graph), and requires distinct
+    declared source and target vertices.  The derived work budget bounds the
+    vertex count, so sparse graphs may declare more vertices.  It normalizes
+    arc rows lexicographically, so state indices and the source-bound result
+    do not depend on input order.
     """
 
     graph: DirectedGraph = Field(
         description=(
-            "A directed graph with at most 16 vertices and 12 arcs for this "
+            "A directed graph with at most 12 arcs for this "
             "complete-enumeration operation."
         )
     )
     arc_probabilities: tuple[DirectedBondReliabilityArcProbability, ...] = Field(
-        min_length=1,
         max_length=MAX_DIRECTED_BOND_RELIABILITY_ARCS,
         description=(
             "One independent open probability for every graph arc exactly once. "
@@ -713,7 +726,7 @@ class DirectedBondConnectionProbabilityResult(StrictModel):
 
     source: DirectedBondConnectionProbabilitySource
     connection_probability: CanonicalRational
-    arc_count: StrictInt = Field(ge=1, le=MAX_DIRECTED_BOND_RELIABILITY_ARCS)
+    arc_count: StrictInt = Field(ge=0, le=MAX_DIRECTED_BOND_RELIABILITY_ARCS)
     visited_states: StrictInt = Field(
         ge=1,
         le=MAX_DIRECTED_BOND_RELIABILITY_STATES,

@@ -174,6 +174,57 @@ def test_component_order_is_canonical_and_does_not_change_result() -> None:
     assert actual.source.graph.edges == ((0, 1), (1, 2))
 
 
+def test_sparse_graph_above_sixteen_vertices_is_admitted() -> None:
+    """The derived work budget, not a fixed vertex ceiling, bounds vertices."""
+    result = _directed_bond_connection_probability(
+        _request(
+            vertex_count=17,
+            arcs=((3, 16),),
+            probabilities=(Fraction(2, 7),),
+            source=3,
+            target=16,
+        )
+    )
+
+    assert _probability(result) == Fraction(2, 7)
+    assert result.visited_states == 2
+
+
+def test_edgeless_graph_has_exact_zero_connection_probability() -> None:
+    """Zero arcs keep the complete single-state ledger with probability zero."""
+    result = _directed_bond_connection_probability(
+        _request(vertex_count=2, arcs=(), probabilities=(), source=0, target=1)
+    )
+
+    assert _probability(result) == 0
+    assert result.arc_count == 0
+    assert result.visited_states == 1
+    assert tuple(state.open_arcs for state in result.states) == ((),)
+    assert tuple(state.source_reaches_target for state in result.states) == (False,)
+    assert tuple(
+        state.state_probability.as_fraction() for state in result.states
+    ) == (Fraction(1),)
+
+
+def test_ledger_estimate_bounds_subset_numerator_growth_not_per_state_maxima() -> None:
+    """A tall-numerator chain is charged by subset occurrence, not per state."""
+    denominator = int("9" * 90)
+    probability = Fraction(denominator - 1, denominator)
+    arcs = tuple((index, index + 1) for index in range(12))
+    result = _directed_bond_connection_probability(
+        _request(
+            vertex_count=13,
+            arcs=arcs,
+            probabilities=(probability,) * len(arcs),
+            source=0,
+            target=12,
+        )
+    )
+
+    assert _probability(result) == probability**12
+    assert result.visited_states == 4096
+
+
 def _mutate_open_arcs(payload: dict[str, Any]) -> None:
     payload["states"][1]["open_arcs"] = []
 

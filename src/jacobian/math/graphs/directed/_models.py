@@ -13,7 +13,7 @@ class DirectedGraph(StrictModel):
     """A simple directed graph for reachability, SCC, and related analyses."""
 
     vertex_count: int = Field(ge=2, le=64)
-    edges: tuple[tuple[int, int], ...] = Field(min_length=1, max_length=512)
+    edges: tuple[tuple[int, int], ...] = Field(max_length=512)
 
     @model_validator(mode="after")
     def require_valid_edges(self) -> Self:

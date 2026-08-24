@@ -97,6 +97,15 @@ class TestReachability:
         assert result.source == 1
         assert result.reachable == (1, 2)
 
+    def test_edgeless_graph_reaches_only_the_source(self) -> None:
+        """An edgeless directed graph is a valid degenerate input."""
+        result = _reachability(
+            {"vertex_count": 2, "edges": []},
+            1,
+        )
+        assert result.reachable == (1,)
+        assert result.unreachable == (0,)
+
 
 class TestReachabilityContract:
     def test_rejects_self_loop(self) -> None:

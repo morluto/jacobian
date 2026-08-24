@@ -10,6 +10,7 @@ from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 
 _MAX_RADICAND = 1_000_000
 _MAX_DIGITS = 256
@@ -72,6 +73,20 @@ class RealQuadraticOrderRequest(StrictModel):
     def require_shared_field(self) -> Self:
         if self.left.radicand != self.right.radicand:
             raise ValueError("comparison requires one shared radicand")
+        difference_components = (
+            self.left.rational_part.as_fraction()
+            - self.right.rational_part.as_fraction(),
+            self.left.radical_coefficient.as_fraction()
+            - self.right.radical_coefficient.as_fraction(),
+        )
+        if any(
+            len(format_canonical_integer(component.numerator).lstrip("-")) > _MAX_DIGITS
+            or len(format_canonical_integer(component.denominator)) > _MAX_DIGITS
+            for component in difference_components
+        ):
+            raise ValueError(
+                "exact quadratic difference exceeds the 256-digit result bound"
+            )
         return self
 
 

@@ -838,6 +838,37 @@ def test_cancelling_amounts_are_admitted_regardless_of_entry_order() -> None:
     assert result.capacity_feasible is True
 
 
+def test_coprime_denominator_flood_fails_closed() -> None:
+    # Two unit-fraction entries whose distinct near-cap denominators are
+    # coprime would construct a roughly 32,776-digit load denominator; the
+    # bucketed combination checks every fold against the canonical cap and
+    # fails closed immediately instead of building the huge fraction.
+    network = FlowGraph(
+        vertex_count=2,
+        edges=(CapacitatedEdge(source=0, target=1, capacity=q(1)),),
+    )
+    commodities = (
+        CommodityDemand(commodity_id="a", source=0, sink=1, demand=q(1)),
+        CommodityDemand(commodity_id="b", source=0, sink=1, demand=q(1)),
+    )
+    entries = (
+        CommodityEdgeFlow(
+            commodity_id="a",
+            source=0,
+            target=1,
+            amount=CanonicalRational(num="1", den="3" + "0" * 19_999),
+        ),
+        CommodityEdgeFlow(
+            commodity_id="b",
+            source=0,
+            target=1,
+            amount=CanonicalRational(num="1", den="7" + "0" * 12_775 + "1"),
+        ),
+    )
+    with pytest.raises(ValidationError, match="canonical cap"):
+        MulticommodityFlow(network=network, commodities=commodities, entries=entries)
+
+
 def test_result_replay_rejects_forged_source_and_derived_ledger_fields() -> None:
     result = compute_multicommodity_flow_profile(shared_bottleneck_flow())
     payload = result.model_dump(mode="json")

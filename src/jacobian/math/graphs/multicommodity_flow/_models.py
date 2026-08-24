@@ -9,7 +9,11 @@ from pydantic import Field, StrictStr, model_validator
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.canonical import encode_strict_json, format_canonical_integer
+from jacobian.canonical import (
+    encode_strict_json,
+    format_canonical_integer,
+    parse_canonical_integer,
+)
 from jacobian.math.graphs.flow._models import FlowGraph
 
 # This operation scans a sparse commodity-by-edge tensor and materializes one
@@ -175,22 +179,45 @@ def _component_sums(
 ) -> tuple[dict[tuple[str, int], Fraction], dict[tuple[int, int], Fraction]]:
     """Return the exact divergence-cell and edge-load sums for one tensor.
 
-    Accumulation order is irrelevant to admission: partial sums may grow
-    arbitrarily and later cancel, so the canonical cap is applied only to the
-    completed reduced components.
+    Amounts are bucketed by identical denominator and combined smallest
+    denominator first: integer bucket sums never exceed the request volume,
+    shared denominators add with zero growth, and every cross-denominator
+    fold is checked against the canonical cap so adversarial
+    coprime-denominator floods abort after constant work instead of
+    constructing huge intermediate fractions.
     """
 
-    divergences = {
-        (commodity.commodity_id, vertex): Fraction(0)
+    cell_buckets: dict[tuple[str, int], dict[int, int]] = {
+        (commodity.commodity_id, vertex): {}
         for commodity in flow.commodities
         for vertex in range(flow.network.vertex_count)
     }
-    loads = {(edge.source, edge.target): Fraction(0) for edge in flow.network.edges}
+    edge_buckets: dict[tuple[int, int], dict[int, int]] = {
+        (edge.source, edge.target): {} for edge in flow.network.edges
+    }
     for entry in flow.entries:
-        amount = entry.amount.as_fraction()
-        divergences[(entry.commodity_id, entry.source)] += amount
-        divergences[(entry.commodity_id, entry.target)] -= amount
-        loads[(entry.source, entry.target)] += amount
+        numerator = parse_canonical_integer(entry.amount.num)
+        denominator = parse_canonical_integer(entry.amount.den)
+        source_key = (entry.commodity_id, entry.source)
+        target_key = (entry.commodity_id, entry.target)
+        edge_key = (entry.source, entry.target)
+        source_bucket = cell_buckets.setdefault(source_key, {})
+        source_bucket[denominator] = source_bucket.get(denominator, 0) + numerator
+        target_bucket = cell_buckets.setdefault(target_key, {})
+        target_bucket[denominator] = target_bucket.get(denominator, 0) - numerator
+        bucket = edge_buckets.setdefault(edge_key, {})
+        bucket[denominator] = bucket.get(denominator, 0) + numerator
+
+    def _combine(buckets: dict[int, int]) -> Fraction:
+        total = Fraction(0)
+        for den in sorted(buckets, key=int.bit_length):
+            total += Fraction(buckets[den], den)
+            for digits in _rational_side_bounds(total):
+                _require_side_within_cap(digits)
+        return total
+
+    divergences = {key: _combine(bucket) for key, bucket in cell_buckets.items()}
+    loads = {key: _combine(bucket) for key, bucket in edge_buckets.items()}
     return divergences, loads
 
 
@@ -242,9 +269,9 @@ def _profile_component_digit_bounds(
     )
 
     cell_bounds = {
-        key: _rational_side_bounds(value) for key, value in divergences.items()
+        key: _measured_side_bounds(value) for key, value in divergences.items()
     }
-    load_bounds = {key: _rational_side_bounds(value) for key, value in loads.items()}
+    load_bounds = {key: _measured_side_bounds(value) for key, value in loads.items()}
     slack_bounds: dict[tuple[int, int], tuple[int, int]] = {}
     max_ratio = Fraction(0)
     for edge in flow.network.edges:

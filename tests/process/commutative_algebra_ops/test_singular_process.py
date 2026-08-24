@@ -191,9 +191,7 @@ def test_aggregate_generator_limit_is_enforced_across_components(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    executable = _executable(
-        tmp_path, f"print({_family_records([40, 40])!r})"
-    )
+    executable = _executable(tmp_path, f"print({_family_records([40, 40])!r})")
     _select_executable(monkeypatch, executable)
 
     result = run_singular_minimal_primes(_ideal(), IdealComputationBudget())
@@ -206,27 +204,21 @@ def test_family_at_the_aggregate_generator_limit_is_accepted(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    executable = _executable(
-        tmp_path, f"print({_family_records([32, 32])!r})"
-    )
+    executable = _executable(tmp_path, f"print({_family_records([32, 32])!r})")
     _select_executable(monkeypatch, executable)
 
     result = run_singular_minimal_primes(_ideal(), IdealComputationBudget())
 
     assert result.outcome == "COMPUTED"
     assert result.components is not None
-    assert all(
-        len(component.generators) == 32 for component in result.components
-    )
+    assert all(len(component.generators) == 32 for component in result.components)
 
 
 def test_family_at_the_aggregate_generator_limit_with_placeholders_is_accepted(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    executable = _executable(
-        tmp_path, f"print({_family_records([0, 0, 62])!r})"
-    )
+    executable = _executable(tmp_path, f"print({_family_records([0, 0, 62])!r})")
     _select_executable(monkeypatch, executable)
 
     result = run_singular_minimal_primes(_ideal(), IdealComputationBudget())
@@ -244,9 +236,7 @@ def test_zero_placeholder_padding_cannot_exceed_the_generator_limit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    executable = _executable(
-        tmp_path, f"print({_family_records([64, 0])!r})"
-    )
+    executable = _executable(tmp_path, f"print({_family_records([64, 0])!r})")
     _select_executable(monkeypatch, executable)
 
     result = run_singular_minimal_primes(_ideal(), IdealComputationBudget())

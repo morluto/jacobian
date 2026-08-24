@@ -389,13 +389,8 @@ def _require_computed_minimal_prime_family(
 ) -> None:
     """Gate ring, canonical ordering, and uniqueness without any replay."""
 
-    if any(
-        component.variables != request.ideal.variables
-        for component in components
-    ):
-        raise ValueError(
-            "every minimal prime must use the source ideal's ordered ring"
-        )
+    if any(component.variables != request.ideal.variables for component in components):
+        raise ValueError("every minimal prime must use the source ideal's ordered ring")
     keys = tuple(component.model_dump_json() for component in components)
     if keys != tuple(sorted(keys)) or len(set(keys)) != len(keys):
         raise ValueError(

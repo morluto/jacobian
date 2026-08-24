@@ -209,7 +209,9 @@ def test_duplicate_producer_family_is_a_typed_error_without_a_third_pass(
     variables = ("x",)
     prime = _ideal(variables, _poly(variables, (1, 1, (1,))))
     duplicated = (prime, prime)
-    request = IdealMinimalPrimesRequest(ideal=_ideal(variables, _poly(variables, (1, 2, (2,)))))
+    request = IdealMinimalPrimesRequest(
+        ideal=_ideal(variables, _poly(variables, (1, 2, (2,))))
+    )
     calls = 0
 
     def backend(
@@ -242,9 +244,7 @@ def test_duplicate_producer_family_is_a_typed_error_without_a_third_pass(
 def test_trusted_factory_enforces_shape_ring_ordering_and_uniqueness() -> None:
     request = _axes_request()
     components = _axes_components()
-    foreign_ring = (
-        _ideal(("y", "x"), _poly(("y", "x"), (1, 1, (0, 1)))),
-    )
+    foreign_ring = (_ideal(("y", "x"), _poly(("y", "x"), (1, 1, (0, 1)))),)
 
     computed = computed_minimal_primes_result(request, components, "4.4.0")
     assert computed.outcome == "COMPUTED"
@@ -255,13 +255,9 @@ def test_trusted_factory_enforces_shape_ring_ordering_and_uniqueness() -> None:
     with pytest.raises(ValueError, match="ordered ring"):
         computed_minimal_primes_result(request, foreign_ring, "4.4.0")
     with pytest.raises(ValueError, match="unique and canonically ordered"):
-        computed_minimal_primes_result(
-            request, tuple(reversed(components)), "4.4.0"
-        )
+        computed_minimal_primes_result(request, tuple(reversed(components)), "4.4.0")
     with pytest.raises(ValueError, match="unique and canonically ordered"):
-        computed_minimal_primes_result(
-            request, (components[0], components[0]), "4.4.0"
-        )
+        computed_minimal_primes_result(request, (components[0], components[0]), "4.4.0")
     with pytest.raises(ValueError, match="requires components and backend version"):
         computed_minimal_primes_result(request, None, None)
 

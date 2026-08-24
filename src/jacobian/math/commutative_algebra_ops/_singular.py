@@ -14,6 +14,8 @@ from typing import Literal
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.math.commutative_algebra_ops._models import IdealComputationBudget
 from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_EXPONENT,
+    MAX_POLYNOMIAL_TERMS,
     RationalPolynomial,
     RationalPolynomialIdeal,
     RationalPolynomialTerm,
@@ -203,6 +205,10 @@ def _parse_term(line: str, variable_count: int) -> RationalPolynomialTerm:
         raise ValueError("Singular output contains a non-integer exponent") from exc
     if any(exponent < 0 for exponent in exponents):
         raise ValueError("Singular output contains a negative exponent")
+    if any(exponent > MAX_POLYNOMIAL_EXPONENT for exponent in exponents):
+        raise _ResultLimitExceededError(
+            "Singular exponent exceeds the exact-result representation limit"
+        )
     return RationalPolynomialTerm(
         coefficient=_parse_coefficient(coefficient_text),
         exponents=exponents,
@@ -220,6 +226,10 @@ def _parse_generator(
         if line == "END_GENERATOR":
             break
         terms.append(_parse_term(line, len(variables)))
+    if len(terms) > MAX_POLYNOMIAL_TERMS:
+        raise _ResultLimitExceededError(
+            "Singular generator exceeds the exact-result term representation limit"
+        )
     return (
         RationalPolynomial(
             variables=variables,

@@ -183,6 +183,99 @@ def test_singular_protocol_classifies_unrepresentable_coefficients_as_a_limit() 
         _singular._parse_coefficient(coefficient)
 
 
+def test_singular_protocol_classifies_oversized_exponents_as_a_limit() -> None:
+    output = b"\n".join(
+        [
+            b"JACOBIAN_SINGULAR_IDEAL_V1",
+            b"44100",
+            b"1",
+            b"GENERATOR",
+            b"1|32769",
+            b"END_GENERATOR",
+            b"END",
+        ]
+    )
+
+    with pytest.raises(
+        _singular._ResultLimitExceededError, match="representation limit"
+    ):
+        _singular._parse_output(
+            output,
+            variables=("x",),
+            budget=IdealComputationBudget(),
+        )
+    component_output = b"\n".join(
+        [
+            b"JACOBIAN_SINGULAR_IDEAL_V1",
+            b"44100",
+            b"1",
+            b"COMPONENT",
+            b"1",
+            b"GENERATOR",
+            b"1|32769",
+            b"END_GENERATOR",
+            b"END_COMPONENT",
+            b"END",
+        ]
+    )
+
+    with pytest.raises(
+        _singular._ResultLimitExceededError, match="representation limit"
+    ):
+        _singular._parse_minimal_primes_output(
+            component_output,
+            variables=("x",),
+            budget=IdealComputationBudget(),
+        )
+
+
+def test_singular_protocol_classifies_oversized_generators_as_a_limit() -> None:
+    terms = [f"1|{exponent}".encode("ascii") for exponent in range(4_096, -1, -1)]
+    output = b"\n".join(
+        [
+            b"JACOBIAN_SINGULAR_IDEAL_V1",
+            b"44100",
+            b"1",
+            b"GENERATOR",
+            *terms,
+            b"END_GENERATOR",
+            b"END",
+        ]
+    )
+
+    with pytest.raises(
+        _singular._ResultLimitExceededError, match="term representation"
+    ):
+        _singular._parse_output(
+            output,
+            variables=("x",),
+            budget=IdealComputationBudget(),
+        )
+    component_output = b"\n".join(
+        [
+            b"JACOBIAN_SINGULAR_IDEAL_V1",
+            b"44100",
+            b"1",
+            b"COMPONENT",
+            b"1",
+            b"GENERATOR",
+            *terms,
+            b"END_GENERATOR",
+            b"END_COMPONENT",
+            b"END",
+        ]
+    )
+
+    with pytest.raises(
+        _singular._ResultLimitExceededError, match="term representation"
+    ):
+        _singular._parse_minimal_primes_output(
+            component_output,
+            variables=("x",),
+            budget=IdealComputationBudget(),
+        )
+
+
 def test_radical_membership_schema_publishes_operation_bounds() -> None:
     properties = IdealRadicalMembershipRequest.model_json_schema()["properties"]
 

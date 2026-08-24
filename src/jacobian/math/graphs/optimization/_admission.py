@@ -11,6 +11,11 @@ from jacobian.math.graphs.optimization._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "graph.cut.maximum.compute",
+        AdmissionDecision.KEEP,
+        "distinct exact source-bound maximum bipartition cut with a reusable partition and crossing-edge witness",
+    ),
+    OperationAdmission(
         "graph.distance_matrix.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",

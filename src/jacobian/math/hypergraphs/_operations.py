@@ -1,10 +1,14 @@
 """Exact bounded finite hypergraph operations."""
 
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.hypergraphs._models import (
     CliqueExpansionRequest,
     CliqueExpansionResult,
     DualRequest,
     DualResult,
+    EdgeIntersectionEntry,
+    EdgeIntersectionsRequest,
+    EdgeIntersectionsResult,
     FiniteHypergraph,
     IncidenceGraphRequest,
     IncidenceGraphResult,
@@ -12,6 +16,7 @@ from jacobian.math.hypergraphs._models import (
     ParametersResult,
     VertexDegreesRequest,
     VertexDegreesResult,
+    _require_edge_intersection_preflight,
 )
 
 
@@ -69,6 +74,57 @@ def _vertex_degrees_data(
     return degree_map, histogram
 
 
+def _edge_intersections_data(
+    hypergraph: FiniteHypergraph,
+) -> tuple[
+    tuple[EdgeIntersectionEntry, ...],
+    tuple[tuple[int, int], ...],
+    int,
+    int,
+    bool,
+    EdgeIntersectionEntry | None,
+]:
+    """Compute the complete canonical indexed edge-pair intersection ledger."""
+
+    edges = _canonical_edges(hypergraph)
+    member_sets = tuple(frozenset(members) for _, members in edges)
+    entries: list[EdgeIntersectionEntry] = []
+    histogram_counts: dict[int, int] = {}
+    maximum_intersection_size = 0
+    first_linearity_violation: EdgeIntersectionEntry | None = None
+
+    for left in range(len(edges)):
+        for right in range(left + 1, len(edges)):
+            intersection = tuple(sorted(member_sets[left] & member_sets[right]))
+            intersection_size = len(intersection)
+            entry = EdgeIntersectionEntry(
+                left_edge_id=edges[left][0],
+                right_edge_id=edges[right][0],
+                intersection=intersection,
+                intersection_size=intersection_size,
+            )
+            entries.append(entry)
+            histogram_counts[intersection_size] = (
+                histogram_counts.get(intersection_size, 0) + 1
+            )
+            maximum_intersection_size = max(
+                maximum_intersection_size, intersection_size
+            )
+            if first_linearity_violation is None and intersection_size > 1:
+                first_linearity_violation = entry
+
+    pair_intersections = tuple(entries)
+    histogram = tuple(sorted(histogram_counts.items()))
+    return (
+        pair_intersections,
+        histogram,
+        len(pair_intersections),
+        maximum_intersection_size,
+        first_linearity_violation is None,
+        first_linearity_violation,
+    )
+
+
 def _dual_data(hypergraph: FiniteHypergraph) -> FiniteHypergraph:
     """Compute the dual hypergraph.
 
@@ -122,53 +178,28 @@ def _incidence_graph_data(
     return vertex_incidence_pairs, edge_incidence_pairs, incidence_edges
 
 
-def _clique_expansion_data(
-    hypergraph: FiniteHypergraph,
-) -> tuple[
-    tuple[str, ...],
-    tuple[tuple[str, tuple[str, ...]], ...],
-    tuple[tuple[str, str], ...],
-]:
-    """Compute the 2-section (primal/clique expansion) graph.
+def _clique_expansion_graph(hypergraph: FiniteHypergraph) -> SimpleUndirectedGraph:
+    """Compute the 2-section (primal/clique expansion) canonical graph.
 
-    Two distinct vertices are adjacent if they share at least one hyperedge.
-    ``adjacency`` maps each vertex to its neighbours in declared vertex order.
-    ``edges`` lists each adjacency pair ``(u, v)`` with ``u`` before ``v`` in
-    declared order, sorted by the first component then the second.
+    Two distinct vertices are adjacent if and only if they share at least
+    one hyperedge.  Vertex labels carry over unchanged, in declared order;
+    each undirected adjacency pair is emitted in lexical order, following
+    the ``SimpleUndirectedGraph`` convention independently of the source
+    hypergraph's declared vertex ordering.
     """
 
-    edges = _canonical_edges(hypergraph)
-    index = {vertex: i for i, vertex in enumerate(hypergraph.vertices)}
-    adjacent: list[set[str]] = [set() for _ in hypergraph.vertices]
-    for _, members in edges:
-        n = len(members)
-        for i in range(n):
-            for j in range(i + 1, n):
-                u, v = members[i], members[j]
-                if u == v:
-                    continue
-                adjacent[index[u]].add(v)
-                adjacent[index[v]].add(u)
-    vertices = hypergraph.vertices
-    adjacency = tuple(
-        (
-            vertex,
-            tuple(
-                neighbour
-                for neighbour in hypergraph.vertices
-                if neighbour in adjacent[index[vertex]]
-            ),
+    adjacent: dict[str, set[str]] = {vertex: set() for vertex in hypergraph.vertices}
+    for _, members in _canonical_edges(hypergraph):
+        for i, u in enumerate(members):
+            for v in members[i + 1 :]:
+                adjacent[u].add(v)
+                adjacent[v].add(u)
+    graph_edges = tuple(
+        sorted(
+            (u, v) for u, neighbours in adjacent.items() for v in neighbours if u < v
         )
-        for vertex in hypergraph.vertices
     )
-    edge_list: list[tuple[str, str]] = []
-    for i, vertex in enumerate(hypergraph.vertices):
-        for neighbour in adjacent[i]:
-            j = index[neighbour]
-            if j > i:
-                edge_list.append((vertex, neighbour))
-    edge_list.sort(key=lambda pair: (index[pair[0]], index[pair[1]]))
-    return vertices, adjacency, tuple(edge_list)
+    return SimpleUndirectedGraph(vertices=hypergraph.vertices, edges=graph_edges)
 
 
 def compute_parameters(request: ParametersRequest) -> ParametersResult:
@@ -204,6 +235,39 @@ def compute_vertex_degrees(request: VertexDegreesRequest) -> VertexDegreesResult
     )
 
 
+def edge_intersections(
+    hypergraph: FiniteHypergraph,
+) -> EdgeIntersectionsResult:
+    """Return every indexed edge-pair intersection and the linearity profile."""
+
+    _require_edge_intersection_preflight(hypergraph)
+    (
+        pair_intersections,
+        histogram,
+        pair_count,
+        maximum_intersection_size,
+        is_linear,
+        first_linearity_violation,
+    ) = _edge_intersections_data(hypergraph)
+    return EdgeIntersectionsResult(
+        hypergraph=hypergraph,
+        pair_intersections=pair_intersections,
+        pair_count=pair_count,
+        histogram=histogram,
+        maximum_intersection_size=maximum_intersection_size,
+        is_linear=is_linear,
+        first_linearity_violation=first_linearity_violation,
+    )
+
+
+def compute_edge_intersections(
+    request: EdgeIntersectionsRequest,
+) -> EdgeIntersectionsResult:
+    """Compute the complete indexed edge-intersection profile."""
+
+    return edge_intersections(request.hypergraph)
+
+
 def compute_dual(request: DualRequest) -> DualResult:
     """Compute the dual of a finite hypergraph."""
 
@@ -230,10 +294,7 @@ def compute_clique_expansion(
 ) -> CliqueExpansionResult:
     """Compute the 2-section (primal/clique expansion) of a hypergraph."""
 
-    vertices, adjacency, edges = _clique_expansion_data(request.hypergraph)
     return CliqueExpansionResult(
         hypergraph=request.hypergraph,
-        vertices=vertices,
-        adjacency=adjacency,
-        edges=edges,
+        graph=_clique_expansion_graph(request.hypergraph),
     )

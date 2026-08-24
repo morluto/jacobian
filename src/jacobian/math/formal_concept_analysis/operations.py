@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from .values import FormalContext
+from .values import (
+    FiniteAttributeImplicationSystem,
+    FormalContext,
+    ImplicationClosureResult,
+    ImplicationClosureWork,
+    ImplicationDerivation,
+)
 
 # This bound is also enforced in the request models (_models.py).
 MAX_CONCEPTS = 10000
@@ -15,9 +21,84 @@ __all__ = [
     "concept_from_objects",
     "concept_lattice",
     "enumerate_concepts",
+    "implication_closure",
     "object_closure",
     "object_derivation",
 ]
+
+
+def _require_implication_seed(
+    system: FiniteAttributeImplicationSystem,
+    seed: frozenset[int],
+) -> None:
+    for attribute in seed:
+        if type(attribute) is not int:
+            raise TypeError("implication seed attributes must be integers")
+        if not 0 <= attribute < len(system.attributes):
+            raise ValueError(
+                "implication seed attribute is outside the declared carrier"
+            )
+
+
+def implication_closure(
+    system: FiniteAttributeImplicationSystem,
+    seed: frozenset[int],
+) -> ImplicationClosureResult:
+    """Return the exact least superset of ``seed`` closed under ``system``.
+
+    Each round evaluates every canonical implication against the closure at the
+    start of that round.  If several enabled implications first derive the same
+    attribute, the first implication in canonical row order owns its lineage.
+    A final nonproductive scan establishes that the returned set is closed.
+    """
+
+    _require_implication_seed(system, seed)
+    closure = set(seed)
+    lineage: list[ImplicationDerivation] = []
+    productive_rounds = 0
+    implication_checks = 0
+    membership_checks = 0
+
+    while True:
+        first_sources: dict[int, int] = {}
+        for implication_index, implication in enumerate(system.implications):
+            implication_checks += 1
+            membership_checks += len(implication.premise)
+            if not set(implication.premise).issubset(closure):
+                continue
+            membership_checks += len(implication.conclusion)
+            for attribute in implication.conclusion:
+                if attribute not in closure:
+                    first_sources.setdefault(attribute, implication_index)
+
+        if not first_sources:
+            break
+
+        productive_rounds += 1
+        for attribute in sorted(first_sources):
+            lineage.append(
+                ImplicationDerivation(
+                    attribute=attribute,
+                    implication_index=first_sources[attribute],
+                    activation_round=productive_rounds,
+                )
+            )
+        closure.update(first_sources)
+
+    canonical_replay_work = implication_checks + membership_checks
+    return ImplicationClosureResult(
+        system=system,
+        seed=tuple(sorted(seed)),
+        closure=tuple(sorted(closure)),
+        added=tuple(sorted(closure - set(seed))),
+        lineage=tuple(lineage),
+        work=ImplicationClosureWork(
+            productive_rounds=productive_rounds,
+            canonical_implication_checks=implication_checks,
+            canonical_membership_checks=membership_checks,
+            canonical_replay_work=canonical_replay_work,
+        ),
+    )
 
 
 def object_derivation(ctx: FormalContext, objects: frozenset[int]) -> frozenset[int]:
@@ -123,15 +204,17 @@ def enumerate_concepts(ctx: FormalContext) -> list[dict[str, frozenset[int]]]:
     """Return every formal concept exactly once using Ganter's NextClosure
     algorithm over the declared attribute order.
 
-    The algorithm enumerates closed attribute intents in lectic order.
-    Each step requires O(n) derivation operations, so the total cost is
-    proportional to the number of concepts times n, not to 2^n.
+    The algorithm enumerates closed attribute intents in lectic order,
+    starting from ``attribute_closure(ctx, frozenset())`` because in a
+    general context the empty attribute set need not be closed; the least
+    closed intent is ``cl(∅) = ∅''``.  Each step requires O(n) derivation
+    operations, so the total cost is proportional to the number of concepts
+    times n, not to 2^n.
     """
     n = len(ctx.attributes)
     concepts: list[dict[str, frozenset[int]]] = []
 
-    # The empty set is always closed (it is the intent of the top concept).
-    current: frozenset[int] | None = frozenset()
+    current: frozenset[int] | None = attribute_closure(ctx, frozenset())
     while current is not None:
         intent = current
         extent = attribute_derivation(ctx, intent)

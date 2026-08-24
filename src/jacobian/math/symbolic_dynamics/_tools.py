@@ -5,6 +5,8 @@ from typing import Any
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
 from jacobian.math.symbolic_dynamics._models import (
+    ArtinMazurZetaRequest,
+    ArtinMazurZetaResult,
     BlockLanguageRequest,
     BlockLanguageResult,
     FiniteTypeShiftRequest,
@@ -15,6 +17,7 @@ from jacobian.math.symbolic_dynamics._models import (
     PeriodicPointProfileResult,
 )
 from jacobian.math.symbolic_dynamics._operations import (
+    compute_artin_mazur_zeta,
     compute_block_language,
     compute_higher_block,
     compute_periodic_point_profile,
@@ -88,6 +91,30 @@ SYMBOLIC_DYNAMICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {
                     "shift": {"matrix": [[1, 1], [1, 0]], "two_sided": True},
                     "max_period": 5,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="symbolic_dynamics.artin_mazur_zeta.compute",
+        version="1",
+        title="Compute an Artin-Mazur zeta function",
+        description=(
+            "Compute the exact edge-shift zeta function 1/det(I-tA) as a "
+            "canonical rational function, retaining det(I-tA) with constant "
+            "term one and replaying -tD'(t)/D(t) against periodic-point traces."
+        ),
+        request_type=ArtinMazurZetaRequest,
+        result_type=ArtinMazurZetaResult,
+        run=compute_artin_mazur_zeta,
+        tags=("symbolic-dynamics", "artin-mazur-zeta", "periodic-points", "exact"),
+        examples=(
+            example(
+                "golden_mean_zeta",
+                "Compute the Golden Mean shift zeta function through five replay coefficients.",
+                {
+                    "shift": {"matrix": [[1, 1], [1, 0]], "two_sided": True},
+                    "replay_period": 5,
                 },
             ),
         ),

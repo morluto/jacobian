@@ -9,6 +9,8 @@ def test_exact_public_api_symbols() -> None:
     expected = (
         "ApplicationTerm",
         "FiniteAlgebra",
+        "FiniteAlgebraCarrierMap",
+        "FiniteAlgebraHomomorphism",
         "FlatTerm",
         "OperationSymbol",
         "Term",
@@ -17,6 +19,7 @@ def test_exact_public_api_symbols() -> None:
         "equation_profile",
         "evaluate_term",
         "generated_subalgebra",
+        "homomorphism_profile",
         "quotient",
     )
     assert tuple(universal_algebra.__all__) == expected

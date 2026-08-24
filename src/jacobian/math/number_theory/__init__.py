@@ -1,3 +1,6 @@
 """Number-theory operation ownership."""
 
-__all__: list[str] = []
+from jacobian.math.number_theory._friable_operations import count_friable
+from jacobian.math.number_theory._models import FriableCountResult
+
+__all__ = ["FriableCountResult", "count_friable"]

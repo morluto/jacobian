@@ -12,7 +12,22 @@ def polynomial_gcdex(left: Any, right: Any) -> tuple[Any, Any, Any]:
 def polynomial_resultant(left: Any, right: Any, generator: Any) -> Any:
     from sympy import resultant
 
-    return resultant(left.as_expr(), right.as_expr(), generator)
+    value = resultant(left.as_expr(), right.as_expr(), generator)
+
+    # SymPy 1.14 internally puts the higher-degree operand first.  For unequal
+    # degrees that loses the sign belonging to the caller's source order.  Put
+    # it back so this helper always returns the Sylvester determinant
+    # ``Res_generator(left, right)``.
+    left_degree = left.degree(generator)
+    right_degree = right.degree(generator)
+    if (
+        isinstance(left_degree, int)
+        and isinstance(right_degree, int)
+        and left_degree < right_degree
+        and left_degree * right_degree % 2 == 1
+    ):
+        return -value
+    return value
 
 
 def polynomial_discriminant(polynomial: Any, generator: Any) -> Any:

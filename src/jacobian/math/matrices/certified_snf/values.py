@@ -116,5 +116,53 @@ class SmithNormalFormCertificate(StrictModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def bind_relation_to_source(self) -> Self:
+        """Replay the exact defining relations against the retained matrices.
+
+        The certificate advertises ``D = U A V`` with unimodular ``U`` and
+        ``V`` and declared determinant signs, so authored, deserialized, or
+        downstream-consumed values must satisfy every advertised relation
+        exactly; the declared fields are never accepted as evidence.
+        """
+
+        from jacobian.math.matrices.certified_snf.operations import (
+            matrix_determinant,
+            matrix_multiply,
+        )
+
+        source = [
+            [parse_canonical_integer(value) for value in row]
+            for row in self.source.entries
+        ]
+        diagonal = [
+            [parse_canonical_integer(value) for value in row]
+            for row in self.diagonal.entries
+        ]
+        left = [
+            [parse_canonical_integer(value) for value in row]
+            for row in self.left_transformation.entries
+        ]
+        right = [
+            [parse_canonical_integer(value) for value in row]
+            for row in self.right_transformation.entries
+        ]
+        if matrix_multiply(matrix_multiply(left, source), right) != diagonal:
+            raise ValueError(
+                "Smith certificate transformations must replay "
+                "diagonal = left * source * right exactly"
+            )
+        for label, transformation, determinant in (
+            ("left", left, self.left_determinant),
+            ("right", right, self.right_determinant),
+        ):
+            numeric_determinant = matrix_determinant(transformation)
+            if numeric_determinant != int(determinant):
+                raise ValueError(
+                    f"Smith certificate {label} transformation determinant "
+                    f"must be the declared unimodular {determinant}"
+                )
+        return self
+
 
 __all__ = ["CertifiedIntegerMatrix", "SmithNormalFormCertificate"]

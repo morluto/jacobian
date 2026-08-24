@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
 MAX_FINITE_GROUP_ORDER = 4_096
 MAX_FINITE_GROUP_RANK = 6
+MAX_FINITE_PRODUCT_GROUP_RANK = 64
 MAX_FINITE_GROUP_FACTOR_SIZE = 256
 MAX_FINITE_GROUP_MODULUS = (1 << 53) - 1
 MAX_FINITE_GROUP_COORDINATE = (1 << 53) - 1
@@ -64,12 +65,15 @@ class FiniteAbelianProductGroup(StrictModel):
 
     Moduli and canonical residues serialize as raw JSON integers inside exact
     results, so this reusable value is bounded by the interoperable
-    safe-integer range rather than any operation's work envelope.
+    safe-integer range rather than any operation's work envelope. The 64-axis
+    ceiling is a defensive materialization fallback in the same spirit as the
+    spectral row cap; consuming operations bound their own work by supplied
+    rows, group exponent, and serialized-result size.
     """
 
     moduli: tuple[FiniteGroupModulus, ...] = Field(
         min_length=1,
-        max_length=MAX_FINITE_GROUP_RANK,
+        max_length=MAX_FINITE_PRODUCT_GROUP_RANK,
     )
 
     @property
@@ -220,15 +224,15 @@ class FiniteAbelianNonorthogonalityWitness(StrictModel):
 
     left_frequency: CanonicalGroupElement = Field(
         min_length=1,
-        max_length=MAX_FINITE_GROUP_RANK,
+        max_length=MAX_FINITE_PRODUCT_GROUP_RANK,
     )
     right_frequency: CanonicalGroupElement = Field(
         min_length=1,
-        max_length=MAX_FINITE_GROUP_RANK,
+        max_length=MAX_FINITE_PRODUCT_GROUP_RANK,
     )
     difference: CanonicalGroupElement = Field(
         min_length=1,
-        max_length=MAX_FINITE_GROUP_RANK,
+        max_length=MAX_FINITE_PRODUCT_GROUP_RANK,
     )
     remainder_coefficients: tuple[BoundedRemainderInteger, ...] = Field(
         min_length=1,

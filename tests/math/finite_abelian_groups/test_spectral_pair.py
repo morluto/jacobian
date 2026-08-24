@@ -361,9 +361,19 @@ def test_group_rank_and_order_boundaries() -> None:
     assert FiniteAbelianProductGroup(moduli=(2, 2, 2, 2, 2, 2)).order == 64
     assert FiniteAbelianProductGroup(moduli=(64, 64)).order == 4_096
     assert FiniteAbelianProductGroup(moduli=(4_096, 2)).order == 8_192
+    assert FiniteAbelianProductGroup(moduli=(2,) * 7).order == 128
 
+    with pytest.raises(ValidationError, match="at most 64 items"):
+        FiniteAbelianProductGroup(moduli=(2,) * 65)
+
+    # The rank and order ceilings stay operation-specific on the exhaustive
+    # factorization path, whose kernel materializes the ambient group.
     with pytest.raises(ValidationError, match="at most 6 items"):
-        FiniteAbelianProductGroup(moduli=(2, 2, 2, 2, 2, 2, 2))
+        FiniteAbelianGroupFactorizationRequest(
+            moduli=(2,) * 7,
+            left=((0,) * 7,),
+            right=((0,) * 7,),
+        )
 
     with pytest.raises(ValidationError, match="4,096-element bound"):
         FiniteAbelianGroupFactorizationRequest(
@@ -381,6 +391,32 @@ def test_singleton_pair_beyond_the_group_order_cap_is_admitted() -> None:
     assert result.is_spectral is True
     assert result.reason == "SPECTRAL"
     assert result.source.group.order == 4_097
+
+
+def test_singleton_beyond_the_former_rank_cap_is_admitted() -> None:
+    zero = (0, 0, 0, 0, 0, 0, 0)
+    unit = (1, 0, 0, 0, 0, 0, 0)
+    result = decide_finite_abelian_spectral_pair(_source((2,) * 7, (zero,), (unit,)))
+
+    assert result.is_spectral is True
+    assert result.reason == "SPECTRAL"
+    assert result.source.group.exponent == 2
+
+
+def test_equal_size_pair_beyond_the_former_rank_cap_fits_budgets() -> None:
+    zero = (0, 0, 0, 0, 0, 0, 0)
+    unit = (1, 0, 0, 0, 0, 0, 0)
+    source = _source((2,) * 7, (zero, unit), (zero, unit))
+    work = domain._spectral_pair_work(source)
+
+    assert work.character_terms == 4
+    assert work.predicted_result_bytes <= domain.MAX_SPECTRAL_RESULT_BYTES
+
+    result = decide_finite_abelian_spectral_pair(source)
+
+    # 1 + X modulo Phi_2 = X + 1 vanishes exactly.
+    assert result.is_spectral is True
+    assert result.reason == "SPECTRAL"
 
 
 def test_singleton_beyond_the_former_modulus_ceiling_is_admitted() -> None:

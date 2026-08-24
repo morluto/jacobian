@@ -318,6 +318,7 @@ def test_moment_totals_bind_to_sparse_differences() -> None:
 
     comparison = result.comparisons[0]
     assert not comparison.equal
+    assert comparison.points == ("a", "b")
     assert (comparison.left_total, comparison.right_total) == (3, 3)
     assert tuple(
         (
@@ -330,6 +331,7 @@ def test_moment_totals_bind_to_sparse_differences() -> None:
 
 def test_equal_empty_moment_comparison_is_accepted_standalone() -> None:
     comparison = IncidenceMomentComparison(
+        points=("a", "b"),
         order=1,
         left_total=4,
         right_total=4,
@@ -340,9 +342,29 @@ def test_equal_empty_moment_comparison_is_accepted_standalone() -> None:
     assert comparison.left_total == comparison.right_total == 4
 
 
+def test_zero_residual_moment_comparison_is_accepted_standalone() -> None:
+    comparison = IncidenceMomentComparison(
+        points=("a", "b"),
+        order=2,
+        left_total=2,
+        right_total=1,
+        differences=(
+            IncidenceMultiplicityDifference(
+                subset=("a", "b"),
+                left_multiplicity=2,
+                right_multiplicity=1,
+            ),
+        ),
+        equal=False,
+    )
+
+    assert (comparison.left_total, comparison.right_total) == (2, 1)
+
+
 def test_forged_equal_totals_with_sparse_differences_are_rejected() -> None:
     with pytest.raises(ValidationError, match="sum of sparse multiplicity"):
         IncidenceMomentComparison(
+            points=("a",),
             order=1,
             left_total=2,
             right_total=2,
@@ -360,6 +382,7 @@ def test_forged_equal_totals_with_sparse_differences_are_rejected() -> None:
 def test_forged_totals_diverging_from_sparse_sum_are_rejected() -> None:
     with pytest.raises(ValidationError, match="sum of sparse multiplicity"):
         IncidenceMomentComparison(
+            points=("a", "b"),
             order=2,
             left_total=5,
             right_total=3,
@@ -374,9 +397,28 @@ def test_forged_totals_diverging_from_sparse_sum_are_rejected() -> None:
         )
 
 
+def test_forged_negative_residual_totals_are_rejected() -> None:
+    with pytest.raises(ValidationError, match="must not exceed their declared totals"):
+        IncidenceMomentComparison(
+            points=("a", "b"),
+            order=2,
+            left_total=1,
+            right_total=0,
+            differences=(
+                IncidenceMultiplicityDifference(
+                    subset=("a", "b"),
+                    left_multiplicity=2,
+                    right_multiplicity=1,
+                ),
+            ),
+            equal=False,
+        )
+
+
 def test_forged_wrong_arity_subset_keys_are_rejected() -> None:
     with pytest.raises(ValidationError, match="exactly order labels"):
         IncidenceMomentComparison(
+            points=("a", "b"),
             order=2,
             left_total=1,
             right_total=0,
@@ -394,6 +436,7 @@ def test_forged_wrong_arity_subset_keys_are_rejected() -> None:
 def test_forged_repeated_label_subset_keys_are_rejected() -> None:
     with pytest.raises(ValidationError, match="distinct labels"):
         IncidenceMomentComparison(
+            points=("a", "b"),
             order=2,
             left_total=1,
             right_total=0,
@@ -408,9 +451,81 @@ def test_forged_repeated_label_subset_keys_are_rejected() -> None:
         )
 
 
+def test_forged_undeclared_difference_labels_are_rejected() -> None:
+    with pytest.raises(ValidationError, match="declared point-axis labels"):
+        IncidenceMomentComparison(
+            points=("a", "b"),
+            order=2,
+            left_total=1,
+            right_total=0,
+            differences=(
+                IncidenceMultiplicityDifference(
+                    subset=("a", "z"),
+                    left_multiplicity=1,
+                    right_multiplicity=0,
+                ),
+            ),
+            equal=False,
+        )
+
+
+def test_forged_out_of_axis_order_subset_keys_are_rejected() -> None:
+    with pytest.raises(ValidationError, match="point-axis order"):
+        IncidenceMomentComparison(
+            points=("a", "b"),
+            order=2,
+            left_total=1,
+            right_total=0,
+            differences=(
+                IncidenceMultiplicityDifference(
+                    subset=("b", "a"),
+                    left_multiplicity=1,
+                    right_multiplicity=0,
+                ),
+            ),
+            equal=False,
+        )
+
+
+def test_forged_permuted_duplicate_subset_keys_are_rejected() -> None:
+    with pytest.raises(ValidationError, match="point-axis order"):
+        IncidenceMomentComparison(
+            points=("a", "b", "c"),
+            order=2,
+            left_total=3,
+            right_total=0,
+            differences=(
+                IncidenceMultiplicityDifference(
+                    subset=("a", "c"),
+                    left_multiplicity=2,
+                    right_multiplicity=0,
+                ),
+                IncidenceMultiplicityDifference(
+                    subset=("c", "a"),
+                    left_multiplicity=1,
+                    right_multiplicity=0,
+                ),
+            ),
+            equal=False,
+        )
+
+
+def test_forged_duplicate_axis_labels_are_rejected_standalone() -> None:
+    with pytest.raises(ValidationError, match="moment point axes must have distinct"):
+        IncidenceMomentComparison(
+            points=("a", "a"),
+            order=1,
+            left_total=0,
+            right_total=0,
+            differences=(),
+            equal=True,
+        )
+
+
 def test_forged_duplicate_subset_keys_are_rejected() -> None:
     with pytest.raises(ValidationError, match="unique"):
         IncidenceMomentComparison(
+            points=("a", "b"),
             order=1,
             left_total=2,
             right_total=0,

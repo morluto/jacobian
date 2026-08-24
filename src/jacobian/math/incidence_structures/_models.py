@@ -161,12 +161,14 @@ def _require_incidence_trade_admitted(
         _subset_label_wire_bytes(left.points, order)
         for order in range(1, max_order + 1)
     )
+    comparison_axis_bytes = max_order * (_label_wire_bytes(left.points) + 16)
     estimated_result_bytes = (
         _incidence_wire_bytes(left)
         + _incidence_wire_bytes(right)
         + subset_label_bytes
         + sum(subset_counts) * _TRADE_DIFFERENCE_OVERHEAD_BYTES
         + max_order * 128
+        + comparison_axis_bytes
         + _RESULT_ENVELOPE_BYTES
     )
     if estimated_result_bytes > MAX_RESULT_BYTES:
@@ -289,12 +291,16 @@ class IncidenceMultiplicityDifference(StrictModel):
 class IncidenceMomentComparison(StrictModel):
     """Complete sparse difference data for one positive incidence moment.
 
-    Defining invariant: every difference key is a distinct ``order``-element
-    subset of labels, and ``left_total - right_total`` equals the sum of
-    ``left_multiplicity - right_multiplicity`` over the sparse differences,
-    because omitted subsets carry equal multiplicities on both sides.
+    Defining invariant: ``points`` is the ordered point axis shared by both
+    sides, every difference key is a distinct ``order``-element subset of
+    axis labels in axis order, each side's sparse multiplicity subtotal does
+    not exceed its declared total, and ``left_total - right_total`` equals
+    the sum of ``left_multiplicity - right_multiplicity`` over the sparse
+    differences, because every omitted subset carries equal nonnegative
+    multiplicity on both sides.
     """
 
+    points: tuple[str, ...] = Field(min_length=1, max_length=MAX_POINTS)
     order: StrictInt = Field(ge=1, le=MAX_TRADE_ORDER)
     left_total: StrictInt = Field(ge=0)
     right_total: StrictInt = Field(ge=0)
@@ -307,16 +313,36 @@ class IncidenceMomentComparison(StrictModel):
     def bind_equality_and_totals_to_sparse_differences(self) -> Self:
         if self.equal != (not self.differences):
             raise ValueError("moment equality must match the sparse difference profile")
+        if len(set(self.points)) != len(self.points):
+            raise ValueError("moment point axes must have distinct labels")
+        axis_index = {point: index for index, point in enumerate(self.points)}
         seen_subsets: set[tuple[str, ...]] = set()
+        left_subtotal = 0
+        right_subtotal = 0
         for difference in self.differences:
             subset = difference.subset
             if len(subset) != self.order:
                 raise ValueError("difference subsets must have exactly order labels")
             if len(set(subset)) != len(subset):
                 raise ValueError("difference subsets must have distinct labels")
+            if any(label not in axis_index for label in subset):
+                raise ValueError(
+                    "difference subsets must use declared point-axis labels"
+                )
+            indices = tuple(axis_index[label] for label in subset)
+            if list(indices) != sorted(indices):
+                raise ValueError(
+                    "difference subsets must follow point-axis order"
+                )
             if subset in seen_subsets:
                 raise ValueError("difference subsets must be unique")
             seen_subsets.add(subset)
+            left_subtotal += difference.left_multiplicity
+            right_subtotal += difference.right_multiplicity
+        if left_subtotal > self.left_total or right_subtotal > self.right_total:
+            raise ValueError(
+                "sparse multiplicity subtotals must not exceed their declared totals"
+            )
         total_difference = sum(
             difference.left_multiplicity - difference.right_multiplicity
             for difference in self.differences

@@ -12,7 +12,6 @@ from jacobian.math.tree_automata import (
 from jacobian.math.tree_automata._models import (
     AcceptedTreeCountRequest,
     TreeAutomatonReachabilityRequest,
-    TreeAutomatonReachabilityResult,
     TreeRunRequest,
 )
 from jacobian.math.tree_automata._operations import (
@@ -22,6 +21,8 @@ from jacobian.math.tree_automata._operations import (
 )
 from jacobian.math.tree_automata.operations import (
     _constructible_state_count,
+    _reachability_execution_work_bound,
+    _reachability_public_path_work_bound,
     accepted_tree_count,
     run_tree_automaton,
 )
@@ -29,6 +30,7 @@ from jacobian.math.tree_automata.values import (
     BottomUpTreeAutomaton,
     RankedTree,
     TreeAutomatonTransition,
+    ranked_tree_node_count,
 )
 
 
@@ -54,6 +56,36 @@ def _simple_automaton() -> BottomUpTreeAutomaton:
             TreeAutomatonTransition(symbol=1, child_states=(1, 1), target_state=1),
         ),
         final_states=(0,),
+    )
+
+
+def _seeded_chain_with_padded_rows(chain_states: int) -> BottomUpTreeAutomaton:
+    """One nullary-seeded chain padded to 4096 rows by unreachable arity-16 rows."""
+    transitions = [
+        TreeAutomatonTransition(symbol=1, child_states=(), target_state=0),
+        *(
+            TreeAutomatonTransition(
+                symbol=0, child_states=(state,), target_state=state + 1
+            )
+            for state in range(chain_states - 1)
+        ),
+        *(
+            TreeAutomatonTransition(
+                symbol=2,
+                child_states=(
+                    *(((index // 64**position) % 64) for position in range(15)),
+                    63,
+                ),
+                target_state=index % 64,
+            )
+            for index in range(4096 - chain_states)
+        ),
+    ]
+    return BottomUpTreeAutomaton(
+        state_count=64,
+        arity=(1, 0, 16),
+        transitions=tuple(transitions),
+        final_states=(),
     )
 
 
@@ -241,11 +273,8 @@ class TestReachableStates:
         result = compute_tree_automaton_reachability(
             TreeAutomatonReachabilityRequest(automaton=automaton)
         )
-        assert result.reachable_states == profile.reachable_states
-        assert result.unreachable_states == profile.unreachable_states
-        assert tuple(witness.tree for witness in result.witnesses) == tuple(
-            tree for _, tree in profile.witnesses
-        )
+        assert isinstance(result, ReachableStateProfile)
+        assert result == profile
 
     def test_no_nullary_seed_has_an_empty_reachable_profile(self):
         automaton = BottomUpTreeAutomaton(
@@ -285,15 +314,15 @@ class TestReachableStates:
 
         assert result.reachable_states == (0, 1, 2, 3, 4)
         assert result.unreachable_states == ()
-        assert tuple(witness.node_count for witness in result.witnesses) == (
+        assert tuple(ranked_tree_node_count(tree) for _, tree in result.witnesses) == (
             1,
             1,
             3,
             4,
             9,
         )
-        for witness in result.witnesses:
-            assert witness.state in run_tree_automaton(automaton, witness.tree)
+        for state, tree in result.witnesses:
+            assert state in run_tree_automaton(automaton, tree)
 
     def test_reachability_requires_every_hyperedge_child(self):
         automaton = BottomUpTreeAutomaton(
@@ -312,7 +341,7 @@ class TestReachableStates:
 
         assert result.reachable_states == (0,)
         assert result.unreachable_states == (1, 2)
-        assert tuple(witness.state for witness in result.witnesses) == (0,)
+        assert tuple(state for state, _ in result.witnesses) == (0,)
 
     def test_profile_is_independent_of_transition_wire_order(self):
         transitions = (
@@ -353,10 +382,14 @@ class TestReachableStates:
             TreeAutomatonReachabilityRequest(automaton=automaton)
         )
 
-        assert tuple(witness.node_count for witness in result.witnesses) == (1, 1, 1)
-        assert tuple(witness.tree.symbol for witness in result.witnesses) == (0, 2, 0)
+        assert tuple(ranked_tree_node_count(tree) for _, tree in result.witnesses) == (
+            1,
+            1,
+            1,
+        )
+        assert tuple(tree.symbol for _, tree in result.witnesses) == (0, 2, 0)
 
-    def test_result_rejects_forged_witness(self):
+    def test_result_rejects_forged_reachable_states(self):
         automaton = _simple_automaton()
         result = compute_tree_automaton_reachability(
             TreeAutomatonReachabilityRequest(automaton=automaton)
@@ -364,8 +397,56 @@ class TestReachableStates:
         payload = result.model_dump()
         payload["reachable_states"] = (1,)
 
-        with pytest.raises(ValidationError, match="not bound"):
-            type(result).model_validate(payload)
+        with pytest.raises(ValidationError, match="disjoint"):
+            ReachableStateProfile.model_validate(payload)
+
+    def test_result_binding_replay_rejects_non_minimum_witness(self):
+        automaton = _simple_automaton()
+        profile = reachable_state_profile(automaton)
+        forged = ReachableStateProfile.model_validate(
+            {
+                **profile.model_dump(),
+                "witnesses": [
+                    [
+                        0,
+                        {
+                            "symbol": 1,
+                            "children": [
+                                {"symbol": 0, "children": []},
+                                {"symbol": 0, "children": []},
+                            ],
+                        },
+                    ]
+                ],
+            }
+        )
+        assert tuple(state for state, _ in forged.witnesses) == (0,)
+
+        with pytest.raises(ValueError, match="not bound"):
+            forged.require_source_binding()
+
+    def test_profile_shape_validators_reject_independent_forgeries(self):
+        automaton = _simple_automaton()
+        payload = reachable_state_profile(automaton).model_dump()
+
+        unsorted = {**payload, "unreachable_states": ()}
+        with pytest.raises(ValidationError, match="partition"):
+            ReachableStateProfile.model_validate(unsorted)
+
+        misaligned = {
+            **payload,
+            "reachable_states": (),
+            "unreachable_states": (0, 1),
+        }
+        with pytest.raises(ValidationError, match="exactly one entry per reachable"):
+            ReachableStateProfile.model_validate(misaligned)
+
+        foreign_alphabet = {
+            **payload,
+            "witnesses": [[0, {"symbol": 1, "children": []}]],
+        }
+        with pytest.raises(ValidationError, match="arity"):
+            ReachableStateProfile.model_validate(foreign_alphabet)
 
 
 class TestValidation:
@@ -445,7 +526,9 @@ class TestValidation:
 
         assert result.reachable_states == (0,)
         assert result.unreachable_states == tuple(range(1, 64))
-        assert tuple(witness.node_count for witness in result.witnesses) == (1,)
+        assert tuple(ranked_tree_node_count(tree) for _, tree in result.witnesses) == (
+            1,
+        )
         assert isinstance(profile, ReachableStateProfile)
         assert profile.automaton == automaton
         assert profile.reachable_states == (0,)
@@ -522,9 +605,9 @@ class TestValidation:
         )
 
         assert result.reachable_states == tuple(range(13))
-        assert tuple(witness.node_count for witness in result.witnesses) == tuple(
-            range(1, 14)
-        )
+        assert tuple(
+            ranked_tree_node_count(tree) for _, tree in result.witnesses
+        ) == tuple(range(1, 14))
 
     def test_reachability_rejects_seeded_deep_chain_scans_beyond_work_bound(self):
         automaton = BottomUpTreeAutomaton(
@@ -557,9 +640,39 @@ class TestValidation:
         with pytest.raises(ValidationError, match="reachability work bound"):
             TreeAutomatonReachabilityRequest(automaton=automaton)
 
+    def test_native_profile_prices_one_profile_within_shared_envelope(self):
+        automaton = _seeded_chain_with_padded_rows(16)
+
+        per_profile = _reachability_execution_work_bound(automaton)
+        assert per_profile == 10_715_384
+        assert per_profile <= 30_000_000
+
+        profile = reachable_state_profile(automaton)
+        assert profile.reachable_states == tuple(range(16))
+        assert tuple(
+            ranked_tree_node_count(tree) for _, tree in profile.witnesses
+        ) == tuple(range(1, 17))
+
+    def test_public_request_prices_three_profiles_against_shared_envelope(self):
+        automaton = _seeded_chain_with_padded_rows(16)
+
+        public_path = _reachability_public_path_work_bound(automaton)
+        assert public_path == 3 * _reachability_execution_work_bound(automaton)
+        assert public_path > 30_000_000
+
+        with pytest.raises(ValidationError, match="reachability work bound"):
+            TreeAutomatonReachabilityRequest(automaton=automaton)
+
+    def test_native_profile_rejects_one_profile_beyond_shared_envelope(self):
+        automaton = _seeded_chain_with_padded_rows(64)
+
+        assert _reachability_execution_work_bound(automaton) > 30_000_000
+        with pytest.raises(ValueError, match="reachability work bound exceeded"):
+            reachable_state_profile(automaton)
+
     def test_reachability_schema_publishes_coupled_admission_envelope(self):
         request_schema = TreeAutomatonReachabilityRequest.model_json_schema()
-        result_schema = TreeAutomatonReachabilityResult.model_json_schema()
+        result_schema = ReachableStateProfile.model_json_schema()
 
         request_description = request_schema["description"]
         assert "MAX_TREE_AUTOMATON_REACHABILITY_WORK" in request_description

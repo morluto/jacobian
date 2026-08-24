@@ -9,11 +9,10 @@ from pydantic import Field, model_validator
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.math.tree_automata.values import (
-    MAX_REACHABILITY_WITNESS_NODES,
+    MAX_TREE_AUTOMATON_REACHABILITY_WORK,
     BottomUpTreeAutomaton,
     RankedTree,
     accepted_tree_count_work_bound,
-    ranked_tree_node_count,
     validate_ranked_tree,
 )
 
@@ -92,20 +91,6 @@ class AcceptedTreeCountResult(AcceptedTreeCountRequest):
         return self
 
 
-class ReachableStateWitness(StrictModel):
-    """One canonical minimum-node tree witnessing a reachable automaton state."""
-
-    state: int = Field(ge=0, le=63)
-    tree: RankedTree
-    node_count: int = Field(ge=1, le=MAX_REACHABILITY_WITNESS_NODES)
-
-    @model_validator(mode="after")
-    def require_exact_node_count(self) -> Self:
-        if self.node_count != ranked_tree_node_count(self.tree):
-            raise ValueError("witness node_count must equal its tree node count")
-        return self
-
-
 class TreeAutomatonReachabilityRequest(StrictModel):
     """Compute ground-tree reachable states through bottom-up hyperedges.
 
@@ -115,8 +100,8 @@ class TreeAutomatonReachabilityRequest(StrictModel):
     - ``MAX_TREE_AUTOMATON_REACHABILITY_WORK`` (30,000,000 units) prices
       transition sorting, one constructible-state closure prepass plus the
       saturation scans over every transition row, and witness materialization
-      and recount, multiplied across request admission, execution, and
-      source-bound result replay.
+      and recount, multiplied across the three public-path invocations:
+      request admission, execution, and source-bound result replay.
     - ``MAX_REACHABILITY_WITNESS_NODES`` (4096 nodes) bounds the total node
       count summed over the minimum witnesses of all reachable states: it is
       an aggregate output limit across states, not a per-witness limit.
@@ -131,68 +116,33 @@ class TreeAutomatonReachabilityRequest(StrictModel):
             "states, 32 ranked symbols, and 4096 unique transitions. "
             "Requests are additionally rejected when the coupled "
             "reachability work envelope (MAX_TREE_AUTOMATON_REACHABILITY_"
-            "WORK = 30,000,000 units) or the aggregate witness output "
-            "envelope (MAX_REACHABILITY_WITNESS_NODES = 4096 nodes summed "
-            "across every reachable state's minimum witness) is exceeded"
+            "WORK = 30,000,000 units, priced across request admission, "
+            "execution, and source-bound result replay) or the aggregate "
+            "witness output envelope (MAX_REACHABILITY_WITNESS_NODES = "
+            "4096 nodes summed across every reachable state's minimum "
+            "witness) is exceeded"
         ),
     )
 
     @model_validator(mode="after")
     def require_bounded_witness_profile(self) -> Self:
-        from jacobian.math.tree_automata.operations import reachable_state_profile
-
-        reachable_state_profile(self.automaton)
-        return self
-
-
-class TreeAutomatonReachabilityResult(StrictModel):
-    """Exact source-bound ground-tree reachability profile."""
-
-    automaton: BottomUpTreeAutomaton
-    reachable_states: tuple[int, ...] = Field(max_length=64)
-    unreachable_states: tuple[int, ...] = Field(max_length=64)
-    witnesses: tuple[ReachableStateWitness, ...] = Field(
-        max_length=64,
-        description=(
-            "one canonical minimum-node witness per reachable state; their "
-            "node counts are bounded in aggregate by "
-            "MAX_REACHABILITY_WITNESS_NODES (4096 nodes summed over all "
-            "reachable states)"
-        ),
-    )
-
-    @model_validator(mode="after")
-    def require_source_bound_profile(self) -> Self:
-        from jacobian.math.tree_automata.operations import reachable_state_profile
-
-        expected = reachable_state_profile(self.automaton)
-        expected_witnesses = tuple(
-            ReachableStateWitness(
-                state=state,
-                tree=tree,
-                node_count=ranked_tree_node_count(tree),
-            )
-            for state, tree in expected.witnesses
+        from jacobian.math.tree_automata.operations import (
+            _reachability_public_path_work_bound,
+            reachable_state_profile,
         )
-        if sum(witness.node_count for witness in self.witnesses) > (
-            MAX_REACHABILITY_WITNESS_NODES
+
+        if _reachability_public_path_work_bound(self.automaton) > (
+            MAX_TREE_AUTOMATON_REACHABILITY_WORK
         ):
-            raise ValueError("reachable-state witness output exceeds the node bound")
-        if (
-            self.reachable_states != expected.reachable_states
-            or self.unreachable_states != expected.unreachable_states
-            or self.witnesses != expected_witnesses
-        ):
-            raise ValueError("reachability profile is not bound to its automaton")
+            raise ValueError("tree automaton reachability work bound exceeded")
+        reachable_state_profile(self.automaton)
         return self
 
 
 __all__ = [
     "AcceptedTreeCountRequest",
     "AcceptedTreeCountResult",
-    "ReachableStateWitness",
     "TreeAutomatonReachabilityRequest",
-    "TreeAutomatonReachabilityResult",
     "TreeRunRequest",
     "TreeRunResult",
 ]

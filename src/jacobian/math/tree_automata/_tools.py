@@ -10,7 +10,6 @@ from jacobian.math.tree_automata._models import (
     AcceptedTreeCountRequest,
     AcceptedTreeCountResult,
     TreeAutomatonReachabilityRequest,
-    TreeAutomatonReachabilityResult,
     TreeRunRequest,
     TreeRunResult,
 )
@@ -19,6 +18,7 @@ from jacobian.math.tree_automata._operations import (
     compute_tree_automaton_reachability,
     compute_tree_run,
 )
+from jacobian.math.tree_automata.values import ReachableStateProfile
 
 
 def _op[
@@ -82,7 +82,7 @@ TREE_AUTOMATA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "minimum-node witness tree per reachable state. A transition is "
         "enabled only when all of its ordered child states are reachable.",
         TreeAutomatonReachabilityRequest,
-        TreeAutomatonReachabilityResult,
+        ReachableStateProfile,
         compute_tree_automaton_reachability,
         "tree-automata",
         "reachability",

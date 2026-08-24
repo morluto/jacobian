@@ -13,9 +13,9 @@ from jacobian.math.tree_automata.values import (
     MAX_TREE_AUTOMATON_REACHABILITY_WORK,
     BottomUpTreeAutomaton,
     RankedTree,
+    ReachableStateProfile,
     TreeAutomatonTransition,
     accepted_tree_count_work_bound,
-    ranked_tree_node_count,
     validate_ranked_tree,
 )
 
@@ -26,16 +26,6 @@ __all__ = [
     "run_tree_automaton",
     "tree_state_chart",
 ]
-
-
-@dataclass(frozen=True)
-class ReachableStateProfile:
-    """Exact least-fixed-point profile for one bottom-up tree automaton."""
-
-    automaton: BottomUpTreeAutomaton
-    reachable_states: tuple[int, ...]
-    unreachable_states: tuple[int, ...]
-    witnesses: tuple[tuple[int, RankedTree], ...]
 
 
 @dataclass(frozen=True)
@@ -88,20 +78,15 @@ def reachable_state_profile(
     if total_witness_nodes > MAX_REACHABILITY_WITNESS_NODES:
         raise ValueError("reachable-state witness output exceeds the node bound")
 
-    witnesses = tuple(
-        (state, _materialize_witness(state, choices)) for state in reachable_states
-    )
-    for _, tree in witnesses:
-        if ranked_tree_node_count(tree) > MAX_REACHABILITY_WITNESS_NODES:
-            raise ValueError("reachable-state witness exceeds the node bound")
-
     return ReachableStateProfile(
         automaton=automaton,
         reachable_states=reachable_states,
         unreachable_states=tuple(
             state for state, choice in enumerate(choices) if choice is None
         ),
-        witnesses=witnesses,
+        witnesses=tuple(
+            (state, _materialize_witness(state, choices)) for state in reachable_states
+        ),
     )
 
 
@@ -122,11 +107,11 @@ def _constructible_state_count(automaton: BottomUpTreeAutomaton) -> int:
 
 
 def _reachability_execution_work_bound(automaton: BottomUpTreeAutomaton) -> int:
-    """Conservatively bound admission, execution, and source-bound replay.
+    """Conservatively bound one native reachability profile's execution work.
 
     Each profile sorts transition rows, runs one constructible-state closure
-    prepass plus its saturation scans, and materializes then recounts at most
-    the admitted witness nodes.  A scan round repeats only when the previous
+    prepass plus its saturation scans, and materializes then recounts at
+    most the admitted witness nodes.  A scan round repeats only when the previous
     round defined or improved a choice, so an automaton without nullary
     transitions is immediately stable and pays exactly one scan: no row can
     fire before any state has a witness.  When nullary transitions seed the
@@ -141,8 +126,8 @@ def _reachability_execution_work_bound(automaton: BottomUpTreeAutomaton) -> int:
     construct the lookup tuple, test that all children are known, add their
     node counts, and compare an equal-size candidate's canonical transition
     key.
-    The public path performs that profile once for request admission, once for
-    execution, and once for result replay.
+
+    Native callers perform exactly one profile per call.
     """
 
     transition_count = len(automaton.transitions)
@@ -160,7 +145,20 @@ def _reachability_execution_work_bound(automaton: BottomUpTreeAutomaton) -> int:
         + sum(6 + 4 * len(row.child_states) for row in automaton.transitions)
     )
     witness_work = 3 * MAX_REACHABILITY_WITNESS_NODES
-    return 3 * (sort_work + scan_work + witness_work)
+    return sort_work + scan_work + witness_work
+
+
+def _reachability_public_path_work_bound(automaton: BottomUpTreeAutomaton) -> int:
+    """Price the public path's three profile invocations against one budget.
+
+    The MCP request boundary performs one profile for request admission, one
+    for execution, and one for source-bound result replay, so it admits the
+    shared ``MAX_TREE_AUTOMATON_REACHABILITY_WORK`` envelope only when three
+    single-profile executions fit inside it.  Native calls perform one
+    profile and are priced by ``_reachability_execution_work_bound`` alone.
+    """
+
+    return 3 * _reachability_execution_work_bound(automaton)
 
 
 def _transition_key(

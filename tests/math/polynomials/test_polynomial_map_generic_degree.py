@@ -667,7 +667,9 @@ def test_forged_standard_monomials_are_rejected_against_the_certified_ideal() ->
         GenericDegreeResult.model_validate(forged)
 
 
-def test_cleared_standard_monomials_cannot_invent_a_positive_dimensional_outcome() -> None:
+def test_cleared_standard_monomials_cannot_invent_a_positive_dimensional_outcome() -> (
+    None
+):
     evidence = _power_map_certificate(2).model_dump(mode="json")
     evidence["standard_monomials"] = []
     forged = {

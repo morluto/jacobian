@@ -374,6 +374,62 @@ def test_forged_totals_diverging_from_sparse_sum_are_rejected() -> None:
         )
 
 
+def test_forged_wrong_arity_subset_keys_are_rejected() -> None:
+    with pytest.raises(ValidationError, match="exactly order labels"):
+        IncidenceMomentComparison(
+            order=2,
+            left_total=1,
+            right_total=0,
+            differences=(
+                IncidenceMultiplicityDifference(
+                    subset=("a",),
+                    left_multiplicity=1,
+                    right_multiplicity=0,
+                ),
+            ),
+            equal=False,
+        )
+
+
+def test_forged_repeated_label_subset_keys_are_rejected() -> None:
+    with pytest.raises(ValidationError, match="distinct labels"):
+        IncidenceMomentComparison(
+            order=2,
+            left_total=1,
+            right_total=0,
+            differences=(
+                IncidenceMultiplicityDifference(
+                    subset=("a", "a"),
+                    left_multiplicity=1,
+                    right_multiplicity=0,
+                ),
+            ),
+            equal=False,
+        )
+
+
+def test_forged_duplicate_subset_keys_are_rejected() -> None:
+    with pytest.raises(ValidationError, match="unique"):
+        IncidenceMomentComparison(
+            order=1,
+            left_total=2,
+            right_total=0,
+            differences=(
+                IncidenceMultiplicityDifference(
+                    subset=("a",),
+                    left_multiplicity=1,
+                    right_multiplicity=0,
+                ),
+                IncidenceMultiplicityDifference(
+                    subset=("a",),
+                    left_multiplicity=1,
+                    right_multiplicity=0,
+                ),
+            ),
+            equal=False,
+        )
+
+
 def test_request_schema_exposes_validator_owned_trade_rules() -> None:
     schema = IncidenceTradeRequest.model_json_schema()
     assert "same ordered point axis" in schema["description"]

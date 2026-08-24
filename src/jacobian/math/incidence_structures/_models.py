@@ -289,7 +289,8 @@ class IncidenceMultiplicityDifference(StrictModel):
 class IncidenceMomentComparison(StrictModel):
     """Complete sparse difference data for one positive incidence moment.
 
-    Defining invariant: ``left_total - right_total`` equals the sum of
+    Defining invariant: every difference key is a distinct ``order``-element
+    subset of labels, and ``left_total - right_total`` equals the sum of
     ``left_multiplicity - right_multiplicity`` over the sparse differences,
     because omitted subsets carry equal multiplicities on both sides.
     """
@@ -306,6 +307,16 @@ class IncidenceMomentComparison(StrictModel):
     def bind_equality_and_totals_to_sparse_differences(self) -> Self:
         if self.equal != (not self.differences):
             raise ValueError("moment equality must match the sparse difference profile")
+        seen_subsets: set[tuple[str, ...]] = set()
+        for difference in self.differences:
+            subset = difference.subset
+            if len(subset) != self.order:
+                raise ValueError("difference subsets must have exactly order labels")
+            if len(set(subset)) != len(subset):
+                raise ValueError("difference subsets must have distinct labels")
+            if subset in seen_subsets:
+                raise ValueError("difference subsets must be unique")
+            seen_subsets.add(subset)
         total_difference = sum(
             difference.left_multiplicity - difference.right_multiplicity
             for difference in self.differences

@@ -29,12 +29,11 @@ def _scalar_digit_cap(info: ValidationInfo) -> int:
     context = info.context
     if isinstance(context, Mapping):
         digits = context.get(_INTERMEDIATE_SCALAR_DIGITS)
-        if (
-            isinstance(digits, int)
-            and 0 < digits <= MAX_CANONICAL_RATIONAL_DIGITS
-        ):
+        if isinstance(digits, int) and 0 < digits <= MAX_CANONICAL_RATIONAL_DIGITS:
             return digits
     return MAX_RATIONAL_DIGITS
+
+
 type RationalLinearProgramStatus = Literal[
     "OPTIMAL",
     "PRIMAL_FEASIBLE",

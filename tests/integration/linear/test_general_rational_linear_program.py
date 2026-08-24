@@ -389,9 +389,7 @@ def test_general_lp_defers_free_split_admission_to_the_normalized_columns() -> N
 def test_general_lp_admits_sixty_four_trivial_equalities_within_the_row_envelope() -> (
     None
 ):
-    constraints = [
-        _row(f"trivial_{index}", [q(0)], "EQ", q(0)) for index in range(64)
-    ]
+    constraints = [_row(f"trivial_{index}", [q(0)], "EQ", q(0)) for index in range(64)]
     result = _run(
         _program(
             variables=[_variable("x", q(0))],
@@ -467,9 +465,7 @@ def test_general_lp_still_rejects_expansions_beyond_the_derived_envelope() -> No
         for _ in range(16):
             prime = nextprime(prime)
             coefficients.append(q(1, prime))
-        constraints.append(
-            _row(f"dense_{row_index}", coefficients, "EQ", q(0))
-        )
+        constraints.append(_row(f"dense_{row_index}", coefficients, "EQ", q(0)))
     with pytest.raises(
         ValidationError, match="height can exceed the exact 32768-digit result bound"
     ):

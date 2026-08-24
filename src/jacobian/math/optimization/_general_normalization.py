@@ -217,7 +217,10 @@ def _mapped_residual_digit_bound(normalization: GeneralLinearNormalization) -> i
     summed_terms = 2 * variables + 1
     return (
         variables
-        * (3 * MAX_RATIONAL_DIGITS + _result_digit_bound(normalization.standard_program))
+        * (
+            3 * MAX_RATIONAL_DIGITS
+            + _result_digit_bound(normalization.standard_program)
+        )
         + MAX_RATIONAL_DIGITS
         + len(str(summed_terms))
         + 1
@@ -253,7 +256,9 @@ def normalized_residual_digit_bound(program: GeneralFormRationalLinearProgram) -
     return _mapped_residual_digit_bound(normalize_general_program(program))
 
 
-def normalized_certificate_digit_bound(program: GeneralFormRationalLinearProgram) -> int:
+def normalized_certificate_digit_bound(
+    program: GeneralFormRationalLinearProgram,
+) -> int:
     return _mapped_certificate_digit_bound(normalize_general_program(program))
 
 

@@ -1481,6 +1481,32 @@ def _cube() -> RationalVPolytope:
     )
 
 
+def _labelled_seven_dimensional_simplex() -> RationalVPolytope:
+    """The standard seven-vertex simplex, labelled: facet profiles reach
+    ``MAX_FACET_DIMENSION = 7``, so the canonical value must carry the
+    operation's full published domain."""
+    axes = tuple(f"x{axis}" for axis in range(7))
+    rows = [
+        RationalPolytopeVertex(
+            vertex_id="v00",
+            coordinates=tuple(_canonical_rational(0) for _ in range(7)),
+        )
+    ]
+    for axis in range(7):
+        coordinates = [_canonical_rational(0) for _ in range(7)]
+        coordinates[axis] = _canonical_rational(1)
+        rows.append(
+            RationalPolytopeVertex(
+                vertex_id=f"v{axis + 1:02d}",
+                coordinates=tuple(coordinates),
+            )
+        )
+    return RationalVPolytope(
+        space=RationalCoordinateSpace(axes=axes),
+        vertices=tuple(rows),
+    )
+
+
 class TestCanonicalVPolytopeComposition:
     """The canonical labelled V-polytope value must compose into the
     volume request unchanged (review thread: support results produce
@@ -1663,6 +1689,29 @@ class TestCanonicalVPolytopeComposition:
         with pytest.raises(ValueError, match="exceeds the dimension bound"):
             PolytopeVolumeRequest(vertices=cube, dimension_bound=2)
 
+    def test_seven_axis_canonical_value_rejects_before_the_hull_replay(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The canonical space may carry seven axes for facet-profile
+        sources, but volume caps ambient dimension at six, so a serialized
+        seven-axis value fails the cheap dimension-bound preflight instead
+        of paying the extremality replay."""
+        simplex = _labelled_seven_dimensional_simplex()
+
+        def unexpected_proof(polytope: object) -> None:
+            raise AssertionError("extremality proof ran before the bound preflight")
+
+        monkeypatch.setattr(
+            polytope_operations,
+            "require_full_dimensional_extreme_vertices",
+            unexpected_proof,
+        )
+
+        with pytest.raises(ValueError, match="dimension 7 exceeds the dimension"):
+            PolytopeVolumeRequest.model_validate(
+                {"vertices": simplex.model_dump(mode="json")}
+            )
+
     def test_canonical_value_remains_mutually_exclusive_with_halfspaces(self) -> None:
         with pytest.raises(ValueError, match="exactly one of"):
             PolytopeVolumeRequest(
@@ -1739,6 +1788,34 @@ class TestCanonicalVPolytopeFacetComposition:
         )
 
         assert request.vertices == _plain_vertices(polytope)
+
+    def _labelled_seven_dimensional_simplex(self) -> RationalVPolytope:
+        return _labelled_seven_dimensional_simplex()
+
+    def test_labelled_seven_dimensional_source_composes_like_bare_rows(self) -> None:
+        polytope = self._labelled_seven_dimensional_simplex()
+
+        composed = compute_facet_incidence(FacetIncidenceRequest(vertices=polytope))
+
+        assert composed.dimension == 7
+        assert composed == _facet_profile(_plain_vertices(polytope))
+
+    def test_serialized_seven_dimensional_source_composes_like_the_typed_value(
+        self,
+    ) -> None:
+        payload = {
+            "vertices": self._labelled_seven_dimensional_simplex().model_dump(
+                mode="json"
+            )
+        }
+
+        request = FacetIncidenceRequest.model_validate(payload)
+        composed = compute_facet_incidence(request)
+
+        assert composed.dimension == 7
+        assert composed.vertices == _plain_vertices(
+            self._labelled_seven_dimensional_simplex()
+        )
 
     def test_forged_serialized_value_rejected_by_defining_invariant(self) -> None:
         payload = self._forged_serialized_square()

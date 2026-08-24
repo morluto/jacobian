@@ -22,7 +22,15 @@ from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalLimits, encode_strict_json
 
 MAX_DIMENSION = 6
-"""Absolute upper bound on the ambient dimension of a polytope."""
+"""Ambient-dimension bound shared by the volume and support operations.
+
+Exact volume caps ambient dimension here, and support pairs a V-polytope
+with a covector of at most this many components. The canonical labelled
+V-representation itself may carry up to ``MAX_FACET_DIMENSION`` axes so its
+consumer path covers the facet profiles' wider published domain; consumers
+whose own envelopes are narrower reject over-dimensional values through
+their published dimension bounds.
+"""
 
 MAX_FACET_DIMENSION = 7
 """Ambient-dimension bound for complete V-representation facet profiles.
@@ -145,7 +153,7 @@ the largest decimal digit count over every reduced numerator and denominator,
 clearing each row's denominators bounds matrix entries by ``(d + 2) * D``
 digits, Hadamard's bound bounds every fraction-free elimination intermediate
 by ``(d + 1) * (d + 2) * D`` digits, and the elimination performs
-``O((d + 1)^3)`` multiplications of such operands. With ``d <= MAX_DIMENSION``
+``O((d + 1)^3)`` multiplications of such operands. With ``d <= MAX_FACET_DIMENSION``
 fixed, one orientation test therefore costs ``Theta(D^2)`` limb operations,
 and the complete proof ``T * D^2`` up to constants absorbed by this ceiling.
 The ceiling is calibrated above the worst work the published operation
@@ -370,7 +378,7 @@ def _require_raw_coordinate_space(value: object, label: str) -> tuple[str, ...]:
 
     Returns the declared axis labels when the raw space satisfies every
     published constraint (closed ``axes`` field, non-empty sequence of at
-    most ``MAX_DIMENSION`` short unique string labels); any violation
+    most ``MAX_FACET_DIMENSION`` short unique string labels); any violation
     raises here because ordinary nested validation rejects it too, only
     after the hull proof has run.
     """
@@ -382,8 +390,10 @@ def _require_raw_coordinate_space(value: object, label: str) -> tuple[str, ...]:
     axes = value["axes"]
     if not isinstance(axes, (list, tuple)) or not axes:
         raise ValueError(f"{label} space axes must be a non-empty sequence")
-    if len(axes) > MAX_DIMENSION:
-        raise ValueError(f"{label} space must declare at most {MAX_DIMENSION} axes")
+    if len(axes) > MAX_FACET_DIMENSION:
+        raise ValueError(
+            f"{label} space must declare at most {MAX_FACET_DIMENSION} axes"
+        )
     if any(not isinstance(axis, str) or not 1 <= len(axis) <= 64 for axis in axes):
         raise ValueError(f"{label} space axes must be short string labels")
     for axis in axes:
@@ -997,9 +1007,16 @@ class RationalCoordinateSpace(StrictModel):
 
     Coordinate order is mathematical data: a covector component can only
     pair with the point coordinate named by the same position in this axis.
+    The axis count reaches ``MAX_FACET_DIMENSION`` so the canonical
+    V-representation covers the facet profiles' wider published domain;
+    support still pairs spaces with covectors of at most ``MAX_DIMENSION``
+    components, and volume rejects over-dimensional values through its own
+    dimension bound.
     """
 
-    axes: tuple[CoordinateAxis, ...] = Field(min_length=1, max_length=MAX_DIMENSION)
+    axes: tuple[CoordinateAxis, ...] = Field(
+        min_length=1, max_length=MAX_FACET_DIMENSION
+    )
 
     @model_validator(mode="after")
     def require_distinct_axes(self) -> Self:
@@ -1017,7 +1034,7 @@ class RationalPolytopeVertex(StrictModel):
     )
     coordinates: tuple[CanonicalRational, ...] = Field(
         min_length=1,
-        max_length=MAX_DIMENSION,
+        max_length=MAX_FACET_DIMENSION,
     )
 
 

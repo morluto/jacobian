@@ -1196,6 +1196,47 @@ def test_result_preflights_surrogate_face_vertex_id_before_nested_parsing(
         PolytopeSupportResult.model_validate(payload)
 
 
+def test_seven_axis_polytope_rejects_support_pairing_before_hull_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The canonical space may carry seven axes for facet-profile sources,
+    but support pairs a V-polytope with a covector of at most six
+    components, so the space mismatch is reported by the raw covector gate
+    before any exact proof runs."""
+    _forbid_extremality_proof(monkeypatch)
+    payload = _square_payload()
+    payload["polytope"]["space"]["axes"] = [f"x{axis}" for axis in range(7)]
+
+    with pytest.raises(ValidationError, match="same coordinate space"):
+        PolytopeSupportRequest.model_validate(payload)
+
+
+def test_seven_axis_polytope_cannot_pair_with_any_covector() -> None:
+    axes = RationalCoordinateSpace(axes=tuple(f"x{axis}" for axis in range(7)))
+
+    with pytest.raises(ValidationError, match=r"at most 6 items|at most 6 entries"):
+        RationalCovector(
+            space=axes,
+            components=tuple(_rational(component) for component in range(7)),
+        )
+
+    polytope = RationalVPolytope(
+        space=axes,
+        vertices=(
+            RationalPolytopeVertex(
+                vertex_id=f"v{index:02d}",
+                coordinates=tuple(
+                    _rational(1 if coordinate == index else 0)
+                    for coordinate in range(7)
+                ),
+            )
+            for index in range(8)
+        ),
+    )
+    with pytest.raises(ValueError, match="same coordinate space"):
+        polytope_operations.polytope_support(polytope, _covector(0, 1))
+
+
 def test_accepted_result_encodes_strict_json(square_result) -> None:
     """Every accepted canonical result crosses the supported serialization
     boundary unchanged."""

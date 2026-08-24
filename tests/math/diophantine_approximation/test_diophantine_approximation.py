@@ -230,3 +230,183 @@ def test_public_kernels_return_typed_values() -> None:
     assert continued_fraction(2, 3) == ([1, 2, 2], 1, 1)
     assert convergents(2, 3) == [(0, 1, 1), (1, 3, 2), (2, 7, 5)]
     assert solve_pell(2) == (3, 2)
+
+
+# ---------------------------------------------------------------------------
+# Source-bound replay regressions (#2313)
+# ---------------------------------------------------------------------------
+
+
+def test_continued_fraction_result_replays_known_answers() -> None:
+    from jacobian.math.diophantine_approximation._models import (
+        ContinuedFractionResult,
+    )
+
+    sqrt2 = compute_continued_fraction(
+        ContinuedFractionRequest(discriminant=2, term_count=5)
+    )
+    assert sqrt2.coefficients == (1, 2, 2, 2, 2)
+    assert (sqrt2.preperiod_length, sqrt2.period_length) == (1, 1)
+    assert ContinuedFractionResult.model_validate(sqrt2.model_dump()) == sqrt2
+
+    sqrt3 = compute_continued_fraction(
+        ContinuedFractionRequest(discriminant=3, term_count=6)
+    )
+    assert sqrt3.coefficients == (1, 1, 2, 1, 2, 1)
+    assert (sqrt3.preperiod_length, sqrt3.period_length) == (1, 2)
+
+    one_period = compute_continued_fraction(
+        ContinuedFractionRequest(discriminant=2, term_count=2)
+    )
+    assert one_period.coefficients == (1, 2)
+    two_periods = compute_continued_fraction(
+        ContinuedFractionRequest(discriminant=3, term_count=5)
+    )
+    assert two_periods.coefficients == (1, 1, 2, 1, 2)
+
+
+def test_continued_fraction_prefix_boundary_semantics() -> None:
+    """A truncated window retains its requested count and replays exactly."""
+
+    exact_window = compute_continued_fraction(
+        ContinuedFractionRequest(discriminant=3, term_count=3)
+    )
+    assert exact_window.term_count == 3
+    assert exact_window.coefficients == (1, 1, 2)
+    assert exact_window.preperiod_length + exact_window.period_length == 3
+
+    beyond = compute_continued_fraction(
+        ContinuedFractionRequest(discriminant=3, term_count=4)
+    )
+    assert beyond.coefficients[-1] == 1
+
+
+def test_continued_fraction_result_rejects_mutations() -> None:
+    from jacobian.math.diophantine_approximation._models import (
+        ContinuedFractionResult,
+    )
+
+    with pytest.raises(ValidationError):
+        ContinuedFractionResult(
+            discriminant=2,
+            coefficients=(99,),
+            preperiod_length=7,
+            period_length=8,
+        )
+    result = compute_continued_fraction(
+        ContinuedFractionRequest(discriminant=2, term_count=5)
+    ).model_dump()
+
+    wrong_source = dict(result, discriminant=3)
+    with pytest.raises(ValidationError):
+        ContinuedFractionResult.model_validate(wrong_source)
+
+    forged_coefficients = dict(result)
+    forged_coefficients["coefficients"] = (1, 2, 2, 2, 3)
+    with pytest.raises(ValidationError, match="canonical continued fraction"):
+        ContinuedFractionResult.model_validate(forged_coefficients)
+
+    forged_metadata = dict(result, preperiod_length=2)
+    with pytest.raises(ValidationError, match="metadata"):
+        ContinuedFractionResult.model_validate(forged_metadata)
+
+    count_mismatch = dict(result, term_count=4)
+    with pytest.raises(ValidationError, match="term_count"):
+        ContinuedFractionResult.model_validate(count_mismatch)
+
+
+def test_convergent_result_replays_recurrence_and_determinant() -> None:
+    from jacobian.math.diophantine_approximation._models import ConvergentResult
+
+    result = compute_convergents(ConvergentRequest(discriminant=2, convergent_count=6))
+    assert [(c.index, c.numerator, c.denominator) for c in result.convergents] == [
+        (0, "1", "1"),
+        (1, "3", "2"),
+        (2, "7", "5"),
+        (3, "17", "12"),
+        (4, "41", "29"),
+        (5, "99", "70"),
+    ]
+    parsed = [
+        (parse_canonical_integer(c.numerator), parse_canonical_integer(c.denominator))
+        for c in result.convergents
+    ]
+    for n in range(1, len(parsed)):
+        p_n, q_n = parsed[n]
+        p_prev, q_prev = parsed[n - 1]
+        determinant = p_n * q_prev - p_prev * q_n
+        assert determinant == (-1) ** (n - 1)
+    assert ConvergentResult.model_validate(result.model_dump()) == result
+
+    sqrt3 = compute_convergents(ConvergentRequest(discriminant=3, convergent_count=4))
+    parsed3 = [
+        (parse_canonical_integer(c.numerator), parse_canonical_integer(c.denominator))
+        for c in sqrt3.convergents
+    ]
+    assert parsed3[:2] == [(1, 1), (2, 1)]
+
+
+def test_convergent_result_rejects_mutations() -> None:
+    from jacobian.math.diophantine_approximation._models import (
+        ConvergentResult,
+        ConvergentValue,
+    )
+
+    with pytest.raises(ValidationError, match="contiguous"):
+        ConvergentResult(
+            discriminant=2,
+            convergent_count=1,
+            convergents=(ConvergentValue(index=77, numerator="0", denominator="0"),),
+        )
+    result = compute_convergents(
+        ConvergentRequest(discriminant=2, convergent_count=4)
+    ).model_dump()
+
+    zero_denominator = dict(result)
+    zero_denominator["convergents"] = [dict(item) for item in result["convergents"]]
+    zero_denominator["convergents"][0]["denominator"] = "0"
+    with pytest.raises(ValidationError, match="positive"):
+        ConvergentResult.model_validate(zero_denominator)
+
+    nonreduced = dict(result)
+    nonreduced["convergents"] = [dict(item) for item in result["convergents"]]
+    nonreduced["convergents"][1]["numerator"] = "6"
+    nonreduced["convergents"][1]["denominator"] = "4"
+    with pytest.raises(ValidationError, match="reduced"):
+        ConvergentResult.model_validate(nonreduced)
+
+    recurrence_break = dict(result)
+    recurrence_break["convergents"] = [dict(item) for item in result["convergents"]]
+    recurrence_break["convergents"][2]["numerator"] = "8"
+    with pytest.raises(ValidationError, match="continuant recurrence"):
+        ConvergentResult.model_validate(recurrence_break)
+
+    wrong_source = dict(result, discriminant=3)
+    with pytest.raises(ValidationError):
+        ConvergentResult.model_validate(wrong_source)
+
+    count_mismatch = dict(result, convergent_count=9)
+    with pytest.raises(ValidationError, match="requested count"):
+        ConvergentResult.model_validate(count_mismatch)
+
+
+def test_producer_to_convergent_composition() -> None:
+    """The CF coefficient stream composes into the serialized convergents."""
+
+    cf = compute_continued_fraction(
+        ContinuedFractionRequest(discriminant=13, term_count=10)
+    )
+    convs = compute_convergents(ConvergentRequest(discriminant=13, convergent_count=10))
+    coefficients = [cf.preperiod_length and x for x in cf.coefficients]
+    p_prev2, p_prev1 = 1, coefficients[0]
+    q_prev2, q_prev1 = 0, 1
+    replayed = [(p_prev1, q_prev1)]
+    for coefficient in coefficients[1:]:
+        p_prev2, p_prev1 = p_prev1, coefficient * p_prev1 + p_prev2
+        q_prev2, q_prev1 = q_prev1, coefficient * q_prev1 + q_prev2
+        replayed.append((p_prev1, q_prev1))
+    claimed = [
+        (parse_canonical_integer(c.numerator), parse_canonical_integer(c.denominator))
+        for c in convs.convergents
+    ]
+    assert claimed == replayed

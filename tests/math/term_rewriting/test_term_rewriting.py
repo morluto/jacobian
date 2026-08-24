@@ -1,5 +1,7 @@
 """Tests for first-order term rewriting operations."""
 
+import tracemalloc
+
 import pytest
 from pydantic import ValidationError
 
@@ -833,6 +835,85 @@ class TestCriticalPairs:
         assert _unify(inner_lhs, overlap, tight) == expected
         with pytest.raises(_ResultEnvelopeError):
             _unify(inner_lhs, overlap, _MaterializationBudget(spent - 1))
+
+    def test_repeated_bound_variable_expansion_is_charged_before_materialization(
+        self,
+    ):
+        # Twelve alternating overlap slots build a dependency-chain MGU whose
+        # top stored binding grows to an 8191-node term while both rule sides
+        # stay small. The last processed slot opposes a sixteen-fold
+        # repetition of that bound variable to a bare variable, so predicting
+        # both equation expansions must reject the overlap before its
+        # ~131k-node substituted equation is ever constructed.
+        inner_cascade: list[Term] = []
+        outer_cascade: list[Term] = []
+        for level in range(6):
+            inner_symbol = 101 + 2 * level
+            outer_symbol = 102 + 2 * level
+            next_outer_symbol = 104 + 2 * level
+            # Bare outer variables alternate with doubled inner symbols, so
+            # each later binding eagerly expands every earlier stored one.
+            inner_cascade.append(_app(1, *([_var(inner_symbol)] * 2)))
+            outer_cascade.append(_var(outer_symbol))
+            inner_cascade.append(_var(inner_symbol))
+            outer_cascade.append(_app(1, *([_var(next_outer_symbol)] * 2)))
+        signature = RankedSignature(arities=(16, 2))
+        inner_rule = RewriteRule(
+            lhs=_app(
+                0,
+                _var(126),
+                *reversed(inner_cascade),
+                *[_var(index) for index in (120, 121, 122)],
+            ),
+            rhs=_var(101),
+        )
+        outer_rule = RewriteRule(
+            lhs=_app(
+                0,
+                _app(0, *([_var(102)] * 16)),
+                *reversed(outer_cascade),
+                *[_var(index) for index in (123, 124, 125)],
+            ),
+            rhs=_var(102),
+        )
+        rules = (outer_rule, inner_rule)
+        candidates = len(rules) * sum(
+            len(_nonvariable_positions(rule.lhs)) for rule in rules
+        ) - len(rules)
+        assert 0 < candidates <= MAX_CRITICAL_PAIR_CANDIDATES
+
+        tracemalloc.start()
+        try:
+            with pytest.raises(ValueError, match="result nodes"):
+                critical_pairs(signature, rules)
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        # The admitted dependency chain itself costs ~33k charged nodes and
+        # keeps ~9.5k envelope nodes free; the rejected sixteen-fold
+        # repetition of the 8191-node top binding must never exist, so the
+        # traced peak stays far below the tens of MB an uncharged
+        # materialization would reach.
+        assert peak < 16 * 1024 * 1024
+
+    def test_bushy_retained_rhs_is_rejected_before_canonical_copy(self):
+        # One rule whose schema-valid RHS is a complete arity-16 tree of ~70k
+        # nodes: the retained-source node bound must reject it during request
+        # validation before any canonical copy or JSON serialization exists.
+        signature = RankedSignature(arities=(1, 16))
+        rule = RewriteRule(
+            lhs=_app(0, _var(0)),
+            rhs=_complete_tree(1, _var(0), 16, 4),
+        )
+        assert _term_node_count(rule.rhs) > MAX_CRITICAL_PAIR_RESULT_NODES
+        tracemalloc.start()
+        try:
+            with pytest.raises(ValueError, match="result nodes"):
+                critical_pairs(signature, (rule,))
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        assert peak < MAX_CRITICAL_PAIR_RESULT_BYTES // 8
 
 
 class TestValidation:

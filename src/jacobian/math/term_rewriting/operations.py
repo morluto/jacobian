@@ -100,13 +100,15 @@ def _unify(
     """Run the kernel unification, charging materialized terms against budget."""
     equations = [(left, right)]
     substitution: dict[int, Term] = {}
+    binding_sizes: dict[int, int] = {}
     while equations:
         equation_left, equation_right = equations.pop()
-        equation_left = _apply_recursive_substitution(equation_left, substitution)
-        equation_right = _apply_recursive_substitution(equation_right, substitution)
         if budget is not None:
-            budget.charge(equation_left)
-            budget.charge(equation_right)
+            budget.charge_nodes(_expanded_node_count(equation_left, binding_sizes))
+        equation_left = _apply_recursive_substitution(equation_left, substitution)
+        if budget is not None:
+            budget.charge_nodes(_expanded_node_count(equation_right, binding_sizes))
+        equation_right = _apply_recursive_substitution(equation_right, substitution)
         if equation_left == equation_right:
             continue
         if equation_right.is_variable:
@@ -117,7 +119,7 @@ def _unify(
             if budget is not None:
                 budget.charge(equation_right)
             binding = {equation_left.symbol: equation_right}
-            binding_sizes = {equation_left.symbol: _term_node_count(equation_right)}
+            binding_sizes[equation_left.symbol] = _term_node_count(equation_right)
             expanded_substitution: dict[int, Term] = {}
             for variable, bound in substitution.items():
                 if budget is not None:
@@ -238,16 +240,31 @@ def _expanded_node_count(term: Term, binding_sizes: dict[int, int]) -> int:
     )
 
 
-def _admit_critical_pair_result_envelope(rules: tuple[RewriteRule, ...]) -> int:
-    """Charge every retained result object against the result envelope.
+def _charge_retained_source(rules: tuple[RewriteRule, ...]) -> int:
+    """Charge echoed source rules and the fixed profile scaffold first.
 
-    The result serializes the source rules beside the overlap profile, so the
-    retained source terms and the fixed profile scaffold are charged before
-    any overlap work: every source term node is charged exactly once, and
+    The result serializes the source rules beside the overlap profile, so
+    every retained source term node is charged exactly once and
     ``_CRITICAL_PAIR_PROFILE_FIXED_NODES`` covers the shape-fixed scaffolding
     of a full candidate ledger and pair family (row framing, positions,
     renaming entries, and substitution keys). A zero-candidate system
-    therefore still pays for the rules its result echoes.
+    therefore still pays for the rules its result echoes. Returns the node
+    allowance left for overlap work and raises when it is already exceeded.
+    """
+    remaining = MAX_CRITICAL_PAIR_RESULT_NODES - _CRITICAL_PAIR_PROFILE_FIXED_NODES
+    for rule in rules:
+        remaining -= _term_node_count(rule.lhs)
+        remaining -= _term_node_count(rule.rhs)
+    if remaining < 0:
+        raise ValueError(_RESULT_NODES_EXCEEDED)
+    return remaining
+
+
+def _admit_critical_pair_result_envelope(rules: tuple[RewriteRule, ...]) -> int:
+    """Charge every retained result object against the result envelope.
+
+    Retained source terms and the fixed profile scaffold are charged by
+    :func:`_charge_retained_source` before any overlap work.
 
     Binding growth is dependency-driven: a chained idempotent MGU expands
     exponentially in its binding depth, so no product of rule-side caps bounds
@@ -259,12 +276,7 @@ def _admit_critical_pair_result_envelope(rules: tuple[RewriteRule, ...]) -> int:
     unifications keep their committed charges against the shared allowance.
     Returns the total charged nodes and raises when the envelope is exceeded.
     """
-    remaining = MAX_CRITICAL_PAIR_RESULT_NODES - _CRITICAL_PAIR_PROFILE_FIXED_NODES
-    for rule in rules:
-        remaining -= _term_node_count(rule.lhs)
-        remaining -= _term_node_count(rule.rhs)
-    if remaining < 0:
-        raise ValueError(_RESULT_NODES_EXCEEDED)
+    remaining = _charge_retained_source(rules)
     for outer_index, outer in enumerate(rules):
         for position in _nonvariable_positions(outer.lhs):
             for inner_index, inner in enumerate(rules):
@@ -317,6 +329,7 @@ def _validate_critical_pair_source(
         signature.validate_term(rule.rhs)
         _require_bounded_variable_ids(rule.lhs)
         _require_bounded_variable_ids(rule.rhs)
+    _charge_retained_source(rules)
     canonical_rules = {_canonical_rule(rule).model_dump_json() for rule in rules}
     if len(canonical_rules) != len(rules):
         raise ValueError("critical-pair rules must be duplicate-free up to renaming")

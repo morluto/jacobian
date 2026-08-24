@@ -124,6 +124,41 @@ def _failed_overlap_witness(
     )
 
 
+def _repeated_chain_overlap_witness(
+    repeats: int,
+) -> tuple[RankedSignature, RewriteRule, RewriteRule]:
+    """Signature and two root-overlapping rules whose MGU chains a binding to
+    4369 nodes and then meets a pending equation repeating it ``repeats`` times.
+
+    Three arity-16 chain slots grow the first variable through nested
+    substitutions exactly as :func:`_chained_overlap_witness` does; the leading
+    slot then repeats that variable under one arity-16 application, so its
+    pending-equation expansion is ``repeats * 4369 + 1`` nodes and must be
+    predicted and charged before the substituted equation is constructed.
+    """
+    left_slots: list[Term] = []
+    right_slots: list[Term] = []
+    for level in range(3):
+        if level % 2 == 0:
+            left_slots.append(_var(100 + level))
+            right_slots.append(_app(1, *([_var(101 + level)] * 16)))
+        else:
+            left_slots.append(_app(1, *([_var(101 + level)] * 16)))
+            right_slots.append(_var(100 + level))
+    signature = RankedSignature(arities=(4, 16))
+    return (
+        signature,
+        RewriteRule(
+            lhs=_app(0, _app(1, *([_var(100)] * repeats)), *left_slots),
+            rhs=_var(100),
+        ),
+        RewriteRule(
+            lhs=_app(0, _app(1, *([_var(300)] * repeats)), *right_slots),
+            rhs=_var(300),
+        ),
+    )
+
+
 def test_catalog_contains_only_audited_agent_outcomes() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
         "term_rewriting.critical_pairs.compute",
@@ -538,6 +573,20 @@ class TestCriticalPairs:
             CriticalPairsResult.model_validate_json(result.model_dump_json()) == result
         )
 
+    def test_retained_source_bound_precedes_duplicate_detection(self):
+        # Canonicalizing a bushy rule allocates a full copy plus its JSON
+        # serialization, so the retained-source bound must reject an oversized
+        # system before the duplicate check ever reconstructs one.
+        signature = term_rewriting.RankedSignature(arities=(1, 16))
+        rule = RewriteRule(
+            lhs=_app(0, _var(0)),
+            rhs=_complete_tree(1, _var(0), 16, 4),
+        )
+        with pytest.raises(ValidationError, match="result nodes"):
+            CriticalPairsRequest(signature=signature, rules=(rule, rule))
+        with pytest.raises(ValueError, match="result nodes"):
+            critical_pairs(signature, (rule, rule))
+
     def test_result_replays_exact_critical_pair_family(self):
         rules = (
             RewriteRule(lhs=_app(0, _app(1, _var(0))), rhs=_var(0)),
@@ -734,6 +783,22 @@ class TestCriticalPairs:
         with pytest.raises(ValueError, match="result nodes"):
             critical_pairs(signature, rules)
 
+    def test_repeated_binding_growth_is_preflight_bounded(self):
+        # The chained MGU binds the first variable to a 4369-node term and the
+        # leading slot then repeats it sixteen times, so substituting that one
+        # pending equation expands to 69905 nodes. Prediction must charge the
+        # expansion before the substituted equation is constructed.
+        signature, outer_rule, inner_rule = _repeated_chain_overlap_witness(16)
+        rules = (outer_rule, inner_rule)
+        candidates = len(rules) * sum(
+            len(_nonvariable_positions(rule.lhs)) for rule in rules
+        ) - len(rules)
+        assert 0 < candidates <= MAX_CRITICAL_PAIR_CANDIDATES
+        with pytest.raises(ValidationError, match="result nodes"):
+            CriticalPairsRequest(signature=signature, rules=rules)
+        with pytest.raises(ValueError, match="result nodes"):
+            critical_pairs(signature, rules)
+
     def test_budgeted_unification_charges_exactly_the_materialized_sizes(self):
         for depth in range(1, 6):
             _, outer_rule, inner_rule = _chained_overlap_witness(depth)
@@ -751,6 +816,23 @@ class TestCriticalPairs:
             assert _unify(inner_lhs, overlap, tight) == expected
             with pytest.raises(_ResultEnvelopeError):
                 _unify(inner_lhs, overlap, _MaterializationBudget(spent - 1))
+
+    def test_budgeted_unification_prepends_equation_growth_exactly(self):
+        _, outer_rule, inner_rule = _repeated_chain_overlap_witness(2)
+        standardized_outer, standardized_inner, _, _ = _standardize_apart(
+            outer_rule, inner_rule
+        )
+        inner_lhs = standardized_inner.lhs
+        overlap = term_at_position(standardized_outer.lhs, ())
+        expected = unify(inner_lhs, overlap)
+        assert expected is not None
+        budget = _MaterializationBudget(MAX_CRITICAL_PAIR_RESULT_NODES)
+        assert _unify(inner_lhs, overlap, budget) == expected
+        spent = MAX_CRITICAL_PAIR_RESULT_NODES - budget.remaining
+        tight = _MaterializationBudget(spent)
+        assert _unify(inner_lhs, overlap, tight) == expected
+        with pytest.raises(_ResultEnvelopeError):
+            _unify(inner_lhs, overlap, _MaterializationBudget(spent - 1))
 
 
 class TestValidation:

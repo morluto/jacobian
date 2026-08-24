@@ -9,6 +9,8 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polynomials.multivariate._models import (
     MultivariateDivisionRequest,
     MultivariateDivisionResult,
+    MultivariateFactorRequest,
+    MultivariateFactorResult,
     MultivariateGcdRequest,
     MultivariateGcdResult,
     MultivariateResultantRequest,
@@ -18,6 +20,7 @@ from jacobian.math.polynomials.multivariate._operations import (
     compute_multivariate_division,
     compute_multivariate_gcd,
     compute_multivariate_resultant,
+    multivariate_factor,
 )
 
 
@@ -214,7 +217,11 @@ MULTIVARIATE_POLYNOMIAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         (
             "Compute the exact resultant of two multivariate polynomials with "
             "respect to one declared variable over QQ[x_1, ..., x_n].  The "
-            "resultant lives in the ring over the remaining variables.  Backed "
+            "resultant lives in the ring over the remaining variables.  "
+            "Nonzero inputs that are constant in the eliminated variable "
+            "follow the Sylvester power rule Res_x(f, c) = c^deg_x(f) "
+            "(symmetrically for the right input), two such constants give "
+            "the empty-determinant value 1, and a zero input gives 0.  Backed "
             "by SymPy's resultant."
         ),
         MultivariateResultantRequest,
@@ -227,8 +234,54 @@ MULTIVARIATE_POLYNOMIAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "elimination",
         examples=(_RESULTANT_EXAMPLE,),
     ),
+    multivariate_polynomial_operation(
+        "polynomial.multivariate.factor.compute",
+        "Factor a multivariate polynomial over QQ",
+        (
+            "Exact content and complete irreducible factorization with "
+            "multiplicities for one bounded nonzero multivariate polynomial over "
+            "QQ in >=2 variables (univariate inputs use polynomial.factor.compute). "
+            "Returns OUTPUT_BUDGET_EXCEEDED carrying the polynomial and its "
+            "positive content when any factor exceeds the output budget; deadline, "
+            "kill, crash, or resource-cap stops return retryable non-mathematical "
+            "EXECUTION_FAILED. Backed by SymPy factor_list."
+        ),
+        MultivariateFactorRequest,
+        MultivariateFactorResult,
+        multivariate_factor,
+        "polynomial",
+        "factorization",
+        "multivariate",
+        "rational",
+        examples=(
+            example(
+                "factor_xy_squared_minus_x",
+                "Factor the nonzero multivariate polynomial x^2*y - x in Q[x,y]; "
+                "the polynomial must use the same canonical ordered QQ ring and "
+                "contain at least two variables.",
+                {
+                    "polynomial": {
+                        "polynomial_schema_version": "1",
+                        "domain": "QQ",
+                        "variables": ["x", "y"],
+                        "polynomial": {
+                            "terms": [
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [2, 1],
+                                },
+                                {
+                                    "coefficient": {"num": "-1", "den": "1"},
+                                    "exponents": [1, 0],
+                                },
+                            ]
+                        },
+                    },
+                },
+            ),
+        ),
+    ),
 )
-
 
 TOOLS = MULTIVARIATE_POLYNOMIAL_OPERATIONS
 

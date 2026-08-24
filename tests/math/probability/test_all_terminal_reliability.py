@@ -401,12 +401,14 @@ def test_native_boundary_rejects_huge_probability_components_preflight() -> None
 def test_request_schema_exposes_the_retained_result_limit() -> None:
     schema = AllTerminalReliabilityRequest.model_json_schema()
 
-    assert "retained graph plus the fixed exact-result envelope" in str(
-        schema["description"]
-    ).lower()
-    assert "retained graph plus fixed result headroom" in str(
-        schema["properties"]["graph"]["description"]
-    ).lower()
+    assert (
+        "retained graph plus the fixed exact-result envelope"
+        in str(schema["description"]).lower()
+    )
+    assert (
+        "retained graph plus fixed result headroom"
+        in str(schema["properties"]["graph"]["description"]).lower()
+    )
 
 
 def test_operation_declares_and_executes_copyable_example() -> None:

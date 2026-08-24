@@ -553,6 +553,54 @@ def test_no_growth_derivatives_are_admitted_at_the_coefficient_boundary() -> Non
     assert len(result.output.polynomial.terms[0].coefficient.num) == 32_768
 
 
+def test_multinomial_path_multiplicity_gates_the_coefficient_bound() -> None:
+    variables = ("x",)
+    operator = _operator(variables, {(0,): 1, (1,): 1})
+    source = RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num="1" + "0" * 32_701, den="1"),
+                    exponents=(32,),
+                ),
+            )
+        ),
+    )
+
+    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=operator,
+            iterations=140,
+        )
+
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=operator,
+            iterations=20,
+            expected=_polynomial(
+                variables,
+                {
+                    (32 - order,): math.comb(20, order)
+                    * math.perm(32, order)
+                    * 10**32_701
+                    for order in range(21)
+                },
+            ),
+        )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    assert len(result.output.polynomial.terms[0].coefficient.num) > 32_700
+    assert replayed == result
+
+
 def test_componentwise_annihilation_admits_off_axis_sources_beyond_caps() -> None:
     variables = ("x", "y")
     tall_source = _polynomial(variables, {(0, 129): 1})

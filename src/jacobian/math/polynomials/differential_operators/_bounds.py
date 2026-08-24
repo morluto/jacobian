@@ -257,8 +257,13 @@ def _coefficient_digit_bound(
     # operator coefficient, or a single candidate path - from adding any bit.
     falling_factor_bits = _multiplier_bit_bound(degree, derivative_order)
 
+    # One aggregate multi-index receives a contribution from every ordered
+    # term sequence of the power that produces it, so the coefficient bound
+    # carries the multinomial path multiplicity, at most term_count **
+    # iterations sequences.
     numerator_bits = source_numerator.bit_length() + (
         _multiplier_bit_bound(candidate_terms, 1)
+        + _multiplier_bit_bound(len(operator.terms), iterations)
         + _multiplier_bit_bound(operator_numerator, iterations)
         + falling_factor_bits
     )

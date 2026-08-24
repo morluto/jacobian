@@ -242,10 +242,11 @@ def compute_optimal_discrepancy(
     bound yields EXECUTION_FAILED and an exhausted or unavailable proof
     yields BUDGET_EXCEEDED. Zero is definitional. A solver limit produces
     BUDGET_EXCEEDED; any other nonzero status, a non-integral or out-of-domain
-    assignment, an objective/replay disagreement, or a raised backend failure
-    produces the distinct non-mathematical EXECUTION_FAILED outcome. Neither
-    carries a coloring or any claim. The empty ground set has the single empty
-    coloring with discrepancy zero.
+    assignment, an objective/replay disagreement, or a failing backend call
+    (failed NumPy/SciPy initialization included) produces the distinct
+    non-mathematical EXECUTION_FAILED outcome. Neither carries a coloring or
+    any claim. The empty ground set has the single empty coloring with
+    discrepancy zero.
     """
     n = request.set_system.ground_set_size
     sets = request.set_system.sets
@@ -253,48 +254,49 @@ def compute_optimal_discrepancy(
     if n == 0:
         return _proven_optimal_result(request.set_system, (), 0)
 
-    import numpy as np
-    from scipy.optimize import (  # type: ignore[import-untyped]
-        Bounds,
-        LinearConstraint,
-        milp,
-    )
-
     variable_count = n + 1
-    objective = np.zeros(variable_count)
-    objective[-1] = 1.0
-    integrality = np.zeros(variable_count)
-    integrality[:n] = 1
-    lower = np.zeros(variable_count)
-    upper = np.full(variable_count, np.inf)
-    upper[:n] = 1.0
-
-    rows: list[np.ndarray] = []
-    bounds_upper: list[float] = []
-    for subset in sets:
-        size = len(subset)
-        plus_row = np.zeros(variable_count)
-        minus_row = np.zeros(variable_count)
-        for element in subset:
-            plus_row[element] = 2.0
-            minus_row[element] = -2.0
-        plus_row[-1] = -1.0
-        minus_row[-1] = -1.0
-        rows.append(plus_row)
-        bounds_upper.append(float(size))
-        rows.append(minus_row)
-        bounds_upper.append(float(-size))
-
-    constraints = None
-    if rows:
-        matrix = np.array(rows)
-        constraints = LinearConstraint(
-            matrix,
-            np.full(matrix.shape[0], -np.inf),
-            np.array(bounds_upper),
-        )
 
     try:
+        import numpy as np
+        from scipy.optimize import (  # type: ignore[import-untyped]
+            Bounds,
+            LinearConstraint,
+            milp,
+        )
+
+        objective = np.zeros(variable_count)
+        objective[-1] = 1.0
+        integrality = np.zeros(variable_count)
+        integrality[:n] = 1
+        lower = np.zeros(variable_count)
+        upper = np.full(variable_count, np.inf)
+        upper[:n] = 1.0
+
+        rows: list[np.ndarray] = []
+        bounds_upper: list[float] = []
+        for subset in sets:
+            size = len(subset)
+            plus_row = np.zeros(variable_count)
+            minus_row = np.zeros(variable_count)
+            for element in subset:
+                plus_row[element] = 2.0
+                minus_row[element] = -2.0
+            plus_row[-1] = -1.0
+            minus_row[-1] = -1.0
+            rows.append(plus_row)
+            bounds_upper.append(float(size))
+            rows.append(minus_row)
+            bounds_upper.append(float(-size))
+
+        constraints = None
+        if rows:
+            matrix = np.array(rows)
+            constraints = LinearConstraint(
+                matrix,
+                np.full(matrix.shape[0], -np.inf),
+                np.array(bounds_upper),
+            )
+
         result = milp(
             c=objective,
             constraints=constraints,
@@ -307,8 +309,10 @@ def compute_optimal_discrepancy(
             },
         )
     except Exception:
-        # A raised backend failure is transport, not mathematics: report the
-        # typed claim-free outcome instead of escaping the kernel.
+        # Backend initialization, program construction, and the solve are one
+        # bounded external call: an ABI/loader, native, or raised failure
+        # there is transport, not mathematics, so report the typed claim-free
+        # outcome instead of escaping the kernel.
         return _execution_failed_result(request.set_system)
     if result.status == 1:
         return _budget_exceeded_result(request.set_system)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+import sys
 from fractions import Fraction
 
 import pytest
@@ -885,6 +886,32 @@ class TestDiscrepancyOptimum:
         assert result.status == "EXECUTION_FAILED"
         assert result.optimal_coloring == ()
         assert result.optimal_discrepancy is None
+        assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == result
+
+    @pytest.mark.parametrize(
+        "blocked_module",
+        ["numpy", "scipy.optimize"],
+    )
+    def test_backend_initialization_failure_is_execution_failed(
+        self,
+        blocked_module: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """A NumPy/SciPy ABI or dynamic-loader failure during backend
+        initialization must translate to typed EXECUTION_FAILED instead of
+        escaping compute_optimal_discrepancy as an ImportError/OSError."""
+
+        monkeypatch.setitem(sys.modules, blocked_module, None)
+        req = DiscrepancyOptimumRequest(
+            set_system=FiniteSetSystem(ground_set_size=2, sets=((0, 1),)),
+        )
+
+        result = compute_optimal_discrepancy(req)
+
+        assert result.status == "EXECUTION_FAILED"
+        assert result.optimal_coloring == ()
+        assert result.optimal_discrepancy is None
+        assert result.set_system == req.set_system
         assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == result
 
     def test_solver_options_carry_node_and_time_budgets(

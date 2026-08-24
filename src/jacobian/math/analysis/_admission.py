@@ -16,6 +16,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
     OperationAdmission(
+        "analysis.real_function.point_enclosure.check",
+        AdmissionDecision.KEEP,
+        "distinct independent bounded check of a source-bound point-enclosure claim with material reliability leverage",
+    ),
+    OperationAdmission(
         "interval.compute.enclosure",
         AdmissionDecision.KEEP,
         "distinct rigorous bounded enclosure for composable user-defined expressions",

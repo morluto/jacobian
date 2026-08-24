@@ -3,22 +3,41 @@
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation
 from jacobian.math.petri_nets.values import MAX_PETRI_ARC_WEIGHT, MAX_PETRI_MARKING
-from jacobian.math.quadratic_forms._models import (
-    MAX_ENTRY_DIGITS,
-    MAX_VECTOR_DIGITS,
+from jacobian.math.quadratic_forms.values import (
+    MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS,
+    MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS,
 )
 
 
-def test_large_quadratic_integer_result_survives_public_dispatch() -> None:
-    entry = "1" + "0" * (MAX_ENTRY_DIGITS - 1)
-    vector = "1" + "0" * (MAX_VECTOR_DIGITS - 1)
+def test_large_quadratic_rational_result_survives_public_dispatch() -> None:
+    coefficient = "1" + "0" * (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1)
+    coordinate = "1" + "0" * (MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS - 1)
     result = invoke_operation(
         "quadratic_form.evaluate.compute",
-        {"form": {"matrix": [[entry]]}, "vector": [vector]},
+        {
+            "form": {
+                "axis": ["x"],
+                "diagonal_coefficients": [{"num": coefficient, "den": "1"}],
+            },
+            "vector": {
+                "axis": ["x"],
+                "coordinates": [{"num": coordinate, "den": "1"}],
+            },
+        },
         Catalog.open(),
     )
 
-    assert result.output["value"] == str(int(entry) * int(vector) ** 2)
+    assert result.output["value"] == {
+        "num": str(int(coefficient) * int(coordinate) ** 2),
+        "den": "1",
+    }
+
+
+def test_unsafe_quadratic_global_enumeration_leaves_are_not_published() -> None:
+    catalog = Catalog.open()
+
+    assert catalog.operation("quadratic_form.representation_numbers.compute") is None
+    assert catalog.operation("quadratic_form.theta_series_prefix.compute") is None
 
 
 def test_petri_firing_reports_successor_outside_marking_envelope() -> None:

@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from itertools import product
+from typing import NamedTuple
+
 from jacobian.math.code_linear._models import (
     CodeEqualRequest,
     CodeEqualResult,
     CodewordCheckRequest,
     CodewordCheckResult,
+    DualCodeRequest,
     DualCodeResult,
     FromGeneratorResult,
     GeneratorMatrixRequest,
@@ -17,11 +21,100 @@ from jacobian.math.code_linear._models import (
     ParityCheckResult,
     PunctureRequest,
     PunctureResult,
+    ReceivedWordProfileRequest,
+    ReceivedWordProfileResult,
+    ReceivedWordWitness,
     ShortenRequest,
     ShortenResult,
     SyndromeRequest,
     SyndromeResult,
+    _threshold_matches_distance,
 )
+from jacobian.math.code_linear.values import PrimeFieldLinearEncoder
+
+
+class _ReceivedWordProfileData(NamedTuple):
+    distance_histogram: tuple[int, ...]
+    codeword_count: int
+    minimum_distance: int
+    maximum_agreement: int
+    threshold_match_count: int | None
+    witnesses: tuple[ReceivedWordWitness, ...]
+
+
+def _received_word_profile_data(
+    request: ReceivedWordProfileRequest,
+) -> _ReceivedWordProfileData:
+    encoder = request.encoder
+    field_order = encoder.field_order
+    dimension = len(encoder.message_axis)
+    length = len(encoder.coordinate_axis)
+    histogram = [0] * (length + 1)
+    threshold_match_count = 0
+    witnesses: list[ReceivedWordWitness] = []
+
+    for message in product(range(field_order), repeat=dimension):
+        codeword = tuple(
+            sum(
+                message[row] * encoder.generator_matrix[row][column]
+                for row in range(dimension)
+            )
+            % field_order
+            for column in range(length)
+        )
+        distance = sum(
+            left != right
+            for left, right in zip(codeword, request.received_word, strict=True)
+        )
+        agreement = length - distance
+        histogram[distance] += 1
+
+        if request.threshold is None or not _threshold_matches_distance(
+            request.threshold,
+            distance=distance,
+            length=length,
+        ):
+            continue
+
+        threshold_match_count += 1
+        if request.witness_mode == "ALL" or (
+            request.witness_mode == "FIRST" and not witnesses
+        ):
+            witnesses.append(
+                ReceivedWordWitness(
+                    message=message,
+                    codeword=codeword,
+                    distance=distance,
+                    agreement=agreement,
+                )
+            )
+
+    minimum_distance = next(index for index, count in enumerate(histogram) if count)
+    return _ReceivedWordProfileData(
+        distance_histogram=tuple(histogram),
+        codeword_count=sum(histogram),
+        minimum_distance=minimum_distance,
+        maximum_agreement=length - minimum_distance,
+        threshold_match_count=(
+            threshold_match_count if request.threshold is not None else None
+        ),
+        witnesses=tuple(witnesses),
+    )
+
+
+def compute_received_word_profile(
+    request: ReceivedWordProfileRequest,
+) -> ReceivedWordProfileResult:
+    data = _received_word_profile_data(request)
+    return ReceivedWordProfileResult(
+        source=request,
+        distance_histogram=data.distance_histogram,
+        codeword_count=data.codeword_count,
+        minimum_distance=data.minimum_distance,
+        maximum_agreement=data.maximum_agreement,
+        threshold_match_count=data.threshold_match_count,
+        witnesses=data.witnesses,
+    )
 
 
 def _rref(matrix: list[list[int]], field_order: int) -> tuple[list[list[int]], int]:
@@ -57,22 +150,23 @@ def _rref(matrix: list[list[int]], field_order: int) -> tuple[list[list[int]], i
     return rows, pivot_row
 
 
-def _nullspace(matrix: list[list[int]], field_order: int) -> list[list[int]]:
-    """Compute a basis for the nullspace of the matrix over a prime field."""
+def _nullspace(
+    matrix: list[list[int]], field_order: int, columns: int
+) -> list[list[int]]:
+    """Compute a basis for the nullspace of a GF(p) matrix with ``columns`` columns."""
     rows, rank = _rref(matrix, field_order)
-    n = len(matrix[0])
     piv_cols: list[int] = []
     for i in range(rank):
-        piv = n
-        for j in range(n):
+        piv = columns
+        for j in range(columns):
             if rows[i][j] % field_order != 0:
                 piv = j
                 break
         piv_cols.append(piv)
-    free_cols = [j for j in range(n) if j not in piv_cols]
+    free_cols = [j for j in range(columns) if j not in piv_cols]
     basis: list[list[int]] = []
     for fc in free_cols:
-        vec = [0] * n
+        vec = [0] * columns
         vec[fc] = 1
         for i in range(rank):
             piv = piv_cols[i]
@@ -85,6 +179,23 @@ def _canonical_generator(matrix: list[list[int]], field_order: int) -> list[list
     """Return canonical RREF rows for a matrix's row space."""
     rref, rank = _rref(matrix, field_order)
     return list(rref[:rank])
+
+
+def _canonical_encoder(
+    *,
+    field_order: int,
+    coordinate_axis: tuple[str, ...],
+    generator_matrix: list[list[int]],
+) -> PrimeFieldLinearEncoder:
+    """Build an encoder whose ``m0``, ``m1``, ... labels follow basis order."""
+
+    rows = tuple(tuple(row) for row in generator_matrix)
+    return PrimeFieldLinearEncoder(
+        field_order=field_order,
+        message_axis=tuple(f"m{index}" for index in range(len(rows))),
+        coordinate_axis=coordinate_axis,
+        generator_matrix=rows,
+    )
 
 
 def _mat_mul_vec(
@@ -106,24 +217,35 @@ def compute_from_generator(request: GeneratorMatrixRequest) -> FromGeneratorResu
     length = len(request.generator_matrix[0])
     cardinality = request.field_order**dim
     return FromGeneratorResult(
-        canonical_generator=tuple(tuple(row) for row in canonical),
+        encoder=_canonical_encoder(
+            field_order=request.field_order,
+            coordinate_axis=request.coordinate_axis,
+            generator_matrix=canonical,
+        ),
         dimension=dim,
         length=length,
         cardinality=cardinality,
     )
 
 
-def compute_dual_code(request: GeneratorMatrixRequest) -> DualCodeResult:
-    matrix = [list(row) for row in request.generator_matrix]
-    _, rank = _rref(matrix, request.field_order)
-    null = _nullspace(matrix, request.field_order)
-    length = len(request.generator_matrix[0])
+def compute_dual_code(request: DualCodeRequest) -> DualCodeResult:
+    encoder = request.encoder
+    q = encoder.field_order
+    length = len(encoder.coordinate_axis)
+    matrix = [list(row) for row in encoder.generator_matrix]
+    _, rank = _rref(matrix, q)
+    null = _canonical_generator(_nullspace(matrix, q, length), q)
+    dual_encoder = _canonical_encoder(
+        field_order=q,
+        coordinate_axis=encoder.coordinate_axis,
+        generator_matrix=null,
+    )
     return DualCodeResult(
-        dual_generator=tuple(tuple(row) for row in null),
+        encoder=dual_encoder,
         parity_check=ParityCheckMatrix(
-            field_order=request.field_order,
-            column_count=length,
-            rows=tuple(map(tuple, null)),
+            field_order=q,
+            coordinate_axis=encoder.coordinate_axis,
+            rows=dual_encoder.generator_matrix,
         ),
         dimension=rank,
         dual_dimension=length - rank,
@@ -132,14 +254,16 @@ def compute_dual_code(request: GeneratorMatrixRequest) -> DualCodeResult:
 
 
 def compute_parity_check(request: ParityCheckRequest) -> ParityCheckResult:
-    matrix = [list(row) for row in request.generator_matrix]
-    _, rank = _rref(matrix, request.field_order)
-    null = _nullspace(matrix, request.field_order)
-    length = len(request.generator_matrix[0])
+    encoder = request.encoder
+    q = encoder.field_order
+    length = len(encoder.coordinate_axis)
+    matrix = [list(row) for row in encoder.generator_matrix]
+    _, rank = _rref(matrix, q)
+    null = _nullspace(matrix, q, length)
     return ParityCheckResult(
         parity_check=ParityCheckMatrix(
-            field_order=request.field_order,
-            column_count=length,
+            field_order=q,
+            coordinate_axis=encoder.coordinate_axis,
             rows=tuple(map(tuple, null)),
         ),
         dimension=rank,
@@ -151,9 +275,11 @@ def compute_parity_check(request: ParityCheckRequest) -> ParityCheckResult:
 def compute_codeword_check(
     request: CodewordCheckRequest,
 ) -> CodewordCheckResult:
-    matrix = [list(row) for row in request.generator_matrix]
+    encoder = request.encoder
+    matrix = [list(row) for row in encoder.generator_matrix]
     word = list(request.word)
-    q = request.field_order
+    q = encoder.field_order
+    length = len(encoder.coordinate_axis)
 
     # Word is a codeword iff it lies in the row space of the generator.
     # Augment the generator with the word as a new row and check
@@ -167,11 +293,8 @@ def compute_codeword_check(
     if is_member:
         # Solve x * G = word over GF(q) by RREF on the augmented
         # transpose [G^T | word^T].
-        gt = [
-            [matrix[r][c] % q for r in range(len(matrix))]
-            for c in range(len(matrix[0]))
-        ]
-        aug_t = [gt[c] + [word[c] % q] for c in range(len(matrix[0]))]
+        gt = [[matrix[r][c] % q for r in range(len(matrix))] for c in range(length)]
+        aug_t = [gt[c] + [word[c] % q] for c in range(length)]
         rref_aug, rank_aug2 = _rref(aug_t, q)
         # Extract solution from augmented column
         coeffs: list[int] = [0] * len(matrix)
@@ -188,9 +311,7 @@ def compute_codeword_check(
                     break
         coefficients = tuple(coeffs)
 
-    syndrome_vec = _mat_mul_vec(
-        _nullspace([list(row) for row in request.generator_matrix], q), word, q
-    )
+    syndrome_vec = _mat_mul_vec(_nullspace(matrix, q, length), word, q)
     hamming = _hamming_weight(word)
     return CodewordCheckResult(
         is_member=is_member,
@@ -241,9 +362,9 @@ def _enumerate_code(
 
 
 def compute_code_equal(request: CodeEqualRequest) -> CodeEqualResult:
-    q = request.field_order
-    mat_a = [list(row) for row in request.generator_matrix_a]
-    mat_b = [list(row) for row in request.generator_matrix_b]
+    q = request.encoder_a.field_order
+    mat_a = [list(row) for row in request.encoder_a.generator_matrix]
+    mat_b = [list(row) for row in request.encoder_b.generator_matrix]
 
     rref_a, rank_a = _rref([list(r) for r in mat_a], q)
     rref_b, rank_b = _rref([list(r) for r in mat_b], q)
@@ -254,7 +375,7 @@ def compute_code_equal(request: CodeEqualRequest) -> CodeEqualResult:
 
     witness = None
     if not equal:
-        n = len(mat_a[0])
+        n = len(request.encoder_a.coordinate_axis)
         code_a = _enumerate_code(rref_a, rank_a, n, q)
         code_b = _enumerate_code(rref_b, rank_b, n, q)
         diff = code_a.symmetric_difference(code_b)
@@ -293,29 +414,35 @@ def compute_macwilliams_transform(request: MacWilliamsRequest) -> MacWilliamsRes
 
 
 def compute_puncture(request: PunctureRequest) -> PunctureResult:
-    matrix = [list(row) for row in request.generator_matrix]
+    encoder = request.encoder
+    column = request.coordinate
     punctured = [
-        row[: request.coordinate] + row[request.coordinate + 1 :] for row in matrix
+        list(row[:column] + row[column + 1 :]) for row in encoder.generator_matrix
     ]
-    rref, rank = _rref(punctured, request.field_order)
-    new_len = len(matrix[0]) - 1
+    rref, rank = _rref(punctured, encoder.field_order)
     gen = tuple(tuple(row) for row in rref[:rank]) if rank > 0 else ()
     return PunctureResult(
-        generator=gen,
+        encoder=_canonical_encoder(
+            field_order=encoder.field_order,
+            coordinate_axis=(
+                encoder.coordinate_axis[:column] + encoder.coordinate_axis[column + 1 :]
+            ),
+            generator_matrix=[list(row) for row in gen],
+        ),
         dimension=rank,
-        length=new_len,
+        length=len(encoder.coordinate_axis) - 1,
     )
 
 
 def compute_shorten(request: ShortenRequest) -> ShortenResult:
-    matrix = [list(row) for row in request.generator_matrix]
-    q = request.field_order
+    encoder = request.encoder
+    q = encoder.field_order
     col = request.coordinate
 
     # Shortening: keep codewords c with c[col] = 0, then delete col.
     # RREF the generator to get a basis, then find the subcode vanishing at col.
-    rref, rank = _rref([list(row) for row in matrix], q)
-    n = len(matrix[0])
+    rref, rank = _rref([list(row) for row in encoder.generator_matrix], q)
+    n = len(encoder.coordinate_axis)
 
     # Build the column of coordinate values from the RREF basis
     col_values = [rref[i][col] % q for i in range(rank)]
@@ -346,10 +473,16 @@ def compute_shorten(request: ShortenRequest) -> ShortenResult:
         shortened_result = shortened_rows
 
     final_rref, final_rank = _rref(shortened_result, q) if shortened_result else ([], 0)
-    new_len = len(matrix[0]) - 1
+    new_len = n - 1
     gen = tuple(tuple(row) for row in final_rref[:final_rank]) if final_rank > 0 else ()
     return ShortenResult(
-        generator=gen,
+        encoder=_canonical_encoder(
+            field_order=q,
+            coordinate_axis=(
+                encoder.coordinate_axis[:col] + encoder.coordinate_axis[col + 1 :]
+            ),
+            generator_matrix=[list(row) for row in gen],
+        ),
         dimension=final_rank,
         length=new_len,
     )

@@ -17,6 +17,10 @@ from jacobian.canonical import parse_canonical_integer
 from jacobian.math.real_quadratic import RealQuadraticValue
 
 MAX_MATRIX_DIMENSION = 32
+# The canonical dense rational matrix retains exact sources for analysis
+# results whose operations admit them by their own work and result budgets,
+# so its structural order is not tied to the shared computation dimension.
+MAX_RATIONAL_MATRIX_ORDER = 50
 MAX_MATRIX_SCALAR_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
 
 
@@ -44,14 +48,17 @@ class RationalMatrix(StrictModel):
     domain: Literal["QQ"] = "QQ"
     entries: tuple[tuple[CanonicalRational, ...], ...] = Field(
         min_length=1,
-        max_length=MAX_MATRIX_DIMENSION,
+        max_length=MAX_RATIONAL_MATRIX_ORDER,
     )
 
     @model_validator(mode="after")
     def require_rectangular_nonempty_rows(self) -> Self:
         column_count = len(self.entries[0])
-        if column_count == 0 or column_count > MAX_MATRIX_DIMENSION:
-            raise ValueError("matrix rows must contain between 1 and 32 entries")
+        if column_count == 0 or column_count > MAX_RATIONAL_MATRIX_ORDER:
+            raise ValueError(
+                "matrix rows must contain between 1 and "
+                f"{MAX_RATIONAL_MATRIX_ORDER} entries"
+            )
         if any(len(row) != column_count for row in self.entries):
             raise ValueError("matrix rows must all have the same length")
         require_matrix_scalar_digits(
@@ -170,6 +177,7 @@ class SmithNormalForm(StrictModel):
 __all__ = [
     "MAX_MATRIX_DIMENSION",
     "MAX_MATRIX_SCALAR_DIGITS",
+    "MAX_RATIONAL_MATRIX_ORDER",
     "IntegerMatrix",
     "RationalMatrix",
     "RealQuadraticMatrix",

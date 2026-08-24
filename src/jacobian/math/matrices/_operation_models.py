@@ -11,6 +11,7 @@ from jacobian._models import StrictModel
 from jacobian.math.matrices.values import (
     MAX_MATRIX_DIMENSION,
     MAX_MATRIX_SCALAR_DIGITS,
+    MAX_RATIONAL_MATRIX_ORDER,
     IntegerMatrix,
     RationalMatrix,
     require_matrix_scalar_digits,
@@ -25,6 +26,16 @@ DeterminantRow = Annotated[
 ]
 
 
+def _require_computation_dimensions(
+    entries: tuple[tuple[CanonicalRational, ...], ...],
+) -> None:
+    if len(entries) > MAX_MATRIX_DIMENSION or len(entries[0]) > MAX_MATRIX_DIMENSION:
+        raise ValueError(
+            "matrix computation dimensions are limited to "
+            f"{MAX_MATRIX_DIMENSION} rows and columns"
+        )
+
+
 def _check_integer_digits(
     value: str, *, maximum: int = MAX_INPUT_SCALAR_DIGITS
 ) -> None:
@@ -32,11 +43,33 @@ def _check_integer_digits(
         raise ValueError(f"matrix scalars are limited to {maximum} decimal digits")
 
 
+def _require_square_system_admission(
+    matrix: RationalMatrix, rhs: tuple[CanonicalRational, ...]
+) -> None:
+    """Apply the linear-solve shape and scalar envelope to one system.
+
+    Shared by the wire request and by result validation, so a retained
+    source can never reach replay arithmetic outside this operation's
+    admitted work envelope.
+    """
+
+    rows = len(matrix.entries)
+    if len(matrix.entries[0]) != rows or len(rhs) != rows:
+        raise ValueError("linear solve requires a square matrix and matching rhs")
+    require_matrix_scalar_digits(
+        matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
+    )
+    for value in rhs:
+        _check_integer_digits(value.num)
+        _check_integer_digits(value.den)
+
+
 class RationalMatrixRequest(StrictModel):
     matrix: RationalMatrix
 
     @model_validator(mode="after")
     def require_rref_input_budget(self) -> Self:
+        _require_computation_dimensions(self.matrix.entries)
         require_matrix_scalar_digits(
             self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
         )
@@ -56,6 +89,8 @@ class RationalMatrixProductRequest(StrictModel):
                 "matrix multiplication requires the left column count to equal "
                 "the right row count"
             )
+        _require_computation_dimensions(self.left.entries)
+        _require_computation_dimensions(self.right.entries)
         require_matrix_scalar_digits(
             self.left.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
         )
@@ -72,6 +107,7 @@ class SquareRationalMatrixRequest(StrictModel):
     def require_square(self) -> Self:
         if len(self.matrix.entries) != len(self.matrix.entries[0]):
             raise ValueError("characteristic polynomial requires a square matrix")
+        _require_computation_dimensions(self.matrix.entries)
         require_matrix_scalar_digits(
             self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
         )
@@ -123,6 +159,7 @@ class MatrixRankRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_input_budget(self) -> Self:
+        _require_computation_dimensions(self.matrix.entries)
         require_matrix_scalar_digits(
             self.matrix.entries,
             maximum=MAX_INPUT_SCALAR_DIGITS,
@@ -185,15 +222,7 @@ class RationalLinearSolveRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_square_system(self) -> Self:
-        rows = len(self.matrix.entries)
-        if len(self.matrix.entries[0]) != rows or len(self.rhs) != rows:
-            raise ValueError("linear solve requires a square matrix and matching rhs")
-        require_matrix_scalar_digits(
-            self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
-        )
-        for value in self.rhs:
-            _check_integer_digits(value.num)
-            _check_integer_digits(value.den)
+        _require_square_system_admission(self.matrix, self.rhs)
         return self
 
 
@@ -386,14 +415,27 @@ class MatrixProductResult(StrictModel):
 
 
 class RationalLinearSolveResult(StrictModel):
-    """Result of solving a linear system Ax=b over QQ.
+    """One square-system classification over QQ, bound to its source system.
 
-    The outcome discriminates between:
-    - UNIQUE: the system has a unique solution (solution field is populated)
-    - INCONSISTENT: the system has no solution
-    - NON_UNIQUE: the system has infinitely many solutions (non-unique)
+    Retains the coefficient matrix and right-hand side so validation replays
+    the classification with the same exact kernel: a unique solution carries
+    one coordinate per column, satisfies ``A x = b`` exactly, and requires
+    the retained coefficient matrix to be nonsingular; an inconsistent
+    outcome requires ``rank(A) < rank([A | b])`` on the retained system; a
+    non-unique outcome requires a consistent, rank-deficient retained system.
+    Validation first reapplies the request's squareness and scalar envelope
+    to the retained source, so deserializing a relayed payload can never push
+    replay arithmetic outside this operation's admitted work envelope.
+    The rational matrix domain admits at least one row and column, so
+    zero-row shapes are rejected by request admission rather than silently
+    dropped.
     """
 
+    matrix: RationalMatrix
+    rhs: tuple[CanonicalRational, ...] = Field(
+        min_length=1,
+        max_length=MAX_MATRIX_DIMENSION,
+    )
     outcome: Literal["UNIQUE", "INCONSISTENT", "NON_UNIQUE"]
     solution: tuple[CanonicalRational, ...] | None = Field(
         default=None,
@@ -405,14 +447,52 @@ class RationalLinearSolveResult(StrictModel):
     )
 
     @model_validator(mode="after")
-    def require_outcome_solution_consistency(self) -> Self:
+    def require_source_bound_classification(self) -> Self:
+        solution = self.solution
         if self.outcome == "UNIQUE":
-            if self.solution is None:
+            if solution is None:
                 raise ValueError("a unique solution must populate the solution field")
-        else:
-            if self.solution is not None:
+        elif solution is not None:
+            raise ValueError(
+                "a non-unique or inconsistent result must not populate the solution field"
+            )
+        # Deserialized source components pass the canonical rational domain
+        # but not this operation's work envelope, so reapply request
+        # admission before any exact replay arithmetic runs.
+        _require_square_system_admission(self.matrix, self.rhs)
+        if len(self.rhs) != len(self.matrix.entries):
+            raise ValueError("right-hand side length must equal the source row count")
+
+        from jacobian.math.matrices._operations import _system_rank_replay
+
+        coefficient_rank, augmented_rank = _system_rank_replay(self.matrix, self.rhs)
+        columns = len(self.matrix.entries[0])
+        if solution is not None:
+            components = [value.as_fraction() for value in solution]
+            if len(components) != columns:
+                raise ValueError("solution length must equal the source column count")
+            for row, bound in zip(self.matrix.entries, self.rhs, strict=True):
+                residual = sum(
+                    coefficient.as_fraction() * component
+                    for coefficient, component in zip(row, components, strict=True)
+                )
+                if residual != bound.as_fraction():
+                    raise ValueError("solution does not satisfy A x = b exactly")
+            if coefficient_rank != columns:
                 raise ValueError(
-                    "a non-unique or inconsistent result must not populate the solution field"
+                    "a unique outcome requires a nonsingular source coefficient matrix"
+                )
+        elif self.outcome == "INCONSISTENT":
+            if coefficient_rank >= augmented_rank:
+                raise ValueError(
+                    "an inconsistent outcome requires rank(A) < rank([A | b]) "
+                    "on the source system"
+                )
+        else:
+            if coefficient_rank == columns or coefficient_rank != augmented_rank:
+                raise ValueError(
+                    "a non-unique outcome requires a consistent, rank-deficient "
+                    "source system"
                 )
         return self
 
@@ -437,6 +517,17 @@ class MatrixKroneckerProductRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_input_budget(self) -> Self:
+        _require_computation_dimensions(self.left.entries)
+        _require_computation_dimensions(self.right.entries)
+        if len(self.left.entries) * len(self.right.entries) > (
+            MAX_RATIONAL_MATRIX_ORDER
+        ) or len(self.left.entries[0]) * len(self.right.entries[0]) > (
+            MAX_RATIONAL_MATRIX_ORDER
+        ):
+            raise ValueError(
+                "kronecker products must fit within "
+                f"{MAX_RATIONAL_MATRIX_ORDER} rows and columns"
+            )
         require_matrix_scalar_digits(
             self.left.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
         )
@@ -491,6 +582,7 @@ class MatrixPartialTraceRequest(StrictModel):
             raise ValueError(
                 "composite matrix must be square: traced_dimension * kept_dimension"
             )
+        _require_computation_dimensions(self.matrix.entries)
         require_matrix_scalar_digits(
             self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
         )

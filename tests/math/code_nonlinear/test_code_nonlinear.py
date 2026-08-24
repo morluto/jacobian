@@ -1,5 +1,7 @@
 """Tests for nonlinear binary code operations."""
 
+import pytest
+
 from jacobian.math.code_nonlinear._models import (
     ConstantWeightProfileRequest,
     ConstantWeightRequest,
@@ -119,3 +121,54 @@ class TestConstantWeight:
         result = compute_constant_weight(ConstantWeightRequest(length=4, weight=2))
         assert result.count == 6  # C(4,2) = 6
         assert len(result.codewords) == 6
+
+    def test_binomial_output_bound_rejects_infeasible_enumeration(self) -> None:
+        """C(64,32) ~ 1.8e18 words cannot be materialized; admission must reject."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="4096-word result bound"):
+            ConstantWeightRequest(length=64, weight=32)
+
+    def test_binomial_output_bound_admits_small_spaces(self) -> None:
+        """C(12,6) = 924 <= MAX_CODEWORDS is admitted at the length-64 envelope."""
+        result = compute_constant_weight(ConstantWeightRequest(length=12, weight=6))
+        assert result.count == 924
+
+    def test_published_schema_advertises_the_coupled_binomial_rule(self) -> None:
+        """math.find must expose the C(length, weight) bound without a failed run."""
+        schema = ConstantWeightRequest.model_json_schema()
+
+        assert "C(length, weight)" in schema["description"]
+        assert "4096" in schema["description"]
+        assert "C(length, weight)" in schema["properties"]["length"]["description"]
+        assert "C(length, weight)" in schema["properties"]["weight"]["description"]
+        assert schema["properties"]["length"]["maximum"] == 64
+        assert schema["properties"]["weight"]["minimum"] == 0
+
+
+def test_constant_weight_contract_version_tracks_the_request_schema_change() -> None:
+    """The narrowed binomial envelope must not present as the unchanged v1 contract."""
+    from jacobian.math.code_nonlinear._tools import TOOLS
+
+    operation = next(
+        item
+        for item in TOOLS
+        if item.operation_id == "code.nonlinear.constant_weight.compute"
+    )
+    assert operation.version == "2"
+
+
+def test_constant_weight_admission_records_the_narrowed_binomial_envelope() -> None:
+    """The materially changed candidate has a fresh owner-local admission decision."""
+    from jacobian.catalog.admission import AdmissionDecision
+    from jacobian.math.code_nonlinear._admission import ADMISSIONS
+
+    admission = next(
+        item
+        for item in ADMISSIONS
+        if item.operation_id == "code.nonlinear.constant_weight.compute"
+    )
+
+    assert admission.decision == AdmissionDecision.KEEP
+    assert "C(length, weight) <= 4096" in admission.rationale
+    assert "4,096 words" in admission.rationale

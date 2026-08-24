@@ -2,11 +2,15 @@
 
 All functions are deterministic and complete for accepted values. They need
 no ``UNKNOWN``, timeout-as-mathematics, search budget, or solver outcome.
+Every function accepting a ``FiniteFeasibleSetSystem`` enforces the same
+bounded carrier envelope as its MCP request contract before any kernel
+expansion.
 """
 
 from __future__ import annotations
 
-from .values import FiniteFeasibleSetSystem
+from jacobian.math.greedoids._models import require_bounded_carrier
+from jacobian.math.greedoids.values import FiniteFeasibleSetSystem
 
 __all__ = [
     "antimatroid_to_convex_geometry",
@@ -82,6 +86,7 @@ def recognize(
     For accepted finite sizes, exhaust every licensed feasible set/pair. A
     sample of exchange pairs cannot return ``GREEDOID``.
     """
+    require_bounded_carrier(system)
     index = system.feasible_index()
     n = len(system.ground)
     if () not in index:
@@ -108,6 +113,7 @@ def recognize(
 
 def union_closed(system: FiniteFeasibleSetSystem) -> bool:
     """Return whether the feasible family is closed under pairwise union."""
+    require_bounded_carrier(system)
     feasible_sets = _feasible_sets(system)
     index = system.feasible_index()
     for i, a in enumerate(feasible_sets):
@@ -123,6 +129,7 @@ def rank(system: FiniteFeasibleSetSystem, subset: frozenset[int] | None = None) 
     If ``subset`` is ``None``, the rank of the whole greedoid (the common size
     of its bases) is returned.
     """
+    require_bounded_carrier(system)
     if subset is None:
         candidates = _feasible_sets(system)
     else:
@@ -138,6 +145,7 @@ def bases(
     A basis of ``X`` is a maximal feasible subset of ``X``. All bases have the
     same cardinality under the greedoid theorem convention.
     """
+    require_bounded_carrier(system)
     if subset is None:
         subset = frozenset(range(len(system.ground)))
     feasible_in_subset = [fs for fs in _feasible_sets(system) if fs <= subset]
@@ -157,6 +165,7 @@ def feasible_continuations(
     system: FiniteFeasibleSetSystem, feasible_set: frozenset[int]
 ) -> list[int]:
     """Return ``Gamma(X) = {e in E\\X : X union {e} in F}`` for a feasible ``X``."""
+    require_bounded_carrier(system)
     index = system.feasible_index()
     if tuple(sorted(feasible_set)) not in index:
         raise ValueError("input set must be feasible")
@@ -177,6 +186,7 @@ def basic_word_profile(
     every prefix set is feasible. A full basic word has length ``r(E)`` and its
     underlying set is a greedoid basis.
     """
+    require_bounded_carrier(system)
     n = len(system.ground)
     seen: set[int] = set()
     for elem in word:
@@ -224,6 +234,7 @@ def antimatroid_to_convex_geometry(
     family (sorted tuples of ground indices) and the feasible->closed
     complement map.
     """
+    require_bounded_carrier(system)
     n = len(system.ground)
     ground_set = frozenset(range(n))
     complement_map: dict[tuple[int, ...], tuple[int, ...]] = {}

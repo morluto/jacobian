@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import itertools
 import math
 from fractions import Fraction
 
@@ -11,6 +10,7 @@ from sympy.polys.matrices import DomainMatrix
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.discrepancy_theory._models import (
+    MAX_OPTIMUM_SOLVER_MILLISECONDS,
     MAX_ROUNDING_INTERMEDIATE_DIGITS,
     DiscrepancyEvalRequest,
     DiscrepancyEvalResult,
@@ -20,6 +20,8 @@ from jacobian.math.discrepancy_theory._models import (
     HardConstraintRoundingResult,
     HardConstraintRowLedger,
     MonitoredColumnLedger,
+    _budget_exceeded_result,
+    _proven_optimal_result,
 )
 
 
@@ -218,46 +220,74 @@ def compute_discrepancy(request: DiscrepancyEvalRequest) -> DiscrepancyEvalResul
 def compute_optimal_discrepancy(
     request: DiscrepancyOptimumRequest,
 ) -> DiscrepancyOptimumResult:
-    """Search over all 2^n colorings for the minimum maximum discrepancy.
+    """Minimize the maximum imbalance via an exact integer program.
 
-    The ground set size is bounded by ``MAX_GROUND_SET`` so the exhaustive
-    search over ``itertools.product`` stays a bounded combinatorial
-    computation. When the ground set is empty there is exactly one coloring
-    (the empty coloring) with discrepancy zero.
+    Variables ``x_u in {-1, +1}`` and a shared nonnegative integer ``D``
+    with ``D >= |sum_{u in S} x_u|`` for every set ``S``.  A sat answer is
+    only trusted as OPTIMAL when Z3's objective handle proves it: its
+    lower and upper bounds must coincide with each other, with the model's
+    objective value, and with an independent Python replay of the
+    coloring's exact maximum imbalance.  An incumbent found after an
+    exhausted budget has open bounds and is reported as
+    ``BUDGET_EXCEEDED`` with no mathematical claim; likewise any
+    non-sat outcome.  The empty ground set has the single empty coloring
+    with discrepancy zero.
     """
     n = request.set_system.ground_set_size
     sets = request.set_system.sets
 
     if n == 0:
-        return DiscrepancyOptimumResult(
-            optimal_coloring=(),
-            optimal_discrepancy=0,
-            exhaustive=True,
+        return _proven_optimal_result(request.set_system, (), 0)
+
+    import z3  # type: ignore[import-untyped]
+
+    optimizer = z3.Optimize()
+    optimizer.set("timeout", MAX_OPTIMUM_SOLVER_MILLISECONDS)
+    variables = [z3.Int(f"x_{index}") for index in range(n)]
+    optimizer.add(*(z3.Or(value == 1, value == -1) for value in variables))
+    objective = z3.Int("D")
+    optimizer.add(objective >= 0)
+    for subset in sets:
+        signed_sum = (
+            z3.Sum([variables[element] for element in subset])
+            if subset
+            else z3.IntVal(0)
         )
+        optimizer.add(objective >= signed_sum, objective >= -signed_sum)
+    objective_handle = optimizer.minimize(objective)
 
-    best_coloring: tuple[int, ...] | None = None
-    best_discrepancy: int | None = None
-    for values in itertools.product((-1, 1), repeat=n):
-        coloring = values
-        max_imbalance = 0
-        for subset in sets:
-            signed_sum = sum(coloring[element] for element in subset)
-            absolute = -signed_sum if signed_sum < 0 else signed_sum
-            if absolute > max_imbalance:
-                max_imbalance = absolute
-                if best_discrepancy is not None and max_imbalance >= best_discrepancy:
-                    break
-        else:
-            if best_discrepancy is None or max_imbalance < best_discrepancy:
-                best_discrepancy = max_imbalance
-                best_coloring = coloring
-                if best_discrepancy == 0:
-                    break
+    def _bound_digits(expression: object) -> int | None:
+        """Return the integer value of a numeral bound, or None if open."""
 
-    assert best_coloring is not None
-    assert best_discrepancy is not None
-    return DiscrepancyOptimumResult(
-        optimal_coloring=best_coloring,
-        optimal_discrepancy=best_discrepancy,
-        exhaustive=True,
+        as_long = getattr(expression, "as_long", None)
+        if callable(as_long):
+            try:
+                return int(as_long())
+            except Exception:
+                return None
+        return None
+
+    outcome = optimizer.check()
+    if outcome != z3.sat:
+        return _budget_exceeded_result(request.set_system)
+    model = optimizer.model()
+    coloring = tuple(int(model.evaluate(variable).as_long()) for variable in variables)
+    model_objective = int(model.evaluate(objective).as_long())
+    lower_bound = _bound_digits(optimizer.lower(objective_handle))
+    upper_bound = _bound_digits(optimizer.upper(objective_handle))
+    replayed_optimum = max(
+        (abs(sum(coloring[element] for element in subset)) for subset in sets),
+        default=0,
+    )
+    proven = (
+        lower_bound is not None
+        and upper_bound is not None
+        and lower_bound == upper_bound == model_objective == replayed_optimum
+    )
+    if not proven:
+        return _budget_exceeded_result(request.set_system)
+    return _proven_optimal_result(
+        request.set_system,
+        coloring,
+        model_objective,
     )

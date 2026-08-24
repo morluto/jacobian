@@ -1,4 +1,4 @@
-"""Validated real-function operations backed by Arb."""
+"""Validated real-function enclosure operations."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from jacobian.math.analysis._models import (
     MAX_DYADIC_EXPONENT,
     ArbPointEnclosureRequest,
     ArbPointEnclosureResult,
+    ClaimedPointEnclosure,
     DyadicClosedInterval,
     ExactDyadic,
     FirstPartialEnclosure,
@@ -28,9 +29,14 @@ from jacobian.math.analysis._models import (
     IntervalExpressionSecondJetEnclosureRequest,
     IntervalExpressionSecondJetEnclosureResult,
     IntervalExpressionSecondJetEnclosureStatus,
+    PointEnclosureCheckRequest,
+    PointEnclosureCheckResult,
     RationalClosedInterval,
     _preflight_box_expression,
     _rational_box_bounds,
+)
+from jacobian.math.analysis._point_enclosure_check import (
+    point_enclosure_check_outcome,
 )
 
 
@@ -819,10 +825,10 @@ def _point_enclosure(
         result = getattr(value, request.function.value.lower())()
         if not result.is_finite():
             return ArbPointEnclosureResult(
-                status="NONFINITE",
                 function=request.function,
                 argument=request.argument,
                 precision_bits=request.precision_bits,
+                status="NONFINITE",
                 detail="Arb returned a non-finite ball; no enclosure conclusion is available.",
             )
         lower_mantissa, lower_exponent = result.lower().man_exp()
@@ -833,22 +839,36 @@ def _point_enclosure(
         )
     if endpoints is None:
         return ArbPointEnclosureResult(
-            status="OUTPUT_MAGNITUDE_EXCEEDED",
             function=request.function,
             argument=request.argument,
             precision_bits=request.precision_bits,
+            status="OUTPUT_MAGNITUDE_EXCEEDED",
             detail="Arb produced finite endpoints outside the interoperable dyadic exponent range.",
         )
     return ArbPointEnclosureResult(
-        status="ENCLOSED",
         function=request.function,
         argument=request.argument,
         precision_bits=request.precision_bits,
-        lower=endpoints[0],
-        upper=endpoints[1],
+        status="ENCLOSED",
+        enclosure=ClaimedPointEnclosure(
+            function=request.function,
+            argument=request.argument,
+            precision_bits=request.precision_bits,
+            lower=endpoints[0],
+            upper=endpoints[1],
+        ),
         relative_accuracy_bits=None if exact else int(result.rel_accuracy_bits()),
         exact=exact,
         detail="Pinned Arb ball arithmetic returned an outward-rounded enclosure with exact dyadic endpoints.",
+    )
+
+
+def _check_point_enclosure(
+    request: PointEnclosureCheckRequest,
+) -> PointEnclosureCheckResult:
+    return PointEnclosureCheckResult(
+        enclosure=request.enclosure,
+        outcome=point_enclosure_check_outcome(request),
     )
 
 
@@ -890,6 +910,46 @@ POINT_ENCLOSURE_OPERATIONS = (
                     "function": "SQRT",
                     "argument": {"num": "0", "den": "1"},
                     "precision_bits": 32,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="analysis.real_function.point_enclosure.check",
+        version="1",
+        title="Check a claimed real-function point enclosure",
+        description=(
+            "Independently check one claimed exact-dyadic enclosure of LOG or "
+            "SQRT at an exact rational point. The result is ACCEPTED, REJECTED, "
+            "or NON_RESULT and retains the complete claim for deterministic "
+            "replay; LOG replay is capped at 128 exact series terms."
+        ),
+        request_type=PointEnclosureCheckRequest,
+        result_type=PointEnclosureCheckResult,
+        run=_check_point_enclosure,
+        tags=(
+            "analysis",
+            "check",
+            "enclosure",
+            "exact",
+            "bounded",
+            "square-root",
+            "sqrt",
+            "logarithm",
+            "log",
+        ),
+        examples=(
+            example(
+                "sqrt_zero",
+                "Independently check the exact claimed enclosure sqrt(0) = 0.",
+                {
+                    "enclosure": {
+                        "function": "SQRT",
+                        "argument": {"num": "0", "den": "1"},
+                        "precision_bits": 128,
+                        "lower": {"mantissa": "0", "exponent": 0},
+                        "upper": {"mantissa": "0", "exponent": 0},
+                    },
                 },
             ),
         ),

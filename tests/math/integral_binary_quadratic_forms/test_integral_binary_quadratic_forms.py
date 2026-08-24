@@ -3,12 +3,17 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import canonicalize_json
 from jacobian.math.integral_binary_quadratic_forms._models import (
     BinaryQuadraticFormCheckRequest,
     BinaryQuadraticFormEvaluateRequest,
+    BinaryQuadraticFormEvaluateResult,
     BinaryQuadraticFormProperEquivRequest,
     BinaryQuadraticFormReducedClassesRequest,
     BinaryQuadraticFormReduceRequest,
+    BinaryQuadraticFormRepresentationsRequest,
+    BinaryQuadraticFormRepresentationsResult,
+    PrimitivePositiveDefiniteBinaryQuadraticForm,
 )
 from jacobian.math.integral_binary_quadratic_forms._operations import (
     compute_check,
@@ -16,29 +21,42 @@ from jacobian.math.integral_binary_quadratic_forms._operations import (
     compute_proper_equivalence,
     compute_reduce,
     compute_reduced_classes,
+    compute_representations,
 )
+from jacobian.math.integral_binary_quadratic_forms._tools import TOOLS
+
+
+def _positive_form(
+    a: int, b: int, c: int
+) -> PrimitivePositiveDefiniteBinaryQuadraticForm:
+    return PrimitivePositiveDefiniteBinaryQuadraticForm(a=a, b=b, c=c)
 
 
 class TestCheck:
     def test_primitive_positive_definite(self) -> None:
         result = compute_check(BinaryQuadraticFormCheckRequest(a=1, b=1, c=1))
         assert result.status == "PRIMITIVE_POSITIVE_DEFINITE"
-        assert result.discriminant == -3
-        assert result.gram == ((1, 1), (1, 1))
+        assert result.form == _positive_form(1, 1, 1)
+        assert result.form.discriminant == -3
+        assert "gram" not in result.model_dump(mode="json")
 
     def test_non_positive_definite(self) -> None:
         result = compute_check(BinaryQuadraticFormCheckRequest(a=-1, b=0, c=1))
         assert result.status == "NOT_IN_INITIAL_DOMAIN"
+        assert result.obstruction is not None
         assert "positive" in result.obstruction.lower()
+        assert result.form is None
 
     def test_nonnegative_discriminant(self) -> None:
         result = compute_check(BinaryQuadraticFormCheckRequest(a=1, b=0, c=-1))
         assert result.status == "NOT_IN_INITIAL_DOMAIN"
+        assert result.obstruction is not None
         assert "discriminant" in result.obstruction.lower()
 
     def test_imprimitive(self) -> None:
         result = compute_check(BinaryQuadraticFormCheckRequest(a=2, b=2, c=2))
         assert result.status == "NOT_IN_INITIAL_DOMAIN"
+        assert result.obstruction is not None
         assert "primitive" in result.obstruction.lower()
 
     def test_invalid_discriminant_congruence(self) -> None:
@@ -51,52 +69,127 @@ class TestCheck:
         # The check is still there for safety. Let's just test a valid case.
         result = compute_check(BinaryQuadraticFormCheckRequest(a=1, b=0, c=1))
         assert result.status == "PRIMITIVE_POSITIVE_DEFINITE"
-        assert result.discriminant == -4
+        assert result.form == _positive_form(1, 0, 1)
+
+    def test_checked_form_cannot_be_forged_or_detached_from_its_source(self) -> None:
+        result = compute_check(BinaryQuadraticFormCheckRequest(a=1, b=1, c=1))
+        forged = result.model_dump(mode="json")
+        forged["form"]["b"] = 0
+        with pytest.raises(ValidationError, match="match the checked coefficients"):
+            type(result).model_validate(forged)
 
 
 class TestEvaluate:
     def test_evaluate_at_origin(self) -> None:
         result = compute_evaluate(
-            BinaryQuadraticFormEvaluateRequest(a=1, b=1, c=1, x=0, y=0)
+            BinaryQuadraticFormEvaluateRequest(form=_positive_form(1, 1, 1), x=0, y=0)
         )
         assert result.value == 0
         assert not result.primitive
 
     def test_evaluate_at_1_0(self) -> None:
         result = compute_evaluate(
-            BinaryQuadraticFormEvaluateRequest(a=1, b=1, c=1, x=1, y=0)
+            BinaryQuadraticFormEvaluateRequest(form=_positive_form(1, 1, 1), x=1, y=0)
         )
         assert result.value == 1
         assert result.primitive
 
     def test_evaluate_at_2_3(self) -> None:
         result = compute_evaluate(
-            BinaryQuadraticFormEvaluateRequest(a=2, b=3, c=5, x=2, y=3)
+            BinaryQuadraticFormEvaluateRequest(form=_positive_form(2, 3, 5), x=2, y=3)
         )
         assert result.value == 2 * 4 + 3 * 6 + 5 * 9  # 8 + 18 + 45 = 71
         assert result.value == 71
         assert result.primitive
 
-    def test_evaluate_wrong_value_rejected(self) -> None:
+    def test_evaluate_rejects_raw_coefficient_fork(self) -> None:
         with pytest.raises(ValidationError):
             BinaryQuadraticFormEvaluateRequest.model_validate(
                 {"a": 1, "b": 1, "c": 1, "x": 1, "y": 0, "value": 2, "primitive": True}
             )
 
+    def test_evaluate_rejects_values_beyond_the_interoperable_integer_range(
+        self,
+    ) -> None:
+        # Q(10^8, 0) = 10^16 > 2^53 - 1 for [1,0,1]: the request must be
+        # rejected at admission instead of failing transport canonicalization.
+        with pytest.raises(ValidationError, match="interoperable integer range"):
+            BinaryQuadraticFormEvaluateRequest(
+                form=_positive_form(1, 0, 1), x=100_000_000, y=0
+            )
+        with pytest.raises(ValidationError, match="interoperable integer range"):
+            BinaryQuadraticFormEvaluateRequest(
+                form=_positive_form(1, 0, 1), x=-100_000_000, y=0
+            )
+
+    def test_evaluate_admits_the_largest_transportable_square(self) -> None:
+        # 94_906_265 = floor_sqrt(2^53 - 1), so Q(x,0) = x^2 fits exactly.
+        result = compute_evaluate(
+            BinaryQuadraticFormEvaluateRequest(
+                form=_positive_form(1, 0, 1), x=94_906_265, y=0
+            )
+        )
+        assert result.value == 9_007_199_136_250_225
+        assert result.value <= 2**53 - 1
+
+    def test_evaluate_boundary_one_above_the_interoperable_bound_is_rejected(
+        self,
+    ) -> None:
+        with pytest.raises(ValidationError, match="interoperable integer range"):
+            BinaryQuadraticFormEvaluateRequest(
+                form=_positive_form(1, 0, 1), x=94_906_266, y=0
+            )
+        with pytest.raises(ValidationError, match="interoperable integer range"):
+            BinaryQuadraticFormEvaluateRequest(
+                form=_positive_form(1, 0, 1), x=-94_906_266, y=0
+            )
+
+    def test_evaluate_admission_tracks_the_exact_value_not_the_worst_case(
+        self,
+    ) -> None:
+        # [1,-2,2] at (floor_sqrt(2^53-1), 1): the worst-case envelope
+        # a*x^2 + abs(b*x*y) + c*y^2 exceeds the bound, but the exact value
+        # 9_007_198_946_437_697 does not, so the request stays admitted.
+        result = compute_evaluate(
+            BinaryQuadraticFormEvaluateRequest(
+                form=_positive_form(1, -2, 2), x=94_906_265, y=1
+            )
+        )
+        assert result.value == 9_007_198_946_437_697
+
+    def test_result_replay_rejects_coordinates_beyond_the_transport_range(
+        self,
+    ) -> None:
+        result = compute_evaluate(
+            BinaryQuadraticFormEvaluateRequest(form=_positive_form(1, 1, 1), x=3, y=0)
+        )
+        forged = result.model_dump(mode="json")
+        forged["x"] = 100_000_000
+        with pytest.raises(ValidationError, match="interoperable integer range"):
+            BinaryQuadraticFormEvaluateResult.model_validate(forged)
+
+    def test_maximal_admitted_evaluation_canonicalizes_for_transport(self) -> None:
+        result = compute_evaluate(
+            BinaryQuadraticFormEvaluateRequest(
+                form=_positive_form(1, 0, 1), x=94_906_265, y=0
+            )
+        )
+        canonicalize_json(result.model_dump(mode="json"))
+
 
 class TestReduce:
     def test_reduce_already_reduced(self) -> None:
-        result = compute_reduce(BinaryQuadraticFormReduceRequest(a=1, b=0, c=1))
-        assert result.reduced_a == 1
-        assert result.reduced_b == 0
-        assert result.reduced_c == 1
+        result = compute_reduce(
+            BinaryQuadraticFormReduceRequest(form=_positive_form(1, 0, 1))
+        )
+        assert result.reduced_form == _positive_form(1, 0, 1)
 
     def test_reduce_5_3_1(self) -> None:
-        result = compute_reduce(BinaryQuadraticFormReduceRequest(a=5, b=3, c=1))
+        result = compute_reduce(
+            BinaryQuadraticFormReduceRequest(form=_positive_form(5, 3, 1))
+        )
         # D = 9 - 20 = -11, reduced form is [1,1,3]
-        assert result.reduced_a == 1
-        assert result.reduced_b == 1
-        assert result.reduced_c == 3
+        assert result.reduced_form == _positive_form(1, 1, 3)
         # Check the matrix has det 1
         p, q = result.matrix[0]
         r, s = result.matrix[1]
@@ -104,39 +197,41 @@ class TestReduce:
 
     def test_reduce_preserves_discriminant(self) -> None:
         for a, b, c in [(5, 3, 1), (7, 5, 3), (2, 1, 3), (10, 7, 2)]:
-            result = compute_reduce(BinaryQuadraticFormReduceRequest(a=a, b=b, c=c))
+            result = compute_reduce(
+                BinaryQuadraticFormReduceRequest(form=_positive_form(a, b, c))
+            )
             d1 = b * b - 4 * a * c
             d2 = (
-                result.reduced_b * result.reduced_b
-                - 4 * result.reduced_a * result.reduced_c
+                result.reduced_form.b * result.reduced_form.b
+                - 4 * result.reduced_form.a * result.reduced_form.c
             )
             assert d1 == d2, f"discriminant changed for [{a},{b},{c}]"
 
     def test_reduce_idempotent(self) -> None:
-        result = compute_reduce(BinaryQuadraticFormReduceRequest(a=5, b=3, c=1))
+        result = compute_reduce(
+            BinaryQuadraticFormReduceRequest(form=_positive_form(5, 3, 1))
+        )
         # Reducing the reduced form should be idempotent
         result2 = compute_reduce(
-            BinaryQuadraticFormReduceRequest(
-                a=result.reduced_a, b=result.reduced_b, c=result.reduced_c
-            )
+            BinaryQuadraticFormReduceRequest(form=result.reduced_form)
         )
-        assert (result2.reduced_a, result2.reduced_b, result2.reduced_c) == (
-            result.reduced_a,
-            result.reduced_b,
-            result.reduced_c,
-        )
+        assert result2.reduced_form == result.reduced_form
 
 
 class TestProperEquivalence:
     def test_self_equivalent(self) -> None:
         result = compute_proper_equivalence(
-            BinaryQuadraticFormProperEquivRequest(form1=(1, 1, 1), form2=(1, 1, 1))
+            BinaryQuadraticFormProperEquivRequest(
+                first=_positive_form(1, 1, 1), second=_positive_form(1, 1, 1)
+            )
         )
         assert result.status == "PROPERLY_EQUIVALENT"
 
     def test_different_discriminants_not_equivalent(self) -> None:
         result = compute_proper_equivalence(
-            BinaryQuadraticFormProperEquivRequest(form1=(1, 1, 1), form2=(1, 0, 1))
+            BinaryQuadraticFormProperEquivRequest(
+                first=_positive_form(1, 1, 1), second=_positive_form(1, 0, 1)
+            )
         )
         assert result.status == "NOT_PROPERLY_EQUIVALENT"
 
@@ -144,32 +239,56 @@ class TestProperEquivalence:
         # [5,3,1] reduces to [1,1,3], and [1,1,3] is itself reduced
         # So [5,3,1] and [1,1,3] should be properly equivalent
         result = compute_proper_equivalence(
-            BinaryQuadraticFormProperEquivRequest(form1=(5, 3, 1), form2=(1, 1, 3))
+            BinaryQuadraticFormProperEquivRequest(
+                first=_positive_form(5, 3, 1), second=_positive_form(1, 1, 3)
+            )
         )
         assert result.status == "PROPERLY_EQUIVALENT"
 
     def test_non_equivalent_same_discriminant(self) -> None:
         # D=-23 has class number 3, so [1,1,6] and [2,1,3] are not equivalent
         result = compute_proper_equivalence(
-            BinaryQuadraticFormProperEquivRequest(form1=(1, 1, 6), form2=(2, 1, 3))
+            BinaryQuadraticFormProperEquivRequest(
+                first=_positive_form(1, 1, 6), second=_positive_form(2, 1, 3)
+            )
         )
         assert result.status == "NOT_PROPERLY_EQUIVALENT"
 
 
 class TestReducedClasses:
+    def test_schema_exposes_the_reduced_class_scan_admission_condition(self) -> None:
+        discriminant_schema = (
+            BinaryQuadraticFormReducedClassesRequest.model_json_schema()["properties"][
+                "discriminant"
+            ]
+        )
+        assert "A*(A+2)" in discriminant_schema["description"]
+        assert "floor_sqrt((-D)//3)+1" in discriminant_schema["description"]
+
+    def test_example_states_the_scan_envelope_precondition(self) -> None:
+        (tool,) = (
+            candidate
+            for candidate in TOOLS
+            if candidate.operation_id
+            == "number_theory.binary_quadratic_form.reduced_classes.compute"
+        )
+        description = str(tool.examples[0].description)
+        assert "A*(A+2)" in description
+        assert "is 8" in description
+
     def test_disc_neg_3(self) -> None:
         result = compute_reduced_classes(
             BinaryQuadraticFormReducedClassesRequest(discriminant=-3)
         )
         assert result.class_number == 1
-        assert result.classes == ((1, 1, 1),)
+        assert result.classes == (_positive_form(1, 1, 1),)
 
     def test_disc_neg_4(self) -> None:
         result = compute_reduced_classes(
             BinaryQuadraticFormReducedClassesRequest(discriminant=-4)
         )
         assert result.class_number == 1
-        assert result.classes == ((1, 0, 1),)
+        assert result.classes == (_positive_form(1, 0, 1),)
 
     def test_disc_neg_23(self) -> None:
         result = compute_reduced_classes(
@@ -177,8 +296,8 @@ class TestReducedClasses:
         )
         assert result.class_number == 3
         # Verify all classes have the correct discriminant
-        for a, b, c in result.classes:
-            assert b * b - 4 * a * c == -23
+        for form in result.classes:
+            assert form.discriminant == -23
 
     def test_disc_neg_20(self) -> None:
         result = compute_reduced_classes(
@@ -186,16 +305,176 @@ class TestReducedClasses:
         )
         assert result.class_number == 2
 
+    def test_exact_reduced_class_search_boundary_is_complete(self) -> None:
+        # Here A=99, so the exact nested scan has A(A+2)=9,999 candidates.
+        result = compute_reduced_classes(
+            BinaryQuadraticFormReducedClassesRequest(discriminant=-28_812)
+        )
+        assert result.class_number == len(result.classes)
+
+    def test_reduced_class_search_just_over_budget_is_rejected(self) -> None:
+        # Here A=100, so the exact nested scan would have 10,200 candidates.
+        with pytest.raises(ValidationError, match="candidate budget"):
+            BinaryQuadraticFormReducedClassesRequest(discriminant=-29_404)
+
+    def test_non_discriminant_is_rejected_before_enumeration(self) -> None:
+        with pytest.raises(ValidationError, match="congruent"):
+            BinaryQuadraticFormReducedClassesRequest(discriminant=-5)
+
     def test_all_classes_reduced(self) -> None:
         for D in [-3, -4, -7, -8, -11, -15, -19, -20, -23, -43, -47, -163]:  # noqa: N806
             result = compute_reduced_classes(
                 BinaryQuadraticFormReducedClassesRequest(discriminant=D)
             )
-            for a, b, c in result.classes:
-                assert a > 0 and c > 0
-                assert abs(b) <= a
-                assert a <= c
-                if abs(b) == a:
-                    assert b >= 0
-                if a == c:
-                    assert b >= 0
+            for form in result.classes:
+                assert form.a > 0 and form.c > 0
+                assert abs(form.b) <= form.a
+                assert form.a <= form.c
+                if abs(form.b) == form.a:
+                    assert form.b >= 0
+                if form.a == form.c:
+                    assert form.b >= 0
+
+
+class TestRepresentations:
+    def test_schema_exposes_the_complete_y_scan_admission_condition(self) -> None:
+        target_schema = BinaryQuadraticFormRepresentationsRequest.model_json_schema()[
+            "properties"
+        ]["target"]
+        assert "2*floor_sqrt(4*a*n/(-D))+1" in target_schema["description"]
+
+    def test_x_squared_plus_y_squared_of_five_has_eight_ordered_signed_pairs(
+        self,
+    ) -> None:
+        result = compute_representations(
+            BinaryQuadraticFormRepresentationsRequest(
+                form=_positive_form(1, 0, 1), target=5
+            )
+        )
+        assert result.count == 8
+        assert result.primitive_count == 8
+        assert tuple((row.x, row.y) for row in result.representations) == (
+            (-2, -1),
+            (-2, 1),
+            (-1, -2),
+            (-1, 2),
+            (1, -2),
+            (1, 2),
+            (2, -1),
+            (2, 1),
+        )
+
+    def test_primitive_count_is_distinct_from_raw_count(self) -> None:
+        result = compute_representations(
+            BinaryQuadraticFormRepresentationsRequest(
+                form=_positive_form(1, 0, 1), target=25
+            )
+        )
+        assert result.count == 12
+        assert result.primitive_count == 8
+
+    def test_no_representation_is_complete_not_a_bound_limited_claim(self) -> None:
+        result = compute_representations(
+            BinaryQuadraticFormRepresentationsRequest(
+                form=_positive_form(1, 0, 1), target=3
+            )
+        )
+        assert result.representations == ()
+        assert result.count == result.primitive_count == 0
+
+    def test_zero_has_the_single_nonprimitive_origin(self) -> None:
+        result = compute_representations(
+            BinaryQuadraticFormRepresentationsRequest(
+                form=_positive_form(1, 1, 1), target=0
+            )
+        )
+        assert tuple(
+            (row.x, row.y, row.primitive) for row in result.representations
+        ) == ((0, 0, False),)
+
+    def test_admission_rejects_unbounded_y_search_before_enumeration(self) -> None:
+        with pytest.raises(ValidationError, match="candidate budget"):
+            BinaryQuadraticFormRepresentationsRequest(
+                form=_positive_form(1_000_000, 0, 1),
+                target=1_000_000_000_000,
+            )
+
+    def test_result_replay_reuses_the_preflight_budget(self) -> None:
+        with pytest.raises(ValidationError, match="candidate budget"):
+            BinaryQuadraticFormRepresentationsResult(
+                form=_positive_form(1_000_000, 0, 1),
+                target=1_000_000_000_000,
+                representations=(),
+                count=0,
+                primitive_count=0,
+            )
+
+    def test_result_rejects_a_missing_or_forged_representation(self) -> None:
+        result = compute_representations(
+            BinaryQuadraticFormRepresentationsRequest(
+                form=_positive_form(1, 0, 1), target=5
+            )
+        )
+        forged = result.model_dump(mode="json")
+        forged["representations"] = forged["representations"][1:]
+        forged["count"] -= 1
+        forged["primitive_count"] -= 1
+        with pytest.raises(ValidationError, match="complete lexicographically"):
+            type(result).model_validate(forged)
+
+
+class TestCanonicalFormComposition:
+    def test_checked_form_serializes_into_every_form_consumer(self) -> None:
+        checked = compute_check(BinaryQuadraticFormCheckRequest(a=5, b=3, c=1))
+        assert checked.form is not None
+        serialized_form = checked.model_dump(mode="json")["form"]
+
+        evaluated = compute_evaluate(
+            BinaryQuadraticFormEvaluateRequest.model_validate(
+                {"form": serialized_form, "x": 1, "y": 0}
+            )
+        )
+        assert evaluated.form == checked.form
+        assert evaluated.value == 5
+
+        reduced = compute_reduce(
+            BinaryQuadraticFormReduceRequest.model_validate({"form": serialized_form})
+        )
+        assert reduced.form == checked.form
+        assert reduced.reduced_form == _positive_form(1, 1, 3)
+
+        representations = compute_representations(
+            BinaryQuadraticFormRepresentationsRequest.model_validate(
+                {"form": serialized_form, "target": 5}
+            )
+        )
+        assert representations.form == checked.form
+        assert representations.count == 4
+        witness = representations.representations[0]
+        assert (
+            compute_evaluate(
+                BinaryQuadraticFormEvaluateRequest(
+                    form=checked.form, x=witness.x, y=witness.y
+                )
+            ).value
+            == representations.target
+        )
+
+        equivalence = compute_proper_equivalence(
+            BinaryQuadraticFormProperEquivRequest.model_validate(
+                {
+                    "first": serialized_form,
+                    "second": reduced.model_dump(mode="json")["reduced_form"],
+                }
+            )
+        )
+        assert equivalence.status == "PROPERLY_EQUIVALENT"
+
+    def test_reduction_result_rejects_a_forged_canonical_reduced_form(self) -> None:
+        result = compute_reduce(
+            BinaryQuadraticFormReduceRequest(form=_positive_form(5, 3, 1))
+        )
+        forged = result.model_dump(mode="json")
+        forged["reduced_form"]["b"] = -1
+        with pytest.raises(ValidationError, match="reduced form must satisfy"):
+            type(result).model_validate(forged)

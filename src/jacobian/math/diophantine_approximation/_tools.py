@@ -65,6 +65,7 @@ DIOPHANTINE_APPROXIMATION_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {"discriminant": 2, "term_count": 5},
             ),
         ),
+        version="2",
     ),
     da_operation(
         "diophantine.convergents.compute",
@@ -84,6 +85,7 @@ DIOPHANTINE_APPROXIMATION_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {"discriminant": 2, "convergent_count": 5},
             ),
         ),
+        version="2",
     ),
     da_operation(
         "diophantine.pell_equation.solve",

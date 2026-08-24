@@ -90,6 +90,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {"length": 4, "weight": 2},
             ),
         ),
+        version="2",
     ),
     _op(
         "code.binary.word_distance.compute",

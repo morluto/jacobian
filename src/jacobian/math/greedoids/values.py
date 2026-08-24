@@ -21,9 +21,6 @@ from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 
-MAX_GROUND_SIZE = 64
-MAX_FEASIBLE_COUNT = 4096
-
 
 def _check_feasible_row(row: tuple[int, ...], n: int) -> None:
     if not row:
@@ -52,20 +49,17 @@ class FiniteFeasibleSetSystem(StrictModel):
     ``ground`` is a tuple of unique ground labels. ``feasible`` is a tuple of
     feasible subsets, each a sorted tuple of ground indices (positions in
     ``ground``). The family is authoritative: omission means exact
-    infeasibility, not unknown.
+    infeasibility, not unknown. Structural well-formedness only; each domain's
+    request contract owns its own execution envelope.
     """
 
-    ground: tuple[str, ...] = Field(min_length=1)
+    ground: tuple[str, ...] = Field()
     feasible: tuple[tuple[int, ...], ...] = Field(default=())
 
     @model_validator(mode="after")
     def require_well_formed(self) -> Self:
-        if len(self.ground) > MAX_GROUND_SIZE:
-            raise ValueError("ground size exceeds the bounded budget")
         if len(set(self.ground)) != len(self.ground):
             raise ValueError("ground labels must be unique")
-        if len(self.feasible) > MAX_FEASIBLE_COUNT:
-            raise ValueError("feasible-set count exceeds the bounded budget")
         n = len(self.ground)
         for row in self.feasible:
             _check_feasible_row(row, n)
@@ -77,7 +71,5 @@ class FiniteFeasibleSetSystem(StrictModel):
 
 
 __all__ = [
-    "MAX_FEASIBLE_COUNT",
-    "MAX_GROUND_SIZE",
     "FiniteFeasibleSetSystem",
 ]

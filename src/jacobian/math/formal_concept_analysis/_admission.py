@@ -46,6 +46,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "exact concept lattice with partial order, cover relation, top, and bottom",
     ),
     OperationAdmission(
+        "formal_context.duquenne_guigues_basis.compute",
+        AdmissionDecision.KEEP,
+        "complete bounded pseudo-intent family and source-bound canonical implication basis with exhaustive closure-equivalence replay",
+    ),
+    OperationAdmission(
         "implication_system.closure.compute",
         AdmissionDecision.KEEP,
         "exact least fixed point and replayable lineage under a bounded finite implication presentation",

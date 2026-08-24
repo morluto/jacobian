@@ -21,9 +21,9 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "exact simple reflection s_i on a root lattice vector",
     ),
     OperationAdmission(
-        "root_system.weyl_group_data.compute",
+        "root_system.weyl_group_order.compute",
         AdmissionDecision.KEEP,
-        "exact Weyl group order, longest element, Coxeter number from Cartan matrix",
+        "exact Weyl-group order from its bounded faithful signed-root action",
     ),
 )
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import pairwise
 from typing import Annotated, Self
 
 from pydantic import Field, StrictInt, StringConstraints, model_validator
@@ -9,8 +10,8 @@ from pydantic import Field, StrictInt, StringConstraints, model_validator
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 
-MAX_SUBSET_SUM_ITEMS = 256
-MAX_SUBSET_SUM_ITEM_DIGITS = 256
+MAX_SUBSET_SUM_ITEMS = 4_095
+MAX_SUBSET_SUM_ITEM_DIGITS = 32_768
 MAX_SUBSET_SUM_SUM_DIGITS = MAX_SUBSET_SUM_ITEM_DIGITS + len(str(MAX_SUBSET_SUM_ITEMS))
 MAX_SUBSET_SUM_MULTIPLICITY_DIGITS = len(str(1 << MAX_SUBSET_SUM_ITEMS))
 MAX_SUBSET_SUM_PROFILE_ENTRIES = 50_000
@@ -54,9 +55,10 @@ class IndexedIntegerSequence(StrictModel):
     items: tuple[IndexedInteger, ...] = Field(
         max_length=MAX_SUBSET_SUM_ITEMS,
         description=(
-            "An ordered tuple of at most 256 canonical integers. Repeated values "
-            "and zeros remain distinct indexed items; each integer has at most "
-            "256 decimal digits, excluding its optional sign."
+            f"An ordered tuple of at most {MAX_SUBSET_SUM_ITEMS:,} canonical "
+            "integers. Repeated values and zeros remain distinct indexed items; "
+            f"each integer has at most {MAX_SUBSET_SUM_ITEM_DIGITS:,} decimal "
+            "digits, excluding its optional sign."
         ),
         examples=[("1", "1", "3")],
     )
@@ -66,7 +68,8 @@ class IndexedIntegerSequence(StrictModel):
         for item in self.items:
             if len(item.lstrip("-")) > MAX_SUBSET_SUM_ITEM_DIGITS:
                 raise ValueError(
-                    "indexed integer exceeds the 256-digit source-item bound"
+                    f"indexed integer exceeds the "
+                    f"{MAX_SUBSET_SUM_ITEM_DIGITS:,}-digit source-item bound"
                 )
         return self
 
@@ -164,7 +167,23 @@ class SubsetSumProfile(StrictModel):
 
 
 __all__ = [
+    "IndexSubset",
     "IndexedIntegerSequence",
     "SubsetSumProfile",
     "SubsetSumProfileEntry",
 ]
+
+
+class IndexSubset(StrictModel):
+    """A finite subset of nonnegative indices in canonical increasing order."""
+
+    indices: tuple[Annotated[StrictInt, Field(ge=0)], ...] = Field(
+        description="Strictly increasing nonnegative indices.",
+        examples=[(0, 2)],
+    )
+
+    @model_validator(mode="after")
+    def require_strictly_increasing_indices(self) -> Self:
+        if any(left >= right for left, right in pairwise(self.indices)):
+            raise ValueError("subset indices must be strictly increasing")
+        return self

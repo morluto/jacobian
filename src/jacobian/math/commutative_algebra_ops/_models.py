@@ -205,7 +205,12 @@ class IdealQuotientRequest(StrictModel):
 
 
 IdealExecutionOutcome = Literal[
-    "COMPUTED", "UNAVAILABLE", "TIMEOUT", "LIMIT_EXCEEDED", "ERROR"
+    "COMPUTED",
+    "UNAVAILABLE",
+    "TIMEOUT",
+    "CANCELLED",
+    "LIMIT_EXCEEDED",
+    "ERROR",
 ]
 
 

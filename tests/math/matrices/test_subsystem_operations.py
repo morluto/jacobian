@@ -251,6 +251,31 @@ def test_operation_input_digits_are_checked_before_exact_backend_work() -> None:
         PsdOrderRequest(left=source, right=source)
 
 
+def test_kronecker_product_schema_describes_the_coupled_operand_digit_bound() -> None:
+    schema = SubsystemKroneckerProductRequest.model_json_schema()
+    for side in ("left", "right"):
+        description = schema["properties"][side]["description"]
+        assert "couples both operands" in description
+        assert "256" in description
+
+
+def test_kronecker_product_admits_asymmetric_operand_digit_growth() -> None:
+    q = MatrixSubsystem(label="q", dimension=2)
+    r = MatrixSubsystem(label="r", dimension=2)
+    heavy = Fraction(1, 10**199 + 3)
+    wide = _matrix([[heavy, 0], [0, 1]], (q,))
+    compact = _matrix([[1, 0], [0, 1]], (r,))
+
+    product = kronecker_product(wide, compact)
+    assert len(product.matrix.entries[0][0].den) == 200
+
+    with pytest.raises(ValidationError, match="result bound"):
+        SubsystemKroneckerProductRequest(
+            left=_matrix([[heavy, 0], [0, 1]], (r,)),
+            right=wide,
+        )
+
+
 def test_psd_order_result_admits_retained_sources_before_inertia_replay(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -11,6 +11,7 @@ from jacobian.math.code_nonlinear._budget import (
     MAX_CODE_RESULT_BYTES,
     MAX_PROFILE_PAIRS,
     distance_profile_wire_upper_bound,
+    require_constant_weight_admission,
     require_pair_work_admission,
     require_profile_admission,
     require_set_system_output_bound,
@@ -21,8 +22,6 @@ from jacobian.math.code_nonlinear.values import (
     BinaryWord,
     ExplicitBinaryCode,
 )
-
-MAX_GENERATED_LENGTH = 16
 
 StrictNonnegativeInt = Annotated[int, Field(strict=True, ge=0)]
 StrictPositiveInt = Annotated[int, Field(strict=True, gt=0)]
@@ -70,13 +69,12 @@ class BinaryCodeRequest(StrictModel):
 class ConstantWeightRequest(StrictModel):
     """Generate all binary words of one bounded length and weight."""
 
-    length: Annotated[int, Field(strict=True, ge=0, le=MAX_GENERATED_LENGTH)]
-    weight: Annotated[int, Field(strict=True, ge=0, le=MAX_GENERATED_LENGTH)]
+    length: Annotated[int, Field(strict=True, ge=0, le=MAX_EXPLICIT_CODE_LENGTH)]
+    weight: Annotated[int, Field(strict=True, ge=0, le=MAX_EXPLICIT_CODE_LENGTH)]
 
     @model_validator(mode="after")
     def require_valid_weight(self) -> Self:
-        if self.weight > self.length:
-            raise ValueError("weight cannot exceed length")
+        require_constant_weight_admission(self.length, self.weight)
         return self
 
 
@@ -107,8 +105,8 @@ class DistanceProfileResult(StrictModel):
 class ConstantWeightResult(StrictModel):
     """Complete generated constant-weight code, bound to length and weight."""
 
-    length: Annotated[int, Field(strict=True, ge=0, le=MAX_GENERATED_LENGTH)]
-    weight: Annotated[int, Field(strict=True, ge=0, le=MAX_GENERATED_LENGTH)]
+    length: Annotated[int, Field(strict=True, ge=0, le=MAX_EXPLICIT_CODE_LENGTH)]
+    weight: Annotated[int, Field(strict=True, ge=0, le=MAX_EXPLICIT_CODE_LENGTH)]
     code: ExplicitBinaryCode
     count: StrictPositiveInt
 
@@ -116,8 +114,7 @@ class ConstantWeightResult(StrictModel):
     def bind_generated_code(self) -> Self:
         from jacobian.math.code_nonlinear._operations import _constant_weight_code
 
-        if self.weight > self.length:
-            raise ValueError("weight cannot exceed length")
+        require_constant_weight_admission(self.length, self.weight)
         expected = _constant_weight_code(self.length, self.weight)
         if self.code != expected:
             raise ValueError("code must contain every word of the declared weight")

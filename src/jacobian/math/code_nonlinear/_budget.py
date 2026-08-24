@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import comb
 
-from jacobian.math.code_nonlinear.values import BinaryWord, ExplicitBinaryCode
+from jacobian.math.code_nonlinear.values import (
+    MAX_EXPLICIT_CODE_BITS,
+    BinaryWord,
+    ExplicitBinaryCode,
+)
 
 # A normal operation invocation visits every unordered pair once in the kernel
 # and once more when result construction replays the source-bound conclusion.
@@ -20,6 +25,15 @@ BITSET_CHUNK_BITS = 30
 # below the canonical transport's 10 MiB ceiling.  Four MiB leaves room for
 # the operation envelope and is checked from the source before pair replay.
 MAX_CODE_RESULT_BYTES = 4 * 1024 * 1024
+
+# Enumerating every ``length``-bit word of weight ``w`` visits exactly
+# ``binomial(length, w)`` candidates and materializes exactly
+# ``length * binomial(length, w)`` binary entries, so that one quantity
+# bounds the combinations work, the intermediate codeword list, and the
+# exact generated result.  Capping it at the canonical explicit-code source
+# bound admits materially larger useful cases than any fixed length cap;
+# the documented A(23,6,10) construction needs 68,816 entries.
+MAX_GENERATED_CODE_ENTRIES = MAX_EXPLICIT_CODE_BITS
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,6 +205,36 @@ def require_word_distance_output_bound(length: int) -> int:
     return bound
 
 
+def constant_weight_result_wire_upper_bound(length: int, cardinality: int) -> int:
+    word_bytes = _binary_word_wire_bytes(length)
+    words_bytes = 2 if cardinality == 0 else 1 + cardinality * (word_bytes + 1)
+    # Fixed object keys, braces, commas, and scalar punctuation fit well
+    # below this 64-byte allowance.
+    return 64 + words_bytes + 3 * (_digits(length) + _digits(cardinality))
+
+
+def require_constant_weight_admission(length: int, weight: int) -> int:
+    """Admit the complete weight-``weight`` generation before enumerating."""
+    if not 0 <= weight <= length:
+        raise ValueError("weight cannot exceed length")
+    cardinality = comb(length, weight)
+    entries = length * cardinality
+    if entries > MAX_GENERATED_CODE_ENTRIES:
+        raise ValueError(
+            "constant-weight generation materializes "
+            f"{entries} entries ({length} coordinates * {cardinality} words), "
+            f"exceeding the {MAX_GENERATED_CODE_ENTRIES}-entry bound"
+        )
+    wire_bytes = constant_weight_result_wire_upper_bound(length, cardinality)
+    if wire_bytes > MAX_CODE_RESULT_BYTES:
+        raise ValueError(
+            "constant-weight generation can use up to "
+            f"{wire_bytes} canonical JSON bytes, exceeding the "
+            f"{MAX_CODE_RESULT_BYTES}-byte result bound"
+        )
+    return cardinality
+
+
 def distance_profile_wire_upper_bound(code: ExplicitBinaryCode) -> int:
     cardinality = len(code.codewords)
     weights = _array_wire_bytes(cardinality, code.length)
@@ -200,11 +244,14 @@ def distance_profile_wire_upper_bound(code: ExplicitBinaryCode) -> int:
 __all__ = [
     "BITSET_CHUNK_BITS",
     "MAX_CODE_RESULT_BYTES",
+    "MAX_GENERATED_CODE_ENTRIES",
     "MAX_PROFILE_BITSET_CHUNK_WORK",
     "MAX_PROFILE_PAIRS",
     "PROFILE_PAIR_PASSES",
     "ProfileAdmission",
+    "constant_weight_result_wire_upper_bound",
     "distance_profile_wire_upper_bound",
+    "require_constant_weight_admission",
     "require_pair_work_admission",
     "require_profile_admission",
     "require_set_system_output_bound",

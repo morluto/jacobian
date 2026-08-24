@@ -24,6 +24,7 @@ from jacobian.math.code_nonlinear._models import (
     ConstantWeightProfileRequest,
     ConstantWeightProfileResult,
     ConstantWeightRequest,
+    ConstantWeightResult,
     ExplicitProfileRequest,
     ExplicitProfileResult,
     ToSetSystemRequest,
@@ -631,6 +632,33 @@ class TestLegacyCanonicalConsumers:
         assert result.weight == 2
         assert result.count == 6
         assert all(sum(word) == 2 for word in result.code.codewords)
+
+    def test_constant_weight_admission_derives_the_work_from_length_and_weight(
+        self,
+    ) -> None:
+        zero = compute_constant_weight(ConstantWeightRequest(length=64, weight=0))
+        assert zero.count == 1
+        assert zero.code.codewords == ((0,) * 64,)
+        unit = compute_constant_weight(ConstantWeightRequest(length=64, weight=1))
+        assert unit.count == 64
+        assert all(sum(word) == 1 for word in unit.code.codewords)
+        wide = compute_constant_weight(ConstantWeightRequest(length=17, weight=8))
+        assert wide.count == 24310
+        assert all(sum(word) == 8 for word in wide.code.codewords)
+        serialized = wide.model_dump(mode="json")
+        replayed = ConstantWeightResult.model_validate(serialized)
+        assert replayed.code == wide.code
+        axis = compute_constant_weight(
+            ConstantWeightRequest(length=MAX_EXPLICIT_CODE_LENGTH, weight=0)
+        )
+        assert axis.count == 1
+        assert axis.code.codewords == ((0,) * MAX_EXPLICIT_CODE_LENGTH,)
+
+    def test_constant_weight_admission_rejects_central_binomial_work(self) -> None:
+        with pytest.raises(ValidationError, match="entry bound"):
+            ConstantWeightRequest.model_validate({"length": 64, "weight": 32})
+        properties = ConstantWeightRequest.model_json_schema()["properties"]
+        assert properties["length"]["maximum"] == MAX_EXPLICIT_CODE_LENGTH
 
     def test_zero_coordinate_generator_returns_the_sole_empty_word(self) -> None:
         result = compute_constant_weight(ConstantWeightRequest(length=0, weight=0))

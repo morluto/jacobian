@@ -82,7 +82,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "code.nonlinear.constant_weight.compute",
         "Generate all constant-weight binary words",
-        "Generate all binary words of given length and Hamming weight.",
+        "Generate all binary words of given length and Hamming weight; the exact work and result are bounded by length times binomial(length, weight).",
         ConstantWeightRequest,
         ConstantWeightResult,
         compute_constant_weight,

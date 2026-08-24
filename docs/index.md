@@ -25,6 +25,8 @@ caller composes the returned mathematical values.
   rules for public mathematical operations.
 - [Mathematical backends](reference/mathematical-backends.md) — adapter,
   conversion, and external-process contracts.
+- [Known backend defects](reference/backend-known-defects.md) — upstream
+  defects that adapters compensate for, with guard tests.
 - [Public operation admission](reference/public-operation-admission.md) — what
   belongs in the agent-visible catalog.
 - [Native Python API](reference/python-api.md) — supported `jacobian.math`

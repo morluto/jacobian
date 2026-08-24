@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.math.formal_concept_analysis.values import FormalContext
+from jacobian.math.formal_concept_analysis.values import (
+    FiniteAttributeImplicationSystem,
+    FormalContext,
+)
 
 
 class _SubsetRequest(StrictModel):
@@ -35,6 +38,32 @@ class AttributeSubsetRequest(_SubsetRequest):
     @model_validator(mode="after")
     def require_valid_indices(self) -> Self:
         self._require_indices(len(self.context.attributes), "attribute")
+        return self
+
+
+class ImplicationClosureRequest(StrictModel):
+    """Close one canonical attribute subset under a finite implication system."""
+
+    system: FiniteAttributeImplicationSystem
+    seed: tuple[StrictInt, ...] = Field(
+        default=(),
+        description=(
+            "Attribute indices initially present. Order is immaterial, duplicate "
+            "indices are invalid, and every index refers to system.attributes."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_bounded_seed(self) -> Self:
+        if len(set(self.seed)) != len(self.seed):
+            raise ValueError("implication seed indices must be unique")
+        if any(
+            not 0 <= attribute < len(self.system.attributes) for attribute in self.seed
+        ):
+            raise ValueError(
+                "implication seed attribute is outside the declared carrier"
+            )
+        object.__setattr__(self, "seed", tuple(sorted(self.seed)))
         return self
 
 
@@ -109,5 +138,6 @@ __all__ = [
     "DerivationResult",
     "EnumerateConceptsRequest",
     "EnumerateConceptsResult",
+    "ImplicationClosureRequest",
     "ObjectSubsetRequest",
 ]

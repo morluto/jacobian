@@ -1195,29 +1195,113 @@ def test_sparse_power_work_boundary_is_admitted_then_rejected() -> None:
 
 
 def test_candidate_output_term_boundary_is_admitted_then_rejected() -> None:
-    exponents = sorted(
-        ((left, right) for left in range(23) for right in range(23 - left)),
-        reverse=True,
-    )[:256]
-    source = _polynomial(("x", "y"), dict.fromkeys(exponents, 1))
-    operator = _operator(("x", "y"), {(1, 0): 1, (0, 0): 1})
+    variables = ("x",)
+    operator = _operator(variables, {(1,): 1, (0,): 1})
+
+    def source(term_count: int) -> RationalPolynomial:
+        return _polynomial(
+            variables,
+            dict.fromkeys(((4 * index + 3,) for index in range(term_count)), 1),
+        )
 
     accepted = DifferentialOperatorApplyRequest(
-        polynomial=source,
+        polynomial=source(1_024),
         operator=operator,
-        iterations=15,
+        iterations=3,
     )
     assert isinstance(
         compute_differential_operator_application(accepted),
         DifferentialOperatorApplyResult,
     )
+    expected_terms: dict[tuple[int, ...], int] = {}
+    for index in range(1_024):
+        exponent = 4 * index + 3
+        for order in range(4):
+            key = (exponent - order,)
+            expected_terms[key] = expected_terms.get(key, 0) + math.comb(
+                3, order
+            ) * math.perm(exponent, order)
+    result = compute_differential_operator_application(accepted)
+    assert result.output == _polynomial(variables, expected_terms)
 
     with pytest.raises(ValidationError, match="candidate-term budget"):
         DifferentialOperatorApplyRequest(
+            polynomial=source(1_025),
+            operator=operator,
+            iterations=3,
+        )
+
+
+def test_correlated_powered_axes_are_counted_distinctly() -> None:
+    variables = ("x", "y")
+    operator = _operator(
+        variables,
+        dict.fromkeys(((order, order) for order in range(100)), 1),
+    )
+    source = _polynomial(variables, {(200, 200): 1})
+
+    def paths(order: int) -> int:
+        return min(order, 99) - max(0, order - 99) + 1
+
+    expected = _polynomial(
+        variables,
+        {
+            (200 - order, 200 - order): paths(order) * math.perm(200, order) ** 2
+            for order in range(199)
+        },
+    )
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
             polynomial=source,
             operator=operator,
-            iterations=16,
+            iterations=2,
+            expected=expected,
         )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.output == expected
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    assert replayed == result
+
+
+def test_per_monomial_annihilation_is_counted_in_the_candidate_bound() -> None:
+    variables = ("x", "y")
+    operator = _operator(
+        variables,
+        {(i, j): 1 for i in range(64) for j in range(64)},
+    )
+    source = _polynomial(variables, {(64, 0): 1, (0, 64): 1})
+    expected_terms: dict[tuple[int, int], int] = {}
+    for exponent in range(64):
+        coefficient = math.factorial(64) // math.factorial(64 - exponent)
+        expected_terms[(64 - exponent, 0)] = (
+            expected_terms.get((64 - exponent, 0), 0) + coefficient
+        )
+        expected_terms[(0, 64 - exponent)] = (
+            expected_terms.get((0, 64 - exponent), 0) + coefficient
+        )
+    expected = _polynomial(variables, expected_terms)
+
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=operator,
+            iterations=1,
+            expected=expected,
+        )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.output == expected
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    assert replayed == result
 
 
 def test_coefficient_growth_boundary_is_admitted_then_rejected() -> None:

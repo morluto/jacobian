@@ -160,6 +160,45 @@ def _powered_support_bound(
     )
 
 
+ENUMERATION_WORK_CAP = 250_000
+
+
+def _distinct_powered_orders(
+    operator: ConstantCoefficientDifferentialOperator,
+    iterations: int,
+    limit: int,
+) -> tuple[tuple[int, ...], ...] | None:
+    """Enumerate the distinct aggregate multi-indices of a powered operator.
+
+    Returns ``None`` when enumeration exceeds ``limit`` distinct sums or the
+    work cap; callers then fall back to the analytic support bound.
+    """
+
+    if iterations == 0:
+        return ()
+    terms = tuple(term.orders for term in operator.terms)
+    if not terms:
+        return ()
+    current = {tuple(orders) for orders in terms}
+    work = len(current)
+    for _ in range(iterations - 1):
+        expanded: set[tuple[int, ...]] = set()
+        exhausted = False
+        for existing in current:
+            for orders in terms:
+                expanded.add(tuple(map(sum, zip(existing, orders, strict=True))))
+                work += 1
+                if len(expanded) > limit or work > ENUMERATION_WORK_CAP:
+                    exhausted = True
+                    break
+            if exhausted:
+                break
+        if exhausted:
+            return None
+        current = expanded
+    return tuple(sorted(current))
+
+
 def _operator_power_work(
     term_count: int,
     iterations: int,
@@ -481,47 +520,73 @@ def validate_application_envelope(
     _require_expected_output(expected)
 
     term_count = len(operator.terms)
-    maximum_exponents = tuple(
-        max(term.exponents[axis] for term in polynomial.polynomial.terms)
-        for axis in range(len(polynomial.variables))
-    )
     maximum_axis_orders = tuple(
         max(term.orders[axis] for term in operator.terms)
         for axis in range(len(polynomial.variables))
     )
-    expanded_terms = _powered_support_bound(
-        term_count,
+    powered_orders = _distinct_powered_orders(
+        operator,
         iterations,
-        maximum_axis_orders,
         MAX_APPLICATION_OUTPUT_TERMS,
     )
+    if powered_orders is not None:
+        expanded_terms = len(powered_orders)
+    else:
+        expanded_terms = _powered_support_bound(
+            term_count,
+            iterations,
+            maximum_axis_orders,
+            MAX_APPLICATION_OUTPUT_TERMS,
+        )
     if expanded_terms > MAX_APPLICATION_OUTPUT_TERMS:
         raise ValueError(
             "differential-operator power exceeds the expanded-support budget"
         )
-    # A powered aggregate multi-index acts on the source only when every
-    # axis order stays within the source's widest per-axis exponent, so the
-    # candidate support counts those acting aggregates instead of treating
+    # A powered aggregate acts on a source monomial only when every axis
+    # order stays within that monomial's exponents, so the candidate support
+    # counts acting aggregates per source monomial instead of treating
     # annihilating powered terms as surviving output paths.
-    acting_terms = min(
-        expanded_terms,
-        _bounded_box_count(
-            (
-                min(exponent, iterations * order) + 1
-                for exponent, order in zip(
-                    maximum_exponents,
-                    maximum_axis_orders,
-                    strict=True,
+    if powered_orders is not None:
+        candidate_terms = 0
+        for source_term in polynomial.polynomial.terms:
+            candidate_terms += sum(
+                1
+                for orders in powered_orders
+                if all(
+                    order <= exponent
+                    for order, exponent in zip(
+                        orders, source_term.exponents, strict=True
+                    )
                 )
-            ),
-            MAX_APPLICATION_OUTPUT_TERMS,
-        ),
-    )
-    candidate_terms = len(polynomial.polynomial.terms) * acting_terms
-    if candidate_terms > MAX_APPLICATION_OUTPUT_TERMS:
-        raise ValueError(
-            "differential-operator output exceeds the candidate-term budget"
+            )
+            if candidate_terms > MAX_APPLICATION_OUTPUT_TERMS:
+                raise ValueError(
+                    "differential-operator output exceeds the candidate-term budget"
+                )
+    else:
+        maximum_exponents = tuple(
+            max(term.exponents[axis] for term in polynomial.polynomial.terms)
+            for axis in range(len(polynomial.variables))
         )
+        acting_terms = min(
+            expanded_terms,
+            _bounded_box_count(
+                (
+                    min(exponent, iterations * order) + 1
+                    for exponent, order in zip(
+                        maximum_exponents,
+                        maximum_axis_orders,
+                        strict=True,
+                    )
+                ),
+                MAX_APPLICATION_OUTPUT_TERMS,
+            ),
+        )
+        candidate_terms = len(polynomial.polynomial.terms) * acting_terms
+        if candidate_terms > MAX_APPLICATION_OUTPUT_TERMS:
+            raise ValueError(
+                "differential-operator output exceeds the candidate-term budget"
+            )
 
     # Signed-unit scalar powers only flip signs: (±1)^k f = ±f keeps every
     # coefficient height unchanged, so their digit admission follows the

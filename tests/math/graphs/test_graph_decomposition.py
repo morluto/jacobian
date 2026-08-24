@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import networkx as nx
 import pytest
 from pydantic import ValidationError
 
@@ -14,13 +15,17 @@ from jacobian.math.graphs.decomposition._models import (
     BridgeBlockResult,
     EarDecompositionRequest,
     EarDecompositionResult,
+    SPQRSkeleton,
+    SPQRTreeRequest,
     UndirectedGraph,
 )
 from jacobian.math.graphs.decomposition._operations import (
+    _validate_spqr_tree,
     compute_biconnected_components,
     compute_block_cut_tree,
     compute_bridge_block_tree,
     compute_ear_decomposition,
+    compute_spqr_tree,
 )
 
 # ---------------------------------------------------------------------------
@@ -50,6 +55,10 @@ def _biconnected_components(graph: dict) -> BiconnectedComponentsResult:
     return compute_biconnected_components(
         BiconnectedComponentsRequest.model_validate({"graph": graph}),
     )
+
+
+def _spqr_tree(graph: dict):
+    return compute_spqr_tree(SPQRTreeRequest.model_validate({"graph": graph}))
 
 
 def _edges_as_sets(edges: tuple[tuple[int, int], ...]) -> frozenset:
@@ -461,4 +470,97 @@ class TestOperationRegistration:
             "graph.decomposition.bridge_block_tree.compute",
             "graph.decomposition.ear.compute",
             "graph.decomposition.biconnected_components.compute",
+            "graph.decomposition.spqr_tree.compute",
         }
+
+
+class TestSPQRTree:
+    def test_rigid_k4_is_one_r_skeleton(self) -> None:
+        result = _spqr_tree(
+            {
+                "vertex_count": 4,
+                "edges": [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)],
+            }
+        )
+        assert result.status == "SPQR_TREE"
+        assert [node.kind for node in result.nodes] == ["R_NODE"]
+        assert result.virtual_edge_pairs == ()
+
+    def test_cycle_is_one_s_skeleton(self) -> None:
+        result = _spqr_tree(
+            {
+                "vertex_count": 4,
+                "edges": [(0, 1), (1, 2), (2, 3), (3, 0)],
+            }
+        )
+        assert result.status == "SPQR_TREE"
+        assert [node.kind for node in result.nodes] == ["S_NODE"]
+
+    def test_theta_has_parallel_junction_and_paired_virtual_edges(self) -> None:
+        result = _spqr_tree(
+            {
+                "vertex_count": 5,
+                "edges": [(0, 2), (2, 1), (0, 3), (3, 1), (0, 4), (4, 1)],
+            }
+        )
+        assert result.status == "SPQR_TREE"
+        assert [node.kind for node in result.nodes].count("P_NODE") == 1
+        assert len(result.virtual_edge_pairs) == 3
+        assert len(result.source_edge_owners) == 6
+
+    def test_non_biconnected_graph_returns_articulation_witness(self) -> None:
+        result = _spqr_tree({"vertex_count": 3, "edges": [(0, 1), (1, 2)]})
+        assert result.status == "NOT_BICONNECTED"
+        assert result.witness_kind == "ARTICULATION"
+        assert result.witness_vertices == (1,)
+
+    def test_replay_rejects_missing_real_source_edge(self) -> None:
+        result = _spqr_tree(
+            {
+                "vertex_count": 4,
+                "edges": [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)],
+            }
+        )
+        node = result.nodes[0]
+        malformed = result.model_copy(
+            update={
+                "nodes": (
+                    SPQRSkeleton(
+                        node_id=node.node_id,
+                        kind=node.kind,
+                        vertices=node.vertices,
+                        edges=node.edges[:-1],
+                    ),
+                )
+            }
+        )
+        with pytest.raises(ValueError):
+            _validate_spqr_tree(malformed)
+
+    def test_replay_rejects_unpaired_virtual_edge(self) -> None:
+        result = _spqr_tree(
+            {
+                "vertex_count": 5,
+                "edges": [(0, 2), (2, 1), (0, 3), (3, 1), (0, 4), (4, 1)],
+            }
+        )
+        malformed = result.model_copy(update={"virtual_edge_pairs": ()})
+        with pytest.raises(ValueError, match="every virtual skeleton edge"):
+            _validate_spqr_tree(malformed)
+
+    def test_replays_every_biconnected_networkx_atlas_graph(self) -> None:
+        """The finite atlas covers overlapping separator patterns through 7 vertices."""
+        checked = 0
+        for atlas_graph in nx.graph_atlas_g():
+            if not 3 <= len(atlas_graph) <= 7 or not nx.is_biconnected(atlas_graph):
+                continue
+            relabelled = nx.convert_node_labels_to_integers(atlas_graph)
+            result = _spqr_tree(
+                {
+                    "vertex_count": len(relabelled),
+                    "edges": tuple(sorted(relabelled.edges())),
+                }
+            )
+            assert result.status == "SPQR_TREE"
+            checked += 1
+        assert checked == 538

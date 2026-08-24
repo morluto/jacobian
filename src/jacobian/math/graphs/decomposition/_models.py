@@ -111,3 +111,106 @@ class BiconnectedComponentsResult(StrictModel):
 
     components: tuple[tuple[int, ...], ...] = Field(default=())
     convention: Literal["NETWORKX_BICONNECTED"] = "NETWORKX_BICONNECTED"
+
+
+# ---------------------------------------------------------------------------
+# SPQR trees
+# ---------------------------------------------------------------------------
+
+
+class SPQRTreeRequest(StrictModel):
+    """Request the normalized SPQR tree of one finite simple graph.
+
+    The positive branch uses the convention that a source graph must be
+    connected, biconnected, and have at least three vertices.  Other inputs
+    return a concrete ``NOT_BICONNECTED`` witness rather than an empty tree.
+    """
+
+    graph: UndirectedGraph = Field(
+        description=(
+            "Finite simple undirected source graph. A positive SPQR tree uses"
+            " the biconnected, at-least-three-vertices convention."
+        )
+    )
+
+
+class SPQRSkeletonEdge(StrictModel):
+    """One real source edge or one paired virtual skeleton edge."""
+
+    edge_id: str = Field(min_length=1, max_length=96)
+    left: int = Field(ge=0, le=63)
+    right: int = Field(ge=0, le=63)
+    kind: Literal["REAL", "VIRTUAL"]
+    source_edge: tuple[int, int] | None = None
+
+    @model_validator(mode="after")
+    def require_tagged_edge_invariant(self) -> Self:
+        if self.left == self.right:
+            raise ValueError("SPQR skeleton edges must be loopless")
+        if self.kind == "REAL":
+            if self.source_edge != (
+                min(self.left, self.right),
+                max(self.left, self.right),
+            ):
+                raise ValueError("a real skeleton edge must name its source edge")
+        elif self.source_edge is not None:
+            raise ValueError("a virtual skeleton edge must not name a source edge")
+        return self
+
+
+class SPQRSkeleton(StrictModel):
+    """One S, P, Q, or R skeleton with stable presentation identity."""
+
+    node_id: str = Field(min_length=1, max_length=64)
+    kind: Literal["S_NODE", "P_NODE", "Q_NODE", "R_NODE"]
+    vertices: tuple[int, ...] = Field(min_length=2, max_length=64)
+    edges: tuple[SPQRSkeletonEdge, ...] = Field(min_length=1, max_length=1_536)
+
+    @model_validator(mode="after")
+    def require_canonical_skeleton_carrier(self) -> Self:
+        if self.vertices != tuple(sorted(set(self.vertices))):
+            raise ValueError("SPQR skeleton vertices must be sorted and unique")
+        if any(
+            edge.left not in self.vertices or edge.right not in self.vertices
+            for edge in self.edges
+        ):
+            raise ValueError("SPQR skeleton edges must use declared skeleton vertices")
+        if len({edge.edge_id for edge in self.edges}) != len(self.edges):
+            raise ValueError("SPQR skeleton edge IDs must be unique")
+        return self
+
+
+class SPQRTreeResult(StrictModel):
+    """Source-bound normalized SPQR decomposition or a negative witness."""
+
+    source_graph: UndirectedGraph
+    status: Literal["SPQR_TREE", "NOT_BICONNECTED"]
+    witness_kind: Literal["ARTICULATION", "DISCONNECTED", "MINIMUM_SIZE"] | None = None
+    witness_vertices: tuple[int, ...] = Field(default=(), max_length=2)
+    nodes: tuple[SPQRSkeleton, ...] = Field(default=(), max_length=1_024)
+    tree_edges: tuple[tuple[str, str], ...] = Field(default=(), max_length=1_023)
+    virtual_edge_pairs: tuple[tuple[str, str], ...] = Field(
+        default=(), max_length=1_536
+    )
+    source_edge_owners: tuple[tuple[tuple[int, int], str, str], ...] = Field(
+        default=(), max_length=512
+    )
+    convention: Literal["JACOBIAN_NORMALIZED_FULL_SPQR_V1"] = (
+        "JACOBIAN_NORMALIZED_FULL_SPQR_V1"
+    )
+
+    @model_validator(mode="after")
+    def require_closed_branch_shape(self) -> Self:
+        if self.status == "NOT_BICONNECTED":
+            if self.witness_kind is None or not self.witness_vertices:
+                raise ValueError("a non-biconnected result requires a concrete witness")
+            if (
+                self.nodes
+                or self.tree_edges
+                or self.virtual_edge_pairs
+                or self.source_edge_owners
+            ):
+                raise ValueError("a non-biconnected result must not carry an SPQR tree")
+        elif self.witness_kind is not None or self.witness_vertices:
+            raise ValueError("an SPQR tree must not carry a negative witness")
+        return self

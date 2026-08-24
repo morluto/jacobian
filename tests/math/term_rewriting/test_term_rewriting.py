@@ -25,17 +25,25 @@ from jacobian.math.term_rewriting._operations import (
 )
 from jacobian.math.term_rewriting._tools import TOOLS
 from jacobian.math.term_rewriting.operations import (
+    _nonvariable_positions,
+    _replace_at_position,
+    _standardize_apart,
+    _term_node_count,
     apply_substitution,
     critical_pairs,
     match,
     normal_form,
     rewrite_steps,
     selected_rewrite_step,
+    term_at_position,
     unify,
 )
 from jacobian.math.term_rewriting.values import (
+    MAX_CRITICAL_PAIR_CANDIDATES,
     MAX_CRITICAL_PAIR_RESULT_BYTES,
+    MAX_CRITICAL_PAIR_RESULT_NODES,
     MAX_CRITICAL_PAIR_RULE_NODES,
+    RankedSignature,
     RewriteRule,
     Term,
 )
@@ -48,6 +56,35 @@ def _var(symbol: int) -> Term:
 
 def _app(symbol: int, *children: Term) -> Term:
     return Term(is_variable=False, symbol=symbol, children=tuple(children))
+
+
+def _chained_overlap_witness(
+    depth: int,
+) -> tuple[RankedSignature, RewriteRule, RewriteRule]:
+    """Signature and two root-overlapping rules with a chained idempotent MGU.
+
+    Overlap slot ``k`` opposes one bare chain variable to a tripled next-chain
+    variable, so unifying the left sides binds the first variable through
+    ``depth`` nested substitutions while every rule side stays within the
+    16-node bound (both depth-6 sides are exactly 16 nodes). Each right side
+    repeats its chain variable 15 times, so each root orientation expands to
+    ``1 + 15 * ((3 ** (depth + 1) - 1) // 2)`` reduct nodes.
+    """
+    left_slots: list[Term] = []
+    right_slots: list[Term] = []
+    for level in range(depth):
+        if level % 2 == 0:
+            left_slots.append(_var(100 + level))
+            right_slots.append(_app(1, *([_var(101 + level)] * 3)))
+        else:
+            left_slots.append(_app(1, *([_var(101 + level)] * 3)))
+            right_slots.append(_var(100 + level))
+    signature = RankedSignature(arities=(depth, 3, 15))
+    return (
+        signature,
+        RewriteRule(lhs=_app(0, *left_slots), rhs=_app(2, *([_var(100)] * 15))),
+        RewriteRule(lhs=_app(0, *right_slots), rhs=_app(2, *([_var(101)] * 15))),
+    )
 
 
 def test_catalog_contains_only_audited_agent_outcomes() -> None:
@@ -485,6 +522,64 @@ class TestCriticalPairs:
         rule = RewriteRule(lhs=_app(0, _var(1_000_000)), rhs=_var(1_000_000))
         with pytest.raises(ValueError, match="variable IDs"):
             critical_pairs(signature, (rule,))
+
+    @pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
+    def test_chained_binding_family_admits_and_replays_within_envelope(
+        self, depth: int
+    ):
+        signature, outer_rule, inner_rule = _chained_overlap_witness(depth)
+        rules = (outer_rule, inner_rule)
+        result = compute_critical_pairs(
+            CriticalPairsRequest(signature=signature, rules=rules)
+        )
+        materialized_nodes = sum(
+            _term_node_count(term)
+            for pair in result.profile.pairs
+            for term in (
+                *pair.substitution.values(),
+                pair.inner_reduct,
+                pair.outer_reduct,
+            )
+        )
+        assert materialized_nodes <= MAX_CRITICAL_PAIR_RESULT_NODES
+        assert CriticalPairsResult.model_validate_json(result.model_dump_json()) == (
+            result
+        )
+        for pair in result.profile.pairs:
+            candidate = result.profile.candidates[pair.candidate_index]
+            standardized_outer, standardized_inner, _, _ = _standardize_apart(
+                rules[candidate.outer_rule_index], rules[candidate.inner_rule_index]
+            )
+            substitution = unify(
+                standardized_inner.lhs,
+                term_at_position(standardized_outer.lhs, candidate.position),
+            )
+            assert substitution is not None
+            assert pair.substitution == substitution
+            spliced = _replace_at_position(
+                standardized_outer.lhs, candidate.position, standardized_inner.rhs
+            )
+            assert pair.inner_reduct == apply_substitution(spliced, substitution)
+            assert pair.outer_reduct == apply_substitution(
+                standardized_outer.rhs, substitution
+            )
+
+    def test_dependency_chained_mgu_expansion_is_preflight_bounded(self):
+        signature, outer_rule, inner_rule = _chained_overlap_witness(6)
+        rules = (outer_rule, inner_rule)
+        assert all(
+            _term_node_count(side) <= MAX_CRITICAL_PAIR_RULE_NODES
+            for rule in rules
+            for side in (rule.lhs, rule.rhs)
+        )
+        candidates = len(rules) * sum(
+            len(_nonvariable_positions(rule.lhs)) for rule in rules
+        ) - len(rules)
+        assert 0 < candidates <= MAX_CRITICAL_PAIR_CANDIDATES
+        with pytest.raises(ValidationError, match="result nodes"):
+            CriticalPairsRequest(signature=signature, rules=rules)
+        with pytest.raises(ValueError, match="result nodes"):
+            critical_pairs(signature, rules)
 
 
 class TestValidation:

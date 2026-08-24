@@ -31,6 +31,8 @@ __all__ = [
     "unify",
 ]
 
+_RESULT_NODES_EXCEEDED = "critical-pair result nodes exceed the supported bound"
+
 
 def _variables(term: Term) -> set[int]:
     if term.is_variable:
@@ -89,12 +91,22 @@ def _apply_recursive_substitution(term: Term, subst: dict[int, Term]) -> Term:
 
 def unify(left: Term, right: Term) -> dict[int, Term] | None:
     """Unify two terms, returning an idempotent most-general unifier."""
+    return _unify(left, right, None)
+
+
+def _unify(
+    left: Term, right: Term, budget: _MaterializationBudget | None
+) -> dict[int, Term] | None:
+    """Run the kernel unification, charging materialized terms against budget."""
     equations = [(left, right)]
     substitution: dict[int, Term] = {}
     while equations:
         equation_left, equation_right = equations.pop()
         equation_left = _apply_recursive_substitution(equation_left, substitution)
         equation_right = _apply_recursive_substitution(equation_right, substitution)
+        if budget is not None:
+            budget.charge(equation_left)
+            budget.charge(equation_right)
         if equation_left == equation_right:
             continue
         if equation_right.is_variable:
@@ -102,11 +114,16 @@ def unify(left: Term, right: Term) -> dict[int, Term] | None:
         if equation_left.is_variable:
             if equation_left.symbol in _variables(equation_right):
                 return None
+            if budget is not None:
+                budget.charge(equation_right)
             binding = {equation_left.symbol: equation_right}
             substitution = {
                 variable: _apply_recursive_substitution(term, binding)
                 for variable, term in substitution.items()
             }
+            if budget is not None:
+                for bound in substitution.values():
+                    budget.charge(bound)
             substitution[equation_left.symbol] = equation_right
             continue
         if (
@@ -175,6 +192,29 @@ def _term_node_count(term: Term) -> int:
     return 1 + sum(_term_node_count(child) for child in term.children)
 
 
+class _ResultEnvelopeError(Exception):
+    """Raised when admitted materialization would leave the node envelope."""
+
+
+class _MaterializationBudget:
+    """Charge every materialized term against a remaining node allowance.
+
+    Charges count materialization events, so they upper-bound both the
+    unification work performed and the distinct nodes any produced binding
+    contributes to a result.
+    """
+
+    __slots__ = ("remaining",)
+
+    def __init__(self, remaining: int) -> None:
+        self.remaining = remaining
+
+    def charge(self, term: Term) -> None:
+        self.remaining -= _term_node_count(term)
+        if self.remaining < 0:
+            raise _ResultEnvelopeError
+
+
 def _require_bounded_variable_ids(term: Term) -> None:
     if term.is_variable and term.symbol > MAX_CRITICAL_PAIR_VARIABLE_ID:
         raise ValueError("critical-pair variable IDs exceed the supported bound")
@@ -182,20 +222,64 @@ def _require_bounded_variable_ids(term: Term) -> None:
         _require_bounded_variable_ids(child)
 
 
-def _critical_pair_result_node_upper_bound(
-    rule_count: int, candidate_count: int
-) -> int:
-    rule_nodes = MAX_CRITICAL_PAIR_RULE_NODES
-    pair_nodes = (
-        (2 * rule_nodes - 1) * rule_nodes
-        + rule_nodes * rule_nodes
-        + 2 * rule_nodes * rule_nodes
-    )
-    return (
-        2 * rule_count * rule_nodes
-        + candidate_count * pair_nodes
-        + 4 * candidate_count * rule_nodes
-    )
+def _expanded_node_count(term: Term, binding_sizes: dict[int, int]) -> int:
+    """Node count of ``apply_substitution(term, ...)`` without materializing it."""
+    if term.is_variable:
+        return binding_sizes.get(term.symbol, 1)
+    return 1 + sum(_expanded_node_count(child, binding_sizes) for child in term.children)
+
+
+def _admit_critical_pair_result_envelope(rules: tuple[RewriteRule, ...]) -> int:
+    """Charge every materialized overlap object against the result envelope.
+
+    Binding growth is dependency-driven: a chained idempotent MGU expands
+    exponentially in its binding depth, so no product of rule-side caps bounds
+    the materialized substitution or its reducts. Each candidate is therefore
+    standardized apart and unified exactly as execution will, under the shared
+    remaining node allowance and with every materialized term charged; reduct
+    sizes are then computed exactly from the substitution. Returns the total
+    charged nodes and raises when the envelope is exceeded.
+    """
+    remaining = MAX_CRITICAL_PAIR_RESULT_NODES
+    for outer_index, outer in enumerate(rules):
+        for position in _nonvariable_positions(outer.lhs):
+            for inner_index, inner in enumerate(rules):
+                if outer_index == inner_index and not position:
+                    continue
+                (
+                    standardized_outer,
+                    standardized_inner,
+                    _outer_renaming,
+                    _inner_renaming,
+                ) = _standardize_apart(outer, inner)
+                budget = _MaterializationBudget(remaining)
+                try:
+                    substitution = _unify(
+                        standardized_inner.lhs,
+                        term_at_position(standardized_outer.lhs, position),
+                        budget,
+                    )
+                except _ResultEnvelopeError:
+                    raise ValueError(_RESULT_NODES_EXCEEDED) from None
+                if substitution is None:
+                    continue
+                remaining = budget.remaining
+                binding_sizes = {
+                    variable: _term_node_count(binding)
+                    for variable, binding in substitution.items()
+                }
+                remaining -= _expanded_node_count(
+                    _replace_at_position(
+                        standardized_outer.lhs, position, standardized_inner.rhs
+                    ),
+                    binding_sizes,
+                )
+                remaining -= _expanded_node_count(
+                    standardized_outer.rhs, binding_sizes
+                )
+                if remaining < 0:
+                    raise ValueError(_RESULT_NODES_EXCEEDED)
+    return MAX_CRITICAL_PAIR_RESULT_NODES - remaining
 
 
 def _validate_critical_pair_source(
@@ -222,10 +306,8 @@ def _validate_critical_pair_source(
     ) - len(rules)
     if candidates > MAX_CRITICAL_PAIR_CANDIDATES:
         raise ValueError("critical-pair overlap candidates exceed the supported bound")
-    result_nodes = _critical_pair_result_node_upper_bound(len(rules), candidates)
-    if result_nodes > MAX_CRITICAL_PAIR_RESULT_NODES:
-        raise ValueError("critical-pair result nodes exceed the supported bound")
-    if result_nodes * 96 > MAX_CRITICAL_PAIR_RESULT_BYTES:
+    charged_nodes = _admit_critical_pair_result_envelope(rules)
+    if charged_nodes * 96 > MAX_CRITICAL_PAIR_RESULT_BYTES:
         raise ValueError("critical-pair result bytes exceed the supported bound")
 
 

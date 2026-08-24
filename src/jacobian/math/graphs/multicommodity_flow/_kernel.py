@@ -77,8 +77,7 @@ def profile_components(
         for vertex in range(flow.network.vertex_count)
     }
     mismatched_divergence_cells = sum(
-        divergences[key] != expected
-        for key, expected in expected_divergences.items()
+        divergences[key] != expected for key, expected in expected_divergences.items()
     )
     all_demands_routed = mismatched_divergence_cells == 0
 

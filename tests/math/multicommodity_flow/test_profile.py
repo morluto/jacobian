@@ -184,9 +184,7 @@ def test_early_divergence_mismatch_still_executes_every_counted_comparison() -> 
 
 def test_mixed_zero_and_positive_capacities_execute_every_counted_comparison() -> None:
     def mixed_flow(zero_capacity_edge_first: bool) -> MulticommodityFlow:
-        capacities = ((q(0), q(1), q(1)), (q(1), q(1), q(0)))[
-            zero_capacity_edge_first
-        ]
+        capacities = ((q(0), q(1), q(1)), (q(1), q(1), q(0)))[zero_capacity_edge_first]
         return MulticommodityFlow(
             network=FlowGraph(
                 vertex_count=4,

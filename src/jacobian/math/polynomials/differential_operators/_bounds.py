@@ -608,12 +608,15 @@ def _per_exponent_height_bits(
             # The exact reduced contribution folds the falling factorial in
             # before normalization, so cross-canceling factors - an N weight
             # against a 1/N coefficient, or 10000! against a /2000!
-            # denominator - never inflate the accounted heights.
+            # denominator - never inflate the accounted heights. Numerators
+            # stay signed: contributions to one target exponent are summed
+            # exactly, so additive cancellation such as N + (-N) is retained
+            # instead of bounding the class by the sum of absolute values.
             contribution = (
                 weight * source_term.coefficient.as_fraction() * falling_product
             )
             class_denominator = contribution.denominator
-            scaled_numerator = abs(contribution.numerator)
+            scaled_numerator = contribution.numerator
             entry = classes.get(target)
             if entry is None:
                 if class_denominator.bit_length() > cap:
@@ -926,26 +929,35 @@ def _expansion_support_candidates(
         )
     # A powered aggregate acts on a source monomial only when every axis
     # order stays within that monomial's exponents, so the candidate support
-    # counts acting aggregates per source monomial instead of treating
-    # annihilating powered terms as surviving output paths.
+    # counts the distinct output exponents across acting aggregates per source
+    # monomial instead of treating annihilating powered terms as surviving
+    # output paths. Distinct targets - not acting pairs - bound the serialized
+    # result: colliding contributions such as an identity shift and a
+    # derivative shift landing on one degree merge into a single output term.
     if powered_orders is not None:
-        candidate_terms = 0
+        targets: set[tuple[int, ...]] = set()
         for source_term in polynomial.polynomial.terms:
-            candidate_terms += sum(
-                1
-                for orders in powered_orders
-                if all(
+            for orders in powered_orders:
+                if not all(
                     order <= exponent
                     for order, exponent in zip(
                         orders, source_term.exponents, strict=True
                     )
+                ):
+                    continue
+                targets.add(
+                    tuple(
+                        exponent - order
+                        for exponent, order in zip(
+                            source_term.exponents, orders, strict=True
+                        )
+                    )
                 )
-            )
-            if candidate_terms > MAX_APPLICATION_OUTPUT_TERMS:
-                raise ValueError(
-                    "differential-operator output exceeds the candidate-term budget"
-                )
-        return expanded_terms, candidate_terms, powered_orders
+                if len(targets) > MAX_APPLICATION_OUTPUT_TERMS:
+                    raise ValueError(
+                        "differential-operator output exceeds the candidate-term budget"
+                    )
+        return expanded_terms, len(targets), powered_orders
     maximum_exponents = tuple(
         max(term.exponents[axis] for term in polynomial.polynomial.terms)
         for axis in range(len(polynomial.variables))

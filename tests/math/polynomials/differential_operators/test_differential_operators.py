@@ -1180,13 +1180,29 @@ def test_dense_source_boundary_follows_the_candidate_support_budget() -> None:
         DifferentialOperatorApplyResult,
     )
 
+    # Acting pairs overcount the result: an identity shift and a derivative
+    # shift collide on one output exponent each, so the candidate budget
+    # follows distinct target exponents instead of (term, shift) pairs.
+    merged = DifferentialOperatorApplyRequest(
+        polynomial=_polynomial(
+            variables,
+            dict.fromkeys(((index,) for index in range(2_049)), 1),
+        ),
+        operator=derivative_plus_one,
+    )
+    assert isinstance(
+        compute_differential_operator_application(merged),
+        DifferentialOperatorApplyResult,
+    )
+
     with pytest.raises(ValidationError, match="candidate-term budget"):
         DifferentialOperatorApplyRequest(
             polynomial=_polynomial(
                 variables,
-                dict.fromkeys(((index,) for index in range(2_049)), 1),
+                dict.fromkeys(((4 * index,) for index in range(1_100)), 1),
             ),
-            operator=derivative_plus_one,
+            operator=_operator(variables, {(3,): 1, (2,): 1, (1,): 1, (0,): 1}),
+            iterations=1,
         )
 
 
@@ -1886,6 +1902,65 @@ def test_falling_factorial_cancels_against_source_denominators() -> None:
     assert result.matches_expected is True
     assert result.is_zero is False
     assert replayed == result
+
+
+def test_colliding_output_exponents_share_the_candidate_budget() -> None:
+    variables = ("x",)
+    source = _polynomial(variables, {(degree,): 1 for degree in range(2_049)})
+    # The identity shift maps x^j to x^j while the derivative shift maps
+    # x^(j+1) to x^j, so all 4,097 acting pairs land on 2,049 output terms.
+    expected = _polynomial(
+        variables,
+        {(degree,): degree + 2 for degree in range(2_048)} | {(2_048,): 1},
+    )
+
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=_operator(variables, {(0,): 1, (1,): 1}),
+            iterations=1,
+            expected=expected,
+        )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.output == expected
+    assert len(result.output.polynomial.terms) == 2_049
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    assert replayed == result
+
+
+def test_class_heights_keep_signed_cancellation() -> None:
+    variables = ("x",)
+    height = 6 * 10**32_767
+
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(variables, {(1,): height, (0,): height}),
+            operator=_operator(variables, {(0,): 1, (1,): -1}),
+            iterations=1,
+            expected=_polynomial(variables, {(1,): height}),
+        )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.output == _polynomial(variables, {(1,): height})
+    assert len(result.output.polynomial.terms[0].coefficient.num) == 32_768
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    assert replayed == result
+
+    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(variables, {(1,): height, (0,): height}),
+            operator=_operator(variables, {(0,): 1, (1,): 1}),
+            iterations=1,
+        )
 
 
 def test_iterations_stay_inside_the_interoperable_integer_range() -> None:

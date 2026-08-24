@@ -35,6 +35,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
+    OperationAdmission(
+        "group.subgroup_lattice.compute",
+        AdmissionDecision.KEEP,
+        "exact complete subgroup lattice enumeration via SymPy bounded to groups of order 64",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

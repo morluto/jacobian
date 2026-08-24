@@ -32,6 +32,7 @@ from jacobian.math.matrices.subsystems.operations import (
 from jacobian.math.matrices.subsystems.values import (
     FactorizedHermitianMatrix,
     MatrixSubsystem,
+    partial_trace_entries,
 )
 from jacobian.math.matrices.values import RationalMatrix
 
@@ -243,6 +244,175 @@ def test_partial_trace_boundary_result_components_round_trip() -> None:
     )
     with pytest.raises(ValidationError, match="4098"):
         SubsystemPartialTraceRequest(matrix=over_source, traced_factor_labels=("q",))
+
+
+def test_kronecker_product_rejects_structural_bounds_before_operand_conversion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.matrices.subsystems import _models
+
+    heavy = Fraction(1, 10**300 + 9)
+
+    def dense(order: int, factor: MatrixSubsystem) -> FactorizedHermitianMatrix:
+        return _matrix(
+            [
+                [heavy if row == column else 0 for column in range(order)]
+                for row in range(order)
+            ],
+            (factor,),
+        )
+
+    converted: list[object] = []
+    real_entry_fractions = _models._entry_fractions
+
+    def counted(matrix: object) -> object:
+        converted.append(matrix)
+        return real_entry_fractions(matrix)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(_models, "_entry_fractions", counted)
+
+    wide_left = MatrixSubsystem(label="wide-left", dimension=5)
+    wide_right = MatrixSubsystem(label="wide-right", dimension=4)
+    with pytest.raises(ValidationError, match="dimension"):
+        SubsystemKroneckerProductRequest(
+            left=dense(5, wide_left),
+            right=dense(4, wide_right),
+        )
+
+    first = MatrixSubsystem(label="first", dimension=2)
+    second = MatrixSubsystem(label="second", dimension=2)
+    third = MatrixSubsystem(label="third", dimension=1)
+    fourth = MatrixSubsystem(label="fourth", dimension=1)
+    fifth = MatrixSubsystem(label="fifth", dimension=1)
+    crowded_left = _matrix(
+        [
+            [heavy if row == column else 0 for column in range(4)]
+            for row in range(4)
+        ],
+        (first, second),
+    )
+    with pytest.raises(ValidationError, match="subsystem-factor bound"):
+        SubsystemKroneckerProductRequest(
+            left=crowded_left,
+            right=_matrix([[heavy]], (third, fourth, fifth)),
+        )
+    assert converted == []
+
+
+def test_kronecker_product_stops_the_digit_scan_after_the_first_excess_product(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.matrices.subsystems import _models
+
+    q = MatrixSubsystem(label="q", dimension=2)
+    r = MatrixSubsystem(label="r", dimension=2)
+    heavy = Fraction(1, 10**300 + 9)
+    scanned: list[int] = []
+    real_digits = _models._fraction_component_digits
+
+    def counted(value: Fraction) -> tuple[int, int]:
+        digits = real_digits(value)
+        scanned.append(max(digits))
+        return digits
+
+    monkeypatch.setattr(_models, "_fraction_component_digits", counted)
+    with pytest.raises(ValidationError, match="result bound"):
+        SubsystemKroneckerProductRequest(
+            left=_matrix([[heavy, 0], [0, heavy]], (q,)),
+            right=_matrix([[1, 0], [0, 1]], (r,)),
+        )
+    assert scanned == [301]
+
+
+def test_partial_trace_rejects_contraction_work_before_exact_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.matrices.subsystems import _models
+
+    factors = tuple(MatrixSubsystem(label=label, dimension=2) for label in "pqrs")
+    value_denominator = 10**1100 + 7
+    source = _matrix(
+        [
+            [
+                Fraction(1, value_denominator) if row == column else 0
+                for column in range(16)
+            ]
+            for row in range(16)
+        ],
+        factors,
+    )
+    contracted: list[object] = []
+    real_entries = partial_trace_entries
+
+    def counted(matrix: object, labels: object) -> object:
+        contracted.append(matrix)
+        return real_entries(matrix, labels)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(_models, "partial_trace_entries", counted)
+
+    with pytest.raises(ValidationError, match="intermediate bound"):
+        SubsystemPartialTraceRequest(
+            matrix=source,
+            traced_factor_labels=("p", "q", "r", "s"),
+        )
+    assert contracted == []
+
+
+def test_partial_trace_work_envelope_admits_folded_boundary_terms() -> None:
+    q = MatrixSubsystem(label="q", dimension=4)
+    admitted_denominator = 10**4095 + 3
+    source = _matrix(
+        [
+            [
+                Fraction(1, admitted_denominator) if row == column else 0
+                for column in range(4)
+            ]
+            for row in range(4)
+        ],
+        (q,),
+    )
+
+    reduced = partial_trace(source, ("q",))
+    assert _entries(reduced) == ((Fraction(4, admitted_denominator),),)
+
+
+def test_partial_trace_work_envelope_rejects_one_step_above_the_folded_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.matrices.subsystems import _models
+
+    q = MatrixSubsystem(label="q", dimension=4)
+    rejected_denominator = 10**4097 + 3
+    source = _matrix(
+        [
+            [
+                Fraction(1, rejected_denominator) if row == column else 0
+                for column in range(4)
+            ]
+            for row in range(4)
+        ],
+        (q,),
+    )
+    contracted: list[object] = []
+    real_entries = partial_trace_entries
+
+    def counted(matrix: object, labels: object) -> object:
+        contracted.append(matrix)
+        return real_entries(matrix, labels)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(_models, "partial_trace_entries", counted)
+
+    with pytest.raises(ValidationError, match="intermediate bound"):
+        SubsystemPartialTraceRequest(matrix=source, traced_factor_labels=("q",))
+    assert contracted == []
+
+
+def test_partial_trace_schema_describes_the_coupled_trace_envelopes() -> None:
+    schema = SubsystemPartialTraceRequest.model_json_schema()
+    description = schema["properties"]["matrix"]["description"]
+    assert "work envelope" in description
+    assert "16392" in description
+    assert "4098" in description
 
 
 def test_traced_label_arrays_are_bounded_during_parsing() -> None:

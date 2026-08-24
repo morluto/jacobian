@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import prod
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
@@ -19,6 +20,9 @@ from jacobian.math.matrices.subsystems.values import (
 
 MAX_KRONECKER_RESULT_COMPONENT_DIGITS = 256
 MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS = 4_098
+MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS = (
+    4 * MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS
+)
 MAX_PSD_DIFFERENCE_COMPONENT_DIGITS = 513
 
 
@@ -42,6 +46,49 @@ def _entry_fractions(
     return tuple(
         tuple(entry.as_fraction() for entry in row) for row in matrix.matrix.entries
     )
+
+
+def _require_trace_work_envelope(
+    matrix: FactorizedHermitianMatrix,
+    traced_factor_labels: tuple[str, ...],
+) -> None:
+    """Bound contraction intermediates from input components before expanding.
+
+    Every reduced cell sums exactly one source entry per traced product
+    coordinate, so folding ``t`` terms can only stack denominator height:
+    taking the widest input numerator plus the largest ``t`` input
+    denominators bounds every unreduced intermediate component of the
+    exact contraction.  Reduction between additions lets admitted results
+    sit at the exact result bound while unreduced sums transiently carry
+    several folded denominators, so this work envelope is a fixed multiple
+    of the result bound rather than the result bound itself.
+    """
+
+    traced_coordinates = prod(
+        (
+            factor.dimension
+            for factor in matrix.factors
+            if factor.label in set(traced_factor_labels)
+        ),
+        start=1,
+    )
+    numerator_digits = 1
+    denominator_digits: list[int] = []
+    for row in matrix.matrix.entries:
+        for entry in row:
+            numerator_digits = max(numerator_digits, len(entry.num.lstrip("-")))
+            denominator_digits.append(len(entry.den))
+    folded_denominator_digits = sum(
+        sorted(denominator_digits, reverse=True)[:traced_coordinates]
+    )
+    if (
+        numerator_digits + folded_denominator_digits
+        > MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS
+    ):
+        raise ValueError(
+            "partial-trace contraction work exceeds the "
+            f"{MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS}-digit intermediate bound"
+        )
 
 
 def _require_trace_result_envelope(
@@ -146,23 +193,6 @@ class SubsystemKroneckerProductRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_product_envelope(self) -> Self:
-        left_entries = _entry_fractions(self.left)
-        right_entries = _entry_fractions(self.right)
-        measured = max(
-            (
-                max(_fraction_component_digits(left_entry * right_entry))
-                for left_row in left_entries
-                for left_entry in left_row
-                for right_row in right_entries
-                for right_entry in right_row
-            ),
-            default=1,
-        )
-        if measured > MAX_KRONECKER_RESULT_COMPONENT_DIGITS:
-            raise ValueError(
-                "Kronecker product coefficient growth exceeds the "
-                f"{MAX_KRONECKER_RESULT_COMPONENT_DIGITS}-digit result bound"
-            )
         product_dimension = len(self.left.matrix.entries) * len(
             self.right.matrix.entries
         )
@@ -176,6 +206,21 @@ class SubsystemKroneckerProductRequest(StrictModel):
             raise ValueError("Kronecker product exceeds the subsystem-factor bound")
         if len({factor.label for factor in labels}) != len(labels):
             raise ValueError("Kronecker product subsystem labels must remain unique")
+        left_entries = _entry_fractions(self.left)
+        right_entries = _entry_fractions(self.right)
+        for left_row in left_entries:
+            for left_entry in left_row:
+                for right_row in right_entries:
+                    for right_entry in right_row:
+                        if (
+                            max(_fraction_component_digits(left_entry * right_entry))
+                            > MAX_KRONECKER_RESULT_COMPONENT_DIGITS
+                        ):
+                            raise ValueError(
+                                "Kronecker product coefficient growth exceeds the "
+                                f"{MAX_KRONECKER_RESULT_COMPONENT_DIGITS}-digit "
+                                "result bound"
+                            )
         return self
 
 
@@ -188,7 +233,14 @@ class SubsystemKroneckerProductResult(StrictModel):
 class SubsystemPartialTraceRequest(StrictModel):
     """One factorized matrix and the named factors to trace out."""
 
-    matrix: FactorizedHermitianMatrix
+    matrix: FactorizedHermitianMatrix = Field(
+        description=(
+            "Source operand; no fixed per-operand digit ceiling applies. "
+            "Admission bounds contraction intermediates within the 16392-digit "
+            "work envelope before the exact trace runs, then admits reduced "
+            "coefficients within the 4098-digit result envelope."
+        ),
+    )
     traced_factor_labels: tuple[str, ...] = Field(
         min_length=1,
         max_length=MAX_SUBSYSTEM_FACTORS,
@@ -210,6 +262,7 @@ class SubsystemPartialTraceRequest(StrictModel):
         )
         if self.traced_factor_labels != expected_order:
             raise ValueError("traced subsystem labels must follow source factor order")
+        _require_trace_work_envelope(self.matrix, self.traced_factor_labels)
         _require_trace_result_envelope(
             partial_trace_entries(self.matrix, self.traced_factor_labels)
         )
@@ -238,6 +291,7 @@ class SubsystemPartialTraceResult(StrictModel):
         )
         if self.traced_factor_labels != expected_order:
             raise ValueError("traced subsystem labels must follow source factor order")
+        _require_trace_work_envelope(self.source_matrix, self.traced_factor_labels)
         expected_entries = partial_trace_entries(
             self.source_matrix,
             self.traced_factor_labels,
@@ -405,6 +459,7 @@ class PsdOrderResult(StrictModel):
 __all__ = [
     "MAX_KRONECKER_RESULT_COMPONENT_DIGITS",
     "MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS",
+    "MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS",
     "MAX_PSD_DIFFERENCE_COMPONENT_DIGITS",
     "NegativeQuadraticWitness",
     "PsdInertia",

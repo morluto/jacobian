@@ -173,7 +173,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "quadratic_form.direct_sum.compute",
         "Compute the direct sum of two quadratic forms",
-        "Compute the block diagonal direct sum A ⊕ B of two quadratic forms. Combined dimension must not exceed 10.",
+        "Compute the block diagonal direct sum A ⊕ B of two quadratic forms. Combined dimension must not exceed 50.",
         DirectSumRequest,
         DirectSumResult,
         compute_direct_sum,

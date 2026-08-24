@@ -41,12 +41,27 @@ jobs:
           context: .
           platforms: ${{ env.PLATFORM }}
           push: false
+          load: true
+          tags: jacobian:pull-request
           build-args: |
             JACOBIAN_REVISION=${{ github.sha }}
             JACOBIAN_VERSION=${{ steps.version.outputs.value }}
             JACOBIAN_SOURCE_DIRTY=false
           cache-from: type=gha,scope=jacobian-container
           cache-to: type=gha,mode=max,scope=jacobian-container
+      - name: Replay a Cake LPR refutation in the image
+        env:
+          VALID_REQUEST: >-
+            {"cnf":{"variables":["x"],"clauses":[[-1],[1]]},"refutation":{"profile":"LPR_ASCII_V1","steps":[{"kind":"addition","clause_id":3,"clause":[],"at_hint_clause_ids":[1,2],"propagation_hints":[]}]}}
+          INVALID_REQUEST: >-
+            {"cnf":{"variables":["x"],"clauses":[[-1],[1]]},"refutation":{"profile":"LPR_ASCII_V1","steps":[]}}
+        run: |
+          docker run --rm --entrypoint uv jacobian:pull-request \
+            run --no-sync jacobian run sat.refutation.check --json "$VALID_REQUEST" \
+            | jq -e '.output.outcome == "VALID_REFUTATION"'
+          docker run --rm --entrypoint uv jacobian:pull-request \
+            run --no-sync jacobian run sat.refutation.check --json "$INVALID_REQUEST" \
+            | jq -e '.output.outcome == "INVALID_REFUTATION"'
 
   publish:
     name: Publish container image

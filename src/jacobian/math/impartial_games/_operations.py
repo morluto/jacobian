@@ -8,6 +8,8 @@ from jacobian.math.impartial_games._models import (
     GrundyEntry,
     GrundyTableRequest,
     GrundyTableResult,
+    NimOptionsRequest,
+    NimOptionsResult,
     NimSumRequest,
     NimSumResult,
     OutcomeProfileRequest,
@@ -16,8 +18,11 @@ from jacobian.math.impartial_games._models import (
     SubtractionGrundyPrefixResult,
 )
 from jacobian.math.impartial_games.operations import (
+    _nim_option_plan,
     birthdays,
     grundy_table,
+    nim_options,
+    nim_sum,
     subtraction_grundy_prefix,
 )
 
@@ -70,6 +75,7 @@ __all__ = [
     "compute_birthday",
     "compute_disjunctive_sum",
     "compute_grundy_table",
+    "compute_nim_options",
     "compute_subtraction_grundy_prefix",
 ]
 
@@ -79,15 +85,26 @@ def compute_nim_sum(
 ) -> NimSumResult:
     """Compute the exact nim sum (bitwise xor) of heap sizes."""
 
-    from functools import reduce
-    from operator import xor
-
-    heaps = request.heaps
-    nim_sum = 0 if not heaps else reduce(xor, heaps)
+    value = nim_sum(request.position)
     return NimSumResult(
-        nim_sum=nim_sum,
-        is_p_position=(nim_sum == 0),
-        heaps=heaps,
+        position=request.position,
+        nim_sum=value,
+        is_p_position=(value == 0),
+    )
+
+
+def compute_nim_options(
+    request: NimOptionsRequest,
+) -> NimOptionsResult:
+    """Enumerate the complete deduplicated option family of a Nim position."""
+
+    options = nim_options(request.position)
+    plan = _nim_option_plan(request.position)
+    return NimOptionsResult(
+        position=request.position,
+        options=options,
+        raw_candidate_count=plan.raw_candidate_count,
+        distinct_option_count=plan.distinct_option_count,
     )
 
 

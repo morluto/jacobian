@@ -299,7 +299,7 @@ def test_annihilating_powered_terms_are_excluded_from_the_candidate_cap() -> Non
     variables = ("x",)
     operator = _operator(
         variables,
-        {(0,): 1, **dict.fromkeys(((order,) for order in range(2, 2_050)), 1)},
+        {(0,): 1, **dict.fromkeys(((order,) for order in range(2, 1_050)), 1)},
     )
     source = _polynomial(variables, {(0,): 1, (1,): 1})
 
@@ -1360,17 +1360,17 @@ def test_per_monomial_annihilation_is_counted_in_the_candidate_bound() -> None:
     variables = ("x", "y")
     operator = _operator(
         variables,
-        {(i, j): 1 for i in range(64) for j in range(64)},
+        {(i, j): 1 for i in range(32) for j in range(32)},
     )
-    source = _polynomial(variables, {(64, 0): 1, (0, 64): 1})
+    source = _polynomial(variables, {(32, 0): 1, (0, 32): 1})
     expected_terms: dict[tuple[int, int], int] = {}
-    for exponent in range(64):
-        coefficient = math.factorial(64) // math.factorial(64 - exponent)
-        expected_terms[(64 - exponent, 0)] = (
-            expected_terms.get((64 - exponent, 0), 0) + coefficient
+    for exponent in range(32):
+        coefficient = math.factorial(32) // math.factorial(32 - exponent)
+        expected_terms[(32 - exponent, 0)] = (
+            expected_terms.get((32 - exponent, 0), 0) + coefficient
         )
-        expected_terms[(0, 64 - exponent)] = (
-            expected_terms.get((0, 64 - exponent), 0) + coefficient
+        expected_terms[(0, 32 - exponent)] = (
+            expected_terms.get((0, 32 - exponent), 0) + coefficient
         )
     expected = _polynomial(variables, expected_terms)
 

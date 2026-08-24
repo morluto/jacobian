@@ -436,8 +436,11 @@ class MultisetSumRepresentationProfileRequest(StrictModel):
         ge=0,
         le=_MAX_MULTISET_SUM_ARITY,
         description=(
-            "Nonnegative multiset arity. Arity zero has one empty multiset with "
-            "sum zero, including when the source is empty."
+            f"Nonnegative multiset arity carrying at most "
+            f"{_multiset_sum.MAX_ARITY_DIGITS} decimal digits. Arity zero has "
+            "one empty multiset with sum zero, including when the source is "
+            "empty; admission derives the accepted envelope from candidate "
+            "work and predicted support rather than from this magnitude."
         ),
         examples=[2],
     )

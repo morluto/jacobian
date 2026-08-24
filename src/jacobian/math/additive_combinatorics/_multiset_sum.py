@@ -8,22 +8,28 @@ from itertools import combinations, combinations_with_replacement
 
 MAX_SOURCE_SIZE = 384
 MAX_ELEMENT_DIGITS = 64
-# The largest seven-digit arity keeps worst-case sum growth aligned with the
-# fixed row-size derivation; candidate work independently rejects costly cases.
-MAX_ARITY = 9_999_999
+# Arity is bounded by its decimal representation, not its mathematical
+# magnitude: admission rejects every costly request through the candidate-work
+# and support preflights, while compact cases (singleton or empty sources)
+# stay admissible at any represented arity. The digit bound alone fixes the
+# cost of admission arithmetic (binomial preflight, sum products) and of the
+# predicted worst-case sum below.
+MAX_ARITY_DIGITS = 18
+MAX_ARITY = 10**MAX_ARITY_DIGITS - 1
 # The operation enumerates once and source-bound result validation replays once,
 # so an accepted call performs at most twice this many coordinate steps.
 MAX_ENUMERATION_WORK = 20_000_000
 
-# A row containing a signed 71-digit sum and an eight-digit multiplicity stays
-# below 128 canonical JSON bytes. Reserving 64 KiB for the maximum source, the
-# optional window, and scalar fields keeps every admitted exact result
-# below an 8 MiB owner-local budget and the transport's 10 MiB limit.
+# A row containing a signed sum of at most MAX_RESULT_DIGITS digits and an
+# eight-digit multiplicity (the work preflight caps candidates below 10^8)
+# stays under 128 canonical JSON bytes. Reserving 64 KiB for the maximum
+# source, the optional window, and scalar fields keeps every admitted exact
+# result below an 8 MiB owner-local budget and the transport's 10 MiB limit.
 RESULT_BUDGET_BYTES = 8 * 1024 * 1024
 _RESULT_RESERVE_BYTES = 64 * 1024
 _ENTRY_WIRE_BYTES = 128
 MAX_SUPPORT_SIZE = (RESULT_BUDGET_BYTES - _RESULT_RESERVE_BYTES) // _ENTRY_WIRE_BYTES
-MAX_RESULT_DIGITS = MAX_ELEMENT_DIGITS + len(str(MAX_ARITY))
+MAX_RESULT_DIGITS = MAX_ELEMENT_DIGITS + MAX_ARITY_DIGITS
 MAX_INTEGER_LENGTH = MAX_RESULT_DIGITS + 1
 
 

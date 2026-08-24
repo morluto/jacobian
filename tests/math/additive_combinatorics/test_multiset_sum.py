@@ -11,6 +11,8 @@ from jacobian.canonical import CanonicalLimits, canonicalize_json
 from jacobian.math.additive_combinatorics._models import (
     _MAX_MULTISET_SUM_ARITY,
     _MAX_MULTISET_SUM_ELEMENT_DIGITS,
+    _MAX_MULTISET_SUM_INTEGER_LENGTH,
+    _MAX_MULTISET_SUM_RESULT_DIGITS,
     _MAX_MULTISET_SUM_SUPPORT_SIZE,
     _MAX_SET_SIZE,
     FiniteIntegerSet,
@@ -18,7 +20,10 @@ from jacobian.math.additive_combinatorics._models import (
     MultisetSumRepresentationProfileResult,
     RepresentationProfileRequest,
 )
-from jacobian.math.additive_combinatorics._multiset_sum import RESULT_BUDGET_BYTES
+from jacobian.math.additive_combinatorics._multiset_sum import (
+    MAX_ARITY,
+    RESULT_BUDGET_BYTES,
+)
 from jacobian.math.additive_combinatorics._operations import (
     compute_multiset_sum_representation_profile,
 )
@@ -171,7 +176,10 @@ def test_request_schema_exposes_collection_and_scalar_bounds() -> None:
     assert source_schema["properties"]["elements"]["maxItems"] == _MAX_SET_SIZE
     assert schema["properties"]["arity"]["maximum"] == _MAX_MULTISET_SUM_ARITY
     window_schema = schema["$defs"]["MultisetSumWindow"]
-    assert window_schema["properties"]["lower"]["maxLength"] == 72
+    assert (
+        window_schema["properties"]["lower"]["maxLength"]
+        == _MAX_MULTISET_SUM_INTEGER_LENGTH
+    )
 
 
 def test_singleton_source_admits_maximum_arity_without_tuple_expansion() -> None:
@@ -183,14 +191,40 @@ def test_arity_above_schema_bound_is_rejected() -> None:
         _request((2,), _MAX_MULTISET_SUM_ARITY + 1)
 
 
+def test_compact_singleton_admits_arity_beyond_the_former_fixed_ceiling() -> None:
+    # Reported failure mode: one candidate, one coordinate step, one result
+    # row; the derived work and support preflights admit it at any arity.
+    assert _profile((0,), 10_000_000) == {0: 1}
+    assert _profile((3,), 10**15) == {3 * 10**15: 1}
+
+
+def test_empty_source_admits_large_arity_with_zero_candidates() -> None:
+    assert _profile((), 10**15) == {}
+
+
+def test_singleton_sum_digits_stay_within_the_derived_result_bound() -> None:
+    value = 10 ** (_MAX_MULTISET_SUM_ELEMENT_DIGITS - 1) + 19
+    entries = _profile((value,), MAX_ARITY)
+    assert len(entries) == 1
+    ((sum_value, multiplicity),) = entries.items()
+    assert multiplicity == 1
+    assert sum_value == value * MAX_ARITY
+    assert len(str(sum_value)) <= _MAX_MULTISET_SUM_RESULT_DIGITS
+
+
+def test_costly_large_arity_is_rejected_by_work_not_by_an_arity_cap() -> None:
+    with pytest.raises(ValidationError, match="coordinate steps"):
+        _request((0, 1), 10**15)
+
+
 def test_reversed_sum_window_is_rejected() -> None:
     with pytest.raises(ValidationError, match="must not exceed"):
         _request((0, 1), 2, (3, 2))
 
 
 def test_sum_window_endpoint_digit_bound_is_enforced() -> None:
-    with pytest.raises(ValidationError, match="at most 71 digits"):
-        _request((0, 1), 2, (0, int("9" * 72)))
+    with pytest.raises(ValidationError, match="at most 82 digits"):
+        _request((0, 1), 2, (0, int("9" * (_MAX_MULTISET_SUM_RESULT_DIGITS + 1))))
 
 
 def test_full_profile_rejects_worst_case_support_above_result_bound() -> None:

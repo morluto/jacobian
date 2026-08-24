@@ -16,7 +16,6 @@ from jacobian.canonical import encode_strict_json
 from jacobian.math.geometry.boxes._kernel import box_volume
 from jacobian.math.geometry.boxes.values import RationalAxisAlignedBox
 
-MAX_BOX_UNION_SOURCE_BOXES = 64
 MAX_BOX_UNION_NONEMPTY_BOXES = 16
 MAX_BOX_ENDPOINT_DIGITS = 256
 MAX_INTERSECTION_CANDIDATES = (1 << MAX_BOX_UNION_NONEMPTY_BOXES) - 1
@@ -117,7 +116,7 @@ def _maximum_result_bytes(
     }
     interval = {"lower": endpoint, "upper": endpoint}
     maximum_entry = {
-        "box_indices": [MAX_BOX_UNION_SOURCE_BOXES - 1]
+        "box_indices": [len(request.boxes) - 1]
         * sum(not box.is_empty for box in request.boxes),
         "intersection": {
             "dimension": request.boxes[0].dimension,
@@ -146,11 +145,14 @@ class BoxUnionVolumeRequest(StrictModel):
     model_config = ConfigDict(
         json_schema_extra={
             "description": (
-                "An ordered family of 1..64 rational boxes. Every box must use "
-                "the same dimension in [1,64]. Each endpoint component carries "
-                "at most 256 digits. intervals=null denotes the canonical empty "
-                "box; at most 16 boxes may be nonempty, and equal interval "
-                "endpoints are valid measure-zero axes."
+                "An ordered family of one or more rational boxes; the "
+                "admitted source count is bounded by the serialized-result "
+                "budget because every result echoes its full source family. "
+                "Every box must use the same dimension in [1,64]. Each "
+                "endpoint component carries at most 256 digits. intervals=null "
+                "denotes the canonical empty box; at most 16 boxes may be "
+                "nonempty, and equal interval endpoints are valid measure-zero "
+                "axes."
             ),
             "examples": [
                 {
@@ -172,12 +174,13 @@ class BoxUnionVolumeRequest(StrictModel):
 
     boxes: tuple[RationalAxisAlignedBox, ...] = Field(
         min_length=1,
-        max_length=MAX_BOX_UNION_SOURCE_BOXES,
         description=(
             "Ordered, indexed boxes with a common dimension in [1,64]. Empty "
-            "boxes use intervals=null. The complete 2^nonempty_box_count-1 subset "
-            "expansion, exact rational growth, and worst-case ledger bytes must "
-            "fit the published operation budgets."
+            "boxes use intervals=null and are pruned before subset expansion. "
+            "The echoed source, the complete 2^nonempty_box_count-1 subset "
+            "expansion, exact rational growth, and worst-case ledger bytes "
+            "must fit the published operation budgets; at most 16 boxes may "
+            "be nonempty."
         ),
     )
 

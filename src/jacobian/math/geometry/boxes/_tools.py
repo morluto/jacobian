@@ -15,11 +15,12 @@ TOOLS: MathTools = (
         "Compute exact volume of a finite rational box union",
         "Compute exact Lebesgue volume for closed rational axis-aligned boxes. "
         "Return every nonempty indexed subset intersection and its volume, plus "
-        "the complete source-bound inclusion-exclusion sum. Inputs contain 1..64 "
-        "same-dimensional boxes in dimensions 1..64, at most 16 nonempty boxes, "
-        "and endpoints of at most 256 digits. intervals=null is the canonical "
-        "empty box; equal endpoints are valid. Preflight bounds replay work, "
-        "rational growth, and worst-case ledger bytes.",
+        "the complete source-bound inclusion-exclusion sum. Inputs contain one "
+        "or more same-dimensional boxes in dimensions 1..64 whose echoed source "
+        "and complete ledger fit the published byte budget, at most 16 nonempty "
+        "boxes, and endpoints of at most 256 digits. intervals=null is the "
+        "canonical empty box; equal endpoints are valid. Preflight bounds "
+        "replay work, rational growth, and worst-case ledger bytes.",
         BoxUnionVolumeRequest,
         BoxUnionVolumeResult,
         _box_union_volume_from_request,

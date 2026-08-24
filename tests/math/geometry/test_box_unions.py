@@ -9,6 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import encode_strict_json
 from jacobian.math.geometry.boxes import (
     BoxIntersectionLedgerEntry,
     BoxUnionVolumeRequest,
@@ -17,7 +18,7 @@ from jacobian.math.geometry.boxes import (
     RationalClosedInterval,
     compute_box_union_volume,
 )
-from jacobian.math.geometry.boxes._models import MAX_BOX_UNION_SOURCE_BOXES
+from jacobian.math.geometry.boxes._models import MAX_BOX_UNION_RESULT_BYTES
 from jacobian.math.geometry.boxes.values import MAX_CANONICAL_BOX_DIMENSION
 
 
@@ -150,12 +151,30 @@ def test_empty_boxes_are_pruned_without_losing_source_indices() -> None:
 
 
 def test_all_empty_boxes_have_empty_ledger_and_zero_volume() -> None:
-    result = compute_box_union_volume(
-        tuple(_empty_box(3) for _ in range(MAX_BOX_UNION_SOURCE_BOXES))
-    )
+    result = compute_box_union_volume(tuple(_empty_box(3) for _ in range(65)))
 
     assert result.intersections == ()
     assert result.union_volume.as_fraction() == 0
+
+
+def test_one_nonempty_box_with_empties_beyond_fixed_cap_is_admitted() -> None:
+    boxes = (_box((0, 2)), *(_empty_box(1) for _ in range(64)))
+    result = compute_box_union_volume(boxes)
+
+    assert len(result.source.boxes) == 65
+    assert result.union_volume.as_fraction() == 2
+    assert tuple(entry.box_indices for entry in result.intersections) == ((0,),)
+    assert result.intersections[0].volume.as_fraction() == 2
+
+
+def test_empty_heavy_result_serialization_stays_within_budget() -> None:
+    boxes = tuple(_empty_box(1) for _ in range(65))
+    result = compute_box_union_volume(boxes)
+
+    assert (
+        len(encode_strict_json(result.model_dump(mode="json")))
+        <= MAX_BOX_UNION_RESULT_BYTES
+    )
 
 
 def test_touching_and_degenerate_boxes_remain_nonempty() -> None:
@@ -346,12 +365,9 @@ def test_rejects_worst_case_ledger_bytes_before_expansion() -> None:
         BoxUnionVolumeRequest(boxes=(box,) * 14)
 
 
-def test_rejects_nonempty_candidate_and_source_shape_limits() -> None:
+def test_rejects_nonempty_candidate_limit() -> None:
     with pytest.raises(ValidationError, match="intersection candidates"):
         BoxUnionVolumeRequest(boxes=(_box((0, 1)),) * 17)
-
-    with pytest.raises(ValidationError, match="at most 64 items"):
-        BoxUnionVolumeRequest(boxes=tuple(_empty_box(1) for _ in range(65)))
 
 
 def test_high_dimension_single_box_is_admitted_by_scaled_budgets() -> None:
@@ -396,4 +412,6 @@ def test_schema_explains_empty_boxes_and_coupled_bounds() -> None:
 
     assert "intervals=null" in box_schema["description"]
     assert "same dimension" in request_schema["description"]
-    assert request_schema["properties"]["boxes"]["maxItems"] == 64
+    boxes_property = request_schema["properties"]["boxes"]
+    assert "maxItems" not in boxes_property
+    assert "published operation budgets" in boxes_property["description"]

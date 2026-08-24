@@ -36,4 +36,3 @@ limit (`rlimit`), and a memory ceiling (`max_memory`). Exhausting any of them,
 or exceeding the bounded model size, returns `UNKNOWN` with an `exhausted`
 value of `time`, `work`, or `memory` where applicable; it never raises a host
 exception or yields a mathematical conclusion.
->>>>>>> origin/main

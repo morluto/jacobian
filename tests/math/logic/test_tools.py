@@ -611,6 +611,79 @@ def test_smt_request_admits_a_decimal_at_the_digit_boundary_and_still_solves() -
     assert result.model_smtlib is not None
 
 
+def test_smtlib_structure_weights_indexed_bit_vector_values_not_bv_symbols() -> None:
+    assert operations._smtlib_structure(f"(_ bv{'9' * 193} 8)").numeral_digits == 193
+    assert operations._smtlib_structure("(_ bv1010 8)").numeral_digits == 4
+    assert (
+        operations._smtlib_structure("(declare-const bv1010 Int)").numeral_digits == 0
+    )
+    assert (
+        operations._smtlib_structure(
+            "(assert (= x |bv" + "9" * 193 + "|))"
+        ).numeral_digits
+        == 0
+    )
+
+
+def test_smt_request_rejects_an_indexed_bit_vector_value_beyond_the_digit_budget() -> (
+    None
+):
+    with pytest.raises(ValueError, match="numeral wider"):
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib=(
+                "(set-logic QF_LIA)\n"
+                "(declare-const x Int)\n"
+                f"(assert (= x (_ bv{'9' * 193} 8)))\n"
+                "(check-sat)\n"
+            ),
+        )
+
+
+def test_smt_request_admits_an_indexed_bit_vector_at_the_digit_boundary() -> None:
+    request = SmtSolveRequest(
+        logic=SmtLogic.QF_LIA,
+        smtlib=(
+            "(set-logic QF_LIA)\n"
+            "(declare-const x Int)\n"
+            f"(assert (= x (_ bv{'9' * 192} 8)))\n"
+            "(check-sat)\n"
+        ),
+    )
+
+    assert operations._smtlib_structure(request.smtlib).numeral_digits == 192
+
+
+def test_smt_request_admits_a_bv_named_symbol_outside_index_context_and_solves() -> (
+    None
+):
+    symbol = "bv" + "0" * 193
+    result = solve_smt(
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib=(
+                "(set-logic QF_LIA)\n"
+                f"(declare-const {symbol} Int)\n"
+                f"(assert (> {symbol} 0))\n"
+                "(check-sat)\n"
+            ),
+        )
+    )
+
+    assert result.outcome == "SAT"
+    assert result.model_smtlib is not None
+
+
+def test_solver_declarations_advertise_version_two_for_the_exhausted_schema() -> None:
+    versions = {
+        tool.operation_id: tool.version
+        for tool in TOOLS
+        if tool.operation_id in ("sat.solve", "smt.solve")
+    }
+
+    assert versions == {"sat.solve": "2", "smt.solve": "2"}
+
+
 def test_smt_request_rejects_more_than_the_declaration_budget() -> None:
     declarations = "\n".join(f"(declare-const v{index} Int)" for index in range(4_097))
     with pytest.raises(ValueError, match="declares more than"):

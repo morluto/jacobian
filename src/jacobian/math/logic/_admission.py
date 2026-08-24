@@ -28,7 +28,10 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "sat.solve",
         AdmissionDecision.KEEP,
-        "distinct exact or explicitly bounded search outcome with material computational leverage",
+        "distinct exact or explicitly bounded search outcome with material computational leverage; "
+        "re-admitted for the request-scoped solver envelope: structural CNF budgets bound the input "
+        "before Z3 runs, timeout, rlimit work, and max_memory ceilings bound the solve, and an "
+        "incomplete result is a typed UNKNOWN that names the exhausted resource",
     ),
     OperationAdmission(
         "sat.refutation.check",
@@ -38,7 +41,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "smt.solve",
         AdmissionDecision.KEEP,
-        "distinct exact or explicitly bounded search outcome with material computational leverage",
+        "distinct exact or explicitly bounded search outcome with material computational leverage; "
+        "re-admitted for the bounded SMT-LIB envelope: ASCII bytes, nesting depth, compound terms, "
+        "declared symbols, and numeral width (including indexed bit-vector values) are admitted "
+        "before Z3 parses, request-scoped timeout, rlimit work, and max_memory ceilings bound the "
+        "solve, and an incomplete result is a typed UNKNOWN that names the exhausted resource",
     ),
 )
 

@@ -592,9 +592,14 @@ def _smtlib_structure(source: str) -> _SmtLibStructure:
 
     This is the same deliberately non-parsing scan used for command shape; it
     bounds what ``z3.parse_smt2_string`` may build before that parser runs.
+    An indexed literal such as ``(_ bvN w)`` spells its value inside a simple
+    symbol, so index position decides whether ``bvN`` digits carry numeral
+    weight; elsewhere digits stay interned names.
     """
 
     max_depth = depth = compound_terms = numeral_digits = 0
+    indexed_depth: int | None = None
+    previous_token = ""
     for token in _tokenize_smtlib(source):
         if token == "(":
             depth += 1
@@ -602,11 +607,22 @@ def _smtlib_structure(source: str) -> _SmtLibStructure:
             if depth > max_depth:
                 max_depth = depth
         elif token == ")":
+            if indexed_depth == depth:
+                indexed_depth = None
             depth -= 1
+        elif previous_token == "(" and token == "_":
+            indexed_depth = depth
         else:
             weight = _atom_numeral_weight(token)
+            if (
+                indexed_depth is not None
+                and token.startswith("bv")
+                and token[2:].isdigit()
+            ):
+                weight = len(token) - 2
             if weight > numeral_digits:
                 numeral_digits = weight
+        previous_token = token
     return _SmtLibStructure(max_depth, compound_terms, numeral_digits)
 
 
@@ -1134,7 +1150,7 @@ LOGIC_OPERATIONS = (
     ),
     MathTool(
         operation_id="sat.solve",
-        version="1",
+        version="2",
         title="Solve a bounded CNF",
         description="Run the maintained Z3 Python binding on one canonical CNF.",
         request_type=SatSolveRequest,
@@ -1186,7 +1202,7 @@ LOGIC_OPERATIONS = (
     ),
     MathTool(
         operation_id="smt.solve",
-        version="1",
+        version="2",
         title="Solve a bounded SMT-LIB query",
         description="Run the maintained Z3 Python binding on one QF SMT-LIB query.",
         request_type=SmtSolveRequest,

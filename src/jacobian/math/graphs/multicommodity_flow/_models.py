@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Self
 
 from pydantic import Field, StrictStr, model_validator
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.canonical import encode_strict_json
+from jacobian.canonical import encode_strict_json, format_canonical_integer
 from jacobian.math.graphs.flow._models import FlowGraph
 
 # This operation scans a sparse commodity-by-edge tensor and materializes one
@@ -27,24 +28,16 @@ MAX_COMMODITY_VERTEX_CELLS = 512
 # reach it: a divergence cell sums the amounts incident to one
 # commodity/vertex pair, an edge load sums the amounts carried by that edge, a
 # slack subtracts one capacity from one such load, and the congestion ratio
-# divides one load by one capacity.  Numerator and denominator growth are
-# tracked separately: a reduced sum denominator divides the operand lcm and
-# so accumulates each operand's denominator digits once; a reduced sum
-# numerator adds at most its largest operand numerator on top of that common
-# denominator plus eight carry digits for up to 256 accumulated endpoints;
-# the slack subtraction pushes the numerator through both denominators once
-# and adds one carry digit; and the division crosses the load with the
-# capacity numerator only.  A component fed by a single operand equals that
-# already-canonical operand exactly, so its own two sides are its bounds and
-# no summation growth is charged; when that lone amount also equals the edge
-# capacity, the slack is the exact zero rational and the congestion ratio is
-# exactly one.  An edge carrying no amount has the exact zero load, so only
-# single-digit zero operands compose with its capacity.  A component stays
-# admissible when each side of this split bound fits the canonical cap on
-# its own.  Demands take part only in exact conservation comparisons, never
-# in arithmetic, so they are covered by the measured source echo instead of
-# these budgets.
-_DERIVED_DIGIT_SLACK = 8
+# divides one load by one capacity.  Summation growth cannot be bounded from
+# digit counts alone — shared denominators, cancellation, and lone operands
+# all keep components far smaller than any worst case — so admission measures
+# the actual reduced numerator and denominator of every component with a pure
+# bounded scan that aborts as soon as a side crosses the canonical cap.  A
+# request whose exact load equals its capacity therefore reports the exact
+# zero slack and exactly-one congestion instead of phantom growth, while a
+# request whose sums genuinely exceed the cap fails closed.  Demands take
+# part only in exact conservation comparisons, never in arithmetic, so they
+# are covered by the measured source echo instead of these budgets.
 
 # A result echoes its source tensor, then includes one divergence row per
 # commodity-vertex cell, one edge row per network edge, and one congestion
@@ -177,6 +170,28 @@ def _require_canonical_entries(
             raise ValueError("flow entry references an undeclared directed edge")
 
 
+def _rational_side_bounds(value: Fraction) -> tuple[int, int]:
+    return len(format_canonical_integer(abs(value.numerator))), len(
+        format_canonical_integer(value.denominator)
+    )
+
+
+def _require_side_within_cap(digits: int) -> None:
+    if digits > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise ValueError(
+            "multicommodity-flow profile derives a "
+            f"{digits}-digit rational above the "
+            f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit canonical cap"
+        )
+
+
+def _measured_side_bounds(value: Fraction) -> tuple[int, int]:
+    sides = _rational_side_bounds(value)
+    _require_side_within_cap(sides[0])
+    _require_side_within_cap(sides[1])
+    return sides
+
+
 def _profile_component_digit_bounds(
     flow: MulticommodityFlow,
 ) -> tuple[
@@ -185,83 +200,49 @@ def _profile_component_digit_bounds(
     dict[tuple[int, int], tuple[int, int]],
     tuple[int, int],
 ]:
-    """Return exact numerator/denominator digit bounds for derived rows."""
+    """Measure the exact numerator/denominator sizes of every derived row.
 
-    cell_den: dict[tuple[str, int], int] = {}
-    cell_num: dict[tuple[str, int], int] = {}
-    cell_operands: dict[tuple[str, int], int] = {}
-    edge_den: dict[tuple[int, int], int] = {}
-    edge_num: dict[tuple[int, int], int] = {}
-    edge_operands: dict[tuple[int, int], int] = {}
-    edge_sole_amount: dict[tuple[int, int], CanonicalRational] = {}
+    Shared denominators, cancellation, and lone operands all keep real sums
+    far below any digit-count worst case, so each component is measured as
+    the exact reduced rational the kernel will produce; any accumulation that
+    crosses the canonical cap aborts immediately instead of growing further.
+    """
+
+    divergences = {
+        (commodity.commodity_id, vertex): Fraction(0)
+        for commodity in flow.commodities
+        for vertex in range(flow.network.vertex_count)
+    }
+    loads = {(edge.source, edge.target): Fraction(0) for edge in flow.network.edges}
+
+    def _absorb(current: Fraction, amount: Fraction) -> Fraction:
+        total = current + amount
+        for digits in _rational_side_bounds(total):
+            _require_side_within_cap(digits)
+        return total
+
     for entry in flow.entries:
-        amount_num = len(entry.amount.num)
-        amount_den = len(entry.amount.den)
+        amount = entry.amount.as_fraction()
+        source_key = (entry.commodity_id, entry.source)
+        target_key = (entry.commodity_id, entry.target)
+        divergences[source_key] = _absorb(divergences[source_key], amount)
+        divergences[target_key] = _absorb(divergences[target_key], -amount)
         edge_key = (entry.source, entry.target)
-        edge_den[edge_key] = edge_den.get(edge_key, 0) + amount_den
-        edge_num[edge_key] = max(edge_num.get(edge_key, 0), amount_num)
-        edge_operands[edge_key] = edge_operands.get(edge_key, 0) + 1
-        edge_sole_amount.setdefault(edge_key, entry.amount)
-        for vertex in (entry.source, entry.target):
-            cell_key = (entry.commodity_id, vertex)
-            cell_den[cell_key] = cell_den.get(cell_key, 0) + amount_den
-            cell_num[cell_key] = max(cell_num.get(cell_key, 0), amount_num)
-            cell_operands[cell_key] = cell_operands.get(cell_key, 0) + 1
+        loads[edge_key] = _absorb(loads[edge_key], amount)
 
-    def _sum_bound(operand_count: int, den_total: int, max_num: int) -> tuple[int, int]:
-        # One operand is its own reduced sum: the component equals that
-        # already-canonical operand and charges no summation growth.
-        if operand_count == 1:
-            return max_num, den_total
-        return den_total + max_num + _DERIVED_DIGIT_SLACK, den_total
-
-    cell_bounds: dict[tuple[str, int], tuple[int, int]] = {}
-    for commodity in flow.commodities:
-        for vertex in range(flow.network.vertex_count):
-            key = (commodity.commodity_id, vertex)
-            if key in cell_den:
-                cell_bounds[key] = _sum_bound(
-                    cell_operands[key], cell_den[key], cell_num[key]
-                )
-            else:
-                cell_bounds[key] = (1, 1)
-
-    load_bounds: dict[tuple[int, int], tuple[int, int]] = {}
+    cell_bounds = {
+        key: _rational_side_bounds(value) for key, value in divergences.items()
+    }
+    load_bounds = {key: _rational_side_bounds(value) for key, value in loads.items()}
     slack_bounds: dict[tuple[int, int], tuple[int, int]] = {}
-    congestion_bound = (1, 1)
+    max_ratio = Fraction(0)
     for edge in flow.network.edges:
         edge_key = (edge.source, edge.target)
-        capacity_num = len(edge.capacity.num)
-        capacity_den = len(edge.capacity.den)
-        den_total = edge_den.get(edge_key)
-        if den_total is None:
-            # No amount reaches this edge: its load is exactly the zero
-            # rational, its slack is exactly its capacity, and its congestion
-            # ratio reduces to exactly zero.
-            load_bounds[edge_key] = (1, 1)
-            slack_bounds[edge_key] = (capacity_num, capacity_den)
-            continue
-        load_n, load_d = _sum_bound(
-            edge_operands[edge_key], den_total, edge_num[edge_key]
-        )
-        if edge_operands[edge_key] == 1 and edge_sole_amount[edge_key] == edge.capacity:
-            # The lone amount equals the capacity exactly: the load is the
-            # capacity, the slack is the exact zero rational, and the
-            # congestion ratio reduces to exactly one.
-            load_bounds[edge_key] = (load_n, load_d)
-            slack_bounds[edge_key] = (1, 1)
-            continue
-        slack_n = max(capacity_num + den_total, load_n + capacity_den) + 1
-        slack_d = capacity_den + den_total
-        load_bounds[edge_key] = (load_n, load_d)
-        slack_bounds[edge_key] = (slack_n, slack_d)
-        # The ratio divides one load by one capacity: cross-multiplication
-        # grows the ratio numerator by the capacity denominator and the ratio
-        # denominator by the capacity numerator.
-        congestion_bound = (
-            max(congestion_bound[0], load_n + capacity_den),
-            max(congestion_bound[1], den_total + capacity_num),
-        )
+        capacity = edge.capacity.as_fraction()
+        slack_bounds[edge_key] = _measured_side_bounds(capacity - loads[edge_key])
+        if capacity > 0:
+            max_ratio = max(max_ratio, loads[edge_key] / capacity)
+    congestion_bound = _measured_side_bounds(max_ratio)
     return cell_bounds, load_bounds, slack_bounds, congestion_bound
 
 

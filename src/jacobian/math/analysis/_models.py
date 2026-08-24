@@ -157,13 +157,6 @@ class RealUnaryFunction(StrEnum):
     COS = "COS"
 
 
-class PointEnclosureCheckFunction(StrEnum):
-    """Real functions supported by the independent exact checker."""
-
-    LOG = "LOG"
-    SQRT = "SQRT"
-
-
 class ArbPointEnclosureRequest(StrictModel):
     function: RealUnaryFunction
     argument: CanonicalRational
@@ -232,16 +225,62 @@ class ExactDyadic(StrictModel):
 type PointEnclosureCheckOutcome = Literal["ACCEPTED", "REJECTED", "NON_RESULT"]
 
 
+class ClaimedPointEnclosure(StrictModel):
+    """One claimed enclosure of a real function value by exact dyadic endpoints.
+
+    This is the domain-owned canonical value shared by the Arb producer and
+    the independent checker, so a serialized claim crosses the consumer
+    boundary unchanged. Endpoint order is deliberately not validated here: a
+    reversed claim is a checkable mathematical statement, not an invalid one.
+    """
+
+    function: RealUnaryFunction = Field(
+        description="Real function whose value the endpoints claim to enclose."
+    )
+    argument: CanonicalRational = Field(
+        description="Exact reduced rational argument with at most 128 digits per component."
+    )
+    precision_bits: StrictInt = Field(
+        ge=32,
+        le=4096,
+        description=(
+            "Precision metadata retained from the source computation; it does "
+            "not promise that an independent replay resolves the claim at "
+            "that precision."
+        ),
+    )
+    lower: ExactDyadic = Field(description="Claimed inclusive lower endpoint.")
+    upper: ExactDyadic = Field(description="Claimed inclusive upper endpoint.")
+
+    @model_validator(mode="after")
+    def bound_claim_source(self) -> Self:
+        require_bounded_rational(
+            self.argument,
+            max_digits=MAX_RATIONAL_DIGITS,
+            label="claimed point-enclosure rational",
+        )
+        return self
+
+
 def _preflight_point_check_source(data: object) -> object:
     """Reject oversized raw source scalars before canonical integer parsing."""
 
     if not isinstance(data, dict):
         return data
-    argument = data.get("argument")
-    if isinstance(argument, CanonicalRational):
-        raw_components: tuple[object, ...] = (argument.num, argument.den)
-    elif isinstance(argument, dict):
-        raw_components = (argument.get("num"), argument.get("den"))
+    enclosure = data.get("enclosure")
+    if isinstance(enclosure, ClaimedPointEnclosure):
+        raw_components: tuple[object, ...] = (
+            enclosure.argument.num,
+            enclosure.argument.den,
+        )
+    elif isinstance(enclosure, dict):
+        argument = enclosure.get("argument")
+        if isinstance(argument, CanonicalRational):
+            raw_components = (argument.num, argument.den)
+        elif isinstance(argument, dict):
+            raw_components = (argument.get("num"), argument.get("den"))
+        else:
+            raw_components = ()
     else:
         raw_components = ()
     if any(
@@ -284,11 +323,13 @@ def _point_check_fraction_bound_bits(argument: CanonicalRational) -> int:
 class PointEnclosureCheckRequest(StrictModel):
     """Check one claimed LOG or SQRT enclosure by exact independent replay.
 
-    Rational components have at most 128 decimal digits. Claimed dyadic
-    exponents must lie in -8192..8192; reversed or mathematically invalid
-    intervals remain valid requests and produce typed checker outcomes. LOG
-    replay uses at most 128 terms per series, about 400 worst-case bits after
-    range reduction, so tighter claims can produce NON_RESULT even when their
+    The claimed enclosure is one canonical ``ClaimedPointEnclosure`` accepted
+    unchanged from its source. Rational components have at most 128 decimal
+    digits. Claimed dyadic exponents must lie in -8192..8192; reversed or
+    mathematically invalid intervals remain valid claims and produce typed
+    checker outcomes. Only LOG and SQRT claims are admitted. LOG replay uses
+    at most 128 terms per series, about 400 worst-case bits after range
+    reduction, so tighter claims can produce NON_RESULT even when their
     retained precision metadata is larger.
     """
 
@@ -305,24 +346,12 @@ class PointEnclosureCheckRequest(StrictModel):
         }
     )
 
-    function: PointEnclosureCheckFunction = Field(
-        description="Function checked independently; exactly LOG or SQRT."
-    )
-    argument: CanonicalRational = Field(
-        description="Exact reduced rational argument with at most 128 digits per component."
-    )
-    precision_bits: StrictInt = Field(
-        default=128,
-        ge=32,
-        le=4096,
+    enclosure: ClaimedPointEnclosure = Field(
         description=(
-            "Precision metadata retained from the source claim; it does not "
-            "promise that the independent 128-term LOG replay resolves a "
-            "claim at that precision."
-        ),
+            "Canonical claimed enclosure retained verbatim from its source; "
+            "only LOG and SQRT functions are admitted."
+        )
     )
-    lower: ExactDyadic = Field(description="Claimed inclusive lower endpoint.")
-    upper: ExactDyadic = Field(description="Claimed inclusive upper endpoint.")
 
     @model_validator(mode="before")
     @classmethod
@@ -331,21 +360,20 @@ class PointEnclosureCheckRequest(StrictModel):
 
     @model_validator(mode="after")
     def preflight_exact_checker(self) -> Self:
-        require_bounded_rational(
-            self.argument,
-            max_digits=MAX_RATIONAL_DIGITS,
-            label="point-enclosure checker rational",
-        )
+        if self.enclosure.function not in (RealUnaryFunction.LOG, RealUnaryFunction.SQRT):
+            raise ValueError(
+                "point-enclosure checker replays only LOG and SQRT claims"
+            )
         if any(
             abs(endpoint.exponent) > MAX_POINT_CHECK_DYADIC_EXPONENT
-            for endpoint in (self.lower, self.upper)
+            for endpoint in (self.enclosure.lower, self.enclosure.upper)
         ):
             raise ValueError(
                 "point-enclosure checker dyadic exponent exceeds the "
                 f"+/-{MAX_POINT_CHECK_DYADIC_EXPONENT} bound"
             )
         if (
-            _point_check_fraction_bound_bits(self.argument)
+            _point_check_fraction_bound_bits(self.enclosure.argument)
             > MAX_POINT_CHECK_FRACTION_BITS
         ):
             raise ValueError(
@@ -370,15 +398,7 @@ class PointEnclosureCheckResult(StrictModel):
         }
     )
 
-    function: PointEnclosureCheckFunction
-    argument: CanonicalRational
-    precision_bits: StrictInt = Field(
-        ge=32,
-        le=4096,
-        description="Precision metadata retained exactly from the source claim.",
-    )
-    lower: ExactDyadic
-    upper: ExactDyadic
+    enclosure: ClaimedPointEnclosure
     outcome: PointEnclosureCheckOutcome = Field(
         description=(
             "ACCEPTED when the independent enclosure is contained in the "
@@ -398,13 +418,7 @@ class PointEnclosureCheckResult(StrictModel):
             point_enclosure_check_outcome,
         )
 
-        request = PointEnclosureCheckRequest(
-            function=self.function,
-            argument=self.argument,
-            precision_bits=self.precision_bits,
-            lower=self.lower,
-            upper=self.upper,
-        )
+        request = PointEnclosureCheckRequest(enclosure=self.enclosure)
         if self.outcome != point_enclosure_check_outcome(request):
             raise ValueError(
                 "outcome must equal the deterministic enclosure check for the retained source"
@@ -416,11 +430,7 @@ class ArbPointEnclosureResult(StrictModel):
     status: Literal[
         "ENCLOSED", "NONFINITE", "TIMEOUT", "BACKEND_ERROR", "OUTPUT_MAGNITUDE_EXCEEDED"
     ]
-    function: RealUnaryFunction
-    argument: CanonicalRational
-    precision_bits: StrictInt = Field(ge=32, le=4096)
-    lower: ExactDyadic | None = None
-    upper: ExactDyadic | None = None
+    enclosure: ClaimedPointEnclosure | None = None
     relative_accuracy_bits: StrictInt | None = None
     exact: bool = False
     detail: str = Field(min_length=1, max_length=1024)
@@ -428,16 +438,14 @@ class ArbPointEnclosureResult(StrictModel):
     @model_validator(mode="after")
     def bind_enclosure_to_status(self) -> Self:
         enclosed = self.status == "ENCLOSED"
-        if enclosed != (self.lower is not None and self.upper is not None):
-            raise ValueError("only an enclosed result may carry dyadic endpoints")
+        if enclosed != (self.enclosure is not None):
+            raise ValueError("only an enclosed result may carry the point enclosure")
         if not enclosed and (self.relative_accuracy_bits is not None or self.exact):
             raise ValueError("a non-enclosure cannot claim accuracy or exactness")
         if enclosed:
-            lower = self.lower
-            upper = self.upper
-            if lower is None or upper is None:
-                raise ValueError("only an enclosed result may carry dyadic endpoints")
-            if lower.compare(upper) > 0:
+            enclosure = self.enclosure
+            assert enclosure is not None
+            if enclosure.lower.compare(enclosure.upper) > 0:
                 raise ValueError("enclosure lower endpoint exceeds upper endpoint")
             if self.exact != (self.relative_accuracy_bits is None):
                 raise ValueError(

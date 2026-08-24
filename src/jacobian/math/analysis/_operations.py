@@ -12,6 +12,7 @@ from jacobian.math.analysis._models import (
     MAX_DYADIC_EXPONENT,
     ArbPointEnclosureRequest,
     ArbPointEnclosureResult,
+    ClaimedPointEnclosure,
     ExactDyadic,
     IntervalExpressionEnclosureRequest,
     IntervalExpressionEnclosureResult,
@@ -185,9 +186,6 @@ def _point_enclosure(
         if not result.is_finite():
             return ArbPointEnclosureResult(
                 status="NONFINITE",
-                function=request.function,
-                argument=request.argument,
-                precision_bits=request.precision_bits,
                 detail="Arb returned a non-finite ball; no enclosure conclusion is available.",
             )
         lower_mantissa, lower_exponent = result.lower().man_exp()
@@ -199,18 +197,17 @@ def _point_enclosure(
     if endpoints is None:
         return ArbPointEnclosureResult(
             status="OUTPUT_MAGNITUDE_EXCEEDED",
-            function=request.function,
-            argument=request.argument,
-            precision_bits=request.precision_bits,
             detail="Arb produced finite endpoints outside the interoperable dyadic exponent range.",
         )
     return ArbPointEnclosureResult(
         status="ENCLOSED",
-        function=request.function,
-        argument=request.argument,
-        precision_bits=request.precision_bits,
-        lower=endpoints[0],
-        upper=endpoints[1],
+        enclosure=ClaimedPointEnclosure(
+            function=request.function,
+            argument=request.argument,
+            precision_bits=request.precision_bits,
+            lower=endpoints[0],
+            upper=endpoints[1],
+        ),
         relative_accuracy_bits=None if exact else int(result.rel_accuracy_bits()),
         exact=exact,
         detail="Pinned Arb ball arithmetic returned an outward-rounded enclosure with exact dyadic endpoints.",
@@ -221,11 +218,7 @@ def _check_point_enclosure(
     request: PointEnclosureCheckRequest,
 ) -> PointEnclosureCheckResult:
     return PointEnclosureCheckResult(
-        function=request.function,
-        argument=request.argument,
-        precision_bits=request.precision_bits,
-        lower=request.lower,
-        upper=request.upper,
+        enclosure=request.enclosure,
         outcome=point_enclosure_check_outcome(request),
     )
 
@@ -301,11 +294,13 @@ POINT_ENCLOSURE_OPERATIONS = (
                 "sqrt_zero",
                 "Independently check the exact claimed enclosure sqrt(0) = 0.",
                 {
-                    "function": "SQRT",
-                    "argument": {"num": "0", "den": "1"},
-                    "precision_bits": 128,
-                    "lower": {"mantissa": "0", "exponent": 0},
-                    "upper": {"mantissa": "0", "exponent": 0},
+                    "enclosure": {
+                        "function": "SQRT",
+                        "argument": {"num": "0", "den": "1"},
+                        "precision_bits": 128,
+                        "lower": {"mantissa": "0", "exponent": 0},
+                        "upper": {"mantissa": "0", "exponent": 0},
+                    },
                 },
             ),
         ),

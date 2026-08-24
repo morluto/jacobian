@@ -23,9 +23,9 @@ from fractions import Fraction
 
 from jacobian.math.analysis._models import (
     MAX_POINT_CHECK_LOG_TERMS,
-    PointEnclosureCheckFunction,
     PointEnclosureCheckOutcome,
     PointEnclosureCheckRequest,
+    RealUnaryFunction,
 )
 
 
@@ -141,13 +141,14 @@ def point_enclosure_check_outcome(
 ) -> PointEnclosureCheckOutcome:
     """Replay one structurally admitted enclosure claim deterministically."""
 
-    if request.lower.compare(request.upper) > 0:
+    enclosure = request.enclosure
+    if enclosure.lower.compare(enclosure.upper) > 0:
         return "REJECTED"
 
-    argument = request.argument.as_fraction()
-    claimed_lower = request.lower.as_fraction()
-    claimed_upper = request.upper.as_fraction()
-    if request.function is PointEnclosureCheckFunction.SQRT:
+    argument = enclosure.argument.as_fraction()
+    claimed_lower = enclosure.lower.as_fraction()
+    claimed_upper = enclosure.upper.as_fraction()
+    if enclosure.function is RealUnaryFunction.SQRT:
         return _sqrt_outcome(argument, claimed_lower, claimed_upper)
     return _log_outcome(argument, claimed_lower, claimed_upper)
 

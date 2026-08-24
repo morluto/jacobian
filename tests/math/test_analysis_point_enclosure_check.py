@@ -12,6 +12,9 @@ from jacobian.math.analysis._models import (
     MAX_POINT_CHECK_FRACTION_UPDATES,
     MAX_POINT_CHECK_LOG_TERMS,
     MAX_POINT_CHECK_OUTPUT_BYTES,
+    ArbPointEnclosureRequest,
+    ArbPointEnclosureResult,
+    ClaimedPointEnclosure,
     ExactDyadic,
     PointEnclosureCheckRequest,
     PointEnclosureCheckResult,
@@ -33,6 +36,24 @@ _LOG_137_80_UPPER = ExactDyadic(
 )
 
 
+def _claim(
+    function: str,
+    numerator: str,
+    denominator: str,
+    lower: ExactDyadic,
+    upper: ExactDyadic,
+    *,
+    precision_bits: int = 128,
+) -> dict[str, Any]:
+    return {
+        "function": function,
+        "argument": {"num": numerator, "den": denominator},
+        "precision_bits": precision_bits,
+        "lower": lower.model_dump(mode="json"),
+        "upper": upper.model_dump(mode="json"),
+    }
+
+
 def _request(
     function: str,
     numerator: str,
@@ -44,11 +65,14 @@ def _request(
 ) -> PointEnclosureCheckRequest:
     return PointEnclosureCheckRequest.model_validate(
         {
-            "function": function,
-            "argument": {"num": numerator, "den": denominator},
-            "precision_bits": precision_bits,
-            "lower": lower.model_dump(mode="json"),
-            "upper": upper.model_dump(mode="json"),
+            "enclosure": _claim(
+                function,
+                numerator,
+                denominator,
+                lower,
+                upper,
+                precision_bits=precision_bits,
+            )
         }
     )
 
@@ -97,14 +121,50 @@ def test_log_137_80_accepts_the_source_bound_arb_enclosure() -> None:
     )
 
     assert result.outcome == "ACCEPTED"
-    assert result.function == "LOG"
-    assert result.argument.as_fraction() == Fraction(137, 80)
-    assert result.lower == _LOG_137_80_LOWER
-    assert result.upper == _LOG_137_80_UPPER
+    assert result.enclosure.function == "LOG"
+    assert result.enclosure.argument.as_fraction() == Fraction(137, 80)
+    assert result.enclosure.lower == _LOG_137_80_LOWER
+    assert result.enclosure.upper == _LOG_137_80_UPPER
     assert (
         PointEnclosureCheckResult.model_validate_json(result.model_dump_json())
         == result
     )
+
+
+def test_producer_enclosure_crosses_the_checker_boundary_unchanged() -> None:
+    from jacobian.math.analysis._operations import _point_enclosure
+
+    producer_result = _point_enclosure(
+        ArbPointEnclosureRequest.model_validate(
+            {
+                "function": "LOG",
+                "argument": {"num": "137", "den": "80"},
+                "precision_bits": 128,
+            }
+        )
+    )
+    serialized = producer_result.model_dump(mode="json")
+    assert serialized["status"] == "ENCLOSED"
+
+    request = PointEnclosureCheckRequest.model_validate(
+        {"enclosure": serialized["enclosure"]}
+    )
+    outcome = _check_point_enclosure(request)
+
+    assert producer_result.enclosure is not None
+    assert request.enclosure == producer_result.enclosure
+    assert outcome.outcome == "ACCEPTED"
+    assert outcome.enclosure == producer_result.enclosure
+    assert ArbPointEnclosureResult.model_validate_json(
+        producer_result.model_dump_json()
+    ) == producer_result
+
+
+def test_checker_rejects_unsupported_claim_functions_at_admission() -> None:
+    claim = _claim("EXP", "1", "1", _integer_dyadic(2), _integer_dyadic(3))
+
+    with pytest.raises(ValidationError, match="only LOG and SQRT"):
+        PointEnclosureCheckRequest.model_validate({"enclosure": claim})
 
 
 @pytest.mark.parametrize(
@@ -265,7 +325,7 @@ def test_fraction_intermediates_fit_the_preflighted_bit_bound_at_the_source_limi
                 str(denominator),
                 _integer_dyadic(-1),
                 _integer_dyadic(0),
-            ).argument
+            ).enclosure.argument
         )
         <= MAX_POINT_CHECK_FRACTION_BITS
     )
@@ -286,22 +346,22 @@ def test_result_validation_rejects_forged_verdicts_and_wrong_sources() -> None:
         PointEnclosureCheckResult.model_validate(forged_verdict)
 
     tampered_interval = result.model_dump(mode="json")
-    tampered_interval["upper"] = {"mantissa": "1", "exponent": -1}
+    tampered_interval["enclosure"]["upper"] = {"mantissa": "1", "exponent": -1}
     with pytest.raises(ValidationError, match="deterministic enclosure check"):
         PointEnclosureCheckResult.model_validate(tampered_interval)
 
     wrong_function = result.model_dump(mode="json")
-    wrong_function["function"] = "SQRT"
+    wrong_function["enclosure"]["function"] = "SQRT"
     with pytest.raises(ValidationError, match="deterministic enclosure check"):
         PointEnclosureCheckResult.model_validate(wrong_function)
 
     wrong_argument = result.model_dump(mode="json")
-    wrong_argument["argument"] = {"num": "0", "den": "1"}
+    wrong_argument["enclosure"]["argument"] = {"num": "0", "den": "1"}
     with pytest.raises(ValidationError, match="deterministic enclosure check"):
         PointEnclosureCheckResult.model_validate(wrong_argument)
 
     oversized_source = result.model_dump(mode="json")
-    oversized_source["argument"] = {"num": "1" + "0" * 128, "den": "1"}
+    oversized_source["enclosure"]["argument"] = {"num": "1" + "0" * 128, "den": "1"}
     with pytest.raises(ValidationError, match="raw rational component"):
         PointEnclosureCheckResult.model_validate(oversized_source)
 
@@ -404,16 +464,21 @@ def test_source_payload_helper_preserves_json_types() -> None:
     payload: dict[str, Any] = request.model_dump(mode="json")
 
     assert payload == {
-        "function": "SQRT",
-        "argument": {"num": "0", "den": "1"},
-        "precision_bits": 128,
-        "lower": {"mantissa": "0", "exponent": 0},
-        "upper": {"mantissa": "0", "exponent": 0},
+        "enclosure": {
+            "function": "SQRT",
+            "argument": {"num": "0", "den": "1"},
+            "precision_bits": 128,
+            "lower": {"mantissa": "0", "exponent": 0},
+            "upper": {"mantissa": "0", "exponent": 0},
+        }
     }
 
 
 def test_request_schema_publishes_work_and_precision_limits() -> None:
     schema = PointEnclosureCheckRequest.model_json_schema()
+    enclosure_ref = schema["properties"]["enclosure"]["$ref"]
+    enclosure_name = enclosure_ref.rsplit("/", 1)[-1]
+    enclosure_schema = schema["$defs"][enclosure_name]
 
     assert schema["point_check_log_term_bound"] == MAX_POINT_CHECK_LOG_TERMS
     assert (
@@ -426,9 +491,16 @@ def test_request_schema_publishes_work_and_precision_limits() -> None:
         == 512
     )
     assert schema["point_check_output_byte_bound"] == MAX_POINT_CHECK_OUTPUT_BYTES
-    precision_description = schema["properties"]["precision_bits"]["description"]
+    precision_description = (
+        enclosure_schema["properties"]["precision_bits"]["description"]
+    )
     assert "does not promise" in precision_description
-    assert "128-term LOG replay" in precision_description
+    precision_description_schema = ClaimedPointEnclosure.model_json_schema()[
+        "properties"
+    ]["precision_bits"]["description"]
+    assert precision_description == precision_description_schema
+    enclosure_description = schema["properties"]["enclosure"]["description"]
+    assert "only LOG and SQRT" in enclosure_description
     assert (
         PointEnclosureCheckResult.model_json_schema()["point_check_output_byte_bound"]
         == MAX_POINT_CHECK_OUTPUT_BYTES

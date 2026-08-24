@@ -18,7 +18,9 @@ TOOLS: MathTools = (
         "the complete source-bound inclusion-exclusion sum. Inputs contain one "
         "or more same-dimensional boxes in dimensions 1..64 whose echoed source "
         "and complete ledger fit the published byte budget, at most 16 nonempty "
-        "boxes, and endpoints of at most 256 digits. intervals=null is the "
+        "boxes, and endpoint components within the canonical 32,768-digit "
+        "rational limit; per-axis growth and result-byte budgets determine "
+        "admission. intervals=null is the "
         "canonical empty box; equal endpoints are valid. Preflight bounds "
         "replay work, rational growth, and worst-case ledger bytes.",
         BoxUnionVolumeRequest,

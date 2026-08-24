@@ -269,11 +269,6 @@ def test_native_api_accepts_canonical_box_tuple_without_request_wrapper() -> Non
 
 
 def test_native_call_admits_the_family_before_the_kernel() -> None:
-    large = "1" + "0" * 256
-
-    with pytest.raises(ValidationError, match="256-digit"):
-        compute_box_union_volume((_box((0, large)),))
-
     with pytest.raises(ValidationError, match="same dimension"):
         compute_box_union_volume((_box((0, 1)), _box((0, 1), (0, 1))))
 
@@ -333,10 +328,24 @@ def test_rejects_malformed_interval_and_dimension_mismatch() -> None:
         BoxUnionVolumeRequest(boxes=(_box((0, 1)), _box((0, 1), (0, 1))))
 
 
-def test_rejects_endpoint_beyond_operation_digit_bound() -> None:
-    large = "1" + "0" * 256
-    with pytest.raises(ValidationError, match="256-digit"):
-        BoxUnionVolumeRequest(boxes=(_box((0, large)),))
+def test_single_box_with_257_digit_endpoint_is_admitted_with_exact_volume() -> None:
+    result = compute_box_union_volume((_box((0, Fraction(10**256))),))
+
+    assert result.union_volume.as_fraction() == Fraction(10**256)
+    assert tuple(entry.box_indices for entry in result.intersections) == ((0,),)
+    assert result.intersections[0].volume.as_fraction() == Fraction(10**256)
+
+
+def test_endpoint_at_derived_growth_boundary_is_admitted() -> None:
+    result = compute_box_union_volume((_box((0, Fraction(10**16_376 - 1))),))
+
+    assert result.union_volume.as_fraction() == Fraction(10**16_376 - 1)
+    assert tuple(entry.box_indices for entry in result.intersections) == ((0,),)
+
+
+def test_endpoint_beyond_derived_growth_budget_is_rejected() -> None:
+    with pytest.raises(ValidationError, match="exact rational intermediate"):
+        BoxUnionVolumeRequest(boxes=(_box((0, Fraction(10**16_377 - 1))),))
 
 
 def test_rejects_complete_replay_work_before_expansion() -> None:
@@ -412,6 +421,8 @@ def test_schema_explains_empty_boxes_and_coupled_bounds() -> None:
 
     assert "intervals=null" in box_schema["description"]
     assert "same dimension" in request_schema["description"]
+    assert "canonical 32,768-digit" in request_schema["description"]
+    assert "256 digits" not in request_schema["description"]
     boxes_property = request_schema["properties"]["boxes"]
     assert "maxItems" not in boxes_property
     assert "published operation budgets" in boxes_property["description"]

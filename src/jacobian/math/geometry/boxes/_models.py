@@ -6,34 +6,17 @@ from typing import Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
 
-from jacobian._exact import (
-    MAX_CANONICAL_RATIONAL_DIGITS,
-    CanonicalRational,
-    require_bounded_rational,
-)
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.canonical import encode_strict_json
 from jacobian.math.geometry.boxes._kernel import box_volume
 from jacobian.math.geometry.boxes.values import RationalAxisAlignedBox
 
 MAX_BOX_UNION_NONEMPTY_BOXES = 16
-MAX_BOX_ENDPOINT_DIGITS = 256
 MAX_INTERSECTION_CANDIDATES = (1 << MAX_BOX_UNION_NONEMPTY_BOXES) - 1
 MAX_BOX_UNION_REPLAY_WORK = 4_000_000
 MAX_BOX_UNION_RESULT_BYTES = 8 * 1024 * 1024
 MAX_BOX_UNION_RESULT_RATIONAL_DIGITS = 16_384
-
-
-def _endpoint_values(
-    boxes: tuple[RationalAxisAlignedBox, ...],
-) -> tuple[CanonicalRational, ...]:
-    return tuple(
-        endpoint
-        for box in boxes
-        if box.intervals is not None
-        for interval in box.intervals
-        for endpoint in (interval.lower, interval.upper)
-    )
 
 
 def _axis_endpoints(
@@ -149,7 +132,10 @@ class BoxUnionVolumeRequest(StrictModel):
                 "admitted source count is bounded by the serialized-result "
                 "budget because every result echoes its full source family. "
                 "Every box must use the same dimension in [1,64]. Each "
-                "endpoint component carries at most 256 digits. intervals=null "
+                "endpoint component obeys the canonical 32,768-digit "
+                "rational limit, and admission rests on the coupled exact "
+                "growth and serialized-byte budgets rather than a "
+                "per-endpoint cap. intervals=null "
                 "denotes the canonical empty box; at most 16 boxes may be "
                 "nonempty, and equal interval endpoints are valid measure-zero "
                 "axes."
@@ -189,12 +175,6 @@ class BoxUnionVolumeRequest(StrictModel):
         dimension = self.boxes[0].dimension
         if any(box.dimension != dimension for box in self.boxes):
             raise ValueError("all box-union sources must have the same dimension")
-        for endpoint in _endpoint_values(self.boxes):
-            require_bounded_rational(
-                endpoint,
-                max_digits=MAX_BOX_ENDPOINT_DIGITS,
-                label="box endpoint",
-            )
 
         active_box_count = sum(not box.is_empty for box in self.boxes)
         candidate_count = (1 << active_box_count) - 1

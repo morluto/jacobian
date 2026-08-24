@@ -10,7 +10,9 @@ from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix, rank
 
-MAX_LINEAR_CODE_LENGTH = 64  # rowspace operations are O(k^2 n) and remain cheap; raised from 32
+MAX_LINEAR_CODE_LENGTH = (
+    64  # rowspace operations are O(k^2 n) and remain cheap; raised from 32
+)
 MAX_LINEAR_CODE_DIMENSION = MAX_LINEAR_CODE_LENGTH
 
 

@@ -96,7 +96,10 @@ TREE_AUTOMATA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "leaf_seed_and_binary_extension",
-                "Find states generated from a leaf and a binary constructor.",
+                "Find states generated from a leaf and a binary "
+                "constructor; every transition's symbol must index the "
+                "ranked alphabet and its child_states count must equal "
+                "arity[symbol].",
                 {
                     "automaton": _RUN_EXAMPLE["automaton"],
                 },

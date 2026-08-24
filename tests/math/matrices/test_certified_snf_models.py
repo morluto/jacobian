@@ -277,7 +277,9 @@ def test_certificate_contract_replays_zero_dimensional_boundaries(
         SmithNormalFormCertificate(**{**kwargs, "left_determinant": "-1"})
 
 
-def test_certificate_contract_replays_rank_zero_determinants_without_formatting_them() -> None:
+def test_certificate_contract_replays_rank_zero_determinants_without_formatting_them() -> (
+    None
+):
     tall_source = CertifiedIntegerMatrix(row_count=2, column_count=0, entries=((), ()))
     empty_right = CertifiedIntegerMatrix(row_count=0, column_count=0)
     permutation = _certified_matrix([[0, 1], [1, 0]])

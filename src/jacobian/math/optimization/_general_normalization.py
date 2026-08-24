@@ -146,11 +146,16 @@ def normalize_general_program(
         raise ValueError(
             "general linear-program normalized rows exceed the 64-entry bound"
         )
-    standard = StandardFormRationalLinearProgram(
-        variables=tuple(standard_names),
-        objective=tuple(_rational(value) for value in objective),
-        coefficients=tuple(tuple(_rational(value) for value in row) for row in rows),
-        rhs=tuple(_rational(value) for value in rhs),
+    standard = StandardFormRationalLinearProgram.admit_derived_intermediate(
+        {
+            "variables": tuple(standard_names),
+            "objective": tuple(_rational(value) for value in objective),
+            "coefficients": tuple(
+                tuple(_rational(value) for value in row) for row in rows
+            ),
+            "rhs": tuple(_rational(value) for value in rhs),
+        },
+        maximum_digits=_standard_intermediate_digit_bound(program),
     )
     return GeneralLinearNormalization(
         standard_program=standard,
@@ -161,29 +166,119 @@ def normalize_general_program(
     )
 
 
+def _standard_intermediate_digit_bound(
+    program: GeneralFormRationalLinearProgram,
+) -> int:
+    """Bound every scalar the private standard expansion can produce.
+
+    Non-RHS entries are one signed source scalar.  Each source-row RHS
+    subtracts the sum of up to ``n`` coefficient-offset products from the
+    source RHS, so its reduced denominator divides the product of the summed
+    term denominators while its numerator carries the matching magnitude;
+    upper-row RHS values subtract two source bounds.
+    """
+
+    product_digits = 2 * MAX_RATIONAL_DIGITS
+    terms = 1 + len(program.variables)
+    return (terms + 1) * product_digits + len(str(terms))
+
+
 _MAPPED_RESULT_HEIGHT_SLACK = 16
 
 
-def _mapped_result_digit_bound(normalization: GeneralLinearNormalization) -> int:
-    """Bound every source-coordinate value a mapped outcome can carry.
+def _mapped_point_digit_bound(normalization: GeneralLinearNormalization) -> int:
+    """Bound mapped coordinates, bound slacks, and mapped recession rays.
 
-    Standard coordinates stay within ``_result_digit_bound`` of the private
-    program.  Mapped source values stack at most two input-height products on
-    one standard coordinate -- objective and residual offset terms, then bound
-    multipliers against bounds -- and sum at most ``2n + m`` such terms with
-    chained differences, so the slack covers summation carries and those
-    chains.
+    A source coordinate adds its offset to at most two standard columns, and
+    each bound slack subtracts one further source bound, so such a value
+    stacks at most two input-height products onto one standard coordinate
+    before one chained difference.
     """
 
     return (
-        _result_digit_bound(normalization.standard_program)
-        + 2 * MAX_RATIONAL_DIGITS
+        2 * MAX_RATIONAL_DIGITS
+        + 2 * _result_digit_bound(normalization.standard_program)
         + _MAPPED_RESULT_HEIGHT_SLACK
     )
 
 
-def normalized_result_digit_bound(program: GeneralFormRationalLinearProgram) -> int:
-    return _mapped_result_digit_bound(normalize_general_program(program))
+def _mapped_residual_digit_bound(normalization: GeneralLinearNormalization) -> int:
+    """Bound mapped objectives, residuals, and constraint slacks.
+
+    These sums stack ``n`` coefficient-offset products and ``n``
+    coefficient-standard products onto the source RHS.  The contributing
+    denominators share no factor, so the reduced denominator grows like the
+    product of all contributing source denominators rather than like one
+    stacked pair; this branch reserves that common-denominator growth across
+    every one of the ``2n + 1`` summed terms.
+    """
+
+    variables = len(normalization.offsets)
+    summed_terms = 2 * variables + 1
+    return (
+        variables
+        * (3 * MAX_RATIONAL_DIGITS + _result_digit_bound(normalization.standard_program))
+        + MAX_RATIONAL_DIGITS
+        + len(str(summed_terms))
+        + 1
+        + _MAPPED_RESULT_HEIGHT_SLACK
+    )
+
+
+def _mapped_certificate_digit_bound(normalization: GeneralLinearNormalization) -> int:
+    """Bound mapped dual, stationarity, and Farkas certificate values.
+
+    Standard multipliers stay within ``_result_digit_bound`` of the private
+    program.  Mapping stacks at most two input-height products per value --
+    objective and gradient terms, then bound multipliers against bounds -- and
+    the dual or Farkas pairing sums up to ``2n`` such products with source
+    bounds whose denominators share no factor, so the bound additionally
+    reserves that common-denominator growth; the slack covers summation
+    carries and chained differences.
+    """
+
+    variables = len(normalization.offsets)
+    return (
+        _result_digit_bound(normalization.standard_program)
+        + (2 + 4 * variables) * MAX_RATIONAL_DIGITS
+        + _MAPPED_RESULT_HEIGHT_SLACK
+    )
+
+
+def normalized_point_digit_bound(program: GeneralFormRationalLinearProgram) -> int:
+    return _mapped_point_digit_bound(normalize_general_program(program))
+
+
+def normalized_residual_digit_bound(program: GeneralFormRationalLinearProgram) -> int:
+    return _mapped_residual_digit_bound(normalize_general_program(program))
+
+
+def normalized_certificate_digit_bound(program: GeneralFormRationalLinearProgram) -> int:
+    return _mapped_certificate_digit_bound(normalize_general_program(program))
+
+
+def estimated_mapped_result_bytes(program: GeneralFormRationalLinearProgram) -> int:
+    """Upper-bound the wired bytes of any outcome this program can return."""
+
+    normalization = normalize_general_program(program)
+    point_unit = 2 * _mapped_point_digit_bound(normalization) + 32
+    residual_unit = 2 * _mapped_residual_digit_bound(normalization) + 32
+    certificate_unit = 2 * _mapped_certificate_digit_bound(normalization) + 32
+    variables = len(normalization.offsets)
+    rows = len(program.constraints)
+    # Each status carries its full replayable block: optimal adds the primal
+    # residual sums plus one certificate family, unbounded swaps duals for the
+    # recession ray, infeasible carries only Farkas coordinates, and unknown
+    # carries no values at all.  Primal evidence always wires within its own
+    # bound, so it anchors the guaranteed typed outcome.
+    optimal_bytes = (
+        (2 * rows + 1) * residual_unit
+        + 3 * variables * point_unit
+        + (3 * variables + rows + 1) * certificate_unit
+    )
+    unbounded_bytes = (2 * rows + 1) * residual_unit + 4 * variables * point_unit
+    infeasible_bytes = (2 * variables + rows) * certificate_unit
+    return 4096 + max(optimal_bytes, unbounded_bytes, infeasible_bytes)
 
 
 def require_admitted_general_normalization(
@@ -191,13 +286,7 @@ def require_admitted_general_normalization(
 ) -> None:
     """Preflight the whole standard expansion and the mapped public result."""
 
-    normalization = normalize_general_program(program)
-    digits = _mapped_result_digit_bound(normalization)
-    # An optimal general result has five source-coordinate vectors over variables
-    # and two over rows plus two scalar objectives.  This is conservative because
-    # only one status-specific certificate family is present in any actual result.
-    values = 6 * len(program.variables) + 3 * len(program.constraints) + 2
-    if 4096 + values * (2 * digits + 32) > MAX_LINEAR_PROGRAM_RESULT_BYTES:
+    if estimated_mapped_result_bytes(program) > MAX_LINEAR_PROGRAM_RESULT_BYTES:
         raise ValueError(
             "general linear-program mapped result can exceed the "
             f"{MAX_LINEAR_PROGRAM_RESULT_BYTES}-byte result bound"
@@ -206,7 +295,10 @@ def require_admitted_general_normalization(
 
 __all__ = [
     "GeneralLinearNormalization",
+    "estimated_mapped_result_bytes",
     "normalize_general_program",
-    "normalized_result_digit_bound",
+    "normalized_certificate_digit_bound",
+    "normalized_point_digit_bound",
+    "normalized_residual_digit_bound",
     "require_admitted_general_normalization",
 ]

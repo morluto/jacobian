@@ -7,6 +7,7 @@ from fractions import Fraction
 
 import pytest
 from pydantic import ValidationError
+from sympy import nextprime
 from tests.support.rationals import rational_payload as q
 
 from jacobian.math.optimization._general_models import (
@@ -383,3 +384,134 @@ def test_general_lp_defers_free_split_admission_to_the_normalized_columns() -> N
                 )
             }
         )
+
+
+def test_general_lp_admits_sixty_four_trivial_equalities_within_the_row_envelope() -> (
+    None
+):
+    constraints = [
+        _row(f"trivial_{index}", [q(0)], "EQ", q(0)) for index in range(64)
+    ]
+    result = _run(
+        _program(
+            variables=[_variable("x", q(0))],
+            sense="MINIMIZE",
+            objective=[q(1)],
+            constraints=constraints,
+        )
+    )
+
+    assert result.status == "OPTIMAL"
+    assert _fractions(result.primal_candidate) == (Fraction(),)
+    assert _fractions(result.primal_residuals) == (Fraction(),) * 64
+    assert result.model_validate_json(result.model_dump_json()) == result
+
+
+def test_general_lp_rejects_constraints_beyond_the_public_row_envelope() -> None:
+    constraints = [_row(f"row_{index}", [q(1)], "EQ", q(0)) for index in range(65)]
+    with pytest.raises(ValidationError, match="constraints exceed the 64-entry bound"):
+        GeneralRationalLinearProgramRequest.model_validate(
+            {
+                "program": _program(
+                    variables=[_variable("x", q(0))],
+                    sense="MINIMIZE",
+                    objective=[q(1)],
+                    constraints=constraints,
+                )
+            }
+        )
+
+
+def test_general_lp_defers_upper_expansion_rows_to_normalized_admission() -> None:
+    constraints = [_row(f"row_{index}", [q(1)], "EQ", q(0)) for index in range(64)]
+    with pytest.raises(ValidationError, match="normalized rows exceed"):
+        GeneralRationalLinearProgramRequest.model_validate(
+            {
+                "program": _program(
+                    variables=[_variable("x", q(0), q(1))],
+                    sense="MINIMIZE",
+                    objective=[q(1)],
+                    constraints=constraints,
+                )
+            }
+        )
+
+
+def test_general_lp_admits_generated_intermediates_from_admitted_source_heights() -> (
+    None
+):
+    scale = 10**127
+    result = _run(
+        _program(
+            variables=[_variable("x", q(scale))],
+            sense="MINIMIZE",
+            objective=[q(1)],
+            constraints=[_row("scaled_floor", [q(scale)], "GE", q(0))],
+        )
+    )
+
+    assert result.status == "OPTIMAL"
+    assert _fractions(result.primal_candidate) == (Fraction(scale),)
+    assert result.primal_objective is not None
+    assert result.primal_objective.as_fraction() == Fraction(scale)
+    assert _fractions(result.primal_residuals) == (Fraction(scale**2),)
+    assert result.dual_objective is not None
+    assert result.dual_objective.as_fraction() == Fraction(scale)
+
+
+def test_general_lp_still_rejects_expansions_beyond_the_derived_envelope() -> None:
+    prime = 10**127 + 283
+    constraints = []
+    for row_index in range(10):
+        coefficients = []
+        for _ in range(16):
+            prime = nextprime(prime)
+            coefficients.append(q(1, prime))
+        constraints.append(
+            _row(f"dense_{row_index}", coefficients, "EQ", q(0))
+        )
+    with pytest.raises(
+        ValidationError, match="height can exceed the exact 32768-digit result bound"
+    ):
+        GeneralRationalLinearProgramRequest.model_validate(
+            {
+                "program": _program(
+                    variables=[_variable(f"x{index}") for index in range(16)],
+                    sense="MINIMIZE",
+                    objective=[q(1)] * 16,
+                    constraints=constraints,
+                )
+            }
+        )
+
+
+_TALL_PRIMES = (
+    10**127 + 283,
+    10**127 + 1521,
+    10**127 + 1533,
+)
+
+
+def test_general_lp_keeps_multi_offset_optima_within_the_mapped_bounds() -> None:
+    lowers = tuple(Fraction(1, prime) for prime in _TALL_PRIMES)
+    result = _run(
+        _program(
+            variables=[
+                _variable(f"x{index}", q(1, prime))
+                for index, prime in enumerate(_TALL_PRIMES)
+            ],
+            sense="MINIMIZE",
+            objective=[q(1)] * len(_TALL_PRIMES),
+            constraints=[],
+        )
+    )
+
+    assert result.status == "OPTIMAL"
+    assert _fractions(result.primal_candidate) == lowers
+    expected = sum(lowers)
+    assert len(str(expected.denominator)) > 300
+    assert result.primal_objective is not None
+    assert result.primal_objective.as_fraction() == expected
+    assert result.dual_objective is not None
+    assert result.dual_objective.as_fraction() == expected
+    assert result.model_validate_json(result.model_dump_json()) == result

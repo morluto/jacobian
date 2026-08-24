@@ -25,7 +25,7 @@ type RationalLinearRelation = Literal["LE", "EQ", "GE"]
 type RationalObjectiveSense = Literal["MINIMIZE", "MAXIMIZE"]
 
 MAX_GENERAL_LINEAR_PROGRAM_VARIABLES = 32
-MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS = 48
+MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS = 64
 
 
 def _prepare_raw_general_program(value: object) -> object:
@@ -416,42 +416,51 @@ def _require_general_result_shape(result: GeneralRationalLinearProgramResult) ->
 
 def _require_general_result_heights(result: GeneralRationalLinearProgramResult) -> None:
     from jacobian.math.optimization._general_normalization import (
-        normalized_result_digit_bound,
+        estimated_mapped_result_bytes,
+        normalized_certificate_digit_bound,
+        normalized_point_digit_bound,
+        normalized_residual_digit_bound,
     )
 
-    maximum_digits = normalized_result_digit_bound(result.program)
-    values = tuple(
-        value
-        for field in (
-            result.primal_candidate,
-            result.primal_residuals,
-            result.constraint_slacks,
-            result.lower_bound_slacks,
-            result.upper_bound_slacks,
-            result.constraint_dual,
-            result.lower_bound_dual,
-            result.upper_bound_dual,
-            result.stationarity_residuals,
-            result.farkas_constraints,
-            result.farkas_lower_bounds,
-            result.farkas_upper_bounds,
-            result.recession_direction,
-        )
-        if field is not None
-        for value in field
-    ) + tuple(
-        value
-        for value in (result.primal_objective, result.dual_objective)
-        if value is not None
+    point_digits = normalized_point_digit_bound(result.program)
+    residual_digits = normalized_residual_digit_bound(result.program)
+    certificate_digits = normalized_certificate_digit_bound(result.program)
+    grouped = (
+        (point_digits, result.primal_candidate),
+        (point_digits, result.lower_bound_slacks),
+        (point_digits, result.upper_bound_slacks),
+        (point_digits, result.recession_direction),
+        (residual_digits, result.primal_residuals),
+        (residual_digits, result.constraint_slacks),
+        (certificate_digits, result.constraint_dual),
+        (certificate_digits, result.lower_bound_dual),
+        (certificate_digits, result.upper_bound_dual),
+        (certificate_digits, result.stationarity_residuals),
+        (certificate_digits, result.farkas_constraints),
+        (certificate_digits, result.farkas_lower_bounds),
+        (certificate_digits, result.farkas_upper_bounds),
     )
-    for value in values:
+    for maximum_digits, field in grouped:
+        if field is None:
+            continue
+        for value in field:
+            require_bounded_rational(
+                value,
+                max_digits=maximum_digits,
+                label="general linear-program result",
+            )
+    for maximum_digits, scalar in (
+        (residual_digits, result.primal_objective),
+        (certificate_digits, result.dual_objective),
+    ):
+        if scalar is None:
+            continue
         require_bounded_rational(
-            value,
+            scalar,
             max_digits=maximum_digits,
             label="general linear-program result",
         )
-    estimated_bytes = 4096 + len(values) * (2 * maximum_digits + 32)
-    if estimated_bytes > MAX_LINEAR_PROGRAM_RESULT_BYTES:
+    if estimated_mapped_result_bytes(result.program) > MAX_LINEAR_PROGRAM_RESULT_BYTES:
         raise ValueError(
             "general linear-program result can exceed the result byte bound"
         )

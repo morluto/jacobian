@@ -17,8 +17,10 @@ from jacobian.math.optimization._general_models import (
 )
 from jacobian.math.optimization._general_normalization import (
     GeneralLinearNormalization,
+    _mapped_certificate_digit_bound,
+    _mapped_point_digit_bound,
+    _mapped_residual_digit_bound,
     normalize_general_program,
-    normalized_result_digit_bound,
 )
 from jacobian.math.optimization._models import (
     RationalLinearProgramRequest,
@@ -242,7 +244,8 @@ def _mapped_primal_fields(
     normalization: GeneralLinearNormalization,
     standard_values: tuple[CanonicalRational, ...],
     *,
-    max_digits: int,
+    point_max_digits: int,
+    residual_max_digits: int,
 ) -> (
     tuple[
         tuple[CanonicalRational, ...],
@@ -258,12 +261,14 @@ def _mapped_primal_fields(
     objective, residuals, constraint_slacks, lower_slacks, upper_slacks = _primal_data(
         program, point
     )
-    wire_point = _wire_vector(point, max_digits=max_digits)
-    wire_objective = _wire(objective, max_digits=max_digits)
-    wire_residuals = _wire_vector(residuals, max_digits=max_digits)
-    wire_constraint_slacks = _wire_vector(constraint_slacks, max_digits=max_digits)
-    wire_lower_slacks = _wire_vector(lower_slacks, max_digits=max_digits)
-    wire_upper_slacks = _wire_vector(upper_slacks, max_digits=max_digits)
+    wire_point = _wire_vector(point, max_digits=point_max_digits)
+    wire_objective = _wire(objective, max_digits=residual_max_digits)
+    wire_residuals = _wire_vector(residuals, max_digits=residual_max_digits)
+    wire_constraint_slacks = _wire_vector(
+        constraint_slacks, max_digits=residual_max_digits
+    )
+    wire_lower_slacks = _wire_vector(lower_slacks, max_digits=point_max_digits)
+    wire_upper_slacks = _wire_vector(upper_slacks, max_digits=point_max_digits)
     if (
         wire_point is None
         or wire_objective is None
@@ -288,7 +293,9 @@ def _map_standard_result(
     normalization: GeneralLinearNormalization,
     standard_result: RationalLinearProgramResult,
     *,
-    max_digits: int,
+    point_max_digits: int,
+    residual_max_digits: int,
+    certificate_max_digits: int,
 ) -> GeneralRationalLinearProgramResult:
     if standard_result.status == "UNKNOWN":
         return _unknown(program)
@@ -304,7 +311,7 @@ def _map_standard_result(
             standard_result.farkas_candidate,
         )
         wires = tuple(
-            _wire_vector(values, max_digits=max_digits)
+            _wire_vector(values, max_digits=certificate_max_digits)
             for values in (constraints, lower, upper)
         )
         if any(value is None for value in wires):
@@ -331,7 +338,8 @@ def _map_standard_result(
         program,
         normalization,
         standard_result.primal_candidate,
-        max_digits=max_digits,
+        point_max_digits=point_max_digits,
+        residual_max_digits=residual_max_digits,
     )
     if primal is None:
         return _unknown(program)
@@ -341,7 +349,7 @@ def _map_standard_result(
         direction = _source_direction(
             normalization, standard_result.recession_direction
         )
-        wire_direction = _wire_vector(direction, max_digits=max_digits)
+        wire_direction = _wire_vector(direction, max_digits=point_max_digits)
         if wire_direction is None:
             return _unknown(program)
         try:
@@ -419,10 +427,10 @@ def _map_standard_result(
         for column in range(len(program.variables))
     )
     wires = tuple(
-        _wire_vector(values, max_digits=max_digits)
+        _wire_vector(values, max_digits=certificate_max_digits)
         for values in (constraints, lower, upper, stationarity)
     )
-    wire_dual_objective = _wire(dual_objective, max_digits=max_digits)
+    wire_dual_objective = _wire(dual_objective, max_digits=certificate_max_digits)
     if any(value is None for value in wires) or wire_dual_objective is None:
         return _primal_feasible(
             program,
@@ -484,7 +492,9 @@ def _general_linear_program(
         program,
         normalization,
         standard_result,
-        max_digits=normalized_result_digit_bound(program),
+        point_max_digits=_mapped_point_digit_bound(normalization),
+        residual_max_digits=_mapped_residual_digit_bound(normalization),
+        certificate_max_digits=_mapped_certificate_digit_bound(normalization),
     )
 
 

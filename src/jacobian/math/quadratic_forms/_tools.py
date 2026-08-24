@@ -4,6 +4,10 @@ from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
 from jacobian.math.quadratic_forms._models import EvaluationRequest, EvaluationResult
 from jacobian.math.quadratic_forms._operations import evaluate_form
+from jacobian.math.quadratic_forms.values import (
+    MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS,
+    MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS,
+)
 
 TOOLS = (
     MathTool(
@@ -25,11 +29,12 @@ TOOLS = (
         examples=(
             example(
                 "binary_cross_term",
-                "Evaluate 2*x^2+3*x*y+5*y^2 at (1/2, 2); axis labels are "
-                "unique, diagonal_coefficients and coordinates hold exactly "
-                "one entry per label in axis order, every cross-term index "
-                "lies inside the axis, and the vector axis equals the form "
-                "axis.",
+                "Evaluate 2*x^2+3*x*y+5*y^2 at (1/2, 2); unique labels, one "
+                "entry per label in axis order, cross-term indices inside "
+                "the axis, vector axis equal to the form axis, and entries "
+                f"within the {MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS}-digit "
+                f"coefficient and {MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS}"
+                "-digit coordinate bounds.",
                 {
                     "form": {
                         "axis": ["x", "y"],

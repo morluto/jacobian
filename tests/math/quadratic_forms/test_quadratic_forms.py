@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.quadratic_forms import (
+    QuadraticCrossTerm,
     RationalCoordinateVector,
     RationalQuadraticForm,
     evaluate_rational_quadratic_form,
@@ -180,9 +181,7 @@ def test_evaluation_budget_admits_forms_near_the_denominator_boundary() -> None:
     labels = [f"x{index}" for index in range(axes)]
     form = {
         "axis": labels,
-        "diagonal_coefficients": [
-            {"num": "1", "den": denominator} for _ in labels
-        ],
+        "diagonal_coefficients": [{"num": "1", "den": denominator} for _ in labels],
     }
     vector = {
         "axis": labels,
@@ -190,9 +189,9 @@ def test_evaluation_budget_admits_forms_near_the_denominator_boundary() -> None:
     }
     request = EvaluationRequest.model_validate({"form": form, "vector": vector})
 
-    assert evaluate_rational_quadratic_form(
-        request.form, request.vector
-    ) == Fraction(axes, 10 ** (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1))
+    assert evaluate_rational_quadratic_form(request.form, request.vector) == Fraction(
+        axes, 10 ** (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1)
+    )
 
 
 def test_evaluation_preflights_the_aggregate_denominator() -> None:
@@ -214,6 +213,49 @@ def test_evaluation_preflights_the_aggregate_denominator() -> None:
         EvaluationRequest.model_validate({"form": form, "vector": vector})
 
 
+def test_evaluation_budget_ignores_annihilated_monomials() -> None:
+    denominator = "1" + "0" * (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1)
+    labels = [f"x{index}" for index in range(30)]
+    form = {
+        "axis": labels,
+        "diagonal_coefficients": [{"num": "1", "den": denominator} for _ in labels],
+        "cross_terms": [
+            {"left": 0, "right": 1, "coefficient": {"num": "1", "den": denominator}},
+        ],
+    }
+    vector = {
+        "axis": labels,
+        "coordinates": [_rational(0) for _ in labels],
+    }
+
+    assert evaluate_form(
+        EvaluationRequest.model_validate({"form": form, "vector": vector})
+    ).value == CanonicalRational(num="0", den="1")
+
+
+def test_zero_coordinates_exclude_irrelevant_coefficient_denominators() -> None:
+    active_denominator = "1" + "0" * (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS // 2 - 1)
+    annihilated_denominator = "1" + "0" * (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1)
+    labels = [f"a{index}" for index in range(20)] + [f"b{index}" for index in range(20)]
+    form = {
+        "axis": labels,
+        "diagonal_coefficients": [
+            {"num": "1", "den": active_denominator} for _ in range(20)
+        ]
+        + [{"num": "1", "den": annihilated_denominator} for _ in range(20)],
+    }
+    vector = {
+        "axis": labels,
+        "coordinates": [_rational(1) for _ in range(20)]
+        + [_rational(0) for _ in range(20)],
+    }
+    request = EvaluationRequest.model_validate({"form": form, "vector": vector})
+
+    assert evaluate_rational_quadratic_form(request.form, request.vector) == Fraction(
+        20, 10 ** (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS // 2 - 1)
+    )
+
+
 def test_form_schema_documents_coupled_axis_invariants() -> None:
     properties = RationalQuadraticForm.model_json_schema()["properties"]
 
@@ -225,6 +267,26 @@ def test_form_schema_documents_coupled_axis_invariants() -> None:
     assert (
         "every cross-term index must lie within the declared axis"
         in properties["cross_terms"]["description"]
+    )
+
+
+def test_schema_documents_entry_digit_limits() -> None:
+    form_properties = RationalQuadraticForm.model_json_schema()["properties"]
+    vector_properties = RationalCoordinateVector.model_json_schema()["properties"]
+
+    assert (
+        f"at most {MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS} decimal digits"
+        in form_properties["diagonal_coefficients"]["description"]
+    )
+    assert (
+        f"at most {MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS} decimal digits"
+        in QuadraticCrossTerm.model_json_schema()["properties"]["coefficient"][
+            "description"
+        ]
+    )
+    assert (
+        f"at most {MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS} decimal digits"
+        in vector_properties["coordinates"]["description"]
     )
 
 

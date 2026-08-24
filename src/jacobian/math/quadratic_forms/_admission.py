@@ -13,7 +13,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "exact source-bound rational-form evaluation over an explicit ordered axis; "
         "the direct Fraction kernel is complete under the entry-digit bounds and "
-        "the term-count-aware aggregate-denominator and exact-result budgets",
+        "the active-term, aggregate-denominator, and exact-result budgets",
     ),
 )
 

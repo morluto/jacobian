@@ -22,7 +22,24 @@ from jacobian.math.polynomials.maps._models import (
     JacobianRequest,
     JacobianResult,
 )
+from jacobian.math.polynomials.maps._replay import (
+    run_bounded_certificate_replay,
+)
 from jacobian.math.polynomials.maps._singular import run_singular_generic_fiber
+
+_REPLAY_FAILURE_OUTCOMES: dict[str, tuple[GenericDegreeOutcome, str]] = {
+    "CANCELLED": (
+        "CANCELLED",
+        "Certificate replay was cancelled before producing a result.",
+    ),
+    "TIMEOUT": ("TIMEOUT", "Certificate replay exceeded the declared wall-time limit."),
+    "LIMIT_EXCEEDED": (
+        "BOUND_EXCEEDED",
+        "The generic-fiber certificate replay exceeded the declared computation bound.",
+    ),
+    "INVALID": ("ERROR", "Singular evidence failed source-bound exact replay."),
+    "ERROR": ("ERROR", "The certificate replay worker failed."),
+}
 
 
 def compute_generic_degree(request: GenericDegreeRequest) -> GenericDegreeResult:
@@ -63,6 +80,26 @@ def compute_generic_degree(request: GenericDegreeRequest) -> GenericDegreeResult
     else:
         mathematical_outcome = "DOMINANT_NOT_GENERICALLY_FINITE"
         degree = None
+    replay = run_bounded_certificate_replay(
+        request.polynomial_map,
+        backend.certificate,
+        wall_seconds=request.resource_budget.wall_seconds,
+    )
+    if replay.status != "COMPUTED":
+        outcome, default_detail = _REPLAY_FAILURE_OUTCOMES[replay.status]
+        return GenericDegreeResult(
+            outcome=outcome,
+            source=request.polynomial_map,
+            detail=replay.detail or default_detail,
+        )
+    if replay.outcome != mathematical_outcome or replay.degree != degree:
+        return GenericDegreeResult(
+            outcome="ERROR",
+            source=request.polynomial_map,
+            detail=(
+                "Singular metadata disagree with the exact certificate replay."
+            ),
+        )
     try:
         return GenericDegreeResult(
             outcome=mathematical_outcome,

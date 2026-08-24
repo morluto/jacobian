@@ -23,6 +23,7 @@ _EXTERNAL_OPERATION_OWNERS = frozenset(
         PurePosixPath(
             "src/jacobian/math/polynomials/multivariate/_factor_backend.py"
         ),
+        PurePosixPath("src/jacobian/math/polynomials/maps/_replay.py"),
     }
 )
 _GENERATED_DIRECTORIES = frozenset(

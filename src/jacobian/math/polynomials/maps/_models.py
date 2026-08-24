@@ -39,9 +39,8 @@ MAX_GENERIC_FIBER_CERTIFICATE_TERMS = 4_096
 MAX_GENERIC_FIBER_COEFFICIENT_TERMS = 16_384
 MAX_GENERIC_FIBER_STANDARD_MONOMIALS = 512
 MAX_GENERIC_FIBER_CERTIFICATE_SOURCE_EXPONENT = MAX_POLYNOMIAL_EXPONENT
-MAX_GENERIC_FIBER_STANDARD_MONOMIAL_EXPONENT = MAX_GENERIC_FIBER_STANDARD_MONOMIALS - 1
-MAX_GENERIC_FIBER_STANDARD_MONOMIAL_CANDIDATES = (
-    1 + MAX_GENERIC_DEGREE_SOURCE_VARIABLES * MAX_GENERIC_FIBER_STANDARD_MONOMIALS
+MAX_GENERIC_FIBER_STANDARD_MONOMIAL_EXPONENT = (
+    MAX_GENERIC_FIBER_STANDARD_MONOMIALS - 1
 )
 MAX_GENERIC_FIBER_REPLAY_PRODUCTS = 262_144
 MAX_GENERIC_FIBER_REPLAY_SOURCE_PRODUCTS = 262_144
@@ -53,74 +52,6 @@ MAX_GENERIC_FIBER_REPLAY_COEFFICIENT_TERMS = 4_096
 MAX_GENERIC_FIBER_REPLAY_COEFFICIENT_BITS = 16_384
 MAX_GENERIC_FIBER_REPLAY_PARAMETER_EXPONENT = MAX_POLYNOMIAL_EXPONENT
 MAX_GENERIC_FIBER_REPLAY_SOURCE_EXPONENT = 2 * MAX_POLYNOMIAL_EXPONENT
-
-
-def _raw_certificate_polynomial_terms(polynomial: Any) -> Sequence[Any] | None:
-    """Return one raw or constructed certificate polynomial's term sequence."""
-
-    if isinstance(polynomial, GenericFiberPolynomial):
-        return polynomial.terms
-    if isinstance(polynomial, Mapping):
-        terms = polynomial.get("terms")
-        if isinstance(terms, Sequence) and not isinstance(terms, (str, bytes)):
-            return terms
-    return None
-
-
-def _raw_certificate_polynomials(value: Mapping[str, Any]) -> list[Any] | None:
-    """Collect the raw certificate's basis and transformation polynomials."""
-
-    basis = value.get("basis")
-    transformation = value.get("basis_from_source")
-    if not isinstance(basis, Sequence) or isinstance(basis, (str, bytes)):
-        return None
-    if not isinstance(transformation, Sequence) or isinstance(
-        transformation, (str, bytes)
-    ):
-        return None
-    if len(basis) > MAX_GENERIC_FIBER_BASIS_POLYNOMIALS:
-        raise ValueError("generic-fiber basis exceeds the result bound")
-    if len(transformation) > MAX_GENERIC_DEGREE_TARGET_VARIABLES:
-        raise ValueError("generic-fiber transformation exceeds the result bound")
-
-    polynomials: list[Any] = list(basis)
-    for row in transformation:
-        if not isinstance(row, Sequence) or isinstance(row, (str, bytes)):
-            return None
-        if len(row) > MAX_GENERIC_FIBER_BASIS_POLYNOMIALS:
-            raise ValueError("generic-fiber transformation exceeds the result bound")
-        polynomials.extend(row)
-    return polynomials
-
-
-def _raw_certificate_term_coefficient(term: Any) -> Any:
-    """Return one raw or constructed certificate term's coefficient."""
-
-    if isinstance(term, GenericFiberTerm):
-        return term.coefficient
-    if isinstance(term, Mapping):
-        return term.get("coefficient")
-    return None
-
-
-def _raw_rational_function_term_count(coefficient: Any) -> int | None:
-    """Count one raw or constructed rational-function coefficient's terms."""
-
-    if isinstance(coefficient, RationalFunction):
-        return len(coefficient.numerator.terms) + len(coefficient.denominator.terms)
-    if isinstance(coefficient, Mapping):
-        numerator = coefficient.get("numerator")
-        denominator = coefficient.get("denominator")
-        if not isinstance(numerator, Mapping) or not isinstance(denominator, Mapping):
-            return None
-        numerator_terms = numerator.get("terms")
-        denominator_terms = denominator.get("terms")
-        if not isinstance(numerator_terms, Sequence) or not isinstance(
-            denominator_terms, Sequence
-        ):
-            return None
-        return len(numerator_terms) + len(denominator_terms)
-    return None
 
 
 class VariablePoint(StrictModel):
@@ -365,6 +296,70 @@ class GenericFiberPolynomial(StrictModel):
         return self
 
 
+def _serialized_certificate_polynomials(value: Any) -> list[Any] | None:
+    """Collect one serialized certificate's polynomial payloads."""
+
+    if not isinstance(value, Mapping):
+        return None
+    basis = value.get("basis")
+    transformation = value.get("basis_from_source")
+    if not isinstance(basis, Sequence) or isinstance(basis, (str, bytes)):
+        return None
+    if not isinstance(transformation, Sequence) or isinstance(
+        transformation,
+        (str, bytes),
+    ):
+        return None
+    if len(basis) > MAX_GENERIC_FIBER_BASIS_POLYNOMIALS:
+        raise ValueError("generic-fiber basis exceeds the result bound")
+    if len(transformation) > MAX_GENERIC_DEGREE_TARGET_VARIABLES:
+        raise ValueError("generic-fiber transformation exceeds the result bound")
+    polynomials: list[Any] = list(basis)
+    for row in transformation:
+        if not isinstance(row, Sequence) or isinstance(row, (str, bytes)):
+            return None
+        if len(row) > MAX_GENERIC_FIBER_BASIS_POLYNOMIALS:
+            raise ValueError("generic-fiber transformation exceeds the result bound")
+        polynomials.extend(row)
+    return polynomials
+
+
+def _serialized_polynomial_terms(polynomial: Any) -> Sequence[Any] | None:
+    if isinstance(polynomial, GenericFiberPolynomial):
+        return polynomial.terms
+    if isinstance(polynomial, Mapping):
+        terms = polynomial.get("terms")
+        if isinstance(terms, Sequence) and not isinstance(terms, (str, bytes)):
+            return terms
+    return None
+
+
+def _serialized_term_support(term: Any) -> int | None:
+    """Count one serialized term's coefficient support, or ``None`` if malformed."""
+
+    if isinstance(term, GenericFiberTerm):
+        return (
+            len(term.coefficient.numerator.terms)
+            + len(term.coefficient.denominator.terms)
+        )
+    if not isinstance(term, Mapping):
+        return None
+    numerator = term.get("numerator")
+    denominator = term.get("denominator")
+    if not isinstance(numerator, Mapping) or not isinstance(denominator, Mapping):
+        return None
+    numerator_terms = numerator.get("terms")
+    denominator_terms = denominator.get("terms")
+    if (
+        not isinstance(numerator_terms, Sequence)
+        or isinstance(numerator_terms, (str, bytes))
+        or not isinstance(denominator_terms, Sequence)
+        or isinstance(denominator_terms, (str, bytes))
+    ):
+        return None
+    return len(numerator_terms) + len(denominator_terms)
+
+
 class GenericFiberCertificate(StrictModel):
     """Exact Gröbner and standard-monomial evidence for the generic fiber.
 
@@ -400,16 +395,14 @@ class GenericFiberCertificate(StrictModel):
     def require_serialized_certificate_bounds(cls, value: Any) -> Any:
         """Reject oversized nested payloads before constructing coefficient values."""
 
-        if not isinstance(value, Mapping):
-            return value
-        polynomials = _raw_certificate_polynomials(value)
+        polynomials = _serialized_certificate_polynomials(value)
         if polynomials is None:
             return value
 
-        certificate_terms = 0
         term_groups: list[Sequence[Any]] = []
+        certificate_terms = 0
         for polynomial in polynomials:
-            terms = _raw_certificate_polynomial_terms(polynomial)
+            terms = _serialized_polynomial_terms(polynomial)
             if terms is None:
                 return value
             certificate_terms += len(terms)
@@ -422,12 +415,10 @@ class GenericFiberCertificate(StrictModel):
         coefficient_terms = 0
         for terms in term_groups:
             for term in terms:
-                count = _raw_rational_function_term_count(
-                    _raw_certificate_term_coefficient(term)
-                )
-                if count is None:
+                support = _serialized_term_support(term)
+                if support is None:
                     return value
-                coefficient_terms += count
+                coefficient_terms += support
                 if coefficient_terms > MAX_GENERIC_FIBER_COEFFICIENT_TERMS:
                     raise ValueError(
                         "generic-fiber coefficient support exceeds the result bound"
@@ -506,8 +497,34 @@ GenericDegreeOutcome = Literal[
 ]
 
 
+def _is_unit_generic_fiber_basis(certificate: GenericFiberCertificate) -> bool:
+    """Report whether the certificate basis presents the constant-one ideal."""
+
+    if len(certificate.basis) != 1 or len(certificate.basis[0].terms) != 1:
+        return False
+    term = certificate.basis[0].terms[0]
+    if term.source_exponents != (0,) * len(certificate.source_variable_order):
+        return False
+    constant = (0,) * len(certificate.target_parameters)
+    numerator = term.coefficient.numerator.terms
+    denominator = term.coefficient.denominator.terms
+    return (
+        len(numerator) == 1
+        and len(denominator) == 1
+        and numerator[0].exponents == constant
+        and denominator[0].exponents == constant
+        and numerator[0].coefficient.as_fraction() == 1
+        and denominator[0].coefficient.as_fraction() == 1
+    )
+
+
 class GenericDegreeResult(StrictModel):
-    """An exact source-bound generic-fiber conclusion or operational failure."""
+    """An exact source-bound generic-fiber conclusion or operational failure.
+
+    The declared outcome must agree with the evidence shape; the full exact
+    Gröbner replay of the evidence runs behind the bounded process boundary in
+    the owning operation.
+    """
 
     outcome: GenericDegreeOutcome
     source: RationalPolynomialMap
@@ -533,17 +550,29 @@ class GenericDegreeResult(StrictModel):
             raise ValueError(
                 "mathematical generic-degree outcomes require exact evidence"
             )
-        from jacobian.math.polynomials.maps._generic_degree import (
-            validate_generic_fiber_certificate,
-        )
-
-        expected_outcome, expected_degree = validate_generic_fiber_certificate(
-            self.source,
-            self.evidence,
-        )
-        if self.outcome != expected_outcome or self.degree != expected_degree:
+        unit_basis = _is_unit_generic_fiber_basis(self.evidence)
+        if self.outcome == "GENERICALLY_FINITE":
+            if (
+                unit_basis
+                or not self.evidence.standard_monomials
+                or self.degree is None
+                or self.degree != len(self.evidence.standard_monomials)
+            ):
+                raise ValueError(
+                    "claimed degree does not match the standard-monomial evidence"
+                )
+            return self
+        if self.degree is not None:
+            raise ValueError("non-finite generic-degree outcomes carry no degree")
+        if self.outcome == "NOT_DOMINANT":
+            if not unit_basis or self.evidence.standard_monomials:
+                raise ValueError(
+                    "not-dominant outcomes carry the unit generic-fiber basis"
+                )
+            return self
+        if unit_basis or self.evidence.standard_monomials:
             raise ValueError(
-                "generic-degree outcome does not match the source-bound quotient evidence"
+                "positive-dimensional outcomes carry a non-unit generic-fiber basis"
             )
         return self
 

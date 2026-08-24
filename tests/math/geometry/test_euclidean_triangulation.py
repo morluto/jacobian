@@ -361,9 +361,7 @@ class TestEuclideanTriangulation:
             "optimum": expression(optimum[0, 4]),
         }
 
-        with pytest.raises(
-            ValidationError, match="contains an unresolved comparison"
-        ):
+        with pytest.raises(ValidationError, match="contains an unresolved comparison"):
             EuclideanConvexPolygonTriangulationResult.model_validate(payload)
 
     def test_certified_result_rejects_claiming_a_later_equal_pivot(self) -> None:

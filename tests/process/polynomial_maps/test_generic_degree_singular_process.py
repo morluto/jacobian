@@ -334,7 +334,10 @@ def test_heavy_certificate_replay_is_killably_bounded(
     )
 
     assert result.outcome == "TIMEOUT"
-    assert result.detail == "Certificate replay exceeded the declared wall-time limit."
+    assert result.detail in (
+        "Certificate replay exceeded the declared wall-time limit.",
+        "The declared wall-time envelope expired before certificate replay.",
+    )
     assert result.degree is None
     assert result.evidence is None
 

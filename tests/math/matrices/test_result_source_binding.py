@@ -232,7 +232,9 @@ def test_request_admission_rejects_matrices_above_the_computation_dimension() ->
 def test_request_admission_rejects_one_oversized_axis() -> None:
     tall = RationalMatrix(
         entries=tuple(
-            tuple(CanonicalRational(num=str(column + 1), den="1") for column in range(2))
+            tuple(
+                CanonicalRational(num=str(column + 1), den="1") for column in range(2)
+            )
             for _ in range(MAX_MATRIX_DIMENSION + 1)
         )
     )

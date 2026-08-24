@@ -289,7 +289,8 @@ def test_singleton_orbit_separators_price_from_computed_blocks() -> None:
         for vertex in payload["graph"]["graph"]["vertices"]  # type: ignore[index]
     ]
     payload["graph"]["edge_colors"] = [  # type: ignore[index]
-        "colors" for edge in payload["graph"]["graph"]["edges"]  # type: ignore[index]
+        "colors"
+        for edge in payload["graph"]["graph"]["edges"]  # type: ignore[index]
     ]
     request = GraphSymmetryOrbitRequest.model_validate(payload)
     result = _generator_orbits(request)

@@ -11,6 +11,8 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.math.graphs.flow._models import CapacitatedEdge, FlowGraph
 from jacobian.math.graphs.multicommodity_flow._models import (
+    MAX_COMMODITY_VERTEX_CELLS,
+    MAX_MULTICOMMODITY_EDGES,
     CommodityDemand,
     CommodityEdgeFlow,
     MulticommodityFlow,
@@ -269,21 +271,130 @@ def test_sparse_tensor_rejects_zero_duplicate_unknown_and_unsorted_cells() -> No
         MulticommodityFlow.model_validate(unsorted)
 
 
-def test_tighter_multicommodity_envelope_rejects_vertex_and_rational_overflow() -> None:
-    payload = shared_bottleneck_flow().model_dump(mode="json")
+def test_low_commodity_networks_admit_vertices_up_to_the_cell_budget() -> None:
+    # A 33-vertex graph with one edge and terminals 0->1 has tiny work and
+    # output; the commodity-vertex cell budget (K*V <= 512) and the aggregate
+    # result envelope bound admission, not an independent vertex ceiling.
+    flow = MulticommodityFlow(
+        network=FlowGraph(
+            vertex_count=33,
+            edges=(CapacitatedEdge(source=0, target=1, capacity=q(2)),),
+        ),
+        commodities=(
+            CommodityDemand(commodity_id="a", source=0, sink=1, demand=q(1)),
+        ),
+        entries=(
+            CommodityEdgeFlow(commodity_id="a", source=0, target=1, amount=q(1)),
+        ),
+    )
+    result = compute_multicommodity_flow_profile(flow)
+    assert result.all_demands_routed is True
+    assert result.capacity_feasible is True
+    assert result.congestion == q(1, 2)
+    assert len(result.divergences) == 33
+    assert result.work.commodity_vertex_cells == 33
+    assert result.work.exact_comparisons_per_pass == 33 + 3
+    assert result.work.logical_steps_per_call == 2 * (4 + 1 + 1 + 36)
 
-    too_many_vertices = deepcopy(payload)
-    too_many_vertices["network"]["vertex_count"] = 33
-    with pytest.raises(ValidationError, match="at most 32 vertices"):
-        MulticommodityFlow.model_validate(too_many_vertices)
+    # Eight commodities over all 64 FlowGraph vertices reach exactly 512
+    # returned cells; a ninth commodity exceeds the dense divergence budget.
+    def wide_flow(commodity_count: int) -> MulticommodityFlow:
+        return MulticommodityFlow(
+            network=FlowGraph(
+                vertex_count=64,
+                edges=(CapacitatedEdge(source=0, target=1, capacity=q(1)),),
+            ),
+            commodities=tuple(
+                CommodityDemand(
+                    commodity_id=chr(ord("a") + index),
+                    source=0,
+                    sink=1,
+                    demand=q(1),
+                )
+                for index in range(commodity_count)
+            ),
+        )
 
-    too_many_digits = deepcopy(payload)
-    too_many_digits["network"]["edges"][0]["capacity"] = {
-        "num": str(10**32),
-        "den": "1",
-    }
-    with pytest.raises(ValidationError, match="32-digit"):
-        MulticommodityFlow.model_validate(too_many_digits)
+    full = compute_multicommodity_flow_profile(wide_flow(8))
+    assert len(full.divergences) == 512
+    assert full.work.commodity_vertex_cells == MAX_COMMODITY_VERTEX_CELLS
+
+    with pytest.raises(ValidationError, match="commodity-by-vertex"):
+        wide_flow(9)
+
+
+def test_large_exact_scalars_are_admitted_when_derived_digits_stay_bounded() -> None:
+    # A 33-digit capacity performs constant work here and returns only a
+    # 33-digit slack; operand-derived digit budgets, not a fixed input cap,
+    # decide whether such exact scalars are admitted.
+    big_capacity = q(10**32)
+    flow = MulticommodityFlow(
+        network=FlowGraph(
+            vertex_count=2,
+            edges=(CapacitatedEdge(source=0, target=1, capacity=big_capacity),),
+        ),
+        commodities=(
+            CommodityDemand(commodity_id="a", source=0, sink=1, demand=q(1)),
+        ),
+    )
+    result = compute_multicommodity_flow_profile(flow)
+    assert result.all_demands_routed is False
+    assert result.capacity_feasible is True
+    assert result.congestion == q(0)
+    assert result.edge_profiles[0].slack == big_capacity
+    assert result.work.sparse_entries == 0
+    assert result.work.commodity_vertex_cells == 2
+    assert result.work.edge_cells == 1
+    assert result.work.rational_additions_per_pass == 1
+    assert result.work.rational_negations_per_pass == 1
+    assert result.work.rational_divisions_per_pass == 1
+    assert result.work.exact_comparisons_per_pass == 5
+    assert result.work.logical_steps_per_call == 16
+
+
+def test_operand_digit_budget_bounds_the_canonical_boundary() -> None:
+    def single_edge_flow(capacity: CanonicalRational) -> MulticommodityFlow:
+        return MulticommodityFlow(
+            network=FlowGraph(
+                vertex_count=2,
+                edges=(CapacitatedEdge(source=0, target=1, capacity=capacity),),
+            ),
+            commodities=(
+                CommodityDemand(commodity_id="a", source=0, sink=1, demand=q(1)),
+            ),
+        )
+
+    # One 32,759-digit numerator plus its one-digit denominator and the eight
+    # derivation slack digits reach exactly the canonical 32,768-digit cap.
+    at_boundary = single_edge_flow(
+        CanonicalRational(num="9" * 32_759, den="1")
+    )
+    result = compute_multicommodity_flow_profile(at_boundary)
+    assert result.capacity_feasible is True
+    assert result.edge_profiles[0].slack.num == "9" * 32_759
+
+    beyond_boundary = CanonicalRational(num="9" * 32_760, den="1")
+    with pytest.raises(ValidationError, match="canonical cap"):
+        single_edge_flow(beyond_boundary)
+
+
+def test_result_envelope_rejects_wide_tensors_with_large_operands() -> None:
+    from itertools import combinations
+
+    edges = tuple(
+        CapacitatedEdge(source=source, target=target, capacity=q(int("9" * 100)))
+        for source, target in combinations(range(32), 2)
+    )[:MAX_MULTICOMMODITY_EDGES]
+    with pytest.raises(ValidationError, match="aggregate result bound"):
+        MulticommodityFlow(
+            network=FlowGraph(vertex_count=32, edges=edges),
+            commodities=tuple(
+                CommodityDemand(
+                    commodity_id=f"c{index:02d}", source=0, sink=31, demand=q(1)
+                )
+                for index in range(16)
+            ),
+        )
 
 
 def test_result_replay_rejects_forged_source_and_derived_ledger_fields() -> None:

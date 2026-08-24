@@ -6,19 +6,19 @@ from fractions import Fraction
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian.math.graphs.multicommodity_flow._models import (
-    MAX_PROFILE_RATIONAL_DIGITS,
     CommodityDivergence,
     EdgeLoadProfile,
     MulticommodityFlow,
     MulticommodityFlowProfileWork,
+    derived_profile_digit_budget,
 )
 
 
-def _wire(value: Fraction) -> CanonicalRational:
+def _wire(value: Fraction, *, max_digits: int) -> CanonicalRational:
     result = CanonicalRational.from_fraction(value)
     require_bounded_rational(
         result,
-        max_digits=MAX_PROFILE_RATIONAL_DIGITS,
+        max_digits=max_digits,
         label="derived multicommodity-flow profile rational",
     )
     return result
@@ -43,6 +43,7 @@ def profile_components(
 
     commodity_ids = tuple(commodity.commodity_id for commodity in flow.commodities)
     edge_keys = tuple((edge.source, edge.target) for edge in flow.network.edges)
+    budget = derived_profile_digit_budget(flow)
     divergences = {
         (commodity_id, vertex): Fraction(0)
         for commodity_id in commodity_ids
@@ -59,7 +60,7 @@ def profile_components(
         CommodityDivergence(
             commodity_id=commodity_id,
             vertex=vertex,
-            divergence=_wire(divergences[(commodity_id, vertex)]),
+            divergence=_wire(divergences[(commodity_id, vertex)], max_digits=budget),
         )
         for commodity_id in commodity_ids
         for vertex in range(flow.network.vertex_count)
@@ -104,8 +105,8 @@ def profile_components(
             EdgeLoadProfile(
                 source=edge.source,
                 target=edge.target,
-                load=_wire(load),
-                slack=_wire(capacity - load),
+                load=_wire(load, max_digits=budget),
+                slack=_wire(capacity - load, max_digits=budget),
             )
         )
 
@@ -140,7 +141,7 @@ def profile_components(
         tuple(edge_rows),
         all_demands_routed,
         capacity_feasible,
-        None if zero_capacity_violation else _wire(max_congestion_ratio),
+        None if zero_capacity_violation else _wire(max_congestion_ratio, max_digits=budget),
         work,
     )
 

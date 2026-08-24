@@ -6,37 +6,44 @@ from typing import Self
 
 from pydantic import Field, StrictStr, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.canonical import encode_strict_json
 from jacobian.math.graphs.flow._models import FlowGraph
 
 # This operation scans a sparse commodity-by-edge tensor and materializes one
-# divergence value for every commodity/vertex pair.  The bounds are deliberately
-# independent: a dense tensor has K*E cells, while the returned divergence table
-# has K*V cells.  The sparse payload itself is capped separately.
-MAX_MULTICOMMODITY_VERTICES = 32
+# divergence value for every commodity/vertex pair.  Vertex count is owned by
+# FlowGraph; admission controls the dense divergence table through the
+# commodity-vertex cell budget, the sparse tensor through the entry and
+# commodity-edge cell budgets, and the whole returned value through the
+# aggregate result envelope below.
 MAX_MULTICOMMODITY_EDGES = 128
 MAX_MULTICOMMODITIES = 16
 MAX_COMMODITY_EDGE_CELLS = 2_048
 MAX_COMMODITY_VERTEX_CELLS = 512
 MAX_SPARSE_FLOW_ENTRIES = 128
-MAX_FLOW_RATIONAL_DIGITS = 32
 
-# A load or divergence can sum at most 128 reduced 32-digit rationals. Before
-# reduction, one common denominator has at most 128*32 digits; the sum and one
-# capacity subtraction add at most three decimal digits, and a congestion ratio
-# multiplies one further 32-digit capacity component. 4,132 is therefore a
-# conservative strict bound below CanonicalRational's global 32,768-digit cap.
-MAX_PROFILE_RATIONAL_DIGITS = 4_132
+# Entry amounts and edge capacities are the only arithmetic operands: every
+# divergence cell and edge load sums a subset of the amounts, every slack
+# subtracts one such sum from one capacity, and the congestion ratio divides
+# one load by one capacity.  Adding one operand to a running sum contributes
+# at most its numerator and denominator digits plus three carry digits, and
+# the slack subtraction and congestion division each compose one further
+# operand, so eight slack digits on top of the totaled operand digits bound
+# every intermediate and derived numerator and denominator exactly.  Demands
+# take part only in exact conservation comparisons, never in arithmetic, so
+# they are covered by the measured source echo instead of this budget.
+_DERIVED_DIGIT_SLACK = 8
 
 # A result echoes its source tensor, then includes at most 512 divergence rows
-# and 128 edge rows. A derived rational can occupy at most 2*d+24 canonical
-# JSON bytes for d decimal digits; the conservative row overhead reserves ASCII
-# keys, labels, separators, and vertices. At the declared maxima this estimate
-# is below 6.6 MiB, leaving explicit headroom under the 10 MiB transport limit.
+# and 128 edge rows. A derived rational occupies at most 2*d+24 canonical JSON
+# bytes when its budget bounds d decimal digits per component; the conservative
+# row overhead reserves ASCII keys, labels, separators, and vertices. Admission
+# measures the echoed source exactly and estimates the derived rows from the
+# request's own digit budget against this aggregate envelope, keeping the
+# serialized result inside the envelope with headroom under the 10 MiB
+# transport limit.
 MAX_PROFILE_RESULT_BYTES = 8 * 1024 * 1024
-_DERIVED_RATIONAL_WIRE_BYTES = 2 * MAX_PROFILE_RATIONAL_DIGITS + 24
 _DIVERGENCE_ROW_OVERHEAD_BYTES = 128
 _EDGE_ROW_OVERHEAD_BYTES = 128
 _PROFILE_RESULT_HEADER_BYTES = 1_024
@@ -51,14 +58,6 @@ MAX_PROFILE_DIVISIONS_PER_PASS = 128
 MAX_PROFILE_COMPARISONS_PER_PASS = 896
 
 
-def _require_flow_rational(value: CanonicalRational, label: str) -> None:
-    require_bounded_rational(
-        value,
-        max_digits=MAX_FLOW_RATIONAL_DIGITS,
-        label=label,
-    )
-
-
 class CommodityDemand(StrictModel):
     """One labelled source-to-sink demand in a directed capacitated network."""
 
@@ -71,8 +70,8 @@ class CommodityDemand(StrictModel):
             "lexicographically by this field."
         ),
     )
-    source: int = Field(ge=0, le=MAX_MULTICOMMODITY_VERTICES - 1)
-    sink: int = Field(ge=0, le=MAX_MULTICOMMODITY_VERTICES - 1)
+    source: int = Field(ge=0, le=63)
+    sink: int = Field(ge=0, le=63)
     demand: CanonicalRational
 
     @model_validator(mode="after")
@@ -81,7 +80,6 @@ class CommodityDemand(StrictModel):
             raise ValueError("commodity source and sink must be distinct")
         if self.demand.as_fraction() <= 0:
             raise ValueError("commodity demand must be strictly positive")
-        _require_flow_rational(self.demand, "commodity demand")
         return self
 
 
@@ -93,24 +91,18 @@ class CommodityEdgeFlow(StrictModel):
         max_length=64,
         pattern=r"^[A-Za-z][A-Za-z0-9_.-]*$",
     )
-    source: int = Field(ge=0, le=MAX_MULTICOMMODITY_VERTICES - 1)
-    target: int = Field(ge=0, le=MAX_MULTICOMMODITY_VERTICES - 1)
+    source: int = Field(ge=0, le=63)
+    target: int = Field(ge=0, le=63)
     amount: CanonicalRational
 
     @model_validator(mode="after")
-    def require_positive_bounded_amount(self) -> Self:
+    def require_positive_amount(self) -> Self:
         if self.amount.as_fraction() <= 0:
             raise ValueError("sparse flow entries must have strictly positive amounts")
-        _require_flow_rational(self.amount, "flow amount")
         return self
 
 
 def _require_canonical_network(network: FlowGraph) -> tuple[tuple[int, int], ...]:
-    if network.vertex_count > MAX_MULTICOMMODITY_VERTICES:
-        raise ValueError(
-            "multicommodity flow networks may have at most "
-            f"{MAX_MULTICOMMODITY_VERTICES} vertices"
-        )
     if len(network.edges) > MAX_MULTICOMMODITY_EDGES:
         raise ValueError(
             "multicommodity flow networks may have at most "
@@ -119,8 +111,6 @@ def _require_canonical_network(network: FlowGraph) -> tuple[tuple[int, int], ...
     edge_keys = tuple((edge.source, edge.target) for edge in network.edges)
     if edge_keys != tuple(sorted(edge_keys)):
         raise ValueError("network edges must be sorted by (source, target)")
-    for edge in network.edges:
-        _require_flow_rational(edge.capacity, "network capacity")
     return edge_keys
 
 
@@ -175,15 +165,45 @@ def _require_canonical_entries(
             raise ValueError("flow entry references an undeclared directed edge")
 
 
-def _require_profile_output_admission(flow: MulticommodityFlow) -> None:
+def derived_profile_digit_budget(flow: MulticommodityFlow) -> int:
+    """Return the exact digit bound shared by every derived profile component."""
+
+    return _DERIVED_DIGIT_SLACK + sum(
+        len(operand.num) + len(operand.den)
+        for operand in (
+            *(entry.amount for entry in flow.entries),
+            *(edge.capacity for edge in flow.network.edges),
+        )
+    )
+
+
+def _require_derived_digit_budget(flow: MulticommodityFlow) -> int:
+    """Reject operands whose implied profile cannot remain a canonical value."""
+
+    budget = derived_profile_digit_budget(flow)
+    if budget > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise ValueError(
+            "multicommodity-flow arithmetic operands imply a "
+            f"{budget}-digit derived-profile bound above the "
+            f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit canonical cap"
+        )
+    return budget
+
+
+def _require_profile_output_admission(
+    flow: MulticommodityFlow,
+    *,
+    digit_budget: int,
+) -> None:
     source_bytes = len(encode_strict_json(flow.model_dump(mode="json")))
+    derived_rational_bytes = 2 * digit_budget + 24
     divergence_bytes = (
         len(flow.commodities)
         * flow.network.vertex_count
-        * (_DERIVED_RATIONAL_WIRE_BYTES + _DIVERGENCE_ROW_OVERHEAD_BYTES)
+        * (derived_rational_bytes + _DIVERGENCE_ROW_OVERHEAD_BYTES)
     )
     edge_bytes = len(flow.network.edges) * (
-        2 * _DERIVED_RATIONAL_WIRE_BYTES + _EDGE_ROW_OVERHEAD_BYTES
+        2 * derived_rational_bytes + _EDGE_ROW_OVERHEAD_BYTES
     )
     estimated_bytes = (
         source_bytes + divergence_bytes + edge_bytes + _PROFILE_RESULT_HEADER_BYTES
@@ -235,7 +255,8 @@ class MulticommodityFlow(StrictModel):
             edge_keys=edge_keys,
             commodity_ids=commodity_ids,
         )
-        _require_profile_output_admission(self)
+        digit_budget = _require_derived_digit_budget(self)
+        _require_profile_output_admission(self, digit_budget=digit_budget)
         return self
 
 
@@ -246,8 +267,9 @@ class MulticommodityFlowProfileRequest(StrictModel):
         description=(
             "Canonical sparse tensor with at most 16 commodities, 128 nonzero "
             "entries, 2,048 conceptual commodity-edge cells, 512 returned "
-            "commodity-vertex cells, 32-digit input rationals, and an admitted "
-            "aggregate result envelope below 8 MiB."
+            "commodity-vertex cells, an operand-derived exact digit budget for "
+            "every input and derived rational, and an admitted aggregate "
+            "result envelope below 8 MiB."
         )
     )
 
@@ -256,36 +278,17 @@ class CommodityDivergence(StrictModel):
     """The exact outgoing-minus-incoming flow for one commodity at one vertex."""
 
     commodity_id: StrictStr
-    vertex: int = Field(ge=0, le=MAX_MULTICOMMODITY_VERTICES - 1)
+    vertex: int = Field(ge=0, le=63)
     divergence: CanonicalRational
-
-    @model_validator(mode="after")
-    def require_bounded_divergence(self) -> Self:
-        require_bounded_rational(
-            self.divergence,
-            max_digits=MAX_PROFILE_RATIONAL_DIGITS,
-            label="derived multicommodity-flow divergence",
-        )
-        return self
 
 
 class EdgeLoadProfile(StrictModel):
     """Exact aggregate load and signed capacity slack for one directed edge."""
 
-    source: int = Field(ge=0, le=MAX_MULTICOMMODITY_VERTICES - 1)
-    target: int = Field(ge=0, le=MAX_MULTICOMMODITY_VERTICES - 1)
+    source: int = Field(ge=0, le=63)
+    target: int = Field(ge=0, le=63)
     load: CanonicalRational
     slack: CanonicalRational
-
-    @model_validator(mode="after")
-    def require_bounded_profile_values(self) -> Self:
-        for value, label in ((self.load, "load"), (self.slack, "slack")):
-            require_bounded_rational(
-                value,
-                max_digits=MAX_PROFILE_RATIONAL_DIGITS,
-                label=f"derived multicommodity-flow {label}",
-            )
-        return self
 
 
 class MulticommodityFlowProfileWork(StrictModel):
@@ -337,12 +340,6 @@ class MulticommodityFlowProfileResult(StrictModel):
     def require_exact_source_bound_profile(self) -> Self:
         from jacobian.math.graphs.multicommodity_flow._kernel import profile_components
 
-        if self.congestion is not None:
-            require_bounded_rational(
-                self.congestion,
-                max_digits=MAX_PROFILE_RATIONAL_DIGITS,
-                label="derived multicommodity-flow congestion",
-            )
         expected = profile_components(self.flow)
         actual = (
             self.divergences,
@@ -360,16 +357,13 @@ class MulticommodityFlowProfileResult(StrictModel):
 __all__ = [
     "MAX_COMMODITY_EDGE_CELLS",
     "MAX_COMMODITY_VERTEX_CELLS",
-    "MAX_FLOW_RATIONAL_DIGITS",
     "MAX_MULTICOMMODITIES",
     "MAX_MULTICOMMODITY_EDGES",
-    "MAX_MULTICOMMODITY_VERTICES",
     "MAX_PROFILE_ADDITIONS_PER_PASS",
     "MAX_PROFILE_COMPARISONS_PER_PASS",
     "MAX_PROFILE_DIVISIONS_PER_PASS",
     "MAX_PROFILE_LOGICAL_STEPS",
     "MAX_PROFILE_NEGATIONS_PER_PASS",
-    "MAX_PROFILE_RATIONAL_DIGITS",
     "MAX_PROFILE_RESULT_BYTES",
     "MAX_SPARSE_FLOW_ENTRIES",
     "CommodityDemand",
@@ -380,4 +374,5 @@ __all__ = [
     "MulticommodityFlowProfileRequest",
     "MulticommodityFlowProfileResult",
     "MulticommodityFlowProfileWork",
+    "derived_profile_digit_budget",
 ]

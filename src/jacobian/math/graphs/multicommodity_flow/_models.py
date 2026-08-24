@@ -35,13 +35,19 @@ MAX_COMMODITY_VERTEX_CELLS = 512
 # divides one load by one capacity.  Summation growth cannot be bounded from
 # digit counts alone — shared denominators, cancellation, and lone operands
 # all keep components far smaller than any worst case — so admission measures
-# the actual reduced numerator and denominator of every component with a pure
-# bounded scan that aborts as soon as a side crosses the canonical cap.  A
-# request whose exact load equals its capacity therefore reports the exact
-# zero slack and exactly-one congestion instead of phantom growth, while a
-# request whose sums genuinely exceed the cap fails closed.  Demands take
-# part only in exact conservation comparisons, never in arithmetic, so they
-# are covered by the measured source echo instead of these budgets.
+# the actual reduced numerator and denominator of every completed component
+# and enforces the canonical cap exactly there.  Fold work is bounded
+# separately: every quantity a cross-denominator fold can touch — bucket
+# numerators, reduced partial sums, and the unreduced products inside one
+# rational addition — carries at most three times the operand digit mass plus
+# a small constant, so folds are checked against that derived envelope while
+# the canonical component cap alone decides admission of completed sums.
+# Fold order therefore never shrinks the safe mathematical domain: a request
+# whose exact load equals its capacity reports the exact zero slack and
+# exactly-one congestion instead of phantom growth, while a request whose
+# completed sums exceed the cap still fails closed.  Demands take part only
+# in exact conservation comparisons, never in arithmetic, so they are covered
+# by the measured source echo instead of these budgets.
 
 # A result echoes its source tensor, then includes one divergence row per
 # commodity-vertex cell, one edge row per network edge, and one congestion
@@ -210,13 +216,16 @@ def _component_sums_with_folds(
     Amounts are bucketed by identical denominator and combined smallest
     denominator first: integer bucket sums never exceed the request volume,
     shared denominators add with zero growth, and every cross-denominator
-    fold is checked against the canonical cap so adversarial
-    coprime-denominator floods abort after constant work instead of
-    constructing huge intermediate fractions. The fold counter increments
-    inside the combination loop itself, so the profile work ledger charges
-    exactly the additions this scan executes.
+    fold is checked against the operand-mass fold envelope so adversarial
+    floods abort after constant work instead of constructing huge
+    intermediate fractions. The canonical cap is enforced on the completed
+    reduced sums by the component measurement, so fold order cannot shrink
+    the safe mathematical domain. The fold counter increments inside the
+    combination loop itself, so the profile work ledger charges exactly the
+    additions this scan executes.
     """
 
+    amount_digit_mass = 0
     cell_buckets: dict[tuple[str, int], dict[int, int]] = {
         (commodity.commodity_id, vertex): {}
         for commodity in flow.commodities
@@ -228,6 +237,7 @@ def _component_sums_with_folds(
     for entry in flow.entries:
         numerator = parse_canonical_integer(entry.amount.num)
         denominator = parse_canonical_integer(entry.amount.den)
+        amount_digit_mass += len(entry.amount.num) + len(entry.amount.den)
         source_key = (entry.commodity_id, entry.source)
         target_key = (entry.commodity_id, entry.target)
         edge_key = (entry.source, entry.target)
@@ -239,6 +249,7 @@ def _component_sums_with_folds(
         bucket[denominator] = bucket.get(denominator, 0) + numerator
 
     fold_additions = 0
+    fold_digit_cap = _fold_intermediate_digit_cap(amount_digit_mass)
 
     def _combine(buckets: dict[int, int]) -> Fraction:
         nonlocal fold_additions
@@ -247,12 +258,37 @@ def _component_sums_with_folds(
             total += Fraction(buckets[den], den)
             fold_additions += 1
             for digits in _rational_side_bounds(total):
-                _require_side_within_cap(digits)
+                _require_fold_intermediate_within_envelope(digits, fold_digit_cap)
         return total
 
     divergences = {key: _combine(bucket) for key, bucket in cell_buckets.items()}
     loads = {key: _combine(bucket) for key, bucket in edge_buckets.items()}
     return divergences, loads, fold_additions
+
+
+# Every quantity a cross-denominator fold can touch stays within three times
+# the summed amount digit mass plus a small constant: a bucket numerator sums
+# its members' digits once, a reduced partial denominator divides the lcm of
+# the processed denominators whose digits sum to at most that mass, a reduced
+# partial numerator adds at most one mass-sized factor over it, and the
+# unreduced products inside a single rational addition cost at most one more
+# mass-sized factor.  The headroom below covers those constants, so the cap
+# provably never rejects any fold of any request; it fails closed only if the
+# summation strategy ever violates the derivation.
+_FOLD_INTERMEDIATE_HEADROOM_DIGITS = 256
+
+
+def _fold_intermediate_digit_cap(amount_digit_mass: int) -> int:
+    return 4 * amount_digit_mass + _FOLD_INTERMEDIATE_HEADROOM_DIGITS
+
+
+def _require_fold_intermediate_within_envelope(digits: int, cap: int) -> None:
+    if digits > cap:
+        raise ValueError(
+            "multicommodity-flow summation produced a "
+            f"{digits}-digit fold intermediate above the "
+            f"{cap}-digit operand-mass envelope"
+        )
 
 
 def _rational_side_bounds(value: Fraction) -> tuple[int, int]:

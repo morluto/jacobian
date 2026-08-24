@@ -10,6 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.graphs.flow._models import CapacitatedEdge, FlowGraph
 from jacobian.math.graphs.multicommodity_flow._models import (
     MAX_COMMODITY_VERTEX_CELLS,
@@ -20,6 +21,7 @@ from jacobian.math.graphs.multicommodity_flow._models import (
     MulticommodityFlow,
     MulticommodityFlowProfileRequest,
     MulticommodityFlowProfileResult,
+    _fold_intermediate_digit_cap,
     _profile_component_digit_bounds,
     derived_profile_digit_budget,
 )
@@ -906,9 +908,10 @@ def test_cancelling_amounts_are_admitted_regardless_of_entry_order() -> None:
 
 def test_coprime_denominator_flood_fails_closed() -> None:
     # Two unit-fraction entries whose distinct near-cap denominators are
-    # coprime would construct a roughly 32,776-digit load denominator; the
-    # bucketed combination checks every fold against the canonical cap and
-    # fails closed immediately instead of building the huge fraction.
+    # coprime complete to a roughly 32,776-digit load denominator above the
+    # canonical cap: their fold intermediates stay inside the operand-mass
+    # envelope, and admission fails closed on the measured completed load
+    # instead of admitting the huge component.
     network = FlowGraph(
         vertex_count=2,
         edges=(CapacitatedEdge(source=0, target=1, capacity=q(1)),),
@@ -1095,6 +1098,76 @@ def test_ledger_charges_every_performed_bucket_fold_addition() -> None:
     assert divergence[("a", 0)] == Fraction(1, 2) + Fraction(1, 3)
     assert divergence[("b", 0)] == Fraction(1, 2)
     assert result.edge_profiles[0].load.as_fraction() == Fraction(1)
+def test_fold_intermediates_admit_coprime_sums_with_small_components() -> None:
+    # One edge, four commodities carrying 1/p, 1/q, (p-2)/(2p), (q-2)/(2q)
+    # with p and q coprime 20,000-digit odd integers: denominator sorting
+    # folds 1/p + 1/q first, whose reduced intermediate has the roughly
+    # 40,000-digit denominator p*q. That transient exceeds the 32,768-digit
+    # canonical cap but stays far inside the operand-mass fold envelope, and
+    # each completed sum is small -- the load is exactly one because each
+    # corresponding pair sums to exactly one half. Fold order must therefore
+    # not reject this tensor.
+    p = 5 * 10**19_999 + 3
+
+    def amount(numerator: int, denominator: int) -> CanonicalRational:
+        return CanonicalRational(
+            num=format_canonical_integer(numerator),
+            den=format_canonical_integer(denominator),
+        )
+
+    commodity_amounts = (
+        amount(1, p),
+        amount(1, p + 2),
+        amount(p - 2, 2 * p),
+        amount(p, 2 * (p + 2)),
+    )
+    flow = MulticommodityFlow(
+        network=FlowGraph(
+            vertex_count=2,
+            edges=(CapacitatedEdge(source=0, target=1, capacity=q(1)),),
+        ),
+        commodities=tuple(
+            CommodityDemand(
+                commodity_id=chr(ord("a") + index),
+                source=0,
+                sink=1,
+                demand=amount,
+            )
+            for index, amount in enumerate(commodity_amounts)
+        ),
+        entries=tuple(
+            CommodityEdgeFlow(
+                commodity_id=chr(ord("a") + index),
+                source=0,
+                target=1,
+                amount=amount,
+            )
+            for index, amount in enumerate(commodity_amounts)
+        ),
+    )
+    result = compute_multicommodity_flow_profile(flow)
+    assert result.all_demands_routed is True
+    assert result.capacity_feasible is True
+    assert result.congestion == q(1)
+    assert result.edge_profiles[0].load == q(1)
+    assert result.edge_profiles[0].slack == q(0)
+    assert [row.divergence for row in result.divergences] == [
+        signed
+        for amount in commodity_amounts
+        for signed in (
+            amount,
+            CanonicalRational.from_fraction(-amount.as_fraction()),
+        )
+    ]
+
+
+def test_fold_intermediate_cap_covers_the_proven_operand_mass_envelope() -> None:
+    # The derivation bounds every bucket numerator, reduced partial sum, and
+    # unreduced addition product by three times the amount digit mass plus a
+    # small constant; the admitted cap must dominate that envelope so it can
+    # only fail closed on a violated derivation, never on an admitted fold.
+    for mass in (0, 1, 120_004, 10**7):
+        assert _fold_intermediate_digit_cap(mass) >= 3 * mass + 9
 
 
 def test_result_replay_rejects_forged_source_and_derived_ledger_fields() -> None:

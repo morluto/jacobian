@@ -4,15 +4,20 @@ from __future__ import annotations
 
 import itertools
 from fractions import Fraction
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import ConfigDict, Field, StringConstraints, model_validator
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 
-MAX_GROUND_SET = 20
-MAX_SETS = 100
+MAX_GROUND_SET = 64
+MAX_SETS = 1_000
+# The optimum operation encodes minimum-discrepancy search as an exact
+# integer program (Z3 Optimize over {±1} variables with one shared
+# objective D); a sat answer is a proven optimum, and an exhausted budget
+# returns BUDGET_EXCEEDED without any mathematical claim.
+MAX_OPTIMUM_SOLVER_MILLISECONDS = 30_000
 
 MAX_ROUNDING_COORDINATES = 512
 MAX_ROUNDING_ROWS = 512
@@ -322,6 +327,18 @@ class FiniteSetSystem(StrictModel):
     subset. An empty family is permitted.
     """
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "A finite ground set of size `ground_set_size` and up to "
+                f"{MAX_SETS} subsets given as strictly increasing index tuples. "
+                f"The optimum operation admits ground sets up to {MAX_GROUND_SET} "
+                "elements and encodes the minimum-discrepancy search as an exact "
+                "integer program; the solver budget bounds each request."
+            )
+        }
+    )
+
     ground_set_size: int = Field(ge=0, le=MAX_GROUND_SET, strict=True)
     sets: tuple[tuple[int, ...], ...] = Field(max_length=MAX_SETS)
 
@@ -370,11 +387,49 @@ class DiscrepancyOptimumRequest(StrictModel):
 
 
 class DiscrepancyOptimumResult(StrictModel):
-    """The optimum coloring found and its discrepancy."""
+    """A proven-minimum coloring or an exhausted solver budget.
 
-    optimal_coloring: tuple[int, ...]
-    optimal_discrepancy: int = Field(ge=0, strict=True)
-    exhaustive: bool
+    Source-bound on its set system: ``OPTIMAL`` carries the exact minimum
+    discrepancy and one witnessing coloring, replayed against the retained
+    system at validation.  The integer program's sat answer establishes
+    optimality, so no exhaustive-scan claim is needed.
+    ``BUDGET_EXCEEDED`` makes no mathematical claim: it carries neither a
+    coloring nor a discrepancy value.
+    """
+
+    set_system: FiniteSetSystem
+    status: Literal["OPTIMAL", "BUDGET_EXCEEDED"]
+    optimal_coloring: tuple[int, ...] = Field(default=())
+    optimal_discrepancy: int | None = Field(default=None, ge=0, strict=True)
+    exhaustive: Literal[True] = True
+
+    @model_validator(mode="after")
+    def bind_optimal_coloring(self) -> Self:
+        if self.status == "BUDGET_EXCEEDED":
+            if self.optimal_coloring or self.optimal_discrepancy is not None:
+                raise ValueError(
+                    "a BUDGET_EXCEEDED result must not carry a coloring or optimum"
+                )
+            return self
+        if self.optimal_discrepancy is None:
+            raise ValueError("an OPTIMAL result requires its discrepancy value")
+        if len(self.optimal_coloring) != self.set_system.ground_set_size:
+            raise ValueError("coloring length must equal the ground-set size")
+        if any(value not in (-1, 1) for value in self.optimal_coloring):
+            raise ValueError("coloring values must be +1 or -1")
+        maximum = max(
+            (
+                abs(sum(self.optimal_coloring[element] for element in subset))
+                for subset in self.set_system.sets
+            ),
+            default=0,
+        )
+        if maximum != self.optimal_discrepancy:
+            raise ValueError(
+                "the reported discrepancy must be the exact maximum imbalance "
+                "of the returned coloring"
+            )
+        return self
 
 
 __all__ = [

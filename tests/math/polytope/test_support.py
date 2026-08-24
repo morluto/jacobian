@@ -114,6 +114,13 @@ def _forbid_extremality_proof(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+@pytest.fixture()
+def square_result() -> PolytopeSupportResult:
+    return compute_polytope_support(
+        PolytopeSupportRequest(polytope=_square(), covector=_covector(0, 1))
+    )
+
+
 def test_support_returns_exact_value_and_complete_exposed_edge() -> None:
     result = compute_polytope_support(
         PolytopeSupportRequest(polytope=_square(), covector=_covector(0, 1))
@@ -639,6 +646,139 @@ def test_result_preflights_missing_covector_before_nested_parsing(
 
     with pytest.raises(ValidationError, match="covector must be provided"):
         PolytopeSupportResult.model_validate(payload)
+
+
+def test_result_preflights_missing_support_value_before_nested_parsing(
+    square_result: PolytopeSupportResult,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A serialized result omitting ``support_value`` is rejected before
+    the retained V-polytope pays its exact extremality proof."""
+
+    _forbid_extremality_proof(monkeypatch)
+    payload = square_result.model_dump(mode="json")
+    del payload["support_value"]
+
+    with pytest.raises(ValidationError, match="support_value must be provided"):
+        PolytopeSupportResult.model_validate(payload)
+
+
+def test_result_preflights_malformed_support_value_before_nested_parsing(
+    square_result: PolytopeSupportResult,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ``support_value`` that cannot construct a canonical rational is
+    rejected before the hull proof."""
+
+    _forbid_extremality_proof(monkeypatch)
+    payload = square_result.model_dump(mode="json")
+    payload["support_value"] = {"num": "0"}
+
+    with pytest.raises(
+        ValidationError,
+        match="support value must be a canonical rational",
+    ):
+        PolytopeSupportResult.model_validate(payload)
+
+
+def test_result_preflights_missing_exposed_face_before_nested_parsing(
+    square_result: PolytopeSupportResult,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A serialized result omitting ``exposed_face`` is rejected before
+    the retained V-polytope pays its exact extremality proof."""
+
+    _forbid_extremality_proof(monkeypatch)
+    payload = square_result.model_dump(mode="json")
+    del payload["exposed_face"]
+
+    with pytest.raises(ValidationError, match="exposed_face must be provided"):
+        PolytopeSupportResult.model_validate(payload)
+
+
+def test_result_preflights_malformed_exposed_face_before_nested_parsing(
+    square_result: PolytopeSupportResult,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An exposed face violating a published structural constraint is
+    rejected before the hull proof."""
+
+    _forbid_extremality_proof(monkeypatch)
+    payload = square_result.model_dump(mode="json")
+    payload["exposed_face"] = {"space": {"axes": ["x", "y"]}}
+
+    with pytest.raises(
+        ValidationError,
+        match="exposed face must be an object with space and vertices",
+    ):
+        PolytopeSupportResult.model_validate(payload)
+
+    payload = square_result.model_dump(mode="json")
+    payload["exposed_face"]["vertices"][0]["vertex_id"] = 7
+
+    with pytest.raises(
+        ValidationError,
+        match="exposed face vertex must be an object with a short vertex_id",
+    ):
+        PolytopeSupportResult.model_validate(payload)
+
+
+def test_result_preflights_broken_face_invariants_before_nested_parsing(
+    square_result: PolytopeSupportResult,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An exposed face whose entries violate the defining ordering or
+    distinctness invariants is rejected before the hull proof."""
+
+    _forbid_extremality_proof(monkeypatch)
+    payload = square_result.model_dump(mode="json")
+    payload["exposed_face"]["vertices"].reverse()
+
+    with pytest.raises(
+        ValidationError,
+        match="exposed-face vertex IDs must be unique and strictly ordered",
+    ):
+        PolytopeSupportResult.model_validate(payload)
+
+    payload = square_result.model_dump(mode="json")
+    duplicated = dict(payload["exposed_face"]["vertices"][0])
+    duplicated["vertex_id"] = "zz_dup"
+    payload["exposed_face"]["vertices"].append(duplicated)
+
+    with pytest.raises(
+        ValidationError,
+        match="exposed-face vertices must have distinct coordinates",
+    ):
+        PolytopeSupportResult.model_validate(payload)
+
+
+def test_result_rejects_forbidden_extra_field_before_nested_parsing(
+    square_result: PolytopeSupportResult,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A forbidden outer field is rejected before the retained
+    V-polytope pays its exact extremality proof."""
+
+    _forbid_extremality_proof(monkeypatch)
+    payload = square_result.model_dump(mode="json")
+    payload["junk"] = 1
+
+    with pytest.raises(
+        ValidationError,
+        match="unexpected fields for a support result",
+    ):
+        PolytopeSupportResult.model_validate(payload)
+
+
+def test_serialized_result_still_round_trips_through_conclusion_gate(
+    square_result: PolytopeSupportResult,
+) -> None:
+    """The conclusion gate admits the exact published result shape."""
+
+    assert (
+        PolytopeSupportResult.model_validate(square_result.model_dump(mode="json"))
+        == square_result
+    )
 
 
 def test_serialized_result_round_trips_at_the_envelope_boundary() -> None:

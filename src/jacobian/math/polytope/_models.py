@@ -323,6 +323,112 @@ def _require_raw_support_covector_admissible(canonical: Any) -> None:
         raise ValueError("polytope and covector must use the same coordinate space")
 
 
+def _require_raw_exposed_face_vertex(
+    vertex: object,
+    dimension: int,
+) -> tuple[str, tuple[tuple[str, str], ...]]:
+    """Mirror one ``RationalPolytopeVertex`` entry of a raw exposed face.
+
+    Returns the vertex ID and its reduced-component key so the caller can
+    apply the exposed face's defining ordering and distinctness
+    invariants; any shape outside the published schema raises here.
+    """
+
+    if isinstance(vertex, RationalPolytopeVertex):
+        return vertex.vertex_id, tuple(
+            (component.num, component.den) for component in vertex.coordinates
+        )
+    if (
+        not isinstance(vertex, dict)
+        or set(vertex) != {"vertex_id", "coordinates"}
+        or not isinstance(vertex["vertex_id"], str)
+        or not 1 <= len(vertex["vertex_id"]) <= 64
+    ):
+        raise ValueError(
+            "exposed face vertex must be an object with a short vertex_id "
+            "and coordinates"
+        )
+    coordinates = vertex["coordinates"]
+    if not isinstance(coordinates, (list, tuple)) or not coordinates:
+        raise ValueError("exposed face vertex coordinates must be a non-empty sequence")
+    if len(coordinates) != dimension:
+        raise ValueError("every exposed-face vertex must use the face coordinate axis")
+    for component in coordinates:
+        _require_raw_canonical_rational_component(
+            component, "exposed face vertex coordinate"
+        )
+    return vertex["vertex_id"], tuple(
+        (component.num, component.den)
+        if isinstance(component, CanonicalRational)
+        else (component["num"], component["den"])
+        for component in coordinates
+    )
+
+
+def _require_raw_support_conclusions_admissible(canonical: Any) -> None:
+    """Gate the outer shape and conclusion fields of a raw support result.
+
+    Pydantic parses declared fields in order, so deserializing a result
+    whose retained source is valid near the hull envelope pays the exact
+    extremality proof before a missing or malformed ``support_value`` or
+    ``exposed_face``, or a forbidden extra field, is reported. This gate
+    mirrors only the result-level constraints nested validation rejects
+    anyway: the closed field set and the published shape of both
+    conclusion fields, including the exposed face's defining ordering
+    and distinctness invariants.
+    """
+
+    if not isinstance(canonical, dict):
+        return
+    unknown_fields = set(canonical) - {
+        "polytope",
+        "covector",
+        "support_value",
+        "exposed_face",
+    }
+    if unknown_fields:
+        raise ValueError(
+            f"unexpected fields for a support result: {sorted(unknown_fields)}"
+        )
+
+    support_value = canonical.get("support_value")
+    if support_value is None:
+        raise ValueError("support_value must be provided")
+    _require_raw_canonical_rational_component(support_value, "support value")
+
+    exposed_face = canonical.get("exposed_face")
+    if exposed_face is None:
+        raise ValueError("exposed_face must be provided")
+    if isinstance(exposed_face, RationalExposedFace):
+        return
+    if not isinstance(exposed_face, dict) or set(exposed_face) != {
+        "space",
+        "vertices",
+    }:
+        raise ValueError("exposed face must be an object with space and vertices")
+    axes = _require_raw_coordinate_space(exposed_face["space"], "exposed face")
+    vertices = exposed_face["vertices"]
+    if not isinstance(vertices, (list, tuple)):
+        raise ValueError("exposed face vertices must be a sequence")
+    if not vertices:
+        raise ValueError("exposed face vertices must be a non-empty sequence")
+    if len(vertices) > MAX_VERTICES:
+        raise ValueError(
+            f"exposed face vertices must carry at most {MAX_VERTICES} entries"
+        )
+    parsed = [
+        _require_raw_exposed_face_vertex(vertex, len(axes)) for vertex in vertices
+    ]
+    vertex_ids = tuple(vertex_id for vertex_id, _ in parsed)
+    if vertex_ids != tuple(sorted(vertex_ids)) or len(set(vertex_ids)) != len(
+        vertex_ids
+    ):
+        raise ValueError("exposed-face vertex IDs must be unique and strictly ordered")
+    coordinate_rows = tuple(rows for _, rows in parsed)
+    if len(set(coordinate_rows)) != len(coordinate_rows):
+        raise ValueError("exposed-face vertices must have distinct coordinates")
+
+
 def _require_interval_volume_within_result_bound(
     points: Sequence[Sequence[object]],
 ) -> None:
@@ -745,10 +851,14 @@ class PolytopeSupportResult(StrictModel):
         proves) the nested values before parent after-validators run, so
         the same raw-payload measurement as the request rejects an
         over-envelope retained source before the exact hull-facet proof
-        can execute outside the advertised envelope.
+        can execute outside the advertised envelope. The result's cheap
+        outer shape and conclusion fields are preflighted the same way:
+        an already-invalid payload must fail before any hull replay runs.
         """
 
-        return _preflight_raw_support_components(data)
+        canonical = _preflight_raw_support_components(data)
+        _require_raw_support_conclusions_admissible(canonical)
+        return canonical
 
     @model_validator(mode="after")
     def bind_support_data_to_source(self) -> Self:

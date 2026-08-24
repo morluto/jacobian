@@ -69,17 +69,16 @@ def _capped_pairs(
 def _merged_pairs(
     *pair_lists: tuple[tuple[int, int], ...] | None,
 ) -> tuple[tuple[int, int], ...] | None:
-    """Union reachable coefficient pairs, keeping the widest per denominator."""
+    """Union reachable coefficient pairs without collapsing any of them."""
 
-    numerators_by_denominator: dict[int, int] = {}
+    merged: set[tuple[int, int]] = set()
     for pair_list in pair_lists:
         if pair_list is None:
             return None
-        for numerator, denominator in pair_list:
-            numerators_by_denominator[denominator] = max(
-                numerators_by_denominator.get(denominator, 0), numerator
-            )
-    return _capped_pairs(numerators_by_denominator)
+        merged.update(pair_list)
+    if len(merged) > _MAX_ENVELOPE_PAIRS:
+        return None
+    return tuple(sorted(merged))
 
 
 def _pairs_common_denominator(
@@ -856,7 +855,7 @@ def _compared_envelope(
         _require_bounded_normalized_coefficient(height)
     shared = _shared_denominator_of_pairs(envelopes)
     if shared is None:
-        fallback = _signed_sum_envelope(envelopes, validate_budget=False)
+        fallback = _signed_sum_envelope(envelopes, validate_budget=validate_budget)
         return _CoefficientEnvelope(
             height,
             fallback.numerator_digits,

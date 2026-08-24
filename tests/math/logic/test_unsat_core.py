@@ -923,6 +923,67 @@ def test_request_bounds_shared_denominator_comparison_numerator_digits() -> None
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
 
 
+def test_request_bounds_nested_division_of_formless_ite_denominator_digits() -> None:
+    outer = "9" * 200
+    inner = "9" * 100
+    source = (
+        "(set-logic QF_LRA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const x Real)\n"
+        f"(assert (= (/ (/ (ite p (* {outer} x) x) {outer}) {inner}) 0))\n"
+        "(check-sat)\n"
+    )
+
+    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+
+
+def test_bounded_nested_division_of_formless_ite_still_admitted() -> None:
+    outer = "9" * 60
+    inner = "3" * 60
+    source = (
+        "(set-logic QF_LRA)\n"
+        "(declare-const p Bool)\n"
+        "(declare-const x Real)\n"
+        f"(assert (= (/ (/ (ite p (* {outer} x) x) {outer}) {inner}) 0))\n"
+        "(assert (>= x 1))\n"
+        "(assert (<= x 1))\n"
+        "(check-sat)\n"
+    )
+
+    assert SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+
+    result = compute_smt_unsat_core(SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source))
+
+    assert result.outcome == "UNSAT"
+    assert result.core_indices == (0, 1)
+
+
+def test_request_bounds_compared_pairless_chain_denominator_digits() -> None:
+    constants = [str(10**199 + offset) for offset in range(5)]
+
+    def chain(prefix: str) -> str:
+        term = "x"
+        for index in range(5):
+            term = f"(ite {prefix}{index} (* (/ 1 {constants[index]}) x) {term})"
+        return term
+
+    declarations = "".join(
+        f"(declare-const left{index} Bool)\n(declare-const right{index} Bool)\n"
+        for index in range(5)
+    )
+    source = (
+        "(set-logic QF_LRA)\n"
+        f"{declarations}"
+        "(declare-const x Real)\n"
+        f"(assert (= {chain('left')} {chain('right')}))\n"
+        "(check-sat)\n"
+    )
+
+    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+        SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
+
+
 def test_request_keeps_shared_denominator_formless_ite_sums_admitted() -> None:
     digits = "9" * 100
     source = (

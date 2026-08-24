@@ -7,6 +7,7 @@ from collections.abc import Iterable
 import pytest
 
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.crossed_products import _models as crossed_product_models
 from jacobian.math.crossed_products._models import (
     CrossedProductMultiplyRequest,
     CrossedProductMultiplyResult,
@@ -290,6 +291,70 @@ def test_wire_result_replays_and_rejects_a_mutated_product() -> None:
     payload["product"]["terms"][0]["exponents"] = ["1", "0", "0"]
     with pytest.raises(ValueError, match="exact replay"):
         CrossedProductMultiplyResult.model_validate(payload)
+
+
+@pytest.fixture(name="replay_counter")
+def replay_counter_fixture(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[
+    tuple[
+        FiniteCosetCrossedProductElement,
+        FiniteCosetCrossedProductElement,
+    ]
+]:
+    calls: list[
+        tuple[
+            FiniteCosetCrossedProductElement,
+            FiniteCosetCrossedProductElement,
+        ]
+    ] = []
+    real_multiply = crossed_product_models.multiply
+
+    def counted_multiply(
+        left: FiniteCosetCrossedProductElement,
+        right: FiniteCosetCrossedProductElement,
+    ) -> FiniteCosetCrossedProductElement:
+        calls.append((left, right))
+        return real_multiply(left, right)
+
+    monkeypatch.setattr(crossed_product_models, "multiply", counted_multiply)
+    return calls
+
+
+def test_compute_product_binds_fresh_kernel_output_without_replay(
+    replay_counter: list[
+        tuple[
+            FiniteCosetCrossedProductElement,
+            FiniteCosetCrossedProductElement,
+        ]
+    ],
+) -> None:
+    alpha, inverse, identity = _gardam_elements()
+
+    result = compute_product(CrossedProductMultiplyRequest(left=alpha, right=inverse))
+
+    assert result.product == identity
+    assert (result.left, result.right) == (alpha, inverse)
+    assert replay_counter == []
+
+
+def test_deserialized_result_validates_through_exactly_one_replay(
+    replay_counter: list[
+        tuple[
+            FiniteCosetCrossedProductElement,
+            FiniteCosetCrossedProductElement,
+        ]
+    ],
+) -> None:
+    alpha, inverse, identity = _gardam_elements()
+    payload = compute_product(
+        CrossedProductMultiplyRequest(left=alpha, right=inverse)
+    ).model_dump(mode="json")
+
+    replayed = CrossedProductMultiplyResult.model_validate(payload)
+
+    assert replayed.product == identity
+    assert replay_counter == [(alpha, inverse)]
 
 
 def test_element_requires_unique_canonical_coset_and_exponent_order() -> None:

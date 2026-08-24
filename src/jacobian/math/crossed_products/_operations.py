@@ -3,6 +3,7 @@
 from jacobian.math.crossed_products._models import (
     CrossedProductMultiplyRequest,
     CrossedProductMultiplyResult,
+    _computed_result,
 )
 from jacobian.math.crossed_products.operations import multiply
 
@@ -12,10 +13,10 @@ def compute_product(
 ) -> CrossedProductMultiplyResult:
     """Multiply two elements and retain their complete ordered sources."""
 
-    return CrossedProductMultiplyResult(
-        left=request.left,
-        right=request.right,
-        product=multiply(request.left, request.right),
+    return _computed_result(
+        request.left,
+        request.right,
+        multiply(request.left, request.right),
     )
 
 

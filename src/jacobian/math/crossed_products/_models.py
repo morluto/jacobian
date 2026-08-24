@@ -45,4 +45,23 @@ class CrossedProductMultiplyResult(StrictModel):
         return self
 
 
+def _computed_result(
+    left: FiniteCosetCrossedProductElement,
+    right: FiniteCosetCrossedProductElement,
+    product: FiniteCosetCrossedProductElement,
+) -> CrossedProductMultiplyResult:
+    """Bind one product freshly computed by the owning kernel.
+
+    Direct construction from the producing kernel skips result replay so the
+    admitted scalar-work budget covers all multiplication work; independently
+    supplied results always validate through ``bind_product_to_sources``.
+    """
+
+    return CrossedProductMultiplyResult.model_construct(
+        left=left,
+        right=right,
+        product=product,
+    )
+
+
 __all__ = ["CrossedProductMultiplyRequest", "CrossedProductMultiplyResult"]

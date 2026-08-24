@@ -126,6 +126,8 @@ def _incidence_trade_data(
         )
         comparisons.append(
             IncidenceMomentComparison(
+                left=left,
+                right=right,
                 points=left.points,
                 order=order,
                 left_total=left_profile[2],

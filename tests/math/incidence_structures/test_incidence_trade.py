@@ -330,20 +330,30 @@ def test_moment_totals_bind_to_sparse_differences() -> None:
 
 
 def test_equal_empty_moment_comparison_is_accepted_standalone() -> None:
+    left = _family((("a",),), "l", points=("a", "b"))
+    right = _family((("a",),), "r", points=("a", "b"))
+
     comparison = IncidenceMomentComparison(
+        left=left,
+        right=right,
         points=("a", "b"),
         order=1,
-        left_total=4,
-        right_total=4,
+        left_total=1,
+        right_total=1,
         differences=(),
         equal=True,
     )
 
-    assert comparison.left_total == comparison.right_total == 4
+    assert comparison.left_total == comparison.right_total == 1
 
 
 def test_zero_residual_moment_comparison_is_accepted_standalone() -> None:
+    left = _family((("a", "b"), ("a", "b")), "l", points=("a", "b"))
+    right = _family((("a", "b"),), "r", points=("a", "b"))
+
     comparison = IncidenceMomentComparison(
+        left=left,
+        right=right,
         points=("a", "b"),
         order=2,
         left_total=2,
@@ -361,39 +371,64 @@ def test_zero_residual_moment_comparison_is_accepted_standalone() -> None:
     assert (comparison.left_total, comparison.right_total) == (2, 1)
 
 
-def test_moment_residual_at_omitted_capacity_is_accepted_standalone() -> None:
-    differences = (
-        IncidenceMultiplicityDifference(
-            subset=("a",),
-            left_multiplicity=100,
-            right_multiplicity=0,
-        ),
-    )
+def test_saturated_sparse_multiplicities_are_accepted_with_witness_families() -> None:
+    left = _family((("a",),) * 100, "l", points=("a", "b"))
+    right = _family(((),), "r", points=("a", "b"))
 
-    at_capacity = IncidenceMomentComparison(
+    comparison = IncidenceMomentComparison(
+        left=left,
+        right=right,
         points=("a", "b"),
         order=1,
-        left_total=200,
-        right_total=100,
-        differences=differences,
+        left_total=100,
+        right_total=0,
+        differences=(
+            IncidenceMultiplicityDifference(
+                subset=("a",),
+                left_multiplicity=100,
+                right_multiplicity=0,
+            ),
+        ),
         equal=False,
     )
-    assert (at_capacity.left_total, at_capacity.right_total) == (200, 100)
 
-    with pytest.raises(ValidationError, match="omitted-subset capacity"):
+    assert (comparison.left_total, comparison.right_total) == (100, 0)
+
+
+def test_forged_totals_diverging_from_retained_profiles_are_rejected() -> None:
+    left = _family((("a", "b"),), "l", points=("a", "b"))
+    right = _family(((),), "r", points=("a", "b"))
+
+    with pytest.raises(
+        ValidationError,
+        match="does not match the retained incidence families",
+    ):
         IncidenceMomentComparison(
+            left=left,
+            right=right,
             points=("a", "b"),
-            order=1,
-            left_total=201,
-            right_total=101,
-            differences=differences,
+            order=2,
+            left_total=2,
+            right_total=1,
+            differences=(
+                IncidenceMultiplicityDifference(
+                    subset=("a", "b"),
+                    left_multiplicity=2,
+                    right_multiplicity=0,
+                ),
+            ),
             equal=False,
         )
 
 
-def test_forged_residual_totals_without_omitted_subsets_are_rejected() -> None:
-    with pytest.raises(ValidationError, match="omitted-subset capacity"):
+def test_forged_positive_totals_without_order_subsets_are_rejected() -> None:
+    left = _family((("a",),), "l", points=("a",))
+    right = _family((("a",),), "r", points=("a",))
+
+    with pytest.raises(ValidationError, match="moment totals do not match"):
         IncidenceMomentComparison(
+            left=left,
+            right=right,
             points=("a",),
             order=2,
             left_total=1,
@@ -404,8 +439,16 @@ def test_forged_residual_totals_without_omitted_subsets_are_rejected() -> None:
 
 
 def test_forged_saturated_shared_core_differences_are_rejected() -> None:
-    with pytest.raises(ValidationError, match="joint block budget"):
+    left = _family((("a", "b"),) * 100, "l", points=("a", "b", "c"))
+    right = _family(((),), "r", points=("a", "b", "c"))
+
+    with pytest.raises(
+        ValidationError,
+        match="does not match the retained incidence families",
+    ):
         IncidenceMomentComparison(
+            left=left,
+            right=right,
             points=("a", "b", "c"),
             order=2,
             left_total=200,
@@ -427,8 +470,16 @@ def test_forged_saturated_shared_core_differences_are_rejected() -> None:
 
 
 def test_forged_right_saturated_shared_core_differences_are_rejected() -> None:
-    with pytest.raises(ValidationError, match="joint block budget"):
+    right = _family((("a", "b"),) * 100, "r", points=("a", "b", "c"))
+    left = _family(((),), "l", points=("a", "b", "c"))
+
+    with pytest.raises(
+        ValidationError,
+        match="does not match the retained incidence families",
+    ):
         IncidenceMomentComparison(
+            left=left,
+            right=right,
             points=("a", "b", "c"),
             order=2,
             left_total=0,
@@ -449,8 +500,15 @@ def test_forged_right_saturated_shared_core_differences_are_rejected() -> None:
         )
 
 
-def test_joint_block_budget_boundary_is_accepted_standalone() -> None:
+def test_shared_core_boundary_is_witnessed_by_retained_families() -> None:
+    left = _family(
+        (("a", "b", "c"),) * 60 + (("a", "b"),) * 40, "l", points=("a", "b", "c")
+    )
+    right = _family((("b", "c"),) * 60, "r", points=("a", "b", "c"))
+
     comparison = IncidenceMomentComparison(
+        left=left,
+        right=right,
         points=("a", "b", "c"),
         order=2,
         left_total=220,
@@ -473,9 +531,16 @@ def test_joint_block_budget_boundary_is_accepted_standalone() -> None:
     assert (comparison.left_total, comparison.right_total) == (220, 60)
 
 
-def test_joint_block_budget_below_boundary_is_rejected_standalone() -> None:
-    with pytest.raises(ValidationError, match="joint block budget"):
+def test_forged_unwitnessable_shared_core_totals_are_rejected() -> None:
+    left = _family(
+        (("a", "b", "c"),) * 60 + (("a", "b"),) * 40, "l", points=("a", "b", "c")
+    )
+    right = _family((("b", "c"),) * 60, "r", points=("a", "b", "c"))
+
+    with pytest.raises(ValidationError, match="moment totals do not match"):
         IncidenceMomentComparison(
+            left=left,
+            right=right,
             points=("a", "b", "c"),
             order=2,
             left_total=219,
@@ -496,28 +561,190 @@ def test_joint_block_budget_below_boundary_is_rejected_standalone() -> None:
         )
 
 
-def test_disjoint_saturated_keys_are_accepted_without_shared_core() -> None:
+def test_disjoint_saturated_keys_are_accepted_with_witness_families() -> None:
+    left = _family(
+        (("a", "b"),) * 50 + (("c", "d"),) * 50, "l", points=("a", "b", "c", "d")
+    )
+    right = _family(((),), "r", points=("a", "b", "c", "d"))
+
     comparison = IncidenceMomentComparison(
+        left=left,
+        right=right,
         points=("a", "b", "c", "d"),
         order=2,
-        left_total=110,
-        right_total=8,
+        left_total=100,
+        right_total=0,
         differences=(
             IncidenceMultiplicityDifference(
                 subset=("a", "b"),
-                left_multiplicity=51,
+                left_multiplicity=50,
                 right_multiplicity=0,
             ),
             IncidenceMultiplicityDifference(
                 subset=("c", "d"),
-                left_multiplicity=51,
+                left_multiplicity=50,
                 right_multiplicity=0,
             ),
         ),
         equal=False,
     )
 
-    assert (comparison.left_total, comparison.right_total) == (110, 8)
+    assert (comparison.left_total, comparison.right_total) == (100, 0)
+
+
+def test_forged_unrealizable_sparse_zero_profile_is_rejected() -> None:
+    paired_points = ("a", "b", "c", "d", "e", "f", "g", "h")
+    left = _family((paired_points,) * 60, "l", points=paired_points)
+    right = _family((("a", "c", "e", "g"),) * 100, "r", points=paired_points)
+
+    with pytest.raises(
+        ValidationError,
+        match="does not match the retained incidence families",
+    ):
+        IncidenceMomentComparison(
+            left=left,
+            right=right,
+            points=paired_points,
+            order=2,
+            left_total=960,
+            right_total=720,
+            differences=tuple(
+                IncidenceMultiplicityDifference(
+                    subset=subset,
+                    left_multiplicity=60,
+                    right_multiplicity=0,
+                )
+                for subset in (("a", "b"), ("c", "d"), ("e", "f"), ("g", "h"))
+            ),
+            equal=False,
+        )
+
+    witnessed = IncidenceMomentComparison(
+        left=_family((("a", "b", "c", "d"),) * 25, "l", points=paired_points),
+        right=_family(
+            (("a", "c"),) * 25
+            + (("a", "d"),) * 25
+            + (("b", "c"),) * 25
+            + (("b", "d"),) * 25,
+            "r",
+            points=paired_points,
+        ),
+        points=paired_points,
+        order=2,
+        left_total=150,
+        right_total=100,
+        differences=(
+            IncidenceMultiplicityDifference(
+                subset=("a", "b"),
+                left_multiplicity=25,
+                right_multiplicity=0,
+            ),
+            IncidenceMultiplicityDifference(
+                subset=("c", "d"),
+                left_multiplicity=25,
+                right_multiplicity=0,
+            ),
+        ),
+        equal=False,
+    )
+    payload: dict[str, Any] = witnessed.model_dump(mode="python")
+    payload["right_total"] = 720
+
+    with pytest.raises(ValidationError, match="moment totals do not match"):
+        IncidenceMomentComparison.model_validate(payload)
+
+
+def test_forged_out_of_combination_order_difference_rows_are_rejected() -> None:
+    left = _family((("a",), ("b",)), "l", points=("a", "b"))
+    right = _family(((),), "r", points=("a", "b"))
+
+    with pytest.raises(ValidationError, match="combination order"):
+        IncidenceMomentComparison(
+            left=left,
+            right=right,
+            points=("a", "b"),
+            order=1,
+            left_total=2,
+            right_total=0,
+            differences=(
+                IncidenceMultiplicityDifference(
+                    subset=("b",),
+                    left_multiplicity=1,
+                    right_multiplicity=0,
+                ),
+                IncidenceMultiplicityDifference(
+                    subset=("a",),
+                    left_multiplicity=1,
+                    right_multiplicity=0,
+                ),
+            ),
+            equal=False,
+        )
+
+
+def test_moment_comparison_round_trips_through_serialization() -> None:
+    left = _family((("a", "b"), ("a", "b")), "l", points=("a", "b"))
+    right = _family((("a", "b"),), "r", points=("a", "b"))
+
+    comparison = IncidenceMomentComparison(
+        left=left,
+        right=right,
+        points=("a", "b"),
+        order=2,
+        left_total=2,
+        right_total=1,
+        differences=(
+            IncidenceMultiplicityDifference(
+                subset=("a", "b"),
+                left_multiplicity=2,
+                right_multiplicity=1,
+            ),
+        ),
+        equal=False,
+    )
+
+    payload: dict[str, Any] = comparison.model_dump(mode="python")
+    assert IncidenceMomentComparison.model_validate(payload) == comparison
+    serialized = comparison.model_dump(mode="json")
+    assert serialized["left"] == left.model_dump(mode="json")
+    assert serialized["right"] == right.model_dump(mode="json")
+
+
+def test_forged_mutated_serialized_multiplicities_are_rejected() -> None:
+    left = _family(
+        (("a", "b"),) * 50 + (("c", "d"),) * 50, "l", points=("a", "b", "c", "d")
+    )
+    right = _family(((),), "r", points=("a", "b", "c", "d"))
+    comparison = IncidenceMomentComparison(
+        left=left,
+        right=right,
+        points=("a", "b", "c", "d"),
+        order=2,
+        left_total=100,
+        right_total=0,
+        differences=(
+            IncidenceMultiplicityDifference(
+                subset=("a", "b"),
+                left_multiplicity=50,
+                right_multiplicity=0,
+            ),
+            IncidenceMultiplicityDifference(
+                subset=("c", "d"),
+                left_multiplicity=50,
+                right_multiplicity=0,
+            ),
+        ),
+        equal=False,
+    )
+
+    payload: dict[str, Any] = comparison.model_dump(mode="json")
+    payload["differences"][0]["left_multiplicity"] = 51
+
+    with pytest.raises(
+        ValidationError,
+        match="does not match the retained incidence families",
+    ):
+        IncidenceMomentComparison.model_validate(payload)
 
 
 def test_forged_repeated_labels_in_difference_values_are_rejected() -> None:
@@ -530,30 +757,20 @@ def test_forged_repeated_labels_in_difference_values_are_rejected() -> None:
 
 
 def test_forged_equal_totals_with_sparse_differences_are_rejected() -> None:
-    with pytest.raises(ValidationError, match="sum of sparse multiplicity"):
-        IncidenceMomentComparison(
-            points=("a",),
-            order=1,
-            left_total=2,
-            right_total=2,
-            differences=(
-                IncidenceMultiplicityDifference(
-                    subset=("a",),
-                    left_multiplicity=1,
-                    right_multiplicity=0,
-                ),
-            ),
-            equal=False,
-        )
+    left = _family((("a", "b"),), "l", points=("a", "b"))
+    right = _family((("a", "b"),), "r", points=("a", "b"))
 
-
-def test_forged_totals_diverging_from_sparse_sum_are_rejected() -> None:
-    with pytest.raises(ValidationError, match="sum of sparse multiplicity"):
+    with pytest.raises(
+        ValidationError,
+        match="does not match the retained incidence families",
+    ):
         IncidenceMomentComparison(
+            left=left,
+            right=right,
             points=("a", "b"),
             order=2,
-            left_total=5,
-            right_total=3,
+            left_total=1,
+            right_total=1,
             differences=(
                 IncidenceMultiplicityDifference(
                     subset=("a", "b"),
@@ -565,9 +782,31 @@ def test_forged_totals_diverging_from_sparse_sum_are_rejected() -> None:
         )
 
 
-def test_forged_negative_residual_totals_are_rejected() -> None:
-    with pytest.raises(ValidationError, match="must not exceed their declared totals"):
+def test_forged_mismatched_family_point_axes_are_rejected() -> None:
+    left = _family((("a",),), "l", points=("a", "b"))
+    right = _family((("a",),), "r", points=("b", "a"))
+
+    with pytest.raises(ValidationError, match="share the declared ordered point axis"):
         IncidenceMomentComparison(
+            left=left,
+            right=right,
+            points=("a", "b"),
+            order=1,
+            left_total=1,
+            right_total=1,
+            differences=(),
+            equal=True,
+        )
+
+
+def test_forged_totals_below_sparse_differences_are_rejected() -> None:
+    left = _family((("a", "b"), ("a", "b")), "l", points=("a", "b"))
+    right = _family((("a", "b"),), "r", points=("a", "b"))
+
+    with pytest.raises(ValidationError, match="moment totals do not match"):
+        IncidenceMomentComparison(
+            left=left,
+            right=right,
             points=("a", "b"),
             order=2,
             left_total=1,
@@ -584,8 +823,13 @@ def test_forged_negative_residual_totals_are_rejected() -> None:
 
 
 def test_forged_wrong_arity_subset_keys_are_rejected() -> None:
+    left = _family((("a", "b"),), "l", points=("a", "b"))
+    right = _family(((),), "r", points=("a", "b"))
+
     with pytest.raises(ValidationError, match="exactly order labels"):
         IncidenceMomentComparison(
+            left=left,
+            right=right,
             points=("a", "b"),
             order=2,
             left_total=1,
@@ -602,8 +846,13 @@ def test_forged_wrong_arity_subset_keys_are_rejected() -> None:
 
 
 def test_forged_repeated_label_subset_keys_are_rejected() -> None:
+    left = _family((("a", "b"),), "l", points=("a", "b"))
+    right = _family(((),), "r", points=("a", "b"))
+
     with pytest.raises(ValidationError, match="distinct labels"):
         IncidenceMomentComparison(
+            left=left,
+            right=right,
             points=("a", "b"),
             order=2,
             left_total=1,
@@ -620,8 +869,13 @@ def test_forged_repeated_label_subset_keys_are_rejected() -> None:
 
 
 def test_forged_undeclared_difference_labels_are_rejected() -> None:
+    left = _family((("a", "b"),), "l", points=("a", "b"))
+    right = _family(((),), "r", points=("a", "b"))
+
     with pytest.raises(ValidationError, match="declared point-axis labels"):
         IncidenceMomentComparison(
+            left=left,
+            right=right,
             points=("a", "b"),
             order=2,
             left_total=1,
@@ -638,8 +892,13 @@ def test_forged_undeclared_difference_labels_are_rejected() -> None:
 
 
 def test_forged_out_of_axis_order_subset_keys_are_rejected() -> None:
+    left = _family((("a", "b"),), "l", points=("a", "b"))
+    right = _family(((),), "r", points=("a", "b"))
+
     with pytest.raises(ValidationError, match="point-axis order"):
         IncidenceMomentComparison(
+            left=left,
+            right=right,
             points=("a", "b"),
             order=2,
             left_total=1,
@@ -656,16 +915,21 @@ def test_forged_out_of_axis_order_subset_keys_are_rejected() -> None:
 
 
 def test_forged_permuted_duplicate_subset_keys_are_rejected() -> None:
+    left = _family((("a", "c"),), "l", points=("a", "b", "c"))
+    right = _family(((),), "r", points=("a", "b", "c"))
+
     with pytest.raises(ValidationError, match="point-axis order"):
         IncidenceMomentComparison(
+            left=left,
+            right=right,
             points=("a", "b", "c"),
             order=2,
-            left_total=3,
+            left_total=1,
             right_total=0,
             differences=(
                 IncidenceMultiplicityDifference(
                     subset=("a", "c"),
-                    left_multiplicity=2,
+                    left_multiplicity=1,
                     right_multiplicity=0,
                 ),
                 IncidenceMultiplicityDifference(
@@ -678,24 +942,17 @@ def test_forged_permuted_duplicate_subset_keys_are_rejected() -> None:
         )
 
 
-def test_forged_duplicate_axis_labels_are_rejected_standalone() -> None:
-    with pytest.raises(ValidationError, match="moment point axes must have distinct"):
-        IncidenceMomentComparison(
-            points=("a", "a"),
-            order=1,
-            left_total=0,
-            right_total=0,
-            differences=(),
-            equal=True,
-        )
-
-
 def test_forged_duplicate_subset_keys_are_rejected() -> None:
+    left = _family((("a",),), "l", points=("a", "b"))
+    right = _family(((),), "r", points=("a", "b"))
+
     with pytest.raises(ValidationError, match="unique"):
         IncidenceMomentComparison(
+            left=left,
+            right=right,
             points=("a", "b"),
             order=1,
-            left_total=2,
+            left_total=1,
             right_total=0,
             differences=(
                 IncidenceMultiplicityDifference(

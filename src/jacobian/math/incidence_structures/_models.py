@@ -23,6 +23,7 @@ MAX_TRADE_ORDER = MAX_T
 MAX_TRADE_DIFFERENCES = MAX_POINTS + MAX_SUBSETS
 
 _CONTAINMENT_RESULT_PASSES = 2
+_TRADE_TOTAL_PASSES = 4
 _MAX_CONTAINMENT_TOTAL_WORK_UNITS = 4_000_000
 _MAX_TRADE_TOTAL_WORK_UNITS = 5_000_000
 _RESULT_ENVELOPE_BYTES = 4_096
@@ -152,7 +153,7 @@ def _require_incidence_trade_admitted(
         _profile_work_units(left, order) + _profile_work_units(right, order)
         for order in range(1, max_order + 1)
     )
-    if _CONTAINMENT_RESULT_PASSES * work_per_pass > _MAX_TRADE_TOTAL_WORK_UNITS:
+    if _TRADE_TOTAL_PASSES * work_per_pass > _MAX_TRADE_TOTAL_WORK_UNITS:
         raise ValueError(
             "trade comparison exceeds the operation-plus-replay work budget"
         )
@@ -163,8 +164,7 @@ def _require_incidence_trade_admitted(
     )
     comparison_axis_bytes = max_order * (_label_wire_bytes(left.points) + 16)
     estimated_result_bytes = (
-        _incidence_wire_bytes(left)
-        + _incidence_wire_bytes(right)
+        max_order * (_incidence_wire_bytes(left) + _incidence_wire_bytes(right))
         + subset_label_bytes
         + sum(subset_counts) * _TRADE_DIFFERENCE_OVERHEAD_BYTES
         + max_order * 128
@@ -175,49 +175,6 @@ def _require_incidence_trade_admitted(
         raise ValueError(
             "trade comparison with its retained sources exceeds the output budget"
         )
-
-
-def _require_joint_difference_block_budget(
-    sparse_values: dict[tuple[str, ...], int],
-    order: int,
-    axis_index: dict[str, int],
-    residual: int,
-) -> None:
-    cores: dict[tuple[str, ...], list[tuple[str, int]]] = {}
-    for subset, value in sparse_values.items():
-        for index in range(order):
-            core = subset[:index] + subset[index + 1 :]
-            cores.setdefault(core, []).append((subset[index], value))
-    omitted_bound = min(MAX_BLOCKS, residual)
-    for core, members in cores.items():
-        if len(members) < 2:
-            continue
-        ranked = sorted(members, key=lambda member: member[1], reverse=True)
-        for first in range(len(ranked) - 1):
-            label_first, value_first = ranked[first]
-            if value_first + ranked[first + 1][1] <= MAX_BLOCKS:
-                break
-            for second in range(first + 1, len(ranked)):
-                label_second, value_second = ranked[second]
-                if value_first + value_second <= MAX_BLOCKS:
-                    break
-                union = tuple(
-                    sorted(
-                        (*core, label_first, label_second),
-                        key=axis_index.__getitem__,
-                    )
-                )
-                capacity = min(
-                    sparse_values.get(
-                        union[:position] + union[position + 1 :],
-                        omitted_bound,
-                    )
-                    for position in range(len(union))
-                )
-                if value_first + value_second - capacity > MAX_BLOCKS:
-                    raise ValueError(
-                        "sparse keys sharing labels must not exceed the joint block budget"
-                    )
 
 
 class IncidenceMatrixRequest(StrictModel):
@@ -340,19 +297,17 @@ class IncidenceMultiplicityDifference(StrictModel):
 class IncidenceMomentComparison(StrictModel):
     """Complete sparse difference data for one positive incidence moment.
 
-    Defining invariant: ``points`` is the ordered point axis shared by both
-    sides, every difference key is a distinct ``order``-element subset of
-    axis labels in axis order, each side's sparse multiplicity subtotal does
-    not exceed its declared total, and ``left_total - right_total`` equals
-    the sum of ``left_multiplicity - right_multiplicity`` over the sparse
-    differences, because every omitted subset carries equal nonnegative
-    multiplicity on both sides bounded by the omitted-subset capacity. Two
-    sparse keys sharing ``order - 1`` axis labels are additionally rejected
-    when either side's joint multiplicity exceeds the ``MAX_BLOCKS`` block
-    budget beyond every ``order``-subset spanning their union: blocks
-    containing both keys already contain each such spanned subset.
+    Source-bound value: ``left`` and ``right`` are the indexed block families
+    being compared on their shared ordered point axis ``points``. Defining
+    invariant: replaying the complete containment profiles of both retained
+    families at ``order`` reproduces ``left_total`` and ``right_total`` and
+    yields exactly ``differences``, in point-axis combination order, as the
+    subsets whose multiplicities differ; every omitted subset therefore
+    carries equal, possibly zero, multiplicity on both sides.
     """
 
+    left: IncidenceStructure
+    right: IncidenceStructure
     points: tuple[str, ...] = Field(min_length=1, max_length=MAX_POINTS)
     order: StrictInt = Field(ge=1, le=MAX_TRADE_ORDER)
     left_total: StrictInt = Field(ge=0)
@@ -363,17 +318,21 @@ class IncidenceMomentComparison(StrictModel):
     equal: StrictBool
 
     @model_validator(mode="after")
-    def bind_equality_and_totals_to_sparse_differences(self) -> Self:
+    def bind_moment_to_retained_families(self) -> Self:
+        from jacobian.math.incidence_structures.operations import (
+            _containment_profile_data,
+        )
+
         if self.equal != (not self.differences):
             raise ValueError("moment equality must match the sparse difference profile")
-        if len(set(self.points)) != len(self.points):
-            raise ValueError("moment point axes must have distinct labels")
+        if self.left.points != self.points or self.right.points != self.points:
+            raise ValueError(
+                "moment comparison requires both retained families to share "
+                "the declared ordered point axis"
+            )
         axis_index = {point: index for index, point in enumerate(self.points)}
+        previous_indices: tuple[int, ...] | None = None
         seen_subsets: set[tuple[str, ...]] = set()
-        sparse_left: dict[tuple[str, ...], int] = {}
-        sparse_right: dict[tuple[str, ...], int] = {}
-        left_subtotal = 0
-        right_subtotal = 0
         for difference in self.differences:
             subset = difference.subset
             if len(subset) != self.order:
@@ -390,42 +349,42 @@ class IncidenceMomentComparison(StrictModel):
             if subset in seen_subsets:
                 raise ValueError("difference subsets must be unique")
             seen_subsets.add(subset)
-            sparse_left[subset] = difference.left_multiplicity
-            sparse_right[subset] = difference.right_multiplicity
-            left_subtotal += difference.left_multiplicity
-            right_subtotal += difference.right_multiplicity
-        if left_subtotal > self.left_total or right_subtotal > self.right_total:
-            raise ValueError(
-                "sparse multiplicity subtotals must not exceed their declared totals"
+            if previous_indices is not None and indices <= previous_indices:
+                raise ValueError(
+                    "difference rows must follow point-axis combination order"
+                )
+            previous_indices = indices
+        _require_containment_profile_admitted(self.left, self.order)
+        _require_containment_profile_admitted(self.right, self.order)
+        left_profile = _containment_profile_data(self.left, self.order)
+        right_profile = _containment_profile_data(self.right, self.order)
+        expected_differences = tuple(
+            (left_entry[0], left_entry[1], right_entry[1])
+            for left_entry, right_entry in zip(
+                left_profile[0],
+                right_profile[0],
+                strict=True,
             )
-        total_difference = sum(
-            difference.left_multiplicity - difference.right_multiplicity
+            if left_entry[1] != right_entry[1]
+        )
+        actual_differences = tuple(
+            (
+                difference.subset,
+                difference.left_multiplicity,
+                difference.right_multiplicity,
+            )
             for difference in self.differences
         )
-        if self.left_total - self.right_total != total_difference:
+        if actual_differences != expected_differences:
             raise ValueError(
-                "moment totals must equal the sum of sparse multiplicity differences"
+                "moment comparison does not match the retained incidence families"
             )
-        residual = self.left_total - left_subtotal
-        omitted_capacity = (
-            comb(len(self.points), self.order) - len(self.differences)
-        ) * MAX_BLOCKS
-        if residual > omitted_capacity:
+        if self.left_total != left_profile[2] or self.right_total != right_profile[2]:
             raise ValueError(
-                "moment residual totals must not exceed the omitted-subset capacity"
+                "moment totals do not match the retained incidence families"
             )
-        _require_joint_difference_block_budget(
-            sparse_left,
-            self.order,
-            axis_index,
-            residual,
-        )
-        _require_joint_difference_block_budget(
-            sparse_right,
-            self.order,
-            axis_index,
-            residual,
-        )
+        if len(encode_strict_json(self.model_dump(mode="json"))) > MAX_RESULT_BYTES:
+            raise ValueError("moment comparison exceeds the exact output budget")
         return self
 
 

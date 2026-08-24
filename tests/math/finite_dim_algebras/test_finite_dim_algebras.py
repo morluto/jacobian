@@ -133,6 +133,29 @@ def test_moderate_dimension_does_not_enumerate() -> None:
     assert result.center_dimension == n
 
 
+def test_center_admits_derived_dimension_boundary() -> None:
+    """The Theta(n^4) kernel admits up to dimension 128 (measured ~19s)."""
+    from jacobian.math.finite_dim_algebras._models import MAX_DIM
+
+    n, q = 128, 251
+    zero_inner = tuple(0 for _ in range(n))
+    mult = tuple(tuple(zero_inner for _ in range(n)) for _ in range(n))
+    struct = StructureConstants(dimension=n, field_order=q, multiplication=mult)
+    request = CenterRequest(algebra=struct)
+    assert request.algebra.dimension == 128 == MAX_DIM
+
+
+def test_center_rejects_above_derived_dimension_boundary() -> None:
+    """Dimensions above the measured envelope are rejected at admission."""
+    from pydantic import ValidationError
+
+    n, q = 129, 251
+    with pytest.raises(ValidationError):
+        CenterRequest(
+            algebra=StructureConstants(dimension=n, field_order=q, multiplication=())
+        )
+
+
 # --- Model validation -----------------------------------------------------
 
 

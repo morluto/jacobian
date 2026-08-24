@@ -1,5 +1,7 @@
 """Tests for nonlinear binary code operations."""
 
+import pytest
+
 from jacobian.math.code_nonlinear._models import (
     ConstantWeightProfileRequest,
     ConstantWeightRequest,
@@ -119,3 +121,15 @@ class TestConstantWeight:
         result = compute_constant_weight(ConstantWeightRequest(length=4, weight=2))
         assert result.count == 6  # C(4,2) = 6
         assert len(result.codewords) == 6
+
+    def test_binomial_output_bound_rejects_infeasible_enumeration(self) -> None:
+        """C(64,32) ~ 1.8e18 words cannot be materialized; admission must reject."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="4096-word result bound"):
+            ConstantWeightRequest(length=64, weight=32)
+
+    def test_binomial_output_bound_admits_small_spaces(self) -> None:
+        """C(12,6) = 924 <= MAX_CODEWORDS is admitted at the length-64 envelope."""
+        result = compute_constant_weight(ConstantWeightRequest(length=12, weight=6))
+        assert result.count == 924

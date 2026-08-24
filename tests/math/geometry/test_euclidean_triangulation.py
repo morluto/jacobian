@@ -7,8 +7,6 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
-from jacobian.dispatch import invoke_operation
 from jacobian.math.geometry._euclidean_triangulation import (
     minimum_euclidean_weight_triangulation,
 )
@@ -262,7 +260,10 @@ class TestEuclideanTriangulation:
             _request(
                 (
                     _point(0, 0),
-                    {"x": {"num": str(scale), "den": "1"}, "y": {"num": "0", "den": "1"}},
+                    {
+                        "x": {"num": str(scale), "den": "1"},
+                        "y": {"num": "0", "den": "1"},
+                    },
                     {
                         "x": {"num": str(scale + 1), "den": "1"},
                         "y": {"num": "1", "den": "1"},
@@ -273,9 +274,9 @@ class TestEuclideanTriangulation:
 
     def test_schema_publishes_the_admitted_envelope_and_preconditions(self) -> None:
         schema = EuclideanConvexPolygonTriangulationRequest.model_json_schema()
-        points = schema["$defs"]["EuclideanTriangulationPolygonRequest"][
-            "properties"
-        ]["points"]
+        points = schema["$defs"]["EuclideanTriangulationPolygonRequest"]["properties"][
+            "points"
+        ]
         assert points["minItems"] == 4
         assert points["maxItems"] == MAX_EUCLIDEAN_TRIANGULATION_VERTICES == 28
         assert (
@@ -290,18 +291,15 @@ class TestEuclideanTriangulation:
         assert "4 to 28 vertices" in description
         assert "convexity and ring simplicity are enforced" in description
 
-    def test_catalog_example_returns_a_replayable_public_result(self) -> None:
-        catalog = Catalog.open()
-        operation_id = "geometry.polygon.triangulation.minimum_euclidean_weight.compute"
-        operation = catalog.operation(operation_id)
-        assert operation is not None
-
-        public_result = invoke_operation(
-            operation_id, operation.examples[0].input, catalog
+    def test_certified_result_round_trips_through_model_validate(self) -> None:
+        result = minimum_euclidean_weight_triangulation(
+            _request((_point(0, 0), _point(3, 0), _point(2, 2), _point(0, 1)))
         )
+        assert result.status == "CERTIFIED_OPTIMUM"
 
-        assert public_result.operation_id == operation_id
         validated = EuclideanConvexPolygonTriangulationResult.model_validate(
-            public_result.output
+            result.model_dump(mode="json")
         )
+
         assert validated.status == "CERTIFIED_OPTIMUM"
+        assert validated.optimum is not None

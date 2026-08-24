@@ -1112,9 +1112,7 @@ class EuclideanConvexPolygonTriangulationResult(StrictModel):
             _replay_euclidean_triangulation(self, points)
         else:
             assert self.unresolved_comparison is not None
-            _replay_euclidean_unresolved_comparison(
-                self.unresolved_comparison, points
-            )
+            _replay_euclidean_unresolved_comparison(self.unresolved_comparison, points)
         return self
 
 
@@ -1277,9 +1275,7 @@ def _replay_euclidean_unresolved_comparison(
                     chosen_pivot = pivot
             assert chosen is not None and chosen_pivot is not None
             optimum[state_start, state_end] = chosen
-    raise ValueError(
-        "unresolved comparison must occur during the replayed recurrence"
-    )
+    raise ValueError("unresolved comparison must occur during the replayed recurrence")
 
 
 # ---------------------------------------------------------------------------

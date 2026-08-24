@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import comb
 
 from jacobian.math.code_nonlinear.values import (
     MAX_EXPLICIT_CODE_BITS,
@@ -213,18 +212,33 @@ def constant_weight_result_wire_upper_bound(length: int, cardinality: int) -> in
     return 64 + words_bytes + 3 * (_digits(length) + _digits(cardinality))
 
 
+def _binomial_within_entry_budget(length: int, weight: int) -> int:
+    # Iterating the multiplicative identity stops at the first step where
+    # ``length * cardinality`` exceeds the entry bound.  After symmetry
+    # reduction every step multiplies by at least two, so a rejected request
+    # stops within logarithmically many steps instead of computing the full
+    # central coefficient, and every reported count stays small enough to
+    # interpolate under Python's integer-to-decimal digit limit.
+    reduced_weight = min(weight, length - weight)
+    cardinality = 1
+    for step in range(reduced_weight + 1):
+        if step:
+            cardinality = cardinality * (length - reduced_weight + step) // step
+        entries = length * cardinality
+        if entries > MAX_GENERATED_CODE_ENTRIES:
+            raise ValueError(
+                "constant-weight generation materializes "
+                f"{entries} entries ({length} coordinates * {cardinality} words), "
+                f"exceeding the {MAX_GENERATED_CODE_ENTRIES}-entry bound"
+            )
+    return cardinality
+
+
 def require_constant_weight_admission(length: int, weight: int) -> int:
     """Admit the complete weight-``weight`` generation before enumerating."""
     if not 0 <= weight <= length:
         raise ValueError("weight cannot exceed length")
-    cardinality = comb(length, weight)
-    entries = length * cardinality
-    if entries > MAX_GENERATED_CODE_ENTRIES:
-        raise ValueError(
-            "constant-weight generation materializes "
-            f"{entries} entries ({length} coordinates * {cardinality} words), "
-            f"exceeding the {MAX_GENERATED_CODE_ENTRIES}-entry bound"
-        )
+    cardinality = _binomial_within_entry_budget(length, weight)
     wire_bytes = constant_weight_result_wire_upper_bound(length, cardinality)
     if wire_bytes > MAX_CODE_RESULT_BYTES:
         raise ValueError(

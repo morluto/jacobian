@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from math import comb
 from pathlib import Path
 
 import pytest
@@ -12,9 +13,11 @@ from jacobian.canonical import encode_strict_json
 from jacobian.math.code_nonlinear import ExplicitBinaryCode, to_set_system
 from jacobian.math.code_nonlinear._budget import (
     MAX_CODE_RESULT_BYTES,
+    MAX_GENERATED_CODE_ENTRIES,
     MAX_PROFILE_BITSET_CHUNK_WORK,
     MAX_PROFILE_PAIRS,
     PROFILE_PAIR_PASSES,
+    require_constant_weight_admission,
     require_profile_admission,
     source_wire_upper_bound,
 )
@@ -615,6 +618,48 @@ class TestDerivedAdmissionBoundaries:
         with pytest.raises(ValidationError, match="result bound"):
             ToSetSystemRequest(
                 code=_code((1,) * (accepted_length + 1), length=accepted_length + 1)
+            )
+
+    @pytest.mark.parametrize(
+        ("length", "weight", "expected"),
+        [
+            (0, 0, 1),
+            (17, 8, 24_310),
+            (101, 2, 5_050),
+            (101, 99, 5_050),
+        ],
+    )
+    def test_constant_weight_admission_is_exact_within_entry_bound(
+        self, length: int, weight: int, expected: int
+    ) -> None:
+        assert expected == comb(length, weight)
+        cardinality = require_constant_weight_admission(length, weight)
+        assert cardinality == comb(length, weight)
+        assert length * cardinality <= MAX_GENERATED_CODE_ENTRIES
+
+    def test_central_weight_rejection_stops_before_the_full_binomial(self) -> None:
+        weight = MAX_EXPLICIT_CODE_LENGTH // 2
+        with pytest.raises(ValueError, match="entry bound") as excinfo:
+            require_constant_weight_admission(MAX_EXPLICIT_CODE_LENGTH, weight)
+        message = str(excinfo.value)
+        # The thresholded crossing reports small counts instead of computing
+        # the ~524k-bit central coefficient and hitting the integer-to-decimal
+        # digit limit.
+        assert "Exceeds the limit" not in message
+        assert f"{MAX_EXPLICIT_CODE_LENGTH} coordinates * {weight + 1} words" in message
+
+    def test_constant_weight_request_rejects_at_the_immediate_entry_boundary(
+        self,
+    ) -> None:
+        ConstantWeightRequest.model_validate({"length": 101, "weight": 2})
+        with pytest.raises(ValidationError, match="entry bound"):
+            ConstantWeightRequest.model_validate({"length": 102, "weight": 2})
+        with pytest.raises(ValidationError, match="entry bound"):
+            ConstantWeightRequest.model_validate(
+                {
+                    "length": MAX_EXPLICIT_CODE_LENGTH,
+                    "weight": MAX_EXPLICIT_CODE_LENGTH // 2,
+                }
             )
 
 

@@ -413,11 +413,14 @@ def test_input_digit_budget_only_gates_paths_that_expand() -> None:
 
     assert copied == source
     assert vanished == _polynomial(variables, {})
-    assert apply_constant_coefficient_differential_operator(
-        source,
-        _operator(variables, {(0,): 1}),
-        iterations=1,
-    ) == source
+    assert (
+        apply_constant_coefficient_differential_operator(
+            source,
+            _operator(variables, {(0,): 1}),
+            iterations=1,
+        )
+        == source
+    )
     with pytest.raises(ValueError, match="256-digit bound"):
         apply_constant_coefficient_differential_operator(
             source,

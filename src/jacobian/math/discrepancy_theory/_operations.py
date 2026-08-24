@@ -301,6 +301,11 @@ def compute_optimal_discrepancy(
         return _budget_exceeded_result(request.set_system)
     if result.status != 0 or result.x is None:
         return _execution_failed_result(request.set_system)
+    if (
+        result.x.shape != (variable_count,)
+        or not bool(np.all(np.isfinite(result.x)))
+    ):
+        return _execution_failed_result(request.set_system)
 
     raw_assignment = result.x[:n]
     if float(np.max(np.abs(raw_assignment - np.round(raw_assignment)))) > 1e-6:

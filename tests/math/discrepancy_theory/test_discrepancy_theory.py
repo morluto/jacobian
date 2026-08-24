@@ -655,6 +655,53 @@ class TestDiscrepancyOptimum:
         assert result.set_system == req.set_system
         assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == result
 
+    @pytest.mark.parametrize(
+        "malformed_x",
+        [
+            "nan_vector",
+            "partially_nan_vector",
+            "inf_bound",
+            "short_vector",
+            "long_vector",
+        ],
+    )
+    def test_malformed_status_zero_solution_is_execution_failed(
+        self,
+        malformed_x: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A status-zero backend response with NaN, inf, or a wrong-shape
+        vector must become typed EXECUTION_FAILED; NaN comparisons evaluate
+        false and would otherwise accept garbage as a proven optimum."""
+        from types import SimpleNamespace
+
+        import numpy as np
+
+        n = 2
+        fixtures = {
+            "nan_vector": np.array([np.nan] * (n + 1)),
+            "partially_nan_vector": np.array([0.0, np.nan, 1.0]),
+            "inf_bound": np.array([0.0, 1.0, np.inf]),
+            "short_vector": np.ones(n),
+            "long_vector": np.ones(n + 2),
+        }
+
+        def fake_milp(**_kwargs: object) -> SimpleNamespace:
+            return SimpleNamespace(status=0, x=fixtures[malformed_x])
+
+        monkeypatch.setattr("scipy.optimize.milp", fake_milp)
+        req = DiscrepancyOptimumRequest(
+            set_system=FiniteSetSystem(ground_set_size=n, sets=((0, 1),)),
+        )
+
+        result = compute_optimal_discrepancy(req)
+
+        assert result.status == "EXECUTION_FAILED"
+        assert result.optimal_coloring == ()
+        assert result.optimal_discrepancy is None
+        assert result.set_system == req.set_system
+        assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == result
+
     def test_execution_failed_result_carries_no_claim(self):
         from pydantic import ValidationError
 

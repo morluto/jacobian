@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -66,6 +67,11 @@ def _validate_graph_symmetry_bounds_and_colors(
     generator_ids = tuple(generator.generator_id for generator in generators)
     if len(set(generator_ids)) != len(generator_ids):
         raise ValueError("graph symmetry generator identifiers must be unique")
+    if any(
+        not unicodedata.is_normalized("NFC", generator_id)
+        for generator_id in generator_ids
+    ):
+        raise ValueError("graph symmetry generator identifiers must use Unicode NFC")
 
     if vertex_colors and tuple(item.vertex for item in vertex_colors) != vertices:
         raise ValueError(
@@ -73,6 +79,10 @@ def _validate_graph_symmetry_bounds_and_colors(
         )
     if edge_colors and tuple(item.edge for item in edge_colors) != edges:
         raise ValueError("edge colors must cover edges in the graph's declared order")
+    if any(not unicodedata.is_normalized("NFC", item.color) for item in vertex_colors):
+        raise ValueError("graph symmetry vertex colors must use Unicode NFC")
+    if any(not unicodedata.is_normalized("NFC", item.color) for item in edge_colors):
+        raise ValueError("graph symmetry edge colors must use Unicode NFC")
 
 
 def _validate_automorphism_generator(
@@ -111,7 +121,7 @@ def _validate_automorphism_generator(
 
 
 _RESULT_ENVELOPE_RESERVE_BYTES = 2_048
-_ORBIT_STRUCTURE_WIRE_BYTES = 96
+_ORBIT_STRUCTURE_WIRE_BYTES = 64
 
 
 def _estimate_orbit_result_wire_bytes(request: GraphSymmetryOrbitRequest) -> int:
@@ -120,10 +130,18 @@ def _estimate_orbit_result_wire_bytes(request: GraphSymmetryOrbitRequest) -> int
     The result echoes its complete declared source action and repeats every
     vertex label once (the ``vertices`` field plus the vertex-orbit members)
     and every canonical edge once (the ``edges`` field plus the edge-orbit
-    members) beyond that echo. The bound charges that repetition plus the
-    worst-case partition shape - at most one orbit per vertex or edge, each
-    with bounded structure and one representative - and the envelope reserve,
-    so every accepted request serializes inside the canonical output limit.
+    members) beyond that echo. Orbit representatives are drawn from those
+    same declared labels and pairs, so all three repetitions are bounded by
+    the exact per-label/pair totals rather than any single maximum. Every
+    retained string is Unicode NFC - vertices through the canonical graph
+    value, generator identifiers and colors through request admission - so
+    these strict-JSON measurements equal their canonicalized sizes. The
+    bound also charges the worst-case partition shape, at most one orbit per
+    declared vertex or edge whose fixed object wire cost is at most 51 bytes
+    plus one member separator each together with the top-level field
+    repetitions, each retained generator identifier, and the envelope
+    reserve, so every accepted request serializes inside the canonical
+    output limit.
     """
     vertex_label_bytes = [
         len(encode_strict_json(vertex)) for vertex in request.graph.vertices
@@ -132,15 +150,16 @@ def _estimate_orbit_result_wire_bytes(request: GraphSymmetryOrbitRequest) -> int
         len(encode_strict_json(left)) + len(encode_strict_json(right)) + 3
         for left, right in request.graph.edges
     ]
-    max_label_bytes = max(vertex_label_bytes, default=0)
     return (
         len(encode_strict_json(request.model_dump(mode="json")))
-        + 2 * sum(vertex_label_bytes)
-        + 2 * sum(edge_pair_bytes)
-        + (len(vertex_label_bytes) + len(edge_pair_bytes)) * _ORBIT_STRUCTURE_WIRE_BYTES
-        + len(vertex_label_bytes) * max_label_bytes
-        + len(edge_pair_bytes) * max(edge_pair_bytes, default=0)
-        + len(request.generators) * (max_label_bytes + 4)
+        + 3 * sum(vertex_label_bytes)
+        + 3 * sum(edge_pair_bytes)
+        + (len(vertex_label_bytes) + len(edge_pair_bytes))
+        * _ORBIT_STRUCTURE_WIRE_BYTES
+        + sum(
+            len(encode_strict_json(generator.generator_id)) + 4
+            for generator in request.generators
+        )
         + _RESULT_ENVELOPE_RESERVE_BYTES
     )
 

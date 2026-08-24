@@ -123,6 +123,93 @@ def test_graph_symmetry_admission_estimate_bounds_actual_result_wire() -> None:
     assert _estimate_orbit_result_wire_bytes(request) >= actual
 
 
+def test_graph_symmetry_request_admits_result_near_output_limit() -> None:
+    """A maximal graph whose exact representative totals fit must be admitted.
+
+    Charging every orbit representative with the largest label or edge pair
+    rejected this request even though its canonical result fits the output
+    limit, so the boundary case pins the sums-based bound.
+    """
+
+    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+
+    request = GraphSymmetryOrbitRequest.model_validate(_wide_orbit_payload(14))
+    result = _generator_orbits(request)
+
+    encoded = canonicalize_json(result.model_dump(mode="json"))
+    assert len(encoded) <= CanonicalLimits().max_output_bytes
+    assert len(encoded) <= _estimate_orbit_result_wire_bytes(request)
+
+
+def test_graph_symmetry_estimate_bounds_heterogeneous_representatives() -> None:
+    """One large label among tiny ones must not inflate the estimate by a maximum."""
+
+    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+
+    vertices = ["h" * 64] + [f"t{index:03d}" for index in range(255)]
+    ring = vertices[1:]
+    successor = dict(zip(ring, [*ring[1:], ring[0]], strict=True))
+    edges = sorted(
+        [a, b] if a < b else [b, a] for a, b in successor.items()
+    )
+    mapping = {"h" * 64: "h" * 64}
+    mapping.update(successor)
+    payload = {
+        "graph": {"vertices": vertices, "edges": edges},
+        "generators": [{"generator_id": "rotation", "mapping": mapping}],
+    }
+    request = GraphSymmetryOrbitRequest.model_validate(payload)
+    result = _generator_orbits(request)
+
+    actual = len(canonicalize_json(result.model_dump(mode="json")))
+    estimate = _estimate_orbit_result_wire_bytes(request)
+    assert actual <= estimate <= CanonicalLimits().max_output_bytes
+
+
+def test_graph_symmetry_request_requires_nfc_generator_identifiers() -> None:
+    payload = _path_request()
+    payload["generators"][0]["generator_id"] = "refle\u0301ction"  # type: ignore[index]
+
+    with pytest.raises(ValidationError, match="must use Unicode NFC"):
+        GraphSymmetryOrbitRequest.model_validate(payload)
+
+
+def test_graph_symmetry_request_requires_nfc_vertex_colors() -> None:
+    payload = _path_request()
+    payload["vertex_colors"][0]["color"] = "\u0344endpoint"  # type: ignore[index]
+
+    with pytest.raises(ValidationError, match="vertex colors must use Unicode NFC"):
+        GraphSymmetryOrbitRequest.model_validate(payload)
+
+
+def test_graph_symmetry_request_requires_nfc_edge_colors() -> None:
+    payload = _path_request()
+    del payload["vertex_colors"]
+    payload["edge_colors"] = [
+        {"edge": ["a", "b"], "color": "\u0344" * 128},
+        {"edge": ["b", "c"], "color": "\u0344" * 128},
+    ]
+
+    with pytest.raises(ValidationError, match="edge colors must use Unicode NFC"):
+        GraphSymmetryOrbitRequest.model_validate(payload)
+
+
+def test_graph_symmetry_nfc_request_wire_matches_canonicalized_result() -> None:
+    """NFC-retained strings make the strict measurements canonical-exact."""
+
+    from jacobian.math.graphs.symmetry._operations import _generator_orbits
+
+    request = GraphSymmetryOrbitRequest.model_validate(_path_request())
+    result = _generator_orbits(request)
+
+    dumped = result.model_dump(mode="json")
+    assert len(encode_strict_json(dumped)) == len(canonicalize_json(dumped))
+    assert (
+        _estimate_orbit_result_wire_bytes(request)
+        >= len(canonicalize_json(dumped))
+    )
+
+
 def test_graph_symmetry_result_rejects_incomplete_orbit_partition() -> None:
     with pytest.raises(ValidationError, match="complete canonical vertex partition"):
         GraphSymmetryOrbitResult(

@@ -357,8 +357,7 @@ def test_source_bound_result_versions_track_wire_shape() -> None:
     from jacobian.math.matrices.rational_linear._tools import TOOLS as LINEAR_TOOLS
 
     versions = {
-        tool.operation_id: tool.version
-        for tool in (*MATRIX_TOOLS, *LINEAR_TOOLS)
+        tool.operation_id: tool.version for tool in (*MATRIX_TOOLS, *LINEAR_TOOLS)
     }
 
     assert versions["matrix.rational_linear_system.solve"] == "3"

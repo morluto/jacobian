@@ -146,7 +146,10 @@ def test_producer_replays_once_without_a_third_backend_call(
     calls = 0
 
     def backend(
-        source: RationalPolynomialIdeal, budget: object
+        source: RationalPolynomialIdeal,
+        budget: object,
+        *,
+        wall_seconds: float | None = None,
     ) -> SingularMinimalPrimesResult:
         nonlocal calls
         calls += 1
@@ -175,7 +178,10 @@ def test_nonreproducible_producer_output_is_a_typed_error(
     calls = 0
 
     def backend(
-        source: RationalPolynomialIdeal, budget: object
+        source: RationalPolynomialIdeal,
+        budget: object,
+        *,
+        wall_seconds: float | None = None,
     ) -> SingularMinimalPrimesResult:
         nonlocal calls
         calls += 1
@@ -194,6 +200,88 @@ def test_nonreproducible_producer_output_is_a_typed_error(
 
     assert result.outcome == "ERROR"
     assert result.components is None
+
+
+class _Clock:
+    """Deterministic ``time.monotonic`` stand-in with preprogrammed readings."""
+
+    def __init__(self, *readings: float) -> None:
+        self._readings = list(readings)
+
+    def monotonic(self) -> float:
+        return self._readings.pop(0)
+
+
+def test_replay_is_charged_only_the_remaining_wall_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = _axes_request()
+    components = _axes_components()
+    charged: list[float | None] = []
+
+    def backend(
+        source: RationalPolynomialIdeal,
+        budget: object,
+        *,
+        wall_seconds: float | None = None,
+    ) -> SingularMinimalPrimesResult:
+        assert source == request.ideal
+        charged.append(wall_seconds)
+        return SingularMinimalPrimesResult(
+            outcome="COMPUTED", components=components, backend_version="4.4.0"
+        )
+
+    monkeypatch.setattr(
+        "jacobian.math.commutative_algebra_ops._operations.run_singular_minimal_primes",
+        backend,
+    )
+    monkeypatch.setattr(
+        "jacobian.math.commutative_algebra_ops._operations.time",
+        _Clock(100.0, 103.25),
+    )
+
+    result = compute_ideal_minimal_primes(request)
+
+    assert result.outcome == "COMPUTED"
+    assert charged[0] is None
+    assert charged[1] == pytest.approx(10.0 - 3.25)
+
+
+def test_exhausted_deadline_is_a_typed_timeout_without_a_replay_launch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = _axes_request()
+    launches = 0
+
+    def backend(
+        source: RationalPolynomialIdeal,
+        budget: object,
+        *,
+        wall_seconds: float | None = None,
+    ) -> SingularMinimalPrimesResult:
+        nonlocal launches
+        launches += 1
+        return SingularMinimalPrimesResult(
+            outcome="COMPUTED",
+            components=_axes_components(),
+            backend_version="4.4.0",
+        )
+
+    monkeypatch.setattr(
+        "jacobian.math.commutative_algebra_ops._operations.run_singular_minimal_primes",
+        backend,
+    )
+    monkeypatch.setattr(
+        "jacobian.math.commutative_algebra_ops._operations.time",
+        _Clock(100.0, 110.5),
+    )
+
+    result = compute_ideal_minimal_primes(request)
+
+    assert launches == 1
+    assert result.outcome == "TIMEOUT"
+    assert result.components is None
+    assert result.detail is not None
 
 
 @pytest.mark.skipif(

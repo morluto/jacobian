@@ -21,6 +21,7 @@ from jacobian.math.polynomials.values import (
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
+from jacobian.process import BoundedProcessResult, ProcessResourceLimits
 
 
 def _ideal() -> RationalPolynomialIdeal:
@@ -124,6 +125,69 @@ def test_minimal_prime_family_protocol_is_typed_and_canonically_ordered(
     assert tuple(
         component.model_dump_json() for component in result.components
     ) == tuple(sorted(component.model_dump_json() for component in result.components))
+
+
+def test_narrowed_replay_allowance_reaches_the_bounded_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: dict[str, object] = {}
+
+    def bounded_process(
+        command: object,
+        *,
+        timeout_seconds: float,
+        resource_limits: ProcessResourceLimits | None = None,
+        **kwargs: object,
+    ) -> BoundedProcessResult:
+        seen["timeout_seconds"] = timeout_seconds
+        seen["cpu_seconds"] = (
+            resource_limits.cpu_seconds if resource_limits is not None else None
+        )
+        return BoundedProcessResult(
+            returncode=0,
+            stdout=b"",
+            stderr=b"",
+            stdout_exceeded=False,
+            stderr_exceeded=False,
+            timed_out=True,
+            cancelled=False,
+        )
+
+    monkeypatch.setattr(
+        "jacobian.math.commutative_algebra_ops._singular.run_bounded_process",
+        bounded_process,
+    )
+    monkeypatch.setattr(
+        "jacobian.math.commutative_algebra_ops._singular.shutil.which",
+        lambda name: "/usr/bin/Singular" if name == "Singular" else None,
+    )
+
+    result = run_singular_minimal_primes(
+        _ideal(), IdealComputationBudget(wall_seconds=60), wall_seconds=6.75
+    )
+
+    assert result.outcome == "TIMEOUT"
+    assert seen["timeout_seconds"] == 6.75
+    assert seen["cpu_seconds"] == 6
+
+
+def test_exhausted_replay_allowance_times_out_without_launching_singular(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def forbidden(command: object, **kwargs: object) -> BoundedProcessResult:
+        raise AssertionError("Singular must not launch on an exhausted allowance")
+
+    monkeypatch.setattr(
+        "jacobian.math.commutative_algebra_ops._singular.run_bounded_process",
+        forbidden,
+    )
+
+    result = run_singular_minimal_primes(
+        _ideal(), IdealComputationBudget(), wall_seconds=-0.5
+    )
+
+    assert result.outcome == "TIMEOUT"
+    assert result.components is None
 
 
 def test_caller_cannot_narrow_the_exact_result_contract() -> None:

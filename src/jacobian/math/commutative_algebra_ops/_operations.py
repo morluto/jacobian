@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 
 import sympy
@@ -422,9 +423,13 @@ def compute_ideal_minimal_primes(
 
     The process adapter canonicalizes and orders each returned reduced standard
     basis.  Constructing the typed computed result then replays the whole
-    ``minAssGTZE`` calculation from the retained source under the same bound.
+    ``minAssGTZE`` calculation from the retained source under ONE
+    operation-level deadline: the replay subprocess receives only the wall
+    allowance remaining after the producing pass, so one request never
+    exceeds its declared wall-time budget.
     """
 
+    started = time.monotonic()
     backend = run_singular_minimal_primes(request.ideal, request.resource_budget)
     if backend.outcome != "COMPUTED":
         return IdealMinimalPrimesResult(
@@ -435,7 +440,26 @@ def compute_ideal_minimal_primes(
             detail=backend.detail,
         )
 
-    replay = run_singular_minimal_primes(request.ideal, request.resource_budget)
+    remaining = float(request.resource_budget.wall_seconds) - (
+        time.monotonic() - started
+    )
+    if remaining <= 0:
+        return IdealMinimalPrimesResult(
+            request=request,
+            outcome="TIMEOUT",
+            components=None,
+            backend_version=None,
+            detail=(
+                "The minimal-prime source replay did not complete within "
+                "the declared backend budget."
+            ),
+        )
+
+    replay = run_singular_minimal_primes(
+        request.ideal,
+        request.resource_budget,
+        wall_seconds=remaining,
+    )
     if replay.outcome != "COMPUTED":
         return IdealMinimalPrimesResult(
             request=request,

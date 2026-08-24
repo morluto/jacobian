@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 import shutil
 import tempfile
@@ -513,9 +514,25 @@ def run_singular_ideal_operation(
 def run_singular_minimal_primes(
     source_ideal: RationalPolynomialIdeal,
     budget: IdealComputationBudget,
+    *,
+    wall_seconds: float | None = None,
 ) -> SingularMinimalPrimesResult:
-    """Compute minimal primes over ``QQ`` in one bounded Singular process."""
+    """Compute minimal primes over ``QQ`` in one bounded Singular process.
 
+    ``wall_seconds`` charges this call to a caller-owned operation deadline
+    by narrowing the enforced allowance below ``budget.wall_seconds``; an
+    exhausted or nonpositive allowance returns the typed TIMEOUT outcome
+    without launching Singular.
+    """
+
+    allowance = (
+        float(budget.wall_seconds) if wall_seconds is None else float(wall_seconds)
+    )
+    if not math.isfinite(allowance) or allowance <= 0:
+        return SingularMinimalPrimesResult(
+            outcome="TIMEOUT",
+            detail="Singular exceeded the declared wall-time limit.",
+        )
     resolved = shutil.which("Singular")
     if resolved is None:
         return SingularMinimalPrimesResult(
@@ -531,12 +548,12 @@ def run_singular_minimal_primes(
             completed = run_bounded_process(
                 [resolved, "-q"],
                 input_bytes=_minimal_primes_script(source_ideal),
-                timeout_seconds=float(budget.wall_seconds),
+                timeout_seconds=allowance,
                 environment=worker_environment(locale="C.UTF-8"),
                 stdout_limit=_STDOUT_LIMIT,
                 stderr_limit=_STDERR_LIMIT,
                 resource_limits=ProcessResourceLimits(
-                    cpu_seconds=budget.wall_seconds,
+                    cpu_seconds=max(1, int(allowance)),
                     address_space_bytes=1024 * 1024 * 1024,
                     file_size_bytes=1024 * 1024,
                 ),

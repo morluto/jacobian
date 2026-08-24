@@ -2,19 +2,23 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 from fractions import Fraction
 
 import pytest
+import sympy
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.math.polynomials.maps import RationalPolynomialMap, _singular
+from jacobian.math import _singular as shared_singular
+from jacobian.math.polynomials.maps import RationalPolynomialMap, _operations, _singular
 from jacobian.math.polynomials.maps._models import (
     GenericDegreeRequest,
     GenericDegreeResult,
 )
 from jacobian.math.polynomials.maps._operations import compute_generic_degree
+from jacobian.math.polynomials.maps._singular import SingularGenericFiberResult
 from jacobian.math.polynomials.maps._tools import TOOLS
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
@@ -81,12 +85,24 @@ def test_operation_is_one_admitted_atomic_generic_fiber_computation() -> None:
     assert "96 aggregate terms" in description
     assert "65536 encoded bytes" in description
     assert "Bezout" in description
+    assert set(
+        GenericDegreeRequest.model_json_schema()["$defs"][
+            "GenericDegreeComputationBudget"
+        ]["properties"]
+    ) == {"wall_seconds"}
+    assert {"method", "backend_version"}.isdisjoint(
+        GenericDegreeResult.model_json_schema()["properties"]
+    )
+    assert "singular" not in json.dumps(
+        GenericDegreeRequest.model_json_schema()
+    ).lower()
+    assert "singular" not in operation.description.lower()
 
 
 def test_missing_backend_is_operational_unavailability(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(_singular.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(shared_singular.shutil, "which", lambda _name: None)
 
     result = _compute(_map(("x",), {(1,): 1}))
 
@@ -155,6 +171,20 @@ def test_request_accepts_the_exact_degree_and_bezout_boundary() -> None:
     assert request.polynomial_map.input_variables == ("x", "y", "z")
 
 
+def test_every_result_outcome_revalidates_the_source_envelope() -> None:
+    outside_operation_domain = _map(
+        ("w", "x", "y", "z"),
+        {(1, 0, 0, 0): 1},
+    )
+
+    with pytest.raises(ValidationError, match="3-variable"):
+        GenericDegreeResult(
+            outcome="ERROR",
+            source=outside_operation_domain,
+            detail="synthetic execution failure",
+        )
+
+
 @requires_singular
 @pytest.mark.requires_backend("singular")
 @pytest.mark.parametrize(
@@ -184,6 +214,25 @@ def test_known_generic_degrees(
     assert result.degree == degree
     assert result.evidence is not None
     assert len(result.evidence.standard_monomials) == degree
+
+
+@requires_singular
+@pytest.mark.requires_backend("singular")
+def test_accepted_triangular_map_returns_replayable_degree_128() -> None:
+    result = _compute(
+        _map(
+            ("x", "y", "z"),
+            {(8, 0, 0): 1},
+            {(1, 0, 0): 1, (0, 8, 0): 1},
+            {(0, 1, 0): 1, (0, 0, 2): 1},
+        )
+    )
+
+    assert result.outcome == "GENERICALLY_FINITE"
+    assert result.degree == 128
+    assert result.evidence is not None
+    assert len(result.evidence.standard_monomials) == 128
+    assert GenericDegreeResult.model_validate_json(result.model_dump_json()) == result
 
 
 @requires_singular
@@ -279,9 +328,55 @@ def quadratic_result() -> GenericDegreeResult:
 def test_branch_specialization_does_not_replace_generic_degree(
     quadratic_result: GenericDegreeResult,
 ) -> None:
-    # Over target x-coordinate 0, x^2=0 has one distinct point but length two.
+    x, y = sympy.symbols("x y")
+    special_fiber = sympy.groebner(
+        [x**2, y],
+        x,
+        y,
+        order="lex",
+        domain=sympy.QQ,
+    )
+    standard_monomials = (sympy.Integer(1), x)
+
+    assert {polynomial.as_expr() for polynomial in special_fiber.polys} == {x**2, y}
+    assert tuple(
+        special_fiber.reduce(monomial)[1] for monomial in standard_monomials
+    ) == standard_monomials
+    assert special_fiber.reduce(x**2)[1] == 0
+    assert sympy.Poly(x**2, x, domain=sympy.QQ).sqf_part().degree() == 1
+    assert len(standard_monomials) == 2
     assert quadratic_result.outcome == "GENERICALLY_FINITE"
     assert quadratic_result.degree == 2
+
+
+@pytest.mark.parametrize(
+    "backend",
+    (
+        SingularGenericFiberResult(outcome="COMPUTED", backend_version="4.4.1"),
+        SingularGenericFiberResult(
+            outcome="COMPUTED",
+            certificate=None,
+            dimension=0,
+            vector_dimension=None,
+            backend_version="4.4.1",
+        ),
+    ),
+)
+def test_malformed_computed_backend_state_is_a_typed_error(
+    backend: SingularGenericFiberResult,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        _operations,
+        "run_singular_generic_fiber",
+        lambda *_args: backend,
+    )
+
+    result = _compute(_map(("x",), {(1,): 1}))
+
+    assert result.outcome == "ERROR"
+    assert result.evidence is None
+    assert result.degree is None
 
 
 def test_result_round_trip_preserves_axes_and_evidence(

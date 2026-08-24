@@ -3,17 +3,29 @@
 from __future__ import annotations
 
 import re
-import shutil
-import tempfile
 from dataclasses import dataclass
 from fractions import Fraction
-from itertools import product
-from pathlib import Path
 from typing import Literal
 
 from jacobian._exact import CanonicalRational
+from jacobian.math._singular import (
+    SingularProtocolReader,
+    UnsupportedSingularVersionError,
+    format_singular_version,
+    read_singular_version,
+    run_bounded_singular,
+    singular_version_preamble,
+)
+from jacobian.math.polynomials.maps._generic_degree import (
+    GenericFiberReplayLimitError,
+    enumerate_standard_monomials,
+)
 from jacobian.math.polynomials.maps._models import (
+    MAX_GENERIC_FIBER_BASIS_POLYNOMIALS,
+    MAX_GENERIC_FIBER_CERTIFICATE_SOURCE_EXPONENT,
+    MAX_GENERIC_FIBER_CERTIFICATE_TERMS,
     MAX_GENERIC_FIBER_COEFFICIENT_TERMS,
+    MAX_GENERIC_FIBER_POLYNOMIAL_TERMS,
     GenericDegreeComputationBudget,
     GenericFiberCertificate,
     GenericFiberPolynomial,
@@ -26,22 +38,17 @@ from jacobian.math.polynomials.values import (
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
-from jacobian.process import (
-    ProcessPlatformTools,
-    ProcessResourceLimits,
-    run_bounded_process,
-    worker_environment,
-)
 
 _GENERIC_FIBER_PROTOCOL_HEADER = "JACOBIAN_SINGULAR_GENERIC_FIBER_V1"
-_SUPPORTED_VERSION_MIN = 44000
-_SUPPORTED_VERSION_MAX = 45000
 _PARAMETER_FACTOR = re.compile(r"^jtp([1-9][0-9]*)(?:\^([1-9][0-9]*))?$")
-_STDOUT_LIMIT = 512 * 1024
-_STDERR_LIMIT = 64 * 1024
 
 SingularOutcome = Literal[
-    "COMPUTED", "UNAVAILABLE", "TIMEOUT", "LIMIT_EXCEEDED", "ERROR"
+    "COMPUTED",
+    "UNAVAILABLE",
+    "TIMEOUT",
+    "CANCELLED",
+    "LIMIT_EXCEEDED",
+    "ERROR",
 ]
 
 
@@ -57,26 +64,6 @@ class SingularGenericFiberResult:
     vector_dimension: int | None = None
     backend_version: str | None = None
     detail: str | None = None
-
-
-@dataclass(slots=True)
-class _ProtocolReader:
-    lines: list[str]
-    cursor: int = 0
-
-    def pop(self) -> str:
-        if self.cursor >= len(self.lines):
-            raise ValueError("Singular output ended unexpectedly")
-        line = self.lines[self.cursor]
-        self.cursor += 1
-        return line
-
-    def expect(self, expected: str) -> None:
-        if self.pop() != expected:
-            raise ValueError(f"Singular output is missing {expected!r}")
-
-    def finished(self) -> bool:
-        return self.cursor == len(self.lines)
 
 
 def _singular_map_polynomial(
@@ -123,6 +110,7 @@ def _generic_fiber_script(polynomial_map: RationalPolynomialMap) -> bytes:
     )
     source = "\n".join(
         [
+            *singular_version_preamble(_GENERIC_FIBER_PROTOCOL_HEADER),
             "option(redSB);",
             f"ring jacobian_ring=(0,{target_parameters}),({source_variables}),lp;",
             f"ideal jacobian_source={generators};",
@@ -167,8 +155,6 @@ def _generic_fiber_script(polynomial_map: RationalPolynomialMap) -> bytes:
             "  }",
             '  print("END_POLYNOMIAL");',
             "}",
-            f'print("{_GENERIC_FIBER_PROTOCOL_HEADER}");',
-            'system("version");',
             "print(jacobian_dimension);",
             "print(jacobian_vector_dimension);",
             "print(size(jacobian_basis));",
@@ -336,12 +322,18 @@ def _parse_source_exponents(text: str, source_count: int) -> tuple[int, ...]:
         re.fullmatch(r"0|[1-9][0-9]*", part) is None for part in parts
     ):
         raise ValueError("Singular monomial does not match the declared source ring")
-    if any(len(part) > 2 for part in parts):
+    if any(
+        len(part) > len(str(MAX_GENERIC_FIBER_CERTIFICATE_SOURCE_EXPONENT))
+        for part in parts
+    ):
         raise _ResultLimitExceededError(
             "Singular source exponent exceeds the exact-result limit"
         )
     exponents = tuple(int(part) for part in parts)
-    if any(exponent > 64 for exponent in exponents):
+    if any(
+        exponent > MAX_GENERIC_FIBER_CERTIFICATE_SOURCE_EXPONENT
+        for exponent in exponents
+    ):
         raise _ResultLimitExceededError(
             "Singular source exponent exceeds the exact-result limit"
         )
@@ -349,7 +341,7 @@ def _parse_source_exponents(text: str, source_count: int) -> tuple[int, ...]:
 
 
 def _parse_generic_fiber_polynomial(
-    reader: _ProtocolReader,
+    reader: SingularProtocolReader,
     *,
     source_count: int,
     target_parameters: tuple[str, ...],
@@ -361,7 +353,7 @@ def _parse_generic_fiber_polynomial(
         exponent_text = reader.pop()
         if exponent_text == "END_POLYNOMIAL":
             break
-        if len(terms) == 256:
+        if len(terms) == MAX_GENERIC_FIBER_POLYNOMIAL_TERMS:
             raise _ResultLimitExceededError(
                 "Singular polynomial support exceeds the exact-result limit"
             )
@@ -387,70 +379,42 @@ def _derive_standard_monomials(
     basis: tuple[GenericFiberPolynomial, ...],
     *,
     source_count: int,
-    maximum_standard_monomials: int,
 ) -> tuple[tuple[int, ...], ...] | None:
     if any(not polynomial.terms for polynomial in basis):
         raise ValueError("Singular returned a zero generic-fiber basis polynomial")
     leading_exponents = tuple(
         polynomial.terms[0].source_exponents for polynomial in basis
     )
-    bounds: list[int] = []
-    for variable_index in range(source_count):
-        powers = [
-            exponents[variable_index]
-            for exponents in leading_exponents
-            if exponents[variable_index]
-            and all(
-                exponent == 0
-                for index, exponent in enumerate(exponents)
-                if index != variable_index
-            )
-        ]
-        if not powers:
-            return None
-        bounds.append(min(powers))
-    candidate_count = 1
-    for bound in bounds:
-        candidate_count *= bound
-    if candidate_count > maximum_standard_monomials:
+    if any(len(exponents) != source_count for exponents in leading_exponents):
+        raise ValueError("Singular basis does not match the declared source ring")
+    try:
+        return enumerate_standard_monomials(leading_exponents)
+    except GenericFiberReplayLimitError as exc:
         raise _ResultLimitExceededError(
-            "Singular quotient dimension exceeds the exact-result limit"
-        )
-    return tuple(
-        exponents
-        for exponents in product(*(range(bound) for bound in bounds))
-        if not any(
-            all(a <= b for a, b in zip(leading, exponents, strict=True))
-            for leading in leading_exponents
-        )
-    )
+            "Singular quotient exceeds the exact-result limit"
+        ) from exc
 
 
 def _parse_generic_fiber_metadata(
-    reader: _ProtocolReader,
+    reader: SingularProtocolReader,
     *,
     polynomial_map: RationalPolynomialMap,
-    budget: GenericDegreeComputationBudget,
-) -> tuple[int, int, int, int, int]:
+) -> tuple[int, int, int, int]:
     try:
-        version_number = int(reader.pop())
         dimension = int(reader.pop())
         vector_dimension = int(reader.pop())
         basis_count = int(reader.pop())
         source_row_count = int(reader.pop())
     except ValueError as exc:
         raise ValueError("Singular output has invalid numeric metadata") from exc
-    if not _SUPPORTED_VERSION_MIN <= version_number < _SUPPORTED_VERSION_MAX:
-        raise ValueError("Singular backend version is unsupported")
     source_count = len(polynomial_map.input_variables)
     if not -1 <= dimension <= source_count:
         raise ValueError("Singular returned an impossible generic-fiber dimension")
-    if not 1 <= basis_count <= budget.maximum_basis_polynomials:
+    if not 1 <= basis_count <= MAX_GENERIC_FIBER_BASIS_POLYNOMIALS:
         raise _ResultLimitExceededError("Singular basis exceeds the exact-result limit")
     if source_row_count != len(polynomial_map.output_polynomials):
         raise ValueError("Singular transformation does not match the source ideal")
     return (
-        version_number,
         dimension,
         vector_dimension,
         basis_count,
@@ -464,7 +428,6 @@ def _require_dimension_metadata(
     dimension: int,
     vector_dimension: int,
     source_count: int,
-    maximum_standard_monomials: int,
 ) -> tuple[tuple[tuple[int, ...], ...], int | None]:
     unit_exponents = (0,) * source_count
     is_unit = (
@@ -475,7 +438,6 @@ def _require_dimension_metadata(
     standard_monomials = _derive_standard_monomials(
         basis,
         source_count=source_count,
-        maximum_standard_monomials=maximum_standard_monomials,
     )
     if dimension == -1:
         if not is_unit or vector_dimension != -1:
@@ -519,16 +481,17 @@ def _parse_generic_fiber_output(
     output: bytes,
     *,
     polynomial_map: RationalPolynomialMap,
-    budget: GenericDegreeComputationBudget,
 ) -> tuple[GenericFiberCertificate, int, int | None, str]:
     try:
         text = output.decode("ascii")
     except UnicodeDecodeError as exc:
         raise ValueError("Singular output is not ASCII") from exc
-    reader = _ProtocolReader(text.splitlines())
-    reader.expect(_GENERIC_FIBER_PROTOCOL_HEADER)
+    reader = SingularProtocolReader(text.splitlines())
+    version_number = read_singular_version(
+        reader,
+        protocol_header=_GENERIC_FIBER_PROTOCOL_HEADER,
+    )
     (
-        version_number,
         dimension,
         vector_dimension_record,
         basis_count,
@@ -536,7 +499,6 @@ def _parse_generic_fiber_output(
     ) = _parse_generic_fiber_metadata(
         reader,
         polynomial_map=polynomial_map,
-        budget=budget,
     )
     source_count = len(polynomial_map.input_variables)
 
@@ -568,7 +530,7 @@ def _parse_generic_fiber_output(
             certificate_terms += len(polynomial.terms)
             coefficient_terms += support
         transformation.append(tuple(row))
-    if certificate_terms > budget.maximum_certificate_terms:
+    if certificate_terms > MAX_GENERIC_FIBER_CERTIFICATE_TERMS:
         raise _ResultLimitExceededError(
             "Singular certificate support exceeds the exact-result limit"
         )
@@ -586,7 +548,6 @@ def _parse_generic_fiber_output(
         dimension=dimension,
         vector_dimension=vector_dimension_record,
         source_count=source_count,
-        maximum_standard_monomials=budget.maximum_standard_monomials,
     )
 
     certificate = GenericFiberCertificate(
@@ -596,14 +557,12 @@ def _parse_generic_fiber_output(
         basis_from_source=transformation_tuple,
         standard_monomials=standard_monomials,
     )
-    return certificate, dimension, vector_dimension, _format_version(version_number)
-
-
-def _format_version(version_number: int) -> str:
-    major, remainder = divmod(version_number, 10_000)
-    minor, patch_code = divmod(remainder, 1_000)
-    patch = patch_code // 100
-    return f"{major}.{minor}.{patch}"
+    return (
+        certificate,
+        dimension,
+        vector_dimension,
+        format_singular_version(version_number),
+    )
 
 
 def run_singular_generic_fiber(
@@ -612,37 +571,14 @@ def run_singular_generic_fiber(
 ) -> SingularGenericFiberResult:
     """Compute one exact generic-fiber certificate in a bounded process."""
 
-    resolved = shutil.which("Singular")
-    if resolved is None:
+    completed = run_bounded_singular(
+        _generic_fiber_script(polynomial_map),
+        wall_seconds=budget.wall_seconds,
+    )
+    if completed is None:
         return SingularGenericFiberResult(
             outcome="UNAVAILABLE",
             detail="The supported Singular 4.4 backend is not installed.",
-        )
-    resolved = str(Path(resolved).resolve())
-    prlimit = shutil.which("prlimit")
-    if prlimit is not None:
-        prlimit = str(Path(prlimit).resolve())
-    try:
-        with tempfile.TemporaryDirectory(prefix="jacobian-singular-") as directory:
-            completed = run_bounded_process(
-                [resolved, "-q"],
-                input_bytes=_generic_fiber_script(polynomial_map),
-                timeout_seconds=float(budget.wall_seconds),
-                environment=worker_environment(locale="C.UTF-8"),
-                stdout_limit=_STDOUT_LIMIT,
-                stderr_limit=_STDERR_LIMIT,
-                resource_limits=ProcessResourceLimits(
-                    cpu_seconds=budget.wall_seconds,
-                    address_space_bytes=1024 * 1024 * 1024,
-                    file_size_bytes=1024 * 1024,
-                ),
-                platform_tools=ProcessPlatformTools(prlimit_executable=prlimit),
-                cwd=directory,
-            )
-    except OSError:
-        return SingularGenericFiberResult(
-            outcome="UNAVAILABLE",
-            detail="The supported Singular backend could not be started.",
         )
     if completed.timed_out:
         return SingularGenericFiberResult(
@@ -651,7 +587,7 @@ def run_singular_generic_fiber(
         )
     if completed.cancelled:
         return SingularGenericFiberResult(
-            outcome="ERROR",
+            outcome="CANCELLED",
             detail="Singular execution was cancelled before producing a result.",
         )
     if completed.stdout_exceeded or completed.stderr_exceeded:
@@ -675,7 +611,11 @@ def run_singular_generic_fiber(
         certificate, dimension, vector_dimension, version = _parse_generic_fiber_output(
             completed.stdout,
             polynomial_map=polynomial_map,
-            budget=budget,
+        )
+    except UnsupportedSingularVersionError:
+        return SingularGenericFiberResult(
+            outcome="UNAVAILABLE",
+            detail="The installed Singular release is unsupported.",
         )
     except _ResultLimitExceededError:
         return SingularGenericFiberResult(

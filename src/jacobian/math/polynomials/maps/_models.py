@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from fractions import Fraction
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
@@ -16,6 +17,7 @@ from jacobian.math.polynomials.maps.values import (
     require_map_polynomial,
 )
 from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_EXPONENT,
     PolynomialVariable,
     RationalFunction,
     RationalPolynomial,
@@ -32,10 +34,29 @@ MAX_GENERIC_DEGREE_COEFFICIENT_DIGITS = 64
 MAX_GENERIC_DEGREE_ENCODED_MAP_BYTES = 64 * 1024
 MAX_GENERIC_DEGREE_BEZOUT_BOUND = 512
 MAX_GENERIC_FIBER_BASIS_POLYNOMIALS = 32
+MAX_GENERIC_FIBER_POLYNOMIAL_TERMS = 4_096
 MAX_GENERIC_FIBER_CERTIFICATE_TERMS = 4_096
 MAX_GENERIC_FIBER_COEFFICIENT_TERMS = 16_384
 MAX_GENERIC_FIBER_STANDARD_MONOMIALS = 512
+MAX_GENERIC_FIBER_CERTIFICATE_SOURCE_EXPONENT = MAX_POLYNOMIAL_EXPONENT
+MAX_GENERIC_FIBER_STANDARD_MONOMIAL_EXPONENT = (
+    MAX_GENERIC_FIBER_STANDARD_MONOMIALS - 1
+)
+MAX_GENERIC_FIBER_STANDARD_MONOMIAL_CANDIDATES = (
+    1
+    + MAX_GENERIC_DEGREE_SOURCE_VARIABLES
+    * MAX_GENERIC_FIBER_STANDARD_MONOMIALS
+)
 MAX_GENERIC_FIBER_REPLAY_PRODUCTS = 262_144
+MAX_GENERIC_FIBER_REPLAY_SOURCE_PRODUCTS = 262_144
+MAX_GENERIC_FIBER_REPLAY_COEFFICIENT_OPERATIONS = 1_048_576
+MAX_GENERIC_FIBER_REPLAY_COEFFICIENT_PRODUCTS = 1_048_576
+MAX_GENERIC_FIBER_REPLAY_REDUCTION_STEPS = 65_536
+MAX_GENERIC_FIBER_REPLAY_SOURCE_TERMS = 8_192
+MAX_GENERIC_FIBER_REPLAY_COEFFICIENT_TERMS = 4_096
+MAX_GENERIC_FIBER_REPLAY_COEFFICIENT_BITS = 16_384
+MAX_GENERIC_FIBER_REPLAY_PARAMETER_EXPONENT = MAX_POLYNOMIAL_EXPONENT
+MAX_GENERIC_FIBER_REPLAY_SOURCE_EXPONENT = 2 * MAX_POLYNOMIAL_EXPONENT
 
 
 class VariablePoint(StrictModel):
@@ -142,24 +163,9 @@ class CompositionResult(StrictModel):
 
 
 class GenericDegreeComputationBudget(StrictModel):
-    """Kill-safe execution and exact-certificate limits for one generic fiber."""
+    """Caller-selected wall-time envelope for one generic-fiber computation."""
 
     wall_seconds: StrictInt = Field(default=20, ge=1, le=60)
-    maximum_basis_polynomials: StrictInt = Field(
-        default=MAX_GENERIC_FIBER_BASIS_POLYNOMIALS,
-        ge=MAX_GENERIC_FIBER_BASIS_POLYNOMIALS,
-        le=MAX_GENERIC_FIBER_BASIS_POLYNOMIALS,
-    )
-    maximum_certificate_terms: StrictInt = Field(
-        default=MAX_GENERIC_FIBER_CERTIFICATE_TERMS,
-        ge=MAX_GENERIC_FIBER_CERTIFICATE_TERMS,
-        le=MAX_GENERIC_FIBER_CERTIFICATE_TERMS,
-    )
-    maximum_standard_monomials: StrictInt = Field(
-        default=MAX_GENERIC_FIBER_STANDARD_MONOMIALS,
-        ge=MAX_GENERIC_FIBER_STANDARD_MONOMIALS,
-        le=MAX_GENERIC_FIBER_STANDARD_MONOMIALS,
-    )
 
 
 def _total_degree(polynomial: RationalPolynomial) -> int:
@@ -172,7 +178,7 @@ def _total_degree(polynomial: RationalPolynomial) -> int:
 class GenericDegreeRequest(StrictModel):
     """Compute the generic-fiber degree of one bounded polynomial map over QQ.
 
-    The source is materialized sparse data. The current Singular envelope has
+    The source is materialized sparse data. The operation envelope has
     at most three source variables, three ordered target components, 96 input
     terms, component total degree at most 8, 64-digit coefficient components,
     64 KiB encoded map, and finite-fiber Bezout bound at most 512. The backend
@@ -264,8 +270,15 @@ class GenericFiberTerm(StrictModel):
     def require_nonzero_bounded_term(self) -> Self:
         if not self.coefficient.numerator.terms:
             raise ValueError("zero generic-fiber terms must be omitted")
-        if any(exponent < 0 or exponent > 64 for exponent in self.source_exponents):
-            raise ValueError("generic-fiber source exponent exceeds 64")
+        if any(
+            exponent < 0
+            or exponent > MAX_GENERIC_FIBER_CERTIFICATE_SOURCE_EXPONENT
+            for exponent in self.source_exponents
+        ):
+            raise ValueError(
+                "generic-fiber source exponent exceeds the certificate "
+                "representation limit"
+            )
         return self
 
 
@@ -274,7 +287,7 @@ class GenericFiberPolynomial(StrictModel):
 
     terms: tuple[GenericFiberTerm, ...] = Field(
         default=(),
-        max_length=256,
+        max_length=MAX_GENERIC_FIBER_POLYNOMIAL_TERMS,
     )
 
     @model_validator(mode="after")
@@ -318,6 +331,88 @@ class GenericFiberCertificate(StrictModel):
         default=(),
         max_length=MAX_GENERIC_FIBER_STANDARD_MONOMIALS,
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_serialized_certificate_bounds(cls, value: Any) -> Any:
+        """Reject oversized nested payloads before constructing coefficient values."""
+
+        if not isinstance(value, Mapping):
+            return value
+        basis = value.get("basis")
+        transformation = value.get("basis_from_source")
+        if not isinstance(basis, Sequence) or isinstance(basis, (str, bytes)):
+            return value
+        if not isinstance(transformation, Sequence) or isinstance(
+            transformation, (str, bytes)
+        ):
+            return value
+        if len(basis) > MAX_GENERIC_FIBER_BASIS_POLYNOMIALS:
+            raise ValueError("generic-fiber basis exceeds the result bound")
+        if len(transformation) > MAX_GENERIC_DEGREE_TARGET_VARIABLES:
+            raise ValueError("generic-fiber transformation exceeds the result bound")
+
+        polynomials: list[Any] = list(basis)
+        for row in transformation:
+            if not isinstance(row, Sequence) or isinstance(row, (str, bytes)):
+                return value
+            if len(row) > MAX_GENERIC_FIBER_BASIS_POLYNOMIALS:
+                raise ValueError("generic-fiber transformation exceeds the result bound")
+            polynomials.extend(row)
+
+        term_groups: list[Sequence[Any]] = []
+        certificate_terms = 0
+        for polynomial in polynomials:
+            terms = (
+                polynomial.terms
+                if isinstance(polynomial, GenericFiberPolynomial)
+                else polynomial.get("terms")
+                if isinstance(polynomial, Mapping)
+                else None
+            )
+            if not isinstance(terms, Sequence) or isinstance(terms, (str, bytes)):
+                return value
+            certificate_terms += len(terms)
+            if certificate_terms > MAX_GENERIC_FIBER_CERTIFICATE_TERMS:
+                raise ValueError(
+                    "generic-fiber certificate exceeds the 4096-term result bound"
+                )
+            term_groups.append(terms)
+
+        coefficient_terms = 0
+        for terms in term_groups:
+            for term in terms:
+                coefficient = (
+                    term.coefficient
+                    if isinstance(term, GenericFiberTerm)
+                    else term.get("coefficient")
+                    if isinstance(term, Mapping)
+                    else None
+                )
+                if isinstance(coefficient, RationalFunction):
+                    coefficient_terms += len(coefficient.numerator.terms)
+                    coefficient_terms += len(coefficient.denominator.terms)
+                elif isinstance(coefficient, Mapping):
+                    numerator = coefficient.get("numerator")
+                    denominator = coefficient.get("denominator")
+                    if not isinstance(numerator, Mapping) or not isinstance(
+                        denominator, Mapping
+                    ):
+                        return value
+                    numerator_terms = numerator.get("terms")
+                    denominator_terms = denominator.get("terms")
+                    if not isinstance(numerator_terms, Sequence) or not isinstance(
+                        denominator_terms, Sequence
+                    ):
+                        return value
+                    coefficient_terms += len(numerator_terms) + len(denominator_terms)
+                else:
+                    return value
+                if coefficient_terms > MAX_GENERIC_FIBER_COEFFICIENT_TERMS:
+                    raise ValueError(
+                        "generic-fiber coefficient support exceeds the result bound"
+                    )
+        return value
 
     @model_validator(mode="after")
     def require_bounded_certificate_shape(self) -> Self:
@@ -367,7 +462,11 @@ class GenericFiberCertificate(StrictModel):
             )
         if any(
             len(exponents) != len(self.source_variable_order)
-            or any(exponent < 0 or exponent > 64 for exponent in exponents)
+            or any(
+                exponent < 0
+                or exponent > MAX_GENERIC_FIBER_STANDARD_MONOMIAL_EXPONENT
+                for exponent in exponents
+            )
             for exponents in self.standard_monomials
         ):
             raise ValueError(
@@ -382,6 +481,7 @@ GenericDegreeOutcome = Literal[
     "DOMINANT_NOT_GENERICALLY_FINITE",
     "UNAVAILABLE",
     "TIMEOUT",
+    "CANCELLED",
     "BOUND_EXCEEDED",
     "ERROR",
 ]
@@ -394,12 +494,11 @@ class GenericDegreeResult(StrictModel):
     source: RationalPolynomialMap
     degree: int | None = Field(default=None, ge=1, le=MAX_GENERIC_DEGREE_BEZOUT_BOUND)
     evidence: GenericFiberCertificate | None = None
-    method: Literal["GENERIC_FIBER_GROEBNER"] = "GENERIC_FIBER_GROEBNER"
-    backend_version: str | None = None
     detail: str | None = None
 
     @model_validator(mode="after")
     def require_source_bound_outcome(self) -> Self:
+        _require_generic_degree_map_budget(self.source)
         mathematical = {
             "GENERICALLY_FINITE",
             "NOT_DOMINANT",
@@ -409,18 +508,16 @@ class GenericDegreeResult(StrictModel):
             if (
                 self.degree is not None
                 or self.evidence is not None
-                or self.backend_version is not None
                 or not self.detail
             ):
                 raise ValueError(
                     "operational generic-degree outcomes require only source and detail"
                 )
             return self
-        if self.evidence is None or self.backend_version is None or self.detail:
+        if self.evidence is None or self.detail:
             raise ValueError(
-                "mathematical generic-degree outcomes require evidence and backend version"
+                "mathematical generic-degree outcomes require exact evidence"
             )
-        _require_generic_degree_map_budget(self.source)
         from jacobian.math.polynomials.maps._generic_degree import (
             validate_generic_fiber_certificate,
         )

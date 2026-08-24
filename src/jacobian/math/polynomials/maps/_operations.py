@@ -44,16 +44,23 @@ def compute_generic_degree(request: GenericDegreeRequest) -> GenericDegreeResult
     if (
         backend.certificate is None
         or backend.dimension is None
-        or backend.backend_version is None
     ):
-        raise RuntimeError("computed generic-fiber backend result is incomplete")
+        return GenericDegreeResult(
+            outcome="ERROR",
+            source=request.polynomial_map,
+            detail="Singular returned incomplete generic-fiber evidence.",
+        )
     mathematical_outcome: GenericDegreeOutcome
     if backend.dimension == -1:
         mathematical_outcome = "NOT_DOMINANT"
         degree = None
     elif backend.dimension == 0:
         if backend.vector_dimension is None:
-            raise RuntimeError("finite generic fiber is missing its quotient dimension")
+            return GenericDegreeResult(
+                outcome="ERROR",
+                source=request.polynomial_map,
+                detail="Singular returned a finite fiber without its exact degree.",
+            )
         mathematical_outcome = "GENERICALLY_FINITE"
         degree = backend.vector_dimension
     else:
@@ -65,7 +72,6 @@ def compute_generic_degree(request: GenericDegreeRequest) -> GenericDegreeResult
             source=request.polynomial_map,
             degree=degree,
             evidence=backend.certificate,
-            backend_version=backend.backend_version,
         )
     except ValidationError:
         return GenericDegreeResult(

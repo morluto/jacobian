@@ -4,17 +4,20 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 from pathlib import Path
 
 import pytest
 
 from jacobian._exact import CanonicalRational
+from jacobian.math import _singular as shared_singular
 from jacobian.math.polynomials.maps import RationalPolynomialMap, _singular
 from jacobian.math.polynomials.maps._models import (
     GenericDegreeComputationBudget,
     GenericDegreeRequest,
 )
 from jacobian.math.polynomials.maps._operations import compute_generic_degree
+from jacobian.process import bounded_process_cancellation
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
@@ -41,6 +44,27 @@ def _map() -> RationalPolynomialMap:
     )
 
 
+def _two_variable_map() -> RationalPolynomialMap:
+    variables = ("x", "y")
+    return RationalPolynomialMap(
+        input_variables=variables,
+        output_polynomials=tuple(
+            RationalPolynomial(
+                variables=variables,
+                polynomial=SparseRationalPolynomial(
+                    terms=(
+                        RationalPolynomialTerm(
+                            coefficient=CanonicalRational(num="1", den="1"),
+                            exponents=exponents,
+                        ),
+                    )
+                ),
+            )
+            for exponents in ((1, 0), (0, 1))
+        ),
+    )
+
+
 def _executable(tmp_path: Path, body: str) -> str:
     path = tmp_path / "fake-singular"
     path.write_text(f"#!{sys.executable}\n{body}\n", encoding="utf-8")
@@ -53,7 +77,7 @@ def _select_executable(
     executable: str,
 ) -> None:
     monkeypatch.setattr(
-        _singular.shutil,
+        shared_singular.shutil,
         "which",
         lambda name: executable if name == "Singular" else None,
     )
@@ -94,6 +118,46 @@ def test_valid_protocol_is_replayed_to_a_mathematical_result(
     assert result.degree == 1
 
 
+def test_invocation_disables_ambient_startup_shell_and_standard_library(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    records = (
+        "JACOBIAN_SINGULAR_GENERIC_FIBER_V1",
+        "44105",
+        "0",
+        "1",
+        "1",
+        "1",
+        "POLYNOMIAL",
+        "1",
+        "1",
+        "1",
+        "0",
+        "(-jtp1)",
+        "1",
+        "END_POLYNOMIAL",
+        "POLYNOMIAL",
+        "0",
+        "1",
+        "1",
+        "END_POLYNOMIAL",
+        "END",
+    )
+    body = (
+            "import sys\n"
+            "required={'-q','-t','--no-rc','--no-shell','--no-stdlib'}\n"
+            "if not required.issubset(sys.argv): raise SystemExit(7)\n"
+        f"print({chr(10).join(records)!r})"
+    )
+    executable = _executable(tmp_path, body)
+    _select_executable(monkeypatch, executable)
+
+    result = compute_generic_degree(GenericDegreeRequest(polynomial_map=_map()))
+
+    assert result.outcome == "GENERICALLY_FINITE"
+
+
 def test_timeout_is_not_a_dominance_conclusion(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -109,6 +173,23 @@ def test_timeout_is_not_a_dominance_conclusion(
     )
 
     assert result.outcome == "TIMEOUT"
+    assert result.degree is None
+    assert result.evidence is None
+
+
+def test_cancellation_is_preserved_as_its_own_public_outcome(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = _executable(tmp_path, "import time; time.sleep(30)")
+    _select_executable(monkeypatch, executable)
+    cancellation = threading.Event()
+    cancellation.set()
+
+    with bounded_process_cancellation(cancellation):
+        result = compute_generic_degree(GenericDegreeRequest(polynomial_map=_map()))
+
+    assert result.outcome == "CANCELLED"
     assert result.degree is None
     assert result.evidence is None
 
@@ -137,6 +218,37 @@ def test_oversized_certificate_is_a_typed_bound_outcome(
 
     assert result.outcome == "BOUND_EXCEEDED"
     assert result.degree is None
+
+
+def test_standard_monomial_candidates_are_distinct_from_returned_monomials(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    records = [
+        "JACOBIAN_SINGULAR_GENERIC_FIBER_V1",
+        "44105",
+        "0",
+        "127",
+        "3",
+        "2",
+    ]
+    for exponents in ("64,0", "1,1", "0,64"):
+        records.extend(("POLYNOMIAL", exponents, "1", "1", "END_POLYNOMIAL"))
+    for _ in range(6):
+        records.extend(("POLYNOMIAL", "END_POLYNOMIAL"))
+    records.append("END")
+    executable = _executable(tmp_path, f"print({chr(10).join(records)!r})")
+    _select_executable(monkeypatch, executable)
+
+    backend = _singular.run_singular_generic_fiber(
+        _two_variable_map(),
+        GenericDegreeComputationBudget(),
+    )
+
+    assert backend.outcome == "COMPUTED"
+    assert backend.vector_dimension == 127
+    assert backend.certificate is not None
+    assert len(backend.certificate.standard_monomials) == 127
 
 
 @pytest.mark.parametrize(
@@ -170,3 +282,4 @@ def test_backend_script_uses_only_fixed_internal_identifiers() -> None:
     assert "callerVariable" not in source
     assert "jv1" in source
     assert "jtp1" in source
+    assert source.index('system("version")') < source.index("ring jacobian_ring")

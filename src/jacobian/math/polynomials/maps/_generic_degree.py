@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from jacobian.math.polynomials.maps._models import (
     MAX_GENERIC_FIBER_REPLAY_PRODUCTS,
+    MAX_GENERIC_FIBER_STANDARD_MONOMIAL_CANDIDATES,
     MAX_GENERIC_FIBER_STANDARD_MONOMIALS,
 )
 
@@ -25,6 +26,10 @@ MathematicalOutcome = Literal[
     "NOT_DOMINANT",
     "DOMINANT_NOT_GENERICALLY_FINITE",
 ]
+
+
+class GenericFiberReplayLimitError(ValueError):
+    """A certificate replay exceeded its declared finite work envelope."""
 
 
 def _sparse_expression(
@@ -231,13 +236,29 @@ def _standard_monomials(
     candidate_count = 1
     for bound in pure_power_bounds:
         candidate_count *= bound
-    if candidate_count > MAX_GENERIC_FIBER_STANDARD_MONOMIALS:
-        raise ValueError("generic-fiber quotient exceeds the standard-monomial bound")
-    return tuple(
+    if candidate_count > MAX_GENERIC_FIBER_STANDARD_MONOMIAL_CANDIDATES:
+        raise ValueError(
+            "generic-fiber quotient exceeds the standard-monomial candidate bound"
+        )
+    standard_monomials = tuple(
         exponents
         for exponents in product(*(range(bound) for bound in pure_power_bounds))
         if not any(_divides(leading, exponents) for leading in leading_exponents)
     )
+    if len(standard_monomials) > MAX_GENERIC_FIBER_STANDARD_MONOMIALS:
+        raise ValueError("generic-fiber quotient exceeds the standard-monomial bound")
+    return standard_monomials
+
+
+def enumerate_standard_monomials(
+    leading_exponents: tuple[tuple[int, ...], ...],
+) -> tuple[tuple[int, ...], ...] | None:
+    """Return the bounded standard-monomial complement for one leading ideal."""
+
+    try:
+        return _standard_monomials(leading_exponents)
+    except ValueError as exc:
+        raise GenericFiberReplayLimitError(str(exc)) from exc
 
 
 def validate_generic_fiber_certificate(
@@ -344,4 +365,8 @@ def validate_generic_fiber_certificate(
     return "GENERICALLY_FINITE", len(standard_monomials)
 
 
-__all__ = ["validate_generic_fiber_certificate"]
+__all__ = [
+    "GenericFiberReplayLimitError",
+    "enumerate_standard_monomials",
+    "validate_generic_fiber_certificate",
+]

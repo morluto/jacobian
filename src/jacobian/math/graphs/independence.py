@@ -54,9 +54,17 @@ class IndependenceNumberRequest(StrictModel):
 
 
 class IndependenceNumberResult(StrictModel):
-    """Exact optimum or bounded incumbent and bounds for one supplied graph."""
+    """Exact optimum or bounded incumbent and bounds for one supplied graph.
+
+    Retains the canonical source graph so validation replays the defining
+    incumbent invariant: every witness identifier belongs to the source,
+    no source edge has both endpoints in the witness, the incumbent equals
+    the witness cardinality, and the reported order matches the source.
+    Operational ``UNKNOWN`` stays distinct from a mathematical optimum.
+    """
 
     result_schema_version: Literal["1"] = "1"
+    graph: SimpleUndirectedGraph
     status: IndependenceSearchStatus
     order: StrictInt = Field(ge=0, le=128)
     optimum_value: StrictInt | None = Field(default=None, ge=0, le=128)
@@ -72,6 +80,16 @@ class IndependenceNumberResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_result(self) -> Self:
+        if self.order != len(self.graph.vertices):
+            raise ValueError("reported order must match the retained source graph")
+        vertices = set(self.graph.vertices)
+        if any(vertex not in vertices for vertex in self.witness_vertices):
+            raise ValueError("every witness vertex must belong to the source graph")
+        witness = set(self.witness_vertices)
+        if any(
+            left in witness and right in witness for left, right in self.graph.edges
+        ):
+            raise ValueError("witness must not contain both endpoints of a source edge")
         if self.witness_vertices != tuple(sorted(self.witness_vertices)) or len(
             set(self.witness_vertices)
         ) != len(self.witness_vertices):

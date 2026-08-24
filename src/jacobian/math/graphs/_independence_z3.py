@@ -27,6 +27,7 @@ def solve_independence_number(
     order = len(vertices)
     if not vertices:
         return IndependenceNumberResult(
+            graph=request.graph,
             status="EXACT",
             order=0,
             optimum_value=0,
@@ -44,6 +45,7 @@ def solve_independence_number(
     )
     if remaining_ms <= 0:
         return IndependenceNumberResult(
+            graph=request.graph,
             status="UNKNOWN",
             order=order,
             optimum_value=None,
@@ -84,6 +86,7 @@ def solve_independence_number(
         upper_bound = max(lower_bound, min(order, _integer_bound(upper, order)))
         if lower_bound == upper_bound == len(incumbent):
             return IndependenceNumberResult(
+                graph=request.graph,
                 status="EXACT",
                 order=order,
                 optimum_value=len(incumbent),
@@ -96,6 +99,7 @@ def solve_independence_number(
             )
     elif status == z3.unsat:
         return IndependenceNumberResult(
+            graph=request.graph,
             status="UNKNOWN",
             order=order,
             optimum_value=None,
@@ -116,6 +120,7 @@ def solve_independence_number(
         else "SOLVER_UNKNOWN"
     )
     return IndependenceNumberResult(
+        graph=request.graph,
         status="UNKNOWN",
         order=order,
         optimum_value=None,

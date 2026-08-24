@@ -275,3 +275,31 @@ def test_certificate_contract_replays_zero_dimensional_boundaries(
     assert certificate.rank == 0
     with pytest.raises(ValidationError, match="determinant"):
         SmithNormalFormCertificate(**{**kwargs, "left_determinant": "-1"})
+
+
+def test_certificate_contract_replays_rank_zero_determinants_without_formatting_them() -> None:
+    tall_source = CertifiedIntegerMatrix(row_count=2, column_count=0, entries=((), ()))
+    empty_right = CertifiedIntegerMatrix(row_count=0, column_count=0)
+    permutation = _certified_matrix([[0, 1], [1, 0]])
+    inflated = _certified_matrix([["1" * 64, 0], [0, 1]])
+    kwargs = _certificate_kwargs(
+        source=tall_source,
+        diagonal=tall_source,
+        right_transformation=empty_right,
+        rank=0,
+        invariant_factors=(),
+    )
+
+    certificate = SmithNormalFormCertificate(
+        **{**kwargs, "left_transformation": permutation, "left_determinant": "-1"}
+    )
+
+    assert certificate.left_determinant == "-1"
+    with pytest.raises(ValidationError) as exc_info:
+        SmithNormalFormCertificate(
+            **{**kwargs, "left_transformation": inflated, "left_determinant": "-1"}
+        )
+
+    message = str(exc_info.value)
+    assert "must be the declared unimodular -1" in message
+    assert "1" * 64 not in message

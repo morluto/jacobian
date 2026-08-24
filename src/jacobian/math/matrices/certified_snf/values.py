@@ -9,7 +9,7 @@ from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import parse_canonical_integer
 
 MAX_CERTIFIED_SNF_DIMENSION = 32
 MAX_CERTIFIED_SNF_INPUT_DIMENSION = 16
@@ -156,14 +156,11 @@ class SmithNormalFormCertificate(StrictModel):
             ("left", left, self.left_determinant),
             ("right", right, self.right_determinant),
         ):
-            actual_determinant = format_canonical_integer(
-                matrix_determinant(transformation)
-            )
-            if actual_determinant != determinant:
+            numeric_determinant = matrix_determinant(transformation)
+            if numeric_determinant != int(determinant):
                 raise ValueError(
                     f"Smith certificate {label} transformation determinant "
-                    f"must be the declared unimodular {determinant}, "
-                    f"not {actual_determinant}"
+                    f"must be the declared unimodular {determinant}"
                 )
         return self
 

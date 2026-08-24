@@ -84,13 +84,87 @@ class LinearCodeRequest(StrictModel):
 
 
 class MinimumDistanceResult(StrictModel):
-    minimum_distance: int = Field(ge=0, le=10000)
+    """The exact minimum nonzero codeword weight bound to its source code.
+
+    Retains the canonical source code (prime field order and generator
+    matrix) so validation replays the exact enumeration: the claimed
+    distance lies in ``[0, n]`` and equals the minimum nonzero Hamming
+    weight over the distinct generated codewords of the retained generator.
+    """
+
+    request: LinearCodeRequest
+    minimum_distance: int = Field(ge=0, le=256)
     method: Literal["EXACT_ENUMERATION"] = "EXACT_ENUMERATION"
+
+    @model_validator(mode="after")
+    def require_source_bound(self) -> Self:
+        from jacobian.math.code_theory.operations import (
+            minimum_distance as replay_minimum_distance,
+        )
+
+        width = len(self.request.generator_matrix[0])
+        if self.minimum_distance > width:
+            raise ValueError("minimum distance must lie in [0, code length]")
+        if (
+            replay_minimum_distance(
+                self.request.generator_matrix, self.request.field_order
+            )
+            != self.minimum_distance
+        ):
+            raise ValueError(
+                "minimum distance must be the exact enumeration of the "
+                "retained source code"
+            )
+        return self
 
 
 class WeightDistributionResult(StrictModel):
+    """The exact weight distribution bound to its source code.
+
+    Retains the canonical source code so validation replays the defining
+    relations: rows are canonically ordered with positive counts and weights
+    in ``[0, n]``, counts sum to the number of distinct generated codewords
+    (``q^rank``), and the profile equals the exact enumeration.
+    """
+
+    request: LinearCodeRequest
     weights: tuple[tuple[int, int], ...] = Field(max_length=10000)
     method: Literal["EXACT_ENUMERATION"] = "EXACT_ENUMERATION"
+
+    @model_validator(mode="after")
+    def require_source_bound(self) -> Self:
+        from jacobian.math.code_theory._models import _matrix_rank_mod_prime
+        from jacobian.math.code_theory.operations import (
+            weight_distribution as replay_weight_distribution,
+        )
+
+        width = len(self.request.generator_matrix[0])
+        seen_weights: list[int] = []
+        for weight, count in self.weights:
+            if not 0 <= weight <= width:
+                raise ValueError("weight rows must lie in [0, code length]")
+            if count < 1:
+                raise ValueError("weight counts must be positive")
+            if seen_weights and weight <= seen_weights[-1]:
+                raise ValueError("weight rows must be strictly ascending and unique")
+            seen_weights.append(weight)
+        rank = _matrix_rank_mod_prime(
+            self.request.generator_matrix, self.request.field_order
+        )
+        expected_total = self.request.field_order**rank
+        if sum(count for _weight, count in self.weights) != expected_total:
+            raise ValueError(
+                "weight counts must sum to the distinct generated codeword count"
+            )
+        replayed = replay_weight_distribution(
+            self.request.generator_matrix, self.request.field_order
+        )
+        if tuple((w, c) for w, c in replayed) != self.weights:
+            raise ValueError(
+                "weight distribution must be the exact enumeration of the "
+                "retained source code"
+            )
+        return self
 
 
 class CoveringRadiusRequest(StrictModel):
@@ -120,8 +194,38 @@ class CoveringRadiusRequest(StrictModel):
 
 
 class CoveringRadiusResult(StrictModel):
+    """The exact covering radius bound to its source code.
+
+    Retains the canonical source code (the same bounded syndrome-graph
+    request) so validation replays the exact BFS: the radius lies in
+    ``[0, n]`` and equals the maximum minimum-error weight over the
+    retained source's syndrome graph.
+    """
+
+    request: CoveringRadiusRequest
     covering_radius: int = Field(ge=0, le=256)
     method: Literal["SYNDROME_BFS"] = "SYNDROME_BFS"
+
+    @model_validator(mode="after")
+    def require_source_bound(self) -> Self:
+        from jacobian.math.code_theory.operations import (
+            covering_radius as replay_covering_radius,
+        )
+
+        width = len(self.request.generator_matrix[0])
+        if self.covering_radius > width:
+            raise ValueError("covering radius must lie in [0, code length]")
+        if (
+            replay_covering_radius(
+                self.request.generator_matrix, self.request.field_order
+            )
+            != self.covering_radius
+        ):
+            raise ValueError(
+                "covering radius must be the exact syndrome BFS of the "
+                "retained source code"
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------

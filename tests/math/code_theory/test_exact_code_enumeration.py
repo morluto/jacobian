@@ -153,3 +153,96 @@ def test_covering_radius_contract_rejects_nonprime_field() -> None:
             field_order=4,
             generator_matrix=((1, 1),),
         )
+
+
+# ---------------------------------------------------------------------------
+# Source-bound replay regressions (#2309)
+# ---------------------------------------------------------------------------
+
+
+def _linear_request() -> LinearCodeRequest:
+    return LinearCodeRequest(field_order=3, generator_matrix=((1, 0, 1), (0, 1, 1)))
+
+
+def test_results_retain_source_and_replay() -> None:
+    from jacobian.math.code_theory._models import (
+        CoveringRadiusResult,
+        MinimumDistanceResult,
+        WeightDistributionResult,
+    )
+
+    request = _linear_request()
+    dist = compute_min_distance(request)
+    assert dist.request == request
+    assert dist.minimum_distance == 2
+    assert MinimumDistanceResult.model_validate(dist.model_dump()) == dist
+
+    profile = compute_weight_dist(request)
+    assert profile.request == request
+    # q^rank = 9 distinct codewords over GF(3) with rank-2 generator rows.
+    assert sum(count for _weight, count in profile.weights) == 9
+    assert WeightDistributionResult.model_validate(profile.model_dump()) == profile
+
+    covering = CoveringRadiusRequest(
+        field_order=2, generator_matrix=((1, 0, 1), (0, 1, 1))
+    )
+    radius = compute_covering_radius(covering)
+    assert radius.request == covering
+    assert CoveringRadiusResult.model_validate(radius.model_dump()) == radius
+
+    with pytest.raises(ValidationError):
+        MinimumDistanceResult(
+            request=request,
+            minimum_distance=9999,
+        )
+    with pytest.raises(ValidationError):
+        WeightDistributionResult(
+            request=request,
+            weights=((99, 777), (-4, 123)),
+        )
+    with pytest.raises(ValidationError):
+        CoveringRadiusResult(request=covering, covering_radius=200)
+
+
+def test_forged_profiles_are_rejected() -> None:
+    from jacobian.math.code_theory._models import (
+        MinimumDistanceResult,
+        WeightDistributionResult,
+    )
+
+    request = _linear_request()
+    base = {
+        "request": request.model_dump(),
+        "method": "EXACT_ENUMERATION",
+    }
+
+    wrong_distance = dict(base, minimum_distance=1)
+    with pytest.raises(ValidationError, match="exact enumeration"):
+        MinimumDistanceResult.model_validate(wrong_distance)
+
+    foreign_code = LinearCodeRequest(
+        field_order=2, generator_matrix=((1, 0), (0, 1), (1, 1))
+    )
+    forged_source = dict(base, request=foreign_code.model_dump(), minimum_distance=2)
+    with pytest.raises(ValidationError, match="retained source code"):
+        MinimumDistanceResult.model_validate(forged_source)
+
+    unsorted_profile = dict(base, weights=((1, 6), (0, 1), (2, 2)))
+    with pytest.raises(ValidationError, match="ascending"):
+        WeightDistributionResult.model_validate(unsorted_profile)
+
+    bad_total = dict(base, weights=((0, 1), (2, 2)))
+    with pytest.raises(ValidationError, match="distinct generated codeword"):
+        WeightDistributionResult.model_validate(bad_total)
+
+    forged_profile = dict(base, weights=((0, 1), (1, 5), (2, 3)))
+    with pytest.raises(ValidationError, match="exact enumeration"):
+        WeightDistributionResult.model_validate(forged_profile)
+
+
+def test_dependent_generator_rows_rank_cardinality() -> None:
+    """Dependent rows deduplicate: cardinality is q^rank, not q^rows."""
+
+    request = LinearCodeRequest(field_order=2, generator_matrix=((1, 1), (1, 1)))
+    profile = compute_weight_dist(request)
+    assert sum(count for _weight, count in profile.weights) == 2

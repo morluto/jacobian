@@ -13,6 +13,7 @@ from typing import Literal
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.math._singular import (
+    SINGULAR_ARGUMENTS,
     SingularProtocolReader,
     UnsupportedSingularVersionError,
     format_singular_version,
@@ -38,8 +39,6 @@ from jacobian.process import (
 
 _PROTOCOL_HEADER = "JACOBIAN_SINGULAR_IDEAL_V1"
 _COEFFICIENT = re.compile(r"^(0|-?[1-9][0-9]*)(?:/([1-9][0-9]*))?$")
-_SUPPORTED_VERSION_MIN = 44000
-_SUPPORTED_VERSION_MAX = 45000
 _STDOUT_LIMIT = 512 * 1024
 _STDERR_LIMIT = 64 * 1024
 
@@ -291,10 +290,12 @@ def _parse_output(
 def _minimal_primes_script(source_ideal: RationalPolynomialIdeal) -> bytes:
     """Encode ``minAssGTZE`` and its complete prime-family result.
 
-    ``minAssGTZE`` differs from ``minAssGTZ`` only on the unit ideal: it
-    returns the empty family rather than an invalid unit ``ideal(1)`` entry.
-    That is precisely the empty intersection convention needed for a complete
-    minimal-prime result.
+    The hermetic version preamble runs before any library load or algebra,
+    so an unsupported release quits with the typed unavailability protocol
+    instead of failing inside the kernel. ``minAssGTZE`` differs from
+    ``minAssGTZ`` only on the unit ideal: it returns the empty family rather
+    than an invalid unit ``ideal(1)`` entry. That is precisely the empty
+    intersection convention needed for a complete minimal-prime result.
     """
 
     variable_count = len(source_ideal.variables)
@@ -304,13 +305,12 @@ def _minimal_primes_script(source_ideal: RationalPolynomialIdeal) -> bytes:
     )
     return "\n".join(
         [
+            *singular_version_preamble(_PROTOCOL_HEADER),
             'LIB "primdec.lib";',
             "option(redSB);",
             f"ring jacobian_ring=0,({variables}),dp;",
             _singular_ideal("jacobian_source", source_ideal),
             "list jacobian_primes=minAssGTZE(jacobian_source);",
-            f'print("{_PROTOCOL_HEADER}");',
-            'system("version");',
             "print(size(jacobian_primes));",
             "int jacobian_component_index,jacobian_generator_index;",
             "ideal jacobian_component;",
@@ -372,14 +372,14 @@ def _parse_minimal_primes_output(
     except UnicodeDecodeError as exc:
         raise ValueError("Singular output is not ASCII") from exc
     reader = SingularProtocolReader(text.splitlines())
-    reader.expect(_PROTOCOL_HEADER)
+    version_number = read_singular_version(
+        reader,
+        protocol_header=_PROTOCOL_HEADER,
+    )
     try:
-        version_number = int(reader.pop())
         component_count = int(reader.pop())
     except ValueError as exc:
         raise ValueError("Singular output has invalid numeric metadata") from exc
-    if not _SUPPORTED_VERSION_MIN <= version_number < _SUPPORTED_VERSION_MAX:
-        raise ValueError("Singular backend version is unsupported")
     if not 0 <= component_count <= budget.maximum_output_generators:
         raise _ResultLimitExceededError(
             "Singular component count exceeds the exact-result limit"
@@ -538,7 +538,7 @@ def run_singular_minimal_primes(
     try:
         with tempfile.TemporaryDirectory(prefix="jacobian-singular-") as directory:
             completed = run_bounded_process(
-                [resolved, "-q"],
+                [resolved, *SINGULAR_ARGUMENTS],
                 input_bytes=_minimal_primes_script(source_ideal),
                 timeout_seconds=allowance,
                 environment=worker_environment(locale="C.UTF-8"),
@@ -588,6 +588,11 @@ def run_singular_minimal_primes(
             variables=source_ideal.variables,
             budget=budget,
         )
+    except UnsupportedSingularVersionError:
+        return SingularMinimalPrimesResult(
+            outcome="UNAVAILABLE",
+            detail="The installed Singular release is unsupported.",
+        )
     except _ResultLimitExceededError:
         return SingularMinimalPrimesResult(
             outcome="LIMIT_EXCEEDED",
@@ -611,6 +616,8 @@ def _minimal_primes_verification_script(
 ) -> bytes:
     """Script deciding the defining minimal-prime invariants inside Singular.
 
+    The hermetic version preamble runs before any library load or algebra,
+    so an unsupported release quits with the typed unavailability protocol.
     Repetition of one deterministic kernel establishes reproducibility only,
     so this pass decides each defining claim by independent evidence: every
     claimed component is prime and no component contains another (pairwise
@@ -635,6 +642,7 @@ def _minimal_primes_verification_script(
     else:
         family_declaration = "list jacobian_family;"
     source_lines = [
+        *singular_version_preamble(_PROTOCOL_HEADER),
         'LIB "primdec.lib";',
         "option(redSB);",
         f"ring jacobian_ring=0,({variables}),dp;",
@@ -749,8 +757,6 @@ def _minimal_primes_verification_script(
         "    }",
         "  }",
         "}",
-        f'print("{_PROTOCOL_HEADER}");',
-        'system("version");',
         'print("VERDICT "+string(jacobian_ok));',
         'print("END");',
         "quit;",
@@ -767,10 +773,7 @@ def _parse_minimal_primes_verdict(output: bytes) -> MinimalPrimesVerificationVer
         return "ERROR"
     lines = SingularProtocolReader(text.splitlines())
     try:
-        lines.expect(_PROTOCOL_HEADER)
-        version_number = int(lines.pop())
-        if not _SUPPORTED_VERSION_MIN <= version_number < _SUPPORTED_VERSION_MAX:
-            return "ERROR"
+        read_singular_version(lines, protocol_header=_PROTOCOL_HEADER)
         verdict_line = lines.pop()
         if not verdict_line.startswith("VERDICT "):
             return "ERROR"
@@ -778,6 +781,8 @@ def _parse_minimal_primes_verdict(output: bytes) -> MinimalPrimesVerificationVer
         lines.expect("END")
         if not lines.finished() or verdict not in (0, 1):
             return "ERROR"
+    except UnsupportedSingularVersionError:
+        return "UNAVAILABLE"
     except ValueError:
         return "ERROR"
     return "VERIFIED" if verdict == 1 else "REFUTED"
@@ -813,7 +818,7 @@ def run_singular_minimal_primes_verification(
     try:
         with tempfile.TemporaryDirectory(prefix="jacobian-singular-") as directory:
             completed = run_bounded_process(
-                [resolved, "-q"],
+                [resolved, *SINGULAR_ARGUMENTS],
                 input_bytes=_minimal_primes_verification_script(
                     source_ideal, claimed_components
                 ),
@@ -849,7 +854,11 @@ def _verification_script(
     saturator: RationalPolynomialIdeal,
     claimed: RationalPolynomialIdeal,
 ) -> bytes:
-    """Script deciding ``source : saturator^inf == claimed`` inside Singular."""
+    """Script deciding ``source : saturator^inf == claimed`` inside Singular.
+
+    The hermetic version preamble runs before any library load or algebra,
+    so an unsupported release quits with the typed unavailability protocol.
+    """
     variable_count = len(source.variables)
     variables = ",".join(f"jv{index + 1}" for index in range(variable_count))
     declarations = [
@@ -858,6 +867,7 @@ def _verification_script(
         _singular_ideal("jacobian_claimed", claimed),
     ]
     source_lines = [
+        *singular_version_preamble(_PROTOCOL_HEADER),
         'LIB "primdec.lib";',
         "option(redSB);",
         f"ring jacobian_ring=0,({variables}),dp;",
@@ -881,8 +891,6 @@ def _verification_script(
         "  if (reduce(jacobian_claimed[jacobian_i],jacobian_true) != 0)",
         "  { jacobian_equal=0; }",
         "}",
-        f'print("{_PROTOCOL_HEADER}");',
-        'system("version");',
         'print("VERDICT "+string(jacobian_equal));',
         'print("END");',
         "quit;",
@@ -899,10 +907,7 @@ def _parse_verification_verdict(output: bytes) -> SaturationVerificationVerdict:
         return "ERROR"
     lines = SingularProtocolReader(text.splitlines())
     try:
-        lines.expect(_PROTOCOL_HEADER)
-        version_number = int(lines.pop())
-        if not _SUPPORTED_VERSION_MIN <= version_number < _SUPPORTED_VERSION_MAX:
-            return "ERROR"
+        read_singular_version(lines, protocol_header=_PROTOCOL_HEADER)
         verdict_line = lines.pop()
         if not verdict_line.startswith("VERDICT "):
             return "ERROR"
@@ -910,6 +915,8 @@ def _parse_verification_verdict(output: bytes) -> SaturationVerificationVerdict:
         lines.expect("END")
         if not lines.finished() or verdict not in (0, 1):
             return "ERROR"
+    except UnsupportedSingularVersionError:
+        return "UNAVAILABLE"
     except ValueError:
         return "ERROR"
     return "VERIFIED" if verdict == 1 else "REFUTED"
@@ -938,7 +945,7 @@ def run_singular_saturation_verification(
     try:
         with tempfile.TemporaryDirectory(prefix="jacobian-singular-") as directory:
             completed = run_bounded_process(
-                [resolved, "-q"],
+                [resolved, *SINGULAR_ARGUMENTS],
                 input_bytes=_verification_script(source, saturator, claimed),
                 timeout_seconds=float(budget.wall_seconds),
                 environment=worker_environment(locale="C.UTF-8"),

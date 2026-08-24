@@ -548,6 +548,60 @@ def test_bezout_boundary_just_over_is_rejected() -> None:
         IdealMinimalPrimesRequest(ideal=_product_ideal(variables, (2,) * 7))
 
 
+def test_pure_power_sources_admit_large_degree_products() -> None:
+    """<x^20, y^20> has Bezout product 400 yet exactly one minimal prime.
+
+    A pure power of every ring variable forces every prime over the source
+    to contain <x,...,y>, so the complete family is that single component
+    regardless of how large the degree product is.
+    """
+
+    variables = ("x", "y")
+    pure_powers = _ideal(
+        variables,
+        _poly(variables, (1, 1, (20, 0))),
+        _poly(variables, (1, 1, (0, 20))),
+    )
+    request = IdealMinimalPrimesRequest(ideal=pure_powers)
+    assert len(request.ideal.generators) == 2
+
+    mixed = IdealMinimalPrimesRequest(
+        ideal=_ideal(
+            variables,
+            *pure_powers.generators,
+            _poly(variables, (1, 1, (3, 3)), (-1, 1, (2, 4))),
+        )
+    )
+    assert len(mixed.ideal.generators) == 3
+
+
+def test_monomial_sources_on_few_active_variables_admit_their_family_bound() -> None:
+    variables = ("w", "x", "y", "z")
+    # One monomial on three active variables: at most 2^3 components with
+    # at most 3 single-term generators each fits the aggregate envelope.
+    request = IdealMinimalPrimesRequest(
+        ideal=_ideal(variables, _poly(variables, (1, 1, (0, 3, 2, 14))))
+    )
+
+    assert len(request.ideal.generators) == 1
+
+
+def test_wide_monomial_sources_without_full_pure_powers_are_rejected() -> None:
+    """Seven active variables defeat both certificates and the Bezout bound."""
+
+    variables = tuple(f"x{index}" for index in range(1, 9))
+    generators = [
+        _poly(
+            variables,
+            (1, 1, tuple(7 if slot == index else 0 for slot in range(8))),
+        )
+        for index in range(7)
+    ]
+
+    with pytest.raises(ValidationError, match="worst-case minimal-prime family"):
+        IdealMinimalPrimesRequest(ideal=_ideal(variables, *generators))
+
+
 def test_unit_and_zero_degenerate_sources_admit_their_exact_families() -> None:
     variables = tuple(f"x{index}" for index in range(1, 7))
     constant = IdealMinimalPrimesRequest(
@@ -584,6 +638,36 @@ def test_coordinate_axes_are_the_two_qq_minimal_primes() -> None:
 
     assert result.outcome == "COMPUTED"
     assert result.components == _axes_components()
+
+
+@pytest.mark.skipif(
+    shutil.which("Singular") is None,
+    reason="Singular 4.4 backend is not installed",
+)
+def test_high_degree_pure_power_source_has_the_single_axis_component() -> None:
+    """<x^20, y^20> computes its exact one-component family end to end."""
+
+    variables = ("x", "y")
+    request = IdealMinimalPrimesRequest(
+        ideal=_ideal(
+            variables,
+            _poly(variables, (1, 1, (20, 0))),
+            _poly(variables, (1, 1, (0, 20))),
+        )
+    )
+    axes = {
+        _poly(variables, (1, 1, (1, 0))).model_dump_json(),
+        _poly(variables, (1, 1, (0, 1))).model_dump_json(),
+    }
+
+    result = compute_ideal_minimal_primes(request)
+
+    assert result.outcome == "COMPUTED"
+    assert result.components is not None
+    assert len(result.components) == 1
+    assert {
+        generator.model_dump_json() for generator in result.components[0].generators
+    } == axes
 
 
 @pytest.mark.skipif(

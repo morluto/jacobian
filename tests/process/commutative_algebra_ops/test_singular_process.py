@@ -563,6 +563,110 @@ def test_invocation_is_hermetic_and_version_precedes_algebra(
     assert source.index('system("version")') < source.index('LIB "primdec.lib"')
 
 
+_HERMETIC_ARGUMENTS = ("-q", "-t", "--no-rc", "--no-shell", "--no-stdlib")
+
+
+def test_minimal_prime_producing_invocation_is_hermetic(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    records = (
+        "JACOBIAN_SINGULAR_IDEAL_V1",
+        "44105",
+        "1",
+        "COMPONENT",
+        "1",
+        "GENERATOR",
+        "1|2",
+        "END_GENERATOR",
+        "END_COMPONENT",
+        "END",
+    )
+    body = (
+        "import sys\n"
+        f"required={set(_HERMETIC_ARGUMENTS)!r}\n"
+        "if not required.issubset(sys.argv): raise SystemExit(7)\n"
+        f"print({chr(10).join(records)!r})"
+    )
+    executable = _executable(tmp_path, body)
+    _select_executable(monkeypatch, executable)
+
+    result = run_singular_minimal_primes(_ideal(), IdealComputationBudget())
+
+    assert result.outcome == "COMPUTED"
+    assert result.components is not None
+
+
+def test_minimal_prime_verifying_invocation_is_hermetic(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    records = (
+        "JACOBIAN_SINGULAR_IDEAL_V1",
+        "44105",
+        "VERDICT 1",
+        "END",
+    )
+    body = (
+        "import sys\n"
+        f"required={set(_HERMETIC_ARGUMENTS)!r}\n"
+        "if not required.issubset(sys.argv): raise SystemExit(7)\n"
+        f"print({chr(10).join(records)!r})"
+    )
+    executable = _executable(tmp_path, body)
+    _select_executable(monkeypatch, executable)
+
+    verdict = run_singular_minimal_primes_verification(
+        _ideal(), (_ideal(),), IdealComputationBudget()
+    )
+
+    assert verdict == "VERIFIED"
+
+
+def test_adapter_scripts_gate_the_version_before_any_algebra() -> None:
+    from jacobian.math.commutative_algebra_ops import _singular as adapter
+
+    variables = ("x",)
+    source = _ideal()
+    saturator = RationalPolynomialIdeal(
+        variables=variables,
+        generators=(_single_term_poly(variables, (1,)),),
+    )
+    claimed = (_monomial_ideal(variables, (2,)),)
+    scripts = [
+        adapter._minimal_primes_script(source).decode("ascii"),
+        adapter._minimal_primes_verification_script(source, claimed).decode("ascii"),
+        adapter._verification_script(source, saturator, claimed[0]).decode("ascii"),
+    ]
+
+    for script in scripts:
+        assert script.count('system("version")') == 1
+        assert script.index('system("version")') < script.index('LIB "primdec.lib"')
+
+
+def test_unsupported_version_quit_before_algebra_is_typed_unavailability(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 4.x release quits at the preamble without running decomposition."""
+
+    executable = _executable(
+        tmp_path,
+        f"print({chr(10).join(('JACOBIAN_SINGULAR_IDEAL_V1', '45000'))!r})",
+    )
+    _select_executable(monkeypatch, executable)
+
+    produced = run_singular_minimal_primes(_ideal(), IdealComputationBudget())
+    verified = run_singular_minimal_primes_verification(
+        _ideal(), (_ideal(),), IdealComputationBudget()
+    )
+
+    assert produced.outcome == "UNAVAILABLE"
+    assert produced.components is None
+    assert produced.detail == "The installed Singular release is unsupported."
+    assert verified == "UNAVAILABLE"
+
+
 def test_exact_result_limit_is_not_reported_as_invalid_backend_encoding(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -20,7 +20,7 @@ SINGULAR_VERSION_MAX = 45_000
 
 _STDOUT_LIMIT = 512 * 1024
 _STDERR_LIMIT = 64 * 1024
-_SINGULAR_ARGUMENTS = (
+_SINGULAR_ARGUMENTS = SINGULAR_ARGUMENTS = (
     "-q",
     "-t",
     "--no-rc",
@@ -137,6 +137,7 @@ def run_bounded_singular(
 
 
 __all__ = [
+    "SINGULAR_ARGUMENTS",
     "SingularProtocolReader",
     "UnsupportedSingularVersionError",
     "format_singular_version",

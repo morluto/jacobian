@@ -1,20 +1,38 @@
 """Tests for truncated formal power series operations."""
 
-from jacobian.math.formal_power_series import derivative, multiply
+from jacobian.math.formal_power_series import (
+    compose,
+    derivative,
+    identity_check,
+    multiply,
+    power,
+    truncate,
+)
 from jacobian.math.formal_power_series._models import (
     MAX_RATIONAL_DIGITS,
+    MAX_TRUNCATION_ORDER,
     InputTruncatedSeries,
     SeriesInverseRequest,
+    SeriesTruncateRequest,
     TruncatedSeries,
 )
 from jacobian.math.formal_power_series._operations import (
     compute_derivative,
     compute_multiply,
+    compute_truncate,
 )
 
 
 def _coeff(num: str, den: str = "1") -> dict[str, str]:
     return {"num": num, "den": den}
+
+
+def _ascending(order: int) -> TruncatedSeries:
+    return TruncatedSeries(
+        variable="q",
+        truncation_order=order,
+        coefficients=tuple(_coeff(str(index + 1)) for index in range(order)),
+    )
 
 
 def test_derivative_of_order_one_is_zero() -> None:
@@ -148,3 +166,64 @@ def test_product_can_exceed_input_digit_bound() -> None:
     value = result.result.coefficients[0]
     assert len(value.num.lstrip("-")) > MAX_RATIONAL_DIGITS
     assert len(value.num.lstrip("-")) <= 4096
+
+
+def test_native_exports_admit_inputs_before_kernel_work() -> None:
+    import pytest
+    from pydantic import ValidationError
+
+    wide = _ascending(513)
+    with pytest.raises(ValidationError, match="512"):
+        multiply(wide, wide)
+    with pytest.raises(ValidationError, match="512"):
+        power(wide, 2)
+    with pytest.raises(ValidationError, match="512"):
+        compose(wide, wide)
+
+    tall = "1" + "0" * MAX_RATIONAL_DIGITS
+    oversized = TruncatedSeries(
+        variable="x",
+        truncation_order=1,
+        coefficients=(_coeff(tall),),
+    )
+    with pytest.raises(ValidationError, match="input coefficient"):
+        multiply(oversized, oversized)
+
+
+def test_native_exports_still_admit_the_wire_boundary_order() -> None:
+    edge = _ascending(MAX_TRUNCATION_ORDER)
+    assert power(edge, 0).result.truncation_order == MAX_TRUNCATION_ORDER
+    assert identity_check(edge, edge).status == "EQUAL_MOD_X_TO_N"
+
+
+def test_truncate_accepts_widened_carrier_orders_and_replays_the_prefix() -> None:
+    source = _ascending(1477)
+    request = SeriesTruncateRequest(series=source, target_order=MAX_TRUNCATION_ORDER)
+    result = compute_truncate(request.series, request.target_order)
+    assert result.result.truncation_order == MAX_TRUNCATION_ORDER
+    assert result.result.coefficients == source.coefficients[:MAX_TRUNCATION_ORDER]
+
+    native = truncate(source, 3)
+    assert native.result.coefficients == source.coefficients[:3]
+
+    import pytest
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="public bound"):
+        SeriesTruncateRequest(series=source, target_order=MAX_TRUNCATION_ORDER + 1)
+
+
+def test_level_one_q_expansion_results_are_consumable_through_truncate() -> None:
+    from jacobian.math.modular_forms.operations import level_one_named_q_expansion
+
+    e4 = level_one_named_q_expansion("E4", 1477).q_expansion
+    prefix = truncate(e4, MAX_TRUNCATION_ORDER)
+    assert prefix.result.truncation_order == MAX_TRUNCATION_ORDER
+    assert prefix.result.coefficients == e4.coefficients[:MAX_TRUNCATION_ORDER]
+
+
+def test_widened_truncate_request_is_versioned_as_version_two() -> None:
+    from jacobian.math.formal_power_series._tools import TOOLS
+
+    tools = {tool.operation_id: tool for tool in TOOLS}
+    assert tools["formal_series.rational.truncate.compute"].version == "2"

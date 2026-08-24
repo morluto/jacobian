@@ -303,6 +303,20 @@ class InputTruncatedSeries(TruncatedSeries):
         return self
 
 
+def as_input_series(series: TruncatedSeries) -> InputTruncatedSeries:
+    """Re-admit one carrier value through the bounded operation input envelope.
+
+    Native callers pass the shared carrier directly, so the native execution
+    path proves the same truncation-order and input-digit admission that wire
+    requests prove before any kernel work starts.
+    """
+    return InputTruncatedSeries(
+        variable=series.variable,
+        truncation_order=series.truncation_order,
+        coefficients=series.coefficients,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Pair / single-series request helpers
 # ---------------------------------------------------------------------------
@@ -744,7 +758,14 @@ class SeriesIntegralResult(StrictModel):
 
 
 class SeriesTruncateRequest(StrictModel):
-    series: InputTruncatedSeries
+    """Extract a prefix of at most the public order bound from one series."""
+
+    series: TruncatedSeries = Field(
+        description=(
+            "Source series of any carrier order; only the requested "
+            "target_order prefix is read, so no work scales with N."
+        ),
+    )
     target_order: StrictInt = Field(ge=1)
 
     @model_validator(mode="after")

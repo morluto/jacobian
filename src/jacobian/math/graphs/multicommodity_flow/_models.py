@@ -14,14 +14,13 @@ from jacobian.math.graphs.flow._models import FlowGraph
 # This operation scans a sparse commodity-by-edge tensor and materializes one
 # divergence value for every commodity/vertex pair.  Vertex count and edge
 # count are owned by FlowGraph; admission controls the dense divergence table
-# through the commodity-vertex cell budget, the sparse tensor through the
-# entry budget, and the whole returned value through the aggregate result
-# envelope below.  Commodity and edge counts are never capped independently:
-# the kernel consumes sparse entries and per-edge sums rather than a dense
-# commodity-by-edge tensor.
+# through the commodity-vertex cell budget and the whole returned value
+# through the aggregate result envelope below.  Commodity, edge, and entry
+# counts are never capped independently: entries are distinct commodity-by-
+# edge cells and the kernel consumes sparse entries and per-edge sums rather
+# than a dense tensor.
 MAX_MULTICOMMODITY_EDGES = 512
 MAX_COMMODITY_VERTEX_CELLS = 512
-MAX_SPARSE_FLOW_ENTRIES = 128
 
 # Entry amounts and edge capacities are the only arithmetic operands, and each
 # derived component is computed independently from only the operands that can
@@ -43,31 +42,37 @@ MAX_SPARSE_FLOW_ENTRIES = 128
 # source echo instead of these budgets.
 _DERIVED_DIGIT_SLACK = 8
 
-# A result echoes its source tensor, then includes at most 512 divergence rows
-# and 128 edge rows. A derived rational occupies at most 2*d+24 canonical JSON
-# bytes when its own component bound limits d decimal digits per component;
-# the conservative row overhead reserves ASCII keys, labels, separators, and
-# vertices. Admission measures the echoed source exactly and prices every
-# divergence row and edge row from its own component's digit bound against
-# this aggregate envelope, keeping the serialized result inside the envelope
-# with headroom under the 10 MiB transport limit.
+# A result echoes its source tensor, then includes one divergence row per
+# commodity-vertex cell, one edge row per network edge, and one congestion
+# value. A derived rational occupies at most num+den+24 canonical JSON bytes
+# when its own component bounds limit the two sides separately; the
+# conservative row overhead reserves ASCII keys, labels, separators, and
+# vertices. Admission measures the echoed source exactly, prices exact-zero
+# loads as the single-digit zero rational, and prices every other row from
+# its own numerator and denominator bounds against this aggregate envelope,
+# keeping the serialized result inside the envelope with headroom under the
+# 10 MiB transport limit.
 MAX_PROFILE_RESULT_BYTES = 8 * 1024 * 1024
 _DIVERGENCE_ROW_OVERHEAD_BYTES = 128
 _EDGE_ROW_OVERHEAD_BYTES = 128
+_RATIONAL_JSON_OVERHEAD_BYTES = 24
 _PROFILE_RESULT_HEADER_BYTES = 1_024
 
 # One pass performs at most 3F+E additions/subtractions, K negations, E
-# divisions, and K*V+3E comparisons. Every admitted commodity occupies V >= 2
-# distinct commodity-vertex cells because its source and sink differ, so the
-# 512-cell divergence budget admits at most 256 commodities, one negation
-# each, and FlowGraph's own 512-edge tuple bounds E. With the admitted maxima
-# this is 3,712 logical steps; producer plus exact result replay therefore
-# costs at most 7,424.
-MAX_PROFILE_LOGICAL_STEPS = 7_424
-MAX_PROFILE_ADDITIONS_PER_PASS = 896
+# divisions, and K*V+3E comparisons. Sparse entries are distinct
+# commodity-by-edge cells of the conceptual tensor, so F <= K*E <= 256 * 512.
+# Every admitted commodity occupies V >= 2 distinct commodity-vertex cells
+# because its source and sink differ, so the 512-cell divergence budget
+# admits at most 256 commodities, one negation each, and FlowGraph's own
+# 512-edge tuple bounds E. With the admitted maxima this is 396,544 logical
+# steps per pass; producer plus exact result replay therefore costs at most
+# 793,088.
+MAX_PROFILE_LOGICAL_STEPS = 793_088
+MAX_PROFILE_ADDITIONS_PER_PASS = 393_728
 MAX_PROFILE_NEGATIONS_PER_PASS = MAX_COMMODITY_VERTEX_CELLS // 2
 MAX_PROFILE_DIVISIONS_PER_PASS = 512
 MAX_PROFILE_COMPARISONS_PER_PASS = 2_048
+MAX_SPARSE_FLOW_ENTRIES = (MAX_COMMODITY_VERTEX_CELLS // 2) * MAX_MULTICOMMODITY_EDGES
 
 
 class CommodityDemand(StrictModel):
@@ -171,11 +176,12 @@ def _require_canonical_entries(
 def _profile_component_digit_bounds(
     flow: MulticommodityFlow,
 ) -> tuple[
-    dict[tuple[str, int], int],
-    dict[tuple[int, int], int],
-    dict[tuple[int, int], int],
+    dict[tuple[str, int], tuple[int, int]],
+    dict[tuple[int, int], tuple[int, int]],
+    dict[tuple[int, int], tuple[int, int]],
+    tuple[int, int],
 ]:
-    """Return exact divergence-cell, edge-load, and edge-slack digit bounds."""
+    """Return exact numerator/denominator digit bounds for derived rows."""
 
     cell_den: dict[tuple[str, int], int] = {}
     cell_num: dict[tuple[str, int], int] = {}
@@ -192,54 +198,60 @@ def _profile_component_digit_bounds(
             cell_den[cell_key] = cell_den.get(cell_key, 0) + amount_den
             cell_num[cell_key] = max(cell_num.get(cell_key, 0), amount_num)
 
-    def _sum_bound(den_total: int, max_num: int) -> int:
-        return den_total + max_num + _DERIVED_DIGIT_SLACK
+    def _sum_bound(den_total: int, max_num: int) -> tuple[int, int]:
+        return den_total + max_num + _DERIVED_DIGIT_SLACK, den_total
 
-    cell_bounds: dict[tuple[str, int], int] = {}
+    cell_bounds: dict[tuple[str, int], tuple[int, int]] = {}
     for commodity in flow.commodities:
         for vertex in range(flow.network.vertex_count):
             key = (commodity.commodity_id, vertex)
-            cell_bounds[key] = _sum_bound(
-                cell_den.get(key, 0),
-                cell_num.get(key, 0),
-            )
+            if key in cell_den:
+                cell_bounds[key] = _sum_bound(cell_den[key], cell_num[key])
+            else:
+                cell_bounds[key] = (1, 1)
 
-    load_bounds: dict[tuple[int, int], int] = {}
-    slack_bounds: dict[tuple[int, int], int] = {}
+    load_bounds: dict[tuple[int, int], tuple[int, int]] = {}
+    slack_bounds: dict[tuple[int, int], tuple[int, int]] = {}
+    congestion_bound = (1, 1)
     for edge in flow.network.edges:
         edge_key = (edge.source, edge.target)
         capacity_num = len(edge.capacity.num)
         capacity_den = len(edge.capacity.den)
         den_total = edge_den.get(edge_key)
         if den_total is None:
-            # No amount reaches this edge: its load is exactly zero, its slack
-            # is exactly its capacity, and its congestion ratio is exactly
-            # zero, so each bound is just the larger capacity component.
-            load_bounds[edge_key] = max(capacity_num, capacity_den)
-            slack_bounds[edge_key] = max(capacity_num, capacity_den)
+            # No amount reaches this edge: its load is exactly the zero
+            # rational, its slack is exactly its capacity, and its congestion
+            # ratio reduces to exactly zero.
+            load_bounds[edge_key] = (1, 1)
+            slack_bounds[edge_key] = (capacity_num, capacity_den)
             continue
-        sum_num = _sum_bound(den_total, edge_num[edge_key])
-        load_bounds[edge_key] = max(sum_num, den_total)
-        slack_bounds[edge_key] = max(
-            # Slack numerator: the subtraction runs through both denominators.
-            max(capacity_num + den_total, sum_num + capacity_den) + 1,
-            capacity_den + den_total,
-            # Congestion numerator over its reduced denominator.
-            sum_num + capacity_num,
-            den_total + capacity_num,
+        load_n, load_d = _sum_bound(den_total, edge_num[edge_key])
+        slack_n = max(capacity_num + den_total, load_n + capacity_den) + 1
+        slack_d = capacity_den + den_total
+        load_bounds[edge_key] = (load_n, load_d)
+        slack_bounds[edge_key] = (slack_n, slack_d)
+        # The ratio divides one load by one capacity: both sides pick up the
+        # capacity numerator only.
+        congestion_bound = (
+            max(congestion_bound[0], load_n + capacity_num),
+            max(congestion_bound[1], den_total + capacity_num),
         )
-    return cell_bounds, load_bounds, slack_bounds
+    return cell_bounds, load_bounds, slack_bounds, congestion_bound
 
 
 def derived_profile_digit_budget(flow: MulticommodityFlow) -> int:
     """Return the exact digit bound shared by every derived profile component."""
 
-    cell_bounds, load_bounds, slack_bounds = _profile_component_digit_bounds(flow)
-    return max(
-        max(cell_bounds.values(), default=_DERIVED_DIGIT_SLACK),
-        max(load_bounds.values(), default=_DERIVED_DIGIT_SLACK),
-        max(slack_bounds.values(), default=_DERIVED_DIGIT_SLACK),
+    cell_bounds, load_bounds, slack_bounds, congestion_bound = (
+        _profile_component_digit_bounds(flow)
     )
+    component_sides = [
+        *cell_bounds.values(),
+        *load_bounds.values(),
+        *slack_bounds.values(),
+        congestion_bound,
+    ]
+    return max(max(sides) for sides in component_sides)
 
 
 def _require_derived_digit_budget(flow: MulticommodityFlow) -> int:
@@ -258,22 +270,37 @@ def _require_derived_digit_budget(flow: MulticommodityFlow) -> int:
 def _require_profile_output_admission(flow: MulticommodityFlow) -> None:
     """Reject tensors whose echoed source and priced rows exceed the envelope."""
 
-    cell_bounds, load_bounds, slack_bounds = _profile_component_digit_bounds(flow)
+    cell_bounds, load_bounds, slack_bounds, congestion_bound = (
+        _profile_component_digit_bounds(flow)
+    )
     source_bytes = len(encode_strict_json(flow.model_dump(mode="json")))
     divergence_bytes = sum(
-        2 * bound + 24 + _DIVERGENCE_ROW_OVERHEAD_BYTES
-        for bound in cell_bounds.values()
+        num_digits
+        + den_digits
+        + _RATIONAL_JSON_OVERHEAD_BYTES
+        + _DIVERGENCE_ROW_OVERHEAD_BYTES
+        for num_digits, den_digits in cell_bounds.values()
     )
-    edge_bytes = sum(
-        2 * load_bounds[(edge.source, edge.target)]
-        + 24
-        + 2 * slack_bounds[(edge.source, edge.target)]
-        + 24
-        + _EDGE_ROW_OVERHEAD_BYTES
-        for edge in flow.network.edges
-    )
+    edge_bytes = 0
+    congestion_bytes = sum(congestion_bound) + _RATIONAL_JSON_OVERHEAD_BYTES
+    for edge in flow.network.edges:
+        edge_key = (edge.source, edge.target)
+        load_num, load_den = load_bounds[edge_key]
+        slack_num, slack_den = slack_bounds[edge_key]
+        edge_bytes += (
+            load_num
+            + load_den
+            + slack_num
+            + slack_den
+            + 2 * _RATIONAL_JSON_OVERHEAD_BYTES
+            + _EDGE_ROW_OVERHEAD_BYTES
+        )
     estimated_bytes = (
-        source_bytes + divergence_bytes + edge_bytes + _PROFILE_RESULT_HEADER_BYTES
+        source_bytes
+        + divergence_bytes
+        + edge_bytes
+        + congestion_bytes
+        + _PROFILE_RESULT_HEADER_BYTES
     )
     if estimated_bytes > MAX_PROFILE_RESULT_BYTES:
         raise ValueError(
@@ -336,9 +363,10 @@ class MulticommodityFlowProfileRequest(StrictModel):
             "Canonical sparse tensor bounded by derived quantities: at most "
             "512 returned commodity-vertex cells (hence at most 256 "
             "commodities), at most the 512 network edges FlowGraph itself "
-            "admits, 128 nonzero entries, a per-component exact digit budget "
-            "derived from each component's own operands, and an admitted "
-            "aggregate result envelope below 8 MiB."
+            "admits, nonzero entries bounded by the distinct commodity-by-edge "
+            "cells they occupy, a per-component exact digit budget derived "
+            "from each component's own operands, and an admitted aggregate "
+            "result envelope below 8 MiB."
         )
     )
 

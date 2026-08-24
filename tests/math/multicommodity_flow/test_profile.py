@@ -502,6 +502,56 @@ def test_derived_quantities_admit_edges_without_a_fixed_ceiling() -> None:
         many_edge_flow(64, 513)
 
 
+def test_entry_count_is_bounded_by_distinct_cells_not_a_fixed_ceiling() -> None:
+    # Sparse entries are distinct commodity-by-edge cells, so a one-commodity
+    # network with 129 sorted unit edges carries 129 admissible unit entries:
+    # 13 divergence rows, 129 edge rows, and 1,046 steps per pass sit well
+    # inside the published addition, comparison, work, and output envelopes.
+    def filled_network(vertex_count: int, edge_count: int) -> MulticommodityFlow:
+        pairs = [
+            (source, target)
+            for source in range(vertex_count)
+            for target in range(vertex_count)
+            if source != target
+        ][:edge_count]
+        return MulticommodityFlow(
+            network=FlowGraph(
+                vertex_count=vertex_count,
+                edges=tuple(
+                    CapacitatedEdge(source=source, target=target, capacity=q(1))
+                    for source, target in pairs
+                ),
+            ),
+            commodities=(
+                CommodityDemand(
+                    commodity_id="a", source=0, sink=vertex_count - 1, demand=q(1)
+                ),
+            ),
+            entries=tuple(
+                CommodityEdgeFlow(
+                    commodity_id="a", source=source, target=target, amount=q(1)
+                )
+                for source, target in pairs
+            ),
+        )
+
+    result = compute_multicommodity_flow_profile(filled_network(13, 129))
+    assert result.capacity_feasible is True
+    assert result.congestion == q(1)
+    assert result.work.sparse_entries == 129
+    assert len(result.edge_profiles) == 129
+    assert all(row.load == q(1) for row in result.edge_profiles)
+    assert result.work.rational_additions_per_pass == 3 * 129 + 129
+    assert result.work.exact_comparisons_per_pass == 13 + 3 * 129
+    assert result.work.logical_steps_per_call == 2 * (516 + 1 + 129 + 400)
+
+    # The entry count inherits the derived cell maxima: one commodity over a
+    # full 512-edge graph admits exactly 512 distinct entries.
+    full = compute_multicommodity_flow_profile(filled_network(64, 512))
+    assert full.work.sparse_entries == 512
+    assert full.work.rational_additions_per_pass == 3 * 512 + 512
+
+
 def test_sparse_scan_admits_commodities_over_a_full_edge_graph() -> None:
     # The kernel scans sparse entries and per-edge sums; it never materializes
     # a dense commodity-by-edge tensor, so five commodities over a full
@@ -582,16 +632,16 @@ def test_cell_budgets_admit_commodities_without_a_fixed_ceiling() -> None:
         dense_commodities(257)
 
 
-def test_result_envelope_rejects_wide_tensors_with_large_operands() -> None:
+def test_result_envelope_prices_rows_at_their_actual_sides() -> None:
     from itertools import combinations
 
-    def comb_edge_tensor(capacity: CanonicalRational) -> MulticommodityFlow:
-        # 128 edges keep the echoed source under the 10 MiB canonical encoder
-        # while the priced derived rows cross the 8 MiB result envelope.
+    def comb_edge_tensor(
+        capacity: CanonicalRational, edge_count: int
+    ) -> MulticommodityFlow:
         edges = tuple(
             CapacitatedEdge(source=source, target=target, capacity=capacity)
             for source, target in combinations(range(32), 2)
-        )[:128]
+        )[:edge_count]
         return MulticommodityFlow(
             network=FlowGraph(vertex_count=32, edges=edges),
             commodities=tuple(
@@ -602,19 +652,43 @@ def test_result_envelope_rejects_wide_tensors_with_large_operands() -> None:
             ),
         )
 
-    # Every edge slack is priced at its own worst-case digit bound, so 128
-    # 30,000-digit capacities price the edge rows alone above the aggregate
-    # envelope and the tensor is rejected before any backend runs.
-    with pytest.raises(ValidationError, match="aggregate result bound"):
-        comb_edge_tensor(CanonicalRational(num="9" * 30_000, den="1"))
+    def comb_amount_tensor(amount_digits: int) -> MulticommodityFlow:
+        pairs = list(combinations(range(32), 2))[:128]
+        amount = CanonicalRational(num="9" * amount_digits, den="1")
+        return MulticommodityFlow(
+            network=FlowGraph(
+                vertex_count=32,
+                edges=tuple(
+                    CapacitatedEdge(source=source, target=target, capacity=q(1))
+                    for source, target in pairs
+                ),
+            ),
+            commodities=(
+                CommodityDemand(commodity_id="a", source=0, sink=31, demand=q(1)),
+            ),
+            entries=tuple(
+                CommodityEdgeFlow(
+                    commodity_id="a", source=source, target=target, amount=amount
+                )
+                for source, target in pairs
+            ),
+        )
 
-    # Halving the operand size keeps every priced row inside the envelope:
-    # large exact operands are admitted whenever the components they can
-    # reach stay bounded, never because of a fixed input cap.
-    admitted = comb_edge_tensor(CanonicalRational(num="9" * 5_000, den="1"))
+    # With no entries each load is exactly zero and each slack equals its
+    # capacity: 100 capacities with 32,000-digit numerators echo about
+    # 3.2 MB and repeat them once as slacks, about 6.4 MB total, so the
+    # request stays inside the aggregate envelope. Pricing the zero loads at
+    # the slack bound would have inflated this above 8 MiB and rejected it.
+    admitted = comb_edge_tensor(CanonicalRational(num="9" * 32_000, den="1"), 100)
     result = compute_multicommodity_flow_profile(admitted)
     assert result.capacity_feasible is True
     assert result.work.edge_cells == len(result.flow.network.edges)
+
+    # Unit-capacity edges carrying 22,000-digit amounts make the echoed
+    # entries, divergence cells, loads, slacks, and congestion genuinely
+    # exceed 8 MiB together, so admission fails closed before any backend.
+    with pytest.raises(ValidationError, match="aggregate result bound"):
+        comb_amount_tensor(22_000)
 
 
 def test_result_replay_rejects_forged_source_and_derived_ledger_fields() -> None:

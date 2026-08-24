@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from math import prod
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
@@ -16,6 +15,7 @@ from jacobian.math.matrices.subsystems.values import (
     MAX_SUBSYSTEM_FACTORS,
     FactorizedHermitianMatrix,
     partial_trace_entries,
+    partial_trace_source_index_groups,
 )
 
 MAX_KRONECKER_RESULT_COMPONENT_DIGITS = 256
@@ -50,43 +50,37 @@ def _require_trace_work_envelope(
     matrix: FactorizedHermitianMatrix,
     traced_factor_labels: tuple[str, ...],
 ) -> None:
-    """Bound contraction intermediates from input components before expanding.
+    """Bound contraction intermediates from the terms each cell actually folds.
 
-    Every reduced cell sums exactly one source entry per traced product
-    coordinate, so folding ``t`` terms can only stack denominator height:
-    taking the widest input numerator plus the largest ``t`` input
-    denominators bounds every unreduced intermediate component of the
-    exact contraction.  Reduction between additions lets admitted results
-    sit at the exact result bound while unreduced sums transiently carry
-    several folded denominators, so this work envelope is a fixed multiple
-    of the result bound rather than the result bound itself.
+    ``Fraction`` folds reduce between additions, so one contracted cell's
+    running denominator always divides the least common multiple of its folded
+    denominators -- at most the digit sum over that cell's distinct denominator
+    values -- while its running numerator gains at most the decimal width of
+    the fold count over that cell's widest folded numerator.  Charging each
+    contracted output cell for its own components, with shared denominators
+    counted once, bounds every unreduced intermediate exactly where it arises
+    and keeps emitted canonical values usable by this consumer, instead of
+    charging every cell for the globally largest components.
     """
 
-    traced_coordinates = prod(
-        (
-            factor.dimension
-            for factor in matrix.factors
-            if factor.label in set(traced_factor_labels)
-        ),
-        start=1,
-    )
-    numerator_digits = 1
-    denominator_digits: list[int] = []
-    for row in matrix.matrix.entries:
-        for entry in row:
-            numerator_digits = max(numerator_digits, len(entry.num.lstrip("-")))
-            denominator_digits.append(len(entry.den))
-    folded_denominator_digits = sum(
-        sorted(denominator_digits, reverse=True)[:traced_coordinates]
-    )
-    if (
-        numerator_digits + folded_denominator_digits
-        > MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS
-    ):
-        raise ValueError(
-            "partial-trace contraction work exceeds the "
-            f"{MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS}-digit intermediate bound"
+    for group in partial_trace_source_index_groups(matrix, traced_factor_labels):
+        entries = [matrix.matrix.entries[row][column] for row, column in group]
+        fold_digits = len(str(len(entries)))
+        numerator_digits = max(
+            (len(entry.num.lstrip("-")) for entry in entries),
+            default=1,
         )
+        denominator_digits = sum(
+            len(denominator) for denominator in {entry.den for entry in entries}
+        )
+        if (
+            fold_digits + numerator_digits + denominator_digits
+            > MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS
+        ):
+            raise ValueError(
+                "partial-trace contraction work exceeds the "
+                f"{MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS}-digit intermediate bound"
+            )
 
 
 def _require_trace_result_envelope(

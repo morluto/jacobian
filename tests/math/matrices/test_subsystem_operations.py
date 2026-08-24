@@ -327,11 +327,10 @@ def test_partial_trace_rejects_contraction_work_before_exact_expansion(
     from jacobian.math.matrices.subsystems import _models
 
     factors = tuple(MatrixSubsystem(label=label, dimension=2) for label in "pqrs")
-    value_denominator = 10**1100 + 7
     source = _matrix(
         [
             [
-                Fraction(1, value_denominator) if row == column else 0
+                Fraction(1, 10 ** (1030 + row) + row) if row == column else 0
                 for column in range(16)
             ]
             for row in range(16)
@@ -373,17 +372,73 @@ def test_partial_trace_work_envelope_admits_folded_boundary_terms() -> None:
     assert _entries(reduced) == ((Fraction(4, admitted_denominator),),)
 
 
-def test_partial_trace_work_envelope_rejects_one_step_above_the_folded_boundary(
+def test_partial_trace_readmits_its_emitted_shared_denominator_factor() -> None:
+    q = MatrixSubsystem(label="q", dimension=2)
+    r = MatrixSubsystem(label="r", dimension=8)
+    shared_denominator = 10**4094 + 9
+    source = _matrix(
+        [
+            [
+                Fraction(1, shared_denominator) if row == column else 0
+                for column in range(16)
+            ]
+            for row in range(16)
+        ],
+        (q, r),
+    )
+
+    reduced = partial_trace(source, ("q",))
+    assert reduced.factors == (r,)
+    assert _entries(reduced) == tuple(
+        tuple(
+            Fraction(2, shared_denominator) if row == column else Fraction(0)
+            for column in range(8)
+        )
+        for row in range(8)
+    )
+    stepwise = partial_trace(reduced, ("r",))
+    combined = partial_trace(source, ("q", "r"))
+    assert stepwise == combined
+    assert _entries(stepwise) == ((Fraction(16, shared_denominator),),)
+
+
+def test_partial_trace_work_charges_only_contracted_terms() -> None:
+    y = MatrixSubsystem(label="y", dimension=2)
+    z = MatrixSubsystem(label="z", dimension=2)
+    uncontracted = Fraction(1, 10**9000 + 9)
+    source = _matrix(
+        [
+            [Fraction(1, 3), 0, 0, uncontracted],
+            [0, Fraction(1, 5), 0, 0],
+            [0, 0, Fraction(1, 7), 0],
+            [uncontracted, 0, 0, Fraction(1, 11)],
+        ],
+        (y, z),
+    )
+
+    reduced = partial_trace(source, ("y",))
+    assert _entries(reduced) == (
+        (Fraction(1, 3) + Fraction(1, 7), Fraction(0)),
+        (Fraction(0), Fraction(1, 5) + Fraction(1, 11)),
+    )
+
+
+def test_partial_trace_work_envelope_rejects_one_step_above_the_contracted_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from jacobian.math.matrices.subsystems import _models
 
     q = MatrixSubsystem(label="q", dimension=4)
-    rejected_denominator = 10**4097 + 3
+    rejected_denominators = (
+        10**4097 + 3,
+        10**4097 + 5,
+        10**4097 + 11,
+        10**4097 + 13,
+    )
     source = _matrix(
         [
             [
-                Fraction(1, rejected_denominator) if row == column else 0
+                Fraction(1, rejected_denominators[row]) if row == column else 0
                 for column in range(4)
             ]
             for row in range(4)

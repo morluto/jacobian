@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from itertools import product
-from math import prod
+from math import isqrt, prod
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
@@ -85,11 +85,16 @@ class FactorizedHermitianMatrix(StrictModel):
         return self
 
 
-def partial_trace_entries(
+def partial_trace_source_index_groups(
     matrix: FactorizedHermitianMatrix,
     traced_factor_labels: tuple[str, ...],
-) -> tuple[tuple[Fraction, ...], ...]:
-    """Return the exact trace over named factors in the declared product basis."""
+) -> tuple[tuple[tuple[int, int], ...], ...]:
+    """Return, per reduced output cell, the folded source (row, column) indices.
+
+    Cells follow the reduced matrix's row-major order, and each cell lists its
+    terms in the kernel's fold order, so consumers of this walk share one
+    contraction layout with :func:`partial_trace_entries`.
+    """
 
     positions = {
         factor.label: position for position, factor in enumerate(matrix.factors)
@@ -103,9 +108,6 @@ def partial_trace_entries(
     dimensions = tuple(factor.dimension for factor in matrix.factors)
     traced_dimensions = tuple(dimensions[position] for position in traced_positions)
     kept_dimensions = tuple(dimensions[position] for position in kept_positions)
-    source = tuple(
-        tuple(entry.as_fraction() for entry in row) for row in matrix.matrix.entries
-    )
 
     def flat_index(coordinates: tuple[int, ...]) -> int:
         index = 0
@@ -119,11 +121,10 @@ def partial_trace_entries(
     traced_coordinates = tuple(
         product(*(range(dimension) for dimension in traced_dimensions))
     )
-    rows: list[tuple[Fraction, ...]] = []
+    cells: list[tuple[tuple[int, int], ...]] = []
     for row_coordinates in kept_coordinates:
-        row: list[Fraction] = []
         for column_coordinates in kept_coordinates:
-            total = Fraction(0)
+            cell: list[tuple[int, int]] = []
             for trace_coordinates in traced_coordinates:
                 source_row = [0] * len(dimensions)
                 source_column = [0] * len(dimensions)
@@ -140,12 +141,37 @@ def partial_trace_entries(
                 ):
                     source_row[position] = coordinate
                     source_column[position] = coordinate
-                total += source[flat_index(tuple(source_row))][
-                    flat_index(tuple(source_column))
-                ]
-            row.append(total)
-        rows.append(tuple(row))
-    return tuple(rows)
+                cell.append(
+                    (
+                        flat_index(tuple(source_row)),
+                        flat_index(tuple(source_column)),
+                    )
+                )
+            cells.append(tuple(cell))
+    return tuple(cells)
+
+
+def partial_trace_entries(
+    matrix: FactorizedHermitianMatrix,
+    traced_factor_labels: tuple[str, ...],
+) -> tuple[tuple[Fraction, ...], ...]:
+    """Return the exact trace over named factors in the declared product basis."""
+
+    source = tuple(
+        tuple(entry.as_fraction() for entry in row) for row in matrix.matrix.entries
+    )
+    groups = partial_trace_source_index_groups(matrix, traced_factor_labels)
+    kept_order = isqrt(len(groups))
+    return tuple(
+        tuple(
+            sum(
+                (source[row_index][column_index] for row_index, column_index in group),
+                Fraction(0),
+            )
+            for group in groups[row * kept_order : (row + 1) * kept_order]
+        )
+        for row in range(len(groups) // kept_order)
+    )
 
 
 __all__ = [

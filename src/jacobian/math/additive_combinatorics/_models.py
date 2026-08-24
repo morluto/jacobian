@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Annotated, Self
 
 from pydantic import Field, StringConstraints, model_validator
@@ -350,6 +350,36 @@ class SubsetSumProfileRequest(StrictModel):
             f"{MAX_SUBSET_SUM_PROFILE_RESULT_BYTES:,} bytes."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def bound_raw_source(cls, value: object) -> object:
+        """Reject oversized raw sources before nested integer parsing.
+
+        Running a before validator moves field validation into Python
+        mode, where decoded JSON arrays no longer coerce to the declared
+        tuple shapes; normalize the source value list to a tuple on a
+        copied path so JSON invocation keeps working while the stored
+        sequence stays canonical.
+        """
+
+        if not isinstance(value, Mapping):
+            return value
+        prepared: dict[str, object] = dict(value)
+        raw_source = prepared.get("source")
+        if isinstance(raw_source, Mapping):
+            source = dict(raw_source)
+            items = source.get("items")
+            if isinstance(items, list):
+                source["items"] = tuple(items)
+            prepared["source"] = source
+            raw_items = source["items"]
+            if isinstance(raw_items, tuple) and len(raw_items) > MAX_SUBSET_SUM_ITEMS:
+                raise ValueError(
+                    "subset-sum profile source exceeds the "
+                    f"{MAX_SUBSET_SUM_ITEMS:,}-item profile bound"
+                )
+        return prepared
 
     @model_validator(mode="after")
     def require_admitted_profile_envelope(self) -> Self:

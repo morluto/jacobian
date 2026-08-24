@@ -42,8 +42,7 @@ def _subset_sum_profile_envelope(
     subset of the final support because the exclude branch retains old sums.
     """
 
-    values = source.as_int_tuple()
-    item_count = len(values)
+    item_count = len(source.items)
     # The shared canonical sequence value carries the widest consumer
     # envelope; the profile's own item ceiling is derived from its
     # multiplicity representation, since total_subsets = 2**item_count is
@@ -53,6 +52,7 @@ def _subset_sum_profile_envelope(
             "subset-sum profile source exceeds the "
             f"{MAX_SUBSET_SUM_ITEMS:,}-item profile bound"
         )
+    values = source.as_int_tuple()
     total_subsets = 1 << item_count
 
     negative_sum = sum(value for value in values if value < 0)

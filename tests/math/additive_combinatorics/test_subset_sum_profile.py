@@ -25,6 +25,7 @@ from jacobian.math.additive_combinatorics._operations import (
 )
 from jacobian.math.additive_combinatorics.operations import (
     MAX_SUBSET_SUM_PROFILE_RESULT_BYTES,
+    _subset_sum_profile_envelope,
 )
 from jacobian.math.additive_combinatorics.values import (
     MAX_SUBSET_SUM_ITEM_DIGITS,
@@ -223,6 +224,35 @@ def test_source_item_count_bound_is_enforced_by_admission() -> None:
 
     with pytest.raises(ValidationError, match="at most 500000 items"):
         IndexedIntegerSequence(items=("0",) * (500_000 + 1))
+
+
+def test_profile_envelope_rejects_oversized_sources_before_integer_conversion() -> None:
+    widened = IndexedIntegerSequence(items=("0",) * (MAX_SUBSET_SUM_ITEMS + 1))
+
+    with pytest.raises(
+        ValueError, match=f"{MAX_SUBSET_SUM_ITEMS:,}-item profile bound"
+    ):
+        _subset_sum_profile_envelope(widened)
+
+
+def test_raw_item_count_bound_is_enforced_before_nested_parsing() -> None:
+    payload = {"source": {"items": ["z"] * (MAX_SUBSET_SUM_ITEMS + 1)}}
+
+    with pytest.raises(
+        ValidationError, match=f"{MAX_SUBSET_SUM_ITEMS:,}-item profile bound"
+    ):
+        SubsetSumProfileRequest.model_validate(payload)
+
+
+def test_wide_canonical_items_are_rejected_by_the_raw_item_count_bound() -> None:
+    payload = {
+        "source": {"items": ["9" * 1_000] * (MAX_SUBSET_SUM_ITEMS + 1)},
+    }
+
+    with pytest.raises(
+        ValidationError, match=f"{MAX_SUBSET_SUM_ITEMS:,}-item profile bound"
+    ):
+        SubsetSumProfileRequest.model_validate(payload)
 
 
 @pytest.mark.parametrize(

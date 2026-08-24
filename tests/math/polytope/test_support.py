@@ -115,6 +115,15 @@ def _forbid_extremality_proof(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+def _forbid_support_replay(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fail the test if bind's exact support replay is ever reached."""
+
+    def unexpected_replay(polytope: object, covector: object) -> object:
+        raise AssertionError("support replay ran before the conclusion preflight")
+
+    monkeypatch.setattr(polytope_operations, "support_data", unexpected_replay)
+
+
 @pytest.fixture()
 def square_result() -> PolytopeSupportResult:
     return compute_polytope_support(
@@ -482,6 +491,47 @@ def test_request_preflights_built_foreign_covector_space_before_hull_proof(
         match="polytope and covector must use the same coordinate space",
     ):
         PolytopeSupportRequest.model_validate(payload)
+
+
+def test_request_gate_covers_built_polytope_space_pairing() -> None:
+    """The covector gate reads a constructed polytope's declared axes
+    too, so an all-built foreign pairing is rejected by the same cheap
+    check instead of the after-validator."""
+
+    payload = _square_payload()
+    payload["polytope"] = RationalVPolytope(
+        space=RationalCoordinateSpace(axes=("u", "v")),
+        vertices=(
+            _vertex("bottom_left", 0, 0),
+            _vertex("bottom_right", 1, 0),
+            _vertex("top_left", 0, 1),
+            _vertex("top_right", 1, 1),
+        ),
+    )
+    payload["covector"] = _covector(1, 0)
+
+    with pytest.raises(
+        ValidationError,
+        match="polytope and covector must use the same coordinate space",
+    ):
+        PolytopeSupportRequest.model_validate(payload)
+
+
+def test_built_matching_covector_composes_with_serialized_polytope() -> None:
+    """A constructed covector sharing the serialized source's declared
+    axes still composes unchanged: the mixed-payload gate mirrors the
+    common-space rule without narrowing the published domain."""
+
+    payload = _square_payload()
+    payload["covector"] = _covector(1, 0)
+    request = PolytopeSupportRequest.model_validate(payload)
+    result = compute_polytope_support(request)
+
+    assert result.support_value.as_fraction() == 1
+    assert tuple(vertex.vertex_id for vertex in result.exposed_face.vertices) == (
+        "bottom_right",
+        "top_right",
+    )
 
 
 def test_request_preflights_malformed_covector_space_before_hull_proof(
@@ -914,10 +964,13 @@ def test_result_preflights_built_foreign_exposed_face_space_before_nested_parsin
 
 def test_constructed_result_rejects_foreign_exposed_face_space_at_construction(
     square_result: PolytopeSupportResult,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An already-built face in another coordinate space is rejected at
     construction with the typed space mismatch, before any binding work
-    runs."""
+    — including bind's exact support replay — runs."""
+
+    _forbid_support_replay(monkeypatch)
 
     with pytest.raises(ValidationError, match="same coordinate space"):
         PolytopeSupportResult(
@@ -929,6 +982,19 @@ def test_constructed_result_rejects_foreign_exposed_face_space_at_construction(
                 vertices=square_result.exposed_face.vertices,
             ),
         )
+
+
+def test_built_matching_exposed_face_composes_with_serialized_result(
+    square_result: PolytopeSupportResult,
+) -> None:
+    """A constructed face sharing the serialized source's declared axes
+    still composes unchanged: the mixed-payload gate mirrors the
+    common-space rule without narrowing the published domain."""
+
+    payload = square_result.model_dump(mode="json")
+    payload["exposed_face"] = square_result.exposed_face
+
+    assert PolytopeSupportResult.model_validate(payload) == square_result
 
 
 def test_constructed_result_still_rejects_forged_face_at_bind(

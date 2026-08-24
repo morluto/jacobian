@@ -331,22 +331,59 @@ def test_request_rejects_edge_key_work_before_enumeration() -> None:
         )
 
 
-def test_request_enforces_source_bound_result_byte_boundary() -> None:
-    colors = tuple(f"color-{index:02d}" for index in range(64))
+def _dense_complete_colored_graph(label_bytes: int) -> ColoredUndirectedGraph:
+    labels = tuple(f"{index:02d}-" + "x" * (label_bytes - 3) for index in range(64))
+    complete_edges = tuple(itertools.combinations(labels, 2))
+    return _graph(
+        labels,
+        complete_edges,
+        vertex_colors=tuple(f"color-{index:02d}" for index in range(64)),
+        edge_colors=("e" * 64,) * len(complete_edges),
+    )
 
-    def dense_graph(label_bytes: int) -> ColoredUndirectedGraph:
-        labels = tuple(f"{index:02d}-" + "x" * (label_bytes - 3) for index in range(64))
-        complete_edges = tuple(itertools.combinations(labels, 2))
-        return _graph(
-            labels,
-            complete_edges,
-            vertex_colors=colors,
-            edge_colors=("e" * 64,) * len(complete_edges),
-        )
 
-    ColoredGraphCanonicalizationRequest(colored_graph=dense_graph(48))
+def test_request_admits_transport_bounded_dense_results() -> None:
+    """A 64-vertex complete graph with 49-byte labels fits the derived budget.
+
+    Distinct vertex colors leave one candidate labeling, the replay work stays
+    below its bound, and the exact result sits far below the repository's
+    10 MiB canonical JSON output limit, so only the superseded 512 KiB ceiling
+    rejected it.
+    """
+    dense_graph = _dense_complete_colored_graph(49)
+
+    assert (
+        isomorphism_models.canonicalization_result_wire_bytes(dense_graph)
+        > 512 * 1024
+    )
+    result = compute_colored_graph_canonicalization(
+        ColoredGraphCanonicalizationRequest(colored_graph=dense_graph)
+    )
+    assert canonicalize_colored_graph(dense_graph) == result
+
+    labels = tuple(f"{index:02d}-" + "x" * (49 - 3) for index in range(64))
+    mapping = {
+        item.source_vertex: item.canonical_vertex for item in result.relabeling
+    }
+    assert mapping == {
+        label: f"v{index:02d}" for index, label in enumerate(labels)
+    }
+
+
+def test_request_enforces_source_bound_result_byte_boundary(monkeypatch) -> None:
+    max_shape = _dense_complete_colored_graph(64)
+    assert (
+        isomorphism_models.canonicalization_result_wire_bytes(max_shape)
+        <= isomorphism_models.MAX_CANONICALIZATION_RESULT_BYTES
+    )
+
+    monkeypatch.setattr(
+        isomorphism_models,
+        "MAX_CANONICALIZATION_RESULT_BYTES",
+        512 * 1024,
+    )
     with pytest.raises(ValidationError, match="byte result bound"):
-        ColoredGraphCanonicalizationRequest(colored_graph=dense_graph(49))
+        ColoredGraphCanonicalizationRequest(colored_graph=max_shape)
 
 
 @pytest.mark.parametrize(

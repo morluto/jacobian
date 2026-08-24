@@ -12,7 +12,8 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_CANONICAL_PERMUTATIONS = factorial(9)
 MAX_CANONICAL_REPLAY_WORK = 100_000_000
-MAX_CANONICALIZATION_RESULT_BYTES = 512 * 1024
+MAX_CANONICALIZATION_RESULT_BYTES = 10 * 1024 * 1024
+"""Aggregate canonical-output budget aligned with Jacobian's 10 MiB JSON limit."""
 _RESULT_ENVELOPE_RESERVE_BYTES = 1_024
 
 

@@ -362,9 +362,7 @@ def test_high_dimension_single_box_is_admitted_by_scaled_budgets() -> None:
 
 
 def test_boxes_admit_the_full_canonical_dimension_range_and_no_more() -> None:
-    result = compute_box_union_volume(
-        (_box(*((0, 1),) * MAX_CANONICAL_BOX_DIMENSION),)
-    )
+    result = compute_box_union_volume((_box(*((0, 1),) * MAX_CANONICAL_BOX_DIMENSION),))
 
     assert result.union_volume.as_fraction() == 1
     assert result.source.boxes[0].dimension == MAX_CANONICAL_BOX_DIMENSION

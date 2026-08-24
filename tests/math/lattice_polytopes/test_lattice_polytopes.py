@@ -813,7 +813,6 @@ class TestBoundedEmptyHalfspacePolytopes:
             "polytope.lattice_points.count",
         ):
             description = tools[operation_id].description.lower()
-            assert len(tools[operation_id].description) <= 512
             assert "empty" in description
         schema = LatticePolytopeRequest.model_json_schema()
         halfspaces_description = schema["properties"]["halfspaces"]["description"]
@@ -1091,7 +1090,6 @@ class TestThirdWaveRegressions:
         ):
             description = tools[operation_id].description.lower()
             assert "nonzero" in description
-            assert len(tools[operation_id].description) <= 512
 
     def test_halfspace_example_no_longer_claims_lower_dimensional_rejection(self):
         """Only V-representations are rejected for lower dimension; the

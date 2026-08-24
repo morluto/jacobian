@@ -461,6 +461,39 @@ def test_nonunit_scalar_growth_still_gates_at_the_coefficient_budget() -> None:
         )
 
 
+def test_no_growth_derivatives_are_admitted_at_the_coefficient_boundary() -> None:
+    variables = ("x",)
+    source = RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num="1" + "0" * 32_767, den="1"),
+                    exponents=(1,),
+                ),
+            )
+        ),
+    )
+
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=source,
+            operator=_operator(variables, {(1,): 1}),
+            iterations=1,
+            expected=_polynomial(variables, {(0,): 10**32_767}),
+        )
+    )
+    replayed = DifferentialOperatorApplyResult.model_validate(
+        result.model_dump(mode="json")
+    )
+
+    assert result.output == _polynomial(variables, {(0,): 10**32_767})
+    assert result.matches_expected is True
+    assert result.is_zero is False
+    assert replayed == result
+    assert len(result.output.polynomial.terms[0].coefficient.num) == 32_768
+
+
 def test_componentwise_annihilation_admits_off_axis_sources_beyond_caps() -> None:
     variables = ("x", "y")
     tall_source = _polynomial(variables, {(0, 129): 1})

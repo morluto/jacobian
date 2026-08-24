@@ -151,12 +151,17 @@ def _operator_power_work(term_count: int, iterations: int) -> int:
     return work
 
 
-def _operator_path_bit_bound(term_count: int, iterations: int) -> int:
-    """Bound the bit length of ``term_count**iterations`` without expanding it."""
+def _multiplier_bit_bound(value: int, exponent: int) -> int:
+    """Bound the bits a multiplication by ``value**exponent`` can add.
 
-    if iterations == 0 or term_count <= 1:
-        return 1
-    return iterations * (term_count - 1).bit_length() + 1
+    ``value <= 2 ** (value - 1).bit_length()`` for every positive integer, so
+    multiplying by ``value`` adds at most ``(value - 1).bit_length()`` bits and
+    unit factors add none.
+    """
+
+    if exponent == 0 or value <= 1:
+        return 0
+    return exponent * (value - 1).bit_length()
 
 
 def _common_denominator_height(values: Iterable[Fraction]) -> tuple[int, int]:
@@ -170,12 +175,6 @@ def _common_denominator_height(values: Iterable[Fraction]) -> tuple[int, int]:
         abs(value.numerator) * (denominator // value.denominator) for value in fractions
     )
     return denominator, maximum_scaled_numerator
-
-
-def _power_bit_bound(value: int, exponent: int) -> int:
-    if exponent == 0 or value <= 1:
-        return 1
-    return value.bit_length() * exponent
 
 
 def _decimal_digits_from_bits(bits: int) -> int:
@@ -197,7 +196,7 @@ def _coefficient_digit_bound(
     polynomial: RationalPolynomial,
     operator: ConstantCoefficientDifferentialOperator,
     iterations: int,
-    path_count_bits: int,
+    candidate_terms: int,
 ) -> int:
     if iterations == 0:
         return _max_coefficient_digits(polynomial)
@@ -211,24 +210,22 @@ def _coefficient_digit_bound(
     degree = _total_degree(polynomial)
     maximum_operator_order = max(sum(term.orders) for term in operator.terms)
     derivative_order = min(degree, iterations * maximum_operator_order)
-    # Every per-axis falling factorial (e)_d satisfies (e)_d <= e^d, so the
-    # derivative multiplier's bit length is d * bits(e); this bounds rational
-    # coefficient growth without materializing degree-sized factorials when
-    # sparse sources carry exponents far above the derivative order.
-    falling_factor_bits = max(1, derivative_order * max(1, degree.bit_length()))
+    # Every per-axis falling factorial (e)_d satisfies (e)_d <= e^d and every
+    # per-axis exponent e is at most the total degree, so the derivative
+    # multiplier adds at most derivative_order * log2(degree) bits; the tight
+    # multiplier bound above keeps unit factors - a degree-one source, a unit
+    # operator coefficient, or a single candidate path - from adding any bit.
+    falling_factor_bits = _multiplier_bit_bound(degree, derivative_order)
 
-    numerator_bits = sum(
-        (
-            max(1, len(polynomial.polynomial.terms)).bit_length(),
-            path_count_bits,
-            max(1, source_numerator).bit_length(),
-            _power_bit_bound(operator_numerator, iterations),
-            falling_factor_bits,
-        )
+    numerator_bits = source_numerator.bit_length() + (
+        _multiplier_bit_bound(candidate_terms, 1)
+        + _multiplier_bit_bound(operator_numerator, iterations)
+        + falling_factor_bits
     )
-    denominator_bits = source_denominator.bit_length()
-    if operator_denominator > 1:
-        denominator_bits += operator_denominator.bit_length() * iterations
+    denominator_bits = source_denominator.bit_length() + _multiplier_bit_bound(
+        operator_denominator,
+        iterations,
+    )
     return max(
         _decimal_digits_from_bits(numerator_bits),
         _decimal_digits_from_bits(denominator_bits),
@@ -456,8 +453,8 @@ def validate_application_envelope(
 
     # Signed-unit scalar powers only flip signs: (±1)^k f = ±f keeps every
     # coefficient height unchanged, so their digit admission follows the
-    # copied result's own heights; the generic multiplicative estimate's
-    # one-bit floors would otherwise push a fitting boundary rescale out.
+    # copied result's own heights rather than the common-denominator scaling
+    # the generic estimate starts from.
     if scalar_action and _is_signed_unit_scalar(operator):
         coefficient_digits = _max_coefficient_digits(polynomial)
     else:
@@ -465,7 +462,7 @@ def validate_application_envelope(
             polynomial,
             operator,
             iterations,
-            _operator_path_bit_bound(term_count, iterations),
+            candidate_terms,
         )
     if coefficient_digits > MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS:
         raise ValueError(

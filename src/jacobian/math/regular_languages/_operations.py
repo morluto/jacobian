@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.regular_languages import (
+    TransitionParikhProfile,
     count_accepted_words,
     dfa_complement,
     dfa_run,
+    transition_parikh_profile,
 )
 from jacobian.math.regular_languages._models import (
     ComplementRequest,
@@ -15,6 +17,7 @@ from jacobian.math.regular_languages._models import (
     CountResult,
     RunRequest,
     RunResult,
+    TransitionParikhProfileRequest,
 )
 
 
@@ -46,4 +49,20 @@ def compute_complement(request: ComplementRequest) -> ComplementResult:
     return ComplementResult(dfa=dfa_complement(request.dfa))
 
 
-__all__ = ["compute_complement", "compute_count", "compute_run"]
+def compute_transition_parikh_profile(
+    request: TransitionParikhProfileRequest,
+) -> TransitionParikhProfile:
+    return transition_parikh_profile(
+        request.automaton,
+        request.source_state,
+        request.target_state,
+        request.path_length,
+    )
+
+
+__all__ = [
+    "compute_complement",
+    "compute_count",
+    "compute_run",
+    "compute_transition_parikh_profile",
+]

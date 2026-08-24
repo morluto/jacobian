@@ -6,6 +6,10 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.graphs.coloring._chromatic_number_models import (
+    ChromaticNumberCertificateCheckRequest,
+    ChromaticNumberCertificateCheckResult,
+)
 from jacobian.math.graphs.coloring._models import (
     EdgeColoringCheckRequest,
     EdgeColoringCheckResult,
@@ -17,6 +21,7 @@ from jacobian.math.graphs.coloring._models import (
     MaximalIndependentSetResult,
 )
 from jacobian.math.graphs.coloring._operations import (
+    compute_chromatic_number_certificate_check,
     compute_edge_coloring_check,
     compute_edge_k_colorability,
     compute_k_colorability,
@@ -75,6 +80,58 @@ PETERSEN_GRAPH = {
 }
 
 GRAPH_COLORING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
+    graph_coloring_operation(
+        "graph.coloring.chromatic_number.check",
+        "Check an exact chromatic-number certificate",
+        "Check an exact vertex chromatic number from both sides: a "
+        "proper k-coloring proves the upper bound, while exact nonnegative "
+        "rational vertex weights prove the lower bound when every independent "
+        "set has weight at most one and ceil(sum(weights)) equals k. The "
+        "checker exhaustively replays all 2^n subsets inside an admitted "
+        "order-20 envelope, retains the graph, claim, coloring, and weights, "
+        "and returns a deterministic rejection witness for invalid evidence. "
+        "Coloring and weight tuples use graph.vertices order.",
+        ChromaticNumberCertificateCheckRequest,
+        ChromaticNumberCertificateCheckResult,
+        compute_chromatic_number_certificate_check,
+        "graph",
+        "coloring",
+        "chromatic-number",
+        "fractional-clique",
+        "independent-set",
+        "certificate",
+        "exact",
+        examples=(
+            example(
+                "complete_bipartite_k23_chromatic_number",
+                "Check chi(K_2,3)=2 from its bipartition coloring and exact "
+                "fractional-clique weights; coloring and weights must align "
+                "with graph.vertices, and the graph may have at most 20 vertices.",
+                {
+                    "graph": {
+                        "vertices": ["a0", "a1", "b0", "b1", "b2"],
+                        "edges": [
+                            ["a0", "b0"],
+                            ["a0", "b1"],
+                            ["a0", "b2"],
+                            ["a1", "b0"],
+                            ["a1", "b1"],
+                            ["a1", "b2"],
+                        ],
+                    },
+                    "claimed_chromatic_number": 2,
+                    "coloring": [0, 0, 1, 1, 1],
+                    "weights": [
+                        {"num": "1", "den": "2"},
+                        {"num": "1", "den": "2"},
+                        {"num": "1", "den": "3"},
+                        {"num": "1", "den": "3"},
+                        {"num": "1", "den": "3"},
+                    ],
+                },
+            ),
+        ),
+    ),
     graph_coloring_operation(
         "graph.coloring.k_colorability.decide",
         "Decide k-colorability of a graph",

@@ -158,10 +158,10 @@ class TestIdealSaturation:
             IdealSaturationRequest(ideal=ideal, denominator=denominator)
 
     def test_denominator_exceeding_total_degree_rejected(self):
-        """The denominator polynomial obeys the same degree-12 bound."""
+        """The denominator polynomial obeys the same degree-20 bound."""
 
         ideal = _ideal(("x",), {(2,): 1})
-        denominator = _polynomial(("x",), {(13,): 1})
+        denominator = _polynomial(("x",), {(21,): 1})
         with pytest.raises(ValidationError):
             IdealSaturationRequest(ideal=ideal, denominator=denominator)
 

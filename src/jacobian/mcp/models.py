@@ -17,7 +17,7 @@ from jacobian.catalog.models import (
 
 class OperationSearchRequest(StrictModel):
     op: Literal["search"]
-    query: Annotated[str, Field(min_length=1, max_length=512)]
+    query: Annotated[str, Field(min_length=1)]
     domain: Annotated[
         str | None,
         Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,127}$"),

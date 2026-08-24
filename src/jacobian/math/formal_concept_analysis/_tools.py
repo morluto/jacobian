@@ -14,6 +14,7 @@ from jacobian.math.formal_concept_analysis._models import (
     DerivationResult,
     EnumerateConceptsRequest,
     EnumerateConceptsResult,
+    ImplicationClosureRequest,
     ObjectSubsetRequest,
 )
 from jacobian.math.formal_concept_analysis._operations import (
@@ -22,9 +23,11 @@ from jacobian.math.formal_concept_analysis._operations import (
     compute_concept_from_objects,
     compute_concept_lattice,
     compute_enumerate_concepts,
+    compute_implication_closure,
     compute_object_closure,
     compute_object_derivation,
 )
+from jacobian.math.formal_concept_analysis.values import ImplicationClosureResult
 
 
 def _op[
@@ -195,6 +198,37 @@ FORMAL_CONCEPT_ANALYSIS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "concept_lattice",
                 "Concept lattice of a 2x2 context.",
                 {"context": _CONTEXT},
+            ),
+        ),
+    ),
+    _op(
+        "implication_system.closure.compute",
+        "Compute closure under a finite attribute implication system",
+        "Return the unique least superset of a seed that satisfies every finite "
+        "attribute implication, together with the first canonical derivation of "
+        "each added attribute and exact canonical lineage-replay work.",
+        ImplicationClosureRequest,
+        ImplicationClosureResult,
+        compute_implication_closure,
+        "formal-concept-analysis",
+        "implication-system",
+        "closure",
+        "exact",
+        examples=(
+            example(
+                "two_round_implication_closure",
+                "Close {has_wings} through has_wings -> flies -> is_mobile; "
+                "all rule and seed indices must refer to the declared attribute axis.",
+                {
+                    "system": {
+                        "attributes": ["has_wings", "flies", "is_mobile"],
+                        "implications": [
+                            {"premise": [0], "conclusion": [1]},
+                            {"premise": [1], "conclusion": [2]},
+                        ],
+                    },
+                    "seed": [0],
+                },
             ),
         ),
     ),

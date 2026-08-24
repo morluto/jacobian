@@ -1,6 +1,7 @@
 """Native-value mathematical APIs supported by Jacobian."""
 
 from jacobian.math import (
+    additive_combinatorics,
     algebraic_combinatorics,
     approximation_theory,
     arithmetic,
@@ -8,6 +9,7 @@ from jacobian.math import (
     combinatorial_maps,
     combinatorial_matrices,
     combinatorics,
+    crossed_products,
     diophantine_approximation,
     finite_abelian_groups,
     finite_fields,
@@ -19,8 +21,10 @@ from jacobian.math import (
     graphical_models,
     graphs,
     greedoids,
+    hypergraphs,
     impartial_games,
     integral_binary_quadratic_forms,
+    intervals,
     matrices,
     numerical_semigroups,
     petri_nets,
@@ -37,6 +41,7 @@ from jacobian.math import (
 )
 
 __all__ = [
+    "additive_combinatorics",
     "algebraic_combinatorics",
     "approximation_theory",
     "arithmetic",
@@ -44,6 +49,7 @@ __all__ = [
     "combinatorial_maps",
     "combinatorial_matrices",
     "combinatorics",
+    "crossed_products",
     "diophantine_approximation",
     "finite_abelian_groups",
     "finite_fields",
@@ -55,8 +61,10 @@ __all__ = [
     "graphical_models",
     "graphs",
     "greedoids",
+    "hypergraphs",
     "impartial_games",
     "integral_binary_quadratic_forms",
+    "intervals",
     "matrices",
     "numerical_semigroups",
     "petri_nets",

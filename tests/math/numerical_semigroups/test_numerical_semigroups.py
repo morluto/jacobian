@@ -1,7 +1,11 @@
 """Tests for numerical semigroup operations."""
 
+import pytest
+from pydantic import ValidationError
+
 from jacobian.math.numerical_semigroups._models import (
     NumericalSemigroupSummaryRequest,
+    NumericalSemigroupSummaryResult,
     SemigroupMembershipRequest,
 )
 from jacobian.math.numerical_semigroups._operations import (
@@ -43,13 +47,56 @@ class TestSemigroupSummary:
         assert result.genus == 50
 
     def test_rejects_nonpositive_generators(self):
-        import pytest
-        from pydantic import ValidationError
-
         with pytest.raises(ValidationError, match="positive"):
             NumericalSemigroupSummaryRequest(generators=("-1",))
         with pytest.raises(ValidationError, match="positive"):
             SemigroupMembershipRequest(generators=("0", "2"), value="4")
+
+    def test_summary_result_rejects_a_redundant_minimal_axis(self):
+        with pytest.raises(ValidationError, match="canonical minimal"):
+            NumericalSemigroupSummaryResult(
+                minimal_generators=("3", "5", "8"),
+                multiplicity="3",
+                embedding_dimension=3,
+                frobenius_number="7",
+                conductor="8",
+                genus=4,
+                gaps=("1", "2", "4", "7"),
+            )
+
+    @pytest.mark.parametrize("axis", [(), tuple(map(str, range(30, 51)))])
+    def test_summary_result_rejects_empty_or_overlong_minimal_axis(self, axis):
+        with pytest.raises(ValidationError):
+            NumericalSemigroupSummaryResult(
+                minimal_generators=axis,
+                multiplicity="3",
+                embedding_dimension=2,
+                frobenius_number="7",
+                conductor="8",
+                genus=4,
+                gaps=("1", "2", "4", "7"),
+            )
+
+    @pytest.mark.parametrize(
+        ("field", "forged_value"),
+        [
+            ("multiplicity", "5"),
+            ("embedding_dimension", 3),
+            ("frobenius_number", "8"),
+            ("conductor", "9"),
+            ("genus", 3),
+            ("gaps", ("1", "2", "4")),
+        ],
+    )
+    def test_summary_result_replays_every_derived_field(self, field, forged_value):
+        result = compute_summary(
+            NumericalSemigroupSummaryRequest(generators=("3", "5"))
+        )
+        payload = result.model_dump()
+        payload[field] = forged_value
+
+        with pytest.raises(ValidationError):
+            NumericalSemigroupSummaryResult(**payload)
 
 
 class TestSemigroupMembership:

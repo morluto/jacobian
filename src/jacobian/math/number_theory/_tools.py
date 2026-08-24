@@ -10,7 +10,6 @@ from jacobian.math.number_theory._friable import FRIABLE_COUNT_OPERATION
 from jacobian.math.number_theory._modular import MODULAR_OPERATIONS
 from jacobian.math.number_theory._modular_identity import MODULAR_IDENTITY_OPERATIONS
 from jacobian.math.number_theory._periodic import PERIODIC_CONGRUENCE_OPERATIONS
-from jacobian.math.number_theory._periodic_union import PERIODIC_UNION_OPERATION
 from jacobian.math.number_theory._powerful import POWERFUL_NUMBER_OPERATION
 from jacobian.math.number_theory._primes import PRIME_OPERATIONS
 
@@ -21,13 +20,8 @@ TOOLS: MathTools = (
     *PRIME_OPERATIONS,
     POWERFUL_NUMBER_OPERATION,
     *MODULAR_OPERATIONS,
-    *(
-        operation
-        for operation in PERIODIC_CONGRUENCE_OPERATIONS
-        if operation.operation_id != "congruence.periodic_union.profile.compute"
-    ),
+    *PERIODIC_CONGRUENCE_OPERATIONS,
     *MODULAR_IDENTITY_OPERATIONS,
-    PERIODIC_UNION_OPERATION,
     *DERIVED_NUMBER_THEORY_OPERATIONS,
     FINITE_ABELIAN_GROUP_FACTORIZATION_OPERATION,
     FRIABLE_COUNT_OPERATION,

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Iterator, Mapping
 from fractions import Fraction
 from itertools import combinations
@@ -19,7 +18,6 @@ from jacobian.math.number_theory._periodic_union import (
     PeriodicUnionProfileResult,
     compute_periodic_union_profile,
 )
-from jacobian.math.number_theory._tools import TOOLS
 
 
 def _request(
@@ -39,41 +37,6 @@ def _request(
 def _occupied_subset(result: PeriodicUnionProfileResult) -> PeriodicResidueSubset:
     assert result.occupied_subset is not None
     return result.occupied_subset
-
-
-def test_periodic_union_operation_is_public_and_example_is_exact() -> None:
-    operation = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id == "congruence.periodic_union.profile.compute"
-    )
-
-    result = operation.run(
-        operation.request_type.model_validate(operation.examples[0].input)
-    )
-
-    assert result.common_period == 30
-    assert result.occupied_count == 9
-    assert result.density == CanonicalRational(num="3", den="10")
-    assert _occupied_subset(result) == PeriodicResidueSubset(
-        modulus=30,
-        residues=(1, 4, 7, 9, 13, 14, 19, 24, 25),
-    )
-
-
-def test_advertised_example_parses_through_strict_json() -> None:
-    operation = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id == "congruence.periodic_union.profile.compute"
-    )
-
-    request = PeriodicUnionProfileRequest.model_validate_json(
-        json.dumps(operation.examples[0].input),
-        strict=True,
-    )
-
-    assert request.subsets[0] == PeriodicResidueSubset(modulus=6, residues=(1,))
 
 
 def test_empty_family_has_period_one_with_union_and_complement_conventions() -> None:

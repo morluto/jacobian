@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from fractions import Fraction
 from typing import Annotated, Literal, Self
 
@@ -241,6 +242,51 @@ class PeriodicCongruenceUnionRequest(StrictModel):
         ),
         examples=[False],
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def bound_raw_source_rows(cls, data: object) -> object:
+        """Reject oversized raw families before constructing every row model."""
+
+        if not isinstance(data, Mapping):
+            return data
+        subsets = data.get("subsets")
+        if not isinstance(subsets, (list, tuple)):
+            return data
+        if len(subsets) > MAX_PERIODIC_FAMILY_SIZE:
+            raise ValueError(
+                f"the family exceeds the {MAX_PERIODIC_FAMILY_SIZE}-subset bound"
+            )
+        total = 0
+        normalized_subsets: list[object] = []
+        for subset in subsets:
+            if isinstance(subset, PeriodicCongruenceSubsetInput):
+                total += len(subset.residues)
+                if total > MAX_PERIODIC_SOURCE_ROWS:
+                    raise ValueError(
+                        f"source exceeds the {MAX_PERIODIC_SOURCE_ROWS}-residue-row "
+                        "bound"
+                    )
+                normalized_subsets.append(subset)
+            elif isinstance(subset, Mapping):
+                residues = subset.get("residues")
+                if not isinstance(residues, (list, tuple)):
+                    normalized_subsets.append(subset)
+                    continue
+                total += len(residues)
+                if total > MAX_PERIODIC_SOURCE_ROWS:
+                    raise ValueError(
+                        f"source exceeds the {MAX_PERIODIC_SOURCE_ROWS}-residue-row "
+                        "bound"
+                    )
+                normalized_subset = dict(subset)
+                normalized_subset["residues"] = tuple(residues)
+                normalized_subsets.append(normalized_subset)
+            else:
+                normalized_subsets.append(subset)
+        normalized_data = dict(data)
+        normalized_data["subsets"] = tuple(normalized_subsets)
+        return normalized_data
 
     @model_validator(mode="after")
     def require_bounded_exact_execution(self) -> Self:

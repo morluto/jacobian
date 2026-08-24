@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import itertools
 import math
+from collections.abc import Iterator, Mapping
 from fractions import Fraction
 
 import pytest
@@ -26,6 +27,7 @@ from jacobian.math.number_theory._periodic_models import (
     MAX_SPARSE_LIFTED_ROWS,
     PERIODIC_EXECUTION_PASSES_PER_CALL,
     PERIODIC_PROFILE_RESULT_ENVELOPE_BYTES,
+    PeriodicCongruenceSubsetInput,
     PeriodicCongruenceUnionMeasureResult,
     PeriodicCongruenceUnionProfileRequest,
     PeriodicCongruenceUnionProfileResult,
@@ -575,6 +577,103 @@ def test_source_row_and_family_boundaries_are_exact() -> None:
     with pytest.raises(ValidationError, match="64"):
         PeriodicCongruenceUnionRequest.model_validate(
             {"subsets": [*family_boundary, {"modulus": "1", "residues": []}]}
+        )
+
+
+def test_many_individually_valid_rows_are_admitted_to_the_aggregate_bound() -> None:
+    payload = {
+        "subsets": [
+            {
+                "modulus": "97",
+                "residues": [str(value % 97) for value in range(64)],
+            }
+            for _ in range(MAX_PERIODIC_SOURCE_ROWS // 64)
+        ],
+        "complement": False,
+    }
+
+    result = _measure(payload)
+
+    assert len(payload["subsets"]) == MAX_PERIODIC_FAMILY_SIZE
+    assert result.occupied_count == "64"
+    assert result.density.as_fraction() == Fraction(64, 97)
+
+
+def test_aggregate_row_bound_rejects_before_constructing_row_models() -> None:
+    payload = {
+        "subsets": [
+            {
+                "modulus": "2",
+                "residues": [None] * MAX_PERIODIC_SOURCE_ROWS,
+            }
+            for _ in range(MAX_PERIODIC_FAMILY_SIZE)
+        ],
+        "complement": False,
+    }
+
+    with pytest.raises(
+        ValidationError, match=f"{MAX_PERIODIC_SOURCE_ROWS}-residue-row"
+    ):
+        PeriodicCongruenceUnionRequest.model_validate(payload)
+
+
+def test_oversized_family_is_rejected_without_normalizing_entries() -> None:
+    class UnnormalizableEntry(Mapping[str, object]):
+        """A row whose normalization would fail if it were ever copied."""
+
+        def __init__(self) -> None:
+            self._data: dict[str, object] = {"modulus": "2", "residues": ["0"]}
+
+        def __getitem__(self, key: str) -> object:
+            return self._data[key]
+
+        def __iter__(self) -> Iterator[str]:
+            raise AssertionError("entry normalization ran past the 64-subset bound")
+
+        def __len__(self) -> int:
+            return len(self._data)
+
+    payload = {
+        "subsets": [
+            UnnormalizableEntry() for _ in range(MAX_PERIODIC_FAMILY_SIZE + 1)
+        ],
+        "complement": False,
+    }
+
+    with pytest.raises(ValidationError, match="family exceeds the 64-subset bound"):
+        PeriodicCongruenceUnionProfileRequest.model_validate(payload)
+
+
+def test_constructor_path_rejects_oversized_families_and_raw_rows() -> None:
+    boundary_rows = tuple(
+        PeriodicCongruenceSubsetInput(
+            modulus="97",
+            residues=tuple(str(value % 97) for value in range(64)),
+        )
+        for _ in range(MAX_PERIODIC_FAMILY_SIZE)
+    )
+    accepted = PeriodicCongruenceUnionRequest(subsets=boundary_rows, complement=False)
+    assert len(accepted.normalized_source().subsets) == 1
+
+    with pytest.raises(ValidationError, match="family exceeds the 64-subset bound"):
+        PeriodicCongruenceUnionRequest(
+            subsets=(
+                *boundary_rows,
+                PeriodicCongruenceSubsetInput(modulus="97", residues=()),
+            ),
+            complement=False,
+        )
+
+    with pytest.raises(ValidationError, match="4096-residue-row"):
+        PeriodicCongruenceUnionRequest(
+            subsets=(
+                PeriodicCongruenceSubsetInput(
+                    modulus="2",
+                    residues=("0",) * MAX_PERIODIC_SOURCE_ROWS,
+                ),
+                PeriodicCongruenceSubsetInput(modulus="2", residues=("1",)),
+            ),
+            complement=False,
         )
 
 

@@ -5,17 +5,29 @@ from pydantic import ValidationError
 from tests.math.numerical_semigroups._support import numerical_semigroup_error
 
 from jacobian.math.numerical_semigroups._models import (
+    MAX_ELEMENT,
+    MAX_GENERATOR,
+    MAX_GENERATORS,
+)
+from jacobian.math.numerical_semigroups._summary import (
     NumericalSemigroupSummaryRequest,
     NumericalSemigroupSummaryResult,
     SemigroupMembershipRequest,
-)
-from jacobian.math.numerical_semigroups._operations import (
     compute_membership,
     compute_summary,
 )
 
 
 class TestSemigroupSummary:
+    def test_summary_request_schema_describes_its_admission_envelope(self):
+        generators = NumericalSemigroupSummaryRequest.model_json_schema()["properties"][
+            "generators"
+        ]
+
+        assert str(MAX_GENERATOR) in generators["description"]
+        assert "gcd 1" in generators["description"]
+        assert generators["maxItems"] == MAX_GENERATORS
+
     def test_semigroup_3_5(self):
         req = NumericalSemigroupSummaryRequest(generators=("3", "5"))
         result = compute_summary(req)
@@ -101,6 +113,14 @@ class TestSemigroupSummary:
 
 
 class TestSemigroupMembership:
+    def test_membership_request_schema_describes_its_admission_envelope(self):
+        properties = SemigroupMembershipRequest.model_json_schema()["properties"]
+
+        assert str(MAX_GENERATOR) in properties["generators"]["description"]
+        assert "gcd 1" in properties["generators"]["description"]
+        assert properties["generators"]["maxItems"] == MAX_GENERATORS
+        assert str(MAX_ELEMENT) in properties["value"]["description"]
+
     def test_in_semigroup(self):
         req = SemigroupMembershipRequest(generators=("3", "5"), value="8")
         result = compute_membership(req)

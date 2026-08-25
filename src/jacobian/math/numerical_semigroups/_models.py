@@ -313,87 +313,6 @@ class NumericalSemigroupRequest(StrictModel):
         return self
 
 
-class NumericalSemigroupSummaryRequest(StrictModel):
-    """Compute the full summary of a numerical semigroup."""
-
-    generators: tuple[CanonicalInteger, ...] = Field(
-        min_length=1, max_length=MAX_GENERATORS
-    )
-
-    @model_validator(mode="after")
-    def require_positive_generators(self) -> Self:
-        _require_positive_bounded_generators(self.generators)
-        return self
-
-
-class NumericalSemigroupSummaryResult(StrictModel):
-    """Summary of a numerical semigroup."""
-
-    minimal_generators: tuple[CanonicalInteger, ...] = Field(
-        min_length=1, max_length=MAX_GENERATORS
-    )
-    multiplicity: CanonicalInteger
-    embedding_dimension: int = Field(ge=1)
-    frobenius_number: str
-    conductor: str
-    genus: int = Field(ge=0)
-    gaps: tuple[CanonicalInteger, ...]
-
-    @model_validator(mode="after")
-    def require_exact_summary(self) -> Self:
-        generators = _require_canonical_minimal_axis(self.minimal_generators)
-        (
-            multiplicity,
-            embedding_dimension,
-            frobenius_number,
-            conductor,
-            genus,
-            gaps,
-        ) = _summary_invariants(generators)
-        if parse_canonical_integer(self.multiplicity) != multiplicity:
-            raise _validation_error(
-                "multiplicity does not match the minimal generators"
-            )
-        if self.embedding_dimension != embedding_dimension:
-            raise _validation_error(
-                "embedding_dimension does not match the minimal generators"
-            )
-        if parse_canonical_integer(self.frobenius_number) != frobenius_number:
-            raise _validation_error(
-                "frobenius_number does not match the minimal generators"
-            )
-        if parse_canonical_integer(self.conductor) != conductor:
-            raise _validation_error("conductor does not match the minimal generators")
-        if self.genus != genus:
-            raise _validation_error("genus does not match the minimal generators")
-        if tuple(map(parse_canonical_integer, self.gaps)) != gaps:
-            raise _validation_error("gaps do not match the minimal generators")
-        return self
-
-
-class SemigroupMembershipRequest(StrictModel):
-    """Check membership of an integer in a numerical semigroup."""
-
-    generators: tuple[CanonicalInteger, ...] = Field(
-        min_length=1, max_length=MAX_GENERATORS
-    )
-    value: CanonicalInteger
-
-    @model_validator(mode="after")
-    def require_positive_generators_and_bounded_value(self) -> Self:
-        _require_positive_bounded_generators(self.generators)
-        if parse_canonical_integer(self.value) > MAX_ELEMENT:
-            raise _validation_error(f"membership value must be at most {MAX_ELEMENT}")
-        return self
-
-
-class SemigroupMembershipResult(StrictModel):
-    """Whether the value is in the semigroup."""
-
-    value: CanonicalInteger
-    in_semigroup: bool
-
-
 # ---------------------------------------------------------------------------
 # Extended operations: factorization, elasticity, catenary degree, etc.
 # ---------------------------------------------------------------------------
@@ -1194,11 +1113,7 @@ __all__ = [
     "MinimalPresentationRelation",
     "MinimalPresentationRequest",
     "MinimalPresentationResult",
-    "NumericalSemigroupSummaryRequest",
-    "NumericalSemigroupSummaryResult",
     "PresentationBinomial",
     "PresentationBinomialsRequest",
     "PresentationBinomialsResult",
-    "SemigroupMembershipRequest",
-    "SemigroupMembershipResult",
 ]

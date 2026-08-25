@@ -24,12 +24,8 @@ from jacobian.math.numerical_semigroups._models import (
     FactorizationGraphComputeResult,
     MinimalPresentationRequest,
     MinimalPresentationResult,
-    NumericalSemigroupSummaryRequest,
-    NumericalSemigroupSummaryResult,
     PresentationBinomialsRequest,
     PresentationBinomialsResult,
-    SemigroupMembershipRequest,
-    SemigroupMembershipResult,
 )
 from jacobian.math.numerical_semigroups._operations import (
     compute_betti_elements,
@@ -39,9 +35,15 @@ from jacobian.math.numerical_semigroups._operations import (
     compute_element_elasticity,
     compute_factorization_graph,
     compute_factorizations,
-    compute_membership,
     compute_minimal_presentation,
     compute_presentation_binomials,
+)
+from jacobian.math.numerical_semigroups._summary import (
+    NumericalSemigroupSummaryRequest,
+    NumericalSemigroupSummaryResult,
+    SemigroupMembershipRequest,
+    SemigroupMembershipResult,
+    compute_membership,
     compute_summary,
 )
 

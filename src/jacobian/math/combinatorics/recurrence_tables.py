@@ -8,6 +8,8 @@ from typing import Literal, Self
 from pydantic import Field, StrictBool, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
+from pydantic_core import PydanticCustomError
+
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics._models import (
@@ -19,11 +21,8 @@ from jacobian.math.combinatorics._models import (
 )
 
 
-def _combinatorics_validation_error(message: str) -> PydanticCustomError:
-    return PydanticCustomError("combinatorics.recurrence_invariant", message, {})
-
-
-ValueError = _combinatorics_validation_error  # noqa: A001
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"combinatorics.{reason}", message)
 
 
 class IndexedRecurrenceResidual(StrictModel):
@@ -62,17 +61,23 @@ class PolynomialCoefficientRecurrenceTableRequest(StrictModel):
             if polynomial[-1].as_fraction() == 0:
                 raise ValueError("coefficient polynomial must omit trailing zero terms")
             for coefficient in polynomial:
-                require_bounded_rational(
-                    coefficient,
-                    max_digits=MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS,
-                    label="recurrence polynomial coefficient",
-                )
+                try:
+                    require_bounded_rational(
+                        coefficient,
+                        max_digits=MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS,
+                        label="recurrence polynomial coefficient",
+                    )
+                except ValueError as exc:
+                    raise _validation_error("recurrence_invariant", str(exc)) from None
         for value in self.values:
-            require_bounded_rational(
-                value,
-                max_digits=MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS,
-                label="submitted recurrence table value",
-            )
+            try:
+                require_bounded_rational(
+                    value,
+                    max_digits=MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS,
+                    label="submitted recurrence table value",
+                )
+            except ValueError as exc:
+                raise _validation_error("recurrence_invariant", str(exc)) from None
         return self
 
 

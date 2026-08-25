@@ -7,6 +7,7 @@ from itertools import product
 from typing import Literal, cast
 
 from jacobian.math.arithmetic.values import IntegerValue
+from jacobian.math.modular_polynomials import NormalizedModularPolynomialTerm
 from jacobian.math.number_theory._models import (
     ChineseRemainderRequest,
     ChineseRemainderResult,
@@ -19,7 +20,6 @@ from jacobian.math.number_theory._models import (
     ModularPolynomialResidueWitness,
     ModularUnitRequest,
     ModulusRequest,
-    NormalizedModularPolynomialTerm,
     QuadraticResiduesResult,
 )
 

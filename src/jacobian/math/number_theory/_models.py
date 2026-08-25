@@ -20,6 +20,12 @@ from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_vali
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.modular_polynomials import (
+    ModularPolynomialTerm as _ModularPolynomialTerm,
+)
+from jacobian.math.modular_polynomials import (
+    NormalizedModularPolynomialTerm as _NormalizedModularPolynomialTerm,
+)
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -520,28 +526,6 @@ class ModularPolynomialVariable(StrictModel):
         return self
 
 
-class ModularPolynomialTerm(StrictModel):
-    """One nonzero sparse integer-polynomial term in canonical exponent order."""
-
-    coefficient: BoundedInteger
-    exponents: tuple[StrictInt, ...] = Field(
-        min_length=1,
-        max_length=_MAX_RESIDUE_VARIABLES,
-    )
-
-    @model_validator(mode="after")
-    def require_nonnegative_exponents(self) -> Self:
-        if any(
-            exponent < 0 or exponent > _MAX_RESIDUE_EXPONENT
-            for exponent in self.exponents
-        ):
-            raise _validation_error(
-                "f_term_exponents_must_be_between_0_and",
-                f"term exponents must be between 0 and {_MAX_RESIDUE_EXPONENT}",
-            )
-        return self
-
-
 class ModularPolynomialResidueImageRequest(StrictModel):
     """A bounded sparse polynomial over declared finite residue domains."""
 
@@ -550,7 +534,7 @@ class ModularPolynomialResidueImageRequest(StrictModel):
         min_length=1,
         max_length=_MAX_RESIDUE_VARIABLES,
     )
-    terms: tuple[ModularPolynomialTerm, ...] = Field(
+    terms: tuple[_ModularPolynomialTerm, ...] = Field(
         min_length=0,
         max_length=_MAX_RESIDUE_TERMS,
     )
@@ -584,6 +568,18 @@ class ModularPolynomialResidueImageRequest(StrictModel):
             raise _validation_error(
                 "every_term_exponent_vector_must_match_the_variable_count",
                 "every term exponent vector must match the variable count",
+            )
+        if any(
+            len(term.coefficient) > _MAX_INTEGER_LENGTH
+            or any(
+                exponent < 0 or exponent > _MAX_RESIDUE_EXPONENT
+                for exponent in term.exponents
+            )
+            for term in self.terms
+        ):
+            raise _validation_error(
+                "term_outside_residue_image_admission",
+                "term coefficient or exponents exceed the residue-image admission",
             )
         exponent_vectors = [term.exponents for term in self.terms]
         if exponent_vectors != sorted(set(exponent_vectors)):
@@ -931,16 +927,6 @@ class QuadraticResiduesResult(StrictModel):
     residues: tuple[BoundedInteger, ...]
 
 
-class NormalizedModularPolynomialTerm(StrictModel):
-    """One sparse term with its coefficient reduced to the canonical residue."""
-
-    coefficient: StrictInt = Field(ge=1, lt=_MAX_POLYNOMIAL_RESIDUE_MODULUS)
-    exponents: tuple[StrictInt, ...] = Field(
-        min_length=1,
-        max_length=_MAX_RESIDUE_VARIABLES,
-    )
-
-
 class ModularPolynomialResidueCount(StrictModel):
     """Multiplicity of one reachable residue in the declared assignment table."""
 
@@ -974,7 +960,7 @@ class ModularPolynomialResidueImageResult(StrictModel):
         min_length=1,
         max_length=_MAX_RESIDUE_VARIABLES,
     )
-    normalized_terms: tuple[NormalizedModularPolynomialTerm, ...] = Field(
+    normalized_terms: tuple[_NormalizedModularPolynomialTerm, ...] = Field(
         min_length=0,
         max_length=_MAX_RESIDUE_TERMS,
     )
@@ -1007,7 +993,7 @@ class ModularPolynomialResidueImageResult(StrictModel):
 
 
 def _evaluate_normalized_modular_polynomial(
-    terms: tuple[NormalizedModularPolynomialTerm, ...],
+    terms: tuple[_NormalizedModularPolynomialTerm, ...],
     assignment: tuple[int, ...],
     modulus: int,
 ) -> int:

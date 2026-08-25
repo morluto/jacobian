@@ -69,7 +69,53 @@ jobs:
           mkdir -p ../dist/npm
           npm pack --pack-destination ../dist/npm
         working-directory: npm
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - name: Smoke exact Python and npm release artifacts over MCP
+        run: |
+          version="$(python -c \
+            'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          wheel="$(find dist/python -maxdepth 1 -name '*.whl' -print -quit)"
+          sdist="$(find dist/python -maxdepth 1 -name '*.tar.gz' -print -quit)"
+          tarball="$(find dist/npm -maxdepth 1 -name '*.tgz' -print -quit)"
+          test -n "$wheel"
+          test -n "$sdist"
+          test -n "$tarball"
+          wheel="$(realpath "$wheel")"
+          sdist="$(realpath "$sdist")"
+          tarball="$(realpath "$tarball")"
+          for artifact_type in wheel sdist; do
+            if [ "$artifact_type" = wheel ]; then
+              artifact="$wheel"
+            else
+              artifact="$sdist"
+            fi
+            environment="$RUNNER_TEMP/release-$artifact_type"
+            uv venv --python 3.12 "$environment"
+            uv pip install --python "$environment/bin/python" "$artifact"
+            PYTHONPATH= "$environment/bin/python" "$GITHUB_WORKSPACE/deploy/smoke_stdio.py" \
+              --expect-version "$version" \
+              --startup-timeout-seconds 60 \
+              --request-timeout-seconds 20 \
+              --shutdown-timeout-seconds 10 \
+              -- "$environment/bin/jacobian-mcp"
+          done
+          client_environment="$RUNNER_TEMP/release-npm-client"
+          npm_project="$RUNNER_TEMP/release-npm-project"
+          uv venv --python 3.12 "$client_environment"
+          uv pip install --python "$client_environment/bin/python" \
+            --only-binary :all: "$wheel"
+          mkdir -p "$npm_project"
+          npm install --prefix "$npm_project" "$tarball"
+          JACOBIAN_PACKAGE="$wheel" \
+          JACOBIAN_UV_BIN="$(command -v uvx)" \
+          PYTHONPATH= \
+            "$client_environment/bin/python" "$GITHUB_WORKSPACE/deploy/smoke_stdio.py" \
+              --expect-version "$version" \
+              --startup-timeout-seconds 60 \
+              --request-timeout-seconds 20 \
+              --shutdown-timeout-seconds 10 \
+              -- "$npm_project/node_modules/.bin/jacobian" mcp
+      - name: Upload release distributions
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-distributions
           path: dist/

@@ -52,6 +52,11 @@ jobs:
       - run: make docs-linkcheck
       - run: make npm-test
       - run: make build
+      - name: Pack npm distribution
+        working-directory: npm
+        run: |
+          mkdir -p ../dist/npm
+          npm pack --pack-destination ../dist/npm
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dist
@@ -246,7 +251,7 @@ jobs:
       - run: make test-singular
 
   wheel:
-    name: wheel (Python ${{ matrix.python-version }})
+    name: ${{ matrix.artifact }} (Python ${{ matrix.python-version }})
     needs: [static]
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -254,6 +259,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.12", "3.13"]
+        artifact: [wheel, sdist]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -268,26 +274,94 @@ jobs:
         with:
           name: dist
           path: dist
-      - name: Install and start the built wheel
+      - name: Install and smoke the built Python artifact over MCP
         run: |
-          wheel="$(find dist -maxdepth 1 -name '*.whl' -print -quit)"
-          test -n "$wheel"
-          environment="$RUNNER_TEMP/jacobian-wheel-${{ matrix.python-version }}"
+          case "${{ matrix.artifact }}" in
+            wheel)
+              package="$(find dist -maxdepth 1 -name '*.whl' -print -quit)"
+              install_policy=(--only-binary :all:)
+              ;;
+            sdist)
+              package="$(find dist -maxdepth 1 -name '*.tar.gz' -print -quit)"
+              install_policy=()
+              ;;
+          esac
+          test -n "$package"
+          package="$(realpath "$package")"
+          environment="$RUNNER_TEMP/jacobian-${{ matrix.artifact }}-${{ matrix.python-version }}"
           uv venv --python "${{ matrix.python-version }}" "$environment"
           uv pip install --python "$environment/bin/python" \
-            --only-binary :all: "$wheel"
-          "$environment/bin/jacobian" --help
-          "$environment/bin/jacobian-mcp" --help
-          "$environment/bin/jacobian" run integer.compute.extended_gcd \
-            --json '{"left":"84","right":"30"}'
-      - if: matrix.python-version == '3.13'
+            "${install_policy[@]}" "$package"
+          version="$("$environment/bin/python" -c \
+            'import importlib.metadata; print(importlib.metadata.version("jacobian"))')"
+          PYTHONPATH= "$environment/bin/python" "$GITHUB_WORKSPACE/deploy/smoke_stdio.py" \
+            --expect-version "$version" \
+            --startup-timeout-seconds 60 \
+            --request-timeout-seconds 20 \
+            --shutdown-timeout-seconds 10 \
+            -- "$environment/bin/jacobian-mcp"
+      - if: matrix.python-version == '3.13' && matrix.artifact == 'wheel'
         uses: ./.github/actions/setup-python-tests
         with:
           python-version: "3.13"
-      - if: matrix.python-version == '3.13'
+      - if: matrix.python-version == '3.13' && matrix.artifact == 'wheel'
         run: make test-compatibility
         env:
           PYTEST_ARGS: --junitxml=pytest.xml
+
+  npm-package:
+    name: npm tarball (Node ${{ matrix.node-version }})
+    needs: [static]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18, 24]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.11.28"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node-version }}
+          package-manager-cache: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: dist
+      - name: Install and smoke the packed npm carrier over MCP
+        run: |
+          wheel="$(find dist -maxdepth 1 -name '*.whl' -print -quit)"
+          tarball="$(find dist/npm -maxdepth 1 -name '*.tgz' -print -quit)"
+          test -n "$wheel"
+          test -n "$tarball"
+          wheel="$(realpath "$wheel")"
+          tarball="$(realpath "$tarball")"
+          client_environment="$RUNNER_TEMP/jacobian-npm-client"
+          project="$RUNNER_TEMP/jacobian-npm-project"
+          uv venv --python 3.12 "$client_environment"
+          uv pip install --python "$client_environment/bin/python" \
+            --only-binary :all: "$wheel"
+          mkdir -p "$project"
+          npm install --prefix "$project" "$tarball"
+          version="$("$client_environment/bin/python" -c \
+            'import importlib.metadata; print(importlib.metadata.version("jacobian"))')"
+          JACOBIAN_PACKAGE="$wheel" \
+          JACOBIAN_UV_BIN="$(command -v uvx)" \
+          PYTHONPATH= \
+            "$client_environment/bin/python" "$GITHUB_WORKSPACE/deploy/smoke_stdio.py" \
+              --expect-version "$version" \
+              --startup-timeout-seconds 60 \
+              --request-timeout-seconds 20 \
+              --shutdown-timeout-seconds 10 \
+              -- "$project/node_modules/.bin/jacobian" mcp
 
   lean:
     name: Lean Runtime
@@ -362,11 +436,11 @@ jobs:
   required:
     name: required
     if: ${{ always() }}
-    needs: [plan, static, math, catalog, catalog_examples, python, boundaries, singular, wheel, coverage, lean]
+    needs: [plan, static, math, catalog, catalog_examples, python, boundaries, singular, wheel, npm-package, coverage, lean]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Require selected evidence and final-tree specialist lanes
+      - name: Require selected evidence packages and final-tree specialist lanes
         env:
           # True for pull_request runs and for autofix dispatches that select
           # the pull_request lane set; Lean then counts skipped as passing.
@@ -383,6 +457,7 @@ jobs:
           BOUNDARIES_RESULT: ${{ needs.boundaries.result }}
           SINGULAR_RESULT: ${{ needs.singular.result }}
           WHEEL_RESULT: ${{ needs.wheel.result }}
+          NPM_PACKAGE_RESULT: ${{ needs.npm-package.result }}
           COVERAGE_RESULT: ${{ needs.coverage.result }}
           LEAN_RESULT: ${{ needs.lean.result }}
         run: |
@@ -401,6 +476,7 @@ jobs:
           test "$BOUNDARIES_RESULT" = success
           test "$SINGULAR_RESULT" = success
           test "$WHEEL_RESULT" = success
+          test "$NPM_PACKAGE_RESULT" = success
           if [ "$PR_LANE_SELECTION" = true ]; then
             test "$COVERAGE_RESULT" = skipped
             test "$LEAN_RESULT" = skipped || test "$LEAN_RESULT" = success

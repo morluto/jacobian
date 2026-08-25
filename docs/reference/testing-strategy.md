@@ -41,6 +41,13 @@ their dedicated commands.
 `make check-all` is an intentional broad reproduction. Do not use a full suite
 as a substitute for a focused regression test.
 
+Release-facing MCP checks install the built wheel and source distribution in
+isolated Python 3.12 and 3.13 environments, install the packed npm carrier at
+its supported Node boundary and release version, and run the built container's
+configured entry point. They must use the real MCP protocol journey in
+`deploy/smoke_stdio.py` or `deploy/smoke_remote.py`; source imports, editable
+installs, help output, and direct CLI operation calls are not artifact evidence.
+
 ## CI lifecycle
 
 Pull requests always run static validation. The checked-in CI planner selects

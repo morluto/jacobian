@@ -5,18 +5,38 @@ from __future__ import annotations
 import asyncio
 import importlib.metadata
 import inspect
+from types import SimpleNamespace
 
+import pytest
 from mcp.types.methods import serialize_server_result
 
 import jacobian.mcp.server as server_module
 from jacobian.catalog.models import OperationCatalogSnapshot, OperationResult
+from jacobian.mcp.runtime import _request_cancellation
 from jacobian.mcp.server import create_server
 from jacobian.mcp.tools import math_run
 
 
 def test_mcp_sdk_is_exactly_pinned_and_v2_bindings_are_used() -> None:
     assert importlib.metadata.version("mcp") == "2.0.0"
-    assert not inspect.iscoroutinefunction(math_run)
+    assert inspect.iscoroutinefunction(math_run)
+
+
+def test_pinned_sdk_request_cancellation_seam_fails_closed() -> None:
+    signal = SimpleNamespace(is_set=lambda: False, wait=lambda: None)
+    context = SimpleNamespace(
+        request_context=SimpleNamespace(
+            session=SimpleNamespace(
+                _request_outbound=SimpleNamespace(cancel_requested=signal)
+            )
+        )
+    )
+
+    assert _request_cancellation(context) is signal
+    with pytest.raises(RuntimeError, match="cancellation signal is unavailable"):
+        _request_cancellation(
+            SimpleNamespace(request_context=SimpleNamespace(session=SimpleNamespace()))
+        )
 
 
 def test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources(

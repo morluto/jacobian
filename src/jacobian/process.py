@@ -40,6 +40,8 @@ _CANCELLATION_EVENT: ContextVar[threading.Event | None] = ContextVar(
     default=None,
 )
 _PIPE_DRAIN_GRACE_SECONDS = 0.5
+_PROCESS_TERMINATION_GRACE_SECONDS = 0.5
+_PROCESS_KILL_GRACE_SECONDS = 0.5
 _DEFAULT_LOCALE = "C.UTF-8"
 
 
@@ -186,29 +188,91 @@ def _resource_limited_command(
     return [prlimit, *options, "--", *command], True
 
 
-def _kill_process_tree(
+def _signal_process_tree(
     process: subprocess.Popen[bytes],
+    *,
+    force: bool,
     platform_tools: ProcessPlatformTools | None = None,
 ) -> None:
-    """Best-effort termination of a worker and every descendant it created."""
+    """Signal a worker and every descendant in its owned process group."""
 
     if os.name == "posix":
         with suppress(ProcessLookupError):
-            os.killpg(process.pid, signal.SIGKILL)
+            os.killpg(process.pid, signal.SIGKILL if force else signal.SIGTERM)
         return
 
     taskkill = (
         platform_tools.taskkill_executable if platform_tools is not None else None
     )
     if taskkill is not None:  # pragma: no cover - exercised in cross-platform CI
-        subprocess.run(
-            [taskkill, "/PID", str(process.pid), "/T", "/F"],
-            check=False,
-            capture_output=True,
-        )
+        command = [taskkill, "/PID", str(process.pid), "/T"]
+        if force:
+            command.append("/F")
+        with suppress(subprocess.TimeoutExpired):
+            subprocess.run(
+                command,
+                check=False,
+                capture_output=True,
+                timeout=_PROCESS_KILL_GRACE_SECONDS,
+            )
         return
 
-    process.kill()  # pragma: no cover - defensive fallback
+    action = process.kill if force else process.terminate
+    with suppress(ProcessLookupError):  # pragma: no cover - defensive fallback
+        action()
+
+
+def _process_tree_alive(process: subprocess.Popen[bytes]) -> bool:
+    """Report whether the owned POSIX group or fallback root still exists."""
+
+    if os.name != "posix":
+        return process.poll() is None  # pragma: no cover - platform dependent
+    try:
+        os.killpg(process.pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:  # pragma: no cover - the child is owned by this process
+        return True
+    return True
+
+
+def _wait_for_process_tree(
+    process: subprocess.Popen[bytes],
+    timeout_seconds: float,
+) -> bool:
+    """Reap the root and wait at most *timeout_seconds* for its group to vanish."""
+
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        process.poll()
+        if not _process_tree_alive(process):
+            return True
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        time.sleep(min(0.01, remaining))
+
+
+def _terminate_and_reap_process_tree(
+    process: subprocess.Popen[bytes],
+    platform_tools: ProcessPlatformTools | None = None,
+) -> bool:
+    """Terminate the owned tree with bounded graceful and forced phases."""
+
+    _signal_process_tree(process, force=False, platform_tools=platform_tools)
+    if _wait_for_process_tree(process, _PROCESS_TERMINATION_GRACE_SECONDS):
+        return True
+    _signal_process_tree(process, force=True, platform_tools=platform_tools)
+    return _wait_for_process_tree(process, _PROCESS_KILL_GRACE_SECONDS)
+
+
+def _kill_process_tree(
+    process: subprocess.Popen[bytes],
+    platform_tools: ProcessPlatformTools | None = None,
+) -> None:
+    """Force the owned tree to stop; the coordinator performs bounded reaping."""
+
+    _signal_process_tree(process, force=True, platform_tools=platform_tools)
 
 
 def _capture_stream(
@@ -254,8 +318,7 @@ def _apply_post_start_limits(
     try:
         _apply_resource_limits(process, resource_limits)
     except (OSError, ValueError):
-        _kill_process_tree(process, platform_tools)
-        process.wait()
+        _terminate_and_reap_process_tree(process, platform_tools)
         raise
 
 
@@ -276,14 +339,12 @@ def _monitor_bounded_process(
     while process.poll() is None:
         if cancellation_event is not None and cancellation_event.is_set():
             cancelled = True
-            _kill_process_tree(process, platform_tools)
-            process.wait()
+            _terminate_and_reap_process_tree(process, platform_tools)
             break
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             timed_out = True
-            _kill_process_tree(process, platform_tools)
-            process.wait()
+            _terminate_and_reap_process_tree(process, platform_tools)
             break
         try:
             process.wait(timeout=min(0.1, remaining))
@@ -299,7 +360,7 @@ def _drain_reader_threads(
 ) -> bool:
     """Kill the tree, drain readers, and return ``True`` if any survived."""
 
-    _kill_process_tree(process, platform_tools)
+    _terminate_and_reap_process_tree(process, platform_tools)
     drain_deadline = time.monotonic() + _PIPE_DRAIN_GRACE_SECONDS
     for reader in readers:
         reader.join(timeout=max(0.0, drain_deadline - time.monotonic()))
@@ -347,6 +408,16 @@ def run_bounded_process(
     stderr_exceeded = threading.Event()
     if cancellation_event is None:
         cancellation_event = _CANCELLATION_EVENT.get()
+    if cancellation_event is not None and cancellation_event.is_set():
+        return BoundedProcessResult(
+            returncode=None,
+            stdout=b"",
+            stderr=b"",
+            stdout_exceeded=False,
+            stderr_exceeded=False,
+            timed_out=False,
+            cancelled=True,
+        )
 
     prlimit_executable = (
         platform_tools.prlimit_executable if platform_tools is not None else None

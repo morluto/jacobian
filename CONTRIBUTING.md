@@ -57,9 +57,11 @@ pre-push hook stays `make lint typecheck`. Focused debugging uses
 `uv run pytest path/to/test.py`. Default `uv run pytest` collects the ordinary
 Lean-free `testpaths`; it does not run process, MCP, or Lean trees.
 
-CI runs static checks, the selected ordinary Python surface, MCP boundaries,
-and the wheel smoke. Full mathematical and Lean suites run on merge-group
-candidates and on `main`, not on every pull request.
+CI runs static checks, the selected ordinary Python surface, and MCP boundaries,
+then installs the built wheel, source distribution, and npm tarball in isolated
+environments and exercises their MCP entry points. The container workflow runs
+the same protocol journey against the built image. Full mathematical and Lean
+suites run on merge-group candidates and on `main`, not on every pull request.
 That gate needs GitHub merge queue
 enabled on `main`; without a queue, Lean only runs after a push to `main`. You
 do not need to reproduce Lean locally for a routine change unless you edited
@@ -251,8 +253,9 @@ Verify every relative Markdown link before submitting the change
 ## Releases
 
 The manifest-driven Release Please configuration keeps the Python and npm
-package versions synchronized. CI tests and packs the npm launcher
-independently, then publishes both distributions after a release is created.
+package versions synchronized. CI and the release build protocol-smoke the
+exact wheel, source distribution, npm tarball, and container route before the
+corresponding artifacts are published.
 The `jacobian` package on npm must authorize `.github/workflows/release.yml` as
 its trusted GitHub Actions publisher, using the `npm` environment; releases use
 OIDC rather than a long-lived npm token.

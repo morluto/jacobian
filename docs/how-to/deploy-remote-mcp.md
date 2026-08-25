@@ -63,6 +63,15 @@ URL must route `/mcp` without stripping the path. For a disposable local
 transport test, use `--allow-anonymous`; never expose that mode as an
 authenticated service.
 
+Streamable HTTP is stateless by default: the server does not retain MCP
+sessions between requests, matching Jacobian's stateless execution contract
+and horizontally scaled deployment model. `--stateless-http` remains an
+accepted explicit spelling. Use `--stateful-http` only when a client requires
+MCP session continuity and the deployment deliberately provides sticky routing
+and process-lifetime session ownership. An explicit command-line flag is the
+only session-mode override; there is no environment-variable or config-file
+session setting.
+
 ## Install the example service files
 
 [`deploy/systemd/jacobian-mcp.service`](../../deploy/systemd/jacobian-mcp.service)
@@ -78,6 +87,13 @@ and public endpoint before directing traffic to the new artifact. Where Lean is
 intentionally installed, also run `uv run python -m deploy.smoke_lean <url>`.
 The probe implementations live in [`deploy/`](../../deploy/). Roll back by
 selecting the previous immutable artifact and rerunning the probes.
+
+The remote probe verifies initialization, the exact two-tool surface, catalog
+access, `math.find` search and inspection, two bounded `math.run` requests, and
+the absence of an MCP session ID in the default stateless mode. Each phase has
+the `--timeout-seconds` deadline and identifies itself in failure diagnostics.
+Pass `--expect-session-mode stateful` only when the server was deliberately
+started with `--stateful-http`.
 
 When moving hosts, provision the same pinned artifact, transfer operator-owned
 configuration and secrets, run the probes, and move traffic.

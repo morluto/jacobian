@@ -62,6 +62,44 @@ jobs:
           docker run --rm --entrypoint uv jacobian:pull-request \
             run --no-sync jacobian run sat.refutation.check --json "$INVALID_REQUEST" \
             | jq -e '.output.outcome == "INVALID_REFUTATION"'
+      - uses: ./.github/actions/setup-python-tests
+        with:
+          python-version: "3.12"
+      - name: Smoke the built image's configured MCP entry point
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          container_id="$(docker run -d --rm \
+            -p 127.0.0.1:8000:8000 \
+            jacobian:pull-request \
+            --allow-anonymous --host 0.0.0.0 --port 8000 --path /mcp)"
+          cleanup() {
+            docker logs "$container_id" || true
+            docker stop --time 5 "$container_id" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          success=false
+          for attempt in $(seq 1 20); do
+            set +e
+            uv run --locked python -m deploy.smoke_remote \
+              http://127.0.0.1:8000/mcp \
+              --expect-version "$PACKAGE_VERSION" \
+              --expect-session-mode stateless \
+              --timeout-seconds 5 \
+              > "$RUNNER_TEMP/container-mcp-smoke.json"
+            status=$?
+            set -e
+            if [ "$status" -eq 0 ]; then
+              success=true
+              break
+            fi
+            if [ "$status" -ne 75 ]; then
+              exit "$status"
+            fi
+            sleep 1
+          done
+          test "$success" = true
+          cat "$RUNNER_TEMP/container-mcp-smoke.json" >> "$GITHUB_STEP_SUMMARY"
 
   publish:
     name: Publish container image
@@ -115,6 +153,47 @@ jobs:
           cache-to: type=gha,mode=max,scope=jacobian-container
           provenance: mode=max
           sbom: true
+      - uses: ./.github/actions/setup-python-tests
+        with:
+          python-version: "3.12"
+      - name: Smoke the digest-addressed image's configured MCP entry point
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          PACKAGE_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          image="$REGISTRY/$IMAGE_NAME@$DIGEST"
+          docker pull "$image"
+          container_id="$(docker run -d --rm \
+            -p 127.0.0.1:8000:8000 \
+            "$image" \
+            --allow-anonymous --host 0.0.0.0 --port 8000 --path /mcp)"
+          cleanup() {
+            docker logs "$container_id" || true
+            docker stop --time 5 "$container_id" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          success=false
+          for attempt in $(seq 1 20); do
+            set +e
+            uv run --locked python -m deploy.smoke_remote \
+              http://127.0.0.1:8000/mcp \
+              --expect-version "$PACKAGE_VERSION" \
+              --expect-session-mode stateless \
+              --timeout-seconds 5 \
+              > "$RUNNER_TEMP/container-mcp-smoke.json"
+            status=$?
+            set -e
+            if [ "$status" -eq 0 ]; then
+              success=true
+              break
+            fi
+            if [ "$status" -ne 75 ]; then
+              exit "$status"
+            fi
+            sleep 1
+          done
+          test "$success" = true
+          cat "$RUNNER_TEMP/container-mcp-smoke.json" >> "$GITHUB_STEP_SUMMARY"
       - name: Record digest-addressed publication evidence
         env:
           DIGEST: ${{ steps.build.outputs.digest }}

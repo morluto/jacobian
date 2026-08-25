@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from jacobian import __version__
@@ -26,10 +27,19 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--path", default="/mcp")
-    parser.add_argument(
+    session_mode = parser.add_mutually_exclusive_group()
+    session_mode.add_argument(
         "--stateless-http",
+        dest="stateless_http",
         action="store_true",
-        help="use stateless Streamable HTTP sessions",
+        default=True,
+        help="use stateless Streamable HTTP sessions (default)",
+    )
+    session_mode.add_argument(
+        "--stateful-http",
+        dest="stateless_http",
+        action="store_false",
+        help="explicitly opt in to stateful Streamable HTTP sessions",
     )
     parser.add_argument(
         "--auth-tokens-file",
@@ -94,6 +104,12 @@ def main() -> None:
         auth=auth,
     )
     if args.transport == "streamable-http":
+        session_mode = "stateless" if args.stateless_http else "stateful"
+        print(
+            f"Jacobian remote MCP: transport=streamable-http session_mode={session_mode}",
+            file=sys.stderr,
+            flush=True,
+        )
         server.run(
             "streamable-http",
             host=args.host,

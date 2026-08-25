@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+import jacobian.mcp.remote as remote_module
+import jacobian.mcp.remote_cli as remote_cli
 from jacobian.mcp.remote import (
     StaticTokenGrant,
     StaticTokenVerifier,
@@ -211,3 +213,56 @@ def test_token_file_is_strict_and_remote_cli_fails_closed(
     )
     assert conflicting_auth.returncode != 0
     assert "mutually exclusive" in conflicting_auth.stderr
+
+
+@pytest.mark.parametrize(
+    ("session_arguments", "expected_stateless", "expected_mode"),
+    [
+        ([], True, "stateless"),
+        (["--stateless-http"], True, "stateless"),
+        (["--stateful-http"], False, "stateful"),
+    ],
+)
+def test_remote_streamable_http_session_mode_is_explicit(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    session_arguments: list[str],
+    expected_stateless: bool,
+    expected_mode: str,
+) -> None:
+    run_calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+
+    class FakeServer:
+        def run(self, *args: object, **kwargs: object) -> None:
+            run_calls.append((args, kwargs))
+
+    monkeypatch.setattr(remote_module, "create_remote_server", lambda **_: FakeServer())
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "jacobian-remote-mcp",
+            "--allow-anonymous",
+            *session_arguments,
+        ],
+    )
+
+    remote_cli.main()
+
+    assert run_calls == [
+        (
+            ("streamable-http",),
+            {
+                "host": "127.0.0.1",
+                "port": 8000,
+                "streamable_http_path": "/mcp",
+                "stateless_http": expected_stateless,
+            },
+        )
+    ]
+    assert f"session_mode={expected_mode}" in capsys.readouterr().err
+
+
+def test_remote_session_mode_flags_are_mutually_exclusive() -> None:
+    with pytest.raises(SystemExit):
+        remote_cli._parser().parse_args(["--stateless-http", "--stateful-http"])

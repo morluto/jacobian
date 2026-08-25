@@ -20,15 +20,45 @@ def test_pr_metadata_edits_do_not_restart_product_ci() -> None:
     assert "unlabeled" not in pull_request_trigger
 
 
-def test_wheel_job_covers_supported_pythons_and_313_compatibility_smoke() -> None:
+def test_python_artifact_job_covers_routes_pythons_and_packaged_mcp() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    wheel = workflow.split("  wheel:", 1)[1].split("  lean:", 1)[0]
+    wheel = workflow.split("  wheel:", 1)[1].split("  npm-package:", 1)[0]
 
     assert 'python-version: ["3.12", "3.13"]' in wheel
+    assert "artifact: [wheel, sdist]" in wheel
     assert "--only-binary :all:" in wheel
-    assert '"$environment/bin/jacobian" run integer.compute.extended_gcd' in wheel
+    assert '"$GITHUB_WORKSPACE/deploy/smoke_stdio.py"' in wheel
+    assert "--startup-timeout-seconds 60" in wheel
+    assert "--request-timeout-seconds 20" in wheel
+    assert "--shutdown-timeout-seconds 10" in wheel
+    assert '"$environment/bin/jacobian-mcp"' in wheel
+    assert "PYTHONPATH=" in wheel
+    assert "--editable" not in wheel
     assert "make test-compatibility" in wheel
     assert "make test\n" not in wheel
+
+
+def test_npm_tarball_is_installed_and_smoked_on_supported_node_bounds() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    npm_package = workflow.split("  npm-package:", 1)[1].split("  lean:", 1)[0]
+
+    assert "node-version: [18, 24]" in npm_package
+    assert "npm install --prefix" in npm_package
+    assert 'JACOBIAN_PACKAGE="$wheel"' in npm_package
+    assert '"$project/node_modules/.bin/jacobian" mcp' in npm_package
+    assert "smoke_stdio.py" in npm_package
+
+
+def test_container_workflow_runs_packaged_remote_mcp_smoke() -> None:
+    workflow = (ROOT / ".github/workflows/container-image.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "load: true" in workflow
+    assert workflow.count("python -m deploy.smoke_remote") == 2
+    assert workflow.count("--expect-session-mode stateless") == 2
+    assert "jacobian:pull-request" in workflow
+    assert 'image="$REGISTRY/$IMAGE_NAME@$DIGEST"' in workflow
 
 
 def test_global_timeout_is_not_a_pytest_deadline() -> None:
@@ -59,10 +89,11 @@ def test_singular_backend_has_a_pinned_required_ci_lane() -> None:
     assert 'system("version")' in singular
     assert "make test-singular" in singular
     assert (
-        "needs: [plan, static, math, catalog, catalog_examples, python, boundaries, singular, wheel, coverage, lean]"
+        "needs: [plan, static, math, catalog, catalog_examples, python, boundaries, singular, wheel, npm-package, coverage, lean]"
         in required
     )
     assert 'test "$SINGULAR_RESULT" = success' in required
+    assert 'test "$NPM_PACKAGE_RESULT" = success' in required
 
 
 def test_python_and_boundary_lanes_share_evidence_collection() -> None:

@@ -5,6 +5,7 @@ import json
 import math
 import os
 import shutil
+import signal
 import sys
 import threading
 import time
@@ -12,12 +13,44 @@ from pathlib import Path
 
 import pytest
 
+import jacobian.process as process_module
 from jacobian.process import (
     ProcessPlatformTools,
     ProcessResourceLimits,
     bounded_process_cancellation,
     run_bounded_process,
 )
+
+
+def _cancel_after_marker(event: threading.Event, marker: Path) -> threading.Thread:
+    def wait_and_cancel() -> None:
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            if marker.exists():
+                event.set()
+                return
+            time.sleep(0.01)
+
+    thread = threading.Thread(target=wait_and_cancel)
+    thread.start()
+    return thread
+
+
+def _pid_exists(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def _wait_for_pid_exit(pid: int) -> bool:
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline:
+        if not _pid_exists(pid):
+            return True
+        time.sleep(0.01)
+    return not _pid_exists(pid)
 
 
 @pytest.mark.parametrize("timeout_seconds", [math.inf, math.nan])
@@ -97,6 +130,150 @@ def test_cancellation_stops_worker_before_its_wall_time_budget() -> None:
     assert completed.cancelled
     assert not completed.timed_out
     assert time.monotonic() - started < 3
+
+
+def test_cancellation_before_spawn_returns_without_launching(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cancellation_event = threading.Event()
+    cancellation_event.set()
+
+    def unexpected_spawn(*args: object, **kwargs: object) -> None:
+        raise AssertionError(f"unexpected process spawn: {args!r} {kwargs!r}")
+
+    monkeypatch.setattr(process_module.subprocess, "Popen", unexpected_spawn)
+    completed = run_bounded_process(
+        [sys.executable, "-c", "raise SystemExit(0)"],
+        input_bytes=b"",
+        timeout_seconds=1,
+        environment=dict(os.environ),
+        stdout_limit=4096,
+        stderr_limit=4096,
+        cancellation_event=cancellation_event,
+    )
+
+    assert completed.cancelled
+    assert not completed.timed_out
+    assert completed.returncode is None
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX signal grace is required")
+def test_cancellation_allows_graceful_process_tree_termination(tmp_path: Path) -> None:
+    ready = tmp_path / "ready"
+    terminated = tmp_path / "terminated"
+    cancellation_event = threading.Event()
+    canceller = _cancel_after_marker(cancellation_event, ready)
+    completed = run_bounded_process(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import pathlib, signal, sys, time; "
+                "ready=pathlib.Path(sys.argv[1]); stopped=pathlib.Path(sys.argv[2]); "
+                "signal.signal(signal.SIGTERM, lambda *_: "
+                "(stopped.write_text('term'), sys.exit(0))); "
+                "ready.write_text('ready'); time.sleep(30)"
+            ),
+            str(ready),
+            str(terminated),
+        ],
+        input_bytes=b"",
+        timeout_seconds=20,
+        environment=dict(os.environ),
+        stdout_limit=4096,
+        stderr_limit=4096,
+        cancellation_event=cancellation_event,
+    )
+    canceller.join(timeout=1)
+
+    assert completed.cancelled
+    assert not completed.timed_out
+    assert terminated.read_text(encoding="utf-8") == "term"
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX signal escalation is required")
+def test_cancellation_forces_a_process_that_ignores_sigterm(tmp_path: Path) -> None:
+    ready = tmp_path / "ready"
+    cancellation_event = threading.Event()
+    canceller = _cancel_after_marker(cancellation_event, ready)
+    completed = run_bounded_process(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import pathlib, signal, sys, time; "
+                "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+                "pathlib.Path(sys.argv[1]).write_text('ready'); time.sleep(30)"
+            ),
+            str(ready),
+        ],
+        input_bytes=b"",
+        timeout_seconds=20,
+        environment=dict(os.environ),
+        stdout_limit=4096,
+        stderr_limit=4096,
+        cancellation_event=cancellation_event,
+    )
+    canceller.join(timeout=1)
+
+    assert completed.cancelled
+    assert not completed.timed_out
+    assert completed.returncode == -signal.SIGKILL
+
+
+@pytest.mark.skipif(os.name != "posix", reason="process groups are POSIX-owned")
+def test_cancellation_removes_the_complete_owned_process_tree(tmp_path: Path) -> None:
+    marker = tmp_path / "processes.json"
+    cancellation_event = threading.Event()
+    canceller = _cancel_after_marker(cancellation_event, marker)
+    completed = run_bounded_process(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import json, os, pathlib, subprocess, sys, time; "
+                "child=subprocess.Popen([sys.executable, '-c', "
+                "'import time; time.sleep(30)']); "
+                "pathlib.Path(sys.argv[1]).write_text(json.dumps([os.getpid(), child.pid])); "
+                "time.sleep(30)"
+            ),
+            str(marker),
+        ],
+        input_bytes=b"",
+        timeout_seconds=20,
+        environment=dict(os.environ),
+        stdout_limit=4096,
+        stderr_limit=4096,
+        cancellation_event=cancellation_event,
+    )
+    canceller.join(timeout=1)
+    pids = json.loads(marker.read_text(encoding="utf-8"))
+
+    assert completed.cancelled
+    assert all(_wait_for_pid_exit(pid) for pid in pids)
+
+
+def test_timeout_and_execution_failure_remain_distinct() -> None:
+    timed_out = run_bounded_process(
+        [sys.executable, "-c", "import time; time.sleep(30)"],
+        input_bytes=b"",
+        timeout_seconds=0.1,
+        environment=dict(os.environ),
+        stdout_limit=4096,
+        stderr_limit=4096,
+    )
+    failed = run_bounded_process(
+        [sys.executable, "-c", "raise SystemExit(7)"],
+        input_bytes=b"",
+        timeout_seconds=1,
+        environment=dict(os.environ),
+        stdout_limit=4096,
+        stderr_limit=4096,
+    )
+
+    assert timed_out.timed_out and not timed_out.cancelled
+    assert not failed.timed_out and not failed.cancelled
+    assert failed.returncode == 7
 
 
 @pytest.mark.skipif(

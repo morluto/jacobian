@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+import anyio
 from mcp.server.mcpserver import Context
 from mcp.shared.exceptions import MCPError
 from mcp.types import INVALID_PARAMS
@@ -28,7 +30,9 @@ from jacobian.mcp.runtime import (
     AppState,
     _authorize,
     _catalog,
+    _request_cancellation,
 )
+from jacobian.process import bounded_process_cancellation
 
 _MAX_VALIDATION_ERRORS = 64
 _MAX_VALIDATION_LOCATION_COMPONENTS = 32
@@ -80,7 +84,7 @@ def math_find(
     )
 
 
-def math_run(
+async def math_run(
     operation_id: OperationId,
     payload: dict[str, Any],
     *,
@@ -89,12 +93,52 @@ def math_run(
     """Run one math tool. Role comes from the tool ID."""
     _authorize(ctx)
     catalog = _catalog(ctx)
+    request_cancellation = _request_cancellation(ctx)
+    process_cancellation = threading.Event()
+    relay_finished = threading.Event()
+    if request_cancellation.is_set():
+        process_cancellation.set()
+
+    async def relay_cancellation() -> None:
+        # The SDK cancels the request scope immediately after setting its
+        # signal. Shield this small relay until the worker has observed the
+        # signal or finished, so cancellation cannot strand subprocess work.
+        with anyio.CancelScope(shield=True):
+            while not relay_finished.is_set():
+                if request_cancellation.is_set():
+                    process_cancellation.set()
+                    return
+                await anyio.sleep(0.01)
+
+    result: list[OperationResult] = []
+    failure: list[BaseException] = []
+
+    def invoke() -> None:
+        try:
+            with bounded_process_cancellation(process_cancellation):
+                result.append(invoke_operation(operation_id, payload, catalog))
+        except BaseException as exc:
+            # Carry the original exception across the task group boundary so
+            # expected validation errors are not wrapped in ExceptionGroup.
+            failure.append(exc)
+
     try:
-        return invoke_operation(
-            operation_id,
-            payload,
-            catalog,
-        )
+        await anyio.lowlevel.checkpoint_if_cancelled()
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(relay_cancellation)
+            try:
+                await anyio.to_thread.run_sync(
+                    invoke,
+                    abandon_on_cancel=False,
+                )
+            finally:
+                relay_finished.set()
+                tasks.cancel_scope.cancel()
+        if failure:
+            raise failure[0]
+        if not result:  # pragma: no cover - defensive worker invariant
+            raise RuntimeError("operation worker returned no result")
+        return result[0]
     except OperationRequestValidationError as exc:
         errors = _bounded_validation_issues(exc.errors())
         data = OperationInvalidRequestData(

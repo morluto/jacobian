@@ -81,6 +81,25 @@ def test_release_build_resolves_and_verifies_one_immutable_sha() -> None:
     ) < _step_names(build).index("Build Python distributions")
 
 
+def test_release_smokes_exact_artifacts_before_upload() -> None:
+    build = _job(_workflow(), "build")
+    smoke = _named_step(build, "Smoke exact Python and npm release artifacts over MCP")
+    script = smoke["run"]
+    assert isinstance(script, str)
+
+    assert "dist/python" in script
+    assert "*.whl" in script
+    assert "*.tar.gz" in script
+    assert "dist/npm" in script and "*.tgz" in script
+    assert "deploy/smoke_stdio.py" in script
+    assert '"$environment/bin/jacobian-mcp"' in script
+    assert '"$npm_project/node_modules/.bin/jacobian" mcp' in script
+    assert "PYTHONPATH=" in script
+    assert _step_names(build).index(
+        "Smoke exact Python and npm release artifacts over MCP"
+    ) < _step_names(build).index("Upload release distributions")
+
+
 def test_release_candidate_dispatches_full_ci_after_lockfile_sync() -> None:
     release_please = RELEASE_PLEASE_WORKFLOW.read_text(encoding="utf-8")
     ci = CI_WORKFLOW.read_text(encoding="utf-8")

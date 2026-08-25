@@ -16,6 +16,7 @@ from jacobian.math.algebraic_number_arithmetic._operations import (
 )
 from jacobian.math.arithmetic._real_quadratic import REAL_QUADRATIC_OPERATIONS
 from jacobian.math.real_quadratic import (
+    _MAX_EMBEDDING_PROFILE_RESULT_DIGITS,
     RealQuadraticEmbeddingProfile,
     RealQuadraticEmbeddingsRequest,
     RealQuadraticValue,
@@ -172,7 +173,7 @@ def test_embedding_candidate_keeps_a_schema_visible_contract() -> None:
     tools = {tool.operation_id: tool for tool in REAL_QUADRATIC_OPERATIONS}
     tool = tools["arithmetic.real_quadratic.embeddings.compute"]
 
-    assert "1,032-digit" in tool.description
+    assert f"{_MAX_EMBEDDING_PROFILE_RESULT_DIGITS:,}-digit" in tool.description
     schema = tool.request_type.model_json_schema()
     assert "square-free" in schema["properties"]["element"]["description"]
     assert tool.examples[0].input["element"]["radicand"] == 2

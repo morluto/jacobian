@@ -3,6 +3,7 @@
 from jacobian.catalog._examples import example
 from jacobian.math.arithmetic._support import arithmetic_operation
 from jacobian.math.real_quadratic import (
+    _MAX_EMBEDDING_PROFILE_RESULT_DIGITS,
     RealQuadraticEmbeddingProfile,
     RealQuadraticEmbeddingsRequest,
     RealQuadraticOrderRequest,
@@ -28,7 +29,7 @@ REAL_QUADRATIC_OPERATIONS = (
             "the source and explicitly identify the maps sqrt(d) -> +sqrt(d) "
             "and sqrt(d) -> -sqrt(d); the profile is available only for a "
             "square-free positive radicand with 256-digit input components and "
-            "a trace and norm within the 1,032-digit result bound."
+            f"a trace and norm within the {_MAX_EMBEDDING_PROFILE_RESULT_DIGITS:,}-digit result bound."
         ),
         RealQuadraticEmbeddingsRequest,
         RealQuadraticEmbeddingProfile,
@@ -45,7 +46,7 @@ REAL_QUADRATIC_OPERATIONS = (
                 "sqrt2_embedding_profile",
                 "Compute both exact embeddings, trace, and norm of 1+sqrt(2). "
                 "The radicand must be positive and square-free, and the derived "
-                "trace and norm must fit the 1,032-digit result bound.",
+                f"trace and norm must fit the {_MAX_EMBEDDING_PROFILE_RESULT_DIGITS:,}-digit result bound.",
                 {
                     "element": {
                         "rational_part": {"num": "1", "den": "1"},

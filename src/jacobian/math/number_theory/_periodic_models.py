@@ -126,8 +126,9 @@ def _periodic_request_schema_extra(*, profile: bool) -> JsonSchemaValue:
 PeriodicSignedInteger = Annotated[
     str,
     StringConstraints(
-        # Shape grammar only; MAX_PERIODIC_INTEGER_DIGITS is owned by max_length.
-        pattern=r"^(?:0|-?[1-9][0-9]*)$",
+        # The digit budget is derived from the owning constant; max_length only
+        # grants the one extra character for a leading minus sign.
+        pattern=f"^(?:0|-?[1-9][0-9]{{0,{MAX_PERIODIC_INTEGER_DIGITS - 1}}})$",
         max_length=MAX_PERIODIC_INTEGER_DIGITS + 1,
         strict=True,
     ),
@@ -135,7 +136,7 @@ PeriodicSignedInteger = Annotated[
 PeriodicNonnegativeInteger = Annotated[
     str,
     StringConstraints(
-        pattern=r"^(?:0|[1-9][0-9]*)$",
+        pattern=f"^(?:0|[1-9][0-9]{{0,{MAX_PERIODIC_INTEGER_DIGITS - 1}}})$",
         max_length=MAX_PERIODIC_INTEGER_DIGITS,
         strict=True,
     ),
@@ -143,7 +144,7 @@ PeriodicNonnegativeInteger = Annotated[
 PeriodicPositiveInteger = Annotated[
     str,
     StringConstraints(
-        pattern=r"^[1-9][0-9]*$",
+        pattern=f"^[1-9][0-9]{{0,{MAX_PERIODIC_INTEGER_DIGITS - 1}}}$",
         max_length=MAX_PERIODIC_INTEGER_DIGITS,
         strict=True,
     ),

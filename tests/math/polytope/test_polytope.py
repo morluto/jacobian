@@ -1680,14 +1680,34 @@ class TestCanonicalVPolytopeComposition:
         with pytest.raises(ValueError, match="exceeds the dimension bound"):
             PolytopeVolumeRequest(vertices=cube, dimension_bound=2)
 
-    def test_seven_axis_canonical_value_rejects_before_the_hull_replay(
+    def test_over_dimension_canonical_value_rejects_before_the_hull_replay(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """The canonical space may carry seven axes for facet-profile
-        sources, but volume caps ambient dimension at six, so a serialized
-        seven-axis value fails the cheap dimension-bound preflight instead
+        """The canonical space may carry ``MAX_FACET_DIMENSION`` axes for
+        facet-profile sources, but volume caps ambient dimension at
+        ``MAX_DIMENSION``, so a full-dimensional canonical simplex one axis
+        beyond that bound fails the cheap dimension-bound preflight instead
         of paying the extremality replay."""
-        simplex = _labelled_seven_dimensional_simplex()
+        axes = tuple(f"x{axis}" for axis in range(MAX_DIMENSION + 1))
+        rows = [
+            RationalPolytopeVertex(
+                vertex_id="v00",
+                coordinates=tuple(_canonical_rational(0) for _ in axes),
+            )
+        ]
+        for axis in range(MAX_DIMENSION + 1):
+            coordinates = [_canonical_rational(0) for _ in axes]
+            coordinates[axis] = _canonical_rational(1)
+            rows.append(
+                RationalPolytopeVertex(
+                    vertex_id=f"v{axis + 1:02d}",
+                    coordinates=tuple(coordinates),
+                )
+            )
+        simplex = RationalVPolytope(
+            space=RationalCoordinateSpace(axes=axes),
+            vertices=tuple(rows),
+        )
 
         def unexpected_proof(polytope: object) -> None:
             raise AssertionError("extremality proof ran before the bound preflight")

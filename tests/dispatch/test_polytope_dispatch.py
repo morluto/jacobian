@@ -6,6 +6,7 @@ import pytest
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import OperationRequestValidationError, invoke_operation
+from jacobian.math.polytope._models import MAX_COMPUTED_FACETS
 
 
 def _moment_curve_payload(count: int, dimension: int) -> dict[str, Any]:
@@ -51,7 +52,7 @@ def test_dispatch_rejects_a_profile_beyond_the_facet_cap_as_invalid_request() ->
     with pytest.raises(OperationRequestValidationError) as exc_info:
         invoke_operation("polytope.facets.compute", payload, Catalog.open())
 
-    assert "256-facet result bound" in exc_info.value.errors()[0]["msg"]
+    assert f"{MAX_COMPUTED_FACETS}-facet result bound" in exc_info.value.errors()[0]["msg"]
 
 
 def test_dispatch_admits_the_seven_simplex_with_interior_rows_at_the_cap_budget() -> (

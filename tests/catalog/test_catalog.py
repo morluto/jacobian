@@ -53,14 +53,28 @@ def test_invoke_operation_runs_determinant_without_state() -> None:
     assert result.output["method"] == "FRACTION_FREE_BAREISS"
 
 
-def test_invoke_operation_reports_unknown_removed_family_id() -> None:
+@pytest.mark.parametrize(
+    "operation_id",
+    (
+        "graph.construct.explicit",
+        "code.nonlinear.distance_profile.compute",
+    ),
+)
+def test_invoke_operation_reports_unknown_removed_family_id(operation_id: str) -> None:
     catalog = Catalog.open()
     with pytest.raises(ValueError, match="unknown operation"):
         invoke_operation(
-            "graph.construct.explicit",
+            operation_id,
             {"vertices": ["a"], "edges": []},
             catalog,
         )
+
+
+def test_explicit_binary_profile_remains_the_published_code_profile() -> None:
+    operation = Catalog.open().operation("code.binary.explicit.profile.compute")
+
+    assert operation is not None
+    assert operation.operation_id == "code.binary.explicit.profile.compute"
 
 
 def test_compact_discovery_matches_full_descriptor_discovery() -> None:

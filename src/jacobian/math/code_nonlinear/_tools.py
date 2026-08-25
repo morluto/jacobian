@@ -7,12 +7,10 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.code_nonlinear._models import (
-    BinaryCodeRequest,
     ConstantWeightProfileRequest,
     ConstantWeightProfileResult,
     ConstantWeightRequest,
     ConstantWeightResult,
-    DistanceProfileResult,
     ExplicitProfileRequest,
     ExplicitProfileResult,
     ToSetSystemRequest,
@@ -23,7 +21,6 @@ from jacobian.math.code_nonlinear._models import (
 from jacobian.math.code_nonlinear._operations import (
     compute_constant_weight,
     compute_constant_weight_profile,
-    compute_distance_profile,
     compute_explicit_profile,
     compute_to_set_system,
     compute_word_distance,
@@ -53,29 +50,6 @@ def _op[RequestT: StrictModel, ResultT: StrictModel](
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "code.nonlinear.distance_profile.compute",
-        "Compute the distance profile of a binary code",
-        "Compute the minimum pairwise Hamming distance and ordered word weights of a canonical explicit nonlinear binary code.",
-        BinaryCodeRequest,
-        DistanceProfileResult,
-        compute_distance_profile,
-        "code",
-        "distance",
-        "exact",
-        examples=(
-            example(
-                "binary_code",
-                "Compute the compact distance profile of a three-word code; the nested code retains its length and normalizes word order.",
-                {
-                    "code": {
-                        "length": 3,
-                        "codewords": [[0, 0, 0], [1, 1, 0], [0, 1, 1]],
-                    }
-                },
-            ),
-        ),
-    ),
     _op(
         "code.nonlinear.constant_weight.compute",
         "Generate all constant-weight binary words",

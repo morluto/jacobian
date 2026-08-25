@@ -257,12 +257,6 @@ def require_constant_weight_admission(length: int, weight: int) -> int:
     return cardinality
 
 
-def distance_profile_wire_upper_bound(code: ExplicitBinaryCode) -> int:
-    cardinality = len(code.codewords)
-    weights = _array_wire_bytes(cardinality, code.length)
-    return source_wire_upper_bound(code) + weights + 1_024
-
-
 __all__ = [
     "BITSET_CHUNK_BITS",
     "MAX_CODE_RESULT_BYTES",
@@ -272,7 +266,6 @@ __all__ = [
     "PROFILE_PAIR_PASSES",
     "ProfileAdmission",
     "constant_weight_result_wire_upper_bound",
-    "distance_profile_wire_upper_bound",
     "require_constant_weight_admission",
     "require_pair_work_admission",
     "require_profile_admission",

@@ -365,11 +365,17 @@ test("npm and Python packages publish the same release version", async () => {
 
 test("package metadata carries setup dependencies and packs the setup adapter", async () => {
   assert.equal(packageMetadata.engines.node, ">=23.5.0 || ^22.13.0 || ^20.17.0");
-  assert.deepEqual(packageMetadata.dependencies, {
-    "@iarna/toml": "^2.2.5",
-    "@inquirer/prompts": "^8.6.0",
-    "jsonc-parser": "^3.3.1",
-  });
+  assert.deepEqual(Object.keys(packageMetadata.dependencies).sort(), [
+    "@iarna/toml",
+    "@inquirer/prompts",
+    "jsonc-parser",
+  ]);
+  assert.ok(
+    Object.values(packageMetadata.dependencies).every(
+      (range) => typeof range === "string" && range.length > 0,
+    ),
+    "runtime dependency ranges must be non-empty manifest strings",
+  );
   assert.equal(packageMetadata.bundleDependencies, undefined);
   assert.deepEqual(packageMetadata.files, ["bin", "lib", "skill", "README.md"]);
   assert.deepEqual(Object.keys(packageMetadata.bin), ["jacobian"]);

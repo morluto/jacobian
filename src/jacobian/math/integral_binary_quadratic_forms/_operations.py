@@ -298,6 +298,8 @@ def _enumerate_representations(
     discriminant = form.discriminant
     rows: list[BinaryQuadraticFormRepresentation] = []
     y_bound = _require_representation_budget(form, target)
+    if y_bound is None:
+        return ()
     for y in range(-y_bound, y_bound + 1):
         x_discriminant = 4 * a * target + discriminant * y * y
         if x_discriminant < 0:

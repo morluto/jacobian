@@ -5,6 +5,8 @@ from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json
 from jacobian.math.integral_binary_quadratic_forms._models import (
+    MAX_REPRESENTATION_TARGET,
+    MAX_REPRESENTATION_Y_CANDIDATES,
     BinaryQuadraticFormCheckRequest,
     BinaryQuadraticFormEvaluateRequest,
     BinaryQuadraticFormEvaluateResult,
@@ -14,6 +16,7 @@ from jacobian.math.integral_binary_quadratic_forms._models import (
     BinaryQuadraticFormRepresentationsRequest,
     BinaryQuadraticFormRepresentationsResult,
     PrimitivePositiveDefiniteBinaryQuadraticForm,
+    _representation_y_bound,
 )
 from jacobian.math.integral_binary_quadratic_forms._operations import (
     compute_check,
@@ -411,6 +414,31 @@ class TestRepresentations:
         )
         assert result.representations == ()
         assert result.count == result.primitive_count == 0
+
+    def test_mod_four_obstruction_skips_an_inapplicable_general_scan(self) -> None:
+        """A huge ``3 mod 4`` sum-of-two-squares target is proved empty first."""
+        target = MAX_REPRESENTATION_TARGET - 1
+        form = _positive_form(1, 0, 1)
+        assert target % 4 == 3
+        assert 2 * _representation_y_bound(form, target) + 1 > (
+            MAX_REPRESENTATION_Y_CANDIDATES
+        )
+
+        result = compute_representations(
+            BinaryQuadraticFormRepresentationsRequest(form=form, target=target)
+        )
+
+        assert result.representations == ()
+        assert result.count == result.primitive_count == 0
+        assert type(result).model_validate(result.model_dump(mode="json")) == result
+
+        with pytest.raises(ValidationError) as exc_info:
+            BinaryQuadraticFormRepresentationsRequest(
+                form=form, target=MAX_REPRESENTATION_TARGET
+            )
+        _assert_error_type(
+            exc_info, "integral_binary_quadratic_form.representation_candidate_budget"
+        )
 
     def test_zero_has_the_single_nonprimitive_origin(self) -> None:
         result = compute_representations(

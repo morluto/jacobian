@@ -46,7 +46,9 @@ class CategoryProductAdmissionError(ValueError):
         self.reason = reason
 
 
-def _product_admission_error(reason: str, message: str) -> CategoryProductAdmissionError:
+def _product_admission_error(
+    reason: str, message: str
+) -> CategoryProductAdmissionError:
     return CategoryProductAdmissionError(reason, message)
 
 

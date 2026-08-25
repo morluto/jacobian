@@ -8,8 +8,6 @@ from typing import Literal, Self
 from pydantic import Field, StrictBool, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from pydantic_core import PydanticCustomError
-
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics._models import (

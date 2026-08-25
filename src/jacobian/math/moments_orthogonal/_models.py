@@ -156,7 +156,9 @@ class OrthogonalPolynomialRequest(StrictModel):
         operate on provably bounded intermediates with typed height checks.
         """
         try:
-            _require_gram_schmidt_heights_admissible(self.prefix.moments, self.max_degree)
+            _require_gram_schmidt_heights_admissible(
+                self.prefix.moments, self.max_degree
+            )
         except MomentsOrthogonalAdmissionError as exc:
             raise _validation_error(exc.reason, str(exc)) from None
         from jacobian.math.moments_orthogonal.operations import (

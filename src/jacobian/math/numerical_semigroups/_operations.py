@@ -12,10 +12,8 @@ from jacobian.math.numerical_semigroups._algorithms import (
     delta_periodicity_bound,
     factorization_length_extrema,
     factorization_lengths,
-    factorization_predecessors,
     factorizations,
     minimal_generating_system,
-    reconstruct_factorization,
 )
 from jacobian.math.numerical_semigroups._models import (
     BettiCatenaryDegree,
@@ -33,12 +31,6 @@ from jacobian.math.numerical_semigroups._models import (
     ElementDeltaSetResult,
     ElementElasticityRequest,
     ElementElasticityResult,
-    MinimalPresentationRelation,
-    MinimalPresentationRequest,
-    MinimalPresentationResult,
-    PresentationBinomial,
-    PresentationBinomialsRequest,
-    PresentationBinomialsResult,
 )
 
 
@@ -135,56 +127,6 @@ def compute_betti_elements(
     )
 
 
-def compute_minimal_presentation(
-    request: MinimalPresentationRequest,
-) -> MinimalPresentationResult:
-    atoms = tuple(_minimal_generators_list(request.generators))
-    _, _, disconnected = betti_data(atoms)
-    predecessors = factorization_predecessors(atoms, max(disconnected, default=0))
-    relations: list[MinimalPresentationRelation] = []
-    for betti_value, components in disconnected.items():
-        representatives: list[tuple[int, ...]] = []
-        for component in components:
-            generator_index = component[0]
-            residual = reconstruct_factorization(
-                atoms, predecessors, betti_value - atoms[generator_index]
-            )
-            if residual is None:
-                raise RuntimeError("Betti component has no factorization witness")
-            coordinates = list(residual)
-            coordinates[generator_index] += 1
-            representatives.append(tuple(coordinates))
-        for target_representative in representatives[1:]:
-            relations.append(
-                MinimalPresentationRelation(
-                    first=representatives[0], second=target_representative
-                )
-            )
-    return MinimalPresentationResult(
-        minimal_generators=tuple(format_canonical_integer(a) for a in atoms),
-        betti_elements=tuple(format_canonical_integer(b) for b in disconnected),
-        relations=tuple(relations),
-    )
-
-
-def compute_presentation_binomials(
-    request: PresentationBinomialsRequest,
-) -> PresentationBinomialsResult:
-    atoms = _minimal_generators_list(request.generators)
-    binomials: list[PresentationBinomial] = []
-    for relation in request.relations:
-        binomials.append(
-            PresentationBinomial(
-                left_exponents=tuple(relation.first),
-                right_exponents=tuple(relation.second),
-            )
-        )
-    return PresentationBinomialsResult(
-        minimal_generators=tuple(format_canonical_integer(a) for a in atoms),
-        binomials=tuple(binomials),
-    )
-
-
 def compute_delta_set(request: DeltaSetRequest) -> DeltaSetResult:
     atoms = tuple(_minimal_generators_list(request.generators))
     periodicity_bound = delta_periodicity_bound(atoms)
@@ -258,6 +200,4 @@ __all__ = [
     "compute_element_catenary_degree",
     "compute_element_delta_set",
     "compute_element_elasticity",
-    "compute_minimal_presentation",
-    "compute_presentation_binomials",
 ]

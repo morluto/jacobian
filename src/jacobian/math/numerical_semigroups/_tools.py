@@ -26,10 +26,6 @@ from jacobian.math.numerical_semigroups._models import (
     ElasticityResult,
     ElementElasticityRequest,
     ElementElasticityResult,
-    MinimalPresentationRequest,
-    MinimalPresentationResult,
-    PresentationBinomialsRequest,
-    PresentationBinomialsResult,
 )
 from jacobian.math.numerical_semigroups._operations import (
     compute_betti_elements,
@@ -37,6 +33,12 @@ from jacobian.math.numerical_semigroups._operations import (
     compute_delta_set,
     compute_elasticity,
     compute_element_elasticity,
+)
+from jacobian.math.numerical_semigroups._presentations import (
+    MinimalPresentationRequest,
+    MinimalPresentationResult,
+    PresentationBinomialsRequest,
+    PresentationBinomialsResult,
     compute_minimal_presentation,
     compute_presentation_binomials,
 )

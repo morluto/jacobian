@@ -19,9 +19,13 @@ from jacobian.math.numerical_semigroups._models import (
     ElementCatenaryDegreeRequest,
     ElementDeltaSetRequest,
     ElementElasticityRequest,
+)
+from jacobian.math.numerical_semigroups._presentations import (
     MinimalPresentationRequest,
     MinimalPresentationResult,
     PresentationBinomialsRequest,
+    compute_minimal_presentation,
+    compute_presentation_binomials,
 )
 from jacobian.math.numerical_semigroups._operations import (
     compute_betti_elements,
@@ -29,8 +33,6 @@ from jacobian.math.numerical_semigroups._operations import (
     compute_delta_set,
     compute_elasticity,
     compute_element_catenary_degree,
-    compute_minimal_presentation,
-    compute_presentation_binomials,
 )
 
 

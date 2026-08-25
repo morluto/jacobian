@@ -8,7 +8,7 @@ from typing import Literal
 from flint import fmpz
 from sympy.ntheory.generate import Sieve, primerange
 
-from jacobian.math.number_theory._models import (
+from jacobian.math.number_theory._powerful_models import (
     MAX_POWERFUL_CUTOFF,
     MAX_POWERFUL_INTEGER_DIGITS,
 )

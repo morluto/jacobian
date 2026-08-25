@@ -12,14 +12,14 @@ from pydantic import ValidationError
 from sympy import factorint, isprime
 from tests.math.number_theory._validation import expect_validation
 
-from jacobian.math.number_theory._models import (
-    PowerfulNumberRequest,
-    PowerfulNumberResult,
-)
 from jacobian.math.number_theory._powerful import decide_powerful
 from jacobian.math.number_theory._powerful_kernels import (
     _perfect_power_witness,
     decide_powerful_data,
+)
+from jacobian.math.number_theory._powerful_models import (
+    PowerfulNumberRequest,
+    PowerfulNumberResult,
 )
 
 PayloadMutation = Callable[[dict[str, Any]], None]

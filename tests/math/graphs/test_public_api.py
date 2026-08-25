@@ -47,6 +47,7 @@ def test_exact_public_api_symbols() -> None:
         "IndependenceNumberBudget",
         "IndependenceNumberRequest",
         "IndependenceNumberResult",
+        "IndexedSimpleUndirectedGraph",
         "SimpleUndirectedGraph",
         "biconnected_components",
         "complement",

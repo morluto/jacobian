@@ -35,6 +35,12 @@ from jacobian.math.tree_automata.values import (
 )
 
 
+def _assert_validation_code(
+    exc: pytest.ExceptionInfo[ValidationError], code: str
+) -> None:
+    assert exc.value.errors()[0]["type"] == code
+
+
 # Helpers
 def _leaf() -> RankedTree:
     return RankedTree(symbol=0, children=())
@@ -196,8 +202,9 @@ class TestRun:
 
         payload = result.model_dump()
         payload["state_chart"] = (((), (0,)),)
-        with pytest.raises(ValidationError, match="not bound"):
+        with pytest.raises(ValidationError) as exc:
             type(result).model_validate(payload)
+        _assert_validation_code(exc, "tree_automata.root_states_not_bound")
 
     def test_native_run_rejects_invalid_nested_rank(self):
         automaton = _simple_automaton()
@@ -446,8 +453,9 @@ class TestReachableStates:
 
         forged_payload = result.model_dump()
         forged_payload["witnesses"] = [[0, {"symbol": 1, "children": []}], [1, _leaf()]]
-        with pytest.raises(ValidationError, match="not bound"):
+        with pytest.raises(ValidationError) as exc:
             ReachableStateProfile.model_validate(forged_payload)
+        _assert_validation_code(exc, "tree_automata.profile_not_bound")
 
     def test_equal_node_tie_breaks_by_smallest_child_state_tuple(self):
         automaton = BottomUpTreeAutomaton(
@@ -497,8 +505,9 @@ class TestReachableStates:
         payload = result.model_dump()
         payload["reachable_states"] = (1,)
 
-        with pytest.raises(ValidationError, match="disjoint"):
+        with pytest.raises(ValidationError) as exc:
             ReachableStateProfile.model_validate(payload)
+        _assert_validation_code(exc, "tree_automata.states_not_disjoint")
 
     def test_result_binding_replay_rejects_non_minimum_witness(self):
         automaton = _simple_automaton()
@@ -519,8 +528,9 @@ class TestReachableStates:
             ],
         }
 
-        with pytest.raises(ValidationError, match="not bound"):
+        with pytest.raises(ValidationError) as exc:
             ReachableStateProfile.model_validate(forged_payload)
+        _assert_validation_code(exc, "tree_automata.profile_not_bound")
 
     def test_deserialized_profile_replays_binding_automatically(self):
         automaton = _simple_automaton()
@@ -537,23 +547,26 @@ class TestReachableStates:
         payload = reachable_state_profile(automaton).model_dump()
 
         unsorted = {**payload, "unreachable_states": ()}
-        with pytest.raises(ValidationError, match="partition"):
+        with pytest.raises(ValidationError) as exc:
             ReachableStateProfile.model_validate(unsorted)
+        _assert_validation_code(exc, "tree_automata.states_do_not_partition")
 
         misaligned = {
             **payload,
             "reachable_states": (),
             "unreachable_states": (0, 1),
         }
-        with pytest.raises(ValidationError, match="exactly one entry per reachable"):
+        with pytest.raises(ValidationError) as exc:
             ReachableStateProfile.model_validate(misaligned)
+        _assert_validation_code(exc, "tree_automata.witnesses_not_aligned")
 
         foreign_alphabet = {
             **payload,
             "witnesses": [[0, {"symbol": 1, "children": []}]],
         }
-        with pytest.raises(ValidationError, match="arity"):
+        with pytest.raises(ValidationError) as exc:
             ReachableStateProfile.model_validate(foreign_alphabet)
+        _assert_validation_code(exc, "tree_automata.witness_arity_mismatch")
 
 
 class TestValidation:
@@ -735,8 +748,9 @@ class TestValidation:
             final_states=(),
         )
 
-        with pytest.raises(ValidationError, match="reachability work bound"):
+        with pytest.raises(ValidationError) as exc:
             TreeAutomatonReachabilityRequest(automaton=automaton)
+        _assert_validation_code(exc, "tree_automata.reachability_work_bound")
 
     def test_native_profile_prices_measured_convergence_within_shared_envelope(self):
         automaton = _seeded_chain_with_padded_rows(16)
@@ -771,8 +785,9 @@ class TestValidation:
         assert public_path > 30_000_000
 
         assert isinstance(reachable_state_profile(automaton), ReachableStateProfile)
-        with pytest.raises(ValidationError, match="reachability work bound"):
+        with pytest.raises(ValidationError) as exc:
             TreeAutomatonReachabilityRequest(automaton=automaton)
+        _assert_validation_code(exc, "tree_automata.reachability_work_bound")
 
     def test_near_envelope_rows_are_priced_exactly_and_admitted_only_when_they_fit(
         self,
@@ -813,8 +828,9 @@ class TestValidation:
             advertised_public_bound(rejected)
         )
         assert _reachability_public_path_work_bound(rejected) > 30_000_000
-        with pytest.raises(ValidationError, match="reachability work bound"):
+        with pytest.raises(ValidationError) as exc:
             TreeAutomatonReachabilityRequest(automaton=rejected)
+        _assert_validation_code(exc, "tree_automata.reachability_work_bound")
 
     def test_deepest_native_profile_fits_envelope_while_public_rejects(self):
         automaton = _seeded_chain_with_padded_rows(64)
@@ -836,8 +852,9 @@ class TestValidation:
             ranked_tree_node_count(tree) for _, tree in profile.witnesses
         ) == tuple(range(1, 65))
 
-        with pytest.raises(ValidationError, match="reachability work bound"):
+        with pytest.raises(ValidationError) as exc:
             TreeAutomatonReachabilityRequest(automaton=automaton)
+        _assert_validation_code(exc, "tree_automata.reachability_work_bound")
 
     def test_reachability_schema_publishes_coupled_admission_envelope(self):
         request_schema = TreeAutomatonReachabilityRequest.model_json_schema()
@@ -876,8 +893,9 @@ class TestValidation:
             final_states=(),
         )
 
-        with pytest.raises(ValidationError, match="witness output exceeds"):
+        with pytest.raises(ValidationError) as exc:
             TreeAutomatonReachabilityRequest(automaton=automaton)
+        _assert_validation_code(exc, "tree_automata.witness_output_bound")
 
     def test_arity_mismatch_rejected(self):
         with pytest.raises(ValidationError):
@@ -915,28 +933,31 @@ class TestValidation:
     def test_nested_tree_arity_is_validated_before_execution(self):
         invalid_tree = _node(RankedTree(symbol=1), _leaf())
 
-        with pytest.raises(ValidationError, match="every tree node"):
+        with pytest.raises(ValidationError) as exc:
             TreeRunRequest(automaton=_simple_automaton(), tree=invalid_tree)
+        _assert_validation_code(exc, "tree_automata.invalid_tree")
 
     def test_duplicate_transitions_are_rejected(self):
         transition = TreeAutomatonTransition(symbol=0, child_states=(), target_state=0)
 
-        with pytest.raises(ValidationError, match="transitions must be unique"):
+        with pytest.raises(ValidationError) as exc:
             BottomUpTreeAutomaton(
                 state_count=1,
                 arity=(0,),
                 transitions=(transition, transition),
                 final_states=(0,),
             )
+        _assert_validation_code(exc, "tree_automata.transitions_not_unique")
 
     def test_duplicate_final_states_are_rejected(self):
-        with pytest.raises(ValidationError, match="final states must be unique"):
+        with pytest.raises(ValidationError) as exc:
             BottomUpTreeAutomaton(
                 state_count=1,
                 arity=(0,),
                 transitions=(),
                 final_states=(0, 0),
             )
+        _assert_validation_code(exc, "tree_automata.final_states_not_unique")
 
     def test_count_request_rejects_work_beyond_complete_bound(self):
         automaton = BottomUpTreeAutomaton(
@@ -949,5 +970,6 @@ class TestValidation:
             final_states=(0,),
         )
 
-        with pytest.raises(ValidationError, match="count work bound exceeded"):
+        with pytest.raises(ValidationError) as exc:
             AcceptedTreeCountRequest(automaton=automaton, tree_size=100)
+        _assert_validation_code(exc, "tree_automata.count_work_bound")

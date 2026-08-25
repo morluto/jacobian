@@ -6,6 +6,7 @@ import math
 
 import pytest
 from pydantic import ValidationError
+from tests.math.number_theory._validation import expect_validation
 
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory._factorization_kernels import (
@@ -91,9 +92,9 @@ def test_digit_bound_rejects_oversized_input() -> None:
 
 
 def test_rejects_value_below_two() -> None:
-    with pytest.raises(ValidationError, match="at least 2"):
+    with expect_validation("number_theory."):
         CertifiedFactorizationRequest(value="1")
-    with pytest.raises(ValidationError, match="at least 2"):
+    with expect_validation("number_theory."):
         CertifiedFactorizationRequest(value="0")
 
 
@@ -141,9 +142,9 @@ def test_pratt_certificate_reports_composite() -> None:
 
 
 def test_pratt_certificate_rejects_value_below_two() -> None:
-    with pytest.raises(ValidationError, match="at least 2"):
+    with expect_validation("number_theory."):
         PrimalityCertificateRequest(value="1")
-    with pytest.raises(ValidationError, match="at least 2"):
+    with expect_validation("number_theory."):
         PrimalityCertificateRequest(value="0")
 
 
@@ -153,7 +154,7 @@ def test_pratt_certificate_rejects_oversized_input() -> None:
 
 
 def test_certified_result_rejects_non_matching_certificate() -> None:
-    with pytest.raises(ValidationError, match="certificate prime must match"):
+    with expect_validation("number_theory."):
         PrimalityCertificateResult(
             status="CERTIFIED",
             value="101",
@@ -178,12 +179,12 @@ def test_certified_result_rejects_non_matching_certificate() -> None:
 
 
 def test_certified_result_rejects_certificate_without_prime() -> None:
-    with pytest.raises(ValidationError, match="CERTIFIED status requires"):
+    with expect_validation("number_theory."):
         PrimalityCertificateResult(status="CERTIFIED", value="101")
 
 
 def test_composite_result_rejects_certificate() -> None:
-    with pytest.raises(ValidationError, match="COMPOSITE status must not"):
+    with expect_validation("number_theory."):
         PrimalityCertificateResult(
             status="COMPOSITE",
             value="9",

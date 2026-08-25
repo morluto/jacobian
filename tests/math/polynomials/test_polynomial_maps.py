@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-import pytest
-from pydantic import ValidationError
+from tests.math.polynomials._support import polynomial_validation_error
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.polynomials.maps._models import (
     CompositionRequest,
     EvalRequest,
-    JacobianRequest,
+    RationalPolynomialMap,
     VariablePoint,
 )
 from jacobian.math.polynomials.maps._operations import (
@@ -60,7 +59,7 @@ def test_evaluation_returns_a_canonical_rational() -> None:
 
 
 def test_evaluation_requires_the_complete_ordered_axis() -> None:
-    with pytest.raises(ValidationError, match="complete ordered axis"):
+    with polynomial_validation_error():
         EvalRequest(
             polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
             point=VariablePoint(
@@ -71,7 +70,7 @@ def test_evaluation_requires_the_complete_ordered_axis() -> None:
 
 
 def test_evaluation_rejects_a_point_whose_exact_value_exceeds_result_bound() -> None:
-    with pytest.raises(ValidationError, match="32,768-digit"):
+    with polynomial_validation_error():
         EvalRequest(
             polynomial=_polynomial(("x",), {(64,): 1}),
             point=VariablePoint(
@@ -82,7 +81,7 @@ def test_evaluation_rejects_a_point_whose_exact_value_exceeds_result_bound() -> 
 
 
 def test_jacobian_entries_are_directly_composable_polynomials() -> None:
-    request = JacobianRequest(
+    request = RationalPolynomialMap(
         input_variables=("x", "y"),
         output_polynomials=(
             _polynomial(("x", "y"), {(2, 0): 1}),
@@ -101,8 +100,8 @@ def test_jacobian_entries_are_directly_composable_polynomials() -> None:
 
 
 def test_jacobian_rejects_a_mismatched_output_ring() -> None:
-    with pytest.raises(ValidationError, match="complete ordered input axis"):
-        JacobianRequest(
+    with polynomial_validation_error():
+        RationalPolynomialMap(
             input_variables=("x", "y"),
             output_polynomials=(_polynomial(("x",), {(2,): 1}),),
         )
@@ -124,7 +123,7 @@ def test_univariate_composition_returns_a_canonical_polynomial() -> None:
 
 
 def test_composition_rejects_multivariate_operands() -> None:
-    with pytest.raises(ValidationError, match="exactly outer_variable"):
+    with polynomial_validation_error():
         CompositionRequest(
             outer=_polynomial(("u", "v"), {(1, 0): 1}),
             inner=_polynomial(("x",), {(1,): 1}),

@@ -7,6 +7,7 @@ from math import gcd
 from typing import Self
 
 from pydantic import ConfigDict, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._digest import Sha256Digest
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, require_bounded_rational
@@ -64,6 +65,10 @@ BOX_ENCLOSURE_ADMISSION_SUMMARY = (
 _RESULT_ENVELOPE_RESERVE_BYTES = 512
 
 
+def _validation_error(message: str) -> PydanticCustomError:
+    return PydanticCustomError("polynomial.box_invariant", message)
+
+
 @dataclass(frozen=True, slots=True)
 class _GrowthEstimate:
     result_numerator_digits: int
@@ -102,13 +107,13 @@ def _coefficient_lcm_contribution(
             common_denominator
         ) + _integer_digits(factor)
         if predicted_product_digits > MAX_BOX_ENCLOSURE_INTERMEDIATE_DIGITS:
-            raise ValueError(
+            raise _validation_error(
                 "polynomial-box coefficient denominator LCM exceeds the "
                 f"{MAX_BOX_ENCLOSURE_INTERMEDIATE_DIGITS}-digit intermediate bound"
             )
         common_denominator *= factor
         if _integer_digits(common_denominator) > MAX_BOX_ENCLOSURE_RESULT_DIGITS:
-            raise ValueError(
+            raise _validation_error(
                 "polynomial-box common denominator exceeds the "
                 f"{MAX_BOX_ENCLOSURE_RESULT_DIGITS}-digit result bound"
             )
@@ -123,7 +128,7 @@ def _endpoint_lcm_contribution(interval: ClosedRationalInterval) -> int:
         upper_denominator
     )
     if predicted_product_digits > MAX_BOX_ENCLOSURE_INTERMEDIATE_DIGITS:
-        raise ValueError(
+        raise _validation_error(
             "polynomial-box endpoint denominator LCM exceeds the "
             f"{MAX_BOX_ENCLOSURE_INTERMEDIATE_DIGITS}-digit intermediate bound"
         )
@@ -260,7 +265,7 @@ def _require_enclosure_preflight(
     box: RationalBox,
 ) -> None:
     if polynomial.domain != box.domain or polynomial.variables != box.variables:
-        raise ValueError(
+        raise _validation_error(
             "polynomial box must use the polynomial's complete ordered axis and QQ parent"
         )
     require_polynomial_budget(
@@ -283,17 +288,17 @@ def _require_enclosure_preflight(
         growth.result_numerator_digits > MAX_BOX_ENCLOSURE_RESULT_DIGITS
         or growth.result_denominator_digits > MAX_BOX_ENCLOSURE_RESULT_DIGITS
     ):
-        raise ValueError(
+        raise _validation_error(
             "polynomial-box enclosure exceeds the "
             f"{MAX_BOX_ENCLOSURE_RESULT_DIGITS}-digit exact-result bound"
         )
     if growth.intermediate_digits > MAX_BOX_ENCLOSURE_INTERMEDIATE_DIGITS:
-        raise ValueError(
+        raise _validation_error(
             "polynomial-box enclosure exceeds the "
             f"{MAX_BOX_ENCLOSURE_INTERMEDIATE_DIGITS}-digit intermediate bound"
         )
     if growth.estimated_result_bytes > MAX_BOX_ENCLOSURE_RESULT_BYTES:
-        raise ValueError(
+        raise _validation_error(
             "polynomial-box enclosure result would exceed the "
             f"{MAX_BOX_ENCLOSURE_RESULT_BYTES}-byte canonical output bound"
         )
@@ -337,11 +342,15 @@ class PolynomialBoxEnclosureResult(StrictModel):
             self.polynomial,
             self.box,
         ):
-            raise ValueError("source digest does not bind the polynomial and box")
+            raise _validation_error(
+                "source digest does not bind the polynomial and box"
+            )
         _require_enclosure_preflight(self.polynomial, self.box)
         expected = natural_interval_extension(self.polynomial, self.box)
         if self.enclosure != expected:
-            raise ValueError("enclosure does not match the bounded source replay")
+            raise _validation_error(
+                "enclosure does not match the bounded source replay"
+            )
         return self
 
 

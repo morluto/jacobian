@@ -5,12 +5,17 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.polynomials._models import IntegerPolynomial
 
 _MAX_PADIC_COEFFICIENTS = 64
+
+
+def _validation_error(code: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(code, message)
 
 
 def _require_padic_budget(polynomial: IntegerPolynomial) -> None:
@@ -22,8 +27,9 @@ def _require_padic_budget(polynomial: IntegerPolynomial) -> None:
     admits far longer inputs than these kernels establish.
     """
     if len(polynomial.coefficients) > _MAX_PADIC_COEFFICIENTS:
-        raise ValueError(
-            "p-adic polynomial exceeds the 64-coefficient operation budget"
+        raise _validation_error(
+            "padic_arithmetic.polynomial_budget",
+            "p-adic polynomial exceeds the 64-coefficient operation budget",
         )
 
 
@@ -51,7 +57,9 @@ def _require_prime(value: int) -> None:
         or value > MAX_PRIME
         or any(value % divisor == 0 for divisor in range(2, int(value**0.5) + 1))
     ):
-        raise ValueError("prime must be a prime modulus")
+        raise _validation_error(
+            "padic_arithmetic.prime_not_prime", "prime must be a prime modulus"
+        )
 
 
 def _poly_eval_mod_p(coeffs: tuple[int, ...], x: int, p: int) -> int:
@@ -89,16 +97,22 @@ class HenselRootRequest(StrictModel):
     def require_valid_root(self) -> Self:
         _require_prime(self.prime)
         if self.root_mod_p >= self.prime:
-            raise ValueError("root_mod_p must be in 0..p-1")
+            raise _validation_error(
+                "padic_arithmetic.root_out_of_range", "root_mod_p must be in 0..p-1"
+            )
         # The contract lifts a SIMPLE root: f(r) = 0 and f'(r) != 0 mod p are
         # mathematical preconditions, so validate them at this boundary.
         coeffs = _kernel_coefficients(self.polynomial)
         if _poly_eval_mod_p(coeffs, self.root_mod_p, self.prime) != 0:
-            raise ValueError("root_mod_p must satisfy f(root_mod_p) = 0 mod p")
+            raise _validation_error(
+                "padic_arithmetic.root_not_root",
+                "root_mod_p must satisfy f(root_mod_p) = 0 mod p",
+            )
         if _poly_deriv_mod_p(coeffs, self.root_mod_p, self.prime) % self.prime == 0:
-            raise ValueError(
+            raise _validation_error(
+                "padic_arithmetic.root_not_simple",
                 "Hensel lifting requires a simple root: "
-                "f'(root_mod_p) must be nonzero mod p"
+                "f'(root_mod_p) must be nonzero mod p",
             )
         return self
 
@@ -125,27 +139,43 @@ class HenselRootResult(StrictModel):
         _require_prime(p)
         _require_padic_budget(self.polynomial)
         if self.root_mod_p >= p:
-            raise ValueError("root_mod_p must be in 0..p-1")
+            raise _validation_error(
+                "padic_arithmetic.root_out_of_range", "root_mod_p must be in 0..p-1"
+            )
         if self.lifted_root >= modulus:
-            raise ValueError("lifted_root must be in 0..p^k - 1")
+            raise _validation_error(
+                "padic_arithmetic.lifted_root_out_of_range",
+                "lifted_root must be in 0..p^k - 1",
+            )
         coeffs = _kernel_coefficients(self.polynomial)
         # Replay the defining invariants against the retained source data so
         # a serialized result cannot detach its lift from its polynomial.
         if _poly_eval_mod_p(coeffs, self.root_mod_p, p) != 0:
-            raise ValueError("root_mod_p must satisfy f(root_mod_p) = 0 mod p")
+            raise _validation_error(
+                "padic_arithmetic.root_not_root",
+                "root_mod_p must satisfy f(root_mod_p) = 0 mod p",
+            )
         if _poly_deriv_mod_p(coeffs, self.root_mod_p, p) % p == 0:
-            raise ValueError(
+            raise _validation_error(
+                "padic_arithmetic.root_not_simple",
                 "the lifted residue must be simple: "
-                "f'(root_mod_p) must be nonzero mod p"
+                "f'(root_mod_p) must be nonzero mod p",
             )
         if self.lifted_root % p != self.root_mod_p:
-            raise ValueError("lifted_root must reduce to root_mod_p modulo the prime")
+            raise _validation_error(
+                "padic_arithmetic.lifted_root_wrong_residue",
+                "lifted_root must reduce to root_mod_p modulo the prime",
+            )
         if _poly_eval_mod_p(coeffs, self.lifted_root, modulus) != 0:
-            raise ValueError(
-                "lifted_root must satisfy f(lifted_root) = 0 modulo p^precision"
+            raise _validation_error(
+                "padic_arithmetic.lifted_root_not_root",
+                "lifted_root must satisfy f(lifted_root) = 0 modulo p^precision",
             )
         if not self.is_simple_root:
-            raise ValueError("only simple roots are lifted, so the flag must hold")
+            raise _validation_error(
+                "padic_arithmetic.simple_flag_invalid",
+                "only simple roots are lifted, so the flag must hold",
+            )
         return self
 
 
@@ -245,11 +275,20 @@ class PAdicRootsResult(StrictModel):
     def require_consistent_count(self) -> Self:
         _require_padic_budget(self.polynomial)
         if self.root_count != len(self.roots):
-            raise ValueError("root_count must match the number of roots")
+            raise _validation_error(
+                "padic_arithmetic.root_count_mismatch",
+                "root_count must match the number of roots",
+            )
         if len(set(self.multiple_residues)) != len(self.multiple_residues):
-            raise ValueError("multiple residues must be distinct")
+            raise _validation_error(
+                "padic_arithmetic.multiple_residues_not_distinct",
+                "multiple residues must be distinct",
+            )
         if any(r >= self.prime for r in self.multiple_residues):
-            raise ValueError("multiple residues must lie in 0..p-1")
+            raise _validation_error(
+                "padic_arithmetic.multiple_residue_out_of_range",
+                "multiple residues must lie in 0..p-1",
+            )
         return self
 
     @model_validator(mode="after")
@@ -263,19 +302,28 @@ class PAdicRootsResult(StrictModel):
         coefficients = _kernel_coefficients(self.polynomial)
         roots = tuple(entry.root for entry in self.roots)
         if any(root >= modulus for root in roots):
-            raise ValueError("roots must lie in 0..p^k - 1")
+            raise _validation_error(
+                "padic_arithmetic.root_out_of_range", "roots must lie in 0..p^k - 1"
+            )
         if len(set(roots)) != len(roots):
-            raise ValueError("roots must be distinct modulo p^k")
+            raise _validation_error(
+                "padic_arithmetic.roots_not_distinct",
+                "roots must be distinct modulo p^k",
+            )
         # Replay every classification against the retained polynomial: each
         # listed root must be an exact vanishing simple root, and the simple
         # versus multiple split must be complete over all residues mod p.
         for root in roots:
             if _eval_poly_mod(coefficients, root, modulus) != 0:
-                raise ValueError(
-                    "each root must satisfy f(root) = 0 modulo p^precision"
+                raise _validation_error(
+                    "padic_arithmetic.root_not_root",
+                    "each root must satisfy f(root) = 0 modulo p^precision",
                 )
             if _eval_poly_deriv_mod(coefficients, root, p) == 0:
-                raise ValueError("each lifted root must be simple modulo p")
+                raise _validation_error(
+                    "padic_arithmetic.root_not_simple",
+                    "each lifted root must be simple modulo p",
+                )
         simple_residues = [
             residue
             for residue in range(p)
@@ -289,14 +337,19 @@ class PAdicRootsResult(StrictModel):
             and _eval_poly_deriv_mod(coefficients, residue, p) == 0
         ]
         if sorted({root % p for root in roots}) != simple_residues:
-            raise ValueError(
-                "roots must cover exactly the simple residues of f modulo p"
+            raise _validation_error(
+                "padic_arithmetic.simple_residues_mismatch",
+                "roots must cover exactly the simple residues of f modulo p",
             )
         if len(roots) != len(simple_residues):
-            raise ValueError("each simple residue lifts to exactly one root")
+            raise _validation_error(
+                "padic_arithmetic.simple_root_count_mismatch",
+                "each simple residue lifts to exactly one root",
+            )
         if sorted(self.multiple_residues) != multiple:
-            raise ValueError(
-                "multiple_residues must list every repeated-factor residue of f mod p"
+            raise _validation_error(
+                "padic_arithmetic.multiple_residues_mismatch",
+                "multiple_residues must list every repeated-factor residue of f mod p",
             )
         return self
 

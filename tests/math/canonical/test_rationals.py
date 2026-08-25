@@ -15,6 +15,8 @@ from pydantic import ValidationError
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
+    canonical_rational_component_digits,
+    format_canonical_rational,
 )
 
 # Values with more than 4,300 digits — above CPython's default
@@ -44,6 +46,24 @@ def test_from_fraction_constructs_reduced_rational() -> None:
 
     assert value.num == "3"
     assert value.den == "2"
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (Fraction(0), "0"),
+        (Fraction(-6, 1), "-6"),
+        (Fraction(-6, 8), "-3/4"),
+    ],
+)
+def test_format_canonical_rational(value: Fraction, expected: str) -> None:
+    assert format_canonical_rational(value) == expected
+
+
+def test_canonical_rational_component_digits_uses_canonical_components() -> None:
+    assert (
+        canonical_rational_component_digits(CanonicalRational(num="-4", den="115")) == 3
+    )
 
 
 def test_from_integer_ratio_preserves_negative_numerator() -> None:
@@ -104,12 +124,14 @@ def test_round_trip_above_digit_limit() -> None:
 def test_from_integer_ratio_rejects_above_contract_digit_limit() -> None:
     too_large = 10 ** (MAX_CANONICAL_RATIONAL_DIGITS + 1)
 
-    with pytest.raises(ValidationError, match=r"exceed the canonical"):
+    with pytest.raises(ValidationError) as error:
         CanonicalRational.from_integer_ratio(too_large, 1)
+    assert error.value.errors()[0]["type"] == "canonical_rational.component_digits"
 
 
 def test_from_fraction_rejects_above_contract_digit_limit() -> None:
     too_large = Fraction(10 ** (MAX_CANONICAL_RATIONAL_DIGITS + 1), 1)
 
-    with pytest.raises(ValidationError, match=r"exceed the canonical"):
+    with pytest.raises(ValidationError) as error:
         CanonicalRational.from_fraction(too_large)
+    assert error.value.errors()[0]["type"] == "canonical_rational.component_digits"

@@ -14,6 +14,7 @@ from jacobian.canonical import (
     canonicalize_json,
     encode_strict_json,
     sha256_digest,
+    strict_json_object_size,
 )
 
 
@@ -40,6 +41,23 @@ def test_strict_json_encoding_preserves_unreduced_rationals_and_unicode() -> Non
         f'{{"label":"{decomposed}","weight":{{"den":"4","num":"2"}}}}'
     )
     assert encode_strict_json(decomposed) == b'"e\xcc\x81"'
+
+
+@pytest.mark.parametrize(
+    ("fields", "value"),
+    [
+        ((), {}),
+        ((("value", 1),), {"value": 0}),
+        (
+            (('quoted"key', 1), ("é", 5)),
+            {'quoted"key': 0, "é": [1, 2]},
+        ),
+    ],
+)
+def test_strict_json_object_size_matches_encoded_empty_single_and_escaped_keys(
+    fields: tuple[tuple[str, int], ...], value: dict[str, object]
+) -> None:
+    assert strict_json_object_size(fields) == len(encode_strict_json(value))
 
 
 @pytest.mark.parametrize(
@@ -79,8 +97,12 @@ def test_canonical_errors_preserve_only_repair_relevant_context(
 
 
 def test_canonical_rational_wire_model_rejects_unreduced_input() -> None:
-    with pytest.raises(ValidationError, match=r"rational must be reduced"):
+    with pytest.raises(ValidationError) as error:
         CanonicalRational.model_validate({"num": "2", "den": "4"})
+    assert (
+        error.value.errors()[0]["type"]
+        == "canonical_rational.noncanonical_representation"
+    )
 
 
 @pytest.mark.parametrize(
@@ -104,8 +126,9 @@ def test_bounded_rational_rejects_oversized_canonical_components(
 def test_negative_zero_is_not_a_canonical_integer_encoding() -> None:
     with pytest.raises(CanonicalizationError, match=r"canonical decimal"):
         canonicalize_json({"num": "-0", "den": "1"})
-    with pytest.raises(ValidationError, match=r"num"):
+    with pytest.raises(ValidationError) as error:
         CanonicalRational.model_validate({"num": "-0", "den": "1"})
+    assert error.value.errors()[0]["type"] == "string_pattern_mismatch"
 
 
 def test_num_den_is_a_reserved_exact_rational_shape() -> None:

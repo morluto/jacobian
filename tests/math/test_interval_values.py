@@ -33,7 +33,7 @@ def test_box_preserves_ordered_axes_and_zero_width_coordinates() -> None:
 
 
 @pytest.mark.parametrize(
-    ("payload", "message"),
+    ("payload", "error_type"),
     (
         (
             {
@@ -49,14 +49,14 @@ def test_box_preserves_ordered_axes_and_zero_width_coordinates() -> None:
                     },
                 ],
             },
-            "variables must be unique",
+            "interval.duplicate_variable",
         ),
         (
             {
                 "variables": ["x"],
                 "intervals": [],
             },
-            "same length",
+            "interval.axis_length",
         ),
         (
             {
@@ -68,13 +68,14 @@ def test_box_preserves_ordered_axes_and_zero_width_coordinates() -> None:
                     },
                 ],
             },
-            "lower endpoint",
+            "interval.endpoint_order",
         ),
     ),
 )
 def test_box_rejects_noncanonical_axes_and_intervals(
     payload: dict[str, object],
-    message: str,
+    error_type: str,
 ) -> None:
-    with pytest.raises(ValidationError, match=message):
+    with pytest.raises(ValidationError) as error:
         RationalBox.model_validate(payload)
+    assert error.value.errors()[0]["type"] == error_type

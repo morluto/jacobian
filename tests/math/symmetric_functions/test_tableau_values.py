@@ -36,28 +36,37 @@ def test_semistandard_tableau_accepts_weak_rows_and_strict_columns() -> None:
 
 
 @pytest.mark.parametrize(
-    ("rows", "message"),
+    ("rows", "error_type"),
     [
-        (((1,), (2, 3)), "weakly decreasing"),
-        (((1, 3, 2),), "weakly increasing"),
-        (((1, 2), (1,)), "columns must be strictly increasing"),
+        (((1,), (2, 3)), "symmetric_function.partition_not_weakly_decreasing"),
+        (((1, 3, 2),), "symmetric_function.semistandard_rows_not_weakly_increasing"),
+        (((1, 2), (1,)), "symmetric_function.tableau_columns_not_strict"),
     ],
 )
 def test_semistandard_tableau_rejects_malformed_rows(
-    rows: tuple[tuple[int, ...], ...], message: str
+    rows: tuple[tuple[int, ...], ...], error_type: str
 ) -> None:
-    with pytest.raises(ValidationError, match=message):
+    with pytest.raises(ValidationError) as error:
         SemistandardYoungTableau(rows=rows)
+    assert error.value.errors()[0]["type"] == error_type
 
 
 def test_standard_tableau_requires_exact_labels_and_strict_rows() -> None:
     tableau = StandardYoungTableau(rows=((1, 2, 4), (3,), (5,)))
     assert tableau.shape.parts == (3, 1, 1)
 
-    with pytest.raises(ValidationError, match="exactly 1 through n"):
+    with pytest.raises(ValidationError) as error:
         StandardYoungTableau(rows=((1, 3),))
-    with pytest.raises(ValidationError, match="strictly increasing"):
+    assert (
+        error.value.errors()[0]["type"]
+        == "symmetric_function.standard_entries_not_consecutive"
+    )
+    with pytest.raises(ValidationError) as error:
         StandardYoungTableau(rows=((1, 1),))
+    assert (
+        error.value.errors()[0]["type"]
+        == "symmetric_function.standard_rows_not_strictly_increasing"
+    )
 
 
 def test_tableau_entries_are_strict_positive_integers() -> None:

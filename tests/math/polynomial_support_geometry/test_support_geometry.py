@@ -1,5 +1,8 @@
 """Tests for polynomial support geometry operations (#1797)."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+
 import pytest
 from pydantic import ValidationError
 
@@ -16,6 +19,20 @@ from jacobian.math.polynomial_support_geometry.operations import (
     compute_weight_profile,
 )
 from jacobian.math.polynomials.values import RationalPolynomial
+
+
+@contextmanager
+def raises_code(code: str) -> Iterator[None]:
+    with pytest.raises(ValidationError) as caught:
+        yield
+    assert caught.value.errors()[0]["type"] == f"polynomial_support_geometry.{code}"
+
+
+@contextmanager
+def raises_pydantic_code(code: str) -> Iterator[None]:
+    with pytest.raises(ValidationError) as caught:
+        yield
+    assert caught.value.errors()[0]["type"] == code
 
 
 def _polynomial(
@@ -207,7 +224,7 @@ class TestInitialForm:
 
         payload = result.model_dump()
         payload["weight"] = [1, 1]
-        with pytest.raises(ValidationError, match="minimum-weight face"):
+        with raises_code("initial_form_mismatch"):
             PolynomialFaceData.model_validate(payload)
 
     def test_initial_form_composes_as_polynomial_input(self) -> None:
@@ -223,7 +240,7 @@ class TestTransportableBounds:
     def test_huge_weight_component_rejected(self) -> None:
         """Derived weights must stay inside the interoperable JSON range."""
         big = 9007199254740991
-        with pytest.raises(ValueError, match="transportable"):
+        with raises_code("weight_component_out_of_range"):
             WeightProfileRequest(
                 polynomial=_polynomial(_XY_TERMS, VARS), weight=[big, 1]
             )
@@ -235,7 +252,7 @@ class TestTransportableBounds:
             _term("1", list(pair))
             for pair in sorted(((i % 32, i // 32) for i in range(1025)), reverse=True)
         )
-        with pytest.raises(ValueError, match="limited to 1024"):
+        with raises_code("initial_form_term_count_exceeded"):
             InitialFormRequest(
                 polynomial=_polynomial(many, VARS),
                 weight=[0, 0],
@@ -246,7 +263,7 @@ class TestNewtonInvariants:
     def test_forged_polytope_rejected(self) -> None:
         from jacobian.math.polynomial_support_geometry.values import NewtonPolytope
 
-        with pytest.raises(ValidationError, match="ambient dimension"):
+        with raises_code("ambient_dimension_mismatch"):
             NewtonPolytope(
                 is_zero=False,
                 variables=("x", "y"),
@@ -256,7 +273,7 @@ class TestNewtonInvariants:
                 nonextreme=(),
                 all_support_exponents=((2, 0),),
             )
-        with pytest.raises(ValidationError, match="partition"):
+        with raises_code("newton_support_partition_mismatch"):
             NewtonPolytope(
                 is_zero=False,
                 variables=("x", "y"),
@@ -315,7 +332,7 @@ class TestSupportCrossFieldValidation:
             PolynomialSupport,
         )
 
-        with pytest.raises(ValidationError, match="term count"):
+        with raises_code("term_count_mismatch"):
             PolynomialSupport(
                 is_zero=False,
                 term_count=1,
@@ -345,7 +362,7 @@ class TestNewtonReplay:
             "nonextreme": [[0]],
             "all_support_exponents": [[0, 0], [0]],
         }
-        with pytest.raises(ValidationError, match="ambient dimension"):
+        with raises_code("newton_exponent_dimension_mismatch"):
             NewtonPolytope.model_validate(payload)
 
     def test_oversized_retained_support_rejected(self) -> None:
@@ -388,7 +405,7 @@ class TestNewtonReplay:
         good = payload["vertices"]
         payload["vertices"] = [*list(good), [1, 1]]
         payload["nonextreme"] = []
-        with pytest.raises(ValidationError, match="exact convex-hull"):
+        with raises_code("newton_vertex_classification_mismatch"):
             NewtonPolytope.model_validate(payload)
 
     def test_wrong_affine_dimension_rejected(self) -> None:
@@ -399,7 +416,7 @@ class TestNewtonReplay:
         )
         payload = result.model_dump()
         payload["affine_dimension"] = 2
-        with pytest.raises(ValidationError, match="affine_dimension"):
+        with raises_code("newton_affine_dimension_mismatch"):
             NewtonPolytope.model_validate(payload)
 
 
@@ -410,7 +427,7 @@ class TestSupportValueInvariants:
             PolynomialSupport,
         )
 
-        with pytest.raises(ValidationError, match="nonzero"):
+        with raises_code("zero_support_coefficient"):
             PolynomialSupport(
                 is_zero=False,
                 term_count=1,
@@ -424,7 +441,7 @@ class TestSupportValueInvariants:
     def test_nonzero_newton_result_must_retain_support(self) -> None:
         from jacobian.math.polynomial_support_geometry.values import NewtonPolytope
 
-        with pytest.raises(ValidationError, match="retain its support"):
+        with raises_code("nonzero_newton_missing_support"):
             NewtonPolytope.model_validate(
                 {
                     "is_zero": False,
@@ -459,7 +476,7 @@ class TestSupportValueInvariants:
     def test_duplicate_support_exponents_rejected(self) -> None:
         from jacobian.math.polynomial_support_geometry.values import PolynomialSupport
 
-        with pytest.raises(ValidationError, match="distinct"):
+        with raises_code("exponents_not_distinct"):
             PolynomialSupport(
                 is_zero=False,
                 term_count=2,
@@ -473,7 +490,7 @@ class TestSupportValueInvariants:
     def test_zero_support_cannot_carry_coordinate_extrema(self) -> None:
         from jacobian.math.polynomial_support_geometry.values import PolynomialSupport
 
-        with pytest.raises(ValidationError, match="coordinate extrema"):
+        with raises_code("zero_support_coordinate_extrema"):
             PolynomialSupport(
                 is_zero=True,
                 term_count=0,
@@ -487,7 +504,7 @@ class TestSupportValueInvariants:
         support: the empty polytope has affine dimension zero."""
         from jacobian.math.polynomial_support_geometry.values import NewtonPolytope
 
-        with pytest.raises(ValidationError, match="affine dimension zero"):
+        with raises_code("zero_newton_affine_dimension"):
             NewtonPolytope(
                 is_zero=True,
                 variables=("x",),
@@ -510,7 +527,7 @@ class TestSupportValueInvariants:
 
         unit = CanonicalRational(num="1", den="1")
         for exponent in (-1, 40000):
-            with pytest.raises(ValidationError, match="canonical polynomial domain"):
+            with raises_code("exponents_out_of_domain"):
                 PolynomialSupport(
                     is_zero=False,
                     term_count=1,
@@ -527,7 +544,7 @@ class TestSupportValueInvariants:
         from jacobian.math.polynomial_support_geometry.values import NewtonPolytope
 
         for point in (-1, 40000):
-            with pytest.raises(ValidationError, match="canonical polynomial domain"):
+            with raises_code("exponents_out_of_domain"):
                 NewtonPolytope.model_validate(
                     {
                         "is_zero": False,
@@ -544,11 +561,11 @@ class TestSupportValueInvariants:
         """Every canonical polynomial ring names at least one variable."""
         from jacobian.math.polynomial_support_geometry.values import PolynomialSupport
 
-        with pytest.raises(ValidationError, match="at least 1 item"):
+        with raises_pydantic_code("too_short"):
             PolynomialSupport(is_zero=True, term_count=0, variables=())
         from jacobian._exact import CanonicalRational
 
-        with pytest.raises(ValidationError, match="at least 1 item"):
+        with raises_pydantic_code("too_short"):
             PolynomialSupport(
                 is_zero=False,
                 term_count=1,
@@ -565,7 +582,7 @@ class TestSupportValueInvariants:
         noncanonical before any set-based check runs."""
         from jacobian.math.polynomial_support_geometry.values import NewtonPolytope
 
-        with pytest.raises(ValidationError, match="distinct"):
+        with raises_code("newton_points_not_distinct"):
             NewtonPolytope.model_validate(
                 {
                     "is_zero": False,
@@ -577,7 +594,7 @@ class TestSupportValueInvariants:
                     "all_support_exponents": [[0], [1], [2]],
                 }
             )
-        with pytest.raises(ValidationError, match="distinct"):
+        with raises_code("newton_points_not_distinct"):
             NewtonPolytope.model_validate(
                 {
                     "is_zero": False,

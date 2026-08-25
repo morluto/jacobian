@@ -20,13 +20,13 @@ from jacobian.math.polynomials.maps._models import (
     GenericDegreeOutcome,
     GenericDegreeRequest,
     GenericDegreeResult,
-    JacobianRequest,
     JacobianResult,
 )
 from jacobian.math.polynomials.maps._replay import (
     run_bounded_certificate_replay,
 )
 from jacobian.math.polynomials.maps._singular import run_singular_generic_fiber
+from jacobian.math.polynomials.maps.values import RationalPolynomialMap
 
 _REPLAY_FAILURE_OUTCOMES: dict[str, tuple[GenericDegreeOutcome, str]] = {
     "CANCELLED": (
@@ -133,7 +133,7 @@ def evaluate_polynomial(request: EvalRequest) -> EvalResult:
     return EvalResult(value=rational_from_sympy(value))
 
 
-def compute_jacobian(request: JacobianRequest) -> JacobianResult:
+def compute_jacobian(request: RationalPolynomialMap) -> JacobianResult:
     """Compute a row-major Jacobian over the map's source ring."""
 
     variables = symbols_for_variables(request.input_variables)

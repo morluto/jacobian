@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 from pydantic import ValidationError
+from tests.math._analysis_support import analysis_validation_error
 
 from jacobian.math.analysis._models import (
     MAX_POINT_CHECK_DYADIC_EXPONENT,
@@ -222,15 +223,15 @@ def test_enclosed_result_must_restate_the_retained_request_source() -> None:
     serialized = producer_result.model_dump(mode="json")
 
     mismatched_function = {**serialized, "function": "LOG"}
-    with pytest.raises(ValidationError, match="restate the retained request"):
+    with analysis_validation_error():
         ArbPointEnclosureResult.model_validate(mismatched_function)
 
     mismatched_argument = {**serialized, "argument": {"num": "3", "den": "1"}}
-    with pytest.raises(ValidationError, match="restate the retained request"):
+    with analysis_validation_error():
         ArbPointEnclosureResult.model_validate(mismatched_argument)
 
     mismatched_precision = {**serialized, "precision_bits": 256}
-    with pytest.raises(ValidationError, match="restate the retained request"):
+    with analysis_validation_error():
         ArbPointEnclosureResult.model_validate(mismatched_precision)
 
     dropped_source = {
@@ -242,14 +243,14 @@ def test_enclosed_result_must_restate_the_retained_request_source() -> None:
         ArbPointEnclosureResult.model_validate(dropped_source)
 
     forged_status = {**serialized, "status": "NONFINITE"}
-    with pytest.raises(ValidationError, match="only an enclosed result"):
+    with analysis_validation_error():
         ArbPointEnclosureResult.model_validate(forged_status)
 
 
 def test_checker_rejects_unsupported_claim_functions_at_admission() -> None:
     claim = _claim("EXP", "1", "1", _integer_dyadic(2), _integer_dyadic(3))
 
-    with pytest.raises(ValidationError, match="only LOG and SQRT"):
+    with analysis_validation_error():
         PointEnclosureCheckRequest.model_validate({"enclosure": claim})
 
 
@@ -428,27 +429,27 @@ def test_result_validation_rejects_forged_verdicts_and_wrong_sources() -> None:
 
     forged_verdict = result.model_dump(mode="json")
     forged_verdict["outcome"] = "REJECTED"
-    with pytest.raises(ValidationError, match="deterministic enclosure check"):
+    with analysis_validation_error():
         PointEnclosureCheckResult.model_validate(forged_verdict)
 
     tampered_interval = result.model_dump(mode="json")
     tampered_interval["enclosure"]["upper"] = {"mantissa": "1", "exponent": -1}
-    with pytest.raises(ValidationError, match="deterministic enclosure check"):
+    with analysis_validation_error():
         PointEnclosureCheckResult.model_validate(tampered_interval)
 
     wrong_function = result.model_dump(mode="json")
     wrong_function["enclosure"]["function"] = "SQRT"
-    with pytest.raises(ValidationError, match="deterministic enclosure check"):
+    with analysis_validation_error():
         PointEnclosureCheckResult.model_validate(wrong_function)
 
     wrong_argument = result.model_dump(mode="json")
     wrong_argument["enclosure"]["argument"] = {"num": "0", "den": "1"}
-    with pytest.raises(ValidationError, match="deterministic enclosure check"):
+    with analysis_validation_error():
         PointEnclosureCheckResult.model_validate(wrong_argument)
 
     oversized_source = result.model_dump(mode="json")
     oversized_source["enclosure"]["argument"] = {"num": "1" + "0" * 128, "den": "1"}
-    with pytest.raises(ValidationError, match="raw rational component"):
+    with analysis_validation_error():
         PointEnclosureCheckResult.model_validate(oversized_source)
 
 
@@ -477,7 +478,7 @@ def test_request_accepts_exact_structural_bounds_and_result_fits_output_budget()
 
 
 def test_request_rejects_values_immediately_over_each_structural_bound() -> None:
-    with pytest.raises(ValidationError, match="128-digit"):
+    with analysis_validation_error():
         _request(
             "SQRT",
             "1" + "0" * 128,
@@ -485,7 +486,7 @@ def test_request_rejects_values_immediately_over_each_structural_bound() -> None
             _integer_dyadic(0),
             _integer_dyadic(1),
         )
-    with pytest.raises(ValidationError, match="dyadic exponent"):
+    with analysis_validation_error():
         _request(
             "SQRT",
             "1",
@@ -493,7 +494,7 @@ def test_request_rejects_values_immediately_over_each_structural_bound() -> None
             _integer_dyadic(0),
             ExactDyadic(mantissa="1", exponent=MAX_POINT_CHECK_DYADIC_EXPONENT + 1),
         )
-    with pytest.raises(ValidationError, match="less than or equal to 4096"):
+    with analysis_validation_error():
         _request(
             "SQRT",
             "1",
@@ -502,7 +503,7 @@ def test_request_rejects_values_immediately_over_each_structural_bound() -> None
             _integer_dyadic(1),
             precision_bits=4097,
         )
-    with pytest.raises(ValidationError, match="at most 1235 characters"):
+    with analysis_validation_error():
         ExactDyadic(mantissa="9" * 1_236, exponent=0)
 
 

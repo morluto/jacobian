@@ -11,59 +11,9 @@ from jacobian.math.probability.values import (
     MutualInformationCertificate,
     MutualInformationResult,
     MutualInformationTerm,
+    _rational_base_exponent,
     _require_bounded_product,
 )
-
-
-def _small_prime_factorization(value: int) -> dict[int, int]:
-    remaining = value
-    factors: dict[int, int] = {}
-    prime = 2
-    while prime * prime <= remaining:
-        while remaining % prime == 0:
-            factors[prime] = factors.get(prime, 0) + 1
-            remaining //= prime
-        prime += 1
-    if remaining > 1:
-        factors[remaining] = factors.get(remaining, 0) + 1
-    return factors
-
-
-def _valuations(value: int, primes: tuple[int, ...]) -> tuple[dict[int, int], int]:
-    remaining = value
-    exponents: dict[int, int] = {}
-    for prime in primes:
-        exponent = 0
-        while remaining > 1 and remaining % prime == 0:
-            remaining //= prime
-            exponent += 1
-        exponents[prime] = exponent
-    return exponents, remaining
-
-
-def _rational_base_exponent(value: Fraction, base: int) -> Fraction | None:
-    """Return ``q`` exactly when ``value == base**q`` for rational ``q``."""
-
-    base_factors = _small_prime_factorization(base)
-    primes = tuple(base_factors)
-    numerator_exponents, numerator_remainder = _valuations(value.numerator, primes)
-    denominator_exponents, denominator_remainder = _valuations(
-        value.denominator,
-        primes,
-    )
-    if numerator_remainder != 1 or denominator_remainder != 1:
-        return None
-    exponent: Fraction | None = None
-    for prime, base_exponent in base_factors.items():
-        current = Fraction(
-            numerator_exponents[prime] - denominator_exponents[prime],
-            base_exponent,
-        )
-        if exponent is None:
-            exponent = current
-        elif current != exponent:
-            return None
-    return exponent if exponent is not None else Fraction()
 
 
 def mutual_information(table: FiniteJointTable) -> MutualInformationResult:

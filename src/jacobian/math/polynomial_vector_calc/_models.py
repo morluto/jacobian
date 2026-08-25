@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
@@ -20,13 +21,21 @@ _MAX_EXPONENT = 64
 _MAX_COEFFICIENT_DIGITS = 128
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by polynomial-vector contracts."""
+
+    return PydanticCustomError(f"polynomial_vector_calc.{reason}", message)
+
+
 def _require_field_polynomial(
     polynomial: RationalPolynomial,
     *,
     label: str,
 ) -> None:
     if len(polynomial.variables) > MAX_VARS:
-        raise ValueError(f"{label} exceeds the {MAX_VARS}-variable budget")
+        raise _validation_error(
+            "variable_budget", f"{label} exceeds the {MAX_VARS}-variable budget"
+        )
     require_polynomial_budget(
         polynomial,
         maximum_terms=_MAX_TERMS,
@@ -35,7 +44,9 @@ def _require_field_polynomial(
         label=label,
     )
     if any(sum(term.exponents) > _MAX_EXPONENT for term in polynomial.polynomial.terms):
-        raise ValueError(f"{label} exceeds total degree {_MAX_EXPONENT}")
+        raise _validation_error(
+            "total_degree", f"{label} exceeds total degree {_MAX_EXPONENT}"
+        )
 
 
 class ScalarFieldRequest(StrictModel):
@@ -50,7 +61,10 @@ class ScalarFieldRequest(StrictModel):
             len(self.polynomial.polynomial.terms) * len(self.polynomial.variables)
             > _MAX_TERMS
         ):
-            raise ValueError("scalar-field derivatives exceed the result-term budget")
+            raise _validation_error(
+                "derivative_term_budget",
+                "scalar-field derivatives exceed the result-term budget",
+            )
         return self
 
 
@@ -65,13 +79,20 @@ class VectorFieldRequest(StrictModel):
     def require_one_vector_field_ring(self) -> Self:
         variables = self.components[0].variables
         if len(self.components) != len(variables):
-            raise ValueError("vector field must have one component per variable")
+            raise _validation_error(
+                "component_count", "vector field must have one component per variable"
+            )
         for component in self.components:
             _require_field_polynomial(component, label="vector-field component")
             if component.variables != variables:
-                raise ValueError("vector-field components must use one ordered ring")
+                raise _validation_error(
+                    "ordered_ring", "vector-field components must use one ordered ring"
+                )
         if sum(len(item.polynomial.terms) for item in self.components) > _MAX_TERMS:
-            raise ValueError("vector-field derivatives exceed the result-term budget")
+            raise _validation_error(
+                "derivative_term_budget",
+                "vector-field derivatives exceed the result-term budget",
+            )
         return self
 
 
@@ -81,7 +102,10 @@ class CurlRequest(VectorFieldRequest):
     @model_validator(mode="after")
     def require_three_dimensions(self) -> Self:
         if len(self.components[0].variables) != 3:
-            raise ValueError("curl requires exactly three variables and components")
+            raise _validation_error(
+                "curl_dimensions",
+                "curl requires exactly three variables and components",
+            )
         return self
 
 
@@ -95,7 +119,10 @@ class DirectionalDerivativeRequest(StrictModel):
     def require_matching_bounded_direction(self) -> Self:
         _require_field_polynomial(self.polynomial, label="scalar field")
         if len(self.direction) != len(self.polynomial.variables):
-            raise ValueError("direction vector length must match the polynomial axis")
+            raise _validation_error(
+                "direction_length",
+                "direction vector length must match the polynomial axis",
+            )
         for coordinate in self.direction:
             require_bounded_rational(
                 coordinate,
@@ -106,7 +133,10 @@ class DirectionalDerivativeRequest(StrictModel):
             len(self.polynomial.polynomial.terms) * len(self.polynomial.variables)
             > _MAX_TERMS
         ):
-            raise ValueError("directional derivative exceeds the result-term budget")
+            raise _validation_error(
+                "derivative_term_budget",
+                "directional derivative exceeds the result-term budget",
+            )
         return self
 
 
@@ -137,7 +167,9 @@ class VectorResult(StrictModel):
     def require_one_result_ring(self) -> Self:
         variables = self.components[0].variables
         if any(component.variables != variables for component in self.components):
-            raise ValueError("vector result components must use one ordered ring")
+            raise _validation_error(
+                "ordered_ring", "vector result components must use one ordered ring"
+            )
         return self
 
 

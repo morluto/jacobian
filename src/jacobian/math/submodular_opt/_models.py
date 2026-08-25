@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
@@ -31,15 +32,24 @@ _ENTRY_OVERHEAD_BYTES = 25
 MAX_SUBMODULAR_SCAN_VALUE_DIGITS = 128
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by submodular-opt contracts."""
+
+    return PydanticCustomError(f"submodular_opt.{reason}", message)
+
+
 def _require_scan_value_height(function: SetFunction) -> None:
     """Bound value heights for the millions-of-comparisons scan kernels."""
 
     for entry in function.entries:
-        require_bounded_rational(
-            entry.value,
-            max_digits=MAX_SUBMODULAR_SCAN_VALUE_DIGITS,
-            label="set-function scan value",
-        )
+        try:
+            require_bounded_rational(
+                entry.value,
+                max_digits=MAX_SUBMODULAR_SCAN_VALUE_DIGITS,
+                label="set-function scan value",
+            )
+        except ValueError as error:
+            raise _validation_error("scan_value_height_exceeded", str(error)) from error
 
 
 class SetFunctionEntry(StrictModel):
@@ -59,23 +69,32 @@ class SetFunction(StrictModel):
     def require_complete_table(self) -> Self:
         expected = 1 << self.ground_set_size
         if len(self.entries) != expected:
-            raise ValueError(
-                "set function table must contain exactly one value per subset"
+            raise _validation_error(
+                "table_entry_count_mismatch",
+                "set function table must contain exactly one value per subset",
             )
         seen: set[tuple[int, ...]] = set()
         for entry in self.entries:
             if len(entry.subset) != len(set(entry.subset)):
-                raise ValueError("subset elements must be unique")
+                raise _validation_error(
+                    "subset_elements_not_unique", "subset elements must be unique"
+                )
             for elem in entry.subset:
                 if not (0 <= elem < self.ground_set_size):
-                    raise ValueError("subset elements must be in 0..ground_set_size-1")
+                    raise _validation_error(
+                        "subset_element_out_of_range",
+                        "subset elements must be in 0..ground_set_size-1",
+                    )
             key = tuple(sorted(entry.subset))
             if key in seen:
-                raise ValueError("set function subsets must be unique")
+                raise _validation_error(
+                    "table_subsets_not_unique", "set function subsets must be unique"
+                )
             seen.add(key)
         if len(seen) != expected:
-            raise ValueError(
-                "set function table must contain every subset of the ground set"
+            raise _validation_error(
+                "table_missing_subset",
+                "set function table must contain every subset of the ground set",
             )
         estimated_bytes = sum(
             _ENTRY_OVERHEAD_BYTES
@@ -85,10 +104,11 @@ class SetFunction(StrictModel):
             for entry in self.entries
         )
         if estimated_bytes > _MAX_TABLE_WIRE_BYTES:
-            raise ValueError(
+            raise _validation_error(
+                "table_transport_envelope_exceeded",
                 "set-function table exceeds the "
                 f"{_MAX_TABLE_WIRE_BYTES}-byte transport envelope; the complete "
-                "2^n table cannot fit at this ground-set size"
+                "2^n table cannot fit at this ground-set size",
             )
         return self
 
@@ -102,10 +122,15 @@ class SetFunctionEvalRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_subset(self) -> Self:
         if len(self.subset) != len(set(self.subset)):
-            raise ValueError("subset elements must be unique")
+            raise _validation_error(
+                "subset_elements_not_unique", "subset elements must be unique"
+            )
         for elem in self.subset:
             if not (0 <= elem < self.function.ground_set_size):
-                raise ValueError("subset elements must be in 0..ground_set_size-1")
+                raise _validation_error(
+                    "subset_element_out_of_range",
+                    "subset elements must be in 0..ground_set_size-1",
+                )
         return self
 
 

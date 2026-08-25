@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
@@ -20,6 +21,12 @@ MAX_CRITICAL_PAIR_RESULT_NODES = 42_752
 MAX_CRITICAL_PAIR_RESULT_BYTES = 4 * 1024 * 1024
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by term-rewriting values."""
+
+    return PydanticCustomError(f"term_rewriting.{reason}", message)
+
+
 class RankedSignature(StrictModel):
     """A finite ordered family of function-symbol arities."""
 
@@ -28,7 +35,10 @@ class RankedSignature(StrictModel):
     @model_validator(mode="after")
     def require_bounded_arities(self) -> Self:
         if any(not 0 <= arity <= MAX_ARITY for arity in self.arities):
-            raise ValueError("signature arities must be within the supported bound")
+            raise _validation_error(
+                "signature_arities",
+                "signature arities must be within the supported bound",
+            )
         return self
 
     def validate_term(self, term: Term) -> None:
@@ -37,9 +47,14 @@ class RankedSignature(StrictModel):
             current = stack.pop()
             if not current.is_variable:
                 if current.symbol >= len(self.arities):
-                    raise ValueError("term uses an undeclared function symbol")
+                    raise _validation_error(
+                        "undeclared_symbol", "term uses an undeclared function symbol"
+                    )
                 if len(current.children) != self.arities[current.symbol]:
-                    raise ValueError("term child count must match the ranked signature")
+                    raise _validation_error(
+                        "signature_arity",
+                        "term child count must match the ranked signature",
+                    )
             stack.extend(current.children)
 
 
@@ -74,11 +89,17 @@ class Term(StrictModel):
     @model_validator(mode="after")
     def require_valid_term(self) -> Self:
         if self.is_variable and self.children:
-            raise ValueError("a variable cannot have children")
+            raise _validation_error(
+                "variable_children", "a variable cannot have children"
+            )
         if not self.is_variable and self.symbol < 0:
-            raise ValueError("function symbol must be non-negative")
+            raise _validation_error(
+                "negative_symbol", "function symbol must be non-negative"
+            )
         if len(self.children) > MAX_ARITY:
-            raise ValueError("too many children (arity exceeds bound)")
+            raise _validation_error(
+                "arity_exceeded", "too many children (arity exceeds bound)"
+            )
         return self
 
 
@@ -91,10 +112,14 @@ class RewriteRule(StrictModel):
     @model_validator(mode="after")
     def require_valid_rule(self) -> Self:
         if self.lhs.is_variable:
-            raise ValueError("LHS must be a function application, not a variable")
+            raise _validation_error(
+                "lhs_variable", "LHS must be a function application, not a variable"
+            )
         extra_variables = _variable_symbols(self.rhs) - _variable_symbols(self.lhs)
         if extra_variables:
-            raise ValueError("RHS variables must occur in the LHS")
+            raise _validation_error(
+                "rhs_variables", "RHS variables must occur in the LHS"
+            )
         return self
 
 
@@ -154,8 +179,9 @@ class Substitution(StrictModel):
     @model_validator(mode="after")
     def require_bounded_labels(self) -> Self:
         if any(not 0 <= key <= MAX_VARIABLE_LABEL for key in self.mapping):
-            raise ValueError(
-                "substitution variable labels must be within the supported bound"
+            raise _validation_error(
+                "substitution_labels",
+                "substitution variable labels must be within the supported bound",
             )
         return self
 

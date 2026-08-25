@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.polynomials._conversions import (
@@ -16,6 +17,11 @@ from jacobian.math.polynomials.values import (
     require_sparse_polynomial_budget,
 )
 
+
+def _validation_error(message: str) -> PydanticCustomError:
+    return PydanticCustomError("polynomial.rational_function_contract", message)
+
+
 MAX_HERMITE_NUMERATOR_DEGREE = 6
 MAX_HERMITE_DENOMINATOR_DEGREE = 3
 MAX_HERMITE_COEFFICIENT_DIGITS = 2
@@ -25,7 +31,7 @@ def require_hermite_reduction_budget(function: RationalFunction) -> None:
     """Validate the shared native and catalog Hermite-reduction envelope."""
 
     if len(function.variables) != 1:
-        raise ValueError("Hermite reduction requires exactly one variable")
+        raise _validation_error("Hermite reduction requires exactly one variable")
     require_sparse_polynomial_budget(
         function.numerator,
         maximum_terms=MAX_HERMITE_NUMERATOR_DEGREE + 1,
@@ -83,7 +89,7 @@ class HermiteReductionResult(HermiteReductionRequest):
             self.rational_part.variables != variables
             or self.remainder.variables != variables
         ):
-            raise ValueError(
+            raise _validation_error(
                 "all Hermite-reduction values must use the source variable"
             )
         (variable,) = symbols_for_variables(variables)
@@ -91,38 +97,42 @@ class HermiteReductionResult(HermiteReductionRequest):
         rational_part = rational_function_to_sympy(self.rational_part)
         remainder = cancel(rational_function_to_sympy(self.remainder))
         if cancel(diff(rational_part, variable) + remainder - source) != 0:
-            raise ValueError("Hermite reduction does not reconstruct the source")
+            raise _validation_error("Hermite reduction does not reconstruct the source")
 
         remainder_numerator, remainder_denominator = fraction(remainder)
         numerator = Poly(remainder_numerator, variable, domain="QQ")
         denominator = Poly(remainder_denominator, variable, domain="QQ")
         if not numerator.is_zero and numerator.degree() >= denominator.degree():
-            raise ValueError("Hermite remainder must be proper")
+            raise _validation_error("Hermite remainder must be proper")
         if not denominator.gcd(denominator.diff()).degree() == 0:
-            raise ValueError("Hermite remainder denominator must be square-free")
+            raise _validation_error("Hermite remainder denominator must be square-free")
 
         part_numerator, part_denominator = fraction(cancel(rational_part))
         quotient, _ = Poly(part_numerator, variable, domain="QQ").div(
             Poly(part_denominator, variable, domain="QQ")
         )
         if quotient.nth(0) != 0:
-            raise ValueError("Hermite rational part must use zero additive constant")
+            raise _validation_error(
+                "Hermite rational part must use zero additive constant"
+            )
 
         has_primitive = numerator.is_zero
         expected_status = (
             "RATIONAL_PRIMITIVE" if has_primitive else "NO_RATIONAL_PRIMITIVE"
         )
         if self.rational_primitive_status != expected_status:
-            raise ValueError(
+            raise _validation_error(
                 "rational-primitive status must match the Hermite remainder"
             )
         if has_primitive:
             if self.rational_primitive != self.rational_part:
-                raise ValueError(
+                raise _validation_error(
                     "rational primitive must equal the canonical rational part"
                 )
         elif self.rational_primitive is not None:
-            raise ValueError("a nonzero Hermite remainder has no rational primitive")
+            raise _validation_error(
+                "a nonzero Hermite remainder has no rational primitive"
+            )
         return self
 
 

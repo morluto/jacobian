@@ -5,8 +5,7 @@ from __future__ import annotations
 from itertools import combinations, pairwise
 from math import lcm
 
-import pytest
-from pydantic import ValidationError
+from tests.math.numerical_semigroups._support import numerical_semigroup_error
 
 from jacobian.math.numerical_semigroups._models import (
     BettiElementsRequest,
@@ -140,7 +139,7 @@ def test_betti_and_minimal_presentation_replay_independently() -> None:
 
 
 def test_minimal_presentation_rejects_relations_inside_one_r_class() -> None:
-    with pytest.raises(ValidationError, match="distinct Betti components"):
+    with numerical_semigroup_error():
         MinimalPresentationResult.model_validate(
             {
                 "minimal_generators": ["4", "10", "15"],
@@ -264,24 +263,24 @@ def test_degenerate_free_semigroup_has_empty_relations_and_invariants() -> None:
 
 
 def test_nonmember_and_undefined_element_invariants_fail_closed() -> None:
-    with pytest.raises(ValidationError, match="belong"):
+    with numerical_semigroup_error():
         ElementDeltaSetRequest(generators=("3", "5"), value="7")
-    with pytest.raises(ValidationError, match="positive"):
+    with numerical_semigroup_error():
         ElementElasticityRequest(generators=("3", "5"), value="0")
-    with pytest.raises(ValidationError, match="belong"):
+    with numerical_semigroup_error():
         ElementCatenaryDegreeRequest(generators=("3", "5"), value="7")
 
 
 def test_completeness_boundaries_reject_unmaterializable_claims() -> None:
-    with pytest.raises(ValidationError, match="22209 members"):
+    with numerical_semigroup_error():
         FactorizationComputeRequest(
             generators=("6", "7", "8", "9", "10", "11"), value="220"
         )
-    with pytest.raises(ValidationError, match="materialization bound 1000"):
+    with numerical_semigroup_error():
         FactorizationGraphComputeRequest(
             generators=("6", "7", "8", "9", "10", "11"), value="200"
         )
-    with pytest.raises(ValidationError, match="candidate range"):
+    with numerical_semigroup_error():
         BettiElementsRequest(generators=("499", "500"))
-    with pytest.raises(ValidationError, match="delta-set check"):
+    with numerical_semigroup_error():
         DeltaSetRequest(generators=("10", "11", "34", "35"))

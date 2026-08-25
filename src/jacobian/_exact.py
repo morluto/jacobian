@@ -6,6 +6,7 @@ from fractions import Fraction
 from typing import Annotated, Self
 
 from pydantic import ConfigDict, Field, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
@@ -19,6 +20,27 @@ CanonicalInteger = Annotated[
 ]
 
 MAX_CANONICAL_RATIONAL_DIGITS = 32_768
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"canonical_rational.{reason}", message)
+
+
+def format_canonical_rational(value: Fraction) -> str:
+    """Return an exact fraction in canonical integer-or-``num/den`` form."""
+
+    if value.denominator == 1:
+        return format_canonical_integer(value.numerator)
+    return (
+        f"{format_canonical_integer(value.numerator)}/"
+        f"{format_canonical_integer(value.denominator)}"
+    )
+
+
+def canonical_rational_component_digits(value: CanonicalRational) -> int:
+    """Return the greatest decimal width of a canonical rational component."""
+
+    return max(len(value.num.lstrip("-")), len(value.den))
 
 
 def require_bounded_rational(
@@ -61,18 +83,22 @@ class CanonicalRational(StrictModel):
             len(self.num.lstrip("-")) > MAX_CANONICAL_RATIONAL_DIGITS
             or len(self.den.lstrip("-")) > MAX_CANONICAL_RATIONAL_DIGITS
         ):
-            raise ValueError(
-                "rational components exceed the canonical 32,768-digit limit"
+            raise _validation_error(
+                "component_digits",
+                "rational components exceed the canonical 32,768-digit limit",
             )
         denominator = parse_canonical_integer(self.den)
         if denominator == 0:
-            raise ValueError("rational denominator cannot be zero")
+            raise _validation_error(
+                "zero_denominator", "rational denominator cannot be zero"
+            )
         value = Fraction(parse_canonical_integer(self.num), denominator)
         if self.num != format_canonical_integer(
             value.numerator
         ) or self.den != format_canonical_integer(value.denominator):
-            raise ValueError(
-                "rational must be reduced with a positive denominator and canonical zero"
+            raise _validation_error(
+                "noncanonical_representation",
+                "rational must be reduced with a positive denominator and canonical zero",
             )
         return self
 

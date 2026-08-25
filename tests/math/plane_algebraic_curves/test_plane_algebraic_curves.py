@@ -1,5 +1,7 @@
 """Tests for plane algebraic curve operations."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from copy import deepcopy
 
 import pytest
@@ -34,6 +36,13 @@ from jacobian.math.polynomials.values import (
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
+
+
+@contextmanager
+def _raises_code(code: str) -> Iterator[None]:
+    with pytest.raises(ValidationError) as caught:
+        yield
+    assert caught.value.errors()[0]["type"] == f"plane_algebraic_curve.{code}"
 
 
 def _rational(numerator: str | int, denominator: str | int = 1) -> CanonicalRational:
@@ -303,7 +312,7 @@ def test_nonzero_equation_rescaling_preserves_normalized_parametrization() -> No
 
 
 def test_request_rejects_point_outside_conic() -> None:
-    with pytest.raises(ValidationError, match="point must lie"):
+    with _raises_code("point_not_on_conic"):
         RationalConicParametrizationRequest(
             polynomial=_polynomial(
                 ("x", "y"),
@@ -336,7 +345,7 @@ def test_request_rejects_singular_or_reducible_quadratics(
     source: RationalPolynomial,
     point: tuple[CanonicalRational, CanonicalRational],
 ) -> None:
-    with pytest.raises(ValidationError, match="smooth irreducible"):
+    with _raises_code("conic_not_smooth_irreducible"):
         RationalConicParametrizationRequest(
             polynomial=source,
             point=_point(source.variables, point),
@@ -345,17 +354,17 @@ def test_request_rejects_singular_or_reducible_quadratics(
 
 def test_request_rejects_wrong_degree_axis_and_parameter_collision() -> None:
     point = (_rational(0), _rational(0))
-    with pytest.raises(ValidationError, match="degree exactly two"):
+    with _raises_code("conic_degree_invalid"):
         RationalConicParametrizationRequest(
             polynomial=_polynomial(("x", "y"), (1, (1, 0))),
             point=_point(("x", "y"), point),
         )
-    with pytest.raises(ValidationError, match="exactly two variables"):
+    with _raises_code("conic_axis_invalid"):
         RationalConicParametrizationRequest(
             polynomial=_polynomial(("x",), (1, (2,))),
             point=_point(("x", "y"), point),
         )
-    with pytest.raises(ValidationError, match="parameter must be distinct"):
+    with _raises_code("parameter_axis_collision"):
         RationalConicParametrizationRequest(
             polynomial=_polynomial(
                 ("x", "y"),
@@ -373,7 +382,7 @@ def test_request_rejects_mismatched_or_reordered_point_axis(
     variables: tuple[str, str],
 ) -> None:
     source = _polynomial(("x", "y"), (1, (2, 0)), (1, (0, 2)), (-1, (0, 0)))
-    with pytest.raises(ValidationError, match="complete ordered axis"):
+    with _raises_code("point_axis_mismatch"):
         RationalConicParametrizationRequest(
             polynomial=source,
             point=_point(variables, (_rational(1), _rational(0))),
@@ -398,7 +407,7 @@ def test_input_coefficient_boundary_is_accepted_then_rejected() -> None:
         (("1", rejected_denominator), (0, 2)),
         (("-1", rejected_denominator), (0, 0)),
     )
-    with pytest.raises(ValidationError, match="128-digit"):
+    with _raises_code("coefficient_height_exceeded"):
         RationalConicParametrizationRequest(
             polynomial=rejected,
             point=_point(("x", "y"), (_rational(1), _rational(0))),
@@ -415,7 +424,7 @@ def test_normalized_result_height_boundary_is_accepted_then_rejected() -> None:
     assert accepted.coordinates
 
     rejected_x = 10**32
-    with pytest.raises(ValidationError, match=r"output exceeds.*128-digit"):
+    with _raises_code("coefficient_height_exceeded"):
         RationalConicParametrizationRequest(
             polynomial=source,
             point=_point(
@@ -443,7 +452,7 @@ def test_request_admission_completes_before_any_backend_expansion(
     assert request.parameter == "t"
 
     rejected_x = 10**32
-    with pytest.raises(ValidationError, match=r"output exceeds.*128-digit"):
+    with _raises_code("coefficient_height_exceeded"):
         RationalConicParametrizationRequest(
             polynomial=source,
             point=_point(
@@ -491,7 +500,7 @@ def test_result_rejects_independently_forged_source_point_and_coordinates() -> N
 
     forged_coordinates = deepcopy(payload)
     forged_coordinates["coordinates"][0] = payload["coordinates"][1]
-    with pytest.raises(ValidationError, match="gradient-normalized"):
+    with _raises_code("parametrization_not_canonical"):
         RationalConicParametrizationResult.model_validate(forged_coordinates)
 
     forged_source = deepcopy(payload)
@@ -501,19 +510,19 @@ def test_result_rejects_independently_forged_source_point_and_coordinates() -> N
         (1, (0, 2)),
         (-1, (0, 0)),
     ).model_dump(mode="json")
-    with pytest.raises(ValidationError, match="gradient-normalized"):
+    with _raises_code("parametrization_not_canonical"):
         RationalConicParametrizationResult.model_validate(forged_source)
 
     forged_point = deepcopy(payload)
     forged_point["exceptional_point"] = _point(
         source.variables, (_rational(-1), _rational(0))
     ).model_dump(mode="json")
-    with pytest.raises(ValidationError, match="gradient-normalized"):
+    with _raises_code("parametrization_not_canonical"):
         RationalConicParametrizationResult.model_validate(forged_point)
 
     forged_inverse = deepcopy(payload)
     forged_inverse["inverse_parameter"] = payload["coordinates"][0]
-    with pytest.raises(ValidationError, match="gradient-normalized"):
+    with _raises_code("parametrization_not_canonical"):
         RationalConicParametrizationResult.model_validate(forged_inverse)
 
     forged_denominator = deepcopy(payload)
@@ -521,7 +530,7 @@ def test_result_rejects_independently_forged_source_point_and_coordinates() -> N
         "polynomial"
     ]["terms"]
     denominator_terms[-1]["coefficient"]["num"] = "-2"
-    with pytest.raises(ValidationError, match="gradient-normalized"):
+    with _raises_code("parametrization_not_canonical"):
         RationalConicParametrizationResult.model_validate(forged_denominator)
 
 
@@ -601,19 +610,22 @@ def test_expression_strings_are_not_a_public_polynomial_contract() -> None:
         "x + t",
         "__import__('os').getcwd()",
     ):
-        with pytest.raises(ValidationError, match="polynomial"):
+        with pytest.raises(ValidationError) as caught:
             AffineCurveRequest.model_validate({"polynomial": payload})
+        assert caught.value.errors()[0]["type"] == "model_type"
 
 
 def test_duplicate_and_invalid_variable_names_are_rejected() -> None:
-    with pytest.raises(ValidationError, match="unique"):
+    with pytest.raises(ValidationError) as caught:
         _polynomial(("x", "x"), (1, (1, 0)))
-    with pytest.raises(ValidationError, match="string_pattern_mismatch"):
+    assert caught.value.errors()[0]["type"] == "polynomial.duplicate_variables"
+    with pytest.raises(ValidationError) as caught:
         _polynomial(("", "y"), (1, (1, 0)))
+    assert caught.value.errors()[0]["type"] == "string_pattern_mismatch"
 
 
 def test_variable_named_z_rejected_in_projective_closure() -> None:
-    with pytest.raises(ValidationError, match="homogenizing"):
+    with _raises_code("homogenizing_coordinate_reserved"):
         ProjectiveClosureRequest(
             polynomial=_polynomial(("x", "z"), (1, (2, 0)), (-1, (0, 1)))
         )
@@ -630,12 +642,12 @@ def test_constant_polynomial_is_not_a_valid_curve(constant: int) -> None:
 
 
 def test_chart_requires_three_variables_and_a_homogeneous_polynomial() -> None:
-    with pytest.raises(ValidationError, match="exactly three"):
+    with _raises_code("chart_axis_invalid"):
         AffineChartRequest(
             polynomial=_polynomial(("x", "y"), (1, (2, 0))),
             chart_variable="x",
         )
-    with pytest.raises(ValidationError, match="homogeneous"):
+    with _raises_code("polynomial_not_homogeneous"):
         AffineChartRequest(
             polynomial=_polynomial(("x", "y", "z"), (1, (2, 0, 0)), (1, (0, 1, 0))),
             chart_variable="z",
@@ -643,7 +655,7 @@ def test_chart_requires_three_variables_and_a_homogeneous_polynomial() -> None:
 
 
 def test_chart_variable_must_be_on_the_projective_axis() -> None:
-    with pytest.raises(ValidationError, match="must belong"):
+    with _raises_code("chart_variable_axis_mismatch"):
         AffineChartRequest(
             polynomial=_polynomial(
                 ("x", "y", "z"),

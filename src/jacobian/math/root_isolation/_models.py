@@ -5,13 +5,15 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.math.real_algebraic import (
-    RealAlgebraicOrderValue,
-    RealAlgebraicValue,
-)
+from jacobian.math.real_algebraic import RealAlgebraicValue
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"root_isolation.{reason}", message)
 
 
 class UnivariatePolynomialRequest(StrictModel):
@@ -22,7 +24,9 @@ class UnivariatePolynomialRequest(StrictModel):
     @model_validator(mode="after")
     def require_nonzero_leading(self) -> Self:
         if self.coefficients_descending[0] == CanonicalRational(num="0", den="1"):
-            raise ValueError("leading coefficient must be nonzero")
+            raise _validation_error(
+                "leading_coefficient_zero", "leading coefficient must be nonzero"
+            )
         return self
 
 
@@ -36,31 +40,31 @@ class RootIsolationResult(StrictModel):
     @model_validator(mode="after")
     def require_aligned_intervals(self) -> Self:
         if len(self.roots) != len(self.multiplicities):
-            raise ValueError("roots and multiplicities must have the same length")
+            raise _validation_error(
+                "root_multiplicity_length_mismatch",
+                "roots and multiplicities must have the same length",
+            )
         if any(
             lower.as_fraction() > upper.as_fraction() for lower, upper in self.roots
         ):
-            raise ValueError("isolating intervals must have lower <= upper")
+            raise _validation_error(
+                "interval_bounds_invalid",
+                "isolating intervals must have lower <= upper",
+            )
         if any(multiplicity < 1 for multiplicity in self.multiplicities):
-            raise ValueError("root multiplicities must be positive")
+            raise _validation_error(
+                "multiplicity_not_positive", "root multiplicities must be positive"
+            )
         return self
 
 
-AlgebraicNumberInput = RealAlgebraicValue
-
-
 class AlgebraicCompareRequest(StrictModel):
-    left: AlgebraicNumberInput
-    right: AlgebraicNumberInput
-
-
-AlgebraicCompareResult = RealAlgebraicOrderValue
+    left: RealAlgebraicValue
+    right: RealAlgebraicValue
 
 
 __all__ = [
     "AlgebraicCompareRequest",
-    "AlgebraicCompareResult",
-    "AlgebraicNumberInput",
     "RootIsolationResult",
     "UnivariatePolynomialRequest",
 ]

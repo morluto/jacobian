@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
@@ -16,6 +17,10 @@ MAX_REACHABILITY_STATES = 100_000
 MAX_REACHABILITY_STATE_TOKEN_CELLS = 100_000
 MAX_REACHABILITY_FIRING_RECORDS = 100_000
 MAX_REACHABILITY_EXPLORATION_WORK = 1_000_000
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"petri_net.{reason}", message)
 
 
 class PetriNet(StrictModel):
@@ -34,19 +39,27 @@ class PetriNet(StrictModel):
     @model_validator(mode="after")
     def require_valid_matrices(self) -> Self:
         if len(self.pre) != self.place_count:
-            raise ValueError("pre must have place_count rows")
+            raise _validation_error("pre_row_count", "pre must have place_count rows")
         if len(self.post) != self.place_count:
-            raise ValueError("post must have place_count rows")
+            raise _validation_error("post_row_count", "post must have place_count rows")
         for row in self.pre:
             if len(row) != self.transition_count:
-                raise ValueError("pre row must have transition_count entries")
+                raise _validation_error(
+                    "pre_row_width", "pre row must have transition_count entries"
+                )
             if any(w < 0 for w in row):
-                raise ValueError("pre weights must be non-negative")
+                raise _validation_error(
+                    "pre_weight_sign", "pre weights must be non-negative"
+                )
         for row in self.post:
             if len(row) != self.transition_count:
-                raise ValueError("post row must have transition_count entries")
+                raise _validation_error(
+                    "post_row_width", "post row must have transition_count entries"
+                )
             if any(w < 0 for w in row):
-                raise ValueError("post weights must be non-negative")
+                raise _validation_error(
+                    "post_weight_sign", "post weights must be non-negative"
+                )
         return self
 
 
@@ -58,7 +71,9 @@ class Marking(StrictModel):
     @model_validator(mode="after")
     def require_valid_marking(self) -> Self:
         if any(t < 0 for t in self.tokens):
-            raise ValueError("marking tokens must be non-negative")
+            raise _validation_error(
+                "marking_token_sign", "marking tokens must be non-negative"
+            )
         return self
 
 

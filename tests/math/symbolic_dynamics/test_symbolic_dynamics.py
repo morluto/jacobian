@@ -79,15 +79,23 @@ def test_golden_mean_artin_mazur_zeta_is_bound_to_periodic_traces() -> None:
 
     payload = result.model_dump()
     payload["replay"][2]["logarithmic_derivative_coefficient"] = "5"
-    with pytest.raises(ValidationError, match="not bound"):
+    with pytest.raises(ValidationError) as exc_info:
         ArtinMazurZetaResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.artin_mazur_zeta_not_bound"
+    )
 
     payload = result.model_dump()
     payload["determinant_polynomial"]["polynomial"]["terms"][0]["coefficient"][
         "num"
     ] = "-2"
-    with pytest.raises(ValidationError, match="not bound"):
+    with pytest.raises(ValidationError) as exc_info:
         ArtinMazurZetaResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.artin_mazur_zeta_not_bound"
+    )
 
 
 def test_zeta_distinguishes_full_shift_cycle_and_disjoint_components() -> None:
@@ -169,8 +177,12 @@ def test_zeta_admission_bounds_coefficient_growth_before_backend() -> None:
     assert len(boundary.replay) == 50
 
     dense_large = (tuple((1_000_000,) * 50),) * 50
-    with pytest.raises(ValidationError, match="coefficient digit bound"):
+    with pytest.raises(ValidationError) as exc_info:
         ArtinMazurZetaRequest(shift=AdjacencyShift(matrix=dense_large), replay_period=1)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.zeta_coefficient_digit_bound"
+    )
     with pytest.raises(ValueError, match="coefficient digit bound"):
         artin_mazur_zeta(AdjacencyShift(matrix=dense_large), 1)
 
@@ -201,8 +213,12 @@ def test_golden_mean_finite_type_presentation_is_exact() -> None:
 
     payload = result.model_dump()
     payload["presentation"]["adjacency_matrix"] = ((1, 0), (1, 1))
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteTypeShiftResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.presentation_adjacency_transition_count"
+    )
 
 
 def test_shorter_forbidden_factors_are_enforced_in_long_memory_presentation() -> None:
@@ -266,31 +282,47 @@ def test_complete_block_language_includes_empty_word_convention() -> None:
 
     payload = result.model_dump()
     payload["count"] = 4
-    with pytest.raises(ValidationError, match="not bound"):
+    with pytest.raises(ValidationError) as exc_info:
         BlockLanguageResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.block_language_not_bound"
+    )
 
 
 def test_oversized_enumerations_fail_before_computation() -> None:
     alphabet = tuple(chr(ord("a") + index) for index in range(16))
     shift = ForbiddenBlockShift(alphabet=alphabet, forbidden_blocks=())
-    with pytest.raises(ValidationError, match="work bound"):
+    with pytest.raises(ValidationError) as exc_info:
         BlockLanguageRequest(shift=shift, block_length=5)
-    with pytest.raises(ValidationError, match="work bound"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.block_language_work_bound"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         FiniteTypeShiftRequest(
             shift=ForbiddenBlockShift(
                 alphabet=alphabet,
                 forbidden_blocks=(("a", "a", "a", "a", "a"),),
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.block_language_work_bound"
+    )
     ten_symbols = alphabet[:10]
-    with pytest.raises(ValidationError, match="result bound"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteTypeShiftRequest(
             shift=ForbiddenBlockShift(
                 alphabet=ten_symbols,
                 forbidden_blocks=(("a", "a", "a", "a", "a"),),
             )
         )
-    with pytest.raises(ValidationError, match="result bound"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.finite_type_presentation_result_bound"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         HigherBlockRequest(
             shift=ForbiddenBlockShift(
                 alphabet=ten_symbols,
@@ -298,12 +330,20 @@ def test_oversized_enumerations_fail_before_computation() -> None:
             ),
             block_length=4,
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.finite_type_presentation_result_bound"
+    )
     oversized_support = ForbiddenBlockShift(
         alphabet=alphabet,
         forbidden_blocks=(("a",) * 20,),
     )
-    with pytest.raises(ValidationError, match="work bound"):
+    with pytest.raises(ValidationError) as exc_info:
         BlockLanguageRequest(shift=oversized_support, block_length=1)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.block_language_work_bound"
+    )
     with pytest.raises(ValueError, match="work bound"):
         block_language(oversized_support, 1)
 
@@ -326,16 +366,24 @@ def test_higher_block_presentation_uses_allowed_overlap_edges() -> None:
 
     payload = result.model_dump()
     payload["presentation"]["transitions"] = ()
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as exc_info:
         HigherBlockResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.presentation_adjacency_transition_count"
+    )
 
 
 def test_higher_block_requires_enough_memory_for_exact_sft_presentation() -> None:
     shift = ForbiddenBlockShift(
         alphabet=("0", "1"), forbidden_blocks=(("1", "0", "1", "0"),)
     )
-    with pytest.raises(ValidationError, match="at least"):
+    with pytest.raises(ValidationError) as exc_info:
         HigherBlockRequest(shift=shift, block_length=2)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.higher_block_memory_bound"
+    )
 
 
 def test_periodic_profile_handles_square_mobius_factor() -> None:
@@ -350,19 +398,38 @@ def test_periodic_profile_handles_square_mobius_factor() -> None:
 
     payload = result.model_dump()
     payload["primitive_orbit_counts"] = ("2", "1", "2", "4")
-    with pytest.raises(ValidationError, match="not bound"):
+    with pytest.raises(ValidationError) as exc_info:
         PeriodicPointProfileResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.periodic_point_profile_not_bound"
+    )
 
 
 def test_value_models_reject_ambiguous_and_invalid_carriers() -> None:
-    with pytest.raises(ValidationError, match="distinct"):
+    with pytest.raises(ValidationError) as exc_info:
         ForbiddenBlockShift(alphabet=("0", "0"), forbidden_blocks=())
-    with pytest.raises(ValidationError, match="outside"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.alphabet_symbols_not_distinct"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         ForbiddenBlockShift(alphabet=("0",), forbidden_blocks=(("1",),))
-    with pytest.raises(ValidationError, match="square"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.forbidden_block_symbol_outside_alphabet"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         AdjacencyShift(matrix=((1, 0), (1,)))
-    with pytest.raises(ValidationError, match="supported bounds"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "symbolic_dynamics.adjacency_matrix_not_square"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         AdjacencyShift(matrix=((-1,),))
+    assert (
+        exc_info.value.errors()[0]["type"] == "symbolic_dynamics.adjacency_entry_bound"
+    )
 
 
 def test_random_block_languages_match_bounded_extension_oracle() -> None:

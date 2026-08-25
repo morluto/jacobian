@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Literal, Self
 
 from pydantic import ConfigDict, Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.canonical import (
@@ -38,6 +39,10 @@ CarrierBlock = Annotated[
 ]
 
 
+def _validation_error(code: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"universal_algebra.{code}", message)
+
+
 def _require_partition(
     algebra: FiniteAlgebra,
     partition: tuple[CarrierBlock, ...],
@@ -47,12 +52,19 @@ def _require_partition(
     for block in partition:
         for element in block:
             if element not in expected:
-                raise ValueError("partition element out of carrier range")
+                raise _validation_error(
+                    "partition_element_out_of_range",
+                    "partition element out of carrier range",
+                )
             if element in seen:
-                raise ValueError("partition blocks must be disjoint")
+                raise _validation_error(
+                    "partition_blocks_overlap", "partition blocks must be disjoint"
+                )
             seen.add(element)
     if seen != expected:
-        raise ValueError("partition blocks must exactly cover the carrier")
+        raise _validation_error(
+            "partition_incomplete", "partition blocks must exactly cover the carrier"
+        )
 
 
 def _congruence_work(algebra: FiniteAlgebra) -> int:
@@ -72,10 +84,15 @@ class EvaluateRequest(StrictModel):
     def require_total_assignment(self) -> Self:
         require_term_for_algebra(self.term, self.algebra)
         if len(self.assignment) != self.term.variable_count:
-            raise ValueError("assignment must cover exactly the referenced variables")
+            raise _validation_error(
+                "assignment_length_mismatch",
+                "assignment must cover exactly the referenced variables",
+            )
         size = len(self.algebra.carrier)
         if any(not 0 <= value < size for value in self.assignment):
-            raise ValueError("assignment value out of carrier range")
+            raise _validation_error(
+                "assignment_value_out_of_range", "assignment value out of carrier range"
+            )
         return self
 
 
@@ -97,10 +114,16 @@ class EquationProfileRequest(StrictModel):
             max(self.left.variable_count, self.right.variable_count)
             > self.variable_count
         ):
-            raise ValueError("variable_count must cover every referenced variable")
+            raise _validation_error(
+                "variable_count_too_small",
+                "variable_count must cover every referenced variable",
+            )
         work = len(self.algebra.carrier) ** self.variable_count
         if work > MAX_ENUMERATION_WORK:
-            raise ValueError("equation profile exceeds the assignment work budget")
+            raise _validation_error(
+                "equation_profile_work_exceeded",
+                "equation profile exceeds the assignment work budget",
+            )
         return self
 
 
@@ -118,7 +141,10 @@ class EquationProfileResult(StrictModel):
     @model_validator(mode="after")
     def bind_status(self) -> Self:
         if (self.status == "FAILS") != (self.first_counterassignment is not None):
-            raise ValueError("FAILS must carry exactly one first counterassignment")
+            raise _validation_error(
+                "counterexample_status_mismatch",
+                "FAILS must carry exactly one first counterassignment",
+            )
         return self
 
 
@@ -133,10 +159,15 @@ class SubalgebraRequest(StrictModel):
     def require_valid_bounded_generators(self) -> Self:
         size = len(self.algebra.carrier)
         if any(not 0 <= generator < size for generator in self.generators):
-            raise ValueError("generator out of carrier range")
+            raise _validation_error(
+                "generator_out_of_range", "generator out of carrier range"
+            )
         work = sum(size**symbol.arity for symbol in self.algebra.operations) * size
         if work > MAX_ENUMERATION_WORK:
-            raise ValueError("subalgebra closure exceeds the operation work budget")
+            raise _validation_error(
+                "subalgebra_work_exceeded",
+                "subalgebra closure exceeds the operation work budget",
+            )
         return self
 
 
@@ -154,14 +185,16 @@ def _require_homomorphism_output_headroom(
             encode_strict_json(carrier_map.model_dump(mode="json"))
         )
     except CanonicalizationError as exc:
-        raise ValueError(
-            "finite algebra carrier map exceeds the canonical output limit"
+        raise _validation_error(
+            "carrier_map_output_exceeded",
+            "finite algebra carrier map exceeds the canonical output limit",
         ) from exc
     output_limit = CanonicalLimits().max_output_bytes
     if retained_source_bytes + _HOMOMORPHISM_RESULT_RESERVE_BYTES > output_limit:
-        raise ValueError(
+        raise _validation_error(
+            "homomorphism_work_exceeded",
             "homomorphism profile retains the carrier map and would exceed the "
-            f"{output_limit}-byte canonical output limit"
+            f"{output_limit}-byte canonical output limit",
         )
 
 
@@ -191,8 +224,9 @@ class HomomorphismProfileRequest(StrictModel):
     def require_bounded_complete_scan(self) -> Self:
         preservation_cells = sum(len(table) for table in self.carrier_map.source.tables)
         if preservation_cells * _HOMOMORPHISM_REPLAY_PASSES > MAX_ENUMERATION_WORK:
-            raise ValueError(
-                "homomorphism operation-and-replay work exceeds the enumeration budget"
+            raise _validation_error(
+                "homomorphism_work_exceeded",
+                "homomorphism operation-and-replay work exceeds the enumeration budget",
             )
         _require_homomorphism_output_headroom(self.carrier_map)
         return self
@@ -236,23 +270,33 @@ class HomomorphismProfileResult(StrictModel):
     def require_source_bound_profile(self) -> Self:
         if self.status == "HOMOMORPHISM":
             if self.homomorphism is None:
-                raise ValueError("HOMOMORPHISM must carry a checked homomorphism")
+                raise _validation_error(
+                    "positive_missing_homomorphism",
+                    "HOMOMORPHISM must carry a checked homomorphism",
+                )
             if self.carrier_map is not None or self.obstruction is not None:
-                raise ValueError(
-                    "HOMOMORPHISM cannot carry a failed map or obstruction"
+                raise _validation_error(
+                    "positive_failed_data",
+                    "HOMOMORPHISM cannot carry a failed map or obstruction",
                 )
             if None in (self.injective, self.surjective, self.isomorphism):
-                raise ValueError("HOMOMORPHISM must carry all map-property flags")
+                raise _validation_error(
+                    "positive_flags_missing",
+                    "HOMOMORPHISM must carry all map-property flags",
+                )
             _require_homomorphism_output_headroom(self.homomorphism)
             expected_kernel, expected_image = _homomorphism_kernel_and_image(
                 self.homomorphism.mapping
             )
             if self.kernel_partition != expected_kernel:
-                raise ValueError(
-                    "kernel_partition must be the canonical fibers of the carrier map"
+                raise _validation_error(
+                    "kernel_partition_mismatch",
+                    "kernel_partition must be the canonical fibers of the carrier map",
                 )
             if self.image != expected_image:
-                raise ValueError("image must be the sorted carrier-map image")
+                raise _validation_error(
+                    "image_mismatch", "image must be the sorted carrier-map image"
+                )
             expected_injective = len(expected_image) == len(
                 self.homomorphism.source.carrier
             )
@@ -260,21 +304,32 @@ class HomomorphismProfileResult(StrictModel):
                 self.homomorphism.target.carrier
             )
             if self.injective is not expected_injective:
-                raise ValueError("injective must be reconstructed from the kernel")
+                raise _validation_error(
+                    "injective_mismatch",
+                    "injective must be reconstructed from the kernel",
+                )
             if self.surjective is not expected_surjective:
-                raise ValueError("surjective must be reconstructed from the image")
+                raise _validation_error(
+                    "surjective_mismatch",
+                    "surjective must be reconstructed from the image",
+                )
             if self.isomorphism is not (expected_injective and expected_surjective):
-                raise ValueError(
-                    "isomorphism must be reconstructed from injectivity and surjectivity"
+                raise _validation_error(
+                    "isomorphism_mismatch",
+                    "isomorphism must be reconstructed from injectivity and surjectivity",
                 )
             return self
 
         if self.carrier_map is None or self.obstruction is None:
-            raise ValueError(
-                "NOT_A_HOMOMORPHISM must retain the carrier map and obstruction"
+            raise _validation_error(
+                "negative_data_missing",
+                "NOT_A_HOMOMORPHISM must retain the carrier map and obstruction",
             )
         if self.homomorphism is not None:
-            raise ValueError("NOT_A_HOMOMORPHISM cannot carry a homomorphism")
+            raise _validation_error(
+                "negative_has_homomorphism",
+                "NOT_A_HOMOMORPHISM cannot carry a homomorphism",
+            )
         if (
             self.kernel_partition
             or self.image
@@ -283,14 +338,16 @@ class HomomorphismProfileResult(StrictModel):
                 for flag in (self.injective, self.surjective, self.isomorphism)
             )
         ):
-            raise ValueError(
-                "NOT_A_HOMOMORPHISM cannot carry positive map-property data"
+            raise _validation_error(
+                "negative_positive_data",
+                "NOT_A_HOMOMORPHISM cannot carry positive map-property data",
             )
         _require_homomorphism_output_headroom(self.carrier_map)
         expected = _first_homomorphism_failure(self.carrier_map)
         if expected is None:
-            raise ValueError(
-                "NOT_A_HOMOMORPHISM source map preserves every basic operation"
+            raise _validation_error(
+                "negative_map_is_homomorphism",
+                "NOT_A_HOMOMORPHISM source map preserves every basic operation",
             )
         expected_obstruction = HomomorphismObstruction(
             operation=expected.operation,
@@ -304,7 +361,10 @@ class HomomorphismProfileResult(StrictModel):
             target_output=expected.target_output,
         )
         if self.obstruction != expected_obstruction:
-            raise ValueError("obstruction must be the first exact preservation failure")
+            raise _validation_error(
+                "obstruction_mismatch",
+                "obstruction must be the first exact preservation failure",
+            )
         return self
 
 
@@ -319,7 +379,10 @@ class _PartitionRequest(StrictModel):
     def require_complete_bounded_partition(self) -> Self:
         _require_partition(self.algebra, self.partition)
         if _congruence_work(self.algebra) > MAX_ENUMERATION_WORK:
-            raise ValueError("congruence check exceeds the operation work budget")
+            raise _validation_error(
+                "congruence_work_exceeded",
+                "congruence check exceeds the operation work budget",
+            )
         return self
 
 
@@ -349,9 +412,10 @@ class QuotientRequest(_PartitionRequest):
             + quotient_table_cells
         )
         if quotient_work > MAX_ENUMERATION_WORK:
-            raise ValueError(
+            raise _validation_error(
+                "quotient_work_exceeded",
                 "quotient construction and homomorphism replay exceed the "
-                "operation work budget"
+                "operation work budget",
             )
         try:
             source_bytes = len(encode_strict_json(self.algebra.model_dump(mode="json")))
@@ -368,8 +432,9 @@ class QuotientRequest(_PartitionRequest):
                 for index in range(quotient_size)
             )
         except CanonicalizationError as exc:
-            raise ValueError(
-                "quotient source exceeds the canonical output limit"
+            raise _validation_error(
+                "quotient_source_output_exceeded",
+                "quotient source exceeds the canonical output limit",
             ) from exc
         quotient_index_bytes = len(str(quotient_size - 1)) + 1
         quotient_table_bytes = quotient_table_cells * quotient_index_bytes
@@ -384,9 +449,10 @@ class QuotientRequest(_PartitionRequest):
         )
         output_limit = CanonicalLimits().max_output_bytes
         if predicted_bytes > output_limit:
-            raise ValueError(
+            raise _validation_error(
+                "quotient_output_exceeded",
                 "canonical quotient homomorphism would exceed the "
-                f"{output_limit}-byte output limit"
+                f"{output_limit}-byte output limit",
             )
         return self
 

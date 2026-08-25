@@ -6,10 +6,10 @@ import sympy
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.real_algebraic import RealAlgebraicOrderValue
 from jacobian.math.root_isolation import compare_algebraic, isolate_real_roots
 from jacobian.math.root_isolation._models import (
     AlgebraicCompareRequest,
-    AlgebraicCompareResult,
     RootIsolationResult,
     UnivariatePolynomialRequest,
 )
@@ -39,5 +39,5 @@ def compute_root_isolation(request: UnivariatePolynomialRequest) -> RootIsolatio
 
 def compute_algebraic_compare(
     request: AlgebraicCompareRequest,
-) -> AlgebraicCompareResult:
+) -> RealAlgebraicOrderValue:
     return compare_algebraic(request.left, request.right)

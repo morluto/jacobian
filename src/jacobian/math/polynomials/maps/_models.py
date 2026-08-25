@@ -7,6 +7,7 @@ from fractions import Fraction
 from typing import Any, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
@@ -52,6 +53,10 @@ MAX_GENERIC_FIBER_REPLAY_PARAMETER_EXPONENT = MAX_POLYNOMIAL_EXPONENT
 MAX_GENERIC_FIBER_REPLAY_SOURCE_EXPONENT = 2 * MAX_POLYNOMIAL_EXPONENT
 
 
+def _validation_error(message: str) -> PydanticCustomError:
+    return PydanticCustomError("polynomial.map_invariant", message)
+
+
 class VariablePoint(StrictModel):
     """One rational point on an explicitly ordered polynomial axis."""
 
@@ -65,9 +70,11 @@ class VariablePoint(StrictModel):
     @model_validator(mode="after")
     def require_matching_axis(self) -> Self:
         if len(self.variables) != len(self.values):
-            raise ValueError("point variables and values must have the same length")
+            raise _validation_error(
+                "point variables and values must have the same length"
+            )
         if len(set(self.variables)) != len(self.variables):
-            raise ValueError("point variables must be unique")
+            raise _validation_error("point variables must be unique")
         return self
 
 
@@ -81,7 +88,7 @@ class EvalRequest(StrictModel):
     def require_complete_ordered_point(self) -> Self:
         require_map_polynomial(self.polynomial, label="evaluation polynomial")
         if self.point.variables != self.polynomial.variables:
-            raise ValueError(
+            raise _validation_error(
                 "evaluation point must use the polynomial's complete ordered axis"
             )
         value = Fraction(0)
@@ -114,11 +121,13 @@ class JacobianResult(StrictModel):
     @model_validator(mode="after")
     def require_matrix_shape(self) -> Self:
         if len(self.entries) != self.n_inputs * self.n_outputs:
-            raise ValueError("Jacobian entry count must match its matrix dimensions")
+            raise _validation_error(
+                "Jacobian entry count must match its matrix dimensions"
+            )
         if self.entries:
             variables = self.entries[0].variables
             if any(entry.variables != variables for entry in self.entries):
-                raise ValueError("Jacobian entries must use one ordered ring")
+                raise _validation_error("Jacobian entries must use one ordered ring")
         return self
 
 
@@ -135,9 +144,9 @@ class CompositionRequest(StrictModel):
         require_map_polynomial(self.outer, label="outer polynomial")
         require_map_polynomial(self.inner, label="inner polynomial")
         if self.outer.variables != (self.outer_variable,):
-            raise ValueError("outer polynomial must use exactly outer_variable")
+            raise _validation_error("outer polynomial must use exactly outer_variable")
         if self.inner.variables != (self.inner_variable,):
-            raise ValueError("inner polynomial must use exactly inner_variable")
+            raise _validation_error("inner polynomial must use exactly inner_variable")
         outer_degree = max(
             (term.exponents[0] for term in self.outer.polynomial.terms), default=0
         )
@@ -145,7 +154,9 @@ class CompositionRequest(StrictModel):
             (term.exponents[0] for term in self.inner.polynomial.terms), default=0
         )
         if outer_degree * inner_degree > _MAX_COMPOSITION_DEGREE:
-            raise ValueError(f"composition exceeds degree {_MAX_COMPOSITION_DEGREE}")
+            raise _validation_error(
+                f"composition exceeds degree {_MAX_COMPOSITION_DEGREE}"
+            )
         return self
 
 
@@ -203,11 +214,11 @@ def _require_generic_degree_map_budget(polynomial_map: RationalPolynomialMap) ->
     source_count = len(polynomial_map.input_variables)
     target_count = len(polynomial_map.output_polynomials)
     if source_count > MAX_GENERIC_DEGREE_SOURCE_VARIABLES:
-        raise ValueError(
+        raise _validation_error(
             "generic-degree source exceeds the 3-variable operation budget"
         )
     if target_count > MAX_GENERIC_DEGREE_TARGET_VARIABLES:
-        raise ValueError(
+        raise _validation_error(
             "generic-degree target exceeds the 3-component operation budget"
         )
     aggregate_terms = sum(
@@ -215,31 +226,33 @@ def _require_generic_degree_map_budget(polynomial_map: RationalPolynomialMap) ->
         for polynomial in polynomial_map.output_polynomials
     )
     if aggregate_terms > MAX_GENERIC_DEGREE_AGGREGATE_TERMS:
-        raise ValueError(
+        raise _validation_error(
             "generic-degree map exceeds the 96-term aggregate input budget"
         )
     if (
         len(polynomial_map.model_dump_json().encode("utf-8"))
         > MAX_GENERIC_DEGREE_ENCODED_MAP_BYTES
     ):
-        raise ValueError("generic-degree map exceeds the 65536-byte input budget")
+        raise _validation_error(
+            "generic-degree map exceeds the 65536-byte input budget"
+        )
     degrees: list[int] = []
     for polynomial in polynomial_map.output_polynomials:
         if len(polynomial.polynomial.terms) > MAX_GENERIC_DEGREE_COMPONENT_TERMS:
-            raise ValueError(
+            raise _validation_error(
                 "generic-degree component exceeds the 48-term input budget"
             )
         degree = _total_degree(polynomial)
         degrees.append(degree)
         if degree > MAX_GENERIC_DEGREE_TOTAL_DEGREE:
-            raise ValueError("generic-degree component exceeds total degree 8")
+            raise _validation_error("generic-degree component exceeds total degree 8")
         for term in polynomial.polynomial.terms:
             if (
                 len(term.coefficient.num.lstrip("-"))
                 > MAX_GENERIC_DEGREE_COEFFICIENT_DIGITS
                 or len(term.coefficient.den) > MAX_GENERIC_DEGREE_COEFFICIENT_DIGITS
             ):
-                raise ValueError(
+                raise _validation_error(
                     "generic-degree coefficient exceeds the 64-digit input budget"
                 )
     if target_count >= source_count:
@@ -247,7 +260,9 @@ def _require_generic_degree_map_budget(polynomial_map: RationalPolynomialMap) ->
         for degree in sorted(degrees)[:source_count]:
             bezout_bound *= max(1, degree)
         if bezout_bound > MAX_GENERIC_DEGREE_BEZOUT_BOUND:
-            raise ValueError("generic-degree finite-fiber Bezout bound exceeds 512")
+            raise _validation_error(
+                "generic-degree finite-fiber Bezout bound exceeds 512"
+            )
 
 
 class GenericFiberTerm(StrictModel):
@@ -262,12 +277,12 @@ class GenericFiberTerm(StrictModel):
     @model_validator(mode="after")
     def require_nonzero_bounded_term(self) -> Self:
         if not self.coefficient.numerator.terms:
-            raise ValueError("zero generic-fiber terms must be omitted")
+            raise _validation_error("zero generic-fiber terms must be omitted")
         if any(
             exponent < 0 or exponent > MAX_GENERIC_FIBER_CERTIFICATE_SOURCE_EXPONENT
             for exponent in self.source_exponents
         ):
-            raise ValueError(
+            raise _validation_error(
                 "generic-fiber source exponent exceeds the certificate "
                 "representation limit"
             )
@@ -286,9 +301,9 @@ class GenericFiberPolynomial(StrictModel):
     def require_canonical_term_order(self) -> Self:
         exponents = tuple(term.source_exponents for term in self.terms)
         if len(set(exponents)) != len(exponents):
-            raise ValueError("generic-fiber exponent tuples must be unique")
+            raise _validation_error("generic-fiber exponent tuples must be unique")
         if exponents != tuple(sorted(exponents, reverse=True)):
-            raise ValueError(
+            raise _validation_error(
                 "generic-fiber terms must use descending lexicographic order"
             )
         return self
@@ -309,15 +324,17 @@ def _serialized_certificate_polynomials(value: Any) -> list[Any] | None:
     ):
         return None
     if len(basis) > MAX_GENERIC_FIBER_BASIS_POLYNOMIALS:
-        raise ValueError("generic-fiber basis exceeds the result bound")
+        raise _validation_error("generic-fiber basis exceeds the result bound")
     if len(transformation) > MAX_GENERIC_DEGREE_TARGET_VARIABLES:
-        raise ValueError("generic-fiber transformation exceeds the result bound")
+        raise _validation_error("generic-fiber transformation exceeds the result bound")
     polynomials: list[Any] = list(basis)
     for row in transformation:
         if not isinstance(row, Sequence) or isinstance(row, (str, bytes)):
             return None
         if len(row) > MAX_GENERIC_FIBER_BASIS_POLYNOMIALS:
-            raise ValueError("generic-fiber transformation exceeds the result bound")
+            raise _validation_error(
+                "generic-fiber transformation exceeds the result bound"
+            )
         polynomials.extend(row)
     return polynomials
 
@@ -407,7 +424,7 @@ class GenericFiberCertificate(StrictModel):
                 return value
             certificate_terms += len(terms)
             if certificate_terms > MAX_GENERIC_FIBER_CERTIFICATE_TERMS:
-                raise ValueError(
+                raise _validation_error(
                     "generic-fiber certificate exceeds the 4096-term result bound"
                 )
             term_groups.append(terms)
@@ -420,7 +437,7 @@ class GenericFiberCertificate(StrictModel):
                     return value
                 coefficient_terms += support
                 if coefficient_terms > MAX_GENERIC_FIBER_COEFFICIENT_TERMS:
-                    raise ValueError(
+                    raise _validation_error(
                         "generic-fiber coefficient support exceeds the result bound"
                     )
         return value
@@ -428,12 +445,12 @@ class GenericFiberCertificate(StrictModel):
     @model_validator(mode="after")
     def require_bounded_certificate_shape(self) -> Self:
         if len(set(self.target_parameters)) != len(self.target_parameters):
-            raise ValueError("generic target parameters must be unique")
+            raise _validation_error("generic target parameters must be unique")
         if len(set(self.source_variable_order)) != len(self.source_variable_order):
-            raise ValueError("generic-fiber source variables must be unique")
+            raise _validation_error("generic-fiber source variables must be unique")
         basis_count = len(self.basis)
         if any(len(row) != basis_count for row in self.basis_from_source):
-            raise ValueError(
+            raise _validation_error(
                 "generic-fiber transformation rows must match the basis length"
             )
         polynomials = [
@@ -442,7 +459,7 @@ class GenericFiberCertificate(StrictModel):
         ]
         certificate_terms = sum(len(polynomial.terms) for polynomial in polynomials)
         if certificate_terms > MAX_GENERIC_FIBER_CERTIFICATE_TERMS:
-            raise ValueError(
+            raise _validation_error(
                 "generic-fiber certificate exceeds the 4096-term result bound"
             )
         coefficient_terms = sum(
@@ -452,23 +469,23 @@ class GenericFiberCertificate(StrictModel):
             for term in polynomial.terms
         )
         if coefficient_terms > MAX_GENERIC_FIBER_COEFFICIENT_TERMS:
-            raise ValueError(
+            raise _validation_error(
                 "generic-fiber coefficient support exceeds the result bound"
             )
         for polynomial in polynomials:
             for term in polynomial.terms:
                 if len(term.source_exponents) != len(self.source_variable_order):
-                    raise ValueError(
+                    raise _validation_error(
                         "generic-fiber monomials must match the source variable order"
                     )
                 if term.coefficient.variables != self.target_parameters:
-                    raise ValueError(
+                    raise _validation_error(
                         "generic-fiber coefficients must use the target parameter field"
                     )
         if len(set(self.standard_monomials)) != len(self.standard_monomials):
-            raise ValueError("standard monomials must be unique")
+            raise _validation_error("standard monomials must be unique")
         if self.standard_monomials != tuple(sorted(self.standard_monomials)):
-            raise ValueError(
+            raise _validation_error(
                 "standard monomials must use ascending lexicographic order"
             )
         if any(
@@ -479,7 +496,7 @@ class GenericFiberCertificate(StrictModel):
             )
             for exponents in self.standard_monomials
         ):
-            raise ValueError(
+            raise _validation_error(
                 "standard monomials must match the bounded source variable order"
             )
         return self
@@ -537,11 +554,11 @@ def _require_bounded_conclusion_replay(
         wall_seconds=GENERIC_DEGREE_RESULT_REPLAY_WALL_SECONDS,
     )
     if replay.status != "COMPUTED":
-        raise ValueError(
+        raise _validation_error(
             "generic-degree evidence failed its bounded source-bound replay"
         )
     if replay.outcome != outcome or replay.degree != degree:
-        raise ValueError(
+        raise _validation_error(
             "claimed generic-degree conclusion disagrees with the bounded "
             "generic-fiber replay"
         )
@@ -575,12 +592,12 @@ class GenericDegreeResult(StrictModel):
         }
         if self.outcome not in mathematical:
             if self.degree is not None or self.evidence is not None or not self.detail:
-                raise ValueError(
+                raise _validation_error(
                     "operational generic-degree outcomes require only source and detail"
                 )
             return self
         if self.evidence is None or self.detail:
-            raise ValueError(
+            raise _validation_error(
                 "mathematical generic-degree outcomes require exact evidence"
             )
         unit_basis = _is_unit_generic_fiber_basis(self.evidence)
@@ -591,19 +608,21 @@ class GenericDegreeResult(StrictModel):
                 or self.degree is None
                 or self.degree != len(self.evidence.standard_monomials)
             ):
-                raise ValueError(
+                raise _validation_error(
                     "claimed degree does not match the standard-monomial evidence"
                 )
         else:
             if self.degree is not None:
-                raise ValueError("non-finite generic-degree outcomes carry no degree")
+                raise _validation_error(
+                    "non-finite generic-degree outcomes carry no degree"
+                )
             if self.outcome == "NOT_DOMINANT":
                 if not unit_basis or self.evidence.standard_monomials:
-                    raise ValueError(
+                    raise _validation_error(
                         "not-dominant outcomes carry the unit generic-fiber basis"
                     )
             elif unit_basis or self.evidence.standard_monomials:
-                raise ValueError(
+                raise _validation_error(
                     "positive-dimensional outcomes carry a non-unit generic-fiber basis"
                 )
         _require_bounded_conclusion_replay(

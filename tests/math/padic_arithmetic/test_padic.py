@@ -48,10 +48,11 @@ class TestHenselRootLifting:
     def test_non_root_rejected(self):
         """A non-root mod p should be rejected."""
         poly = IntegerPolynomial(coefficients=("1", "0", "1"))  # x^2 + 1
-        with pytest.raises(ValidationError, match=r"f\(root_mod_p\) = 0"):
+        with pytest.raises(ValidationError) as exc_info:
             hensel_lift_root(
                 HenselRootRequest(polynomial=poly, prime=5, root_mod_p=1, precision=2)
             )
+        assert exc_info.value.errors()[0]["type"] == "padic_arithmetic.root_not_root"
 
     def test_root_in_range(self):
         """Lifted root should be in [0, p^k - 1]."""
@@ -96,13 +97,14 @@ class TestPAdicRoots:
     def test_composite_prime_rejected(self):
         """Composite moduli are rejected at the typed boundary."""
         poly = IntegerPolynomial(coefficients=("1", "-1"))
-        with pytest.raises(ValidationError, match="prime modulus"):
+        with pytest.raises(ValidationError) as exc_info:
             HenselRootRequest(polynomial=poly, prime=4, root_mod_p=1, precision=2)
+        assert exc_info.value.errors()[0]["type"] == "padic_arithmetic.prime_not_prime"
 
     def test_result_rejects_composite_modulus(self):
         """A serialized root set cannot validate against a composite modulus
         even when its completeness and derivative replay would succeed."""
-        with pytest.raises(ValidationError, match="prime modulus"):
+        with pytest.raises(ValidationError) as exc_info:
             PAdicRootsResult(
                 polynomial=IntegerPolynomial(coefficients=("1", "-1")),
                 roots=(PAdicRootEntry(root=1),),
@@ -110,6 +112,7 @@ class TestPAdicRoots:
                 precision=2,
                 root_count=1,
             )
+        assert exc_info.value.errors()[0]["type"] == "padic_arithmetic.prime_not_prime"
 
     def test_result_binds_to_source_polynomial(self):
         """The exact result retains polynomial and residue and replays them:
@@ -129,8 +132,9 @@ class TestPAdicRoots:
 
         detached = result.model_dump()
         detached["polynomial"]["coefficients"] = ["1", "0", "2"]
-        with pytest.raises(ValidationError, match=r"f\(root_mod_p\) = 0"):
+        with pytest.raises(ValidationError) as exc_info:
             HenselRootResult.model_validate(detached)
+        assert exc_info.value.errors()[0]["type"] == "padic_arithmetic.root_not_root"
 
         forged = result.model_dump()
         forged["lifted_root"] = (forged["lifted_root"] + 1) % 625
@@ -141,19 +145,27 @@ class TestPAdicRoots:
         # residue 3 is itself a simple root of x^2+1 mod 5, so only the
         # congruence of the lift to its residue can reject this tampering
         wrong_residue["root_mod_p"] = 3
-        with pytest.raises(ValidationError, match="reduce to root_mod_p"):
+        with pytest.raises(ValidationError) as exc_info:
             HenselRootResult.model_validate(wrong_residue)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "padic_arithmetic.lifted_root_wrong_residue"
+        )
 
         not_simple = result.model_dump()
         not_simple["is_simple_root"] = False
-        with pytest.raises(ValidationError, match="simple"):
+        with pytest.raises(ValidationError) as exc_info:
             HenselRootResult.model_validate(not_simple)
+        assert (
+            exc_info.value.errors()[0]["type"] == "padic_arithmetic.simple_flag_invalid"
+        )
 
     def test_multiple_root_lift_rejected(self):
         """f=x^2+5, p=5: r=0 is a multiple root; lifting is refused."""
         poly = IntegerPolynomial(coefficients=("1", "0", "5"))
-        with pytest.raises(ValidationError, match="simple root"):
+        with pytest.raises(ValidationError) as exc_info:
             HenselRootRequest(polynomial=poly, prime=5, root_mod_p=0, precision=2)
+        assert exc_info.value.errors()[0]["type"] == "padic_arithmetic.root_not_simple"
 
     def test_all_roots_are_valid(self):
         """All returned roots should satisfy f(root) ≡ 0 (mod p^k)."""

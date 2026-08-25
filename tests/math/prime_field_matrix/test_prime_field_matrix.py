@@ -29,6 +29,13 @@ def pfm(prime: int, entries: tuple[tuple[int, ...], ...]):
     )
 
 
+def assert_error_type(
+    exc_info: pytest.ExceptionInfo[ValidationError], expected: str
+) -> None:
+    """Assert a stable Pydantic error code without matching prose."""
+    assert any(error["type"] == expected for error in exc_info.value.errors())
+
+
 class TestRank:
     def test_full_rank_gf2(self):
         """Identity 3x3 over GF(2) has rank 3."""
@@ -295,14 +302,15 @@ class TestResultReplay:
 
     def test_forged_rank_rejected(self):
         request = pfm(prime=2, entries=((1, 0), (0, 1)))
-        with pytest.raises(ValidationError, match="recomputation"):
+        with pytest.raises(ValidationError) as exc_info:
             PrimeFieldMatrixRankResult(prime=2, source=request, rank=0)
+        assert_error_type(exc_info, "prime_field_matrix.result.rank_recomputation")
 
     def test_forged_rref_rejected(self):
         from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
 
         request = pfm(prime=2, entries=((1, 0), (0, 1)))
-        with pytest.raises(ValidationError, match="recomputation"):
+        with pytest.raises(ValidationError) as exc_info:
             PrimeFieldRrefResult(
                 prime=2,
                 source=request,
@@ -312,12 +320,13 @@ class TestResultReplay:
                 pivot_columns=(),
                 rank=0,
             )
+        assert_error_type(exc_info, "prime_field_matrix.result.rref_recomputation")
 
     def test_forged_nullspace_rejected(self):
         from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
 
         request = pfm(prime=2, entries=((0, 0),))
-        with pytest.raises(ValidationError, match="recomputation"):
+        with pytest.raises(ValidationError) as exc_info:
             PrimeFieldNullspaceResult(
                 prime=2,
                 source=request,
@@ -326,14 +335,16 @@ class TestResultReplay:
                 ),
                 nullity=0,
             )
+        assert_error_type(exc_info, "prime_field_matrix.result.nullspace_recomputation")
 
     def test_prime_mismatch_rejected(self):
         request = pfm(prime=2, entries=((1, 0), (0, 1)))
         result = compute_rank(request)
-        with pytest.raises(ValidationError, match="prime"):
+        with pytest.raises(ValidationError) as exc_info:
             PrimeFieldMatrixRankResult(prime=3, source=result.source, rank=result.rank)
+        assert_error_type(exc_info, "prime_field_matrix.result.source_prime")
         rref_result = compute_rref(request)
-        with pytest.raises(ValidationError, match="prime"):
+        with pytest.raises(ValidationError) as exc_info:
             PrimeFieldRrefResult(
                 prime=3,
                 source=rref_result.source,
@@ -341,14 +352,16 @@ class TestResultReplay:
                 pivot_columns=rref_result.pivot_columns,
                 rank=rref_result.rank,
             )
+        assert_error_type(exc_info, "prime_field_matrix.result.source_prime")
         ns_result = compute_nullspace(request)
-        with pytest.raises(ValidationError, match="prime"):
+        with pytest.raises(ValidationError) as exc_info:
             PrimeFieldNullspaceResult(
                 prime=3,
                 source=ns_result.source,
                 nullspace_matrix=ns_result.nullspace_matrix,
                 nullity=ns_result.nullity,
             )
+        assert_error_type(exc_info, "prime_field_matrix.result.source_prime")
 
     def test_genuine_results_round_trip(self):
         request = pfm(prime=5, entries=((1, 2, 3), (2, 4, 1)))
@@ -363,7 +376,7 @@ class TestResultReplay:
 class TestCanonicalValueComposition:
     def test_oversized_prime_rejected_before_construction(self):
         """A huge characteristic is bounded before primality work."""
-        with pytest.raises(ValidationError, match=r"\[2, 2147483647\]"):
+        with pytest.raises(ValidationError) as exc_info:
             PrimeFieldMatrixRequest.model_validate(
                 {
                     "matrix": {
@@ -375,6 +388,7 @@ class TestCanonicalValueComposition:
                     }
                 }
             )
+        assert_error_type(exc_info, "prime_field_matrix.request.prime_bound")
 
     def test_rref_and_nullspace_results_feed_rank_unchanged(self):
         """The canonical result matrices compose into consumers unchanged."""

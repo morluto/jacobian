@@ -7,6 +7,7 @@ from itertools import pairwise
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
     CanonicalInteger,
@@ -21,6 +22,12 @@ from jacobian.canonical import (
 )
 from jacobian.math.graphs.directed._models import DirectedGraph
 from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.probability._gaussian_moments import gaussian_univariate_moment
+
+
+def _validation_error(message: str) -> PydanticCustomError:
+    return PydanticCustomError("probability.model_invariant", message)
+
 
 MAX_FINITE_DISTRIBUTION_ATOMS = 256
 MAX_FINITE_CONVOLUTION_PAIRS = 4096
@@ -79,7 +86,7 @@ def _require_bounded_fraction(
         len(format_canonical_integer(abs(value.numerator))) > max_digits
         or len(format_canonical_integer(value.denominator)) > max_digits
     ):
-        raise ValueError(f"{label} exceeds the {max_digits}-digit bound")
+        raise _validation_error(f"{label} exceeds the {max_digits}-digit bound")
 
 
 def _require_strictly_increasing(
@@ -89,17 +96,8 @@ def _require_strictly_increasing(
 ) -> tuple[Fraction, ...]:
     fractions = tuple(value.as_fraction() for value in values)
     if any(left >= right for left, right in pairwise(fractions)):
-        raise ValueError(f"{label} must be strictly increasing")
+        raise _validation_error(f"{label} must be strictly increasing")
     return fractions
-
-
-def _gaussian_univariate_moment(exponent: int) -> int:
-    if exponent % 2:
-        return 0
-    result = 1
-    for factor in range(1, exponent, 2):
-        result *= factor
-    return result
 
 
 class ExactComplexRational(StrictModel):
@@ -137,16 +135,18 @@ class GaussianPolynomialTerm(StrictModel):
         if any(
             type(exponent) is not int or exponent < 0 for exponent in self.exponents
         ):
-            raise ValueError(
+            raise _validation_error(
                 "Gaussian polynomial exponents must be nonnegative integers"
             )
         if sum(self.exponents) > MAX_GAUSSIAN_TERM_DEGREE:
-            raise ValueError(
+            raise _validation_error(
                 "Gaussian polynomial term exceeds the "
                 f"{MAX_GAUSSIAN_TERM_DEGREE}-degree bound"
             )
         if self.coefficient.as_fractions() == (Fraction(), Fraction()):
-            raise ValueError("Gaussian polynomial terms must have nonzero coefficients")
+            raise _validation_error(
+                "Gaussian polynomial terms must have nonzero coefficients"
+            )
         return self
 
 
@@ -167,12 +167,12 @@ class GaussianPolynomial(StrictModel):
     def require_canonical_sparse_polynomial(self) -> Self:
         exponents = tuple(term.exponents for term in self.terms)
         if any(len(item) != self.variable_count for item in exponents):
-            raise ValueError(
+            raise _validation_error(
                 "every Gaussian polynomial exponent vector must match variable_count"
             )
         for left, right in pairwise(exponents):
             if left >= right:
-                raise ValueError(
+                raise _validation_error(
                     "Gaussian polynomial terms must use strictly increasing "
                     "lexicographic exponent-vector order; first offending adjacent "
                     f"pair is {list(left)} then {list(right)}"
@@ -188,7 +188,7 @@ class GaussianPolynomialMomentRequest(StrictModel):
     def require_bounded_complete_expansion(self) -> Self:
         expansion_paths = len(self.polynomial.terms) ** self.order
         if expansion_paths > MAX_GAUSSIAN_EXPANSION_PATHS:
-            raise ValueError(
+            raise _validation_error(
                 "Gaussian polynomial power exceeds the "
                 f"{MAX_GAUSSIAN_EXPANSION_PATHS}-path expansion bound"
             )
@@ -210,7 +210,7 @@ class GaussianPolynomialMomentRequest(StrictModel):
             + 64
         )
         if result_digit_bound > MAX_GAUSSIAN_RESULT_RATIONAL_DIGITS:
-            raise ValueError(
+            raise _validation_error(
                 "Gaussian polynomial coefficient denominators can exceed the "
                 f"{MAX_GAUSSIAN_RESULT_RATIONAL_DIGITS}-digit result bound"
             )
@@ -233,25 +233,27 @@ class GaussianMomentContraction(StrictModel):
     @model_validator(mode="after")
     def bind_gaussian_contraction(self) -> Self:
         if len(self.exponents) != len(self.variable_moment_factors):
-            raise ValueError("Gaussian contraction dimensions disagree")
+            raise _validation_error("Gaussian contraction dimensions disagree")
         expected_factors = tuple(
-            _gaussian_univariate_moment(exponent) for exponent in self.exponents
+            gaussian_univariate_moment(exponent) for exponent in self.exponents
         )
         actual_factors = tuple(int(value) for value in self.variable_moment_factors)
         if actual_factors != expected_factors:
-            raise ValueError("Gaussian variable moment factors are invalid")
+            raise _validation_error("Gaussian variable moment factors are invalid")
         expected_factor = 1
         for factor in expected_factors:
             expected_factor *= factor
         if int(self.gaussian_moment_factor) != expected_factor:
-            raise ValueError("Gaussian moment factor does not match its variables")
+            raise _validation_error(
+                "Gaussian moment factor does not match its variables"
+            )
         coefficient = self.expanded_coefficient.as_fractions()
         contribution = self.contribution.as_fractions()
         if contribution != (
             coefficient[0] * expected_factor,
             coefficient[1] * expected_factor,
         ):
-            raise ValueError("Gaussian contraction contribution is invalid")
+            raise _validation_error("Gaussian contraction contribution is invalid")
         return self
 
 
@@ -272,14 +274,14 @@ class GaussianPolynomialMomentResult(StrictModel):
     @model_validator(mode="after")
     def bind_complete_contraction_ledger(self) -> Self:
         if self.expanded_monomial_count != len(self.contractions):
-            raise ValueError("expanded monomial count does not match the ledger")
+            raise _validation_error("expanded monomial count does not match the ledger")
         exponents = tuple(item.exponents for item in self.contractions)
         if any(left >= right for left, right in pairwise(exponents)):
-            raise ValueError(
+            raise _validation_error(
                 "Gaussian contractions must use strictly increasing exponent order"
             )
         if any(len(item) != len(exponents[0]) for item in exponents):
-            raise ValueError("Gaussian contraction dimensions disagree")
+            raise _validation_error("Gaussian contraction dimensions disagree")
         total_real = Fraction()
         total_imaginary = Fraction()
         for item in self.contractions:
@@ -287,7 +289,9 @@ class GaussianPolynomialMomentResult(StrictModel):
             total_real += real
             total_imaginary += imaginary
         if self.moment.as_fractions() != (total_real, total_imaginary):
-            raise ValueError("Gaussian polynomial moment does not match its ledger")
+            raise _validation_error(
+                "Gaussian polynomial moment does not match its ledger"
+            )
         return self
 
 
@@ -298,14 +302,18 @@ class GraphReliabilityEdgeProbability(StrictModel):
     @model_validator(mode="after")
     def require_canonical_bounded_probability(self) -> Self:
         if len(self.edge) != 2 or self.edge[0] >= self.edge[1]:
-            raise ValueError("reliability edge must contain two ordered vertices")
+            raise _validation_error(
+                "reliability edge must contain two ordered vertices"
+            )
         require_bounded_rational(
             self.open_probability,
             max_digits=MAX_INPUT_RATIONAL_DIGITS,
             label="graph reliability edge probability",
         )
         if not 0 <= self.open_probability.as_fraction() <= 1:
-            raise ValueError("graph reliability probabilities must lie in [0, 1]")
+            raise _validation_error(
+                "graph reliability probabilities must lie in [0, 1]"
+            )
         return self
 
 
@@ -320,17 +328,17 @@ class GraphConnectionProbabilityRequest(StrictModel):
     @model_validator(mode="after")
     def require_bounded_fully_weighted_graph(self) -> Self:
         if len(self.graph.vertices) > MAX_GRAPH_RELIABILITY_VERTICES:
-            raise ValueError(
+            raise _validation_error(
                 "graph reliability exceeds the "
                 f"{MAX_GRAPH_RELIABILITY_VERTICES}-vertex bound"
             )
         if len(self.graph.edges) > MAX_GRAPH_RELIABILITY_EDGES:
-            raise ValueError(
+            raise _validation_error(
                 "graph reliability exceeds the "
                 f"{MAX_GRAPH_RELIABILITY_EDGES}-edge bound"
             )
         if tuple(item.edge for item in self.edge_probabilities) != self.graph.edges:
-            raise ValueError(
+            raise _validation_error(
                 "edge probabilities must cover graph edges in canonical graph order"
             )
         if (
@@ -338,7 +346,9 @@ class GraphConnectionProbabilityRequest(StrictModel):
             or self.terminals[0] == self.terminals[1]
             or any(terminal not in self.graph.vertices for terminal in self.terminals)
         ):
-            raise ValueError("terminals must be two distinct declared graph vertices")
+            raise _validation_error(
+                "terminals must be two distinct declared graph vertices"
+            )
         edge_count = len(self.graph.edges)
         state_count = 1 << edge_count
         repeated_edge_bytes = (
@@ -385,7 +395,7 @@ class GraphConnectionProbabilityRequest(StrictModel):
             + 16 * 1024
         )
         if estimated_ledger_bytes > MAX_GRAPH_RELIABILITY_LEDGER_BYTES:
-            raise ValueError(
+            raise _validation_error(
                 "graph reliability request can exceed the complete ledger "
                 f"budget of {MAX_GRAPH_RELIABILITY_LEDGER_BYTES} bytes"
             )
@@ -403,7 +413,9 @@ class GraphReliabilityState(StrictModel):
     @model_validator(mode="after")
     def require_bounded_probability(self) -> Self:
         if not 0 <= self.state_probability.as_fraction() <= 1:
-            raise ValueError("graph reliability state probability must lie in [0, 1]")
+            raise _validation_error(
+                "graph reliability state probability must lie in [0, 1]"
+            )
         return self
 
 
@@ -428,13 +440,15 @@ class GraphConnectionProbabilityResult(StrictModel):
     @model_validator(mode="after")
     def bind_complete_state_mass(self) -> Self:
         if self.visited_states != 1 << self.edge_count:
-            raise ValueError("visited state count is not the full edge powerset")
+            raise _validation_error("visited state count is not the full edge powerset")
         if len(self.states) != self.visited_states:
-            raise ValueError("state ledger length does not match visited states")
+            raise _validation_error("state ledger length does not match visited states")
         if tuple(item.state_index for item in self.states) != tuple(
             range(self.visited_states)
         ):
-            raise ValueError("state ledger indices must be complete and canonical")
+            raise _validation_error(
+                "state ledger indices must be complete and canonical"
+            )
         total = sum(
             (item.state_probability.as_fraction() for item in self.states),
             start=Fraction(),
@@ -448,9 +462,13 @@ class GraphConnectionProbabilityResult(StrictModel):
             start=Fraction(),
         )
         if total != 1:
-            raise ValueError("graph reliability state probabilities must sum to one")
+            raise _validation_error(
+                "graph reliability state probabilities must sum to one"
+            )
         if self.connection_probability.as_fraction() != connected:
-            raise ValueError("connection probability does not match connected states")
+            raise _validation_error(
+                "connection probability does not match connected states"
+            )
         return self
 
 
@@ -463,14 +481,14 @@ class DirectedBondReliabilityArcProbability(StrictModel):
     @model_validator(mode="after")
     def require_bounded_directed_arc_probability(self) -> Self:
         if self.arc[0] == self.arc[1]:
-            raise ValueError("directed reliability arcs must not be self-loops")
+            raise _validation_error("directed reliability arcs must not be self-loops")
         require_bounded_rational(
             self.open_probability,
             max_digits=MAX_INPUT_RATIONAL_DIGITS,
             label="directed bond reliability arc probability",
         )
         if not 0 <= self.open_probability.as_fraction() <= 1:
-            raise ValueError(
+            raise _validation_error(
                 "directed bond reliability probabilities must lie in [0, 1]"
             )
         return self
@@ -511,7 +529,7 @@ class DirectedBondConnectionProbabilitySource(StrictModel):
     @model_validator(mode="after")
     def require_bounded_fully_weighted_directed_graph(self) -> Self:
         if len(self.graph.edges) > MAX_DIRECTED_BOND_RELIABILITY_ARCS:
-            raise ValueError(
+            raise _validation_error(
                 "directed bond reliability exceeds the "
                 f"{MAX_DIRECTED_BOND_RELIABILITY_ARCS}-arc bound"
             )
@@ -519,7 +537,7 @@ class DirectedBondConnectionProbabilitySource(StrictModel):
             vertex < 0 or vertex >= self.graph.vertex_count
             for vertex in (self.source, self.target)
         ):
-            raise ValueError(
+            raise _validation_error(
                 "source and target must be distinct declared graph vertices"
             )
 
@@ -529,7 +547,7 @@ class DirectedBondConnectionProbabilitySource(StrictModel):
         if len(probabilities_by_arc) != len(self.arc_probabilities) or frozenset(
             probabilities_by_arc
         ) != frozenset(self.graph.edges):
-            raise ValueError(
+            raise _validation_error(
                 "arc probabilities must contain every directed graph arc exactly once"
             )
 
@@ -560,7 +578,7 @@ class DirectedBondConnectionProbabilitySource(StrictModel):
             2 * state_count * (5 * arc_count + 4 * self.graph.vertex_count + 3) + 8
         )
         if logical_work > MAX_DIRECTED_BOND_RELIABILITY_LOGICAL_WORK:
-            raise ValueError(
+            raise _validation_error(
                 "directed bond reliability exceeds the complete producer and "
                 "replay work budget"
             )
@@ -630,7 +648,7 @@ class DirectedBondConnectionProbabilitySource(StrictModel):
             + 16 * 1024
         )
         if estimated_ledger_bytes > MAX_DIRECTED_BOND_RELIABILITY_LEDGER_BYTES:
-            raise ValueError(
+            raise _validation_error(
                 "directed bond reliability request can exceed the complete ledger "
                 f"budget of {MAX_DIRECTED_BOND_RELIABILITY_LEDGER_BYTES} bytes"
             )
@@ -706,7 +724,7 @@ class DirectedBondReliabilityState(StrictModel):
             label="directed bond reliability state probability",
         )
         if not 0 <= self.state_probability.as_fraction() <= 1:
-            raise ValueError(
+            raise _validation_error(
                 "directed bond reliability state probability must lie in [0, 1]"
             )
         return self
@@ -750,27 +768,35 @@ class DirectedBondConnectionProbabilityResult(StrictModel):
             _directed_bond_connection_probability_data(self.source)
         )
         if self.arc_count != len(self.source.graph.edges):
-            raise ValueError("arc_count must match the source graph")
+            raise _validation_error("arc_count must match the source graph")
         if self.visited_states != 1 << self.arc_count:
-            raise ValueError("visited state count is not the full arc powerset")
+            raise _validation_error("visited state count is not the full arc powerset")
         if len(self.states) != self.visited_states:
-            raise ValueError("state ledger length does not match visited states")
+            raise _validation_error("state ledger length does not match visited states")
         if tuple(item.state_index for item in self.states) != tuple(
             range(self.visited_states)
         ):
-            raise ValueError("state ledger indices must be complete and canonical")
+            raise _validation_error(
+                "state ledger indices must be complete and canonical"
+            )
         if len(expected_states) != len(self.states):
-            raise ValueError("state ledger length does not match source replay")
+            raise _validation_error("state ledger length does not match source replay")
         for state, expected in zip(self.states, expected_states, strict=True):
             open_arcs, reaches_target, state_probability = expected
             if state.open_arcs != open_arcs:
-                raise ValueError("state open arcs do not match source subset")
+                raise _validation_error("state open arcs do not match source subset")
             if state.source_reaches_target != reaches_target:
-                raise ValueError("state reachability does not match source subset")
+                raise _validation_error(
+                    "state reachability does not match source subset"
+                )
             if state.state_probability.as_fraction() != state_probability:
-                raise ValueError("state probability does not match source subset")
+                raise _validation_error(
+                    "state probability does not match source subset"
+                )
         if self.connection_probability.as_fraction() != connection_probability:
-            raise ValueError("connection probability does not match source replay")
+            raise _validation_error(
+                "connection probability does not match source replay"
+            )
         return self
 
 
@@ -791,7 +817,9 @@ class FiniteDistributionAtom(StrictModel):
             label="finite-distribution probability",
         )
         if self.probability.as_fraction() < 0:
-            raise ValueError("finite-distribution probabilities must be nonnegative")
+            raise _validation_error(
+                "finite-distribution probabilities must be nonnegative"
+            )
         return self
 
 
@@ -814,7 +842,9 @@ class FiniteRationalDistribution(StrictModel):
             )
             != 1
         ):
-            raise ValueError("finite-distribution probabilities must sum exactly to 1")
+            raise _validation_error(
+                "finite-distribution probabilities must sum exactly to 1"
+            )
         return self
 
 
@@ -825,9 +855,9 @@ def require_input_distribution(
 ) -> tuple[Fraction, ...]:
     values = tuple(atom.value.as_fraction() for atom in atoms)
     if len(values) != len(set(values)):
-        raise ValueError("finite-distribution support values must be unique")
+        raise _validation_error("finite-distribution support values must be unique")
     if require_canonical and any(left >= right for left, right in pairwise(values)):
-        raise ValueError(
+        raise _validation_error(
             "finite-distribution support values must be strictly increasing"
         )
     for atom in atoms:
@@ -848,7 +878,9 @@ def require_input_distribution(
         )
         != 1
     ):
-        raise ValueError("finite-distribution probabilities must sum exactly to 1")
+        raise _validation_error(
+            "finite-distribution probabilities must sum exactly to 1"
+        )
     return values
 
 
@@ -886,13 +918,15 @@ class FiniteRawMomentResult(StrictModel):
         for item in self.contributions:
             expected_power = item.value.as_fraction() ** self.order
             if item.powered_value.as_fraction() != expected_power:
-                raise ValueError("moment powered value does not match its atom")
+                raise _validation_error("moment powered value does not match its atom")
             expected_contribution = item.probability.as_fraction() * expected_power
             if item.contribution.as_fraction() != expected_contribution:
-                raise ValueError("moment contribution does not match its atom")
+                raise _validation_error("moment contribution does not match its atom")
             total += expected_contribution
         if self.moment.as_fraction() != total:
-            raise ValueError("moment does not equal the sum of atom contributions")
+            raise _validation_error(
+                "moment does not equal the sum of atom contributions"
+            )
         return self
 
 
@@ -921,7 +955,9 @@ class FiniteEventRequest(StrictModel):
                 label="finite event value",
             )
         if not set(event).issubset(support):
-            raise ValueError("finite event values must belong to the distribution")
+            raise _validation_error(
+                "finite event values must belong to the distribution"
+            )
         event_mass = sum(
             (
                 atom.probability.as_fraction()
@@ -953,7 +989,9 @@ class FiniteConditionRequest(FiniteEventRequest):
             start=Fraction(),
         )
         if mass <= 0:
-            raise ValueError("conditioning requires a positive-mass finite event")
+            raise _validation_error(
+                "conditioning requires a positive-mass finite event"
+            )
         return self
 
 
@@ -974,7 +1012,9 @@ class FiniteEventProbabilityResult(StrictModel):
             start=Fraction(),
         )
         if self.event_probability.as_fraction() != total:
-            raise ValueError("event probability does not equal selected atom mass")
+            raise _validation_error(
+                "event probability does not equal selected atom mass"
+            )
         return self
 
 
@@ -999,7 +1039,9 @@ class FiniteConditionalContribution(StrictModel):
             self.source_probability.as_fraction() < 0
             or self.conditioned_probability.as_fraction() < 0
         ):
-            raise ValueError("conditional contribution masses must be nonnegative")
+            raise _validation_error(
+                "conditional contribution masses must be nonnegative"
+            )
         return self
 
 
@@ -1015,7 +1057,9 @@ class FiniteConditionResult(StrictModel):
     def bind_normalized_contributions(self) -> Self:
         event_probability = self.event_probability.as_fraction()
         if event_probability <= 0:
-            raise ValueError("conditional distribution requires positive event mass")
+            raise _validation_error(
+                "conditional distribution requires positive event mass"
+            )
         values = tuple(item.value for item in self.contributions)
         _require_strictly_increasing(
             values,
@@ -1027,17 +1071,21 @@ class FiniteConditionResult(StrictModel):
             source = item.source_probability.as_fraction()
             conditioned = item.conditioned_probability.as_fraction()
             if source < 0 or conditioned != source / event_probability:
-                raise ValueError("conditioned probability does not match source mass")
+                raise _validation_error(
+                    "conditioned probability does not match source mass"
+                )
             source_total += source
             expected_atoms.append((item.value.as_fraction(), conditioned))
         if source_total != event_probability:
-            raise ValueError("conditional contributions do not equal event mass")
+            raise _validation_error("conditional contributions do not equal event mass")
         actual_atoms = [
             (atom.value.as_fraction(), atom.probability.as_fraction())
             for atom in self.distribution.atoms
         ]
         if actual_atoms != expected_atoms:
-            raise ValueError("conditional distribution does not match contributions")
+            raise _validation_error(
+                "conditional distribution does not match contributions"
+            )
         return self
 
 
@@ -1061,7 +1109,7 @@ class FinitePushforwardRequest(StrictModel):
         )
         mapping_sources = tuple(item.source.as_fraction() for item in self.mapping)
         if mapping_sources != source_values:
-            raise ValueError(
+            raise _validation_error(
                 "pushforward mapping must cover each source atom in canonical order"
             )
         aggregated: dict[Fraction, Fraction] = {}
@@ -1112,7 +1160,7 @@ class FinitePushforwardContribution(StrictModel):
                 label=label,
             )
         if self.probability.as_fraction() < 0:
-            raise ValueError("pushforward contribution mass must be nonnegative")
+            raise _validation_error("pushforward contribution mass must be nonnegative")
         return self
 
 
@@ -1140,7 +1188,9 @@ class FinitePushforwardResult(StrictModel):
             for atom in self.distribution.atoms
         ]
         if actual != expected:
-            raise ValueError("pushforward distribution does not match contributions")
+            raise _validation_error(
+                "pushforward distribution does not match contributions"
+            )
         return self
 
 
@@ -1154,7 +1204,7 @@ class FiniteConvolutionRequest(StrictModel):
         require_input_distribution(self.right.atoms, require_canonical=True)
         pair_count = len(self.left.atoms) * len(self.right.atoms)
         if pair_count > MAX_FINITE_CONVOLUTION_PAIRS:
-            raise ValueError(
+            raise _validation_error(
                 "finite convolution exceeds the "
                 f"{MAX_FINITE_CONVOLUTION_PAIRS}-pair bound"
             )
@@ -1167,7 +1217,7 @@ class FiniteConvolutionRequest(StrictModel):
                 )
                 aggregated[value] = aggregated.get(value, Fraction()) + probability
         if len(aggregated) > MAX_FINITE_DISTRIBUTION_ATOMS:
-            raise ValueError(
+            raise _validation_error(
                 "finite convolution exceeds the "
                 f"{MAX_FINITE_DISTRIBUTION_ATOMS}-atom output bound"
             )
@@ -1205,7 +1255,7 @@ class FiniteConvolutionContribution(StrictModel):
                 label=label,
             )
         if self.probability.as_fraction() < 0:
-            raise ValueError("convolution contribution mass must be nonnegative")
+            raise _validation_error("convolution contribution mass must be nonnegative")
         return self
 
 
@@ -1226,13 +1276,13 @@ class FiniteConvolutionResult(StrictModel):
             right = item.right_value.as_fraction()
             pair = (left, right)
             if previous is not None and pair <= previous:
-                raise ValueError(
+                raise _validation_error(
                     "convolution contributions must use canonical pair order"
                 )
             previous = pair
             value = item.sum_value.as_fraction()
             if value != left + right:
-                raise ValueError("convolution sum value does not match its pair")
+                raise _validation_error("convolution sum value does not match its pair")
             probability = item.probability.as_fraction()
             aggregated[value] = aggregated.get(value, Fraction()) + probability
         expected = sorted(aggregated.items())
@@ -1241,7 +1291,7 @@ class FiniteConvolutionResult(StrictModel):
             for atom in self.distribution.atoms
         ]
         if actual != expected:
-            raise ValueError(
+            raise _validation_error(
                 "convolution distribution does not match pair contributions"
             )
         return self

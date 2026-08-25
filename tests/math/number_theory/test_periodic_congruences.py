@@ -9,7 +9,7 @@ from collections.abc import Iterator, Mapping
 from fractions import Fraction
 
 import pytest
-from pydantic import ValidationError
+from tests.math.number_theory._validation import expect_validation
 
 from jacobian.math.number_theory._periodic_kernel import (
     require_admitted_periodic_source,
@@ -342,7 +342,7 @@ def test_sparse_lift_work_boundary_is_exact() -> None:
     assert prime_sum * admitted_scale <= MAX_SPARSE_LIFTED_ROWS
     assert len(admitted.occupied_residues) == 424 * admitted_scale
 
-    with pytest.raises(ValidationError, match="sparse lifting requires"):
+    with expect_validation("number_theory."):
         PeriodicCongruenceUnionRequest.model_validate(payload(rejected_scale))
 
 
@@ -382,17 +382,17 @@ def test_measure_result_rejects_independent_source_and_conclusion_mutations() ->
 
     bad_count = copy.deepcopy(serialized)
     bad_count["occupied_count"] = "3"
-    with pytest.raises(ValidationError, match="occupied count"):
+    with expect_validation("number_theory."):
         PeriodicCongruenceUnionMeasureResult.model_validate(bad_count)
 
     bad_density = copy.deepcopy(serialized)
     bad_density["density"] = {"num": "1", "den": "5"}
-    with pytest.raises(ValidationError, match="density"):
+    with expect_validation("number_theory."):
         PeriodicCongruenceUnionMeasureResult.model_validate(bad_density)
 
     bad_source = copy.deepcopy(serialized)
     bad_source["source"]["complement"] = True
-    with pytest.raises(ValidationError, match="occupied count"):
+    with expect_validation("number_theory."):
         PeriodicCongruenceUnionMeasureResult.model_validate(bad_source)
 
 
@@ -408,7 +408,7 @@ def test_profile_result_rejects_omitted_or_forged_residues() -> None:
     for residues in (["0"], ["0", "1", "2"]):
         forged = copy.deepcopy(serialized)
         forged["occupied_residues"] = residues
-        with pytest.raises(ValidationError, match="every satisfying residue"):
+        with expect_validation("number_theory."):
             PeriodicCongruenceUnionProfileResult.model_validate(forged)
 
 
@@ -423,22 +423,22 @@ def test_profile_result_rejects_independent_source_and_measure_mutations() -> No
 
     bad_source = copy.deepcopy(serialized)
     bad_source["source"]["subsets"][0]["residues"] = ["1", "3"]
-    with pytest.raises(ValidationError, match="every satisfying residue"):
+    with expect_validation("number_theory."):
         PeriodicCongruenceUnionProfileResult.model_validate(bad_source)
 
     bad_period = copy.deepcopy(serialized)
     bad_period["common_period"] = "6"
-    with pytest.raises(ValidationError, match="common period"):
+    with expect_validation("number_theory."):
         PeriodicCongruenceUnionProfileResult.model_validate(bad_period)
 
     bad_count = copy.deepcopy(serialized)
     bad_count["occupied_count"] = "3"
-    with pytest.raises(ValidationError, match="occupied count"):
+    with expect_validation("number_theory."):
         PeriodicCongruenceUnionProfileResult.model_validate(bad_count)
 
     bad_density = copy.deepcopy(serialized)
     bad_density["density"] = {"num": "1", "den": "5"}
-    with pytest.raises(ValidationError, match="density"):
+    with expect_validation("number_theory."):
         PeriodicCongruenceUnionProfileResult.model_validate(bad_density)
 
 
@@ -523,7 +523,7 @@ def test_measure_accepts_exact_integer_digit_boundary() -> None:
 
 
 def test_rejects_integer_and_lcm_above_exact_result_digit_bound() -> None:
-    with pytest.raises(ValidationError, match="at most 256"):
+    with expect_validation("number_theory."):
         PeriodicCongruenceUnionRequest.model_validate(
             {
                 "subsets": [
@@ -532,7 +532,7 @@ def test_rejects_integer_and_lcm_above_exact_result_digit_bound() -> None:
             }
         )
 
-    with pytest.raises(ValidationError, match="common period"):
+    with expect_validation("number_theory."):
         PeriodicCongruenceUnionRequest.model_validate(
             {
                 "subsets": [
@@ -557,7 +557,7 @@ def test_source_row_and_family_boundaries_are_exact() -> None:
     )
     assert boundary.occupied_count == str(MAX_PERIODIC_SOURCE_ROWS)
 
-    with pytest.raises(ValidationError, match="4096"):
+    with expect_validation("number_theory."):
         PeriodicCongruenceUnionRequest.model_validate(
             {
                 "subsets": [
@@ -574,7 +574,7 @@ def test_source_row_and_family_boundaries_are_exact() -> None:
         {"modulus": "1", "residues": []} for _ in range(MAX_PERIODIC_FAMILY_SIZE)
     ]
     PeriodicCongruenceUnionRequest.model_validate({"subsets": family_boundary})
-    with pytest.raises(ValidationError, match="64"):
+    with expect_validation("number_theory."):
         PeriodicCongruenceUnionRequest.model_validate(
             {"subsets": [*family_boundary, {"modulus": "1", "residues": []}]}
         )
@@ -611,9 +611,7 @@ def test_aggregate_row_bound_rejects_before_constructing_row_models() -> None:
         "complement": False,
     }
 
-    with pytest.raises(
-        ValidationError, match=f"{MAX_PERIODIC_SOURCE_ROWS}-residue-row"
-    ):
+    with expect_validation("number_theory."):
         PeriodicCongruenceUnionRequest.model_validate(payload)
 
 
@@ -638,7 +636,7 @@ def test_oversized_family_is_rejected_without_normalizing_entries() -> None:
         "complement": False,
     }
 
-    with pytest.raises(ValidationError, match="family exceeds the 64-subset bound"):
+    with expect_validation("number_theory."):
         PeriodicCongruenceUnionProfileRequest.model_validate(payload)
 
 
@@ -653,7 +651,7 @@ def test_constructor_path_rejects_oversized_families_and_raw_rows() -> None:
     accepted = PeriodicCongruenceUnionRequest(subsets=boundary_rows, complement=False)
     assert len(accepted.normalized_source().subsets) == 1
 
-    with pytest.raises(ValidationError, match="family exceeds the 64-subset bound"):
+    with expect_validation("number_theory."):
         PeriodicCongruenceUnionRequest(
             subsets=(
                 *boundary_rows,
@@ -662,7 +660,7 @@ def test_constructor_path_rejects_oversized_families_and_raw_rows() -> None:
             complement=False,
         )
 
-    with pytest.raises(ValidationError, match="4096-residue-row"):
+    with expect_validation("number_theory."):
         PeriodicCongruenceUnionRequest(
             subsets=(
                 PeriodicCongruenceSubsetInput(
@@ -706,7 +704,7 @@ def test_materialized_period_boundary_is_separate_from_measure() -> None:
         "complement": True,
     }
     assert _measure(measure_only).occupied_count == str(MAX_MATERIALIZED_RESIDUES + 1)
-    with pytest.raises(ValidationError, match="complemented profile common period"):
+    with expect_validation("number_theory."):
         PeriodicCongruenceUnionProfileRequest.model_validate(measure_only)
 
 
@@ -727,7 +725,7 @@ def test_full_subset_shortcuts_count_and_complement_materialization() -> None:
     assert empty_complement.occupied_count == "0"
     assert empty_complement.density.as_fraction() == 0
 
-    with pytest.raises(ValidationError, match="materialized full union"):
+    with expect_validation("number_theory."):
         PeriodicCongruenceUnionProfileRequest.model_validate(
             {"subsets": source, "complement": False}
         )
@@ -754,7 +752,7 @@ def test_materialized_union_row_bound_is_checked_before_lifting() -> None:
         ],
         "complement": False,
     }
-    with pytest.raises(ValidationError, match="materialized union"):
+    with expect_validation("number_theory."):
         PeriodicCongruenceUnionProfileRequest.model_validate(rejected_payload)
 
 
@@ -770,7 +768,7 @@ def test_profile_accounts_for_retained_source_and_wide_residue_output_bytes() ->
     }
 
     assert _measure(payload).occupied_count == str(output_rows)
-    with pytest.raises(ValidationError, match="canonical output budget"):
+    with expect_validation("number_theory."):
         PeriodicCongruenceUnionProfileRequest.model_validate(payload)
 
 
@@ -789,7 +787,7 @@ def test_compressed_intersection_work_boundary_rejects_before_backend() -> None:
 
     rejected_payload = copy.deepcopy(boundary_payload)
     rejected_payload["subsets"].append({"modulus": str(primes[-1]), "residues": ["0"]})
-    with pytest.raises(ValidationError, match="all exact execution regimes"):
+    with expect_validation("number_theory."):
         PeriodicCongruenceUnionRequest.model_validate(rejected_payload)
 
 

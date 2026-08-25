@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
+from tests.math._real_algebraic_support import real_algebraic_validation_error
 
 from jacobian.math.real_algebraic import (
     RealAlgebraicOrderValue,
@@ -59,14 +60,14 @@ def test_order_within_one_minimal_polynomial_uses_real_root_indices() -> None:
 def test_noncanonical_minimal_polynomials_are_rejected(
     polynomial: tuple[str, ...], message: str
 ) -> None:
-    with pytest.raises(ValidationError, match=message):
+    with real_algebraic_validation_error():
         _value(polynomial, 0)
 
 
 def test_value_rejects_a_nonreal_or_missing_root() -> None:
-    with pytest.raises(ValidationError, match="existing real root"):
+    with real_algebraic_validation_error():
         _value(("1", "0", "1"), 0)
-    with pytest.raises(ValidationError, match="existing real root"):
+    with real_algebraic_validation_error():
         _value(("1", "0", "-2"), 2)
 
 
@@ -78,7 +79,7 @@ def test_degree_and_coefficient_boundaries_are_closed() -> None:
     assert len(thousand_digit_leading.polynomial[0]) == 1_000
     with pytest.raises(ValidationError):
         _value(("1",) + ("0",) * 8 + ("-2",), 1)
-    with pytest.raises(ValidationError, match="1000-digit bound"):
+    with real_algebraic_validation_error():
         _value(("1" + "0" * 1_000, "1"), 0)
 
 
@@ -89,7 +90,7 @@ def test_order_result_rejects_forged_conclusion_or_evidence() -> None:
     )
     forged_order = result.model_dump()
     forged_order["order"] = "GT"
-    with pytest.raises(ValidationError, match="order must match"):
+    with real_algebraic_validation_error():
         RealAlgebraicOrderValue.model_validate(forged_order)
 
     forged_interval = result.model_dump()
@@ -97,7 +98,7 @@ def test_order_result_rejects_forged_conclusion_or_evidence() -> None:
         "num": "0",
         "den": "1",
     }
-    with pytest.raises(ValidationError, match="left isolating interval"):
+    with real_algebraic_validation_error():
         RealAlgebraicOrderValue.model_validate(forged_interval)
 
 

@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import unicodedata
+from collections.abc import Iterable
 from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any, NoReturn
@@ -229,6 +230,19 @@ def encode_strict_json(
     if len(encoded) > active_limits.max_output_bytes:
         raise CanonicalizationError("JSON exceeds the configured size limit")
     return encoded
+
+
+def strict_json_object_size(fields: Iterable[tuple[str, int]]) -> int:
+    """Return the exact encoded size of an object from its field-value sizes."""
+
+    items = tuple(fields)
+    return (
+        2
+        + max(len(items) - 1, 0)
+        + sum(
+            len(encode_strict_json(name)) + 1 + value_size for name, value_size in items
+        )
+    )
 
 
 def _normalize_object(

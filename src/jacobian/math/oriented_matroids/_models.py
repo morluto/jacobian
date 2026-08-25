@@ -7,6 +7,7 @@ from itertools import combinations
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
@@ -26,6 +27,12 @@ MAX_EXECUTION_B2_EXCHANGE_INSTANCES = (
     SOURCE_BOUND_REPLAY_PASSES * MAX_B2_EXCHANGE_INSTANCES
 )
 """The work envelope charged by one public checker invocation."""
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by oriented-matroid contracts."""
+
+    return PydanticCustomError(f"oriented_matroid.{reason}", message)
 
 
 class Rank3ChirotopeEntry(StrictModel):
@@ -75,15 +82,17 @@ class UniformRank3Chirotope(StrictModel):
     @model_validator(mode="after")
     def require_complete_canonical_table(self) -> Self:
         if self.ground_size**6 > MAX_B2_EXCHANGE_INSTANCES:
-            raise ValueError(
-                "ground_size exceeds the one-scan B2 exchange work envelope"
+            raise _validation_error(
+                "canonical_table.work_bound",
+                "ground_size exceeds the one-scan B2 exchange work envelope",
             )
         expected = tuple(combinations(range(self.ground_size), 3))
         actual = tuple(entry.triple for entry in self.entries)
         if actual != expected:
-            raise ValueError(
+            raise _validation_error(
+                "canonical_table.entries",
                 "entries must be the complete lexicographic sequence of increasing "
-                "triples for ground_size"
+                "triples for ground_size",
             )
         return self
 
@@ -113,11 +122,17 @@ class B2Obstruction(StrictModel):
         if self.premise_products != tuple(
             left * right for left, right in self.premise_factors
         ):
-            raise ValueError("premise_products must match premise_factors")
+            raise _validation_error(
+                "b2_obstruction.premise_products",
+                "premise_products must match premise_factors",
+            )
         if self.conclusion_product != (
             self.conclusion_factors[0] * self.conclusion_factors[1]
         ):
-            raise ValueError("conclusion_product must match conclusion_factors")
+            raise _validation_error(
+                "b2_obstruction.conclusion_product",
+                "conclusion_product must match conclusion_factors",
+            )
         return self
 
 
@@ -153,8 +168,9 @@ class ChirotopeCheckResult(StrictModel):
 
         expected = _expected_result(ChirotopeCheckRequest(chirotope=self.chirotope))
         if self != expected:
-            raise ValueError(
-                "result must be the exact axiom replay of the retained chirotope"
+            raise _validation_error(
+                "result.replay",
+                "result must be the exact axiom replay of the retained chirotope",
             )
         return self
 

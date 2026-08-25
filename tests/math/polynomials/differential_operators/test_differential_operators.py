@@ -9,7 +9,7 @@ from fractions import Fraction
 
 import pytest
 import sympy
-from pydantic import ValidationError
+from tests.math.polynomials._support import polynomial_validation_error
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
@@ -221,13 +221,13 @@ def test_expanding_iterates_gate_on_derived_support_and_growth() -> None:
     )
 
     expanding = _operator(variables, {(1,): 1, (0,): 1})
-    with pytest.raises(ValidationError, match="expanded-support budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=source,
             operator=expanding,
             iterations=tall_iterations,
         )
-    with pytest.raises(ValidationError, match="expanded-support budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=source,
             operator=expanding,
@@ -336,7 +336,7 @@ def test_scalar_iterate_growth_is_bounded_by_the_coefficient_budget() -> None:
     variables = ("x",)
     scaling = _operator(variables, {(0,): 2})
 
-    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=_polynomial(variables, {(0,): 1}),
             operator=scaling,
@@ -550,7 +550,7 @@ def test_merged_unit_paths_still_gate_at_the_coefficient_budget() -> None:
     # Under 1 + ∂x the monomials x·y and y both contribute a unit-height
     # copy to the output monomial y, so its merged coefficient 12·10^32767
     # carries 32,769 digits even though each path alone preserves height.
-    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=_polynomial(variables, {(1, 1): tall, (0, 1): tall}),
             operator=_operator(variables, {(0, 0): 1, (1, 0): 1}),
@@ -584,7 +584,7 @@ def test_growing_derivatives_still_gate_at_the_coefficient_budget() -> None:
 
     # Differentiating x^11 multiplies the boundary height by 11, producing a
     # 32,769-digit coefficient that exceeds the budget.
-    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=boundary_source(11),
             operator=_operator(variables, {(1,): 1}),
@@ -593,7 +593,7 @@ def test_growing_derivatives_still_gate_at_the_coefficient_budget() -> None:
 
     # A coefficient-10 derivative scales the surviving height to 10^32768,
     # whose 32,769 digits also exceed the budget.
-    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=boundary_source(1),
             operator=_operator(variables, {(1,): 10}),
@@ -611,7 +611,7 @@ def test_nonunit_scalar_growth_still_gates_at_the_coefficient_budget() -> None:
         ),
     )
 
-    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=source,
             operator=_operator(variables, {(0,): 11}),
@@ -667,7 +667,7 @@ def test_multinomial_path_multiplicity_gates_the_coefficient_bound() -> None:
         ),
     )
 
-    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=source,
             operator=operator,
@@ -857,7 +857,7 @@ def test_tall_source_coefficients_are_admitted_by_derived_growth() -> None:
     assert reviewer.output == _polynomial(variables, {(0,): 10**299})
     assert reviewer.matches_expected is True
 
-    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=_polynomial(
                 variables,
@@ -958,7 +958,7 @@ def test_degenerate_shortcuts_still_honor_the_retained_byte_budget() -> None:
     )
     assert admitted.is_zero is True
 
-    with pytest.raises(ValidationError, match="serialized-output budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=oversized_source(300),
             operator=_operator(("x",), {}),
@@ -970,7 +970,7 @@ def test_degenerate_shortcuts_still_honor_the_retained_byte_budget() -> None:
 
 
 def test_operator_and_polynomial_axes_must_match_exactly() -> None:
-    with pytest.raises(ValidationError, match="same ordered variables"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
             operator=_operator(("y", "x"), {(1, 0): 1}),
@@ -978,7 +978,7 @@ def test_operator_and_polynomial_axes_must_match_exactly() -> None:
 
 
 def test_expected_polynomial_uses_the_same_axis() -> None:
-    with pytest.raises(ValidationError, match="expected polynomial"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
             operator=_operator(("x", "y"), {(1, 0): 1}),
@@ -1022,7 +1022,7 @@ def test_expected_retention_still_honors_the_retained_byte_budget() -> None:
         ),
     )
 
-    with pytest.raises(ValidationError, match="serialized-output budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=_polynomial(("x",), {(1,): 1}),
             operator=_operator(("x",), {(1,): 1}),
@@ -1054,7 +1054,7 @@ def test_operator_terms_must_be_canonical(
     terms: tuple[DifferentialOperatorTerm, ...],
     message: str,
 ) -> None:
-    with pytest.raises(ValidationError, match=message):
+    with polynomial_validation_error():
         ConstantCoefficientDifferentialOperator(
             variables=("x", "y"),
             terms=terms,
@@ -1062,7 +1062,7 @@ def test_operator_terms_must_be_canonical(
 
 
 def test_operator_rejects_zero_coefficient_terms() -> None:
-    with pytest.raises(ValidationError, match="zero differential-operator"):
+    with polynomial_validation_error():
         DifferentialOperatorTerm(coefficient=_rational(0), orders=(1, 0))
 
 
@@ -1131,7 +1131,7 @@ def test_orders_stay_inside_the_interoperable_integer_range() -> None:
         orders=((1 << 53) - 1,),
     )
     assert boundary.orders == ((1 << 53) - 1,)
-    with pytest.raises(ValidationError, match="less than or equal"):
+    with polynomial_validation_error():
         DifferentialOperatorTerm(
             coefficient=_rational(1),
             orders=((1 << 53),),
@@ -1195,7 +1195,7 @@ def test_dense_source_boundary_follows_the_candidate_support_budget() -> None:
         DifferentialOperatorApplyResult,
     )
 
-    with pytest.raises(ValidationError, match="candidate-term budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=_polynomial(
                 variables,
@@ -1266,7 +1266,7 @@ def test_full_width_operators_follow_the_shared_term_representation() -> None:
         full_width,
     ) == _polynomial(variables, {})
 
-    with pytest.raises(ValidationError, match="4096"):
+    with polynomial_validation_error():
         ConstantCoefficientDifferentialOperator(
             variables=variables,
             terms=tuple(
@@ -1279,7 +1279,7 @@ def test_full_width_operators_follow_the_shared_term_representation() -> None:
 def test_tall_order_growth_gates_on_the_coefficient_budget() -> None:
     edge = MAX_POLYNOMIAL_EXPONENT
 
-    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=_polynomial(("x",), {(edge,): 1}),
             operator=_operator(("x",), {(edge,): 1}),
@@ -1301,7 +1301,7 @@ def test_sparse_power_work_boundary_is_admitted_then_rejected() -> None:
         DifferentialOperatorApplyResult,
     )
 
-    with pytest.raises(ValidationError, match="deterministic work budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=source,
             operator=operator,
@@ -1339,7 +1339,7 @@ def test_candidate_output_term_boundary_is_admitted_then_rejected() -> None:
     result = compute_differential_operator_application(accepted)
     assert result.output == _polynomial(variables, expected_terms)
 
-    with pytest.raises(ValidationError, match="candidate-term budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=source(1_025),
             operator=operator,
@@ -1417,7 +1417,7 @@ def test_widened_correlated_power_still_follows_the_work_budget() -> None:
     terms.update({(order, order): 1 for order in range(1_000)})
     terms[(1, 0)] = 1
 
-    with pytest.raises(ValidationError, match="deterministic work budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=_polynomial(variables, {(1, 0): 1, (0, 1): 1}),
             operator=_operator(variables, terms),
@@ -1494,7 +1494,7 @@ def test_scalar_on_source_regime_skips_unreachable_expansion() -> None:
     assert grown.output == _polynomial(variables, {(0,): 2**20})
     assert grown.matches_expected is True
 
-    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=_polynomial(variables, {(0,): 1}),
             operator=growing,
@@ -1631,7 +1631,7 @@ def test_weight_enumeration_aborts_before_huge_powers_materialize() -> None:
         ),
     )
 
-    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=source,
             operator=operator,
@@ -1680,7 +1680,7 @@ def test_rescale_scan_overflow_falls_back_to_expansion_gates() -> None:
         {(0,): 1, **dict.fromkeys(((j,) for j in range(2, 1_002)), 1)},
     )
 
-    with pytest.raises(ValidationError, match="deterministic work budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=source,
             operator=operator,
@@ -1770,7 +1770,7 @@ def test_wide_operator_weight_growth_gates_at_the_height_cap() -> None:
         ),
     )
 
-    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=source,
             operator=operator,
@@ -1855,7 +1855,7 @@ def test_falling_factorial_growth_is_measured_exactly() -> None:
     assert result.is_zero is False
     assert replayed == result
 
-    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=_polynomial(variables, {(8_501,): 10**32_000}),
             operator=_operator(variables, {(8_501,): 1}),
@@ -2016,7 +2016,7 @@ def test_class_heights_keep_signed_cancellation() -> None:
     assert result.is_zero is False
     assert replayed == result
 
-    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=_polynomial(variables, {(1,): height, (0,): height}),
             operator=_operator(variables, {(0,): 1, (1,): 1}),
@@ -2028,7 +2028,7 @@ def test_iterations_stay_inside_the_interoperable_integer_range() -> None:
     schema = DifferentialOperatorApplyRequest.model_json_schema()
     assert schema["properties"]["iterations"]["maximum"] == (1 << 53) - 1
 
-    with pytest.raises(ValidationError, match="less than or equal"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=_polynomial(("x",), {(0,): 1}),
             operator=_operator(("x",), {(0,): 1}),
@@ -2056,7 +2056,7 @@ def test_coefficient_growth_boundary_is_admitted_then_rejected() -> None:
         <= MAX_APPLICATION_RESULT_BYTES
     )
 
-    with pytest.raises(ValidationError, match="coefficient-digit budget"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyRequest(
             polynomial=source,
             operator=operator,
@@ -2079,7 +2079,7 @@ def test_result_replay_rejects_source_operator_iteration_and_output_mutations() 
     ):
         payload = result.model_dump(mode="json")
         mutate(payload)
-        with pytest.raises(ValidationError, match="not bound"):
+        with polynomial_validation_error():
             DifferentialOperatorApplyResult.model_validate(payload)
 
 
@@ -2089,17 +2089,17 @@ def test_result_rejects_forged_zero_and_expected_decisions() -> None:
 
     payload = result.model_dump(mode="json")
     payload["is_zero"] = True
-    with pytest.raises(ValidationError, match="is_zero"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyResult.model_validate(payload)
 
     payload = result.model_dump(mode="json")
     payload["matches_expected"] = False
-    with pytest.raises(ValidationError, match="matches_expected"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyResult.model_validate(payload)
 
     payload = result.model_dump(mode="json")
     payload["expected"]["polynomial"]["terms"][-1]["coefficient"]["num"] = "5"
-    with pytest.raises(ValidationError, match="matches_expected"):
+    with polynomial_validation_error():
         DifferentialOperatorApplyResult.model_validate(payload)
 
 

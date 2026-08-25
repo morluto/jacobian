@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 from sympy import Poly, apart, symbols
+from tests.math.polynomials._support import polynomial_validation_error
 
 from jacobian.math import polynomials
 
@@ -255,8 +256,6 @@ def test_factorization_results_reject_multivariate_sources() -> None:
     ``polynomial.factor.compute`` factorizes univariate polynomials only.
     """
 
-    from pydantic import ValidationError
-
     from jacobian._exact import CanonicalRational
     from jacobian.math.polynomials._models import (
         PolynomialFactorizationResult,
@@ -273,7 +272,7 @@ def test_factorization_results_reject_multivariate_sources() -> None:
             factor=_sparse_polynomial(variables, {(0, 1): "1"}), multiplicity=1
         ),
     )
-    with pytest.raises(ValidationError, match="one variable over QQ"):
+    with polynomial_validation_error():
         PolynomialFactorizationResult(
             polynomial=source,
             coefficient=CanonicalRational(num="1", den="1"),
@@ -285,8 +284,6 @@ def test_factorization_results_reject_multivariate_sources() -> None:
 def test_equivalent_factor_orders_normalize_canonically() -> None:
     """A hand-built result with backend-incidental ordering still replays."""
 
-    from pydantic import ValidationError
-
     from jacobian.math.polynomials._models import (
         PolynomialFactorizationResult,
         PolynomialFactorRequest,
@@ -296,7 +293,7 @@ def test_equivalent_factor_orders_normalize_canonically() -> None:
     request = _univariate("x", {3: "1", 0: "-1"})
     produced = polynomial_factorization(PolynomialFactorRequest(polynomial=request))
     if len(produced.factors) > 1:
-        with pytest.raises(ValidationError, match="ordered by"):
+        with polynomial_validation_error():
             PolynomialFactorizationResult(
                 polynomial=produced.polynomial,
                 coefficient=produced.coefficient,
@@ -396,8 +393,6 @@ def test_source_bound_results_reject_combinatorial_replay_claims() -> None:
     executed step's materialized support inside the per-step ceiling.
     """
 
-    from pydantic import ValidationError
-
     for operation, request_model, result_model in _source_bound_result_cases():
         request = request_model(polynomial=_univariate("x", {2: "1", 0: "-1"}))
         produced = operation(request)
@@ -410,19 +405,12 @@ def test_source_bound_results_reject_combinatorial_replay_claims() -> None:
         # predictable boxes) while the cumulative monomial-multiplication
         # count crosses the reconstruction budget, so the work guard rejects
         # the claim before any further multiplication could run.
-        expected = (
-            "one variable over QQ"
-            if "Factorization" in result_model.__name__
-            else "reconstruction budget"
-        )
-        with pytest.raises(ValidationError, match=expected):
+        with polynomial_validation_error():
             result_model.model_validate(forged)
 
 
 def test_zero_content_results_retain_no_factors() -> None:
     """A zero coefficient cannot authenticate an arbitrary factor list."""
-
-    from pydantic import ValidationError
 
     from jacobian.math.polynomials._models import (
         PolynomialFactorizationResult,
@@ -442,7 +430,7 @@ def test_zero_content_results_retain_no_factors() -> None:
             "multiplicity": 1,
         }
     ]
-    with pytest.raises(ValidationError, match="zero content"):
+    with polynomial_validation_error():
         PolynomialFactorizationResult.model_validate(forged)
 
 
@@ -611,8 +599,6 @@ def test_square_free_replay_rejects_dense_multivariate_claims_without_dividing()
     mismatched records typedly without materializing any quotient.
     """
 
-    from pydantic import ValidationError
-
     from jacobian._exact import CanonicalRational
     from jacobian.math.polynomials._models import (
         PolynomialSquareFreeDecompositionResult,
@@ -621,7 +607,7 @@ def test_square_free_replay_rejects_dense_multivariate_claims_without_dividing()
 
     variables = tuple(f"v{index}" for index in range(8))
     source, factor = _multivariate_binomial_box(variables, 64)
-    with pytest.raises(ValidationError, match="must reconstruct"):
+    with polynomial_validation_error():
         PolynomialSquareFreeDecompositionResult(
             polynomial=source,
             coefficient=CanonicalRational(num="1", den="1"),
@@ -691,8 +677,6 @@ def test_square_free_replay_admits_sparse_cofactors_above_the_division_box() -> 
     from collections import defaultdict
     from itertools import repeat
 
-    from pydantic import ValidationError
-
     from jacobian._exact import CanonicalRational
     from jacobian.math.polynomials._models import (
         PolynomialSquareFreeDecompositionResult,
@@ -755,7 +739,7 @@ def test_square_free_replay_admits_sparse_cofactors_above_the_division_box() -> 
     )
 
     forged_factor = _sparse_polynomial(source.variables, {(1,) * size: "1"})
-    with pytest.raises(ValidationError, match="must reconstruct"):
+    with polynomial_validation_error():
         PolynomialSquareFreeDecompositionResult(
             polynomial=source,
             coefficient=CanonicalRational(num="1", den="1"),
@@ -775,8 +759,6 @@ def test_square_free_results_require_canonical_univariate_parts() -> None:
     claim.
     """
 
-    from pydantic import ValidationError
-
     from jacobian._exact import CanonicalRational
     from jacobian.math.polynomials._models import (
         PolynomialSquareFreeDecompositionResult,
@@ -786,7 +768,7 @@ def test_square_free_results_require_canonical_univariate_parts() -> None:
     source = _univariate("x", {5: "1", 4: "-1", 3: "-2", 2: "2", 1: "1", 0: "-1"})
     linear = _univariate("x", {1: "1", 0: "-1"})
     mixed = _univariate("x", {2: "1", 0: "-1"})
-    with pytest.raises(ValidationError, match="must reconstruct"):
+    with polynomial_validation_error():
         PolynomialSquareFreeDecompositionResult(
             polynomial=source,
             coefficient=CanonicalRational(num="1", den="1"),
@@ -796,7 +778,7 @@ def test_square_free_results_require_canonical_univariate_parts() -> None:
             ),
             reconstructed=source,
         )
-    with pytest.raises(ValidationError, match="must reconstruct"):
+    with polynomial_validation_error():
         PolynomialSquareFreeDecompositionResult(
             polynomial=source,
             coefficient=CanonicalRational(num="1", den="2"),
@@ -858,8 +840,6 @@ def test_square_free_results_require_canonical_square_free_parts() -> None:
     authenticate the claimed records.
     """
 
-    from pydantic import ValidationError
-
     from jacobian._exact import CanonicalRational
     from jacobian.math.polynomials._models import (
         PolynomialSquareFreeDecompositionResult,
@@ -887,7 +867,7 @@ def test_square_free_results_require_canonical_square_free_parts() -> None:
     mixed = _sparse_polynomial(
         ("x", "y"), {(1, 1): "1", (1, 0): "-1", (0, 1): "-1", (0, 0): "1"}
     )
-    with pytest.raises(ValidationError, match="must reconstruct"):
+    with polynomial_validation_error():
         PolynomialSquareFreeDecompositionResult(
             polynomial=source,
             coefficient=CanonicalRational(num="1", den="1"),
@@ -982,8 +962,6 @@ def test_square_free_replay_rejects_inexact_multivariate_divisors() -> None:
     recomparison lane rejects the mismatched records typedly instead.
     """
 
-    from pydantic import ValidationError
-
     from jacobian._exact import CanonicalRational
     from jacobian.math.polynomials._models import (
         PolynomialSquareFreeDecompositionResult,
@@ -997,7 +975,7 @@ def test_square_free_replay_rejects_inexact_multivariate_divisors() -> None:
         terms[tuple(64 if position == index else 0 for position in range(8))] = "-1"
     factor = _sparse_polynomial(variables, terms)
     assert len(factor.polynomial.terms) == 8
-    with pytest.raises(ValidationError, match="must reconstruct"):
+    with polynomial_validation_error():
         PolynomialSquareFreeDecompositionResult(
             polynomial=source,
             coefficient=CanonicalRational(num="1", den="1"),
@@ -1015,8 +993,6 @@ def test_factorization_replay_requires_canonical_irreducible_records() -> None:
     factorization rejects the non-canonical multiset typedly.
     """
 
-    from pydantic import ValidationError
-
     from jacobian._exact import CanonicalRational
     from jacobian.math.polynomials._models import (
         PolynomialFactorizationResult,
@@ -1024,7 +1000,7 @@ def test_factorization_replay_requires_canonical_irreducible_records() -> None:
     )
 
     source = _univariate("x", {2: "1", 0: "-1"})
-    with pytest.raises(ValidationError, match="must reconstruct"):
+    with polynomial_validation_error():
         PolynomialFactorizationResult(
             polynomial=source,
             coefficient=CanonicalRational(num="1", den="1"),
@@ -1075,7 +1051,6 @@ def test_square_free_replay_never_recomputes_unrepresentable_decompositions(
     the claimed records alone; no backend decomposition may run at all.
     """
 
-    from pydantic import ValidationError
     from sympy import Poly, symbols
 
     from jacobian._exact import CanonicalRational
@@ -1099,7 +1074,7 @@ def test_square_free_replay_never_recomputes_unrepresentable_decompositions(
 
     monkeypatch.setattr(Poly, "sqf_list", fail_decomposition)
     monkeypatch.setattr(Poly, "factor_list", fail_decomposition)
-    with pytest.raises(ValidationError, match="must reconstruct"):
+    with polynomial_validation_error():
         PolynomialSquareFreeDecompositionResult(
             polynomial=source,
             coefficient=CanonicalRational(num="1", den="1"),
@@ -1259,8 +1234,6 @@ def test_square_free_replay_rejects_forged_disjoint_grid_claims() -> None:
 
     import itertools
 
-    from pydantic import ValidationError
-
     from jacobian._exact import CanonicalRational
     from jacobian.math.polynomials._models import (
         PolynomialSquareFreeDecompositionResult,
@@ -1277,7 +1250,7 @@ def test_square_free_replay_rejects_forged_disjoint_grid_claims() -> None:
         variables, {(0,) * 4 + exponents: "1" for exponents in grid}
     )
     constant = _sparse_polynomial(variables, {(0,) * 8: "1"})
-    with pytest.raises(ValidationError, match="materialize more than"):
+    with polynomial_validation_error():
         PolynomialSquareFreeDecompositionResult(
             polynomial=constant,
             coefficient=CanonicalRational(num="1", den="1"),
@@ -1301,8 +1274,6 @@ def test_square_free_replay_support_prediction_keeps_colliding_claims_bounded() 
     by the exact reconstruction equality instead.
     """
 
-    from pydantic import ValidationError
-
     from jacobian._exact import CanonicalRational
     from jacobian.math.polynomials._models import (
         PolynomialSquareFreeDecompositionResult,
@@ -1317,7 +1288,7 @@ def test_square_free_replay_support_prediction_keeps_colliding_claims_bounded() 
     first = _sparse_polynomial(("x", "y", "z"), low_grid)
     second = _sparse_polynomial(("x", "y", "z"), high_grid)
     constant = _sparse_polynomial(("x", "y", "z"), {(0, 0, 0): "1"})
-    with pytest.raises(ValidationError, match="must reconstruct"):
+    with polynomial_validation_error():
         PolynomialSquareFreeDecompositionResult(
             polynomial=constant,
             coefficient=CanonicalRational(num="1", den="1"),
@@ -1347,7 +1318,6 @@ def test_replay_preflights_support_before_multiplying(
 
     import itertools
 
-    from pydantic import ValidationError
     from sympy import Poly
 
     from jacobian._exact import CanonicalRational
@@ -1381,7 +1351,7 @@ def test_replay_preflights_support_before_multiplying(
         return original_mul(self, other)
 
     monkeypatch.setattr(Poly, "__mul__", spy_mul)
-    with pytest.raises(ValidationError, match="materialize more than"):
+    with polynomial_validation_error():
         PolynomialSquareFreeDecompositionResult(
             polynomial=constant,
             coefficient=CanonicalRational(num="1", den="1"),
@@ -1466,8 +1436,6 @@ def test_factorization_replay_rejects_split_duplicate_records() -> None:
     factorization lists one record; repeating a factor key is rejected.
     """
 
-    from pydantic import ValidationError
-
     from jacobian._exact import CanonicalRational
     from jacobian.math.polynomials._models import (
         PolynomialFactorizationResult,
@@ -1476,7 +1444,7 @@ def test_factorization_replay_rejects_split_duplicate_records() -> None:
 
     factor = _univariate("x", {1: "1", 0: "-1"})
     source = _univariate("x", {2: "1", 1: "-2", 0: "1"})
-    with pytest.raises(ValidationError, match="must reconstruct"):
+    with polynomial_validation_error():
         PolynomialFactorizationResult(
             polynomial=source,
             coefficient=CanonicalRational(num="1", den="1"),
@@ -1496,8 +1464,6 @@ def test_square_free_replay_rejects_repeated_part_keys() -> None:
     rejected before any coprimality work.
     """
 
-    from pydantic import ValidationError
-
     from jacobian._exact import CanonicalRational
     from jacobian.math.polynomials._models import (
         PolynomialSquareFreeDecompositionResult,
@@ -1506,7 +1472,7 @@ def test_square_free_replay_rejects_repeated_part_keys() -> None:
 
     factor = _univariate("x", {1: "1", 0: "-1"})
     source = _univariate("x", {3: "1", 2: "-3", 1: "3", 0: "-1"})
-    with pytest.raises(ValidationError, match="must reconstruct"):
+    with polynomial_validation_error():
         PolynomialSquareFreeDecompositionResult(
             polynomial=source,
             coefficient=CanonicalRational(num="1", den="1"),

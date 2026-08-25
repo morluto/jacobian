@@ -2,6 +2,7 @@
 
 import pytest
 from pydantic import ValidationError
+from tests.math.numerical_semigroups._support import numerical_semigroup_error
 
 from jacobian.math.numerical_semigroups._models import (
     NumericalSemigroupSummaryRequest,
@@ -47,13 +48,13 @@ class TestSemigroupSummary:
         assert result.genus == 50
 
     def test_rejects_nonpositive_generators(self):
-        with pytest.raises(ValidationError, match="positive"):
+        with numerical_semigroup_error():
             NumericalSemigroupSummaryRequest(generators=("-1",))
-        with pytest.raises(ValidationError, match="positive"):
+        with numerical_semigroup_error():
             SemigroupMembershipRequest(generators=("0", "2"), value="4")
 
     def test_summary_result_rejects_a_redundant_minimal_axis(self):
-        with pytest.raises(ValidationError, match="canonical minimal"):
+        with numerical_semigroup_error():
             NumericalSemigroupSummaryResult(
                 minimal_generators=("3", "5", "8"),
                 multiplicity="3",

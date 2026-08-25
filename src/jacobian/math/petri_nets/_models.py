@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.petri_nets.values import (
@@ -16,6 +17,10 @@ from jacobian.math.petri_nets.values import (
 )
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"petri_net.{reason}", message)
+
+
 class EnabledTransitionsRequest(StrictModel):
     """Find all enabled transitions at a marking."""
 
@@ -25,7 +30,9 @@ class EnabledTransitionsRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_marking_size(self) -> Self:
         if len(self.marking.tokens) != self.net.place_count:
-            raise ValueError("marking length must match place_count")
+            raise _validation_error(
+                "marking_length", "marking length must match place_count"
+            )
         return self
 
 
@@ -45,9 +52,11 @@ class FireTransitionRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_marking_size(self) -> Self:
         if len(self.marking.tokens) != self.net.place_count:
-            raise ValueError("marking length must match place_count")
+            raise _validation_error(
+                "marking_length", "marking length must match place_count"
+            )
         if not 0 <= self.transition < self.net.transition_count:
-            raise ValueError("transition index out of range")
+            raise _validation_error("transition_index", "transition index out of range")
         return self
 
 
@@ -62,11 +71,17 @@ class FireTransitionResult(StrictModel):
     def require_consistent_outcome(self) -> Self:
         if self.status == "ESCAPES_DECLARED_ENVELOPE":
             if self.new_marking is not None or self.envelope_escape is None:
-                raise ValueError("envelope escape must carry only the successor")
+                raise _validation_error(
+                    "escape_payload", "envelope escape must carry only the successor"
+                )
             if all(token <= MAX_PETRI_MARKING for token in self.envelope_escape):
-                raise ValueError("envelope escape must exceed the marking bound")
+                raise _validation_error(
+                    "escape_bound", "envelope escape must exceed the marking bound"
+                )
         elif self.new_marking is None or self.envelope_escape is not None:
-            raise ValueError("ordinary firing outcomes must carry only a marking")
+            raise _validation_error(
+                "ordinary_payload", "ordinary firing outcomes must carry only a marking"
+            )
         return self
 
 
@@ -95,8 +110,13 @@ class ReachabilityRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_marking_size(self) -> Self:
         if len(self.initial_marking.tokens) != self.net.place_count:
-            raise ValueError("marking length must match place_count")
-        require_reachability_bounds(self.net, self.max_states)
+            raise _validation_error(
+                "marking_length", "marking length must match place_count"
+            )
+        try:
+            require_reachability_bounds(self.net, self.max_states)
+        except ValueError as error:
+            raise _validation_error("reachability_bound", str(error)) from error
         return self
 
 
@@ -120,8 +140,9 @@ class SiphonTrapRequest(StrictModel):
     @model_validator(mode="after")
     def require_bounded_places(self) -> Self:
         if self.net.place_count > 20:
-            raise ValueError(
-                "siphon/trap check supports at most 20 places for exact enumeration"
+            raise _validation_error(
+                "siphon_trap_place_bound",
+                "siphon/trap check supports at most 20 places for exact enumeration",
             )
         return self
 

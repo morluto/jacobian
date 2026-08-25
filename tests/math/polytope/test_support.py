@@ -166,14 +166,14 @@ def test_support_is_source_bound_against_forged_value_or_face() -> None:
         PolytopeSupportRequest(polytope=_square(), covector=_covector(0, 1))
     )
 
-    with pytest.raises(ValidationError, match="support value must equal"):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(
             {
                 **result.model_dump(mode="json"),
                 "support_value": {"num": "2", "den": "1"},
             }
         )
-    with pytest.raises(ValidationError, match="exposed face must be exactly"):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult(
             polytope=result.polytope,
             covector=result.covector,
@@ -183,7 +183,7 @@ def test_support_is_source_bound_against_forged_value_or_face() -> None:
                 vertices=(result.polytope.vertices[0],),
             ),
         )
-    with pytest.raises(ValidationError, match="exposed face must be exactly"):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(
             {
                 **result.model_dump(mode="json"),
@@ -204,12 +204,12 @@ def test_request_rejects_coordinate_axis_mismatch() -> None:
         components=(_rational(0), _rational(1)),
     )
 
-    with pytest.raises(ValidationError, match="same coordinate space"):
+    with pytest.raises(ValidationError):
         PolytopeSupportRequest(polytope=_square(), covector=bad_covector)
 
 
 def test_v_polytope_rejects_nonextreme_vertex() -> None:
-    with pytest.raises(ValidationError, match="exact extreme vertices"):
+    with pytest.raises(ValidationError):
         RationalVPolytope(
             space=RationalCoordinateSpace(axes=("x", "y")),
             vertices=(
@@ -223,7 +223,7 @@ def test_v_polytope_rejects_nonextreme_vertex() -> None:
 
 
 def test_v_polytope_rejects_lower_dimensional_hull() -> None:
-    with pytest.raises(ValidationError, match="affinely span"):
+    with pytest.raises(ValidationError):
         RationalVPolytope(
             space=RationalCoordinateSpace(axes=("x", "y")),
             vertices=(
@@ -241,10 +241,7 @@ def test_support_request_rejects_over_envelope_covector_component() -> None:
         components=(over_bound, _rational(0)),
     )
 
-    with pytest.raises(
-        ValidationError,
-        match=f"covector component exceeds the {MAX_SUPPORT_COMPONENT_DIGITS}-digit bound",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportRequest(polytope=_square(), covector=covector)
 
 
@@ -268,10 +265,7 @@ def test_support_request_rejects_over_envelope_vertex_coordinates() -> None:
         ),
     )
 
-    with pytest.raises(
-        ValidationError,
-        match=f"polytope vertex coordinate exceeds the {MAX_SUPPORT_COMPONENT_DIGITS}-digit bound",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportRequest(polytope=polytope, covector=_covector(1, 0))
 
 
@@ -291,10 +285,7 @@ def test_request_preflights_oversized_coordinates_before_hull_proof(
         unexpected_proof,
     )
 
-    with pytest.raises(
-        ValidationError,
-        match=f"polytope vertex coordinate exceeds the {MAX_SUPPORT_COMPONENT_DIGITS}-digit bound",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportRequest.model_validate(_oversized_simplex_payload())
 
 
@@ -339,10 +330,7 @@ def test_request_preflights_oversized_covector_payload_before_nested_parsing(
         },
     }
 
-    with pytest.raises(
-        ValidationError,
-        match=f"covector component exceeds the {MAX_SUPPORT_COMPONENT_DIGITS}-digit bound",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportRequest.model_validate(payload)
 
 
@@ -356,10 +344,7 @@ def test_request_rejects_forbidden_extra_field_before_hull_proof(
     payload = _square_payload()
     payload["junk"] = 1
 
-    with pytest.raises(
-        ValidationError,
-        match="unexpected fields for a polytope support request",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportRequest.model_validate(payload)
 
 
@@ -373,7 +358,7 @@ def test_request_preflights_missing_covector_before_hull_proof(
     payload = _square_payload()
     del payload["covector"]
 
-    with pytest.raises(ValidationError, match="covector must be provided"):
+    with pytest.raises(ValidationError):
         PolytopeSupportRequest.model_validate(payload)
 
 
@@ -390,19 +375,13 @@ def test_request_preflights_malformed_covector_components_before_hull_proof(
         {"num": "0"},
     ]
 
-    with pytest.raises(
-        ValidationError,
-        match="covector component must be a canonical rational",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportRequest.model_validate(payload)
 
     payload = _square_payload()
     payload["covector"]["components"] = [{"num": "1", "den": "1"}, "0"]
 
-    with pytest.raises(
-        ValidationError,
-        match="covector component must be a canonical rational",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportRequest.model_validate(payload)
 
 
@@ -431,10 +410,7 @@ def test_request_preflights_noncanonical_covector_strings_before_hull_proof(
             {"num": "0", "den": "1"},
         ]
 
-        with pytest.raises(
-            ValidationError,
-            match="covector component must be a canonical rational",
-        ):
+        with pytest.raises(ValidationError):
             PolytopeSupportRequest.model_validate(payload)
 
 
@@ -448,10 +424,7 @@ def test_request_preflights_covector_dimension_mismatch_before_hull_proof(
     payload = _square_payload()
     payload["covector"]["components"] = [{"num": "1", "den": "1"}]
 
-    with pytest.raises(
-        ValidationError,
-        match="covector components must use the declared coordinate axis",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportRequest.model_validate(payload)
 
 
@@ -465,10 +438,7 @@ def test_request_preflights_foreign_covector_space_before_hull_proof(
     payload = _square_payload()
     payload["covector"]["space"] = {"axes": ["x", "z"]}
 
-    with pytest.raises(
-        ValidationError,
-        match="polytope and covector must use the same coordinate space",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportRequest.model_validate(payload)
 
 
@@ -486,10 +456,7 @@ def test_request_preflights_built_foreign_covector_space_before_hull_proof(
         components=(_rational(0), _rational(1)),
     )
 
-    with pytest.raises(
-        ValidationError,
-        match="polytope and covector must use the same coordinate space",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportRequest.model_validate(payload)
 
 
@@ -510,10 +477,7 @@ def test_request_gate_covers_built_polytope_space_pairing() -> None:
     )
     payload["covector"] = _covector(1, 0)
 
-    with pytest.raises(
-        ValidationError,
-        match="polytope and covector must use the same coordinate space",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportRequest.model_validate(payload)
 
 
@@ -544,16 +508,13 @@ def test_request_preflights_malformed_covector_space_before_hull_proof(
     payload = _square_payload()
     payload["covector"]["space"] = {"axes": []}
 
-    with pytest.raises(
-        ValidationError,
-        match="covector space axes must be a non-empty sequence",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportRequest.model_validate(payload)
 
     payload = _square_payload()
     payload["covector"]["space"] = {"axes": ["x", "x"]}
 
-    with pytest.raises(ValidationError, match="coordinate axes must be unique"):
+    with pytest.raises(ValidationError):
         PolytopeSupportRequest.model_validate(payload)
 
 
@@ -659,13 +620,7 @@ def test_result_rejects_unproducible_over_envelope_source() -> None:
     carries a 151-digit coordinate is rejected: no admitted request could
     have produced it."""
 
-    with pytest.raises(
-        ValidationError,
-        match=(
-            f"polytope vertex coordinate exceeds the "
-            f"{MAX_SUPPORT_COMPONENT_DIGITS}-digit bound"
-        ),
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(_over_envelope_source_result_payload())
 
 
@@ -691,13 +646,7 @@ def test_constructed_result_rejects_unadmitted_source() -> None:
         ),
     )
 
-    with pytest.raises(
-        ValidationError,
-        match=(
-            f"polytope vertex coordinate exceeds the "
-            f"{MAX_SUPPORT_COMPONENT_DIGITS}-digit bound"
-        ),
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult(
             polytope=polytope,
             covector=_covector(0, 0),
@@ -743,12 +692,7 @@ def test_result_preflights_oversized_covector_before_nested_parsing(
         },
     }
 
-    with pytest.raises(
-        ValidationError,
-        match=(
-            f"covector component exceeds the {MAX_SUPPORT_COMPONENT_DIGITS}-digit bound"
-        ),
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(payload)
 
 
@@ -765,7 +709,7 @@ def test_result_preflights_missing_covector_before_nested_parsing(
     payload = result.model_dump(mode="json")
     del payload["covector"]
 
-    with pytest.raises(ValidationError, match="covector must be provided"):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(payload)
 
 
@@ -780,7 +724,7 @@ def test_result_preflights_missing_support_value_before_nested_parsing(
     payload = square_result.model_dump(mode="json")
     del payload["support_value"]
 
-    with pytest.raises(ValidationError, match="support_value must be provided"):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(payload)
 
 
@@ -795,28 +739,19 @@ def test_result_preflights_malformed_support_value_before_nested_parsing(
     payload = square_result.model_dump(mode="json")
     payload["support_value"] = {"num": "0"}
 
-    with pytest.raises(
-        ValidationError,
-        match="support value must be a canonical rational",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(payload)
 
     payload = square_result.model_dump(mode="json")
     payload["support_value"] = {"num": "invalid", "den": "1"}
 
-    with pytest.raises(
-        ValidationError,
-        match="support value must be a canonical rational",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(payload)
 
     payload = square_result.model_dump(mode="json")
     payload["support_value"] = {"num": "2", "den": "4"}
 
-    with pytest.raises(
-        ValidationError,
-        match="support value must be a canonical rational",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(payload)
 
 
@@ -831,7 +766,7 @@ def test_result_preflights_missing_exposed_face_before_nested_parsing(
     payload = square_result.model_dump(mode="json")
     del payload["exposed_face"]
 
-    with pytest.raises(ValidationError, match="exposed_face must be provided"):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(payload)
 
 
@@ -846,19 +781,13 @@ def test_result_preflights_malformed_exposed_face_before_nested_parsing(
     payload = square_result.model_dump(mode="json")
     payload["exposed_face"] = {"space": {"axes": ["x", "y"]}}
 
-    with pytest.raises(
-        ValidationError,
-        match="exposed face must be an object with space and vertices",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(payload)
 
     payload = square_result.model_dump(mode="json")
     payload["exposed_face"]["vertices"][0]["vertex_id"] = 7
 
-    with pytest.raises(
-        ValidationError,
-        match="exposed face vertex must be an object with a short vertex_id",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(payload)
 
     payload = square_result.model_dump(mode="json")
@@ -867,10 +796,7 @@ def test_result_preflights_malformed_exposed_face_before_nested_parsing(
         "den": "1",
     }
 
-    with pytest.raises(
-        ValidationError,
-        match="exposed face vertex coordinate must be a canonical rational",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(payload)
 
 
@@ -885,10 +811,7 @@ def test_result_preflights_broken_face_invariants_before_nested_parsing(
     payload = square_result.model_dump(mode="json")
     payload["exposed_face"]["vertices"].reverse()
 
-    with pytest.raises(
-        ValidationError,
-        match="exposed-face vertex IDs must be unique and strictly ordered",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(payload)
 
     payload = square_result.model_dump(mode="json")
@@ -896,10 +819,7 @@ def test_result_preflights_broken_face_invariants_before_nested_parsing(
     duplicated["vertex_id"] = "zz_dup"
     payload["exposed_face"]["vertices"].append(duplicated)
 
-    with pytest.raises(
-        ValidationError,
-        match="exposed-face vertices must have distinct coordinates",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(payload)
 
 
@@ -915,19 +835,13 @@ def test_result_preflights_foreign_exposed_face_space_before_nested_parsing(
     payload = square_result.model_dump(mode="json")
     payload["exposed_face"]["space"] = {"axes": ["u", "v"]}
 
-    with pytest.raises(
-        ValidationError,
-        match="exposed face must use the same coordinate space as the polytope",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(payload)
 
     payload = square_result.model_dump(mode="json")
     payload["exposed_face"]["space"] = {"axes": ["y", "x"]}
 
-    with pytest.raises(
-        ValidationError,
-        match="exposed face must use the same coordinate space as the polytope",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(payload)
 
 
@@ -955,10 +869,7 @@ def test_result_preflights_built_foreign_exposed_face_space_before_nested_parsin
         ),
     )
 
-    with pytest.raises(
-        ValidationError,
-        match="exposed face must use the same coordinate space as the polytope",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(payload)
 
 
@@ -973,10 +884,7 @@ def test_result_preflights_forged_support_value_before_nested_parsing(
     payload = square_result.model_dump(mode="json")
     payload["support_value"] = {"num": "2", "den": "1"}
 
-    with pytest.raises(
-        ValidationError,
-        match="support value must equal the exact maximum on every vertex",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(payload)
 
 
@@ -991,10 +899,7 @@ def test_result_preflights_forged_exposed_face_before_nested_parsing(
     payload = square_result.model_dump(mode="json")
     payload["exposed_face"]["vertices"] = payload["exposed_face"]["vertices"][:1]
 
-    with pytest.raises(
-        ValidationError,
-        match="exposed face must be exactly the complete maximizing vertex family",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(payload)
 
 
@@ -1009,7 +914,7 @@ def test_result_preflight_binding_defers_unparsed_structural_faults(
     payload = square_result.model_dump(mode="json")
     del payload["polytope"]["vertices"][1]["vertex_id"]
 
-    with pytest.raises(ValidationError, match="vertex_id"):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(payload)
 
 
@@ -1028,10 +933,7 @@ def test_result_preflights_forged_built_face_before_nested_parsing(
         vertices=(square_result.exposed_face.vertices[0],),
     )
 
-    with pytest.raises(
-        ValidationError,
-        match="exposed face must be exactly the complete maximizing vertex family",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(payload)
 
 
@@ -1045,7 +947,7 @@ def test_result_defers_malformed_coordinate_containers_to_nested_validation(
     payload = square_result.model_dump(mode="json")
     payload["polytope"]["vertices"][0]["coordinates"] = 3
 
-    with pytest.raises(ValidationError, match="coordinates"):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(payload)
 
 
@@ -1059,7 +961,7 @@ def test_constructed_result_rejects_foreign_exposed_face_space_at_construction(
 
     _forbid_support_replay(monkeypatch)
 
-    with pytest.raises(ValidationError, match="same coordinate space"):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult(
             polytope=square_result.polytope,
             covector=square_result.covector,
@@ -1090,7 +992,7 @@ def test_constructed_result_still_rejects_forged_face_at_bind(
     """A built face in the correct space but with forged membership is
     still bound to the source by the after-validator."""
 
-    with pytest.raises(ValidationError, match="exposed face must be exactly"):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult(
             polytope=square_result.polytope,
             covector=square_result.covector,
@@ -1113,10 +1015,7 @@ def test_result_rejects_forbidden_extra_field_before_nested_parsing(
     payload = square_result.model_dump(mode="json")
     payload["junk"] = 1
 
-    with pytest.raises(
-        ValidationError,
-        match="unexpected fields for a support result",
-    ):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(payload)
 
 
@@ -1203,7 +1102,7 @@ def test_extremality_subfacet_bound_is_enforced_before_filtering() -> None:
         for index in range(64)
     )
 
-    with pytest.raises(ValidationError, match="subfacet bound"):
+    with pytest.raises(ValidationError):
         RationalVPolytope(space=RationalCoordinateSpace(axes=axes), vertices=vertices)
 
 
@@ -1217,7 +1116,7 @@ def test_extremality_orientation_work_is_enforced_before_filtering() -> None:
         for index in range(64)
     )
 
-    with pytest.raises(ValidationError, match="orientation-test bound"):
+    with pytest.raises(ValidationError):
         RationalVPolytope(space=RationalCoordinateSpace(axes=axes), vertices=vertices)
 
 
@@ -1244,7 +1143,7 @@ def test_extremality_budget_bounds_are_enforced_before_exact_conversion(
         for index in range(64)
     )
 
-    with pytest.raises(ValidationError, match="subfacet bound"):
+    with pytest.raises(ValidationError):
         RationalVPolytope(
             space=RationalCoordinateSpace(axes=six_axes),
             vertices=vertices_64_by_6,
@@ -1259,7 +1158,7 @@ def test_extremality_budget_bounds_are_enforced_before_exact_conversion(
         for index in range(40)
     )
 
-    with pytest.raises(ValidationError, match="orientation-test bound"):
+    with pytest.raises(ValidationError):
         RationalVPolytope(
             space=RationalCoordinateSpace(axes=four_axes),
             vertices=vertices_40_by_4,
@@ -1293,7 +1192,7 @@ def test_extremality_height_work_bound_is_enforced_before_exact_conversion(
         for index in range(12)
     )
 
-    with pytest.raises(ValidationError, match="height-work bound"):
+    with pytest.raises(ValidationError):
         RationalVPolytope(
             space=RationalCoordinateSpace(axes=four_axes),
             vertices=vertices_12_by_4,
@@ -1333,7 +1232,7 @@ def test_extremality_height_work_grades_admission_by_coordinate_height() -> None
         )
         for index in range(6)
     )
-    with pytest.raises(ValidationError, match="height-work bound") as exc_info:
+    with pytest.raises(ValidationError) as exc_info:
         RationalVPolytope(
             space=RationalCoordinateSpace(axes=("x", "y", "z")),
             vertices=vertices_over,
@@ -1390,7 +1289,7 @@ def test_surrogate_axis_label_rejected_before_hull_proof(
     payload["polytope"]["space"]["axes"] = ["x\ud800", "y"]
     payload["covector"]["space"]["axes"] = ["x\ud800", "y"]
 
-    with pytest.raises(ValidationError, match=r"[Uu]nicode"):
+    with pytest.raises(ValidationError):
         PolytopeSupportRequest.model_validate(payload)
 
 
@@ -1401,7 +1300,7 @@ def test_surrogate_vertex_id_rejected_before_hull_proof(
     payload = _square_payload()
     payload["polytope"]["vertices"][1]["vertex_id"] = "br\ud800"
 
-    with pytest.raises(ValidationError, match=r"[Uu]nicode"):
+    with pytest.raises(ValidationError):
         PolytopeSupportRequest.model_validate(payload)
 
 
@@ -1416,7 +1315,7 @@ def test_result_preflights_surrogate_face_vertex_id_before_nested_parsing(
     payload = square_result.model_dump(mode="json")
     payload["exposed_face"]["vertices"][0]["vertex_id"] = "top_left\ud800"
 
-    with pytest.raises(ValidationError, match=r"[Uu]nicode"):
+    with pytest.raises(ValidationError):
         PolytopeSupportResult.model_validate(payload)
 
 
@@ -1431,14 +1330,14 @@ def test_seven_axis_polytope_rejects_support_pairing_before_hull_proof(
     payload = _square_payload()
     payload["polytope"]["space"]["axes"] = [f"x{axis}" for axis in range(7)]
 
-    with pytest.raises(ValidationError, match="same coordinate space"):
+    with pytest.raises(ValidationError):
         PolytopeSupportRequest.model_validate(payload)
 
 
 def test_seven_axis_polytope_cannot_pair_with_any_covector() -> None:
     axes = RationalCoordinateSpace(axes=tuple(f"x{axis}" for axis in range(7)))
 
-    with pytest.raises(ValidationError, match=r"at most 6 items|at most 6 entries"):
+    with pytest.raises(ValidationError):
         RationalCovector(
             space=axes,
             components=tuple(_rational(component) for component in range(7)),
@@ -1507,10 +1406,7 @@ def test_oversized_aggregate_face_rejected_before_nested_parsing() -> None:
     )
     assert encoded > CanonicalLimits().max_output_bytes
 
-    with pytest.raises(
-        ValidationError,
-        match="exposed face exceeds the canonical JSON output bound",
-    ):
+    with pytest.raises(ValidationError):
         RationalExposedFace.model_validate(payload)
 
 

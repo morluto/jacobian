@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -35,13 +36,31 @@ from jacobian.math.symbolic_dynamics.values import (
 MAX_PERIODIC_PROFILE_DIGITS = 100_000
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"symbolic_dynamics.{reason}", message)
+
+
+def _validation_error_from_message(error: ValueError) -> PydanticCustomError:
+    reasons = {
+        "presentation adjacency exceeds the result bound": "finite_type_presentation_result_bound",
+        "requested block enumeration exceeds the work bound": "block_language_work_bound",
+        "zeta polynomial exceeds the coefficient digit bound": "zeta_coefficient_digit_bound",
+        "zeta determinant and replay exceed the work bound": "zeta_work_bound",
+        "zeta result exceeds the aggregate digit bound": "zeta_result_digit_bound",
+    }
+    return _validation_error(reasons.get(str(error), "request_bound"), str(error))
+
+
 class FiniteTypeShiftRequest(StrictModel):
     shift: ForbiddenBlockShift
 
     @model_validator(mode="after")
     def require_bounded_presentation(self) -> Self:
         memory = _presentation_memory(self.shift)
-        _require_bounded_presentation(self.shift, memory)
+        try:
+            _require_bounded_presentation(self.shift, memory)
+        except ValueError as error:
+            raise _validation_error_from_message(error) from error
         return self
 
 
@@ -56,7 +75,10 @@ class FiniteTypeShiftResult(FiniteTypeShiftRequest):
         if self.presentation != finite_type_presentation(
             self.shift
         ) or self.normalized_forbidden_blocks != normalize_forbidden_blocks(self.shift):
-            raise ValueError("finite-type presentation is not bound to the request")
+            raise _validation_error(
+                "finite_type_presentation_not_bound",
+                "finite-type presentation is not bound to the request",
+            )
         return self
 
 
@@ -66,8 +88,11 @@ class BlockLanguageRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_enumeration(self) -> Self:
-        enumeration_size(len(self.shift.alphabet), self.block_length)
-        _require_bounded_support(self.shift)
+        try:
+            enumeration_size(len(self.shift.alphabet), self.block_length)
+            _require_bounded_support(self.shift)
+        except ValueError as error:
+            raise _validation_error_from_message(error) from error
         return self
 
 
@@ -86,7 +111,9 @@ class BlockLanguageResult(BlockLanguageRequest):
     def bind_language(self) -> Self:
         expected = block_language(self.shift, self.block_length)
         if self.allowed_blocks != expected or self.count != len(expected):
-            raise ValueError("block language is not bound to the request")
+            raise _validation_error(
+                "block_language_not_bound", "block language is not bound to the request"
+            )
         return self
 
 
@@ -98,12 +125,18 @@ class PeriodicPointProfileRequest(StrictModel):
     def require_bounded_matrix_powering(self) -> Self:
         states = len(self.shift.matrix)
         if states**3 * self.max_period > 10_000_000:
-            raise ValueError("periodic-point matrix powering exceeds the work bound")
+            raise _validation_error(
+                "periodic_point_work_bound",
+                "periodic-point matrix powering exceeds the work bound",
+            )
         max_row_sum = max(sum(row) for row in self.shift.matrix)
         count_bound = states * max(1, max_row_sum) ** self.max_period
         aggregate_digits = 3 * self.max_period * len(str(count_bound))
         if aggregate_digits > MAX_PERIODIC_PROFILE_DIGITS:
-            raise ValueError("periodic-point profile exceeds the output digit bound")
+            raise _validation_error(
+                "periodic_point_result_bound",
+                "periodic-point profile exceeds the output digit bound",
+            )
         return self
 
 
@@ -130,7 +163,10 @@ class PeriodicPointProfileResult(PeriodicPointProfileRequest):
             != tuple(format_canonical_integer(value) for value in orbits)
             or self.complete_through_period != self.max_period
         ):
-            raise ValueError("periodic-point profile is not bound to the request")
+            raise _validation_error(
+                "periodic_point_profile_not_bound",
+                "periodic-point profile is not bound to the request",
+            )
         return self
 
 
@@ -142,10 +178,14 @@ class HigherBlockRequest(StrictModel):
     def require_exact_bounded_presentation(self) -> Self:
         required_memory = _presentation_memory(self.shift)
         if self.block_length < required_memory:
-            raise ValueError(
-                "block_length must be at least the SFT presentation memory"
+            raise _validation_error(
+                "higher_block_memory_bound",
+                "block_length must be at least the SFT presentation memory",
             )
-        _require_bounded_presentation(self.shift, self.block_length)
+        try:
+            _require_bounded_presentation(self.shift, self.block_length)
+        except ValueError as error:
+            raise _validation_error_from_message(error) from error
         return self
 
 
@@ -161,7 +201,10 @@ class HigherBlockResult(HigherBlockRequest):
         if self.presentation != higher_block_presentation(
             self.shift, self.block_length
         ):
-            raise ValueError("higher-block presentation is not bound to the request")
+            raise _validation_error(
+                "higher_block_presentation_not_bound",
+                "higher-block presentation is not bound to the request",
+            )
         return self
 
 
@@ -173,7 +216,10 @@ class ArtinMazurZetaRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_exact_zeta(self) -> Self:
-        _require_zeta_budget(self.shift, self.replay_period)
+        try:
+            _require_zeta_budget(self.shift, self.replay_period)
+        except ValueError as error:
+            raise _validation_error_from_message(error) from error
         return self
 
 
@@ -214,7 +260,10 @@ class ArtinMazurZetaResult(ArtinMazurZetaRequest):
             or self.zeta_function != zeta
             or self.replay != expected_replay
         ):
-            raise ValueError("Artin--Mazur zeta result is not bound to the request")
+            raise _validation_error(
+                "artin_mazur_zeta_not_bound",
+                "Artin--Mazur zeta result is not bound to the request",
+            )
         return self
 
 

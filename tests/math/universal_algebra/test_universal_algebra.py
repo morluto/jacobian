@@ -329,8 +329,12 @@ class TestHomomorphismProfile:
             )
         ).model_dump(mode="json")
         positive["kernel_partition"] = [[0, 1], [2, 3]]
-        with pytest.raises(ValidationError, match="canonical fibers"):
+        with pytest.raises(ValidationError) as error:
             HomomorphismProfileResult.model_validate(positive)
+        assert (
+            error.value.errors()[0]["type"]
+            == "universal_algebra.kernel_partition_mismatch"
+        )
 
         symbol = (OperationSymbol(operation_id="flip", arity=1),)
         negative = compute_homomorphism_profile(
@@ -347,8 +351,11 @@ class TestHomomorphismProfile:
             )
         ).model_dump(mode="json")
         negative["obstruction"]["target_output"] = 1
-        with pytest.raises(ValidationError, match="first exact"):
+        with pytest.raises(ValidationError) as error:
             HomomorphismProfileResult.model_validate(negative)
+        assert (
+            error.value.errors()[0]["type"] == "universal_algebra.obstruction_mismatch"
+        )
 
     def test_source_mutation_invalidates_negative_conclusion(self) -> None:
         symbol = (OperationSymbol(operation_id="flip", arity=1),)
@@ -366,8 +373,12 @@ class TestHomomorphismProfile:
             )
         ).model_dump(mode="json")
         payload["carrier_map"]["target"]["tables"] = [[1, 0]]
-        with pytest.raises(ValidationError, match="preserves every"):
+        with pytest.raises(ValidationError) as error:
             HomomorphismProfileResult.model_validate(payload)
+        assert (
+            error.value.errors()[0]["type"]
+            == "universal_algebra.negative_map_is_homomorphism"
+        )
 
     def test_source_mutation_invalidates_positive_homomorphism(self) -> None:
         payload = compute_homomorphism_profile(
@@ -380,8 +391,12 @@ class TestHomomorphismProfile:
             )
         ).model_dump(mode="json")
         payload["homomorphism"]["target"]["tables"][0][0] = 1
-        with pytest.raises(ValidationError, match="does not preserve"):
+        with pytest.raises(ValidationError) as error:
             HomomorphismProfileResult.model_validate(payload)
+        assert (
+            error.value.errors()[0]["type"]
+            == "universal_algebra.operation_not_preserved"
+        )
 
     def test_maximum_source_table_budget_is_scanned_completely(self) -> None:
         size = 16
@@ -414,7 +429,7 @@ class TestHomomorphismProfile:
         target = FiniteAlgebra(
             carrier=(oversized_label + "y",), operations=(), tables=()
         )
-        with pytest.raises(ValidationError, match="canonical output limit"):
+        with pytest.raises(ValidationError) as error:
             HomomorphismProfileRequest(
                 carrier_map=FiniteAlgebraCarrierMap(
                     source=source,
@@ -422,6 +437,10 @@ class TestHomomorphismProfile:
                     mapping=(0,),
                 )
             )
+        assert (
+            error.value.errors()[0]["type"]
+            == "universal_algebra.carrier_map_output_exceeded"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -486,8 +505,12 @@ class TestQuotient:
             tables=(),
         )
 
-        with pytest.raises(ValidationError, match="canonical quotient homomorphism"):
+        with pytest.raises(ValidationError) as error:
             QuotientRequest(algebra=source, partition=((0,),))
+        assert (
+            error.value.errors()[0]["type"]
+            == "universal_algebra.quotient_output_exceeded"
+        )
 
     def test_quotient_charges_construction_and_map_replay_work(self) -> None:
         def constant_ternary_algebra(size: int) -> FiniteAlgebra:
@@ -505,11 +528,15 @@ class TestQuotient:
         assert len(accepted.partition) == accepted_size
 
         rejected_size = 24
-        with pytest.raises(ValidationError, match="construction and homomorphism"):
+        with pytest.raises(ValidationError) as error:
             QuotientRequest(
                 algebra=constant_ternary_algebra(rejected_size),
                 partition=tuple((index,) for index in range(rejected_size)),
             )
+        assert (
+            error.value.errors()[0]["type"]
+            == "universal_algebra.quotient_work_exceeded"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -519,28 +546,40 @@ class TestQuotient:
 
 class TestValidation:
     def test_duplicate_carrier_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="unique"):
+        with pytest.raises(ValidationError) as error:
             FiniteAlgebra(
                 carrier=("a", "a"),
                 operations=(OperationSymbol(operation_id="f", arity=1),),
                 tables=((0, 0),),
             )
+        assert (
+            error.value.errors()[0]["type"]
+            == "universal_algebra.carrier_labels_not_unique"
+        )
 
     def test_wrong_table_size_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="cell count"):
+        with pytest.raises(ValidationError) as error:
             FiniteAlgebra(
                 carrier=("a", "b"),
                 operations=(OperationSymbol(operation_id="f", arity=2),),
                 tables=((0, 0, 0),),  # Should be 4 cells, not 3
             )
+        assert (
+            error.value.errors()[0]["type"]
+            == "universal_algebra.operation_table_cell_count"
+        )
 
     def test_out_of_range_output_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="carrier range"):
+        with pytest.raises(ValidationError) as error:
             FiniteAlgebra(
                 carrier=("a", "b"),
                 operations=(OperationSymbol(operation_id="f", arity=1),),
                 tables=((0, 2),),  # 2 is out of range
             )
+        assert (
+            error.value.errors()[0]["type"]
+            == "universal_algebra.table_output_out_of_range"
+        )
 
     @pytest.mark.parametrize("kind", ["", "VARIABLE", "arbitrary"])
     def test_term_node_kind_is_closed(self, kind: str) -> None:
@@ -550,14 +589,17 @@ class TestValidation:
             )
 
     def test_term_rejects_cycles_forward_edges_and_unreachable_nodes(self) -> None:
-        with pytest.raises(ValidationError, match="earlier nodes"):
+        with pytest.raises(ValidationError) as error:
             FlatTerm.model_validate(
                 {
                     "nodes": [{"kind": "application", "operation": 0, "children": [0]}],
                     "root": 0,
                 }
             )
-        with pytest.raises(ValidationError, match="reachable"):
+        assert (
+            error.value.errors()[0]["type"] == "universal_algebra.children_not_acyclic"
+        )
+        with pytest.raises(ValidationError) as error:
             FlatTerm(
                 nodes=(
                     VariableTerm(kind="variable", variable_id=0),
@@ -565,6 +607,9 @@ class TestValidation:
                 ),
                 root=1,
             )
+        assert (
+            error.value.errors()[0]["type"] == "universal_algebra.term_node_unreachable"
+        )
 
     def test_term_signature_and_assignment_are_checked_in_request(self) -> None:
         wrong_arity = FlatTerm(
@@ -574,14 +619,21 @@ class TestValidation:
             ),
             root=1,
         )
-        with pytest.raises(ValidationError, match="arity"):
+        with pytest.raises(ValidationError) as error:
             EvaluateRequest(
                 algebra=_boolean_algebra(), term=wrong_arity, assignment=(0,)
             )
-        with pytest.raises(ValidationError, match="cover exactly"):
+        assert (
+            error.value.errors()[0]["type"] == "universal_algebra.term_arity_mismatch"
+        )
+        with pytest.raises(ValidationError) as error:
             EvaluateRequest(
                 algebra=_boolean_algebra(), term=_and_term(), assignment=(0,)
             )
+        assert (
+            error.value.errors()[0]["type"]
+            == "universal_algebra.assignment_length_mismatch"
+        )
 
     @pytest.mark.parametrize("partition", [((0,),), ((), (0, 1)), ((0, 1), (1,))])
     def test_partition_must_be_nonempty_disjoint_exact_cover(
@@ -597,37 +649,46 @@ class TestValidation:
             tables=(),
         )
         term = _variable_term(0)
-        with pytest.raises(ValidationError, match="work budget"):
+        with pytest.raises(ValidationError) as error:
             EquationProfileRequest(
                 algebra=algebra,
                 left=term,
                 right=term,
                 variable_count=7,
             )
+        assert (
+            error.value.errors()[0]["type"]
+            == "universal_algebra.equation_profile_work_exceeded"
+        )
 
     def test_carrier_map_rejects_incomplete_or_wrong_signature_input(self) -> None:
         source = _boolean_algebra()
-        with pytest.raises(ValidationError, match="one target index"):
+        with pytest.raises(ValidationError) as error:
             FiniteAlgebraCarrierMap(
                 source=source,
                 target=source,
                 mapping=(0,),
             )
+        assert (
+            error.value.errors()[0]["type"]
+            == "universal_algebra.mapping_length_mismatch"
+        )
         wrong_signature = FiniteAlgebra(
             carrier=("0", "1"),
             operations=(OperationSymbol(operation_id="and", arity=1),),
             tables=((0, 1),),
         )
-        with pytest.raises(ValidationError, match="must match exactly"):
+        with pytest.raises(ValidationError) as error:
             FiniteAlgebraCarrierMap(
                 source=source,
                 target=wrong_signature,
                 mapping=(0, 1),
             )
+        assert error.value.errors()[0]["type"] == "universal_algebra.signature_mismatch"
 
     def test_table_budget_rejects_immediately_above_boundary(self) -> None:
         size = 16
-        with pytest.raises(ValidationError, match="cell budget"):
+        with pytest.raises(ValidationError) as error:
             FiniteAlgebra(
                 carrier=tuple(str(index) for index in range(size)),
                 operations=(
@@ -636,3 +697,6 @@ class TestValidation:
                 ),
                 tables=((0,) * (size**4), (0,)),
             )
+        assert (
+            error.value.errors()[0]["type"] == "universal_algebra.table_cells_exceeded"
+        )

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.plane_algebraic_curves._conic import (
@@ -28,6 +29,39 @@ _MAX_EXPONENT = 64
 _MAX_COEFFICIENT_DIGITS = 128
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"plane_algebraic_curve.{reason}", message)
+
+
+def _validation_error_from(exc: ValueError) -> PydanticCustomError:
+    """Translate owner-kernel admission failures at the public model boundary."""
+
+    message = str(exc)
+    reasons = (
+        ("point must lie", "point_not_on_conic"),
+        ("smooth irreducible", "conic_not_smooth_irreducible"),
+        ("degree exactly two", "conic_degree_invalid"),
+        ("exactly two variables", "conic_axis_invalid"),
+        ("parameter must be distinct", "parameter_axis_collision"),
+        ("complete ordered axis", "point_axis_mismatch"),
+        ("128-digit", "coefficient_height_exceeded"),
+        ("output exceeds", "result_height_exceeded"),
+        ("gradient-normalized", "parametrization_not_canonical"),
+        ("source conic identity", "parametrization_identity_invalid"),
+        ("projective parameter infinity", "exceptional_point_invalid"),
+        ("quadratic denominator", "pencil_denominator_invalid"),
+        ("finite parameter", "inverse_chart_invalid"),
+        ("tangent line", "inverse_denominator_invalid"),
+        ("base point", "projective_base_point"),
+        ("source closure", "projective_closure_invalid"),
+        ("chart coordinate", "projective_chart_invalid"),
+    )
+    for fragment, reason in reasons:
+        if fragment in message:
+            return _validation_error(reason, message)
+    return _validation_error("admission_failed", message)
+
+
 def _require_curve_polynomial(polynomial: RationalPolynomial) -> None:
     require_polynomial_budget(
         polynomial,
@@ -47,9 +81,15 @@ class AffineCurveRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_affine_plane(self) -> Self:
-        _require_curve_polynomial(self.polynomial)
+        try:
+            _require_curve_polynomial(self.polynomial)
+        except ValueError as exc:
+            raise _validation_error_from(exc) from exc
         if len(self.polynomial.variables) != 2:
-            raise ValueError("affine plane curves require exactly two variables")
+            raise _validation_error(
+                "affine_axis_invalid",
+                "affine plane curves require exactly two variables",
+            )
         return self
 
 
@@ -60,13 +100,20 @@ class ProjectiveClosureRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_available_homogenizing_coordinate(self) -> Self:
-        _require_curve_polynomial(self.polynomial)
+        try:
+            _require_curve_polynomial(self.polynomial)
+        except ValueError as exc:
+            raise _validation_error_from(exc) from exc
         if len(self.polynomial.variables) != 2:
-            raise ValueError("projective closure requires exactly two variables")
+            raise _validation_error(
+                "closure_axis_invalid",
+                "projective closure requires exactly two variables",
+            )
         if HOMOGENIZING_COORDINATE in self.polynomial.variables:
-            raise ValueError(
+            raise _validation_error(
+                "homogenizing_coordinate_reserved",
                 "affine variable axis must not contain the reserved "
-                f"homogenizing coordinate {HOMOGENIZING_COORDINATE!r}"
+                f"homogenizing coordinate {HOMOGENIZING_COORDINATE!r}",
             )
         return self
 
@@ -79,13 +126,25 @@ class AffineChartRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_homogeneous_projective_plane(self) -> Self:
-        _require_curve_polynomial(self.polynomial)
+        try:
+            _require_curve_polynomial(self.polynomial)
+        except ValueError as exc:
+            raise _validation_error_from(exc) from exc
         if len(self.polynomial.variables) != 3:
-            raise ValueError("projective plane curves require exactly three variables")
+            raise _validation_error(
+                "chart_axis_invalid",
+                "projective plane curves require exactly three variables",
+            )
         if self.chart_variable not in self.polynomial.variables:
-            raise ValueError("chart_variable must belong to the polynomial axis")
+            raise _validation_error(
+                "chart_variable_axis_mismatch",
+                "chart_variable must belong to the polynomial axis",
+            )
         if not rational_polynomial_to_sympy(self.polynomial).is_homogeneous:
-            raise ValueError("projective polynomial must be homogeneous")
+            raise _validation_error(
+                "polynomial_not_homogeneous",
+                "projective polynomial must be homogeneous",
+            )
         return self
 
 
@@ -126,7 +185,10 @@ class RationalConicParametrizationRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_smooth_conic_with_admitted_output(self) -> Self:
-        validate_rational_conic_request(self.polynomial, self.point, self.parameter)
+        try:
+            validate_rational_conic_request(self.polynomial, self.point, self.parameter)
+        except ValueError as exc:
+            raise _validation_error_from(exc) from exc
         return self
 
 
@@ -183,21 +245,22 @@ class RationalConicParametrizationResult(StrictModel):
 
     @model_validator(mode="after")
     def replay_defining_identities(self) -> Self:
-        validate_rational_conic_request(
-            self.source_polynomial,
-            self.exceptional_point,
-            self.parameter,
-        )
-        validate_rational_conic_result_identities(
-            self.source_polynomial,
-            self.exceptional_point,
-            self.parameter,
-            ConicParametrizationData(
-                coordinates=self.coordinates,
-                inverse_parameter=self.inverse_parameter,
-                finite_parameter_denominator=self.finite_parameter_denominator,
-            ),
-        )
+        try:
+            validate_rational_conic_request(
+                self.source_polynomial, self.exceptional_point, self.parameter
+            )
+            validate_rational_conic_result_identities(
+                self.source_polynomial,
+                self.exceptional_point,
+                self.parameter,
+                ConicParametrizationData(
+                    coordinates=self.coordinates,
+                    inverse_parameter=self.inverse_parameter,
+                    finite_parameter_denominator=self.finite_parameter_denominator,
+                ),
+            )
+        except ValueError as exc:
+            raise _validation_error_from(exc) from exc
         return self
 
 

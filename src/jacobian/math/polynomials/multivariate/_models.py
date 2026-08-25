@@ -9,6 +9,7 @@ from math import comb, factorial, gcd, lcm
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
@@ -17,6 +18,11 @@ from jacobian.math.polynomials.values import (
     RationalPolynomial,
     require_polynomial_budget,
 )
+
+
+def _validation_error(message: str) -> PydanticCustomError:
+    return PydanticCustomError("polynomial.multivariate_contract", message)
+
 
 _MAX_MULTIVARIATE_TERMS = 512
 _MAX_MULTIVARIATE_EXPONENT = 64
@@ -58,9 +64,11 @@ def _validate_multivariate_pair(
     """Shared validation for two polynomials in the same declared ring."""
 
     if len(left.variables) < _MULTIVARIATE_MIN_VARIABLES:
-        raise ValueError("multivariate operations require at least two variables")
+        raise _validation_error(
+            "multivariate operations require at least two variables"
+        )
     if left.variables != right.variables:
-        raise ValueError("both polynomials must use the same ordered variables")
+        raise _validation_error("both polynomials must use the same ordered variables")
 
 
 def _resultant_support_bound(
@@ -369,7 +377,7 @@ class MultivariateDivisionRequest(StrictModel):
     def require_multivariate_ring(self) -> Self:
         _validate_multivariate_pair(self.left, self.right)
         if not self.right.polynomial.terms:
-            raise ValueError("divisor polynomial must be nonzero")
+            raise _validation_error("divisor polynomial must be nonzero")
         for polynomial in (self.left, self.right):
             require_polynomial_budget(
                 polynomial,
@@ -410,7 +418,9 @@ class MultivariateResultantRequest(StrictModel):
     def require_multivariate_ring(self) -> Self:
         _validate_multivariate_pair(self.left, self.right)
         if self.elimination_variable not in self.left.variables:
-            raise ValueError("elimination variable must belong to the declared ring")
+            raise _validation_error(
+                "elimination variable must belong to the declared ring"
+            )
         for polynomial in (self.left, self.right):
             require_polynomial_budget(
                 polynomial,
@@ -427,12 +437,12 @@ class MultivariateResultantRequest(StrictModel):
             default=0,
         )
         if degree_sum > _MAX_ELIMINATION_DEGREE_SUM:
-            raise ValueError("Sylvester degree exceeds the resultant budget")
+            raise _validation_error("Sylvester degree exceeds the resultant budget")
         if (
             _resultant_support_bound(self.left, self.right, variable_index)
             > _MAX_RESULTANT_TERMS
         ):
-            raise ValueError("resultant output exceeds the term budget")
+            raise _validation_error("resultant output exceeds the term budget")
         return self
 
 
@@ -479,7 +489,7 @@ class MultivariateResultantResult(StrictModel):
             elimination_variable=self.elimination_variable,
         )
         if self.resultant != _sylvester_resultant_value(request):
-            raise ValueError(
+            raise _validation_error(
                 "resultant must equal the Sylvester determinant of the "
                 "retained source polynomials"
             )
@@ -510,7 +520,7 @@ class MultivariateSubresultantSequenceRequest(StrictModel):
     def require_bounded_subresultant_envelope(self) -> Self:
         _validate_multivariate_pair(self.left, self.right)
         if self.main_variable not in self.left.variables:
-            raise ValueError("main variable must belong to the declared ring")
+            raise _validation_error("main variable must belong to the declared ring")
         for polynomial, label in ((self.left, "left"), (self.right, "right")):
             require_polynomial_budget(
                 polynomial,
@@ -525,28 +535,32 @@ class MultivariateSubresultantSequenceRequest(StrictModel):
             _degree_in_variable(self.right, variable_index),
         )
         if any(degree == 0 for degree in degrees):
-            raise ValueError("both polynomials must have positive main-variable degree")
+            raise _validation_error(
+                "both polynomials must have positive main-variable degree"
+            )
         if sum(degrees) > _MAX_ELIMINATION_DEGREE_SUM:
-            raise ValueError("Sylvester order exceeds the subresultant backend budget")
+            raise _validation_error(
+                "Sylvester order exceeds the subresultant backend budget"
+            )
 
         envelope = _subresultant_envelope(self.left, self.right, variable_index)
         if envelope.aggregate_terms > _MAX_SUBRESULTANT_SEQUENCE_TERMS:
-            raise ValueError(
+            raise _validation_error(
                 "formal subresultant sequence support exceeds the aggregate "
                 "result-term budget"
             )
         if envelope.maximum_coefficient_support > _MAX_SUBRESULTANT_COEFFICIENT_SUPPORT:
-            raise ValueError(
+            raise _validation_error(
                 "subresultant coefficient support exceeds the intermediate "
                 "polynomial-term budget"
             )
         if envelope.arithmetic_term_pairs > _MAX_SUBRESULTANT_ARITHMETIC_TERM_PAIRS:
-            raise ValueError(
+            raise _validation_error(
                 "subresultant pseudo-remainder arithmetic exceeds the term-pair "
                 "work budget"
             )
         if envelope.coefficient_bits > _MAX_SUBRESULTANT_COEFFICIENT_BITS:
-            raise ValueError(
+            raise _validation_error(
                 "subresultant determinant coefficient height exceeds the exact "
                 "coefficient-bit budget"
             )
@@ -554,7 +568,7 @@ class MultivariateSubresultantSequenceRequest(StrictModel):
             envelope.intermediate_coefficient_bits
             > _MAX_SUBRESULTANT_INTERMEDIATE_COEFFICIENT_BITS
         ):
-            raise ValueError(
+            raise _validation_error(
                 "Brown pseudo-remainder intermediate coefficient height exceeds "
                 "the exact coefficient-bit budget"
             )
@@ -562,7 +576,7 @@ class MultivariateSubresultantSequenceRequest(StrictModel):
             envelope.serialized_coefficient_bits
             > _MAX_SUBRESULTANT_SERIALIZED_COEFFICIENT_BITS
         ):
-            raise ValueError(
+            raise _validation_error(
                 "subresultant sequence exceeds the aggregate exact-output budget"
             )
         return self
@@ -693,7 +707,7 @@ class MultivariateSubresultantSequenceResult(StrictModel):
             maximum_terms=_MAX_SUBRESULTANT_SEQUENCE_TERMS,
         )
         if self.source_order != expected_order:
-            raise ValueError("source_order does not match main-variable degrees")
+            raise _validation_error("source_order does not match main-variable degrees")
         variable_index = request.left.variables.index(request.main_variable)
         left_degree = _degree_in_variable(request.left, variable_index)
         right_degree = _degree_in_variable(request.right, variable_index)
@@ -703,10 +717,14 @@ class MultivariateSubresultantSequenceResult(StrictModel):
             else 1
         )
         if self.resultant_sign_from_sequence_order != expected_resultant_sign:
-            raise ValueError("resultant sign does not match the PRS source order")
+            raise _validation_error(
+                "resultant sign does not match the PRS source order"
+            )
         actual_polynomials = tuple(member.polynomial for member in self.members)
         if actual_polynomials != expected_polynomials:
-            raise ValueError("members do not replay the exact subresultant sequence")
+            raise _validation_error(
+                "members do not replay the exact subresultant sequence"
+            )
 
         expected_degrees = tuple(
             _degree_in_variable(polynomial, variable_index)
@@ -716,7 +734,7 @@ class MultivariateSubresultantSequenceResult(StrictModel):
             member.degree_in_main_variable for member in self.members
         )
         if actual_degrees != expected_degrees:
-            raise ValueError("member degrees do not match their polynomials")
+            raise _validation_error("member degrees do not match their polynomials")
         greatest_degree = max(expected_degrees)
         expected_degree_set = set(expected_degrees)
         expected_absent = tuple(
@@ -725,7 +743,9 @@ class MultivariateSubresultantSequenceResult(StrictModel):
             if degree not in expected_degree_set
         )
         if self.skipped_member_degrees != expected_absent:
-            raise ValueError("skipped_member_degrees does not match the PRS ledger")
+            raise _validation_error(
+                "skipped_member_degrees does not match the PRS ledger"
+            )
         expected_scalar_ledger = tuple(
             MultivariatePrincipalSubresultantCoefficient(
                 index=index,
@@ -734,11 +754,11 @@ class MultivariateSubresultantSequenceResult(StrictModel):
             for index, coefficient in enumerate(expected_principal_coefficients)
         )
         if self.principal_subresultant_coefficients != expected_scalar_ledger:
-            raise ValueError(
+            raise _validation_error(
                 "principal subresultant coefficients do not replay the source pair"
             )
         if self.gcd_member_index != len(self.members) - 1:
-            raise ValueError("gcd_member_index must select the final PRS member")
+            raise _validation_error("gcd_member_index must select the final PRS member")
 
         expected_resultant = polynomial_resultant_in_remaining_ring(
             request.left,
@@ -747,7 +767,7 @@ class MultivariateSubresultantSequenceResult(StrictModel):
             maximum_terms=_MAX_SUBRESULTANT_SEQUENCE_TERMS,
         )
         if self.resultant != expected_resultant:
-            raise ValueError("resultant does not match the source pair")
+            raise _validation_error("resultant does not match the source pair")
         expected_gcd_degree, expected_leading_coefficient = fraction_field_gcd_relation(
             request.left,
             request.right,
@@ -756,9 +776,11 @@ class MultivariateSubresultantSequenceResult(StrictModel):
             maximum_terms=_MAX_SUBRESULTANT_SEQUENCE_TERMS,
         )
         if self.gcd_degree_in_main_variable != expected_gcd_degree:
-            raise ValueError("gcd degree does not match the final PRS member")
+            raise _validation_error("gcd degree does not match the final PRS member")
         if self.gcd_member_leading_coefficient != expected_leading_coefficient:
-            raise ValueError("gcd leading coefficient does not match the final member")
+            raise _validation_error(
+                "gcd leading coefficient does not match the final member"
+            )
         return self
 
 
@@ -777,12 +799,12 @@ class MultivariateFactorRequest(StrictModel):
     @model_validator(mode="after")
     def require_factor_budget(self) -> Self:
         if len(self.polynomial.variables) < _MULTIVARIATE_MIN_VARIABLES:
-            raise ValueError(
+            raise _validation_error(
                 f"multivariate factorization requires at least {_MULTIVARIATE_MIN_VARIABLES} variables; "
                 "univariate polynomials are handled by polynomial.factor.compute"
             )
         if not self.polynomial.polynomial.terms:
-            raise ValueError("zero polynomial has no factorization")
+            raise _validation_error("zero polynomial has no factorization")
         require_polynomial_budget(
             self.polynomial,
             maximum_terms=_MAX_MULTIVARIATE_TERMS,
@@ -817,14 +839,14 @@ def _require_representable_content(polynomial: RationalPolynomial) -> None:
         abs(content_numerator) >= canonical_bound
         or common_denominator >= canonical_bound
     ):
-        raise ValueError(
+        raise _validation_error(
             "aggregate rational content exceeds the "
             f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit representable bound"
         )
     primitive_bound = 10**_MAX_MULTIVARIATE_COEFFICIENT_DIGITS
     for value in scaled:
         if abs(value // content_numerator) >= primitive_bound:
-            raise ValueError(
+            raise _validation_error(
                 "primitive integer coefficients exceed the "
                 f"{_MAX_MULTIVARIATE_COEFFICIENT_DIGITS}-digit operation budget"
             )
@@ -869,7 +891,7 @@ class MultivariateFactorResult(StrictModel):
     @model_validator(mode="after")
     def require_canonical(self) -> Self:
         if self.coefficient.as_fraction() == 0:
-            raise ValueError("factorization coefficient must be nonzero")
+            raise _validation_error("factorization coefficient must be nonzero")
         require_polynomial_budget(
             self.reconstructed,
             maximum_terms=_MAX_MULTIVARIATE_TERMS,
@@ -880,19 +902,21 @@ class MultivariateFactorResult(StrictModel):
             from jacobian.math.polynomials.multivariate import _factor_backend
 
             if self.factors:
-                raise ValueError("non-FACTORIZED outcomes carry no irreducible factors")
+                raise _validation_error(
+                    "non-FACTORIZED outcomes carry no irreducible factors"
+                )
             if (
                 self.normalization is not None
                 or self.product_reconstruction is not None
             ):
-                raise ValueError(
+                raise _validation_error(
                     "non-FACTORIZED outcomes declare no normalization or "
                     "product reconstruction"
                 )
             if _factor_backend.primitive_content_fraction(self.reconstructed) != (
                 self.coefficient.as_fraction()
             ):
-                raise ValueError(
+                raise _validation_error(
                     "outcome coefficient does not match the exact content "
                     "of the restated polynomial"
                 )
@@ -909,12 +933,12 @@ class MultivariateFactorResult(StrictModel):
             self.normalization != "CONTENT_AND_MONIC_IRREDUCIBLES"
             or self.product_reconstruction != "EXACT"
         ):
-            raise ValueError(
+            raise _validation_error(
                 "FACTORIZED outcomes declare content-and-monic-irreducibles "
                 "normalization and exact product reconstruction"
             )
         if not self.reconstructed.polynomial.terms:
-            raise ValueError("reconstructed polynomial must be nonzero")
+            raise _validation_error("reconstructed polynomial must be nonzero")
         _check_factor_records(self.factors, self.reconstructed.variables)
         _require_aggregate_degree_consistent(self.factors, self.reconstructed)
         _require_distinct_canonical_order(self.factors)
@@ -968,7 +992,7 @@ def _require_aggregate_degree_consistent(
     for record in factors:
         aggregate += _factor_total_degree(record) * record.multiplicity
         if aggregate > target:
-            raise ValueError(
+            raise _validation_error(
                 "aggregate irreducible degree exceeds the reconstructed "
                 "total degree; the factorization product cannot match"
             )
@@ -1008,7 +1032,7 @@ def _verify_output_budget_exceeded_claim(
     if _factor_backend.primitive_content_fraction(reconstructed) != (
         coefficient.as_fraction()
     ):
-        raise ValueError(
+        raise _validation_error(
             "budget-exceeded outcome coefficient does not match the exact "
             "content of the restated polynomial"
         )
@@ -1026,7 +1050,7 @@ def _verify_output_budget_exceeded_claim(
         # claim, so only exhaustion returns here.
         return
     except FactorBackendInterruptedError as exc:
-        raise ValueError(
+        raise _validation_error(
             "budget-exceeded outcome could not be re-derived because the "
             "verification replay was itself stopped before completing"
         ) from exc
@@ -1053,7 +1077,7 @@ def _verify_output_budget_exceeded_claim(
             if "term operation budget" in str(exc):
                 return
             raise
-    raise ValueError(
+    raise _validation_error(
         "claimed output-budget exceedance is not reproduced by the exact "
         "factorization of the restated polynomial"
     )
@@ -1071,7 +1095,7 @@ def _check_factor_records(
 
     for record in factors:
         if record.factor.variables != variables:
-            raise ValueError("irreducible factors must use the source ring")
+            raise _validation_error("irreducible factors must use the source ring")
         require_polynomial_budget(
             record.factor,
             maximum_terms=_MAX_FACTOR_OUTPUT_TERMS,
@@ -1079,7 +1103,7 @@ def _check_factor_records(
             maximum_coefficient_digits=_MAX_MULTIVARIATE_COEFFICIENT_DIGITS,
         )
         if _factor_total_degree(record) == 0:
-            raise ValueError("irreducible factor must be non-constant")
+            raise _validation_error("irreducible factor must be non-constant")
 
 
 def _require_distinct_canonical_order(
@@ -1088,7 +1112,7 @@ def _require_distinct_canonical_order(
     seen: set[_FactorContentKey] = set()
     for key in (_factor_content_key(record) for record in factors):
         if key in seen:
-            raise ValueError("irreducible factors must be distinct")
+            raise _validation_error("irreducible factors must be distinct")
         seen.add(key)
     ordered = tuple(
         sorted(
@@ -1101,13 +1125,13 @@ def _require_distinct_canonical_order(
         ),
     )
     if factors != ordered:
-        raise ValueError("irreducible factors must use canonical order")
+        raise _validation_error("irreducible factors must use canonical order")
 
 
 def _require_monic(poly: Any, factor: RationalPolynomial) -> None:
     lc = poly.LC()
     if getattr(lc, "p", None) != 1 or getattr(lc, "q", None) != 1:
-        raise ValueError(f"irreducible factor {factor} is not monic")
+        raise _validation_error(f"irreducible factor {factor} is not monic")
 
 
 def _verify_monic_irreducibles(
@@ -1122,11 +1146,11 @@ def _verify_monic_irreducibles(
         try:
             _require_monic(poly, record.factor)
             if not poly.is_irreducible:
-                raise ValueError(f"factor {record.factor} is not irreducible")
+                raise _validation_error(f"factor {record.factor} is not irreducible")
         except ValueError:
             raise
         except Exception as exc:  # pragma: no cover - defensive
-            raise ValueError("invalid factor normalization check") from exc
+            raise _validation_error("invalid factor normalization check") from exc
 
 
 def _sympy_factor_key(poly: Any) -> _SympyFactorKey:
@@ -1191,18 +1215,18 @@ def _verify_exact_reconstruction(
             _monic_content_fraction(content) != coefficient.as_fraction()
             or claimed != replayed
         ):
-            raise ValueError(
+            raise _validation_error(
                 "factorization product does not equal reconstructed polynomial"
             )
     except ValueError:
         raise
     except (FactorBackendExhaustedError, FactorBackendInterruptedError) as exc:
-        raise ValueError(
+        raise _validation_error(
             "factorization verification could not reproduce the exact "
             "factorization within the declared work budget"
         ) from exc
     except Exception as exc:  # pragma: no cover - defensive
-        raise ValueError("invalid factorization reconstruction") from exc
+        raise _validation_error("invalid factorization reconstruction") from exc
 
 
 __all__ = [

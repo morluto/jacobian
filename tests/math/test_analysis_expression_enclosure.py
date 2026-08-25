@@ -3,7 +3,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 import pytest
-from pydantic import ValidationError
+from tests.math._analysis_support import analysis_validation_error
 
 from jacobian.math.analysis._models import (
     MAX_DYADIC_EXPONENT,
@@ -175,14 +175,14 @@ def test_expression_depth_is_rejected_before_arb() -> None:
     expression: dict[str, object] = {"op": "var"}
     for _ in range(16):
         expression = {"op": "neg", "children": [expression]}
-    with pytest.raises(ValidationError, match="depth exceeds"):
+    with analysis_validation_error():
         IntervalExpressionEnclosureRequest.model_validate(
             {"expression": expression, "argument": {"num": "0", "den": "1"}}
         )
 
 
 def test_operation_payloads_are_structurally_typed() -> None:
-    with pytest.raises(ValidationError, match="only a const node"):
+    with analysis_validation_error():
         IntervalExpressionEnclosureRequest.model_validate(
             {
                 "expression": {"op": "var", "value": {"num": "1", "den": "1"}},

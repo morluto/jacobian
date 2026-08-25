@@ -135,8 +135,9 @@ class TestCanonicalUniformRank3Table:
     def test_rejects_zero_sign_before_axiom_enumeration(self) -> None:
         table = _alternating_table(4)
         table["entries"][0]["sign"] = 0
-        with pytest.raises(ValidationError, match="Input should be -1 or 1"):
+        with pytest.raises(ValidationError) as exc_info:
             ChirotopeCheckRequest.model_validate({"chirotope": table})
+        assert exc_info.value.errors()[0]["type"] == "literal_error"
 
     def test_rejects_missing_or_reordered_triples(self) -> None:
         table = _alternating_table(4)
@@ -144,8 +145,12 @@ class TestCanonicalUniformRank3Table:
             table["entries"][2],
             table["entries"][1],
         )
-        with pytest.raises(ValidationError, match="complete lexicographic"):
+        with pytest.raises(ValidationError) as exc_info:
             UniformRank3Chirotope.model_validate(table)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "oriented_matroid.canonical_table.entries"
+        )
 
     def test_b2_budget_admits_nine_and_ten_but_rejects_eleven(self) -> None:
         assert (
@@ -153,8 +158,9 @@ class TestCanonicalUniformRank3Table:
             == 10
         )
         oversized = _alternating_table(11)
-        with pytest.raises(ValidationError, match="less than or equal to 10"):
+        with pytest.raises(ValidationError) as exc_info:
             UniformRank3Chirotope.model_validate(oversized)
+        assert exc_info.value.errors()[0]["type"] == "less_than_equal"
 
 
 class TestChirotopeCheck:
@@ -217,13 +223,15 @@ class TestChirotopeCheck:
         )
         source_corruption = result.model_dump(mode="json")
         source_corruption["chirotope"]["entries"][0]["sign"] *= -1
-        with pytest.raises(ValidationError, match="exact axiom replay"):
+        with pytest.raises(ValidationError) as exc_info:
             ChirotopeCheckResult.model_validate(source_corruption)
+        assert exc_info.value.errors()[0]["type"] == "oriented_matroid.result.replay"
 
         conclusion_corruption = result.model_dump(mode="json")
         conclusion_corruption["b2_exchange_instances_checked"] -= 1
-        with pytest.raises(ValidationError, match="exact axiom replay"):
+        with pytest.raises(ValidationError) as exc_info:
             ChirotopeCheckResult.model_validate(conclusion_corruption)
+        assert exc_info.value.errors()[0]["type"] == "oriented_matroid.result.replay"
 
     def test_result_replay_rejects_corrupted_b2_witness(self) -> None:
         table = _ringel_table()
@@ -239,8 +247,9 @@ class TestChirotopeCheck:
             original_x[1],
             original_x[2],
         ]
-        with pytest.raises(ValidationError, match="exact axiom replay"):
+        with pytest.raises(ValidationError) as exc_info:
             ChirotopeCheckResult.model_validate(witness_corruption)
+        assert exc_info.value.errors()[0]["type"] == "oriented_matroid.result.replay"
 
     def test_boundary_ten_reserves_two_b2_scans(
         self, monkeypatch: pytest.MonkeyPatch

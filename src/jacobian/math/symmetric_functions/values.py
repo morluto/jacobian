@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Self
 
 from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
@@ -36,6 +37,12 @@ TableauRow = Annotated[
 ]
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by symmetric-function values."""
+
+    return PydanticCustomError(f"symmetric_function.{reason}", message)
+
+
 class IntegerPartition(StrictModel):
     """A partition as a weakly decreasing tuple of positive integers.
 
@@ -58,14 +65,21 @@ class IntegerPartition(StrictModel):
         if not self.parts:
             return self
         if any(part <= 0 for part in self.parts):
-            raise ValueError("partition parts must be positive")
+            raise _validation_error(
+                "partition_parts_not_positive", "partition parts must be positive"
+            )
         if any(
             self.parts[index] < self.parts[index + 1]
             for index in range(len(self.parts) - 1)
         ):
-            raise ValueError("partition parts must be weakly decreasing")
+            raise _validation_error(
+                "partition_not_weakly_decreasing",
+                "partition parts must be weakly decreasing",
+            )
         if sum(self.parts) > MAX_PARTITION_SIZE:
-            raise ValueError("partition size exceeds the supported bound")
+            raise _validation_error(
+                "partition_size_exceeded", "partition size exceeds the supported bound"
+            )
         return self
 
 
@@ -79,7 +93,10 @@ def _require_strict_columns(rows: tuple[TableauRow, ...]) -> None:
         lower = rows[row_index + 1]
         for column, lower_entry in enumerate(lower):
             if upper[column] >= lower_entry:
-                raise ValueError("tableau columns must be strictly increasing")
+                raise _validation_error(
+                    "tableau_columns_not_strict",
+                    "tableau columns must be strictly increasing",
+                )
 
 
 class SemistandardYoungTableau(StrictModel):
@@ -104,7 +121,10 @@ class SemistandardYoungTableau(StrictModel):
         _shape(self.rows)
         for row in self.rows:
             if any(row[index] > row[index + 1] for index in range(len(row) - 1)):
-                raise ValueError("semistandard tableau rows must be weakly increasing")
+                raise _validation_error(
+                    "semistandard_rows_not_weakly_increasing",
+                    "semistandard tableau rows must be weakly increasing",
+                )
         _require_strict_columns(self.rows)
         return self
 
@@ -135,11 +155,17 @@ class StandardYoungTableau(StrictModel):
         shape = _shape(self.rows)
         for row in self.rows:
             if any(row[index] >= row[index + 1] for index in range(len(row) - 1)):
-                raise ValueError("standard tableau rows must be strictly increasing")
+                raise _validation_error(
+                    "standard_rows_not_strictly_increasing",
+                    "standard tableau rows must be strictly increasing",
+                )
         _require_strict_columns(self.rows)
         entries = sorted(entry for row in self.rows for entry in row)
         if entries != list(range(1, sum(shape.parts) + 1)):
-            raise ValueError("standard tableau entries must be exactly 1 through n")
+            raise _validation_error(
+                "standard_entries_not_consecutive",
+                "standard tableau entries must be exactly 1 through n",
+            )
         return self
 
     @property

@@ -13,6 +13,11 @@ from jacobian.math.probability._mutual_information import (
 from jacobian.math.probability.mutual_information import (
     MAX_MUTUAL_INFORMATION_PRODUCT_DIGITS,
 )
+from jacobian.math.probability.values import (
+    MAX_FINITE_JOINT_TABLE_CELLS,
+    MAX_FINITE_JOINT_TABLE_COLUMNS,
+    MAX_FINITE_JOINT_TABLE_ROWS,
+)
 
 _Q1 = {"num": "1", "den": "1"}
 
@@ -38,7 +43,7 @@ def test_request_rejects_oversized_outer_table_before_cell_parsing() -> None:
     payload = {
         "row_labels": ["only"],
         "column_labels": ["only"],
-        "probabilities": [[{}] for _ in range(17)],
+        "probabilities": [[{}] for _ in range(MAX_FINITE_JOINT_TABLE_ROWS + 1)],
         "log_base": 2,
     }
 
@@ -48,9 +53,22 @@ def test_request_rejects_oversized_outer_table_before_cell_parsing() -> None:
 
 def test_request_rejects_oversized_cell_product_before_cell_parsing() -> None:
     payload = {
-        "row_labels": [str(index) for index in range(8)],
-        "column_labels": [str(index) for index in range(9)],
-        "probabilities": [[{} for _ in range(9)] for _ in range(8)],
+        "row_labels": [str(index) for index in range(MAX_FINITE_JOINT_TABLE_ROWS)],
+        "column_labels": [
+            str(index)
+            for index in range(
+                MAX_FINITE_JOINT_TABLE_CELLS // MAX_FINITE_JOINT_TABLE_ROWS + 1
+            )
+        ],
+        "probabilities": [
+            [
+                {}
+                for _ in range(
+                    MAX_FINITE_JOINT_TABLE_CELLS // MAX_FINITE_JOINT_TABLE_ROWS + 1
+                )
+            ]
+            for _ in range(MAX_FINITE_JOINT_TABLE_ROWS)
+        ],
         "log_base": 2,
     }
 
@@ -86,7 +104,9 @@ def _candidate() -> dict[str, object]:
 
 def test_candidate_rejects_oversized_support_before_item_parsing() -> None:
     candidate = _candidate()
-    candidate["positive_support"] = [{} for _ in range(65)]
+    candidate["positive_support"] = [
+        {} for _ in range(MAX_FINITE_JOINT_TABLE_CELLS + 1)
+    ]
 
     with pytest.raises(ValidationError):
         FiniteJointTableMutualInformationResult.model_validate(candidate)
@@ -94,7 +114,7 @@ def test_candidate_rejects_oversized_support_before_item_parsing() -> None:
 
 def test_candidate_rejects_oversized_marginals_before_item_parsing() -> None:
     candidate = _candidate()
-    candidate["row_marginals"] = [{} for _ in range(17)]
+    candidate["row_marginals"] = [{} for _ in range(MAX_FINITE_JOINT_TABLE_ROWS + 1)]
 
     with pytest.raises(ValidationError):
         FiniteJointTableMutualInformationResult.model_validate(candidate)
@@ -128,7 +148,19 @@ def test_generated_schemas_publish_all_collection_bounds() -> None:
     request_schema = FiniteJointTableMutualInformationRequest.model_json_schema()
     result_schema = FiniteJointTableMutualInformationResult.model_json_schema()
 
-    assert request_schema["properties"]["probabilities"]["maxItems"] == 16
-    assert result_schema["properties"]["row_marginals"]["maxItems"] == 16
-    assert result_schema["properties"]["column_marginals"]["maxItems"] == 16
-    assert result_schema["properties"]["positive_support"]["maxItems"] == 64
+    assert (
+        request_schema["properties"]["probabilities"]["maxItems"]
+        == MAX_FINITE_JOINT_TABLE_ROWS
+    )
+    assert (
+        result_schema["properties"]["row_marginals"]["maxItems"]
+        == MAX_FINITE_JOINT_TABLE_ROWS
+    )
+    assert (
+        result_schema["properties"]["column_marginals"]["maxItems"]
+        == MAX_FINITE_JOINT_TABLE_COLUMNS
+    )
+    assert (
+        result_schema["properties"]["positive_support"]["maxItems"]
+        == MAX_FINITE_JOINT_TABLE_CELLS
+    )

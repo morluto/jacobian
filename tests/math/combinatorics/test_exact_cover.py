@@ -471,11 +471,18 @@ def test_schema_publishes_the_exact_cover_contract() -> None:
     schema = GeneralizedExactCoverRequest.model_json_schema()
     instance_schema = schema["$defs"]["GeneralizedExactCoverInstance"]
     result_schema = GeneralizedExactCoverResult.model_json_schema()
-    assert instance_schema["properties"]["primary_items"]["maxItems"] == 256
-    assert instance_schema["properties"]["rows"]["maxItems"] == 4_096
-    assert schema["properties"]["search_node_limit"]["maximum"] == 100_000
     assert (
-        result_schema["properties"]["selected_row_ids"]["anyOf"][0]["maxItems"] == 256
+        instance_schema["properties"]["primary_items"]["maxItems"]
+        == MAX_EXACT_COVER_PRIMARY_ITEMS
+    )
+    assert instance_schema["properties"]["rows"]["maxItems"] == MAX_EXACT_COVER_ROWS
+    assert (
+        schema["properties"]["search_node_limit"]["maximum"]
+        == MAX_EXACT_COVER_SEARCH_NODES_PER_PASS
+    )
+    assert (
+        result_schema["properties"]["selected_row_ids"]["anyOf"][0]["maxItems"]
+        == MAX_EXACT_COVER_PRIMARY_ITEMS
     )
     assert "NO_COVER" in schema["description"]
     assert "UNKNOWN" in schema["description"]

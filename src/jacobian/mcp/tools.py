@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, Protocol
 
-import anyio
 from mcp.server.mcpserver import Context
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.shared.exceptions import MCPError
@@ -37,6 +36,12 @@ _MAX_VALIDATION_ERRORS = 64
 _MAX_VALIDATION_LOCATION_COMPONENTS = 32
 _MAX_VALIDATION_LOCATION_LENGTH = 128
 _MAX_VALIDATION_ISSUES_BYTES = 48 * 1_024
+
+
+class _CancellationSignal(Protocol):
+    """Cooperative request cancellation observed by external process work."""
+
+    def is_set(self) -> bool: ...
 
 
 def math_find(
@@ -113,7 +118,7 @@ def math_run(
         ) from exc
 
 
-def _request_cancellation(ctx: Context[AppState, Any]) -> anyio.Event:
+def _request_cancellation(ctx: Context[AppState, Any]) -> _CancellationSignal:
     """Return MCP 2.1's request signal through its only available SDK seam."""
 
     return ctx.request_context.session._request_outbound.cancel_requested

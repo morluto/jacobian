@@ -285,7 +285,7 @@ class SubsystemKroneckerProductRequest(StrictModel):
             "First operand; no fixed per-operand digit ceiling applies. "
             "Admission evaluates the exact product coefficients and admits "
             "the pair when every numerator and denominator stays within the "
-            "256-digit product component envelope."
+            f"{MAX_KRONECKER_RESULT_COMPONENT_DIGITS}-digit product component envelope."
         ),
     )
     right: FactorizedHermitianMatrix = Field(
@@ -293,7 +293,7 @@ class SubsystemKroneckerProductRequest(StrictModel):
             "Second operand; no fixed per-operand digit ceiling applies. "
             "Admission evaluates the exact product coefficients and admits "
             "the pair when every numerator and denominator stays within the "
-            "256-digit product component envelope."
+            f"{MAX_KRONECKER_RESULT_COMPONENT_DIGITS}-digit product component envelope."
         ),
     )
 

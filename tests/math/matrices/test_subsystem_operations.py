@@ -13,6 +13,7 @@ from pydantic import BaseModel, ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.math.matrices import subsystems
 from jacobian.math.matrices.subsystems._models import (
+    MAX_KRONECKER_RESULT_COMPONENT_DIGITS,
     MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS,
     MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS,
     PsdOrderRequest,
@@ -787,7 +788,7 @@ def test_kronecker_product_schema_describes_the_exact_product_component_envelope
     for side in ("left", "right"):
         description = schema["properties"][side]["description"]
         assert "exact product coefficients" in description
-        assert "256" in description
+        assert str(MAX_KRONECKER_RESULT_COMPONENT_DIGITS) in description
 
 
 def test_kronecker_product_admits_asymmetric_operand_digit_growth() -> None:

@@ -4,23 +4,41 @@ from copy import deepcopy
 from fractions import Fraction
 
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 from pydantic import ValidationError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import CanonicalLimits, format_canonical_integer
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    format_canonical_integer,
+)
 from jacobian.math.matrices._operation_models import SquareRationalMatrixRequest
 from jacobian.math.matrices._operations import compute_characteristic_polynomial
 from jacobian.math.matrices.canonical_forms._models import (
     _MAX_WORK_BOUND,
+    _RESULT_ENTRY_OVERHEAD_BYTES,
+    _RESULT_ENVELOPE_RESERVE_BYTES,
     MATRIX_POLYNOMIAL_EVALUATION_PASSES,
     MAX_MATRIX_POLYNOMIAL_DIGIT_WORK,
     MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS,
     MatrixPolynomialEvaluationRequest,
     MatrixPolynomialEvaluationResult,
+    _coefficient_ratios,
+    _general_result_component_bounds,
+    _linear_result_component_bounds,
+    _polynomial_degree,
+    _require_matrix_polynomial_output_budget,
     _work_exact_quotient,
 )
 from jacobian.math.matrices.canonical_forms._operations import (
+    _dense_polynomial_coefficients,
     compute_matrix_polynomial_evaluation,
+)
+from jacobian.math.matrices.canonical_forms.operations import (
+    _evaluate_polynomial,
+    _HornerEvaluationMetrics,
 )
 from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.polynomials.values import (
@@ -67,6 +85,185 @@ def _polynomial(*terms: tuple[RationalInput, int]) -> RationalPolynomial:
 
 def _fractions(matrix: RationalMatrix) -> tuple[tuple[Fraction, ...], ...]:
     return tuple(tuple(entry.as_fraction() for entry in row) for row in matrix.entries)
+
+
+def _matrix_polynomial_component_bounds(
+    request: MatrixPolynomialEvaluationRequest,
+) -> tuple[tuple[tuple[int, int], ...], int]:
+    """Return the same owner-local result and intermediate estimates as admission."""
+
+    degree = _polynomial_degree(request.polynomial)
+    coefficients = _coefficient_ratios(request.polynomial)
+    matrix_is_zero = all(
+        entry.num == "0" for row in request.matrix.entries for entry in row
+    )
+    if degree <= 1 or matrix_is_zero:
+        return _linear_result_component_bounds(request.matrix, coefficients)
+    return _general_result_component_bounds(request.matrix, request.polynomial)
+
+
+def _assert_matrix_polynomial_envelope_conformance(
+    request: MatrixPolynomialEvaluationRequest,
+) -> None:
+    """Compare one public evaluation with the owner-local admission envelope."""
+
+    component_bounds, _component_work_digits = _matrix_polynomial_component_bounds(
+        request
+    )
+    estimated_work_digits = _require_matrix_polynomial_output_budget(
+        request.matrix,
+        request.polynomial,
+        _polynomial_degree(request.polynomial),
+    )
+
+    metrics = _HornerEvaluationMetrics()
+    measured_value = _evaluate_polynomial(
+        _fractions(request.matrix),
+        _dense_polynomial_coefficients(request),
+        metrics=metrics,
+    )
+    result = compute_matrix_polynomial_evaluation(request)
+
+    assert _fractions(result.value) == measured_value
+    actual_component_bounds = tuple(
+        (len(entry.num.lstrip("-")), len(entry.den))
+        for row in result.value.entries
+        for entry in row
+    )
+    assert all(
+        actual_numerator_digits <= estimated_numerator_digits
+        and actual_denominator_digits <= estimated_denominator_digits
+        for (actual_numerator_digits, actual_denominator_digits), (
+            estimated_numerator_digits,
+            estimated_denominator_digits,
+        ) in zip(actual_component_bounds, component_bounds, strict=True)
+    )
+    assert metrics.maximum_component_digits <= estimated_work_digits
+
+    dimension = len(request.matrix.entries)
+    degree = _polynomial_degree(request.polynomial)
+    assert metrics.scalar_product_terms == degree * dimension**3
+    assert metrics.stored_states == degree + 1
+    total_scalar_products = (
+        MATRIX_POLYNOMIAL_EVALUATION_PASSES * metrics.scalar_product_terms
+    )
+    assert total_scalar_products <= MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS
+    assert (
+        total_scalar_products * estimated_work_digits**2
+        <= MAX_MATRIX_POLYNOMIAL_DIGIT_WORK
+    )
+
+    estimated_value_bytes = sum(
+        numerator_digits + denominator_digits + _RESULT_ENTRY_OVERHEAD_BYTES
+        for numerator_digits, denominator_digits in component_bounds
+    )
+    estimated_output_bytes = (
+        len(encode_strict_json(request.matrix.model_dump(mode="json")))
+        + len(encode_strict_json(request.polynomial.model_dump(mode="json")))
+        + estimated_value_bytes
+        + _RESULT_ENVELOPE_RESERVE_BYTES
+    )
+    actual_output_bytes = len(encode_strict_json(result.model_dump(mode="json")))
+    assert actual_output_bytes <= estimated_output_bytes
+    assert actual_output_bytes <= CanonicalLimits().max_output_bytes
+
+
+@pytest.mark.parametrize(
+    ("matrix", "polynomial"),
+    [
+        # Degenerate zero support keeps a high-degree Horner trace without a
+        # matrix-side denominator product.
+        (_matrix((0, 0), (0, 0)), _polynomial((1, 3), ((1, 3), 0))),
+        # A chain clears dead powers after bounded shifted states.
+        (
+            _matrix((0, (1, 2), 0), (0, 0, (1, 3)), (0, 0, 0)),
+            _polynomial(((1, 5), 5), ((1, 7), 4), (1, 1)),
+        ),
+        # Two routes meet at one cell, so coprime denominators compound in a
+        # measured state rather than staying independent by construction.
+        (
+            _matrix(
+                (0, (1, 2), (1, 3), 0),
+                (0, 0, 0, (1, 5)),
+                (0, 0, 0, (1, 7)),
+                (0, 0, 0, 0),
+            ),
+            _polynomial((1, 2), ((1, 11), 1), ((1, 13), 0)),
+        ),
+        # Separate diagonal cells retain distinct rational components.
+        (
+            _matrix(((1, 2), 0), (0, (1, 3))),
+            _polynomial(((1, 5), 4), ((1, 7), 2), ((1, 11), 0)),
+        ),
+        # Cyclic support exercises the conservative non-acyclic path.
+        (
+            _matrix((0, (1, 2)), ((1, 3), 0)),
+            _polynomial((1, 5), ((1, 5), 3), ((1, 7), 0)),
+        ),
+    ],
+    ids=("zero", "chain", "converging_paths", "disjoint_diagonal", "cycle"),
+)
+def test_matrix_polynomial_envelope_pilot_matches_measured_horner_states(
+    matrix: RationalMatrix,
+    polynomial: RationalPolynomial,
+) -> None:
+    """#2597 pilot: admitted representative shapes match their work/output envelope."""
+
+    _assert_matrix_polynomial_envelope_conformance(
+        MatrixPolynomialEvaluationRequest(matrix=matrix, polynomial=polynomial)
+    )
+
+
+@st.composite
+def _small_horner_requests(
+    draw: st.DrawFn,
+) -> MatrixPolynomialEvaluationRequest:
+    """Generate bounded support shapes around the representative pilot corpus."""
+
+    dimension = draw(st.integers(min_value=1, max_value=3))
+    support = draw(st.sampled_from(("zero", "chain", "diagonal", "dense")))
+    numerator = st.integers(min_value=-3, max_value=3)
+    denominator = st.sampled_from((1, 2, 3, 5))
+
+    def entry(row: int, column: int) -> RationalInput:
+        if support == "zero":
+            return 0
+        if support == "chain" and column != row + 1:
+            return 0
+        if support == "diagonal" and column != row:
+            return 0
+        value, divisor = draw(st.tuples(numerator, denominator))
+        reduced = Fraction(value, divisor)
+        return 0 if reduced == 0 else (reduced.numerator, reduced.denominator)
+
+    matrix = _matrix(
+        *(
+            tuple(entry(row, column) for column in range(dimension))
+            for row in range(dimension)
+        )
+    )
+    degree = draw(st.integers(min_value=0, max_value=5))
+    coefficients = [(draw(numerator), exponent) for exponent in range(degree, -1, -1)]
+    return MatrixPolynomialEvaluationRequest(
+        matrix=matrix,
+        polynomial=_polynomial(
+            *(
+                (coefficient, exponent)
+                for coefficient, exponent in coefficients
+                if coefficient
+            )
+        ),
+    )
+
+
+@settings(max_examples=40, deadline=None, derandomize=True)
+@given(_small_horner_requests())
+def test_matrix_polynomial_envelope_pilot_covers_small_support_variation(
+    request: MatrixPolynomialEvaluationRequest,
+) -> None:
+    """The pilot's conformance relation also holds across small support variation."""
+
+    _assert_matrix_polynomial_envelope_conformance(request)
 
 
 def test_saturated_work_estimates_do_not_reenter_exact_division() -> None:

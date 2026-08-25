@@ -1,11 +1,11 @@
 """Public declaration for the exact bounded friable-count operation."""
 
 from jacobian.catalog._examples import example
-from jacobian.math.number_theory._friable_operations import compute_friable_count
-from jacobian.math.number_theory._models import (
+from jacobian.math.number_theory._friable_models import (
     FriableCountRequest,
     FriableCountResult,
 )
+from jacobian.math.number_theory._friable_operations import compute_friable_count
 from jacobian.math.number_theory._support import number_theory_operation
 
 FRIABLE_COUNT_OPERATION = number_theory_operation(

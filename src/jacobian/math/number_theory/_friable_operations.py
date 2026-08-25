@@ -6,7 +6,7 @@ from math import isqrt
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.arithmetic.values import IntegerValue
-from jacobian.math.number_theory._models import (
+from jacobian.math.number_theory._friable_models import (
     FriableCountRequest,
     FriableCountResult,
     _plan_friable_count,

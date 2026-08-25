@@ -11,14 +11,14 @@ from tests.math.number_theory._validation import expect_validation
 from jacobian.math.arithmetic import absolute_value
 from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory import FriableCountResult, count_friable
-from jacobian.math.number_theory._friable_operations import compute_friable_count
-from jacobian.math.number_theory._models import (
+from jacobian.math.number_theory._friable_models import (
     _MAX_FRIABLE_SOURCE_ABS,
     _MAX_FRIABLE_SOURCE_DIGITS,
     MAX_FRIABLE_GENERATED_CUTOFF,
     MAX_FRIABLE_MATERIALIZED_X,
     FriableCountRequest,
 )
+from jacobian.math.number_theory._friable_operations import compute_friable_count
 
 
 def _prime_factors(value: int) -> Iterator[int]:

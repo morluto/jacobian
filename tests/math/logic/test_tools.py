@@ -10,7 +10,6 @@ from jacobian.math.logic import _operations as operations
 from jacobian.math.logic._operations import (
     CanonicalCnf,
     CnfCanonicalizeRequest,
-    LeanCheckRequest,
     LprAddition,
     LprDeletion,
     LprPropagationHint,
@@ -23,7 +22,6 @@ from jacobian.math.logic._operations import (
     SmtSolveRequest,
     SmtSolveResult,
     canonicalize_cnf,
-    check_lean_source,
     check_sat_assignment,
     check_sat_refutation,
     solve_sat,
@@ -46,7 +44,6 @@ def test_logic_bundle_exposes_only_atomic_inline_operations() -> None:
         "sat.solve",
         "sat.refutation.check",
         "smt.solve",
-        "lean.check",
         "smt.unsat_core",
     )
 
@@ -1044,31 +1041,3 @@ def test_result_models_bind_exhausted_budgets_to_unknown_outcomes() -> None:
         SatSolveResult(outcome="SAT", assignment=(True,), exhausted="time")
     with pytest.raises(ValueError, match="exhausted budget"):
         SmtSolveResult(outcome="UNSAT", exhausted="memory")
-
-
-def test_lean_check_returns_typed_rejection_without_retaining_source(
-    monkeypatch,
-) -> None:
-    monkeypatch.setattr(operations.shutil, "which", lambda _name: "/usr/bin/lean")
-    monkeypatch.setattr(
-        operations,
-        "run_bounded_process",
-        lambda *_args, **_kwargs: SimpleNamespace(
-            returncode=1,
-            stdout=b"",
-            stderr=b"Snippet.lean:1:20: error: invalid proof\n",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=False,
-            cancelled=False,
-        ),
-    )
-
-    result = check_lean_source(LeanCheckRequest(source="example : True := by sorry"))
-
-    assert result.outcome == "REJECTED"
-    assert result.diagnostics == (
-        operations.LeanDiagnostic(
-            severity="ERROR", message="Snippet.lean:1:20: error: invalid proof"
-        ),
-    )

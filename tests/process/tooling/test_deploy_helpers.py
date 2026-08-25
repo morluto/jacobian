@@ -1,17 +1,15 @@
 """Behavioral coverage for the deployment smoke helper.
 
 The smoke helper lives in ``deploy.smoke`` and is shared by the
-read-only ``deploy/smoke_remote.py`` and ``deploy/smoke_lean.py`` probes. These
-tests cover its transient-failure classification, HTTP status surfacing, and
-stable exit codes; they do not exercise installation, state migration, or
-rollout machinery.
+read-only ``deploy/smoke_remote.py`` probe. These tests cover its
+transient-failure classification, HTTP status surfacing, and stable exit codes;
+they do not exercise installation, state migration, or rollout machinery.
 """
 
 from __future__ import annotations
 
 import httpx2
 import pytest
-from deploy import smoke_lean
 from deploy.smoke import (
     TRANSIENT_SMOKE_EXIT,
     TransientSmokeError,
@@ -78,36 +76,3 @@ def test_smoke_failure_exit_codes_are_stable(
 
     assert exc_info.value.code == expected_code
     assert str(failure) in capsys.readouterr().err
-
-
-def test_lean_smoke_uses_one_shot_typed_outcomes() -> None:
-    accepted = {
-        "execution": {"status": "COMPLETED"},
-        "output": {"result": {"outcome": "ELABORATED", "diagnostics": []}},
-    }
-    rejected = {
-        "execution": {"status": "COMPLETED"},
-        "output": {
-            "result": {
-                "outcome": "REJECTED",
-                "diagnostics": [{"severity": "ERROR", "message": "invalid proof"}],
-            }
-        },
-    }
-
-    smoke_lean._require_outcome(accepted, expected="ELABORATED")
-    smoke_lean._require_outcome(
-        rejected,
-        expected="REJECTED",
-        require_diagnostics=True,
-    )
-
-    with pytest.raises(RuntimeError, match="typed diagnostics"):
-        smoke_lean._require_outcome(
-            {
-                "execution": {"status": "COMPLETED"},
-                "output": {"result": {"outcome": "REJECTED", "diagnostics": []}},
-            },
-            expected="REJECTED",
-            require_diagnostics=True,
-        )

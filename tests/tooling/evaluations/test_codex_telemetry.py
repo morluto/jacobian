@@ -168,9 +168,12 @@ def test_agent_telemetry_retains_failed_math_run_attempts(tmp_path: Path) -> Non
     }
     succeeded = _tool_event(
         "math.run",
-        {"operation_id": "lean.check", "payload": {"statement": "True"}},
         {
-            "operation_id": "lean.check",
+            "operation_id": "smt.solve",
+            "payload": {"logic": "QF_LIA", "smtlib": "(set-logic QF_LIA)\n(check-sat)"},
+        },
+        {
+            "operation_id": "smt.solve",
             "execution": {"status": "COMPLETED"},
             "output": {"conclusion": "UNKNOWN"},
         },
@@ -178,24 +181,24 @@ def test_agent_telemetry_retains_failed_math_run_attempts(tmp_path: Path) -> Non
     domain_failure = _tool_event(
         "math.run",
         {
-            "operation_id": "lean.retrieve.premises",
-            "payload": {"statement": "True", "proof_prefix": ["by"]},
+            "operation_id": "sat.solve",
+            "payload": {"cnf": {"variables": 0, "clauses": []}},
         },
         {
-            "operation_id": "lean.retrieve.premises",
+            "operation_id": "sat.solve",
             "execution": {"status": "ERROR"},
             "output": {
                 "error": {
-                    "code": "INVALID_LEAN_RETRIEVAL_REQUEST",
+                    "code": "INVALID_SAT_REQUEST",
                     "stage": "request_validation",
-                    "message": "proof_prefix must not include by",
+                    "message": "CNF must contain at least one clause",
                 }
             },
             "diagnostics": [
                 {
-                    "code": "INVALID_LEAN_RETRIEVAL_REQUEST",
+                    "code": "INVALID_SAT_REQUEST",
                     "stage": "request_validation",
-                    "message": "proof_prefix must not include by",
+                    "message": "CNF must contain at least one clause",
                 }
             ],
         },
@@ -229,8 +232,8 @@ def test_agent_telemetry_retains_failed_math_run_attempts(tmp_path: Path) -> Non
             "request_validation_failure": False,
         },
         {
-            "operation_id": "lean.retrieve.premises",
-            "input": {"statement": "True", "proof_prefix": ["by"]},
+            "operation_id": "sat.solve",
+            "input": {"cnf": {"variables": 0, "clauses": []}},
             "successful": False,
             "terminal_status": "ERROR",
             "error_digest": "sha256:"
@@ -240,47 +243,47 @@ def test_agent_telemetry_retains_failed_math_run_attempts(tmp_path: Path) -> Non
                         "item_error": None,
                         "response_error": None,
                         "output_error": {
-                            "code": "INVALID_LEAN_RETRIEVAL_REQUEST",
+                            "code": "INVALID_SAT_REQUEST",
                             "stage": "request_validation",
-                            "message": "proof_prefix must not include by",
+                            "message": "CNF must contain at least one clause",
                         },
                         "diagnostics": [
                             {
-                                "code": "INVALID_LEAN_RETRIEVAL_REQUEST",
+                                "code": "INVALID_SAT_REQUEST",
                                 "stage": "request_validation",
-                                "message": "proof_prefix must not include by",
+                                "message": "CNF must contain at least one clause",
                             }
                         ],
                     }
                 )
             ).hexdigest(),
             "request_validation_failure": True,
-            "diagnostic_codes": ["INVALID_LEAN_RETRIEVAL_REQUEST"],
+            "diagnostic_codes": ["INVALID_SAT_REQUEST"],
             "diagnostics": [
                 {
-                    "code": "INVALID_LEAN_RETRIEVAL_REQUEST",
+                    "code": "INVALID_SAT_REQUEST",
                     "stage": "request_validation",
                 }
             ],
         },
         {
-            "operation_id": "lean.check",
-            "input": {"statement": "True"},
+            "operation_id": "smt.solve",
+            "input": {"logic": "QF_LIA", "smtlib": "(set-logic QF_LIA)\n(check-sat)"},
             "successful": True,
         },
     ]
     assert telemetry["operation_attempt_ids"] == [
-        "lean.retrieve.premises",
-        "lean.check",
+        "sat.solve",
+        "smt.solve",
     ]
-    assert telemetry["operation_ids"] == ["lean.check"]
+    assert telemetry["operation_ids"] == ["smt.solve"]
 
 
 def test_agent_telemetry_records_empty_payload_and_exact_repeated_errors(
     tmp_path: Path,
 ) -> None:
     invalid = {
-        "operation_id": "lean.check",
+        "operation_id": "smt.solve",
         "execution": {"status": "ERROR"},
         "output": {
             "error": {
@@ -291,20 +294,20 @@ def test_agent_telemetry_records_empty_payload_and_exact_repeated_errors(
         },
     }
     events = [
-        _tool_event("math.run", {"operation_id": "lean.check", "payload": {}}, invalid),
-        _tool_event("math.run", {"operation_id": "lean.check", "payload": {}}, invalid),
+        _tool_event("math.run", {"operation_id": "smt.solve", "payload": {}}, invalid),
+        _tool_event("math.run", {"operation_id": "smt.solve", "payload": {}}, invalid),
         _tool_event(
             "math.run",
             {
-                "operation_id": "lean.retrieve.premises",
-                "payload": {"statement": "True", "proof_prefix": ["by"]},
+                "operation_id": "sat.solve",
+                "payload": {"cnf": {"variables": 0, "clauses": []}},
             },
             {
-                "operation_id": "lean.retrieve.premises",
+                "operation_id": "sat.solve",
                 "execution": {"status": "ERROR"},
                 "output": {
                     "error": {
-                        "code": "INVALID_LEAN_RETRIEVAL_REQUEST",
+                        "code": "INVALID_SAT_REQUEST",
                         "stage": "request_validation",
                     }
                 },
@@ -356,9 +359,15 @@ def test_agent_telemetry_distinguishes_terminal_failure_identity(
         events.append(
             _tool_event(
                 "math.run",
-                {"operation_id": "lean.check", "payload": {"statement": "True"}},
                 {
-                    "operation_id": "lean.check",
+                    "operation_id": "smt.solve",
+                    "payload": {
+                        "logic": "QF_LIA",
+                        "smtlib": "(set-logic QF_LIA)\n(check-sat)",
+                    },
+                },
+                {
+                    "operation_id": "smt.solve",
                     "execution": {"status": status},
                     "output": {"error": {"code": status, "message": message}},
                 },

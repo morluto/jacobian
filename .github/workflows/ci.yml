@@ -11,8 +11,7 @@ on:
   workflow_dispatch:
     # The autofix bot dispatches CI on the head SHA it just pushed (GITHUB_TOKEN
     # pushes raise no events). Selecting the pull_request lane set keeps the
-    # dispatched run identical to what a human push would run: Lean stays
-    # skipped and the required aggregate accepts its skip.
+    # dispatched run identical to what a human push would run.
     inputs:
       pr_lanes:
         description: Select the pull_request lane set instead of the main gate.
@@ -289,25 +288,6 @@ jobs:
         env:
           PYTEST_ARGS: --junitxml=pytest.xml
 
-  lean:
-    name: Lean Runtime
-    # Full Lean is the merge-group/main gate. Pull requests skip it so
-    # intermediate commits are not blocked for the ~14 minute specialist suite.
-    # Enable GitHub merge queue on main; otherwise Lean only runs after a
-    # push to main.
-    if: >-
-      github.event_name != 'pull_request' &&
-      !(github.event_name == 'workflow_dispatch' && inputs.pr_lanes)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Prepare Lean test environment
-        uses: ./.github/actions/setup-lean
-      - run: make test-lean
-
   coverage:
     name: Coverage
     if: ${{ always() && needs.plan.outputs.pr_lanes != 'true' }}
@@ -362,14 +342,12 @@ jobs:
   required:
     name: required
     if: ${{ always() }}
-    needs: [plan, static, math, catalog, catalog_examples, python, boundaries, singular, wheel, coverage, lean]
+    needs: [plan, static, math, catalog, catalog_examples, python, boundaries, singular, wheel, coverage]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Require selected evidence and final-tree specialist lanes
         env:
-          # True for pull_request runs and for autofix dispatches that select
-          # the pull_request lane set; Lean then counts skipped as passing.
           PR_LANE_SELECTION: ${{ needs.plan.outputs.pr_lanes }}
           PLAN_RESULT: ${{ needs.plan.result }}
           RUN_MATH: ${{ needs.plan.outputs.run_math }}
@@ -384,7 +362,6 @@ jobs:
           SINGULAR_RESULT: ${{ needs.singular.result }}
           WHEEL_RESULT: ${{ needs.wheel.result }}
           COVERAGE_RESULT: ${{ needs.coverage.result }}
-          LEAN_RESULT: ${{ needs.lean.result }}
         run: |
           selected_result() {
             case "$1:$2" in
@@ -403,8 +380,6 @@ jobs:
           test "$WHEEL_RESULT" = success
           if [ "$PR_LANE_SELECTION" = true ]; then
             test "$COVERAGE_RESULT" = skipped
-            test "$LEAN_RESULT" = skipped || test "$LEAN_RESULT" = success
           else
             test "$COVERAGE_RESULT" = success
-            test "$LEAN_RESULT" = success
           fi

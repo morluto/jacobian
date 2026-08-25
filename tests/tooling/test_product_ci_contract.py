@@ -22,7 +22,7 @@ def test_pr_metadata_edits_do_not_restart_product_ci() -> None:
 
 def test_wheel_job_covers_supported_pythons_and_313_compatibility_smoke() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    wheel = workflow.split("  wheel:", 1)[1].split("  lean:", 1)[0]
+    wheel = workflow.split("  wheel:", 1)[1].split("  coverage:", 1)[0]
 
     assert 'python-version: ["3.12", "3.13"]' in wheel
     assert "--only-binary :all:" in wheel
@@ -59,7 +59,7 @@ def test_singular_backend_has_a_pinned_required_ci_lane() -> None:
     assert 'system("version")' in singular
     assert "make test-singular" in singular
     assert (
-        "needs: [plan, static, math, catalog, catalog_examples, python, boundaries, singular, wheel, coverage, lean]"
+        "needs: [plan, static, math, catalog, catalog_examples, python, boundaries, singular, wheel, coverage]"
         in required
     )
     assert 'test "$SINGULAR_RESULT" = success' in required
@@ -79,36 +79,10 @@ def test_python_and_boundary_lanes_share_evidence_collection() -> None:
     assert "uv cache prune --ci" in action
 
 
-def test_full_lean_runs_on_merge_group_and_main() -> None:
-    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    action = (ROOT / ".github/actions/setup-lean/action.yml").read_text(
-        encoding="utf-8"
-    )
-
-    lean = workflow.split("  lean:", 1)[1].split("  coverage:", 1)[0]
-    # Pull requests and autofix dispatches that select pr_lanes skip Lean;
-    # merge groups and main pushes always run it.
-    assert "github.event_name != 'pull_request'" in lean
-    assert "inputs.pr_lanes" in lean
-    assert "inputs.pr_lanes" in workflow.split("EVENT_NAME", 1)[0] or (
-        "PR_LANE_SELECTION" in workflow
-    )
-    assert "JACOBIAN_LEAN_REQUIRED" not in lean
-    assert "python tools/setup_lean.py --repo ." in action
-    assert "lake-manifest.json" not in action
-    assert "leanprover/lean-action" not in action
-    assert "JacobianLeanRuntime" not in action
-    assert "jacobian_lean_proof_state" not in action
-    assert "preflight_lean_runtime" not in action
-    assert "Mathlib" not in action
-    assert "uses: actions/cache" not in action
-
-
 def test_optional_boundary_jobs_have_explicit_workflow_gates() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
     assert "ci:full" not in workflow
-    assert "ci:lean" not in workflow
     assert "name: required" in workflow
     assert "name: Deployment Tests" not in workflow
 
@@ -135,8 +109,6 @@ def test_python_jobs_select_math_and_public_contract_evidence_from_the_plan() ->
     assert "quick: lint test-fast" in makefile
     assert "check: lint typecheck test-fast" in makefile
     assert "check-all: lint typecheck test-ordinary" in makefile
-    assert "check-external: test-lean ##" in makefile
-    assert "check-external: test-lean test-provider" not in makefile
 
 
 def test_product_ci_uses_a_versioned_checked_in_test_plan() -> None:

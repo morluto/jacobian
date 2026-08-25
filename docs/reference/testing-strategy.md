@@ -13,7 +13,7 @@ make setup
 make check
 ```
 
-`make check` runs Ruff, mypy, and the Lean-free math, catalog, dispatch, CLI,
+`make check` runs Ruff, mypy, and the math, catalog, dispatch, CLI,
 and tooling owners. Add the narrowest named lane when a change crosses its
 real boundary:
 
@@ -35,8 +35,7 @@ make test-focused LANE=math TESTS=tests/math/graphs/test_graph_distance_matrix.p
 
 The explicit lane preserves its configured timeout and worker count. Supported
 focused lanes are `math`, `catalog`, `dispatch`, `cli`, `tooling`,
-`integration`, `process`, and `mcp`; specialist Lean and Singular checks retain
-their dedicated commands.
+`integration`, `process`, and `mcp`; Singular retains its dedicated command.
 
 `make check-all` is an intentional broad reproduction. Do not use a full suite
 as a substitute for a focused regression test.
@@ -165,9 +164,6 @@ When a valid result is not unique, compare its mathematical equivalence class
 or validate its reconstruction. Do not require incidental backend ordering,
 temporary identifiers, tree roots, or one particular witness unless the public
 contract makes that choice canonical.
-
-`lean.check` is the retained external process boundary. Its tests cover request
-bounds, process cleanup, timeout/error projection, and typed diagnostics.
 
 Singular testing follows the same ownership split as other child-process
 backends. The shared bounded-process supervisor owns process-group termination,

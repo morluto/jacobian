@@ -74,10 +74,9 @@ source control.
 ## Health checks and rollout
 
 Run `uv run python -m deploy.smoke_remote <url>` against the private listener
-and public endpoint before directing traffic to the new artifact. Where Lean is
-intentionally installed, also run `uv run python -m deploy.smoke_lean <url>`.
-The probe implementations live in [`deploy/`](../../deploy/). Roll back by
-selecting the previous immutable artifact and rerunning the probes.
+and public endpoint before directing traffic to the new artifact. The probe
+implementation lives in [`deploy/`](../../deploy/). Roll back by selecting the
+previous immutable artifact and rerunning the probe.
 
 When moving hosts, provision the same pinned artifact, transfer operator-owned
 configuration and secrets, run the probes, and move traffic.

@@ -34,7 +34,7 @@ PUBLIC_COMMANDS: tuple[CommandContract, ...] = (
     ),
     CommandContract(
         name="quick",
-        help="Cheap iteration: lint and Lean-free owner tests.",
+        help="Cheap iteration: lint and owner tests.",
         mutates_checkout=False,
         scope="lint + math/catalog/dispatch/CLI/tooling tests",
         ci_relationship="ordinary CI lanes except integration, plus lint",
@@ -42,7 +42,7 @@ PUBLIC_COMMANDS: tuple[CommandContract, ...] = (
     ),
     CommandContract(
         name="check",
-        help="Routine local handoff: lint, types, and Lean-free owner tests.",
+        help="Routine local handoff: lint, types, and owner tests.",
         mutates_checkout=False,
         scope="lint + typecheck + math/catalog/dispatch/CLI/tooling tests",
         ci_relationship="subset of required PR jobs, not PR-equivalent",
@@ -55,14 +55,6 @@ PUBLIC_COMMANDS: tuple[CommandContract, ...] = (
         scope="lint + typecheck + all ordinary semantic owners",
         ci_relationship="local equivalent of the python matrix, not all CI jobs",
         cost_class="broad",
-    ),
-    CommandContract(
-        name="check-external",
-        help="Pinned Lean specialist lane only.",
-        mutates_checkout=False,
-        scope="tests/process/logic/test_lean.py",
-        ci_relationship="local equivalent of the Lean job when the toolchain exists",
-        cost_class="specialist",
     ),
     CommandContract(
         name="fix",

@@ -507,7 +507,7 @@ class DirectedBondConnectionProbabilitySource(StrictModel):
 
     graph: DirectedGraph = Field(
         description=(
-            "A directed graph with at most 12 arcs for this "
+            f"A directed graph with at most {MAX_DIRECTED_BOND_RELIABILITY_ARCS} arcs for this "
             "complete-enumeration operation."
         )
     )
@@ -668,7 +668,7 @@ class DirectedBondConnectionProbabilityRequest(StrictModel):
 
     graph: DirectedGraph = Field(
         description=(
-            "A directed graph with at most 12 arcs for this "
+            f"A directed graph with at most {MAX_DIRECTED_BOND_RELIABILITY_ARCS} arcs for this "
             "complete-enumeration operation."
         )
     )

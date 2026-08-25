@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.symmetric_functions._models import (
+    _MAX_SCHUR_PARTITION_LENGTH,
     IntegerPartition,
     PartitionRequest,
     SchurExpansionRequest,
@@ -15,6 +16,9 @@ from jacobian.math.symmetric_functions._operations import (
     compute_schur_evaluation,
 )
 from jacobian.math.symmetric_functions._tools import TOOLS
+from jacobian.math.symmetric_functions.values import (
+    MAX_PARTITION_SIZE,
+)
 
 
 def test_operations_in_catalog() -> None:
@@ -156,12 +160,12 @@ def test_request_schema_publishes_schur_invariants() -> None:
     assert "decimal digits" in point["items"]["description"]
     partition = schema["properties"]["partition"]
     assert partition["title"] == "IntegerPartition"
-    assert "500" in partition["description"]
-    assert "at most 50" in partition["description"]
+    assert str(MAX_PARTITION_SIZE) in partition["description"]
+    assert f"at most {_MAX_SCHUR_PARTITION_LENGTH}" in partition["description"]
     parts = partition["properties"]["parts"]
-    assert parts["maxItems"] == 50
-    assert "at most 50" in parts["description"]
-    assert "500" in parts["description"]
+    assert parts["maxItems"] == _MAX_SCHUR_PARTITION_LENGTH
+    assert f"at most {_MAX_SCHUR_PARTITION_LENGTH}" in parts["description"]
+    assert str(MAX_PARTITION_SIZE) in parts["description"]
 
 
 def test_schur_rejects_coordinate_exceeding_digit_bound() -> None:

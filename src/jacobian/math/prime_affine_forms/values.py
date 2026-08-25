@@ -59,7 +59,7 @@ class PrimeAffineTuple(StrictModel):
         description=(
             "Nonempty primitive affine-form family. Form IDs and coefficient/constant "
             "pairs must be unique; rows are normalized by form_id. Across all forms, "
-            "coefficient and constant magnitudes contain at most 131072 decimal digits."
+            f"coefficient and constant magnitudes contain at most {MAX_AFFINE_AGGREGATE_DIGITS} decimal digits."
         ),
     )
 

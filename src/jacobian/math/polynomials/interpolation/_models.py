@@ -77,8 +77,8 @@ class OrdinaryDerivativeValue(StrictModel):
     )
     value: CanonicalRational = Field(
         description=(
-            "Canonical exact rational derivative value whose numerator and "
-            "denominator each have at most 256 digits."
+            f"Canonical exact rational derivative value whose numerator and "
+            f"denominator each have at most {_MAX_RATIONAL_DIGITS} digits."
         )
     )
 
@@ -88,8 +88,8 @@ class OrdinaryDerivativeJet(StrictModel):
 
     node: CanonicalRational = Field(
         description=(
-            "Canonical exact rational node whose numerator and denominator "
-            "each have at most 256 digits."
+            f"Canonical exact rational node whose numerator and denominator "
+            f"each have at most {_MAX_RATIONAL_DIGITS} digits."
         )
     )
     derivatives: tuple[OrdinaryDerivativeValue, ...] = Field(

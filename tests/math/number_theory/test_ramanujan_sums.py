@@ -149,7 +149,19 @@ def test_equal_frequencies_share_one_serialized_identity() -> None:
 
 @pytest.mark.parametrize(
     "encoding",
-    ("0", "7", "-7", "9" * _MAX_INTEGER_LENGTH, "-0", "+0", "00", "-007", "", "-", "+1"),
+    (
+        "0",
+        "7",
+        "-7",
+        "9" * _MAX_INTEGER_LENGTH,
+        "-0",
+        "+0",
+        "00",
+        "-007",
+        "",
+        "-",
+        "+1",
+    ),
 )
 def test_frequency_grammar_is_owned_by_canonical_integer(encoding: str) -> None:
     owner = TypeAdapter(CanonicalInteger)
@@ -278,17 +290,20 @@ def test_native_ramanujan_sum_bounds_frequency_magnitude() -> None:
     with pytest.raises(ValueError, match=rf"at most {_MAX_INTEGER_LENGTH}"):
         ramanujan_sum(4, 10**_MAX_INTEGER_LENGTH)
     with pytest.raises(ValueError, match=rf"at most {_MAX_INTEGER_LENGTH}"):
-        ramanujan_sum(4, -(10**(_MAX_INTEGER_LENGTH - 1)))
+        ramanujan_sum(4, -(10 ** (_MAX_INTEGER_LENGTH - 1)))
     with pytest.raises(ValueError, match=rf"at most {_MAX_INTEGER_LENGTH}"):
         ramanujan_sum(0, 10**_MAX_INTEGER_LENGTH)
 
     assert ramanujan_sum(4, 10**_MAX_INTEGER_LENGTH - 2) == -2
-    assert ramanujan_sum(4, -(10**(_MAX_INTEGER_LENGTH - 1) - 2)) == -2
+    assert ramanujan_sum(4, -(10 ** (_MAX_INTEGER_LENGTH - 1) - 2)) == -2
     assert ramanujan_sum(4, 10**_MAX_INTEGER_LENGTH - 1) == 0
 
 
 def test_native_frequency_bound_matches_wire_admission() -> None:
-    for modulus, frequency in (("4", str(10**_MAX_INTEGER_LENGTH - 2)), ("1", "9" * _MAX_INTEGER_LENGTH)):
+    for modulus, frequency in (
+        ("4", str(10**_MAX_INTEGER_LENGTH - 2)),
+        ("1", "9" * _MAX_INTEGER_LENGTH),
+    ):
         request = RamanujanSumRequest(modulus=modulus, frequency=frequency)
         assert RAMANUJAN_SUM_OPERATION.run(request).value == str(
             ramanujan_sum(int(modulus), int(frequency))

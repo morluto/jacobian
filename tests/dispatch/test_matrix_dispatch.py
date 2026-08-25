@@ -53,7 +53,9 @@ def test_dispatch_rejects_requests_above_the_computation_dimension(
 ) -> None:
     with pytest.raises(OperationRequestValidationError) as excinfo:
         invoke_operation(operation_id, payload, Catalog.open())
-    assert f"limited to {MAX_MATRIX_DIMENSION} rows and columns" in str(excinfo.value.cause)
+    assert f"limited to {MAX_MATRIX_DIMENSION} rows and columns" in str(
+        excinfo.value.cause
+    )
 
 
 def test_dispatch_returns_typed_results_at_the_boundary_order() -> None:

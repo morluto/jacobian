@@ -23,7 +23,10 @@ def test_directed_bond_reliability_schema_exposes_cross_field_contract() -> None
         "do not depend on input order."
     )
     properties = schema["properties"]
-    assert f"at most {MAX_DIRECTED_BOND_RELIABILITY_ARCS} arcs" in properties["graph"]["description"]
+    assert (
+        f"at most {MAX_DIRECTED_BOND_RELIABILITY_ARCS} arcs"
+        in properties["graph"]["description"]
+    )
     assert (
         "every graph arc exactly once" in properties["arc_probabilities"]["description"]
     )

@@ -119,7 +119,10 @@ def test_large_direct_cases_do_not_inherit_the_materialized_cap() -> None:
 
 
 def test_native_api_enforces_the_source_digit_bound_before_work() -> None:
-    with pytest.raises(ValueError, match=rf"{round(math.log10(_MAX_FRIABLE_SOURCE_ABS))} decimal digits"):
+    with pytest.raises(
+        ValueError,
+        match=rf"{round(math.log10(_MAX_FRIABLE_SOURCE_ABS))} decimal digits",
+    ):
         count_friable(_MAX_FRIABLE_SOURCE_ABS, 1)
 
 

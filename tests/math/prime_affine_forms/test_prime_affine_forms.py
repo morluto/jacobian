@@ -596,7 +596,10 @@ def test_prime_sets_and_interval_relations_are_schema_visible() -> None:
     assert "strictly increasing" in factor_schema["properties"]["primes"]["description"]
     assert factor_schema["properties"]["primes"]["items"]["maximum"] == ((1 << 53) - 1)
     source_schema = factor_schema["$defs"]["PrimeAffineTuple"]
-    assert str(MAX_AFFINE_AGGREGATE_DIGITS) in source_schema["properties"]["forms"]["description"]
+    assert (
+        str(MAX_AFFINE_AGGREGATE_DIGITS)
+        in source_schema["properties"]["forms"]["description"]
+    )
     form_schema = factor_schema["$defs"]["PrimitiveIntegerAffineForm"]
     assert form_schema["properties"]["coefficient"]["maxLength"] == 257
     assert (

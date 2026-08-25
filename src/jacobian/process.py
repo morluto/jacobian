@@ -23,7 +23,7 @@ from contextlib import contextmanager, suppress
 from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO, cast
+from typing import BinaryIO, Protocol, cast
 
 __all__ = [
     "BoundedProcessResult",
@@ -35,7 +35,14 @@ __all__ = [
     "worker_environment",
 ]
 
-_CANCELLATION_EVENT: ContextVar[threading.Event | None] = ContextVar(
+
+class _CancellationSignal(Protocol):
+    """Minimal cooperative signal accepted by the process monitor."""
+
+    def is_set(self) -> bool: ...
+
+
+_CANCELLATION_EVENT: ContextVar[_CancellationSignal | None] = ContextVar(
     "jacobian_bounded_process_cancellation_event",
     default=None,
 )
@@ -56,7 +63,7 @@ class BoundedProcessResult:
 
 @contextmanager
 def bounded_process_cancellation(
-    event: threading.Event,
+    event: _CancellationSignal,
 ) -> Iterator[None]:
     """Bind cooperative subprocess cancellation to the current worker context."""
 
@@ -263,7 +270,7 @@ def _monitor_bounded_process(
     process: subprocess.Popen[bytes],
     *,
     deadline: float,
-    cancellation_event: threading.Event | None,
+    cancellation_event: _CancellationSignal | None,
     platform_tools: ProcessPlatformTools | None,
 ) -> tuple[bool, bool]:
     """Poll the child until exit, timeout, or cancellation.
@@ -317,7 +324,7 @@ def run_bounded_process(
     resource_limits: ProcessResourceLimits | None = None,
     cwd: str | None = None,
     platform_tools: ProcessPlatformTools | None = None,
-    cancellation_event: threading.Event | None = None,
+    cancellation_event: _CancellationSignal | None = None,
 ) -> BoundedProcessResult:
     """Run a child with bounded output, time, lifetime, and supported resources.
 

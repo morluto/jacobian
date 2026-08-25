@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+import anyio
 from mcp.server.mcpserver import Context
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.shared.exceptions import MCPError
@@ -30,6 +31,7 @@ from jacobian.mcp.runtime import (
     _authorize,
     _catalog,
 )
+from jacobian.process import bounded_process_cancellation
 
 _MAX_VALIDATION_ERRORS = 64
 _MAX_VALIDATION_LOCATION_COMPONENTS = 32
@@ -93,11 +95,11 @@ def math_run(
     if catalog.operation(operation_id) is None:
         raise ToolError(f"unknown operation: {operation_id}")
     try:
-        return invoke_operation(
-            operation_id,
-            payload,
-            catalog,
-        )
+        # MCP runs synchronous tools in a worker thread.  Its request event
+        # is polled by the shared external-process runner, which kills and
+        # reaps only an operation's owned child tree.
+        with bounded_process_cancellation(_request_cancellation(ctx)):
+            return invoke_operation(operation_id, payload, catalog)
     except OperationRequestValidationError as exc:
         errors = _bounded_validation_issues(exc.errors())
         data = OperationInvalidRequestData(
@@ -109,6 +111,12 @@ def math_run(
             message="operation payload failed validation",
             data=data.model_dump(mode="json"),
         ) from exc
+
+
+def _request_cancellation(ctx: Context[AppState, Any]) -> anyio.Event:
+    """Return MCP 2.1's request signal through its only available SDK seam."""
+
+    return ctx.request_context.session._request_outbound.cancel_requested
 
 
 def _bounded_validation_issues(

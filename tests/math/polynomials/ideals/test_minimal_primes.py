@@ -11,6 +11,8 @@ from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationResult
 from jacobian.math.polynomials.ideals import _operations as operations_module
 from jacobian.math.polynomials.ideals._models import (
+    MAX_OUTPUT_GENERATORS,
+    MAX_OUTPUT_TERMS,
     IdealMinimalPrimesRequest,
     IdealMinimalPrimesResult,
     computed_minimal_primes_result,
@@ -385,7 +387,7 @@ def test_external_family_must_respect_the_generator_and_term_envelopes() -> None
             *(_poly(variables, (-1, 1, (0,) * 8)) for _ in range(33)),
         ),
     )
-    with pytest.raises(ValueError, match="64-generator exact-result envelope"):
+    with pytest.raises(ValueError, match=rf"{MAX_OUTPUT_GENERATORS}-generator exact-result envelope"):
         computed_minimal_primes_result(request, over_generators, "4.4.0")
 
     heavy_terms = tuple(
@@ -399,7 +401,7 @@ def test_external_family_must_respect_the_generator_and_term_envelopes() -> None
         )
     )
     oversized = (_ideal(variables, _poly(variables, *heavy_terms)),)
-    with pytest.raises(ValueError, match="1024-term exact-result envelope"):
+    with pytest.raises(ValueError, match=rf"{MAX_OUTPUT_TERMS}-term exact-result envelope"):
         computed_minimal_primes_result(request, oversized, "4.4.0")
 
 

@@ -219,7 +219,7 @@ def test_request_rejects_group_immediately_above_enumeration_bound() -> None:
     with pytest.raises(ValidationError) as exc_info:
         _request(symmetric_s8, (0,))
     _assert_error_type(exc_info.value, "finite_group_action.group_order_exceeds_bound")
-    with pytest.raises(ValueError, match=r"group order exceeds.*10000"):
+    with pytest.raises(ValueError, match=rf"group order exceeds.*{MAX_GROUP_ORDER}"):
         _enumerate_group(symmetric_s8)
 
 

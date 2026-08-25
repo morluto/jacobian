@@ -11,6 +11,7 @@ import pytest
 from tests.math.polynomials._support import polynomial_validation_error
 
 from jacobian.math.polynomials.multivariate._models import (
+    _MAX_MULTIVARIATE_COEFFICIENT_DIGITS,
     MultivariateDivisionRequest,
     MultivariateGcdRequest,
     MultivariateResultantRequest,
@@ -952,7 +953,7 @@ class TestMultivariateSubresultantSequence:
             )
 
     def test_accepts_exact_input_coefficient_boundary(self) -> None:
-        boundary_coefficient = "9" * 256
+        boundary_coefficient = "9" * _MAX_MULTIVARIATE_COEFFICIENT_DIGITS
         left = _poly(
             ("x", "y"),
             ((f"{boundary_coefficient}/1", (1, 0)), ("1/1", (0, 1))),
@@ -976,9 +977,9 @@ class TestMultivariateSubresultantSequence:
 
         beyond = _poly(
             ("x", "y"),
-            ((f"{'9' * 257}/1", (1, 0)), ("1/1", (0, 1))),
+            ((f"{'9' * (_MAX_MULTIVARIATE_COEFFICIENT_DIGITS + 1)}/1", (1, 0)), ("1/1", (0, 1))),
         )
-        with pytest.raises(ValueError, match="256-digit bound"):
+        with pytest.raises(ValueError, match=rf"{_MAX_MULTIVARIATE_COEFFICIENT_DIGITS}-digit bound"):
             MultivariateSubresultantSequenceRequest(
                 left=beyond,
                 right=right,

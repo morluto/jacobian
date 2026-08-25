@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from jacobian.math.arithmetic import _operations as arithmetic_operations
 from jacobian.math.arithmetic._models import (
+    MAX_BASE_DIGITS,
     IntegerBaseDigitsRequest,
     IntegerBaseDigitsResult,
 )
@@ -66,5 +67,5 @@ def test_base_digits_rejects_an_oversized_result_before_integer_conversion(
 
     monkeypatch.setattr(arithmetic_operations, "_int", unexpected_conversion)
 
-    with pytest.raises(ValueError, match="1024-digit result bound"):
+    with pytest.raises(ValueError, match=rf"{MAX_BASE_DIGITS}-digit result bound"):
         base_digits(IntegerBaseDigitsRequest(value="1" + ("0" * 1_024), base=10))

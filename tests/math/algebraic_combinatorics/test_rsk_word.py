@@ -291,16 +291,16 @@ def _wide_unicode_symbols(count: int) -> tuple[str, ...]:
 
 
 def test_word_length_and_utf8_payload_bounds_are_closed() -> None:
-    length_boundary = FiniteWord(alphabet=("a",), letters=("a",) * 500)
-    assert sum(_pair(length_boundary).shape.parts) == 500
+    length_boundary = FiniteWord(alphabet=("a",), letters=("a",) * MAX_RSK_WORD_LENGTH)
+    assert sum(_pair(length_boundary).shape.parts) == MAX_RSK_WORD_LENGTH
 
-    too_long = FiniteWord.model_construct(alphabet=("a",), letters=("a",) * 501)
+    too_long = FiniteWord.model_construct(alphabet=("a",), letters=("a",) * (MAX_RSK_WORD_LENGTH + 1))
     with pytest.raises(ValidationError):
         RSKWordRequest(word=too_long)
-    with pytest.raises(ValueError, match="length must not exceed 500"):
+    with pytest.raises(ValueError, match=rf"length must not exceed {MAX_RSK_WORD_LENGTH}"):
         row_insertion_rsk(too_long)
     with pytest.raises(ValidationError):
-        FiniteWord(alphabet=("a",), letters=("a",) * 501)
+        FiniteWord(alphabet=("a",), letters=("a",) * (MAX_RSK_WORD_LENGTH + 1))
 
     ordered_symbols = tuple(f"s{index:02d}" for index in range(50))
     deepest_shape = _pair(
@@ -334,7 +334,7 @@ def test_word_length_and_utf8_payload_bounds_are_closed() -> None:
 
 
 def test_canonical_tableau_cell_bound_admits_boundary_pairs_end_to_end() -> None:
-    single_row = _pair(FiniteWord(alphabet=("a",), letters=("a",) * 500))
+    single_row = _pair(FiniteWord(alphabet=("a",), letters=("a",) * MAX_RSK_WORD_LENGTH))
     assert single_row.insertion_tableau.rows == ((1,) * 500,)
     assert single_row.recording_tableau.rows == (tuple(range(1, 501)),)
     assert single_row.shape.parts == (500,)
@@ -345,7 +345,7 @@ def test_canonical_tableau_cell_bound_admits_boundary_pairs_end_to_end() -> None
     reconstructed = compute_inverse_rsk_word(
         RSKInverseWordRequest.model_validate({"pair": single_row.model_dump()})
     )
-    assert reconstructed == FiniteWord(alphabet=("a",), letters=("a",) * 500)
+    assert reconstructed == FiniteWord(alphabet=("a",), letters=("a",) * MAX_RSK_WORD_LENGTH)
 
     wide = tuple(f"s{index:02d}" for index in range(50))
     descending_pairs = tuple(symbol for symbol in reversed(wide) for _ in range(10))

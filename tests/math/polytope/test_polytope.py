@@ -13,6 +13,7 @@ from jacobian.canonical import format_canonical_integer
 from jacobian.math.polytope import _operations as polytope_operations
 from jacobian.math.polytope._models import (
     MAX_COMPUTED_FACETS,
+    MAX_DIMENSION,
     MAX_FACET_COORDINATE_DIGITS,
     MAX_FACET_INCIDENCES,
     MAX_FACET_SIGN_TESTS,
@@ -1295,12 +1296,12 @@ class TestHullWorkBoundPublished:
         """26 distinct six-dimensional points satisfy every visible field
         bound yet exceed C(26, 6) = 230230; the rejection must say why."""
         points = tuple(_v(*((1000 * j + i, 1) for i in range(6))) for j in range(26))
-        with pytest.raises(ValueError, match=r"combinatorial bound \(230230"):
+        with pytest.raises(ValueError, match=rf"combinatorial bound \({math.comb(26, 6)}"):
             PolytopeVolumeRequest(vertices=points)
 
     def test_just_above_the_four_dimensional_maximum_rejected(self) -> None:
         points = tuple(_v(*((1000 * j + i, 1) for i in range(4))) for j in range(49))
-        with pytest.raises(ValueError, match=r"combinatorial bound \(211876"):
+        with pytest.raises(ValueError, match=rf"combinatorial bound \({math.comb(49, 4)}"):
             PolytopeVolumeRequest(vertices=points)
 
 
@@ -1693,7 +1694,7 @@ class TestCanonicalVPolytopeComposition:
             unexpected_proof,
         )
 
-        with pytest.raises(ValueError, match="dimension 7 exceeds the dimension"):
+        with pytest.raises(ValueError, match=rf"dimension {MAX_DIMENSION + 1} exceeds the dimension"):
             PolytopeVolumeRequest.model_validate(
                 {"vertices": simplex.model_dump(mode="json")}
             )

@@ -14,7 +14,7 @@ from jacobian.math.crossed_products._models import (
 )
 from jacobian.math.crossed_products._operations import compute_product
 from jacobian.math.crossed_products._tools import TOOLS
-from jacobian.math.crossed_products.operations import multiply
+from jacobian.math.crossed_products.operations import MAX_CONVOLUTION_PAIRS, multiply
 from jacobian.math.crossed_products.values import (
     FiniteCosetCrossedProductElement,
     FiniteCosetCrossedProductPresentation,
@@ -438,7 +438,7 @@ def test_request_rejects_pairwise_convolution_before_expansion() -> None:
     left = _element(presentation, {"e": {(position,) for position in range(33)}})
     right = _element(presentation, {"a": {(position,) for position in range(33)}})
 
-    with pytest.raises(ValueError, match="1024-pair"):
+    with pytest.raises(ValueError, match=rf"{MAX_CONVOLUTION_PAIRS}-pair"):
         CrossedProductMultiplyRequest(left=left, right=right)
 
 

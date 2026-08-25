@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterator
 
 import pytest
@@ -11,6 +12,7 @@ from tests.math.number_theory._validation import expect_validation
 from jacobian.math.number_theory import FriableCountResult, count_friable
 from jacobian.math.number_theory._friable_operations import compute_friable_count
 from jacobian.math.number_theory._models import (
+    _MAX_FRIABLE_SOURCE_ABS,
     MAX_FRIABLE_GENERATED_CUTOFF,
     MAX_FRIABLE_MATERIALIZED_X,
     FriableCountRequest,
@@ -111,14 +113,14 @@ def test_materialized_regime_reaches_its_cell_boundary() -> None:
 
 
 def test_large_direct_cases_do_not_inherit_the_materialized_cap() -> None:
-    huge = 10**255
+    huge = _MAX_FRIABLE_SOURCE_ABS // 10
     assert count_friable(huge, 1) == 1
     assert count_friable(huge, huge) == huge
 
 
 def test_native_api_enforces_the_source_digit_bound_before_work() -> None:
-    with pytest.raises(ValueError, match="256 decimal digits"):
-        count_friable(10**256, 1)
+    with pytest.raises(ValueError, match=rf"{round(math.log10(_MAX_FRIABLE_SOURCE_ABS))} decimal digits"):
+        count_friable(_MAX_FRIABLE_SOURCE_ABS, 1)
 
 
 def test_request_rejects_negative_and_noncanonical_sources() -> None:
@@ -138,7 +140,7 @@ def test_request_rejects_unbounded_generated_prime_cutoff() -> None:
 
 def test_request_rejects_generated_search_above_node_budget() -> None:
     with expect_validation("number_theory."):
-        FriableCountRequest(x="1" + "0" * 255, y="5")
+        FriableCountRequest(x=str(_MAX_FRIABLE_SOURCE_ABS // 10), y="5")
 
 
 def test_result_rejects_a_nearby_estimate_presented_as_exact() -> None:

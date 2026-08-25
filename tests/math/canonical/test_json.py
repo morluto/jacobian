@@ -115,10 +115,11 @@ def test_canonical_rational_wire_model_rejects_unreduced_input() -> None:
 def test_bounded_rational_rejects_oversized_canonical_components(
     value: dict[str, str],
 ) -> None:
-    with pytest.raises(ValueError, match="test rational exceeds the 2-digit bound"):
+    max_digits = 2
+    with pytest.raises(ValueError, match=rf"test rational exceeds the {max_digits}-digit bound"):
         require_bounded_rational(
             CanonicalRational.model_validate(value),
-            max_digits=2,
+            max_digits=max_digits,
             label="test rational",
         )
 

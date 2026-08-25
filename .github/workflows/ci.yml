@@ -279,7 +279,7 @@ jobs:
           "$environment/bin/jacobian-mcp" --help
           "$environment/bin/jacobian" run integer.compute.extended_gcd \
             --json '{"left":"84","right":"30"}'
-          python deploy/smoke_stdio.py "$environment/bin/jacobian-mcp"
+          "$environment/bin/python" deploy/smoke_stdio.py "$environment/bin/jacobian-mcp"
       - if: matrix.python-version == '3.13'
         uses: ./.github/actions/setup-python-tests
         with:

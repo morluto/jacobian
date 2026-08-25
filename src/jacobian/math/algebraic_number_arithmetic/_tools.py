@@ -7,6 +7,7 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.algebraic_number_arithmetic._models import (
+    _MAX_RESULT_DIGITS,
     AlgebraicAdditionRequest,
     AlgebraicMultiplicationRequest,
 )
@@ -55,7 +56,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "number field Q(sqrt(d)). Each element is represented as "
         "a + b*sqrt(d) with rational coefficients a and b. Both "
         "operands must use the same square-free radicand d, and the "
-        "component-wise sum must fit within the 256-digit canonical "
+        f"component-wise sum must fit within the {_MAX_RESULT_DIGITS}-digit canonical "
         "rational bound; requests whose sum would exceed that bound "
         "are rejected.",
         AlgebraicAdditionRequest,
@@ -69,7 +70,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "add_sqrt2",
                 "Compute (1 + sqrt(2)) + (3 + 2*sqrt(2)) in Q(sqrt(2)). "
                 "Both operands must share one square-free radicand, and "
-                "the component-wise sum must stay within the 256-digit "
+                f"the component-wise sum must stay within the {_MAX_RESULT_DIGITS}-digit "
                 "canonical rational bound.",
                 {
                     "left": _element(1, 1, 2),
@@ -86,7 +87,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "a + b*sqrt(d) with rational coefficients a and b. Both "
         "operands must use the same square-free radicand d, and the "
         "exact product components (ac + b*e*d and a*e + b*c) must fit "
-        "within the 256-digit canonical rational bound; requests whose "
+        f"within the {_MAX_RESULT_DIGITS}-digit canonical rational bound; requests whose "
         "product would exceed that bound are rejected.",
         AlgebraicMultiplicationRequest,
         RealQuadraticValue,
@@ -100,7 +101,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "Compute (1 + sqrt(2)) * (1 - sqrt(2)) = -1 in Q(sqrt(2)). "
                 "Both operands must share one square-free radicand, and "
                 "the exact product components must stay within the "
-                "256-digit canonical rational bound.",
+                f"{_MAX_RESULT_DIGITS}-digit canonical rational bound.",
                 {
                     "left": _element(1, 1, 2),
                     "right": _element(1, -1, 2),

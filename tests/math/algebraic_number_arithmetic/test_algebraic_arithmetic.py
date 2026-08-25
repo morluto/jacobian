@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.algebraic_number_arithmetic._models import (
+    _MAX_RESULT_DIGITS,
     AlgebraicAdditionRequest,
     AlgebraicArithmeticRequest,
     AlgebraicMultiplicationRequest,
@@ -239,7 +240,7 @@ def test_operation_declarations_expose_operand_preconditions() -> None:
         tool = tools[operation_id]
         description = tool.description.lower()
         assert "same square-free radicand" in description
-        assert "256-digit" in description
+        assert f"{_MAX_RESULT_DIGITS}-digit" in description
         schema = tool.request_type.model_json_schema()
         properties = schema["properties"]
         for side in ("left", "right"):

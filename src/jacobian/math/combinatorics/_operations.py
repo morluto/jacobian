@@ -8,11 +8,13 @@ from operator import mul
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.combinatorics import operations as native
-from jacobian.math.combinatorics._models import (
+from jacobian.math.combinatorics._counting_models import (
     BinomialRequest,
+    IntegerListRequest,
+)
+from jacobian.math.combinatorics._models import (
     FibonacciPairRequest,
     FibonacciPairResult,
-    IntegerListRequest,
     IntegerPartitionEnumerationRequest,
     IntegerPartitionEnumerationResult,
     IntegerResult,

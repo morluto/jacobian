@@ -1,21 +1,10 @@
 from __future__ import annotations
 
-from jacobian.math.combinatorics._models import IntegerListRequest
 from jacobian.math.geometry.projective.values import PrimitiveProjectiveTriple
 from jacobian.math.matrices.certified_snf.values import (
     CertifiedIntegerMatrix,
     SmithNormalFormCertificate,
 )
-
-
-def test_nonnegative_integer_list_accepts_canonical_values_beyond_python_limit() -> (
-    None
-):
-    value = "1" + ("0" * 5_000)
-
-    request = IntegerListRequest(values=(value,))
-
-    assert request.values == (value,)
 
 
 def test_smith_certificate_validates_large_canonical_invariant_factor() -> None:

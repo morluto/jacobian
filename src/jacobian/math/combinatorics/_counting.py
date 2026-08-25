@@ -1,9 +1,11 @@
 """Counting-owned exact combinatorics operations."""
 
 from jacobian.catalog._examples import example
-from jacobian.math.combinatorics._models import (
+from jacobian.math.combinatorics._counting_models import (
     BinomialRequest,
     IntegerListRequest,
+)
+from jacobian.math.combinatorics._models import (
     IntegerResult,
     NonnegativeIntegerRequest,
     NonnegativePairRequest,

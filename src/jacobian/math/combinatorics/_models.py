@@ -24,7 +24,6 @@ from jacobian.canonical import (
     CanonicalLimits,
     canonicalize_json,
     format_canonical_integer,
-    parse_canonical_integer,
 )
 
 
@@ -69,8 +68,6 @@ def _require_bounded_rational(
 
 
 _MAX_N = 10_000
-MAX_BINOMIAL_N = 10_000
-_MAX_PARTS = 256
 _MAX_PARTITION_N = 30
 _MAX_ENUMERATED_PARTITIONS = 10_000
 MAX_LINEAR_RECURRENCE_ORDER = 16
@@ -432,13 +429,6 @@ class NonnegativePairRequest(StrictModel):
     k: StrictInt = Field(ge=0, le=_MAX_N)
 
 
-class BinomialRequest(StrictModel):
-    """A wider safe bound for Python's efficient exact ``math.comb`` path."""
-
-    n: StrictInt = Field(ge=0, le=MAX_BINOMIAL_N)
-    k: StrictInt = Field(ge=0, le=MAX_BINOMIAL_N)
-
-
 class IntegerSidonRequest(StrictModel):
     """One bounded finite integer set for ordered-difference replay."""
 
@@ -796,18 +786,6 @@ class CyclicDifferenceSetExtensionResult(StrictModel):
                 raise _combinatorics_validation_error(
                     "negative extension decision must match the exhaustive search"
                 )
-        return self
-
-
-class IntegerListRequest(StrictModel):
-    values: tuple[CanonicalInteger, ...] = Field(min_length=1, max_length=_MAX_PARTS)
-
-    @model_validator(mode="after")
-    def require_nonnegative_parts(self) -> Self:
-        if any(parse_canonical_integer(value) < 0 for value in self.values):
-            raise _combinatorics_validation_error(
-                "integer list values must be nonnegative"
-            )
         return self
 
 

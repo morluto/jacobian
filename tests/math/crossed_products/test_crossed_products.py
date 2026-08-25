@@ -20,10 +20,16 @@ from jacobian.math.crossed_products.values import (
     FiniteCosetCrossedProductElement,
     FiniteCosetCrossedProductPresentation,
     FiniteCosetCrossedProductTerm,
+    _integer_matrix_vector_product,
 )
 
 Exponent = tuple[int, ...]
 Support = set[Exponent]
+
+
+def test_integer_matrix_vector_product_handles_zero_and_full_rank_actions() -> None:
+    assert _integer_matrix_vector_product((), ()) == ()
+    assert _integer_matrix_vector_product(((2, -1), (3, 4)), (5, -2)) == (12, 7)
 
 
 def _c2_presentation(

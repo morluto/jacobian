@@ -10,6 +10,7 @@ from jacobian.math.crossed_products.values import (
     FiniteCosetCrossedProductElement,
     FiniteCosetCrossedProductPresentation,
     FiniteCosetCrossedProductTerm,
+    _integer_matrix_vector_product,
 )
 
 MAX_CONVOLUTION_PAIRS = 1_024
@@ -35,16 +36,6 @@ def _integer_cocycle(
             tuple(parse_canonical_integer(entry) for entry in vector) for vector in row
         )
         for row in presentation.cocycle_table
-    )
-
-
-def _matrix_vector_product(
-    matrix: tuple[tuple[int, ...], ...],
-    vector: tuple[int, ...],
-) -> tuple[int, ...]:
-    return tuple(
-        sum(entry * coordinate for entry, coordinate in zip(row, vector, strict=True))
-        for row in matrix
     )
 
 
@@ -204,7 +195,9 @@ def _multiply_admitted(
                 right_coset
             ]
             product_coset = coset_index[product_coset_label]
-            transformed = _matrix_vector_product(actions[left_coset], right_exponents)
+            transformed = _integer_matrix_vector_product(
+                actions[left_coset], right_exponents
+            )
             product_exponents = tuple(
                 left_coordinate + transformed_coordinate + cocycle_coordinate
                 for left_coordinate, transformed_coordinate, cocycle_coordinate in zip(

@@ -9,7 +9,10 @@ from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    IndexedSimpleUndirectedGraph,
+    SimpleUndirectedGraph,
+)
 
 MAX_EDGE_COLORING_VERTICES = 64
 MAX_EDGE_COLORING_EDGES = (
@@ -26,6 +29,34 @@ DEFAULT_SOLVER_CONFLICT_BUDGET = 100_000
 
 MAX_SOLVER_CONFLICT_BUDGET = 1_000_000
 """Upper bound on the accepted SAT conflict budget."""
+
+
+def _require_indexed_coloring_graph(graph: IndexedSimpleUndirectedGraph) -> None:
+    if graph.vertex_count > MAX_EDGE_COLORING_VERTICES:
+        raise PydanticCustomError(
+            "graph.coloring_vertex_count_exceeds_operation_bound",
+            f"coloring operations support at most {MAX_EDGE_COLORING_VERTICES} vertices",
+        )
+
+
+def _indexed_coloring_graph_schema() -> JsonSchemaValue:
+    """Project the coloring envelope onto the shared indexed graph value."""
+
+    schema = IndexedSimpleUndirectedGraph.model_json_schema()
+    schema["description"] = (
+        "An integer-indexed simple undirected graph accepted by the coloring "
+        f"operations: at most {MAX_EDGE_COLORING_VERTICES} vertices and at most "
+        f"{MAX_EDGE_COLORING_EDGES} edges."
+    )
+    schema["properties"]["vertex_count"].update(maximum=MAX_EDGE_COLORING_VERTICES)
+    schema["properties"]["edges"].update(maxItems=MAX_EDGE_COLORING_EDGES)
+    return schema
+
+
+IndexedColoringGraph = Annotated[
+    IndexedSimpleUndirectedGraph,
+    WithJsonSchema(_indexed_coloring_graph_schema()),
+]
 
 
 def _run_edge_coloring_solver(
@@ -59,7 +90,7 @@ def _run_edge_coloring_solver(
 
 
 def _run_k_colorability_solver(
-    graph: GraphEdgeList,
+    graph: IndexedSimpleUndirectedGraph,
     colors: int,
     solver_conflicts: int,
 ) -> tuple[str, tuple[int, ...] | None]:
@@ -90,7 +121,7 @@ def _run_k_colorability_solver(
 
 
 def _is_proper_vertex_coloring(
-    graph: GraphEdgeList,
+    graph: IndexedSimpleUndirectedGraph,
     coloring: tuple[int, ...],
 ) -> bool:
     """Check whether a coloring assigns distinct colors to adjacent vertices."""
@@ -206,46 +237,10 @@ def _require_conflicting_pair(
         )
 
 
-class GraphEdgeList(StrictModel):
-    """A simple undirected graph given by an edge list."""
-
-    # SAT instances are bounded by the explicit solver conflict budget but
-    # capped at 64 vertices for one direct stateless call; polynomial-time
-    # checks (maximal independent set) use the same envelope and run in
-    # O(V+E).
-    vertex_count: int = Field(ge=1, le=64)
-    edges: tuple[tuple[int, int], ...] = Field(
-        max_length=MAX_EDGE_COLORING_EDGES,
-    )
-
-    @model_validator(mode="after")
-    def require_valid_edges(self) -> Self:
-        seen: set[tuple[int, int]] = set()
-        for u, v in self.edges:
-            if not (0 <= u < self.vertex_count and 0 <= v < self.vertex_count):
-                raise PydanticCustomError(
-                    "graph.edge_vertices_must_be_in_0_vertex_count_1",
-                    "edge vertices must be in 0..vertex_count-1",
-                )
-            if u == v:
-                raise PydanticCustomError(
-                    "graph.a_simple_graph_cannot_contain_self_loops",
-                    "a simple graph cannot contain self-loops",
-                )
-            edge = (min(u, v), max(u, v))
-            if edge in seen:
-                raise PydanticCustomError(
-                    "graph.a_simple_graph_cannot_contain_duplicate_edges",
-                    "a simple graph cannot contain duplicate edges",
-                )
-            seen.add(edge)
-        return self
-
-
 class KColorabilityRequest(StrictModel):
     """Decide whether a bounded simple graph admits a proper ``k``-coloring."""
 
-    graph: GraphEdgeList
+    graph: IndexedColoringGraph
     colors: int = Field(ge=1, le=64)
     solver_conflicts: int = Field(
         default=DEFAULT_SOLVER_CONFLICT_BUDGET,
@@ -259,11 +254,16 @@ class KColorabilityRequest(StrictModel):
         ),
     )
 
+    @model_validator(mode="after")
+    def require_admitted_graph(self) -> Self:
+        _require_indexed_coloring_graph(self.graph)
+        return self
+
 
 class KColorabilityResult(StrictModel):
     """Whether a proper ``k``-coloring exists, with one coloring witness."""
 
-    graph: GraphEdgeList
+    graph: IndexedColoringGraph
     colors: int = Field(ge=1, le=64)
     solver_conflicts: int = Field(
         default=DEFAULT_SOLVER_CONFLICT_BUDGET,
@@ -277,6 +277,7 @@ class KColorabilityResult(StrictModel):
 
     @model_validator(mode="after")
     def require_claim_consistency(self) -> Self:
+        _require_indexed_coloring_graph(self.graph)
         if self.vertex_count != self.graph.vertex_count:
             raise PydanticCustomError(
                 "graph.vertex_count_must_equal_the_graph_s_vertex_count",
@@ -377,11 +378,12 @@ def _require_k_colorability_negative_replay(result: KColorabilityResult) -> None
 class MaximalIndependentSetRequest(StrictModel):
     """One canonical candidate set in a bounded simple graph."""
 
-    graph: GraphEdgeList
+    graph: IndexedColoringGraph
     candidate_set: tuple[int, ...] = Field(max_length=64)
 
     @model_validator(mode="after")
     def require_canonical_candidate_set(self) -> Self:
+        _require_indexed_coloring_graph(self.graph)
         if tuple(sorted(self.candidate_set)) != self.candidate_set:
             raise PydanticCustomError(
                 "graph.candidate_set_must_be_strictly_increasing",

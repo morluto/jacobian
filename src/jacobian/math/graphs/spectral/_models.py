@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import WithJsonSchema, model_validator
+from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
@@ -22,38 +24,43 @@ _MAX_CHARPOLY_EXPONENT = 32
 _MAX_CHARPOLY_COEFFICIENT_DIGITS = 128
 
 
-class GraphEdgeList(StrictModel):
-    """A simple undirected graph given by an edge list."""
+_MAX_SPECTRAL_VERTICES = 32
 
-    vertex_count: int = Field(ge=1, le=32)
-    edges: tuple[tuple[int, int], ...] = Field(max_length=512)
 
-    @model_validator(mode="after")
-    def require_simple_graph(self) -> Self:
-        seen: set[tuple[int, int]] = set()
-        for u, v in self.edges:
-            if not (0 <= u < self.vertex_count and 0 <= v < self.vertex_count):
-                raise PydanticCustomError(
-                    "graph.edge_vertices_must_be_in_0_vertex_count_1",
-                    "edge vertices must be in 0..vertex_count-1",
-                )
-            if u == v:
-                raise PydanticCustomError(
-                    "graph.a_simple_graph_cannot_contain_self_loops",
-                    "a simple graph cannot contain self-loops",
-                )
-            edge = (min(u, v), max(u, v))
-            if edge in seen:
-                raise PydanticCustomError(
-                    "graph.a_simple_graph_cannot_contain_duplicate_edges",
-                    "a simple graph cannot contain duplicate edges",
-                )
-            seen.add(edge)
-        return self
+def _require_spectral_graph(graph: IndexedSimpleUndirectedGraph) -> None:
+    if graph.vertex_count > _MAX_SPECTRAL_VERTICES:
+        raise PydanticCustomError(
+            "graph.spectral_vertex_count_exceeds_operation_bound",
+            "spectral operations support at most 32 vertices",
+        )
+
+
+def _spectral_graph_schema() -> JsonSchemaValue:
+    """Project the spectral-operation envelope onto the shared graph value."""
+
+    schema = IndexedSimpleUndirectedGraph.model_json_schema()
+    schema["description"] = (
+        "An integer-indexed simple undirected graph accepted by the spectral "
+        "operations: at most 32 vertices and at most 512 edges."
+    )
+    schema["properties"]["vertex_count"].update(maximum=_MAX_SPECTRAL_VERTICES)
+    schema["properties"]["edges"].update(maxItems=512)
+    return schema
+
+
+SpectralGraph = Annotated[
+    IndexedSimpleUndirectedGraph,
+    WithJsonSchema(_spectral_graph_schema()),
+]
 
 
 class GraphSpectrumRequest(StrictModel):
-    graph: GraphEdgeList
+    graph: SpectralGraph
+
+    @model_validator(mode="after")
+    def require_admitted_graph(self) -> Self:
+        _require_spectral_graph(self.graph)
+        return self
 
 
 class GraphSpectrumResult(StrictModel):
@@ -71,7 +78,7 @@ class GraphSpectrumResult(StrictModel):
     multiset rather than by backend iteration order.
     """
 
-    graph: GraphEdgeList
+    graph: SpectralGraph
     matrix_convention: Literal["ADJACENCY", "LAPLACIAN"]
     eigenvalues: tuple[str, ...]
     multiplicities: tuple[int, ...]
@@ -84,6 +91,7 @@ class GraphSpectrumResult(StrictModel):
             laplacian_spectrum,
         )
 
+        _require_spectral_graph(self.graph)
         order = self.graph.vertex_count
         if len(self.eigenvalues) != len(self.multiplicities):
             raise PydanticCustomError(
@@ -142,7 +150,7 @@ class GraphCharacteristicPolynomialResult(StrictModel):
     determinant relation.
     """
 
-    graph: GraphEdgeList
+    graph: SpectralGraph
     convention: Literal["ADJACENCY", "LAPLACIAN"]
     polynomial: RationalPolynomial
 
@@ -156,6 +164,7 @@ class GraphCharacteristicPolynomialResult(StrictModel):
             rational_polynomial_to_sympy,
         )
 
+        _require_spectral_graph(self.graph)
         if self.polynomial.variables != (_VARIABLE,):
             raise PydanticCustomError(
                 "graph.characteristic_polynomial_must_be_univariate_in_",
@@ -187,7 +196,6 @@ class GraphCharacteristicPolynomialResult(StrictModel):
 
 __all__ = [
     "GraphCharacteristicPolynomialResult",
-    "GraphEdgeList",
     "GraphSpectrumRequest",
     "GraphSpectrumResult",
 ]

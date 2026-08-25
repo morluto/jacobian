@@ -8,7 +8,6 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.graphs.spectral._models import (
-    GraphEdgeList,
     GraphSpectrumRequest,
     GraphSpectrumResult,
 )
@@ -16,10 +15,28 @@ from jacobian.math.graphs.spectral._operations import (
     compute_adjacency_spectrum,
     compute_laplacian_spectrum,
 )
+from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
 
-def _graph(vertex_count: int, edges: tuple[tuple[int, int], ...]) -> GraphEdgeList:
-    return GraphEdgeList(vertex_count=vertex_count, edges=edges)
+def _graph(
+    vertex_count: int, edges: tuple[tuple[int, int], ...]
+) -> IndexedSimpleUndirectedGraph:
+    return IndexedSimpleUndirectedGraph(vertex_count=vertex_count, edges=edges)
+
+
+def test_indexed_graph_value_composes_with_coloring_and_spectral_requests() -> None:
+    from jacobian.math.graphs.coloring._models import KColorabilityRequest
+
+    graph = _graph(3, ((0, 1), (1, 2)))
+    assert KColorabilityRequest(graph=graph, colors=2).graph is graph
+    assert GraphSpectrumRequest(graph=graph).graph is graph
+
+
+def test_spectral_request_rejects_the_shared_value_outside_its_envelope() -> None:
+    graph = _graph(33, tuple((index, index + 1) for index in range(32)))
+
+    with pytest.raises(ValidationError, match="spectral operations support"):
+        GraphSpectrumRequest(graph=graph)
 
 
 def test_producer_spectra_retain_source_and_replay() -> None:

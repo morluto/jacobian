@@ -630,9 +630,9 @@ class TestSolverConflictBudget:
 
 class TestVertexKColorability:
     def _k4(self):
-        from jacobian.math.graphs.coloring._models import GraphEdgeList
+        from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
-        return GraphEdgeList(
+        return IndexedSimpleUndirectedGraph(
             vertex_count=4,
             edges=((0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)),
         )
@@ -673,13 +673,13 @@ class TestVertexKColorability:
         """An authored budget-exceeded label on a trivially decidable graph
         must not validate."""
         from jacobian.math.graphs.coloring._models import (
-            GraphEdgeList,
             KColorabilityResult,
         )
+        from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
         with pytest.raises(ValidationError):
             KColorabilityResult(
-                graph=GraphEdgeList(vertex_count=2, edges=((0, 1),)),
+                graph=IndexedSimpleUndirectedGraph(vertex_count=2, edges=((0, 1),)),
                 colors=2,
                 solver_conflicts=1000,
                 status="SOLVER_BUDGET_EXCEEDED",
@@ -758,11 +758,11 @@ class TestVertexKColorability:
         """A colorable claim must carry one in-range color per vertex and the
         witness must be proper for the result's own graph."""
         from jacobian.math.graphs.coloring._models import (
-            GraphEdgeList,
             KColorabilityResult,
         )
+        from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
-        path = GraphEdgeList(vertex_count=3, edges=((0, 1), (1, 2)))
+        path = IndexedSimpleUndirectedGraph(vertex_count=3, edges=((0, 1), (1, 2)))
         base = {
             "graph": path,
             "colors": 2,

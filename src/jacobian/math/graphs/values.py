@@ -20,6 +20,10 @@ GraphCompositionOperation = Literal[
 
 MAX_GRAPH_LABEL_BYTES = 64
 MAX_GRAPH_COLOR_BYTES = 64
+MAX_INDEXED_SIMPLE_GRAPH_VERTICES = 256
+MAX_INDEXED_SIMPLE_GRAPH_EDGES = (
+    MAX_INDEXED_SIMPLE_GRAPH_VERTICES * (MAX_INDEXED_SIMPLE_GRAPH_VERTICES - 1) // 2
+)
 
 GraphVertexLabel = Annotated[
     str,
@@ -79,6 +83,38 @@ class SimpleUndirectedGraph(StrictModel):
             raise PydanticCustomError(
                 "graph.graph_edges_must_be_unique", "graph edges must be unique"
             )
+        return self
+
+
+class IndexedSimpleUndirectedGraph(StrictModel):
+    """A finite simple undirected graph on the integer axis ``0..n-1``."""
+
+    vertex_count: int = Field(ge=1, le=MAX_INDEXED_SIMPLE_GRAPH_VERTICES)
+    edges: tuple[tuple[int, int], ...] = Field(
+        max_length=MAX_INDEXED_SIMPLE_GRAPH_EDGES
+    )
+
+    @model_validator(mode="after")
+    def require_simple_indexed_graph(self) -> Self:
+        seen: set[tuple[int, int]] = set()
+        for left, right in self.edges:
+            if not (0 <= left < self.vertex_count and 0 <= right < self.vertex_count):
+                raise PydanticCustomError(
+                    "graph.edge_vertices_must_be_in_0_vertex_count_1",
+                    "edge vertices must be in 0..vertex_count-1",
+                )
+            if left == right:
+                raise PydanticCustomError(
+                    "graph.a_simple_graph_cannot_contain_self_loops",
+                    "a simple graph cannot contain self-loops",
+                )
+            edge = (min(left, right), max(left, right))
+            if edge in seen:
+                raise PydanticCustomError(
+                    "graph.a_simple_graph_cannot_contain_duplicate_edges",
+                    "a simple graph cannot contain duplicate edges",
+                )
+            seen.add(edge)
         return self
 
 
@@ -188,11 +224,14 @@ class GraphCompositionInput(StrictModel):
 __all__ = [
     "MAX_GRAPH_COLOR_BYTES",
     "MAX_GRAPH_LABEL_BYTES",
+    "MAX_INDEXED_SIMPLE_GRAPH_EDGES",
+    "MAX_INDEXED_SIMPLE_GRAPH_VERTICES",
     "ColoredUndirectedGraph",
     "GraphColor",
     "GraphCompositionInput",
     "GraphCompositionOperation",
     "GraphVertexLabel",
+    "IndexedSimpleUndirectedGraph",
     "SimpleUndirectedGraph",
     "simple_undirected_graph_wire_bytes",
 ]

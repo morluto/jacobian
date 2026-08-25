@@ -12,7 +12,6 @@ from jacobian.math.graphs.spectral import (
 )
 from jacobian.math.graphs.spectral._models import (
     GraphCharacteristicPolynomialResult,
-    GraphEdgeList,
     GraphSpectrumRequest,
 )
 from jacobian.math.graphs.spectral._operations import (
@@ -20,6 +19,7 @@ from jacobian.math.graphs.spectral._operations import (
     compute_laplacian_characteristic_polynomial,
 )
 from jacobian.math.graphs.spectral._tools import TOOLS
+from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 from jacobian.math.polynomials._elementary_operations import (
     rational_polynomial_derivative,
 )
@@ -32,7 +32,9 @@ from jacobian.math.polynomials.values import (
 
 
 def _graph(edges, vc):
-    return GraphEdgeList(vertex_count=vc, edges=tuple(tuple(e) for e in edges))
+    return IndexedSimpleUndirectedGraph(
+        vertex_count=vc, edges=tuple(tuple(e) for e in edges)
+    )
 
 
 def _request(edges, vc):
@@ -72,7 +74,9 @@ def _univariate_polynomial(coefficients: dict[int, str]) -> RationalPolynomial:
 def _charpoly_payload(polynomial: RationalPolynomial) -> dict:
     """Serialize a result payload bound to the P3 adjacency source."""
     return {
-        "graph": GraphEdgeList(vertex_count=3, edges=((0, 1), (1, 2))).model_dump(),
+        "graph": IndexedSimpleUndirectedGraph(
+            vertex_count=3, edges=((0, 1), (1, 2))
+        ).model_dump(),
         "convention": "ADJACENCY",
         "polynomial": polynomial.model_dump(),
     }
@@ -161,7 +165,7 @@ class TestLaplacianCharacteristicPolynomial:
 
 
 def test_forged_result_rejected():
-    graph = GraphEdgeList(vertex_count=3, edges=((0, 1), (1, 2)))
+    graph = IndexedSimpleUndirectedGraph(vertex_count=3, edges=((0, 1), (1, 2)))
     with pytest.raises(ValidationError):
         GraphCharacteristicPolynomialResult.model_validate(
             {
@@ -210,7 +214,9 @@ def test_maximum_shaped_nonmatching_polynomial_fails_only_on_source_binding():
 
 def test_maximal_path_round_trips_through_serialization():
     # Degree exactly 32 exercises the replay degree bound from above.
-    graph = GraphEdgeList(vertex_count=32, edges=tuple((i, i + 1) for i in range(31)))
+    graph = IndexedSimpleUndirectedGraph(
+        vertex_count=32, edges=tuple((i, i + 1) for i in range(31))
+    )
     polynomial = adjacency_characteristic_polynomial(graph)
     restored = GraphCharacteristicPolynomialResult.model_validate(
         GraphCharacteristicPolynomialResult(

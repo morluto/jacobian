@@ -25,6 +25,7 @@ from jacobian.math.graphs.transforms import (
 from jacobian.math.graphs.values import (
     ColoredUndirectedGraph,
     GraphCompositionInput,
+    IndexedSimpleUndirectedGraph,
     SimpleUndirectedGraph,
 )
 
@@ -34,6 +35,7 @@ __all__ = [
     "IndependenceNumberBudget",
     "IndependenceNumberRequest",
     "IndependenceNumberResult",
+    "IndexedSimpleUndirectedGraph",
     "SimpleUndirectedGraph",
     "biconnected_components",
     "complement",

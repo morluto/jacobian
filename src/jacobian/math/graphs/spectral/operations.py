@@ -12,7 +12,8 @@ __all__ = [
 ]
 
 from jacobian._exact import CanonicalRational
-from jacobian.math.graphs.spectral._models import GraphEdgeList
+from jacobian.math.graphs.spectral._models import _require_spectral_graph
+from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 from jacobian.math.polynomials.values import RationalPolynomial
 
 
@@ -38,9 +39,10 @@ def _dense_to_canonical_polynomial(
     return _dense_to_canonical_polynomial(coefficients)
 
 
-def _adjacency_matrix(graph: GraphEdgeList) -> Any:
+def _adjacency_matrix(graph: IndexedSimpleUndirectedGraph) -> Any:
     import sympy
 
+    _require_spectral_graph(graph)
     mat = sympy.zeros(graph.vertex_count)
     for u, v in graph.edges:
         mat[u, v] = 1
@@ -48,7 +50,7 @@ def _adjacency_matrix(graph: GraphEdgeList) -> Any:
     return mat
 
 
-def _laplacian_matrix(graph: GraphEdgeList) -> Any:
+def _laplacian_matrix(graph: IndexedSimpleUndirectedGraph) -> Any:
     import sympy
 
     adj = _adjacency_matrix(graph)
@@ -56,19 +58,21 @@ def _laplacian_matrix(graph: GraphEdgeList) -> Any:
     return degree - adj
 
 
-def adjacency_spectrum(graph: GraphEdgeList) -> list[tuple[str, int]]:
+def adjacency_spectrum(graph: IndexedSimpleUndirectedGraph) -> list[tuple[str, int]]:
+    _require_spectral_graph(graph)
     mat = _adjacency_matrix(graph)
     eigenvals = mat.eigenvals()
     return [(str(val), int(mult)) for val, mult in eigenvals.items()]
 
 
-def laplacian_spectrum(graph: GraphEdgeList) -> list[tuple[str, int]]:
+def laplacian_spectrum(graph: IndexedSimpleUndirectedGraph) -> list[tuple[str, int]]:
+    _require_spectral_graph(graph)
     eigenvals = _laplacian_matrix(graph).eigenvals()
     return [(str(val), int(mult)) for val, mult in eigenvals.items()]
 
 
 def adjacency_characteristic_polynomial(
-    graph: GraphEdgeList,
+    graph: IndexedSimpleUndirectedGraph,
 ) -> RationalPolynomial:
     """Return det(xI - A) as the canonical sparse rational polynomial."""
 
@@ -78,7 +82,7 @@ def adjacency_characteristic_polynomial(
 
 
 def laplacian_characteristic_polynomial(
-    graph: GraphEdgeList,
+    graph: IndexedSimpleUndirectedGraph,
 ) -> RationalPolynomial:
     """Return det(xI - L) as the canonical sparse rational polynomial."""
 

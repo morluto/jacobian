@@ -1484,7 +1484,7 @@ class MinimalPolynomialResult(StrictModel):
 
         if self.degree != _polynomial_degree(self.minimal_polynomial):
             raise ValueError("degree must equal the minimal-polynomial degree")
-        entries = _matrix_entries(self.matrix)
+        entries = _matrix_entries(self.matrix.matrix)
         if _coefficients_of(self.minimal_polynomial) != tuple(replay_minimal(entries)):
             raise ValueError(
                 "minimal polynomial must be the exact minimal polynomial of "
@@ -1551,7 +1551,7 @@ class RationalCanonicalFormResult(StrictModel):
             minimal_polynomial as replay_minimal,
         )
 
-        entries = _matrix_entries(self.matrix)
+        entries = _matrix_entries(self.matrix.matrix)
         dimension = len(entries)
         if self.total_block_size != sum(
             entry.block_size for entry in self.invariant_factors
@@ -1631,7 +1631,7 @@ class PrimaryDecompositionResult(StrictModel):
             minimal_polynomial as replay_minimal,
         )
 
-        entries = _matrix_entries(self.matrix)
+        entries = _matrix_entries(self.matrix.matrix)
 
         if _coefficients_of(self.minimal_polynomial) != tuple(replay_minimal(entries)):
             raise ValueError(

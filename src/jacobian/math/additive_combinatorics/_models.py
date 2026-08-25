@@ -25,6 +25,7 @@ from jacobian.math.additive_combinatorics.values import (
     IndexedIntegerSequence,
     indexed_sequence_item_ceiling,
 )
+from jacobian.math.finite_sets._models import FiniteIntegerSet
 
 # This conservative materialized-axis cap bounds source parsing and binomial
 # preflight. Operation-specific work and result bounds impose the sharper
@@ -336,20 +337,6 @@ def _check_first_collision(
         )
 
 
-class FiniteIntegerSet(StrictModel):
-    """One finite set of canonical integers, possibly empty."""
-
-    elements: tuple[CanonicalInteger, ...] = Field(max_length=_MAX_SET_SIZE)
-
-    @model_validator(mode="after")
-    def require_unique_elements(self) -> Self:
-        if len(set(self.elements)) != len(self.elements):
-            raise _validation_error(
-                "require_unique_elements", "finite set elements must be unique"
-            )
-        return self
-
-
 def _require_bounded_cartesian_product(
     left: FiniteIntegerSet,
     right: FiniteIntegerSet,
@@ -493,8 +480,8 @@ def _multiset_sum_source_values(source: FiniteIntegerSet) -> tuple[int, ...]:
 
 
 _MULTISET_SUM_SOURCE_DESCRIPTION = (
-    f"A materialized finite set of at most {_MAX_SET_SIZE} distinct canonical "
-    "integers in strictly increasing numeric order; each element carries at "
+    "A materialized finite set of distinct canonical integers in strictly "
+    "increasing numeric order; each element carries at "
     f"most {_MAX_MULTISET_SUM_ELEMENT_DIGITS} digits."
 )
 

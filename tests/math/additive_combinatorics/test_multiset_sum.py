@@ -82,6 +82,12 @@ def test_empty_zero_and_singleton_conventions(
     assert _profile(source, arity) == expected
 
 
+def test_zero_arity_uses_derived_admission_not_the_legacy_source_cap() -> None:
+    source = tuple(range(_MAX_SET_SIZE + 1))
+
+    assert _profile(source, 0) == {0: 1}
+
+
 def test_closed_window_is_complete_only_for_its_declared_scope() -> None:
     result = compute_multiset_sum_representation_profile(_request((0, 1, 2), 3, (2, 3)))
     assert result.window is not None
@@ -176,7 +182,7 @@ def test_request_rejects_oversized_source_integer_before_parsing() -> None:
 def test_request_schema_exposes_collection_and_scalar_bounds() -> None:
     schema = MultisetSumRepresentationProfileRequest.model_json_schema()
     source_schema = schema["$defs"]["FiniteIntegerSet"]
-    assert source_schema["properties"]["elements"]["maxItems"] == _MAX_SET_SIZE
+    assert source_schema["properties"]["elements"]["maxItems"] == 50_000
     assert schema["properties"]["arity"]["maximum"] == _MAX_MULTISET_SUM_ARITY
     window_schema = schema["$defs"]["MultisetSumWindow"]
     assert (

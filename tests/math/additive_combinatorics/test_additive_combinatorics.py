@@ -14,9 +14,29 @@ from jacobian.math.additive_combinatorics._operations import (
     compute_sumset_cardinality,
     decide_direct_sum_predicate,
 )
+from jacobian.math.finite_sets._models import (
+    FiniteIntegerSet as CanonicalFiniteIntegerSet,
+)
 
 
 class TestRepresentationProfile:
+    def test_finite_set_value_is_shared_with_the_finite_sets_owner(self):
+        value = CanonicalFiniteIntegerSet(elements=("1", "2"))
+
+        assert FiniteIntegerSet is CanonicalFiniteIntegerSet
+        request = RepresentationProfileRequest(left=value, right=value)
+        assert request.left is value
+        assert request.right is value
+
+        serialized_request = RepresentationProfileRequest.model_validate(
+            {
+                "left": value.model_dump(mode="json"),
+                "right": value.model_dump(mode="json"),
+            }
+        )
+        assert serialized_request.left == value
+        assert serialized_request.right == value
+
     def test_two_by_two(self):
         req = RepresentationProfileRequest(
             left=FiniteIntegerSet(elements=("1", "2")),

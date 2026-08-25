@@ -874,8 +874,7 @@ class TestValidation:
         assert f"{MAX_TA_TRANSITIONS} unique transitions" in automaton_description
         assert "{MAX_REACHABILITY_WITNESS_NODES}" not in automaton_description
         assert (
-            f"{MAX_TREE_AUTOMATON_REACHABILITY_WORK:,} units"
-            in automaton_description
+            f"{MAX_TREE_AUTOMATON_REACHABILITY_WORK:,} units" in automaton_description
         )
         assert "summed" in automaton_description
 

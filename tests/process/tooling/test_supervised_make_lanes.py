@@ -42,7 +42,6 @@ def test_process_lane_dry_run_uses_lifecycle_and_signal_timeout() -> None:
     assert "-n 2" in output
     assert "--timeout=120" in output
     assert "--timeout-method=signal" in output
-    assert '-m "not requires_lean"' in output
     assert "tests/process" in output
 
 
@@ -52,18 +51,6 @@ def test_mcp_lane_dry_run_uses_lifecycle() -> None:
     assert "tools/pytest_lifecycle.py" in output
     assert "--name mcp" in output
     assert "tests/mcp" in output
-
-
-def test_lean_lane_dry_run_is_serial_and_supervised() -> None:
-    output = _make_dry_run("test-lean")
-
-    assert "tools/pytest_lifecycle.py" in output
-    assert "--name lean" in output
-    assert "--timeout=300" in output
-    assert "--timeout-method=signal" in output
-    assert "-m requires_lean" in output
-    assert "tests/process/logic" in output
-    assert " -n " not in output
 
 
 def test_supervised_lane_forwards_pytest_arguments() -> None:

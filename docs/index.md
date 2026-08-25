@@ -15,7 +15,7 @@ caller composes the returned mathematical values.
 - [Discover and invoke operations](how-to/invoke-domain-operations.md) — use
   `math.find` and `math.run`.
 - [Backend requirements](how-to/backend-requirements.md) — maintained Python
-  backends and optional Lean.
+  backends.
 - [Remote deployment](how-to/deploy-remote-mcp.md) — serve Jacobian over MCP.
 
 ## Reference

@@ -34,7 +34,6 @@ Examples:
 - `{"request":{"op":"search","query":"exact matrix determinant","domain":"matrix","limit":3}}`
 - `{"request":{"op":"browse","domain":"matrix","limit":20}}`
 - `{"request":{"op":"search","query":"counterexample to associativity"}}`
-- `{"request":{"op":"search","query":"check a bounded Lean source snippet","domain":"lean"}}`
 - `{"request":{"op":"inspect","operation_id":"polynomial.compute.gcd"}}`
 """
 

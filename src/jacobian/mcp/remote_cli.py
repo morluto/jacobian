@@ -26,10 +26,19 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--path", default="/mcp")
-    parser.add_argument(
+    session_mode = parser.add_mutually_exclusive_group()
+    session_mode.add_argument(
         "--stateless-http",
+        dest="stateless_http",
         action="store_true",
-        help="use stateless Streamable HTTP sessions",
+        default=True,
+        help="use stateless Streamable HTTP sessions (the default)",
+    )
+    session_mode.add_argument(
+        "--stateful-http",
+        dest="stateless_http",
+        action="store_false",
+        help="opt into stateful Streamable HTTP sessions",
     )
     parser.add_argument(
         "--auth-tokens-file",

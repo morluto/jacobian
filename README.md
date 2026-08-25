@@ -103,14 +103,11 @@ The built-in portfolio covers work in:
 - exact linear algebra;
 - graphs, paths, colorings, and isomorphism;
 - bounded SAT and SMT solving;
-- finite algebra, probability, geometry, and topology; and
-- Lean source elaboration.
+- finite algebra, probability, geometry, and topology.
 
-SAT and SMT operations use the maintained Z3 Python binding directly. The
-optional `lean.check` operation runs one bounded source snippet in the fixed
-Lean service environment, using a request-scoped temporary directory and
-returning typed diagnostics. Use `math.find` to search for an operation, browse
-an unfamiliar domain, and inspect one operation before calling `math.run` once.
+SAT and SMT operations use the maintained Z3 Python binding directly. Use
+`math.find` to search for an operation, browse an unfamiliar domain, and inspect
+one operation before calling `math.run` once.
 
 See the [domain operation library](docs/reference/domain-operation-library.md)
 for the maintained operation portfolio and
@@ -133,7 +130,7 @@ between releases.
 - [Tool reference](docs/reference/tools.md): MCP resources and invocation
   contracts
 - [Backend requirements](docs/how-to/backend-requirements.md):
-  maintained Python backends and optional Lean
+  maintained Python backends
 - [Remote deployment](docs/how-to/deploy-remote-mcp.md): HTTP deployment and
   authentication
 

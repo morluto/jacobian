@@ -87,7 +87,7 @@ jobs:
           docker run --rm -d --name jacobian-heldout-probe \
             -p 127.0.0.1:8000:8000 "$image" \
             --transport streamable-http --host 0.0.0.0 --port 8000 \
-            --allow-anonymous --stateless-http
+            --allow-anonymous
           echo "url=http://127.0.0.1:8000/mcp" >> "$GITHUB_OUTPUT"
       - name: Execute and resume at complete pair boundaries
         env:

@@ -16,12 +16,12 @@ make check
 
 If this change crosses a named boundary, add the explicitly relevant specialist
 lane(s) and list them below. Specialist lanes are troubleshooting/boundary
-work, not a routine gate; CI owns Lean on merge-group/main, coverage,
-compatibility, packaging, and the ordinary Python surface. See
+work, not a routine gate; CI owns coverage, compatibility, packaging, and the
+ordinary Python surface. See
 [CONTRIBUTING.md](../CONTRIBUTING.md) and the
 [testing strategy](../docs/reference/testing-strategy.md) for lane ownership.
 
-- Specialist validation run (if any): <!-- e.g. make test-lean TESTS=..., make harbor-validate-task DATASET=... TASKS="..." -->
+- Specialist validation run (if any): <!-- e.g. make test-mcp TESTS=..., make harbor-validate-task DATASET=... TASKS="..." -->
 
 ## Public contract impact
 <!-- Does this change alter an operation ID, request/result schema, native API,
@@ -74,7 +74,7 @@ admitted operation with no residual surface. -->
 
 ## Checklist
 - [ ] `make check` passes
-- [ ] Explicitly relevant specialist validation is listed above (boundary, Lean, backend, Harbor/Oracle)
+- [ ] Explicitly relevant specialist validation is listed above (boundary, backend, Harbor/Oracle)
 - [ ] Harbor task or verifier changes ran `make harbor-prepare-task` then `make harbor-validate-task` (if applicable)
 - [ ] Catalog changes include an owner-local catalog-admission decision (if applicable)
 - [ ] Runtime-bound changes name the request-bounds owner and execute the same semantic path for native and MCP callers (if applicable)

@@ -9,15 +9,12 @@ User=jacobian
 Group=jacobian
 WorkingDirectory=/opt/jacobian/current
 Environment=PYTHONUNBUFFERED=1
-Environment=ELAN_HOME=/opt/jacobian/lean/elan
-Environment=PATH=/opt/jacobian/lean/elan/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 LoadCredential=tokens.json:/etc/jacobian-mcp/tokens.json
 ExecStart=/usr/bin/env /opt/jacobian/current/.venv/bin/jacobian-remote-mcp \
   --transport streamable-http \
   --host 127.0.0.1 \
   --port 8765 \
   --path /mcp \
-  --stateless-http \
   --auth-tokens-file %d/tokens.json \
   --public-base-url https://math-tools.example.org
 Restart=on-failure

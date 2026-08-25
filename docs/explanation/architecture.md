@@ -92,10 +92,7 @@ the old path in the same change, and lands as one family per change.
 
 Logic follows the same rule. CNF canonicalization and assignment checks are
 pure direct operations. SAT and bounded QF SMT-LIB solving call the maintained
-Z3 Python binding in process. `lean.check` is a one-shot external boundary: it
-writes one source file in a request-scoped temporary directory, invokes the
-fixed Lean environment with an explicit timeout, returns typed diagnostics, and
-deletes that directory.
+Z3 Python binding in process.
 
 Remote serving uses the same immutable operation library. Authentication
 produces a small request-scoped context. Deployment supplies an immutable

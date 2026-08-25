@@ -72,8 +72,8 @@ exclude = [
 [tool.pytest.ini_options]
 addopts = "-ra --strict-config --strict-markers --import-mode=importlib"
 pythonpath = ["."]
-# Default collection is Lean-free and xdist-safe. Process, MCP, and optional
-# Lean checks stay on explicit paths / Make targets.
+# Default collection is xdist-safe. Process and MCP checks stay on explicit
+# paths / Make targets.
 testpaths = [
     "tests/math",
     "tests/catalog",
@@ -83,11 +83,10 @@ testpaths = [
     "tests/integration",
 ]
 # Per-invocation --timeout lives on Make/CI commands, not here: a global
-# deadline would interrupt native solvers that process/Lean isolate instead.
+# deadline would interrupt native solvers that process lanes isolate instead.
 timeout_method = "thread"
 markers = [
     "requires_backend(name): test requires a maintained mathematical backend",
-    "requires_lean: test requires the fixed external Lean toolchain",
     "property: property-based invariant tests",
     "exhaustive: broad finite reference sweeps run by scheduled validation",
 ]

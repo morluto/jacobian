@@ -11,6 +11,7 @@ from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.math.tree_automata.values import (
     MAX_REACHABILITY_WITNESS_NODES,
+    MAX_TA_TRANSITIONS,
     MAX_TREE_AUTOMATON_REACHABILITY_WORK,
     BottomUpTreeAutomaton,
     RankedTree,
@@ -139,7 +140,7 @@ class TreeAutomatonReachabilityRequest(StrictModel):
     automaton: BottomUpTreeAutomaton = Field(
         description=(
             f"nondeterministic bottom-up tree automaton with at most 64 "
-            "states, 32 ranked symbols, and {MAX_REACHABILITY_WITNESS_NODES} unique transitions. "
+            f"states, 32 ranked symbols, and {MAX_TA_TRANSITIONS} unique transitions. "
             "Requests are additionally rejected when the coupled "
             "reachability work envelope (MAX_TREE_AUTOMATON_REACHABILITY_"
             f"WORK = {MAX_TREE_AUTOMATON_REACHABILITY_WORK:,} units, priced across the four passes behind "

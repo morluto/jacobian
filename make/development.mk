@@ -1,13 +1,10 @@
-.PHONY: uv-version-check setup setup-lean container-image eval-image eval-image-pull hooks fix lint lint-full security-audit typecheck architecture docs-command-check docs-linkcheck
+.PHONY: uv-version-check setup container-image eval-image eval-image-pull hooks fix lint lint-full security-audit typecheck architecture docs-command-check docs-linkcheck
 
 uv-version-check: ## Require the repository-pinned uv release.
 	@test "$$(uv --version | awk '{print $$2}')" = "$$(tr -d '[:space:]' < .uv-version)" || { echo "install uv $$(tr -d '[:space:]' < .uv-version) before using this checkout" >&2; exit 2; }
 
 setup: uv-version-check ## Install the locked Python environment.
 	uv sync --locked --dev
-
-setup-lean: setup ## Install the locked environment and the pinned Lean toolchain.
-	python3 tools/setup_lean.py --repo .
 
 JACOBIAN_REGISTRY_IMAGE ?= ghcr.io/morluto/jacobian
 

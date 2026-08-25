@@ -61,7 +61,6 @@ def test_makefile_public_commands_match_the_command_contract() -> None:
     assert COMMAND_BY_NAME["fix"].mutates_checkout is True
     assert "not PR-equivalent" in COMMAND_BY_NAME["check"].ci_relationship
     assert "not all CI" in COMMAND_BY_NAME["check-all"].ci_relationship
-    assert COMMAND_BY_NAME["check-external"].scope == "tests/process/logic/test_lean.py"
 
 
 def test_help_all_retains_specialist_and_compatibility_commands() -> None:
@@ -78,7 +77,6 @@ def test_help_all_retains_specialist_and_compatibility_commands() -> None:
         "test-fast",
         "test-process",
         "test-mcp",
-        "test-lean",
         "harbor-plan",
         "harbor-prepare-task",
         "harbor-validate-task",

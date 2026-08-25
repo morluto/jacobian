@@ -11,11 +11,6 @@ from jacobian.math.logic._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
-        "lean.check",
-        AdmissionDecision.KEEP,
-        "distinct exact bounded predicate or candidate check with typed semantics",
-    ),
-    OperationAdmission(
         "sat.assignment.check",
         AdmissionDecision.KEEP,
         "distinct exact bounded predicate or candidate check with typed semantics",

@@ -69,12 +69,12 @@ def test_path_prefix_builds_toolchain_only_path_without_ambient_append(
 def test_extra_variables_explicitly_opts_host_values_back_in(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("ELAN_HOME", "/authorized/elan")
+    monkeypatch.setenv("JACOBIAN_OPTED_IN_VARIABLE", "/authorized/value")
     monkeypatch.setenv("JACOBIAN_TEST_SECRET", "do-not-forward")
 
-    environment = worker_environment(extra_variables=("ELAN_HOME",))
+    environment = worker_environment(extra_variables=("JACOBIAN_OPTED_IN_VARIABLE",))
 
-    assert environment["ELAN_HOME"] == "/authorized/elan"
+    assert environment["JACOBIAN_OPTED_IN_VARIABLE"] == "/authorized/value"
     assert "JACOBIAN_TEST_SECRET" not in environment
 
 

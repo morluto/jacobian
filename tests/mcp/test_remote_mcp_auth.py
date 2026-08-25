@@ -211,3 +211,40 @@ def test_token_file_is_strict_and_remote_cli_fails_closed(
     )
     assert conflicting_auth.returncode != 0
     assert "mutually exclusive" in conflicting_auth.stderr
+
+
+def test_remote_cli_uses_stateless_http_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.mcp import remote, remote_cli
+
+    calls: list[dict[str, object]] = []
+
+    class _Server:
+        def run(self, _transport: str, **kwargs: object) -> None:
+            calls.append(kwargs)
+
+    monkeypatch.setattr(remote, "create_remote_server", lambda **_kwargs: _Server())
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["jacobian-remote-mcp", "--allow-anonymous"],
+    )
+    remote_cli.main()
+    assert calls == [
+        {
+            "host": "127.0.0.1",
+            "port": 8000,
+            "streamable_http_path": "/mcp",
+            "stateless_http": True,
+        }
+    ]
+
+    calls.clear()
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["jacobian-remote-mcp", "--allow-anonymous", "--stateful-http"],
+    )
+    remote_cli.main()
+    assert calls[0]["stateless_http"] is False

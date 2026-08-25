@@ -61,7 +61,9 @@ uv run jacobian-remote-mcp \
 Put a TLS-terminating reverse proxy in front of the bound address. The public
 URL must route `/mcp` without stripping the path. For a disposable local
 transport test, use `--allow-anonymous`; never expose that mode as an
-authenticated service.
+authenticated service. Streamable HTTP is stateless by default. Use
+`--stateful-http` only when the deployment deliberately provides stateful
+session handling.
 
 ## Install the example service files
 
@@ -74,10 +76,9 @@ source control.
 ## Health checks and rollout
 
 Run `uv run python -m deploy.smoke_remote <url>` against the private listener
-and public endpoint before directing traffic to the new artifact. Where Lean is
-intentionally installed, also run `uv run python -m deploy.smoke_lean <url>`.
-The probe implementations live in [`deploy/`](../../deploy/). Roll back by
-selecting the previous immutable artifact and rerunning the probes.
+and public endpoint before directing traffic to the new artifact. The probe
+implementation lives in [`deploy/`](../../deploy/). Roll back by selecting the
+previous immutable artifact and rerunning the probe.
 
 When moving hosts, provision the same pinned artifact, transfer operator-owned
 configuration and secrets, run the probes, and move traffic.

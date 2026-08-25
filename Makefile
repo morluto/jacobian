@@ -10,17 +10,17 @@ PYTEST_DIAGNOSTIC_ARGS ?= --durations=10
 RUFF_PATHS := src tests benchmarks
 PYTEST_RUNNER := $(UV_RUN) python tools/pytest_lifecycle.py
 VALIDATION_LOCK := $(UV_RUN) python tools/with_validation_lock.py
-# Owner lanes cover every Lean-free ordinary test root exactly once. CI runs
+# Owner lanes cover every ordinary test root exactly once. CI runs
 # them independently; `make check-all` reproduces them locally in this order.
 ORDINARY_TEST_LANES := math catalog dispatch cli tooling integration
 FOCUSED_TEST_LANES := $(ORDINARY_TEST_LANES) process mcp
-PUBLIC_COMMANDS := setup test-focused quick check check-all check-external fix
+PUBLIC_COMMANDS := setup test-focused quick check check-all fix
 
 include make/development.mk
 include make/harbor.mk
 include make/evaluations.mk
 
-# Timeouts are per-command, not pyproject addopts: process/Lean isolate
+# Timeouts are per-command, not pyproject addopts: process lanes isolate
 # killable work, and a global signal deadline would hit native solvers.
 .PHONY: help help-all
 
@@ -68,7 +68,7 @@ test-focused: ## Run TESTS through its explicit semantic LANE (for example, LANE
 		echo "LANE must be one of: $(FOCUSED_TEST_LANES)" >&2; exit 2;; esac
 	$(MAKE) test-$(LANE) TESTS="$(TESTS)" PYTEST_ARGS="$(PYTEST_ARGS)"
 
-test-fast: ## Lean-free owner tests except cross-owner integration.
+test-fast: ## Owner tests except cross-owner integration.
 	# Full catalog construction imports every maintained math backend; keep
 	# the fast lane within hosted-runner memory instead of crashing workers.
 	$(UV_RUN) pytest -n 2 --dist worksteal --timeout=120 -m "not exhaustive" \
@@ -78,7 +78,6 @@ test-fast: ## Lean-free owner tests except cross-owner integration.
 test-process: ## Killable child-process boundaries (2 workers, 120s).
 	$(PYTEST_RUNNER) --name process --timeout-seconds 4800 -- \
 		-n 2 --dist worksteal --timeout=120 --timeout-method=signal \
-		-m "not requires_lean" \
 		$(if $(TESTS),$(TESTS),tests/process) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
@@ -86,12 +85,6 @@ test-mcp: ## MCP transport boundaries (2 workers, 120s).
 	$(PYTEST_RUNNER) --name mcp --timeout-seconds 4800 -- \
 		-n 2 --dist worksteal --timeout=120 --timeout-method=signal \
 		$(if $(TESTS),$(TESTS),tests/mcp) \
-		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
-
-test-lean: ## Pinned Lean/Mathlib boundary (serial, 300s, kill-safe).
-	$(PYTEST_RUNNER) --name lean --timeout-seconds 12000 -- \
-		--timeout=300 --timeout-method=signal \
-		-m requires_lean $(if $(TESTS),$(TESTS),tests/process/logic) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-singular: ## Pinned Singular exact-algebra backend (serial, 120s, kill-safe).
@@ -106,7 +99,7 @@ test-singular: ## Pinned Singular exact-algebra backend (serial, 120s, kill-safe
 
 test: test-ordinary ## All ordinary Python tests.
 
-test-ordinary: ## Lean-free ordinary suite in the fixed CI group order.
+test-ordinary: ## Ordinary suite in the fixed CI group order.
 	@for lane in $(ORDINARY_TEST_LANES); do \
 		$(MAKE) test-$$lane || exit $$?; \
 	done
@@ -116,7 +109,7 @@ test-compatibility: ## Supported-version import/API compatibility smoke.
 		tests/tooling/test_ci_compatibility.py \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
-test-full: ## Every local semantic pytest/Lean lane; not hosted CI, coverage, or docs.
+test-full: ## Every local semantic pytest lane; not hosted CI, coverage, or docs.
 	$(VALIDATION_LOCK) run --target test-full -- $(MAKE) _test-full
 
 _test-full:
@@ -130,7 +123,6 @@ _test-full:
 	$(MAKE) test-process
 	$(MAKE) test-mcp
 	$(MAKE) test-singular
-	$(MAKE) test-lean
 
 test-stress: ## Repeat explicitly marked property tests on the scheduled lane.
 	$(UV_RUN) pytest -n 0 --timeout=120 --timeout-method=thread -m property \
@@ -174,13 +166,11 @@ build: ## Build Python source and wheel distributions.
 	uv build
 	$(UV_RUN) python tools/check_wheel_contents.py
 
-quick: lint test-fast ## Cheap iteration: lint and Lean-free owner tests.
+quick: lint test-fast ## Cheap iteration: lint and owner tests.
 
-check: lint typecheck test-fast ## Routine local handoff: lint, types, and Lean-free owner tests.
+check: lint typecheck test-fast ## Routine local handoff: lint, types, and owner tests.
 
 check-all: lint typecheck test-ordinary ## Reproduce the ordinary Python CI lanes locally.
-
-check-external: test-lean ## Pinned Lean specialist lane only.
 
 precommit: ## Apply safe fixes, then run lint, types, and unit tests (mutates the tree).
 	$(MAKE) fix

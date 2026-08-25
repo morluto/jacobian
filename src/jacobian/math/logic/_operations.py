@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import shutil
 import tempfile
 from enum import StrEnum
@@ -72,7 +71,6 @@ _CAKE_LPR_MANIFEST_CONTENT = (
     "basis_ffi.c=8e30d84fdcb2177aa5571d7fa6661a2fae5ecfd56baa0ce49c65f9233a9f87cb\n"
     "cake_lpr.S=2f3af32d55083839b3fa0e693afd817679c0b8944bef41def05a8b0ec72b7d4a\n"
 )
-_LEAN_TOOLCHAIN = "leanprover/lean4:v4.31.0"
 _SUPPORTED_SMTLIB_COMMANDS = frozenset(
     {"set-logic", "declare-const", "declare-fun", "assert", "check-sat"}
 )
@@ -802,40 +800,6 @@ class SmtSolveResult(StrictModel):
         return self
 
 
-class LeanDiagnostic(StrictModel):
-    severity: Literal["ERROR", "WARNING", "INFO"]
-    message: str = Field(min_length=1, max_length=4_000)
-
-
-class LeanCheckRequest(StrictModel):
-    """A source snippet checked in the service image's fixed Lean environment."""
-
-    source: str = Field(
-        min_length=1,
-        max_length=32_000,
-        description="A self-contained Lean source snippet for the fixed service toolchain.",
-        examples=["example : True := by trivial"],
-    )
-    timeout_seconds: StrictInt = Field(default=10, ge=1, le=30)
-
-
-class LeanCheckResult(StrictModel):
-    outcome: Literal["ELABORATED", "REJECTED", "UNAVAILABLE", "TIMEOUT", "ERROR"]
-    diagnostics: tuple[LeanDiagnostic, ...] = Field(max_length=64)
-    detail: str | None = Field(default=None, max_length=4_000)
-
-    @model_validator(mode="after")
-    def bind_diagnostics_to_outcome(self) -> Self:
-        if self.outcome == "ELABORATED" and any(
-            diagnostic.severity == "ERROR" for diagnostic in self.diagnostics
-        ):
-            raise _validation_error(
-                "logic.elaborated_diagnostic",
-                "an elaborated source result cannot contain an error",
-            )
-        return self
-
-
 def canonicalize_cnf(request: CnfCanonicalizeRequest) -> CnfCanonicalizeResult:
     """Return the unique canonical CNF for one named clause collection."""
 
@@ -1143,85 +1107,6 @@ def solve_smt(request: SmtSolveRequest) -> SmtSolveResult:
     return SmtSolveResult(outcome="UNKNOWN", exhausted=exhausted, detail=detail)
 
 
-def check_lean_source(request: LeanCheckRequest) -> LeanCheckResult:
-    """Elaborate one source snippet in a temporary request-scoped directory."""
-
-    executable = shutil.which("lean")
-    if executable is None:
-        return LeanCheckResult(
-            outcome="UNAVAILABLE",
-            diagnostics=(),
-            detail="The fixed Lean environment is not installed.",
-        )
-    with tempfile.TemporaryDirectory(prefix="jacobian-lean-") as directory:
-        source_path = Path(directory) / "Snippet.lean"
-        source_path.write_text(request.source, encoding="utf-8")
-        try:
-            completed = run_bounded_process(
-                [executable, str(source_path)],
-                input_bytes=b"",
-                timeout_seconds=float(request.timeout_seconds),
-                environment=worker_environment(
-                    extra_variables=("PATH", "ELAN_HOME"),
-                    overrides={
-                        "ELAN_TOOLCHAIN": _LEAN_TOOLCHAIN,
-                        "ELAN_HOME": os.environ.get(
-                            "ELAN_HOME", str(Path.home() / ".elan")
-                        ),
-                    },
-                    locale="C.UTF-8",
-                ),
-                stdout_limit=64_000,
-                stderr_limit=64_000,
-                cwd=directory,
-            )
-        except OSError:
-            return LeanCheckResult(
-                outcome="UNAVAILABLE",
-                diagnostics=(),
-                detail="The fixed Lean environment could not be started.",
-            )
-    if completed.timed_out:
-        return LeanCheckResult(
-            outcome="TIMEOUT",
-            diagnostics=(),
-            detail="Lean exceeded the declared time limit.",
-        )
-    if completed.cancelled or completed.stdout_exceeded or completed.stderr_exceeded:
-        return LeanCheckResult(
-            outcome="ERROR",
-            diagnostics=(),
-            detail="Lean exceeded a process resource limit.",
-        )
-    diagnostics = _lean_diagnostics(completed.stdout + completed.stderr)
-    if completed.returncode == 0:
-        return LeanCheckResult(outcome="ELABORATED", diagnostics=diagnostics)
-    return LeanCheckResult(outcome="REJECTED", diagnostics=diagnostics)
-
-
-def _lean_diagnostics(output: bytes) -> tuple[LeanDiagnostic, ...]:
-    text = output.decode("utf-8", errors="replace")
-    if not text.strip():
-        return ()
-    diagnostics: list[LeanDiagnostic] = []
-    for line in text.splitlines():
-        message = line.strip()
-        if not message:
-            continue
-        lowered = message.lower()
-        severity: Literal["ERROR", "WARNING", "INFO"] = (
-            "ERROR"
-            if "error:" in lowered
-            else "WARNING"
-            if "warning:" in lowered
-            else "INFO"
-        )
-        diagnostics.append(LeanDiagnostic(severity=severity, message=message[:4_000]))
-        if len(diagnostics) == 64:
-            break
-    return tuple(diagnostics)
-
-
 class _TautologicalClauseError(Exception):
     pass
 
@@ -1346,22 +1231,6 @@ LOGIC_OPERATIONS = (
             ),
         ),
     ),
-    MathTool(
-        operation_id="lean.check",
-        title="Check a bounded Lean source snippet",
-        description="Elaborate one source snippet in the fixed Lean service environment and return typed diagnostics.",
-        request_type=LeanCheckRequest,
-        result_type=LeanCheckResult,
-        run=check_lean_source,
-        tags=("lean", "elaboration", "source", "bounded"),
-        examples=(
-            example(
-                "trivial_proposition",
-                "Elaborate a self-contained proof of True.",
-                {"source": "example : True := by trivial"},
-            ),
-        ),
-    ),
 )
 
 __all__ = [
@@ -1369,8 +1238,6 @@ __all__ = [
     "CanonicalCnf",
     "CnfCanonicalizeRequest",
     "CnfCanonicalizeResult",
-    "LeanCheckRequest",
-    "LeanCheckResult",
     "LprAddition",
     "LprDeletion",
     "LprPropagationHint",
@@ -1386,7 +1253,6 @@ __all__ = [
     "SmtSolveRequest",
     "SmtSolveResult",
     "canonicalize_cnf",
-    "check_lean_source",
     "check_sat_assignment",
     "check_sat_refutation",
     "solve_sat",

@@ -15,7 +15,7 @@ def _pull_request_trigger(workflow_path: str) -> str:
 def test_exhaustive_local_reproduction_includes_exhaustive_marker_lane() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
     all_ci = makefile.split(
-        "test-full: ## Every local semantic pytest/Lean lane; not hosted CI, coverage, or docs.",
+        "test-full: ## Every local semantic pytest lane; not hosted CI, coverage, or docs.",
         1,
     )[1].split("test-stress:", 1)[0]
 

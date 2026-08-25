@@ -68,4 +68,6 @@ def test_base_digits_rejects_an_oversized_result_before_integer_conversion(
     monkeypatch.setattr(arithmetic_operations, "_int", unexpected_conversion)
 
     with pytest.raises(ValueError, match=rf"{MAX_BASE_DIGITS}-digit result bound"):
-        base_digits(IntegerBaseDigitsRequest(value="1" + ("0" * 1_024), base=10))
+        base_digits(
+            IntegerBaseDigitsRequest(value="1" + ("0" * MAX_BASE_DIGITS), base=10)
+        )

@@ -377,14 +377,21 @@ def test_external_family_must_respect_the_generator_and_term_envelopes() -> None
     assert computed.outcome == "COMPUTED"
     assert computed.components == wide
 
+    first_component_generators = MAX_OUTPUT_GENERATORS // 2
     over_generators = (
         _ideal(
             variables,
-            *(_poly(variables, (1, 1, (0,) * 8)) for _ in range(32)),
+            *(
+                _poly(variables, (1, 1, (0,) * 8))
+                for _ in range(first_component_generators)
+            ),
         ),
         _ideal(
             variables,
-            *(_poly(variables, (-1, 1, (0,) * 8)) for _ in range(33)),
+            *(
+                _poly(variables, (-1, 1, (0,) * 8))
+                for _ in range(MAX_OUTPUT_GENERATORS - first_component_generators + 1)
+            ),
         ),
     )
     with pytest.raises(
@@ -396,7 +403,7 @@ def test_external_family_must_respect_the_generator_and_term_envelopes() -> None
         sorted(
             (
                 (1, 1, (exponent // 33, exponent % 33, 0, 0, 0, 0, 0, 0))
-                for exponent in range(1025)
+                for exponent in range(MAX_OUTPUT_TERMS + 1)
             ),
             key=lambda term: term[2],
             reverse=True,

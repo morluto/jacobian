@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from math import isqrt
 
 import pytest
 
@@ -435,8 +436,15 @@ def test_presentation_rejects_oversized_nested_rows(
 
 def test_request_rejects_pairwise_convolution_before_expansion() -> None:
     presentation = _c2_presentation()
-    left = _element(presentation, {"e": {(position,) for position in range(33)}})
-    right = _element(presentation, {"a": {(position,) for position in range(33)}})
+    convolution_side = isqrt(MAX_CONVOLUTION_PAIRS) + 1
+    left = _element(
+        presentation,
+        {"e": {(position,) for position in range(convolution_side)}},
+    )
+    right = _element(
+        presentation,
+        {"a": {(position,) for position in range(convolution_side)}},
+    )
 
     with pytest.raises(ValueError, match=rf"{MAX_CONVOLUTION_PAIRS}-pair"):
         CrossedProductMultiplyRequest(left=left, right=right)

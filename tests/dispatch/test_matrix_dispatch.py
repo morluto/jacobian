@@ -7,6 +7,7 @@ import pytest
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 from jacobian.math.matrices._operation_models import MAX_MATRIX_DIMENSION
+from jacobian.math.matrices.values import MAX_RATIONAL_MATRIX_ORDER
 
 
 def _identity_payload(order: int) -> dict:
@@ -31,20 +32,41 @@ def _partial_trace_payload(traced_dimension: int, kept_dimension: int) -> dict:
     return payload
 
 
+def _oversized_partial_trace_payload() -> dict:
+    """Smallest composite exceeding the computation dimension within the wire order."""
+    for total in range(MAX_MATRIX_DIMENSION + 1, MAX_RATIONAL_MATRIX_ORDER + 1):
+        for kept_dimension in range(1, total + 1):
+            if total % kept_dimension:
+                continue
+            traced_dimension = total // kept_dimension
+            if max(traced_dimension, kept_dimension) <= MAX_MATRIX_DIMENSION:
+                return _partial_trace_payload(
+                    traced_dimension=traced_dimension,
+                    kept_dimension=kept_dimension,
+                )
+    raise AssertionError(
+        "no composite shape fits the wire order budget while exceeding "
+        "the computation dimension"
+    )
+
+
 @pytest.mark.parametrize(
     ("operation_id", "payload"),
     (
         (
             "matrix.characteristic_polynomial.compute",
-            _identity_payload(33),
+            _identity_payload(MAX_MATRIX_DIMENSION + 1),
         ),
-        ("matrix.permanent.compute", _identity_payload(33)),
-        ("matrix.rank.compute", _identity_payload(33)),
-        ("matrix.normal_form.rref.compute", _identity_payload(33)),
-        ("matrix.nullspace.compute", _identity_payload(33)),
+        ("matrix.permanent.compute", _identity_payload(MAX_MATRIX_DIMENSION + 1)),
+        ("matrix.rank.compute", _identity_payload(MAX_MATRIX_DIMENSION + 1)),
+        (
+            "matrix.normal_form.rref.compute",
+            _identity_payload(MAX_MATRIX_DIMENSION + 1),
+        ),
+        ("matrix.nullspace.compute", _identity_payload(MAX_MATRIX_DIMENSION + 1)),
         (
             "matrix.partial_trace.compute",
-            _partial_trace_payload(traced_dimension=11, kept_dimension=3),
+            _oversized_partial_trace_payload(),
         ),
     ),
 )
@@ -61,8 +83,8 @@ def test_dispatch_rejects_requests_above_the_computation_dimension(
 def test_dispatch_returns_typed_results_at_the_boundary_order() -> None:
     result = invoke_operation(
         "matrix.characteristic_polynomial.compute",
-        _identity_payload(32),
+        _identity_payload(MAX_MATRIX_DIMENSION),
         Catalog.open(),
     )
-    assert result.output["degree"] == 32
-    assert len(result.output["coefficients_descending"]) == 33
+    assert result.output["degree"] == MAX_MATRIX_DIMENSION
+    assert len(result.output["coefficients_descending"]) == MAX_MATRIX_DIMENSION + 1

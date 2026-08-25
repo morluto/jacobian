@@ -62,7 +62,13 @@ class BottomUpTreeAutomaton(StrictModel):
     """
 
     state_count: int = Field(ge=1, le=MAX_TA_STATES)
-    arity: tuple[Arity, ...] = Field(min_length=1, max_length=MAX_TA_SYMBOLS)
+    arity: tuple[Arity, ...] = Field(
+        max_length=MAX_TA_SYMBOLS,
+        description=(
+            "arity of each ranked symbol; an empty tuple is the canonical "
+            "empty ranked alphabet, whose ground-tree language is empty"
+        ),
+    )
     transitions: tuple[TreeAutomatonTransition, ...] = Field(
         min_length=0, max_length=MAX_TA_TRANSITIONS
     )

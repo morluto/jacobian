@@ -220,6 +220,37 @@ class TestRun:
 
 
 class TestAcceptedTreeCount:
+    def test_empty_ranked_alphabet_has_exact_empty_language(self):
+        """The canonical empty alphabet has no ground trees of any positive size."""
+        automaton = BottomUpTreeAutomaton(
+            state_count=2,
+            arity=(),
+            transitions=(),
+            final_states=(),
+        )
+
+        assert (
+            BottomUpTreeAutomaton.model_validate(automaton.model_dump(mode="json"))
+            == automaton
+        )
+
+        count = compute_accepted_tree_count(
+            AcceptedTreeCountRequest(automaton=automaton, tree_size=1)
+        )
+        assert count.count == "0"
+        assert count.estimated_work_bound == 0
+
+        profile = compute_tree_automaton_reachability(
+            TreeAutomatonReachabilityRequest(automaton=automaton)
+        )
+        assert profile.reachable_states == ()
+        assert profile.unreachable_states == (0, 1)
+        assert profile.witnesses == ()
+
+        arity_schema = BottomUpTreeAutomaton.model_json_schema()["properties"]["arity"]
+        assert "minItems" not in arity_schema
+        assert "empty ranked alphabet" in arity_schema["description"]
+
     def test_count_size_1(self):
         automaton = _simple_automaton()
         result = compute_accepted_tree_count(

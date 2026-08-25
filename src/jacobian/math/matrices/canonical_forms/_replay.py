@@ -19,9 +19,7 @@ if TYPE_CHECKING:
 def _matrix_entries(
     matrix: RationalMatrix,
 ) -> tuple[tuple[Fraction, ...], ...]:
-    return tuple(
-        tuple(value.as_fraction() for value in row) for row in matrix.entries
-    )
+    return tuple(tuple(value.as_fraction() for value in row) for row in matrix.entries)
 
 
 def _matrix_from_request(request: SquareMatrixRequest) -> Matrix:

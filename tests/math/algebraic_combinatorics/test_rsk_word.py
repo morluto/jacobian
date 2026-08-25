@@ -228,22 +228,24 @@ def test_permutation_envelope_is_derived_from_the_canonical_cell_budget() -> Non
     assert result.lis_length == 51
     assert result.lds_length == 1
 
-    identity_500 = tuple(range(1, 501))
-    wide = compute_rsk_permutation(RSKPermutationRequest(permutation=identity_500))
-    assert wide.p_tableau.rows == (tuple(range(1, 501)),)
-    assert wide.q_tableau.rows == (tuple(range(1, 501)),)
-    assert wide.shape.parts == (500,)
+    identity_at_cap = tuple(range(1, MAX_RSK_PERMUTATION_LENGTH + 1))
+    wide = compute_rsk_permutation(RSKPermutationRequest(permutation=identity_at_cap))
+    assert wide.p_tableau.rows == (identity_at_cap,)
+    assert wide.q_tableau.rows == (identity_at_cap,)
+    assert wide.shape.parts == (MAX_RSK_PERMUTATION_LENGTH,)
     assert RSKResult.model_validate(wide.model_dump()) == wide
 
-    descending_500 = tuple(range(500, 0, -1))
-    deep = compute_rsk_permutation(RSKPermutationRequest(permutation=descending_500))
-    assert deep.shape.parts == (1,) * 500
+    descending_at_cap = tuple(range(MAX_RSK_PERMUTATION_LENGTH, 0, -1))
+    deep = compute_rsk_permutation(RSKPermutationRequest(permutation=descending_at_cap))
+    assert deep.shape.parts == (1,) * MAX_RSK_PERMUTATION_LENGTH
     assert deep.lis_length == 1
-    assert deep.lds_length == 500
+    assert deep.lds_length == MAX_RSK_PERMUTATION_LENGTH
     assert RSKResult.model_validate(deep.model_dump()) == deep
 
     with pytest.raises(ValidationError):
-        RSKPermutationRequest(permutation=tuple(range(1, 502)))
+        RSKPermutationRequest(
+            permutation=tuple(range(1, MAX_RSK_PERMUTATION_LENGTH + 2))
+        )
 
 
 def test_structurally_incompatible_pairs_fail_before_reverse_insertion() -> None:
@@ -324,16 +326,20 @@ def test_word_length_and_utf8_payload_bounds_are_closed() -> None:
         )
 
     boundary_symbols = _wide_unicode_symbols(50)
+    per_symbol_bytes = len(boundary_symbols[0].encode("utf-8"))
+    boundary_letter_count = MAX_RSK_WORD_BYTES // per_symbol_bytes - len(
+        boundary_symbols
+    )
     byte_boundary = FiniteWord(
         alphabet=boundary_symbols,
-        letters=(boundary_symbols[0],) * 500,
+        letters=(boundary_symbols[0],) * boundary_letter_count,
     )
     assert RSKWordRequest(word=byte_boundary).word == byte_boundary
 
     assert (
         sum(len(symbol.encode("utf-8")) for symbol in boundary_symbols)
         + sum(len(letter.encode("utf-8")) for letter in byte_boundary.letters)
-        == 140_800
+        == MAX_RSK_WORD_BYTES
     )
 
 
@@ -341,11 +347,13 @@ def test_canonical_tableau_cell_bound_admits_boundary_pairs_end_to_end() -> None
     single_row = _pair(
         FiniteWord(alphabet=("a",), letters=("a",) * MAX_RSK_WORD_LENGTH)
     )
-    assert single_row.insertion_tableau.rows == ((1,) * 500,)
-    assert single_row.recording_tableau.rows == (tuple(range(1, 501)),)
-    assert single_row.shape.parts == (500,)
+    assert single_row.insertion_tableau.rows == ((1,) * MAX_RSK_WORD_LENGTH,)
+    assert single_row.recording_tableau.rows == (
+        tuple(range(1, MAX_RSK_WORD_LENGTH + 1)),
+    )
+    assert single_row.shape.parts == (MAX_RSK_WORD_LENGTH,)
     assert inverse_row_insertion_rsk(single_row) == FiniteWord(
-        alphabet=("a",), letters=("a",) * 500
+        alphabet=("a",), letters=("a",) * MAX_RSK_WORD_LENGTH
     )
 
     reconstructed = compute_inverse_rsk_word(
@@ -459,10 +467,7 @@ def test_rsk_request_schema_publishes_convention_and_work_envelope() -> None:
     )
     assert "nine integer" in class_description
     assert "comparisons per search" in class_description
-    assert (
-        500 * 499 // 2 == 124_750
-        and (500).bit_length() == MAX_RSK_ROW_SEARCH_COMPARISONS
-    )
+    assert MAX_RSK_WORD_LENGTH.bit_length() == MAX_RSK_ROW_SEARCH_COMPARISONS
 
     inverse_schema = RSKInverseWordRequest.model_json_schema()
     pair_schema = inverse_schema["$defs"]["RSKTableauPair"]

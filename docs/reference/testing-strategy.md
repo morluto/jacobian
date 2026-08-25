@@ -106,7 +106,42 @@ independent bounded oracle. A factorization needs reconstruction, retained
 unit, and positive-multiplicity properties. Known answers remain useful
 regressions, but they do not replace these defining properties.
 
+### Derived contract bounds in match strings
+
+When an assertion matches a validation message that carries a computed bound
+(such as a digit limit, byte budget, or combinatorial ceiling), import the
+owning constant or helper from source and build the expected string from it
+rather than hardcoding the numeric value. A test that writes `match="10-digit
+bound"` will break with an opaque regex mismatch whenever a scale-cap commit on
+main raises the bound — even on an unrelated open branch. Instead, import the
+constant and interpolate:
+
+```python
+from jacobian.math.diophantine_approximation._models import (
+    _convergent_component_digit_cap,
+)
+
+cap = _convergent_component_digit_cap(4)
+with pytest.raises(ValueError, match=rf"{cap}-digit bound"):
+    ...
+```
+
+The message text stays pinned; only the number is derived from the same source
+the production code uses. Boundary test inputs (the value that triggers the
+error) should likewise be computed from the constant, not hardcoded:
+
+```python
+beyond = "9" * (_MAX_MULTIVARIATE_COEFFICIENT_DIGITS + 1)
+with pytest.raises(ValueError, match=rf"{_MAX_MULTIVARIATE_COEFFICIENT_DIGITS}-digit bound"):
+    ...
+```
+
+When the owning constant is private (underscore-prefixed), importing it from
+its owning module is acceptable in tests — the test and the source share one
+definition.
+
 ### Evidence plans for exact operations
+
 
 Before implementing an exact decomposition, certificate, or authoritative
 derived value, state its defining invariant: the reconstruction equation,

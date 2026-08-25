@@ -17,15 +17,11 @@ from jacobian.math.number_theory._models import (
 
 
 def compute_gcd(request: IntegerPairRequest) -> IntegerValue:
-    return IntegerValue(
-        value=str(math.gcd(int(request.left), int(request.right)))
-    )
+    return IntegerValue(value=str(math.gcd(int(request.left), int(request.right))))
 
 
 def compute_lcm(request: IntegerPairRequest) -> IntegerValue:
-    return IntegerValue(
-        value=str(math.lcm(int(request.left), int(request.right)))
-    )
+    return IntegerValue(value=str(math.lcm(int(request.left), int(request.right))))
 
 
 def compute_extended_gcd(request: IntegerPairRequest) -> ExtendedGcdResult:

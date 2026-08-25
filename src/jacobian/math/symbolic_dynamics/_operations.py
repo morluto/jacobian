@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.symbolic_dynamics._models import (
-    ArtinMazurZetaReplayRow,
     ArtinMazurZetaRequest,
     ArtinMazurZetaResult,
     BlockLanguageRequest,
@@ -15,6 +14,7 @@ from jacobian.math.symbolic_dynamics._models import (
     HigherBlockResult,
     PeriodicPointProfileRequest,
     PeriodicPointProfileResult,
+    _computed_artin_mazur_zeta_result,
 )
 from jacobian.math.symbolic_dynamics.operations import (
     artin_mazur_zeta,
@@ -32,20 +32,11 @@ def compute_artin_mazur_zeta(
     determinant, zeta, coefficients = artin_mazur_zeta(
         request.shift, request.replay_period
     )
-    return ArtinMazurZetaResult(
-        **request.model_dump(),
-        determinant_polynomial=determinant,
-        zeta_function=zeta,
-        replay=tuple(
-            ArtinMazurZetaReplayRow(
-                period=period,
-                trace_fixed_points=format_canonical_integer(coefficient),
-                logarithmic_derivative_coefficient=format_canonical_integer(
-                    coefficient
-                ),
-            )
-            for period, coefficient in enumerate(coefficients, 1)
-        ),
+    return _computed_artin_mazur_zeta_result(
+        request,
+        determinant,
+        zeta,
+        coefficients,
     )
 
 

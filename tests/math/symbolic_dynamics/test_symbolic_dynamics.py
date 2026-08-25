@@ -76,6 +76,7 @@ def test_golden_mean_artin_mazur_zeta_is_bound_to_periodic_traces() -> None:
         "7",
         "11",
     )
+    assert ArtinMazurZetaResult.model_validate(result.model_dump(mode="json")) == result
 
     payload = result.model_dump()
     payload["replay"][2]["logarithmic_derivative_coefficient"] = "5"

@@ -267,6 +267,49 @@ class ArtinMazurZetaResult(ArtinMazurZetaRequest):
         return self
 
 
+def _computed_artin_mazur_zeta_result(
+    request: ArtinMazurZetaRequest,
+    determinant_polynomial: RationalPolynomial,
+    zeta_function: RationalFunction,
+    coefficients: tuple[int, ...],
+) -> ArtinMazurZetaResult:
+    """Bind a fresh kernel result without a second determinant/replay pass.
+
+    ``artin_mazur_zeta`` has already established these exact values for the
+    typed request.  The public operation therefore constructs its result
+    directly; independently supplied result payloads still take the complete
+    source-binding replay in ``bind_zeta_and_periodic_replay``.
+    """
+
+    if (
+        determinant_polynomial.variables != ("t",)
+        or zeta_function.variables != ("t",)
+        or len(coefficients) != request.replay_period
+    ):
+        raise _validation_error(
+            "artin_mazur_zeta_computed_shape",
+            "computed zeta values must retain the canonical t axis and replay scope",
+        )
+    return ArtinMazurZetaResult.model_construct(
+        shift=request.shift,
+        replay_period=request.replay_period,
+        determinant_polynomial=determinant_polynomial,
+        zeta_function=zeta_function,
+        replay=tuple(
+            ArtinMazurZetaReplayRow(
+                period=period,
+                trace_fixed_points=format_canonical_integer(coefficient),
+                logarithmic_derivative_coefficient=format_canonical_integer(
+                    coefficient
+                ),
+            )
+            for period, coefficient in enumerate(coefficients, 1)
+        ),
+        convention="EDGE_SHIFT_ARTIN_MAZUR_ZETA",
+        method="SYMPY_EXACT_CHARACTERISTIC_POLYNOMIAL",
+    )
+
+
 __all__ = [
     "ArtinMazurZetaReplayRow",
     "ArtinMazurZetaRequest",

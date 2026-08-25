@@ -108,9 +108,6 @@ class EvalResult(StrictModel):
     value: CanonicalRational
 
 
-JacobianRequest = RationalPolynomialMap
-
-
 class JacobianResult(StrictModel):
     """The row-major Jacobian matrix over the source polynomial ring."""
 
@@ -646,7 +643,6 @@ __all__ = [
     "GenericFiberCertificate",
     "GenericFiberPolynomial",
     "GenericFiberTerm",
-    "JacobianRequest",
     "JacobianResult",
     "VariablePoint",
 ]

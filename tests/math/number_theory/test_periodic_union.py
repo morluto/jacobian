@@ -5,9 +5,6 @@ from fractions import Fraction
 from itertools import combinations
 
 import pytest
-from pydantic import ValidationError
-
-from jacobian._exact import CanonicalRational
 from jacobian.math.number_theory._periodic_union import (
     MAX_PERIODIC_COMMON_PERIOD,
     MAX_PERIODIC_FAMILY_SIZE,
@@ -18,6 +15,9 @@ from jacobian.math.number_theory._periodic_union import (
     PeriodicUnionProfileResult,
     compute_periodic_union_profile,
 )
+from pydantic import ValidationError
+
+from jacobian._exact import CanonicalRational
 
 
 def _request(

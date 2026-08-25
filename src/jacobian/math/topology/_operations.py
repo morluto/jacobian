@@ -21,6 +21,7 @@ from jacobian.math.matrices.certified_snf.values import CertifiedIntegerMatrix
 from jacobian.math.topology._chain_conversion import (
     canonical_chain_complex_value_from_parts,
 )
+from jacobian.math.topology._barycentric import barycentric_subdivision
 from jacobian.math.topology._models import (
     BarycentricSubdivisionRequest,
     BarycentricSubdivisionResult,
@@ -65,9 +66,6 @@ from jacobian.math.topology._models import (
     VertexDeletionRequest,
     VertexDeletionResult,
     _all_faces,
-    _cover_relations,
-    _maximal_chains_from_covers,
-    _minimal_face_indices,
     face_closure,
     simplicial_complex_digest,
 )
@@ -927,44 +925,23 @@ def compute_barycentric_subdivision(
     """Compute the barycentric subdivision of a simplicial complex."""
     all_faces_set = _all_faces(request.complex.facets)
     sorted_faces = sorted(all_faces_set, key=lambda f: (len(f), f))
-    # Bounded injective encoding: use short valid labels "bv{i}" instead of
-    # comma-joined face content which violates VertexLabel.
-    new_vertices = [f"bv{i}" for i in range(len(sorted_faces))]
-    vertex_map = {face: new_vertices[idx] for idx, face in enumerate(sorted_faces)}
-    # Enumerate maximal chains via cover relation (efficient, not power set).
-    face_frozens = [frozenset(f) for f in sorted_faces]
-    n = len(sorted_faces)
-    covers = _cover_relations(face_frozens)
-    minimal_indices = _minimal_face_indices(face_frozens)
-    maximal_chains = _maximal_chains_from_covers(
-        covers, minimal_indices, n, sorted_faces, face_frozens
-    )
-    subdivision_facets = [
-        tuple(sorted(vertex_map[sorted_faces[idx]] for idx in chain))
-        for chain in maximal_chains
-    ]
-    # Ensure maximality (covers already guarantees, but keep dedup)
-    # Remove duplicates and sort deterministically
-    unique_facets = sorted(set(subdivision_facets), key=lambda f: (-len(f), f))
-    # No further filtering needed; they are maximal chains.
-    maximal = unique_facets
-    subdivision_vertex_faces = tuple(sorted_faces)
+    subdivision = barycentric_subdivision(sorted_faces)
     # Build canonical complex for subdivision
     subdivision_complex = None
-    if maximal:
-        sub_vertices = tuple(sorted(new_vertices))
+    if subdivision.facets:
+        sub_vertices = tuple(sorted(subdivision.vertices))
         # maximal facets for complex must be sorted tuple of sorted vertices
-        canon_facets = tuple(sorted(tuple(sorted(f)) for f in maximal))
+        canon_facets = tuple(sorted(tuple(sorted(f)) for f in subdivision.facets))
         subdivision_complex = _canonical_complex(sub_vertices, canon_facets)
     return BarycentricSubdivisionResult(
         original_vertices=request.complex.vertices,
         original_dimension=max(len(f) - 1 for f in request.complex.facets),
-        subdivision_vertices=tuple(new_vertices),
-        subdivision_facets=tuple(maximal),
-        num_new_vertices=len(new_vertices),
+        subdivision_vertices=subdivision.vertices,
+        subdivision_facets=subdivision.facets,
+        num_new_vertices=len(subdivision.vertices),
         complex=request.complex,
         subdivision_complex=subdivision_complex,
-        subdivision_vertex_faces=subdivision_vertex_faces,
+        subdivision_vertex_faces=subdivision.vertex_faces,
     )
 
 

@@ -30,6 +30,7 @@ from jacobian.math.matrices.certified_snf.values import (
     CertifiedIntegerMatrix,
     SmithNormalFormCertificate,
 )
+from jacobian.math.topology._barycentric import barycentric_subdivision
 
 MAX_TOPOLOGY_VERTICES = 64
 MAX_TOPOLOGY_FACETS = 128
@@ -200,86 +201,6 @@ def _all_faces(facets: tuple[Simplex, ...]) -> set[tuple[str, ...]]:
     return faces
 
 
-def _cover_relations(face_frozens: list[frozenset[str]]) -> list[list[int]]:
-    """Compute the cover relation of the face lattice: i covers j when
-    ``face_frozens[i] < face_frozens[j]`` with no strict intermediate."""
-
-    n = len(face_frozens)
-    covers: list[list[int]] = [[] for _ in range(n)]
-    for i in range(n):
-        for j in range(n):
-            if face_frozens[i] < face_frozens[j]:
-                has_intermediate = any(
-                    face_frozens[i] < face_frozens[k] < face_frozens[j]
-                    for k in range(n)
-                )
-                if not has_intermediate:
-                    covers[i].append(j)
-    return covers
-
-
-def _minimal_face_indices(face_frozens: list[frozenset[str]]) -> list[int]:
-    is_minimal = [True] * len(face_frozens)
-    for i in range(len(face_frozens)):
-        for j in range(len(face_frozens)):
-            if face_frozens[j] < face_frozens[i]:
-                is_minimal[i] = False
-                break
-    return [i for i, minimal in enumerate(is_minimal) if minimal]
-
-
-def _maximal_chains_from_covers(
-    covers: list[list[int]],
-    minimal_indices: list[int],
-    n: int,
-    sorted_faces: list[tuple[str, ...]],
-    face_frozens: list[frozenset[str]],
-) -> list[list[int]]:
-    maximal_chains: list[list[int]] = []
-
-    def dfs(chain: list[int]) -> None:
-        last = chain[-1]
-        if not covers[last]:
-            maximal_chains.append(list(chain))
-            return
-        for nxt in covers[last]:
-            chain.append(nxt)
-            dfs(chain)
-            chain.pop()
-
-    for start in minimal_indices:
-        dfs([start])
-    # If no minimal (should not happen) fallback to each face as chain
-    if not maximal_chains and sorted_faces:
-        # Single-face complex
-        for i in range(n):
-            if not any(face_frozens[i] < face_frozens[j] for j in range(n)):
-                # maximal element
-                maximal_chains.append([i])
-    return maximal_chains
-
-
-def _replayed_barycentric_subdivision(
-    facets: tuple[Simplex, ...],
-    faces: list[tuple[str, ...]],
-) -> tuple[tuple[str, ...], ...]:
-    """Recompute the barycentric-subdivision facets for ``bv{i}`` labels
-    assigned to ``faces`` in the given canonical order."""
-
-    face_frozens = [frozenset(face) for face in faces]
-    covers = _cover_relations(face_frozens)
-    minimal_indices = _minimal_face_indices(face_frozens)
-    maximal_chains = _maximal_chains_from_covers(
-        covers, minimal_indices, len(faces), faces, face_frozens
-    )
-    vertex_map = {face: f"bv{idx}" for idx, face in enumerate(faces)}
-    subdivision_facets = [
-        tuple(sorted(vertex_map[faces[idx]] for idx in chain))
-        for chain in maximal_chains
-    ]
-    return tuple(sorted(set(subdivision_facets), key=lambda f: (-len(f), f)))
-
-
 def _require_subdivision_replay(
     *,
     source_complex: SimplicialComplexRequest,
@@ -308,7 +229,7 @@ def _require_subdivision_replay(
             "the canonical indexed bijection onto the source complex's "
             "non-empty faces",
         )
-    expected = _replayed_barycentric_subdivision(source_complex.facets, faces)
+    expected = barycentric_subdivision(faces).facets
     if (
         tuple(subdivision_facets) != expected
         or original_vertices != source_complex.vertices

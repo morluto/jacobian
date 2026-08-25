@@ -10,7 +10,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.math.combinatorics._models import (
+from jacobian.math.combinatorics._recurrence_models import (
     MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS,
     MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
     MAX_LINEAR_RECURRENCE_INDEX,

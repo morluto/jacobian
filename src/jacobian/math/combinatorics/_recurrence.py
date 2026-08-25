@@ -7,16 +7,8 @@ from jacobian.math.combinatorics import (
     recurrence_table_residuals,
 )
 from jacobian.math.combinatorics._models import (
-    FibonacciPairRequest,
-    FibonacciPairResult,
     IntegerResult,
-    LinearRecurrenceEvaluationRequest,
-    LinearRecurrenceEvaluationResult,
     NonnegativeIntegerRequest,
-    PolynomialCoefficientRecurrenceEvaluationRequest,
-    PolynomialCoefficientRecurrenceEvaluationResult,
-    RationalGeneratingFunctionCoefficientsRequest,
-    RationalGeneratingFunctionCoefficientsResult,
     RationalResult,
 )
 from jacobian.math.combinatorics._operations import (
@@ -24,6 +16,16 @@ from jacobian.math.combinatorics._operations import (
     fibonacci,
     fibonacci_pair,
     lucas,
+)
+from jacobian.math.combinatorics._recurrence_models import (
+    FibonacciPairRequest,
+    FibonacciPairResult,
+    LinearRecurrenceEvaluationRequest,
+    LinearRecurrenceEvaluationResult,
+    PolynomialCoefficientRecurrenceEvaluationRequest,
+    PolynomialCoefficientRecurrenceEvaluationResult,
+    RationalGeneratingFunctionCoefficientsRequest,
+    RationalGeneratingFunctionCoefficientsResult,
 )
 from jacobian.math.combinatorics._recurrence_series_operations import (
     compute_rational_generating_function_coefficients,

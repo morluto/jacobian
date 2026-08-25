@@ -13,8 +13,6 @@ from jacobian.math.combinatorics._counting_models import (
     IntegerListRequest,
 )
 from jacobian.math.combinatorics._models import (
-    FibonacciPairRequest,
-    FibonacciPairResult,
     IntegerResult,
     NonnegativeIntegerRequest,
     NonnegativePairRequest,
@@ -23,6 +21,10 @@ from jacobian.math.combinatorics._models import (
 from jacobian.math.combinatorics._partition_models import (
     IntegerPartitionEnumerationRequest,
     IntegerPartitionEnumerationResult,
+)
+from jacobian.math.combinatorics._recurrence_models import (
+    FibonacciPairRequest,
+    FibonacciPairResult,
 )
 
 

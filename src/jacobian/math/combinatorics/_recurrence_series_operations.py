@@ -6,7 +6,7 @@ from typing import Any
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
-from jacobian.math.combinatorics._models import (
+from jacobian.math.combinatorics._recurrence_models import (
     IndexedRationalValue,
     LinearRecurrenceEvaluationRequest,
     LinearRecurrenceEvaluationResult,

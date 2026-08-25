@@ -7,7 +7,7 @@ import pytest
 from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
-from jacobian.math.combinatorics._models import (
+from jacobian.math.combinatorics._recurrence_models import (
     MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES,
     PolynomialCoefficientRecurrenceEvaluationRequest,
     PolynomialCoefficientRecurrenceEvaluationResult,

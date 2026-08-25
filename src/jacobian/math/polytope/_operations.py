@@ -43,7 +43,6 @@ from jacobian.math.polytope._models import (
     MAX_SUPPORT_VERTEX_SUBSETS,
     FacetIncidenceRequest,
     FacetIncidenceResult,
-    Halfspace,
     PolytopeSupportRequest,
     PolytopeSupportResult,
     PolytopeVolumeRequest,
@@ -52,7 +51,6 @@ from jacobian.math.polytope._models import (
     RationalCovector,
     RationalPolytopeVertex,
     RationalVPolytope,
-    Vertex,
 )
 from jacobian.math.polytope._rational_geometry import (
     facets_from_points as _facets_from_points,
@@ -61,6 +59,7 @@ from jacobian.math.polytope._rational_geometry import (
     recession_cone_is_trivial,
     vertices_from_halfspaces,
 )
+from jacobian.math.polytope.values import Halfspace, Vertex
 
 # Absolute combinatorial ceiling: reject vertex enumeration that would
 # attempt to solve more subsystems than this. With ``MAX_FACETS = 64``

@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.polytope import Halfspace, Vertex
 from jacobian.math.polytope import _operations as polytope_operations
 from jacobian.math.polytope._models import (
     MAX_COMPUTED_FACETS,
@@ -22,7 +23,6 @@ from jacobian.math.polytope._models import (
     MAX_VERTICES,
     FacetIncidenceRequest,
     FacetIncidenceResult,
-    Halfspace,
     PolytopeSupportRequest,
     PolytopeVolumeRequest,
     PolytopeVolumeResult,
@@ -33,7 +33,6 @@ from jacobian.math.polytope._models import (
 )
 from jacobian.math.polytope._operations import (
     PrimitiveFacet,
-    Vertex,
     compute_facet_incidence,
     compute_polytope_support,
     compute_polytope_volume,
@@ -1222,16 +1221,12 @@ class TestNonzeroNormalContractPublished:
     def test_zero_normal_row_rejected_at_request_admission(self) -> None:
         """The reviewer's tautology `0*x + 0*y <= 1` fails typed validation,
         not a host exception after acceptance."""
-        with pytest.raises(ValueError, match="must not all be zero"):
-            PolytopeVolumeRequest(
-                halfspaces=(
-                    _h((1, 1), (0, 1), offset=(1, 1)),
-                    _h((-1, 1), (0, 1), offset=(0, 1)),
-                    _h((0, 1), (1, 1), offset=(1, 1)),
-                    _h((0, 1), (-1, 1), offset=(0, 1)),
-                    _h((0, 1), (0, 1), offset=(1, 1)),
-                )
+        with pytest.raises(ValidationError) as error:
+            Halfspace(
+                coefficients=(_cr0(), _cr0()),
+                offset=_cr0(),
             )
+        assert error.value.errors()[0]["type"] == "polytope.halfspace_normal_zero"
 
     def test_nonzero_normal_rule_is_schema_visible(self) -> None:
         schema = Halfspace.model_json_schema()

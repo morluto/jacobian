@@ -69,6 +69,8 @@ def test_canonical_polytope_values_feed_lattice_requests_directly() -> None:
 
     assert vertex_request.vertices == (vertex,)
     assert halfspace_request.halfspaces == (upper, lower)
+    assert count_lattice_points(vertex_request).point_count == 1
+    assert count_lattice_points(halfspace_request).point_count == 1
 
 
 class TestEnumerate:

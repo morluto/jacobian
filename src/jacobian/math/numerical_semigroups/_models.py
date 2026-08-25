@@ -517,7 +517,7 @@ class FactorizationDistanceRequest(StrictModel):
         generators = _require_minimal_generators(self.generators)
         value = _require_bounded_value(self.value)
         if any(c < 0 for c in self.first) or any(c < 0 for c in self.second):
-            raise ValueError("factorization coordinates must be non-negative")
+            raise _validation_error("factorization coordinates must be non-negative")
         if len(self.first) != len(generators) or len(self.second) != len(generators):
             raise _validation_error(
                 "factorization coordinates must match the minimal generating system"

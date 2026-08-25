@@ -325,10 +325,14 @@ class TestFactorizationDistance:
             )
 
     def test_distance_rejects_negative_coordinates(self):
-        with numerical_semigroup_error():
+        with pytest.raises(ValidationError) as caught:
             FactorizationDistanceRequest(
                 generators=("3", "5"), value="15", first=(-1, 0), second=(0, 3)
             )
+        assert (
+            caught.value.errors()[0]["type"]
+            == "numerical_semigroup.factorization_coordinates_negative"
+        )
 
     def test_distance_rejects_vectors_for_a_different_element(self):
         with numerical_semigroup_error():

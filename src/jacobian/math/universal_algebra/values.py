@@ -29,6 +29,14 @@ def _validation_error(code: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"universal_algebra.{code}", message)
 
 
+class UniversalAlgebraAdmissionError(ValueError):
+    """Native admission failure for universal-algebra term binding."""
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 class OperationSymbol(StrictModel):
     """One finitary operation symbol."""
 
@@ -297,11 +305,11 @@ def require_term_for_algebra(term: FlatTerm, algebra: FiniteAlgebra) -> None:
         if not isinstance(node, ApplicationTerm):
             continue
         if node.operation >= len(algebra.operations):
-            raise _validation_error(
+            raise UniversalAlgebraAdmissionError(
                 "term_operation_out_of_range", "term operation index out of range"
             )
         if len(node.children) != algebra.operations[node.operation].arity:
-            raise _validation_error(
+            raise UniversalAlgebraAdmissionError(
                 "term_arity_mismatch",
                 "term application arity does not match the operation",
             )

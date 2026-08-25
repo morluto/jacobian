@@ -20,6 +20,14 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"chain_complex.{reason}", message)
 
 
+class ChainComplexAdmissionError(ValueError):
+    """Native admission failure for chain-complex tensor operations."""
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 class ConstructChainComplexRequest(StrictModel):
     """Construct a chain complex from differential matrices.
 
@@ -430,7 +438,7 @@ def _require_serializable_entries(*complex_values: ChainComplexValue) -> None:
                         len(numerator.lstrip("-")) > 512
                         or len(denominator.lstrip("-")) > 512
                     ):
-                        raise _validation_error(
+                        raise ChainComplexAdmissionError(
                             "tensor_coefficient_digit_budget_exceeded",
                             "tensor product inputs are limited to "
                             "512-digit coefficients",
@@ -449,7 +457,7 @@ def _require_admissible_tensor_work(
     input bounds.
     """
     if left.coefficient_field != right.coefficient_field or left.prime != right.prime:
-        raise _validation_error(
+        raise ChainComplexAdmissionError(
             "tensor_context_mismatch",
             "tensor product requires same coefficient field and prime",
         )
@@ -462,7 +470,7 @@ def _require_admissible_tensor_work(
             if j < len(right.basis_sizes):
                 size += left.basis_sizes[i] * right.basis_sizes[j]
         if size > MAX_TENSOR_GROUP_DIMENSION:
-            raise _validation_error(
+            raise ChainComplexAdmissionError(
                 "tensor_group_dimension_budget_exceeded",
                 f"tensor product group dimension {size} exceeds the "
                 f"{MAX_TENSOR_GROUP_DIMENSION}-dimension work bound",
@@ -474,7 +482,7 @@ def _require_admissible_tensor_work(
         for degree in range(1, group_count)
     )
     if total > MAX_TENSOR_TOTAL_CELLS or allocated_cells > MAX_TENSOR_TOTAL_CELLS:
-        raise _validation_error(
+        raise ChainComplexAdmissionError(
             "tensor_cell_budget_exceeded",
             f"tensor product allocates {max(total, allocated_cells)} "
             f"cells, exceeding the {MAX_TENSOR_TOTAL_CELLS}-cell work bound",
@@ -525,7 +533,7 @@ def _require_admissible_tensor_work(
     worst_entry_chars = max(_max_entry_length(left), _max_entry_length(right)) + 1
     expanded_entry_chars = allocated_cells * worst_entry_chars
     if expanded_entry_chars > MAX_MATRIX_ENTRY_CHARS:
-        raise _validation_error(
+        raise ChainComplexAdmissionError(
             "tensor_output_budget_exceeded",
             "tensor product serialization exceeds the canonical "
             f"{MAX_MATRIX_ENTRY_CHARS}-character budget: {allocated_cells} "
@@ -542,7 +550,10 @@ class TensorProductRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_admissible_tensor_work(self) -> Self:
-        _require_admissible_tensor_work(self.left, self.right)
+        try:
+            _require_admissible_tensor_work(self.left, self.right)
+        except ChainComplexAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         return self
 
 

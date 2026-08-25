@@ -42,6 +42,14 @@ def _validation_error(code: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"incidence_structure.{code}", message)
 
 
+class IncidenceStructureAdmissionError(ValueError):
+    """Native admission failure for incidence-structure operations."""
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 class IncidenceStructure(StrictModel):
     """An ordered point axis and an indexed family of finite blocks.
 
@@ -126,20 +134,20 @@ def _require_containment_profile_admitted(
     order: int,
 ) -> None:
     if not 1 <= order <= MAX_T:
-        raise _validation_error(
+        raise IncidenceStructureAdmissionError(
             "containment_order_out_of_range",
             f"containment-profile order must be between 1 and {MAX_T}",
         )
     subset_count = _subset_count(len(incidence.points), order)
     if subset_count > MAX_SUBSETS:
-        raise _validation_error(
+        raise IncidenceStructureAdmissionError(
             "containment_subset_budget_exceeded",
             "containment profile exceeds the complete subset-count budget",
         )
 
     total_work = _CONTAINMENT_RESULT_PASSES * _profile_work_units(incidence, order)
     if total_work > _MAX_CONTAINMENT_TOTAL_WORK_UNITS:
-        raise _validation_error(
+        raise IncidenceStructureAdmissionError(
             "containment_work_budget_exceeded",
             "containment profile exceeds the operation-plus-replay work budget",
         )
@@ -152,7 +160,7 @@ def _require_containment_profile_admitted(
         + _RESULT_ENVELOPE_BYTES
     )
     if estimated_result_bytes > MAX_RESULT_BYTES:
-        raise _validation_error(
+        raise IncidenceStructureAdmissionError(
             "containment_output_budget_exceeded",
             "containment profile with its retained source exceeds the output budget",
         )
@@ -164,12 +172,12 @@ def _require_incidence_trade_admitted(
     max_order: int,
 ) -> None:
     if not 1 <= max_order <= MAX_TRADE_ORDER:
-        raise _validation_error(
+        raise IncidenceStructureAdmissionError(
             "trade_order_out_of_range",
             f"trade comparison order must be between 1 and {MAX_TRADE_ORDER}",
         )
     if left.points != right.points:
-        raise _validation_error(
+        raise IncidenceStructureAdmissionError(
             "trade_point_axis_mismatch",
             "trade comparison requires the same ordered point axis on both sides",
         )
@@ -178,7 +186,7 @@ def _require_incidence_trade_admitted(
         _subset_count(len(left.points), order) for order in range(1, max_order + 1)
     )
     if any(count > MAX_SUBSETS for count in subset_counts):
-        raise _validation_error(
+        raise IncidenceStructureAdmissionError(
             "trade_subset_budget_exceeded",
             "trade comparison exceeds the complete subset-count budget",
         )
@@ -188,7 +196,7 @@ def _require_incidence_trade_admitted(
         for order in range(1, max_order + 1)
     )
     if _TRADE_TOTAL_PASSES * work_per_pass > _MAX_TRADE_TOTAL_WORK_UNITS:
-        raise _validation_error(
+        raise IncidenceStructureAdmissionError(
             "trade_work_budget_exceeded",
             "trade comparison exceeds the operation-plus-replay work budget",
         )
@@ -209,7 +217,7 @@ def _require_incidence_trade_admitted(
         + _RESULT_ENVELOPE_BYTES
     )
     if estimated_result_bytes > MAX_RESULT_BYTES:
-        raise _validation_error(
+        raise IncidenceStructureAdmissionError(
             "trade_output_budget_exceeded",
             "trade comparison with its retained sources exceeds the output budget",
         )
@@ -265,7 +273,10 @@ class ContainmentProfileRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_complete_profile_bounded(self) -> Self:
-        _require_containment_profile_admitted(self.incidence, self.t)
+        try:
+            _require_containment_profile_admitted(self.incidence, self.t)
+        except IncidenceStructureAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         return self
 
 
@@ -292,7 +303,10 @@ class ContainmentProfileResult(StrictModel):
             _containment_profile_data,
         )
 
-        _require_containment_profile_admitted(self.incidence, self.t)
+        try:
+            _require_containment_profile_admitted(self.incidence, self.t)
+        except IncidenceStructureAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         expected = _containment_profile_data(self.incidence, self.t)
         actual = (
             self.subset_profile,
@@ -419,8 +433,14 @@ class IncidenceMomentComparison(StrictModel):
                     "difference rows must follow point-axis combination order",
                 )
             previous_indices = indices
-        _require_containment_profile_admitted(self.left, self.order)
-        _require_containment_profile_admitted(self.right, self.order)
+        try:
+            _require_containment_profile_admitted(self.left, self.order)
+        except IncidenceStructureAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
+        try:
+            _require_containment_profile_admitted(self.right, self.order)
+        except IncidenceStructureAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         left_profile = _containment_profile_data(self.left, self.order)
         right_profile = _containment_profile_data(self.right, self.order)
         expected_differences = tuple(
@@ -488,7 +508,10 @@ class IncidenceTradeRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_trade_comparison_bounded(self) -> Self:
-        _require_incidence_trade_admitted(self.left, self.right, self.max_order)
+        try:
+            _require_incidence_trade_admitted(self.left, self.right, self.max_order)
+        except IncidenceStructureAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         return self
 
 
@@ -509,7 +532,10 @@ class IncidenceTradeResult(StrictModel):
     def bind_comparison_to_sources(self) -> Self:
         from jacobian.math.incidence_structures.operations import _incidence_trade_data
 
-        _require_incidence_trade_admitted(self.left, self.right, self.max_order)
+        try:
+            _require_incidence_trade_admitted(self.left, self.right, self.max_order)
+        except IncidenceStructureAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         expected = _incidence_trade_data(self.left, self.right, self.max_order)
         actual = (
             self.zeroth_difference,

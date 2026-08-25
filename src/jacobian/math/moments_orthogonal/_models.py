@@ -25,6 +25,14 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"moments_orthogonal.{reason}", message)
 
 
+class MomentsOrthogonalAdmissionError(ValueError):
+    """Native admission failure for moments-orthogonal operations."""
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 def _require_determinant_representable(
     moments: tuple[CanonicalRational, ...], order: int
 ) -> None:
@@ -70,7 +78,7 @@ def _require_gram_schmidt_heights_admissible(
     bound = max(per_entry, 8)
     for value in moments[: 2 * max_degree + 1]:
         if RationalHeight.from_canonical(value).exceeds(bound):
-            raise _validation_error(
+            raise MomentsOrthogonalAdmissionError(
                 "gram_schmidt_height",
                 f"moment heights exceed the conservative {bound}-digit "
                 f"bound for exact degree-{max_degree} Gram-Schmidt; supply "
@@ -147,7 +155,10 @@ class OrthogonalPolynomialRequest(StrictModel):
         gate, both this admission replay and the execution that follows it
         operate on provably bounded intermediates with typed height checks.
         """
-        _require_gram_schmidt_heights_admissible(self.prefix.moments, self.max_degree)
+        try:
+            _require_gram_schmidt_heights_admissible(self.prefix.moments, self.max_degree)
+        except MomentsOrthogonalAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         from jacobian.math.moments_orthogonal.operations import (
             orthogonal_polynomials_from_moments,
         )
@@ -317,7 +328,10 @@ class GaussianQuadratureRequest(StrictModel):
         # projection: without it, a single schema-valid payload such as
         # mu_0 = 10^-32767 with mu_1 = 10^32767 forces enormous exact
         # backend work during parsing before the derived-node check fires.
-        _require_gram_schmidt_heights_admissible(self.prefix.moments, self.order)
+        try:
+            _require_gram_schmidt_heights_admissible(self.prefix.moments, self.order)
+        except MomentsOrthogonalAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         # Building p_order projects only onto earlier polynomials, so the
         # Gram-Schmidt kernel and the Vandermonde weight solve consume
         # moments through mu_(2n-1) exactly; execution verifies exactness

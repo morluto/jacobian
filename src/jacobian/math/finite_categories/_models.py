@@ -7,7 +7,11 @@ from typing import Self
 from pydantic import model_validator
 
 from jacobian._models import StrictModel
-from jacobian.math.finite_categories.operations import _product_plan
+from jacobian.math.finite_categories.operations import (
+    CategoryProductAdmissionError,
+    _product_error,
+    _product_plan,
+)
 from jacobian.math.finite_categories.values import (
     CategoryIdentifier,
     FiniteCategory,
@@ -34,7 +38,10 @@ class CategoryProductRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_product(self) -> Self:
-        _product_plan(self.left, self.right)
+        try:
+            _product_plan(self.left, self.right)
+        except CategoryProductAdmissionError as exc:
+            raise _product_error(exc.reason, str(exc)) from None
         return self
 
 

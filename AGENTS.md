@@ -121,8 +121,8 @@ the operation returns a concrete mathematical value or certificate.
   comparison is not an exact invariant.
 - Use a direct Python binding whenever it can perform the bounded computation.
   A subprocess needs a concrete isolation, killability, or fixed-toolchain
-  reason. `lean.check` is the example: one bounded source request, temporary
-  files, timeout, and typed diagnostics.
+  reason. It must handle one bounded request with temporary files, a timeout,
+  and typed diagnostics.
 - Native public functions belong under `jacobian.math`, have explicit `__all__`,
   call typed kernels directly, and accept domain values or a maintained backend
   type that already carries the complete mathematical meaning (see the

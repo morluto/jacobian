@@ -71,10 +71,9 @@ Python 发行包里包含了数学内核、CLI 和 MCP 服务器。npm 包本身
 - 精确线性代数；
 - 图、路径、着色与同构；
 - 有界 SAT 和 SMT 求解；
-- 有限代数、概率、几何与拓扑；
-- Lean 源码 elaboration。
+- 有限代数、概率、几何与拓扑。
 
-SAT 和 SMT 操作直接调用 Z3 的 Python 绑定。可选的 `lean.check` 会在固定的 Lean 服务环境里跑一段有界源码：仅为本次请求创建临时目录并写入源码，返回类型化诊断后即清理；不会保留证明状态会话，也不会持久化保存源码。用 `math.find` 搜索操作、浏览不熟悉的领域，先查看单个操作的契约，再用 `math.run` 执行一次。
+SAT 和 SMT 操作直接调用 Z3 的 Python 绑定。用 `math.find` 搜索操作、浏览不熟悉的领域，先查看单个操作的契约，再用 `math.run` 执行一次。
 
 请参阅[领域操作库](docs/reference/domain-operation-library.md)了解操作契约与准入规则，用 `math.find` 浏览实际的操作目录，并参阅[后端要求](docs/how-to/backend-requirements.md)。
 
@@ -88,7 +87,7 @@ Jacobian 0.13.0 <!-- x-release-please-version --> 仍为预稳定版本。已发
 - [架构](docs/explanation/architecture.md)：运行时结构与信任边界
 - [产品模型](docs/explanation/product-blueprint.md)：操作契约、归属和项目边界
 - [工具参考](docs/reference/tools.md)：MCP 资源与调用契约
-- [后端要求](docs/how-to/backend-requirements.md)：维护的 Python 后端与可选的 Lean
+- [后端要求](docs/how-to/backend-requirements.md)：维护的 Python 后端
 - [远程部署](docs/how-to/deploy-remote-mcp.md)：HTTP 部署与身份认证
 
 ## 贡献

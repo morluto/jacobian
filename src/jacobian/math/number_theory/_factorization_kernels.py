@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory._models import (
     ArithmeticFunctionRequest,
     BooleanResult,
@@ -13,7 +14,6 @@ from jacobian.math.number_theory._models import (
     CertifiedFactorizationResult,
     DivisorListResult,
     FactorizationRequest,
-    IntegerValueResult,
     PrattCertificateNode,
     PrimalityCertificateRequest,
     PrimalityCertificateResult,
@@ -169,7 +169,7 @@ def decide_squarefree(request: ArithmeticFunctionRequest) -> BooleanResult:
     )
 
 
-def compute_radical(request: ArithmeticFunctionRequest) -> IntegerValueResult:
+def compute_radical(request: ArithmeticFunctionRequest) -> IntegerValue:
     from sympy import factorint
 
-    return IntegerValueResult(value=str(math.prod(factorint(request.n))))
+    return IntegerValue(value=str(math.prod(factorint(request.n))))

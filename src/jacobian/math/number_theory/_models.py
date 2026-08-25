@@ -112,6 +112,14 @@ BoundedInteger = Annotated[
         strict=True,
     ),
 ]
+
+
+class PrimalityRequest(StrictModel):
+    """One bounded canonical integer for the maintained primality backend."""
+
+    value: BoundedInteger
+
+
 FactorizationInteger = Annotated[
     str,
     StringConstraints(
@@ -232,17 +240,6 @@ def _plan_friable_count(x: int, y: int) -> tuple[_FriableRegime, tuple[int, ...]
                 "generated friable counting exceeds the search-node budget",
             )
     return "GENERATED", primes
-
-
-# ---------------------------------------------------------------------------
-# Request models — canonical integers (arbitrary precision, bounded string)
-# ---------------------------------------------------------------------------
-
-
-class IntegerValueRequest(StrictModel):
-    """One canonical integer supplied to a unary number-theory operation."""
-
-    value: BoundedInteger
 
 
 class FactorizationRequest(StrictModel):
@@ -687,17 +684,6 @@ class DiscreteLogarithmRequest(StrictModel):
                 "base and target must be less than the modulus",
             )
         return self
-
-
-# ---------------------------------------------------------------------------
-# Result models
-# ---------------------------------------------------------------------------
-
-
-class IntegerValueResult(StrictModel):
-    """One exact integer value produced by a number-theory operation."""
-
-    value: BoundedInteger
 
 
 _MAX_PRIMORIAL_DIGITS = 3_400

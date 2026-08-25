@@ -7,6 +7,7 @@ from collections.abc import Callable
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory._factorization_kernels import (
     compute_pratt_certificate,
     compute_radical,
@@ -22,7 +23,6 @@ from jacobian.math.number_theory._models import (
     CertifiedFactorizationRequest,
     CertifiedFactorizationResult,
     DivisorListResult,
-    IntegerValueResult,
     NonzeroFactorizationRequest,
     PrimalityCertificateRequest,
     PrimalityCertificateResult,
@@ -68,7 +68,7 @@ def _compute_squarefree(
 
 def _compute_radical(
     request: ArithmeticFunctionRequest,
-) -> IntegerValueResult:
+) -> IntegerValue:
     return compute_radical(request)
 
 
@@ -197,7 +197,7 @@ FACTORIZATION_OPERATIONS = (
         title="Compute integer radical",
         description="Compute the product of distinct prime divisors exactly.",
         request_model=ArithmeticFunctionRequest,
-        result_model=IntegerValueResult,
+        result_model=IntegerValue,
         implementation=_compute_radical,
         tags=("number-theory", "arithmetic-function"),
         examples=(example("radical_360", "Compute the radical of 360.", {"n": 360}),),

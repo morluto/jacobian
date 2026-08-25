@@ -1,13 +1,13 @@
 """Modular-owned exact number-theory operations."""
 
 from jacobian.catalog._examples import example
+from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory._discrete_logarithm import (
     DISCRETE_LOGARITHM_OPERATION,
 )
 from jacobian.math.number_theory._models import (
     ChineseRemainderRequest,
     ChineseRemainderResult,
-    IntegerValueResult,
     JacobiSymbolRequest,
     JacobiSymbolResult,
     ModularPolynomialResidueImageRequest,
@@ -58,7 +58,7 @@ MODULAR_OPERATIONS = (
         "Compute modular inverse",
         "Compute the least nonnegative inverse of a unit modulo m.",
         ModularUnitRequest,
-        IntegerValueResult,
+        IntegerValue,
         compute_modular_inverse,
         "number-theory",
         "modular",
@@ -75,7 +75,7 @@ MODULAR_OPERATIONS = (
         "Compute multiplicative order",
         "Compute the multiplicative order of a unit modulo m.",
         ModularUnitRequest,
-        IntegerValueResult,
+        IntegerValue,
         compute_multiplicative_order,
         "number-theory",
         "modular",

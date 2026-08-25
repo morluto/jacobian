@@ -46,17 +46,6 @@ BaseDigit = Annotated[
 
 
 # ---------------------------------------------------------------------------
-# Requests — unary integer
-# ---------------------------------------------------------------------------
-
-
-class IntegerValueRequest(StrictModel):
-    """One canonical integer supplied to a unary integer operation."""
-
-    value: CanonicalInteger
-
-
-# ---------------------------------------------------------------------------
 # Requests — base expansion
 # ---------------------------------------------------------------------------
 
@@ -109,17 +98,6 @@ class IntegerNthRootRequest(StrictModel):
                 "even root of a negative integer is not integral-real",
             )
         return self
-
-
-# ---------------------------------------------------------------------------
-# Structured results — integer
-# ---------------------------------------------------------------------------
-
-
-class IntegerValueResult(StrictModel):
-    """One canonical integer produced by a unary integer operation."""
-
-    value: CanonicalInteger
 
 
 class IntegerSignResult(StrictModel):

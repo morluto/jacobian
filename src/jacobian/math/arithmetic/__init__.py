@@ -9,8 +9,10 @@ from jacobian.math.arithmetic.operations import (
     sign,
     sum_rationals,
 )
+from jacobian.math.arithmetic.values import IntegerValue
 
 __all__ = [
+    "IntegerValue",
     "absolute_value",
     "integerize_rational_vector",
     "primitive_integer_vector",

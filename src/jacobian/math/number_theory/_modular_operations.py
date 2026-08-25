@@ -6,10 +6,10 @@ import math
 from itertools import product
 from typing import Literal, cast
 
+from jacobian.math.arithmetic.values import IntegerValue
 from jacobian.math.number_theory._models import (
     ChineseRemainderRequest,
     ChineseRemainderResult,
-    IntegerValueResult,
     JacobiSymbolRequest,
     JacobiSymbolResult,
     ModularPolynomialResidueCount,
@@ -34,17 +34,17 @@ def compute_jacobi_symbol(request: JacobiSymbolRequest) -> JacobiSymbolResult:
     )
 
 
-def compute_modular_inverse(request: ModularUnitRequest) -> IntegerValueResult:
-    return IntegerValueResult(value=str(pow(int(request.value), -1, request.modulus)))
+def compute_modular_inverse(request: ModularUnitRequest) -> IntegerValue:
+    return IntegerValue(value=str(pow(int(request.value), -1, request.modulus)))
 
 
-def compute_multiplicative_order(request: ModularUnitRequest) -> IntegerValueResult:
+def compute_multiplicative_order(request: ModularUnitRequest) -> IntegerValue:
     from sympy import n_order
 
     value, modulus = int(request.value), request.modulus
     if math.gcd(value, modulus) != 1:
         raise ValueError("multiplicative order requires coprime value and modulus")
-    return IntegerValueResult(value=str(int(n_order(value, modulus))))
+    return IntegerValue(value=str(int(n_order(value, modulus))))
 
 
 def enumerate_quadratic_residues(request: ModulusRequest) -> QuadraticResiduesResult:

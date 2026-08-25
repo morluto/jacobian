@@ -13,6 +13,7 @@ from jacobian.math.number_theory._models import (
     ModularValueRequest,
     NonnegativeIntegerRequest,
     PositiveIntegerRequest,
+    PrimalityRequest,
 )
 
 
@@ -97,6 +98,11 @@ def test_in_process_factorization_dependencies_have_small_input_bounds() -> None
     ):
         with expect_validation("number_theory."):
             model.model_validate(payload)
+
+
+def test_primality_keeps_its_operation_specific_input_bound() -> None:
+    with expect_validation("string_too_long"):
+        PrimalityRequest(value="1" + "0" * _MAX_INTEGER_LENGTH)
 
 
 # ---------------------------------------------------------------------------

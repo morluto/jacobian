@@ -25,8 +25,6 @@ from jacobian.math.arithmetic._models import (
     IntegerNthRootRequest,
     IntegerNthRootResult,
     IntegerSignResult,
-    IntegerValueRequest,
-    IntegerValueResult,
 )
 from jacobian.math.arithmetic._rational_models import (
     NonzeroRationalValueRequest,
@@ -38,6 +36,7 @@ from jacobian.math.arithmetic._rational_models import (
     RationalValueRequest,
     RationalValueResult,
 )
+from jacobian.math.arithmetic.values import IntegerValue
 
 
 def _int(value: str) -> int:
@@ -48,13 +47,13 @@ def _canonical(value: int) -> str:
     return format_canonical_integer(value)
 
 
-def absolute_value(request: IntegerValueRequest) -> IntegerValueResult:
-    return IntegerValueResult(
+def absolute_value(request: IntegerValue) -> IntegerValue:
+    return IntegerValue(
         value=_canonical(native_arithmetic.absolute_value(_int(request.value)))
     )
 
 
-def sign(request: IntegerValueRequest) -> IntegerSignResult:
+def sign(request: IntegerValue) -> IntegerSignResult:
     value = native_arithmetic.sign(_int(request.value))
     if value < 0:
         sign: Literal[-1, 0, 1] = -1
@@ -65,14 +64,14 @@ def sign(request: IntegerValueRequest) -> IntegerSignResult:
     return IntegerSignResult(sign=sign)
 
 
-def decimal_digit_sum(request: IntegerValueRequest) -> IntegerValueResult:
-    return IntegerValueResult(
+def decimal_digit_sum(request: IntegerValue) -> IntegerValue:
+    return IntegerValue(
         value=_canonical(sum(int(digit) for digit in request.value.lstrip("-")))
     )
 
 
-def decimal_digit_count(request: IntegerValueRequest) -> IntegerValueResult:
-    return IntegerValueResult(value=_canonical(len(request.value.lstrip("-"))))
+def decimal_digit_count(request: IntegerValue) -> IntegerValue:
+    return IntegerValue(value=_canonical(len(request.value.lstrip("-"))))
 
 
 def base_digits(request: IntegerBaseDigitsRequest) -> IntegerBaseDigitsResult:

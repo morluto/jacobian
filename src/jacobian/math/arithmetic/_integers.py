@@ -13,8 +13,6 @@ from jacobian.math.arithmetic._models import (
     IntegerNthRootRequest,
     IntegerNthRootResult,
     IntegerSignResult,
-    IntegerValueRequest,
-    IntegerValueResult,
 )
 from jacobian.math.arithmetic._operations import (
     absolute_value,
@@ -25,14 +23,15 @@ from jacobian.math.arithmetic._operations import (
     sign,
 )
 from jacobian.math.arithmetic._support import arithmetic_operation
+from jacobian.math.arithmetic.values import IntegerValue
 
 INTEGER_OPERATIONS = (
     arithmetic_operation(
         "integer.compute.absolute_value",
         "Compute integer absolute value",
         "Compute the exact absolute value of one integer.",
-        IntegerValueRequest,
-        IntegerValueResult,
+        IntegerValue,
+        IntegerValue,
         absolute_value,
         "integer",
         "exact",
@@ -48,7 +47,7 @@ INTEGER_OPERATIONS = (
         "integer.compute.sign",
         "Compute integer sign",
         "Compute -1, 0, or 1 according to one integer's sign.",
-        IntegerValueRequest,
+        IntegerValue,
         IntegerSignResult,
         sign,
         "integer",
@@ -61,8 +60,8 @@ INTEGER_OPERATIONS = (
         "integer.compute.decimal_digit_sum",
         "Compute decimal digit sum",
         "Sum decimal digits of one integer's absolute value.",
-        IntegerValueRequest,
-        IntegerValueResult,
+        IntegerValue,
+        IntegerValue,
         decimal_digit_sum,
         "integer",
         "representation",
@@ -78,8 +77,8 @@ INTEGER_OPERATIONS = (
         "integer.compute.decimal_digit_count",
         "Count decimal digits",
         "Count decimal digits in one integer's absolute value.",
-        IntegerValueRequest,
-        IntegerValueResult,
+        IntegerValue,
+        IntegerValue,
         decimal_digit_count,
         "integer",
         "representation",

@@ -49,6 +49,7 @@ def test_zero_division_is_explicit(operation: object) -> None:
 def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the arithmetic public API."""
     expected = (
+        "IntegerValue",
         "absolute_value",
         "integerize_rational_vector",
         "primitive_integer_vector",

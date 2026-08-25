@@ -68,8 +68,6 @@ def _require_bounded_rational(
 
 
 _MAX_N = 10_000
-_MAX_PARTITION_N = 30
-_MAX_ENUMERATED_PARTITIONS = 10_000
 MAX_LINEAR_RECURRENCE_ORDER = 16
 MAX_LINEAR_RECURRENCE_INDEX = 512
 MAX_LINEAR_RECURRENCE_REQUESTED_INDICES = 256
@@ -807,50 +805,6 @@ class FibonacciPairResult(StrictModel):
 
 class FibonacciPairRequest(StrictModel):
     n: StrictInt = Field(ge=0, le=10_000)
-
-
-class IntegerPartitionEnumerationRequest(StrictModel):
-    """Enumerate every partition of n containing at most max_parts summands."""
-
-    n: StrictInt = Field(ge=0, le=_MAX_PARTITION_N)
-    max_parts: StrictInt = Field(ge=1, le=_MAX_PARTITION_N)
-
-
-class IntegerPartitionEnumerationResult(StrictModel):
-    """Complete canonical partition enumeration for one bounded request."""
-
-    n: StrictInt = Field(ge=0, le=_MAX_PARTITION_N)
-    max_parts: StrictInt = Field(ge=1, le=_MAX_PARTITION_N)
-    partitions: tuple[tuple[StrictInt, ...], ...] = Field(
-        max_length=_MAX_ENUMERATED_PARTITIONS
-    )
-
-    @model_validator(mode="after")
-    def require_canonical_complete_items(self) -> Self:
-        previous: tuple[int, ...] | None = None
-        for partition in self.partitions:
-            if len(partition) > self.max_parts:
-                raise _combinatorics_validation_error("partition exceeds max_parts")
-            if any(part <= 0 for part in partition):
-                raise _combinatorics_validation_error(
-                    "partition parts must be positive"
-                )
-            if tuple(sorted(partition, reverse=True)) != partition:
-                raise _combinatorics_validation_error(
-                    "partition parts must be nonincreasing"
-                )
-            if sum(partition) != self.n:
-                raise _combinatorics_validation_error("partition parts must sum to n")
-            if previous is not None and previous <= partition:
-                raise _combinatorics_validation_error(
-                    "partitions must be unique in descending lexicographic order"
-                )
-            previous = tuple(partition)
-        if self.n == 0 and self.partitions != ((),):
-            raise _combinatorics_validation_error(
-                "zero has exactly one empty partition"
-            )
-        return self
 
 
 class LinearRecurrenceEvaluationRequest(StrictModel):

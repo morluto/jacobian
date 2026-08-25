@@ -2,8 +2,6 @@
 
 from jacobian.catalog._examples import example
 from jacobian.math.combinatorics._models import (
-    IntegerPartitionEnumerationRequest,
-    IntegerPartitionEnumerationResult,
     IntegerResult,
     NonnegativeIntegerRequest,
     NonnegativePairRequest,
@@ -14,6 +12,10 @@ from jacobian.math.combinatorics._operations import (
     partition_number,
     stirling_first,
     stirling_second,
+)
+from jacobian.math.combinatorics._partition_models import (
+    IntegerPartitionEnumerationRequest,
+    IntegerPartitionEnumerationResult,
 )
 from jacobian.math.combinatorics._support import (
     combinatorics_operation,

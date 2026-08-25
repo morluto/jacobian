@@ -15,12 +15,14 @@ from jacobian.math.combinatorics._counting_models import (
 from jacobian.math.combinatorics._models import (
     FibonacciPairRequest,
     FibonacciPairResult,
-    IntegerPartitionEnumerationRequest,
-    IntegerPartitionEnumerationResult,
     IntegerResult,
     NonnegativeIntegerRequest,
     NonnegativePairRequest,
     RationalResult,
+)
+from jacobian.math.combinatorics._partition_models import (
+    IntegerPartitionEnumerationRequest,
+    IntegerPartitionEnumerationResult,
 )
 
 

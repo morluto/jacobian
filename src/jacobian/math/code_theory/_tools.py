@@ -6,19 +6,21 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
-from jacobian.math.code_theory._dual_operations import (
+from jacobian.math.code_linear._models import (
+    DualCodeRequest,
+    DualCodeResult,
+    SyndromeRequest,
+    SyndromeResult,
+)
+from jacobian.math.code_linear._operations import (
     compute_dual_code,
     compute_syndrome,
 )
 from jacobian.math.code_theory._models import (
     CoveringRadiusRequest,
     CoveringRadiusResult,
-    DualCodeRequest,
-    DualCodeResult,
     LinearCodeRequest,
     MinimumDistanceResult,
-    SyndromeRequest,
-    SyndromeResult,
     WeightDistributionResult,
 )
 from jacobian.math.code_theory._operations import (
@@ -108,9 +110,9 @@ CODE_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ct_operation(
         "code.dual_code.compute",
         "Compute the dual code",
-        "Compute the parity check matrix (dual code) from a "
-        "generator matrix over a prime field GF(p), using exact null "
-        "space computation.",
+        "Compute the exact dual code of a canonical prime-field encoder. "
+        "The retained operation ID returns the shared dual encoder and "
+        "parity-check value without discarding its ordered coordinate axis.",
         DualCodeRequest,
         DualCodeResult,
         compute_dual_code,
@@ -120,16 +122,20 @@ CODE_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "hamming_7_4_generator",
-                "Compute the dual code of a [7,4] Hamming generator; "
-                "field_order must be prime and entries must be canonical.",
+                "Compute the dual code of a [7,4] Hamming encoder; preserve "
+                "the encoder's ordered coordinate axis unchanged.",
                 {
-                    "field_order": 2,
-                    "generator_matrix": [
-                        [1, 0, 0, 0, 1, 1, 0],
-                        [0, 1, 0, 0, 1, 0, 1],
-                        [0, 0, 1, 0, 0, 1, 1],
-                        [0, 0, 0, 1, 1, 1, 1],
-                    ],
+                    "encoder": {
+                        "field_order": 2,
+                        "message_axis": ["m0", "m1", "m2", "m3"],
+                        "coordinate_axis": ["x0", "x1", "x2", "x3", "x4", "x5", "x6"],
+                        "generator_matrix": [
+                            [1, 0, 0, 0, 1, 1, 0],
+                            [0, 1, 0, 0, 1, 0, 1],
+                            [0, 0, 1, 0, 0, 1, 1],
+                            [0, 0, 0, 1, 1, 1, 1],
+                        ],
+                    }
                 },
             ),
         ),
@@ -137,8 +143,8 @@ CODE_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ct_operation(
         "code.syndrome.compute",
         "Compute the syndrome of a received word",
-        "Compute the syndrome vector H * r^T mod p for a "
-        "received word r under a parity check matrix H over GF(p).",
+        "Compute the exact syndrome Hw^T over GF(p) from the shared "
+        "parity-check value and its matching ordered word axis.",
         SyndromeRequest,
         SyndromeResult,
         compute_syndrome,
@@ -148,15 +154,20 @@ CODE_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "single_error_syndrome",
-                "Syndrome of a single-bit error under a Hamming parity check.",
+                "Syndrome of a single-bit error under a Hamming parity check; "
+                "the word keeps the parity-check coordinate axis.",
                 {
-                    "field_order": 2,
-                    "parity_check_matrix": [
-                        [1, 1, 0, 1, 1, 0, 0],
-                        [1, 0, 1, 1, 0, 1, 0],
-                        [0, 1, 1, 1, 0, 0, 1],
-                    ],
-                    "received_word": [1, 0, 0, 0, 0, 0, 0],
+                    "parity_check": {
+                        "field_order": 2,
+                        "coordinate_axis": ["x0", "x1", "x2", "x3", "x4", "x5", "x6"],
+                        "rows": [
+                            [1, 1, 0, 1, 1, 0, 0],
+                            [1, 0, 1, 1, 0, 1, 0],
+                            [0, 1, 1, 1, 0, 0, 1],
+                        ],
+                    },
+                    "coordinate_axis": ["x0", "x1", "x2", "x3", "x4", "x5", "x6"],
+                    "word": [1, 0, 0, 0, 0, 0, 0],
                 },
             ),
         ),

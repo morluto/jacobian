@@ -4,13 +4,15 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import MathTool
+from jacobian.math.topology._homology import (
+    IntegralSimplicialHomologyRequest,
+    SimplicialHomologyRequest,
+)
 from jacobian.math.topology._models import (
     ChainCoefficientRing,
     ChainComplexRequest,
     FiniteSimplicialComplex,
-    IntegralSimplicialHomologyRequest,
     SimplicialComplexRequest,
-    SimplicialHomologyRequest,
 )
 from jacobian.math.topology._tools import TOOLS
 

@@ -15,12 +15,12 @@ from jacobian.math.chain_complexes.operations import (
     compute_tensor_product,
 )
 from jacobian.math.chain_complexes.values import CoefficientField
+from jacobian.math.topology._homology import SimplicialHomologyRequest
 from jacobian.math.topology._models import (
     ChainCoefficientRing,
     ChainComplexRequest,
     HomologyConvention,
     SimplicialComplexRequest,
-    SimplicialHomologyRequest,
 )
 from jacobian.math.topology._tools import TOOLS
 from jacobian.math.topology.native import simplicial_chain_complex_value

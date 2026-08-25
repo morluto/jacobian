@@ -46,7 +46,9 @@ def evaluate_shelling(
         facet = set(facets[index])
         if position == 0:
             continue
-        previous_facets = [set(facets[facet_order[offset]]) for offset in range(position)]
+        previous_facets = [
+            set(facets[facet_order[offset]]) for offset in range(position)
+        ]
         if any(facet & previous == facet for previous in previous_facets):
             return False, position, f"facet {index} is contained in earlier facet"
         failure = _restriction_failure(facet, previous_facets)

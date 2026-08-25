@@ -18,10 +18,22 @@ from jacobian.math.matrices.certified_snf.operations import (
     smith_reduce,
 )
 from jacobian.math.matrices.certified_snf.values import CertifiedIntegerMatrix
+from jacobian.math.topology._barycentric import barycentric_subdivision
 from jacobian.math.topology._chain_conversion import (
     canonical_chain_complex_value_from_parts,
 )
-from jacobian.math.topology._barycentric import barycentric_subdivision
+from jacobian.math.topology._homology import (
+    HomologyGroupResult,
+    IntegralFreeGenerator,
+    IntegralHomologyGroupResult,
+    IntegralSimplicialHomologyRequest,
+    IntegralSimplicialHomologyResult,
+    IntegralTorsionGenerator,
+    IntegralVector,
+    ModularVector,
+    SimplicialHomologyRequest,
+    SimplicialHomologyResult,
+)
 from jacobian.math.topology._models import (
     BarycentricSubdivisionRequest,
     BarycentricSubdivisionResult,
@@ -36,18 +48,10 @@ from jacobian.math.topology._models import (
     FVectorRequest,
     FVectorResult,
     HomologyConvention,
-    HomologyGroupResult,
-    IntegralFreeGenerator,
-    IntegralHomologyGroupResult,
-    IntegralSimplicialHomologyRequest,
-    IntegralSimplicialHomologyResult,
-    IntegralTorsionGenerator,
-    IntegralVector,
     JoinRequest,
     JoinResult,
     LinkRequest,
     LinkResult,
-    ModularVector,
     PseudomanifoldRequest,
     PseudomanifoldResult,
     ShellingCheckRequest,
@@ -55,8 +59,6 @@ from jacobian.math.topology._models import (
     SimplexBasis,
     SimplicialComplexCanonicalizationResult,
     SimplicialComplexRequest,
-    SimplicialHomologyRequest,
-    SimplicialHomologyResult,
     SkeletonRequest,
     SkeletonResult,
     SparseBoundaryMatrix,

@@ -30,7 +30,10 @@ Then open a pull request. `make setup` installs the locked development
 environment with the complete maintained Python backend stack. `make check`
 runs Ruff, mypy, and the Lean-free math, catalog, dispatch, CLI, and tooling
 owners. Add the named `make test-*` lane for the behavior or boundary changed;
-CI runs the complete fixed semantic matrix.
+pull-request CI runs static checks plus the changed mathematical owner. Public
+operation, model, admission, and canonical-contract changes also run catalog
+conformance and every advertised invocation example; merge-group candidates
+and `main` run the full mathematical suite.
 Open the PR once it is green, and add any explicitly relevant specialist
 validation called out below.
 
@@ -54,8 +57,9 @@ pre-push hook stays `make lint typecheck`. Focused debugging uses
 `uv run pytest path/to/test.py`. Default `uv run pytest` collects the ordinary
 Lean-free `testpaths`; it does not run process, MCP, or Lean trees.
 
-CI runs the ordinary Python surface, MCP boundaries, and the wheel smoke. Full
-Lean runs on merge-group candidates and on `main`, not on every pull request.
+CI runs static checks, the selected ordinary Python surface, MCP boundaries,
+and the wheel smoke. Full mathematical and Lean suites run on merge-group
+candidates and on `main`, not on every pull request.
 That gate needs GitHub merge queue
 enabled on `main`; without a queue, Lean only runs after a push to `main`. You
 do not need to reproduce Lean locally for a routine change unless you edited
@@ -75,8 +79,8 @@ operation.
 ### When the quick path is not enough
 
 - **Documentation only:** `make docs-linkcheck` is the dedicated lane; CI runs
-  it too. See [Documentation](#documentation). Ordinary Python tests still run
-  on documentation PRs.
+  it too. See [Documentation](#documentation). Static and boundary CI evidence
+  still runs, but no mathematical owner is selected.
 - **Broad or unknown impact** (CI, dependencies, shared infrastructure): run
   `make check-static` plus the affected tests, and let CI own the fail-closed
   functional lanes.
@@ -145,7 +149,8 @@ Before final validation, run `make check` plus the named lane that owns the
 changed behavior. If the tree changes during validation, rerun checks whose
 evidence was invalidated by that change; do not describe results from an
 earlier tree as final-tree validation. `make check-all` is an explicit broad
-reproduction, not a routine closeout requirement. CI owns the complete matrix.
+reproduction, not a routine closeout requirement. Merge-group CI owns the
+complete mathematical matrix.
 Use `make check-external` when the fixed Lean check changes, and run the owning
 mathematical test when a maintained Python backend changes.
 

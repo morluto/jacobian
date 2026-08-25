@@ -57,26 +57,131 @@ jobs:
           name: dist
           path: dist/
 
+  plan:
+    name: plan test evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      pr_lanes: ${{ steps.plan.outputs.pr_lanes }}
+      run_math: ${{ steps.plan.outputs.run_math }}
+      math_tests: ${{ steps.plan.outputs.math_tests }}
+      run_catalog: ${{ steps.plan.outputs.run_catalog }}
+      run_catalog_examples: ${{ steps.plan.outputs.run_catalog_examples }}
+      plan: ${{ steps.plan.outputs.plan }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_LANES: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.pr_lanes) }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || github.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          event="$EVENT_NAME"
+          if [ "$PR_LANES" = true ]; then
+            event=pull_request
+          fi
+          if [ "$event" = pull_request ] && [ "$BASE_SHA" = "$HEAD_SHA" ]; then
+            # A manually dispatched PR-lane run has no pull-request base SHA.
+            # Preserve evidence by using the planner's full-suite event policy.
+            event=workflow_dispatch
+          fi
+          if [ "$event" = pull_request ]; then
+            git diff --no-ext-diff --no-textconv --name-only "$BASE_SHA...$HEAD_SHA" > changed-paths.txt
+          else
+            : > changed-paths.txt
+          fi
+          python tools/ci_test_plan.py \
+            --event "$event" \
+            --base "$BASE_SHA" \
+            --head "$HEAD_SHA" \
+            --changed-paths changed-paths.txt \
+            --github-output "$GITHUB_OUTPUT"
+          echo "pr_lanes=$PR_LANES" >> "$GITHUB_OUTPUT"
+
+  math:
+    name: python (math)
+    needs: plan
+    if: ${{ needs.plan.outputs.run_math == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-python-tests
+        with:
+          python-version: "3.12"
+      - uses: ./.github/actions/run-test-lane
+        with:
+          lane: math
+          junit-artifact: junit-python-math-3.12
+          coverage-artifact: coverage-data-python-math
+          coverage-file: .coverage.python-math
+          tests: ${{ needs.plan.outputs.math_tests }}
+          collect-coverage: ${{ needs.plan.outputs.pr_lanes != 'true' }}
+
+  catalog:
+    name: python (catalog)
+    needs: plan
+    if: ${{ needs.plan.outputs.run_catalog == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-python-tests
+        with:
+          python-version: "3.12"
+      - uses: ./.github/actions/run-test-lane
+        with:
+          lane: catalog
+          junit-artifact: junit-python-catalog-3.12
+          coverage-artifact: coverage-data-python-catalog
+          coverage-file: .coverage.python-catalog
+          collect-coverage: ${{ needs.plan.outputs.pr_lanes != 'true' }}
+
+  catalog_examples:
+    name: python (catalog examples)
+    needs: plan
+    if: ${{ needs.plan.outputs.run_catalog_examples == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-python-tests
+        with:
+          python-version: "3.12"
+      - uses: ./.github/actions/run-test-lane
+        with:
+          lane: integration
+          junit-artifact: junit-python-catalog-examples-3.12
+          coverage-artifact: coverage-data-python-catalog-examples
+          coverage-file: .coverage.python-catalog-examples
+          tests: tests/integration/catalog/test_builtin_examples.py
+          collect-coverage: ${{ needs.plan.outputs.pr_lanes != 'true' }}
+
   python:
     name: python (${{ matrix.lane }})
+    needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.timeout-minutes }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - lane: math
-            timeout-minutes: 25
-          - lane: catalog
-            timeout-minutes: 10
           - lane: dispatch
             timeout-minutes: 10
           - lane: cli
             timeout-minutes: 10
           - lane: tooling
             timeout-minutes: 15
-          - lane: integration
-            timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -90,9 +195,11 @@ jobs:
           junit-artifact: junit-python-${{ matrix.lane }}-3.12
           coverage-artifact: coverage-data-python-${{ matrix.lane }}
           coverage-file: .coverage.python-${{ matrix.lane }}
+          collect-coverage: ${{ needs.plan.outputs.pr_lanes != 'true' }}
 
   boundaries:
     name: boundaries (${{ matrix.lane }})
+    needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
@@ -112,6 +219,7 @@ jobs:
           junit-artifact: junit-${{ matrix.lane }}-3.12
           coverage-artifact: coverage-data-${{ matrix.lane }}
           coverage-file: .coverage.${{ matrix.lane }}
+          collect-coverage: ${{ needs.plan.outputs.pr_lanes != 'true' }}
 
   singular:
     name: Singular Runtime
@@ -202,16 +310,24 @@ jobs:
 
   coverage:
     name: Coverage
-    if: ${{ always() }}
-    needs: [python, boundaries]
+    if: ${{ always() && needs.plan.outputs.pr_lanes != 'true' }}
+    needs: [plan, math, catalog, catalog_examples, python, boundaries]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Require python and boundary lanes
+      - name: Require selected final-tree test lanes
         env:
+          PLAN_RESULT: ${{ needs.plan.result }}
+          MATH_RESULT: ${{ needs.math.result }}
+          CATALOG_RESULT: ${{ needs.catalog.result }}
+          CATALOG_EXAMPLES_RESULT: ${{ needs.catalog_examples.result }}
           PYTHON_RESULT: ${{ needs.python.result }}
           BOUNDARIES_RESULT: ${{ needs.boundaries.result }}
         run: |
+          test "$PLAN_RESULT" = success
+          test "$MATH_RESULT" = success
+          test "$CATALOG_RESULT" = success
+          test "$CATALOG_EXAMPLES_RESULT" = success
           test "$PYTHON_RESULT" = success
           test "$BOUNDARIES_RESULT" = success
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -246,17 +362,23 @@ jobs:
   required:
     name: required
     if: ${{ always() }}
-    needs: [static, python, boundaries, singular, wheel, coverage, lean]
+    needs: [plan, static, math, catalog, catalog_examples, python, boundaries, singular, wheel, coverage, lean]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Require static python boundaries wheel coverage and selected specialist lanes
+      - name: Require selected evidence and final-tree specialist lanes
         env:
-          EVENT_NAME: ${{ github.event_name }}
           # True for pull_request runs and for autofix dispatches that select
           # the pull_request lane set; Lean then counts skipped as passing.
-          PR_LANE_SELECTION: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.pr_lanes) }}
+          PR_LANE_SELECTION: ${{ needs.plan.outputs.pr_lanes }}
+          PLAN_RESULT: ${{ needs.plan.result }}
+          RUN_MATH: ${{ needs.plan.outputs.run_math }}
+          RUN_CATALOG: ${{ needs.plan.outputs.run_catalog }}
+          RUN_CATALOG_EXAMPLES: ${{ needs.plan.outputs.run_catalog_examples }}
           STATIC_RESULT: ${{ needs.static.result }}
+          MATH_RESULT: ${{ needs.math.result }}
+          CATALOG_RESULT: ${{ needs.catalog.result }}
+          CATALOG_EXAMPLES_RESULT: ${{ needs.catalog_examples.result }}
           PYTHON_RESULT: ${{ needs.python.result }}
           BOUNDARIES_RESULT: ${{ needs.boundaries.result }}
           SINGULAR_RESULT: ${{ needs.singular.result }}
@@ -264,14 +386,25 @@ jobs:
           COVERAGE_RESULT: ${{ needs.coverage.result }}
           LEAN_RESULT: ${{ needs.lean.result }}
         run: |
+          selected_result() {
+            case "$1:$2" in
+              true:success|false:skipped) ;;
+              *) echo "selected=$1 result=$2" >&2; exit 1 ;;
+            esac
+          }
+          test "$PLAN_RESULT" = success
           test "$STATIC_RESULT" = success
+          selected_result "$RUN_MATH" "$MATH_RESULT"
+          selected_result "$RUN_CATALOG" "$CATALOG_RESULT"
+          selected_result "$RUN_CATALOG_EXAMPLES" "$CATALOG_EXAMPLES_RESULT"
           test "$PYTHON_RESULT" = success
           test "$BOUNDARIES_RESULT" = success
           test "$SINGULAR_RESULT" = success
           test "$WHEEL_RESULT" = success
-          test "$COVERAGE_RESULT" = success
           if [ "$PR_LANE_SELECTION" = true ]; then
+            test "$COVERAGE_RESULT" = skipped
             test "$LEAN_RESULT" = skipped || test "$LEAN_RESULT" = success
           else
+            test "$COVERAGE_RESULT" = success
             test "$LEAN_RESULT" = success
           fi

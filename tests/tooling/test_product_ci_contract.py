@@ -46,7 +46,7 @@ def test_process_lane_is_invoked_by_ci() -> None:
 
     assert "lane: [process, mcp]" in workflow
     assert "uses: ./.github/actions/run-test-lane" in workflow
-    assert "run: make test-${{ inputs.lane }}" in action
+    assert 'make test-${{ inputs.lane }} TESTS="$TESTS"' in action
 
 
 def test_singular_backend_has_a_pinned_required_ci_lane() -> None:
@@ -59,7 +59,7 @@ def test_singular_backend_has_a_pinned_required_ci_lane() -> None:
     assert 'system("version")' in singular
     assert "make test-singular" in singular
     assert (
-        "needs: [static, python, boundaries, singular, wheel, coverage, lean]"
+        "needs: [plan, static, math, catalog, catalog_examples, python, boundaries, singular, wheel, coverage, lean]"
         in required
     )
     assert 'test "$SINGULAR_RESULT" = success' in required
@@ -71,9 +71,10 @@ def test_python_and_boundary_lanes_share_evidence_collection() -> None:
         encoding="utf-8"
     )
 
-    assert workflow.count("uses: ./.github/actions/run-test-lane") == 2
+    assert workflow.count("uses: ./.github/actions/run-test-lane") == 5
     assert "--junitxml=pytest.xml" in action
-    assert "--cov --cov-report= --cov-fail-under=0" in action
+    assert "pytest_args+=(--cov --cov-report= --cov-fail-under=0)" in action
+    assert "inputs.collect-coverage == 'true'" in action
     assert action.count("actions/upload-artifact@") == 2
     assert "uv cache prune --ci" in action
 
@@ -112,12 +113,17 @@ def test_optional_boundary_jobs_have_explicit_workflow_gates() -> None:
     assert "name: Deployment Tests" not in workflow
 
 
-def test_python_jobs_use_fixed_local_semantic_targets() -> None:
+def test_python_jobs_select_math_and_public_contract_evidence_from_the_plan() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
 
     assert "name: python (${{ matrix.lane }})" in workflow
-    for lane in ("math", "catalog", "dispatch", "cli", "tooling", "integration"):
+    assert "name: python (math)" in workflow
+    assert "name: python (catalog)" in workflow
+    assert "name: python (catalog examples)" in workflow
+    assert "tests: ${{ needs.plan.outputs.math_tests }}" in workflow
+    assert "tests: tests/integration/catalog/test_builtin_examples.py" in workflow
+    for lane in ("dispatch", "cli", "tooling"):
         assert f"lane: {lane}" in workflow
     assert "lane: e2e" not in workflow
     assert "lane: provider" not in workflow
@@ -133,14 +139,15 @@ def test_python_jobs_use_fixed_local_semantic_targets() -> None:
     assert "check-external: test-lean test-provider" not in makefile
 
 
-def test_product_ci_does_not_emit_a_plan_receipt() -> None:
+def test_product_ci_uses_a_versioned_checked_in_test_plan() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
-    assert "python .github/scripts/emit-plan-receipt" not in workflow
-    assert "ci-plan-receipt" not in workflow
-    assert "classify-ci-paths" not in workflow
-    assert not (ROOT / ".github/scripts/emit-plan-receipt").exists()
-    assert not (ROOT / ".github/scripts/validate-benchmark-plan").exists()
+    assert "name: plan test evidence" in workflow
+    assert "python tools/ci_test_plan.py" in workflow
+    assert '--base "$BASE_SHA"' in workflow
+    assert '--head "$HEAD_SHA"' in workflow
+    assert "event=workflow_dispatch" in workflow
+    assert (ROOT / "tools" / "ci_test_plan.py").exists()
 
 
 def test_static_job_runs_docs_linkcheck() -> None:
@@ -194,3 +201,13 @@ def test_coverage_report_lives_in_the_job_summary_not_a_pr_comment() -> None:
     assert "jacobian-coverage-report" not in workflow
     assert "issues/$PR_NUMBER/comments" not in workflow
     assert "pull-requests: write" not in coverage
+
+
+def test_required_accepts_only_explicitly_skipped_pr_evidence() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    required = workflow.split("  required:", 1)[1]
+
+    assert "selected_result" in required
+    assert "true:success|false:skipped" in required
+    assert 'test "$COVERAGE_RESULT" = skipped' in required
+    assert 'test "$COVERAGE_RESULT" = success' in required

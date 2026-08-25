@@ -29,6 +29,17 @@ real boundary:
 `make check-all` is an intentional broad reproduction. Do not use a full suite
 as a substitute for a focused regression test.
 
+## CI lifecycle
+
+Pull requests always run static validation. The checked-in CI planner selects
+the changed `tests/math` owner and, when a public operation, model, admission,
+or canonical contract changes, catalog conformance plus the advertised-example
+integration test. Shared runtime, CI, dependency, and unmapped mathematical
+paths fail closed to the full math suite. Merge-group candidates and `main`
+always run the full non-exhaustive `tests/math` suite. Scheduled validation owns
+exhaustive and repeated property checks. Collection inspection remains a manual
+diagnostic, not a prerequisite for every test lane.
+
 ## What to test
 
 For an operation, test the typed request boundary, the domain result, and a

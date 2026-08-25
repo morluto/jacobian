@@ -9,17 +9,18 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
+# These are the execution envelope for the four direct NetworkX operations
+# below.  ``DirectedGraph`` itself remains reusable by consumers whose work is
+# bounded more sharply from their own request data.
+MAX_DIRECTED_OPERATION_VERTICES = 256
+MAX_DIRECTED_OPERATION_EDGES = 512
+
 
 class DirectedGraph(StrictModel):
-    """A simple directed graph for reachability, SCC, and related analyses.
+    """A structurally valid finite simple directed graph."""
 
-    ``vertex_count`` carries a conservative admission fallback bounding
-    linear-time traversal work and vertex-sized results; consumers with
-    sharper derived budgets refine admission further.
-    """
-
-    vertex_count: int = Field(ge=2, le=256)
-    edges: tuple[tuple[int, int], ...] = Field(max_length=512)
+    vertex_count: int = Field(ge=2)
+    edges: tuple[tuple[int, int], ...] = Field()
 
     @model_validator(mode="after")
     def require_valid_edges(self) -> Self:
@@ -46,12 +47,30 @@ class DirectedGraph(StrictModel):
         return self
 
 
+def _require_directed_operation_admission(graph: DirectedGraph) -> None:
+    """Bound one direct traversal operation before constructing NetworkX state."""
+
+    if graph.vertex_count > MAX_DIRECTED_OPERATION_VERTICES:
+        raise PydanticCustomError(
+            "graph.directed_vertex_budget_exceeded",
+            "directed graph operation supports at most "
+            f"{MAX_DIRECTED_OPERATION_VERTICES} vertices",
+        )
+    if len(graph.edges) > MAX_DIRECTED_OPERATION_EDGES:
+        raise PydanticCustomError(
+            "graph.directed_edge_budget_exceeded",
+            "directed graph operation supports at most "
+            f"{MAX_DIRECTED_OPERATION_EDGES} edges",
+        )
+
+
 class ReachabilityRequest(StrictModel):
     graph: DirectedGraph
-    source: int = Field(ge=0, le=255)
+    source: int = Field(ge=0)
 
     @model_validator(mode="after")
     def require_valid_source(self) -> Self:
+        _require_directed_operation_admission(self.graph)
         if not (0 <= self.source < self.graph.vertex_count):
             raise PydanticCustomError(
                 "graph.source_must_be_in_0_graph_vertex_count_1",
@@ -70,6 +89,11 @@ class ReachabilityResult(StrictModel):
 class StronglyConnectedComponentsRequest(StrictModel):
     graph: DirectedGraph
 
+    @model_validator(mode="after")
+    def require_operation_admission(self) -> Self:
+        _require_directed_operation_admission(self.graph)
+        return self
+
 
 class StronglyConnectedComponentsResult(StrictModel):
     component_count: int = Field(ge=0, strict=True)
@@ -81,6 +105,11 @@ class StronglyConnectedComponentsResult(StrictModel):
 
 class CondensationRequest(StrictModel):
     graph: DirectedGraph
+
+    @model_validator(mode="after")
+    def require_operation_admission(self) -> Self:
+        _require_directed_operation_admission(self.graph)
+        return self
 
 
 class CondensationEdge(StrictModel):
@@ -97,6 +126,11 @@ class CondensationResult(StrictModel):
 
 class AcyclicOrderRequest(StrictModel):
     graph: DirectedGraph
+
+    @model_validator(mode="after")
+    def require_operation_admission(self) -> Self:
+        _require_directed_operation_admission(self.graph)
+        return self
 
 
 class AcyclicOrderResult(StrictModel):

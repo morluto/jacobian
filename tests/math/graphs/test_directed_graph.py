@@ -11,6 +11,7 @@ from jacobian.math.graphs.directed._models import (
     AcyclicOrderResult,
     CondensationRequest,
     CondensationResult,
+    DirectedGraph,
     ReachabilityRequest,
     ReachabilityResult,
     StronglyConnectedComponentsRequest,
@@ -142,10 +143,17 @@ class TestReachabilityContract:
             )
 
     def test_rejects_vertex_count_above_the_conservative_fallback(self) -> None:
+        graph = DirectedGraph(vertex_count=257, edges=())
+        assert graph.vertex_count == 257
+
         with pytest.raises(ValidationError):
-            ReachabilityRequest.model_validate(
-                {"graph": {"vertex_count": 257, "edges": []}, "source": 0}
-            )
+            ReachabilityRequest(graph=graph, source=0)
+        with pytest.raises(ValidationError):
+            StronglyConnectedComponentsRequest(graph=graph)
+        with pytest.raises(ValidationError):
+            CondensationRequest(graph=graph)
+        with pytest.raises(ValidationError):
+            AcyclicOrderRequest(graph=graph)
 
 
 # ---------------------------------------------------------------------------

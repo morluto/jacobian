@@ -9,8 +9,6 @@ from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
-from jacobian.math.graphs.directed._models import ReachabilityRequest
-from jacobian.math.graphs.directed._operations import compute_reachability
 from jacobian.math.probability._gaussian_inputs import (
     CanonicalGaussianPolynomialMomentRequest,
 )
@@ -405,9 +403,8 @@ def _directed_bond_connection_probability_data(
 ) -> tuple[Fraction, tuple[tuple[tuple[tuple[int, int], ...], bool, Fraction], ...]]:
     """Replay the full directed bond-percolation source with exact rationals.
 
-    Directed reachability is delegated to the directed-graph owner.  The
-    standard-library ``Fraction`` replay is deliberately independent from the
-    Python-FLINT producer used by the public operation below.
+    The standard-library ``Fraction`` replay is deliberately independent from
+    the Python-FLINT producer used by the public operation below.
     """
 
     probabilities = tuple(
@@ -426,19 +423,33 @@ def _directed_bond_connection_probability_data(
             state_probability *= (
                 probability if state_index & (1 << index) else 1 - probability
             )
-        reaches_target = (
-            source.target
-            in compute_reachability(
-                ReachabilityRequest(
-                    graph=source.graph.model_copy(update={"edges": open_arcs}),
-                    source=source.source,
-                )
-            ).reachable
+        reaches_target = _directed_path_exists(
+            vertex_count=source.graph.vertex_count,
+            arcs=open_arcs,
+            source=source.source,
+            target=source.target,
         )
         if reaches_target:
             connection_probability += state_probability
         states.append((open_arcs, reaches_target, state_probability))
     return connection_probability, tuple(states)
+
+
+def _directed_path_exists(
+    *,
+    vertex_count: int,
+    arcs: tuple[tuple[int, int], ...],
+    source: int,
+    target: int,
+) -> bool:
+    """Test one admitted directed percolation state without another operation's cap."""
+
+    import networkx as nx
+
+    graph: Any = nx.DiGraph()
+    graph.add_nodes_from(range(vertex_count))
+    graph.add_edges_from(arcs)
+    return nx.has_path(graph, source, target)
 
 
 def _directed_bond_connection_probability(
@@ -470,14 +481,11 @@ def _directed_bond_connection_probability(
             state_probability *= (
                 probability if state_index & (1 << index) else 1 - probability
             )
-        reaches_target = (
-            source.target
-            in compute_reachability(
-                ReachabilityRequest(
-                    graph=source.graph.model_copy(update={"edges": open_arcs}),
-                    source=source.source,
-                )
-            ).reachable
+        reaches_target = _directed_path_exists(
+            vertex_count=source.graph.vertex_count,
+            arcs=open_arcs,
+            source=source.source,
+            target=source.target,
         )
         if reaches_target:
             connection_probability += state_probability

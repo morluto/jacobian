@@ -191,9 +191,9 @@ def test_sparse_graph_above_sixteen_vertices_is_admitted() -> None:
 
 
 def test_edgeless_graph_above_the_shared_vertex_cap_is_admitted() -> None:
-    """A 65-vertex edgeless source stays inside the derived work budget."""
+    """A 257-vertex edgeless source stays inside the derived work budget."""
     result = _directed_bond_connection_probability(
-        _request(vertex_count=65, arcs=(), probabilities=(), source=0, target=1)
+        _request(vertex_count=257, arcs=(), probabilities=(), source=0, target=1)
     )
 
     assert _probability(result) == 0

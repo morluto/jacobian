@@ -28,6 +28,8 @@ from jacobian.math.tree_automata.operations import (
     run_tree_automaton,
 )
 from jacobian.math.tree_automata.values import (
+    MAX_REACHABILITY_WITNESS_NODES,
+    MAX_TREE_AUTOMATON_REACHABILITY_WORK,
     BottomUpTreeAutomaton,
     RankedTree,
     TreeAutomatonTransition,
@@ -862,17 +864,17 @@ class TestValidation:
 
         request_description = request_schema["description"]
         assert "MAX_TREE_AUTOMATON_REACHABILITY_WORK" in request_description
-        assert "30,000,000" in request_description
+        assert f"{MAX_TREE_AUTOMATON_REACHABILITY_WORK:,}" in request_description
         assert "MAX_REACHABILITY_WITNESS_NODES" in request_description
-        assert "4096" in request_description
+        assert str(MAX_REACHABILITY_WITNESS_NODES) in request_description
         assert "summed" in request_description
 
         automaton_description = request_schema["properties"]["automaton"]["description"]
-        assert "30,000,000 units" in automaton_description
+        assert f"{MAX_TREE_AUTOMATON_REACHABILITY_WORK:,} units" in automaton_description
         assert "summed" in automaton_description
 
         witnesses_description = result_schema["properties"]["witnesses"]["description"]
-        assert "4096 nodes summed over all reachable states" in witnesses_description
+        assert f"{MAX_REACHABILITY_WITNESS_NODES} nodes summed over all reachable states" in witnesses_description
 
     def test_reachability_rejects_materialized_witnesses_beyond_output_bound(self):
         transitions = [

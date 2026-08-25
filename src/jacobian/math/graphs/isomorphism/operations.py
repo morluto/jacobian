@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.math.graphs.isomorphism._models import (
-    ColoredGraphCanonicalizationRequest,
-    ColoredGraphCanonicalizationResult,
+from jacobian.math.graphs.isomorphism._canonicalization_bounds import (
+    require_admitted_colored_graph_canonicalization,
 )
+from jacobian.math.graphs.isomorphism._models import ColoredGraphCanonicalizationResult
 from jacobian.math.graphs.isomorphism._operations import (
-    compute_colored_graph_canonicalization,
+    canonicalize_colored_graph_kernel,
 )
 from jacobian.math.graphs.values import ColoredUndirectedGraph
 
@@ -17,9 +17,8 @@ def canonicalize_colored_graph(
 ) -> ColoredGraphCanonicalizationResult:
     """Return the exact color-preserving canonical form and one relabeling."""
 
-    return compute_colored_graph_canonicalization(
-        ColoredGraphCanonicalizationRequest(colored_graph=graph)
-    )
+    require_admitted_colored_graph_canonicalization(graph)
+    return canonicalize_colored_graph_kernel(graph)
 
 
 __all__ = ["canonicalize_colored_graph"]

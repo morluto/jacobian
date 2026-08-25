@@ -19,6 +19,7 @@ from jacobian.math.graphs.isomorphism._models import (
     SimpleGraph,
     VertexMappingPair,
 )
+from jacobian.math.graphs.values import ColoredUndirectedGraph
 
 
 def _build_graph(graph: SimpleGraph) -> nx.Graph[int] | nx.DiGraph[int]:
@@ -76,15 +77,22 @@ def compute_colored_graph_canonicalization(
 ) -> ColoredGraphCanonicalizationResult:
     """Return the exact canonical form for one admitted request.
 
-    This is the shared request-accepting implementation: ``math.run`` parses
-    and admits the typed request once, and the native
-    ``canonicalize_colored_graph`` entry point validates its value by
-    constructing this same request before delegating here.
+    ``math.run`` parses and admits the typed request before calling this thin
+    adapter. Native callers use the same typed kernel after owner-local
+    admission without constructing a wire request.
     """
 
-    canonical_graph, relabeling = canonicalize_colored_graph_data(request.colored_graph)
+    return canonicalize_colored_graph_kernel(request.colored_graph)
+
+
+def canonicalize_colored_graph_kernel(
+    graph: ColoredUndirectedGraph,
+) -> ColoredGraphCanonicalizationResult:
+    """Construct the exact canonical value from one admitted graph value."""
+
+    canonical_graph, relabeling = canonicalize_colored_graph_data(graph)
     return ColoredGraphCanonicalizationResult(
-        source_graph=request.colored_graph,
+        source_graph=graph,
         canonical_graph=canonical_graph,
         relabeling=tuple(
             GraphRelabelingPair(source_vertex=source, canonical_vertex=target)

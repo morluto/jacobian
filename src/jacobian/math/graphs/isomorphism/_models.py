@@ -9,14 +9,11 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.isomorphism._canonicalization import (
-    MAX_CANONICAL_PERMUTATIONS,
-    MAX_CANONICAL_REPLAY_WORK,
-    MAX_CANONICALIZATION_RESULT_BYTES,
     apply_colored_graph_relabeling,
-    canonical_permutation_count,
-    canonical_replay_work,
-    canonicalization_result_wire_bytes,
     canonicalize_colored_graph_data,
+)
+from jacobian.math.graphs.isomorphism._canonicalization_bounds import (
+    require_admitted_colored_graph_canonicalization,
 )
 from jacobian.math.graphs.values import ColoredUndirectedGraph, GraphVertexLabel
 
@@ -134,27 +131,7 @@ class ColoredGraphCanonicalizationRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_canonicalization(self) -> Self:
-        candidate_count = canonical_permutation_count(self.colored_graph)
-        if candidate_count > MAX_CANONICAL_PERMUTATIONS:
-            raise PydanticCustomError(
-                "graph.colored_canonicalization_exceeds_max_canonical_permutations_permutatio",
-                "colored-graph canonicalization exceeds the "
-                f"{MAX_CANONICAL_PERMUTATIONS}-permutation bound",
-            )
-        replay_work = canonical_replay_work(self.colored_graph)
-        if replay_work > MAX_CANONICAL_REPLAY_WORK:
-            raise PydanticCustomError(
-                "graph.colored_canonicalization_exceeds_max_canonical_replay_work",
-                "colored-graph canonicalization exceeds the "
-                f"{MAX_CANONICAL_REPLAY_WORK}-unit execution-and-replay work bound",
-            )
-        result_bytes = canonicalization_result_wire_bytes(self.colored_graph)
-        if result_bytes > MAX_CANONICALIZATION_RESULT_BYTES:
-            raise PydanticCustomError(
-                "graph.colored_canonicalization_exceeds_max_canonicalization_result_bytes",
-                "colored-graph canonicalization exceeds the "
-                f"{MAX_CANONICALIZATION_RESULT_BYTES}-byte result bound",
-            )
+        require_admitted_colored_graph_canonicalization(self.colored_graph)
         return self
 
 
@@ -191,7 +168,7 @@ class ColoredGraphCanonicalizationResult(StrictModel):
 
     @model_validator(mode="after")
     def require_exact_source_bound_canonical_form(self) -> Self:
-        ColoredGraphCanonicalizationRequest(colored_graph=self.source_graph)
+        require_admitted_colored_graph_canonicalization(self.source_graph)
         if tuple(item.source_vertex for item in self.relabeling) != (
             self.source_graph.graph.vertices
         ):

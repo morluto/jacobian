@@ -14,6 +14,7 @@ from jacobian.math.delta_matroids.values import (
     MAX_DELTA_LABEL_BYTES,
     MAX_DELTA_MEMBERSHIPS,
     MAX_DELTA_RESULT_BYTES,
+    DeltaMatroidAdmissionError,
     DeltaMatroidObstruction,
     FiniteDeltaMatroid,
     canonical_feasible_rows,
@@ -70,7 +71,10 @@ class DeltaMatroidFromFeasibleSetsRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_exchange_replay(self) -> Self:
-        require_delta_matroid_admission(self.system)
+        try:
+            require_delta_matroid_admission(self.system)
+        except DeltaMatroidAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         return self
 
 
@@ -84,7 +88,10 @@ class DeltaMatroidRecognitionResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_result_to_complete_source_replay(self) -> Self:
-        require_delta_matroid_admission(self.source)
+        try:
+            require_delta_matroid_admission(self.source)
+        except DeltaMatroidAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         expected_obstruction = first_symmetric_exchange_obstruction(self.source)
         if expected_obstruction is None:
             if self.status != "DELTA_MATROID":

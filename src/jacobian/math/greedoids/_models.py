@@ -23,6 +23,14 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"greedoid.{reason}", message)
 
 
+class GreedoidAdmissionError(ValueError):
+    """Native admission failure for greedoid operations."""
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 def require_bounded_carrier(system: FiniteFeasibleSetSystem) -> None:
     """Bound the greedoid execution envelope before any kernel expands.
 
@@ -31,12 +39,12 @@ def require_bounded_carrier(system: FiniteFeasibleSetSystem) -> None:
     """
 
     if len(system.ground) > MAX_GROUND_SIZE:
-        raise _validation_error(
+        raise GreedoidAdmissionError(
             "ground_size_exceeds_budget",
             f"ground size exceeds the bounded budget of {MAX_GROUND_SIZE} elements",
         )
     if len(system.feasible) > MAX_FEASIBLE_COUNT:
-        raise _validation_error(
+        raise GreedoidAdmissionError(
             "feasible_count_exceeds_budget",
             f"feasible-set count exceeds the bounded budget of "
             f"{MAX_FEASIBLE_COUNT} rows",
@@ -50,7 +58,10 @@ class RecognizeRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_system(self) -> Self:
-        require_bounded_carrier(self.system)
+        try:
+            require_bounded_carrier(self.system)
+        except GreedoidAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         return self
 
 
@@ -94,7 +105,10 @@ class RankRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_subset(self) -> Self:
-        require_bounded_carrier(self.system)
+        try:
+            require_bounded_carrier(self.system)
+        except GreedoidAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         if self.subset is not None:
             n = len(self.system.ground)
             if len(set(self.subset)) != len(self.subset):
@@ -123,7 +137,10 @@ class BasesRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_subset(self) -> Self:
-        require_bounded_carrier(self.system)
+        try:
+            require_bounded_carrier(self.system)
+        except GreedoidAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         if self.subset is not None:
             n = len(self.system.ground)
             if len(set(self.subset)) != len(self.subset):
@@ -152,7 +169,10 @@ class BasicWordProfileRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_system(self) -> Self:
-        require_bounded_carrier(self.system)
+        try:
+            require_bounded_carrier(self.system)
+        except GreedoidAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         return self
 
 
@@ -184,7 +204,10 @@ class ConvexGeometryRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_system(self) -> Self:
-        require_bounded_carrier(self.system)
+        try:
+            require_bounded_carrier(self.system)
+        except GreedoidAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         return self
 
 

@@ -22,6 +22,14 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"delta_matroid.{reason}", message)
 
 
+class DeltaMatroidAdmissionError(ValueError):
+    """Native admission failure for delta-matroid operations."""
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 class DeltaMatroidObstruction(StrictModel):
     """The first exact obstruction to a complete feasible family."""
 
@@ -96,7 +104,7 @@ def require_delta_matroid_admission(system: FiniteFeasibleSetSystem) -> None:
 
     memberships = sum(len(row) for row in system.feasible)
     if memberships > MAX_DELTA_MEMBERSHIPS:
-        raise _validation_error(
+        raise DeltaMatroidAdmissionError(
             "memberships_exceeded",
             "delta-matroid feasible-family memberships exceed the "
             f"{MAX_DELTA_MEMBERSHIPS}-entry envelope",
@@ -104,12 +112,12 @@ def require_delta_matroid_admission(system: FiniteFeasibleSetSystem) -> None:
     try:
         label_bytes = sum(len(label.encode("utf-8")) for label in system.ground)
     except UnicodeEncodeError:
-        raise _validation_error(
+        raise DeltaMatroidAdmissionError(
             "labels_not_utf8",
             "delta-matroid ground labels must be UTF-8-representable",
         ) from None
     if label_bytes > MAX_DELTA_LABEL_BYTES:
-        raise _validation_error(
+        raise DeltaMatroidAdmissionError(
             "label_bytes_exceeded",
             "delta-matroid ground labels exceed the "
             f"{MAX_DELTA_LABEL_BYTES}-byte envelope",
@@ -118,7 +126,7 @@ def require_delta_matroid_admission(system: FiniteFeasibleSetSystem) -> None:
     # envelope bounds the row count and keeps this ordered-pair scan bounded.
     _, candidate_space = _exchange_work(canonical_feasible_rows(system))
     if candidate_space > MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS:
-        raise _validation_error(
+        raise DeltaMatroidAdmissionError(
             "candidate_work_exceeded",
             "delta-matroid symmetric-exchange candidate checks exceed the "
             f"{MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS}-check envelope",
@@ -127,7 +135,7 @@ def require_delta_matroid_admission(system: FiniteFeasibleSetSystem) -> None:
     # result carries the source and one bounded obstruction.  The factor and
     # fixed headroom cover both public shapes without expanding a new family.
     if 2 * _wire_size(system) + 4_096 > MAX_DELTA_RESULT_BYTES:
-        raise _validation_error(
+        raise DeltaMatroidAdmissionError(
             "result_bytes_exceeded",
             "delta-matroid recognition result exceeds the "
             f"{MAX_DELTA_RESULT_BYTES}-byte envelope",
@@ -178,7 +186,10 @@ class FiniteDeltaMatroid(StrictModel):
     @model_validator(mode="after")
     def require_complete_canonical_delta_matroid(self) -> Self:
         system = FiniteFeasibleSetSystem(ground=self.ground, feasible=self.feasible)
-        require_delta_matroid_admission(system)
+        try:
+            require_delta_matroid_admission(system)
+        except DeltaMatroidAdmissionError as exc:
+            raise _validation_error(exc.reason, str(exc)) from None
         expected_rows = canonical_feasible_rows(system)
         if self.feasible != expected_rows:
             raise _validation_error(

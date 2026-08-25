@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
@@ -61,6 +62,10 @@ def _polynomial_total_degree(polynomial: RationalPolynomial) -> int:
     )
 
 
+def _validation_error(message: str) -> PydanticCustomError:
+    return PydanticCustomError("polynomial.invariant", message)
+
+
 class PolynomialPairRequest(StrictModel):
     """Two polynomials in one identical declared rational polynomial ring."""
 
@@ -70,7 +75,7 @@ class PolynomialPairRequest(StrictModel):
     @model_validator(mode="after")
     def require_matching_rings(self) -> Self:
         if self.left.variables != self.right.variables:
-            raise ValueError("polynomials must use the same ordered variables")
+            raise _validation_error("polynomials must use the same ordered variables")
         return self
 
 
@@ -78,7 +83,9 @@ class PolynomialGcdRequest(PolynomialPairRequest):
     @model_validator(mode="after")
     def require_univariate_budget(self) -> Self:
         if len(self.left.variables) != 1:
-            raise ValueError("Bézout GCD currently supports one variable over QQ")
+            raise _validation_error(
+                "Bézout GCD currently supports one variable over QQ"
+            )
         for polynomial in (self.left, self.right):
             require_polynomial_budget(
                 polynomial,
@@ -93,7 +100,9 @@ class PolynomialGcdRequest(PolynomialPairRequest):
         left_zero = len(self.left.polynomial.terms) == 0
         right_zero = len(self.right.polynomial.terms) == 0
         if left_zero and right_zero:
-            raise ValueError("gcd(0, 0) is undefined: zero has no monic normalization")
+            raise _validation_error(
+                "gcd(0, 0) is undefined: zero has no monic normalization"
+            )
         return self
 
 
@@ -114,7 +123,9 @@ class PolynomialResultantRequest(PolynomialPairRequest):
     @model_validator(mode="after")
     def require_elimination_budget(self) -> Self:
         if self.elimination_variable not in self.left.variables:
-            raise ValueError("elimination variable must belong to the declared ring")
+            raise _validation_error(
+                "elimination variable must belong to the declared ring"
+            )
         for polynomial in (self.left, self.right):
             require_polynomial_budget(
                 polynomial,
@@ -126,7 +137,7 @@ class PolynomialResultantRequest(PolynomialPairRequest):
             self.right, variable_index
         )
         if degree_sum > _MAX_ELIMINATION_DEGREE_SUM:
-            raise ValueError("Sylvester degree exceeds the resultant budget")
+            raise _validation_error("Sylvester degree exceeds the resultant budget")
         return self
 
 
@@ -137,7 +148,9 @@ class PolynomialDiscriminantRequest(StrictModel):
     @model_validator(mode="after")
     def require_discriminant_budget(self) -> Self:
         if self.variable not in self.polynomial.variables:
-            raise ValueError("discriminant variable must belong to the declared ring")
+            raise _validation_error(
+                "discriminant variable must belong to the declared ring"
+            )
         require_polynomial_budget(
             self.polynomial,
             maximum_terms=_MAX_INVARIANT_TERMS,
@@ -145,7 +158,9 @@ class PolynomialDiscriminantRequest(StrictModel):
         )
         variable_index = self.polynomial.variables.index(self.variable)
         if _degree(self.polynomial, variable_index) > _MAX_DISCRIMINANT_DEGREE:
-            raise ValueError("main-variable degree exceeds the discriminant budget")
+            raise _validation_error(
+                "main-variable degree exceeds the discriminant budget"
+            )
         return self
 
 
@@ -223,14 +238,18 @@ class PolynomialSquareFreeDecompositionResult(StrictModel):
 
         multiplicities = tuple(factor.multiplicity for factor in self.factors)
         if multiplicities != tuple(sorted(multiplicities)):
-            raise ValueError("square-free factors must be ordered by multiplicity")
+            raise _validation_error(
+                "square-free factors must be ordered by multiplicity"
+            )
         if len(set(multiplicities)) != len(multiplicities):
-            raise ValueError("each multiplicity must have one square-free factor")
+            raise _validation_error(
+                "each multiplicity must have one square-free factor"
+            )
         if any(
             factor.factor.variables != self.reconstructed.variables
             for factor in self.factors
         ):
-            raise ValueError("square-free factors must use the source ring")
+            raise _validation_error("square-free factors must use the source ring")
         require_polynomial_budget(
             self.polynomial,
             maximum_terms=_MAX_GCD_TERMS,
@@ -245,7 +264,9 @@ class PolynomialSquareFreeDecompositionResult(StrictModel):
         )
         source = rational_polynomial_to_sympy(self.polynomial)
         if rational_polynomial_to_sympy(self.reconstructed) != source:
-            raise ValueError("reconstructed must equal the retained source polynomial")
+            raise _validation_error(
+                "reconstructed must equal the retained source polynomial"
+            )
         _verify_exact_factor_product(
             source,
             self.factors,
@@ -269,7 +290,9 @@ class PolynomialFactorRequest(StrictModel):
     @model_validator(mode="after")
     def require_univariate_factor_budget(self) -> Self:
         if len(self.polynomial.variables) != 1:
-            raise ValueError("factorization currently supports one variable over QQ")
+            raise _validation_error(
+                "factorization currently supports one variable over QQ"
+            )
         require_polynomial_budget(
             self.polynomial,
             maximum_terms=_MAX_GCD_TERMS,
@@ -315,12 +338,14 @@ class PolynomialFactorizationResult(StrictModel):
         )
 
         if len(self.polynomial.variables) != 1:
-            raise ValueError("factorization currently supports one variable over QQ")
+            raise _validation_error(
+                "factorization currently supports one variable over QQ"
+            )
         if any(
             factor.factor.variables != self.reconstructed.variables
             for factor in self.factors
         ):
-            raise ValueError("irreducible factors must use the source ring")
+            raise _validation_error("irreducible factors must use the source ring")
         ordered = tuple(
             sorted(
                 self.factors,
@@ -345,7 +370,7 @@ class PolynomialFactorizationResult(StrictModel):
             )
         )
         if self.factors != ordered:
-            raise ValueError(
+            raise _validation_error(
                 "irreducible factors must be ordered by multiplicity, degree, "
                 "and sparse term fingerprint"
             )
@@ -363,7 +388,9 @@ class PolynomialFactorizationResult(StrictModel):
         )
         source = rational_polynomial_to_sympy(self.polynomial)
         if rational_polynomial_to_sympy(self.reconstructed) != source:
-            raise ValueError("reconstructed must equal the retained source polynomial")
+            raise _validation_error(
+                "reconstructed must equal the retained source polynomial"
+            )
         _verify_exact_factor_product(
             source,
             self.factors,
@@ -440,13 +467,13 @@ def _require_bounded_replay_step(
     if box_bound < support_bound:
         support_bound = box_bound
     if support_bound > _MAX_REPLAY_INTERMEDIATE_TERMS:
-        raise ValueError(
+        raise _validation_error(
             f"{label} factor replay would materialize more than "
             f"{_MAX_REPLAY_INTERMEDIATE_TERMS} intermediate terms"
         )
     work += step_work
     if work > _MAX_REPLAY_WORK:
-        raise ValueError(
+        raise _validation_error(
             f"{label} factor replay exceeds the "
             f"{_MAX_REPLAY_WORK}-operation reconstruction budget"
         )
@@ -482,13 +509,13 @@ def _validated_replay_records(
             label=f"{label} factor",
         )
         if _polynomial_total_degree(record.factor) == 0:
-            raise ValueError(f"{label} factor must be non-constant")
+            raise _validation_error(f"{label} factor must be non-constant")
         base = rational_polynomial_to_sympy(record.factor)
         if base.LC() != 1:
-            raise ValueError(mismatch_message)
+            raise _validation_error(mismatch_message)
         key = _canonical_poly_key(base)
         if key in seen:
-            raise ValueError(mismatch_message)
+            raise _validation_error(mismatch_message)
         seen.add(key)
         claimed.append((base, record.multiplicity))
     return claimed
@@ -516,11 +543,11 @@ def _require_disjoint_square_free_parts(
                 partial if derivative_gcd is None else derivative_gcd.gcd(partial)
             )
         if derivative_gcd is not None and not base.gcd(derivative_gcd).is_one:
-            raise ValueError(mismatch_message)
+            raise _validation_error(mismatch_message)
     for index, (base, _) in enumerate(claimed):
         for other, _ in claimed[index + 1 :]:
             if not base.gcd(other).is_one:
-                raise ValueError(mismatch_message)
+                raise _validation_error(mismatch_message)
 
 
 def _verify_exact_factor_product(
@@ -567,7 +594,7 @@ def _verify_exact_factor_product(
     from sympy import Poly, Rational
 
     if coefficient.as_fraction() == 0 and factors:
-        raise ValueError("results with zero content retain no factors")
+        raise _validation_error("results with zero content retain no factors")
     claimed = _validated_replay_records(
         factors,
         mismatch_message=mismatch_message,
@@ -593,13 +620,13 @@ def _verify_exact_factor_product(
             accumulated, power, work, label=label
         )
     if accumulated != source:
-        raise ValueError(mismatch_message)
+        raise _validation_error(mismatch_message)
     if require_square_free_parts:
         _require_disjoint_square_free_parts(claimed, mismatch_message=mismatch_message)
         return
     for base, _ in claimed:
         if not base.is_irreducible:
-            raise ValueError(mismatch_message)
+            raise _validation_error(mismatch_message)
 
 
 class PolynomialGroebnerBudget(StrictModel):
@@ -621,9 +648,11 @@ class PolynomialGroebnerBasisRequest(StrictModel):
     def require_groebner_budget(self) -> Self:
         variables = self.generators[0].variables
         if any(generator.variables != variables for generator in self.generators):
-            raise ValueError("all ideal generators must use the same ordered ring")
+            raise _validation_error(
+                "all ideal generators must use the same ordered ring"
+            )
         if sum(len(generator.polynomial.terms) for generator in self.generators) > 256:
-            raise ValueError("ideal generators exceed the aggregate term budget")
+            raise _validation_error("ideal generators exceed the aggregate term budget")
         for generator in self.generators:
             require_polynomial_budget(
                 generator,
@@ -633,7 +662,7 @@ class PolynomialGroebnerBasisRequest(StrictModel):
                 label="ideal generator",
             )
             if any(sum(term.exponents) > 12 for term in generator.polynomial.terms):
-                raise ValueError("ideal generator exceeds total degree 12")
+                raise _validation_error("ideal generator exceeds total degree 12")
         return self
 
 
@@ -650,9 +679,11 @@ class PolynomialGroebnerBasisResult(StrictModel):
     @model_validator(mode="after")
     def require_canonical_basis_ring(self) -> Self:
         if any(polynomial.variables != self.variables for polynomial in self.basis):
-            raise ValueError("every basis polynomial must use the declared ring")
+            raise _validation_error("every basis polynomial must use the declared ring")
         if sum(len(polynomial.polynomial.terms) for polynomial in self.basis) > 1024:
-            raise ValueError("Gröbner basis exceeds the aggregate output term limit")
+            raise _validation_error(
+                "Gröbner basis exceeds the aggregate output term limit"
+            )
         return self
 
 
@@ -668,12 +699,12 @@ class IntegerPolynomial(StrictModel):
     @model_validator(mode="after")
     def require_canonical_coefficients(self) -> Self:
         if len(self.coefficients) > 1 and self.coefficients[0] == "0":
-            raise ValueError("leading zero coefficients must be omitted")
+            raise _validation_error("leading zero coefficients must be omitted")
         if any(
             len(coefficient.lstrip("-")) > MAX_CANONICAL_RATIONAL_DIGITS
             for coefficient in self.coefficients
         ):
-            raise ValueError(
+            raise _validation_error(
                 "integer coefficient exceeds the shared representation limit"
             )
         return self
@@ -681,12 +712,14 @@ class IntegerPolynomial(StrictModel):
 
 def _require_integer_polynomial_budget(polynomial: IntegerPolynomial) -> None:
     if len(polynomial.coefficients) > _MAX_ELEMENTARY_DEGREE + 1:
-        raise ValueError("integer polynomial exceeds the degree-127 operation budget")
+        raise _validation_error(
+            "integer polynomial exceeds the degree-127 operation budget"
+        )
     if any(
         len(coefficient.lstrip("-")) > _MAX_INTEGER_COEFFICIENT_DIGITS
         for coefficient in polynomial.coefficients
     ):
-        raise ValueError("integer coefficient exceeds the decimal-digit budget")
+        raise _validation_error("integer coefficient exceeds the decimal-digit budget")
 
 
 class IntegerPolynomialRequest(StrictModel):
@@ -747,7 +780,7 @@ class IntegerPolynomialEvaluationRequest(IntegerPolynomialRequest):
     @model_validator(mode="after")
     def require_bounded_point(self) -> Self:
         if len(self.point.lstrip("-")) > _MAX_INTEGER_COEFFICIENT_DIGITS:
-            raise ValueError("evaluation point exceeds the decimal-digit budget")
+            raise _validation_error("evaluation point exceeds the decimal-digit budget")
         return self
 
 
@@ -767,7 +800,7 @@ class IntegerPolynomialCompositionRequest(StrictModel):
         outer_degree = len(self.outer.coefficients) - 1
         inner_degree = len(self.inner.coefficients) - 1
         if outer_degree * inner_degree > _MAX_ELEMENTARY_DEGREE:
-            raise ValueError("composition exceeds the degree-127 output budget")
+            raise _validation_error("composition exceeds the degree-127 output budget")
         return self
 
 
@@ -781,7 +814,9 @@ class RationalPolynomialRequest(StrictModel):
     @model_validator(mode="after")
     def require_univariate_budget(self) -> Self:
         if len(self.polynomial.variables) != 1:
-            raise ValueError("elementary polynomial operations require one variable")
+            raise _validation_error(
+                "elementary polynomial operations require one variable"
+            )
         require_polynomial_budget(
             self.polynomial,
             maximum_terms=_MAX_GCD_TERMS,
@@ -794,9 +829,9 @@ class RationalPolynomialDivisionRequest(PolynomialPairRequest):
     @model_validator(mode="after")
     def require_division_budget(self) -> Self:
         if len(self.left.variables) != 1:
-            raise ValueError("polynomial division requires one variable")
+            raise _validation_error("polynomial division requires one variable")
         if not self.right.polynomial.terms:
-            raise ValueError("divisor polynomial must be nonzero")
+            raise _validation_error("divisor polynomial must be nonzero")
         for polynomial in (self.left, self.right):
             require_polynomial_budget(
                 polynomial,
@@ -837,11 +872,11 @@ class RationalFunctionRequest(StrictModel):
     @model_validator(mode="after")
     def require_matching_univariate_ring_and_budget(self) -> Self:
         if self.numerator.variables != self.denominator.variables:
-            raise ValueError("numerator and denominator must use the same ring")
+            raise _validation_error("numerator and denominator must use the same ring")
         if len(self.numerator.variables) != 1:
-            raise ValueError("partial fractions require one variable")
+            raise _validation_error("partial fractions require one variable")
         if not self.denominator.polynomial.terms:
-            raise ValueError("denominator polynomial must be nonzero")
+            raise _validation_error("denominator polynomial must be nonzero")
         for polynomial in (self.numerator, self.denominator):
             require_polynomial_budget(
                 polynomial,

@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 from pydantic import ValidationError
+from tests.math._analysis_support import analysis_validation_error
 
 from jacobian.math.analysis._models import (
     DyadicClosedInterval,
@@ -258,7 +259,7 @@ def test_source_bound_result_round_trips_and_rejects_mutated_partial() -> None:
     )
     payload = deepcopy(payload)
     payload["hessian"][0]["enclosure"]["lower"] = {"mantissa": "0", "exponent": 0}
-    with pytest.raises(ValidationError, match="does not replay"):
+    with analysis_validation_error():
         IntervalExpressionSecondJetEnclosureResult.model_validate(payload)
 
 
@@ -336,7 +337,7 @@ def test_full_box_affine_jet_encloses_all_eight_variables() -> None:
 def test_work_budget_scales_with_the_jet_dimension() -> None:
     box = tuple((variable, Fraction(2), Fraction(3)) for variable in "abcdefgh")
     wide_tree = _balanced_binary_tree("div", tuple("abcdefgh"))
-    with pytest.raises(ValidationError, match="exceeds its"):
+    with analysis_validation_error():
         _request(wide_tree, box)
 
     narrow_box = (

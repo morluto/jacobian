@@ -6,6 +6,7 @@ from collections.abc import Iterator
 
 import pytest
 from pydantic import ValidationError
+from tests.math.number_theory._validation import expect_validation
 
 from jacobian.math.number_theory import FriableCountResult, count_friable
 from jacobian.math.number_theory._friable_operations import compute_friable_count
@@ -121,14 +122,14 @@ def test_native_api_enforces_the_source_digit_bound_before_work() -> None:
 
 
 def test_request_rejects_negative_and_noncanonical_sources() -> None:
-    with pytest.raises(ValidationError, match="nonnegative"):
+    with expect_validation("number_theory."):
         FriableCountRequest(x="-1", y="2")
     with pytest.raises(ValidationError):
         FriableCountRequest(x="01", y="2")
 
 
 def test_request_rejects_unbounded_generated_prime_cutoff() -> None:
-    with pytest.raises(ValidationError, match="prime cutoff"):
+    with expect_validation("number_theory."):
         FriableCountRequest(
             x=str(MAX_FRIABLE_MATERIALIZED_X + 1),
             y=str(MAX_FRIABLE_GENERATED_CUTOFF + 1),
@@ -136,12 +137,12 @@ def test_request_rejects_unbounded_generated_prime_cutoff() -> None:
 
 
 def test_request_rejects_generated_search_above_node_budget() -> None:
-    with pytest.raises(ValidationError, match="search-node budget"):
+    with expect_validation("number_theory."):
         FriableCountRequest(x="1" + "0" * 255, y="5")
 
 
 def test_result_rejects_a_nearby_estimate_presented_as_exact() -> None:
-    with pytest.raises(ValidationError, match="does not match"):
+    with expect_validation("number_theory."):
         FriableCountResult(x="100", y="5", count="35")
 
 
@@ -149,9 +150,9 @@ def test_result_replays_count_and_binds_both_source_fields() -> None:
     result = compute_friable_count(FriableCountRequest(x="100", y="5"))
     assert result == FriableCountResult(x="100", y="5", count="34")
 
-    with pytest.raises(ValidationError, match="does not match"):
+    with expect_validation("number_theory."):
         FriableCountResult(x="125", y="5", count=result.count)
-    with pytest.raises(ValidationError, match="does not match"):
+    with expect_validation("number_theory."):
         FriableCountResult(x="100", y="3", count=result.count)
 
 

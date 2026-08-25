@@ -39,8 +39,12 @@ class TestSetFunctionEval:
         import pytest
         from pydantic import ValidationError
 
-        with pytest.raises(ValidationError, match="unique"):
+        with pytest.raises(ValidationError) as error:
             SetFunctionEvalRequest(function=_make_uniform_function(1), subset=(0, 0))
+        assert (
+            error.value.errors()[0]["type"]
+            == "submodular_opt.subset_elements_not_unique"
+        )
 
 
 class TestMonotonicity:
@@ -54,7 +58,7 @@ class TestMonotonicity:
         import pytest
         from pydantic import ValidationError
 
-        with pytest.raises(ValidationError, match="exactly one value per subset"):
+        with pytest.raises(ValidationError) as error:
             SetFunction(
                 ground_set_size=2,
                 entries=(
@@ -65,6 +69,10 @@ class TestMonotonicity:
                     ),
                 ),
             )
+        assert (
+            error.value.errors()[0]["type"]
+            == "submodular_opt.table_entry_count_mismatch"
+        )
 
 
 class TestSubmodularity:
@@ -194,8 +202,12 @@ class TestKernelEquivalence:
                     value={"num": "9" * 90, "den": "1"},
                 )
             )
-        with pytest.raises(ValidationError, match="transport envelope"):
+        with pytest.raises(ValidationError) as error:
             SetFunction(ground_set_size=16, entries=tuple(entries))
+        assert (
+            error.value.errors()[0]["type"]
+            == "submodular_opt.table_transport_envelope_exceeded"
+        )
 
 
 def test_value_height_bound_keeps_scan_work_small() -> None:
@@ -206,14 +218,20 @@ def test_value_height_bound_keeps_scan_work_small() -> None:
 
     wide_empty = SetFunctionEntry(subset=(), value={"num": "9" * 129, "den": "1"})
     wide_full = SetFunctionEntry(subset=(0,), value={"num": "9" * 129, "den": "1"})
-    with pytest.raises(ValidationError, match="128-digit"):
+    with pytest.raises(ValidationError) as error:
         MonotonicityCheckRequest(
             function=SetFunction(ground_set_size=1, entries=(wide_empty, wide_full))
         )
-    with pytest.raises(ValidationError, match="128-digit"):
+    assert (
+        error.value.errors()[0]["type"] == "submodular_opt.scan_value_height_exceeded"
+    )
+    with pytest.raises(ValidationError) as error:
         SubmodularityCheckRequest(
             function=SetFunction(ground_set_size=1, entries=(wide_empty, wide_full))
         )
+    assert (
+        error.value.errors()[0]["type"] == "submodular_opt.scan_value_height_exceeded"
+    )
 
     narrow = SetFunctionEntry(subset=(0,), value={"num": "9" * 128, "den": "1"})
     # Exactly-128-digit values are admitted and the scan completes normally.

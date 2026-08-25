@@ -23,6 +23,10 @@ from jacobian.math.regular_languages.operations import (
 from jacobian.math.regular_languages.values import DFA, DFATransition
 
 
+def _error_type(exc_info: pytest.ExceptionInfo[ValidationError]) -> str:
+    return str(exc_info.value.errors()[0]["type"])
+
+
 def _dfa_ends_in_1() -> DFA:
     return DFA(
         state_count=2,
@@ -163,14 +167,16 @@ def test_run_and_count_results_reject_detached_conclusions() -> None:
     run = compute_run(RunRequest(dfa=dfa, word=(1, 0, 1)))
     run_payload = run.model_dump()
     run_payload["accepted"] = False
-    with pytest.raises(ValidationError, match="acceptance"):
+    with pytest.raises(ValidationError) as exc_info:
         type(run).model_validate(run_payload)
+    assert _error_type(exc_info) == "regular_language.acceptance_mismatch"
 
     count = compute_count(CountRequest(dfa=dfa, word_length=3))
     count_payload = count.model_dump()
     count_payload["count"] = "5"
-    with pytest.raises(ValidationError, match="not bound"):
+    with pytest.raises(ValidationError) as exc_info:
         type(count).model_validate(count_payload)
+    assert _error_type(exc_info) == "regular_language.count_not_bound"
 
 
 def test_native_kernels_are_typed_and_consistent() -> None:
@@ -203,7 +209,7 @@ def test_complement_double_complement_is_identity() -> None:
 
 
 def test_contract_rejects_duplicate_transitions() -> None:
-    with pytest.raises(ValidationError, match="deterministic"):
+    with pytest.raises(ValidationError) as exc_info:
         DFA(
             state_count=2,
             alphabet_size=2,
@@ -214,10 +220,11 @@ def test_contract_rejects_duplicate_transitions() -> None:
             initial_state=0,
             accepting_states=(1,),
         )
+    assert _error_type(exc_info) == "regular_language.dfa_not_deterministic"
 
 
 def test_contract_rejects_invalid_accepting_states() -> None:
-    with pytest.raises(ValidationError, match="accepting"):
+    with pytest.raises(ValidationError) as exc_info:
         DFA(
             state_count=2,
             alphabet_size=2,
@@ -230,18 +237,20 @@ def test_contract_rejects_invalid_accepting_states() -> None:
             initial_state=0,
             accepting_states=(5,),  # out of range
         )
+    assert _error_type(exc_info) == "regular_language.accepting_state_out_of_range"
 
 
 def test_contract_rejects_out_of_range_word_symbol() -> None:
     dfa = _dfa_ends_in_1()
-    with pytest.raises(ValidationError, match="word symbols"):
+    with pytest.raises(ValidationError) as exc_info:
         RunRequest(dfa=dfa, word=(5,))  # symbol 5 is out of range for alphabet_size=2
+    assert _error_type(exc_info) == "regular_language.word_symbol_out_of_range"
 
 
 def test_contract_rejects_non_total_dfa() -> None:
     """A DFA missing a transition for some (state, symbol) pair must be rejected."""
 
-    with pytest.raises(ValidationError, match="total"):
+    with pytest.raises(ValidationError) as exc_info:
         DFA(
             state_count=2,
             alphabet_size=2,
@@ -254,12 +263,13 @@ def test_contract_rejects_non_total_dfa() -> None:
             initial_state=0,
             accepting_states=(1,),
         )
+    assert _error_type(exc_info) == "regular_language.dfa_not_total"
 
 
 def test_contract_rejects_review_missing_edge_example() -> None:
     """The reviewed one-state example must fail validation, not self-loop."""
 
-    with pytest.raises(ValidationError, match="total"):
+    with pytest.raises(ValidationError) as exc_info:
         DFA(
             state_count=1,
             alphabet_size=1,
@@ -267,3 +277,4 @@ def test_contract_rejects_review_missing_edge_example() -> None:
             initial_state=0,
             accepting_states=(0,),
         )
+    assert _error_type(exc_info) == "regular_language.dfa_not_total"

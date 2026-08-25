@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
@@ -21,6 +22,10 @@ MAX_PERIOD = 50
 Symbol = Annotated[str, Field(min_length=1, max_length=MAX_SYMBOL_LENGTH)]
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"symbolic_dynamics.{reason}", message)
+
+
 class ForbiddenBlockShift(StrictModel):
     """A finite-alphabet shift specified by forbidden contiguous blocks."""
 
@@ -33,12 +38,20 @@ class ForbiddenBlockShift(StrictModel):
     @model_validator(mode="after")
     def require_bounded_words_over_distinct_alphabet(self) -> Self:
         if len(set(self.alphabet)) != len(self.alphabet):
-            raise ValueError("alphabet symbols must be distinct")
+            raise _validation_error(
+                "alphabet_symbols_not_distinct", "alphabet symbols must be distinct"
+            )
         for block in self.forbidden_blocks:
             if len(block) > MAX_FORBIDDEN_BLOCK_LENGTH:
-                raise ValueError("forbidden block exceeds the length bound")
+                raise _validation_error(
+                    "forbidden_block_length_bound",
+                    "forbidden block exceeds the length bound",
+                )
             if any(symbol not in self.alphabet for symbol in block):
-                raise ValueError("forbidden block uses a symbol outside the alphabet")
+                raise _validation_error(
+                    "forbidden_block_symbol_outside_alphabet",
+                    "forbidden block uses a symbol outside the alphabet",
+                )
         return self
 
 
@@ -54,13 +67,18 @@ class AdjacencyShift(StrictModel):
     def require_square_nonnegative_bounded_matrix(self) -> Self:
         size = len(self.matrix)
         if any(len(row) != size for row in self.matrix):
-            raise ValueError("adjacency matrix must be square")
+            raise _validation_error(
+                "adjacency_matrix_not_square", "adjacency matrix must be square"
+            )
         if any(
             entry < 0 or entry > MAX_ADJACENCY_ENTRY
             for row in self.matrix
             for entry in row
         ):
-            raise ValueError("adjacency entries must be within the supported bounds")
+            raise _validation_error(
+                "adjacency_entry_bound",
+                "adjacency entries must be within the supported bounds",
+            )
         return self
 
 
@@ -86,21 +104,33 @@ class BlockPresentation(StrictModel):
         if len(self.adjacency_matrix) != size or any(
             len(row) != size for row in self.adjacency_matrix
         ):
-            raise ValueError("presentation adjacency must match its state blocks")
+            raise _validation_error(
+                "presentation_adjacency_shape",
+                "presentation adjacency must match its state blocks",
+            )
         if any(len(block) != self.memory for block in self.state_blocks):
-            raise ValueError("presentation state blocks must match its memory")
+            raise _validation_error(
+                "presentation_state_block_memory",
+                "presentation state blocks must match its memory",
+            )
         if any(
             transition.source >= size
             or transition.target >= size
             or transition.appended_symbol not in self.alphabet
             for transition in self.transitions
         ):
-            raise ValueError("presentation transition is outside its carrier")
+            raise _validation_error(
+                "presentation_transition_outside_carrier",
+                "presentation transition is outside its carrier",
+            )
         counts = [[0] * size for _ in range(size)]
         for transition in self.transitions:
             counts[transition.source][transition.target] += 1
         if self.adjacency_matrix != tuple(tuple(row) for row in counts):
-            raise ValueError("presentation adjacency does not count its transitions")
+            raise _validation_error(
+                "presentation_adjacency_transition_count",
+                "presentation adjacency does not count its transitions",
+            )
         return self
 
 

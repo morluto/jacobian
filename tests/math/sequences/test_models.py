@@ -22,7 +22,7 @@ def test_integer_sequence_accepts_items_at_exact_digit_bound(sign: str) -> None:
 def test_integer_sequence_rejects_items_over_digit_bound(sign: str) -> None:
     value = sign + "1" * (MAX_INTEGER_SEQUENCE_ITEM_DIGITS + 1)
 
-    with pytest.raises(
-        ValidationError, match=r"sequence item exceeds the .*digit bound"
-    ):
+    with pytest.raises(ValidationError) as exc_info:
         IntegerSequenceRequest(values=(value,))
+
+    assert exc_info.value.errors()[0]["type"] == "sequences.item_too_large"

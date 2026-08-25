@@ -25,8 +25,9 @@ def _value(rational: int) -> RealQuadraticValue:
 def test_order_preflights_a_difference_that_cannot_be_returned() -> None:
     maximum_component = 10**256 - 1
 
-    with pytest.raises(ValidationError, match="difference exceeds the 256-digit"):
+    with pytest.raises(ValidationError) as error:
         RealQuadraticOrderRequest(
             left=_value(maximum_component),
             right=_value(-maximum_component),
         )
+    assert error.value.errors()[0]["type"] == "real_quadratic.difference_bound_exceeded"

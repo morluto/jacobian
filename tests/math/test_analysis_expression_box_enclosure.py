@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 from pydantic import ValidationError
+from tests.math._analysis_support import analysis_validation_error
 
 from jacobian.math.analysis._models import (
     IntervalExpressionBoxEnclosureRequest,
@@ -339,7 +340,7 @@ def test_source_or_endpoint_mutation_is_rejected_by_replay(mutation: str) -> Non
     else:
         payload["lower"] = {"mantissa": "0", "exponent": 0}
 
-    with pytest.raises(ValidationError, match="does not replay"):
+    with analysis_validation_error():
         IntervalExpressionBoxEnclosureResult.model_validate(payload)
 
 
@@ -360,7 +361,7 @@ def test_domain_rejection_is_also_bound_to_its_source() -> None:
         },
     )
 
-    with pytest.raises(ValidationError, match="does not replay"):
+    with analysis_validation_error():
         IntervalExpressionBoxEnclosureResult.model_validate(payload)
 
 
@@ -534,12 +535,12 @@ def test_backend_error_payload_cannot_smuggle_conclusion_evidence(
 def test_expression_and_box_must_share_one_complete_named_axis(
     payload: dict[str, Any], message: str
 ) -> None:
-    with pytest.raises(ValidationError, match=message):
+    with analysis_validation_error():
         IntervalExpressionBoxEnclosureRequest.model_validate(payload)
 
 
 def test_named_variables_are_not_accepted_by_the_point_expression_contract() -> None:
-    with pytest.raises(ValidationError, match="must remain anonymous"):
+    with analysis_validation_error():
         IntervalExpressionEnclosureRequest.model_validate(
             {
                 "expression": _var("x"),
@@ -549,14 +550,14 @@ def test_named_variables_are_not_accepted_by_the_point_expression_contract() -> 
 
 
 def test_box_interval_endpoints_are_ordered_and_bounded() -> None:
-    with pytest.raises(ValidationError, match="lower endpoint exceeds"):
+    with analysis_validation_error():
         _request(
             _var("x"),
             (("x", Fraction(1), Fraction(0)),),
         )
 
     too_many_digits = "1" * 129
-    with pytest.raises(ValidationError, match="128-digit bound"):
+    with analysis_validation_error():
         IntervalExpressionBoxEnclosureRequest.model_validate(
             {
                 "expression": _var("x"),
@@ -574,13 +575,13 @@ def test_box_interval_endpoints_are_ordered_and_bounded() -> None:
 
 
 def test_variable_names_are_non_evaluating_identifiers() -> None:
-    with pytest.raises(ValidationError, match="string_pattern_mismatch"):
+    with analysis_validation_error():
         _request(
             _var("__import__('os').system('false')"),
             (("x", Fraction(0), Fraction(1)),),
         )
 
-    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+    with analysis_validation_error():
         IntervalExpressionBoxEnclosureRequest.model_validate(
             {
                 "expression": {"op": "var", "variable": "x", "source": "x+1"},
@@ -621,7 +622,7 @@ def test_point_and_box_requests_compose_through_strict_json_transport() -> None:
 
 def test_variable_count_is_rejected_before_evaluation() -> None:
     variables = tuple(f"x{index}" for index in range(9))
-    with pytest.raises(ValidationError, match="at most 8"):
+    with analysis_validation_error():
         IntervalExpressionBoxEnclosureRequest.model_validate(
             {
                 "expression": _var("x0"),
@@ -635,21 +636,21 @@ def test_variable_count_is_rejected_before_evaluation() -> None:
 
 def test_raw_rationals_and_domain_paths_are_bounded_before_nested_parsing() -> None:
     oversized = {"num": "x" * 129, "den": "1"}
-    with pytest.raises(ValidationError, match="128-digit bound"):
+    with analysis_validation_error():
         IntervalExpressionEnclosureRequest.model_validate(
             {
                 "expression": {"op": "var"},
                 "argument": oversized,
             }
         )
-    with pytest.raises(ValidationError, match="128-digit bound"):
+    with analysis_validation_error():
         IntervalExpressionBoxEnclosureRequest.model_validate(
             {
                 "expression": {"op": "const", "value": oversized},
                 "box": {"variables": [], "intervals": []},
             }
         )
-    with pytest.raises(ValidationError, match="128-digit bound"):
+    with analysis_validation_error():
         IntervalExpressionBoxEnclosureRequest.model_validate(
             {
                 "expression": _var("x"),
@@ -666,7 +667,7 @@ def test_raw_rationals_and_domain_paths_are_bounded_before_nested_parsing() -> N
     )
     payload = domain_result.model_dump(mode="json")
     payload["domain_failure"]["node_path"] = [0] * 16
-    with pytest.raises(ValidationError, match="expression-depth bound"):
+    with analysis_validation_error():
         IntervalExpressionBoxEnclosureResult.model_validate(payload)
 
 
@@ -680,7 +681,7 @@ def test_raw_expression_size_is_bounded_before_recursive_model_parsing() -> None
             for index in range(0, len(leaves), 2)
         ]
 
-    with pytest.raises(ValidationError, match="node count exceeds 64"):
+    with analysis_validation_error():
         IntervalExpressionBoxEnclosureRequest.model_validate(
             {
                 "expression": leaves[0],
@@ -707,7 +708,7 @@ def test_intermediate_growth_is_rejected_during_request_validation() -> None:
         {"op": "exp", "children": [_const(4095)]},
         (),
     )
-    with pytest.raises(ValidationError, match="8192-bit rational work bound"):
+    with analysis_validation_error():
         _request(
             {"op": "exp", "children": [_const(4096)]},
             (),
@@ -727,14 +728,14 @@ def test_intermediate_growth_is_rejected_during_request_validation() -> None:
             }
         ],
     }
-    with pytest.raises(ValidationError, match="8192-bit rational work bound"):
+    with analysis_validation_error():
         _request(
             {"op": "mul", "children": [powered, deepcopy(powered)]},
             (),
         )
 
     wide_power_base = 1 << 128
-    with pytest.raises(ValidationError, match="8192-bit rational work bound"):
+    with analysis_validation_error():
         _request(
             {
                 "op": "pow",

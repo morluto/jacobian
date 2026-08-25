@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.polynomial_support_geometry.values import (
@@ -15,6 +16,10 @@ from jacobian.math.polynomials.values import (
     PolynomialVariable,
     RationalPolynomial,
 )
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"polynomial_support_geometry.{reason}", message)
 
 
 class SupportRequest(StrictModel):
@@ -46,8 +51,9 @@ class NewtonPolytopeRequest(StrictModel):
         # work conservatively small instead of admitting the full canonical
         # term budget.
         if len(self.polynomial.polynomial.terms) > MAX_NEWTON_TERMS:
-            raise ValueError(
-                f"Newton polytope requests are limited to {MAX_NEWTON_TERMS} terms"
+            raise _validation_error(
+                "newton_term_count_exceeded",
+                (f"Newton polytope requests are limited to {MAX_NEWTON_TERMS} terms"),
             )
         return self
 
@@ -62,12 +68,16 @@ def _require_transportable_weight(
     weight: tuple[int, ...], variables: tuple[PolynomialVariable, ...]
 ) -> None:
     if len(weight) != len(variables):
-        raise ValueError("weight vector length must match variable count")
+        raise _validation_error(
+            "weight_dimension_mismatch",
+            "weight vector length must match variable count",
+        )
     for component in weight:
         if abs(component) > MAX_WEIGHT_COMPONENT_MAGNITUDE:
-            raise ValueError(
+            raise _validation_error(
+                "weight_component_out_of_range",
                 "weight components exceed the transportable integer range "
-                f"(max {MAX_WEIGHT_COMPONENT_MAGNITUDE})"
+                f"(max {MAX_WEIGHT_COMPONENT_MAGNITUDE})",
             )
 
 
@@ -98,20 +108,27 @@ class WeightProfileRequest(StrictModel):
         # The empty support has no minimum weight; admit only polynomials
         # whose weight profile exists.
         if not self.polynomial.polynomial.terms:
-            raise ValueError(
-                "the zero polynomial has no weight profile; supply a nonzero polynomial"
+            raise _validation_error(
+                "zero_weight_profile",
+                (
+                    "the zero polynomial has no weight profile; supply a nonzero polynomial"
+                ),
             )
         # A degenerate weight repeats every exponent in the minimizing list
         # and again inside the single layer; cap the serialized profile so
         # it stays well inside the canonical output envelope.
         terms = self.polynomial.polynomial.terms
         if len(terms) > 1024:
-            raise ValueError("weight-profile requests are limited to 1024 terms")
+            raise _validation_error(
+                "weight_profile_term_count_exceeded",
+                "weight-profile requests are limited to 1024 terms",
+            )
         for term in terms:
             for component in (term.coefficient.num, term.coefficient.den):
                 if len(component.lstrip("-")) > 512:
-                    raise ValueError(
-                        "weight-profile coefficients are limited to 512 digits"
+                    raise _validation_error(
+                        "weight_profile_coefficient_too_large",
+                        ("weight-profile coefficients are limited to 512 digits"),
                     )
         return self
 
@@ -141,20 +158,27 @@ class InitialFormRequest(StrictModel):
     def require_matching_dimensions(self) -> Self:
         _require_transportable_weight(self.weight, self.polynomial.variables)
         if not self.polynomial.polynomial.terms:
-            raise ValueError(
-                "the zero polynomial has no initial form; supply a nonzero polynomial"
+            raise _validation_error(
+                "zero_initial_form",
+                (
+                    "the zero polynomial has no initial form; supply a nonzero polynomial"
+                ),
             )
         # A degenerate weight can make every term minimal, serializing the
         # whole polynomial twice (source + face); admit only sources whose
         # doubled serialization stays comfortably inside the envelope.
         terms = self.polynomial.polynomial.terms
         if len(terms) > 1024:
-            raise ValueError("initial-form requests are limited to 1024 terms")
+            raise _validation_error(
+                "initial_form_term_count_exceeded",
+                "initial-form requests are limited to 1024 terms",
+            )
         for term in terms:
             for component in (term.coefficient.num, term.coefficient.den):
                 if len(component.lstrip("-")) > 512:
-                    raise ValueError(
-                        "initial-form coefficients are limited to 512 digits"
+                    raise _validation_error(
+                        "initial_form_coefficient_too_large",
+                        ("initial-form coefficients are limited to 512 digits"),
                     )
         return self
 

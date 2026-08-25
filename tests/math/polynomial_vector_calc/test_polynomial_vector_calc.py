@@ -124,13 +124,16 @@ def test_divergence_uses_one_authoritative_axis() -> None:
 
 
 def test_curl_is_rejected_at_the_request_boundary_outside_three_dimensions() -> None:
-    with pytest.raises(ValidationError, match="exactly three"):
+    with pytest.raises(ValidationError) as exc_info:
         CurlRequest(
             components=(
                 _polynomial(("x", "y"), {(1, 0): 1}),
                 _polynomial(("x", "y"), {(0, 1): 1}),
             )
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "polynomial_vector_calc.curl_dimensions"
+    )
 
 
 def test_curl_three_dimensional_orientation() -> None:
@@ -152,13 +155,14 @@ def test_curl_three_dimensional_orientation() -> None:
 
 
 def test_vector_components_must_share_the_same_ring() -> None:
-    with pytest.raises(ValidationError, match="one ordered ring"):
+    with pytest.raises(ValidationError) as exc_info:
         VectorFieldRequest(
             components=(
                 _polynomial(("x", "y"), {(1, 0): 1}),
                 _polynomial(("y", "x"), {(1, 0): 1}),
             )
         )
+    assert exc_info.value.errors()[0]["type"] == "polynomial_vector_calc.ordered_ring"
 
 
 def test_vector_field_rejects_aggregate_result_term_growth() -> None:
@@ -168,18 +172,24 @@ def test_vector_field_rejects_aggregate_result_term_growth() -> None:
     ]
     first = dict.fromkeys(monomials[:128], 1)
     second = dict.fromkeys(monomials[128:257], 1)
-    with pytest.raises(ValidationError, match="result-term budget"):
+    with pytest.raises(ValidationError) as exc_info:
         VectorFieldRequest(
             components=(
                 _polynomial(variables, first),
                 _polynomial(variables, second),
             )
         )
+    assert exc_info.value.errors()[0]["type"] == (
+        "polynomial_vector_calc.derivative_term_budget"
+    )
 
 
 def test_direction_length_must_match_polynomial_axis() -> None:
-    with pytest.raises(ValidationError, match="length must match"):
+    with pytest.raises(ValidationError) as exc_info:
         DirectionalDerivativeRequest(
             polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
             direction=(CanonicalRational(num="1", den="1"),),
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "polynomial_vector_calc.direction_length"
+    )

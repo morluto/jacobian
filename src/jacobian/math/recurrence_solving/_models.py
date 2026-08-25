@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
@@ -12,9 +13,16 @@ from jacobian._models import StrictModel
 MAX_RATIONAL_DIGITS = 256
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"recurrence_solving.{reason}", message)
+
+
 def _require_rationals(values: tuple[CanonicalRational, ...], *, label: str) -> None:
     for value in values:
-        require_bounded_rational(value, max_digits=MAX_RATIONAL_DIGITS, label=label)
+        try:
+            require_bounded_rational(value, max_digits=MAX_RATIONAL_DIGITS, label=label)
+        except ValueError as exc:
+            raise _validation_error("rational_out_of_bounds", str(exc)) from exc
 
 
 class RecurrenceFindRequest(StrictModel):
@@ -40,12 +48,14 @@ class RecurrenceFindResult(StrictModel):
     def require_status_consistent_coefficients(self) -> Self:
         if self.status == "FOUND":
             if self.order == 0 or len(self.coefficients) != self.order:
-                raise ValueError(
-                    "a found recurrence must have one coefficient per order"
+                raise _validation_error(
+                    "found_coefficients_mismatch",
+                    "a found recurrence must have one coefficient per order",
                 )
         elif self.order != 0 or self.coefficients:
-            raise ValueError(
-                "a missing recurrence must have zero order and no coefficients"
+            raise _validation_error(
+                "missing_coefficients_mismatch",
+                "a missing recurrence must have zero order and no coefficients",
             )
         return self
 
@@ -64,16 +74,23 @@ class ClosedFormRequest(StrictModel):
     def require_initial_values_for_order(self) -> Self:
         order = len(self.characteristic_coefficients) - 1
         if order < 1:
-            raise ValueError("characteristic polynomial must have positive degree")
+            raise _validation_error(
+                "characteristic_degree_invalid",
+                "characteristic polynomial must have positive degree",
+            )
         if len(self.initial_values) != order:
-            raise ValueError("initial value count must match the recurrence order")
+            raise _validation_error(
+                "initial_value_count_mismatch",
+                "initial value count must match the recurrence order",
+            )
         _require_rationals(
             self.characteristic_coefficients, label="characteristic coefficient"
         )
         _require_rationals(self.initial_values, label="initial value")
         if self.characteristic_coefficients[0].as_fraction() == 0:
-            raise ValueError(
-                "characteristic polynomial must have nonzero leading coefficient"
+            raise _validation_error(
+                "leading_coefficient_zero",
+                "characteristic polynomial must have nonzero leading coefficient",
             )
         return self
 
@@ -95,13 +112,14 @@ _MAX_FIELD_PRIME = 10_000
 
 def _require_bounded_prime(prime: int) -> None:
     if not 2 <= prime <= _MAX_FIELD_PRIME:
-        raise ValueError(
-            f"prime must be a prime number between 2 and {_MAX_FIELD_PRIME}"
+        raise _validation_error(
+            "prime_out_of_bounds",
+            f"prime must be a prime number between 2 and {_MAX_FIELD_PRIME}",
         )
     from sympy import isprime
 
     if not isprime(prime):
-        raise ValueError("prime must be a prime integer")
+        raise _validation_error("prime_not_prime", "prime must be a prime integer")
 
 
 def _require_canonical_residues(
@@ -109,7 +127,10 @@ def _require_canonical_residues(
 ) -> None:
     for value in values:
         if type(value) is not int or not 0 <= value < prime:
-            raise ValueError(f"{label} must be canonical residues modulo the prime")
+            raise _validation_error(
+                "noncanonical_residue",
+                f"{label} must be canonical residues modulo the prime",
+            )
 
 
 class PrimeFieldRecurrence(StrictModel):
@@ -142,7 +163,10 @@ class PrimeFieldRecurrence(StrictModel):
         _require_bounded_prime(self.prime)
         _require_canonical_residues(self.coefficients, self.prime, "coefficients")
         if self.order != len(self.coefficients):
-            raise ValueError("order must equal the number of coefficients")
+            raise _validation_error(
+                "order_coefficients_mismatch",
+                "order must equal the number of coefficients",
+            )
         return self
 
 
@@ -200,8 +224,9 @@ class PrimeFieldRecurrenceFindResult(StrictModel):
 
         expected = berlekamp_massey(list(self.sequence), self.recurrence.prime)
         if self.recurrence != expected:
-            raise ValueError(
-                "result must match the exact bounded Berlekamp-Massey recurrence"
+            raise _validation_error(
+                "result_mismatch",
+                "result must match the exact bounded Berlekamp-Massey recurrence",
             )
         return self
 

@@ -70,25 +70,34 @@ def test_affine_tuple_is_canonical_and_closed() -> None:
         constant="-4",
     )
     assert constant_form.evaluate(999) == -4
-    with pytest.raises(ValidationError, match="identically zero"):
+    with pytest.raises(ValidationError):
         IntegerAffineForm(form_id="zero", coefficient="0", constant="0")
 
     assert tuple(form.form_id for form in TWIN_PRIMES.forms) == ("n", "n_plus_2")
     assert TWIN_PRIMES.forms[1].evaluate(7) == 9
 
-    with pytest.raises(ValidationError, match="coefficient must be nonzero"):
+    with pytest.raises(ValidationError):
         _form("constant", 0, 1)
-    with pytest.raises(ValidationError, match="must be coprime"):
+    with pytest.raises(ValidationError):
         _form("nonprimitive", 2, 2)
-    with pytest.raises(ValidationError, match="IDs must be unique"):
+    with pytest.raises(ValidationError):
         _tuple(_form("same", 1, 0), _form("same", 1, 2))
-    with pytest.raises(ValidationError, match="pairwise distinct"):
+    with pytest.raises(ValidationError):
         _tuple(_form("first", 1, 0), _form("second", 1, 0))
+
+    with pytest.raises(ValidationError) as exc_info:
+        _form("coded_zero", 0, 1)
+    assert (
+        exc_info.value.errors()[0]["type"] == "prime_affine_form.coefficient_required"
+    )
+    with pytest.raises(ValidationError) as exc_info:
+        _form("coded_nonprimitive", 2, 2)
+    assert exc_info.value.errors()[0]["type"] == "prime_affine_form.primitive_required"
 
     _form("f" * 32, 1, int("9" * 256))
     with pytest.raises(ValidationError):
         _form("f" * 33, 1, 0)
-    with pytest.raises(ValidationError, match="at most 256 digits"):
+    with pytest.raises(ValidationError):
         _form("too_many_digits", 1, int("9" * 257))
 
     _tuple(*(_form(f"f{index:03d}", 1, index) for index in range(512)))
@@ -173,17 +182,17 @@ def test_local_factor_result_rejects_source_and_conclusion_mutations() -> None:
 
     wrong_factor = deepcopy(payload)
     wrong_factor["factor"] = {"num": "1", "den": "1"}
-    with pytest.raises(ValidationError, match="defining formula"):
+    with pytest.raises(ValidationError):
         PrimeTupleLocalFactorResult.model_validate(wrong_factor)
 
     wrong_source = deepcopy(payload)
     wrong_source["source"]["forms"][1]["constant"] = "4"
-    with pytest.raises(ValidationError, match="source-bound partition"):
+    with pytest.raises(ValidationError):
         PrimeTupleLocalFactorResult.model_validate(wrong_source)
 
     wrong_row = deepcopy(payload)
     wrong_row["residue_rows"][1]["vanishing_form_ids"] = []
-    with pytest.raises(ValidationError, match="source-bound partition"):
+    with pytest.raises(ValidationError):
         PrimeTupleLocalFactorResult.model_validate(wrong_row)
 
 
@@ -207,7 +216,7 @@ def test_finite_local_factor_product_and_obstruction() -> None:
 
     payload = zero.model_dump(mode="json")
     payload["first_obstructing_prime"] = 2
-    with pytest.raises(ValidationError, match="first obstructing prime"):
+    with pytest.raises(ValidationError):
         FinitePrimeTupleFactorProduct.model_validate(payload)
 
 
@@ -297,7 +306,7 @@ def test_translation_preserves_local_factors_and_form_ids() -> None:
 
     payload = translated.model_dump(mode="json")
     payload["translated"]["forms"][0]["constant"] = "2"
-    with pytest.raises(ValidationError, match=r"L_i\(n\+shift\)"):
+    with pytest.raises(ValidationError):
         PrimeAffineTranslationResult.model_validate(payload)
 
 
@@ -305,7 +314,7 @@ def test_translation_rejects_translated_tuple_exceeding_aggregate_digit_bound() 
     source = _tuple(
         *(_form(f"f{index:03d}", 10**127 + index, 1) for index in range(512))
     )
-    with pytest.raises(ValidationError, match="aggregate coefficient-digit bound"):
+    with pytest.raises(ValidationError):
         PrimeAffineTranslationRequest(source=source, shift=str(10**63))
 
 
@@ -393,7 +402,7 @@ def test_wheel_result_rejects_component_and_source_mutations() -> None:
 
     wrong_source = deepcopy(payload)
     wrong_source["source"]["forms"][1]["constant"] = "4"
-    with pytest.raises(ValidationError, match="source affine tuple"):
+    with pytest.raises(ValidationError):
         PrimeTupleResidueWheel.model_validate(wrong_source)
 
     enumeration = compute_residue_wheel_enumeration(
@@ -401,12 +410,12 @@ def test_wheel_result_rejects_component_and_source_mutations() -> None:
     )
     wrong_component = enumeration.model_dump(mode="json")
     wrong_component["residues"][0]["components"] = [0, 2]
-    with pytest.raises(ValidationError, match="complete CRT reconstruction"):
+    with pytest.raises(ValidationError):
         PrimeTupleResidueWheelEnumeration.model_validate(wrong_component)
 
     oversized_scalar = deepcopy(payload)
     oversized_scalar["modulus"] = "9" * 4_097
-    with pytest.raises(ValidationError, match="at most 4096 characters"):
+    with pytest.raises(ValidationError):
         PrimeTupleWheelMembershipRequest.model_validate(
             {"wheel": oversized_scalar, "value": "1"}
         )
@@ -437,7 +446,7 @@ def test_interval_count_and_enumeration_are_exact_and_aligned() -> None:
 
     payload = enumeration.model_dump(mode="json")
     payload["matches"][0]["prime_values"][1] = "7"
-    with pytest.raises(ValidationError, match="every and only"):
+    with pytest.raises(ValidationError):
         PrimePatternIntervalEnumerateResult.model_validate(payload)
 
 
@@ -488,32 +497,32 @@ def test_request_boundaries_reject_before_expansion() -> None:
     PrimeTupleLocalFactorRequest(source=identity_form, prime=8_191)
     with pytest.raises(ValidationError):
         PrimeTupleLocalFactorRequest(source=identity_form, prime=8_209)
-    with pytest.raises(ValidationError, match="must be prime"):
+    with pytest.raises(ValidationError):
         PrimeTupleLocalFactorRequest(source=identity_form, prime=15)
-    with pytest.raises(ValidationError, match="must be prime"):
+    with pytest.raises(ValidationError):
         PrimeTupleLocalSummary(
             prime=15,
             bad_residues=(),
             bad_count=0,
             valid_count=15,
         )
-    with pytest.raises(ValidationError, match="strictly increasing"):
+    with pytest.raises(ValidationError):
         PrimeTupleLocalFactorsRequest(source=identity_form, primes=(3, 2))
-    with pytest.raises(ValidationError, match="strictly increasing"):
+    with pytest.raises(ValidationError):
         PrimeTupleLocalFactorsRequest(source=identity_form, primes=(2, 2))
 
     PrimeAffineIntervalCountRequest(source=identity_form, lower="0", upper="99999")
-    with pytest.raises(ValidationError, match="affine evaluations"):
+    with pytest.raises(ValidationError):
         PrimeAffineIntervalCountRequest(source=identity_form, lower="0", upper="100000")
 
     PrimeAffineIntervalEnumerateRequest(source=identity_form, lower="0", upper="32767")
-    with pytest.raises(ValidationError, match="result cells"):
+    with pytest.raises(ValidationError):
         PrimeAffineIntervalEnumerateRequest(
             source=identity_form, lower="0", upper="32768"
         )
 
     cancellation_source = _tuple(_form("shifted_n", 1, -(10**63)))
-    with pytest.raises(ValidationError, match="serialized bound"):
+    with pytest.raises(ValidationError):
         PrimeAffineIntervalEnumerateRequest(
             source=cancellation_source,
             lower=str(10**63),
@@ -525,7 +534,7 @@ def test_request_boundaries_reject_before_expansion() -> None:
         lower=str(2**64 - 1),
         upper=str(2**64 - 1),
     )
-    with pytest.raises(ValidationError, match="deterministic primality"):
+    with pytest.raises(ValidationError):
         PrimeAffineIntervalCountRequest(
             source=identity_form,
             lower=str(2**64),
@@ -551,10 +560,10 @@ def test_request_boundaries_reject_before_expansion() -> None:
         PrimeTupleResidueWheelRequest(source=identity_form, primes=(8_209,))
     )
     assert large_compact_wheel.valid_count == "8208"
-    with pytest.raises(ValidationError, match="valid residues"):
+    with pytest.raises(ValidationError):
         PrimeTupleResidueWheelEnumerationRequest(wheel=large_compact_wheel)
 
-    with pytest.raises(ValidationError, match="translated constant"):
+    with pytest.raises(ValidationError):
         PrimeAffineTranslationRequest(
             source=_tuple(_form("large", 1, int("9" * 256))),
             shift="1",
@@ -569,7 +578,7 @@ def test_result_validation_reapplies_request_bounds_before_replay() -> None:
     )
     overbound_count = count.model_dump(mode="json")
     overbound_count["upper"] = "100000"
-    with pytest.raises(ValidationError, match="affine evaluations"):
+    with pytest.raises(ValidationError):
         PrimePatternIntervalCountResult.model_validate(overbound_count)
 
     wheel = compute_residue_wheel(

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -19,6 +20,10 @@ from jacobian.math.regular_languages.values import (
 )
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"regular_language.{reason}", message)
+
+
 class RunRequest(StrictModel):
     """Check if a word is accepted by a DFA."""
 
@@ -29,7 +34,10 @@ class RunRequest(StrictModel):
     def require_valid_word(self) -> Self:
         for symbol in self.word:
             if not 0 <= symbol < self.dfa.alphabet_size:
-                raise ValueError("word symbols must be in 0..alphabet_size-1")
+                raise _validation_error(
+                    "word_symbol_out_of_range",
+                    "word symbols must be in 0..alphabet_size-1",
+                )
         return self
 
 
@@ -82,12 +90,15 @@ class TransitionParikhProfileRequest(StrictModel):
             _require_transition_profile_envelope,
         )
 
-        _require_transition_profile_envelope(
-            self.automaton,
-            self.source_state,
-            self.target_state,
-            self.path_length,
-        )
+        try:
+            _require_transition_profile_envelope(
+                self.automaton,
+                self.source_state,
+                self.target_state,
+                self.path_length,
+            )
+        except ValueError as exc:
+            raise _validation_error("profile_admission_rejected", str(exc)) from exc
         return self
 
 
@@ -108,9 +119,13 @@ class RunResult(RunRequest):
         for symbol in self.word:
             trace.append(transitions[(trace[-1], symbol)])
         if self.state_trace != tuple(trace) or self.final_state != trace[-1]:
-            raise ValueError("DFA run trace is not bound to its source")
+            raise _validation_error(
+                "run_trace_not_bound", "DFA run trace is not bound to its source"
+            )
         if self.accepted != (self.final_state in self.dfa.accepting_states):
-            raise ValueError("DFA acceptance must agree with the final state")
+            raise _validation_error(
+                "acceptance_mismatch", "DFA acceptance must agree with the final state"
+            )
         return self
 
 
@@ -126,7 +141,9 @@ class CountResult(CountRequest):
         from jacobian.math.regular_languages.operations import count_accepted_words
 
         if int(self.count) != count_accepted_words(self.dfa, self.word_length):
-            raise ValueError("word count is not bound to its DFA")
+            raise _validation_error(
+                "count_not_bound", "word count is not bound to its DFA"
+            )
         return self
 
 

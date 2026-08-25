@@ -7,6 +7,7 @@ from itertools import pairwise
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -33,21 +34,92 @@ MAX_GLOBAL_BETTI_ELEMENT = 100_000
 MAX_GLOBAL_DELTA_CHECK = 20_000
 
 
+def _validation_error(message: str) -> PydanticCustomError:
+    """Build a stable owner-local error for a failed semigroup invariant."""
+
+    semantic_reasons = (
+        ("elasticity is defined", "elasticity_undefined_for_zero"),
+        ("delta_set must", "delta_set_not_canonical"),
+        ("delta values", "delta_values_invalid"),
+        ("is_connected", "graph_connectivity_mismatch"),
+        ("candidate_count", "betti_candidate_count_mismatch"),
+        ("factorization_lengths", "factorization_lengths_mismatch"),
+        ("binomial exponents must match", "binomial_axis_mismatch"),
+        ("relation arity", "relation_dimension_mismatch"),
+        ("relation is not", "relation_betti_binding_mismatch"),
+        ("relations do not", "relation_cardinality_mismatch"),
+        ("relations must", "relation_connectivity_mismatch"),
+        ("binomial terms", "binomial_degree_mismatch"),
+        ("same semigroup degree", "binomial_degree_mismatch"),
+        ("relation coordinates", "relation_dimension_mismatch"),
+        ("delta_set does not", "delta_set_mismatch"),
+        ("length extrema", "length_extrema_mismatch"),
+        ("global catenary", "global_catenary_mismatch"),
+        ("betti_degrees", "betti_degrees_mismatch"),
+        ("positive", "generators_not_positive"),
+        ("at most", "value_exceeds_bound"),
+        ("gcd", "generators_not_coprime"),
+        ("canonical minimal", "generator_axis_not_canonical"),
+        ("belong", "value_not_in_semigroup"),
+        ("materialization bound", "factorization_materialization_exceeded"),
+        ("candidate range", "betti_candidate_bound_exceeded"),
+        ("delta-set check", "delta_check_bound_exceeded"),
+        ("Betti component", "factorization_component_mismatch"),
+        ("factorizations must be unique", "factorizations_not_unique"),
+        ("invalid coordinates", "factorization_coordinates_invalid"),
+        ("does not evaluate", "factorization_value_mismatch"),
+        ("complete family", "factorization_family_incomplete"),
+        ("membership must agree", "membership_mismatch"),
+        ("lengths must", "factorization_lengths_not_canonical"),
+        ("lengths do not", "factorization_lengths_mismatch"),
+        ("coordinates must", "factorization_dimension_mismatch"),
+        ("coordinates must be", "factorization_coordinates_negative"),
+        ("both factorizations", "factorization_value_mismatch"),
+        ("multiplicity", "summary_multiplicity_mismatch"),
+        ("embedding_dimension", "summary_embedding_dimension_mismatch"),
+        ("frobenius_number", "summary_frobenius_mismatch"),
+        ("conductor", "summary_conductor_mismatch"),
+        ("genus", "summary_genus_mismatch"),
+        ("gaps", "summary_gaps_mismatch"),
+        ("graph vertices", "graph_vertex_membership_mismatch"),
+        ("connected components", "graph_components_mismatch"),
+        ("graph edge", "graph_edge_invalid"),
+        ("shared-support adjacency", "graph_adjacency_mismatch"),
+        ("strictly increasing", "factorization_lengths_not_canonical"),
+        ("periodicity_bound", "delta_periodicity_bound_mismatch"),
+        ("checked_through", "delta_checked_range_mismatch"),
+        ("elasticity", "elasticity_mismatch"),
+        ("factorization_count", "factorization_count_mismatch"),
+        ("catenary_degree", "catenary_degree_mismatch"),
+        ("apery_set", "apery_set_mismatch"),
+        ("betti_elements", "betti_elements_mismatch"),
+        ("relation factorizations", "relation_factorizations_invalid"),
+        ("binomial exponents", "binomial_exponents_invalid"),
+        ("generator extrema", "generator_extrema_reversed"),
+        ("witnesses", "catenary_witnesses_mismatch"),
+    )
+    reason = next(
+        (reason for marker, reason in semantic_reasons if marker in message),
+        "invariant_mismatch",
+    )
+    return PydanticCustomError(f"numerical_semigroup.{reason}", message)
+
+
 def _require_positive_bounded_generators(generators: tuple[str, ...]) -> None:
     values: list[int] = []
     for generator in generators:
         value = parse_canonical_integer(generator)
         if value <= 0:
-            raise ValueError("generators must be positive integers")
+            raise _validation_error("generators must be positive integers")
         if value > MAX_GENERATOR:
-            raise ValueError(f"generators must be at most {MAX_GENERATOR}")
+            raise _validation_error(f"generators must be at most {MAX_GENERATOR}")
         values.append(value)
     gcd = values[0]
     for value in values[1:]:
         while value:
             gcd, value = value, gcd % value
     if gcd != 1:
-        raise ValueError(f"generators must have gcd 1, got gcd {gcd}")
+        raise _validation_error(f"generators must have gcd 1, got gcd {gcd}")
 
 
 def _require_minimal_generators(generators: tuple[str, ...]) -> tuple[int, ...]:
@@ -66,7 +138,7 @@ def _require_canonical_minimal_axis(
     _require_positive_bounded_generators(generators)
     values = tuple(parse_canonical_integer(value) for value in generators)
     if values != _require_minimal_generators(generators):
-        raise ValueError(
+        raise _validation_error(
             "minimal_generators must use the canonical minimal generator axis"
         )
     return values
@@ -93,13 +165,13 @@ def _summary_invariants(
 def _require_bounded_value(value: str) -> int:
     parsed = parse_canonical_integer(value)
     if parsed > MAX_ELEMENT:
-        raise ValueError(f"value must be at most {MAX_ELEMENT}")
+        raise _validation_error(f"value must be at most {MAX_ELEMENT}")
     return parsed
 
 
 def _require_member(generators: tuple[int, ...], value: int) -> None:
     if not belongs(value, apery_set(generators)):
-        raise ValueError("value must belong to the numerical semigroup")
+        raise _validation_error("value must belong to the numerical semigroup")
 
 
 def _require_materializable_factorizations(
@@ -109,7 +181,7 @@ def _require_materializable_factorizations(
         return
     count = factorization_count(generators, value)
     if count > maximum:
-        raise ValueError(
+        raise _validation_error(
             f"factorization family has {count} members, exceeding the exact "
             f"materialization bound {maximum}"
         )
@@ -121,7 +193,7 @@ def _require_global_betti_bound(generators: tuple[int, ...]) -> None:
     apery = apery_set(generators)
     maximum_candidate = max(apery[1:]) + generators[-1]
     if maximum_candidate > MAX_GLOBAL_BETTI_ELEMENT:
-        raise ValueError(
+        raise _validation_error(
             "complete Apéry candidate range ends at "
             f"{maximum_candidate}, exceeding the global invariant bound "
             f"{MAX_GLOBAL_BETTI_ELEMENT}"
@@ -140,7 +212,7 @@ def _require_global_catenary_bound(generators: tuple[int, ...]) -> None:
 def _require_global_delta_bound(generators: tuple[int, ...]) -> None:
     checked_through = delta_periodicity_bound(generators) + generators[-1] - 1
     if checked_through > MAX_GLOBAL_DELTA_CHECK:
-        raise ValueError(
+        raise _validation_error(
             f"complete delta-set check requires elements through {checked_through}, "
             f"exceeding the bound {MAX_GLOBAL_DELTA_CHECK}"
         )
@@ -156,7 +228,9 @@ def _betti_component_index(
         index for index, component in enumerate(components) if support <= set(component)
     ]
     if len(matches) != 1:
-        raise ValueError("relation factorization is not bound to one Betti component")
+        raise _validation_error(
+            "relation factorization is not bound to one Betti component"
+        )
     return matches[0]
 
 
@@ -179,20 +253,22 @@ def _require_exact_factorization_family(
     family: tuple[tuple[int, ...], ...],
 ) -> None:
     if len(set(family)) != len(family):
-        raise ValueError("factorizations must be unique")
+        raise _validation_error("factorizations must be unique")
     for factorization in family:
         if len(factorization) != len(generators) or any(
             coordinate < 0 for coordinate in factorization
         ):
-            raise ValueError("factorization has invalid coordinates")
+            raise _validation_error("factorization has invalid coordinates")
         degree = sum(
             coordinate * generator
             for coordinate, generator in zip(factorization, generators, strict=True)
         )
         if degree != value:
-            raise ValueError("factorization does not evaluate to the result value")
+            raise _validation_error(
+                "factorization does not evaluate to the result value"
+            )
     if len(family) != factorization_count(generators, value):
-        raise ValueError("factorizations do not form the complete family")
+        raise _validation_error("factorizations do not form the complete family")
 
 
 def _factorization_graph_data(
@@ -275,19 +351,23 @@ class NumericalSemigroupSummaryResult(StrictModel):
             gaps,
         ) = _summary_invariants(generators)
         if parse_canonical_integer(self.multiplicity) != multiplicity:
-            raise ValueError("multiplicity does not match the minimal generators")
+            raise _validation_error(
+                "multiplicity does not match the minimal generators"
+            )
         if self.embedding_dimension != embedding_dimension:
-            raise ValueError(
+            raise _validation_error(
                 "embedding_dimension does not match the minimal generators"
             )
         if parse_canonical_integer(self.frobenius_number) != frobenius_number:
-            raise ValueError("frobenius_number does not match the minimal generators")
+            raise _validation_error(
+                "frobenius_number does not match the minimal generators"
+            )
         if parse_canonical_integer(self.conductor) != conductor:
-            raise ValueError("conductor does not match the minimal generators")
+            raise _validation_error("conductor does not match the minimal generators")
         if self.genus != genus:
-            raise ValueError("genus does not match the minimal generators")
+            raise _validation_error("genus does not match the minimal generators")
         if tuple(map(parse_canonical_integer, self.gaps)) != gaps:
-            raise ValueError("gaps do not match the minimal generators")
+            raise _validation_error("gaps do not match the minimal generators")
         return self
 
 
@@ -303,7 +383,7 @@ class SemigroupMembershipRequest(StrictModel):
     def require_positive_generators_and_bounded_value(self) -> Self:
         _require_positive_bounded_generators(self.generators)
         if parse_canonical_integer(self.value) > MAX_ELEMENT:
-            raise ValueError(f"membership value must be at most {MAX_ELEMENT}")
+            raise _validation_error(f"membership value must be at most {MAX_ELEMENT}")
         return self
 
 
@@ -358,7 +438,9 @@ class FactorizationComputeResult(StrictModel):
         generators = _require_canonical_minimal_axis(self.minimal_generators)
         value = parse_canonical_integer(self.value)
         if self.in_semigroup != bool(self.factorizations):
-            raise ValueError("membership must agree with the factorization family")
+            raise _validation_error(
+                "membership must agree with the factorization family"
+            )
         _require_exact_factorization_family(generators, value, self.factorizations)
         return self
 
@@ -399,13 +481,17 @@ class FactorizationLengthsComputeResult(StrictModel):
         generators = _require_canonical_minimal_axis(self.minimal_generators)
         value = parse_canonical_integer(self.value)
         if self.in_semigroup != bool(self.lengths):
-            raise ValueError("membership must agree with the factorization lengths")
+            raise _validation_error(
+                "membership must agree with the factorization lengths"
+            )
         if self.lengths != tuple(sorted(set(self.lengths))):
-            raise ValueError("lengths must be strictly increasing and duplicate-free")
+            raise _validation_error(
+                "lengths must be strictly increasing and duplicate-free"
+            )
         if any(length < 0 for length in self.lengths):
-            raise ValueError("factorization lengths must be non-negative")
+            raise _validation_error("factorization lengths must be non-negative")
         if self.lengths != factorization_lengths(generators, value):
-            raise ValueError("lengths do not form the complete length set")
+            raise _validation_error("lengths do not form the complete length set")
         return self
 
 
@@ -431,11 +517,11 @@ class FactorizationDistanceRequest(StrictModel):
         generators = _require_minimal_generators(self.generators)
         value = _require_bounded_value(self.value)
         if len(self.first) != len(generators) or len(self.second) != len(generators):
-            raise ValueError(
+            raise _validation_error(
                 "factorization coordinates must match the minimal generating system"
             )
         if any(c < 0 for c in self.first) or any(c < 0 for c in self.second):
-            raise ValueError("factorization coordinates must be non-negative")
+            raise _validation_error("factorization coordinates must be non-negative")
         first_value = sum(
             coefficient * generator
             for coefficient, generator in zip(self.first, generators, strict=True)
@@ -445,7 +531,9 @@ class FactorizationDistanceRequest(StrictModel):
             for coefficient, generator in zip(self.second, generators, strict=True)
         )
         if first_value != value or second_value != value:
-            raise ValueError("both factorizations must evaluate to the declared value")
+            raise _validation_error(
+                "both factorizations must evaluate to the declared value"
+            )
         return self
 
 
@@ -501,25 +589,27 @@ class FactorizationGraphComputeResult(StrictModel):
         value = parse_canonical_integer(self.value)
         vertex_count = len(self.factorizations)
         if self.in_semigroup != bool(self.factorizations):
-            raise ValueError("membership must agree with graph vertices")
+            raise _validation_error("membership must agree with graph vertices")
         vertices = tuple(
             index for component in self.connected_components for index in component
         )
         if tuple(sorted(vertices)) != tuple(range(vertex_count)):
-            raise ValueError("connected components must partition all graph vertices")
+            raise _validation_error(
+                "connected components must partition all graph vertices"
+            )
         if self.is_connected != (len(self.connected_components) <= 1):
-            raise ValueError("is_connected must agree with connected components")
+            raise _validation_error("is_connected must agree with connected components")
         for left, right in self.edges:
             if not 0 <= left < right < vertex_count:
-                raise ValueError("graph edge has invalid vertex indices")
+                raise _validation_error("graph edge has invalid vertex indices")
         _require_exact_factorization_family(generators, value, self.factorizations)
         expected_edges, expected_components = _factorization_graph_data(
             self.factorizations
         )
         if self.edges != expected_edges:
-            raise ValueError("edges do not match shared-support adjacency")
+            raise _validation_error("edges do not match shared-support adjacency")
         if self.connected_components != expected_components:
-            raise ValueError("connected components do not match the graph")
+            raise _validation_error("connected components do not match the graph")
         return self
 
 
@@ -561,16 +651,18 @@ class ElementDeltaSetResult(StrictModel):
         value = parse_canonical_integer(self.value)
         expected_lengths = factorization_lengths(generators, value)
         if self.factorization_lengths != expected_lengths:
-            raise ValueError("factorization_lengths do not match the element")
+            raise _validation_error("factorization_lengths do not match the element")
         expected_delta = tuple(
             sorted({right - left for left, right in pairwise(expected_lengths)})
         )
         if self.delta_set != tuple(sorted(set(self.delta_set))):
-            raise ValueError("delta_set must be strictly increasing and duplicate-free")
+            raise _validation_error(
+                "delta_set must be strictly increasing and duplicate-free"
+            )
         if any(delta <= 0 for delta in self.delta_set):
-            raise ValueError("delta values must be positive")
+            raise _validation_error("delta values must be positive")
         if self.delta_set != expected_delta:
-            raise ValueError("delta_set does not match the complete length set")
+            raise _validation_error("delta_set does not match the complete length set")
         return self
 
 
@@ -595,7 +687,9 @@ class ElementElasticityRequest(StrictModel):
         generators = _require_minimal_generators(self.generators)
         value = _require_bounded_value(self.value)
         if value <= 0:
-            raise ValueError("elasticity is defined here only for positive elements")
+            raise _validation_error(
+                "elasticity is defined here only for positive elements"
+            )
         _require_member(generators, value)
         return self
 
@@ -618,11 +712,11 @@ class ElementElasticityResult(StrictModel):
             generators, parse_canonical_integer(self.value)
         )
         if (self.minimum_length, self.maximum_length) != expected_extrema:
-            raise ValueError("length extrema do not match the element")
+            raise _validation_error("length extrema do not match the element")
         if Fraction(self.elasticity) != Fraction(
             self.maximum_length, self.minimum_length
         ):
-            raise ValueError("elasticity does not match the length ratio")
+            raise _validation_error("elasticity does not match the length ratio")
         return self
 
 
@@ -666,9 +760,11 @@ class ElementCatenaryDegreeResult(StrictModel):
         generators = _require_canonical_minimal_axis(self.minimal_generators)
         family = factorizations(generators, parse_canonical_integer(self.value))
         if self.factorization_count != len(family):
-            raise ValueError("factorization_count does not match the element")
+            raise _validation_error("factorization_count does not match the element")
         if self.catenary_degree != catenary_degree_from_factorizations(family):
-            raise ValueError("catenary_degree does not match the factorization graph")
+            raise _validation_error(
+                "catenary_degree does not match the factorization graph"
+            )
         return self
 
 
@@ -707,13 +803,15 @@ class BettiElementsResult(StrictModel):
         generators = _require_canonical_minimal_axis(self.minimal_generators)
         apery, candidates, disconnected = betti_data(generators)
         if tuple(map(parse_canonical_integer, self.apery_set)) != apery:
-            raise ValueError("apery_set does not match the minimal generators")
+            raise _validation_error("apery_set does not match the minimal generators")
         if self.candidate_count != len(candidates):
-            raise ValueError("candidate_count does not match the complete range")
+            raise _validation_error("candidate_count does not match the complete range")
         if tuple(map(parse_canonical_integer, self.betti_elements)) != tuple(
             disconnected
         ):
-            raise ValueError("betti_elements do not match disconnected candidates")
+            raise _validation_error(
+                "betti_elements do not match disconnected candidates"
+            )
         return self
 
 
@@ -746,11 +844,11 @@ class MinimalPresentationRelation(StrictModel):
     @model_validator(mode="after")
     def require_distinct_nonnegative_factorizations(self) -> Self:
         if len(self.first) != len(self.second):
-            raise ValueError("relation factorizations must have equal arity")
+            raise _validation_error("relation factorizations must have equal arity")
         if any(value < 0 for value in (*self.first, *self.second)):
-            raise ValueError("relation factorizations must be non-negative")
+            raise _validation_error("relation factorizations must be non-negative")
         if self.first == self.second:
-            raise ValueError("relation factorizations must be distinct")
+            raise _validation_error("relation factorizations must be distinct")
         return self
 
 
@@ -770,13 +868,17 @@ class MinimalPresentationResult(StrictModel):
         if tuple(map(parse_canonical_integer, self.betti_elements)) != tuple(
             disconnected
         ):
-            raise ValueError("betti_elements do not match the minimal generators")
+            raise _validation_error(
+                "betti_elements do not match the minimal generators"
+            )
         relation_components: dict[int, list[tuple[int, int]]] = {
             betti: [] for betti in disconnected
         }
         for relation in self.relations:
             if len(relation.first) != len(generators):
-                raise ValueError("relation arity does not match minimal generators")
+                raise _validation_error(
+                    "relation arity does not match minimal generators"
+                )
             first_degree = sum(
                 coordinate * generator
                 for coordinate, generator in zip(
@@ -790,12 +892,14 @@ class MinimalPresentationResult(StrictModel):
                 )
             )
             if first_degree != second_degree or first_degree not in relation_components:
-                raise ValueError("relation is not bound to a Betti element")
+                raise _validation_error("relation is not bound to a Betti element")
             components = disconnected[first_degree]
             left_component = _betti_component_index(relation.first, components)
             right_component = _betti_component_index(relation.second, components)
             if left_component == right_component:
-                raise ValueError("relation must connect distinct Betti components")
+                raise _validation_error(
+                    "relation must connect distinct Betti components"
+                )
             relation_components[first_degree].append((left_component, right_component))
         expected = {
             betti: len(components) - 1 for betti, components in disconnected.items()
@@ -803,10 +907,12 @@ class MinimalPresentationResult(StrictModel):
         if {
             betti: len(edges) for betti, edges in relation_components.items()
         } != expected:
-            raise ValueError("relations do not have minimal per-Betti cardinality")
+            raise _validation_error(
+                "relations do not have minimal per-Betti cardinality"
+            )
         for betti, edges in relation_components.items():
             if not _edges_span(len(disconnected[betti]), edges):
-                raise ValueError("relations must span all Betti components")
+                raise _validation_error("relations must span all Betti components")
         return self
 
 
@@ -829,7 +935,7 @@ class PresentationBinomialsRequest(StrictModel):
         generators = _require_minimal_generators(self.generators)
         for relation in self.relations:
             if len(relation.first) != len(generators):
-                raise ValueError(
+                raise _validation_error(
                     "relation coordinates must match the minimal generating system"
                 )
             first_degree = sum(
@@ -845,7 +951,7 @@ class PresentationBinomialsRequest(StrictModel):
                 )
             )
             if first_degree != second_degree:
-                raise ValueError(
+                raise _validation_error(
                     "relation factorizations must have the same semigroup degree"
                 )
         return self
@@ -875,14 +981,14 @@ class PresentationBinomialsResult(StrictModel):
             if len(binomial.left_exponents) != len(generators) or len(
                 binomial.right_exponents
             ) != len(generators):
-                raise ValueError(
+                raise _validation_error(
                     "binomial exponents must match the minimal generator axis"
                 )
             if any(
                 exponent < 0
                 for exponent in (*binomial.left_exponents, *binomial.right_exponents)
             ):
-                raise ValueError("binomial exponents must be non-negative")
+                raise _validation_error("binomial exponents must be non-negative")
             left_degree = sum(
                 exponent * generator
                 for exponent, generator in zip(
@@ -896,7 +1002,9 @@ class PresentationBinomialsResult(StrictModel):
                 )
             )
             if left_degree != right_degree:
-                raise ValueError("binomial terms must have the same semigroup degree")
+                raise _validation_error(
+                    "binomial terms must have the same semigroup degree"
+                )
         return self
 
 
@@ -937,14 +1045,18 @@ class DeltaSetResult(StrictModel):
     def require_set_semantics(self) -> Self:
         generators = _require_canonical_minimal_axis(self.minimal_generators)
         if self.delta_set != tuple(sorted(set(self.delta_set))):
-            raise ValueError("delta_set must be strictly increasing and duplicate-free")
+            raise _validation_error(
+                "delta_set must be strictly increasing and duplicate-free"
+            )
         if any(delta <= 0 for delta in self.delta_set):
-            raise ValueError("delta values must be positive")
+            raise _validation_error("delta values must be positive")
         expected_bound = delta_periodicity_bound(generators)
         if self.periodicity_bound != expected_bound:
-            raise ValueError("periodicity_bound does not match the generators")
+            raise _validation_error("periodicity_bound does not match the generators")
         if self.checked_through != expected_bound + generators[-1] - 1:
-            raise ValueError("checked_through does not match the completeness theorem")
+            raise _validation_error(
+                "checked_through does not match the completeness theorem"
+            )
         return self
 
 
@@ -979,10 +1091,10 @@ class ElasticityResult(StrictModel):
         smallest = parse_canonical_integer(self.smallest_generator)
         largest = parse_canonical_integer(self.largest_generator)
         if smallest > largest:
-            raise ValueError("generator extrema are reversed")
+            raise _validation_error("generator extrema are reversed")
         expected = Fraction(largest, smallest)
         if Fraction(self.elasticity) != expected:
-            raise ValueError("elasticity must equal largest/smallest generator")
+            raise _validation_error("elasticity must equal largest/smallest generator")
         return self
 
 
@@ -1037,19 +1149,21 @@ class CatenaryDegreeResult(StrictModel):
             for betti_element in disconnected
         )
         if self.betti_degrees != expected_records:
-            raise ValueError("betti_degrees do not match the complete Betti set")
+            raise _validation_error("betti_degrees do not match the complete Betti set")
         maximum = max(
             (record.catenary_degree for record in self.betti_degrees), default=0
         )
         if self.catenary_degree != maximum:
-            raise ValueError("global catenary degree must be the Betti maximum")
+            raise _validation_error("global catenary degree must be the Betti maximum")
         expected = tuple(
             record.betti_element
             for record in self.betti_degrees
             if maximum > 0 and record.catenary_degree == maximum
         )
         if self.witness_betti_elements != expected:
-            raise ValueError("witnesses must be exactly the maximizing Betti elements")
+            raise _validation_error(
+                "witnesses must be exactly the maximizing Betti elements"
+            )
         return self
 
 

@@ -32,16 +32,19 @@ class TestCartanMatrix:
         CartanMatrixRequest(matrix=G2)
 
     def test_invalid_non_symmetric(self) -> None:
-        with pytest.raises(ValidationError, match="product"):
+        with pytest.raises(ValidationError) as exc_info:
             CartanMatrixRequest(matrix=[[2, -4], [-1, 2]])
+        assert exc_info.value.errors()[0]["type"] == "root_system.off_diagonal_product"
 
     def test_invalid_diagonal(self) -> None:
-        with pytest.raises(ValidationError, match="diagonal"):
+        with pytest.raises(ValidationError) as exc_info:
             CartanMatrixRequest(matrix=[[3, -1], [-1, 2]])
+        assert exc_info.value.errors()[0]["type"] == "root_system.diagonal_entry"
 
     def test_invalid_positive_offdiag(self) -> None:
-        with pytest.raises(ValidationError, match="non-positive"):
+        with pytest.raises(ValidationError) as exc_info:
             CartanMatrixRequest(matrix=[[2, 1], [-1, 2]])
+        assert exc_info.value.errors()[0]["type"] == "root_system.positive_off_diagonal"
 
 
 class TestRootSystemData:
@@ -142,8 +145,9 @@ class TestWeylGroupOrder:
     def test_result_replays_signed_root_action_order(self) -> None:
         from jacobian.math.root_systems._models import WeylGroupOrderResult
 
-        with pytest.raises(ValidationError, match="group_order"):
+        with pytest.raises(ValidationError) as exc_info:
             WeylGroupOrderResult(matrix=A2, group_order=5)
+        assert exc_info.value.errors()[0]["type"] == "root_system.group_order_mismatch"
 
     def test_catalog_replaces_the_invalid_mixed_weyl_data_contract(self) -> None:
         from jacobian.math.root_systems._tools import TOOLS

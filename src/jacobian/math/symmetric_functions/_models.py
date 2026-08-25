@@ -6,6 +6,7 @@ from typing import Annotated, Self
 
 from pydantic import Field, WithJsonSchema, model_validator
 from pydantic.json_schema import JsonSchemaValue
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -18,6 +19,13 @@ _MAX_POINT_COORDINATE_DIGITS = 6
 _MAX_POINT_COORDINATE_ABS = 10**_MAX_POINT_COORDINATE_DIGITS - 1
 _MAX_SCHUR_RESULT_DIGITS = 4000
 _MAX_SCHUR_PARTITION_LENGTH = 50
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by symmetric-function contracts."""
+
+    return PydanticCustomError(f"symmetric_function.{reason}", message)
+
 
 PointCoordinate = Annotated[
     int,
@@ -97,14 +105,21 @@ class SchurExpansionRequest(StrictModel):
     @model_validator(mode="after")
     def require_matching_dimensions(self) -> Self:
         if len(self.partition.parts) > _MAX_SCHUR_PARTITION_LENGTH:
-            raise ValueError(
+            raise _validation_error(
+                "schur_partition_length_exceeded",
                 "Schur evaluation partition length must not exceed "
-                f"{_MAX_SCHUR_PARTITION_LENGTH}"
+                f"{_MAX_SCHUR_PARTITION_LENGTH}",
             )
         if len(self.variables) != len(self.point):
-            raise ValueError("variables and point must have the same length")
+            raise _validation_error(
+                "schur_dimensions_mismatch",
+                "variables and point must have the same length",
+            )
         if len(set(self.variables)) != len(self.variables):
-            raise ValueError("variables must be distinct (duplicate axis)")
+            raise _validation_error(
+                "schur_variables_not_distinct",
+                "variables must be distinct (duplicate axis)",
+            )
         return self
 
 
@@ -114,7 +129,10 @@ class SchurExpansionResult(StrictModel):
     @model_validator(mode="after")
     def require_bounded_value(self) -> Self:
         if len(self.value.lstrip("-")) > _MAX_SCHUR_RESULT_DIGITS:
-            raise ValueError("Schur value exceeds the output digit bound")
+            raise _validation_error(
+                "schur_value_digits_exceeded",
+                "Schur value exceeds the output digit bound",
+            )
         return self
 
 

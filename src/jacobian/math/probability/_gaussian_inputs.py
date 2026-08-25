@@ -6,6 +6,7 @@ from fractions import Fraction
 from typing import Annotated, Self
 
 from pydantic import BeforeValidator, Field, StrictInt, ValidationError, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
@@ -22,6 +23,10 @@ from jacobian.math.probability._models import (
 )
 
 
+def _validation_error(message: str) -> PydanticCustomError:
+    return PydanticCustomError("probability.gaussian_invariant", message)
+
+
 class RawGaussianPolynomialTerm(StrictModel):
     """One bounded wire term before duplicate/zero canonicalization."""
 
@@ -36,11 +41,11 @@ class RawGaussianPolynomialTerm(StrictModel):
         if any(
             type(exponent) is not int or exponent < 0 for exponent in self.exponents
         ):
-            raise ValueError(
+            raise _validation_error(
                 "Gaussian polynomial exponents must be nonnegative integers"
             )
         if sum(self.exponents) > MAX_GAUSSIAN_TERM_DEGREE:
-            raise ValueError(
+            raise _validation_error(
                 "Gaussian polynomial term exceeds the "
                 f"{MAX_GAUSSIAN_TERM_DEGREE}-degree bound"
             )
@@ -65,7 +70,7 @@ class RawGaussianPolynomial(StrictModel):
     @model_validator(mode="after")
     def require_consistent_dimension(self) -> Self:
         if any(len(term.exponents) != self.variable_count for term in self.terms):
-            raise ValueError(
+            raise _validation_error(
                 "every Gaussian polynomial exponent vector must match variable_count"
             )
         return self
@@ -118,7 +123,9 @@ def canonical_gaussian_polynomial(value: object) -> GaussianPolynomial:
         if real or imaginary
     )
     if not terms:
-        raise ValueError("Gaussian polynomial canonicalization removed every zero term")
+        raise _validation_error(
+            "Gaussian polynomial canonicalization removed every zero term"
+        )
     return GaussianPolynomial(variable_count=raw.variable_count, terms=terms)
 
 

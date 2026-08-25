@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.root_systems._cartan import require_finite_type
@@ -13,6 +14,12 @@ MAX_RANK = 8
 MAX_REFLECTION_COORDINATE = ((1 << 53) - 1) // (1 + 3 * MAX_RANK)
 # E8 is the largest finite crystallographic Weyl group at the admitted rank.
 MAX_WEYL_GROUP_ORDER = 696_729_600
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by root-system contracts."""
+
+    return PydanticCustomError(f"root_system.{reason}", message)
 
 
 class CartanMatrixRequest(StrictModel):
@@ -24,13 +31,15 @@ class CartanMatrixRequest(StrictModel):
     def require_valid_cartan(self) -> Self:
         n = len(self.matrix)
         if n < 1 or n > MAX_RANK:
-            raise ValueError(f"rank must be between 1 and {MAX_RANK}")
+            raise _validation_error(
+                "rank_out_of_range", f"rank must be between 1 and {MAX_RANK}"
+            )
         for row in self.matrix:
             if len(row) != n:
-                raise ValueError("Cartan matrix must be square")
+                raise _validation_error("not_square", "Cartan matrix must be square")
         for i in range(n):
             if self.matrix[i][i] != 2:
-                raise ValueError("diagonal entries must be 2")
+                raise _validation_error("diagonal_entry", "diagonal entries must be 2")
         self._check_off_diagonal(n)
         require_finite_type(self.matrix)
         return self
@@ -43,12 +52,19 @@ class CartanMatrixRequest(StrictModel):
                 aij = self.matrix[i][j]
                 aji = self.matrix[j][i]
                 if aij > 0:
-                    raise ValueError("off-diagonal entries must be non-positive")
+                    raise _validation_error(
+                        "positive_off_diagonal",
+                        "off-diagonal entries must be non-positive",
+                    )
                 if aij * aji not in (0, 1, 2, 3):
-                    raise ValueError("off-diagonal product must be 0, 1, 2, or 3")
+                    raise _validation_error(
+                        "off_diagonal_product",
+                        "off-diagonal product must be 0, 1, 2, or 3",
+                    )
                 if (aij == 0) != (aji == 0):
-                    raise ValueError(
-                        "generalized Cartan matrix requires a_ij == 0 iff a_ji == 0"
+                    raise _validation_error(
+                        "zero_pattern",
+                        "generalized Cartan matrix requires a_ij == 0 iff a_ji == 0",
                     )
 
 
@@ -65,7 +81,10 @@ class PositiveRootsResult(CartanMatrixRequest):
 
         expected = positive_roots(self.matrix)
         if self.positive_roots != expected or self.num_positive_roots != len(expected):
-            raise ValueError("positive roots are not bound to the Cartan matrix")
+            raise _validation_error(
+                "positive_roots_mismatch",
+                "positive roots are not bound to the Cartan matrix",
+            )
         return self
 
 
@@ -105,11 +124,17 @@ class RootSystemDataResult(StrictModel):
             or self.positive_roots != expected
             or self.num_positive_roots != len(expected)
         ):
-            raise ValueError("root-system data is not bound to its Cartan matrix")
+            raise _validation_error(
+                "root_data_mismatch",
+                "root-system data is not bound to its Cartan matrix",
+            )
         if self.negative_roots != tuple(
             tuple(-value for value in root) for root in expected
         ):
-            raise ValueError("negative roots must be the negatives of positive roots")
+            raise _validation_error(
+                "negative_roots_mismatch",
+                "negative roots must be the negatives of positive roots",
+            )
         expected_components = []
         for indices in connected_components(self.cartan_matrix):
             roots = tuple(
@@ -132,7 +157,10 @@ class RootSystemDataResult(StrictModel):
                 )
             )
         if self.components != tuple(expected_components):
-            raise ValueError("component data is not bound to the Cartan matrix")
+            raise _validation_error(
+                "component_data_mismatch",
+                "component data is not bound to the Cartan matrix",
+            )
         return self
 
 
@@ -147,16 +175,23 @@ class SimpleReflectionRequest(StrictModel):
     def require_valid(self) -> Self:
         n = len(self.matrix)
         if n < 1 or n > MAX_RANK:
-            raise ValueError(f"rank must be between 1 and {MAX_RANK}")
+            raise _validation_error(
+                "rank_out_of_range", f"rank must be between 1 and {MAX_RANK}"
+            )
         if self.simple_index >= n:
-            raise ValueError("simple_index out of range")
+            raise _validation_error(
+                "simple_index_out_of_range", "simple_index out of range"
+            )
         if len(self.vector) != n:
-            raise ValueError("vector length must match rank")
+            raise _validation_error(
+                "vector_length_mismatch", "vector length must match rank"
+            )
         if any(
             abs(coordinate) > MAX_REFLECTION_COORDINATE for coordinate in self.vector
         ):
-            raise ValueError(
-                "vector coordinates must fit the bounded reflected-coordinate domain"
+            raise _validation_error(
+                "vector_coordinate_out_of_range",
+                "vector coordinates must fit the bounded reflected-coordinate domain",
             )
         CartanMatrixRequest(matrix=self.matrix)
         return self
@@ -183,7 +218,9 @@ class SimpleReflectionResult(StrictModel):
             [list(row) for row in self.matrix], list(self.vector), self.simple_index
         )
         if self.reflected_vector != tuple(reflected):
-            raise ValueError("reflected_vector must be s_i(vector)")
+            raise _validation_error(
+                "reflected_vector_mismatch", "reflected_vector must be s_i(vector)"
+            )
         return self
 
 
@@ -202,5 +239,8 @@ class WeylGroupOrderResult(StrictModel):
 
         CartanMatrixRequest(matrix=self.matrix)
         if self.group_order != _weyl_group_order(self.matrix):
-            raise ValueError("group_order must equal the order of the root action")
+            raise _validation_error(
+                "group_order_mismatch",
+                "group_order must equal the order of the root action",
+            )
         return self

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
@@ -17,6 +18,10 @@ from jacobian.math.quadratic_forms.values import (
     evaluate_rational_quadratic_form,
     require_evaluation_budget,
 )
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"quadratic_form.{reason}", message)
 
 
 class EvaluationRequest(StrictModel):
@@ -50,8 +55,18 @@ class EvaluationRequest(StrictModel):
     @model_validator(mode="after")
     def require_shared_axis(self) -> Self:
         if self.vector.axis != self.form.axis:
-            raise ValueError("vector axis must equal the quadratic-form axis")
-        require_evaluation_budget(self.form, self.vector)
+            raise _validation_error(
+                "axis_mismatch", "vector axis must equal the quadratic-form axis"
+            )
+        try:
+            require_evaluation_budget(self.form, self.vector)
+        except ValueError as error:
+            reason = (
+                "support_budget"
+                if "total support" in str(error)
+                else "evaluation_budget"
+            )
+            raise _validation_error(reason, str(error)) from error
         return self
 
 
@@ -64,15 +79,25 @@ class EvaluationResult(StrictModel):
 
     @model_validator(mode="after")
     def require_exact_source_bound_evaluation(self) -> Self:
-        require_evaluation_budget(self.form, self.vector)
-        require_bounded_rational(
-            self.value,
-            max_digits=MAX_QUADRATIC_EVALUATION_DIGITS,
-            label="quadratic-form evaluation",
-        )
+        try:
+            require_evaluation_budget(self.form, self.vector)
+            require_bounded_rational(
+                self.value,
+                max_digits=MAX_QUADRATIC_EVALUATION_DIGITS,
+                label="quadratic-form evaluation",
+            )
+        except ValueError as error:
+            reason = (
+                "support_budget"
+                if "total support" in str(error)
+                else "evaluation_budget"
+            )
+            raise _validation_error(reason, str(error)) from error
         expected = evaluate_rational_quadratic_form(self.form, self.vector)
         if self.value.as_fraction() != expected:
-            raise ValueError("value must equal the exact quadratic-form evaluation")
+            raise _validation_error(
+                "value_mismatch", "value must equal the exact quadratic-form evaluation"
+            )
         return self
 
 

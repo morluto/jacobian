@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Self
 
 from pydantic import ConfigDict, Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
@@ -13,6 +14,12 @@ MAX_ROWS = 256
 MAX_COLUMNS = 256
 MAX_PRIME = 2_147_483_647
 """Explicit conservative bound on the field prime before primality testing."""
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable error owned by prime-field-matrix contracts."""
+
+    return PydanticCustomError(f"prime_field_matrix.{reason}", message)
 
 
 class PrimeFieldMatrixRequest(StrictModel):
@@ -70,24 +77,31 @@ class PrimeFieldMatrixRequest(StrictModel):
             else:
                 prime = getattr(raw, "prime", None)
             if isinstance(prime, int) and not 2 <= prime <= MAX_PRIME:
-                raise ValueError(
+                raise _validation_error(
+                    "request.prime_bound",
                     "field prime must lie in [2, "
-                    f"{MAX_PRIME}] so validation work stays bounded"
+                    f"{MAX_PRIME}] so validation work stays bounded",
                 )
         return data
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
         if len(self.matrix.entries) > MAX_ROWS:
-            raise ValueError(f"matrix has at most {MAX_ROWS} rows")
+            raise _validation_error(
+                "request.rows_bound", f"matrix has at most {MAX_ROWS} rows"
+            )
         if not 1 <= self.matrix.columns <= MAX_COLUMNS:
-            raise ValueError(f"matrix has at most {MAX_COLUMNS} columns")
+            raise _validation_error(
+                "request.columns_bound", f"matrix has at most {MAX_COLUMNS} columns"
+            )
         return self
 
 
 def _require_source_prime(self_prime: int, source: PrimeFieldMatrixRequest) -> None:
     if self_prime != source.matrix.prime:
-        raise ValueError("result prime must equal the retained source prime")
+        raise _validation_error(
+            "result.source_prime", "result prime must equal the retained source prime"
+        )
 
 
 class PrimeFieldMatrixRankResult(StrictModel):
@@ -105,7 +119,10 @@ class PrimeFieldMatrixRankResult(StrictModel):
         # Replay the conclusion from the retained source: the declared rank
         # must equal a recomputation, so corrupted results cannot revalidate.
         if self.rank != kernel_rank(self.source.matrix):
-            raise ValueError("rank does not match a recomputation from the source")
+            raise _validation_error(
+                "result.rank_recomputation",
+                "rank does not match a recomputation from the source",
+            )
         return self
 
 
@@ -130,18 +147,27 @@ class PrimeFieldRrefResult(StrictModel):
         _require_source_prime(self.prime, self.source)
         expected_rows, expected_pivots = kernel_rref(self.source.matrix)
         if self.rref_matrix.entries != tuple(expected_rows):
-            raise ValueError(
-                "rref_matrix does not match a recomputation from the source"
+            raise _validation_error(
+                "result.rref_recomputation",
+                "rref_matrix does not match a recomputation from the source",
             )
         if (
             self.rref_matrix.prime != self.source.matrix.prime
             or self.rref_matrix.columns != self.source.matrix.columns
         ):
-            raise ValueError("rref_matrix must carry the source prime and column axis")
+            raise _validation_error(
+                "result.rref_shape",
+                "rref_matrix must carry the source prime and column axis",
+            )
         if tuple(self.pivot_columns) != tuple(expected_pivots):
-            raise ValueError("pivot_columns must be the exact pivot column sequence")
+            raise _validation_error(
+                "result.pivot_columns",
+                "pivot_columns must be the exact pivot column sequence",
+            )
         if self.rank != len(expected_pivots):
-            raise ValueError("rank must equal the number of pivot columns")
+            raise _validation_error(
+                "result.rank_pivots", "rank must equal the number of pivot columns"
+            )
         return self
 
 
@@ -170,18 +196,22 @@ class PrimeFieldNullspaceResult(StrictModel):
         # defining relation, independence, and completeness of the basis.
         expected_basis = kernel_nullspace(self.source.matrix)
         if self.nullspace_matrix.entries != tuple(expected_basis):
-            raise ValueError(
-                "nullspace_matrix does not match a recomputation from the source"
+            raise _validation_error(
+                "result.nullspace_recomputation",
+                "nullspace_matrix does not match a recomputation from the source",
             )
         if (
             self.nullspace_matrix.prime != self.source.matrix.prime
             or self.nullspace_matrix.columns != self.source.matrix.columns
         ):
-            raise ValueError(
-                "nullspace_matrix must carry the source prime and column axis"
+            raise _validation_error(
+                "result.nullspace_shape",
+                "nullspace_matrix must carry the source prime and column axis",
             )
         if self.nullity != len(expected_basis):
-            raise ValueError("nullity must equal the number of basis vectors")
+            raise _validation_error(
+                "result.nullity_basis", "nullity must equal the number of basis vectors"
+            )
         return self
 
 

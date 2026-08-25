@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -15,6 +16,10 @@ from jacobian.math.tree_automata.values import (
     accepted_tree_count_work_bound,
     validate_ranked_tree,
 )
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"tree_automata.{reason}", message)
 
 
 class TreeRunRequest(StrictModel):
@@ -28,7 +33,10 @@ class TreeRunRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_tree_arity(self) -> Self:
-        validate_ranked_tree(self.automaton, self.tree)
+        try:
+            validate_ranked_tree(self.automaton, self.tree)
+        except ValueError as exc:
+            raise _validation_error("invalid_tree", str(exc)) from exc
         return self
 
 
@@ -45,16 +53,22 @@ class TreeRunResult(TreeRunRequest):
     @model_validator(mode="after")
     def require_canonical_root_states(self) -> Self:
         if self.root_states != tuple(sorted(set(self.root_states))):
-            raise ValueError("root states must be unique and sorted")
+            raise _validation_error(
+                "root_states_not_canonical", "root states must be unique and sorted"
+            )
         from jacobian.math.tree_automata.operations import tree_state_chart
 
         expected_chart = tree_state_chart(self.automaton, self.tree)
         expected = expected_chart[-1][1]
         if self.state_chart != expected_chart or self.root_states != expected:
-            raise ValueError("root states are not bound to the automaton and tree")
+            raise _validation_error(
+                "root_states_not_bound",
+                "root states are not bound to the automaton and tree",
+            )
         if self.accepted != bool(set(expected) & set(self.automaton.final_states)):
-            raise ValueError(
-                "tree acceptance must agree with the reachable root states"
+            raise _validation_error(
+                "acceptance_not_bound",
+                "tree acceptance must agree with the reachable root states",
             )
         return self
 
@@ -67,7 +81,10 @@ class AcceptedTreeCountRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_exact_count(self) -> Self:
-        accepted_tree_count_work_bound(self.automaton, self.tree_size)
+        try:
+            accepted_tree_count_work_bound(self.automaton, self.tree_size)
+        except ValueError as exc:
+            raise _validation_error("count_work_bound", str(exc)) from exc
         return self
 
 
@@ -87,7 +104,9 @@ class AcceptedTreeCountResult(AcceptedTreeCountRequest):
         from jacobian.math.tree_automata.operations import accepted_tree_count
 
         if int(self.count) != accepted_tree_count(self.automaton, self.tree_size):
-            raise ValueError("tree count is not bound to its automaton")
+            raise _validation_error(
+                "count_not_bound", "tree count is not bound to its automaton"
+            )
         return self
 
 
@@ -142,8 +161,16 @@ class TreeAutomatonReachabilityRequest(StrictModel):
         if _reachability_public_path_work_bound(self.automaton) > (
             MAX_TREE_AUTOMATON_REACHABILITY_WORK
         ):
-            raise ValueError("tree automaton reachability work bound exceeded")
-        reachable_state_profile(self.automaton)
+            raise _validation_error(
+                "reachability_work_bound",
+                "tree automaton reachability work bound exceeded",
+            )
+        try:
+            reachable_state_profile(self.automaton)
+        except ValueError as exc:
+            if "witness output" in str(exc):
+                raise _validation_error("witness_output_bound", str(exc)) from exc
+            raise
         return self
 
 

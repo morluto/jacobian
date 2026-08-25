@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.posets._models import (
@@ -13,6 +14,11 @@ from jacobian.math.posets._models import (
     FinitePoset,
     PosetExactResult,
 )
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"poset.{reason}", message)
+
 
 # ---------------------------------------------------------------------------
 # Requests
@@ -32,7 +38,9 @@ class LowerClosureRequest(StrictModel):
         elements = set(self.poset.elements)
         for s in self.subset:
             if s not in elements:
-                raise ValueError(f"subset element {s!r} is not in the poset")
+                raise _validation_error(
+                    "subset_in_carrier", f"subset element {s!r} is not in the poset"
+                )
         return self
 
 
@@ -49,7 +57,9 @@ class UpperClosureRequest(StrictModel):
         elements = set(self.poset.elements)
         for s in self.subset:
             if s not in elements:
-                raise ValueError(f"subset element {s!r} is not in the poset")
+                raise _validation_error(
+                    "subset_in_carrier", f"subset element {s!r} is not in the poset"
+                )
         return self
 
 
@@ -72,7 +82,9 @@ class InducedSubposetRequest(StrictModel):
         elements = set(self.poset.elements)
         for s in self.subset:
             if s not in elements:
-                raise ValueError(f"subset element {s!r} is not in the poset")
+                raise _validation_error(
+                    "subset_in_carrier", f"subset element {s!r} is not in the poset"
+                )
         return self
 
 

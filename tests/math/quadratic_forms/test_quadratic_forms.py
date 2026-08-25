@@ -87,16 +87,20 @@ def test_zero_dimensional_form_evaluates_to_zero() -> None:
 
 
 def test_zero_dimensional_axis_keeps_coupled_length_validation() -> None:
-    with pytest.raises(ValidationError, match="must match"):
+    with pytest.raises(ValidationError) as error:
         RationalQuadraticForm.model_validate(
             {"axis": [], "diagonal_coefficients": [_rational(1)]}
         )
-    with pytest.raises(ValidationError, match="must match"):
+    assert error.value.errors()[0]["type"] == "quadratic_form.diagonal_length_mismatch"
+    with pytest.raises(ValidationError) as error:
         RationalCoordinateVector.model_validate({"axis": ["u"], "coordinates": []})
+    assert (
+        error.value.errors()[0]["type"] == "quadratic_form.coordinate_length_mismatch"
+    )
 
 
 def test_axis_mismatch_is_rejected_before_arithmetic() -> None:
-    with pytest.raises(ValidationError, match="vector axis"):
+    with pytest.raises(ValidationError) as error:
         EvaluationRequest.model_validate(
             {
                 "form": _form(),
@@ -106,10 +110,11 @@ def test_axis_mismatch_is_rejected_before_arithmetic() -> None:
                 },
             }
         )
+    assert error.value.errors()[0]["type"] == "quadratic_form.axis_mismatch"
 
 
 def test_cross_terms_are_nonzero_unique_and_canonically_ordered() -> None:
-    with pytest.raises(ValidationError, match="zero cross terms"):
+    with pytest.raises(ValidationError) as error:
         RationalQuadraticForm.model_validate(
             {
                 **_form(),
@@ -118,7 +123,8 @@ def test_cross_terms_are_nonzero_unique_and_canonically_ordered() -> None:
                 ],
             }
         )
-    with pytest.raises(ValidationError, match="ordered"):
+    assert error.value.errors()[0]["type"] == "quadratic_form.zero_cross_term"
+    with pytest.raises(ValidationError) as error:
         RationalQuadraticForm.model_validate(
             {
                 "axis": ["x", "y", "z"],
@@ -129,7 +135,8 @@ def test_cross_terms_are_nonzero_unique_and_canonically_ordered() -> None:
                 ],
             }
         )
-    with pytest.raises(ValidationError, match="within the quadratic-form axis"):
+    assert error.value.errors()[0]["type"] == "quadratic_form.cross_terms_not_canonical"
+    with pytest.raises(ValidationError) as error:
         RationalQuadraticForm.model_validate(
             {
                 "axis": ["x"],
@@ -139,18 +146,20 @@ def test_cross_terms_are_nonzero_unique_and_canonically_ordered() -> None:
                 ],
             }
         )
+    assert error.value.errors()[0]["type"] == "quadratic_form.cross_term_out_of_range"
 
 
 def test_result_replays_the_source_bound_value() -> None:
-    with pytest.raises(ValidationError, match="exact quadratic-form evaluation"):
+    with pytest.raises(ValidationError) as error:
         EvaluationResult.model_validate(
             {"form": _form(), "vector": _vector(), "value": _rational(1)}
         )
+    assert error.value.errors()[0]["type"] == "quadratic_form.value_mismatch"
 
 
 def test_digit_bounds_reject_before_exact_arithmetic() -> None:
     too_large_coefficient = "1" + "0" * MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
-    with pytest.raises(ValidationError, match="cross coefficient"):
+    with pytest.raises(ValidationError) as error:
         RationalQuadraticForm.model_validate(
             {
                 "axis": ["x", "y"],
@@ -164,14 +173,16 @@ def test_digit_bounds_reject_before_exact_arithmetic() -> None:
                 ],
             }
         )
+    assert error.value.errors()[0]["type"] == "quadratic_form.coefficient_bound"
     too_large_coordinate = "1" + "0" * MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS
-    with pytest.raises(ValidationError, match="vector coordinate"):
+    with pytest.raises(ValidationError) as error:
         RationalCoordinateVector.model_validate(
             {
                 "axis": ["x"],
                 "coordinates": [{"num": too_large_coordinate, "den": "1"}],
             }
         )
+    assert error.value.errors()[0]["type"] == "quadratic_form.coordinate_bound"
 
 
 def test_work_based_admission_accepts_light_high_dimension_forms() -> None:
@@ -232,8 +243,9 @@ def test_evaluation_preflights_the_aggregate_denominator() -> None:
         "coordinates": [_rational(1) for _ in labels],
     }
 
-    with pytest.raises(ValidationError, match="aggregate denominator"):
+    with pytest.raises(ValidationError) as error:
         EvaluationRequest.model_validate({"form": form, "vector": vector})
+    assert error.value.errors()[0]["type"] == "quadratic_form.evaluation_budget"
 
 
 def test_evaluation_budget_ignores_annihilated_monomials() -> None:
@@ -325,12 +337,14 @@ def test_total_support_bound_rejects_unbounded_annihilated_support() -> None:
         "coordinates": [_rational(0) for _ in labels],
     }
 
-    with pytest.raises(ValidationError, match="total support"):
+    with pytest.raises(ValidationError) as error:
         EvaluationRequest.model_validate({"form": form, "vector": vector})
-    with pytest.raises(ValidationError, match="total support"):
+    assert error.value.errors()[0]["type"] == "quadratic_form.support_budget"
+    with pytest.raises(ValidationError) as error:
         EvaluationResult.model_validate(
             {"form": form, "vector": vector, "value": _rational(0)}
         )
+    assert error.value.errors()[0]["type"] == "quadratic_form.support_budget"
 
 
 def test_total_support_admits_the_boundary_and_rejects_one_past_it() -> None:
@@ -356,10 +370,11 @@ def test_total_support_admits_the_boundary_and_rejects_one_past_it() -> None:
     assert evaluate_rational_quadratic_form(accepted.form, accepted.vector) == Fraction(
         0
     )
-    with pytest.raises(ValidationError, match="total support"):
+    with pytest.raises(ValidationError) as error:
         EvaluationRequest.model_validate(
             _request(MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS + 1)
         )
+    assert error.value.errors()[0]["type"] == "quadratic_form.support_budget"
 
 
 def test_request_schema_documents_the_evaluation_budgets() -> None:

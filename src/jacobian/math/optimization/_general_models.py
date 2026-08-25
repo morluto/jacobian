@@ -7,6 +7,7 @@ from fractions import Fraction
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
@@ -14,12 +15,18 @@ from jacobian._exact import (
     require_bounded_rational,
 )
 from jacobian._models import StrictModel
+from jacobian.math.optimization._arithmetic import rational_dot
 from jacobian.math.optimization._models import (
     MAX_LINEAR_PROGRAM_RESULT_BYTES,
     RationalLinearProgramStatus,
     _bound_raw_rational,
     _prepare_raw_rational_vector,
 )
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"general_linear_program.{reason}", message)
+
 
 type RationalLinearRelation = Literal["LE", "EQ", "GE"]
 type RationalObjectiveSense = Literal["MINIMIZE", "MAXIMIZE"]
@@ -123,22 +130,28 @@ class RationalLinearProgramVariable(StrictModel):
         if not (self.name[0].isalpha() or self.name[0] == "_") or any(
             not (character.isalnum() or character == "_") for character in self.name
         ):
-            raise ValueError(
-                "general linear-program variable names must be identifiers"
+            raise _validation_error(
+                "variable_identifier",
+                "general linear-program variable names must be identifiers",
             )
         for bound in (self.lower_bound, self.upper_bound):
             if bound is not None:
-                require_bounded_rational(
-                    bound,
-                    max_digits=128,
-                    label="general linear-program input",
-                )
+                try:
+                    require_bounded_rational(
+                        bound,
+                        max_digits=128,
+                        label="general linear-program input",
+                    )
+                except ValueError as error:
+                    raise _validation_error("bounded_rational", str(error)) from error
         if (
             self.lower_bound is not None
             and self.upper_bound is not None
             and self.lower_bound.as_fraction() > self.upper_bound.as_fraction()
         ):
-            raise ValueError("a variable lower bound cannot exceed its upper bound")
+            raise _validation_error(
+                "bound_order", "a variable lower bound cannot exceed its upper bound"
+            )
         return self
 
 
@@ -157,11 +170,14 @@ class RationalLinearObjective(StrictModel):
     @model_validator(mode="after")
     def require_bounded_coefficients(self) -> Self:
         for coefficient in self.coefficients:
-            require_bounded_rational(
-                coefficient,
-                max_digits=128,
-                label="general linear-program input",
-            )
+            try:
+                require_bounded_rational(
+                    coefficient,
+                    max_digits=128,
+                    label="general linear-program input",
+                )
+            except ValueError as error:
+                raise _validation_error("bounded_rational", str(error)) from error
         return self
 
 
@@ -186,11 +202,14 @@ class RationalLinearConstraint(StrictModel):
     @model_validator(mode="after")
     def require_bounded_coefficients(self) -> Self:
         for value in (*self.coefficients, self.rhs):
-            require_bounded_rational(
-                value,
-                max_digits=128,
-                label="general linear-program input",
-            )
+            try:
+                require_bounded_rational(
+                    value,
+                    max_digits=128,
+                    label="general linear-program input",
+                )
+            except ValueError as error:
+                raise _validation_error("bounded_rational", str(error)) from error
         return self
 
 
@@ -217,30 +236,48 @@ class GeneralFormRationalLinearProgram(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def bound_raw_program(cls, value: object) -> object:
-        return _prepare_raw_general_program(value)
+        try:
+            return _prepare_raw_general_program(value)
+        except ValueError as error:
+            raise _validation_error("raw_input_bound", str(error)) from error
 
     @model_validator(mode="after")
     def require_dimensions_and_admission(self) -> Self:
         if len({variable.name for variable in self.variables}) != len(self.variables):
-            raise ValueError("general linear-program variable names must be unique")
+            raise _validation_error(
+                "duplicate_variable",
+                "general linear-program variable names must be unique",
+            )
         if len({constraint.label for constraint in self.constraints}) != len(
             self.constraints
         ):
-            raise ValueError("general linear-program constraint labels must be unique")
+            raise _validation_error(
+                "duplicate_constraint_label",
+                "general linear-program constraint labels must be unique",
+            )
         if len(self.objective.coefficients) != len(self.variables):
-            raise ValueError("objective length must equal the variable count")
+            raise _validation_error(
+                "objective_length",
+                "objective length must equal the variable count",
+            )
         if any(
             len(constraint.coefficients) != len(self.variables)
             for constraint in self.constraints
         ):
-            raise ValueError("every constraint row must match the variable count")
+            raise _validation_error(
+                "constraint_row_length",
+                "every constraint row must match the variable count",
+            )
         # Import lazily: normalizing imports these public source types, while
         # this model owns the pre-backend work admission.
         from jacobian.math.optimization._general_normalization import (
             require_admitted_general_normalization,
         )
 
-        require_admitted_general_normalization(self)
+        try:
+            require_admitted_general_normalization(self)
+        except ValueError as error:
+            raise _validation_error("normalization_admission", str(error)) from error
         return self
 
 
@@ -307,55 +344,57 @@ class GeneralRationalLinearProgramResult(StrictModel):
     def bound_raw_result(cls, value: object) -> object:
         if not isinstance(value, Mapping):
             return value
-        prepared = dict(value)
-        prepared["program"] = _prepare_raw_general_program(prepared.get("program"))
-        vector_bounds = {
-            "primal_candidate": MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
-            "primal_residuals": MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS,
-            "constraint_slacks": MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS,
-            "lower_bound_slacks": MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
-            "upper_bound_slacks": MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
-            "constraint_dual": MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS,
-            "lower_bound_dual": MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
-            "upper_bound_dual": MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
-            "stationarity_residuals": MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
-            "farkas_constraints": MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS,
-            "farkas_lower_bounds": MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
-            "farkas_upper_bounds": MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
-            "recession_direction": MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
-        }
-        for name, maximum_length in vector_bounds.items():
-            prepared[name] = _prepare_raw_rational_vector(
-                prepared.get(name),
-                maximum_length=maximum_length,
-                maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
-                label=f"general linear-program {name}",
-            )
-        for name in ("primal_objective", "dual_objective"):
-            _bound_raw_rational(
-                prepared.get(name),
-                maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
-                label=f"general linear-program {name}",
-            )
-        return prepared
+        try:
+            prepared = dict(value)
+            prepared["program"] = _prepare_raw_general_program(prepared.get("program"))
+            vector_bounds = {
+                "primal_candidate": MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
+                "primal_residuals": MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS,
+                "constraint_slacks": MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS,
+                "lower_bound_slacks": MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
+                "upper_bound_slacks": MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
+                "constraint_dual": MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS,
+                "lower_bound_dual": MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
+                "upper_bound_dual": MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
+                "stationarity_residuals": MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
+                "farkas_constraints": MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS,
+                "farkas_lower_bounds": MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
+                "farkas_upper_bounds": MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
+                "recession_direction": MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
+            }
+            for name, maximum_length in vector_bounds.items():
+                prepared[name] = _prepare_raw_rational_vector(
+                    prepared.get(name),
+                    maximum_length=maximum_length,
+                    maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+                    label=f"general linear-program {name}",
+                )
+            for name in ("primal_objective", "dual_objective"):
+                _bound_raw_rational(
+                    prepared.get(name),
+                    maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+                    label=f"general linear-program {name}",
+                )
+            return prepared
+        except ValueError as error:
+            raise _validation_error("raw_result_bound", str(error)) from error
 
     @model_validator(mode="after")
     def bind_result_to_source(self) -> Self:
-        _require_general_result_shape(self)
-        _require_general_result_heights(self)
-        primal_objective = _replay_general_primal(self)
-        _replay_general_dual(self, primal_objective)
-        _replay_general_farkas(self)
-        _replay_general_recession(self)
+        try:
+            _require_general_result_shape(self)
+            _require_general_result_heights(self)
+            primal_objective = _replay_general_primal(self)
+            _replay_general_dual(self, primal_objective)
+            _replay_general_farkas(self)
+            _replay_general_recession(self)
+        except ValueError as error:
+            raise _validation_error("result_replay", str(error)) from error
         return self
 
 
 def _fractions(values: tuple[CanonicalRational, ...]) -> tuple[Fraction, ...]:
     return tuple(value.as_fraction() for value in values)
-
-
-def _dot(left: tuple[Fraction, ...], right: tuple[Fraction, ...]) -> Fraction:
-    return sum((a * b for a, b in zip(left, right, strict=True)), Fraction())
 
 
 def _source_arrays(
@@ -488,7 +527,8 @@ def _replay_general_primal(
             raise ValueError("general LP primal point violates an upper bound")
     objective, coefficients, rhs = _source_arrays(program)
     residuals = tuple(
-        _dot(row, primal) - bound for row, bound in zip(coefficients, rhs, strict=True)
+        rational_dot(row, primal) - bound
+        for row, bound in zip(coefficients, rhs, strict=True)
     )
     for residual, row in zip(residuals, program.constraints, strict=True):
         if (
@@ -502,7 +542,7 @@ def _replay_general_primal(
     assert result.constraint_slacks is not None
     assert result.lower_bound_slacks is not None
     assert result.upper_bound_slacks is not None
-    source_objective = _dot(objective, primal)
+    source_objective = rational_dot(objective, primal)
     if result.primal_objective.as_fraction() != source_objective:
         raise ValueError(
             "general LP primal objective must be recomputed from the source"
@@ -596,7 +636,7 @@ def _replay_general_dual(
     if _fractions(result.stationarity_residuals) != stationarity or any(stationarity):
         raise ValueError("general LP dual stationarity must replay exactly")
     dual_objective = (
-        _dot(rhs, multipliers)
+        rational_dot(rhs, multipliers)
         + sum(
             (
                 lower_value * variable.lower_bound.as_fraction()
@@ -666,7 +706,7 @@ def _replay_general_farkas(result: GeneralRationalLinearProgramResult) -> None:
     if any(balance):
         raise ValueError("general LP Farkas multipliers must balance every variable")
     pairing = (
-        _dot(rhs, multipliers)
+        rational_dot(rhs, multipliers)
         + sum(
             (
                 lower_value * variable.lower_bound.as_fraction()
@@ -706,7 +746,7 @@ def _replay_general_recession(result: GeneralRationalLinearProgramResult) -> Non
             )
     _, coefficients, _ = _source_arrays(program)
     for row, constraint in zip(coefficients, program.constraints, strict=True):
-        derivative = _dot(row, direction)
+        derivative = rational_dot(row, direction)
         if (
             (constraint.relation == "EQ" and derivative != 0)
             or (constraint.relation == "LE" and derivative > 0)
@@ -714,7 +754,7 @@ def _replay_general_recession(result: GeneralRationalLinearProgramResult) -> Non
         ):
             raise ValueError("general LP recession direction violates a source row")
     objective, _, _ = _source_arrays(program)
-    improvement = _dot(objective, direction)
+    improvement = rational_dot(objective, direction)
     if (program.objective.sense == "MINIMIZE" and improvement >= 0) or (
         program.objective.sense == "MAXIMIZE" and improvement <= 0
     ):

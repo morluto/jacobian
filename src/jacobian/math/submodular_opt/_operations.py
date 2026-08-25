@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from jacobian.canonical import format_canonical_integer
+from jacobian._exact import format_canonical_rational
 from jacobian.math.submodular_opt._models import (
     MonotonicityCheckRequest,
     MonotonicityCheckResult,
@@ -14,15 +14,6 @@ from jacobian.math.submodular_opt._models import (
     SubmodularityCheckRequest,
     SubmodularityCheckResult,
 )
-
-
-def _format_rational(value: Fraction) -> str:
-    if value.denominator == 1:
-        return format_canonical_integer(value.numerator)
-    return (
-        f"{format_canonical_integer(value.numerator)}/"
-        f"{format_canonical_integer(value.denominator)}"
-    )
 
 
 def _subset_label(mask: int, size: int) -> tuple[int, ...]:
@@ -45,7 +36,7 @@ def evaluate_set_function(
     """Evaluate f(S) by table lookup."""
     val = _lookup(request.function, request.subset)
     if val is not None:
-        return SetFunctionEvalResult(value=_format_rational(val), found=True)
+        return SetFunctionEvalResult(value=format_canonical_rational(val), found=True)
     return SetFunctionEvalResult(value="0", found=False)
 
 

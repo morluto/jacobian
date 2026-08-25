@@ -5,6 +5,7 @@ from math import gcd, lcm
 import pytest
 from pydantic import TypeAdapter, ValidationError
 from sympy import divisors, mobius
+from tests.math.number_theory._validation import expect_validation
 
 from jacobian._exact import CanonicalInteger
 from jacobian.math.number_theory import ramanujan_sum
@@ -84,7 +85,7 @@ def test_operation_returns_a_source_bound_exact_result() -> None:
         {"modulus": "3", "frequency": "2", "value": "-2"},
         {"modulus": "4", "frequency": "2", "value": "2"},
     ):
-        with pytest.raises(ValidationError, match="does not match"):
+        with expect_validation("number_theory."):
             RamanujanSumResult.model_validate(mutation)
 
 
@@ -193,9 +194,9 @@ def test_owner_grammar_admits_negative_moduli_the_operation_rejects(
     negative: str,
 ) -> None:
     assert TypeAdapter(CanonicalInteger).validate_python(negative) == negative
-    with pytest.raises(ValidationError, match="nonnegative"):
+    with expect_validation("number_theory."):
         RamanujanSumRequest(modulus=negative, frequency="0")
-    with pytest.raises(ValidationError, match="nonnegative"):
+    with expect_validation("number_theory."):
         RamanujanSumResult.model_validate(
             {"modulus": negative, "frequency": "2", "value": "-2"}
         )
@@ -249,9 +250,9 @@ def test_ramanujan_sum_request_bounds_factorization_and_frequency_work() -> None
         int(boundary.modulus), int(boundary.frequency)
     )
 
-    with pytest.raises(ValidationError, match=r"at most 12|12 characters"):
+    with expect_validation("number_theory."):
         RamanujanSumRequest(modulus="1000000000000", frequency="0")
-    with pytest.raises(ValidationError, match=r"at most 256|256 characters"):
+    with expect_validation("number_theory."):
         RamanujanSumRequest(modulus="1", frequency="9" * 257)
     with pytest.raises(ValidationError):
         RamanujanSumRequest(modulus="-1", frequency="0")

@@ -33,6 +33,10 @@ from jacobian.math.regular_languages.values import (
 )
 
 
+def _error_type(exc_info: pytest.ExceptionInfo[ValidationError]) -> str:
+    return str(exc_info.value.errors()[0]["type"])
+
+
 def _automaton(
     state_count: int,
     alphabet_size: int,
@@ -398,7 +402,7 @@ def test_wire_result_rejects_source_and_conclusion_forgeries() -> None:
 
 
 def test_transition_axis_requires_contiguous_stable_identifiers() -> None:
-    with pytest.raises(ValidationError, match="contiguous zero-based axis"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteLabeledAutomaton(
             state_count=1,
             alphabet_size=1,
@@ -411,6 +415,7 @@ def test_transition_axis_requires_contiguous_stable_identifiers() -> None:
                 ),
             ),
         )
+    assert _error_type(exc_info) == "regular_language.transition_axis_not_contiguous"
 
     parallel = _automaton(1, 1, ((0, 0, 0), (0, 0, 0)))
     assert _profile_map(transition_parikh_profile(parallel, 0, 0, 1)) == Counter(
@@ -419,13 +424,14 @@ def test_transition_axis_requires_contiguous_stable_identifiers() -> None:
 
 
 def test_request_rejects_out_of_range_endpoint_before_execution() -> None:
-    with pytest.raises(ValidationError, match="source_state"):
+    with pytest.raises(ValidationError) as exc_info:
         TransitionParikhProfileRequest(
             automaton=_automaton(1, 0, ()),
             source_state=1,
             target_state=0,
             path_length=0,
         )
+    assert _error_type(exc_info) == "regular_language.profile_admission_rejected"
 
 
 def _loop_automaton(
@@ -446,13 +452,14 @@ def test_request_rejects_excessive_dp_work_even_when_target_is_unreachable() -> 
         target_state=1,
         path_length=157,
     )
-    with pytest.raises(ValidationError, match="DP transition-update bound"):
+    with pytest.raises(ValidationError) as exc_info:
         TransitionParikhProfileRequest(
             automaton=automaton,
             source_state=0,
             target_state=1,
             path_length=158,
         )
+    assert _error_type(exc_info) == "regular_language.profile_admission_rejected"
 
 
 def test_request_preflight_scans_only_reachable_outgoing_transitions() -> None:
@@ -479,13 +486,14 @@ def test_request_rejects_excessive_dense_vector_update_work() -> None:
         target_state=1,
         path_length=9,
     )
-    with pytest.raises(ValidationError, match="dense-vector update-work bound"):
+    with pytest.raises(ValidationError) as exc_info:
         TransitionParikhProfileRequest(
             automaton=automaton,
             source_state=0,
             target_state=1,
             path_length=10,
         )
+    assert _error_type(exc_info) == "regular_language.profile_admission_rejected"
 
 
 def test_request_rejects_excessive_profile_cell_count() -> None:
@@ -496,24 +504,26 @@ def test_request_rejects_excessive_profile_cell_count() -> None:
         target_state=0,
         path_length=9,
     )
-    with pytest.raises(ValidationError, match="profile-cell bound"):
+    with pytest.raises(ValidationError) as exc_info:
         TransitionParikhProfileRequest(
             automaton=automaton,
             source_state=0,
             target_state=0,
             path_length=10,
         )
+    assert _error_type(exc_info) == "regular_language.profile_admission_rejected"
 
 
 def test_request_rejects_excessive_intermediate_vector_coordinates() -> None:
     automaton = _loop_automaton(159, state_count=2)
-    with pytest.raises(ValidationError, match="intermediate vector-coordinate bound"):
+    with pytest.raises(ValidationError) as exc_info:
         TransitionParikhProfileRequest(
             automaton=automaton,
             source_state=0,
             target_state=1,
             path_length=2,
         )
+    assert _error_type(exc_info) == "regular_language.profile_admission_rejected"
     TransitionParikhProfileRequest(
         automaton=_loop_automaton(158, state_count=2),
         source_state=0,
@@ -534,13 +544,14 @@ def test_request_rejects_excessive_serialized_result() -> None:
     )
     assert len(encoded) <= _MAX_TRANSITION_PROFILE_RESULT_BYTES
 
-    with pytest.raises(ValidationError, match="serialized-result bound"):
+    with pytest.raises(ValidationError) as exc_info:
         TransitionParikhProfileRequest(
             automaton=_loop_automaton(130),
             source_state=0,
             target_state=0,
             path_length=2,
         )
+    assert _error_type(exc_info) == "regular_language.profile_admission_rejected"
 
 
 def test_length_bound_keeps_large_degenerate_cases_typed() -> None:
@@ -553,13 +564,14 @@ def test_length_bound_keeps_large_degenerate_cases_typed() -> None:
     )
     assert compute_transition_parikh_profile(request).entries == ()
 
-    with pytest.raises(ValidationError, match="less than or equal"):
+    with pytest.raises(ValidationError) as exc_info:
         TransitionParikhProfileRequest(
             automaton=automaton,
             source_state=0,
             target_state=1,
             path_length=MAX_TRANSITION_PROFILE_PATH_LENGTH + 1,
         )
+    assert _error_type(exc_info) == "less_than_equal"
 
 
 def _atlas_clock_carry_product_automaton() -> tuple[FiniteLabeledAutomaton, int]:
@@ -611,12 +623,13 @@ def test_labeled_automaton_state_materialization_boundary() -> None:
         alphabet_size=0,
         transitions=(),
     )
-    with pytest.raises(ValidationError, match="less than or equal"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteLabeledAutomaton(
             state_count=MAX_LABELED_AUTOMATON_STATES + 1,
             alphabet_size=0,
             transitions=(),
         )
+    assert _error_type(exc_info) == "less_than_equal"
 
 
 def _clock_automaton(delta: tuple[tuple[int, int, int], ...]) -> FiniteLabeledAutomaton:

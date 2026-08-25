@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.words.operations import (
@@ -27,6 +28,10 @@ from jacobian.math.words.values import (
 )
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"word.{reason}", message)
+
+
 class FactorsLengthRequest(StrictModel):
     """Enumerate all distinct factors of one valid length."""
 
@@ -36,7 +41,10 @@ class FactorsLengthRequest(StrictModel):
     @model_validator(mode="after")
     def require_bounded_factor_length(self) -> Self:
         if self.factor_length > len(self.word.letters):
-            raise ValueError("factor_length must not exceed the word length")
+            raise _validation_error(
+                "factor_length_exceeds_word",
+                "factor_length must not exceed the word length",
+            )
         return self
 
 
@@ -69,7 +77,10 @@ class FactorsLengthResult(FactorsLengthRequest):
             != tuple(indices[0] for indices in expected_occurrences)
             or self.distinct_count != len(expected.factors)
         ):
-            raise ValueError("factor result is not bound to the requested word")
+            raise _validation_error(
+                "factor_result_unbound",
+                "factor result is not bound to the requested word",
+            )
         return self
 
 
@@ -102,7 +113,10 @@ class PeriodsResult(PeriodsRequest):
             or self.least_period != expected.least_period
             or self.is_primitive != expected.primitive
         ):
-            raise ValueError("period result is not bound to the requested word")
+            raise _validation_error(
+                "period_result_unbound",
+                "period result is not bound to the requested word",
+            )
         return self
 
 
@@ -123,7 +137,10 @@ class IncidenceMatrixResult(IncidenceMatrixRequest):
     @model_validator(mode="after")
     def bind_exact_incidence_matrix(self) -> Self:
         if self.matrix != incidence_matrix(self.morphism):
-            raise ValueError("incidence matrix is not bound to the requested morphism")
+            raise _validation_error(
+                "incidence_matrix_unbound",
+                "incidence matrix is not bound to the requested morphism",
+            )
         return self
 
 
@@ -134,7 +151,12 @@ class SubstitutionDependencyGraphRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_occurrence_output(self) -> Self:
-        _require_dependency_occurrence_bound(self.substitution)
+        try:
+            _require_dependency_occurrence_bound(self.substitution)
+        except ValueError as error:
+            raise _validation_error(
+                "dependency_occurrence_bound", str(error)
+            ) from error
         return self
 
 
@@ -153,7 +175,10 @@ class SubstitutionDependencyGraphResult(SubstitutionDependencyGraphRequest):
     @model_validator(mode="after")
     def bind_exact_dependency_graph(self) -> Self:
         if self.graph != substitution_dependency_graph(self.substitution):
-            raise ValueError("dependency graph result is not bound to the substitution")
+            raise _validation_error(
+                "dependency_graph_unbound",
+                "dependency graph result is not bound to the substitution",
+            )
         return self
 
 
@@ -164,7 +189,12 @@ class SubstitutionPrimitivityProfileRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_dependency_source(self) -> Self:
-        _require_dependency_occurrence_bound(self.dependency_graph.substitution)
+        try:
+            _require_dependency_occurrence_bound(self.dependency_graph.substitution)
+        except ValueError as error:
+            raise _validation_error(
+                "dependency_occurrence_bound", str(error)
+            ) from error
         return self
 
 
@@ -197,7 +227,10 @@ class SubstitutionPrimitivityProfileResult(SubstitutionPrimitivityProfileRequest
             or self.exponent_upper_bound != expected.exponent_upper_bound
             or self.obstruction != expected.obstruction
         ):
-            raise ValueError("primitivity result is not bound to the dependency graph")
+            raise _validation_error(
+                "primitivity_result_unbound",
+                "primitivity result is not bound to the dependency graph",
+            )
         return self
 
 
@@ -209,7 +242,10 @@ class SubstitutionFixedPointPrefixRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_source_work_and_result(self) -> Self:
-        _require_fixed_point_prefix_budget(self.source, self.prefix_length)
+        try:
+            _require_fixed_point_prefix_budget(self.source, self.prefix_length)
+        except ValueError as error:
+            raise _validation_error("fixed_point_budget", str(error)) from error
         return self
 
 
@@ -237,7 +273,10 @@ class SubstitutionFixedPointPrefixResult(SubstitutionFixedPointPrefixRequest):
             or self.least_iterate_depth != expected.least_iterate_depth
             or self.retained_prefix_lengths != expected.retained_prefix_lengths
         ):
-            raise ValueError("fixed-point prefix is not bound to the request")
+            raise _validation_error(
+                "fixed_point_prefix_unbound",
+                "fixed-point prefix is not bound to the request",
+            )
         return self
 
 

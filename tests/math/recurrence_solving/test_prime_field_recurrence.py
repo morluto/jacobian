@@ -6,6 +6,8 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.recurrence_solving._models import (
+    _MAX_FIELD_PRIME,
+    _MAX_FIELD_SEQUENCE_LENGTH,
     PrimeFieldRecurrence,
     PrimeFieldRecurrenceFindRequest,
     PrimeFieldRecurrenceFindResult,
@@ -13,6 +15,7 @@ from jacobian.math.recurrence_solving._models import (
 from jacobian.math.recurrence_solving._operations import (
     compute_prime_field_find_recurrence,
 )
+from jacobian.math.recurrence_solving.operations import berlekamp_massey
 
 FIBONACCI_MOD_7 = (0, 1, 1, 2, 3, 5, 1, 6, 0)
 
@@ -82,6 +85,23 @@ class TestPrimeFieldRecurrenceFind:
         with pytest.raises(ValueError, match="residues"):
             PrimeFieldRecurrenceFindRequest(prime=3, sequence=(1, 3, 2))
 
+    def test_wire_and_native_paths_share_prime_field_bounds(self):
+        with pytest.raises(ValidationError) as exc_info:
+            PrimeFieldRecurrenceFindRequest(
+                prime=_MAX_FIELD_PRIME + 1,
+                sequence=(0, 1),
+            )
+        assert exc_info.value.errors()[0]["type"] == "less_than_equal"
+        with pytest.raises(ValueError, match="prime number"):
+            berlekamp_massey([0, 1], _MAX_FIELD_PRIME + 1)
+
+        oversized_sequence = (0,) * (_MAX_FIELD_SEQUENCE_LENGTH + 1)
+        with pytest.raises(ValidationError) as exc_info:
+            PrimeFieldRecurrenceFindRequest(prime=2, sequence=oversized_sequence)
+        assert exc_info.value.errors()[0]["type"] == "too_long"
+        with pytest.raises(ValueError, match="sequence must have length"):
+            berlekamp_massey(list(oversized_sequence), 2)
+
     def test_request_schema_publishes_canonical_residue_constraint(self):
         schema = PrimeFieldRecurrenceFindRequest.model_json_schema()
         assert "0 <= value < prime" in schema["properties"]["sequence"]["description"]
@@ -108,13 +128,16 @@ class TestPrimeFieldRecurrenceFind:
         assert result.recurrence.coefficients == (1, 1)
 
     def test_result_rejects_non_minimal_fibonacci_recurrence(self):
-        with pytest.raises(ValidationError, match="Berlekamp-Massey"):
+        with pytest.raises(ValidationError) as exc_info:
             PrimeFieldRecurrenceFindResult(
                 sequence=FIBONACCI_MOD_7,
                 recurrence=PrimeFieldRecurrence(
                     prime=7, coefficients=(1, 1, 0), order=3, status="FOUND"
                 ),
             )
+        assert (
+            exc_info.value.errors()[0]["type"] == "recurrence_solving.result_mismatch"
+        )
 
     def test_no_fitting_status_is_not_part_of_the_prime_field_contract(self):
         with pytest.raises(ValidationError):
@@ -131,13 +154,16 @@ class TestPrimeFieldRecurrenceFind:
         )
 
     def test_result_rejects_wrong_coefficients_at_minimal_order(self):
-        with pytest.raises(ValidationError, match="Berlekamp-Massey"):
+        with pytest.raises(ValidationError) as exc_info:
             PrimeFieldRecurrenceFindResult(
                 sequence=FIBONACCI_MOD_7,
                 recurrence=PrimeFieldRecurrence(
                     prime=7, coefficients=(1, 2), order=2, status="FOUND"
                 ),
             )
+        assert (
+            exc_info.value.errors()[0]["type"] == "recurrence_solving.result_mismatch"
+        )
 
     def test_impulse_sequence_is_the_minimal_order_n_recurrence(self):
         sequence = (0, 0, 0, 1)
@@ -147,10 +173,13 @@ class TestPrimeFieldRecurrenceFind:
         assert result.recurrence.status == "FOUND"
         assert result.recurrence.order == len(sequence)
         PrimeFieldRecurrenceFindResult.model_validate(result.model_dump())
-        with pytest.raises(ValidationError, match="Berlekamp-Massey"):
+        with pytest.raises(ValidationError) as exc_info:
             PrimeFieldRecurrenceFindResult(
                 sequence=sequence,
                 recurrence=PrimeFieldRecurrence(
                     prime=2, coefficients=(1,), order=1, status="FOUND"
                 ),
             )
+        assert (
+            exc_info.value.errors()[0]["type"] == "recurrence_solving.result_mismatch"
+        )

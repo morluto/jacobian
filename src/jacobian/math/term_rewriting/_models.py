@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalizationError, CanonicalLimits, canonicalize_json
@@ -33,6 +34,12 @@ from jacobian.math.term_rewriting.values import (
 )
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by term-rewriting contracts."""
+
+    return PydanticCustomError(f"term_rewriting.{reason}", message)
+
+
 def _require_transport_safe_depth(*terms: Term) -> None:
     """Reject term paths deeper than strict JSON transport can carry.
 
@@ -47,9 +54,10 @@ def _require_transport_safe_depth(*terms: Term) -> None:
     while stack:
         current, depth = stack.pop()
         if depth > MAX_TERM_DEPTH:
-            raise ValueError(
+            raise _validation_error(
+                "transport_depth",
                 "term depth exceeds the transport-safe bound; any "
-                f"root-to-leaf path carries at most {MAX_TERM_DEPTH} nodes"
+                f"root-to-leaf path carries at most {MAX_TERM_DEPTH} nodes",
             )
         stack.extend((child, depth + 1) for child in current.children)
 
@@ -83,7 +91,9 @@ class SubstitutionResult(SubstitutionRequest):
     def bind_substitution(self) -> Self:
         self.signature.validate_term(self.result)
         if self.result != apply_substitution(self.term, self.substitution.mapping):
-            raise ValueError("substitution result is not bound to its source")
+            raise _validation_error(
+                "substitution_result", "substitution result is not bound to its source"
+            )
         _require_transport_safe_depth(self.result)
         return self
 
@@ -117,7 +127,9 @@ class MatchingResult(MatchingRequest):
         if self.matched != (expected is not None) or self.substitution != (
             expected or {}
         ):
-            raise ValueError("matching result is not bound to its signed terms")
+            raise _validation_error(
+                "matching_result", "matching result is not bound to its signed terms"
+            )
         return self
 
 
@@ -133,7 +145,10 @@ class UnificationRequest(StrictModel):
         self.signature.validate_term(self.left)
         self.signature.validate_term(self.right)
         _require_transport_safe_depth(self.left, self.right)
-        expected = _bounded_unify(self.left, self.right)
+        try:
+            expected = _bounded_unify(self.left, self.right)
+        except ValueError as error:
+            raise _validation_error("unification_bound", str(error)) from error
         if expected is not None:
             _require_transport_safe_depth(*expected.values())
             try:
@@ -153,8 +168,9 @@ class UnificationRequest(StrictModel):
                     ),
                 )
             except CanonicalizationError as error:
-                raise ValueError(
-                    "unification result exceeds the supported transport bound"
+                raise _validation_error(
+                    "unification_transport",
+                    "unification result exceeds the supported transport bound",
                 ) from error
         return self
 
@@ -170,9 +186,14 @@ class UnificationResult(UnificationRequest):
         expected = _bounded_unify(self.left, self.right)
         if expected is None:
             if self.unified or self.substitution:
-                raise ValueError("failed unification must not claim a substitution")
+                raise _validation_error(
+                    "failed_unification",
+                    "failed unification must not claim a substitution",
+                )
         elif not self.unified or self.substitution != expected:
-            raise ValueError("substitution must be the computed idempotent MGU")
+            raise _validation_error(
+                "unifier_mismatch", "substitution must be the computed idempotent MGU"
+            )
         return self
 
 
@@ -185,7 +206,9 @@ class RewriteStepSelection(StrictModel):
     @model_validator(mode="after")
     def require_nonnegative_position(self) -> Self:
         if any(child_index < 0 for child_index in self.position):
-            raise ValueError("rewrite position indices must be non-negative")
+            raise _validation_error(
+                "negative_position", "rewrite position indices must be non-negative"
+            )
         return self
 
 
@@ -210,14 +233,19 @@ class RewriteStepRequest(StrictModel):
             applications = rewrite_steps(self.term, self.rules)
         else:
             if self.selection.rule_index >= len(self.rules):
-                raise ValueError("selected rule_index is out of range")
-            term_at_position(self.term, self.selection.position)
-            application = selected_rewrite_step(
-                self.term,
-                self.rules,
-                self.selection.position,
-                self.selection.rule_index,
-            )
+                raise _validation_error(
+                    "selection_rule_index", "selected rule_index is out of range"
+                )
+            try:
+                term_at_position(self.term, self.selection.position)
+                application = selected_rewrite_step(
+                    self.term,
+                    self.rules,
+                    self.selection.position,
+                    self.selection.rule_index,
+                )
+            except ValueError as error:
+                raise _validation_error("selection_position", str(error)) from error
             applications = () if application is None else (application,)
         _require_transport_safe_depth(
             *(application.term for application in applications)
@@ -261,9 +289,14 @@ class RewriteStepResult(StrictModel):
             expected = () if application is None else (application,)
             expected_scope = "SELECTED_STEP"
         if self.scope != expected_scope:
-            raise ValueError("scope must agree with selection")
+            raise _validation_error(
+                "scope_selection", "scope must agree with selection"
+            )
         if self.applications != expected:
-            raise ValueError("applications do not match the declared rewrite scope")
+            raise _validation_error(
+                "applications_mismatch",
+                "applications do not match the declared rewrite scope",
+            )
         return self
 
 
@@ -329,7 +362,9 @@ class NormalFormResult(StrictModel):
             steps,
             next_step,
         ):
-            raise ValueError("normal-form result does not replay exactly")
+            raise _validation_error(
+                "normal_form_replay", "normal-form result does not replay exactly"
+            )
         return self
 
 
@@ -371,7 +406,10 @@ class CriticalPairsRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_critical_pair_source(self) -> Self:
-        _validate_critical_pair_source(self.signature, self.rules)
+        try:
+            _validate_critical_pair_source(self.signature, self.rules)
+        except ValueError as error:
+            raise _validation_error("critical_pair_source", str(error)) from error
         _require_transport_safe_depth(
             *(side for rule in self.rules for side in (rule.lhs, rule.rhs))
         )
@@ -387,7 +425,10 @@ class CriticalPairsResult(CriticalPairsRequest):
     def bind_critical_pairs(self) -> Self:
         expected = critical_pairs(self.signature, self.rules)
         if self.profile != expected:
-            raise ValueError("critical pairs do not replay from the source rules")
+            raise _validation_error(
+                "critical_pairs_replay",
+                "critical pairs do not replay from the source rules",
+            )
         return self
 
 

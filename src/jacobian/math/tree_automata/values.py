@@ -7,6 +7,7 @@ from math import comb
 from typing import Annotated, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
@@ -19,6 +20,11 @@ MAX_RUN_TREE_DEPTH = 128
 MAX_TREE_AUTOMATON_WORK = 2_000_000
 MAX_REACHABILITY_WITNESS_NODES = 4096
 MAX_TREE_AUTOMATON_REACHABILITY_WORK = 30_000_000
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"tree_automata.{reason}", message)
+
 
 Arity = Annotated[int, Field(ge=0, le=MAX_TA_ARITY)]
 
@@ -71,9 +77,13 @@ class BottomUpTreeAutomaton(StrictModel):
 
     def _require_unique_sets(self) -> None:
         if len(set(self.transitions)) != len(self.transitions):
-            raise ValueError("transitions must be unique")
+            raise _validation_error(
+                "transitions_not_unique", "transitions must be unique"
+            )
         if len(set(self.final_states)) != len(self.final_states):
-            raise ValueError("final states must be unique")
+            raise _validation_error(
+                "final_states_not_unique", "final states must be unique"
+            )
 
     def _require_valid_transitions(self) -> None:
         for tr in self.transitions:
@@ -181,24 +191,36 @@ class ReachableStateProfile(StrictModel):
             ("unreachable", self.unreachable_states),
         ):
             if states != tuple(sorted(set(states))):
-                raise ValueError(f"{label} states must be unique and sorted")
+                raise _validation_error(
+                    "states_not_canonical", f"{label} states must be unique and sorted"
+                )
             if any(not 0 <= state < state_count for state in states):
-                raise ValueError(f"{label} state out of range")
+                raise _validation_error(
+                    "state_out_of_range", f"{label} state out of range"
+                )
         if set(self.reachable_states) & set(self.unreachable_states):
-            raise ValueError("reachable and unreachable states must be disjoint")
+            raise _validation_error(
+                "states_not_disjoint",
+                "reachable and unreachable states must be disjoint",
+            )
         if len(self.reachable_states) + len(self.unreachable_states) != state_count:
-            raise ValueError(
-                "reachable and unreachable states must partition the automaton states"
+            raise _validation_error(
+                "states_do_not_partition",
+                "reachable and unreachable states must partition the automaton states",
             )
         if tuple(state for state, _ in self.witnesses) != self.reachable_states:
-            raise ValueError(
-                "witnesses must carry exactly one entry per reachable state in order"
+            raise _validation_error(
+                "witnesses_not_aligned",
+                "witnesses must carry exactly one entry per reachable state in order",
             )
         total_nodes = 0
         for _, tree in self.witnesses:
             total_nodes = _ranked_witness_nodes(tree, self.automaton, total_nodes)
         if total_nodes > MAX_REACHABILITY_WITNESS_NODES:
-            raise ValueError("reachable-state witness output exceeds the node bound")
+            raise _validation_error(
+                "witness_output_bound",
+                "reachable-state witness output exceeds the node bound",
+            )
         return self
 
     @model_validator(mode="after")
@@ -219,7 +241,10 @@ class ReachableStateProfile(StrictModel):
         from jacobian.math.tree_automata.operations import reachable_state_profile
 
         if self != reachable_state_profile(self.automaton):
-            raise ValueError("reachability profile is not bound to its automaton")
+            raise _validation_error(
+                "profile_not_bound",
+                "reachability profile is not bound to its automaton",
+            )
 
 
 def _ranked_witness_nodes(
@@ -235,13 +260,24 @@ def _ranked_witness_nodes(
         node, depth = stack.pop()
         node_count += 1
         if running_total + node_count > MAX_REACHABILITY_WITNESS_NODES:
-            raise ValueError("reachable-state witness output exceeds the node bound")
+            raise _validation_error(
+                "witness_output_bound",
+                "reachable-state witness output exceeds the node bound",
+            )
         if depth > MAX_RUN_TREE_DEPTH:
-            raise ValueError("witness depth exceeds the ranked-tree bound")
+            raise _validation_error(
+                "witness_depth_bound", "witness depth exceeds the ranked-tree bound"
+            )
         if node.symbol >= len(automaton.arity):
-            raise ValueError("witness symbol out of the ranked alphabet")
+            raise _validation_error(
+                "witness_symbol_out_of_range",
+                "witness symbol out of the ranked alphabet",
+            )
         if len(node.children) != automaton.arity[node.symbol]:
-            raise ValueError("every witness node must match its symbol arity")
+            raise _validation_error(
+                "witness_arity_mismatch",
+                "every witness node must match its symbol arity",
+            )
         stack.extend((child, depth + 1) for child in node.children)
     return running_total + node_count
 

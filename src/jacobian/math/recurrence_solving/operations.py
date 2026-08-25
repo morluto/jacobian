@@ -6,7 +6,11 @@ from dataclasses import dataclass
 from typing import Literal
 
 from jacobian._exact import CanonicalRational
-from jacobian.math.recurrence_solving._models import PrimeFieldRecurrence
+from jacobian.math.recurrence_solving._models import (
+    _MAX_FIELD_PRIME,
+    _MAX_FIELD_SEQUENCE_LENGTH,
+    PrimeFieldRecurrence,
+)
 
 __all__ = [
     "ClosedForm",
@@ -23,10 +27,6 @@ class Recurrence:
     coefficients: tuple[CanonicalRational, ...]
     order: int
     status: Literal["FOUND", "NO_FITTING_RECURRENCE"]
-
-
-_MAX_FIELD_PRIME = 10_000
-_MAX_FIELD_SEQUENCE_LENGTH = 256
 
 
 def _validate_berlekamp_inputs(sequence: list[int], prime: int) -> None:

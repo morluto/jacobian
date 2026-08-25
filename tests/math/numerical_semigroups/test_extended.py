@@ -2,6 +2,7 @@
 
 import pytest
 from pydantic import ValidationError
+from tests.math.numerical_semigroups._support import numerical_semigroup_error
 
 from jacobian.math.numerical_semigroups._models import (
     MAX_GENERATOR,
@@ -71,7 +72,7 @@ class TestFactorizations:
         assert result.factorizations == ()
 
     def test_factorizations_rejects_nonpositive_generators(self):
-        with pytest.raises(ValidationError, match="positive"):
+        with numerical_semigroup_error():
             FactorizationComputeRequest(generators=("0", "5"), value="10")
 
     def test_factorizations_normalize_redundant_permuted_generators(self):
@@ -84,7 +85,7 @@ class TestFactorizations:
         assert result.factorizations == ((0, 3), (5, 0))
 
     def test_factorization_result_rejects_a_redundant_coordinate_axis(self):
-        with pytest.raises(ValidationError, match="canonical minimal"):
+        with numerical_semigroup_error():
             FactorizationComputeResult(
                 value="15",
                 minimal_generators=("3", "5", "8"),
@@ -191,7 +192,7 @@ class TestFactorizations:
     ],
 )
 def test_result_rejects_redundant_minimal_generator_axis(result_model, payload):
-    with pytest.raises(ValidationError, match="canonical minimal"):
+    with numerical_semigroup_error():
         result_model(minimal_generators=("3", "5", "6"), **payload)
 
 
@@ -318,19 +319,19 @@ class TestFactorizationDistance:
         assert result.distance == 5
 
     def test_distance_rejects_mismatched_lengths(self):
-        with pytest.raises(ValidationError, match="coordinates must match"):
+        with numerical_semigroup_error():
             FactorizationDistanceRequest(
                 generators=("3", "5"), value="15", first=(5, 0, 0), second=(0, 3)
             )
 
     def test_distance_rejects_negative_coordinates(self):
-        with pytest.raises(ValidationError, match="non-negative"):
+        with numerical_semigroup_error():
             FactorizationDistanceRequest(
                 generators=("3", "5"), value="15", first=(-1, 0), second=(0, 3)
             )
 
     def test_distance_rejects_vectors_for_a_different_element(self):
-        with pytest.raises(ValidationError, match="declared value"):
+        with numerical_semigroup_error():
             FactorizationDistanceRequest(
                 generators=("3", "5"), value="15", first=(4, 0), second=(0, 3)
             )
@@ -346,7 +347,7 @@ class TestFactorizationGraph:
         assert result.factorizations == ((0, 3), (5, 0))
 
     def test_graph_result_rejects_a_redundant_coordinate_axis(self):
-        with pytest.raises(ValidationError, match="canonical minimal"):
+        with numerical_semigroup_error():
             FactorizationGraphComputeResult(
                 value="15",
                 minimal_generators=("3", "5", "8"),
@@ -487,7 +488,7 @@ class TestMinimalPresentation:
         )
 
     def test_presentation_result_rejects_a_redundant_coordinate_axis(self):
-        with pytest.raises(ValidationError, match="canonical minimal"):
+        with numerical_semigroup_error():
             MinimalPresentationResult(
                 minimal_generators=("3", "5", "8"),
                 betti_elements=("15",),
@@ -551,7 +552,7 @@ class TestPresentationBinomials:
         assert result.binomials[0].right_exponents == (0, 3)
 
     def test_binomial_result_rejects_a_redundant_coordinate_axis(self):
-        with pytest.raises(ValidationError, match="canonical minimal"):
+        with numerical_semigroup_error():
             PresentationBinomialsResult(
                 minimal_generators=("3", "5", "8"),
                 binomials=(
@@ -593,7 +594,7 @@ class TestPresentationBinomials:
         assert result.binomials == ()
 
     def test_binomials_reject_nonrelations(self):
-        with pytest.raises(ValidationError, match="same semigroup degree"):
+        with numerical_semigroup_error():
             PresentationBinomialsRequest(
                 generators=("3", "5"),
                 relations=[{"first": [1, 0], "second": [0, 1]}],
@@ -671,7 +672,7 @@ class TestGeneratorEnvelopeIsSchemaVisible:
             assert f"each at most {MAX_GENERATOR}" in description
 
     def test_rejects_a_generator_above_the_published_ceiling(self):
-        with pytest.raises(ValidationError, match=f"at most {MAX_GENERATOR}"):
+        with numerical_semigroup_error():
             FactorizationComputeRequest(generators=("2", "501"), value="503")
 
     def test_broadened_declarations_state_the_per_generator_ceiling(self):

@@ -5,10 +5,16 @@ from __future__ import annotations
 from typing import Annotated, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import parse_canonical_integer
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"regular_language.{reason}", message)
+
 
 MAX_DFA_STATES = 64
 MAX_DFA_ALPHABET = 32
@@ -66,30 +72,49 @@ class DFA(StrictModel):
     @model_validator(mode="after")
     def require_total_deterministic_dfa(self) -> Self:
         if not 0 <= self.initial_state < self.state_count:
-            raise ValueError("initial_state must be in 0..state_count-1")
+            raise _validation_error(
+                "initial_state_out_of_range",
+                "initial_state must be in 0..state_count-1",
+            )
         if any(not 0 <= state < self.state_count for state in self.accepting_states):
-            raise ValueError("accepting states must be in 0..state_count-1")
+            raise _validation_error(
+                "accepting_state_out_of_range",
+                "accepting states must be in 0..state_count-1",
+            )
         if len(set(self.accepting_states)) != len(self.accepting_states):
-            raise ValueError("accepting states must be unique")
+            raise _validation_error(
+                "accepting_states_not_unique", "accepting states must be unique"
+            )
         seen: set[tuple[int, int]] = set()
         for transition in self.transitions:
             if not 0 <= transition.source < self.state_count:
-                raise ValueError("transition source must be in 0..state_count-1")
+                raise _validation_error(
+                    "transition_source_out_of_range",
+                    "transition source must be in 0..state_count-1",
+                )
             if not 0 <= transition.target < self.state_count:
-                raise ValueError("transition target must be in 0..state_count-1")
+                raise _validation_error(
+                    "transition_target_out_of_range",
+                    "transition target must be in 0..state_count-1",
+                )
             if not 0 <= transition.symbol < self.alphabet_size:
-                raise ValueError("transition symbol must be in 0..alphabet_size-1")
+                raise _validation_error(
+                    "transition_symbol_out_of_range",
+                    "transition symbol must be in 0..alphabet_size-1",
+                )
             key = (transition.source, transition.symbol)
             if key in seen:
-                raise ValueError(
-                    "DFA must be deterministic (no duplicate source/symbol)"
+                raise _validation_error(
+                    "dfa_not_deterministic",
+                    "DFA must be deterministic (no duplicate source/symbol)",
                 )
             seen.add(key)
         expected = self.state_count * self.alphabet_size
         if len(seen) != expected:
-            raise ValueError(
+            raise _validation_error(
+                "dfa_not_total",
                 "DFA must be total: expected one transition for every "
-                f"state-symbol pair ({expected}), got {len(seen)}"
+                f"state-symbol pair ({expected}), got {len(seen)}",
             )
         return self
 
@@ -133,17 +158,27 @@ class FiniteLabeledAutomaton(StrictModel):
         if tuple(transition.transition_id for transition in self.transitions) != tuple(
             range(len(self.transitions))
         ):
-            raise ValueError(
+            raise _validation_error(
+                "transition_axis_not_contiguous",
                 "transition_id values must be the contiguous zero-based axis in "
-                "tuple order"
+                "tuple order",
             )
         for transition in self.transitions:
             if not 0 <= transition.source < self.state_count:
-                raise ValueError("transition source must be in 0..state_count-1")
+                raise _validation_error(
+                    "transition_source_out_of_range",
+                    "transition source must be in 0..state_count-1",
+                )
             if not 0 <= transition.target < self.state_count:
-                raise ValueError("transition target must be in 0..state_count-1")
+                raise _validation_error(
+                    "transition_target_out_of_range",
+                    "transition target must be in 0..state_count-1",
+                )
             if not 0 <= transition.symbol < self.alphabet_size:
-                raise ValueError("transition symbol must be in 0..alphabet_size-1")
+                raise _validation_error(
+                    "transition_symbol_out_of_range",
+                    "transition symbol must be in 0..alphabet_size-1",
+                )
         return self
 
 
@@ -165,7 +200,9 @@ class TransitionParikhCell(StrictModel):
     @model_validator(mode="after")
     def require_positive_multiplicity(self) -> Self:
         if parse_canonical_integer(self.multiplicity) <= 0:
-            raise ValueError("path multiplicity must be positive")
+            raise _validation_error(
+                "path_multiplicity_not_positive", "path multiplicity must be positive"
+            )
         return self
 
 
@@ -190,34 +227,42 @@ class TransitionParikhProfile(StrictModel):
     @model_validator(mode="after")
     def require_source_and_canonical_complete_profile(self) -> Self:
         if not 0 <= self.source_state < self.automaton.state_count:
-            raise ValueError("source_state must be in 0..state_count-1")
+            raise _validation_error(
+                "source_state_out_of_range", "source_state must be in 0..state_count-1"
+            )
         if not 0 <= self.target_state < self.automaton.state_count:
-            raise ValueError("target_state must be in 0..state_count-1")
+            raise _validation_error(
+                "target_state_out_of_range", "target_state must be in 0..state_count-1"
+            )
 
         transition_count = len(self.automaton.transitions)
         vectors = tuple(entry.transition_counts for entry in self.entries)
         if vectors != tuple(sorted(set(vectors))):
-            raise ValueError(
+            raise _validation_error(
+                "profile_vectors_not_canonical",
                 "profile transition-count vectors must be lexicographically sorted "
-                "and unique"
+                "and unique",
             )
         for vector in vectors:
             if len(vector) != transition_count:
-                raise ValueError(
+                raise _validation_error(
+                    "profile_vector_length_mismatch",
                     "every transition-count vector must use the automaton's complete "
-                    "transition axis"
+                    "transition axis",
                 )
             if sum(vector) != self.path_length:
-                raise ValueError(
-                    "every transition-count vector must sum to path_length"
+                raise _validation_error(
+                    "profile_vector_sum_mismatch",
+                    "every transition-count vector must sum to path_length",
                 )
 
         total = sum(
             parse_canonical_integer(entry.multiplicity) for entry in self.entries
         )
         if parse_canonical_integer(self.total_path_count) != total:
-            raise ValueError(
-                "total_path_count must equal the sum of profile multiplicities"
+            raise _validation_error(
+                "profile_total_mismatch",
+                "total_path_count must equal the sum of profile multiplicities",
             )
 
         if self.path_length == 0:
@@ -227,9 +272,10 @@ class TransitionParikhProfile(StrictModel):
                 else ()
             )
             if vectors != expected_vectors or total != len(expected_vectors):
-                raise ValueError(
+                raise _validation_error(
+                    "zero_length_profile_invalid",
                     "length-zero profile must contain the zero vector once exactly "
-                    "when source_state equals target_state"
+                    "when source_state equals target_state",
                 )
 
         # Replay the bounded recurrence so a serialized value cannot preserve
@@ -249,8 +295,9 @@ class TransitionParikhProfile(StrictModel):
             for entry in self.entries
         )
         if actual_entries != expected_entries or total != expected_total:
-            raise ValueError(
-                "transition-Parikh profile is not bound to its automaton and path scope"
+            raise _validation_error(
+                "profile_not_bound",
+                "transition-Parikh profile is not bound to its automaton and path scope",
             )
         return self
 

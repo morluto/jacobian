@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from math import isqrt
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.arithmetic._integer_predicates import is_square_free
 
 _MAX_RADICAND = 1_000_000
 _MAX_DIGITS = 256
@@ -19,6 +20,26 @@ _MAX_DIGITS = 256
 # of at most 1,032 digits after bringing the two terms to that denominator
 # (d <= 10^6).  The trace is smaller.  This covers producer and replay.
 _MAX_EMBEDDING_PROFILE_RESULT_DIGITS = 1_032
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by real-quadratic contracts."""
+
+    return PydanticCustomError(f"real_quadratic.{reason}", message)
+
+
+def _require_bounded_rational(
+    value: CanonicalRational, *, max_digits: int, label: str
+) -> None:
+    if (
+        len(value.num.lstrip("-")) > max_digits
+        or len(value.den.lstrip("-")) > max_digits
+    ):
+        raise _validation_error(
+            "rational_bound_exceeded", f"{label} exceeds the {max_digits}-digit bound"
+        )
+
+
 RealQuadraticSignBasis = Literal[
     "RATIONAL_ONLY",
     "RADICAL_ONLY",
@@ -27,10 +48,6 @@ RealQuadraticSignBasis = Literal[
 ]
 RealQuadraticEmbedding = Literal["POSITIVE_ROOT", "NEGATIVE_ROOT"]
 RealQuadraticEmbeddingConvention = Literal["REAL_QUADRATIC_ROOTS_V1"]
-
-
-def _is_square_free(value: int) -> bool:
-    return all(value % (divisor * divisor) for divisor in range(2, isqrt(value) + 1))
 
 
 def _order(left: Fraction, right: Fraction) -> Literal["LT", "EQ", "GT"]:
@@ -59,16 +76,19 @@ class RealQuadraticValue(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_field_value(self) -> Self:
-        require_bounded_rational(
+        _require_bounded_rational(
             self.rational_part, max_digits=_MAX_DIGITS, label="rational part"
         )
-        require_bounded_rational(
+        _require_bounded_rational(
             self.radical_coefficient,
             max_digits=_MAX_DIGITS,
             label="radical coefficient",
         )
-        if not _is_square_free(self.radicand):
-            raise ValueError("real-quadratic radicand must be square-free")
+        if not is_square_free(self.radicand):
+            raise _validation_error(
+                "radicand_not_square_free",
+                "real-quadratic radicand must be square-free",
+            )
         return self
 
 
@@ -79,7 +99,9 @@ class RealQuadraticOrderRequest(StrictModel):
     @model_validator(mode="after")
     def require_shared_field(self) -> Self:
         if self.left.radicand != self.right.radicand:
-            raise ValueError("comparison requires one shared radicand")
+            raise _validation_error(
+                "radicand_mismatch", "comparison requires one shared radicand"
+            )
         difference_components = (
             self.left.rational_part.as_fraction()
             - self.right.rational_part.as_fraction(),
@@ -91,8 +113,9 @@ class RealQuadraticOrderRequest(StrictModel):
             or len(format_canonical_integer(component.denominator)) > _MAX_DIGITS
             for component in difference_components
         ):
-            raise ValueError(
-                "exact quadratic difference exceeds the 256-digit result bound"
+            raise _validation_error(
+                "difference_bound_exceeded",
+                "exact quadratic difference exceeds the 256-digit result bound",
             )
         return self
 
@@ -126,7 +149,7 @@ class RealQuadraticEmbeddingsRequest(StrictModel):
     def require_profile_within_result_bound(self) -> Self:
         trace, norm = _embedding_scalars(self.element)
         for label, value in (("trace", trace), ("norm", norm)):
-            require_bounded_rational(
+            _require_bounded_rational(
                 CanonicalRational.from_fraction(value),
                 max_digits=_MAX_EMBEDDING_PROFILE_RESULT_DIGITS,
                 label=f"real-quadratic embedding {label}",
@@ -172,9 +195,10 @@ class RealQuadraticEmbeddingProfile(StrictModel):
             RealQuadraticEmbeddingImage(embedding="NEGATIVE_ROOT", value=conjugate),
         )
         if self.images != expected_images:
-            raise ValueError(
+            raise _validation_error(
+                "embedding_images_mismatch",
                 "images must be the ordered positive-root and negative-root "
-                "embeddings of the retained source"
+                "embeddings of the retained source",
             )
         expected_trace, expected_norm = _embedding_scalars(self.source)
         expected_trace_value = CanonicalRational.from_fraction(expected_trace)
@@ -183,14 +207,15 @@ class RealQuadraticEmbeddingProfile(StrictModel):
             ("trace", expected_trace_value),
             ("norm", expected_norm_value),
         ):
-            require_bounded_rational(
+            _require_bounded_rational(
                 value,
                 max_digits=_MAX_EMBEDDING_PROFILE_RESULT_DIGITS,
                 label=f"real-quadratic embedding {label}",
             )
         if self.trace != expected_trace_value or self.norm != expected_norm_value:
-            raise ValueError(
-                "trace and norm must be the exact trace and norm of the retained source"
+            raise _validation_error(
+                "embedding_invariants_mismatch",
+                "trace and norm must be the exact trace and norm of the retained source",
             )
         return self
 
@@ -224,7 +249,9 @@ class RealQuadraticOrderValue(StrictModel):
             or self.difference.rational_part.as_fraction() != a
             or self.difference.radical_coefficient.as_fraction() != b
         ):
-            raise ValueError("difference must equal left minus right")
+            raise _validation_error(
+                "difference_mismatch", "difference must equal left minus right"
+            )
         expected_order = (
             "LT"
             if _sign(a, b, self.left.radicand) < 0
@@ -233,7 +260,9 @@ class RealQuadraticOrderValue(StrictModel):
             else "EQ"
         )
         if self.order != expected_order:
-            raise ValueError("order must match exact quadratic sign")
+            raise _validation_error(
+                "order_mismatch", "order must match exact quadratic sign"
+            )
         expected_basis: RealQuadraticSignBasis = (
             "RATIONAL_ONLY"
             if b == 0
@@ -244,7 +273,9 @@ class RealQuadraticOrderValue(StrictModel):
             else "OPPOSING_SIGNS_SQUARED_MAGNITUDES"
         )
         if self.sign_basis != expected_basis:
-            raise ValueError("sign basis does not match difference structure")
+            raise _validation_error(
+                "sign_basis_mismatch", "sign basis does not match difference structure"
+            )
         rational_square = a * a
         radical_square = b * b * self.left.radicand
         if (
@@ -254,7 +285,10 @@ class RealQuadraticOrderValue(StrictModel):
             or self.sign_certificate.magnitude_order
             != _order(rational_square, radical_square)
         ):
-            raise ValueError("sign certificate does not match squared magnitudes")
+            raise _validation_error(
+                "sign_certificate_mismatch",
+                "sign certificate does not match squared magnitudes",
+            )
         return self
 
 

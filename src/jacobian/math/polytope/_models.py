@@ -16,10 +16,18 @@ from pydantic import (
     ValidationError,
     model_validator,
 )
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalLimits, encode_strict_json
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Create a stable structured error for the polytope public contract."""
+
+    return PydanticCustomError(f"polytope.{reason}", message)
+
 
 MAX_DIMENSION = 6
 """Ambient-dimension bound shared by the volume and support operations.
@@ -174,7 +182,9 @@ def _require_unicode_scalar_label(value: str) -> str:
     """
 
     if any(0xD800 <= ord(character) <= 0xDFFF for character in value):
-        raise ValueError("labels must contain only Unicode scalar values")
+        raise _validation_error(
+            "unicode_scalar_label", "labels must contain only Unicode scalar values"
+        )
     return value
 
 
@@ -290,7 +300,9 @@ def _require_raw_component_digit_bound(
     else:
         return
     if max(len(num.lstrip("-")), len(den.lstrip("-"))) > max_digits:
-        raise ValueError(f"{label} exceeds the {max_digits}-digit bound")
+        raise _validation_error(
+            "component_digit_bound", f"{label} exceeds the {max_digits}-digit bound"
+        )
 
 
 def _require_raw_component_within_support_envelope(
@@ -372,9 +384,13 @@ def _require_raw_canonical_rational_component(
         try:
             CanonicalRational.model_validate(component)
         except ValidationError as exc:
-            raise ValueError(f"{label} must be a canonical rational") from exc
+            raise _validation_error(
+                "canonical_rational", f"{label} must be a canonical rational"
+            ) from exc
         return
-    raise ValueError(f"{label} must be a canonical rational")
+    raise _validation_error(
+        "canonical_rational", f"{label} must be a canonical rational"
+    )
 
 
 def _require_raw_coordinate_space(value: object, label: str) -> tuple[str, ...]:
@@ -390,20 +406,29 @@ def _require_raw_coordinate_space(value: object, label: str) -> tuple[str, ...]:
     if isinstance(value, RationalCoordinateSpace):
         return tuple(value.axes)
     if not isinstance(value, dict) or set(value) != {"axes"}:
-        raise ValueError(f"{label} space must be an object with axes")
+        raise _validation_error(
+            "coordinate_space_shape", f"{label} space must be an object with axes"
+        )
     axes = value["axes"]
     if not isinstance(axes, (list, tuple)) or not axes:
-        raise ValueError(f"{label} space axes must be a non-empty sequence")
+        raise _validation_error(
+            "coordinate_space_shape", f"{label} space axes must be a non-empty sequence"
+        )
     if len(axes) > MAX_FACET_DIMENSION:
-        raise ValueError(
-            f"{label} space must declare at most {MAX_FACET_DIMENSION} axes"
+        raise _validation_error(
+            "coordinate_space_shape",
+            f"{label} space must declare at most {MAX_FACET_DIMENSION} axes",
         )
     if any(not isinstance(axis, str) or not 1 <= len(axis) <= 64 for axis in axes):
-        raise ValueError(f"{label} space axes must be short string labels")
+        raise _validation_error(
+            "coordinate_space_axes", f"{label} space axes must be short string labels"
+        )
     for axis in axes:
         _require_unicode_scalar_label(axis)
     if len(set(axes)) != len(axes):
-        raise ValueError("coordinate axes must be unique")
+        raise _validation_error(
+            "coordinate_axes_unique", "coordinate axes must be unique"
+        )
     return tuple(axes)
 
 
@@ -425,7 +450,7 @@ def _require_raw_support_covector_admissible(canonical: Any) -> None:
 
     covector = canonical.get("covector")
     if covector is None:
-        raise ValueError("covector must be provided")
+        raise _validation_error("covector_required", "covector must be provided")
     if isinstance(covector, RationalCovector):
         axes = tuple(covector.space.axes)
     else:
@@ -433,22 +458,31 @@ def _require_raw_support_covector_admissible(canonical: Any) -> None:
             "space",
             "components",
         }:
-            raise ValueError("covector must be an object with space and components")
+            raise _validation_error(
+                "covector_shape", "covector must be an object with space and components"
+            )
         components = covector["components"]
         if not isinstance(components, (list, tuple)):
-            raise ValueError("covector components must be a sequence")
+            raise _validation_error(
+                "covector_components", "covector components must be a sequence"
+            )
         if not components:
-            raise ValueError("covector components must be a non-empty sequence")
+            raise _validation_error(
+                "covector_components",
+                "covector components must be a non-empty sequence",
+            )
         if len(components) > MAX_DIMENSION:
-            raise ValueError(
-                f"covector components must carry at most {MAX_DIMENSION} entries"
+            raise _validation_error(
+                "covector_components",
+                f"covector components must carry at most {MAX_DIMENSION} entries",
             )
         for component in components:
             _require_raw_canonical_rational_component(component, "covector component")
         axes = _require_raw_coordinate_space(covector["space"], "covector")
         if len(components) != len(axes):
-            raise ValueError(
-                "covector components must use the declared coordinate axis"
+            raise _validation_error(
+                "covector_components",
+                "covector components must use the declared coordinate axis",
             )
     polytope_axes = _raw_space_axes(
         _raw_field_value(canonical.get("polytope"), "space")
@@ -458,7 +492,10 @@ def _require_raw_support_covector_admissible(canonical: Any) -> None:
         and all(isinstance(axis, str) for axis in polytope_axes)
         and tuple(polytope_axes) != axes
     ):
-        raise ValueError("polytope and covector must use the same coordinate space")
+        raise _validation_error(
+            "coordinate_space_mismatch",
+            "polytope and covector must use the same coordinate space",
+        )
 
 
 def _require_raw_exposed_face_vertex(
@@ -483,16 +520,23 @@ def _require_raw_exposed_face_vertex(
         or not isinstance(vertex["vertex_id"], str)
         or not 1 <= len(vertex["vertex_id"]) <= 64
     ):
-        raise ValueError(
+        raise _validation_error(
+            "exposed_face_vertex_shape",
             "exposed face vertex must be an object with a short vertex_id "
-            "and coordinates"
+            "and coordinates",
         )
     _require_unicode_scalar_label(vertex["vertex_id"])
     coordinates = vertex["coordinates"]
     if not isinstance(coordinates, (list, tuple)) or not coordinates:
-        raise ValueError("exposed face vertex coordinates must be a non-empty sequence")
+        raise _validation_error(
+            "exposed_face_coordinates",
+            "exposed face vertex coordinates must be a non-empty sequence",
+        )
     if len(coordinates) != dimension:
-        raise ValueError("every exposed-face vertex must use the face coordinate axis")
+        raise _validation_error(
+            "exposed_face_vertex",
+            "every exposed-face vertex must use the face coordinate axis",
+        )
     for component in coordinates:
         _require_raw_canonical_rational_component(
             component, "exposed face vertex coordinate"
@@ -520,9 +564,10 @@ def _require_raw_support_request_shape(canonical: Any) -> None:
         return
     unknown_fields = set(canonical) - {"polytope", "covector"}
     if unknown_fields:
-        raise ValueError(
+        raise _validation_error(
+            "unexpected_fields",
             "unexpected fields for a polytope support request: "
-            f"{sorted(unknown_fields)}"
+            f"{sorted(unknown_fields)}",
         )
 
 
@@ -550,18 +595,23 @@ def _require_raw_support_conclusions_admissible(canonical: Any) -> None:
         "exposed_face",
     }
     if unknown_fields:
-        raise ValueError(
-            f"unexpected fields for a support result: {sorted(unknown_fields)}"
+        raise _validation_error(
+            "unexpected_fields",
+            f"unexpected fields for a support result: {sorted(unknown_fields)}",
         )
 
     support_value = canonical.get("support_value")
     if support_value is None:
-        raise ValueError("support_value must be provided")
+        raise _validation_error(
+            "support_value_binding", "support_value must be provided"
+        )
     _require_raw_canonical_rational_component(support_value, "support value")
 
     exposed_face = canonical.get("exposed_face")
     if exposed_face is None:
-        raise ValueError("exposed_face must be provided")
+        raise _validation_error(
+            "exposed_face_required", "exposed_face must be provided"
+        )
     polytope_axes = _raw_space_axes(
         _raw_field_value(canonical.get("polytope"), "space")
     )
@@ -572,15 +622,19 @@ def _require_raw_support_conclusions_admissible(canonical: Any) -> None:
             "space",
             "vertices",
         }:
-            raise ValueError("exposed face must be an object with space and vertices")
+            raise _validation_error(
+                "exposed_face_shape",
+                "exposed face must be an object with space and vertices",
+            )
         axes = _require_raw_coordinate_space(exposed_face["space"], "exposed face")
     if (
         polytope_axes is not None
         and all(isinstance(axis, str) for axis in polytope_axes)
         and tuple(polytope_axes) != axes
     ):
-        raise ValueError(
-            "exposed face must use the same coordinate space as the polytope"
+        raise _validation_error(
+            "coordinate_space_mismatch",
+            "exposed face must use the same coordinate space as the polytope",
         )
     if isinstance(exposed_face, RationalExposedFace):
         # Its ordering, distinctness, and serialization invariants already
@@ -594,12 +648,18 @@ def _require_raw_support_conclusions_admissible(canonical: Any) -> None:
         return
     vertices = exposed_face["vertices"]
     if not isinstance(vertices, (list, tuple)):
-        raise ValueError("exposed face vertices must be a sequence")
+        raise _validation_error(
+            "exposed_face_vertices", "exposed face vertices must be a sequence"
+        )
     if not vertices:
-        raise ValueError("exposed face vertices must be a non-empty sequence")
+        raise _validation_error(
+            "exposed_face_vertices",
+            "exposed face vertices must be a non-empty sequence",
+        )
     if len(vertices) > MAX_VERTICES:
-        raise ValueError(
-            f"exposed face vertices must carry at most {MAX_VERTICES} entries"
+        raise _validation_error(
+            "exposed_face_vertices",
+            f"exposed face vertices must carry at most {MAX_VERTICES} entries",
         )
     parsed = [
         _require_raw_exposed_face_vertex(vertex, len(axes)) for vertex in vertices
@@ -608,10 +668,16 @@ def _require_raw_support_conclusions_admissible(canonical: Any) -> None:
     if vertex_ids != tuple(sorted(vertex_ids)) or len(set(vertex_ids)) != len(
         vertex_ids
     ):
-        raise ValueError("exposed-face vertex IDs must be unique and strictly ordered")
+        raise _validation_error(
+            "exposed_face_vertex",
+            "exposed-face vertex IDs must be unique and strictly ordered",
+        )
     coordinate_rows = tuple(rows for _, rows in parsed)
     if len(set(coordinate_rows)) != len(coordinate_rows):
-        raise ValueError("exposed-face vertices must have distinct coordinates")
+        raise _validation_error(
+            "exposed_face_coordinates_unique",
+            "exposed-face vertices must have distinct coordinates",
+        )
     _require_raw_support_conclusions_bound(canonical, parsed)
 
 
@@ -724,7 +790,10 @@ def _require_raw_support_conclusions_bound(
         else CanonicalRational.model_validate(support_claim)
     )
     if claim_value != CanonicalRational.from_fraction(expected_value):
-        raise ValueError("support value must equal the exact maximum on every vertex")
+        raise _validation_error(
+            "support_value_binding",
+            "support value must equal the exact maximum on every vertex",
+        )
 
     exposed_face = canonical.get("exposed_face")
     if isinstance(exposed_face, RationalExposedFace):
@@ -735,8 +804,9 @@ def _require_raw_support_conclusions_bound(
         claimed_keys = face_keys
     expected_keys = [_raw_support_vertex_key(vertex) for vertex in expected_vertices]
     if claimed_keys != expected_keys:
-        raise ValueError(
-            "exposed face must be exactly the complete maximizing vertex family"
+        raise _validation_error(
+            "exposed_face_complete",
+            "exposed face must be exactly the complete maximizing vertex family",
         )
 
 
@@ -769,10 +839,11 @@ def _require_interval_volume_within_result_bound(
         numerator_digits > MAX_RESULT_COMPONENT_DIGITS
         or top_two + 2 > MAX_RESULT_COMPONENT_DIGITS
     ):
-        raise ValueError(
+        raise _validation_error(
+            "volume_result_bound",
             "coordinate magnitudes can grow the exact volume beyond the "
             f"{MAX_RESULT_COMPONENT_DIGITS}-digit canonical rational "
-            "result bound"
+            "result bound",
         )
 
 
@@ -810,10 +881,11 @@ def _require_triangulated_volume_within_result_bound(
         numerator_total + carry > MAX_RESULT_COMPONENT_DIGITS
         or denominator_total + carry > MAX_RESULT_COMPONENT_DIGITS
     ):
-        raise ValueError(
+        raise _validation_error(
+            "volume_result_bound",
             "coordinate magnitudes can grow the exact volume beyond the "
             f"{MAX_RESULT_COMPONENT_DIGITS}-digit canonical rational "
-            "result bound"
+            "result bound",
         )
 
 
@@ -878,9 +950,10 @@ def require_volume_components_within_result_bound(
     except ValueError:
         subfacets = 10**18
     if subfacets > MAX_HULL_SUBFACETS:
-        raise ValueError(
+        raise _validation_error(
+            "subfacet_bound",
             "polytope hull enumeration exceeds the combinatorial bound "
-            f"({subfacets} > {MAX_HULL_SUBFACETS} d-subsets)"
+            f"({subfacets} > {MAX_HULL_SUBFACETS} d-subsets)",
         )
     pts = _filter_redundant_vertices(pts, dim)
     if len(pts) < dim + 1:
@@ -936,18 +1009,25 @@ class PrimitiveFacet(StrictModel):
             coefficient.as_fraction() == 0
             for coefficient in self.halfspace.coefficients
         ):
-            raise ValueError("facet inequality must have a nonzero normal")
+            raise _validation_error(
+                "facet_inequality", "facet inequality must have a nonzero normal"
+            )
         entries = [
             Fraction(*value.as_integer_ratio())
             for value in (*self.halfspace.coefficients, self.halfspace.offset)
         ]
         if any(entry.denominator != 1 for entry in entries):
-            raise ValueError("facet inequality entries must be integers")
+            raise _validation_error(
+                "facet_inequality", "facet inequality entries must be integers"
+            )
         gcd = 0
         for entry in entries:
             gcd = math.gcd(gcd, abs(int(entry)))
         if gcd != 1:
-            raise ValueError("facet inequality must be primitive over the integers")
+            raise _validation_error(
+                "facet_inequality",
+                "facet inequality must be primitive over the integers",
+            )
         if any(
             right <= left
             for left, right in zip(
@@ -956,7 +1036,10 @@ class PrimitiveFacet(StrictModel):
                 strict=False,
             )
         ):
-            raise ValueError("facet source vertex indices must be strictly increasing")
+            raise _validation_error(
+                "facet_source_indices",
+                "facet source vertex indices must be strictly increasing",
+            )
         return self
 
 
@@ -984,8 +1067,9 @@ class FacetIncidenceResult(StrictModel):
     @model_validator(mode="after")
     def require_complete_source_bound_profile(self) -> Self:
         if any(len(vertex.coordinates) != self.dimension for vertex in self.vertices):
-            raise ValueError(
-                "every source vertex must have exactly `dimension` coordinates"
+            raise _validation_error(
+                "dimension_bound",
+                "every source vertex must have exactly `dimension` coordinates",
             )
         for vertex in self.vertices:
             for coordinate in vertex.coordinates:
@@ -998,22 +1082,25 @@ class FacetIncidenceResult(StrictModel):
             sum(len(facet.source_vertex_indices) for facet in self.facets)
             > MAX_FACET_INCIDENCES
         ):
-            raise ValueError(
+            raise _validation_error(
+                "result_bound",
                 "facet profile exceeds the "
-                f"{MAX_FACET_INCIDENCES}-incidence result bound"
+                f"{MAX_FACET_INCIDENCES}-incidence result bound",
             )
         from jacobian.math.polytope._operations import _computed_facets_from_vertices
 
         expected = _computed_facets_from_vertices(self.vertices, self.dimension)
         if self.facets != expected:
-            raise ValueError(
-                "facets must be the complete canonical source-bound facet profile"
+            raise _validation_error(
+                "facet_profile_complete",
+                "facets must be the complete canonical source-bound facet profile",
             )
         try:
             encode_strict_json(self.model_dump(mode="json"), limits=CanonicalLimits())
         except ValueError as exc:
-            raise ValueError(
-                "facet profile exceeds the canonical JSON output bound"
+            raise _validation_error(
+                "canonical_json_bound",
+                "facet profile exceeds the canonical JSON output bound",
             ) from exc
         return self
 
@@ -1094,9 +1181,10 @@ class FacetIncidenceRequest(StrictModel):
         if carries_v_polytope:
             unknown_fields = set(data) - {"vertices", "dimension_bound"}
             if unknown_fields:
-                raise ValueError(
+                raise _validation_error(
+                    "facet_incidence_bound",
                     "unexpected fields for a facet incidence request: "
-                    f"{sorted(unknown_fields)}"
+                    f"{sorted(unknown_fields)}",
                 )
             axis_count = _v_polytope_axis_count(value)
             if axis_count is not None:
@@ -1120,11 +1208,14 @@ class FacetIncidenceRequest(StrictModel):
         assert isinstance(vertices, tuple)  # projected by the before-validator
         dimension = len(vertices[0].coordinates)
         if dimension > self.dimension_bound:
-            raise ValueError(
-                f"dimension {dimension} exceeds the dimension bound {self.dimension_bound}"
+            raise _validation_error(
+                "vertex_dimension_consistency",
+                f"dimension {dimension} exceeds the dimension bound {self.dimension_bound}",
             )
         if any(len(vertex.coordinates) != dimension for vertex in vertices):
-            raise ValueError("all vertices must share one dimension")
+            raise _validation_error(
+                "vertex_dimension_consistency", "all vertices must share one dimension"
+            )
         for vertex in vertices:
             for coordinate in vertex.coordinates:
                 require_bounded_rational(
@@ -1170,7 +1261,9 @@ class RationalCoordinateSpace(StrictModel):
     @model_validator(mode="after")
     def require_distinct_axes(self) -> Self:
         if len(set(self.axes)) != len(self.axes):
-            raise ValueError("coordinate axes must be unique")
+            raise _validation_error(
+                "coordinate_axes_unique", "coordinate axes must be unique"
+            )
         return self
 
 
@@ -1217,19 +1310,27 @@ class RationalVPolytope(StrictModel):
     def require_canonical_full_dimensional_vertices(self) -> Self:
         dimension = len(self.space.axes)
         if len(self.vertices) < dimension + 1:
-            raise ValueError(
-                "a full-dimensional V-polytope needs at least dimension + 1 vertices"
+            raise _validation_error(
+                "dimension_bound",
+                "a full-dimensional V-polytope needs at least dimension + 1 vertices",
             )
         vertex_ids = tuple(vertex.vertex_id for vertex in self.vertices)
         if tuple(sorted(vertex_ids)) != vertex_ids or len(set(vertex_ids)) != len(
             vertex_ids
         ):
-            raise ValueError("vertex IDs must be unique and strictly ordered")
+            raise _validation_error(
+                "vertex_ids", "vertex IDs must be unique and strictly ordered"
+            )
         coordinates = tuple(vertex.coordinates for vertex in self.vertices)
         if any(len(point) != dimension for point in coordinates):
-            raise ValueError("every vertex must use the polytope coordinate axis")
+            raise _validation_error(
+                "polytope_vertices",
+                "every vertex must use the polytope coordinate axis",
+            )
         if len(set(coordinates)) != len(coordinates):
-            raise ValueError("polytope vertices must have distinct coordinates")
+            raise _validation_error(
+                "polytope_vertices", "polytope vertices must have distinct coordinates"
+            )
         from jacobian.math.polytope._operations import (
             require_full_dimensional_extreme_vertices,
         )
@@ -1254,8 +1355,9 @@ class RationalCovector(StrictModel):
     @model_validator(mode="after")
     def require_components_match_declared_axis(self) -> Self:
         if len(self.components) != len(self.space.axes):
-            raise ValueError(
-                "covector components must use the declared coordinate axis"
+            raise _validation_error(
+                "covector_components",
+                "covector components must use the declared coordinate axis",
             )
         return self
 
@@ -1356,7 +1458,10 @@ class RationalExposedFace(StrictModel):
 
         estimated = _estimate_face_wire_bytes(data)
         if estimated > CanonicalLimits().max_output_bytes:
-            raise ValueError("exposed face exceeds the canonical JSON output bound")
+            raise _validation_error(
+                "canonical_json_bound",
+                "exposed face exceeds the canonical JSON output bound",
+            )
         return data
 
     @model_validator(mode="after")
@@ -1365,21 +1470,27 @@ class RationalExposedFace(StrictModel):
         if tuple(sorted(vertex_ids)) != vertex_ids or len(set(vertex_ids)) != len(
             vertex_ids
         ):
-            raise ValueError(
-                "exposed-face vertex IDs must be unique and strictly ordered"
+            raise _validation_error(
+                "exposed_face_vertex",
+                "exposed-face vertex IDs must be unique and strictly ordered",
             )
         dimension = len(self.space.axes)
         if any(len(vertex.coordinates) != dimension for vertex in self.vertices):
-            raise ValueError(
-                "every exposed-face vertex must use the face coordinate axis"
+            raise _validation_error(
+                "exposed_face_vertex",
+                "every exposed-face vertex must use the face coordinate axis",
             )
         if len({vertex.coordinates for vertex in self.vertices}) != len(self.vertices):
-            raise ValueError("exposed-face vertices must have distinct coordinates")
+            raise _validation_error(
+                "exposed_face_coordinates_unique",
+                "exposed-face vertices must have distinct coordinates",
+            )
         try:
             encode_strict_json(self.model_dump(mode="json"), limits=CanonicalLimits())
         except ValueError as exc:
-            raise ValueError(
-                "exposed face exceeds the canonical JSON output bound"
+            raise _validation_error(
+                "canonical_json_bound",
+                "exposed face exceeds the canonical JSON output bound",
             ) from exc
         return self
 
@@ -1495,7 +1606,10 @@ class PolytopeSupportRequest(StrictModel):
     @model_validator(mode="after")
     def require_common_coordinate_space(self) -> Self:
         if self.polytope.space != self.covector.space:
-            raise ValueError("polytope and covector must use the same coordinate space")
+            raise _validation_error(
+                "coordinate_space_mismatch",
+                "polytope and covector must use the same coordinate space",
+            )
         return self
 
     @model_validator(mode="after")
@@ -1540,22 +1654,27 @@ class PolytopeSupportResult(StrictModel):
     @model_validator(mode="after")
     def bind_support_data_to_source(self) -> Self:
         if self.polytope.space != self.covector.space:
-            raise ValueError("polytope and covector must use the same coordinate space")
+            raise _validation_error(
+                "coordinate_space_mismatch",
+                "polytope and covector must use the same coordinate space",
+            )
         require_support_components_within_envelope(self.polytope, self.covector)
         from jacobian.math.polytope._operations import support_data
 
         expected_value, expected_vertices = support_data(self.polytope, self.covector)
         if self.support_value != CanonicalRational.from_fraction(expected_value):
-            raise ValueError(
-                "support value must equal the exact maximum on every vertex"
+            raise _validation_error(
+                "support_value_binding",
+                "support value must equal the exact maximum on every vertex",
             )
         expected_face = RationalExposedFace(
             space=self.polytope.space,
             vertices=expected_vertices,
         )
         if self.exposed_face != expected_face:
-            raise ValueError(
-                "exposed face must be exactly the complete maximizing vertex family"
+            raise _validation_error(
+                "exposed_face_complete",
+                "exposed face must be exactly the complete maximizing vertex family",
             )
         return self
 
@@ -1609,17 +1728,22 @@ def _require_projected_dimension_bound(
     """
 
     if dimension_bound is None:
-        raise ValueError(
-            f"dimension_bound must be an integer between 1 and {upper_bound}"
+        raise _validation_error(
+            "dimension_bound",
+            f"dimension_bound must be an integer between 1 and {upper_bound}",
         )
     try:
         bound: int = bound_adapter.validate_python(dimension_bound)
     except ValidationError as exc:
-        raise ValueError(
-            f"dimension_bound must be an integer between 1 and {upper_bound}"
+        raise _validation_error(
+            "dimension_bound",
+            f"dimension_bound must be an integer between 1 and {upper_bound}",
         ) from exc
     if dimension > bound:
-        raise ValueError(f"dimension {dimension} exceeds the dimension bound {bound}")
+        raise _validation_error(
+            "dimension_bound",
+            f"dimension {dimension} exceeds the dimension bound {bound}",
+        )
 
 
 VertexTuple = Annotated[
@@ -1741,13 +1865,15 @@ class PolytopeVolumeRequest(StrictModel):
         if carries_v_polytope:
             unknown_fields = set(data) - {"vertices", "halfspaces", "dimension_bound"}
             if unknown_fields:
-                raise ValueError(
+                raise _validation_error(
+                    "halfspaces",
                     "unexpected fields for a polytope volume request: "
-                    f"{sorted(unknown_fields)}"
+                    f"{sorted(unknown_fields)}",
                 )
             if data.get("halfspaces") is not None:
-                raise ValueError(
-                    "exactly one of `vertices` or `halfspaces` must be provided"
+                raise _validation_error(
+                    "halfspaces",
+                    "exactly one of `vertices` or `halfspaces` must be provided",
                 )
             axis_count = _v_polytope_axis_count(value)
             if axis_count is not None:
@@ -1769,8 +1895,9 @@ class PolytopeVolumeRequest(StrictModel):
         has_v = self.vertices is not None
         has_h = self.halfspaces is not None
         if has_v == has_h:
-            raise ValueError(
-                "exactly one of `vertices` or `halfspaces` must be provided"
+            raise _validation_error(
+                "halfspaces",
+                "exactly one of `vertices` or `halfspaces` must be provided",
             )
         if has_v:
             vertices = self.vertices
@@ -1791,9 +1918,11 @@ _DIMENSION_BOUND_ADAPTER: TypeAdapter[int] = TypeAdapter(
 def _validate_vertices(vertices: tuple[Vertex, ...], dimension_bound: int) -> None:
     """Validate a V-representation: count, per-component, and dimension bounds."""
     if len(vertices) < 1:
-        raise ValueError("`vertices` must be non-empty")
+        raise _validation_error("vertices_bound", "`vertices` must be non-empty")
     if len(vertices) > MAX_VERTICES:
-        raise ValueError(f"`vertices` exceeds the {MAX_VERTICES}-vertex bound")
+        raise _validation_error(
+            "vertices_bound", f"`vertices` exceeds the {MAX_VERTICES}-vertex bound"
+        )
     numerator_digits = 0
     denominator_digits = 0
     for vertex in vertices:
@@ -1805,12 +1934,15 @@ def _validate_vertices(vertices: tuple[Vertex, ...], dimension_bound: int) -> No
             denominator_digits = max(denominator_digits, len(coord.den))
     dim = len(vertices[0].coordinates)
     if dim > dimension_bound:
-        raise ValueError(
-            f"dimension {dim} exceeds the dimension bound {dimension_bound}"
+        raise _validation_error(
+            "dimension_bound",
+            f"dimension {dim} exceeds the dimension bound {dimension_bound}",
         )
     for vertex in vertices:
         if len(vertex.coordinates) != dim:
-            raise ValueError("all vertices must share one dimension")
+            raise _validation_error(
+                "vertex_dimension_consistency", "all vertices must share one dimension"
+            )
     from jacobian.math.polytope._operations import _vertices_from_v_representation
 
     # Exact-volume growth is bounded over the whole triangulation, so the
@@ -1839,17 +1971,21 @@ def _require_admissible_h_vertices(halfspaces: tuple[Halfspace, ...], dim: int) 
     )
 
     if not _is_bounded_h(halfspaces):
-        raise ValueError(
-            "the H-representation is unbounded; polytope volume requires a bounded polytope"
+        raise _validation_error(
+            "halfspaces",
+            "the H-representation is unbounded; polytope volume requires a bounded polytope",
         )
     verts, _ = _vertices_from_h_representation(halfspaces)
     if not verts:
-        raise ValueError("the H-representation defines an empty polytope")
+        raise _validation_error(
+            "h_representation", "the H-representation defines an empty polytope"
+        )
     subfacets = math.comb(len(verts), dim)
     if subfacets > MAX_HULL_SUBFACETS:
-        raise ValueError(
+        raise _validation_error(
+            "halfspace_coefficients",
             "polytope hull enumeration exceeds the combinatorial bound "
-            f"({subfacets} > {MAX_HULL_SUBFACETS} d-subsets)"
+            f"({subfacets} > {MAX_HULL_SUBFACETS} d-subsets)",
         )
     # Solved vertices can carry more digits than the declaring half-space
     # coefficients, so measure them directly.
@@ -1861,9 +1997,11 @@ def _validate_halfspaces(
 ) -> None:
     """Validate an H-representation: count, per-component, and dimension bounds."""
     if len(halfspaces) < 1:
-        raise ValueError("`halfspaces` must be non-empty")
+        raise _validation_error("halfspaces", "`halfspaces` must be non-empty")
     if len(halfspaces) > MAX_FACETS:
-        raise ValueError(f"`halfspaces` exceeds the {MAX_FACETS}-facet bound")
+        raise _validation_error(
+            "halfspaces", f"`halfspaces` exceeds the {MAX_FACETS}-facet bound"
+        )
     for halfspace in halfspaces:
         for coeff in halfspace.coefficients:
             require_bounded_rational(
@@ -1878,15 +2016,20 @@ def _validate_halfspaces(
         )
     dim = len(halfspaces[0].coefficients)
     if dim > dimension_bound:
-        raise ValueError(
-            f"dimension {dim} exceeds the dimension bound {dimension_bound}"
+        raise _validation_error(
+            "halfspaces",
+            f"dimension {dim} exceeds the dimension bound {dimension_bound}",
         )
     for halfspace in halfspaces:
         if len(halfspace.coefficients) != dim:
-            raise ValueError("all half-spaces must share one dimension")
+            raise _validation_error(
+                "halfspaces", "all half-spaces must share one dimension"
+            )
     for halfspace in halfspaces:
         if all(c.as_fraction() == 0 for c in halfspace.coefficients):
-            raise ValueError("half-space coefficients must not all be zero")
+            raise _validation_error(
+                "halfspaces", "half-space coefficients must not all be zero"
+            )
     _require_admissible_h_vertices(halfspaces, dim)
 
 

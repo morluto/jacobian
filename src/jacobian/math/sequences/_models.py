@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
@@ -17,6 +18,12 @@ from jacobian.canonical import CanonicalLimits
 _MAX_SEQUENCE_LENGTH = 100_000
 MAX_INTEGER_SEQUENCE_ITEM_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
 _MAX_SEQUENCE_WIRE_BYTES = CanonicalLimits().max_output_bytes // 2
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by sequence contracts."""
+
+    return PydanticCustomError(f"sequences.{reason}", message)
 
 
 class IntegerSequenceRequest(StrictModel):
@@ -33,9 +40,10 @@ class IntegerSequenceRequest(StrictModel):
             len(value.lstrip("-")) > MAX_INTEGER_SEQUENCE_ITEM_DIGITS
             for value in self.values
         ):
-            raise ValueError(
+            raise _validation_error(
+                "item_too_large",
                 "sequence item exceeds the "
-                f"{MAX_INTEGER_SEQUENCE_ITEM_DIGITS}-digit bound"
+                f"{MAX_INTEGER_SEQUENCE_ITEM_DIGITS}-digit bound",
             )
         # Result-sensitive transport guard: estimate wire bytes before allocation.
         # Small 1-digit values at 100k ~400KB pass; 10k x 256-digit ~2.5MB pass;
@@ -43,10 +51,11 @@ class IntegerSequenceRequest(StrictModel):
         # composition hint rather than a coarse n ceiling.
         estimated = sum(len(value) + 3 for value in self.values) + 64
         if estimated > _MAX_SEQUENCE_WIRE_BYTES:
-            raise ValueError(
+            raise _validation_error(
+                "transport_too_large",
                 "sequence request exceeds the "
                 f"{_MAX_SEQUENCE_WIRE_BYTES}-byte transport envelope; "
-                "chunk the sequence into ≤10MiB pieces and compose via typed values"
+                "chunk the sequence into ≤10MiB pieces and compose via typed values",
             )
         return self
 

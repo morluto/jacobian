@@ -7,6 +7,7 @@ from math import prod
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
 from sympy import isprime, primepi
 
 from jacobian._exact import CanonicalInteger, CanonicalRational
@@ -83,6 +84,34 @@ DeterministicPrimeInteger = Annotated[
 ]
 
 
+def _validation_error(message: str) -> PydanticCustomError:
+    """Return an actionable owner-local validation error."""
+
+    code_by_reason = (
+        ("prime must", "prime_bound"),
+        ("modulus must", "prime_required"),
+        ("primes must", "prime_order"),
+        ("factor", "factor_bound"),
+        ("residue", "residue_invariant"),
+        ("local", "local_invariant"),
+        ("interval", "interval_bound"),
+        ("affine", "affine_bound"),
+        ("wheel", "wheel_invariant"),
+        ("membership", "membership_invariant"),
+        ("translation", "translation_bound"),
+        ("translated", "translation_invariant"),
+        ("match", "interval_invariant"),
+        ("first", "obstruction_invariant"),
+        ("admissibility", "admissibility_invariant"),
+        ("finite", "finite_product_invariant"),
+    )
+    suffix = next(
+        (suffix for phrase, suffix in code_by_reason if phrase in message.lower()),
+        "invariant",
+    )
+    return PydanticCustomError(f"prime_affine_form.{suffix}", message)
+
+
 def _digits(value: int | str) -> int:
     return len(str(value).lstrip("-"))
 
@@ -114,14 +143,14 @@ def _require_prime(prime: int, *, maximum: int) -> None:
     """Require a prime inside SymPy's deterministic sub-2^64 domain."""
 
     if prime > maximum:
-        raise ValueError(f"prime must be at most {maximum}")
+        raise _validation_error(f"prime must be at most {maximum}")
     if not isprime(prime):
-        raise ValueError("modulus must be prime")
+        raise _validation_error("modulus must be prime")
 
 
 def _require_prime_set(primes: tuple[int, ...], *, maximum: int) -> None:
     if primes != tuple(sorted(set(primes))):
-        raise ValueError("primes must be distinct and strictly increasing")
+        raise _validation_error("primes must be distinct and strictly increasing")
     for prime in primes:
         _require_prime(prime, maximum=maximum)
 
@@ -138,7 +167,7 @@ def _factor_digit_upper_bound(source: PrimeAffineTuple, prime: int) -> int:
 def _require_factor_output(source: PrimeAffineTuple, prime: int) -> None:
     bound = _factor_digit_upper_bound(source, prime)
     if bound > MAX_FACTOR_COMPONENT_DIGITS:
-        raise ValueError(
+        raise _validation_error(
             "local-factor numerator or denominator may require "
             f"{bound} digits, exceeding the bound {MAX_FACTOR_COMPONENT_DIGITS}"
         )
@@ -155,9 +184,9 @@ def _require_summary(source: PrimeAffineTuple, summary: PrimeTupleLocalSummary) 
     bad, bad_count, valid_count = _expected_summary(source, summary.prime)
     actual = tuple((row.residue, row.form_ids) for row in summary.bad_residues)
     if actual != bad:
-        raise ValueError("bad-residue rows do not match the source affine tuple")
+        raise _validation_error("bad-residue rows do not match the source affine tuple")
     if summary.bad_count != bad_count or summary.valid_count != valid_count:
-        raise ValueError("local residue counts do not match the source tuple")
+        raise _validation_error("local residue counts do not match the source tuple")
 
 
 def _parse_interval(lower: str, upper: str) -> tuple[int, int, int]:
@@ -165,14 +194,16 @@ def _parse_interval(lower: str, upper: str) -> tuple[int, int, int]:
         _digits(lower) > MAX_INTERVAL_ENDPOINT_DIGITS
         or _digits(upper) > MAX_INTERVAL_ENDPOINT_DIGITS
     ):
-        raise ValueError(
+        raise _validation_error(
             "interval endpoints must each have at most "
             f"{MAX_INTERVAL_ENDPOINT_DIGITS} digits"
         )
     lower_value = parse_canonical_integer(lower)
     upper_value = parse_canonical_integer(upper)
     if lower_value > upper_value:
-        raise ValueError("interval lower endpoint must not exceed upper endpoint")
+        raise _validation_error(
+            "interval lower endpoint must not exceed upper endpoint"
+        )
     return lower_value, upper_value, upper_value - lower_value + 1
 
 
@@ -184,7 +215,7 @@ def _interval_value_digit_bound(
         values = (form.evaluate(lower), form.evaluate(upper))
         maximum_digits = max(maximum_digits, *(_digits(value) for value in values))
         if max(values) > MAX_DETERMINISTIC_PRIME_INPUT:
-            raise ValueError(
+            raise _validation_error(
                 "a positive affine value exceeds SymPy's deterministic primality "
                 f"range 0..{MAX_DETERMINISTIC_PRIME_INPUT}"
             )
@@ -202,7 +233,7 @@ class PrimeTupleBadResidueRow(StrictModel):
     @model_validator(mode="after")
     def require_canonical_ids(self) -> Self:
         if self.form_ids != tuple(sorted(set(self.form_ids))):
-            raise ValueError("vanishing form IDs must be distinct and sorted")
+            raise _validation_error("vanishing form IDs must be distinct and sorted")
         return self
 
 
@@ -215,7 +246,7 @@ class PrimeTupleResidueRow(StrictModel):
     @model_validator(mode="after")
     def require_canonical_ids(self) -> Self:
         if self.vanishing_form_ids != tuple(sorted(set(self.vanishing_form_ids))):
-            raise ValueError("vanishing form IDs must be distinct and sorted")
+            raise _validation_error("vanishing form IDs must be distinct and sorted")
         return self
 
 
@@ -234,15 +265,17 @@ class PrimeTupleLocalSummary(StrictModel):
         _require_prime(self.prime, maximum=MAX_BATCH_PRIME)
         residues = tuple(row.residue for row in self.bad_residues)
         if residues != tuple(sorted(set(residues))):
-            raise ValueError("bad residues must be distinct and sorted")
+            raise _validation_error("bad residues must be distinct and sorted")
         if any(residue >= self.prime for residue in residues):
-            raise ValueError("bad residues must be canonical modulo the prime")
+            raise _validation_error("bad residues must be canonical modulo the prime")
         if self.bad_count != len(self.bad_residues):
-            raise ValueError("bad_count must equal the number of bad residue rows")
+            raise _validation_error(
+                "bad_count must equal the number of bad residue rows"
+            )
         if self.bad_count + self.valid_count != self.prime:
-            raise ValueError("bad and valid counts must partition every residue")
+            raise _validation_error("bad and valid counts must partition every residue")
         if sum(len(row.form_ids) for row in self.bad_residues) > MAX_AFFINE_FORMS:
-            raise ValueError(
+            raise _validation_error(
                 "bad-residue incidence count exceeds the affine-form bound"
             )
         return self
@@ -260,7 +293,7 @@ class PrimeTupleLocalFactorRequest(StrictModel):
         _require_factor_output(self.source, self.prime)
         work = 6 * self.source.form_count + 2 * self.prime
         if work > MAX_LOCAL_PROFILE_WORK:
-            raise ValueError(
+            raise _validation_error(
                 f"local profile and validation need {work} bounded steps, "
                 f"exceeding {MAX_LOCAL_PROFILE_WORK}"
             )
@@ -286,7 +319,7 @@ class PrimeTupleLocalFactorResult(StrictModel):
             sum(len(row.vanishing_form_ids) for row in self.residue_rows)
             > self.source.form_count
         ):
-            raise ValueError(
+            raise _validation_error(
                 "residue incidence count exceeds the source affine-form count"
             )
         PrimeTupleLocalFactorRequest(source=self.source, prime=self.prime)
@@ -298,17 +331,25 @@ class PrimeTupleLocalFactorResult(StrictModel):
             (row.residue, row.vanishing_form_ids) for row in self.residue_rows
         )
         if actual_rows != expected_rows:
-            raise ValueError("residue rows must be the complete source-bound partition")
+            raise _validation_error(
+                "residue rows must be the complete source-bound partition"
+            )
         expected_bad = len(bad)
         expected_valid = self.prime - expected_bad
         if self.bad_count != expected_bad or self.valid_count != expected_valid:
-            raise ValueError("local counts do not match the complete residue rows")
+            raise _validation_error(
+                "local counts do not match the complete residue rows"
+            )
         if self.locally_obstructed != (expected_valid == 0):
-            raise ValueError("local obstruction status must equal valid_count == 0")
+            raise _validation_error(
+                "local obstruction status must equal valid_count == 0"
+            )
         if self.factor.as_fraction() != local_factor_from_bad_count(
             self.source.form_count, self.prime, expected_bad
         ):
-            raise ValueError("local factor does not satisfy its defining formula")
+            raise _validation_error(
+                "local factor does not satisfy its defining formula"
+            )
         return self
 
 
@@ -331,7 +372,7 @@ class PrimeTupleLocalFactorsRequest(StrictModel):
         root_cells = self.source.form_count * len(self.primes)
         root_work = 6 * root_cells
         if root_work > MAX_BATCH_ROOT_WORK:
-            raise ValueError(
+            raise _validation_error(
                 f"local-factor computation and validation need {root_work} root "
                 f"steps, exceeding {MAX_BATCH_ROOT_WORK}"
             )
@@ -339,11 +380,11 @@ class PrimeTupleLocalFactorsRequest(StrictModel):
             _factor_digit_upper_bound(self.source, prime) for prime in self.primes
         )
         if any(bound > MAX_FACTOR_COMPONENT_DIGITS for bound in digit_bounds):
-            raise ValueError(
+            raise _validation_error(
                 "one local factor exceeds the exact rational component-digit bound"
             )
         if sum(digit_bounds) > MAX_FACTOR_PRODUCT_DIGITS:
-            raise ValueError(
+            raise _validation_error(
                 "finite factor product exceeds the conservative exact rational "
                 f"digit bound {MAX_FACTOR_PRODUCT_DIGITS}"
             )
@@ -358,7 +399,7 @@ class PrimeTupleLocalFactorsRequest(StrictModel):
             + 256
         )
         if estimated_characters > MAX_RESULT_CHARACTER_BUDGET:
-            raise ValueError(
+            raise _validation_error(
                 "finite factor result exceeds the conservative serialized bound"
             )
         return self
@@ -384,7 +425,7 @@ class FinitePrimeTupleFactorProduct(StrictModel):
     def bind_finite_factor_product(self) -> Self:
         PrimeTupleLocalFactorsRequest(source=self.source, primes=self.primes)
         if tuple(row.summary.prime for row in self.rows) != self.primes:
-            raise ValueError(
+            raise _validation_error(
                 "local-factor rows must align with the canonical prime set"
             )
         expected_product = Fraction(1, 1)
@@ -397,16 +438,20 @@ class FinitePrimeTupleFactorProduct(StrictModel):
                 row.summary.bad_count,
             )
             if row.factor.as_fraction() != expected_factor:
-                raise ValueError(
+                raise _validation_error(
                     "local factor row does not satisfy its defining formula"
                 )
             expected_product *= expected_factor
             if expected_first is None and row.summary.valid_count == 0:
                 expected_first = row.summary.prime
         if self.product.as_fraction() != expected_product:
-            raise ValueError("finite product must equal the product of every local row")
+            raise _validation_error(
+                "finite product must equal the product of every local row"
+            )
         if self.first_obstructing_prime != expected_first:
-            raise ValueError("first obstructing prime does not match the local rows")
+            raise _validation_error(
+                "first obstructing prime does not match the local rows"
+            )
         return self
 
 
@@ -420,14 +465,14 @@ class PrimeTupleAdmissibilityRequest(StrictModel):
         cutoff = self.source.form_count
         prime_rows = int(primepi(cutoff))
         if prime_rows > MAX_ADMISSIBILITY_PRIME_ROWS:
-            raise ValueError(
+            raise _validation_error(
                 f"admissibility needs {prime_rows} prime rows, exceeding "
                 f"{MAX_ADMISSIBILITY_PRIME_ROWS}"
             )
         root_cells = self.source.form_count * prime_rows
         total_root_cells = 4 * root_cells
         if total_root_cells > MAX_ADMISSIBILITY_ROOT_CELLS:
-            raise ValueError(
+            raise _validation_error(
                 "admissibility computation and validation may require "
                 f"{total_root_cells} root cells, "
                 f"exceeding {MAX_ADMISSIBILITY_ROOT_CELLS}"
@@ -442,7 +487,7 @@ class PrimeTupleAdmissibilityRequest(StrictModel):
             + 256
         )
         if estimated_characters > MAX_RESULT_CHARACTER_BUDGET:
-            raise ValueError(
+            raise _validation_error(
                 "admissibility profile exceeds the conservative serialized bound"
             )
         return self
@@ -470,11 +515,11 @@ class PrimeTupleAdmissibilityResult(StrictModel):
         expected_cutoff = self.source.form_count
         expected_primes = primes_through(expected_cutoff)
         if self.cutoff != expected_cutoff or self.checked_primes != expected_primes:
-            raise ValueError(
+            raise _validation_error(
                 "checked primes must be exactly every prime through the cutoff"
             )
         if tuple(row.prime for row in self.local_rows) != expected_primes:
-            raise ValueError("local rows must align with every checked prime")
+            raise _validation_error("local rows must align with every checked prime")
         for row in self.local_rows:
             _require_summary(self.source, row)
         obstructing = tuple(
@@ -482,15 +527,21 @@ class PrimeTupleAdmissibilityResult(StrictModel):
         )
         expected_status = "LOCALLY_OBSTRUCTED" if obstructing else "LOCALLY_ADMISSIBLE"
         if self.status != expected_status:
-            raise ValueError("admissibility status does not match the local rows")
+            raise _validation_error(
+                "admissibility status does not match the local rows"
+            )
         expected_first = obstructing[0] if obstructing else None
         if self.least_obstructing_prime != expected_first:
-            raise ValueError("least obstructing prime does not match the local rows")
+            raise _validation_error(
+                "least obstructing prime does not match the local rows"
+            )
         if (
             self.large_prime_lower_bound != expected_cutoff + 1
             or self.maximum_large_prime_bad_residues != self.source.form_count
         ):
-            raise ValueError("large-prime cutoff evidence does not match the source")
+            raise _validation_error(
+                "large-prime cutoff evidence does not match the source"
+            )
         return self
 
 
@@ -513,13 +564,13 @@ class PrimeTupleResidueWheelRequest(StrictModel):
         root_cells = self.source.form_count * len(self.primes)
         root_work = 6 * root_cells
         if root_work > MAX_COMPACT_WHEEL_ROOT_WORK:
-            raise ValueError(
+            raise _validation_error(
                 f"compact wheel computation and validation need {root_work} root "
                 f"steps, exceeding {MAX_COMPACT_WHEEL_ROOT_WORK}"
             )
         modulus_digits = sum(_digits(prime) for prime in self.primes) or 1
         if modulus_digits > MAX_COMPACT_WHEEL_SCALAR_DIGITS:
-            raise ValueError(
+            raise _validation_error(
                 "compact wheel modulus exceeds the conservative exact scalar "
                 f"digit bound {MAX_COMPACT_WHEEL_SCALAR_DIGITS}"
             )
@@ -533,7 +584,9 @@ class PrimeTupleResidueWheelRequest(StrictModel):
             + 128
         )
         if estimated_characters > MAX_RESULT_CHARACTER_BUDGET:
-            raise ValueError("compact wheel exceeds the conservative serialized bound")
+            raise _validation_error(
+                "compact wheel exceeds the conservative serialized bound"
+            )
         return self
 
 
@@ -555,15 +608,21 @@ class PrimeTupleResidueWheel(StrictModel):
     def bind_compact_crt_wheel(self) -> Self:
         PrimeTupleResidueWheelRequest(source=self.source, primes=self.primes)
         if tuple(row.prime for row in self.local_rows) != self.primes:
-            raise ValueError("wheel local rows must align with its canonical primes")
+            raise _validation_error(
+                "wheel local rows must align with its canonical primes"
+            )
         for row in self.local_rows:
             _require_summary(self.source, row)
         expected_modulus = wheel_modulus(self.primes)
         if parse_canonical_integer(self.modulus) != expected_modulus:
-            raise ValueError("wheel modulus must equal the product of its primes")
+            raise _validation_error(
+                "wheel modulus must equal the product of its primes"
+            )
         expected_count = prod((row.valid_count for row in self.local_rows), start=1)
         if parse_canonical_integer(self.valid_count) != expected_count:
-            raise ValueError("wheel valid_count must equal the product of local counts")
+            raise _validation_error(
+                "wheel valid_count must equal the product of local counts"
+            )
         return self
 
 
@@ -576,19 +635,19 @@ class PrimeTupleResidueWheelEnumerationRequest(StrictModel):
     def require_bounded_wheel_enumeration(self) -> Self:
         local_residue_rows = sum(self.wheel.primes)
         if local_residue_rows > MAX_WHEEL_LOCAL_RESIDUES:
-            raise ValueError(
+            raise _validation_error(
                 f"wheel local residue enumeration {local_residue_rows} exceeds "
                 f"{MAX_WHEEL_LOCAL_RESIDUES}"
             )
         result_count = parse_canonical_integer(self.wheel.valid_count)
         if result_count > MAX_WHEEL_RESIDUES:
-            raise ValueError(
+            raise _validation_error(
                 f"wheel has {result_count} valid residues, exceeding "
                 f"{MAX_WHEEL_RESIDUES}"
             )
         result_cells = result_count * (len(self.wheel.primes) + 1)
         if result_cells > MAX_WHEEL_RESULT_CELLS:
-            raise ValueError(
+            raise _validation_error(
                 f"wheel result needs {result_cells} cells, exceeding "
                 f"{MAX_WHEEL_RESULT_CELLS}"
             )
@@ -597,7 +656,7 @@ class PrimeTupleResidueWheelEnumerationRequest(StrictModel):
             result_count * len(self.wheel.primes) + local_residue_rows + root_cells
         )
         if replay_work > MAX_WHEEL_ENUMERATION_WORK:
-            raise ValueError(
+            raise _validation_error(
                 f"wheel enumeration and validation need {replay_work} bounded "
                 f"steps, exceeding {MAX_WHEEL_ENUMERATION_WORK}"
             )
@@ -610,7 +669,7 @@ class PrimeTupleResidueWheelEnumerationRequest(StrictModel):
             + 128
         )
         if serialized_characters > MAX_RESULT_CHARACTER_BUDGET:
-            raise ValueError(
+            raise _validation_error(
                 "wheel enumeration exceeds the conservative serialized bound"
             )
         return self
@@ -630,16 +689,16 @@ class PrimeTupleResidueWheelEnumeration(StrictModel):
             len(row.components) for row in self.residues
         )
         if result_cells > MAX_WHEEL_RESULT_CELLS:
-            raise ValueError("wheel rows exceed the explicit result-cell bound")
+            raise _validation_error("wheel rows exceed the explicit result-cell bound")
         PrimeTupleResidueWheelEnumerationRequest(wheel=self.wheel)
         expected_count = parse_canonical_integer(self.wheel.valid_count)
         if len(self.residues) != expected_count:
-            raise ValueError(
+            raise _validation_error(
                 "wheel rows do not satisfy the complete CRT reconstruction invariant"
             )
         residues = tuple(parse_canonical_integer(row.residue) for row in self.residues)
         if residues != tuple(sorted(set(residues))):
-            raise ValueError(
+            raise _validation_error(
                 "wheel rows do not satisfy the complete CRT reconstruction invariant"
             )
         modulus = parse_canonical_integer(self.wheel.modulus)
@@ -647,7 +706,7 @@ class PrimeTupleResidueWheelEnumeration(StrictModel):
             if not 0 <= residue < modulus or len(row.components) != len(
                 self.wheel.primes
             ):
-                raise ValueError(
+                raise _validation_error(
                     "wheel rows do not satisfy the complete CRT reconstruction invariant"
                 )
             for prime, summary, component in zip(
@@ -662,7 +721,7 @@ class PrimeTupleResidueWheelEnumeration(StrictModel):
                     or residue % prime != component
                     or component in bad
                 ):
-                    raise ValueError(
+                    raise _validation_error(
                         "wheel rows do not satisfy the complete CRT reconstruction "
                         "invariant"
                     )
@@ -678,7 +737,7 @@ class PrimeTupleWheelMembershipRequest(StrictModel):
     @model_validator(mode="after")
     def require_bounded_value(self) -> Self:
         if _digits(self.value) > MAX_AFFINE_COMPONENT_DIGITS:
-            raise ValueError(
+            raise _validation_error(
                 f"membership value must have at most {MAX_AFFINE_COMPONENT_DIGITS} digits"
             )
         result_characters = (
@@ -690,7 +749,7 @@ class PrimeTupleWheelMembershipRequest(StrictModel):
             + 256
         )
         if result_characters > MAX_RESULT_CHARACTER_BUDGET:
-            raise ValueError(
+            raise _validation_error(
                 "wheel membership result exceeds the conservative serialized bound"
             )
         return self
@@ -724,16 +783,24 @@ class PrimeTupleWheelMembershipResult(StrictModel):
                 break
         expected_permitted = expected_prime is None
         if parse_canonical_integer(self.canonical_residue) != expected_residue:
-            raise ValueError("canonical residue does not match the wheel modulus")
+            raise _validation_error(
+                "canonical residue does not match the wheel modulus"
+            )
         if self.components != expected_components:
-            raise ValueError("prime components do not match the supplied integer")
+            raise _validation_error(
+                "prime components do not match the supplied integer"
+            )
         if self.is_permitted != expected_permitted:
-            raise ValueError("wheel membership does not match the complete residue set")
+            raise _validation_error(
+                "wheel membership does not match the complete residue set"
+            )
         if (
             self.first_excluded_prime != expected_prime
             or self.vanishing_form_ids != expected_form_ids
         ):
-            raise ValueError("first local exclusion does not match the source forms")
+            raise _validation_error(
+                "first local exclusion does not match the source forms"
+            )
         return self
 
 
@@ -754,7 +821,7 @@ class PrimeAffineIntervalCountRequest(StrictModel):
         _interval_value_digit_bound(self.source, lower, upper)
         replay_evaluations = 2 * interval_size * self.source.form_count
         if replay_evaluations > MAX_INTERVAL_REPLAY_EVALUATIONS:
-            raise ValueError(
+            raise _validation_error(
                 f"interval result and validation need {replay_evaluations} affine "
                 f"evaluations, exceeding {MAX_INTERVAL_REPLAY_EVALUATIONS}"
             )
@@ -770,7 +837,7 @@ class PrimeAffineIntervalEnumerateRequest(PrimeAffineIntervalCountRequest):
         value_digits = _interval_value_digit_bound(self.source, lower, upper)
         result_cells = interval_size * (self.source.form_count + 1)
         if result_cells > MAX_INTERVAL_ENUMERATION_CELLS:
-            raise ValueError(
+            raise _validation_error(
                 f"interval enumeration may need {result_cells} result cells, "
                 f"exceeding {MAX_INTERVAL_ENUMERATION_CELLS}"
             )
@@ -782,7 +849,7 @@ class PrimeAffineIntervalEnumerateRequest(PrimeAffineIntervalCountRequest):
             + 256
         )
         if serialized_characters > MAX_RESULT_CHARACTER_BUDGET:
-            raise ValueError(
+            raise _validation_error(
                 "interval enumeration exceeds the conservative serialized bound"
             )
         return self
@@ -815,13 +882,15 @@ class PrimePatternIntervalCountResult(StrictModel):
             self.source, lower, upper
         )
         if self.interval_size != interval_size:
-            raise ValueError("interval_size must equal upper-lower+1")
+            raise _validation_error("interval_size must equal upper-lower+1")
         if self.affine_values_examined != interval_size * self.source.form_count:
-            raise ValueError(
+            raise _validation_error(
                 "affine_values_examined does not match the complete interval"
             )
         if self.match_count != expected_count:
-            raise ValueError("match_count does not match exact interval primality")
+            raise _validation_error(
+                "match_count does not match exact interval primality"
+            )
         if (
             None
             if self.first_match is None
@@ -831,7 +900,7 @@ class PrimePatternIntervalCountResult(StrictModel):
             if self.last_match is None
             else parse_canonical_integer(self.last_match)
         ) != expected_last:
-            raise ValueError(
+            raise _validation_error(
                 "first or last match does not match exact interval primality"
             )
         return self
@@ -853,7 +922,7 @@ class PrimePatternIntervalEnumerateResult(StrictModel):
             len(match.prime_values) for match in self.matches
         )
         if result_cells > MAX_INTERVAL_ENUMERATION_CELLS:
-            raise ValueError("matches exceed the interval result-cell bound")
+            raise _validation_error("matches exceed the interval result-cell bound")
         PrimeAffineIntervalEnumerateRequest(
             source=self.source, lower=self.lower, upper=self.upper
         )
@@ -867,13 +936,13 @@ class PrimePatternIntervalEnumerateResult(StrictModel):
             for match in self.matches
         )
         if actual != expected:
-            raise ValueError(
+            raise _validation_error(
                 "matches must be every and only positive-prime affine tuple"
             )
         if self.interval_size != interval_size:
-            raise ValueError("interval_size must equal upper-lower+1")
+            raise _validation_error("interval_size must equal upper-lower+1")
         if self.affine_values_examined != interval_size * self.source.form_count:
-            raise ValueError(
+            raise _validation_error(
                 "affine_values_examined does not match the complete interval"
             )
         return self
@@ -890,13 +959,13 @@ class PrimeTupleIntervalResidueProfileRequest(StrictModel):
     def require_bounded_survivor_profile(self) -> Self:
         _, _, interval_size = _parse_interval(self.lower, self.upper)
         if interval_size > MAX_WHEEL_INTERVAL_LENGTH:
-            raise ValueError(
+            raise _validation_error(
                 f"wheel interval length {interval_size} exceeds "
                 f"{MAX_WHEEL_INTERVAL_LENGTH}"
             )
         replay_work = 2 * interval_size * max(1, len(self.wheel.primes))
         if replay_work > MAX_INTERVAL_REPLAY_EVALUATIONS:
-            raise ValueError(
+            raise _validation_error(
                 f"wheel interval profile and validation need {replay_work} "
                 f"modular checks, exceeding {MAX_INTERVAL_REPLAY_EVALUATIONS}"
             )
@@ -907,7 +976,7 @@ class PrimeTupleIntervalResidueProfileRequest(StrictModel):
             + 192
         )
         if result_characters > MAX_RESULT_CHARACTER_BUDGET:
-            raise ValueError(
+            raise _validation_error(
                 "wheel interval profile exceeds the conservative serialized bound"
             )
         return self
@@ -944,9 +1013,11 @@ class PrimeTupleIntervalResidueProfileResult(StrictModel):
         )
         actual = tuple(parse_canonical_integer(value) for value in self.survivors)
         if actual != expected:
-            raise ValueError("survivors must be the complete local wheel profile")
+            raise _validation_error(
+                "survivors must be the complete local wheel profile"
+            )
         if self.interval_size != interval_size:
-            raise ValueError("interval_size must equal upper-lower+1")
+            raise _validation_error("interval_size must equal upper-lower+1")
         return self
 
 
@@ -959,7 +1030,7 @@ class PrimeAffineTranslationRequest(StrictModel):
     @model_validator(mode="after")
     def require_bounded_translated_tuple(self) -> Self:
         if _digits(self.shift) > MAX_INTERVAL_ENDPOINT_DIGITS:
-            raise ValueError(
+            raise _validation_error(
                 f"translation shift must have at most {MAX_INTERVAL_ENDPOINT_DIGITS} digits"
             )
         shift = parse_canonical_integer(self.shift)
@@ -967,12 +1038,12 @@ class PrimeAffineTranslationRequest(StrictModel):
         for form in self.source.forms:
             translated_constant = form.evaluate(shift)
             if _digits(translated_constant) > MAX_AFFINE_COMPONENT_DIGITS:
-                raise ValueError(
+                raise _validation_error(
                     "translated constant exceeds the canonical affine component bound"
                 )
             aggregate_digits += _digits(form.coefficient) + _digits(translated_constant)
         if aggregate_digits > MAX_AFFINE_AGGREGATE_DIGITS:
-            raise ValueError(
+            raise _validation_error(
                 "translated affine tuple exceeds the aggregate coefficient-digit "
                 f"bound {MAX_AFFINE_AGGREGATE_DIGITS}"
             )
@@ -989,7 +1060,9 @@ class PrimeAffineTranslationResult(StrictModel):
         PrimeAffineTranslationRequest(source=self.source, shift=self.shift)
         expected = translated_tuple(self.source, parse_canonical_integer(self.shift))
         if self.translated != expected:
-            raise ValueError("translated tuple must equal L_i(n+shift) for every form")
+            raise _validation_error(
+                "translated tuple must equal L_i(n+shift) for every form"
+            )
         return self
 
 

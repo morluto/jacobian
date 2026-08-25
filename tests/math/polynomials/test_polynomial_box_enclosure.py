@@ -6,7 +6,7 @@ from fractions import Fraction
 from itertools import product
 
 import pytest
-from pydantic import ValidationError
+from tests.math.polynomials._support import polynomial_validation_error
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import encode_strict_json
@@ -29,7 +29,7 @@ from jacobian.math.polynomials.intervals._operations import (
     compute_polynomial_box_enclosure,
 )
 from jacobian.math.polynomials.intervals._tools import TOOLS
-from jacobian.math.polynomials.maps._models import JacobianRequest
+from jacobian.math.polynomials.maps._models import RationalPolynomialMap
 from jacobian.math.polynomials.maps._operations import compute_jacobian
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_EXPONENT,
@@ -206,7 +206,7 @@ def test_jacobian_entry_is_consumed_without_parent_or_axis_conversion() -> None:
         {(2, 0): 1, (1, 1): 1, (0, 0): -1},
     )
     jacobian = compute_jacobian(
-        JacobianRequest(
+        RationalPolynomialMap(
             input_variables=("x", "y"),
             output_polynomials=(source,),
         )
@@ -242,7 +242,7 @@ def test_transported_variable_and_axis_permutation_preserves_enclosure() -> None
 
 def test_box_must_use_the_polynomial_complete_ordered_axis() -> None:
     polynomial = _polynomial(("x", "y"), {(1, 0): 1})
-    with pytest.raises(ValidationError, match="complete ordered axis"):
+    with polynomial_validation_error():
         PolynomialBoxEnclosureRequest(
             polynomial=polynomial,
             box=_box(("y", "x"), ((0, 1), (0, 1))),
@@ -250,7 +250,7 @@ def test_box_must_use_the_polynomial_complete_ordered_axis() -> None:
 
 
 def test_reversed_coordinate_interval_is_rejected_before_execution() -> None:
-    with pytest.raises(ValidationError, match="lower endpoint"):
+    with polynomial_validation_error():
         ClosedRationalInterval(lower=_q(2), upper=_q(1))
 
 
@@ -276,8 +276,7 @@ def test_source_bound_result_rejects_independent_forgery(mutation: str) -> None:
     else:
         payload["enclosure"]["upper"] = {"num": "3", "den": "1"}
 
-    expected = "bounded source replay" if mutation == "enclosure" else "source digest"
-    with pytest.raises(ValidationError, match=expected):
+    with polynomial_validation_error():
         PolynomialBoxEnclosureResult.model_validate(payload)
 
 
@@ -294,7 +293,7 @@ def test_digest_rejects_a_different_polynomial_with_the_same_replayed_interval()
         {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]},
     ]
 
-    with pytest.raises(ValidationError, match="source digest"):
+    with polynomial_validation_error():
         PolynomialBoxEnclosureResult.model_validate(payload)
 
 
@@ -306,7 +305,7 @@ def test_digest_rejects_a_different_box_when_the_polynomial_is_constant() -> Non
     payload = result.model_dump(mode="json")
     payload["box"]["intervals"][0]["upper"] = {"num": "2", "den": "1"}
 
-    with pytest.raises(ValidationError, match="source digest"):
+    with polynomial_validation_error():
         PolynomialBoxEnclosureResult.model_validate(payload)
 
 
@@ -334,7 +333,7 @@ def test_variable_count_boundary_preserves_axis_identity() -> None:
     assert request.box.variables == variables
 
     too_many = (*variables, "overflow")
-    with pytest.raises(ValidationError, match="at most 8 items"):
+    with polynomial_validation_error():
         RationalBox(
             variables=too_many,
             intervals=tuple(_interval(0, 0) for _ in too_many),
@@ -364,7 +363,7 @@ def test_term_count_boundary_is_checked_before_interval_evaluation() -> None:
         box=_box(variables, ((0, 0), (0, 0))),
     )
 
-    with pytest.raises(ValidationError, match="at most 4096 items"):
+    with polynomial_validation_error():
         _polynomial(
             variables,
             dict.fromkeys(_many_exponents(MAX_BOX_ENCLOSURE_TERMS + 1), 1),
@@ -405,7 +404,7 @@ def test_per_variable_and_total_degree_boundaries() -> None:
         box,
     )
     assert result.enclosure == _interval(0, 1)
-    with pytest.raises(ValidationError, match="shared representation limit"):
+    with polynomial_validation_error():
         _polynomial(
             ("x",),
             {(per_variable_limit + 1,): 1},
@@ -437,7 +436,7 @@ def test_coefficient_and_endpoint_digit_boundaries() -> None:
         polynomial=polynomial,
         box=_box(("x",), ((0, 0),)),
     )
-    with pytest.raises(ValidationError, match="canonical 32,768-digit limit"):
+    with polynomial_validation_error():
         CanonicalRational(
             num="9" * (MAX_BOX_ENCLOSURE_COEFFICIENT_DIGITS + 1),
             den="1",
@@ -454,7 +453,7 @@ def test_coefficient_and_endpoint_digit_boundaries() -> None:
             intervals=(ClosedRationalInterval(lower=_q(0), upper=endpoint_at_limit),),
         ),
     )
-    with pytest.raises(ValidationError, match="canonical 32,768-digit limit"):
+    with polynomial_validation_error():
         CanonicalRational(
             num="9" * (MAX_BOX_ENCLOSURE_ENDPOINT_DIGITS + 1),
             den="1",
@@ -486,7 +485,7 @@ def test_interval_ordering_at_the_canonical_boundary_is_admitted() -> None:
 
     oversized_interval = _maximum_canonical_interval_payload()
     oversized_interval["upper"]["num"] = "1" + "0" * MAX_CANONICAL_RATIONAL_DIGITS
-    with pytest.raises(ValidationError, match="canonical 32,768-digit limit"):
+    with polynomial_validation_error():
         PolynomialBoxEnclosureRequest.model_validate(
             {
                 "polynomial": polynomial_payload,
@@ -506,7 +505,7 @@ def test_forged_result_interval_ordering_stays_inside_intermediate_bound() -> No
     payload = result.model_dump(mode="json")
     payload["enclosure"] = _maximum_canonical_interval_payload()
 
-    with pytest.raises(ValidationError, match="bounded source replay"):
+    with polynomial_validation_error():
         PolynomialBoxEnclosureResult.model_validate(payload)
 
 
@@ -576,7 +575,7 @@ def test_exact_result_digit_growth_boundary() -> None:
     assert MAX_BOX_ENCLOSURE_RESULT_DIGITS == 32_768
     assert compute_polynomial_box_enclosure(at_limit).box == at_limit.box
 
-    with pytest.raises(ValidationError, match="exact-result bound"):
+    with polynomial_validation_error():
         _growth_boundary_request(
             second_endpoint_numerator_digits=128,
             second_endpoint_denominator_digits=127,

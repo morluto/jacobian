@@ -8,6 +8,7 @@ from math import comb, factorial
 from typing import Literal, Self
 
 from pydantic import Field, ValidationInfo, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
@@ -15,12 +16,17 @@ from jacobian._exact import (
     require_bounded_rational,
 )
 from jacobian._models import StrictModel
+from jacobian.math.optimization._arithmetic import rational_dot
 
 MAX_RATIONAL_DIGITS = 128
 MAX_LINEAR_PROGRAM_RESULT_BYTES = 10 * 1024 * 1024
 MAX_LINEAR_PROGRAM_SIMPLEX_BASES = 1_000_000
 MAX_LINEAR_PROGRAM_SIMPLEX_SCALAR_UPDATES = 50_000_000
 _INTERMEDIATE_SCALAR_DIGITS = "standard_intermediate_scalar_digits"
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"linear_program.{reason}", message)
 
 
 def _scalar_digit_cap(info: ValidationInfo) -> int:
@@ -330,10 +336,6 @@ def _source_wire_bytes(program: StandardFormRationalLinearProgram) -> int:
     )
 
 
-def _dot(left: tuple[Fraction, ...], right: tuple[Fraction, ...]) -> Fraction:
-    return sum((a * b for a, b in zip(left, right, strict=True)), Fraction())
-
-
 def _program_fractions(
     program: StandardFormRationalLinearProgram,
 ) -> tuple[
@@ -355,8 +357,8 @@ def _primal_diagnostics(
     candidate: tuple[Fraction, ...],
 ) -> tuple[Fraction, tuple[Fraction, ...]]:
     objective, coefficients, rhs = _program_fractions(program)
-    return _dot(objective, candidate), tuple(
-        _dot(row, candidate) - expected
+    return rational_dot(objective, candidate), tuple(
+        rational_dot(row, candidate) - expected
         for row, expected in zip(coefficients, rhs, strict=True)
     )
 
@@ -366,8 +368,8 @@ def _recession_diagnostics(
     direction: tuple[Fraction, ...],
 ) -> tuple[Fraction, tuple[Fraction, ...]]:
     objective, coefficients, _ = _program_fractions(program)
-    return _dot(objective, direction), tuple(
-        _dot(row, direction) for row in coefficients
+    return rational_dot(objective, direction), tuple(
+        rational_dot(row, direction) for row in coefficients
     )
 
 
@@ -387,7 +389,7 @@ def _dual_diagnostics(
         )
         for column in range(len(objective))
     )
-    return _dot(rhs, candidate), slacks
+    return rational_dot(rhs, candidate), slacks
 
 
 class StandardFormRationalLinearProgram(StrictModel):
@@ -404,12 +406,17 @@ class StandardFormRationalLinearProgram(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def bound_raw_program(cls, value: object, info: ValidationInfo) -> object:
-        return _prepare_raw_program(value, maximum_digits=_scalar_digit_cap(info))
+        try:
+            return _prepare_raw_program(value, maximum_digits=_scalar_digit_cap(info))
+        except ValueError as error:
+            raise _validation_error("raw_input_bound", str(error)) from error
 
     @model_validator(mode="after")
     def require_canonical_dimensions(self) -> Self:
         if len(set(self.variables)) != len(self.variables):
-            raise ValueError("linear-program variable names must be unique")
+            raise _validation_error(
+                "duplicate_variable", "linear-program variable names must be unique"
+            )
         if any(
             not name
             or len(name) > 64
@@ -417,20 +424,30 @@ class StandardFormRationalLinearProgram(StrictModel):
             or any(not (char.isalnum() or char == "_") for char in name)
             for name in self.variables
         ):
-            raise ValueError("linear-program variable names must be identifiers")
+            raise _validation_error(
+                "variable_identifier",
+                "linear-program variable names must be identifiers",
+            )
         width = len(self.variables)
         if len(self.objective) != width:
-            raise ValueError("objective length must equal the variable count")
+            raise _validation_error(
+                "objective_length", "objective length must equal the variable count"
+            )
         if len(self.coefficients) != len(self.rhs):
-            raise ValueError("coefficient row count must equal the rhs length")
+            raise _validation_error(
+                "row_count", "coefficient row count must equal the rhs length"
+            )
         if any(len(row) != width for row in self.coefficients):
-            raise ValueError("every coefficient row must match the variable count")
+            raise _validation_error(
+                "row_width", "every coefficient row must match the variable count"
+            )
 
         result_digits = _result_digit_bound(self)
         if result_digits > MAX_CANONICAL_RATIONAL_DIGITS:
-            raise ValueError(
+            raise _validation_error(
+                "result_height",
                 "linear-program rational height can exceed the exact "
-                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit result bound"
+                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit result bound",
             )
         direct_certificate = _has_trivial_inconsistent_row(self)
         active_equations = 0 if direct_certificate else len(_active_equations(self))
@@ -441,14 +458,16 @@ class StandardFormRationalLinearProgram(StrictModel):
                 equations=active_equations,
             )
         if candidates > MAX_LINEAR_PROGRAM_SIMPLEX_BASES:
-            raise ValueError(
+            raise _validation_error(
+                "simplex_basis_bound",
                 "linear-program possible simplex bases exceed the "
-                f"{MAX_LINEAR_PROGRAM_SIMPLEX_BASES}-candidate bound"
+                f"{MAX_LINEAR_PROGRAM_SIMPLEX_BASES}-candidate bound",
             )
         if scalar_updates > MAX_LINEAR_PROGRAM_SIMPLEX_SCALAR_UPDATES:
-            raise ValueError(
+            raise _validation_error(
+                "simplex_work_bound",
                 "linear-program exact simplex pivot work exceeds the "
-                f"{MAX_LINEAR_PROGRAM_SIMPLEX_SCALAR_UPDATES}-scalar-update bound"
+                f"{MAX_LINEAR_PROGRAM_SIMPLEX_SCALAR_UPDATES}-scalar-update bound",
             )
         derived_rationals = 2 * len(self.variables) + 2 * len(self.rhs) + 2
         estimated_result_bytes = (
@@ -457,9 +476,10 @@ class StandardFormRationalLinearProgram(StrictModel):
             + 4_096
         )
         if estimated_result_bytes > MAX_LINEAR_PROGRAM_RESULT_BYTES:
-            raise ValueError(
+            raise _validation_error(
+                "result_size_bound",
                 "linear-program exact result can exceed the "
-                f"{MAX_LINEAR_PROGRAM_RESULT_BYTES}-byte result bound"
+                f"{MAX_LINEAR_PROGRAM_RESULT_BYTES}-byte result bound",
             )
         return self
 
@@ -518,64 +538,70 @@ class RationalLinearProgramResult(StrictModel):
     def bound_raw_result(cls, value: object) -> object:
         if not isinstance(value, Mapping):
             return value
-        prepared: dict[str, object] = dict(value)
-        prepared["program"] = _prepare_raw_program(prepared.get("program"))
-        prepared["primal_candidate"] = _prepare_raw_rational_vector(
-            prepared.get("primal_candidate"),
-            maximum_length=32,
-            maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
-            label="rational linear-program primal candidate",
-        )
-        prepared["dual_candidate"] = _prepare_raw_rational_vector(
-            prepared.get("dual_candidate"),
-            maximum_length=64,
-            maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
-            label="rational linear-program dual candidate",
-        )
-        prepared["primal_residuals"] = _prepare_raw_rational_vector(
-            prepared.get("primal_residuals"),
-            maximum_length=64,
-            maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
-            label="rational linear-program primal residuals",
-        )
-        prepared["dual_slacks"] = _prepare_raw_rational_vector(
-            prepared.get("dual_slacks"),
-            maximum_length=32,
-            maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
-            label="rational linear-program dual slacks",
-        )
-        prepared["farkas_candidate"] = _prepare_raw_rational_vector(
-            prepared.get("farkas_candidate"),
-            maximum_length=64,
-            maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
-            label="rational linear-program Farkas candidate",
-        )
-        prepared["recession_direction"] = _prepare_raw_rational_vector(
-            prepared.get("recession_direction"),
-            maximum_length=32,
-            maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
-            label="rational linear-program recession direction",
-        )
-        _bound_raw_rational(
-            prepared.get("primal_objective"),
-            maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
-            label="rational linear-program primal objective",
-        )
-        _bound_raw_rational(
-            prepared.get("dual_objective"),
-            maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
-            label="rational linear-program dual objective",
-        )
-        return prepared
+        try:
+            prepared: dict[str, object] = dict(value)
+            prepared["program"] = _prepare_raw_program(prepared.get("program"))
+            prepared["primal_candidate"] = _prepare_raw_rational_vector(
+                prepared.get("primal_candidate"),
+                maximum_length=32,
+                maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+                label="rational linear-program primal candidate",
+            )
+            prepared["dual_candidate"] = _prepare_raw_rational_vector(
+                prepared.get("dual_candidate"),
+                maximum_length=64,
+                maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+                label="rational linear-program dual candidate",
+            )
+            prepared["primal_residuals"] = _prepare_raw_rational_vector(
+                prepared.get("primal_residuals"),
+                maximum_length=64,
+                maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+                label="rational linear-program primal residuals",
+            )
+            prepared["dual_slacks"] = _prepare_raw_rational_vector(
+                prepared.get("dual_slacks"),
+                maximum_length=32,
+                maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+                label="rational linear-program dual slacks",
+            )
+            prepared["farkas_candidate"] = _prepare_raw_rational_vector(
+                prepared.get("farkas_candidate"),
+                maximum_length=64,
+                maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+                label="rational linear-program Farkas candidate",
+            )
+            prepared["recession_direction"] = _prepare_raw_rational_vector(
+                prepared.get("recession_direction"),
+                maximum_length=32,
+                maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+                label="rational linear-program recession direction",
+            )
+            _bound_raw_rational(
+                prepared.get("primal_objective"),
+                maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+                label="rational linear-program primal objective",
+            )
+            _bound_raw_rational(
+                prepared.get("dual_objective"),
+                maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+                label="rational linear-program dual objective",
+            )
+            return prepared
+        except ValueError as error:
+            raise _validation_error("raw_result_bound", str(error)) from error
 
     @model_validator(mode="after")
     def bind_result_to_source(self) -> Self:
-        _require_result_shape(self)
-        _require_result_heights(self)
-        primal_objective = _replay_primal(self)
-        _replay_dual(self, primal_objective)
-        _replay_farkas(self)
-        _replay_recession(self)
+        try:
+            _require_result_shape(self)
+            _require_result_heights(self)
+            primal_objective = _replay_primal(self)
+            _replay_dual(self, primal_objective)
+            _replay_farkas(self)
+            _replay_recession(self)
+        except ValueError as error:
+            raise _validation_error("result_replay", str(error)) from error
         return self
 
 
@@ -692,7 +718,7 @@ def _replay_farkas(result: RationalLinearProgramResult) -> None:
         objective[column] - slacks[column] for column in range(len(objective))
     )
     rhs = tuple(value.as_fraction() for value in result.program.rhs)
-    if any(value < 0 for value in pairings) or _dot(rhs, farkas) >= 0:
+    if any(value < 0 for value in pairings) or rational_dot(rhs, farkas) >= 0:
         raise ValueError(
             "Farkas candidate must satisfy Aᵀy>=0 and bᵀy<0 for the source"
         )

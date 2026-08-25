@@ -13,6 +13,7 @@ from itertools import product as iproduct
 from typing import Annotated, Literal, NamedTuple, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
@@ -22,6 +23,10 @@ MAX_ARITY = 4
 MAX_TERM_NODES = 256
 MAX_TERM_DEPTH = 64
 MAX_TABLE_CELLS = 65_536
+
+
+def _validation_error(code: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"universal_algebra.{code}", message)
 
 
 class OperationSymbol(StrictModel):
@@ -48,26 +53,41 @@ class FiniteAlgebra(StrictModel):
     @model_validator(mode="after")
     def require_well_formed(self) -> Self:
         if len(self.carrier) > MAX_CARRIER_SIZE:
-            raise ValueError("carrier size exceeds the bounded budget")
+            raise _validation_error(
+                "carrier_size_exceeded", "carrier size exceeds the bounded budget"
+            )
         if len(set(self.carrier)) != len(self.carrier):
-            raise ValueError("carrier labels must be unique")
+            raise _validation_error(
+                "carrier_labels_not_unique", "carrier labels must be unique"
+            )
         if len(self.tables) != len(self.operations):
-            raise ValueError("tables must have one entry per operation symbol")
+            raise _validation_error(
+                "table_count_mismatch",
+                "tables must have one entry per operation symbol",
+            )
         if len({symbol.operation_id for symbol in self.operations}) != len(
             self.operations
         ):
-            raise ValueError("operation identifiers must be unique")
+            raise _validation_error(
+                "operation_ids_not_unique", "operation identifiers must be unique"
+            )
         if sum(len(table) for table in self.tables) > MAX_TABLE_CELLS:
-            raise ValueError("operation tables exceed the bounded cell budget")
+            raise _validation_error(
+                "table_cells_exceeded",
+                "operation tables exceed the bounded cell budget",
+            )
         for symbol, table in zip(self.operations, self.tables, strict=True):
             expected_cells = len(self.carrier) ** symbol.arity
             if len(table) != expected_cells:
-                raise ValueError(
-                    f"operation {symbol.operation_id} table has wrong cell count"
+                raise _validation_error(
+                    "operation_table_cell_count",
+                    f"operation {symbol.operation_id} table has wrong cell count",
                 )
             for output in table:
                 if not 0 <= output < len(self.carrier):
-                    raise ValueError("table output out of carrier range")
+                    raise _validation_error(
+                        "table_output_out_of_range", "table output out of carrier range"
+                    )
         return self
 
 
@@ -101,13 +121,20 @@ class FiniteAlgebraCarrierMap(StrictModel):
     @model_validator(mode="after")
     def require_total_signature_bound_map(self) -> Self:
         if self.source.operations != self.target.operations:
-            raise ValueError(
-                "source and target operation identifiers and arities must match exactly"
+            raise _validation_error(
+                "signature_mismatch",
+                "source and target operation identifiers and arities must match exactly",
             )
         if len(self.mapping) != len(self.source.carrier):
-            raise ValueError("mapping must contain one target index per source element")
+            raise _validation_error(
+                "mapping_length_mismatch",
+                "mapping must contain one target index per source element",
+            )
         if any(not 0 <= image < len(self.target.carrier) for image in self.mapping):
-            raise ValueError("mapping image is outside the target carrier")
+            raise _validation_error(
+                "mapping_image_out_of_range",
+                "mapping image is outside the target carrier",
+            )
         return self
 
 
@@ -177,10 +204,11 @@ class FiniteAlgebraHomomorphism(FiniteAlgebraCarrierMap):
         failure = _first_homomorphism_failure(self)
         if failure is not None:
             operation_id = self.source.operations[failure.operation].operation_id
-            raise ValueError(
+            raise _validation_error(
+                "operation_not_preserved",
                 "carrier map does not preserve operation "
                 f"{operation_id!r} at source arguments "
-                f"{failure.source_arguments}"
+                f"{failure.source_arguments}",
             )
         return self
 
@@ -209,17 +237,25 @@ class FlatTerm(StrictModel):
     @model_validator(mode="after")
     def require_closed_acyclic_ast(self) -> Self:
         if self.root >= len(self.nodes):
-            raise ValueError("root index out of range")
+            raise _validation_error("root_out_of_range", "root index out of range")
         for index, node in enumerate(self.nodes):
             if isinstance(node, ApplicationTerm) and any(
                 child < 0 or child >= index for child in node.children
             ):
-                raise ValueError("application children must reference earlier nodes")
+                raise _validation_error(
+                    "children_not_acyclic",
+                    "application children must reference earlier nodes",
+                )
         reachable = _reachable_nodes(self.nodes, self.root)
         if reachable != set(range(len(self.nodes))):
-            raise ValueError("every term node must be reachable from the root")
+            raise _validation_error(
+                "term_node_unreachable",
+                "every term node must be reachable from the root",
+            )
         if _term_depths(self.nodes)[self.root] > MAX_TERM_DEPTH:
-            raise ValueError("term depth exceeds the bounded budget")
+            raise _validation_error(
+                "term_depth_exceeded", "term depth exceeds the bounded budget"
+            )
         return self
 
     @property
@@ -261,9 +297,14 @@ def require_term_for_algebra(term: FlatTerm, algebra: FiniteAlgebra) -> None:
         if not isinstance(node, ApplicationTerm):
             continue
         if node.operation >= len(algebra.operations):
-            raise ValueError("term operation index out of range")
+            raise _validation_error(
+                "term_operation_out_of_range", "term operation index out of range"
+            )
         if len(node.children) != algebra.operations[node.operation].arity:
-            raise ValueError("term application arity does not match the operation")
+            raise _validation_error(
+                "term_arity_mismatch",
+                "term application arity does not match the operation",
+            )
 
 
 __all__ = [

@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from typing import Annotated, Any, Self
 
 from pydantic import AfterValidator, Field, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
@@ -18,9 +19,16 @@ MAX_SUBSTITUTION_DEPENDENCY_OCCURRENCES = 10_000
 MAX_PROLONGABLE_SUBSTITUTION_SOURCE_OCCURRENCES = 20_000
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"word.{reason}", message)
+
+
 def _require_unicode_scalar_string(value: str) -> str:
     if any(0xD800 <= ord(character) <= 0xDFFF for character in value):
-        raise ValueError("symbol must contain only Unicode scalar values")
+        raise _validation_error(
+            "symbol_not_unicode_scalar",
+            "symbol must contain only Unicode scalar values",
+        )
     return value
 
 
@@ -38,9 +46,14 @@ class FiniteWord(StrictModel):
     @model_validator(mode="after")
     def require_word_over_ordered_alphabet(self) -> Self:
         if len(set(self.alphabet)) != len(self.alphabet):
-            raise ValueError("alphabet symbols must be distinct")
+            raise _validation_error(
+                "alphabet_symbols_not_distinct", "alphabet symbols must be distinct"
+            )
         if any(letter not in self.alphabet for letter in self.letters):
-            raise ValueError("word letter is outside the declared alphabet")
+            raise _validation_error(
+                "word_letter_outside_alphabet",
+                "word letter is outside the declared alphabet",
+            )
         return self
 
 
@@ -58,19 +71,33 @@ class WordMorphism(StrictModel):
     @model_validator(mode="after")
     def require_total_bounded_morphism(self) -> Self:
         if len(set(self.source_alphabet)) != len(self.source_alphabet):
-            raise ValueError("source alphabet symbols must be distinct")
+            raise _validation_error(
+                "source_alphabet_not_distinct",
+                "source alphabet symbols must be distinct",
+            )
         if len(set(self.target_alphabet)) != len(self.target_alphabet):
-            raise ValueError("target alphabet symbols must be distinct")
+            raise _validation_error(
+                "target_alphabet_not_distinct",
+                "target alphabet symbols must be distinct",
+            )
         if len(self.images) != len(self.source_alphabet):
-            raise ValueError("morphism must have one image per source symbol")
+            raise _validation_error(
+                "morphism_image_count_mismatch",
+                "morphism must have one image per source symbol",
+            )
         if any(len(image) > MAX_MORPHISM_IMAGE_LENGTH for image in self.images):
-            raise ValueError("morphism image exceeds the length bound")
+            raise _validation_error(
+                "morphism_image_too_long", "morphism image exceeds the length bound"
+            )
         if any(
             letter not in self.target_alphabet
             for image in self.images
             for letter in image
         ):
-            raise ValueError("morphism image uses a symbol outside the target alphabet")
+            raise _validation_error(
+                "morphism_image_outside_target",
+                "morphism image uses a symbol outside the target alphabet",
+            )
         return self
 
 
@@ -82,8 +109,9 @@ class Substitution(StrictModel):
     @model_validator(mode="after")
     def require_endomorphism(self) -> Self:
         if self.morphism.source_alphabet != self.morphism.target_alphabet:
-            raise ValueError(
-                "a substitution must have identical source and target alphabets"
+            raise _validation_error(
+                "substitution_not_endomorphism",
+                "a substitution must have identical source and target alphabets",
             )
         return self
 
@@ -113,13 +141,20 @@ class ProlongableSubstitution(StrictModel):
     def require_growing_seed(self) -> Self:
         morphism = self.substitution.morphism
         if self.seed not in morphism.source_alphabet:
-            raise ValueError("seed must belong to the substitution alphabet")
+            raise _validation_error(
+                "seed_outside_alphabet", "seed must belong to the substitution alphabet"
+            )
         seed_index = morphism.source_alphabet.index(self.seed)
         seed_image = morphism.images[seed_index]
         if not seed_image or seed_image[0] != self.seed:
-            raise ValueError("the seed image must begin with the seed")
+            raise _validation_error(
+                "seed_image_not_prolongable", "the seed image must begin with the seed"
+            )
         if len(seed_image) == 1:
-            raise ValueError("the seed image must contain a nonempty growing suffix")
+            raise _validation_error(
+                "seed_image_not_growing",
+                "the seed image must contain a nonempty growing suffix",
+            )
         image_map = dict(zip(morphism.source_alphabet, morphism.images, strict=True))
         mortal = {symbol for symbol, image in image_map.items() if not image}
         changed = True
@@ -130,7 +165,10 @@ class ProlongableSubstitution(StrictModel):
                     mortal.add(symbol)
                     changed = True
         if all(letter in mortal for letter in seed_image[1:]):
-            raise ValueError("the seed suffix must not eventually erase")
+            raise _validation_error(
+                "seed_suffix_eventually_erases",
+                "the seed suffix must not eventually erase",
+            )
         return self
 
 
@@ -166,9 +204,10 @@ def _require_prolongable_source_occurrence_bound(value: object) -> None:
         return
     occurrence_count = sum(len(image) for image in images)
     if occurrence_count > MAX_PROLONGABLE_SUBSTITUTION_SOURCE_OCCURRENCES:
-        raise ValueError(
+        raise _validation_error(
+            "fixed_point_source_occurrence_bound",
             "fixed-point source exceeds the aggregate occurrence bound "
-            f"({occurrence_count} > {MAX_PROLONGABLE_SUBSTITUTION_SOURCE_OCCURRENCES})"
+            f"({occurrence_count} > {MAX_PROLONGABLE_SUBSTITUTION_SOURCE_OCCURRENCES})",
         )
 
 
@@ -220,11 +259,20 @@ class SubstitutionDependencyEdge(StrictModel):
     @model_validator(mode="after")
     def require_canonical_positions(self) -> Self:
         if self.positions != tuple(sorted(set(self.positions))):
-            raise ValueError("dependency positions must be strictly increasing")
+            raise _validation_error(
+                "dependency_positions_not_increasing",
+                "dependency positions must be strictly increasing",
+            )
         if self.positions[0] < 0:
-            raise ValueError("dependency positions must be nonnegative")
+            raise _validation_error(
+                "dependency_positions_negative",
+                "dependency positions must be nonnegative",
+            )
         if self.multiplicity != len(self.positions):
-            raise ValueError("dependency multiplicity must equal the position count")
+            raise _validation_error(
+                "dependency_multiplicity_mismatch",
+                "dependency multiplicity must equal the position count",
+            )
         return self
 
 
@@ -241,14 +289,24 @@ class SubstitutionDependencyGraph(StrictModel):
     def require_bounded_source_before_edges(
         cls, substitution: Substitution
     ) -> Substitution:
-        _require_dependency_occurrence_bound(substitution)
+        try:
+            _require_dependency_occurrence_bound(substitution)
+        except ValueError as error:
+            raise _validation_error(
+                "dependency_occurrence_bound", str(error)
+            ) from error
         return substitution
 
     @model_validator(mode="after")
     def bind_graph_to_substitution(self) -> Self:
         # Recheck before replay when Pydantic receives an existing model instance;
         # instance revalidation may not revisit the field validator above.
-        _require_dependency_occurrence_bound(self.substitution)
+        try:
+            _require_dependency_occurrence_bound(self.substitution)
+        except ValueError as error:
+            raise _validation_error(
+                "dependency_occurrence_bound", str(error)
+            ) from error
         morphism = self.substitution.morphism
         expected = tuple(
             SubstitutionDependencyEdge(
@@ -268,7 +326,10 @@ class SubstitutionDependencyGraph(StrictModel):
             if target in image
         )
         if self.edges != expected:
-            raise ValueError("dependency graph is not bound to the substitution")
+            raise _validation_error(
+                "dependency_graph_unbound",
+                "dependency graph is not bound to the substitution",
+            )
         return self
 
 

@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 from sympy import factorint, isprime
+from tests.math.number_theory._validation import expect_validation
 
 from jacobian.math.number_theory._models import (
     PowerfulNumberRequest,
@@ -179,7 +180,7 @@ def test_25_digit_boundary_is_admitted_and_26_digits_are_rejected() -> None:
     result = decide_powerful(request)
 
     assert result.cutoff == 100_000
-    with pytest.raises(ValidationError, match="at most 25 characters"):
+    with expect_validation("number_theory."):
         PowerfulNumberRequest(value="10000000000000000000000000")
 
 
@@ -219,7 +220,7 @@ def test_result_rejects_mutated_source_or_certificate(
     payload = deepcopy(genuine.model_dump(mode="json"))
     mutation(payload)
 
-    with pytest.raises(ValidationError, match="does not match exact replay"):
+    with expect_validation("number_theory."):
         PowerfulNumberResult.model_validate(payload)
 
 

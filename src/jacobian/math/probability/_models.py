@@ -12,13 +12,8 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    canonicalize_json,
-    encode_strict_json,
-    format_canonical_integer,
-)
+from jacobian.canonical import encode_strict_json, format_canonical_integer
 from jacobian.math.graphs.directed._models import DirectedGraph
-from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
 def _validation_error(message: str) -> PydanticCustomError:
@@ -27,10 +22,6 @@ def _validation_error(message: str) -> PydanticCustomError:
 
 MAX_INPUT_RATIONAL_DIGITS = 128
 MAX_RESULT_RATIONAL_DIGITS = 512
-MAX_GRAPH_RELIABILITY_VERTICES = 16
-MAX_GRAPH_RELIABILITY_EDGES = 12
-MAX_GRAPH_RELIABILITY_STATES = 1 << MAX_GRAPH_RELIABILITY_EDGES
-MAX_GRAPH_RELIABILITY_LEDGER_BYTES = 9 * 1024 * 1024
 MAX_DIRECTED_BOND_RELIABILITY_ARCS = 12
 MAX_DIRECTED_BOND_RELIABILITY_STATES = 1 << MAX_DIRECTED_BOND_RELIABILITY_ARCS
 MAX_DIRECTED_BOND_RELIABILITY_LEDGER_BYTES = 9 * 1024 * 1024
@@ -100,183 +91,6 @@ def _require_strictly_increasing(
     if any(left >= right for left, right in pairwise(fractions)):
         raise _validation_error(f"{label} must be strictly increasing")
     return fractions
-
-
-class GraphReliabilityEdgeProbability(StrictModel):
-    edge: tuple[str, str]
-    open_probability: CanonicalRational
-
-    @model_validator(mode="after")
-    def require_canonical_bounded_probability(self) -> Self:
-        if len(self.edge) != 2 or self.edge[0] >= self.edge[1]:
-            raise _validation_error(
-                "reliability edge must contain two ordered vertices"
-            )
-        require_bounded_rational(
-            self.open_probability,
-            max_digits=MAX_INPUT_RATIONAL_DIGITS,
-            label="graph reliability edge probability",
-        )
-        if not 0 <= self.open_probability.as_fraction() <= 1:
-            raise _validation_error(
-                "graph reliability probabilities must lie in [0, 1]"
-            )
-        return self
-
-
-class GraphConnectionProbabilityRequest(StrictModel):
-    graph: SimpleUndirectedGraph
-    edge_probabilities: tuple[GraphReliabilityEdgeProbability, ...] = Field(
-        max_length=MAX_GRAPH_RELIABILITY_EDGES
-    )
-    terminals: tuple[str, str]
-    event: Literal["TERMINALS_CONNECTED"] = "TERMINALS_CONNECTED"
-
-    @model_validator(mode="after")
-    def require_bounded_fully_weighted_graph(self) -> Self:
-        if len(self.graph.vertices) > MAX_GRAPH_RELIABILITY_VERTICES:
-            raise _validation_error(
-                "graph reliability exceeds the "
-                f"{MAX_GRAPH_RELIABILITY_VERTICES}-vertex bound"
-            )
-        if len(self.graph.edges) > MAX_GRAPH_RELIABILITY_EDGES:
-            raise _validation_error(
-                "graph reliability exceeds the "
-                f"{MAX_GRAPH_RELIABILITY_EDGES}-edge bound"
-            )
-        if tuple(item.edge for item in self.edge_probabilities) != self.graph.edges:
-            raise _validation_error(
-                "edge probabilities must cover graph edges in canonical graph order"
-            )
-        if (
-            len(self.terminals) != 2
-            or self.terminals[0] == self.terminals[1]
-            or any(terminal not in self.graph.vertices for terminal in self.terminals)
-        ):
-            raise _validation_error(
-                "terminals must be two distinct declared graph vertices"
-            )
-        edge_count = len(self.graph.edges)
-        state_count = 1 << edge_count
-        repeated_edge_bytes = (
-            (1 << (edge_count - 1))
-            * sum(len(canonicalize_json(list(edge))) + 1 for edge in self.graph.edges)
-            if edge_count
-            else 0
-        )
-        probability_numerator_digits = sum(
-            max(
-                len(
-                    format_canonical_integer(
-                        item.open_probability.as_fraction().numerator
-                    )
-                ),
-                len(
-                    format_canonical_integer(
-                        (1 - item.open_probability.as_fraction()).numerator
-                    )
-                ),
-            )
-            for item in self.edge_probabilities
-        )
-        probability_denominator_digits = sum(
-            len(
-                format_canonical_integer(
-                    item.open_probability.as_fraction().denominator
-                )
-            )
-            for item in self.edge_probabilities
-        )
-        maximum_state = {
-            "state_index": state_count - 1,
-            "open_edges": [],
-            "terminals_connected": False,
-            "state_probability": {
-                "num": "9" * max(1, probability_numerator_digits),
-                "den": "9" * max(1, probability_denominator_digits),
-            },
-        }
-        estimated_ledger_bytes = (
-            repeated_edge_bytes
-            + state_count * len(canonicalize_json(maximum_state))
-            + 16 * 1024
-        )
-        if estimated_ledger_bytes > MAX_GRAPH_RELIABILITY_LEDGER_BYTES:
-            raise _validation_error(
-                "graph reliability request can exceed the complete ledger "
-                f"budget of {MAX_GRAPH_RELIABILITY_LEDGER_BYTES} bytes"
-            )
-        return self
-
-
-class GraphReliabilityState(StrictModel):
-    state_index: StrictInt = Field(ge=0, lt=MAX_GRAPH_RELIABILITY_STATES)
-    open_edges: tuple[tuple[str, str], ...] = Field(
-        max_length=MAX_GRAPH_RELIABILITY_EDGES
-    )
-    terminals_connected: bool
-    state_probability: CanonicalRational
-
-    @model_validator(mode="after")
-    def require_bounded_probability(self) -> Self:
-        if not 0 <= self.state_probability.as_fraction() <= 1:
-            raise _validation_error(
-                "graph reliability state probability must lie in [0, 1]"
-            )
-        return self
-
-
-class GraphConnectionProbabilityResult(StrictModel):
-    terminals: tuple[str, str]
-    connection_probability: CanonicalRational
-    edge_count: StrictInt = Field(ge=0, le=MAX_GRAPH_RELIABILITY_EDGES)
-    visited_states: StrictInt = Field(ge=1, le=MAX_GRAPH_RELIABILITY_STATES)
-    states: tuple[GraphReliabilityState, ...] = Field(
-        min_length=1,
-        max_length=MAX_GRAPH_RELIABILITY_STATES,
-    )
-    event: Literal["TERMINALS_CONNECTED"] = "TERMINALS_CONNECTED"
-    edge_independence: Literal["INDEPENDENT_BERNOULLI"] = "INDEPENDENT_BERNOULLI"
-    enumeration: Literal["COMPLETE_EDGE_SUBSETS"] = "COMPLETE_EDGE_SUBSETS"
-    completeness: Literal["COMPLETE"] = "COMPLETE"
-    truncated: Literal[False] = False
-    termination_reason: Literal["EXHAUSTED"] = "EXHAUSTED"
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-
-    @model_validator(mode="after")
-    def bind_complete_state_mass(self) -> Self:
-        if self.visited_states != 1 << self.edge_count:
-            raise _validation_error("visited state count is not the full edge powerset")
-        if len(self.states) != self.visited_states:
-            raise _validation_error("state ledger length does not match visited states")
-        if tuple(item.state_index for item in self.states) != tuple(
-            range(self.visited_states)
-        ):
-            raise _validation_error(
-                "state ledger indices must be complete and canonical"
-            )
-        total = sum(
-            (item.state_probability.as_fraction() for item in self.states),
-            start=Fraction(),
-        )
-        connected = sum(
-            (
-                item.state_probability.as_fraction()
-                for item in self.states
-                if item.terminals_connected
-            ),
-            start=Fraction(),
-        )
-        if total != 1:
-            raise _validation_error(
-                "graph reliability state probabilities must sum to one"
-            )
-        if self.connection_probability.as_fraction() != connected:
-            raise _validation_error(
-                "connection probability does not match connected states"
-            )
-        return self
 
 
 def _directed_bond_reliability_graph_schema() -> JsonSchemaValue:
@@ -653,16 +467,9 @@ __all__ = [
     "MAX_DIRECTED_BOND_RELIABILITY_ARCS",
     "MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES",
     "MAX_DIRECTED_BOND_RELIABILITY_STATES",
-    "MAX_GRAPH_RELIABILITY_EDGES",
-    "MAX_GRAPH_RELIABILITY_STATES",
-    "MAX_GRAPH_RELIABILITY_VERTICES",
     "DirectedBondConnectionProbabilityRequest",
     "DirectedBondConnectionProbabilityResult",
     "DirectedBondConnectionProbabilitySource",
     "DirectedBondReliabilityArcProbability",
     "DirectedBondReliabilityState",
-    "GraphConnectionProbabilityRequest",
-    "GraphConnectionProbabilityResult",
-    "GraphReliabilityEdgeProbability",
-    "GraphReliabilityState",
 ]

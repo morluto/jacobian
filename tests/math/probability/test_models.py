@@ -6,7 +6,7 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.probability._models import (
+from jacobian.math.probability._graph_connection_probability import (
     GraphConnectionProbabilityResult,
     GraphReliabilityEdgeProbability,
 )

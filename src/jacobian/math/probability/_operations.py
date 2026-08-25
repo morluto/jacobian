@@ -37,14 +37,14 @@ from jacobian.math.probability._distribution import (
     FiniteRawMomentRequest,
     FiniteRawMomentResult,
 )
+from jacobian.math.probability._graph_connection_probability import (
+    GRAPH_CONNECTION_PROBABILITY_OPERATION,
+)
 from jacobian.math.probability._models import (
     DirectedBondConnectionProbabilityRequest,
     DirectedBondConnectionProbabilityResult,
     DirectedBondConnectionProbabilitySource,
     DirectedBondReliabilityState,
-    GraphConnectionProbabilityRequest,
-    GraphConnectionProbabilityResult,
-    GraphReliabilityState,
 )
 
 
@@ -336,72 +336,6 @@ def _gaussian_polynomial_moment(
     )
 
 
-def _terminals_connected(
-    vertices: tuple[str, ...],
-    open_edges: tuple[tuple[str, str], ...],
-    terminals: tuple[str, str],
-) -> bool:
-    adjacency: dict[str, set[str]] = {vertex: set() for vertex in vertices}
-    for left, right in open_edges:
-        adjacency[left].add(right)
-        adjacency[right].add(left)
-    seen = {terminals[0]}
-    pending = [terminals[0]]
-    while pending:
-        vertex = pending.pop()
-        for neighbor in adjacency[vertex] - seen:
-            if neighbor == terminals[1]:
-                return True
-            seen.add(neighbor)
-            pending.append(neighbor)
-    return terminals[1] in seen
-
-
-def _graph_connection_probability(
-    request: GraphConnectionProbabilityRequest,
-) -> GraphConnectionProbabilityResult:
-    from flint import fmpq
-
-    probabilities = tuple(
-        _fmpq(item.open_probability) for item in request.edge_probabilities
-    )
-    states: list[GraphReliabilityState] = []
-    connection_probability = fmpq(0)
-    for state_index in range(1 << len(request.graph.edges)):
-        open_edges = tuple(
-            edge
-            for index, edge in enumerate(request.graph.edges)
-            if state_index & (1 << index)
-        )
-        state_probability = fmpq(1)
-        for index, probability in enumerate(probabilities):
-            state_probability *= (
-                probability if state_index & (1 << index) else 1 - probability
-            )
-        connected = _terminals_connected(
-            request.graph.vertices,
-            open_edges,
-            request.terminals,
-        )
-        if connected:
-            connection_probability += state_probability
-        states.append(
-            GraphReliabilityState(
-                state_index=state_index,
-                open_edges=open_edges,
-                terminals_connected=connected,
-                state_probability=_wire(state_probability),
-            )
-        )
-    return GraphConnectionProbabilityResult(
-        terminals=request.terminals,
-        connection_probability=_wire(connection_probability),
-        edge_count=len(request.graph.edges),
-        visited_states=len(states),
-        states=tuple(states),
-    )
-
-
 def _directed_bond_connection_probability_data(
     source: DirectedBondConnectionProbabilitySource,
 ) -> tuple[Fraction, tuple[tuple[tuple[tuple[int, int], ...], bool, Fraction], ...]]:
@@ -544,33 +478,6 @@ _FAIR_DIE_3 = {
         },
     ],
 }
-
-_SQUARE_GRAPH = {
-    "graph": {
-        "vertices": ["a", "b", "c", "d"],
-        "edges": [["a", "b"], ["a", "c"], ["b", "d"], ["c", "d"]],
-    },
-    "edge_probabilities": [
-        {
-            "edge": ["a", "b"],
-            "open_probability": {"num": "1", "den": "2"},
-        },
-        {
-            "edge": ["a", "c"],
-            "open_probability": {"num": "1", "den": "2"},
-        },
-        {
-            "edge": ["b", "d"],
-            "open_probability": {"num": "1", "den": "2"},
-        },
-        {
-            "edge": ["c", "d"],
-            "open_probability": {"num": "1", "den": "2"},
-        },
-    ],
-    "terminals": ["a", "d"],
-}
-
 
 FINITE_PROBABILITY_OPERATIONS = (
     MathTool(
@@ -795,61 +702,7 @@ FINITE_PROBABILITY_OPERATIONS = (
             ),
         ),
     ),
-    MathTool(
-        operation_id="probability.graph_reliability.connection_probability.compute",
-        title="Exact small-graph terminal connection probability",
-        description=(
-            "Compute the exact probability that two explicit terminals are "
-            "connected in one bounded undirected graph with independent rational "
-            "edge-open probabilities, preserving the complete edge-subset ledger."
-        ),
-        request_type=GraphConnectionProbabilityRequest,
-        result_type=GraphConnectionProbabilityResult,
-        run=_graph_connection_probability,
-        tags=(
-            "probability",
-            "graph",
-            "reliability",
-            "percolation",
-            "connection",
-            "terminals",
-            "exact",
-            "bounded",
-            "python-flint",
-        ),
-        examples=(
-            example(
-                "triangle_terminal_reliability",
-                "Compute the exact terminal connection probability in a fair-edge triangle.",
-                {
-                    "graph": {
-                        "vertices": ["a", "b", "c"],
-                        "edges": [["a", "b"], ["a", "c"], ["b", "c"]],
-                    },
-                    "edge_probabilities": [
-                        {
-                            "edge": ["a", "b"],
-                            "open_probability": {"num": "1", "den": "2"},
-                        },
-                        {
-                            "edge": ["a", "c"],
-                            "open_probability": {"num": "1", "den": "2"},
-                        },
-                        {
-                            "edge": ["b", "c"],
-                            "open_probability": {"num": "1", "den": "2"},
-                        },
-                    ],
-                    "terminals": ["a", "c"],
-                },
-            ),
-            example(
-                "square_terminal_reliability",
-                "Compute square-graph terminal reliability; edge probabilities cover edges canonically and terminals are distinct declared vertices.",
-                _SQUARE_GRAPH,
-            ),
-        ),
-    ),
+    GRAPH_CONNECTION_PROBABILITY_OPERATION,
     MathTool(
         operation_id=(
             "probability.digraph_bond_reliability.connection_probability.compute"

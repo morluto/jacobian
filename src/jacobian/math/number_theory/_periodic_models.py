@@ -49,9 +49,9 @@ _PERIODIC_REQUEST_EXAMPLE = {
     "complement": False,
 }
 _PERIODIC_REQUEST_DESCRIPTION = (
-    "Normalize and merge at most 64 residue subsets with at most 4,096 raw "
-    "and 4,096 normalized residue rows. Each modulus and their lcm L have at "
-    "most 256 decimal digits. With W = sum(|R_i| * L/m_i), exact execution "
+    f"Normalize and merge at most {MAX_PERIODIC_FAMILY_SIZE} residue subsets with at most {MAX_PERIODIC_SOURCE_ROWS:,} raw "
+    f"and {MAX_PERIODIC_SOURCE_ROWS:,} normalized residue rows. Each modulus and their lcm L have at "
+    f"most {MAX_PERIODIC_INTEGER_DIGITS} decimal digits. With W = sum(|R_i| * L/m_i), exact execution "
     "uses a full-subset shortcut; a period lift when L <= 1,000,000 and "
     "L + W <= 2,000,000; a sparse lift when W <= 65,536; or generalized-CRT "
     "inclusion-exclusion with at most 65,535 retained states and 100,000 merges "

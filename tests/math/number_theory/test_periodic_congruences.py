@@ -449,11 +449,11 @@ def test_request_schemas_publish_aggregate_execution_and_profile_bounds() -> Non
     for schema in (measure_schema, profile_schema):
         description = schema["description"]
         subsets_description = schema["properties"]["subsets"]["description"]
-        assert "4,096 raw" in description
-        assert "4,096 normalized" in description
-        assert "256 decimal digits" in description
-        assert "4,096 raw" in subsets_description
-        assert "4,096 normalized" in subsets_description
+        assert f"{MAX_PERIODIC_SOURCE_ROWS:,} raw" in description
+        assert f"{MAX_PERIODIC_SOURCE_ROWS:,} normalized" in description
+        assert f"{MAX_PERIODIC_INTEGER_DIGITS} decimal digits" in description
+        assert f"{MAX_PERIODIC_SOURCE_ROWS:,} raw" in subsets_description
+        assert f"{MAX_PERIODIC_SOURCE_ROWS:,} normalized" in subsets_description
         assert schema["aggregate_raw_residue_row_limit"] == MAX_PERIODIC_SOURCE_ROWS
         assert (
             schema["aggregate_normalized_residue_row_limit"] == MAX_PERIODIC_SOURCE_ROWS

@@ -11,16 +11,16 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
-from jacobian.math.probability._models import (
+from jacobian.math.probability._gaussian import (
     MAX_GAUSSIAN_POLYNOMIAL_TERMS,
     MAX_GAUSSIAN_TERM_DEGREE,
     MAX_GAUSSIAN_VARIABLES,
-    MAX_INPUT_RATIONAL_DIGITS,
     ExactComplexRational,
     GaussianPolynomial,
     GaussianPolynomialMomentRequest,
     GaussianPolynomialTerm,
 )
+from jacobian.math.probability._models import MAX_INPUT_RATIONAL_DIGITS
 
 
 def _validation_error(message: str) -> PydanticCustomError:

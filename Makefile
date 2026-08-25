@@ -13,7 +13,8 @@ VALIDATION_LOCK := $(UV_RUN) python tools/with_validation_lock.py
 # Owner lanes cover every Lean-free ordinary test root exactly once. CI runs
 # them independently; `make check-all` reproduces them locally in this order.
 ORDINARY_TEST_LANES := math catalog dispatch cli tooling integration
-PUBLIC_COMMANDS := setup quick check check-all check-external fix
+FOCUSED_TEST_LANES := $(ORDINARY_TEST_LANES) process mcp
+PUBLIC_COMMANDS := setup test-focused quick check check-all check-external fix
 
 include make/development.mk
 include make/harbor.mk
@@ -59,6 +60,13 @@ test-integration: ## Cross-owner mathematical seams (2 workers, 120s).
 	$(UV_RUN) pytest -n 2 --dist worksteal --timeout=120 \
 		$(if $(TESTS),$(TESTS),tests/integration) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
+
+test-focused: ## Run TESTS through its explicit semantic LANE (for example, LANE=math).
+	@test -n "$(LANE)" || { echo "LANE is required, e.g. LANE=math" >&2; exit 2; }
+	@test -n "$(TESTS)" || { echo "TESTS is required, e.g. TESTS=tests/math/..." >&2; exit 2; }
+	@case " $(FOCUSED_TEST_LANES) " in *" $(LANE) "*) ;; *) \
+		echo "LANE must be one of: $(FOCUSED_TEST_LANES)" >&2; exit 2;; esac
+	$(MAKE) test-$(LANE) TESTS="$(TESTS)" PYTEST_ARGS="$(PYTEST_ARGS)"
 
 test-fast: ## Lean-free owner tests except cross-owner integration.
 	# Full catalog construction imports every maintained math backend; keep

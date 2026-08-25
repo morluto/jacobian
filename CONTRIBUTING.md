@@ -109,7 +109,16 @@ make setup          # locked dev environment and Python backends
 ```
 
 `make check` is the bounded lint, type, and Lean-free owner handoff;
-`make quick` omits typechecking for a shorter edit loop.
+`make quick` omits typechecking for a shorter edit loop. For an ordinary edit
+loop, name both the semantic owner and changed test path:
+
+```sh
+make test-focused LANE=math TESTS=tests/math/graphs/test_graph_distance_matrix.py
+```
+
+`LANE` is one of `math`, `catalog`, `dispatch`, `cli`, `tooling`,
+`integration`, `process`, or `mcp`. The command keeps each lane's established
+timeout and worker count; it does not select a lane from a path implicitly.
 `make check-all` explicitly reproduces every ordinary Python CI lane. The
 pre-push hook intentionally runs only
 `make lint typecheck` so it stays below the interactive feedback budget.
@@ -129,7 +138,8 @@ On macOS, read the
 troubleshooting a source-build failure from `uv sync --dev`.
 
 Every `make test-*` target accepts `TESTS=<file-or-node>` and extra pytest
-options through `PYTEST_ARGS`, and prints its ten slowest tests by default
+options through `PYTEST_ARGS`; `test-focused` is the discoverable form for an
+explicit owner plus path. They print their ten slowest tests by default
 (override with `PYTEST_DIAGNOSTIC_ARGS=--durations=0`). Use
 `uv run --locked pytest --lf` after a failure and `uv run --locked pytest -n 0`
 while debugging. Default `uv run pytest` is Lean-free; use

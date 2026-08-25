@@ -8,6 +8,7 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 from sympy import nextprime
+from tests.integration.linear._support import linear_validation_error
 from tests.support.rationals import rational_payload as q
 
 from jacobian.math.optimization._general_models import (
@@ -197,7 +198,7 @@ def test_general_lp_replays_source_farkas_and_free_unbounded_ray() -> None:
     assert _fractions(infeasible.farkas_lower_bounds) == (Fraction(-1),)
     forged_farkas = deepcopy(infeasible.model_dump(mode="json"))
     forged_farkas["farkas_constraints"] = [q(0)]
-    with pytest.raises(ValidationError, match="Farkas"):
+    with linear_validation_error():
         GeneralRationalLinearProgramResult.model_validate(forged_farkas)
     assert unbounded.status == "UNBOUNDED"
     assert _fractions(unbounded.recession_direction) == (Fraction(1),)
@@ -212,8 +213,9 @@ def test_general_lp_rejects_invalid_bound_order_and_replays_mutation_against_sou
         objective=[q(1)],
         constraints=[],
     )
-    with pytest.raises(ValidationError, match="lower bound cannot exceed"):
+    with pytest.raises(ValidationError) as caught:
         GeneralRationalLinearProgramRequest.model_validate({"program": invalid})
+    assert caught.value.errors()[0]["type"] == "general_linear_program.bound_order"
 
     result = _run(
         _program(
@@ -228,9 +230,9 @@ def test_general_lp_rejects_invalid_bound_order_and_replays_mutation_against_sou
     assert isinstance(forged["program"], dict)
     assert isinstance(forged["program"]["constraints"], list)
     forged["program"]["constraints"][0]["rhs"] = q(2)
-    with pytest.raises(ValidationError, match="violates a source relation"):
+    with linear_validation_error():
         GeneralRationalLinearProgramResult.model_validate(forged)
-    with pytest.raises(ValidationError, match="cannot carry primal data"):
+    with linear_validation_error():
         GeneralRationalLinearProgramResult.model_validate(
             {
                 "program": result.program,
@@ -238,6 +240,32 @@ def test_general_lp_rejects_invalid_bound_order_and_replays_mutation_against_sou
                 "primal_candidate": [q(1)],
             }
         )
+
+
+def test_general_lp_model_validation_uses_owner_codes_for_source_shape_errors() -> None:
+    invalid_name = _program(
+        variables=[_variable("x-y")],
+        sense="MINIMIZE",
+        objective=[q(1)],
+        constraints=[],
+    )
+    with pytest.raises(ValidationError) as caught:
+        GeneralRationalLinearProgramRequest.model_validate({"program": invalid_name})
+    assert (
+        caught.value.errors()[0]["type"] == "general_linear_program.variable_identifier"
+    )
+
+    invalid_objective = _program(
+        variables=[_variable("x")],
+        sense="MINIMIZE",
+        objective=[q(1), q(2)],
+        constraints=[],
+    )
+    with pytest.raises(ValidationError) as caught:
+        GeneralRationalLinearProgramRequest.model_validate(
+            {"program": invalid_objective}
+        )
+    assert caught.value.errors()[0]["type"] == "general_linear_program.objective_length"
 
 
 def test_general_lp_raw_limits_precede_nested_rational_parsing(
@@ -250,7 +278,7 @@ def test_general_lp_raw_limits_precede_nested_rational_parsing(
 
     monkeypatch.setattr(exact, "parse_canonical_integer", fail_if_called)
     oversized = "9" * 129
-    with pytest.raises(ValidationError, match="128-digit bound"):
+    with linear_validation_error():
         GeneralRationalLinearProgramRequest.model_validate(
             {
                 "program": _program(
@@ -267,7 +295,7 @@ def test_general_lp_preflights_private_sign_split_and_slack_expansion() -> None:
     variables = [_variable(f"x{index}") for index in range(16)]
     objective = [q(0) for _ in variables]
     constraints = [_row("one_more_slack", [q(0) for _ in variables], "LE", q(0))]
-    with pytest.raises(ValidationError, match="normalized variables exceed"):
+    with linear_validation_error():
         GeneralRationalLinearProgramRequest.model_validate(
             {
                 "program": _program(
@@ -333,7 +361,7 @@ def test_general_lp_rejects_source_values_taller_than_the_mapped_result_bound() 
     )
     forged = deepcopy(result.model_dump(mode="json"))
     forged["primal_candidate"] = [{"num": "9" * 400, "den": "1"}]
-    with pytest.raises(ValidationError, match="result exceeds the"):
+    with linear_validation_error():
         GeneralRationalLinearProgramResult.model_validate(forged)
 
 
@@ -358,7 +386,7 @@ def test_general_lp_admits_the_full_one_sided_variable_envelope() -> None:
 
 def test_general_lp_rejects_variables_beyond_the_public_envelope() -> None:
     variables = [_variable(f"x{index}", q(0)) for index in range(33)]
-    with pytest.raises(ValidationError, match="variables exceed the 32-entry bound"):
+    with linear_validation_error():
         GeneralRationalLinearProgramRequest.model_validate(
             {
                 "program": _program(
@@ -373,7 +401,7 @@ def test_general_lp_rejects_variables_beyond_the_public_envelope() -> None:
 
 def test_general_lp_defers_free_split_admission_to_the_normalized_columns() -> None:
     variables = [_variable(f"x{index}") for index in range(17)]
-    with pytest.raises(ValidationError, match="normalized variables exceed"):
+    with linear_validation_error():
         GeneralRationalLinearProgramRequest.model_validate(
             {
                 "program": _program(
@@ -407,7 +435,7 @@ def test_general_lp_admits_sixty_four_trivial_equalities_within_the_row_envelope
 
 def test_general_lp_rejects_constraints_beyond_the_public_row_envelope() -> None:
     constraints = [_row(f"row_{index}", [q(1)], "EQ", q(0)) for index in range(65)]
-    with pytest.raises(ValidationError, match="constraints exceed the 64-entry bound"):
+    with linear_validation_error():
         GeneralRationalLinearProgramRequest.model_validate(
             {
                 "program": _program(
@@ -422,7 +450,7 @@ def test_general_lp_rejects_constraints_beyond_the_public_row_envelope() -> None
 
 def test_general_lp_defers_upper_expansion_rows_to_normalized_admission() -> None:
     constraints = [_row(f"row_{index}", [q(1)], "EQ", q(0)) for index in range(64)]
-    with pytest.raises(ValidationError, match="normalized rows exceed"):
+    with linear_validation_error():
         GeneralRationalLinearProgramRequest.model_validate(
             {
                 "program": _program(
@@ -466,9 +494,7 @@ def test_general_lp_still_rejects_expansions_beyond_the_derived_envelope() -> No
             prime = nextprime(prime)
             coefficients.append(q(1, prime))
         constraints.append(_row(f"dense_{row_index}", coefficients, "EQ", q(0)))
-    with pytest.raises(
-        ValidationError, match="height can exceed the exact 32768-digit result bound"
-    ):
+    with linear_validation_error():
         GeneralRationalLinearProgramRequest.model_validate(
             {
                 "program": _program(

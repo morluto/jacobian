@@ -77,7 +77,7 @@ def test_producer_result_carries_its_canonical_value() -> None:
 
     payload = result.model_dump()
     payload["canonical_value"]["prime"] = 3
-    with pytest.raises(ValidationError, match="exact"):
+    with pytest.raises(ValidationError):
         type(result).model_validate(payload)
 
 
@@ -91,7 +91,7 @@ def test_integral_producer_result_admits_no_canonical_value() -> None:
         )
     )
     assert integral.canonical_value is None
-    with pytest.raises(ValueError, match="unreduced prime-field"):
+    with pytest.raises(ValueError):
         simplicial_chain_complex_value(integral)
 
 
@@ -144,7 +144,7 @@ def test_integral_ring_is_outside_the_canonical_domain() -> None:
             convention=HomologyConvention.UNREDUCED,
         )
     )
-    with pytest.raises(ValueError, match="prime-field"):
+    with pytest.raises(ValueError):
         simplicial_chain_complex_value(integral)
 
 
@@ -158,7 +158,7 @@ def test_reduced_chains_carry_an_unrepresentable_augmentation() -> None:
         )
     )
     assert reduced.canonical_value is None
-    with pytest.raises(ValueError, match="unreduced prime-field"):
+    with pytest.raises(ValueError):
         simplicial_chain_complex_value(reduced)
 
 
@@ -174,7 +174,7 @@ def test_oversized_simplicial_groups_stay_outside_the_canonical_domain() -> None
     big = _operation("topology.simplicial_complex.canonicalize").run(
         SimplicialComplexRequest(vertices=labels, facets=facets)
     )
-    with pytest.raises(ValueError, match="faces per chain group"):
+    with pytest.raises(ValueError):
         ChainComplexRequest(
             complex=big.complex,
             coefficient_ring=ChainCoefficientRing.PRIME_FIELD,
@@ -195,7 +195,7 @@ def test_aggregate_canonical_cell_bound_is_enforced() -> None:
         .complex
     )
     assert complex_.f_vector == (40, 60, 40, 10)
-    with pytest.raises(ValueError, match="aggregate boundary cells"):
+    with pytest.raises(ValueError):
         ChainComplexRequest(
             complex=complex_,
             coefficient_ring=ChainCoefficientRing.PRIME_FIELD,

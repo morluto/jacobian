@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
+from tests.integration.linear._support import linear_validation_error
 from tests.support.rationals import rational_payload as _q
 
 from jacobian.math.matrices.rational_linear._models import (
@@ -31,24 +31,24 @@ def test_linear_system_requires_exact_matching_dimensions() -> None:
 
     malformed = _system()
     malformed["rhs"] = [_q(5)]
-    with pytest.raises(ValidationError, match="right-hand side"):
+    with linear_validation_error():
         LinearRationalSystem.model_validate(malformed)
 
     malformed = _system()
     malformed["variables"] = ["x"]
-    with pytest.raises(ValidationError, match="variable"):
+    with linear_validation_error():
         LinearRationalSystem.model_validate(malformed)
 
 
 def test_linear_find_request_rejects_ambiguous_or_oversized_rationals() -> None:
     noncanonical = _system()
     noncanonical["rhs"] = [{"num": "2", "den": "2"}, _q(1)]
-    with pytest.raises(ValidationError, match="reduced"):
+    with linear_validation_error():
         LinearRationalSolutionFindRequest.model_validate({"system": noncanonical})
 
     oversized = _system()
     oversized["rhs"] = [{"num": "1" * 257, "den": "1"}, _q(1)]
-    with pytest.raises(ValidationError, match="256-digit bound"):
+    with linear_validation_error():
         LinearRationalSolutionFindRequest.model_validate({"system": oversized})
 
 
@@ -99,13 +99,13 @@ def test_inline_results_preserve_completed_no_candidate_outcomes() -> None:
 
     assert solution.values is None
     assert inconsistency.left_witness is None
-    with pytest.raises(ValidationError, match="agree with the result status"):
+    with linear_validation_error():
         LinearRationalSolutionResult(
             system=dependent,
             status="INCONSISTENT",
             values=(_q(2), _q(1)),
         )
-    with pytest.raises(ValidationError, match="agree with the result status"):
+    with linear_validation_error():
         LinearRationalInconsistencyResult(
             system=dependent,
             status="CONSISTENT",
@@ -123,7 +123,7 @@ def test_linear_program_outcomes_require_status_specific_source_bound_data() -> 
             "rhs": [_q(1)],
         }
     )
-    with pytest.raises(ValidationError, match="cannot carry primal data"):
+    with linear_validation_error():
         RationalLinearProgramResult.model_validate(
             {
                 "program": program,
@@ -131,7 +131,7 @@ def test_linear_program_outcomes_require_status_specific_source_bound_data() -> 
                 "primal_candidate": [_q(1)],
             }
         )
-    with pytest.raises(ValidationError, match="only an optimal"):
+    with linear_validation_error():
         RationalLinearProgramResult.model_validate(
             {
                 "program": program,
@@ -154,7 +154,7 @@ def test_linear_program_raw_rational_bounds_precede_canonical_parsing(
 
     monkeypatch.setattr(exact, "parse_canonical_integer", fail_if_called)
     oversized = "9" * 129
-    with pytest.raises(ValidationError, match="128-digit bound"):
+    with linear_validation_error():
         StandardFormRationalLinearProgram.model_validate(
             {
                 "variables": ["x"],
@@ -170,7 +170,7 @@ def test_linear_program_raw_rational_bounds_precede_canonical_parsing(
         coefficients=((_q(1),),),
         rhs=(_q(1),),
     )
-    with pytest.raises(ValidationError, match="32768-digit bound"):
+    with linear_validation_error():
         RationalLinearProgramResult.model_validate(
             {
                 "program": program,

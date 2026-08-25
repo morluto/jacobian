@@ -8,12 +8,10 @@ from itertools import combinations
 from jacobian.math.code_nonlinear._budget import require_profile_admission
 from jacobian.math.code_nonlinear._models import (
     BinaryCodeDistanceWitness,
-    BinaryCodeRequest,
     ConstantWeightProfileRequest,
     ConstantWeightProfileResult,
     ConstantWeightRequest,
     ConstantWeightResult,
-    DistanceProfileResult,
     ExplicitProfileRequest,
     ExplicitProfileResult,
     ToSetSystemRequest,
@@ -95,19 +93,6 @@ def _distance_witness(
         support_intersection=intersection,
         distance=distance,
     )
-
-
-def _distance_profile_data(
-    code: ExplicitBinaryCode,
-) -> tuple[int | None, tuple[int, ...]]:
-    bitsets = tuple(_word_to_bitset(word) for word in code.codewords)
-    minimum: int | None = None
-    for left_index, left in enumerate(bitsets):
-        for right in bitsets[left_index + 1 :]:
-            distance = (left ^ right).bit_count()
-            if minimum is None or distance < minimum:
-                minimum = distance
-    return minimum, tuple(word.bit_count() for word in bitsets)
 
 
 def _explicit_profile_data(code: ExplicitBinaryCode) -> _ExplicitProfileData:
@@ -198,16 +183,6 @@ def _constant_weight_code(length: int, weight: int) -> ExplicitBinaryCode:
         support_set = set(support)
         codewords.append(tuple(1 if i in support_set else 0 for i in range(length)))
     return ExplicitBinaryCode(length=length, codewords=tuple(codewords))
-
-
-def compute_distance_profile(request: BinaryCodeRequest) -> DistanceProfileResult:
-    """Compute minimum pair distance and per-word weights."""
-    minimum, weights = _distance_profile_data(request.code)
-    return DistanceProfileResult(
-        source=request.code,
-        minimum_distance=minimum,
-        weight_profile=weights,
-    )
 
 
 def compute_constant_weight(request: ConstantWeightRequest) -> ConstantWeightResult:
@@ -308,7 +283,6 @@ def to_set_system(code: ExplicitBinaryCode) -> ToSetSystemResult:
 __all__ = [
     "compute_constant_weight",
     "compute_constant_weight_profile",
-    "compute_distance_profile",
     "compute_explicit_profile",
     "compute_to_set_system",
     "compute_word_distance",

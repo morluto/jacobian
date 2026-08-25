@@ -11,11 +11,6 @@ from jacobian.math.code_nonlinear._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
-        "code.nonlinear.distance_profile.compute",
-        AdmissionDecision.KEEP,
-        "exact source-bound minimum Hamming distance and weight profile",
-    ),
-    OperationAdmission(
         "code.nonlinear.constant_weight.compute",
         AdmissionDecision.KEEP,
         "exact bounded generation of the canonical constant-weight binary code",

@@ -12,9 +12,7 @@ from jacobian._models import StrictModel
 from jacobian.math.code_nonlinear._budget import (
     MAX_CODE_RESULT_BYTES,
     MAX_PROFILE_PAIRS,
-    distance_profile_wire_upper_bound,
     require_constant_weight_admission,
-    require_pair_work_admission,
     require_profile_admission,
     require_set_system_output_bound,
     require_word_distance_output_bound,
@@ -72,23 +70,6 @@ def _require_constant_weight(code: ExplicitBinaryCode) -> int:
     return weight
 
 
-class BinaryCodeRequest(StrictModel):
-    """Request the legacy compact distance profile of one canonical code."""
-
-    code: ExplicitBinaryCode
-
-    @model_validator(mode="after")
-    def require_bounded_profile(self) -> Self:
-        _require_admission(
-            lambda: require_pair_work_admission(self.code),
-            "nonlinear_code.admission_bound",
-        )
-        _require_result_bound(
-            distance_profile_wire_upper_bound(self.code), "distance profile result"
-        )
-        return self
-
-
 class ConstantWeightRequest(StrictModel):
     """Generate all binary words of one bounded length and weight."""
 
@@ -101,39 +82,6 @@ class ConstantWeightRequest(StrictModel):
             lambda: require_constant_weight_admission(self.length, self.weight),
             "nonlinear_code.admission_bound",
         )
-        return self
-
-
-class DistanceProfileResult(StrictModel):
-    """Minimum pair distance and per-word weights, bound to the source code."""
-
-    source: ExplicitBinaryCode
-    minimum_distance: StrictNonnegativeInt | None
-    weight_profile: tuple[StrictNonnegativeInt, ...]
-
-    @model_validator(mode="after")
-    def bind_profile(self) -> Self:
-        from jacobian.math.code_nonlinear._operations import _distance_profile_data
-
-        _require_admission(
-            lambda: require_pair_work_admission(self.source),
-            "nonlinear_code.admission_bound",
-        )
-        _require_result_bound(
-            distance_profile_wire_upper_bound(self.source),
-            "distance profile result",
-        )
-        minimum_distance, weights = _distance_profile_data(self.source)
-        if self.minimum_distance != minimum_distance:
-            raise _validation_error(
-                "nonlinear_code.replay_mismatch",
-                "minimum_distance must replay from the retained source",
-            )
-        if self.weight_profile != weights:
-            raise _validation_error(
-                "nonlinear_code.replay_mismatch",
-                "weight_profile must replay from the retained source",
-            )
         return self
 
 
@@ -578,12 +526,10 @@ class ToSetSystemResult(StrictModel):
 
 __all__ = [
     "BinaryCodeDistanceWitness",
-    "BinaryCodeRequest",
     "ConstantWeightProfileRequest",
     "ConstantWeightProfileResult",
     "ConstantWeightRequest",
     "ConstantWeightResult",
-    "DistanceProfileResult",
     "ExplicitProfileRequest",
     "ExplicitProfileResult",
     "ToSetSystemRequest",

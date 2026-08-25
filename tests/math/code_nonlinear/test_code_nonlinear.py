@@ -24,7 +24,6 @@ from jacobian.math.code_nonlinear._budget import (
 )
 from jacobian.math.code_nonlinear._models import (
     BinaryCodeDistanceWitness,
-    BinaryCodeRequest,
     ConstantWeightProfileRequest,
     ConstantWeightProfileResult,
     ConstantWeightRequest,
@@ -39,7 +38,6 @@ from jacobian.math.code_nonlinear._models import (
 from jacobian.math.code_nonlinear._operations import (
     compute_constant_weight,
     compute_constant_weight_profile,
-    compute_distance_profile,
     compute_explicit_profile,
     compute_to_set_system,
     compute_word_distance,
@@ -749,14 +747,7 @@ class TestDerivedAdmissionBoundaries:
         assert exc_info.value.errors()[0]["type"] == "nonlinear_code.admission_bound"
 
 
-class TestLegacyCanonicalConsumers:
-    def test_distance_profile_uses_the_same_canonical_source(self) -> None:
-        source = _code((1, 1, 0), (0, 0, 0), (0, 1, 1))
-        result = compute_distance_profile(BinaryCodeRequest(code=source))
-        assert result.source is source
-        assert result.minimum_distance == 2
-        assert result.weight_profile == (0, 2, 2)
-
+class TestCanonicalConsumers:
     def test_constant_weight_generator_is_source_bound(self) -> None:
         result = compute_constant_weight(ConstantWeightRequest(length=4, weight=2))
         assert result.length == 4

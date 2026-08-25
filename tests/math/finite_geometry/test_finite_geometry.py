@@ -1,9 +1,13 @@
 """Tests for finite geometry operations."""
 
 import pytest
+from jsonschema.validators import Draft202012Validator
 from pydantic import ValidationError
 
+from jacobian.catalog.catalog import Catalog
+from jacobian.dispatch import invoke_operation
 from jacobian.math.finite_geometry._models import (
+    MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS,
     GrassmannianCountRequest,
     LinearSubspace,
     PrimeFieldVectorSpace,
@@ -190,6 +194,43 @@ def test_projective_space_enumerate_pg1_f2() -> None:
     result = compute_projective_space_enumerate(request)
     assert result.count == 3
     assert len(result.points) == 3
+
+
+def test_projective_space_schema_publishes_coupled_enumeration_bound() -> None:
+    operation = Catalog.open().operation(
+        "finite_geometry.projective_space.enumerate_points"
+    )
+    assert operation is not None
+
+    schema = operation.request_type.model_json_schema()
+    description = schema["description"]
+    space_description = schema["properties"]["space"]["description"]
+    assert f"q**n <= {MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS}" in description
+    assert (
+        f"q**len(axis) <= {MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS}"
+        in space_description
+    )
+
+    validator = Draft202012Validator(schema)
+    accepted = {"space": {"field_order": 2, "axis": ["x", "y"]}}
+    assert not list(validator.iter_errors(accepted))
+    assert (
+        invoke_operation(operation.operation_id, accepted, Catalog.open()).output[
+            "count"
+        ]
+        == 3
+    )
+
+    structurally_valid_but_too_large = {
+        "space": {"field_order": 257, "axis": ["x", "y"]}
+    }
+    assert not list(validator.iter_errors(structurally_valid_but_too_large))
+    with pytest.raises(ValidationError) as exc_info:
+        operation.request_type.model_validate(structurally_valid_but_too_large)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_geometry.projective_space_too_large"
+    )
 
 
 def test_request_rejects_nonprime_field() -> None:

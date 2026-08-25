@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 from sympy import isprime
 
@@ -12,6 +12,7 @@ from jacobian._models import StrictModel
 
 MAX_DIM = 32
 MAX_FIELD_ORDER = 10000
+MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS = 65_536
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -224,13 +225,47 @@ class GrassmannianCountRequest(StrictModel):
 
 
 class ProjectiveSpaceEnumerateRequest(StrictModel):
-    space: PrimeFieldVectorSpace
+    """One finite projective space whose complete point list fits the envelope.
+
+    ``q`` is the prime field order and ``n`` is the length of its ordered
+    coordinate axis.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "One finite projective space whose complete point list fits the "
+                "enumeration envelope. It admits exactly q**n <= "
+                f"{MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS}, where q is the "
+                "prime field order and n is the length of its ordered coordinate "
+                "axis; this leaves at most "
+                f"{MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS - 1} canonical "
+                "projective points to return."
+            )
+        }
+    )
+
+    space: PrimeFieldVectorSpace = Field(
+        description=(
+            "An ordered coordinate space over the prime field F_q. Complete "
+            "enumeration requires q**len(axis) <= "
+            f"{MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS}; this bounds the "
+            "canonical point result to at most "
+            f"{MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS - 1} points."
+        )
+    )
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
-        if self.space.field_order ** len(self.space.axis) > 65536:
+        if (
+            self.space.field_order ** len(self.space.axis)
+            > MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS
+        ):
             raise _validation_error(
-                "projective_space_too_large", "projective space too large to enumerate"
+                "projective_space_too_large",
+                "projective space exceeds the "
+                f"{MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS}-vector "
+                "enumeration envelope",
             )
         return self
 

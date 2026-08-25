@@ -100,6 +100,13 @@ algebraic claim. Select evidence by the claim being made:
 | Public operation | Catalog mutation conformance |
 | Process backend | Codec, version, timeout/output, and typed failure tests |
 
+When correcting an admission or boundedness rule, inspect the affected owner
+lane for assertions that pin the previous accept/reject outcome and rewrite or
+remove them in the same change. Every retained rejected boundary case must
+fail for the guard it names: keep the rest of its payload valid and assert the
+owner's structured error code. A request rejected by an earlier field bound is
+not evidence that a later cross-field admission guard ran.
+
 For example, an ideal radical needs containment and radicality evidence or an
 independent bounded oracle. A factorization needs reconstruction, retained
 unit, and positive-multiplicity properties. Known answers remain useful
@@ -131,7 +138,9 @@ error) should likewise be computed from the constant, not hardcoded:
 
 ```python
 beyond = "9" * (_MAX_MULTIVARIATE_COEFFICIENT_DIGITS + 1)
-with pytest.raises(ValueError, match=rf"{_MAX_MULTIVARIATE_COEFFICIENT_DIGITS}-digit bound"):
+with pytest.raises(
+    ValueError, match=rf"{_MAX_MULTIVARIATE_COEFFICIENT_DIGITS}-digit bound"
+):
     ...
 ```
 

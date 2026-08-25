@@ -6,6 +6,15 @@ from pydantic import ValidationError
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation, parse_operation_input
+from jacobian.math import finite_geometry
+from jacobian.math.finite_fields import (
+    Axis,
+    AxisBoundMatrix,
+    FiniteDimensionalSubspace,
+    element,
+    finite_field,
+    restrict_scalars,
+)
 from jacobian.math.finite_geometry._models import (
     MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS,
     GrassmannianCountRequest,
@@ -30,6 +39,9 @@ from jacobian.math.finite_geometry._operations import (
     compute_subspace_span,
 )
 from jacobian.math.finite_geometry._tools import TOOLS
+from jacobian.math.finite_geometry.conversions import (
+    embed_projective_point_in_finite_field,
+)
 
 
 def test_catalog_contains_only_audited_operations() -> None:
@@ -82,6 +94,80 @@ def test_projective_point_equal_different_points() -> None:
     )
     result = compute_projective_point_equal(request)
     assert result.equal is False
+
+
+@pytest.mark.requires_backend("flint")
+def test_projective_point_embeds_into_finite_field_restrict_scalars() -> None:
+    """A finite-geometry producer composes through an explicit field extension."""
+    geometry_point = compute_projective_point_canonicalize(
+        ProjectivePointCanonicalizeRequest(
+            space={"field_order": 2, "axis": ("x", "y")}, vector=(1, 1)
+        )
+    ).point
+    presentation = finite_field(2, (1, 1, 1))
+    row_axis = Axis(name="coordinate directions", labels=("x", "y"))
+
+    direction = embed_projective_point_in_finite_field(
+        geometry_point,
+        presentation,
+        row_axis,
+    )
+    one = element(presentation, (1, 0))
+    zero = element(presentation, (0, 0))
+    subspace = FiniteDimensionalSubspace(
+        presentation=presentation,
+        basis_axis=Axis(name="matrix basis", labels=("B",)),
+        basis=(
+            AxisBoundMatrix(
+                presentation=presentation,
+                row_axis=row_axis,
+                column_axis=Axis(name="target", labels=("c",)),
+                entries=((one,), (zero,)),
+            ),
+        ),
+    )
+
+    restricted = restrict_scalars(subspace, direction)
+
+    assert tuple(value.coordinates for value in direction.coordinates) == (
+        (1, 0),
+        (1, 0),
+    )
+    assert restricted.matrix.entries == ((1,), (0,))
+    assert (
+        type(direction).model_validate(direction.model_dump(mode="json")) == direction
+    )
+
+
+def test_projective_point_embedding_requires_explicit_compatible_target() -> None:
+    point = compute_projective_point_canonicalize(
+        ProjectivePointCanonicalizeRequest(
+            space={"field_order": 2, "axis": ("x", "y")}, vector=(1, 1)
+        )
+    ).point
+    target = finite_field(2, (1, 1, 1))
+
+    with pytest.raises(ValueError, match="axis labels"):
+        embed_projective_point_in_finite_field(
+            point,
+            target,
+            Axis(name="different coordinates", labels=("y", "x")),
+        )
+
+    with pytest.raises(ValueError, match="characteristic"):
+        embed_projective_point_in_finite_field(
+            point,
+            finite_field(3, (1, 0, 1)),
+            Axis(name="coordinate directions", labels=("x", "y")),
+        )
+
+
+def test_finite_geometry_public_api_exposes_only_the_explicit_conversion() -> None:
+    assert finite_geometry.__all__ == ["embed_projective_point_in_finite_field"]
+    assert (
+        finite_geometry.embed_projective_point_in_finite_field
+        is embed_projective_point_in_finite_field
+    )
 
 
 def test_subspace_compute_basic() -> None:

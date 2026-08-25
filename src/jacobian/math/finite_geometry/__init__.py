@@ -1,3 +1,7 @@
-"""Finite geometry operations."""
+"""Finite geometry operations and explicit canonical-value maps."""
 
-__all__: list[str] = []
+from jacobian.math.finite_geometry.conversions import (
+    embed_projective_point_in_finite_field,
+)
+
+__all__ = ["embed_projective_point_in_finite_field"]

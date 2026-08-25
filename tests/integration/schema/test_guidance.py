@@ -6,7 +6,7 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.finite_fields import FiniteFieldPresentation
-from jacobian.math.logic._operations import CanonicalCnf
+from jacobian.math.logic._cnf import CanonicalCnf
 
 
 @pytest.mark.parametrize(

@@ -7,13 +7,17 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.logic import _operations as operations
-from jacobian.math.logic._operations import (
+from jacobian.math.logic._cnf import (
     CanonicalCnf,
     CnfCanonicalizeRequest,
+    SatAssignmentCheckRequest,
+    canonicalize_cnf,
+    check_sat_assignment,
+)
+from jacobian.math.logic._operations import (
     LprAddition,
     LprDeletion,
     LprPropagationHint,
-    SatAssignmentCheckRequest,
     SatLprRefutation,
     SatRefutationCheckRequest,
     SatSolveRequest,
@@ -21,8 +25,6 @@ from jacobian.math.logic._operations import (
     SmtLogic,
     SmtSolveRequest,
     SmtSolveResult,
-    canonicalize_cnf,
-    check_sat_assignment,
     check_sat_refutation,
     solve_sat,
     solve_smt,

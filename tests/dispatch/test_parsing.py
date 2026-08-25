@@ -11,7 +11,7 @@ from tests.dispatch._support import dispatch_validation_error
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationDiscoveryRequest
 from jacobian.dispatch import parse_operation_input
-from jacobian.math.logic._operations import SatAssignmentCheckRequest
+from jacobian.math.logic._cnf import SatAssignmentCheckRequest
 
 
 class _Label(StrEnum):

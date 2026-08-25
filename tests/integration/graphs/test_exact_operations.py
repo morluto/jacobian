@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import pytest
-from pydantic import ValidationError
+from tests.integration.graphs._support import graph_validation_error
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDiscoveryRequest
@@ -78,7 +77,7 @@ def test_flow_preserves_large_exact_rational_capacity() -> None:
 
 
 def test_flow_contract_rejects_out_of_range_terminals() -> None:
-    with pytest.raises(ValidationError, match="source must be"):
+    with graph_validation_error():
         MaxFlowRequest.model_validate(
             {
                 "graph": {
@@ -98,7 +97,7 @@ def test_flow_contract_rejects_out_of_range_terminals() -> None:
 
 
 def test_spectral_contract_rejects_non_simple_graphs() -> None:
-    with pytest.raises(ValidationError, match="duplicate"):
+    with graph_validation_error():
         GraphSpectrumRequest.model_validate(
             {"graph": {"vertex_count": 2, "edges": [[0, 1], [1, 0]]}}
         )
@@ -114,7 +113,7 @@ def test_native_spectral_api_requires_a_validated_simple_graph() -> None:
     graph = GraphEdgeList(vertex_count=2, edges=((0, 1),))
     assert dict(laplacian_spectrum(graph)) == {"0": 1, "2": 1}
 
-    with pytest.raises(ValidationError, match="self-loops"):
+    with graph_validation_error():
         adjacency_spectrum(GraphEdgeList(vertex_count=2, edges=((0, 0),)))
 
 

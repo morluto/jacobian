@@ -90,6 +90,7 @@ jobs:
           junit-artifact: junit-python-${{ matrix.lane }}-3.12
           coverage-artifact: coverage-data-python-${{ matrix.lane }}
           coverage-file: .coverage.python-${{ matrix.lane }}
+          worker-count: ${{ matrix.lane == 'math' && 4 || 2 }}
 
   boundaries:
     name: boundaries (${{ matrix.lane }})
@@ -112,6 +113,7 @@ jobs:
           junit-artifact: junit-${{ matrix.lane }}-3.12
           coverage-artifact: coverage-data-${{ matrix.lane }}
           coverage-file: .coverage.${{ matrix.lane }}
+          worker-count: 2
 
   singular:
     name: Singular Runtime

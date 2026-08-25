@@ -1,5 +1,5 @@
 name: Run test lane evidence
-description: Run one semantic test lane and publish its JUnit and coverage evidence.
+description: Run one semantic test lane and publish its JUnit, coverage, and timing evidence.
 inputs:
   lane:
     description: Make test lane to execute.
@@ -13,16 +13,41 @@ inputs:
   coverage-file:
     description: Coverage database filename after the lane is isolated.
     required: true
+  worker-count:
+    description: Number of xdist workers configured for this lane.
+    required: true
 runs:
   using: composite
   steps:
+    - name: Measure ${{ inputs.lane }} collection
+      shell: bash
+      env:
+        LC_ALL: C
+      run: >-
+        /usr/bin/time --format='wall_seconds=%e\npeak_rss_kib=%M'
+        --output=collection.metrics
+        env PYTEST_ARGS='--collect-only'
+        make test-${{ inputs.lane }}
     - name: Run ${{ inputs.lane }} tests
       shell: bash
       env:
         PYTEST_ARGS: >-
           --junitxml=pytest.xml
           --cov --cov-report= --cov-fail-under=0
-      run: make test-${{ inputs.lane }}
+        LC_ALL: C
+      run: >-
+        /usr/bin/time --format='wall_seconds=%e\npeak_rss_kib=%M'
+        --output=execution.metrics
+        make test-${{ inputs.lane }}
+    - name: Record ${{ inputs.lane }} timing evidence
+      shell: bash
+      env:
+        LANE: ${{ inputs.lane }}
+        WORKER_COUNT: ${{ inputs.worker-count }}
+      run: >-
+        uv run --locked python .github/scripts/record_test_lane_timing.py
+        --collection collection.metrics --execution execution.metrics
+        --output lane-timing.json
     - if: ${{ !cancelled() }}
       shell: bash
       run: uv cache prune --ci
@@ -42,3 +67,9 @@ runs:
         name: ${{ inputs.coverage-artifact }}
         path: ${{ inputs.coverage-file }}
         include-hidden-files: true
+    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      if: ${{ !cancelled() }}
+      with:
+        name: test-timing-${{ inputs.lane }}-3.12
+        path: lane-timing.json
+        retention-days: 90

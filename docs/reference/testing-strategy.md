@@ -26,6 +26,18 @@ real boundary:
 | Singular ideal backend | `make test-singular` |
 | Documentation | `make docs-linkcheck` |
 
+For the normal edit loop, run one changed test path through its semantic owner
+instead of the broad confidence gate:
+
+```sh
+make test-focused LANE=math TESTS=tests/math/graphs/test_graph_distance_matrix.py
+```
+
+The explicit lane preserves its configured timeout and worker count. Supported
+focused lanes are `math`, `catalog`, `dispatch`, `cli`, `tooling`,
+`integration`, `process`, and `mcp`; specialist Lean and Singular checks retain
+their dedicated commands.
+
 `make check-all` is an intentional broad reproduction. Do not use a full suite
 as a substitute for a focused regression test.
 

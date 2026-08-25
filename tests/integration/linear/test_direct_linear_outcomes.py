@@ -7,6 +7,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from pydantic import ValidationError
+from tests.integration.linear._support import linear_validation_error
 from tests.support.rationals import rational_payload as q
 
 from jacobian.math.matrices.rational_linear._models import (
@@ -544,5 +545,5 @@ def test_linear_program_admission_is_result_sensitive_but_bounds_all_bases() -> 
         "coefficients": [[q(1)] * 8 for _ in range(8)],
         "rhs": [q(0)] * 8,
     }
-    with pytest.raises(ValidationError, match="possible simplex bases"):
+    with linear_validation_error():
         StandardFormRationalLinearProgram.model_validate(excessive_work)

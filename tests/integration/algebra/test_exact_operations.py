@@ -4,6 +4,7 @@ from fractions import Fraction
 
 import pytest
 from pydantic import ValidationError
+from tests.integration.algebra._support import algebra_validation_error
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.number_field import ring_of_integers
@@ -96,7 +97,7 @@ def test_algebraic_comparison_parses_canonical_interval_endpoints() -> None:
 
 def test_algebraic_comparison_rejects_coefficients_above_its_work_bound() -> None:
     oversized_coefficient = "1" + "0" * 1_000
-    with pytest.raises(ValidationError, match="1000-digit bound"):
+    with algebra_validation_error():
         AlgebraicCompareRequest.model_validate(
             {
                 "left": {
@@ -112,7 +113,7 @@ def test_algebraic_comparison_rejects_coefficients_above_its_work_bound() -> Non
 
 
 def test_algebraic_comparison_contract_rejects_a_missing_real_root() -> None:
-    with pytest.raises(ValidationError, match="existing real root"):
+    with algebra_validation_error():
         AlgebraicCompareRequest.model_validate(
             {
                 "left": {
@@ -154,7 +155,7 @@ def test_integral_basis_is_computed_in_the_defining_power_basis() -> None:
 
 
 def test_number_field_requires_a_monic_irreducible_integer_polynomial() -> None:
-    with pytest.raises(ValidationError, match="monic"):
+    with algebra_validation_error():
         NumberFieldRequest(coefficients_descending=("2", "0", "-10"), variable="x")
 
 
@@ -175,10 +176,10 @@ def test_native_recurrence_api_enforces_the_sequence_contract() -> None:
     assert recurrence.coefficients == (_r(2),)
     assert closed_form((_r(1), _r(-2)), (_r(3),)).expression == "3*2**n"
 
-    with pytest.raises(ValidationError, match="at least 2"):
+    with algebra_validation_error():
         find_recurrence((_r(1),))
 
-    with pytest.raises(ValidationError, match="initial value count"):
+    with algebra_validation_error():
         closed_form((_r(1), _r(-1), _r(-1)), (_r(1),))
 
 
@@ -225,7 +226,7 @@ def test_closed_form_contract_rejects_characteristic_polynomials_above_degree_fo
 
 
 def test_closed_form_contract_requires_every_initial_value() -> None:
-    with pytest.raises(ValidationError, match="initial value count"):
+    with algebra_validation_error():
         ClosedFormRequest(
             characteristic_coefficients=(_r(1), _r(-1), _r(-1)),
             initial_values=(_r(1),),

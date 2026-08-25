@@ -46,7 +46,7 @@ def test_process_lane_is_invoked_by_ci() -> None:
 
     assert "lane: [process, mcp]" in workflow
     assert "uses: ./.github/actions/run-test-lane" in workflow
-    assert "run: make test-${{ inputs.lane }}" in action
+    assert "make test-${{ inputs.lane }}" in action
 
 
 def test_singular_backend_has_a_pinned_required_ci_lane() -> None:
@@ -74,7 +74,11 @@ def test_python_and_boundary_lanes_share_evidence_collection() -> None:
     assert workflow.count("uses: ./.github/actions/run-test-lane") == 2
     assert "--junitxml=pytest.xml" in action
     assert "--cov --cov-report= --cov-fail-under=0" in action
-    assert action.count("actions/upload-artifact@") == 2
+    assert "PYTEST_ARGS='--collect-only'" in action
+    assert "record_test_lane_timing.py" in action
+    assert "test-timing-${{ inputs.lane }}-3.12" in action
+    assert "retention-days: 90" in action
+    assert action.count("actions/upload-artifact@") == 3
     assert "uv cache prune --ci" in action
 
 
@@ -127,6 +131,8 @@ def test_python_jobs_use_fixed_local_semantic_targets() -> None:
         in makefile
     )
     assert "quick: lint test-fast" in makefile
+    assert "test-focused: ## Run TESTS through its explicit semantic LANE" in makefile
+    assert "FOCUSED_TEST_LANES := $(ORDINARY_TEST_LANES) process mcp" in makefile
     assert "check: lint typecheck test-fast" in makefile
     assert "check-all: lint typecheck test-ordinary" in makefile
     assert "check-external: test-lean ##" in makefile

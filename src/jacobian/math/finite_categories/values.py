@@ -6,9 +6,10 @@ from collections.abc import Mapping
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import encode_strict_json
+from jacobian.canonical import encode_strict_json, strict_json_object_size
 from jacobian.math._labels import OpaqueLabel
 
 MAX_CATEGORY_OBJECTS = 1_024
@@ -22,6 +23,12 @@ MAX_CATEGORY_IDENTIFIER_BYTES = 4_096
 
 
 type CategoryIdentifier = OpaqueLabel | tuple[CategoryIdentifier, CategoryIdentifier]
+
+
+def _category_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by finite-category values."""
+
+    return PydanticCustomError(f"finite_category.{reason}", message)
 
 
 def _identifier_sort_key(identifier: CategoryIdentifier) -> tuple[object, ...]:
@@ -55,25 +62,24 @@ def _identifier_shape(identifier: CategoryIdentifier) -> tuple[int, int]:
 def _require_identifier_budget(identifier: CategoryIdentifier) -> None:
     depth, leaves = _identifier_shape(identifier)
     if depth > MAX_CATEGORY_IDENTIFIER_DEPTH:
-        raise ValueError(
-            "category identifier exceeds the bounded structural-depth budget"
+        raise _category_error(
+            "identifier_depth_budget",
+            "category identifier exceeds the bounded structural-depth budget",
         )
     if leaves > MAX_CATEGORY_IDENTIFIER_LEAVES:
-        raise ValueError("category identifier exceeds the bounded atomic-leaf budget")
+        raise _category_error(
+            "identifier_leaf_budget",
+            "category identifier exceeds the bounded atomic-leaf budget",
+        )
     if _identifier_wire_size(identifier) > MAX_CATEGORY_IDENTIFIER_BYTES:
-        raise ValueError("category identifier exceeds the bounded wire-size budget")
+        raise _category_error(
+            "identifier_wire_size_budget",
+            "category identifier exceeds the bounded wire-size budget",
+        )
 
 
 def _json_array_size(item_sizes: tuple[int, ...]) -> int:
     return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
-
-
-def _json_object_size(fields: tuple[tuple[str, int], ...]) -> int:
-    return (
-        2
-        + max(len(fields) - 1, 0)
-        + sum(len(name) + 3 + value_size for name, value_size in fields)
-    )
 
 
 class MorphismSpec(StrictModel):
@@ -110,13 +116,20 @@ def _morphism_index(
 ) -> dict[CategoryIdentifier, MorphismSpec]:
     object_set = set(objects)
     if len(object_set) != len(objects):
-        raise ValueError("object identifiers must be distinct")
+        raise _category_error(
+            "duplicate_object_identifier", "object identifiers must be distinct"
+        )
     by_id = {morphism.morphism_id: morphism for morphism in morphisms}
     if len(by_id) != len(morphisms):
-        raise ValueError("morphism identifiers must be distinct")
+        raise _category_error(
+            "duplicate_morphism_identifier", "morphism identifiers must be distinct"
+        )
     for morphism in morphisms:
         if morphism.source not in object_set or morphism.target not in object_set:
-            raise ValueError("every morphism source/target must be a declared object")
+            raise _category_error(
+                "undeclared_morphism_endpoint",
+                "every morphism source/target must be a declared object",
+            )
     return by_id
 
 
@@ -129,17 +142,30 @@ def _identity_map(
     identity_map: dict[CategoryIdentifier, CategoryIdentifier] = {}
     for object_id, morphism_id in identities:
         if object_id not in object_set:
-            raise ValueError("identity objects must be declared objects")
+            raise _category_error(
+                "undeclared_identity_object",
+                "identity objects must be declared objects",
+            )
         if object_id in identity_map:
-            raise ValueError("each object has exactly one identity")
+            raise _category_error(
+                "duplicate_identity", "each object has exactly one identity"
+            )
         morphism = by_id.get(morphism_id)
         if morphism is None:
-            raise ValueError("an identity must name a declared morphism")
+            raise _category_error(
+                "undeclared_identity_morphism",
+                "an identity must name a declared morphism",
+            )
         if morphism.source != object_id or morphism.target != object_id:
-            raise ValueError("an identity must be an endomorphism of its object")
+            raise _category_error(
+                "non_endomorphism_identity",
+                "an identity must be an endomorphism of its object",
+            )
         identity_map[object_id] = morphism_id
     if set(identity_map) != object_set:
-        raise ValueError("every object must have exactly one identity")
+        raise _category_error(
+            "missing_identity", "every object must have exactly one identity"
+        )
     return identity_map
 
 
@@ -153,16 +179,27 @@ def _composition_table(
     table: dict[tuple[CategoryIdentifier, CategoryIdentifier], CategoryIdentifier] = {}
     for g, f, result in composition:
         if g not in by_id or f not in by_id or result not in by_id:
-            raise ValueError("composition must name declared morphisms")
+            raise _category_error(
+                "undeclared_composition_morphism",
+                "composition must name declared morphisms",
+            )
         f_spec = by_id[f]
         g_spec = by_id[g]
         result_spec = by_id[result]
         if f_spec.target != g_spec.source:
-            raise ValueError("composition requires target(f) == source(g)")
+            raise _category_error(
+                "noncomposable_pair", "composition requires target(f) == source(g)"
+            )
         if result_spec.source != f_spec.source or result_spec.target != g_spec.target:
-            raise ValueError("composition result must have source(f) and target(g)")
+            raise _category_error(
+                "composition_result_endpoint",
+                "composition result must have source(f) and target(g)",
+            )
         if (g, f) in table:
-            raise ValueError("composition must be total and single-valued")
+            raise _category_error(
+                "duplicate_composition_pair",
+                "composition must be total and single-valued",
+            )
         table[(g, f)] = result
 
     by_source: dict[CategoryIdentifier, list[CategoryIdentifier]] = {}
@@ -177,8 +214,9 @@ def _composition_table(
         for g in by_source.get(object_id, ())
     }
     if set(table) != composable:
-        raise ValueError(
-            "composition table domain must be exactly the composable pairs"
+        raise _category_error(
+            "incomplete_composition_table",
+            "composition table domain must be exactly the composable pairs",
         )
     return table
 
@@ -194,9 +232,9 @@ def _check_unit_laws(
         identity_target = identities[morphism.target]
         identity_source = identities[morphism.source]
         if composition[(identity_target, morphism.morphism_id)] != morphism.morphism_id:
-            raise ValueError("left identity law violated")
+            raise _category_error("left_identity_law", "left identity law violated")
         if composition[(morphism.morphism_id, identity_source)] != morphism.morphism_id:
-            raise ValueError("right identity law violated")
+            raise _category_error("right_identity_law", "right identity law violated")
 
 
 def _check_associativity(
@@ -217,14 +255,14 @@ def _check_associativity(
             for h in by_source.get(g_spec.target, ()):
                 hg = composition[(h, g)]
                 if composition[(hg, f)] != composition[(h, gf)]:
-                    raise ValueError("associativity violated")
+                    raise _category_error("associativity", "associativity violated")
 
 
 def _morphism_wire_size(
     morphism: MorphismSpec,
     identifier_sizes: Mapping[CategoryIdentifier, int],
 ) -> int:
-    return _json_object_size(
+    return strict_json_object_size(
         (
             ("morphism_id", identifier_sizes[morphism.morphism_id]),
             ("source", identifier_sizes[morphism.source]),
@@ -240,7 +278,7 @@ def _category_wire_size(category: FiniteCategory) -> int:
     identifier_sizes = {
         identifier: _identifier_wire_size(identifier) for identifier in identifiers
     }
-    return _json_object_size(
+    return strict_json_object_size(
         (
             (
                 "objects",
@@ -345,17 +383,24 @@ class FiniteCategory(StrictModel):
         by_id = _morphism_index(objects, morphisms)
         composable_pairs, composable_triples = _category_counts(objects, morphisms)
         if composable_pairs > MAX_CATEGORY_COMPOSABLE_PAIRS:
-            raise ValueError("category exceeds the bounded composable-pair work budget")
+            raise _category_error(
+                "composable_pair_budget",
+                "category exceeds the bounded composable-pair work budget",
+            )
         if composable_triples > MAX_CATEGORY_COMPOSABLE_TRIPLES:
-            raise ValueError(
-                "category exceeds the bounded composable-triple work budget"
+            raise _category_error(
+                "composable_triple_budget",
+                "category exceeds the bounded composable-triple work budget",
             )
         identity_map = _identity_map(objects, by_id, identities)
         composition_table = _composition_table(morphisms, by_id, composition)
         _check_unit_laws(morphisms, identity_map, composition_table)
         _check_associativity(morphisms, composition_table)
         if _category_wire_size(self) > MAX_CATEGORY_VALUE_BYTES:
-            raise ValueError("category exceeds the bounded canonical wire-size budget")
+            raise _category_error(
+                "wire_size_budget",
+                "category exceeds the bounded canonical wire-size budget",
+            )
         return self
 
 
@@ -396,14 +441,19 @@ class FiniteCategoryProduct(StrictModel):
             self.left, self.right
         )
         if self.product != product:
-            raise ValueError("product must be the exact componentwise product category")
+            raise _category_error(
+                "incorrect_product",
+                "product must be the exact componentwise product category",
+            )
         if self.object_projections != object_projections:
-            raise ValueError(
-                "object_projections must be the exact structural pair projections"
+            raise _category_error(
+                "incorrect_object_projections",
+                "object_projections must be the exact structural pair projections",
             )
         if self.morphism_projections != morphism_projections:
-            raise ValueError(
-                "morphism_projections must be the exact structural pair projections"
+            raise _category_error(
+                "incorrect_morphism_projections",
+                "morphism_projections must be the exact structural pair projections",
             )
         return self
 

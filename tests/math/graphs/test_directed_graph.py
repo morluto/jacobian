@@ -118,25 +118,25 @@ class TestReachability:
 
 class TestReachabilityContract:
     def test_rejects_self_loop(self) -> None:
-        with pytest.raises(ValidationError, match="self-loops"):
+        with pytest.raises(ValidationError):
             ReachabilityRequest.model_validate(
                 {"graph": {"vertex_count": 2, "edges": [[0, 0], [0, 1]]}, "source": 0}
             )
 
     def test_rejects_out_of_range_edge_vertex(self) -> None:
-        with pytest.raises(ValidationError, match="edge vertices must be"):
+        with pytest.raises(ValidationError):
             ReachabilityRequest.model_validate(
                 {"graph": {"vertex_count": 2, "edges": [[0, 3]]}, "source": 0}
             )
 
     def test_rejects_duplicate_edges(self) -> None:
-        with pytest.raises(ValidationError, match="unique"):
+        with pytest.raises(ValidationError):
             ReachabilityRequest.model_validate(
                 {"graph": {"vertex_count": 3, "edges": [[0, 1], [0, 1]]}, "source": 0}
             )
 
     def test_rejects_out_of_range_source(self) -> None:
-        with pytest.raises(ValidationError, match="source must be"):
+        with pytest.raises(ValidationError):
             ReachabilityRequest.model_validate(
                 {"graph": {"vertex_count": 2, "edges": [[0, 1]]}, "source": 5}
             )

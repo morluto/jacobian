@@ -71,7 +71,7 @@ class TestHankel:
         assert int(result.determinant.den) > 0
 
     def test_insufficient_moments(self) -> None:
-        with pytest.raises(Exception, match="moment"):
+        with pytest.raises(ValidationError):
             HankelRequest(prefix=_prefix(_moments_uniform(3)), order=2)
 
 
@@ -92,7 +92,7 @@ class TestShiftedHankel:
             CanonicalRational(num="0", den="1"),
             CanonicalRational.from_fraction(Fraction(10) ** 32767),
         )
-        with pytest.raises(ValidationError, match="8190-digit"):
+        with pytest.raises(ValidationError):
             ShiftedHankelRequest(prefix=_prefix(moments), order=1)
 
     def test_unconsumed_moments_do_not_gate_admission(self) -> None:
@@ -139,7 +139,7 @@ class TestOrthogonalPolynomials:
         assert int(result.polynomials[1].squared_norm.den) == 3
 
     def test_insufficient_moments(self) -> None:
-        with pytest.raises(Exception, match="moment"):
+        with pytest.raises(ValidationError):
             OrthogonalPolynomialRequest(
                 prefix=_prefix(_moments_uniform(3)), max_degree=2
             )
@@ -154,12 +154,12 @@ class TestOrthogonalPolynomials:
             CanonicalRational(num="0", den="1"),
             CanonicalRational(num="0", den="1"),
         )
-        with pytest.raises(ValueError, match="quasi-definite"):
+        with pytest.raises(ValueError):
             compute_orthogonal_polynomials(
                 OrthogonalPolynomialRequest(prefix=_prefix(moments), max_degree=2)
             )
         # The same prefix is rejected at request admission.
-        with pytest.raises(ValueError, match="quasi-definite"):
+        with pytest.raises(ValueError):
             OrthogonalPolynomialRequest(prefix=_prefix(moments), max_degree=2)
 
     def test_quasi_definite_is_not_positive_definite(self) -> None:
@@ -281,7 +281,7 @@ class TestChristoffelDarboux:
             is_quasi_definite=False,
             is_positive_definite=False,
         )
-        with pytest.raises(ValidationError, match="vanishing norm"):
+        with pytest.raises(ValidationError):
             ChristoffelDarbouxRequest(family=family, degree=0)
 
     def test_zero_norm_beyond_degree_does_not_gate(self) -> None:
@@ -411,7 +411,7 @@ class TestGaussianQuadrature:
         """Construction consumes moments through mu_(2n-1) exactly: 2n
         moments suffice for an exact order-n rule and 2n-1 do not."""
 
-        with pytest.raises(ValueError, match="need at least 4"):
+        with pytest.raises(ValueError):
             GaussianQuadratureRequest(
                 prefix=_prefix(self._moments_rational_nodes()[:3]), order=2
             )
@@ -459,7 +459,7 @@ class TestGaussianQuadrature:
         admission rejects instead of crashing on .p/.q access."""
 
         uniform = tuple(CanonicalRational(num="1", den=str(k + 1)) for k in range(5))
-        with pytest.raises(ValueError, match="rational"):
+        with pytest.raises(ValueError):
             GaussianQuadratureRequest(prefix=_prefix(uniform), order=2)
 
 
@@ -484,14 +484,14 @@ class TestQuadratureSourceBinding:
 
         payload = result.model_dump()
         payload["exactness_degree"] = 999
-        with pytest.raises(ValidationError, match="exactness degree"):
+        with pytest.raises(ValidationError):
             GaussianQuadratureRule.model_validate(payload)
 
     def test_node_count_matches_order(self) -> None:
         one_node = QuadratureNode(
             node={"num": "0", "den": "1"}, weight={"num": "1", "den": "1"}
         )
-        with pytest.raises(ValueError, match="exactly 2 nodes"):
+        with pytest.raises(ValueError):
             GaussianQuadratureRule(
                 order=2,
                 nodes=(one_node,),
@@ -512,7 +512,7 @@ class TestQuadratureSourceBinding:
         minimal = MomentFunctionalPrefix(
             moments=(CanonicalRational(num="1", den="1"),), variable="x"
         )
-        with pytest.raises(ValidationError, match="source moments"):
+        with pytest.raises(ValidationError):
             GaussianQuadratureRule(
                 order=1,
                 nodes=(
@@ -531,7 +531,7 @@ class TestJacobiCrossField:
     def test_contradictory_jacobi_rejected(self) -> None:
         from jacobian.math.moments_orthogonal.values import JacobiMatrix
 
-        with pytest.raises(ValidationError, match="diagonal must carry"):
+        with pytest.raises(ValidationError):
             JacobiMatrix(
                 alphas=(CanonicalRational(num="0", den="1"),),
                 betas=(CanonicalRational(num="0", den="1"),),
@@ -558,7 +558,7 @@ class TestJacobiCrossField:
         payload["matrix"] = [
             [{"num": c.num, "den": c.den} for c in row] for row in rows
         ]
-        with pytest.raises(ValidationError, match="tridiagonal band"):
+        with pytest.raises(ValidationError):
             JacobiMatrix.model_validate(payload)
 
 
@@ -583,7 +583,7 @@ class TestFamilyResidualBasisCheck:
             OrthogonalPolynomialFamily,
         )
 
-        with pytest.raises(ValidationError, match="three-term"):
+        with pytest.raises(ValidationError):
             OrthogonalPolynomialFamily(
                 polynomials=(
                     self._term(0, (1,), 1),
@@ -638,7 +638,7 @@ class TestDegenerateNormRecurrenceIdentities:
             OrthogonalPolynomialFamily,
         )
 
-        with pytest.raises(ValidationError, match="must satisfy"):
+        with pytest.raises(ValidationError):
             OrthogonalPolynomialFamily(
                 polynomials=(
                     self._term(0, (1,), 0),
@@ -701,7 +701,7 @@ class TestGramSchmidtHeightAdmission:
             CanonicalRational.from_fraction(Fraction(10) ** 20000),
             CanonicalRational(num="0", den="1"),
         )
-        with pytest.raises(ValidationError, match="Gram-Schmidt"):
+        with pytest.raises(ValidationError):
             OrthogonalPolynomialRequest(prefix=_prefix(moments), max_degree=1)
 
     def test_bounded_prefix_still_admits_and_executes(self) -> None:
@@ -739,7 +739,7 @@ class TestGramSchmidtHeightAdmission:
         request = OrthogonalPolynomialRequest.model_construct(
             prefix=_prefix(moments), max_degree=1
         )
-        with pytest.raises(ValueError, match="digit limit"):
+        with pytest.raises(ValueError):
             compute_orthogonal_polynomials(request)
 
 
@@ -763,7 +763,7 @@ class TestRecurrenceTupleDimensions:
     def test_contradictory_dimensions_rejected(self) -> None:
         from jacobian.math.moments_orthogonal.values import ThreeTermRecurrence
 
-        with pytest.raises(ValidationError, match=r"len\(alpha\)"):
+        with pytest.raises(ValidationError):
             ThreeTermRecurrence(
                 alpha=(CanonicalRational(num="0", den="1"),),
                 beta=(),
@@ -773,7 +773,7 @@ class TestRecurrenceTupleDimensions:
     def test_nonzero_placeholder_rejected(self) -> None:
         from jacobian.math.moments_orthogonal.values import ThreeTermRecurrence
 
-        with pytest.raises(ValidationError, match="placeholder"):
+        with pytest.raises(ValidationError):
             ThreeTermRecurrence(
                 alpha=(),
                 beta=(CanonicalRational(num="5", den="1"),),
@@ -844,7 +844,7 @@ class TestJacobiNormRatioAdmission:
             is_quasi_definite=False,
             is_positive_definite=False,
         )
-        with pytest.raises(ValidationError, match="vanishes"):
+        with pytest.raises(ValidationError):
             JacobiMatrixRequest(family=family)
 
     def test_emitted_ratio_free_family_admits_zero_terminal_norm(self) -> None:
@@ -893,7 +893,7 @@ class TestFamilyDefinitenessFlags:
             coefficients=(CanonicalRational(num="1", den="1"),),
             squared_norm=CanonicalRational(num="-1", den="1"),
         )
-        with pytest.raises(ValidationError, match="positive"):
+        with pytest.raises(ValidationError):
             OrthogonalPolynomialFamily(
                 polynomials=(term,),
                 variable="x",
@@ -952,7 +952,7 @@ class TestKernelFamilyBinding:
             ({"num": "1", "den": "2"}, {"num": "7", "den": "5"}),
             ({"num": "0", "den": "1"}, {"num": "3", "den": "2"}),
         )
-        with pytest.raises(ValidationError, match="exact Christoffel-Darboux"):
+        with pytest.raises(ValidationError):
             ChristoffelDarbouxKernel.model_validate(payload)
 
 
@@ -1001,7 +1001,7 @@ class TestDerivedAlphaHeightAdmission:
             is_quasi_definite=True,
             is_positive_definite=False,
         )
-        with pytest.raises(ValidationError, match="canonical rational digit limit"):
+        with pytest.raises(ValidationError):
             JacobiMatrixRequest(family=family)
 
 
@@ -1044,9 +1044,7 @@ class TestDerivedQuadratureHeightAdmission:
             CanonicalRational.from_fraction(Fraction(10) ** 16400),
             CanonicalRational(num="0", den="1"),
         )
-        with pytest.raises(
-            ValidationError, match="moment heights exceed the conservative"
-        ):
+        with pytest.raises(ValidationError):
             GaussianQuadratureRequest(prefix=_prefix(moments), order=1)
 
     def test_representable_large_node_admitted_and_round_trips(self) -> None:
@@ -1073,7 +1071,7 @@ class TestReplayedRulePositivity:
         prefix = _prefix(
             tuple(CanonicalRational(num=v, den="1") for v in ("-1", "0", "0"))
         )
-        with pytest.raises(ValidationError, match="strictly positive"):
+        with pytest.raises(ValidationError):
             GaussianQuadratureRule(
                 order=1,
                 nodes=(

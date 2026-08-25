@@ -6,10 +6,22 @@ from fractions import Fraction
 from typing import Annotated, Self
 
 from pydantic import ConfigDict, Field, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.canonical import encode_strict_json, format_canonical_integer
+from jacobian.math.geometry.exact._line_arithmetic import (
+    canonical_line_coefficients,
+    squared_point_line_distance,
+)
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable error owned by the geometry contracts."""
+
+    return PydanticCustomError(f"geometry.{reason}", message)
+
 
 MAX_POINTS = 64
 MAX_DIMENSION = 20
@@ -54,7 +66,9 @@ class LabelledRationalPoint(StrictModel):
     @model_validator(mode="after")
     def require_valid_dimension(self) -> Self:
         if len(self.coordinates) > MAX_DIMENSION:
-            raise ValueError("dimension exceeds bound")
+            raise _validation_error(
+                "dimension_exceeds_bound", "dimension exceeds bound"
+            )
         return self
 
 
@@ -73,10 +87,14 @@ class PointConfiguration(StrictModel):
         dim = len(self.points[0].coordinates)
         for p in self.points[1:]:
             if len(p.coordinates) != dim:
-                raise ValueError("all points must have the same dimension")
+                raise _validation_error(
+                    "points_same_dimension", "all points must have the same dimension"
+                )
         labels = [p.label for p in self.points]
         if len(labels) != len(set(labels)):
-            raise ValueError("point labels must be unique")
+            raise _validation_error(
+                "point_labels_unique", "point labels must be unique"
+            )
         return self
 
 
@@ -112,7 +130,10 @@ class DistanceGraphRequest(StrictModel):
     @model_validator(mode="after")
     def require_nonnegative_target(self) -> Self:
         if self.target_squared_distance.as_fraction() < 0:
-            raise ValueError("squared distance target must be nonnegative")
+            raise _validation_error(
+                "squared_distance_target_nonnegative",
+                "squared distance target must be nonnegative",
+            )
         return self
 
 
@@ -437,8 +458,9 @@ class PinnedLineDistanceRequest(StrictModel):
             return self
         _require_bounded_point_configuration(self.configuration, self.anchor)
         if len(self.configuration.points[0].coordinates) != 2:
-            raise ValueError(
-                "pinned line-distance profile requires a planar configuration"
+            raise _validation_error(
+                "pinned_line_distance_profile_requires_a",
+                "pinned line-distance profile requires a planar configuration",
             )
         # A pair of coincident points does not span a line; require distinct
         # coordinates so every pair defines a geometric line.
@@ -447,7 +469,8 @@ class PinnedLineDistanceRequest(StrictModel):
             for pt in self.configuration.points
         }
         if len(coords) != len(self.configuration.points):
-            raise ValueError(
+            raise _validation_error(
+                "pinned_line_distance_profile_requires_distinct",
                 "pinned line-distance profile requires distinct point coordinates",
             )
         # Couple the point count to the coordinate heights through the
@@ -457,10 +480,11 @@ class PinnedLineDistanceRequest(StrictModel):
             self.configuration, self.anchor
         )
         if estimated_bytes > MAX_PINNED_PROFILE_RESULT_BYTES:
-            raise ValueError(
+            raise _validation_error(
+                "complete_pinned_line_distance_profile_would",
                 "the complete pinned line-distance profile would exceed the "
                 f"{MAX_PINNED_PROFILE_RESULT_BYTES}-byte aggregate result "
-                "budget; reduce the point count or coordinate heights"
+                "budget; reduce the point count or coordinate heights",
             )
         return self
 
@@ -476,16 +500,23 @@ class PinnedLineEntry(StrictModel):
     def require_sorted_pairs(self) -> Self:
         for i, j in self.pairs:
             if not i < j:
-                raise ValueError("source pairs must be ordered (i < j)")
+                raise _validation_error(
+                    "source_pairs_ordered_i_j", "source pairs must be ordered (i < j)"
+                )
         if len(set(self.pairs)) != len(self.pairs):
-            raise ValueError("source pairs must be unique")
+            raise _validation_error(
+                "source_pairs_unique", "source pairs must be unique"
+            )
         if self.pairs != tuple(sorted(self.pairs)):
-            raise ValueError(
+            raise _validation_error(
+                "source_pairs_sorted_so_profile_has",
                 "source pairs must be sorted so each profile has exactly "
-                "one canonical serialization"
+                "one canonical serialization",
             )
         if self.squared_distance.as_fraction() < 0:
-            raise ValueError("squared distance must be nonnegative")
+            raise _validation_error(
+                "squared_distance_nonnegative", "squared distance must be nonnegative"
+            )
         return self
 
 
@@ -529,80 +560,43 @@ def _pinned_profile_source(
 ) -> tuple[list[tuple[Fraction, ...]], tuple[Fraction, ...]]:
     _require_bounded_point_configuration(configuration, anchor)
     if any(len(pt.coordinates) != 2 for pt in configuration.points):
-        raise ValueError(
+        raise _validation_error(
+            "retained_configuration_a_planar_configuration_two",
             "retained configuration must be a planar configuration "
-            "(exactly two coordinates per point)"
+            "(exactly two coordinates per point)",
         )
     if (
         _maximum_pinned_profile_wire_bytes(configuration, anchor)
         > MAX_PINNED_PROFILE_RESULT_BYTES
     ):
-        raise ValueError(
+        raise _validation_error(
+            "complete_pinned_line_distance_profile_would",
             "the complete pinned line-distance profile would exceed the "
             f"{MAX_PINNED_PROFILE_RESULT_BYTES}-byte aggregate result "
-            "budget; reduce the point count or coordinate heights"
+            "budget; reduce the point count or coordinate heights",
         )
     if len(configuration.points) != point_count:
-        raise ValueError("point_count must match the retained configuration")
+        raise _validation_error(
+            "point_count_retained_configuration",
+            "point_count must match the retained configuration",
+        )
     coords = {
         tuple(c.as_fraction() for c in pt.coordinates) for pt in configuration.points
     }
     if len(coords) != len(configuration.points):
-        raise ValueError("retained configuration points must have distinct coordinates")
+        raise _validation_error(
+            "retained_configuration_points_distinct_coordinates",
+            "retained configuration points must have distinct coordinates",
+        )
     if point_count > MAX_POINTS:
-        raise ValueError("point_count exceeds the configuration bound")
+        raise _validation_error(
+            "point_count_exceeds_configuration_bound",
+            "point_count exceeds the configuration bound",
+        )
     points = [
         tuple(c.as_fraction() for c in pt.coordinates) for pt in configuration.points
     ]
     return points, tuple(c.as_fraction() for c in anchor)
-
-
-def _gcd3(a: Fraction, b: Fraction, c: Fraction) -> Fraction:
-    from math import gcd
-
-    if a == 0 and b == 0 and c == 0:
-        return Fraction(0)
-    nums = [a.numerator, b.numerator, c.numerator]
-    dens = [a.denominator, b.denominator, c.denominator]
-    common_den = 1
-    for denominator in dens:
-        common_den = common_den * denominator // gcd(common_den, denominator)
-    scaled = [n * (common_den // d) for n, d in zip(nums, dens, strict=True)]
-    common_num = 0
-    for value in scaled:
-        common_num = gcd(common_num, abs(value))
-    if common_num == 0:
-        return Fraction(0)
-    return Fraction(common_num, common_den)
-
-
-def _canonical_line_coefficients(
-    p: tuple[Fraction, ...], q: tuple[Fraction, ...]
-) -> tuple[Fraction, Fraction, Fraction]:
-    dx = q[0] - p[0]
-    dy = q[1] - p[1]
-    a, b = dy, -dx
-    c = -(a * p[0] + b * p[1])
-    common = _gcd3(a, b, c)
-    if common != 0:
-        a, b, c = a / common, b / common, c / common
-    for coeff in (a, b, c):
-        if coeff != 0:
-            if coeff < 0:
-                a, b, c = -a, -b, -c
-            break
-    return a, b, c
-
-
-def _squared_point_line_distance(
-    anchor: tuple[Fraction, ...],
-    p: tuple[Fraction, ...],
-    q: tuple[Fraction, ...],
-) -> Fraction:
-    dx = q[0] - p[0]
-    dy = q[1] - p[1]
-    cross = dx * (anchor[1] - p[1]) - dy * (anchor[0] - p[0])
-    return (cross * cross) / (dx * dx + dy * dy)
 
 
 def _expected_pinned_profile_geometry(
@@ -620,10 +614,10 @@ def _expected_pinned_profile_geometry(
     ] = {}
     expected_distances: dict[tuple[Fraction, Fraction, Fraction], Fraction] = {}
     for i, j in combinations(range(point_count), 2):
-        coeffs = _canonical_line_coefficients(points[i], points[j])
+        coeffs = canonical_line_coefficients(points[i], points[j])
         expected_lines.setdefault(coeffs, []).append((i, j))
         if coeffs not in expected_distances:
-            expected_distances[coeffs] = _squared_point_line_distance(
+            expected_distances[coeffs] = squared_point_line_distance(
                 anchor, points[i], points[j]
             )
     return expected_lines, expected_distances
@@ -641,17 +635,32 @@ def _validate_pinned_profile_entries(
     for entry in lines:
         entry_coeffs = tuple(c.as_fraction() for c in entry.line_coefficients)
         if entry_coeffs in seen_lines:
-            raise ValueError("duplicate lines must be collapsed into one entry")
+            raise _validation_error(
+                "duplicate_lines_collapsed_entry",
+                "duplicate lines must be collapsed into one entry",
+            )
         seen_lines.add(entry_coeffs)
         if entry_coeffs not in expected_lines:
-            raise ValueError("line coefficients do not match any source pair line")
+            raise _validation_error(
+                "line_coefficients_do_any_source_pair",
+                "line coefficients do not match any source pair line",
+            )
         if tuple(sorted(entry.pairs)) != tuple(sorted(expected_lines[entry_coeffs])):
-            raise ValueError("source pairs do not match the line's geometry")
+            raise _validation_error(
+                "source_pairs_do_line_s_geometry",
+                "source pairs do not match the line's geometry",
+            )
         if entry.squared_distance.as_fraction() != expected_distances[entry_coeffs]:
-            raise ValueError("squared distance does not match the source geometry")
+            raise _validation_error(
+                "squared_distance_source_geometry",
+                "squared distance does not match the source geometry",
+            )
         for i, j in entry.pairs:
             if not 0 <= i < j < point_count:
-                raise ValueError("source pairs must reference valid point indices")
+                raise _validation_error(
+                    "source_pairs_reference_valid_point_indices",
+                    "source pairs must reference valid point indices",
+                )
             seen_pairs.append((i, j))
         distance = entry.squared_distance.as_fraction()
         multiplicities[distance] = multiplicities.get(distance, 0) + 1
@@ -670,7 +679,10 @@ def _validate_pinned_profile_order(
         tuple(c.as_fraction() for c in entry.line_coefficients) for entry in lines
     ]
     if actual_coeffs != ordered_coeffs:
-        raise ValueError("lines must be sorted by (squared_distance, coefficients)")
+        raise _validation_error(
+            "lines_sorted_squared_distance_coefficients",
+            "lines must be sorted by (squared_distance, coefficients)",
+        )
 
 
 class PinnedLineDistanceResult(StrictModel):
@@ -732,9 +744,10 @@ class PinnedLineDistanceResult(StrictModel):
             total += pair_total
             authored_rational_bytes += rational_bytes
             if total > MAX_PAIRS:
-                raise ValueError(
+                raise _validation_error(
+                    "aggregate_source_pair_ledger_exceeds_f",
                     "the aggregate source-pair ledger exceeds the "
-                    f"{MAX_PAIRS}-pair profile bound"
+                    f"{MAX_PAIRS}-pair profile bound",
                 )
         # Distance multiplicities carry authored rationals too; count them
         # so no field can bypass the pre-parse aggregate bound.
@@ -749,10 +762,11 @@ class PinnedLineDistanceResult(StrictModel):
         # raw numerator/denominator characters alone approach the budget is
         # forged padding that must be rejected BEFORE nested parsing.
         if authored_rational_bytes > MAX_PINNED_PROFILE_RESULT_BYTES:
-            raise ValueError(
+            raise _validation_error(
+                "authored_rational_components_exceed_f_max",
                 "authored rational components exceed the "
                 f"{MAX_PINNED_PROFILE_RESULT_BYTES}-byte aggregate result "
-                "budget before parsing"
+                "budget before parsing",
             )
         return data
 
@@ -773,9 +787,15 @@ class PinnedLineDistanceResult(StrictModel):
         if sorted(seen_pairs) != expected_pairs or len(seen_pairs) != len(
             set(seen_pairs)
         ):
-            raise ValueError("lines must cover exactly the set of source pairs once")
+            raise _validation_error(
+                "lines_cover_set_source_pairs_once",
+                "lines must cover exactly the set of source pairs once",
+            )
         if len(self.lines) != len(expected_lines):
-            raise ValueError("lines must correspond to distinct geometric lines")
+            raise _validation_error(
+                "lines_correspond_distinct_geometric_lines",
+                "lines must correspond to distinct geometric lines",
+            )
         _validate_pinned_profile_order(self.lines, expected_lines, expected_distances)
 
         reconstructed = tuple(
@@ -786,7 +806,8 @@ class PinnedLineDistanceResult(StrictModel):
             for d, count in sorted(multiplicities.items())
         )
         if reconstructed != self.distance_multiplicities:
-            raise ValueError(
-                "distance multiplicities must partition the lines and be sorted"
+            raise _validation_error(
+                "distance_multiplicities_partition_lines_sorted",
+                "distance multiplicities must partition the lines and be sorted",
             )
         return self

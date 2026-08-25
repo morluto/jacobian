@@ -272,7 +272,7 @@ def test_below_draw_reachability_and_at_draw_safety_choose_progress() -> None:
 
 
 @pytest.mark.parametrize(
-    ("payload", "message"),
+    ("payload", "error_type"),
     [
         (
             {
@@ -280,15 +280,21 @@ def test_below_draw_reachability_and_at_draw_safety_choose_progress() -> None:
                 "moves": [],
                 "draw_payoff": {"num": "0", "den": "1"},
             },
-            "terminal positions require",
+            "finite_game.terminal_payoff_required",
         ),
         (
             {
-                "positions": [{"label": "x", "owner": "MAX"}],
-                "moves": [],
+                "positions": [
+                    {
+                        "label": "x",
+                        "owner": "MAX",
+                        "payoff": {"num": "0", "den": "1"},
+                    }
+                ],
+                "moves": [{"source": "x", "target": "x"}],
                 "draw_payoff": {"num": "0", "den": "1"},
             },
-            "nonterminal position",
+            "finite_game.nonterminal_payoff_forbidden",
         ),
         (
             {
@@ -302,7 +308,7 @@ def test_below_draw_reachability_and_at_draw_safety_choose_progress() -> None:
                 "moves": [{"source": "t", "target": "t"}],
                 "draw_payoff": {"num": "0", "den": "1"},
             },
-            "terminal positions must have no outgoing",
+            "finite_game.terminal_has_moves",
         ),
         (
             {
@@ -310,7 +316,7 @@ def test_below_draw_reachability_and_at_draw_safety_choose_progress() -> None:
                 "moves": [{"source": "x", "target": "missing"}],
                 "draw_payoff": {"num": "0", "den": "1"},
             },
-            "endpoint",
+            "finite_game.move_endpoint_unknown",
         ),
         (
             {
@@ -324,15 +330,16 @@ def test_below_draw_reachability_and_at_draw_safety_choose_progress() -> None:
                 ],
                 "draw_payoff": {"num": "0", "den": "1"},
             },
-            "canonical declared-position order",
+            "finite_game.moves_not_canonical",
         ),
     ],
 )
 def test_malformed_arenas_fail_at_the_typed_boundary(
-    payload: dict[str, object], message: str
+    payload: dict[str, object], error_type: str
 ) -> None:
-    with pytest.raises(ValidationError, match=message):
+    with pytest.raises(ValidationError) as exc_info:
         DeterministicTerminalGame.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == error_type
 
 
 def test_threshold_work_is_admitted_and_rejected_before_solving() -> None:
@@ -351,8 +358,9 @@ def test_threshold_work_is_admitted_and_rejected_before_solving() -> None:
         }
 
     DeterministicTerminalGame.model_validate(terminal_game(256))
-    with pytest.raises(ValidationError, match="threshold work"):
+    with pytest.raises(ValidationError) as exc_info:
         DeterministicTerminalGame.model_validate(terminal_game(400))
+    assert exc_info.value.errors()[0]["type"] == "finite_game.threshold_work_exceeded"
 
 
 def test_result_size_is_rejected_independently_of_threshold_work() -> None:
@@ -368,8 +376,9 @@ def test_result_size_is_rejected_independently_of_threshold_work() -> None:
         "draw_payoff": {"num": "0", "den": "1"},
     }
 
-    with pytest.raises(ValidationError, match="result-size bound"):
+    with pytest.raises(ValidationError) as exc_info:
         DeterministicTerminalGame.model_validate(payload)
+    assert exc_info.value.errors()[0]["type"] == "finite_game.result_size_exceeded"
 
 
 def test_solution_rejects_value_strategy_and_source_mutations() -> None:
@@ -379,21 +388,27 @@ def test_solution_rejects_value_strategy_and_source_mutations() -> None:
         TerminalGameValueClass(payoff=_r(0), positions=("s", "u", "t1")),
         *result.value_classes[1:],
     )
-    with pytest.raises(ValidationError, match="exact minimax partition"):
+    with pytest.raises(ValidationError) as exc_info:
         DeterministicTerminalGameSolution(
             game=result.game,
             value_classes=bad_classes,
             max_strategy=result.max_strategy,
             min_strategy=result.min_strategy,
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "finite_game.value_classes_not_canonical"
+    )
 
-    with pytest.raises(ValidationError, match="canonical optimal strategy"):
+    with pytest.raises(ValidationError) as exc_info:
         DeterministicTerminalGameSolution(
             game=result.game,
             value_classes=result.value_classes,
             max_strategy=(StationaryChoice(position="u", target="u"),),
             min_strategy=result.min_strategy,
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "finite_game.max_strategy_not_canonical"
+    )
 
     source_mutations = []
     draw_mutation = result.game.model_dump(mode="json")
@@ -411,13 +426,17 @@ def test_solution_rejects_value_strategy_and_source_mutations() -> None:
     source_mutations.append(graph_mutation)
 
     for mutated_game in source_mutations:
-        with pytest.raises(ValidationError, match="exact minimax partition"):
+        with pytest.raises(ValidationError) as exc_info:
             DeterministicTerminalGameSolution(
                 game=DeterministicTerminalGame.model_validate(mutated_game),
                 value_classes=result.value_classes,
                 max_strategy=result.max_strategy,
                 min_strategy=result.min_strategy,
             )
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "finite_game.value_classes_not_canonical"
+        )
 
 
 def test_public_request_and_example_return_the_declared_result() -> None:

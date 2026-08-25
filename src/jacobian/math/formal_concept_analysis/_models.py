@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.formal_concept_analysis.basis import (
@@ -29,7 +30,11 @@ class _SubsetRequest(StrictModel):
     def _require_indices(self, size: int, side: str) -> None:
         for i in self.subset:
             if not 0 <= i < size:
-                raise ValueError(f"{side} subset index out of range")
+                raise PydanticCustomError(
+                    "formal_concept_analysis.subset_index_out_of_range",
+                    f"{side} subset index out of range",
+                    {"axis": side},
+                )
 
 
 class ObjectSubsetRequest(_SubsetRequest):
@@ -65,12 +70,16 @@ class ImplicationClosureRequest(StrictModel):
     @model_validator(mode="after")
     def require_canonical_bounded_seed(self) -> Self:
         if len(set(self.seed)) != len(self.seed):
-            raise ValueError("implication seed indices must be unique")
+            raise PydanticCustomError(
+                "formal_concept_analysis.seed_indices_not_unique",
+                "implication seed indices must be unique",
+            )
         if any(
             not 0 <= attribute < len(self.system.attributes) for attribute in self.seed
         ):
-            raise ValueError(
-                "implication seed attribute is outside the declared carrier"
+            raise PydanticCustomError(
+                "formal_concept_analysis.seed_attribute_out_of_range",
+                "implication seed attribute is outside the declared carrier",
             )
         object.__setattr__(self, "seed", tuple(sorted(self.seed)))
         return self
@@ -156,11 +165,12 @@ class EnumerateConceptsRequest(StrictModel):
 
             family_size = concept_family_size_capped(self.context, MAX_CONCEPTS)
             if family_size > MAX_CONCEPTS:
-                raise ValueError(
+                raise PydanticCustomError(
+                    "formal_concept_analysis.concept_family_exceeds_bound",
                     f"the context carries more than {MAX_CONCEPTS} concepts "
                     "and concept enumeration returns at most "
                     f"{MAX_CONCEPTS}; narrow the context or split the "
-                    "enumeration"
+                    "enumeration",
                 )
         return self
 

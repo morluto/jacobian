@@ -41,7 +41,7 @@ class TestBestResponse:
 class TestNashEquilibrium:
     def test_payoffs_must_bound_exact_strategy_growth(self) -> None:
         large = 10**32_767
-        with pytest.raises(ValidationError, match="exact-equilibrium result budget"):
+        with pytest.raises(ValidationError) as exc_info:
             ZeroSumGameRequest(
                 payoff_matrix=PayoffMatrix(
                     n_rows=2,
@@ -54,6 +54,9 @@ class TestNashEquilibrium:
                     ),
                 )
             )
+        assert (
+            exc_info.value.errors()[0]["type"] == "finite_game.exact_equilibrium_budget"
+        )
 
     def test_pure_strategy(self) -> None:
         req = ZeroSumGameRequest(

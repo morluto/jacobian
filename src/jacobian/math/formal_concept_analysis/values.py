@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Self
 
 from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
@@ -58,9 +59,15 @@ class AttributeImplication(StrictModel):
     @model_validator(mode="after")
     def canonicalize_members(self) -> Self:
         if len(set(self.premise)) != len(self.premise):
-            raise ValueError("implication premise indices must be unique")
+            raise PydanticCustomError(
+                "formal_concept_analysis.implication_premise_not_unique",
+                "implication premise indices must be unique",
+            )
         if len(set(self.conclusion)) != len(self.conclusion):
-            raise ValueError("implication conclusion indices must be unique")
+            raise PydanticCustomError(
+                "formal_concept_analysis.implication_conclusion_not_unique",
+                "implication conclusion indices must be unique",
+            )
         premise = tuple(sorted(self.premise))
         conclusion = tuple(sorted(set(self.conclusion) - set(premise)))
         object.__setattr__(self, "premise", premise)
@@ -99,7 +106,10 @@ class FiniteAttributeImplicationSystem(StrictModel):
     @model_validator(mode="after")
     def require_bounded_canonical_system(self) -> Self:
         if len(set(self.attributes)) != len(self.attributes):
-            raise ValueError("attribute labels must be unique")
+            raise PydanticCustomError(
+                "formal_concept_analysis.attribute_labels_not_unique",
+                "attribute labels must be unique",
+            )
 
         attribute_count = len(self.attributes)
         canonical = tuple(
@@ -112,29 +122,33 @@ class FiniteAttributeImplicationSystem(StrictModel):
             )
         )
         if len(set(canonical)) != len(canonical):
-            raise ValueError(
-                "implication rows must be duplicate-free after normalization"
+            raise PydanticCustomError(
+                "formal_concept_analysis.implication_rows_not_unique",
+                "implication rows must be duplicate-free after normalization",
             )
 
         memberships = 0
         for implication in canonical:
             for attribute in implication.premise + implication.conclusion:
                 if attribute >= attribute_count:
-                    raise ValueError(
-                        "implication attribute index is outside the declared carrier"
+                    raise PydanticCustomError(
+                        "formal_concept_analysis.implication_attribute_out_of_range",
+                        "implication attribute index is outside the declared carrier",
                     )
             memberships += len(implication.premise) + len(implication.conclusion)
         if memberships > MAX_IMPLICATION_MEMBERSHIPS:
-            raise ValueError(
+            raise PydanticCustomError(
+                "formal_concept_analysis.membership_budget_exceeded",
                 "implication memberships exceed the bounded aggregate membership "
-                f"limit of {MAX_IMPLICATION_MEMBERSHIPS}"
+                f"limit of {MAX_IMPLICATION_MEMBERSHIPS}",
             )
 
         predicted_work = 2 * (attribute_count + 1) * (len(canonical) + memberships)
         if predicted_work > MAX_FORWARD_CHAIN_WORK:
-            raise ValueError(
+            raise PydanticCustomError(
+                "formal_concept_analysis.forward_chain_work_exceeded",
                 "predicted forward-chaining work exceeds the bounded limit of "
-                f"{MAX_FORWARD_CHAIN_WORK}"
+                f"{MAX_FORWARD_CHAIN_WORK}",
             )
 
         # Conservative strict-JSON envelope: four UTF-8 bytes per label code
@@ -150,9 +164,10 @@ class FiniteAttributeImplicationSystem(StrictModel):
             + 128 * attribute_count
         )
         if predicted_result_bytes > MAX_IMPLICATION_CLOSURE_RESULT_BYTES:
-            raise ValueError(
+            raise PydanticCustomError(
+                "formal_concept_analysis.result_size_exceeded",
                 "predicted closure result exceeds the aggregate serialized-result "
-                f"limit of {MAX_IMPLICATION_CLOSURE_RESULT_BYTES} bytes"
+                f"limit of {MAX_IMPLICATION_CLOSURE_RESULT_BYTES} bytes",
             )
 
         object.__setattr__(self, "implications", canonical)
@@ -204,8 +219,9 @@ class ImplicationClosureWork(StrictModel):
         if self.canonical_replay_work != (
             self.canonical_implication_checks + self.canonical_membership_checks
         ):
-            raise ValueError(
-                "canonical_replay_work must equal implication plus membership checks"
+            raise PydanticCustomError(
+                "formal_concept_analysis.replay_work_mismatch",
+                "canonical_replay_work must equal implication plus membership checks",
             )
         return self
 
@@ -216,9 +232,17 @@ def _require_canonical_carrier_subset(
     carrier_size: int,
 ) -> None:
     if values != tuple(sorted(set(values))):
-        raise ValueError(f"{name} must be sorted and duplicate-free")
+        raise PydanticCustomError(
+            "formal_concept_analysis.subset_not_canonical",
+            f"{name} must be sorted and duplicate-free",
+            {"name": name},
+        )
     if any(attribute >= carrier_size for attribute in values):
-        raise ValueError(f"{name} contains an attribute outside the carrier")
+        raise PydanticCustomError(
+            "formal_concept_analysis.subset_attribute_out_of_range",
+            f"{name} contains an attribute outside the carrier",
+            {"name": name},
+        )
 
 
 def _replay_implication_lineage(
@@ -244,7 +268,10 @@ def _replay_implication_lineage(
                 if attribute not in reconstructed:
                     expected_sources.setdefault(attribute, implication_index)
         if not expected_sources:
-            raise ValueError("every reported productive round must add an attribute")
+            raise PydanticCustomError(
+                "formal_concept_analysis.productive_round_empty",
+                "every reported productive round must add an attribute",
+            )
 
         reported_sources: dict[int, int] = {}
         while (
@@ -253,18 +280,23 @@ def _replay_implication_lineage(
         ):
             step = lineage[lineage_index]
             if step.attribute in reconstructed or step.attribute in reported_sources:
-                raise ValueError("lineage derives an attribute more than once")
+                raise PydanticCustomError(
+                    "formal_concept_analysis.lineage_duplicate_attribute",
+                    "lineage derives an attribute more than once",
+                )
             reported_sources[step.attribute] = step.implication_index
             lineage_index += 1
         if reported_sources != expected_sources:
-            raise ValueError(
-                "lineage does not replay each simultaneous first derivation"
+            raise PydanticCustomError(
+                "formal_concept_analysis.lineage_round_mismatch",
+                "lineage does not replay each simultaneous first derivation",
             )
         reconstructed.update(reported_sources)
 
     if lineage_index != len(lineage) or reconstructed != closure:
-        raise ValueError(
-            "lineage does not reconstruct the claimed least implication fixed point"
+        raise PydanticCustomError(
+            "formal_concept_analysis.lineage_fixed_point_mismatch",
+            "lineage does not reconstruct the claimed least implication fixed point",
         )
 
     final_sources: set[int] = set()
@@ -276,7 +308,10 @@ def _replay_implication_lineage(
         membership_checks += len(implication.conclusion)
         final_sources.update(set(implication.conclusion) - reconstructed)
     if final_sources:
-        raise ValueError("closure must satisfy every implication")
+        raise PydanticCustomError(
+            "formal_concept_analysis.closure_not_closed",
+            "closure must satisfy every implication",
+        )
     return implication_checks, membership_checks
 
 
@@ -291,7 +326,10 @@ def _require_exact_implication_work(
         or work.canonical_membership_checks != expected_membership_checks
         or work.canonical_replay_work != expected_replay_work
     ):
-        raise ValueError("work accounting does not match the canonical lineage replay")
+        raise PydanticCustomError(
+            "formal_concept_analysis.work_accounting_mismatch",
+            "work accounting does not match the canonical lineage replay",
+        )
 
 
 class ImplicationClosureResult(StrictModel):
@@ -316,19 +354,29 @@ class ImplicationClosureResult(StrictModel):
         seed = set(self.seed)
         closure = set(self.closure)
         if not seed.issubset(closure):
-            raise ValueError("closure must contain every seed attribute")
+            raise PydanticCustomError(
+                "formal_concept_analysis.closure_missing_seed",
+                "closure must contain every seed attribute",
+            )
         if set(self.added) != closure - seed:
-            raise ValueError("added attributes are not bound to the seed and closure")
+            raise PydanticCustomError(
+                "formal_concept_analysis.added_attributes_mismatch",
+                "added attributes are not bound to the seed and closure",
+            )
         if len(self.lineage) != len(self.added):
-            raise ValueError("lineage must justify every added attribute exactly once")
+            raise PydanticCustomError(
+                "formal_concept_analysis.lineage_length_mismatch",
+                "lineage must justify every added attribute exactly once",
+            )
         if self.lineage != tuple(
             sorted(
                 self.lineage,
                 key=lambda step: (step.activation_round, step.attribute),
             )
         ):
-            raise ValueError(
-                "lineage must be ordered by activation round and attribute"
+            raise PydanticCustomError(
+                "formal_concept_analysis.lineage_not_ordered",
+                "lineage must be ordered by activation round and attribute",
             )
         expected_implication_checks, expected_membership_checks = (
             _replay_implication_lineage(
@@ -363,18 +411,33 @@ class FormalContext(StrictModel):
     @model_validator(mode="after")
     def require_well_formed(self) -> Self:
         if len(set(self.objects)) != len(self.objects):
-            raise ValueError("object labels must be unique")
+            raise PydanticCustomError(
+                "formal_concept_analysis.object_labels_not_unique",
+                "object labels must be unique",
+            )
         if len(set(self.attributes)) != len(self.attributes):
-            raise ValueError("attribute labels must be unique")
+            raise PydanticCustomError(
+                "formal_concept_analysis.attribute_labels_not_unique",
+                "attribute labels must be unique",
+            )
         seen: set[tuple[int, int]] = set()
         for oi, ai in self.incidence:
             if not 0 <= oi < len(self.objects):
-                raise ValueError("incidence object index out of range")
+                raise PydanticCustomError(
+                    "formal_concept_analysis.incidence_object_out_of_range",
+                    "incidence object index out of range",
+                )
             if not 0 <= ai < len(self.attributes):
-                raise ValueError("incidence attribute index out of range")
+                raise PydanticCustomError(
+                    "formal_concept_analysis.incidence_attribute_out_of_range",
+                    "incidence attribute index out of range",
+                )
             pair = (oi, ai)
             if pair in seen:
-                raise ValueError("incidence pairs must be duplicate-free")
+                raise PydanticCustomError(
+                    "formal_concept_analysis.incidence_pairs_not_unique",
+                    "incidence pairs must be duplicate-free",
+                )
             seen.add(pair)
         return self
 

@@ -6,6 +6,7 @@ from fractions import Fraction
 from typing import NamedTuple, Self
 
 from pydantic import Field, PrivateAttr, StrictStr, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
@@ -119,9 +120,15 @@ class CommodityDemand(StrictModel):
     @model_validator(mode="after")
     def require_distinct_positive_terminals(self) -> Self:
         if self.source == self.sink:
-            raise ValueError("commodity source and sink must be distinct")
+            raise PydanticCustomError(
+                "graph.commodity_source_and_sink_must_be_distinct",
+                "commodity source and sink must be distinct",
+            )
         if self.demand.as_fraction() <= 0:
-            raise ValueError("commodity demand must be strictly positive")
+            raise PydanticCustomError(
+                "graph.commodity_demand_must_be_strictly_positive",
+                "commodity demand must be strictly positive",
+            )
         return self
 
 
@@ -140,14 +147,20 @@ class CommodityEdgeFlow(StrictModel):
     @model_validator(mode="after")
     def require_positive_amount(self) -> Self:
         if self.amount.as_fraction() <= 0:
-            raise ValueError("sparse flow entries must have strictly positive amounts")
+            raise PydanticCustomError(
+                "graph.sparse_flow_entries_must_have_strictly_positive_",
+                "sparse flow entries must have strictly positive amounts",
+            )
         return self
 
 
 def _require_canonical_network(network: FlowGraph) -> tuple[tuple[int, int], ...]:
     edge_keys = tuple((edge.source, edge.target) for edge in network.edges)
     if edge_keys != tuple(sorted(edge_keys)):
-        raise ValueError("network edges must be sorted by (source, target)")
+        raise PydanticCustomError(
+            "graph.network_edges_must_be_sorted_by_source_target",
+            "network edges must be sorted by (source, target)",
+        )
     return edge_keys
 
 
@@ -157,19 +170,28 @@ def _require_canonical_commodities(
 ) -> tuple[str, ...]:
     commodity_ids = tuple(commodity.commodity_id for commodity in commodities)
     if commodity_ids != tuple(sorted(commodity_ids)):
-        raise ValueError("commodities must be sorted by commodity_id")
+        raise PydanticCustomError(
+            "graph.commodities_must_be_sorted_by_commodity_id",
+            "commodities must be sorted by commodity_id",
+        )
     if len(set(commodity_ids)) != len(commodity_ids):
-        raise ValueError("commodity IDs must be unique")
+        raise PydanticCustomError(
+            "graph.commodity_ids_must_be_unique", "commodity IDs must be unique"
+        )
     for commodity in commodities:
         if not (
             commodity.source < network.vertex_count
             and commodity.sink < network.vertex_count
         ):
-            raise ValueError("commodity terminals must be in 0..network.vertex_count-1")
+            raise PydanticCustomError(
+                "graph.commodity_terminals_must_be_in_0_network_vertex_",
+                "commodity terminals must be in 0..network.vertex_count-1",
+            )
     if len(commodities) * network.vertex_count > MAX_COMMODITY_VERTEX_CELLS:
-        raise ValueError(
+        raise PydanticCustomError(
+            "graph.commodity_by_vertex_divergence_cell_count_exceeds",
             "commodity-by-vertex divergence cell count exceeds "
-            f"{MAX_COMMODITY_VERTEX_CELLS}"
+            f"{MAX_COMMODITY_VERTEX_CELLS}",
         )
     return commodity_ids
 
@@ -184,18 +206,28 @@ def _require_canonical_entries(
         (entry.commodity_id, entry.source, entry.target) for entry in entries
     )
     if entry_keys != tuple(sorted(entry_keys)):
-        raise ValueError(
-            "flow entries must be sorted by (commodity_id, source, target)"
+        raise PydanticCustomError(
+            "graph.flow_entries_sorted_by_commodity_id_source",
+            "flow entries must be sorted by (commodity_id, source, target)",
         )
     if len(set(entry_keys)) != len(entry_keys):
-        raise ValueError("each commodity-by-edge flow entry may occur once")
+        raise PydanticCustomError(
+            "graph.each_commodity_by_edge_flow_entry_may_occur_once",
+            "each commodity-by-edge flow entry may occur once",
+        )
     declared_edges = set(edge_keys)
     declared_commodities = set(commodity_ids)
     for entry in entries:
         if entry.commodity_id not in declared_commodities:
-            raise ValueError("flow entry references an undeclared commodity")
+            raise PydanticCustomError(
+                "graph.flow_entry_references_an_undeclared_commodity",
+                "flow entry references an undeclared commodity",
+            )
         if (entry.source, entry.target) not in declared_edges:
-            raise ValueError("flow entry references an undeclared directed edge")
+            raise PydanticCustomError(
+                "graph.flow_entry_references_an_undeclared_directed_edg",
+                "flow entry references an undeclared directed edge",
+            )
 
 
 def _component_sums(
@@ -297,11 +329,12 @@ MAX_PROFILE_FOLD_INTERMEDIATE_DIGITS = 2 * MAX_CANONICAL_RATIONAL_DIGITS + 8
 
 def _require_side_within_fold_budget(digits: int) -> None:
     if digits > MAX_PROFILE_FOLD_INTERMEDIATE_DIGITS:
-        raise ValueError(
+        raise PydanticCustomError(
+            "graph.multicommodity_flow_profile_derives_digits_digit_fold",
             "multicommodity-flow profile derives a "
             f"{digits}-digit fold intermediate above the "
             f"{MAX_PROFILE_FOLD_INTERMEDIATE_DIGITS}"
-            "-digit fold-intermediate budget"
+            "-digit fold-intermediate budget",
         )
 
 
@@ -313,10 +346,11 @@ def _rational_side_bounds(value: Fraction) -> tuple[int, int]:
 
 def _require_side_within_cap(digits: int) -> None:
     if digits > MAX_CANONICAL_RATIONAL_DIGITS:
-        raise ValueError(
+        raise PydanticCustomError(
+            "graph.multicommodity_flow_profile_derives_digits_digit_rational",
             "multicommodity-flow profile derives a "
             f"{digits}-digit rational above the "
-            f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit canonical cap"
+            f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit canonical cap",
         )
 
 
@@ -559,9 +593,10 @@ def _require_profile_source_room(flow: MulticommodityFlow) -> None:
         + 4
     )
     if minimum_result_bytes > MAX_PROFILE_RESULT_BYTES:
-        raise ValueError(
+        raise PydanticCustomError(
+            "graph.multicommodity_flow_profile_result_would_exceed_max",
             "multicommodity-flow profile result would exceed the "
-            f"{MAX_PROFILE_RESULT_BYTES}-byte aggregate result bound"
+            f"{MAX_PROFILE_RESULT_BYTES}-byte aggregate result bound",
         )
 
 
@@ -614,9 +649,10 @@ def _require_admitted_profile_rows(
         + _PROFILE_RESULT_HEADER_BYTES
     )
     if estimated_bytes > MAX_PROFILE_RESULT_BYTES:
-        raise ValueError(
+        raise PydanticCustomError(
+            "graph.multicommodity_flow_profile_result_would_exceed_max",
             "multicommodity-flow profile result would exceed the "
-            f"{MAX_PROFILE_RESULT_BYTES}-byte aggregate result bound"
+            f"{MAX_PROFILE_RESULT_BYTES}-byte aggregate result bound",
         )
 
 
@@ -765,7 +801,10 @@ class MulticommodityFlowProfileResult(StrictModel):
             self.work,
         )
         if actual != expected:
-            raise ValueError("result must match the exact multicommodity-flow profile")
+            raise PydanticCustomError(
+                "graph.result_must_match_the_exact_multicommodity_flow_",
+                "result must match the exact multicommodity-flow profile",
+            )
         return self
 
 

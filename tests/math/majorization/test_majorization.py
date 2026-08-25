@@ -1,11 +1,12 @@
 """Tests for majorization and matrix mixing operations."""
 
+from fractions import Fraction
+
 from jacobian._exact import CanonicalRational
 from jacobian.math.majorization._models import (
     BirkhoffDecompositionRequest,
     DoublyStochasticCheckRequest,
     MajorizationCheckRequest,
-    RationalMatrix,
     RationalVector,
     SchurHornCheckRequest,
     TTransformSequenceRequest,
@@ -19,6 +20,7 @@ from jacobian.math.majorization._operations import (
     compute_t_transform_sequence,
     compute_weak_majorization_check,
 )
+from jacobian.math.matrices.values import RationalMatrix, rational_matrix_from_fractions
 
 
 def cr(n: str, d: str = "1") -> CanonicalRational:
@@ -124,12 +126,21 @@ class TestWeakMajorization:
 
 
 class TestDoublyStochastic:
+    def test_accepts_the_canonical_matrix_value_without_an_adapter(self) -> None:
+        matrix = rational_matrix_from_fractions(
+            ((Fraction(1), Fraction(0)), (Fraction(0), Fraction(1)))
+        )
+
+        result = compute_doubly_stochastic_check(
+            DoublyStochasticCheckRequest(matrix=matrix)
+        )
+
+        assert result.is_doubly_stochastic
+
     def test_identity(self) -> None:
         result = compute_doubly_stochastic_check(
             DoublyStochasticCheckRequest(
                 matrix=RationalMatrix(
-                    row_labels=["a", "b"],
-                    col_labels=["a", "b"],
                     entries=(
                         (cr("1", "1"), cr("0", "1")),
                         (cr("0", "1"), cr("1", "1")),
@@ -143,8 +154,6 @@ class TestDoublyStochastic:
         result = compute_doubly_stochastic_check(
             DoublyStochasticCheckRequest(
                 matrix=RationalMatrix(
-                    row_labels=["a", "b"],
-                    col_labels=["a", "b"],
                     entries=(
                         (cr("2", "1"), cr("0", "1")),
                         (cr("0", "1"), cr("1", "1")),
@@ -159,8 +168,6 @@ class TestDoublyStochastic:
         result = compute_doubly_stochastic_check(
             DoublyStochasticCheckRequest(
                 matrix=RationalMatrix(
-                    row_labels=["a", "b"],
-                    col_labels=["a", "b"],
                     entries=(
                         (cr("-1", "1"), cr("2", "1")),
                         (cr("2", "1"), cr("-1", "1")),
@@ -178,8 +185,6 @@ class TestBirkhoff:
         result = compute_birkhoff_decomposition(
             BirkhoffDecompositionRequest(
                 matrix=RationalMatrix(
-                    row_labels=["a", "b"],
-                    col_labels=["a", "b"],
                     entries=(
                         (cr("0", "1"), cr("1", "1")),
                         (cr("1", "1"), cr("0", "1")),
@@ -195,8 +200,6 @@ class TestBirkhoff:
         result = compute_birkhoff_decomposition(
             BirkhoffDecompositionRequest(
                 matrix=RationalMatrix(
-                    row_labels=["a", "b"],
-                    col_labels=["a", "b"],
                     entries=(
                         (cr("1", "2"), cr("1", "2")),
                         (cr("1", "2"), cr("1", "2")),

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
@@ -36,7 +37,10 @@ class GraphEdge(StrictModel):
     @model_validator(mode="after")
     def require_distinct(self) -> Self:
         if self.source == self.target:
-            raise ValueError("edge endpoints must be distinct")
+            raise PydanticCustomError(
+                "graph.edge_endpoints_must_be_distinct",
+                "edge endpoints must be distinct",
+            )
         return self
 
 
@@ -53,7 +57,10 @@ class ResultGraphEdge(StrictModel):
     @model_validator(mode="after")
     def require_distinct(self) -> Self:
         if self.source == self.target:
-            raise ValueError("edge endpoints must be distinct")
+            raise PydanticCustomError(
+                "graph.edge_endpoints_must_be_distinct",
+                "edge endpoints must be distinct",
+            )
         return self
 
 
@@ -71,14 +78,19 @@ class SimpleGraph(StrictModel):
                 0 <= edge.source < self.vertex_count
                 and 0 <= edge.target < self.vertex_count
             ):
-                raise ValueError("edge vertices must be in 0..vertex_count-1")
+                raise PydanticCustomError(
+                    "graph.edge_vertices_must_be_in_0_vertex_count_1",
+                    "edge vertices must be in 0..vertex_count-1",
+                )
             key = (
                 (edge.source, edge.target)
                 if edge.source < edge.target
                 else (edge.target, edge.source)
             )
             if key in seen:
-                raise ValueError("edges must be unique")
+                raise PydanticCustomError(
+                    "graph.edges_must_be_unique", "edges must be unique"
+                )
             seen.add(key)
         return self
 
@@ -109,8 +121,13 @@ class SubgraphRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_vertices(self) -> Self:
         if len(set(self.vertices)) != len(self.vertices):
-            raise ValueError("vertices must be unique")
+            raise PydanticCustomError(
+                "graph.vertices_must_be_unique", "vertices must be unique"
+            )
         for v in self.vertices:
             if not (0 <= v < self.graph.vertex_count):
-                raise ValueError("vertices must be in 0..vertex_count-1")
+                raise PydanticCustomError(
+                    "graph.vertices_must_be_in_0_vertex_count_1",
+                    "vertices must be in 0..vertex_count-1",
+                )
         return self

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
@@ -13,6 +14,12 @@ from jacobian.math.finite_stochastic_processes.values import (
     FiniteRandomVariable,
     FiniteSigmaAlgebra,
 )
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by finite stochastic contracts."""
+
+    return PydanticCustomError(f"finite_stochastic_process.{reason}", message)
 
 
 class FromObservationRequest(StrictModel):
@@ -24,7 +31,10 @@ class FromObservationRequest(StrictModel):
     @model_validator(mode="after")
     def require_observation_matches_space(self) -> Self:
         if len(self.observation) != len(self.space.samples):
-            raise ValueError("observation must have one entry per sample")
+            raise _validation_error(
+                "observation_length_mismatch",
+                "observation must have one entry per sample",
+            )
         return self
 
 
@@ -37,7 +47,10 @@ class JoinRequest(StrictModel):
     @model_validator(mode="after")
     def require_same_space(self) -> Self:
         if self.sigma1.space != self.sigma2.space:
-            raise ValueError("sigma algebras must share the same probability space")
+            raise _validation_error(
+                "sigma_space_mismatch",
+                "sigma algebras must share the same probability space",
+            )
         return self
 
 
@@ -50,8 +63,9 @@ class ConditionalExpectationRequest(StrictModel):
     @model_validator(mode="after")
     def require_same_space(self) -> Self:
         if self.rv.space != self.sigma.space:
-            raise ValueError(
-                "random variable and sigma algebra must share the same probability space"
+            raise _validation_error(
+                "conditional_expectation_space_mismatch",
+                "random variable and sigma algebra must share the same probability space",
             )
         for value in self.rv.values:
             require_bounded_rational(
@@ -72,7 +86,10 @@ class FiltrationRequest(StrictModel):
     def require_observations_match_space(self) -> Self:
         for obs in self.observations:
             if len(obs) != len(self.space.samples):
-                raise ValueError("observation must have one entry per sample")
+                raise _validation_error(
+                    "observation_length_mismatch",
+                    "observation must have one entry per sample",
+                )
         return self
 
 
@@ -86,7 +103,9 @@ class DoobMartingaleRequest(StrictModel):
     @model_validator(mode="after")
     def require_payoff_matches_space(self) -> Self:
         if len(self.payoff) != len(self.space.samples):
-            raise ValueError("payoff must have one entry per sample")
+            raise _validation_error(
+                "payoff_length_mismatch", "payoff must have one entry per sample"
+            )
         for value in self.payoff:
             require_bounded_rational(
                 value,
@@ -95,7 +114,10 @@ class DoobMartingaleRequest(StrictModel):
             )
         for obs in self.observations:
             if len(obs) != len(self.space.samples):
-                raise ValueError("observation must have one entry per sample")
+                raise _validation_error(
+                    "observation_length_mismatch",
+                    "observation must have one entry per sample",
+                )
         return self
 
 

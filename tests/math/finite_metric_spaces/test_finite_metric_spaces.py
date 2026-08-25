@@ -104,46 +104,67 @@ def test_gromov_hyperbolicity_cycle_c5_half_integer() -> None:
 
 
 def test_contract_rejects_nonsymmetric() -> None:
-    with pytest.raises(ValidationError, match="symmetric"):
+    with pytest.raises(ValidationError) as error:
         FiniteMetricSpace(
             point_count=2,
             distances=((0, 1), (2, 0)),
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "finite_metric_space.distance_matrix_asymmetric"
+    )
 
 
 def test_contract_rejects_nonzero_diagonal() -> None:
-    with pytest.raises(ValidationError, match="zero"):
+    with pytest.raises(ValidationError) as error:
         FiniteMetricSpace(
             point_count=2,
             distances=((1, 1), (1, 0)),
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "finite_metric_space.distance_diagonal_nonzero"
+    )
 
 
 def test_contract_rejects_triangle_inequality() -> None:
-    with pytest.raises(ValidationError, match="triangle inequality"):
+    with pytest.raises(ValidationError) as error:
         FiniteMetricSpace(
             point_count=3,
             distances=((0, 1, 3), (1, 0, 1), (3, 1, 0)),
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "finite_metric_space.distance_triangle_inequality_violation"
+    )
 
 
 def test_contract_rejects_zero_distance() -> None:
-    with pytest.raises(ValidationError, match="positive distance"):
+    with pytest.raises(ValidationError) as error:
         FiniteMetricSpace(
             point_count=3,
             distances=((0, 0, 1), (0, 0, 1), (1, 1, 0)),
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "finite_metric_space.distance_nonpositive_between_distinct_points"
+    )
 
 
 def test_contract_rejects_oversized_distance() -> None:
-    with pytest.raises(ValidationError, match="less than or equal to"):
+    with pytest.raises(ValidationError) as error:
         FiniteMetricSpace(
             point_count=2,
             distances=((0, MAX_DISTANCE + 1), (MAX_DISTANCE + 1, 0)),
         )
+    assert error.value.errors()[0]["type"] == "less_than_equal"
 
 
 def test_ball_rejects_center_out_of_range() -> None:
     ms = _ms([[0, 1, 2], [1, 0, 1], [2, 1, 0]])
-    with pytest.raises(ValidationError, match="within the metric space"):
+    with pytest.raises(ValidationError) as error:
         BallRequest(metric_space=ms, center=3, radius=1)
+    assert (
+        error.value.errors()[0]["type"]
+        == "finite_metric_space.ball_center_out_of_range"
+    )

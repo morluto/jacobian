@@ -5,10 +5,14 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import ConfigDict, Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalLimits, encode_strict_json
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    SimpleUndirectedGraph,
+    simple_undirected_graph_wire_bytes,
+)
 
 # Exhaustive backtracking search over graph morphisms is exponential in the
 # vertex count.  This dedicated bound keeps every search-based morphism
@@ -19,10 +23,6 @@ MORPHISM_MAX_VERTICES = 64
 # This reserved envelope covers the result wrapper and field names after those
 # representation-dependent components.
 _RESULT_ENVELOPE_RESERVE_BYTES = 1_024
-
-
-def _graph_wire_bytes(graph: SimpleUndirectedGraph) -> int:
-    return len(encode_strict_json(graph.model_dump(mode="json")))
 
 
 def _label_wire_bytes(labels: tuple[str, ...]) -> int:
@@ -37,10 +37,11 @@ def _require_output_headroom(
     )
     output_limit = CanonicalLimits().max_output_bytes
     if estimated_result_bytes > output_limit:
-        raise ValueError(
+        raise PydanticCustomError(
+            "graph.operation_result_retains_its_sources_would_exceed",
             f"the {operation} result retains its sources and would exceed the "
             f"{output_limit}-byte canonical output limit; "
-            "shorten vertex labels or shrink the graphs"
+            "shorten vertex labels or shrink the graphs",
         )
 
 
@@ -68,14 +69,16 @@ class GraphVertexMap(StrictModel):
         expected_sources = tuple(sorted(self.source_graph.vertices))
         actual_sources = tuple(row.source_vertex for row in self.rows)
         if actual_sources != expected_sources:
-            raise ValueError(
+            raise PydanticCustomError(
+                "graph.vertex_map_rows_cover_every_source_vertex",
                 "vertex-map rows must cover every source vertex exactly once "
-                "in canonical source-label order"
+                "in canonical source-label order",
             )
         target_vertices = set(self.target_graph.vertices)
         if any(row.target_vertex not in target_vertices for row in self.rows):
-            raise ValueError(
-                "vertex-map targets must be declared target-graph vertices"
+            raise PydanticCustomError(
+                "graph.vertex_map_targets_declared_target_vertices",
+                "vertex-map targets must be declared target-graph vertices",
             )
 
         max_obstruction_label_bytes = max(
@@ -91,9 +94,10 @@ class GraphVertexMap(StrictModel):
             + _RESULT_ENVELOPE_RESERVE_BYTES
         )
         if estimated_result_bytes > CanonicalLimits().max_output_bytes:
-            raise ValueError(
+            raise PydanticCustomError(
+                "graph.source_bound_homomorphism_result_would_exceed_canonicallimits",
                 "the source-bound graph-homomorphism result would exceed the "
-                f"{CanonicalLimits().max_output_bytes}-byte canonical output limit"
+                f"{CanonicalLimits().max_output_bytes}-byte canonical output limit",
             )
         return self
 
@@ -121,7 +125,10 @@ class GraphHomomorphism(StrictModel):
     @model_validator(mode="after")
     def require_edge_preservation(self) -> Self:
         if _first_homomorphism_obstruction(self.vertex_map) is not None:
-            raise ValueError("a graph homomorphism must preserve every source edge")
+            raise PydanticCustomError(
+                "graph.a_graph_homomorphism_must_preserve_every_source_",
+                "a graph homomorphism must preserve every source edge",
+            )
         return self
 
 
@@ -136,14 +143,21 @@ class GraphHomomorphismObstruction(StrictModel):
     def require_first_replayable_obstruction(self) -> Self:
         expected = _first_homomorphism_obstruction(self.vertex_map)
         if expected is None:
-            raise ValueError("a homomorphism has no edge-image obstruction")
+            raise PydanticCustomError(
+                "graph.a_homomorphism_has_no_edge_image_obstruction",
+                "a homomorphism has no edge-image obstruction",
+            )
         source_edge, image_vertices = expected
         if self.source_edge != source_edge:
-            raise ValueError(
-                "obstruction source_edge must be the first failing source edge"
+            raise PydanticCustomError(
+                "graph.obstruction_source_edge_first_failing_source_edge",
+                "obstruction source_edge must be the first failing source edge",
             )
         if self.image_vertices != image_vertices:
-            raise ValueError("obstruction image_vertices must replay the submitted map")
+            raise PydanticCustomError(
+                "graph.obstruction_image_vertices_must_replay_the_submi",
+                "obstruction image_vertices must replay the submitted map",
+            )
         return self
 
 
@@ -175,17 +189,27 @@ class HomomorphismCheckResult(StrictModel):
     def require_replayable_result(self) -> Self:
         if self.status == "HOMOMORPHISM":
             if self.obstruction is not None:
-                raise ValueError("a homomorphism result must not carry an obstruction")
+                raise PydanticCustomError(
+                    "graph.a_homomorphism_result_must_not_carry_an_obstruct",
+                    "a homomorphism result must not carry an obstruction",
+                )
             if self.homomorphism is None:
-                raise ValueError(
-                    "a HOMOMORPHISM result must retain the checked source-bound map"
+                raise PydanticCustomError(
+                    "graph.homomorphism_result_retain_checked_source_bound_map",
+                    "a HOMOMORPHISM result must retain the checked source-bound map",
                 )
             return self
 
         if self.homomorphism is not None:
-            raise ValueError("a non-homomorphism result must not carry a homomorphism")
+            raise PydanticCustomError(
+                "graph.a_non_homomorphism_result_must_not_carry_a_homom",
+                "a non-homomorphism result must not carry a homomorphism",
+            )
         if self.obstruction is None:
-            raise ValueError("a non-homomorphism result requires its first obstruction")
+            raise PydanticCustomError(
+                "graph.a_non_homomorphism_result_requires_its_first_obs",
+                "a non-homomorphism result requires its first obstruction",
+            )
         return self
 
 
@@ -247,24 +271,29 @@ class FixedLengthCycleRequest(StrictModel):
     def require_length_within_graph(self) -> Self:
         n = len(self.graph.vertices)
         if n > MORPHISM_MAX_VERTICES:
-            raise ValueError(
-                f"graph must have at most {MORPHISM_MAX_VERTICES} vertices"
+            raise PydanticCustomError(
+                "graph.have_at_most_morphism_max_vertices_vertices",
+                f"graph must have at most {MORPHISM_MAX_VERTICES} vertices",
             )
         if self.length > n:
-            raise ValueError("cycle length must not exceed the vertex count")
+            raise PydanticCustomError(
+                "graph.cycle_length_must_not_exceed_the_vertex_count",
+                "cycle length must not exceed the vertex count",
+            )
         # Conservative worst-case path-count bound: n * d^(length-1).
         d_max = _canonical_max_degree(self.graph)
         work = n * (d_max ** (self.length - 1))
         if work > _MAX_SEARCH_PATHS_PER_PASS:
-            raise ValueError(
+            raise PydanticCustomError(
+                "graph.fixed_length_cycle_search_exceeds_max_search",
                 "fixed-length cycle search exceeds the "
                 f"{_MAX_SEARCH_PATHS_PER_PASS}-path per-pass budget "
-                f"({MAX_CYCLE_SEARCH_PATHS} including validation replay)"
+                f"({MAX_CYCLE_SEARCH_PATHS} including validation replay)",
             )
         # The result echoes its source graph; reserve output headroom for
         # the envelope and witness labels beyond that echo.
         _require_output_headroom(
-            _graph_wire_bytes(self.graph),
+            simple_undirected_graph_wire_bytes(self.graph),
             _label_wire_bytes(self.graph.vertices),
             "fixed-length cycle",
         )
@@ -276,12 +305,17 @@ def _cycle_source_edges(
 ) -> tuple[set[str], set[tuple[str, str]]]:
     n = len(graph.vertices)
     if n > 256 or len(graph.edges) > 32640:
-        raise ValueError("source graph exceeds the canonical bounds")
+        raise PydanticCustomError(
+            "graph.source_graph_exceeds_the_canonical_bounds",
+            "source graph exceeds the canonical bounds",
+        )
     vertex_set = set(graph.vertices)
     edge_set: set[tuple[str, str]] = set()
     for u, v in graph.edges:
         if u not in vertex_set or v not in vertex_set:
-            raise ValueError("edge vertices must be declared")
+            raise PydanticCustomError(
+                "graph.edge_vertices_must_be_declared", "edge vertices must be declared"
+            )
         edge_set.add((u, v) if u < v else (v, u))
     return vertex_set, edge_set
 
@@ -293,43 +327,60 @@ def _validate_cycle_witness(
     edge_set: set[tuple[str, str]],
 ) -> None:
     if len(cycle) != length:
-        raise ValueError("an EXISTS witness must list exactly length vertices")
+        raise PydanticCustomError(
+            "graph.an_exists_witness_must_list_exactly_length_verti",
+            "an EXISTS witness must list exactly length vertices",
+        )
     if len(set(cycle)) != length:
-        raise ValueError("a simple cycle witness must have distinct vertices")
+        raise PydanticCustomError(
+            "graph.a_simple_cycle_witness_must_have_distinct_vertic",
+            "a simple cycle witness must have distinct vertices",
+        )
     if any(label not in vertex_set for label in cycle):
-        raise ValueError("cycle vertex not in source graph")
+        raise PydanticCustomError(
+            "graph.cycle_vertex_not_in_source_graph", "cycle vertex not in source graph"
+        )
     for index in range(length):
         u = cycle[index]
         v = cycle[(index + 1) % length]
         key = (u, v) if u < v else (v, u)
         if key not in edge_set:
-            raise ValueError("a cycle witness must follow graph edges")
+            raise PydanticCustomError(
+                "graph.a_cycle_witness_must_follow_graph_edges",
+                "a cycle witness must follow graph edges",
+            )
 
 
 def _validate_negative_cycle(graph: SimpleUndirectedGraph, length: int) -> None:
     n = len(graph.vertices)
     if length > n:
-        raise ValueError("cycle length must not exceed the vertex count")
+        raise PydanticCustomError(
+            "graph.cycle_length_must_not_exceed_the_vertex_count",
+            "cycle length must not exceed the vertex count",
+        )
     if length > MORPHISM_MAX_VERTICES or n > MORPHISM_MAX_VERTICES:
-        raise ValueError(
+        raise PydanticCustomError(
+            "graph.does_exist_decision_requires_retained_source_satisfy",
             "a DOES_NOT_EXIST decision requires the retained source "
             f"to satisfy the {MORPHISM_MAX_VERTICES}-vertex "
-            f"{MAX_CYCLE_SEARCH_PATHS}-path request budget"
+            f"{MAX_CYCLE_SEARCH_PATHS}-path request budget",
         )
     d_max = _canonical_max_degree(graph)
     work = n * (d_max ** (length - 1))
     if work > _MAX_SEARCH_PATHS_PER_PASS:
-        raise ValueError(
+        raise PydanticCustomError(
+            "graph.does_exist_decision_requires_retained_source_satisfy",
             "a DOES_NOT_EXIST decision requires the retained source "
             f"to satisfy the {MORPHISM_MAX_VERTICES}-vertex "
-            f"{_MAX_SEARCH_PATHS_PER_PASS}-path request budget"
+            f"{_MAX_SEARCH_PATHS_PER_PASS}-path request budget",
         )
     from jacobian.math.graphs.morphisms._operations import find_cycle_of_length
 
     if find_cycle_of_length(graph.vertices, graph.edges, length) is not None:
-        raise ValueError(
+        raise PydanticCustomError(
+            "graph.does_exist_decision_contradicts_retained_which_contains",
             "a DOES_NOT_EXIST decision contradicts the retained "
-            f"graph, which contains a cycle of length {length}"
+            f"graph, which contains a cycle of length {length}",
         )
 
 
@@ -366,7 +417,10 @@ class FixedLengthCycleResult(StrictModel):
             _validate_cycle_witness(self.cycle, self.length, vertex_set, edge_set)
         else:
             if self.cycle:
-                raise ValueError("a DOES_NOT_EXIST result must not carry a witness")
+                raise PydanticCustomError(
+                    "graph.a_does_not_exist_result_must_not_carry_a_witness",
+                    "a DOES_NOT_EXIST result must not carry a witness",
+                )
             _validate_negative_cycle(self.graph, self.length)
         return self
 
@@ -409,11 +463,15 @@ class SubgraphPatternFindRequest(StrictModel):
     @model_validator(mode="after")
     def require_search_bounded(self) -> Self:
         if len(self.pattern.vertices) > MORPHISM_MAX_VERTICES:
-            raise ValueError(
-                f"pattern must have at most {MORPHISM_MAX_VERTICES} vertices"
+            raise PydanticCustomError(
+                "graph.pattern_have_at_most_morphism_max_vertices",
+                f"pattern must have at most {MORPHISM_MAX_VERTICES} vertices",
             )
         if len(self.pattern.vertices) > len(self.host.vertices):
-            raise ValueError("pattern must not have more vertices than the host")
+            raise PydanticCustomError(
+                "graph.pattern_must_not_have_more_vertices_than_the_hos",
+                "pattern must not have more vertices than the host",
+            )
         # Conservative worst-case assignment count: P(n, k) injective maps.
         n = len(self.host.vertices)
         k = len(self.pattern.vertices)
@@ -421,16 +479,18 @@ class SubgraphPatternFindRequest(StrictModel):
         for step in range(k):
             assignments *= n - step
             if assignments > _MAX_SEARCH_PATHS_PER_PASS:
-                raise ValueError(
+                raise PydanticCustomError(
+                    "graph.subgraph_pattern_search_exceeds_max_search_paths",
                     "subgraph-pattern search exceeds the "
                     f"{_MAX_SEARCH_PATHS_PER_PASS}-assignment per-pass budget "
-                    f"({MAX_CYCLE_SEARCH_PATHS} including validation replay)"
+                    f"({MAX_CYCLE_SEARCH_PATHS} including validation replay)",
                 )
 
         # The result echoes both source graphs; reserve output headroom for
         # the envelope and witness labels beyond those echoes.
         _require_output_headroom(
-            _graph_wire_bytes(self.pattern) + _graph_wire_bytes(self.host),
+            simple_undirected_graph_wire_bytes(self.pattern)
+            + simple_undirected_graph_wire_bytes(self.host),
             _label_wire_bytes(self.host.vertices),
             "subgraph-pattern",
         )
@@ -456,9 +516,10 @@ def _replay_subgraph_embedding(
             max_candidate_checks=_MAX_SEARCH_PATHS_PER_PASS,
         )
     except SearchBudgetExceededError as exc:
-        raise ValueError(
+        raise PydanticCustomError(
+            "graph.does_exist_decision_exceeded_retained_source_candidate",
             "a DOES_NOT_EXIST decision exceeded the retained source "
-            "candidate-check budget during validation replay"
+            "candidate-check budget during validation replay",
         ) from exc
 
 
@@ -468,24 +529,39 @@ def _validate_embedding_witness(
     vertex_map: tuple[str, ...],
 ) -> None:
     if len(vertex_map) != len(pattern.vertices):
-        raise ValueError("an EXISTS result must map every pattern vertex exactly once")
+        raise PydanticCustomError(
+            "graph.an_exists_result_must_map_every_pattern_vertex_e",
+            "an EXISTS result must map every pattern vertex exactly once",
+        )
     if len(set(vertex_map)) != len(vertex_map):
-        raise ValueError("a subgraph embedding must be injective")
+        raise PydanticCustomError(
+            "graph.a_subgraph_embedding_must_be_injective",
+            "a subgraph embedding must be injective",
+        )
     host_set = set(host.vertices)
     if any(v not in host_set for v in vertex_map):
-        raise ValueError("vertex_map entries must be valid host vertices")
+        raise PydanticCustomError(
+            "graph.vertex_map_entries_must_be_valid_host_vertices",
+            "vertex_map entries must be valid host vertices",
+        )
     host_edges = {(u, v) if u < v else (v, u) for u, v in host.edges}
     for u_label, v_label in pattern.edges:
         try:
             u_idx = pattern.vertices.index(u_label)
             v_idx = pattern.vertices.index(v_label)
         except ValueError:
-            raise ValueError("pattern edge vertices must be declared") from None
+            raise PydanticCustomError(
+                "graph.pattern_edge_vertices_must_be_declared",
+                "pattern edge vertices must be declared",
+            ) from None
         mapped_u = vertex_map[u_idx]
         mapped_v = vertex_map[v_idx]
         key = (mapped_u, mapped_v) if mapped_u < mapped_v else (mapped_v, mapped_u)
         if key not in host_edges:
-            raise ValueError("an embedding must preserve every pattern edge")
+            raise PydanticCustomError(
+                "graph.an_embedding_must_preserve_every_pattern_edge",
+                "an embedding must preserve every pattern edge",
+            )
 
 
 def _validate_negative_embedding(
@@ -504,15 +580,17 @@ def _validate_negative_embedding(
         or p_n > h_n
         or assignments > _MAX_SEARCH_PATHS_PER_PASS
     ):
-        raise ValueError(
+        raise PydanticCustomError(
+            "graph.does_exist_decision_requires_retained_sources_satisfy",
             "a DOES_NOT_EXIST decision requires the retained sources "
             f"to satisfy the {MORPHISM_MAX_VERTICES}-vertex "
-            f"{_MAX_SEARCH_PATHS_PER_PASS}-assignment request budget"
+            f"{_MAX_SEARCH_PATHS_PER_PASS}-assignment request budget",
         )
     if _replay_subgraph_embedding(pattern, host) is not None:
-        raise ValueError(
+        raise PydanticCustomError(
+            "graph.does_exist_decision_contradicts_retained_graphs_which",
             "a DOES_NOT_EXIST decision contradicts the retained "
-            "graphs, which admit an embedding"
+            "graphs, which admit an embedding",
         )
 
 
@@ -551,9 +629,15 @@ class SubgraphPatternFindResult(StrictModel):
             # A budget-exhausted attempt makes no mathematical claim: it
             # must carry neither a witness nor an implicit negative.
             if self.vertex_map:
-                raise ValueError("a BUDGET_EXCEEDED result must not carry a vertex map")
+                raise PydanticCustomError(
+                    "graph.a_budget_exceeded_result_must_not_carry_a_vertex",
+                    "a BUDGET_EXCEEDED result must not carry a vertex map",
+                )
         else:
             if self.vertex_map:
-                raise ValueError("a DOES_NOT_EXIST result must not carry a vertex map")
+                raise PydanticCustomError(
+                    "graph.a_does_not_exist_result_must_not_carry_a_vertex_",
+                    "a DOES_NOT_EXIST result must not carry a vertex map",
+                )
             _validate_negative_embedding(self.pattern, self.host)
         return self

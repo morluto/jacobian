@@ -6,8 +6,13 @@ from math import factorial
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    CanonicalRational,
+    canonical_rational_component_digits,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
 from jacobian.canonical import (
     CanonicalizationError,
@@ -35,10 +40,6 @@ MAX_RATIONAL_SPECTRUM_SHIFTED_DIGITS = 129
 MAX_RATIONAL_SPECTRUM_RANK_WORK = 1_048_576
 MAX_RATIONAL_SPECTRUM_MINOR_DIGITS = 132_256
 MAX_RATIONAL_SPECTRUM_RESULT_BYTES = 384 * 1024
-
-
-def _component_digits(value: CanonicalRational) -> int:
-    return max(len(value.num.lstrip("-")), len(value.den))
 
 
 class RationalSpectrumMultiplicityClaim(StrictModel):
@@ -76,18 +77,23 @@ class RationalSpectrumClaimRequest(StrictModel):
     def require_admitted_complete_claim(self) -> Self:
         order = len(self.matrix.entries)
         if order != len(self.matrix.entries[0]):
-            raise ValueError("rational spectrum claims require a square matrix")
+            raise _validation_error(
+                "shape_mismatch", "rational spectrum claims require a square matrix"
+            )
         if order > MAX_RATIONAL_SPECTRUM_ORDER:
-            raise ValueError(
+            raise _validation_error(
+                "budget_exceeded",
                 "rational spectrum claims support matrix order at most "
-                f"{MAX_RATIONAL_SPECTRUM_ORDER}"
+                f"{MAX_RATIONAL_SPECTRUM_ORDER}",
             )
         if any(
             self.matrix.entries[row][column] != self.matrix.entries[column][row]
             for row in range(order)
             for column in range(row + 1, order)
         ):
-            raise ValueError("rational spectrum claims require a symmetric matrix")
+            raise _validation_error(
+                "budget_exceeded", "rational spectrum claims require a symmetric matrix"
+            )
 
         require_matrix_scalar_digits(
             self.matrix.entries,
@@ -98,8 +104,9 @@ class RationalSpectrumClaimRequest(StrictModel):
             entry.num != "0" for row in self.matrix.entries for entry in row
         )
         if nonzero_entries > MAX_RATIONAL_SPECTRUM_NONZERO_ENTRIES:
-            raise ValueError(
-                "rational spectrum matrix exceeds the nonzero-entry budget"
+            raise _validation_error(
+                "budget_exceeded",
+                "rational spectrum matrix exceeds the nonzero-entry budget",
             )
         eigenvalues = tuple(claim.eigenvalue for claim in self.claimed_profile)
         for eigenvalue in eigenvalues:
@@ -109,10 +116,13 @@ class RationalSpectrumClaimRequest(StrictModel):
                 label="claimed eigenvalue",
             )
         if len(set(eigenvalues)) != len(eigenvalues):
-            raise ValueError("claimed rational eigenvalues must be pairwise distinct")
+            raise _validation_error(
+                "budget_exceeded",
+                "claimed rational eigenvalues must be pairwise distinct",
+            )
 
         shifted_digits = max(
-            _component_digits(
+            canonical_rational_component_digits(
                 CanonicalRational.from_fraction(
                     self.matrix.entries[index][index].as_fraction()
                     - eigenvalue.as_fraction()
@@ -122,14 +132,16 @@ class RationalSpectrumClaimRequest(StrictModel):
             for index in range(order)
         )
         if shifted_digits > MAX_RATIONAL_SPECTRUM_SHIFTED_DIGITS:
-            raise ValueError(
-                "shifted diagonal entries exceed the rational spectrum digit budget"
+            raise _validation_error(
+                "budget_exceeded",
+                "shifted diagonal entries exceed the rational spectrum digit budget",
             )
 
         rank_work = len(eigenvalues) * order**3
         if rank_work > MAX_RATIONAL_SPECTRUM_RANK_WORK:
-            raise ValueError(
-                "shifted-rank computations exceed the aggregate work budget"
+            raise _validation_error(
+                "budget_exceeded",
+                "shifted-rank computations exceed the aggregate work budget",
             )
 
         # Clearing each row's denominators gives integer entries with at most
@@ -137,7 +149,9 @@ class RationalSpectrumClaimRequest(StrictModel):
         # order! terms, each a product of at most order such entries.
         minor_digits = order * order * shifted_digits + len(str(factorial(order))) + 1
         if minor_digits > MAX_RATIONAL_SPECTRUM_MINOR_DIGITS:
-            raise ValueError("exact shifted-rank minors exceed the digit budget")
+            raise _validation_error(
+                "budget_exceeded", "exact shifted-rank minors exceed the digit budget"
+            )
 
         source_cells = order * order
         result_bytes = (
@@ -146,7 +160,10 @@ class RationalSpectrumClaimRequest(StrictModel):
             + len(eigenvalues) * (4 * MAX_RATIONAL_SPECTRUM_INPUT_DIGITS + 256)
         )
         if result_bytes > MAX_RATIONAL_SPECTRUM_RESULT_BYTES:
-            raise ValueError("rational spectrum ledger exceeds the result-size budget")
+            raise _validation_error(
+                "budget_exceeded",
+                "rational spectrum ledger exceeds the result-size budget",
+            )
         return self
 
 
@@ -223,9 +240,10 @@ class RationalSpectrumClaimResult(StrictModel):
             and self.first_failed_claim_index == mismatch
         )
         if not expected:
-            raise ValueError(
+            raise _validation_error(
+                "shape_mismatch",
                 "rational spectrum result does not match exact replay from the "
-                "retained source and claim"
+                "retained source and claim",
             )
         return self
 
@@ -253,10 +271,14 @@ class SymmetricMatrixRequest(StrictModel):
         seen: set[tuple[int, int]] = set()
         for e in self.entries:
             if e.row >= self.dimension or e.col >= self.dimension:
-                raise ValueError("entry indices must be < dimension")
+                raise _validation_error(
+                    "shape_mismatch", "entry indices must be < dimension"
+                )
             key = (min(e.row, e.col), max(e.row, e.col))
             if key in seen:
-                raise ValueError("symmetric matrix entries must not conflict")
+                raise _validation_error(
+                    "invariant_mismatch", "symmetric matrix entries must not conflict"
+                )
             seen.add(key)
         source = _canonical_source_matrix(self)
         output_limit = CanonicalLimits().max_output_bytes
@@ -265,10 +287,11 @@ class SymmetricMatrixRequest(StrictModel):
         except CanonicalizationError:
             retained_bytes = output_limit + 1
         if retained_bytes + _RESULT_ENVELOPE_RESERVE_BYTES > output_limit:
-            raise ValueError(
+            raise _validation_error(
+                "invariant_mismatch",
                 "the inertia result retains its source matrix and would "
                 f"exceed the {output_limit}-byte canonical output limit; "
-                "use fewer or smaller-magnitude entries"
+                "use fewer or smaller-magnitude entries",
             )
         return self
 
@@ -306,28 +329,36 @@ class InertiaResult(StrictModel):
 
         dimension = len(self.matrix.entries)
         if any(len(row) != dimension for row in self.matrix.entries):
-            raise ValueError("retained source matrix must be square")
+            raise _validation_error(
+                "shape_mismatch", "retained source matrix must be square"
+            )
         if any(
             self.matrix.entries[row][col] != self.matrix.entries[col][row]
             for row in range(dimension)
             for col in range(row + 1, dimension)
         ):
-            raise ValueError("retained source matrix must be symmetric")
+            raise _validation_error(
+                "shape_mismatch", "retained source matrix must be symmetric"
+            )
         if self.n_positive + self.n_negative + self.n_zero != dimension:
-            raise ValueError("inertia counts must sum to the matrix dimension")
+            raise _validation_error(
+                "shape_mismatch", "inertia counts must sum to the matrix dimension"
+            )
         replayed = _symmetric_inertia(_dense_fractions(self.matrix))
         if replayed != (self.n_positive, self.n_negative, self.n_zero):
-            raise ValueError(
+            raise _validation_error(
+                "shape_mismatch",
                 "inertia counts must be the exact Sylvester inertia of the "
-                "retained source matrix"
+                "retained source matrix",
             )
         expected_label = _definiteness_label(
             self.n_positive, self.n_negative, self.n_zero
         )
         if self.definiteness != expected_label:
-            raise ValueError(
+            raise _validation_error(
+                "shape_mismatch",
                 f"definiteness label must agree with the counts; expected "
-                f"{expected_label!r}"
+                f"{expected_label!r}",
             )
         return self
 
@@ -347,13 +378,18 @@ class FarkasCertificateRequest(StrictModel):
     def require_valid(self) -> Self:
         n_constraints = len(self.constraint_matrix)
         if len(self.rhs_vector) != n_constraints:
-            raise ValueError("rhs_vector length must match constraint count")
+            raise _validation_error(
+                "shape_mismatch", "rhs_vector length must match constraint count"
+            )
         if len(self.multipliers) != n_constraints:
-            raise ValueError("multipliers length must match constraint count")
+            raise _validation_error(
+                "shape_mismatch", "multipliers length must match constraint count"
+            )
         widths = {len(row) for row in self.constraint_matrix}
         if len(widths) != 1 or 0 in widths:
-            raise ValueError(
-                "constraint matrix must be rectangular with positive row width"
+            raise _validation_error(
+                "shape_mismatch",
+                "constraint matrix must be rectangular with positive row width",
             )
         return self
 
@@ -378,3 +414,7 @@ __all__ = [
     "RationalSpectrumNullityLedgerEntry",
     "SymmetricMatrixRequest",
 ]
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"matrix.{reason}", message)

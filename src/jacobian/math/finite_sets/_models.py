@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -16,6 +17,10 @@ _MAX_COVERAGE_VALUES = 2 * _MAX_SET_SIZE
 _MAX_FINITE_SET_WIRE_BYTES = CanonicalLimits().max_output_bytes // 2
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"finite_set.{reason}", message)
+
+
 class FiniteIntegerSet(StrictModel):
     """One finite set of canonical integers, possibly empty."""
 
@@ -24,13 +29,16 @@ class FiniteIntegerSet(StrictModel):
     @model_validator(mode="after")
     def require_unique_elements(self) -> Self:
         if len(set(self.elements)) != len(self.elements):
-            raise ValueError("finite set elements must be unique")
+            raise _validation_error(
+                "elements_not_unique", "finite set elements must be unique"
+            )
         estimated = sum(len(value) + 3 for value in self.elements) + 64
         if estimated > _MAX_FINITE_SET_WIRE_BYTES:
-            raise ValueError(
+            raise _validation_error(
+                "wire_bytes_exceeded",
                 "finite set request exceeds the "
                 f"{_MAX_FINITE_SET_WIRE_BYTES}-byte transport envelope; "
-                "partition the set into ≤10MiB chunks and compose"
+                "partition the set into ≤10MiB chunks and compose",
             )
         return self
 
@@ -62,9 +70,15 @@ class FiniteSetCoverageResult(StrictModel):
         for name in ("missing", "duplicates", "outside"):
             values = [parse_canonical_integer(value) for value in getattr(self, name)]
             if values != sorted(set(values)):
-                raise ValueError(f"coverage {name} values must be sorted and unique")
+                raise _validation_error(
+                    "coverage_values_invalid",
+                    f"coverage {name} values must be sorted and unique",
+                )
         if self.holds != (not (self.missing or self.duplicates or self.outside)):
-            raise ValueError("coverage truth value and diagnostics disagree")
+            raise _validation_error(
+                "coverage_diagnostics_inconsistent",
+                "coverage truth value and diagnostics disagree",
+            )
         return self
 
 
@@ -79,9 +93,13 @@ class FiniteSetElementListResult(StrictModel):
     def require_sorted_unique(self) -> Self:
         values = [parse_canonical_integer(element) for element in self.elements]
         if values != sorted(values):
-            raise ValueError("set element list must be sorted")
+            raise _validation_error(
+                "elements_not_sorted", "set element list must be sorted"
+            )
         if len(set(values)) != len(values):
-            raise ValueError("set element list must be unique")
+            raise _validation_error(
+                "elements_not_unique", "set element list must be unique"
+            )
         return self
 
 

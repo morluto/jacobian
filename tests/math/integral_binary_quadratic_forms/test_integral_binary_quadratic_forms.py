@@ -32,6 +32,12 @@ def _positive_form(
     return PrimitivePositiveDefiniteBinaryQuadraticForm(a=a, b=b, c=c)
 
 
+def _assert_error_type(
+    exc_info: pytest.ExceptionInfo[ValidationError], code: str
+) -> None:
+    assert any(error["type"] == code for error in exc_info.value.errors())
+
+
 class TestCheck:
     def test_primitive_positive_definite(self) -> None:
         result = compute_check(BinaryQuadraticFormCheckRequest(a=1, b=1, c=1))
@@ -75,8 +81,11 @@ class TestCheck:
         result = compute_check(BinaryQuadraticFormCheckRequest(a=1, b=1, c=1))
         forged = result.model_dump(mode="json")
         forged["form"]["b"] = 0
-        with pytest.raises(ValidationError, match="match the checked coefficients"):
+        with pytest.raises(ValidationError) as exc_info:
             type(result).model_validate(forged)
+        _assert_error_type(
+            exc_info, "integral_binary_quadratic_form.checked_coefficients_mismatch"
+        )
 
 
 class TestEvaluate:
@@ -113,14 +122,20 @@ class TestEvaluate:
     ) -> None:
         # Q(10^8, 0) = 10^16 > 2^53 - 1 for [1,0,1]: the request must be
         # rejected at admission instead of failing transport canonicalization.
-        with pytest.raises(ValidationError, match="interoperable integer range"):
+        with pytest.raises(ValidationError) as exc_info:
             BinaryQuadraticFormEvaluateRequest(
                 form=_positive_form(1, 0, 1), x=100_000_000, y=0
             )
-        with pytest.raises(ValidationError, match="interoperable integer range"):
+        _assert_error_type(
+            exc_info, "integral_binary_quadratic_form.evaluated_value_range"
+        )
+        with pytest.raises(ValidationError) as exc_info:
             BinaryQuadraticFormEvaluateRequest(
                 form=_positive_form(1, 0, 1), x=-100_000_000, y=0
             )
+        _assert_error_type(
+            exc_info, "integral_binary_quadratic_form.evaluated_value_range"
+        )
 
     def test_evaluate_admits_the_largest_transportable_square(self) -> None:
         # 94_906_265 = floor_sqrt(2^53 - 1), so Q(x,0) = x^2 fits exactly.
@@ -135,14 +150,20 @@ class TestEvaluate:
     def test_evaluate_boundary_one_above_the_interoperable_bound_is_rejected(
         self,
     ) -> None:
-        with pytest.raises(ValidationError, match="interoperable integer range"):
+        with pytest.raises(ValidationError) as exc_info:
             BinaryQuadraticFormEvaluateRequest(
                 form=_positive_form(1, 0, 1), x=94_906_266, y=0
             )
-        with pytest.raises(ValidationError, match="interoperable integer range"):
+        _assert_error_type(
+            exc_info, "integral_binary_quadratic_form.evaluated_value_range"
+        )
+        with pytest.raises(ValidationError) as exc_info:
             BinaryQuadraticFormEvaluateRequest(
                 form=_positive_form(1, 0, 1), x=-94_906_266, y=0
             )
+        _assert_error_type(
+            exc_info, "integral_binary_quadratic_form.evaluated_value_range"
+        )
 
     def test_evaluate_admission_tracks_the_exact_value_not_the_worst_case(
         self,
@@ -165,8 +186,11 @@ class TestEvaluate:
         )
         forged = result.model_dump(mode="json")
         forged["x"] = 100_000_000
-        with pytest.raises(ValidationError, match="interoperable integer range"):
+        with pytest.raises(ValidationError) as exc_info:
             BinaryQuadraticFormEvaluateResult.model_validate(forged)
+        _assert_error_type(
+            exc_info, "integral_binary_quadratic_form.evaluated_value_range"
+        )
 
     def test_maximal_admitted_evaluation_canonicalizes_for_transport(self) -> None:
         result = compute_evaluate(
@@ -314,12 +338,18 @@ class TestReducedClasses:
 
     def test_reduced_class_search_just_over_budget_is_rejected(self) -> None:
         # Here A=100, so the exact nested scan would have 10,200 candidates.
-        with pytest.raises(ValidationError, match="candidate budget"):
+        with pytest.raises(ValidationError) as exc_info:
             BinaryQuadraticFormReducedClassesRequest(discriminant=-29_404)
+        _assert_error_type(
+            exc_info, "integral_binary_quadratic_form.reduced_class_candidate_budget"
+        )
 
     def test_non_discriminant_is_rejected_before_enumeration(self) -> None:
-        with pytest.raises(ValidationError, match="congruent"):
+        with pytest.raises(ValidationError) as exc_info:
             BinaryQuadraticFormReducedClassesRequest(discriminant=-5)
+        _assert_error_type(
+            exc_info, "integral_binary_quadratic_form.invalid_discriminant_congruence"
+        )
 
     def test_all_classes_reduced(self) -> None:
         for D in [-3, -4, -7, -8, -11, -15, -19, -20, -23, -43, -47, -163]:  # noqa: N806
@@ -393,14 +423,17 @@ class TestRepresentations:
         ) == ((0, 0, False),)
 
     def test_admission_rejects_unbounded_y_search_before_enumeration(self) -> None:
-        with pytest.raises(ValidationError, match="candidate budget"):
+        with pytest.raises(ValidationError) as exc_info:
             BinaryQuadraticFormRepresentationsRequest(
                 form=_positive_form(1_000_000, 0, 1),
                 target=1_000_000_000_000,
             )
+        _assert_error_type(
+            exc_info, "integral_binary_quadratic_form.representation_candidate_budget"
+        )
 
     def test_result_replay_reuses_the_preflight_budget(self) -> None:
-        with pytest.raises(ValidationError, match="candidate budget"):
+        with pytest.raises(ValidationError) as exc_info:
             BinaryQuadraticFormRepresentationsResult(
                 form=_positive_form(1_000_000, 0, 1),
                 target=1_000_000_000_000,
@@ -408,6 +441,9 @@ class TestRepresentations:
                 count=0,
                 primitive_count=0,
             )
+        _assert_error_type(
+            exc_info, "integral_binary_quadratic_form.representation_candidate_budget"
+        )
 
     def test_result_rejects_a_missing_or_forged_representation(self) -> None:
         result = compute_representations(
@@ -419,8 +455,11 @@ class TestRepresentations:
         forged["representations"] = forged["representations"][1:]
         forged["count"] -= 1
         forged["primitive_count"] -= 1
-        with pytest.raises(ValidationError, match="complete lexicographically"):
+        with pytest.raises(ValidationError) as exc_info:
             type(result).model_validate(forged)
+        _assert_error_type(
+            exc_info, "integral_binary_quadratic_form.representations_mismatch"
+        )
 
 
 class TestCanonicalFormComposition:
@@ -476,5 +515,8 @@ class TestCanonicalFormComposition:
         )
         forged = result.model_dump(mode="json")
         forged["reduced_form"]["b"] = -1
-        with pytest.raises(ValidationError, match="reduced form must satisfy"):
+        with pytest.raises(ValidationError) as exc_info:
             type(result).model_validate(forged)
+        _assert_error_type(
+            exc_info, "integral_binary_quadratic_form.reduced_form_invalid"
+        )

@@ -6,10 +6,18 @@ from math import gcd, lcm
 from typing import Annotated, Self
 
 from pydantic import StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable error owned by the geometry contracts."""
+
+    return PydanticCustomError(f"geometry.{reason}", message)
+
 
 ProjectiveLabel = Annotated[
     str,
@@ -33,7 +41,10 @@ def _primitive_integer_triple(
     for value in integers:
         divisor = gcd(divisor, abs(value))
     if divisor == 0:
-        raise ValueError("a projective line coefficient triple must be nonzero")
+        raise _validation_error(
+            "a_projective_line_coefficient_triple_nonzero",
+            "a projective line coefficient triple must be nonzero",
+        )
     primitive = tuple(value // divisor for value in integers)
     if next(value for value in primitive if value) < 0:
         primitive = tuple(-value for value in primitive)
@@ -66,19 +77,31 @@ class PrimitiveProjectiveTriple(StrictModel):
         try:
             values = tuple(parse_canonical_integer(value) for value in self.coordinates)
         except ValueError as exc:
-            raise ValueError("projective coordinates must be integer strings") from exc
+            raise _validation_error(
+                "projective_coordinates_integer_strings",
+                "projective coordinates must be integer strings",
+            ) from exc
         if (
             tuple(format_canonical_integer(value) for value in values)
             != self.coordinates
         ):
-            raise ValueError("projective coordinates must be canonical integer strings")
+            raise _validation_error(
+                "projective_coordinates_canonical_integer_strings",
+                "projective coordinates must be canonical integer strings",
+            )
         divisor = 0
         for value in values:
             divisor = gcd(divisor, abs(value))
         if divisor != 1:
-            raise ValueError("projective coordinates must be nonzero and primitive")
+            raise _validation_error(
+                "projective_coordinates_nonzero_primitive",
+                "projective coordinates must be nonzero and primitive",
+            )
         if next(value for value in values if value) < 0:
-            raise ValueError("the first nonzero projective coordinate must be positive")
+            raise _validation_error(
+                "first_nonzero_projective_coordinate_positive",
+                "the first nonzero projective coordinate must be positive",
+            )
         return self
 
 

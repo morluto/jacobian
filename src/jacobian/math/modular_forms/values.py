@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.formal_power_series._models import TruncatedSeries
@@ -14,6 +15,10 @@ from jacobian.math.modular_forms.kernel import (
     metadata,
     require_level_one_replay,
 )
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"modular_forms.{reason}", message)
 
 
 class LevelOneModularQExpansion(StrictModel):
@@ -35,22 +40,34 @@ class LevelOneModularQExpansion(StrictModel):
 
     @model_validator(mode="after")
     def require_normalized_replayable_form(self) -> Self:
-        require_level_one_replay(self.form, self.q_expansion.truncation_order)
+        try:
+            require_level_one_replay(self.form, self.q_expansion.truncation_order)
+        except ValueError as exc:
+            raise _validation_error("replay_bound", str(exc)) from exc
         weight, space_kind, normalization = metadata(self.form)
         if (
             self.weight != weight
             or self.space_kind != space_kind
             or self.normalization != normalization
         ):
-            raise ValueError("level-one modular metadata does not match the named form")
+            raise _validation_error(
+                "metadata_mismatch",
+                "level-one modular metadata does not match the named form",
+            )
         if self.q_expansion.variable != "q":
-            raise ValueError("a modular q-expansion must use the canonical variable q")
+            raise _validation_error(
+                "variable_mismatch",
+                "a modular q-expansion must use the canonical variable q",
+            )
         expected = expected_coefficients(self.form, self.q_expansion.truncation_order)
         actual = tuple(
             coefficient.as_fraction() for coefficient in self.q_expansion.coefficients
         )
         if actual != expected:
-            raise ValueError("q-expansion does not match the normalized named form")
+            raise _validation_error(
+                "coefficients_mismatch",
+                "q-expansion does not match the normalized named form",
+            )
         return self
 
 

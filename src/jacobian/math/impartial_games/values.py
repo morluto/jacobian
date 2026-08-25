@@ -6,6 +6,7 @@ from collections import deque
 from typing import Annotated, Self
 
 from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math._labels import MAX_OPAQUE_LABEL_LENGTH, OpaqueLabel
@@ -47,18 +48,28 @@ class ImpartialGame(StrictModel):
     @model_validator(mode="after")
     def require_finite_dag(self) -> Self:
         if len(set(self.positions)) != len(self.positions):
-            raise ValueError("position labels must be distinct")
+            raise PydanticCustomError(
+                "impartial_game.positions_not_unique",
+                "position labels must be distinct",
+            )
         labels = set(self.positions)
         edge_pairs = tuple((move.source, move.target) for move in self.moves)
         if len(set(edge_pairs)) != len(edge_pairs):
-            raise ValueError("game moves must be distinct")
+            raise PydanticCustomError(
+                "impartial_game.moves_not_unique", "game moves must be distinct"
+            )
         if any(
             source not in labels or target not in labels
             for source, target in edge_pairs
         ):
-            raise ValueError("every move endpoint must be a declared position")
+            raise PydanticCustomError(
+                "impartial_game.move_endpoint_unknown",
+                "every move endpoint must be a declared position",
+            )
         if any(source == target for source, target in edge_pairs):
-            raise ValueError("game moves cannot contain self-loops")
+            raise PydanticCustomError(
+                "impartial_game.self_loop", "game moves cannot contain self-loops"
+            )
         successors: dict[str, list[str]] = {position: [] for position in self.positions}
         indegree = dict.fromkeys(self.positions, 0)
         for source, target in edge_pairs:
@@ -76,7 +87,9 @@ class ImpartialGame(StrictModel):
                 if indegree[target] == 0:
                     queue.append(target)
         if visited != len(self.positions):
-            raise ValueError("impartial game must be acyclic")
+            raise PydanticCustomError(
+                "impartial_game.cyclic", "impartial game must be acyclic"
+            )
         return self
 
 
@@ -95,7 +108,10 @@ class NimPosition(StrictModel):
     @model_validator(mode="after")
     def require_canonical_bounded_heaps(self) -> Self:
         if self.heaps != tuple(sorted(self.heaps)):
-            raise ValueError("Nim heaps must be in nondecreasing order")
+            raise PydanticCustomError(
+                "impartial_game.heaps_not_sorted",
+                "Nim heaps must be in nondecreasing order",
+            )
         return self
 
 
@@ -123,11 +139,19 @@ class NimOption(StrictModel):
     @model_validator(mode="after")
     def require_local_move_shape(self) -> Self:
         if self.source_heap_indices != tuple(sorted(set(self.source_heap_indices))):
-            raise ValueError("source heap indices must be distinct and sorted")
+            raise PydanticCustomError(
+                "impartial_game.source_indices_not_canonical",
+                "source heap indices must be distinct and sorted",
+            )
         if self.source_heap_size == 0:
-            raise ValueError("a zero heap has no legal Nim move")
+            raise PydanticCustomError(
+                "impartial_game.zero_heap_move", "a zero heap has no legal Nim move"
+            )
         if self.replacement_heap_size >= self.source_heap_size:
-            raise ValueError("a Nim move must strictly reduce one heap")
+            raise PydanticCustomError(
+                "impartial_game.move_not_reducing",
+                "a Nim move must strictly reduce one heap",
+            )
         return self
 
 

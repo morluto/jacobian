@@ -6,6 +6,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import WithJsonSchema, model_validator
 from pydantic.json_schema import JsonSchemaValue
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.matrices.certified_snf.values import (
@@ -41,19 +42,21 @@ class CertifiedSmithNormalFormRequest(StrictModel):
             not 1 <= self.matrix.row_count <= MAX_CERTIFIED_SNF_INPUT_DIMENSION
             or not 1 <= self.matrix.column_count <= MAX_CERTIFIED_SNF_INPUT_DIMENSION
         ):
-            raise ValueError(
+            raise _validation_error(
+                "budget_exceeded",
                 "certified Smith input must be a nonempty matrix of at most "
                 f"{MAX_CERTIFIED_SNF_INPUT_DIMENSION} by "
-                f"{MAX_CERTIFIED_SNF_INPUT_DIMENSION}"
+                f"{MAX_CERTIFIED_SNF_INPUT_DIMENSION}",
             )
         if any(
             _integer_digits(value) > MAX_CERTIFIED_SNF_INPUT_DIGITS
             for row in self.matrix.entries
             for value in row
         ):
-            raise ValueError(
+            raise _validation_error(
+                "budget_exceeded",
                 "certified Smith input entries may contain at most "
-                f"{MAX_CERTIFIED_SNF_INPUT_DIGITS} decimal digits"
+                f"{MAX_CERTIFIED_SNF_INPUT_DIGITS} decimal digits",
             )
         return self
 
@@ -69,3 +72,7 @@ __all__ = [
     "CertifiedSmithNormalFormRequest",
     "CertifiedSmithNormalFormResult",
 ]
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"matrix.{reason}", message)

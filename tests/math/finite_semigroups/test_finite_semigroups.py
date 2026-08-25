@@ -86,7 +86,7 @@ class TestFiniteSemigroup:
 
     def test_non_associative_rejected(self) -> None:
         # (a*b)*a = b*a = c, but a*(b*a) = a*c = a, so non-associative
-        with pytest.raises(ValidationError, match="associative"):
+        with pytest.raises(ValidationError) as error:
             FiniteSemigroup(
                 elements=["a", "b", "c"],
                 multiplication=[
@@ -95,9 +95,10 @@ class TestFiniteSemigroup:
                     ["c", "b", "c"],
                 ],
             )
+        assert error.value.errors()[0]["type"] == "finite_semigroup.not_associative"
 
     def test_self_loop_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="declared element"):
+        with pytest.raises(ValidationError) as error:
             FiniteSemigroup(
                 elements=["a", "b"],
                 multiplication=[
@@ -105,9 +106,12 @@ class TestFiniteSemigroup:
                     ["a", "b"],
                 ],
             )
+        assert (
+            error.value.errors()[0]["type"] == "finite_semigroup.product_not_declared"
+        )
 
     def test_overlong_label_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="at most 64 characters"):
+        with pytest.raises(ValidationError) as error:
             FiniteSemigroup(
                 elements=["a", "x" * 65],
                 multiplication=[
@@ -115,6 +119,7 @@ class TestFiniteSemigroup:
                     ["a", "a"],
                 ],
             )
+        assert error.value.errors()[0]["type"] == "string_too_long"
 
 
 class TestPowerProfile:
@@ -249,12 +254,17 @@ class TestElementPower:
         assert result.power == "0"
 
     def test_exponent_zero_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="exponent"):
+        with pytest.raises(ValidationError) as error:
             ElementPowerRequest(semigroup=Z3, element="1", exponent=0)
+        assert error.value.errors()[0]["type"] == "greater_than_equal"
 
     def test_missing_element_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="element must be in the semigroup"):
+        with pytest.raises(ValidationError) as error:
             ElementPowerRequest(semigroup=Z3, element="9", exponent=2)
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_semigroup.element_not_in_semigroup"
+        )
 
     def test_power_replays_from_table(self) -> None:
         result = compute_element_power(
@@ -344,16 +354,26 @@ class TestPrincipalIdeals:
                     assert table[index[member]][index[multiplier]] in ideal
 
     def test_duplicate_or_out_of_order_elements_are_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="distinct"):
+        with pytest.raises(ValidationError) as error:
             PrincipalIdealsRequest(semigroup=Z3, elements=["1", "1"])
-        with pytest.raises(ValidationError, match="declared semigroup order"):
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_semigroup.requested_elements_not_distinct"
+        )
+        with pytest.raises(ValidationError) as error:
             PrincipalIdealsRequest(semigroup=Z3, elements=["2", "1"])
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_semigroup.requested_elements_wrong_order"
+        )
 
     def test_missing_element_rejected(self) -> None:
-        with pytest.raises(
-            ValidationError, match="every element must be in the semigroup"
-        ):
+        with pytest.raises(ValidationError) as error:
             PrincipalIdealsRequest(semigroup=Z3, elements=["nope"])
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_semigroup.element_not_in_semigroup"
+        )
 
 
 class TestGreenRelations:
@@ -450,7 +470,7 @@ class TestGreenRelations:
 
         sg = FiniteSemigroup(**Z3)
         result = compute_green_relations(GreenRelationsRequest(semigroup=sg))
-        with pytest.raises(ValueError, match="L must be"):
+        with pytest.raises(ValidationError) as error:
             GreenRelationsResult(
                 semigroup=sg,
                 L=(("0",), ("1",), ("2",)),  # wrong
@@ -459,3 +479,4 @@ class TestGreenRelations:
                 D=result.D,
                 J=result.J,
             )
+        assert error.value.errors()[0]["type"] == "finite_semigroup.green_l_mismatch"

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
@@ -14,6 +15,13 @@ MAX_GENERATORS = 50
 MAX_LABEL_LENGTH = 64
 MAX_COLORS = 50
 MAX_TERMS = 5000
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build stable owner-local validation errors for finite actions."""
+
+    return PydanticCustomError(f"finite_group_action.{reason}", message)
+
 
 DomainPosition = Annotated[int, Field(ge=0, le=MAX_DOMAIN_SIZE - 1)]
 FiniteActionSubset = Annotated[
@@ -46,17 +54,26 @@ class FinitePermutationAction(StrictModel):
     def require_valid_action(self) -> Self:
         labels = set(self.domain)
         if len(labels) != len(self.domain):
-            raise ValueError("domain labels must be distinct")
+            raise _validation_error(
+                "domain_labels_not_distinct", "domain labels must be distinct"
+            )
         for label in self.domain:
             if len(label) > MAX_LABEL_LENGTH:
-                raise ValueError("domain label exceeds the bounded length budget")
+                raise _validation_error(
+                    "domain_label_too_long",
+                    "domain label exceeds the bounded length budget",
+                )
         n = len(self.domain)
         for perm in self.generators:
             if len(perm) != n:
-                raise ValueError("every generator must be a permutation of the domain")
+                raise _validation_error(
+                    "generator_length_mismatch",
+                    "every generator must be a permutation of the domain",
+                )
             if sorted(perm) != list(range(n)):
-                raise ValueError(
-                    "every generator must be a total permutation of the domain"
+                raise _validation_error(
+                    "generator_not_permutation",
+                    "every generator must be a total permutation of the domain",
                 )
         return self
 
@@ -66,9 +83,14 @@ def _canonical_subset_positions(
     subset: FiniteActionSubset,
 ) -> tuple[int, ...]:
     if len(set(subset)) != len(subset):
-        raise ValueError("subset positions must be distinct")
+        raise _validation_error(
+            "subset_positions_not_distinct", "subset positions must be distinct"
+        )
     if any(position >= len(action.domain) for position in subset):
-        raise ValueError("every subset position must index the action domain")
+        raise _validation_error(
+            "subset_position_out_of_range",
+            "every subset position must index the action domain",
+        )
     return tuple(sorted(subset))
 
 
@@ -142,8 +164,9 @@ class SubsetCanonicalizationRequest(StrictModel):
     def bound_generated_group_order(self) -> Self:
         order = _generated_group_order(self.subset.action)
         if order > MAX_GROUP_ORDER:
-            raise ValueError(
-                f"group order {order} exceeds the bounded maximum {MAX_GROUP_ORDER}"
+            raise _validation_error(
+                "group_order_exceeds_bound",
+                f"group order {order} exceeds the bounded maximum {MAX_GROUP_ORDER}",
             )
         return self
 
@@ -200,23 +223,32 @@ class SubsetCanonicalizationResult(StrictModel):
 
         action = self.source_subset.action
         if self.canonical_subset.action != action:
-            raise ValueError("canonical_subset must be bound to the source action")
+            raise _validation_error(
+                "canonical_subset_action_mismatch",
+                "canonical_subset must be bound to the source action",
+            )
         canonical, transporter, orbit_size, stabilizer_size = (
             _subset_canonicalization_data(action, self.source_subset.positions)
         )
         if self.canonical_subset.positions != canonical:
-            raise ValueError(
-                "canonical_subset must be the lexicographically least orbit image"
+            raise _validation_error(
+                "canonical_subset_not_minimal",
+                "canonical_subset must be the lexicographically least orbit image",
             )
         if self.transporter != transporter:
-            raise ValueError(
-                "transporter must be the exact canonical generated-group witness"
+            raise _validation_error(
+                "transporter_mismatch",
+                "transporter must be the exact canonical generated-group witness",
             )
         if self.orbit_size != orbit_size:
-            raise ValueError("orbit_size must equal the exact subset-orbit size")
+            raise _validation_error(
+                "orbit_size_mismatch",
+                "orbit_size must equal the exact subset-orbit size",
+            )
         if self.stabilizer_size != stabilizer_size:
-            raise ValueError(
-                "stabilizer_size must equal the exact setwise-stabilizer order"
+            raise _validation_error(
+                "stabilizer_size_mismatch",
+                "stabilizer_size must equal the exact setwise-stabilizer order",
             )
         return self
 
@@ -265,19 +297,37 @@ class ElementCyclesResult(StrictModel):
             self.action, self.element
         )
         if self.permutation != permutation:
-            raise ValueError("permutation must be the exact enumerated group element")
+            raise _validation_error(
+                "permutation_mismatch",
+                "permutation must be the exact enumerated group element",
+            )
         if self.cycles != cycles:
-            raise ValueError("cycles must be the exact cycle decomposition")
+            raise _validation_error(
+                "cycles_mismatch", "cycles must be the exact cycle decomposition"
+            )
         if self.cycle_lengths != lengths:
-            raise ValueError("cycle_lengths must match the computed cycle lengths")
+            raise _validation_error(
+                "cycle_lengths_mismatch",
+                "cycle_lengths must match the computed cycle lengths",
+            )
         if self.cycle_type != cycle_type:
-            raise ValueError("cycle_type must be the integer partition of |X|")
+            raise _validation_error(
+                "cycle_type_mismatch", "cycle_type must be the integer partition of |X|"
+            )
         if self.fixed_points != fixed:
-            raise ValueError("fixed_points must be the exact fixed-point set")
+            raise _validation_error(
+                "fixed_points_mismatch",
+                "fixed_points must be the exact fixed-point set",
+            )
         if self.fixed_point_count != len(fixed):
-            raise ValueError("fixed_point_count must equal len(fixed_points)")
+            raise _validation_error(
+                "fixed_point_count_mismatch",
+                "fixed_point_count must equal len(fixed_points)",
+            )
         if self.support != support:
-            raise ValueError("support must be the exact support set")
+            raise _validation_error(
+                "support_mismatch", "support must be the exact support set"
+            )
         return self
 
 
@@ -310,12 +360,15 @@ class CycleIndexResult(StrictModel):
 
         order, degree, counts = _cycle_index_data(self.action)
         if self.group_order != order:
-            raise ValueError("group_order must equal the exact |G|")
+            raise _validation_error(
+                "group_order_mismatch", "group_order must equal the exact |G|"
+            )
         if self.degree != degree:
-            raise ValueError("degree must equal |X|")
+            raise _validation_error("degree_mismatch", "degree must equal |X|")
         if self.cycle_type_counts != counts:
-            raise ValueError(
-                "cycle_type_counts must be the exact cycle-type multiplicity table"
+            raise _validation_error(
+                "cycle_type_counts_mismatch",
+                "cycle_type_counts must be the exact cycle-type multiplicity table",
             )
         return self
 
@@ -349,15 +402,24 @@ class BurnsideCountResult(StrictModel):
 
         order, contributions, orbit_count = _burnside_data(self.action)
         if self.group_order != order:
-            raise ValueError("group_order must equal the exact |G|")
+            raise _validation_error(
+                "group_order_mismatch", "group_order must equal the exact |G|"
+            )
         if self.fixed_point_contributions != contributions:
-            raise ValueError(
-                "fixed_point_contributions must be the exact |Fix(g)| table"
+            raise _validation_error(
+                "fixed_point_contributions_mismatch",
+                "fixed_point_contributions must be the exact |Fix(g)| table",
             )
         if self.fixed_point_sum != sum(contributions):
-            raise ValueError("fixed_point_sum must equal the sum of contributions")
+            raise _validation_error(
+                "fixed_point_sum_mismatch",
+                "fixed_point_sum must equal the sum of contributions",
+            )
         if self.orbit_count != orbit_count:
-            raise ValueError("orbit_count must equal the exact Burnside orbit count")
+            raise _validation_error(
+                "orbit_count_mismatch",
+                "orbit_count must equal the exact Burnside orbit count",
+            )
         return self
 
 
@@ -399,7 +461,9 @@ class PolyaInventoryResult(StrictModel):
 
         degree, terms = _polya_inventory_data(self.action, self.colors)
         if self.degree != degree:
-            raise ValueError("degree must equal |X|")
+            raise _validation_error("degree_mismatch", "degree must equal |X|")
         if self.terms != terms:
-            raise ValueError("terms must be the exact Pólya inventory polynomial")
+            raise _validation_error(
+                "terms_mismatch", "terms must be the exact Pólya inventory polynomial"
+            )
         return self

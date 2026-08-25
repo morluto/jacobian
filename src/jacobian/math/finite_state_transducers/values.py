@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
@@ -13,6 +14,12 @@ MAX_FST_ALPHABET = 32
 MAX_FST_WORD_LENGTH = 512
 MAX_FST_EDGES = 4096
 MAX_FST_RESULT_WORD_LENGTH = 4096
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by transducer values."""
+
+    return PydanticCustomError(f"finite_state_transducer.{reason}", message)
 
 
 class SubseqTransition(StrictModel):
@@ -44,19 +51,33 @@ def _check_subseq_transitions(
     seen_pairs: set[tuple[int, int]] = set()
     for tr in transitions:
         if not 0 <= tr.source < state_count:
-            raise ValueError("transition source out of range")
+            raise _validation_error(
+                "transition_source_out_of_range", "transition source out of range"
+            )
         if not 0 <= tr.target < state_count:
-            raise ValueError("transition target out of range")
+            raise _validation_error(
+                "transition_target_out_of_range", "transition target out of range"
+            )
         if not 0 <= tr.input_symbol < input_size:
-            raise ValueError("transition input_symbol out of range")
+            raise _validation_error(
+                "transition_input_symbol_out_of_range",
+                "transition input_symbol out of range",
+            )
         key = (tr.source, tr.input_symbol)
         if key in seen_pairs:
-            raise ValueError("duplicate (source, input_symbol) transition")
+            raise _validation_error(
+                "duplicate_transition", "duplicate (source, input_symbol) transition"
+            )
         seen_pairs.add(key)
         if any(not 0 <= sym < output_size for sym in tr.output):
-            raise ValueError("transition output symbol out of range")
+            raise _validation_error(
+                "transition_output_symbol_out_of_range",
+                "transition output symbol out of range",
+            )
         if len(tr.output) > MAX_FST_WORD_LENGTH:
-            raise ValueError("transition output word too long")
+            raise _validation_error(
+                "transition_output_word_too_long", "transition output word too long"
+            )
 
 
 def _check_subseq_finals(
@@ -67,14 +88,22 @@ def _check_subseq_finals(
     seen_finals: set[int] = set()
     for fo in final_outputs:
         if not 0 <= fo.state < state_count:
-            raise ValueError("final output state out of range")
+            raise _validation_error(
+                "final_output_state_out_of_range", "final output state out of range"
+            )
         if fo.state in seen_finals:
-            raise ValueError("duplicate final output state")
+            raise _validation_error(
+                "duplicate_final_output_state", "duplicate final output state"
+            )
         seen_finals.add(fo.state)
         if any(not 0 <= sym < output_size for sym in fo.output):
-            raise ValueError("final output symbol out of range")
+            raise _validation_error(
+                "final_output_symbol_out_of_range", "final output symbol out of range"
+            )
         if len(fo.output) > MAX_FST_WORD_LENGTH:
-            raise ValueError("final output word too long")
+            raise _validation_error(
+                "final_output_word_too_long", "final output word too long"
+            )
 
 
 class SubsequentialTransducer(StrictModel):
@@ -99,7 +128,10 @@ class SubsequentialTransducer(StrictModel):
     @model_validator(mode="after")
     def require_valid_transducer(self) -> Self:
         if not 0 <= self.initial_state < self.state_count:
-            raise ValueError("initial_state must be in 0..state_count-1")
+            raise _validation_error(
+                "initial_state_out_of_range",
+                "initial_state must be in 0..state_count-1",
+            )
         _check_subseq_transitions(
             self.transitions,
             self.state_count,
@@ -135,22 +167,32 @@ def _check_rational_edges(
 ) -> None:
     for edge in edges:
         if not 0 <= edge.source < state_count:
-            raise ValueError("edge source out of range")
+            raise _validation_error(
+                "edge_source_out_of_range", "edge source out of range"
+            )
         if not 0 <= edge.target < state_count:
-            raise ValueError("edge target out of range")
+            raise _validation_error(
+                "edge_target_out_of_range", "edge target out of range"
+            )
         for sym in edge.input_label:
             if not 0 <= sym < input_size:
-                raise ValueError("edge input label out of range")
+                raise _validation_error(
+                    "edge_input_label_out_of_range", "edge input label out of range"
+                )
         for sym in edge.output_label:
             if not 0 <= sym < output_size:
-                raise ValueError("edge output label out of range")
+                raise _validation_error(
+                    "edge_output_label_out_of_range", "edge output label out of range"
+                )
         if not edge.input_label and not edge.output_label:
-            raise ValueError("edge with both labels empty is forbidden")
+            raise _validation_error(
+                "edge_labels_empty", "edge with both labels empty is forbidden"
+            )
         if (
             len(edge.input_label) > MAX_FST_WORD_LENGTH
             or len(edge.output_label) > MAX_FST_WORD_LENGTH
         ):
-            raise ValueError("edge label too long")
+            raise _validation_error("edge_label_too_long", "edge label too long")
 
 
 class RationalTransducer(StrictModel):
@@ -170,15 +212,25 @@ class RationalTransducer(StrictModel):
     @model_validator(mode="after")
     def require_valid_relation(self) -> Self:
         if len(self.initial_states) > MAX_FST_STATES:
-            raise ValueError("too many initial states")
+            raise _validation_error(
+                "too_many_initial_states", "too many initial states"
+            )
         if len(set(self.initial_states)) != len(self.initial_states):
-            raise ValueError("initial states must be distinct")
+            raise _validation_error(
+                "initial_states_not_distinct", "initial states must be distinct"
+            )
         if len(set(self.accepting_states)) != len(self.accepting_states):
-            raise ValueError("accepting states must be distinct")
+            raise _validation_error(
+                "accepting_states_not_distinct", "accepting states must be distinct"
+            )
         if any(not 0 <= s < self.state_count for s in self.initial_states):
-            raise ValueError("initial state out of range")
+            raise _validation_error(
+                "initial_state_out_of_range", "initial state out of range"
+            )
         if any(not 0 <= s < self.state_count for s in self.accepting_states):
-            raise ValueError("accepting state out of range")
+            raise _validation_error(
+                "accepting_state_out_of_range", "accepting state out of range"
+            )
         _check_rational_edges(
             self.edges,
             self.state_count,

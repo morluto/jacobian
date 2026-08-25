@@ -5,12 +5,19 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 from sympy import isprime
 
 from jacobian._models import StrictModel
 
 MAX_DIM = 32
 MAX_FIELD_ORDER = 10000
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by finite-geometry contracts."""
+
+    return PydanticCustomError(f"finite_geometry.{reason}", message)
 
 
 class PrimeFieldVectorSpace(StrictModel):
@@ -22,19 +29,30 @@ class PrimeFieldVectorSpace(StrictModel):
     @model_validator(mode="after")
     def require_valid(self) -> Self:
         if not isprime(self.field_order):
-            raise ValueError("field_order must be prime")
+            raise _validation_error(
+                "field_order_not_prime", "field_order must be prime"
+            )
         if any(not label or not label.isidentifier() for label in self.axis):
-            raise ValueError("axis labels must be nonempty identifiers")
+            raise _validation_error(
+                "axis_labels_invalid", "axis labels must be nonempty identifiers"
+            )
         if len(set(self.axis)) != len(self.axis):
-            raise ValueError("axis labels must be unique")
+            raise _validation_error(
+                "axis_labels_not_unique", "axis labels must be unique"
+            )
         return self
 
 
 def _validate_vector(vector: tuple[int, ...], space: PrimeFieldVectorSpace) -> None:
     if len(vector) != len(space.axis):
-        raise ValueError("vector length must match the ambient axis")
+        raise _validation_error(
+            "vector_length_mismatch", "vector length must match the ambient axis"
+        )
     if any(not 0 <= value < space.field_order for value in vector):
-        raise ValueError("vector entries must be canonical field residues")
+        raise _validation_error(
+            "vector_entry_not_canonical",
+            "vector entries must be canonical field residues",
+        )
 
 
 class ProjectivePoint(StrictModel):
@@ -49,9 +67,14 @@ class ProjectivePoint(StrictModel):
         try:
             first = next(value for value in self.coordinates if value != 0)
         except StopIteration as exc:
-            raise ValueError("projective coordinates must be nonzero") from exc
+            raise _validation_error(
+                "projective_coordinates_zero", "projective coordinates must be nonzero"
+            ) from exc
         if first != 1:
-            raise ValueError("projective coordinates must have first nonzero entry one")
+            raise _validation_error(
+                "projective_coordinates_not_normalized",
+                "projective coordinates must have first nonzero entry one",
+            )
         return self
 
 
@@ -70,15 +93,21 @@ class LinearSubspace(StrictModel):
             try:
                 pivot = next(index for index, value in enumerate(row) if value != 0)
             except StopIteration as exc:
-                raise ValueError("RREF basis cannot contain a zero row") from exc
+                raise _validation_error(
+                    "rref_zero_row", "RREF basis cannot contain a zero row"
+                ) from exc
             if row[pivot] != 1 or (pivots and pivot <= pivots[-1]):
-                raise ValueError("basis must be in reduced row echelon form")
+                raise _validation_error(
+                    "basis_not_rref", "basis must be in reduced row echelon form"
+                )
             if any(
                 other[pivot] != 0
                 for other_index, other in enumerate(self.basis)
                 if other_index != row_index
             ):
-                raise ValueError("basis must be in reduced row echelon form")
+                raise _validation_error(
+                    "basis_not_rref", "basis must be in reduced row echelon form"
+                )
             pivots.append(pivot)
         return self
 
@@ -95,7 +124,9 @@ class ProjectivePointCanonicalizeRequest(StrictModel):
     def require_valid(self) -> Self:
         _validate_vector(self.vector, self.space)
         if all(value == 0 for value in self.vector):
-            raise ValueError("projective point vector must be nonzero")
+            raise _validation_error(
+                "projective_vector_zero", "projective point vector must be nonzero"
+            )
         return self
 
 
@@ -106,7 +137,10 @@ class ProjectivePointEqualRequest(StrictModel):
     @model_validator(mode="after")
     def require_same_parent(self) -> Self:
         if self.point_a.space != self.point_b.space:
-            raise ValueError("projective points must have the same field and axis")
+            raise _validation_error(
+                "projective_parent_mismatch",
+                "projective points must have the same field and axis",
+            )
         return self
 
 
@@ -139,13 +173,20 @@ class SubspaceSpanRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid(self) -> Self:
         if not self.vectors and not self.subspaces:
-            raise ValueError("span requires at least one vector or subspace")
+            raise _validation_error(
+                "span_empty_generators", "span requires at least one vector or subspace"
+            )
         for vector in self.vectors:
             _validate_vector(vector, self.space)
         if any(subspace.space != self.space for subspace in self.subspaces):
-            raise ValueError("all subspaces must have the declared field and axis")
+            raise _validation_error(
+                "span_parent_mismatch",
+                "all subspaces must have the declared field and axis",
+            )
         if len(self.vectors) + sum(len(item.basis) for item in self.subspaces) > 32:
-            raise ValueError("span generator count exceeds bound")
+            raise _validation_error(
+                "span_generator_count_exceeded", "span generator count exceeds bound"
+            )
         return self
 
 
@@ -156,7 +197,10 @@ class SubspaceIntersectionRequest(StrictModel):
     @model_validator(mode="after")
     def require_same_parent(self) -> Self:
         if self.subspace_a.space != self.subspace_b.space:
-            raise ValueError("subspaces must have the same field and axis")
+            raise _validation_error(
+                "intersection_parent_mismatch",
+                "subspaces must have the same field and axis",
+            )
         return self
 
 
@@ -168,9 +212,14 @@ class GrassmannianCountRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid(self) -> Self:
         if not isprime(self.field_order):
-            raise ValueError("field_order must be prime")
+            raise _validation_error(
+                "field_order_not_prime", "field_order must be prime"
+            )
         if self.subspace_dimension > self.ambient_dimension:
-            raise ValueError("subspace dimension cannot exceed ambient dimension")
+            raise _validation_error(
+                "subspace_dimension_exceeds_ambient",
+                "subspace dimension cannot exceed ambient dimension",
+            )
         return self
 
 
@@ -180,7 +229,9 @@ class ProjectiveSpaceEnumerateRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid(self) -> Self:
         if self.space.field_order ** len(self.space.axis) > 65536:
-            raise ValueError("projective space too large to enumerate")
+            raise _validation_error(
+                "projective_space_too_large", "projective space too large to enumerate"
+            )
         return self
 
 
@@ -203,7 +254,10 @@ class ProjectivePointCanonicalizeResult(ProjectivePointCanonicalizeRequest):
             or self.point.coordinates != expected
             or self.scale != expected_scale
         ):
-            raise ValueError("projective point is not the canonicalized source vector")
+            raise _validation_error(
+                "canonicalization_replay_mismatch",
+                "projective point is not the canonicalized source vector",
+            )
         return self
 
 
@@ -216,9 +270,15 @@ class ProjectivePointEqualResult(StrictModel):
     @model_validator(mode="after")
     def replay(self) -> Self:
         if self.point_a.space != self.point_b.space:
-            raise ValueError("projective points must have the same field and axis")
+            raise _validation_error(
+                "projective_parent_mismatch",
+                "projective points must have the same field and axis",
+            )
         if self.equal != (self.point_a.coordinates == self.point_b.coordinates):
-            raise ValueError("projective equality must match canonical coordinates")
+            raise _validation_error(
+                "equality_replay_mismatch",
+                "projective equality must match canonical coordinates",
+            )
         return self
 
 
@@ -237,7 +297,10 @@ class SubspaceComputeResult(SubspaceComputeRequest):
             )
         )
         if self.subspace.space != self.space or self.subspace.basis != expected:
-            raise ValueError("subspace is not the span of its source vectors")
+            raise _validation_error(
+                "subspace_replay_mismatch",
+                "subspace is not the span of its source vectors",
+            )
         return self
 
 
@@ -255,7 +318,10 @@ class SubspaceMembershipResult(StrictModel):
         enlarged = [list(row) for row in self.subspace.basis] + [list(self.vector)]
         expected = len(_canonical_basis(enlarged, q)) == self.subspace.dimension
         if self.is_member != expected:
-            raise ValueError("membership does not match the bound subspace and vector")
+            raise _validation_error(
+                "membership_replay_mismatch",
+                "membership does not match the bound subspace and vector",
+            )
         return self
 
 
@@ -275,7 +341,9 @@ class SubspaceSpanResult(SubspaceSpanRequest):
             tuple(row) for row in _canonical_basis(generators, self.space.field_order)
         )
         if self.subspace.space != self.space or self.subspace.basis != expected:
-            raise ValueError("span result is not bound to its source values")
+            raise _validation_error(
+                "span_replay_mismatch", "span result is not bound to its source values"
+            )
         return self
 
 
@@ -292,7 +360,10 @@ class SubspaceIntersectionResult(SubspaceIntersectionRequest):
             self.subspace.space != self.subspace_a.space
             or self.subspace.basis != expected
         ):
-            raise ValueError("intersection is not bound to its source subspaces")
+            raise _validation_error(
+                "intersection_replay_mismatch",
+                "intersection is not bound to its source subspaces",
+            )
         return self
 
 
@@ -308,14 +379,20 @@ class GrassmannianCountResult(StrictModel):
         if not isprime(self.field_order) or not (
             0 <= self.subspace_dimension <= self.ambient_dimension <= MAX_DIM
         ):
-            raise ValueError("Grassmannian parameters are outside the public domain")
+            raise _validation_error(
+                "grassmannian_parameters_invalid",
+                "Grassmannian parameters are outside the public domain",
+            )
         numerator = 1
         denominator = 1
         for index in range(self.subspace_dimension):
             numerator *= self.field_order ** (self.ambient_dimension - index) - 1
             denominator *= self.field_order ** (self.subspace_dimension - index) - 1
         if self.count != numerator // denominator:
-            raise ValueError("count does not match its Gaussian-binomial parameters")
+            raise _validation_error(
+                "grassmannian_count_mismatch",
+                "count does not match its Gaussian-binomial parameters",
+            )
         return self
 
 
@@ -331,9 +408,17 @@ class ProjectiveSpaceEnumerateResult(StrictModel):
             self.space.field_order - 1
         )
         if self.count != len(self.points) or self.count != expected:
-            raise ValueError("projective point enumeration does not match its parent")
+            raise _validation_error(
+                "enumeration_count_mismatch",
+                "projective point enumeration does not match its parent",
+            )
         if any(point.space != self.space for point in self.points):
-            raise ValueError("every projective point must belong to the result space")
+            raise _validation_error(
+                "enumeration_parent_mismatch",
+                "every projective point must belong to the result space",
+            )
         if len({point.coordinates for point in self.points}) != len(self.points):
-            raise ValueError("projective points must be unique")
+            raise _validation_error(
+                "enumeration_points_not_unique", "projective points must be unique"
+            )
         return self

@@ -8,7 +8,7 @@ used only as a private traversal backend for the Eulerian decomposition.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
 import networkx as nx
 
@@ -30,6 +30,7 @@ from jacobian.math.graphs.multigraph._models import (
     VertexDivergence,
     _FlowSearchOutcome,
 )
+from jacobian.math.graphs.multigraph._orientation import oriented_endpoints
 
 __all__ = [
     "check_cycle_multicover",
@@ -42,13 +43,6 @@ __all__ = [
 # ---------------------------------------------------------------------------
 # Flow check
 # ---------------------------------------------------------------------------
-
-
-def _oriented_endpoints(edge: Any, orientation: str) -> tuple[int, int]:
-    """Return ``(tail, head)`` for one oriented edge assignment."""
-    if orientation == "left_to_right":
-        return edge.left, edge.right
-    return edge.right, edge.left
 
 
 def check_multigraph_flow(
@@ -75,7 +69,7 @@ def check_multigraph_flow(
 
     for assign in request.edge_values:
         edge = graph.edge_by_id(assign.edge_id)
-        tail, head = _oriented_endpoints(edge, assign.orientation)
+        tail, head = oriented_endpoints(edge, assign.orientation)
         value = group.normalize(assign.value)
         vertex_out[tail].append(value)
         vertex_in[head].append(value)
@@ -160,7 +154,7 @@ def _check_flow_conservation(
     }
     for assign in assignments:
         edge = graph.edge_by_id(assign.edge_id)
-        tail, head = _oriented_endpoints(edge, assign.orientation)
+        tail, head = oriented_endpoints(edge, assign.orientation)
         value = group.normalize(assign.value)
         vertex_out[tail].append(value)
         vertex_in[head].append(value)
@@ -234,7 +228,7 @@ def _balance_apply(
     sign: int,
 ) -> None:
     """Add (sign=1) or remove (sign=-1) one assignment's divergence update."""
-    tail, head = _oriented_endpoints(edge, assignment.orientation)
+    tail, head = oriented_endpoints(edge, assignment.orientation)
     for k, component in enumerate(assignment.value):
         net[tail][k] += sign * component
         net[head][k] -= sign * component

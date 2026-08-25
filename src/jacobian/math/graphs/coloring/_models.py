@@ -6,6 +6,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, WithJsonSchema, model_validator
 from pydantic.json_schema import JsonSchemaValue
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -146,8 +147,9 @@ def _is_proper_edge_coloring(
 
 def _require_edge_coloring_graph_bound(graph: SimpleUndirectedGraph) -> None:
     if len(graph.vertices) > MAX_EDGE_COLORING_VERTICES:
-        raise ValueError(
-            f"edge-coloring supports at most {MAX_EDGE_COLORING_VERTICES} vertices"
+        raise PydanticCustomError(
+            "graph.edge_coloring_supports_at_most_max_edge",
+            f"edge-coloring supports at most {MAX_EDGE_COLORING_VERTICES} vertices",
         )
 
 
@@ -157,10 +159,16 @@ def _require_coloring_sequence(
     colors: int,
 ) -> None:
     if len(coloring) != len(graph.edges):
-        raise ValueError("coloring must assign one color per edge")
+        raise PydanticCustomError(
+            "graph.coloring_must_assign_one_color_per_edge",
+            "coloring must assign one color per edge",
+        )
     for value in coloring:
         if not 0 <= value < colors:
-            raise ValueError("coloring values must be in 0..colors-1")
+            raise PydanticCustomError(
+                "graph.coloring_values_must_be_in_0_colors_1",
+                "coloring values must be in 0..colors-1",
+            )
 
 
 def _require_conflicting_pair(
@@ -170,17 +178,32 @@ def _require_conflicting_pair(
     conflicting_edge: tuple[str, str],
 ) -> None:
     if blocking_edge == conflicting_edge:
-        raise ValueError("conflicting edge pair must be distinct")
+        raise PydanticCustomError(
+            "graph.conflicting_edge_pair_must_be_distinct",
+            "conflicting edge pair must be distinct",
+        )
     edge_index = {edge: idx for idx, edge in enumerate(graph.edges)}
     for edge in (blocking_edge, conflicting_edge):
         if edge[0] >= edge[1]:
-            raise ValueError("blocking edges must be canonical pairs with left < right")
+            raise PydanticCustomError(
+                "graph.blocking_edges_must_be_canonical_pairs_with_left",
+                "blocking edges must be canonical pairs with left < right",
+            )
         if edge not in edge_index:
-            raise ValueError("blocking edges must be edges of the graph")
+            raise PydanticCustomError(
+                "graph.blocking_edges_must_be_edges_of_the_graph",
+                "blocking edges must be edges of the graph",
+            )
     if not set(blocking_edge) & set(conflicting_edge):
-        raise ValueError("conflicting edges must share a vertex")
+        raise PydanticCustomError(
+            "graph.conflicting_edges_must_share_a_vertex",
+            "conflicting edges must share a vertex",
+        )
     if coloring[edge_index[blocking_edge]] != coloring[edge_index[conflicting_edge]]:
-        raise ValueError("conflicting edges must have the same color")
+        raise PydanticCustomError(
+            "graph.conflicting_edges_must_have_the_same_color",
+            "conflicting edges must have the same color",
+        )
 
 
 class GraphEdgeList(StrictModel):
@@ -200,12 +223,21 @@ class GraphEdgeList(StrictModel):
         seen: set[tuple[int, int]] = set()
         for u, v in self.edges:
             if not (0 <= u < self.vertex_count and 0 <= v < self.vertex_count):
-                raise ValueError("edge vertices must be in 0..vertex_count-1")
+                raise PydanticCustomError(
+                    "graph.edge_vertices_must_be_in_0_vertex_count_1",
+                    "edge vertices must be in 0..vertex_count-1",
+                )
             if u == v:
-                raise ValueError("a simple graph cannot contain self-loops")
+                raise PydanticCustomError(
+                    "graph.a_simple_graph_cannot_contain_self_loops",
+                    "a simple graph cannot contain self-loops",
+                )
             edge = (min(u, v), max(u, v))
             if edge in seen:
-                raise ValueError("a simple graph cannot contain duplicate edges")
+                raise PydanticCustomError(
+                    "graph.a_simple_graph_cannot_contain_duplicate_edges",
+                    "a simple graph cannot contain duplicate edges",
+                )
             seen.add(edge)
         return self
 
@@ -246,12 +278,18 @@ class KColorabilityResult(StrictModel):
     @model_validator(mode="after")
     def require_claim_consistency(self) -> Self:
         if self.vertex_count != self.graph.vertex_count:
-            raise ValueError("vertex_count must equal the graph's vertex count")
+            raise PydanticCustomError(
+                "graph.vertex_count_must_equal_the_graph_s_vertex_count",
+                "vertex_count must equal the graph's vertex count",
+            )
         if self.status == "SOLVER_BUDGET_EXCEEDED":
             _require_k_colorability_budget_exceeded_shape(self)
             return self
         if self.colorable is None:
-            raise ValueError("a decided result must claim colorable true or false")
+            raise PydanticCustomError(
+                "graph.a_decided_result_must_claim_colorable_true_or_fa",
+                "a decided result must claim colorable true or false",
+            )
         if self.colorable:
             _require_k_colorability_positive_witness(self)
         else:
@@ -265,17 +303,24 @@ def _require_k_colorability_budget_exceeded_shape(
     """A budget-exceeded outcome carries no claim and must replay unknown."""
 
     if result.colorable is not None or result.coloring is not None:
-        raise ValueError("a budget-exceeded outcome carries no colorability claim")
+        raise PydanticCustomError(
+            "graph.a_budget_exceeded_outcome_carries_no_colorabilit",
+            "a budget-exceeded outcome carries no colorability claim",
+        )
     if not result.graph.edges:
-        raise ValueError("empty graph is decided colorable without any search")
+        raise PydanticCustomError(
+            "graph.empty_graph_is_decided_colorable_without_any_sea",
+            "empty graph is decided colorable without any search",
+        )
     if (
         _run_k_colorability_solver(
             result.graph, result.colors, result.solver_conflicts
         )[0]
         != "unknown"
     ):
-        raise ValueError(
-            "claimed solver-budget exceedance is not reproduced by the bounded replay"
+        raise PydanticCustomError(
+            "graph.claimed_solver_budget_exceedance_reproduced_by_bounded",
+            "claimed solver-budget exceedance is not reproduced by the bounded replay",
         )
 
 
@@ -283,30 +328,49 @@ def _require_k_colorability_positive_witness(result: KColorabilityResult) -> Non
     """A colorable claim must carry a proper source-bound witness."""
 
     if result.coloring is None:
-        raise ValueError("a colorable result must carry a coloring witness")
+        raise PydanticCustomError(
+            "graph.a_colorable_result_must_carry_a_coloring_witness",
+            "a colorable result must carry a coloring witness",
+        )
     if len(result.coloring) != result.graph.vertex_count:
-        raise ValueError("coloring must assign one color per vertex")
+        raise PydanticCustomError(
+            "graph.coloring_must_assign_one_color_per_vertex",
+            "coloring must assign one color per vertex",
+        )
     if any(not 0 <= color < result.colors for color in result.coloring):
-        raise ValueError("coloring values must be in 0..colors-1")
+        raise PydanticCustomError(
+            "graph.coloring_values_must_be_in_0_colors_1",
+            "coloring values must be in 0..colors-1",
+        )
     if not _is_proper_vertex_coloring(result.graph, result.coloring):
-        raise ValueError("coloring witness must be a proper vertex coloring")
+        raise PydanticCustomError(
+            "graph.coloring_witness_must_be_a_proper_vertex_colorin",
+            "coloring witness must be a proper vertex coloring",
+        )
 
 
 def _require_k_colorability_negative_replay(result: KColorabilityResult) -> None:
     """Replay non-colorability; only an explicit unsat may support it."""
 
     if result.coloring is not None:
-        raise ValueError("a non-colorable result must not carry a coloring")
+        raise PydanticCustomError(
+            "graph.a_non_colorable_result_must_not_carry_a_coloring",
+            "a non-colorable result must not carry a coloring",
+        )
     if not result.graph.edges:
-        raise ValueError("empty graph is k-colorable but result claims not colorable")
+        raise PydanticCustomError(
+            "graph.empty_graph_is_k_colorable_but_result_claims_not",
+            "empty graph is k-colorable but result claims not colorable",
+        )
     if (
         _run_k_colorability_solver(
             result.graph, result.colors, result.solver_conflicts
         )[0]
         != "unsat"
     ):
-        raise ValueError(
-            "graph is k-colorable or undecided but result claims not colorable"
+        raise PydanticCustomError(
+            "graph.colorable_undecided_but_result_claims_colorable",
+            "graph is k-colorable or undecided but result claims not colorable",
         )
 
 
@@ -319,14 +383,23 @@ class MaximalIndependentSetRequest(StrictModel):
     @model_validator(mode="after")
     def require_canonical_candidate_set(self) -> Self:
         if tuple(sorted(self.candidate_set)) != self.candidate_set:
-            raise ValueError("candidate_set must be strictly increasing")
+            raise PydanticCustomError(
+                "graph.candidate_set_must_be_strictly_increasing",
+                "candidate_set must be strictly increasing",
+            )
         if len(set(self.candidate_set)) != len(self.candidate_set):
-            raise ValueError("candidate_set must not contain duplicate vertices")
+            raise PydanticCustomError(
+                "graph.candidate_set_must_not_contain_duplicate_vertice",
+                "candidate_set must not contain duplicate vertices",
+            )
         if any(
             vertex < 0 or vertex >= self.graph.vertex_count
             for vertex in self.candidate_set
         ):
-            raise ValueError("candidate vertices must lie in 0..vertex_count-1")
+            raise PydanticCustomError(
+                "graph.candidate_vertices_must_lie_in_0_vertex_count_1",
+                "candidate vertices must lie in 0..vertex_count-1",
+            )
         return self
 
 
@@ -341,23 +414,34 @@ class MaximalIndependentSetResult(StrictModel):
     def bind_witness_to_decision(self) -> Self:
         if self.decision == "MAXIMAL":
             if self.blocking_edge is not None or self.addable_vertex is not None:
-                raise ValueError("a maximal result must not carry a rejection witness")
+                raise PydanticCustomError(
+                    "graph.a_maximal_result_must_not_carry_a_rejection_witn",
+                    "a maximal result must not carry a rejection witness",
+                )
             return self
         if self.decision == "NOT_INDEPENDENT":
             if self.blocking_edge is None or self.addable_vertex is not None:
-                raise ValueError(
-                    "a non-independent result requires exactly one blocking edge"
+                raise PydanticCustomError(
+                    "graph.non_independent_result_requires_exactly_one_blocking",
+                    "a non-independent result requires exactly one blocking edge",
                 )
             u, v = self.blocking_edge
             if u < 0 or v < 0 or u >= v:
-                raise ValueError("blocking_edge must be a canonical pair u < v")
+                raise PydanticCustomError(
+                    "graph.blocking_edge_must_be_a_canonical_pair_u_v",
+                    "blocking_edge must be a canonical pair u < v",
+                )
             return self
         if self.blocking_edge is not None or self.addable_vertex is None:
-            raise ValueError(
-                "an independent non-maximal result requires exactly one addable vertex"
+            raise PydanticCustomError(
+                "graph.independent_non_maximal_result_requires_exactly_one",
+                "an independent non-maximal result requires exactly one addable vertex",
             )
         if self.addable_vertex < 0:
-            raise ValueError("addable_vertex must be nonnegative")
+            raise PydanticCustomError(
+                "graph.addable_vertex_must_be_nonnegative",
+                "addable_vertex must be nonnegative",
+            )
         return self
 
 
@@ -444,17 +528,24 @@ def _require_budget_exceeded_shape(result: EdgeKColorabilityResult) -> None:
     """A budget-exceeded outcome carries no claim and must replay unknown."""
 
     if result.colorable is not None or result.coloring is not None:
-        raise ValueError("a budget-exceeded outcome carries no colorability claim")
+        raise PydanticCustomError(
+            "graph.a_budget_exceeded_outcome_carries_no_colorabilit",
+            "a budget-exceeded outcome carries no colorability claim",
+        )
     if not result.graph.edges:
-        raise ValueError("empty graph is decided colorable without any search")
+        raise PydanticCustomError(
+            "graph.empty_graph_is_decided_colorable_without_any_sea",
+            "empty graph is decided colorable without any search",
+        )
     if (
         _run_edge_coloring_solver(result.graph, result.colors, result.solver_conflicts)[
             0
         ]
         != "unknown"
     ):
-        raise ValueError(
-            "claimed solver-budget exceedance is not reproduced by the bounded replay"
+        raise PydanticCustomError(
+            "graph.claimed_solver_budget_exceedance_reproduced_by_bounded",
+            "claimed solver-budget exceedance is not reproduced by the bounded replay",
         )
 
 
@@ -462,10 +553,14 @@ def _require_negative_replay(result: EdgeKColorabilityResult) -> None:
     """Replay non-colorability; only an explicit unsat may support it."""
 
     if result.coloring is not None:
-        raise ValueError("a non-colorable result must not carry a coloring")
+        raise PydanticCustomError(
+            "graph.a_non_colorable_result_must_not_carry_a_coloring",
+            "a non-colorable result must not carry a coloring",
+        )
     if not result.graph.edges:
-        raise ValueError(
-            "empty graph is k-edge-colorable but result claims not colorable"
+        raise PydanticCustomError(
+            "graph.empty_edge_colorable_but_result_claims_colorable",
+            "empty graph is k-edge-colorable but result claims not colorable",
         )
     if (
         _run_edge_coloring_solver(result.graph, result.colors, result.solver_conflicts)[
@@ -473,8 +568,9 @@ def _require_negative_replay(result: EdgeKColorabilityResult) -> None:
         ]
         != "unsat"
     ):
-        raise ValueError(
-            "graph is k-edge-colorable or undecided but result claims not colorable"
+        raise PydanticCustomError(
+            "graph.edge_colorable_undecided_but_result_claims_colorable",
+            "graph is k-edge-colorable or undecided but result claims not colorable",
         )
 
 
@@ -482,11 +578,20 @@ def _require_positive_witness(result: EdgeKColorabilityResult) -> None:
     """A colorable claim must carry a proper source-bound witness."""
 
     if result.coloring is None:
-        raise ValueError("a colorable result must carry a coloring witness")
+        raise PydanticCustomError(
+            "graph.a_colorable_result_must_carry_a_coloring_witness",
+            "a colorable result must carry a coloring witness",
+        )
     if result.coloring.graph != result.graph or result.coloring.colors != result.colors:
-        raise ValueError("witness must bind the result's own graph and palette")
+        raise PydanticCustomError(
+            "graph.witness_must_bind_the_result_s_own_graph_and_pal",
+            "witness must bind the result's own graph and palette",
+        )
     if not _is_proper_edge_coloring(result.graph, result.coloring.coloring):
-        raise ValueError("coloring witness must be a proper edge coloring")
+        raise PydanticCustomError(
+            "graph.coloring_witness_must_be_a_proper_edge_coloring",
+            "coloring witness must be a proper edge coloring",
+        )
 
 
 class EdgeKColorabilityRequest(StrictModel):
@@ -531,12 +636,18 @@ class EdgeKColorabilityResult(StrictModel):
     def require_witness_consistency(self) -> Self:
         _require_edge_coloring_graph_bound(self.graph)
         if self.edge_count != len(self.graph.edges):
-            raise ValueError("edge_count must equal the number of graph edges")
+            raise PydanticCustomError(
+                "graph.edge_count_must_equal_the_number_of_graph_edges",
+                "edge_count must equal the number of graph edges",
+            )
         if self.status == "SOLVER_BUDGET_EXCEEDED":
             _require_budget_exceeded_shape(self)
             return self
         if self.colorable is None:
-            raise ValueError("a decided result must claim colorable true or false")
+            raise PydanticCustomError(
+                "graph.a_decided_result_must_claim_colorable_true_or_fa",
+                "a decided result must claim colorable true or false",
+            )
         if self.colorable:
             _require_positive_witness(self)
         else:
@@ -564,13 +675,22 @@ class EdgeColoringCheckResult(StrictModel):
             self.assignment.graph, self.assignment.coloring
         )
         if self.proper != actual_proper:
-            raise ValueError("proper flag does not match the submitted coloring")
+            raise PydanticCustomError(
+                "graph.proper_flag_does_not_match_the_submitted_colorin",
+                "proper flag does not match the submitted coloring",
+            )
         if self.proper:
             if self.blocking_edge is not None or self.conflicting_edge is not None:
-                raise ValueError("a proper coloring must not carry a blocking edge")
+                raise PydanticCustomError(
+                    "graph.a_proper_coloring_must_not_carry_a_blocking_edge",
+                    "a proper coloring must not carry a blocking edge",
+                )
             return self
         if self.blocking_edge is None or self.conflicting_edge is None:
-            raise ValueError("an improper coloring must carry a conflicting edge pair")
+            raise PydanticCustomError(
+                "graph.an_improper_coloring_must_carry_a_conflicting_ed",
+                "an improper coloring must carry a conflicting edge pair",
+            )
         _require_conflicting_pair(
             self.assignment.graph,
             self.assignment.coloring,

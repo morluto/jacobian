@@ -243,20 +243,24 @@ class TestConvexGeometry:
 
 class TestValidation:
     def test_non_unique_ground_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="unique"):
+        with pytest.raises(ValidationError) as error:
             FiniteFeasibleSetSystem(ground=("a", "a"), feasible=((),))
+        assert error.value.errors()[0]["type"] == "greedoid.ground_duplicate"
 
     def test_unsorted_feasible_set_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="sorted"):
+        with pytest.raises(ValidationError) as error:
             FiniteFeasibleSetSystem(ground=("a", "b"), feasible=((1, 0),))
+        assert error.value.errors()[0]["type"] == "greedoid.feasible_row_unsorted"
 
     def test_duplicate_feasible_set_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="duplicate-free"):
+        with pytest.raises(ValidationError) as error:
             FiniteFeasibleSetSystem(ground=("a", "b"), feasible=((), (0,), (0,)))
+        assert error.value.errors()[0]["type"] == "greedoid.feasible_family_duplicate"
 
     def test_index_out_of_range_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="out of range"):
+        with pytest.raises(ValidationError) as error:
             FiniteFeasibleSetSystem(ground=("a", "b"), feasible=((0, 5),))
+        assert error.value.errors()[0]["type"] == "greedoid.feasible_index_out_of_range"
 
     def test_every_request_bounds_ground_size(self) -> None:
         # The carrier is structural only; each greedoid request owns the
@@ -275,8 +279,11 @@ class TestValidation:
             lambda s: ConvexGeometryRequest(system=s),
         )
         for build in builders:
-            with pytest.raises(ValidationError, match="ground size"):
+            with pytest.raises(ValidationError) as error:
                 build(system)
+            assert (
+                error.value.errors()[0]["type"] == "greedoid.ground_size_exceeds_budget"
+            )
 
     def test_recognize_request_bounds_feasible_set_count(self) -> None:
         feasible = []
@@ -287,8 +294,11 @@ class TestValidation:
             feasible=tuple(feasible),
         )
 
-        with pytest.raises(ValidationError, match="feasible-set count"):
+        with pytest.raises(ValidationError) as error:
             RecognizeRequest(system=system)
+        assert (
+            error.value.errors()[0]["type"] == "greedoid.feasible_count_exceeds_budget"
+        )
 
 
 # ---------------------------------------------------------------------------

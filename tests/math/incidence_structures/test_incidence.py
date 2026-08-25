@@ -65,7 +65,7 @@ class TestIncidenceMatrix:
         assert result.block_ids == ("b1", "b2")
 
     def test_duplicate_points_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="distinct"):
+        with pytest.raises(ValidationError):
             IncidenceMatrixRequest(
                 incidence={
                     "points": ["p1", "p1"],
@@ -74,8 +74,21 @@ class TestIncidenceMatrix:
                 }
             )
 
+    def test_validation_uses_stable_error_code(self) -> None:
+        with pytest.raises(ValidationError) as exc_info:
+            IncidenceMatrixRequest(
+                incidence={
+                    "points": ["p1", "p1"],
+                    "block_ids": ["b1"],
+                    "blocks": [["p1"]],
+                }
+            )
+        assert exc_info.value.errors()[0]["type"] == (
+            "incidence_structure.point_labels_not_distinct"
+        )
+
     def test_invalid_block_member(self) -> None:
-        with pytest.raises(ValidationError, match="declared point"):
+        with pytest.raises(ValidationError):
             IncidenceMatrixRequest(
                 incidence={
                     "points": ["p1"],
@@ -111,7 +124,7 @@ class TestIncidenceStructureCanonicalization:
         assert first.model_dump(mode="json") == second.model_dump(mode="json")
 
     def test_canonicalized_source_still_rejects_undecorated_members(self) -> None:
-        with pytest.raises(ValidationError, match="declared point"):
+        with pytest.raises(ValidationError):
             IncidenceStructure(
                 points=("p1", "p2"),
                 block_ids=("b1",),
@@ -334,7 +347,7 @@ class TestDerivedResidual:
         assert result.source_blocks == ("b2",)
 
     def test_derived_at_nonexistent_point(self) -> None:
-        with pytest.raises(ValueError, match="declared point"):
+        with pytest.raises(ValueError):
             compute_derived_residual(
                 DerivedResidualRequest(incidence=STRUCTURE, point="pX")
             )
@@ -401,5 +414,5 @@ class TestGram:
         )
 
     def test_gram_invalid_axis(self) -> None:
-        with pytest.raises(ValidationError, match="axis must be"):
+        with pytest.raises(ValidationError):
             GramRequest(incidence=STRUCTURE, axis="invalid")

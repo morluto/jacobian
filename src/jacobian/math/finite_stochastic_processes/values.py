@@ -5,11 +5,18 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 
 MAX_SAMPLES = 64
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by finite stochastic values."""
+
+    return PydanticCustomError(f"finite_stochastic_process.{reason}", message)
 
 
 class FiniteProbabilitySpace(StrictModel):
@@ -28,9 +35,12 @@ class FiniteProbabilitySpace(StrictModel):
     @model_validator(mode="after")
     def require_well_formed(self) -> Self:
         if len(self.samples) != len(self.masses):
-            raise ValueError("samples and masses must have equal length")
+            raise _validation_error(
+                "sample_mass_length_mismatch",
+                "samples and masses must have equal length",
+            )
         if len(set(self.samples)) != len(self.samples):
-            raise ValueError("sample labels must be unique")
+            raise _validation_error("sample_duplicate", "sample labels must be unique")
         total = sum((mass.as_fraction() for mass in self.masses), start=0)
         for mass in self.masses:
             require_bounded_rational(
@@ -39,9 +49,9 @@ class FiniteProbabilitySpace(StrictModel):
                 label="probability mass",
             )
             if mass.as_fraction() <= 0:
-                raise ValueError("masses must be positive")
+                raise _validation_error("mass_nonpositive", "masses must be positive")
         if total != 1:
-            raise ValueError("masses must sum to exactly 1")
+            raise _validation_error("mass_sum_invalid", "masses must sum to exactly 1")
         return self
 
 
@@ -61,7 +71,10 @@ class FiniteRandomVariable(StrictModel):
     @model_validator(mode="after")
     def require_valid_rv(self) -> Self:
         if len(self.values) != len(self.space.samples):
-            raise ValueError("values must have one entry per sample")
+            raise _validation_error(
+                "random_variable_length_mismatch",
+                "values must have one entry per sample",
+            )
         return self
 
 
@@ -81,16 +94,25 @@ class FiniteSigmaAlgebra(StrictModel):
         seen: set[str] = set()
         for block in self.blocks:
             if not block:
-                raise ValueError("partition blocks must be nonempty")
+                raise _validation_error(
+                    "partition_block_empty", "partition blocks must be nonempty"
+                )
             for s in block:
                 if s in seen:
-                    raise ValueError("partition blocks must be disjoint")
+                    raise _validation_error(
+                        "partition_blocks_overlap", "partition blocks must be disjoint"
+                    )
                 if s not in self.space.samples:
-                    raise ValueError("block element not in sample space")
+                    raise _validation_error(
+                        "partition_element_outside_space",
+                        "block element not in sample space",
+                    )
                 seen.add(s)
                 all_samples.add(s)
         if all_samples != set(self.space.samples):
-            raise ValueError("blocks must partition the entire sample space")
+            raise _validation_error(
+                "partition_incomplete", "blocks must partition the entire sample space"
+            )
         return self
 
 

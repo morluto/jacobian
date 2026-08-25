@@ -36,10 +36,12 @@ def _two_state_counterexample(exponent: int) -> dict[str, object]:
 
 
 def test_stationary_request_rejects_exact_two_state_height_counterexample() -> None:
-    with pytest.raises(
-        ValidationError, match="stationary distribution rational height"
-    ):
+    with pytest.raises(ValidationError) as error:
         StationaryDistributionRequest.model_validate(_two_state_counterexample(45_000))
+    assert (
+        error.value.errors()[0]["type"]
+        == "markov_chain.stationary_height_exceeds_bound"
+    )
 
 
 def test_stationary_bound_does_not_narrow_ergodic_decision_request() -> None:

@@ -18,6 +18,11 @@ from jacobian.math.finite_group_actions._operations import (
     compute_polya_inventory,
 )
 
+
+def _assert_error_type(error: ValidationError, expected: str) -> None:
+    assert error.errors()[0]["type"] == expected
+
+
 # ---------------------------------------------------------------------------
 # Shared known actions
 # ---------------------------------------------------------------------------
@@ -451,25 +456,34 @@ class TestGeneratorOrderInvariance:
 
 class TestBounds:
     def test_duplicate_labels_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="distinct"):
+        with pytest.raises(ValidationError) as exc_info:
             FinitePermutationAction(
                 domain=("a", "b", "a"),
                 generators=((1, 2, 0),),
             )
+        _assert_error_type(
+            exc_info.value, "finite_group_action.domain_labels_not_distinct"
+        )
 
     def test_non_permutation_generator_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="total permutation"):
+        with pytest.raises(ValidationError) as exc_info:
             FinitePermutationAction(
                 domain=("a", "b", "c"),
                 generators=((1, 2, 1),),
             )
+        _assert_error_type(
+            exc_info.value, "finite_group_action.generator_not_permutation"
+        )
 
     def test_wrong_length_generator_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="permutation of the domain"):
+        with pytest.raises(ValidationError) as exc_info:
             FinitePermutationAction(
                 domain=("a", "b", "c"),
                 generators=((1, 2),),
             )
+        _assert_error_type(
+            exc_info.value, "finite_group_action.generator_length_mismatch"
+        )
 
     def test_element_index_out_of_range_rejected(self) -> None:
         action = _cyclic_c3()

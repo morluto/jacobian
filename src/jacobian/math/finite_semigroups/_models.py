@@ -5,11 +5,18 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
 
 MAX_ELEMENTS = 50
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by finite semigroups."""
+
+    return PydanticCustomError(f"finite_semigroup.{reason}", message)
 
 
 class FiniteSemigroup(StrictModel):
@@ -22,15 +29,25 @@ class FiniteSemigroup(StrictModel):
     def require_valid_semigroup(self) -> Self:
         labels = set(self.elements)
         if len(labels) != len(self.elements):
-            raise ValueError("element labels must be distinct")
+            raise _validation_error(
+                "element_labels_not_distinct", "element labels must be distinct"
+            )
         if len(self.multiplication) != len(self.elements):
-            raise ValueError("multiplication table must have one row per element")
+            raise _validation_error(
+                "multiplication_row_count",
+                "multiplication table must have one row per element",
+            )
         for row in self.multiplication:
             if len(row) != len(self.elements):
-                raise ValueError("multiplication table must be square")
+                raise _validation_error(
+                    "multiplication_not_square", "multiplication table must be square"
+                )
             for cell in row:
                 if cell not in labels:
-                    raise ValueError("every product must be a declared element")
+                    raise _validation_error(
+                        "product_not_declared",
+                        "every product must be a declared element",
+                    )
         self._check_associativity(labels)
         return self
 
@@ -45,10 +62,11 @@ class FiniteSemigroup(StrictModel):
                     left = self.multiplication[idx[ij]][k]
                     right = self.multiplication[i][idx[jk]]
                     if left != right:
-                        raise ValueError(
+                        raise _validation_error(
+                            "not_associative",
                             f"semigroup must be associative: "
                             f"({self.elements[i]}*{self.elements[j]})*{self.elements[k]} "
-                            f"!= {self.elements[i]}*({self.elements[j]}*{self.elements[k]})"
+                            f"!= {self.elements[i]}*({self.elements[j]}*{self.elements[k]})",
                         )
 
 
@@ -61,7 +79,9 @@ class PowerProfileRequest(StrictModel):
     @model_validator(mode="after")
     def require_element_exists(self) -> Self:
         if self.element not in set(self.semigroup.elements):
-            raise ValueError("element must be in the semigroup")
+            raise _validation_error(
+                "element_not_in_semigroup", "element must be in the semigroup"
+            )
         return self
 
 
@@ -93,16 +113,26 @@ class PowerProfileResult(StrictModel):
             self.element,
         )
         if self.powers != powers:
-            raise ValueError("powers must be the exact power sequence of the element")
+            raise _validation_error(
+                "powers_mismatch",
+                "powers must be the exact power sequence of the element",
+            )
         if self.index != index:
-            raise ValueError("index must be the first repeated power exponent")
+            raise _validation_error(
+                "index_mismatch", "index must be the first repeated power exponent"
+            )
         if self.period != period:
-            raise ValueError("period must be the power cycle length")
+            raise _validation_error(
+                "period_mismatch", "period must be the power cycle length"
+            )
         if self.idempotent != idempotent:
-            raise ValueError("idempotent must be the unique idempotent power")
+            raise _validation_error(
+                "idempotent_mismatch", "idempotent must be the unique idempotent power"
+            )
         if self.cyclic_subsemigroup != cyclic:
-            raise ValueError(
-                "cyclic_subsemigroup must be the exact closure of the element"
+            raise _validation_error(
+                "cyclic_subsemigroup_mismatch",
+                "cyclic_subsemigroup must be the exact closure of the element",
             )
         return self
 
@@ -118,7 +148,10 @@ class GeneratedSubsemigroupRequest(StrictModel):
         labels = set(self.semigroup.elements)
         for gen in self.generators:
             if gen not in labels:
-                raise ValueError("every generator must be in the semigroup")
+                raise _validation_error(
+                    "generator_not_in_semigroup",
+                    "every generator must be in the semigroup",
+                )
         return self
 
 
@@ -139,7 +172,9 @@ class ElementPowerRequest(StrictModel):
     @model_validator(mode="after")
     def require_element_exists(self) -> Self:
         if self.element not in set(self.semigroup.elements):
-            raise ValueError("element must be in the semigroup")
+            raise _validation_error(
+                "element_not_in_semigroup", "element must be in the semigroup"
+            )
         return self
 
 
@@ -162,7 +197,10 @@ class ElementPowerResult(StrictModel):
             self.exponent,
         )
         if self.power != power:
-            raise ValueError("power must be the exact iterated product of the element")
+            raise _validation_error(
+                "power_mismatch",
+                "power must be the exact iterated product of the element",
+            )
         return self
 
 
@@ -186,7 +224,10 @@ class IdempotentsResult(StrictModel):
             self.semigroup.elements, self.semigroup.multiplication
         )
         if self.idempotents != idempotents:
-            raise ValueError("idempotents must be exactly the elements with e*e = e")
+            raise _validation_error(
+                "idempotents_mismatch",
+                "idempotents must be exactly the elements with e*e = e",
+            )
         return self
 
 
@@ -201,14 +242,21 @@ class PrincipalIdealsRequest(StrictModel):
         labels = set(self.semigroup.elements)
         for element in self.elements:
             if element not in labels:
-                raise ValueError("every element must be in the semigroup")
+                raise _validation_error(
+                    "element_not_in_semigroup", "every element must be in the semigroup"
+                )
         if len(set(self.elements)) != len(self.elements):
-            raise ValueError("requested elements must be distinct")
+            raise _validation_error(
+                "requested_elements_not_distinct", "requested elements must be distinct"
+            )
         declared_order = tuple(
             element for element in self.semigroup.elements if element in self.elements
         )
         if self.elements != declared_order:
-            raise ValueError("requested elements must use declared semigroup order")
+            raise _validation_error(
+                "requested_elements_wrong_order",
+                "requested elements must use declared semigroup order",
+            )
         return self
 
 
@@ -232,8 +280,9 @@ class PrincipalIdealsResult(StrictModel):
             self.elements,
         )
         if self.ideals != ideals:
-            raise ValueError(
-                "ideals must be the exact principal ideals of the elements"
+            raise _validation_error(
+                "ideals_mismatch",
+                "ideals must be the exact principal ideals of the elements",
             )
         return self
 
@@ -268,13 +317,23 @@ class GreenRelationsResult(StrictModel):
             self.semigroup.elements, self.semigroup.multiplication
         )
         if self.L != L:
-            raise ValueError("L must be the exact Green L-relation")
+            raise _validation_error(
+                "green_l_mismatch", "L must be the exact Green L-relation"
+            )
         if self.R != R:
-            raise ValueError("R must be the exact Green R-relation")
+            raise _validation_error(
+                "green_r_mismatch", "R must be the exact Green R-relation"
+            )
         if self.H != H:
-            raise ValueError("H must be the exact Green H-relation")
+            raise _validation_error(
+                "green_h_mismatch", "H must be the exact Green H-relation"
+            )
         if self.D != D:
-            raise ValueError("D must be the exact Green D-relation")
+            raise _validation_error(
+                "green_d_mismatch", "D must be the exact Green D-relation"
+            )
         if self.J != J:
-            raise ValueError("J must be the exact Green J-relation")
+            raise _validation_error(
+                "green_j_mismatch", "J must be the exact Green J-relation"
+            )
         return self

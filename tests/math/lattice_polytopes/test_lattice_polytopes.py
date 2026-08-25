@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import pytest
 from pydantic import ValidationError
 
@@ -34,6 +36,13 @@ def _hs(coeffs: tuple[tuple[str, str], ...], offset: tuple[str, str]) -> Halfspa
         coefficients=tuple(_cr(n, d) for n, d in coeffs),
         offset=_cr(offset[0], offset[1]),
     )
+
+
+@contextmanager
+def raises_code(code: str):
+    with pytest.raises(ValidationError) as error:
+        yield
+    assert error.value.errors()[0]["type"] == f"lattice_polytope.{code}"
 
 
 UNIT_SQUARE_V = (
@@ -194,14 +203,14 @@ class TestCount:
 class TestRejection:
     def test_unbounded_halfspace_representation_is_rejected(self) -> None:
         # Only x <= 1: the polytope is unbounded in every other direction.
-        with pytest.raises(ValidationError, match="unbounded"):
+        with raises_code("geometry_invalid"):
             LatticePolytopeRequest(
                 halfspaces=(_hs((("1", "1"), ("0", "1")), ("1", "1")),)
             )
 
     def test_unbounded_quadrant_is_rejected(self) -> None:
         # x >= 0 and y >= 0 only: unbounded.
-        with pytest.raises(ValidationError, match="unbounded"):
+        with raises_code("geometry_invalid"):
             LatticePolytopeRequest(
                 halfspaces=(
                     _hs((("-1", "1"), ("0", "1")), ("0", "1")),
@@ -229,18 +238,18 @@ class TestRejection:
             )
 
     def test_both_representations_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="exactly one"):
+        with raises_code("representation_not_exclusive"):
             LatticePolytopeRequest(
                 vertices=(_v(("0", "1"), ("0", "1")),),
                 halfspaces=(_hs((("1", "1"), ("0", "1")), ("1", "1")),),
             )
 
     def test_neither_representation_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="exactly one"):
+        with raises_code("representation_not_exclusive"):
             LatticePolytopeRequest()
 
     def test_all_zero_halfspace_normal_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="must not all be zero"):
+        with raises_code("halfspace_normal_zero"):
             Halfspace(
                 coefficients=(_cr("0"), _cr("0")),
                 offset=_cr("1"),
@@ -251,7 +260,7 @@ class TestBudgets:
     def test_bounding_box_span_bound_enforced(self) -> None:
         # A 1D interval spanning more than MAX_BOUND_SPAN integer points.
         far = str(MAX_BOUND_SPAN + 5)
-        with pytest.raises(ValidationError, match="span bound"):
+        with raises_code("geometry_invalid"):
             LatticePolytopeRequest(
                 vertices=(
                     _v(("0", "1")),
@@ -368,7 +377,7 @@ class TestMembershipWorkBudget:
         diagonals = [
             _hs((("1", "1"), ("1", "1")), (str(c), "1")) for c in range(10998, 11005)
         ]
-        with pytest.raises(ValidationError, match="budget"):
+        with raises_code("geometry_work_exceeds_bound"):
             LatticePolytopeRequest(halfspaces=tuple(sides + diagonals))
 
     def test_membership_work_boundary_accepts_the_limit(self) -> None:
@@ -437,7 +446,7 @@ class TestLowerDimensionalRejection:
         # Two affinely dependent vertices in 3-D define a segment.  The old
         # behaviour skipped the rank guard when len(vertices) < dimension and
         # counted the whole eight-point bounding box instead of the segment.
-        with pytest.raises(ValidationError, match="full-dimensional"):
+        with raises_code("geometry_invalid"):
             LatticePolytopeRequest(
                 vertices=(
                     _v(("0", "1"), ("0", "1"), ("0", "1")),
@@ -446,12 +455,12 @@ class TestLowerDimensionalRejection:
             )
 
     def test_single_vertex_in_two_d_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="full-dimensional"):
+        with raises_code("geometry_invalid"):
             LatticePolytopeRequest(vertices=(_v(("0", "1"), ("0", "1")),))
 
     def test_collinear_triangle_rejected(self) -> None:
         # Three collinear vertices in 2-D: affine rank 1 < 2.
-        with pytest.raises(ValidationError, match="full-dimensional"):
+        with raises_code("geometry_invalid"):
             LatticePolytopeRequest(
                 vertices=(
                     _v(("0", "1"), ("0", "1")),
@@ -497,7 +506,7 @@ class TestEnumerateRequestBoundary:
         # translates for request parsing, so admission rejects it at
         # request construction instead of failing inside operation.run.
         far = "599"
-        with pytest.raises(ValidationError, match="output limit"):
+        with raises_code("enumeration_artifact_invalid"):
             EnumerateLatticePointsRequest(
                 vertices=(
                     _v(("0", "1"), ("0", "1")),
@@ -511,7 +520,7 @@ class TestEnumerateRequestBoundary:
         # [0,1000]^2 holds more than MAX_LATTICE_POINTS points: counting
         # succeeds but enumeration must be refused before execution.
         far = "1000"
-        with pytest.raises(ValidationError, match="budget bound"):
+        with raises_code("enumeration_artifact_invalid"):
             EnumerateLatticePointsRequest(
                 vertices=(
                     _v(("0", "1"), ("0", "1")),
@@ -527,7 +536,7 @@ class TestEnumerateRequestBoundary:
             LatticePoint,
         )
 
-        with pytest.raises(ValidationError, match="point_count"):
+        with raises_code("point_count_mismatch"):
             EnumerateLatticePointsResult(
                 dimension=1,
                 point_count=0,
@@ -552,7 +561,7 @@ class TestEnumerationResultInvariants:
             LatticePoint,
         )
 
-        with pytest.raises(ValidationError, match="repeat"):
+        with raises_code("duplicate_lattice_point"):
             EnumerateLatticePointsResult(
                 dimension=1,
                 point_count=2,
@@ -569,7 +578,7 @@ class TestEnumerationResultInvariants:
             LatticePoint,
         )
 
-        with pytest.raises(ValidationError, match="dimension"):
+        with raises_code("point_dimension_mismatch"):
             EnumerateLatticePointsResult(
                 dimension=2,
                 point_count=1,
@@ -585,7 +594,7 @@ class TestEnumerationResultInvariants:
 
         exactly_at = "9" * COORDINATE_DIGITS
         assert LatticePoint(coordinates=(exactly_at,)).coordinates == (exactly_at,)
-        with pytest.raises(ValidationError, match="digit bound"):
+        with raises_code("lattice_point_coordinate_digit_bound"):
             LatticePoint(coordinates=("9" * (COORDINATE_DIGITS + 1),))
 
 
@@ -599,7 +608,7 @@ class TestVertexFacetMembershipBudget:
         vertices = tuple(
             _v((str(i * 63), "1"), (str(i * i // 2), "1")) for i in range(64)
         )
-        with pytest.raises(ValidationError, match="test budget"):
+        with raises_code("geometry_work_exceeds_bound"):
             LatticePolytopeRequest(vertices=vertices)
 
     def test_small_vertex_polygon_still_admitted(self) -> None:
@@ -801,7 +810,7 @@ class TestBoundedEmptyHalfspacePolytopes:
         assert enumerated.points == ()
 
     def test_unbounded_representation_still_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="unbounded"):
+        with raises_code("geometry_invalid"):
             LatticePolytopeRequest(halfspaces=(_hs((("1", "1"),), ("0", "1")),))
 
     def test_declarations_disclose_the_empty_h_result(self) -> None:
@@ -880,7 +889,7 @@ class TestReviewRegressions:
     def test_feasible_unbounded_lineality_system_still_rejected(self):
         """A feasible vertex-free system with lineality stays rejected."""
 
-        with pytest.raises(ValidationError, match="unbounded"):
+        with raises_code("geometry_invalid"):
             LatticePolytopeRequest(
                 halfspaces=(_hs((("1", "1"), ("0", "1")), ("0", "1")),)
             )
@@ -901,7 +910,7 @@ class TestReviewRegressions:
 class TestSecondWaveRegressions:
     def test_feasibility_probe_uses_unrestricted_coordinates(self):
         """x <= -1 is unbounded, not empty: the probe must not assume x >= 0."""
-        with pytest.raises(ValidationError, match="unbounded"):
+        with raises_code("geometry_invalid"):
             LatticePolytopeRequest(halfspaces=(_hs((("-1", "1"),), ("-1", "1")),))
 
     def test_empty_integer_slice_detected_before_span_budgets(self):
@@ -937,7 +946,7 @@ class TestSecondWaveRegressions:
         """
         small_den = "1" + "0" * 10000  # 10^10000, 10,001 digits
         big_offset = "1" + "0" * 25000  # 10^25000, 25,001 digits
-        with pytest.raises(ValidationError, match="representable bound"):
+        with raises_code("geometry_invalid"):
             LatticePolytopeRequest(
                 halfspaces=(
                     _hs((("1", small_den),), (big_offset, "1")),
@@ -1024,7 +1033,7 @@ class TestDerivedCoordinateSignBoundary:
         big_offset = "1" + "0" * 25000
         upper = ("-" + big_offset) if negative else big_offset
         lower = big_offset if negative else "-" + big_offset
-        with pytest.raises(ValidationError, match="representable bound"):
+        with raises_code("geometry_invalid"):
             LatticePolytopeRequest(
                 halfspaces=(
                     _hs((("1", small_den),), (upper, "1")),

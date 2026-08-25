@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
@@ -22,6 +23,12 @@ MAX_ENTRIES = (
 # execution envelope; replacing the kernel with a faster elimination
 # would justify re-deriving this bound upward.
 _MAX_DIM_FOR_CENTER = 128
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by finite-dimensional algebras."""
+
+    return PydanticCustomError(f"finite_dim_algebra.{reason}", message)
 
 
 class StructureConstants(StrictModel):
@@ -45,22 +52,32 @@ class StructureConstants(StrictModel):
         from sympy import isprime
 
         if not isprime(self.field_order):
-            raise ValueError("field_order must be prime")
+            raise _validation_error(
+                "field_order_not_prime", "field_order must be prime"
+            )
         n = self.dimension
         if len(self.multiplication) != n:
-            raise ValueError("multiplication must have dimension rows")
+            raise _validation_error(
+                "multiplication_outer_dimension",
+                "multiplication must have dimension rows",
+            )
         for row in self.multiplication:
             if len(row) != n:
-                raise ValueError(
-                    "multiplication must be square in the first two indices"
+                raise _validation_error(
+                    "multiplication_not_square",
+                    "multiplication must be square in the first two indices",
                 )
             for inner in row:
                 if len(inner) != n:
-                    raise ValueError(
-                        "multiplication must be a 3-index tensor c[i][j][k]"
+                    raise _validation_error(
+                        "multiplication_inner_dimension",
+                        "multiplication must be a 3-index tensor c[i][j][k]",
                     )
                 if any(not 0 <= v < self.field_order for v in inner):
-                    raise ValueError("entries must be canonical field residues")
+                    raise _validation_error(
+                        "multiplication_noncanonical_residue",
+                        "entries must be canonical field residues",
+                    )
         return self
 
 
@@ -73,9 +90,10 @@ class CenterRequest(StrictModel):
     @model_validator(mode="after")
     def require_bounded_center_work(self) -> Self:
         if self.algebra.dimension > _MAX_DIM_FOR_CENTER:
-            raise ValueError(
+            raise _validation_error(
+                "center_dimension_limit",
                 "center computation is Theta(n^4) on the current elimination "
-                f"kernel and supports at most {_MAX_DIM_FOR_CENTER} dimensions"
+                f"kernel and supports at most {_MAX_DIM_FOR_CENTER} dimensions",
             )
         return self
 

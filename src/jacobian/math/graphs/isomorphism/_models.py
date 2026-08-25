@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import ConfigDict, Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.isomorphism._canonicalization import (
@@ -39,15 +40,22 @@ class SimpleGraph(StrictModel):
             if not (
                 0 <= source < self.vertex_count and 0 <= target < self.vertex_count
             ):
-                raise ValueError("edge vertices must be in 0..vertex_count-1")
+                raise PydanticCustomError(
+                    "graph.edge_vertices_must_be_in_0_vertex_count_1",
+                    "edge vertices must be in 0..vertex_count-1",
+                )
             if source == target:
-                raise ValueError("self-loops are not allowed")
+                raise PydanticCustomError(
+                    "graph.self_loops_are_not_allowed", "self-loops are not allowed"
+                )
             if self.directed:
                 edge_key = (source, target)
             else:
                 edge_key = (min(source, target), max(source, target))
             if edge_key in seen:
-                raise ValueError("edges must be unique")
+                raise PydanticCustomError(
+                    "graph.edges_must_be_unique", "edges must be unique"
+                )
             seen.add(edge_key)
         return self
 
@@ -64,13 +72,19 @@ class GraphIsomorphismRequest(StrictModel):
     @model_validator(mode="after")
     def require_consistent_directedness(self) -> Self:
         if self.graph_a.directed != self.graph_b.directed:
-            raise ValueError("both graphs must have the same directedness")
+            raise PydanticCustomError(
+                "graph.both_graphs_must_have_the_same_directedness",
+                "both graphs must have the same directedness",
+            )
         return self
 
     @model_validator(mode="after")
     def require_consistent_vertex_count(self) -> Self:
         if self.graph_a.vertex_count != self.graph_b.vertex_count:
-            raise ValueError("both graphs must have the same vertex count")
+            raise PydanticCustomError(
+                "graph.both_graphs_must_have_the_same_vertex_count",
+                "both graphs must have the same vertex count",
+            )
         return self
 
 
@@ -122,21 +136,24 @@ class ColoredGraphCanonicalizationRequest(StrictModel):
     def require_bounded_canonicalization(self) -> Self:
         candidate_count = canonical_permutation_count(self.colored_graph)
         if candidate_count > MAX_CANONICAL_PERMUTATIONS:
-            raise ValueError(
+            raise PydanticCustomError(
+                "graph.colored_canonicalization_exceeds_max_canonical_permutations_permutatio",
                 "colored-graph canonicalization exceeds the "
-                f"{MAX_CANONICAL_PERMUTATIONS}-permutation bound"
+                f"{MAX_CANONICAL_PERMUTATIONS}-permutation bound",
             )
         replay_work = canonical_replay_work(self.colored_graph)
         if replay_work > MAX_CANONICAL_REPLAY_WORK:
-            raise ValueError(
+            raise PydanticCustomError(
+                "graph.colored_canonicalization_exceeds_max_canonical_replay_work",
                 "colored-graph canonicalization exceeds the "
-                f"{MAX_CANONICAL_REPLAY_WORK}-unit execution-and-replay work bound"
+                f"{MAX_CANONICAL_REPLAY_WORK}-unit execution-and-replay work bound",
             )
         result_bytes = canonicalization_result_wire_bytes(self.colored_graph)
         if result_bytes > MAX_CANONICALIZATION_RESULT_BYTES:
-            raise ValueError(
+            raise PydanticCustomError(
+                "graph.colored_canonicalization_exceeds_max_canonicalization_result_bytes",
                 "colored-graph canonicalization exceeds the "
-                f"{MAX_CANONICALIZATION_RESULT_BYTES}-byte result bound"
+                f"{MAX_CANONICALIZATION_RESULT_BYTES}-byte result bound",
             )
         return self
 
@@ -178,22 +195,30 @@ class ColoredGraphCanonicalizationResult(StrictModel):
         if tuple(item.source_vertex for item in self.relabeling) != (
             self.source_graph.graph.vertices
         ):
-            raise ValueError(
-                "relabeling must cover source vertices in their authoritative order"
+            raise PydanticCustomError(
+                "graph.relabeling_cover_source_vertices_their_authoritative_order",
+                "relabeling must cover source vertices in their authoritative order",
             )
         mapping = {
             item.source_vertex: item.canonical_vertex for item in self.relabeling
         }
         if len(mapping) != len(self.relabeling):
-            raise ValueError("relabeling source vertices must be unique")
+            raise PydanticCustomError(
+                "graph.relabeling_source_vertices_must_be_unique",
+                "relabeling source vertices must be unique",
+            )
         if set(mapping.values()) != set(self.canonical_graph.graph.vertices):
-            raise ValueError(
-                "relabeling must be a bijection onto the canonical graph vertices"
+            raise PydanticCustomError(
+                "graph.relabeling_bijection_onto_canonical_vertices",
+                "relabeling must be a bijection onto the canonical graph vertices",
             )
         if apply_colored_graph_relabeling(self.source_graph, mapping) != (
             self.canonical_graph
         ):
-            raise ValueError("relabeling must reconstruct the canonical colored graph")
+            raise PydanticCustomError(
+                "graph.relabeling_must_reconstruct_the_canonical_colore",
+                "relabeling must reconstruct the canonical colored graph",
+            )
         expected_graph, expected_relabeling = canonicalize_colored_graph_data(
             self.source_graph
         )
@@ -204,8 +229,9 @@ class ColoredGraphCanonicalizationResult(StrictModel):
             self.canonical_graph != expected_graph
             or actual_relabeling != expected_relabeling
         ):
-            raise ValueError(
-                "result must be the exact deterministic colored-graph canonical form"
+            raise PydanticCustomError(
+                "graph.result_exact_deterministic_colored_canonical_form",
+                "result must be the exact deterministic colored-graph canonical form",
             )
         return self
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.tree_decompositions.values import TreeDecomposition
@@ -27,7 +28,10 @@ class WidthResult(StrictModel):
     @model_validator(mode="after")
     def bind_width(self) -> Self:
         if self.max_bag_cardinality != self.width + 1:
-            raise ValueError("width must equal max_bag_cardinality minus one")
+            raise PydanticCustomError(
+                "graph.width_must_equal_max_bag_cardinality_minus_one",
+                "width must equal max_bag_cardinality minus one",
+            )
         return self
 
 
@@ -67,7 +71,10 @@ class RerootRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_root(self) -> Self:
         if self.root not in self.decomposition.tree_nodes:
-            raise ValueError("root must be a declared tree node")
+            raise PydanticCustomError(
+                "graph.root_must_be_a_declared_tree_node",
+                "root must be a declared tree node",
+            )
         return self
 
 
@@ -91,7 +98,10 @@ class RestrictRequest(StrictModel):
     def require_source_vertices(self) -> Self:
         source_vertices = set(self.decomposition.graph.vertices)
         if not set(self.subset).issubset(source_vertices):
-            raise ValueError("subset must contain only declared source vertices")
+            raise PydanticCustomError(
+                "graph.subset_must_contain_only_declared_source_vertice",
+                "subset must contain only declared source vertices",
+            )
         return self
 
 

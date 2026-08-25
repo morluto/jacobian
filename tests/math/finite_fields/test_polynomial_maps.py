@@ -117,11 +117,15 @@ def test_certificates_reject_values_not_bound_to_the_exact_table() -> None:
 def test_table_consumers_reject_unevaluated_targets() -> None:
     identity_table = finite_map_table(_map(1))
     zero = identity_table.entries[0][1]
-    with pytest.raises(ValidationError, match="bound polynomial"):
+    with pytest.raises(ValidationError) as error:
         FiniteMapTable(
             map=identity_table.map,
             entries=tuple((source, zero) for source, _ in identity_table.entries),
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "finite_field.finite_map_table_targets_match_bound_polynomial"
+    )
 
 
 def test_slice_b_reuses_one_table_for_fiber_and_certificate_handoff() -> None:

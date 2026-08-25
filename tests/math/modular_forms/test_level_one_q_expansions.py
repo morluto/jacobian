@@ -35,6 +35,10 @@ def _integers(expansion: LevelOneModularQExpansion) -> tuple[int, ...]:
     )
 
 
+def _validation_type(error: pytest.ExceptionInfo[ValidationError]) -> str:
+    return str(error.value.errors()[0]["type"])
+
+
 def test_e4_and_e6_known_normalized_prefixes() -> None:
     assert _integers(level_one_named_q_expansion("E4", 6)) == (
         1,
@@ -87,8 +91,9 @@ def test_value_rejects_the_misspelled_holomorphic_space_kind() -> None:
     result = level_one_named_q_expansion("E4", 3)
     payload = result.model_dump()
     payload["space_kind"] = "HOLMORPHIC"
-    with pytest.raises(ValidationError, match="should be 'HOLOMORPHIC' or 'CUSP'"):
+    with pytest.raises(ValidationError) as error:
         LevelOneModularQExpansion.model_validate(payload)
+    assert _validation_type(error) == "literal_error"
 
 
 def test_order_one_retains_the_known_constant_coefficient() -> None:
@@ -108,15 +113,17 @@ def test_eisenstein_prefixes_beyond_the_former_carrier_ceiling_are_admitted() ->
 
 
 def test_requests_above_the_serialized_budget_name_the_controlling_quantity() -> None:
-    with pytest.raises(ValidationError, match="serialized result bound"):
+    with pytest.raises(ValidationError) as error:
         LevelOneNamedQExpansionRequest(form="E6", truncation_order=1301)
+    assert _validation_type(error) == "modular_forms.serialized_result_bound"
     with pytest.raises(ValueError, match="serialized result bound"):
         require_level_one_admission("E4", 1478)
 
 
 def test_delta_above_the_work_budget_names_the_controlling_quantity() -> None:
-    with pytest.raises(ValidationError, match="exact work bound"):
+    with pytest.raises(ValidationError) as error:
         LevelOneNamedQExpansionRequest(form="DELTA", truncation_order=601)
+    assert _validation_type(error) == "modular_forms.exact_work_bound"
     with pytest.raises(ValueError, match="exact work bound"):
         require_level_one_admission("DELTA", 601)
 
@@ -157,8 +164,9 @@ def test_every_closed_family_member_is_admitted_at_order_one(form: str) -> None:
 
 
 def test_wire_request_rejects_unknown_form_names() -> None:
-    with pytest.raises(ValidationError, match="should be 'E4', 'E6' or 'DELTA'"):
+    with pytest.raises(ValidationError) as error:
         LevelOneNamedQExpansionRequest(form="E5", truncation_order=8)
+    assert _validation_type(error) == "literal_error"
 
 
 def test_value_rejects_forged_coefficient_during_replay() -> None:
@@ -170,8 +178,9 @@ def test_value_rejects_forged_coefficient_during_replay() -> None:
         {"num": "241", "den": "1"},
         {"num": "2160", "den": "1"},
     )
-    with pytest.raises(ValidationError, match="does not match"):
+    with pytest.raises(ValidationError) as error:
         LevelOneModularQExpansion.model_validate(payload)
+    assert _validation_type(error) == "modular_forms.coefficients_mismatch"
 
 
 def test_value_rejects_forged_coefficient_at_widened_precision() -> None:
@@ -179,8 +188,9 @@ def test_value_rejects_forged_coefficient_at_widened_precision() -> None:
     coefficients = list(payload["q_expansion"]["coefficients"])
     coefficients[-1] = {"num": str(int(coefficients[-1]["num"]) + 1), "den": "1"}
     payload["q_expansion"]["coefficients"] = tuple(coefficients)
-    with pytest.raises(ValidationError, match="does not match"):
+    with pytest.raises(ValidationError) as error:
         LevelOneModularQExpansion.model_validate(payload)
+    assert _validation_type(error) == "modular_forms.coefficients_mismatch"
 
 
 def _beyond_budget_e4_payload() -> dict[str, object]:
@@ -211,8 +221,9 @@ def test_value_rejects_forged_coefficients_beyond_the_producer_envelope() -> Non
     coefficients = list(payload["q_expansion"]["coefficients"])
     coefficients[-1] = {"num": str(int(coefficients[-1]["num"]) + 1), "den": "1"}
     payload["q_expansion"]["coefficients"] = tuple(coefficients)
-    with pytest.raises(ValidationError, match="does not match"):
+    with pytest.raises(ValidationError) as error:
         LevelOneModularQExpansion.model_validate(payload)
+    assert _validation_type(error) == "modular_forms.coefficients_mismatch"
 
 
 def test_replay_envelope_names_its_own_controlling_quantity() -> None:

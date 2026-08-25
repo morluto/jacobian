@@ -6,6 +6,7 @@ import unicodedata
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
@@ -36,9 +37,15 @@ class DeterministicGamePosition(StrictModel):
     @model_validator(mode="after")
     def require_payoff_exactly_at_terminals(self) -> Self:
         if self.owner == "TERMINAL" and self.payoff is None:
-            raise ValueError("terminal positions require an exact payoff")
+            raise PydanticCustomError(
+                "finite_game.terminal_payoff_required",
+                "terminal positions require an exact payoff",
+            )
         if self.owner != "TERMINAL" and self.payoff is not None:
-            raise ValueError("nonterminal positions must not carry a payoff")
+            raise PydanticCustomError(
+                "finite_game.nonterminal_payoff_forbidden",
+                "nonterminal positions must not carry a payoff",
+            )
         return self
 
 
@@ -82,23 +89,35 @@ class DeterministicTerminalGame(StrictModel):
     def require_complete_bounded_arena(self) -> Self:
         labels = tuple(position.label for position in self.positions)
         if any(not unicodedata.is_normalized("NFC", label) for label in labels):
-            raise ValueError("position labels must use Unicode NFC")
+            raise PydanticCustomError(
+                "finite_game.labels_not_nfc", "position labels must use Unicode NFC"
+            )
         if len(set(labels)) != len(labels):
-            raise ValueError("position labels must be distinct")
+            raise PydanticCustomError(
+                "finite_game.labels_not_distinct", "position labels must be distinct"
+            )
 
         index = {label: offset for offset, label in enumerate(labels)}
         edge_pairs = tuple((move.source, move.target) for move in self.moves)
         if any(
             source not in index or target not in index for source, target in edge_pairs
         ):
-            raise ValueError("every move endpoint must be a declared position")
+            raise PydanticCustomError(
+                "finite_game.move_endpoint_unknown",
+                "every move endpoint must be a declared position",
+            )
         if len(set(edge_pairs)) != len(edge_pairs):
-            raise ValueError("game moves must be distinct")
+            raise PydanticCustomError(
+                "finite_game.moves_not_distinct", "game moves must be distinct"
+            )
         canonical_edges = tuple(
             sorted(edge_pairs, key=lambda edge: (index[edge[0]], index[edge[1]]))
         )
         if edge_pairs != canonical_edges:
-            raise ValueError("game moves must use canonical declared-position order")
+            raise PydanticCustomError(
+                "finite_game.moves_not_canonical",
+                "game moves must use canonical declared-position order",
+            )
 
         outgoing = dict.fromkeys(labels, 0)
         for source, _ in edge_pairs:
@@ -106,10 +125,14 @@ class DeterministicTerminalGame(StrictModel):
         for position in self.positions:
             if position.owner == "TERMINAL":
                 if outgoing[position.label] != 0:
-                    raise ValueError("terminal positions must have no outgoing moves")
+                    raise PydanticCustomError(
+                        "finite_game.terminal_has_moves",
+                        "terminal positions must have no outgoing moves",
+                    )
             elif outgoing[position.label] == 0:
-                raise ValueError(
-                    "every nonterminal position must have an outgoing move"
+                raise PydanticCustomError(
+                    "finite_game.nonterminal_without_move",
+                    "every nonterminal position must have an outgoing move",
                 )
 
         _require_terminal_game_envelope(self)
@@ -169,11 +192,20 @@ class DeterministicTerminalGameSolution(StrictModel):
 
         value_classes, max_strategy, min_strategy = _solve_terminal_game_data(self.game)
         if self.value_classes != value_classes:
-            raise ValueError("value_classes must be the exact minimax partition")
+            raise PydanticCustomError(
+                "finite_game.value_classes_not_canonical",
+                "value_classes must be the exact minimax partition",
+            )
         if self.max_strategy != max_strategy:
-            raise ValueError("max_strategy must be the canonical optimal strategy")
+            raise PydanticCustomError(
+                "finite_game.max_strategy_not_canonical",
+                "max_strategy must be the canonical optimal strategy",
+            )
         if self.min_strategy != min_strategy:
-            raise ValueError("min_strategy must be the canonical optimal strategy")
+            raise PydanticCustomError(
+                "finite_game.min_strategy_not_canonical",
+                "min_strategy must be the canonical optimal strategy",
+            )
         return self
 
 
@@ -215,10 +247,11 @@ def _require_terminal_game_envelope(game: DeterministicTerminalGame) -> None:
         + rational_work
     )
     if work_units > MAX_TERMINAL_GAME_WORK_UNITS:
-        raise ValueError(
+        raise PydanticCustomError(
+            "finite_game.threshold_work_exceeded",
             "terminal-game threshold work exceeds the exact work bound "
             f"({work_units} > {MAX_TERMINAL_GAME_WORK_UNITS}); reduce distinct "
-            "payoff levels, arena size, or payoff digit length"
+            "payoff levels, arena size, or payoff digit length",
         )
 
     labels = tuple(position.label for position in game.positions)
@@ -259,8 +292,9 @@ def _require_terminal_game_envelope(game: DeterministicTerminalGame) -> None:
             ),
         )
     except ValueError as exc:
-        raise ValueError(
-            "terminal-game solution exceeds the exact result-size bound"
+        raise PydanticCustomError(
+            "finite_game.result_size_exceeded",
+            "terminal-game solution exceeds the exact result-size bound",
         ) from exc
 
 

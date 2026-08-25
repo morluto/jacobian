@@ -22,39 +22,22 @@ from jacobian.math.finite_geometry._models import (
     SubspaceSpanRequest,
     SubspaceSpanResult,
 )
+from jacobian.math.prime_field_linear_algebra import (
+    PrimeFieldMatrix,
+    nullspace,
+    rref,
+)
 
 
 def _rref(matrix: list[list[int]], field_order: int) -> tuple[list[list[int]], int]:
     """Reduced row echelon form and rank over a prime field."""
-    rows = [list(row) for row in matrix]
-    row_count = len(rows)
-    col_count = len(rows[0]) if rows else 0
-    pivot_row = 0
-    for col in range(col_count):
-        pivot = None
-        for i in range(pivot_row, row_count):
-            if rows[i][col] % field_order != 0:
-                pivot = i
-                break
-        if pivot is None:
-            continue
-        rows[pivot_row], rows[pivot] = rows[pivot], rows[pivot_row]
-        inv = pow(rows[pivot_row][col] % field_order, -1, field_order)
-        rows[pivot_row] = [v * inv % field_order for v in rows[pivot_row]]
-        for i, row in enumerate(rows):
-            if i == pivot_row:
-                continue
-            factor = row[col] % field_order
-            if factor == 0:
-                continue
-            rows[i] = [
-                (a - factor * b) % field_order
-                for a, b in zip(row, rows[pivot_row], strict=True)
-            ]
-        pivot_row += 1
-        if pivot_row == row_count:
-            break
-    return rows, pivot_row
+    shared_matrix = PrimeFieldMatrix(
+        prime=field_order,
+        entries=tuple(tuple(row) for row in matrix),
+        columns=len(matrix[0]) if matrix else 0,
+    )
+    reduced, pivots = rref(shared_matrix)
+    return [list(row) for row in reduced], len(pivots)
 
 
 def _canonical_basis(matrix: list[list[int]], field_order: int) -> list[list[int]]:
@@ -200,26 +183,12 @@ def _intersection_basis(
 
 
 def _nullspace(matrix: list[list[int]], field_order: int) -> list[list[int]]:
-    rows, rank = _rref(matrix, field_order)
-    n = len(matrix[0])
-    piv_cols: list[int] = []
-    for i in range(rank):
-        piv = n
-        for j in range(n):
-            if rows[i][j] % field_order != 0:
-                piv = j
-                break
-        piv_cols.append(piv)
-    free_cols = [j for j in range(n) if j not in piv_cols]
-    basis: list[list[int]] = []
-    for fc in free_cols:
-        vec = [0] * n
-        vec[fc] = 1
-        for i in range(rank):
-            piv = piv_cols[i]
-            vec[piv] = (-rows[i][fc]) % field_order
-        basis.append(vec)
-    return basis
+    shared_matrix = PrimeFieldMatrix(
+        prime=field_order,
+        entries=tuple(tuple(row) for row in matrix),
+        columns=len(matrix[0]),
+    )
+    return [list(row) for row in nullspace(shared_matrix)]
 
 
 def compute_grassmannian_count(

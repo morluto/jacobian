@@ -76,7 +76,7 @@ def test_nonergodic_chains_return_typed_outcome(
 
 
 def test_search_bounds_reject_before_exact_matrix_powers() -> None:
-    with pytest.raises(ValidationError, match="at most 32"):
+    with pytest.raises(ValidationError) as error:
         MixingTimeRequest.model_validate(
             {
                 "matrix": [
@@ -86,8 +86,10 @@ def test_search_bounds_reject_before_exact_matrix_powers() -> None:
                 "max_steps": 4,
             }
         )
-    with pytest.raises(ValidationError, match=r"\(0, 1\]"):
+    assert error.value.errors()[0]["type"] == "too_long"
+    with pytest.raises(ValidationError) as error:
         _request(epsilon=(0, 1))
+    assert error.value.errors()[0]["type"] == "markov_chain.mixing_epsilon_out_of_range"
 
 
 def test_search_rejects_a_rational_height_that_cannot_fit_the_result() -> None:
@@ -103,7 +105,11 @@ def test_search_rejects_a_rational_height_that_cannot_fit_the_result() -> None:
         ]
         for row in range(8)
     ]
-    with pytest.raises(ValidationError, match="exact rational result bound"):
+    with pytest.raises(ValidationError) as error:
         MixingTimeRequest.model_validate(
             {"matrix": matrix, "epsilon": _r(1, 10), "max_steps": 256}
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "markov_chain.mixing_result_height_exceeds_bound"
+    )

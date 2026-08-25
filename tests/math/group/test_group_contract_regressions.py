@@ -1,5 +1,7 @@
 """Contract regression tests for the finite group operations."""
 
+from contextlib import contextmanager
+
 import pytest
 from pydantic import ValidationError
 
@@ -23,9 +25,16 @@ from jacobian.math.group._operations import (
 S3_GENERATORS = ((1, 2, 0), (1, 0, 2))
 
 
+@contextmanager
+def _group_error(code: str):
+    with pytest.raises(ValidationError) as info:
+        yield
+    assert info.value.errors()[0]["type"] == code
+
+
 def test_group_orbit_contract_binds_the_point_to_the_declared_degree() -> None:
     group = PermutationGroupRequest(degree=2, generators=((1, 0),))
-    with pytest.raises(ValidationError, match="point"):
+    with _group_error("group.point_out_of_range"):
         GroupOrbitRequest(group=group, point=3)
 
 
@@ -156,14 +165,14 @@ def test_group_conjugacy_classes_result_accepts_trivial_and_abelian_partitions()
 def test_group_conjugacy_classes_result_rejects_non_permutations() -> None:
     from jacobian.math.group._models import GroupConjugacyClassesResult
 
-    with pytest.raises(ValidationError, match="permutation"):
+    with _group_error("group.generator_permutation"):
         GroupConjugacyClassesResult(classes=(((0, 0),),))
 
 
 def test_group_conjugacy_classes_result_rejects_mixed_degrees() -> None:
     from jacobian.math.group._models import GroupConjugacyClassesResult
 
-    with pytest.raises(ValidationError, match="degree"):
+    with _group_error("group.common_degree"):
         GroupConjugacyClassesResult(
             classes=(((0, 1),), ((0, 1, 2), (1, 2, 0))),
         )
@@ -172,14 +181,14 @@ def test_group_conjugacy_classes_result_rejects_mixed_degrees() -> None:
 def test_group_conjugacy_classes_result_rejects_duplicate_elements() -> None:
     from jacobian.math.group._models import GroupConjugacyClassesResult
 
-    with pytest.raises(ValidationError, match="repeat"):
+    with _group_error("group.duplicate_element"):
         GroupConjugacyClassesResult(classes=(((1, 0),), ((1, 0),)))
 
 
 def test_group_conjugacy_classes_result_rejects_unclosed_element_set() -> None:
     from jacobian.math.group._models import GroupConjugacyClassesResult
 
-    with pytest.raises(ValidationError, match="group under composition"):
+    with _group_error("group.not_closed"):
         GroupConjugacyClassesResult(classes=(((1, 0),),))
 
 
@@ -195,7 +204,7 @@ def test_group_conjugacy_classes_result_rejects_wrong_partition_of_valid_group()
         ((1, 0, 2),),
         ((1, 2, 0), (2, 0, 1)),
     )
-    with pytest.raises(ValidationError, match="conjugation orbit"):
+    with _group_error("group.conjugacy_orbit"):
         GroupConjugacyClassesResult(classes=wrong)
 
 
@@ -206,7 +215,7 @@ def test_group_conjugacy_classes_result_requires_canonical_member_order() -> Non
         ((0, 1, 2),),
         ((2, 0, 1), (1, 2, 0)),
     )
-    with pytest.raises(ValidationError, match="strictly increasing"):
+    with _group_error("group.class_order"):
         GroupConjugacyClassesResult(classes=unsorted_members)
 
 
@@ -217,7 +226,7 @@ def test_group_conjugacy_classes_result_requires_representative_class_order() ->
         ((1, 2, 0), (2, 0, 1)),
         ((0, 1, 2),),
     )
-    with pytest.raises(ValidationError, match="canonical representative"):
+    with _group_error("group.class_order"):
         GroupConjugacyClassesResult(classes=reordered_classes)
 
 
@@ -347,7 +356,7 @@ def test_group_stabilizer_degree_one_boundary() -> None:
 
 def test_group_stabilizer_rejects_invalid_point() -> None:
     group = PermutationGroupRequest(degree=2, generators=((1, 0),))
-    with pytest.raises(ValidationError, match="point"):
+    with _group_error("group.point_out_of_range"):
         GroupStabilizerRequest(group=group, point=5)
     with pytest.raises(ValueError, match="point"):
         group_stabilizer(group, 7)
@@ -357,7 +366,7 @@ def test_forged_stabilizer_results_fail_defining_invariants() -> None:
     group = PermutationGroupRequest(degree=4, generators=((1, 2, 3, 0),))
 
     # A generator that does not fix the point is rejected.
-    with pytest.raises(ValidationError, match="fix the point"):
+    with _group_error("group.stabilizer_point"):
         GroupStabilizerResult(
             point=0,
             source=group,
@@ -367,7 +376,7 @@ def test_forged_stabilizer_results_fail_defining_invariants() -> None:
     # A fixing permutation outside the source group breaks membership and the
     # orbit-stabilizer relation |G| = |orbit| * |stab|.
     impostor = PermutationGroupRequest(degree=4, generators=((0, 2, 1, 3),))
-    with pytest.raises(ValidationError, match=r"orbit-stabilizer|source group"):
+    with _group_error("group.stabilizer_source"):
         GroupStabilizerResult(point=0, source=group, stabilizer=impostor)
 
     # A genuine stabilizer passes its own validation unchanged.
@@ -415,5 +424,5 @@ def test_group_subgroup_lattice_result_requires_canonical_entry_order() -> None:
     )
     payload = result.model_dump(mode="json")
     payload["subgroups"] = list(reversed(payload["subgroups"]))
-    with pytest.raises(ValidationError, match="canonical element and entry order"):
+    with _group_error("group.lattice_canonical"):
         GroupSubgroupLatticeResult.model_validate(payload)

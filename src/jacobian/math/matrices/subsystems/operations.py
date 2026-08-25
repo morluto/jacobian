@@ -21,7 +21,7 @@ from jacobian.math.matrices.subsystems.values import (
     MatrixSubsystem,
     partial_trace_entries,
 )
-from jacobian.math.matrices.values import RationalMatrix
+from jacobian.math.matrices.values import rational_matrix_from_fractions
 
 __all__ = [
     "kronecker_product",
@@ -36,21 +36,14 @@ def _fractions(matrix: FactorizedHermitianMatrix) -> tuple[tuple[Fraction, ...],
     )
 
 
-def _rational_matrix(entries: tuple[tuple[Fraction, ...], ...]) -> RationalMatrix:
-    return RationalMatrix(
-        entries=tuple(
-            tuple(CanonicalRational.from_fraction(entry) for entry in row)
-            for row in entries
-        )
-    )
-
-
 def _factorized(
     entries: tuple[tuple[Fraction, ...], ...],
     *,
     factors: tuple[MatrixSubsystem, ...],
 ) -> FactorizedHermitianMatrix:
-    return FactorizedHermitianMatrix(matrix=_rational_matrix(entries), factors=factors)
+    return FactorizedHermitianMatrix(
+        matrix=rational_matrix_from_fractions(entries), factors=factors
+    )
 
 
 def _negative_direction(

@@ -17,7 +17,13 @@ from jacobian.math.lie_algebra_homology._operations import (
     compute_chevalley_eilenberg_complex,
     compute_lie_homology,
 )
-from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
+from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix, rank
+
+
+def _assert_error_type(
+    exc_info: pytest.ExceptionInfo[ValidationError], code: str
+) -> None:
+    assert exc_info.value.errors()[0]["type"] == code
 
 
 def _sl2_gf5() -> LieAlgebra:
@@ -85,10 +91,12 @@ class TestChevalleyEilenbergComplex:
             ChevalleyEilenbergComplexRequest(lie_algebra=_sl2_gf5())
         )
         matrices = {
-            d.degree: [list(row) for row in d.entries] for d in result.differentials
+            d.degree: [list(row) for row in d.matrix.entries]
+            for d in result.differentials
         }
         # d_1 is identically zero and d_3 composes against d_2.
         assert matrices[1] == [[0, 0, 0]]
+        assert rank(next(d for d in result.differentials if d.degree == 1).matrix) == 0
         for degree in range(1, 3):
             composed = _compose(matrices[degree], matrices[degree + 1], result.prime)
             assert all(value == 0 for row in composed for value in row)
@@ -102,7 +110,7 @@ class TestChevalleyEilenbergComplex:
         # targets (E, F, H) x sources (EF, EH, FH); each single-pair column
         # carries the standard (-1)^(a+b+pi) CE sign:
         # d(E^F) = -H, d(E^H) = -(-2E) = 2E... encoded as exact GF(5) residues.
-        assert d2.entries == ((0, 2, 0), (0, 0, 3), (4, 0, 0))
+        assert d2.matrix.entries == ((0, 2, 0), (0, 0, 3), (4, 0, 0))
 
     def test_differential_serializes_canonical_matrix(self):
         """The CE differential serializes as one reusable GF(p) matrix value."""
@@ -129,28 +137,31 @@ class TestLieAlgebraValidation:
     """Adversarial rejection of tensors that are not Lie brackets."""
 
     def test_composite_prime_rejected(self):
-        with pytest.raises(ValidationError, match="prime must be a prime integer"):
+        with pytest.raises(ValidationError) as exc_info:
             LieAlgebra(
                 prime=4,
                 dimension=1,
                 structure_constants=(((0,),),),
             )
+        _assert_error_type(exc_info, "lie_algebra_homology.prime_not_prime")
 
     def test_alternation_violation_rejected(self):
         constants = (
             ((0, 0), (1, 0)),
             ((4, 0), (0, 1)),
         )  # [e_1, e_1] = e_0 != 0
-        with pytest.raises(ValidationError, match="alternating"):
+        with pytest.raises(ValidationError) as exc_info:
             LieAlgebra(prime=5, dimension=2, structure_constants=constants)
+        _assert_error_type(exc_info, "lie_algebra_homology.alternating")
 
     def test_antisymmetry_violation_rejected(self):
         constants = (
             ((0, 0), (1, 0)),
             ((1, 0), (0, 0)),
         )  # c[0][1] = (1,0) is not -c[1][0] mod 5
-        with pytest.raises(ValidationError, match="antisymmetric"):
+        with pytest.raises(ValidationError) as exc_info:
             LieAlgebra(prime=5, dimension=2, structure_constants=constants)
+        _assert_error_type(exc_info, "lie_algebra_homology.antisymmetric")
 
     def test_jacobi_violation_rejected(self):
         # [e0, e1] = e0 and [e1, e2] = e1 violate the Jacobi identity:
@@ -160,18 +171,20 @@ class TestLieAlgebraValidation:
             ((4, 0, 0), (0, 0, 0), (0, 1, 0)),
             ((0, 0, 0), (0, 4, 0), (0, 0, 0)),
         )
-        with pytest.raises(ValidationError, match="Jacobi"):
+        with pytest.raises(ValidationError) as exc_info:
             LieAlgebra(prime=5, dimension=3, structure_constants=constants)
+        _assert_error_type(exc_info, "lie_algebra_homology.jacobi")
 
     def test_noncanonical_diagonal_residue_rejected(self):
         # 2 mod 2 is zero, so every Lie identity holds vacuously; the entry
         # must still be rejected because it is not a canonical GF(2) residue.
-        with pytest.raises(ValidationError, match="canonical GF\\(prime\\) residues"):
+        with pytest.raises(ValidationError) as exc_info:
             LieAlgebra(
                 prime=2,
                 dimension=1,
                 structure_constants=(((2,),),),
             )
+        _assert_error_type(exc_info, "lie_algebra_homology.canonical_residues")
 
     def test_noncanonical_offdiagonal_residue_rejected(self):
         # c[0][1] = 5 and c[1][0] = 5 are antisymmetric and Jacobi modulo 5
@@ -180,8 +193,9 @@ class TestLieAlgebraValidation:
             ((0, 0), (5, 0)),
             ((5, 0), (0, 0)),
         )
-        with pytest.raises(ValidationError, match="canonical GF\\(prime\\) residues"):
+        with pytest.raises(ValidationError) as exc_info:
             LieAlgebra(prime=5, dimension=2, structure_constants=constants)
+        _assert_error_type(exc_info, "lie_algebra_homology.canonical_residues")
 
     def test_canonical_residues_accepted(self):
         g = LieAlgebra(
@@ -324,7 +338,7 @@ class TestComplexResultBinding:
         full = compute_chevalley_eilenberg_complex(
             ChevalleyEilenbergComplexRequest(lie_algebra=g)
         )
-        with pytest.raises(ValidationError, match="degree"):
+        with pytest.raises(ValidationError) as exc_info:
             ChevalleyEilenbergComplexResult(
                 lie_algebra=g,
                 dimension=3,
@@ -332,6 +346,7 @@ class TestComplexResultBinding:
                 differentials=tuple(d for d in full.differentials if d.degree != 1),
                 prime=5,
             )
+        _assert_error_type(exc_info, "lie_algebra_homology.complex_degrees")
 
     def test_wrong_matrix_shape_rejected(self):
         g = _sl2_gf5()
@@ -340,23 +355,23 @@ class TestComplexResultBinding:
         )
         d2 = next(d for d in full.differentials if d.degree == 2)
         # Rows narrower than the declared column axis cannot form a matrix value.
-        tampered_rows = tuple(row[:2] for row in d2.entries)
+        tampered_rows = tuple(row[:2] for row in d2.matrix.entries)
         with pytest.raises(ValidationError):
             DifferentialMatrix(
                 degree=2,
                 matrix=PrimeFieldMatrix(
-                    prime=5, entries=tampered_rows, columns=d2.source_dim
+                    prime=5, entries=tampered_rows, columns=d2.matrix.columns
                 ),
             )
         # A well-formed but forged differential still fails source replay.
-        forged_rows = [list(row) for row in d2.entries]
+        forged_rows = [list(row) for row in d2.matrix.entries]
         forged_rows[0][0] = (forged_rows[0][0] + 1) % 5
         broken = DifferentialMatrix(
             degree=2,
             matrix=PrimeFieldMatrix(
                 prime=5,
                 entries=tuple(tuple(row) for row in forged_rows),
-                columns=d2.source_dim,
+                columns=d2.matrix.columns,
             ),
         )
         others = tuple(d for d in full.differentials if d.degree != 2)
@@ -381,18 +396,18 @@ class TestComplexResultBinding:
             ChevalleyEilenbergComplexRequest(lie_algebra=g)
         )
         d2 = next(d for d in full.differentials if d.degree == 2)
-        rows = [list(row) for row in d2.entries]
+        rows = [list(row) for row in d2.matrix.entries]
         rows[0][0] = (rows[0][0] + 1) % 5
         forged_d2 = DifferentialMatrix(
             degree=2,
             matrix=PrimeFieldMatrix(
                 prime=5,
                 entries=tuple(tuple(row) for row in rows),
-                columns=d2.source_dim,
+                columns=d2.matrix.columns,
             ),
         )
         others = tuple(d for d in full.differentials if d.degree != 2)
-        with pytest.raises(ValidationError, match="reconstructed"):
+        with pytest.raises(ValidationError) as exc_info:
             ChevalleyEilenbergComplexResult(
                 lie_algebra=g,
                 dimension=3,
@@ -400,6 +415,7 @@ class TestComplexResultBinding:
                 differentials=(others[0], forged_d2, others[1]),
                 prime=5,
             )
+        _assert_error_type(exc_info, "lie_algebra_homology.complex_replay")
 
     def test_non_residue_entries_rejected(self):
         g = _sl2_gf5()
@@ -407,18 +423,19 @@ class TestComplexResultBinding:
             ChevalleyEilenbergComplexRequest(lie_algebra=g)
         )
         d1 = next(d for d in full.differentials if d.degree == 1)
-        rows = [list(row) for row in d1.entries]
+        rows = [list(row) for row in d1.matrix.entries]
         rows[0][0] = 5
         # The canonical prime-field matrix value itself rejects non-residues.
-        with pytest.raises(ValidationError, match="residues"):
+        with pytest.raises(ValidationError) as exc_info:
             DifferentialMatrix(
                 degree=1,
                 matrix=PrimeFieldMatrix(
                     prime=5,
                     entries=tuple(tuple(row) for row in rows),
-                    columns=d1.source_dim,
+                    columns=d1.matrix.columns,
                 ),
             )
+        _assert_error_type(exc_info, "value_error")
 
 
 class TestHomologySourceBinding:
@@ -433,8 +450,9 @@ class TestHomologySourceBinding:
             {"degree": 2, "betti": 0, "chain_dimension": 9},
             {"degree": 3, "betti": 1, "chain_dimension": 27},
         ]
-        with pytest.raises(ValidationError, match="replay"):
+        with pytest.raises(ValidationError) as exc_info:
             LieHomologyResult.model_validate(payload)
+        _assert_error_type(exc_info, "lie_algebra_homology.homology_replay")
 
     def test_dimension_mismatch_with_source_rejected(self):
         from pydantic import ValidationError
@@ -442,8 +460,9 @@ class TestHomologySourceBinding:
         genuine = compute_lie_homology(LieHomologyRequest(lie_algebra=_sl2_gf5()))
         payload = genuine.model_dump()
         payload["prime"] = 7
-        with pytest.raises(ValidationError, match="retained Lie algebra"):
+        with pytest.raises(ValidationError) as exc_info:
             LieHomologyResult.model_validate(payload)
+        _assert_error_type(exc_info, "lie_algebra_homology.homology_source_mismatch")
 
 
 def _abelian(dimension: int) -> tuple[tuple[tuple[int, ...], ...], ...]:
@@ -527,8 +546,9 @@ class TestDimensionEnvelope:
     def test_eleven_dimensional_algebra_rejected_at_boundary(self):
         """Dimension 11 would push C(11,5) = 462 rows past one matrix axis,
         so it stays rejected at the request boundary."""
-        with pytest.raises(ValidationError, match="10"):
+        with pytest.raises(ValidationError) as exc_info:
             LieAlgebra(prime=2, dimension=11, structure_constants=_abelian(11))
+        _assert_error_type(exc_info, "less_than_equal")
 
 
 class TestCharacteristicEnvelope:

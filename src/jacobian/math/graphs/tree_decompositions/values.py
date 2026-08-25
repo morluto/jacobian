@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -53,14 +54,25 @@ def _is_tree(node_count: int, edges: list[tuple[int, int]]) -> bool:
 def _validate_bags(bags: tuple[tuple[str, ...], ...], vertex_set: set[str]) -> None:
     for bag in bags:
         if list(bag) != sorted(bag):
-            raise ValueError("bag members must be a sorted tuple")
+            raise PydanticCustomError(
+                "graph.bag_members_must_be_a_sorted_tuple",
+                "bag members must be a sorted tuple",
+            )
         if len(set(bag)) != len(bag):
-            raise ValueError("bag members must be unique")
+            raise PydanticCustomError(
+                "graph.bag_members_must_be_unique", "bag members must be unique"
+            )
         if len(bag) > MAX_BAG_SIZE:
-            raise ValueError("bag size exceeds the bounded budget")
+            raise PydanticCustomError(
+                "graph.bag_size_exceeds_the_bounded_budget",
+                "bag size exceeds the bounded budget",
+            )
         for vertex in bag:
             if vertex not in vertex_set:
-                raise ValueError("bag references an undeclared graph vertex")
+                raise PydanticCustomError(
+                    "graph.bag_references_an_undeclared_graph_vertex",
+                    "bag references an undeclared graph vertex",
+                )
 
 
 def _check_vertex_coverage(
@@ -70,7 +82,10 @@ def _check_vertex_coverage(
     for bag in bags:
         all_bag_vertices.update(bag)
     if all_bag_vertices != vertex_set:
-        raise ValueError("every source vertex must occur in at least one bag")
+        raise PydanticCustomError(
+            "graph.every_source_vertex_must_occur_in_at_least_one_b",
+            "every source vertex must occur in at least one bag",
+        )
 
 
 def _check_edge_coverage(
@@ -78,8 +93,9 @@ def _check_edge_coverage(
 ) -> None:
     for left, right in graph.edges:
         if not any(left in bag and right in bag for bag in bags):
-            raise ValueError(
-                "every source edge must have both endpoints in at least one bag"
+            raise PydanticCustomError(
+                "graph.every_source_edge_have_both_endpoints_at",
+                "every source edge must have both endpoints in at least one bag",
             )
 
 
@@ -106,7 +122,10 @@ def _check_connectedness(
                     reached.add(nxt)
                     stack.append(nxt)
         if reached != set(containing):
-            raise ValueError("the connectedness axiom is violated for vertex " + vertex)
+            raise PydanticCustomError(
+                "graph.connectedness_axiom_violated_for_vertex_vertex",
+                "the connectedness axiom is violated for vertex " + vertex,
+            )
 
 
 class TreeDecomposition(StrictModel):
@@ -120,22 +139,36 @@ class TreeDecomposition(StrictModel):
     @model_validator(mode="after")
     def require_well_formed(self) -> Self:
         if len(self.bags) != len(self.tree_nodes):
-            raise ValueError("bags must have one entry per tree node")
+            raise PydanticCustomError(
+                "graph.bags_must_have_one_entry_per_tree_node",
+                "bags must have one entry per tree node",
+            )
         if len(set(self.tree_nodes)) != len(self.tree_nodes):
-            raise ValueError("tree_nodes must be unique")
+            raise PydanticCustomError(
+                "graph.tree_nodes_must_be_unique", "tree_nodes must be unique"
+            )
         node_set = set(self.tree_nodes)
         for left, right in self.tree_edges:
             if left == right:
-                raise ValueError("tree edges must not be loops")
+                raise PydanticCustomError(
+                    "graph.tree_edges_must_not_be_loops", "tree edges must not be loops"
+                )
             if left not in node_set or right not in node_set:
-                raise ValueError("tree edge references an undeclared node")
+                raise PydanticCustomError(
+                    "graph.tree_edge_references_an_undeclared_node",
+                    "tree edge references an undeclared node",
+                )
         edge_pairs = [(a, b) if a <= b else (b, a) for a, b in self.tree_edges]
         if len(set(edge_pairs)) != len(edge_pairs):
-            raise ValueError("tree edges must be unique")
+            raise PydanticCustomError(
+                "graph.tree_edges_must_be_unique", "tree edges must be unique"
+            )
         index_of = {label: i for i, label in enumerate(self.tree_nodes)}
         int_edges = [(index_of[a], index_of[b]) for a, b in edge_pairs]
         if not _is_tree(len(self.tree_nodes), int_edges):
-            raise ValueError("tree edges do not form a tree")
+            raise PydanticCustomError(
+                "graph.tree_edges_do_not_form_a_tree", "tree edges do not form a tree"
+            )
         vertex_set = set(self.graph.vertices)
         _validate_bags(self.bags, vertex_set)
         _check_vertex_coverage(self.bags, vertex_set)

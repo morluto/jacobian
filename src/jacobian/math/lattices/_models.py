@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.matrices.values import (
@@ -15,6 +16,12 @@ from jacobian.math.matrices.values import (
 )
 
 _MAX_LATTICE_INPUT_SCALAR_DIGITS = 256
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by lattice models."""
+
+    return PydanticCustomError(f"lattice.{reason}", message)
 
 
 class HermiteNormalFormRequest(StrictModel):
@@ -45,9 +52,14 @@ class HermiteNormalFormResult(StrictModel):
     def require_compatible_shapes(self) -> Self:
         rows = len(self.normal_form.entries)
         if len(self.transformation.entries) != rows:
-            raise ValueError("HNF transformation must have one row per source row")
+            raise _validation_error(
+                "hnf_transformation_rows",
+                "HNF transformation must have one row per source row",
+            )
         if any(len(row) != rows for row in self.transformation.entries):
-            raise ValueError("HNF transformation must be square")
+            raise _validation_error(
+                "hnf_transformation_square", "HNF transformation must be square"
+            )
         return self
 
 
@@ -84,9 +96,15 @@ class LatticeReductionResult(StrictModel):
     def require_transformation_shape(self) -> Self:
         rows = len(self.reduced_basis.entries)
         if len(self.transformation.entries) != rows:
-            raise ValueError("LLL transformation must have one row per basis row")
+            raise _validation_error(
+                "lll_transformation_rows",
+                "LLL transformation must have one row per basis row",
+            )
         if len(self.transformation.entries[0]) != rows:
-            raise ValueError("LLL transformation must be square by basis row count")
+            raise _validation_error(
+                "lll_transformation_square",
+                "LLL transformation must be square by basis row count",
+            )
         return self
 
 
@@ -112,11 +130,18 @@ class IntegerLattice(StrictModel):
         rows = len(self.basis.entries)
         columns = len(self.basis.entries[0]) if rows else 0
         if rows == 0:
-            raise ValueError("lattice basis must contain at least one row")
+            raise _validation_error(
+                "basis_empty", "lattice basis must contain at least one row"
+            )
         if columns != self.ambient_dimension:
-            raise ValueError("basis columns must equal ambient_dimension")
+            raise _validation_error(
+                "basis_columns_mismatch", "basis columns must equal ambient_dimension"
+            )
         if rows > self.ambient_dimension:
-            raise ValueError("lattice rank cannot exceed the ambient dimension")
+            raise _validation_error(
+                "rank_exceeds_ambient",
+                "lattice rank cannot exceed the ambient dimension",
+            )
         require_matrix_scalar_digits(
             self.basis.entries,
             maximum=_MAX_LATTICE_INPUT_SCALAR_DIGITS,
@@ -161,7 +186,9 @@ def _require_full_rank_qq(
         col += 1
         rank += 1
     if rank != rows:
-        raise ValueError("lattice basis must have full row rank over QQ")
+        raise _validation_error(
+            "basis_not_full_rank", "lattice basis must have full row rank over QQ"
+        )
 
 
 class RankGramRequest(StrictModel):
@@ -256,13 +283,22 @@ class SublatticeIndexRequest(StrictModel):
     @model_validator(mode="after")
     def require_compatible_inclusion(self) -> Self:
         if self.sublattice.ambient_dimension != self.parent.ambient_dimension:
-            raise ValueError("sublattice and parent ambient dimensions must match")
+            raise _validation_error(
+                "ambient_dimensions_mismatch",
+                "sublattice and parent ambient dimensions must match",
+            )
         if self.embedding.entries and len(self.embedding.entries[0]) != len(
             self.parent.basis.entries
         ):
-            raise ValueError("embedding columns must match parent basis rows")
+            raise _validation_error(
+                "embedding_columns_mismatch",
+                "embedding columns must match parent basis rows",
+            )
         if len(self.embedding.entries) != len(self.sublattice.basis.entries):
-            raise ValueError("embedding rows must match sublattice basis rows")
+            raise _validation_error(
+                "embedding_rows_mismatch",
+                "embedding rows must match sublattice basis rows",
+            )
         require_matrix_scalar_digits(
             self.embedding.entries,
             maximum=_MAX_LATTICE_INPUT_SCALAR_DIGITS,

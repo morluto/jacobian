@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
@@ -12,9 +13,17 @@ from jacobian.math._labels import OpaqueLabel
 MAX_POINTS = 64
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by finite-topology values."""
+
+    return PydanticCustomError(f"finite_topology_space.{reason}", message)
+
+
 def _require_distinct_points(points: tuple[str, ...]) -> None:
     if len(set(points)) != len(points):
-        raise ValueError("point labels must be distinct")
+        raise _validation_error(
+            "point_labels_not_distinct", "point labels must be distinct"
+        )
 
 
 class FiniteTopologicalSpace(StrictModel):
@@ -37,20 +46,28 @@ class FiniteTopologicalSpace(StrictModel):
     def require_well_formed(self) -> Self:
         _require_distinct_points(self.points)
         if len(self.preorder) != len(self.points):
-            raise ValueError("preorder must have one row per point")
+            raise _validation_error(
+                "preorder_row_count_mismatch", "preorder must have one row per point"
+            )
         for row in self.preorder:
             for idx in row:
                 if not 0 <= idx < len(self.points):
-                    raise ValueError("preorder index out of range")
+                    raise _validation_error(
+                        "preorder_index_out_of_range", "preorder index out of range"
+                    )
         for i in range(len(self.points)):
             if i not in self.preorder[i]:
-                raise ValueError("preorder must be reflexive")
+                raise _validation_error(
+                    "preorder_not_reflexive", "preorder must be reflexive"
+                )
         # Transitivity: j in row[i] => row[j] subset of row[i].
         for _i, row in enumerate(self.preorder):
             row_i = set(row)
             for j in row:
                 if not set(self.preorder[j]).issubset(row_i):
-                    raise ValueError("preorder must be transitive")
+                    raise _validation_error(
+                        "preorder_not_transitive", "preorder must be transitive"
+                    )
         return self
 
 
@@ -64,10 +81,15 @@ class FiniteTopologicalMap(StrictModel):
     @model_validator(mode="after")
     def require_valid_map(self) -> Self:
         if len(self.point_map) != len(self.source.points):
-            raise ValueError("point_map must have one entry per source point")
+            raise _validation_error(
+                "point_map_length_mismatch",
+                "point_map must have one entry per source point",
+            )
         for idx in self.point_map:
             if not 0 <= idx < len(self.target.points):
-                raise ValueError("point_map index out of range")
+                raise _validation_error(
+                    "point_map_index_out_of_range", "point_map index out of range"
+                )
         return self
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
@@ -28,7 +29,10 @@ class PayoffMatrix(StrictModel):
     @model_validator(mode="after")
     def require_valid_size(self) -> Self:
         if len(self.entries) != self.n_rows * self.n_cols:
-            raise ValueError("entries must have n_rows * n_cols elements")
+            raise PydanticCustomError(
+                "finite_game.payoff_matrix_size",
+                "entries must have n_rows * n_cols elements",
+            )
         return self
 
 
@@ -44,7 +48,10 @@ class ZeroSumGameRequest(StrictModel):
         numerator_digits = max(len(value.num.lstrip("-")) for value in matrix.entries)
         elimination_dimension = max(matrix.n_rows, matrix.n_cols) + 2
         if elimination_dimension * (denominator_digits + numerator_digits) > 32_768:
-            raise ValueError("payoffs exceed the exact-equilibrium result budget")
+            raise PydanticCustomError(
+                "finite_game.exact_equilibrium_budget",
+                "payoffs exceed the exact-equilibrium result budget",
+            )
         return self
 
 

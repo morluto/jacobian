@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.multigraph._models import MAX_EDGES, LooplessMultigraph
@@ -34,13 +35,21 @@ class UndirectedGraph(StrictModel):
             if not (
                 0 <= source < self.vertex_count and 0 <= target < self.vertex_count
             ):
-                raise ValueError("edge vertices must be in 0..vertex_count-1")
+                raise PydanticCustomError(
+                    "graph.edge_vertices_must_be_in_0_vertex_count_1",
+                    "edge vertices must be in 0..vertex_count-1",
+                )
             if source == target:
-                raise ValueError("self-loops are not allowed")
+                raise PydanticCustomError(
+                    "graph.self_loops_are_not_allowed", "self-loops are not allowed"
+                )
             endpoint_pair = (source, target)
             canonical = (min(endpoint_pair), max(endpoint_pair))
             if canonical in seen:
-                raise ValueError("undirected edges must be unique")
+                raise PydanticCustomError(
+                    "graph.undirected_edges_must_be_unique",
+                    "undirected edges must be unique",
+                )
             seen.add(canonical)
         return self
 
@@ -104,7 +113,10 @@ class EarDecompositionResult(StrictModel):
     @model_validator(mode="after")
     def require_ears_match_biconnectivity(self) -> Self:
         if not self.biconnected and self.ears:
-            raise ValueError("a non-biconnected graph must not report ears")
+            raise PydanticCustomError(
+                "graph.a_non_biconnected_graph_must_not_report_ears",
+                "a non-biconnected graph must not report ears",
+            )
         return self
 
 
@@ -156,25 +168,38 @@ class SPQRSkeleton(StrictModel):
     @model_validator(mode="after")
     def require_canonical_skeleton_carrier(self) -> Self:
         if self.vertices != tuple(sorted(set(self.vertices))):
-            raise ValueError("SPQR skeleton vertices must be sorted and unique")
+            raise PydanticCustomError(
+                "graph.spqr_skeleton_vertices_must_be_sorted_and_unique",
+                "SPQR skeleton vertices must be sorted and unique",
+            )
         if self.graph.vertex_count != len(self.vertices):
-            raise ValueError(
-                "SPQR multigraph carrier must use the skeleton vertex axis"
+            raise PydanticCustomError(
+                "graph.spqr_multigraph_carrier_use_skeleton_vertex_axis",
+                "SPQR multigraph carrier must use the skeleton vertex axis",
             )
         edge_ids = self.graph.edge_id_set
         real_ids = {edge_id for edge_id, _ in self.real_edge_sources}
         virtual_ids = set(self.virtual_edge_ids)
         if real_ids & virtual_ids or real_ids | virtual_ids != edge_ids:
-            raise ValueError("SPQR edge tags must partition the multigraph edge IDs")
+            raise PydanticCustomError(
+                "graph.spqr_edge_tags_must_partition_the_multigraph_edg",
+                "SPQR edge tags must partition the multigraph edge IDs",
+            )
         if len(real_ids) != len(self.real_edge_sources) or len(virtual_ids) != len(
             self.virtual_edge_ids
         ):
-            raise ValueError("SPQR edge tags must not repeat edge IDs")
+            raise PydanticCustomError(
+                "graph.spqr_edge_tags_must_not_repeat_edge_ids",
+                "SPQR edge tags must not repeat edge IDs",
+            )
         for edge_id, source_edge in self.real_edge_sources:
             edge = self.graph.edge_by_id(edge_id)
             endpoints = (self.vertices[edge.left], self.vertices[edge.right])
             if tuple(sorted(endpoints)) != source_edge:
-                raise ValueError("a real skeleton edge must name its source edge")
+                raise PydanticCustomError(
+                    "graph.a_real_skeleton_edge_must_name_its_source_edge",
+                    "a real skeleton edge must name its source edge",
+                )
         return self
 
 
@@ -204,7 +229,10 @@ class SPQRTreeResult(StrictModel):
     def require_closed_branch_shape(self) -> Self:
         if self.status == "NOT_BICONNECTED":
             if self.witness_kind is None or not self.witness_vertices:
-                raise ValueError("a non-biconnected result requires a concrete witness")
+                raise PydanticCustomError(
+                    "graph.a_non_biconnected_result_requires_a_concrete_wit",
+                    "a non-biconnected result requires a concrete witness",
+                )
             if (
                 self.nodes
                 or self.tree_edges
@@ -212,9 +240,15 @@ class SPQRTreeResult(StrictModel):
                 or self.source_vertex_incidence
                 or self.source_edge_owners
             ):
-                raise ValueError("a non-biconnected result must not carry an SPQR tree")
+                raise PydanticCustomError(
+                    "graph.a_non_biconnected_result_must_not_carry_an_spqr_",
+                    "a non-biconnected result must not carry an SPQR tree",
+                )
         elif self.witness_kind is not None or self.witness_vertices:
-            raise ValueError("an SPQR tree must not carry a negative witness")
+            raise PydanticCustomError(
+                "graph.an_spqr_tree_must_not_carry_a_negative_witness",
+                "an SPQR tree must not carry a negative witness",
+            )
         # Keep source-bound replay at the ordinary deserialization boundary,
         # not only in the producer. The lazy import avoids a module cycle.
         from jacobian.math.graphs.decomposition._operations import _validate_spqr_tree

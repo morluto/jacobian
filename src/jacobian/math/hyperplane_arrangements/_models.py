@@ -5,12 +5,17 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 
 MAX_HYPERPLANES = 16
 MAX_DIM = 8
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"hyperplane_arrangement.{reason}", message)
 
 
 class RationalHyperplane(StrictModel):
@@ -24,7 +29,9 @@ class RationalHyperplane(StrictModel):
     @model_validator(mode="after")
     def require_valid(self) -> Self:
         if all(coefficient.as_fraction() == 0 for coefficient in self.coefficients):
-            raise ValueError("hyperplane coefficients must not all be zero")
+            raise _validation_error(
+                "coefficients_zero", "hyperplane coefficients must not all be zero"
+            )
         return self
 
 
@@ -40,7 +47,10 @@ class HyperplaneArrangementRequest(StrictModel):
     def require_valid(self) -> Self:
         for hp in self.hyperplanes:
             if len(hp.coefficients) != self.ambient_dimension:
-                raise ValueError("hyperplane coefficients must match ambient dimension")
+                raise _validation_error(
+                    "dimension_mismatch",
+                    "hyperplane coefficients must match ambient dimension",
+                )
         return self
 
 

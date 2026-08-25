@@ -7,6 +7,7 @@ from math import gcd
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
@@ -166,6 +167,14 @@ def _work_lcm(values: Iterable[int]) -> int:
             if result > _MAX_WORK_BOUND:
                 return result
     return result
+
+
+def _work_exact_quotient(value: int, divisor: int) -> int:
+    """Divide an exact work value without unsaturating an overflow estimate."""
+
+    if value > _MAX_WORK_BOUND:
+        return value
+    return value // divisor
 
 
 def _decimal_digit_upper_bound(value: int) -> int:
@@ -990,9 +999,10 @@ def _general_result_component_bounds(
         denominator for _exponent, _numerator, denominator in surviving_terms
     )
     if common_coefficient_denominator > _MAX_RESULT_COMPONENT:
-        raise ValueError(
+        raise _validation_error(
+            "budget_exceeded",
             "matrix polynomial denominator growth exceeds the canonical "
-            f"{MAX_CANONICAL_RATIONAL_DIGITS:,}-digit result bound"
+            f"{MAX_CANONICAL_RATIONAL_DIGITS:,}-digit result bound",
         )
     dead_terms = tuple(
         (exponent, numerator, denominator)
@@ -1072,9 +1082,10 @@ def _general_result_component_bounds(
             denominator for _numerator, denominator in matrix_ratios
         )
         if common_matrix_denominator > _MAX_RESULT_COMPONENT:
-            raise ValueError(
+            raise _validation_error(
+                "budget_exceeded",
                 "matrix polynomial denominator growth exceeds the canonical "
-                f"{MAX_CANONICAL_RATIONAL_DIGITS:,}-digit result bound"
+                f"{MAX_CANONICAL_RATIONAL_DIGITS:,}-digit result bound",
             )
         highest_surviving_exponent = max(
             exponent for exponent, _numerator, _denominator in surviving_terms
@@ -1165,7 +1176,7 @@ def _general_result_component_bounds(
                 abs(numerator),
                 _work_multiply(
                     common_coefficient_denominator,
-                    dead_common_denominator // denominator,
+                    _work_exact_quotient(dead_common_denominator, denominator),
                 ),
             )
             matrix_power_height = _work_multiply(
@@ -1218,9 +1229,10 @@ def _general_result_component_bounds(
             numerator_bound > _MAX_RESULT_COMPONENT
             or denominator_bound > _MAX_RESULT_COMPONENT
         ):
-            raise ValueError(
+            raise _validation_error(
+                "budget_exceeded",
                 "matrix polynomial coefficient growth exceeds the canonical "
-                f"{MAX_CANONICAL_RATIONAL_DIGITS:,}-digit result bound"
+                f"{MAX_CANONICAL_RATIONAL_DIGITS:,}-digit result bound",
             )
         component_bound = (
             _decimal_digit_upper_bound(numerator_bound),
@@ -1252,9 +1264,10 @@ def _require_matrix_polynomial_output_budget(
         or denominator_digits > MAX_CANONICAL_RATIONAL_DIGITS
         for numerator_digits, denominator_digits in component_bounds
     ):
-        raise ValueError(
+        raise _validation_error(
+            "budget_exceeded",
             "matrix polynomial evaluation can exceed the canonical "
-            f"{MAX_CANONICAL_RATIONAL_DIGITS:,}-digit rational result bound"
+            f"{MAX_CANONICAL_RATIONAL_DIGITS:,}-digit rational result bound",
         )
 
     source_bytes = len(encode_strict_json(matrix.model_dump(mode="json")))
@@ -1268,9 +1281,10 @@ def _require_matrix_polynomial_output_budget(
     )
     output_limit = CanonicalLimits().max_output_bytes
     if estimated_result_bytes > output_limit:
-        raise ValueError(
+        raise _validation_error(
+            "budget_exceeded",
             "the retained matrix, polynomial, and exact value can exceed the "
-            f"{output_limit}-byte canonical output limit"
+            f"{output_limit}-byte canonical output limit",
         )
     arithmetic_component_digits = [
         len(component.lstrip("-"))
@@ -1324,10 +1338,14 @@ class MatrixPolynomialEvaluationRequest(StrictModel):
     def require_square_univariate_bounded_evaluation(self) -> Self:
         dimension = len(self.matrix.entries)
         if len(self.matrix.entries[0]) != dimension:
-            raise ValueError("matrix polynomial evaluation requires a square matrix")
+            raise _validation_error(
+                "budget_exceeded",
+                "matrix polynomial evaluation requires a square matrix",
+            )
         if len(self.polynomial.variables) != 1:
-            raise ValueError(
-                "matrix polynomial evaluation requires exactly one polynomial variable"
+            raise _validation_error(
+                "budget_exceeded",
+                "matrix polynomial evaluation requires exactly one polynomial variable",
             )
         require_polynomial_budget(
             self.polynomial,
@@ -1342,10 +1360,11 @@ class MatrixPolynomialEvaluationRequest(StrictModel):
             MATRIX_POLYNOMIAL_EVALUATION_PASSES * scalar_products_per_pass
         )
         if total_scalar_products > MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS:
-            raise ValueError(
+            raise _validation_error(
+                "budget_exceeded",
                 "matrix polynomial Horner evaluation and source-bound replay "
                 f"exceed the {MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS:,}-scalar-product "
-                "work bound"
+                "work bound",
             )
         maximum_arithmetic_digits = _require_matrix_polynomial_output_budget(
             self.matrix,
@@ -1354,9 +1373,10 @@ class MatrixPolynomialEvaluationRequest(StrictModel):
         )
         digit_work = total_scalar_products * maximum_arithmetic_digits**2
         if digit_work > MAX_MATRIX_POLYNOMIAL_DIGIT_WORK:
-            raise ValueError(
+            raise _validation_error(
+                "budget_exceeded",
                 "matrix polynomial exact-arithmetic work exceeds the coupled "
-                f"{MAX_MATRIX_POLYNOMIAL_DIGIT_WORK:,}-unit digit-work bound"
+                f"{MAX_MATRIX_POLYNOMIAL_DIGIT_WORK:,}-unit digit-work bound",
             )
         return self
 
@@ -1388,18 +1408,21 @@ class MatrixPolynomialEvaluationResult(StrictModel):
         )
         expected_degree = _mathematical_polynomial_degree(request.polynomial)
         if self.polynomial_degree != expected_degree:
-            raise ValueError(
-                "matrix polynomial result degree does not match its source"
+            raise _validation_error(
+                "budget_exceeded",
+                "matrix polynomial result degree does not match its source",
             )
         expected_multiplications = expected_degree or 0
         if self.matrix_multiplications != expected_multiplications:
-            raise ValueError(
-                "Horner matrix multiplication count must equal the polynomial degree"
+            raise _validation_error(
+                "budget_exceeded",
+                "Horner matrix multiplication count must equal the polynomial degree",
             )
         dimension = len(request.matrix.entries)
         if self.scalar_product_terms != expected_multiplications * dimension**3:
-            raise ValueError(
-                "Horner scalar-product count must equal degree times matrix order cubed"
+            raise _validation_error(
+                "shape_mismatch",
+                "Horner scalar-product count must equal degree times matrix order cubed",
             )
         from jacobian.math.matrices.canonical_forms._operations import (
             evaluate_matrix_polynomial_value,
@@ -1407,8 +1430,9 @@ class MatrixPolynomialEvaluationResult(StrictModel):
 
         expected = evaluate_matrix_polynomial_value(request)
         if self.value != expected:
-            raise ValueError(
-                "matrix polynomial value does not equal the retained exact evaluation"
+            raise _validation_error(
+                "budget_exceeded",
+                "matrix polynomial value does not equal the retained exact evaluation",
             )
         return self
 
@@ -1423,10 +1447,13 @@ class SquareMatrixRequest(StrictModel):
         rows = len(self.matrix.entries)
         columns = len(self.matrix.entries[0])
         if rows != columns:
-            raise ValueError("canonical-form operations require a square matrix")
+            raise _validation_error(
+                "budget_exceeded", "canonical-form operations require a square matrix"
+            )
         if rows > MAX_CANONICAL_FORM_DIMENSION:
-            raise ValueError(
-                "canonical-form operations are bounded to 16 x 16 matrices"
+            raise _validation_error(
+                "budget_exceeded",
+                "canonical-form operations are bounded to 16 x 16 matrices",
             )
         require_matrix_scalar_digits(
             self.matrix.entries,
@@ -1447,7 +1474,9 @@ class MonicPolynomial(StrictModel):
     @model_validator(mode="after")
     def require_monic(self) -> Self:
         if self.coefficients[-1].as_fraction() != 1:
-            raise ValueError("polynomial must be monic (leading coefficient = 1)")
+            raise _validation_error(
+                "shape_mismatch", "polynomial must be monic (leading coefficient = 1)"
+            )
         return self
 
 
@@ -1483,19 +1512,23 @@ class MinimalPolynomialResult(StrictModel):
         )
 
         if self.degree != _polynomial_degree(self.minimal_polynomial):
-            raise ValueError("degree must equal the minimal-polynomial degree")
+            raise _validation_error(
+                "invariant_mismatch", "degree must equal the minimal-polynomial degree"
+            )
         entries = _matrix_entries(self.matrix.matrix)
         if _coefficients_of(self.minimal_polynomial) != tuple(replay_minimal(entries)):
-            raise ValueError(
+            raise _validation_error(
+                "invariant_mismatch",
                 "minimal polynomial must be the exact minimal polynomial of "
-                "the retained matrix"
+                "the retained matrix",
             )
         if _coefficients_of(self.characteristic_polynomial) != tuple(
             replay_characteristic(entries)
         ):
-            raise ValueError(
+            raise _validation_error(
+                "shape_mismatch",
                 "characteristic polynomial must be the characteristic "
-                "polynomial of the retained matrix"
+                "polynomial of the retained matrix",
             )
         matrix = _matrix_from_request(self.matrix)
         evaluated = matrix.zeros(matrix.rows, matrix.cols)
@@ -1504,7 +1537,10 @@ class MinimalPolynomialResult(StrictModel):
             evaluated = evaluated + power * coefficient.as_fraction()
             power = power * matrix
         if evaluated != matrix.zeros(matrix.rows, matrix.cols):
-            raise ValueError("minimal polynomial must annihilate the retained matrix")
+            raise _validation_error(
+                "shape_mismatch",
+                "minimal polynomial must annihilate the retained matrix",
+            )
         return self
 
 
@@ -1556,24 +1592,32 @@ class RationalCanonicalFormResult(StrictModel):
         if self.total_block_size != sum(
             entry.block_size for entry in self.invariant_factors
         ):
-            raise ValueError("total block size must equal the summed block sizes")
+            raise _validation_error(
+                "shape_mismatch", "total block size must equal the summed block sizes"
+            )
         if self.total_block_size != dimension:
-            raise ValueError("block sizes must total the matrix dimension")
+            raise _validation_error(
+                "shape_mismatch", "block sizes must total the matrix dimension"
+            )
         for entry in self.invariant_factors:
             if entry.block_size != _polynomial_degree(entry.factor):
-                raise ValueError("each block size must equal its factor degree")
+                raise _validation_error(
+                    "invariant_mismatch", "each block size must equal its factor degree"
+                )
 
         if _coefficients_of(self.minimal_polynomial) != tuple(replay_minimal(entries)):
-            raise ValueError(
+            raise _validation_error(
+                "invariant_mismatch",
                 "minimal polynomial must be the exact minimal polynomial of "
-                "the retained matrix"
+                "the retained matrix",
             )
         if _coefficients_of(self.characteristic_polynomial) != tuple(
             replay_characteristic(entries)
         ):
-            raise ValueError(
+            raise _validation_error(
+                "invariant_mismatch",
                 "characteristic polynomial must be the characteristic "
-                "polynomial of the retained matrix"
+                "polynomial of the retained matrix",
             )
 
         previous = None
@@ -1583,24 +1627,32 @@ class RationalCanonicalFormResult(StrictModel):
             if previous is not None:
                 _quotient, remainder = factor.div(previous)
                 if remainder.as_expr() != 0:
-                    raise ValueError("invariant factors must divide successively")
+                    raise _validation_error(
+                        "invariant_mismatch",
+                        "invariant factors must divide successively",
+                    )
             product = factor if product is None else product * factor
             previous = factor
         characteristic = _poly_from_monic(self.characteristic_polynomial)
         if product is None or product.as_expr() != characteristic.as_expr():
-            raise ValueError(
-                "invariant factors must multiply to the characteristic polynomial"
+            raise _validation_error(
+                "invariant_mismatch",
+                "invariant factors must multiply to the characteristic polynomial",
             )
         last_factor = _poly_from_monic(self.invariant_factors[-1].factor)
         minimal = _poly_from_monic(self.minimal_polynomial)
         if last_factor.as_expr() != minimal.as_expr():
-            raise ValueError("the final invariant factor is the minimal polynomial")
+            raise _validation_error(
+                "invariant_mismatch",
+                "the final invariant factor is the minimal polynomial",
+            )
         if tuple(
             _coefficients_of(entry.factor) for entry in self.invariant_factors
         ) != tuple(replay_invariant_factors(entries)):
-            raise ValueError(
+            raise _validation_error(
+                "invariant_mismatch",
                 "invariant factors must be the exact invariant factors of "
-                "the retained matrix"
+                "the retained matrix",
             )
         return self
 
@@ -1634,29 +1686,35 @@ class PrimaryDecompositionResult(StrictModel):
         entries = _matrix_entries(self.matrix.matrix)
 
         if _coefficients_of(self.minimal_polynomial) != tuple(replay_minimal(entries)):
-            raise ValueError(
+            raise _validation_error(
+                "field_mismatch",
                 "minimal polynomial must be the exact minimal polynomial of "
-                "the retained matrix"
+                "the retained matrix",
             )
 
         component_polys = [_poly_from_monic(component) for component in self.components]
         for component in component_polys:
             _content, factors = component.factor_list()
             if len(factors) != 1:
-                raise ValueError(
-                    "each primary component must be one monic irreducible power"
+                raise _validation_error(
+                    "invariant_mismatch",
+                    "each primary component must be one monic irreducible power",
                 )
         for index, first in enumerate(component_polys):
             for second in component_polys[index + 1 :]:
                 if first.gcd(second).degree() >= 1:
-                    raise ValueError("primary components must be pairwise coprime")
+                    raise _validation_error(
+                        "invariant_mismatch",
+                        "primary components must be pairwise coprime",
+                    )
         product = component_polys[0]
         for component in component_polys[1:]:
             product = product * component
         minimal = _poly_from_monic(self.minimal_polynomial)
         if product.as_expr() != minimal.as_expr():
-            raise ValueError(
-                "primary components must multiply to the claimed minimal polynomial"
+            raise _validation_error(
+                "budget_exceeded",
+                "primary components must multiply to the claimed minimal polynomial",
             )
         return self
 
@@ -1676,3 +1734,7 @@ __all__ = [
     "RationalCanonicalFormResult",
     "SquareMatrixRequest",
 ]
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"matrix.{reason}", message)

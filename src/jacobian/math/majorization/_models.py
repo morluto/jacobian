@@ -6,17 +6,26 @@ from fractions import Fraction
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.math.matrices.values import RationalMatrix
 
 MAX_DIMENSION = 20
 MAX_STEPS = 500
 MAX_DIGITS = 4096
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"majorization.{reason}", message)
+
+
 def _bound_rational(value: CanonicalRational, label: str) -> None:
-    require_bounded_rational(value, max_digits=MAX_DIGITS, label=label)
+    try:
+        require_bounded_rational(value, max_digits=MAX_DIGITS, label=label)
+    except ValueError as error:
+        raise _validation_error("rational_bound", str(error)) from error
 
 
 class RationalVector(StrictModel):
@@ -30,9 +39,13 @@ class RationalVector(StrictModel):
     @model_validator(mode="after")
     def require_consistent(self) -> Self:
         if len(self.labels) != len(self.values):
-            raise ValueError("labels and values must have the same length")
+            raise _validation_error(
+                "vector_length", "labels and values must have the same length"
+            )
         if len(set(self.labels)) != len(self.labels):
-            raise ValueError("coordinate labels must be distinct")
+            raise _validation_error(
+                "duplicate_label", "coordinate labels must be distinct"
+            )
         for i, v in enumerate(self.values):
             _bound_rational(v, f"values[{i}]")
         return self
@@ -41,32 +54,20 @@ class RationalVector(StrictModel):
         return tuple(v.as_fraction() for v in self.values)
 
 
-class RationalMatrix(StrictModel):
-    """An exact rational square matrix with row and column labels."""
+def _require_majorization_matrix(matrix: RationalMatrix) -> None:
+    """Apply majorization's square-matrix and scalar admission envelope."""
 
-    row_labels: tuple[str, ...] = Field(min_length=1, max_length=MAX_DIMENSION)
-    col_labels: tuple[str, ...] = Field(min_length=1, max_length=MAX_DIMENSION)
-    entries: tuple[tuple[CanonicalRational, ...], ...]
-
-    @model_validator(mode="after")
-    def require_consistent(self) -> Self:
-        if len(self.row_labels) != len(self.col_labels):
-            raise ValueError("row and column counts must match for a square matrix")
-        if len(self.row_labels) != len(self.entries):
-            raise ValueError("entry rows must match row_labels count")
-        for i, row in enumerate(self.entries):
-            if len(row) != len(self.col_labels):
-                raise ValueError(f"row {i} has wrong column count")
-            for j, v in enumerate(row):
-                _bound_rational(v, f"entries[{i}][{j}]")
-        if len(set(self.row_labels)) != len(self.row_labels):
-            raise ValueError("row labels must be distinct")
-        if len(set(self.col_labels)) != len(self.col_labels):
-            raise ValueError("column labels must be distinct")
-        return self
-
-    def as_fractions(self) -> list[list[Fraction]]:
-        return [[v.as_fraction() for v in row] for row in self.entries]
+    if len(matrix.entries) > MAX_DIMENSION:
+        raise _validation_error(
+            "matrix_dimension", f"matrix order must not exceed {MAX_DIMENSION}"
+        )
+    if len(matrix.entries) != len(matrix.entries[0]):
+        raise _validation_error(
+            "matrix_not_square", "majorization requires a square matrix"
+        )
+    for row_index, row in enumerate(matrix.entries):
+        for column_index, value in enumerate(row):
+            _bound_rational(value, f"entries[{row_index}][{column_index}]")
 
 
 class MajorizationCheckRequest(StrictModel):
@@ -78,7 +79,9 @@ class MajorizationCheckRequest(StrictModel):
     @model_validator(mode="after")
     def require_same_length(self) -> Self:
         if len(self.x.labels) != len(self.y.labels):
-            raise ValueError("vectors must have the same dimension")
+            raise _validation_error(
+                "vector_dimension", "vectors must have the same dimension"
+            )
         return self
 
 
@@ -101,9 +104,11 @@ class WeakMajorizationCheckRequest(StrictModel):
     @model_validator(mode="after")
     def require_same_length(self) -> Self:
         if len(self.x.labels) != len(self.y.labels):
-            raise ValueError("vectors must have the same dimension")
+            raise _validation_error(
+                "vector_dimension", "vectors must have the same dimension"
+            )
         if self.direction not in ("sub", "super"):
-            raise ValueError("direction must be 'sub' or 'super'")
+            raise _validation_error("direction", "direction must be 'sub' or 'super'")
         return self
 
 
@@ -133,7 +138,9 @@ class TTransformSequenceRequest(StrictModel):
     @model_validator(mode="after")
     def require_same_length(self) -> Self:
         if len(self.x.labels) != len(self.y.labels):
-            raise ValueError("vectors must have the same dimension")
+            raise _validation_error(
+                "vector_dimension", "vectors must have the same dimension"
+            )
         return self
 
 
@@ -152,6 +159,11 @@ class DoublyStochasticCheckRequest(StrictModel):
     """Check if a rational matrix is doubly stochastic."""
 
     matrix: RationalMatrix
+
+    @model_validator(mode="after")
+    def require_admitted_matrix(self) -> Self:
+        _require_majorization_matrix(self.matrix)
+        return self
 
 
 class DoublyStochasticCheckResult(StrictModel):
@@ -179,21 +191,29 @@ class BirkhoffDecompositionRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_doubly_stochastic(self) -> Self:
-        fracs = self.matrix.as_fractions()
+        _require_majorization_matrix(self.matrix)
+        fracs = tuple(
+            tuple(value.as_fraction() for value in row) for row in self.matrix.entries
+        )
         n = len(fracs)
         for i in range(n):
             for j in range(n):
                 if fracs[i][j] < 0:
-                    raise ValueError(
-                        "Birkhoff decomposition requires a nonnegative matrix"
+                    raise _validation_error(
+                        "birkhoff_negative_entry",
+                        "Birkhoff decomposition requires a nonnegative matrix",
                     )
         for i in range(n):
             if sum(fracs[i][j] for j in range(n)) != Fraction(1):
-                raise ValueError("Birkhoff decomposition requires row sums equal to 1")
+                raise _validation_error(
+                    "birkhoff_row_sum",
+                    "Birkhoff decomposition requires row sums equal to 1",
+                )
         for j in range(n):
             if sum(fracs[i][j] for i in range(n)) != Fraction(1):
-                raise ValueError(
-                    "Birkhoff decomposition requires column sums equal to 1"
+                raise _validation_error(
+                    "birkhoff_column_sum",
+                    "Birkhoff decomposition requires column sums equal to 1",
                 )
         return self
 
@@ -219,7 +239,10 @@ class SchurHornCheckRequest(StrictModel):
     @model_validator(mode="after")
     def require_consistent(self) -> Self:
         if len(self.eigenvalues) != len(self.diagonal):
-            raise ValueError("eigenvalues and diagonal must have the same dimension")
+            raise _validation_error(
+                "schur_horn_dimension",
+                "eigenvalues and diagonal must have the same dimension",
+            )
         for i, v in enumerate(self.eigenvalues):
             _bound_rational(v, f"eigenvalues[{i}]")
         for i, v in enumerate(self.diagonal):
@@ -246,7 +269,6 @@ __all__ = [
     "DoublyStochasticCheckResult",
     "MajorizationCheckRequest",
     "MajorizationCheckResult",
-    "RationalMatrix",
     "RationalVector",
     "SchurHornCheckRequest",
     "SchurHornCheckResult",

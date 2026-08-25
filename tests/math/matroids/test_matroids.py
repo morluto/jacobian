@@ -39,10 +39,11 @@ class TestLinearMatroidRepresentation:
 
     def test_oversized_prime_rejected_before_construction(self):
         """A ~3,000-digit prime is bounded before primality work."""
-        with pytest.raises(ValidationError, match="2147483647"):
+        with pytest.raises(ValidationError) as exc_info:
             LinearMatroid.model_validate(
                 {"matrix": {"prime": 2**9941 - 1, "entries": [], "columns": 0}}
             )
+        assert exc_info.value.errors()[0]["type"] == "matroid.field_prime.bound"
 
     def test_ground_set_beyond_cap_rejected(self):
         """A 33-column matrix is rejected even though the shared kernel
@@ -54,14 +55,16 @@ class TestLinearMatroidRepresentation:
             "entries": [(0,) * 33],
             "columns": 33,
         }
-        with pytest.raises(ValidationError, match="at most 32"):
+        with pytest.raises(ValidationError) as exc_info:
             LinearMatroid(matrix=PrimeFieldMatrix(**oversized_matrix))
+        assert exc_info.value.errors()[0]["type"] == "matroid.ground_set.bound"
         payload = {
             "matroid": {"matrix": oversized_matrix},
             "subset": [],
         }
-        with pytest.raises(ValidationError, match="at most 32"):
+        with pytest.raises(ValidationError) as exc_info:
             MatroidClosureRequest.model_validate(payload)
+        assert exc_info.value.errors()[0]["type"] == "matroid.ground_set.bound"
 
     def test_empty_matroid_admitted(self):
         """The empty ground set with a preserved row axis is representable."""
@@ -99,8 +102,9 @@ class TestClosure:
 
     def test_subset_indices_validated(self):
         m = _matroid(5, [(1, 0), (0, 1)], 2)
-        with pytest.raises(ValidationError, match=r"0\.\.n-1"):
+        with pytest.raises(ValidationError) as exc_info:
             MatroidClosureRequest(matroid=m, subset=(2,))
+        assert exc_info.value.errors()[0]["type"] == "matroid.subset.invalid"
 
     def test_native_closure_validates_indices(self):
         """The native entry point applies the wire subset admission."""

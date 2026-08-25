@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
@@ -30,16 +31,28 @@ MAX_REDUCED_CLASS_OUTPUT_ROWS = MAX_REDUCED_CLASS_SEARCH_STATES
 MAX_EVALUATED_VALUE = (1 << 53) - 1
 
 
+def _validation_error(code: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(code, message)
+
+
 def _require_positive_primitive_form(form: tuple[int, int, int]) -> None:
     a, b, c = form
     if any(abs(value) > MAX_COEFFICIENT for value in form):
-        raise ValueError("form coefficients exceed the supported bound")
+        raise _validation_error(
+            "integral_binary_quadratic_form.coefficient_bound",
+            "form coefficients exceed the supported bound",
+        )
     if a <= 0 or b * b - 4 * a * c >= 0:
-        raise ValueError("form must be positive definite")
+        raise _validation_error(
+            "integral_binary_quadratic_form.not_positive_definite",
+            "form must be positive definite",
+        )
     from math import gcd
 
     if gcd(gcd(abs(a), abs(b)), abs(c)) != 1:
-        raise ValueError("form must be primitive")
+        raise _validation_error(
+            "integral_binary_quadratic_form.not_primitive", "form must be primitive"
+        )
 
 
 class PrimitivePositiveDefiniteBinaryQuadraticForm(StrictModel):
@@ -133,13 +146,20 @@ def _reduced_class_search_state_count(discriminant: int) -> int:
 def _require_reduced_class_search_budget(discriminant: int) -> int:
     """Validate a negative quadratic discriminant and its complete scan."""
     if discriminant > -3:
-        raise ValueError("discriminant must be at most -3")
+        raise _validation_error(
+            "integral_binary_quadratic_form.discriminant_too_large",
+            "discriminant must be at most -3",
+        )
     if discriminant % 4 not in (0, 1):
-        raise ValueError("discriminant must be congruent to 0 or 1 modulo 4")
+        raise _validation_error(
+            "integral_binary_quadratic_form.invalid_discriminant_congruence",
+            "discriminant must be congruent to 0 or 1 modulo 4",
+        )
     state_count = _reduced_class_search_state_count(discriminant)
     if state_count > MAX_REDUCED_CLASS_SEARCH_STATES:
-        raise ValueError(
-            "reduced-class enumeration exceeds the supported candidate budget"
+        raise _validation_error(
+            "integral_binary_quadratic_form.reduced_class_candidate_budget",
+            "reduced-class enumeration exceeds the supported candidate budget",
         )
     return state_count
 
@@ -162,8 +182,9 @@ def _require_representation_budget(
     """Return the complete y-bound after checking the exact scan envelope."""
     y_bound = _representation_y_bound(form, target)
     if 2 * y_bound + 1 > MAX_REPRESENTATION_Y_CANDIDATES:
-        raise ValueError(
-            "representation search exceeds the supported y-coordinate candidate budget"
+        raise _validation_error(
+            "integral_binary_quadratic_form.representation_candidate_budget",
+            "representation search exceeds the supported y-coordinate candidate budget",
         )
     return y_bound
 
@@ -178,7 +199,10 @@ def _require_evaluated_value_bound(
     """
     value = form.a * x * x + form.b * x * y + form.c * y * y
     if value > MAX_EVALUATED_VALUE:
-        raise ValueError("evaluated value exceeds the interoperable integer range")
+        raise _validation_error(
+            "integral_binary_quadratic_form.evaluated_value_range",
+            "evaluated value exceeds the interoperable integer range",
+        )
     return value
 
 
@@ -215,7 +239,10 @@ class BinaryQuadraticFormRepresentation(StrictModel):
         from math import gcd
 
         if self.primitive != (gcd(self.x, self.y) == 1):
-            raise ValueError("primitive must equal gcd(x, y) == 1")
+            raise _validation_error(
+                "integral_binary_quadratic_form.primitive_mismatch",
+                "primitive must equal gcd(x, y) == 1",
+            )
         return self
 
 
@@ -239,13 +266,20 @@ class BinaryQuadraticFormRepresentationsResult(StrictModel):
         _require_representation_budget(self.form, self.target)
         expected = _enumerate_representations(self.form, self.target)
         if self.representations != expected:
-            raise ValueError(
-                "representations must be the complete lexicographically ordered set"
+            raise _validation_error(
+                "integral_binary_quadratic_form.representations_mismatch",
+                "representations must be the complete lexicographically ordered set",
             )
         if self.count != len(self.representations):
-            raise ValueError("count must equal the number of representations")
+            raise _validation_error(
+                "integral_binary_quadratic_form.count_mismatch",
+                "count must equal the number of representations",
+            )
         if self.primitive_count != sum(row.primitive for row in self.representations):
-            raise ValueError("primitive_count must equal the derived primitive total")
+            raise _validation_error(
+                "integral_binary_quadratic_form.primitive_count_mismatch",
+                "primitive_count must equal the derived primitive total",
+            )
         return self
 
 
@@ -275,22 +309,41 @@ class BinaryQuadraticFormCheckResult(StrictModel):
                 obstruction = f"gcd(a,b,c)={divisor}>1: form is not primitive"
         if self.status == "PRIMITIVE_POSITIVE_DEFINITE":
             if obstruction is not None:
-                raise ValueError("accepted form must satisfy the initial domain")
+                raise _validation_error(
+                    "integral_binary_quadratic_form.accepted_domain_mismatch",
+                    "accepted form must satisfy the initial domain",
+                )
             if self.form is None:
-                raise ValueError("accepted form must carry the canonical form value")
+                raise _validation_error(
+                    "integral_binary_quadratic_form.accepted_form_missing",
+                    "accepted form must carry the canonical form value",
+                )
             if (self.form.a, self.form.b, self.form.c) != (self.a, self.b, self.c):
-                raise ValueError("canonical form must match the checked coefficients")
+                raise _validation_error(
+                    "integral_binary_quadratic_form.checked_coefficients_mismatch",
+                    "canonical form must match the checked coefficients",
+                )
             if self.obstruction is not None:
-                raise ValueError("accepted form cannot carry an obstruction")
+                raise _validation_error(
+                    "integral_binary_quadratic_form.accepted_obstruction",
+                    "accepted form cannot carry an obstruction",
+                )
         else:
             if obstruction is None:
-                raise ValueError(
-                    "valid form cannot be classified outside the initial domain"
+                raise _validation_error(
+                    "integral_binary_quadratic_form.invalid_domain_status",
+                    "valid form cannot be classified outside the initial domain",
                 )
             if self.form is not None:
-                raise ValueError("rejected form cannot carry a canonical form value")
+                raise _validation_error(
+                    "integral_binary_quadratic_form.rejected_form_present",
+                    "rejected form cannot carry a canonical form value",
+                )
             if self.obstruction != obstruction:
-                raise ValueError("obstruction must match the checked coefficients")
+                raise _validation_error(
+                    "integral_binary_quadratic_form.obstruction_mismatch",
+                    "obstruction must match the checked coefficients",
+                )
         return self
 
 
@@ -313,10 +366,16 @@ class BinaryQuadraticFormEvaluateResult(StrictModel):
         _require_evaluated_value_bound(self.form, self.x, self.y)
         value = _evaluate(self.form.a, self.form.b, self.form.c, self.x, self.y)
         if self.value != value:
-            raise ValueError("value must be a*x^2 + b*x*y + c*y^2")
+            raise _validation_error(
+                "integral_binary_quadratic_form.value_mismatch",
+                "value must be a*x^2 + b*x*y + c*y^2",
+            )
         primitive = _gcd(self.x, self.y) == 1
         if self.primitive != primitive:
-            raise ValueError("primitive must be gcd(x,y)==1")
+            raise _validation_error(
+                "integral_binary_quadratic_form.primitive_mismatch",
+                "primitive must be gcd(x,y)==1",
+            )
         return self
 
 
@@ -336,18 +395,27 @@ class ReducedBinaryQuadraticFormResult(StrictModel):
         if not _check_reduced(
             self.reduced_form.a, self.reduced_form.b, self.reduced_form.c
         ):
-            raise ValueError("reduced form must satisfy |b|<=a<=c with tie-breaking")
+            raise _validation_error(
+                "integral_binary_quadratic_form.reduced_form_invalid",
+                "reduced form must satisfy |b|<=a<=c with tie-breaking",
+            )
         p, q = self.matrix[0]
         r, s = self.matrix[1]
         if p * s - q * r != 1:
-            raise ValueError("transformation matrix must have determinant 1")
+            raise _validation_error(
+                "integral_binary_quadratic_form.transformation_determinant",
+                "transformation matrix must have determinant 1",
+            )
         ra, rb, rc = _transform(self.form.a, self.form.b, self.form.c, p, q, r, s)
         if (ra, rb, rc) != (
             self.reduced_form.a,
             self.reduced_form.b,
             self.reduced_form.c,
         ):
-            raise ValueError("transformation must map original to reduced form")
+            raise _validation_error(
+                "integral_binary_quadratic_form.transformation_mismatch",
+                "transformation must map original to reduced form",
+            )
         return self
 
 
@@ -380,21 +448,36 @@ class ProperEquivalenceResult(StrictModel):
             and first_reduced == second_reduced
         )
         if (self.status == "PROPERLY_EQUIVALENT") != equivalent:
-            raise ValueError("status must match canonical proper-equivalence decision")
+            raise _validation_error(
+                "integral_binary_quadratic_form.equivalence_status_mismatch",
+                "status must match canonical proper-equivalence decision",
+            )
         if self.status == "PROPERLY_EQUIVALENT" and self.matrix is None:
-            raise ValueError("proper equivalence requires a witness matrix")
+            raise _validation_error(
+                "integral_binary_quadratic_form.equivalence_witness_missing",
+                "proper equivalence requires a witness matrix",
+            )
         if self.status == "PROPERLY_EQUIVALENT" and self.matrix is not None:
             p, q = self.matrix[0]
             r, s = self.matrix[1]
             if p * s - q * r != 1:
-                raise ValueError("witness matrix must have determinant 1")
+                raise _validation_error(
+                    "integral_binary_quadratic_form.witness_determinant",
+                    "witness matrix must have determinant 1",
+                )
             ta, tb, tc = _transform(
                 self.first.a, self.first.b, self.first.c, p, q, r, s
             )
             if (ta, tb, tc) != (self.second.a, self.second.b, self.second.c):
-                raise ValueError("witness must map first to second form")
+                raise _validation_error(
+                    "integral_binary_quadratic_form.witness_mismatch",
+                    "witness must map first to second form",
+                )
         if self.status == "NOT_PROPERLY_EQUIVALENT" and self.matrix is not None:
-            raise ValueError("nonequivalence cannot carry a witness matrix")
+            raise _validation_error(
+                "integral_binary_quadratic_form.nonequivalence_witness",
+                "nonequivalence cannot carry a witness matrix",
+            )
         return self
 
 
@@ -414,20 +497,35 @@ class ReducedClassesResult(StrictModel):
         )
 
         if self.class_number != len(self.classes):
-            raise ValueError("class_number must equal the number of classes")
+            raise _validation_error(
+                "integral_binary_quadratic_form.class_number_mismatch",
+                "class_number must equal the number of classes",
+            )
         _require_reduced_class_search_budget(self.discriminant)
         for form in self.classes:
             if form.discriminant != self.discriminant:
-                raise ValueError("every class must have the requested discriminant")
+                raise _validation_error(
+                    "integral_binary_quadratic_form.class_discriminant_mismatch",
+                    "every class must have the requested discriminant",
+                )
             if not _check_reduced(form.a, form.b, form.c):
-                raise ValueError("every class must be reduced")
+                raise _validation_error(
+                    "integral_binary_quadratic_form.class_not_reduced",
+                    "every class must be reduced",
+                )
         seen = set(self.classes)
         if len(seen) != len(self.classes):
-            raise ValueError("classes must be distinct")
+            raise _validation_error(
+                "integral_binary_quadratic_form.classes_not_distinct",
+                "classes must be distinct",
+            )
         from jacobian.math.integral_binary_quadratic_forms._operations import (
             _enumerate_reduced_classes,
         )
 
         if self.classes != _enumerate_reduced_classes(self.discriminant):
-            raise ValueError("classes must be the complete reduced class set")
+            raise _validation_error(
+                "integral_binary_quadratic_form.classes_incomplete",
+                "classes must be the complete reduced class set",
+            )
         return self

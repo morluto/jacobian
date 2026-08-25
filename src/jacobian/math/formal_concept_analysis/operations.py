@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from jacobian.canonical import encode_strict_json
 
+from ._models import MAX_CONCEPTS
 from .basis import (
     CanonicalImplicationBasisResult,
     DGBasisClosureRow,
@@ -21,9 +22,6 @@ from .values import (
     ImplicationClosureWork,
     ImplicationDerivation,
 )
-
-# This bound is also enforced in the request models (_models.py).
-MAX_CONCEPTS = 10000
 
 __all__ = [
     "MAX_CONCEPTS",

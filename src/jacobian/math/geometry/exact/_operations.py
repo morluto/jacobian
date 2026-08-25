@@ -5,6 +5,10 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.geometry.exact._line_arithmetic import (
+    canonical_line_coefficients,
+    squared_point_line_distance,
+)
 from jacobian.math.geometry.exact._models import (
     DistanceGraphRequest,
     DistanceGraphResult,
@@ -90,67 +94,6 @@ __all__ = [
 ]
 
 
-def _canonical_line_coefficients(
-    p: tuple[Fraction, ...],
-    q: tuple[Fraction, ...],
-) -> tuple[Fraction, Fraction, Fraction]:
-    """Return the sign- and gcd-normalized coefficients (A, B, C) of Ax+By+C=0.
-
-    The line through two distinct points p, q has normal (dy, -dx) where
-    (dx, dy) = q - p, so A = dy, B = -dx, C = -(A*px + B*py).  The triple is
-    reduced by the gcd of A, B, C and its leading nonzero coefficient is made
-    positive, giving a canonical identity for the geometric line.
-    """
-    dx = q[0] - p[0]
-    dy = q[1] - p[1]
-    a = dy
-    b = -dx
-    c = -(a * p[0] + b * p[1])
-    g = _gcd3(a, b, c)
-    if g != 0:
-        a, b, c = a / g, b / g, c / g
-    # Normalize the sign so the first nonzero coefficient is positive.
-    for coeff in (a, b, c):
-        if coeff != 0:
-            if coeff < 0:
-                a, b, c = -a, -b, -c
-            break
-    return a, b, c
-
-
-def _gcd3(a: Fraction, b: Fraction, c: Fraction) -> Fraction:
-    """Return a positive Fraction that divides a, b, c (the gcd of numerators)."""
-    from math import gcd
-
-    if a == 0 and b == 0 and c == 0:
-        return Fraction(0)
-    nums = [a.numerator, b.numerator, c.numerator]
-    dens = [a.denominator, b.denominator, c.denominator]
-    common_den = 1
-    for d in dens:
-        common_den = common_den * d // gcd(common_den, d)
-    scaled = [n * (common_den // d) for n, d in zip(nums, dens, strict=True)]
-    g = 0
-    for v in scaled:
-        g = gcd(g, abs(v))
-    if g == 0:
-        return Fraction(0)
-    return Fraction(g, common_den)
-
-
-def _squared_point_line_distance(
-    anchor: tuple[Fraction, ...],
-    p: tuple[Fraction, ...],
-    q: tuple[Fraction, ...],
-) -> Fraction:
-    """Exact squared distance from ``anchor`` to the line through ``p, q``."""
-    dx = q[0] - p[0]
-    dy = q[1] - p[1]
-    cross = dx * (anchor[1] - p[1]) - dy * (anchor[0] - p[0])
-    norm_sq = dx * dx + dy * dy
-    return (cross * cross) / norm_sq
-
-
 def compute_pinned_line_distance_profile(
     request: PinnedLineDistanceRequest,
 ) -> PinnedLineDistanceResult:
@@ -174,10 +117,10 @@ def compute_pinned_line_distance_profile(
     lines: dict[tuple[Fraction, Fraction, Fraction], list[tuple[int, int]]] = {}
     distances: dict[tuple[Fraction, Fraction, Fraction], Fraction] = {}
     for i, j in combinations(range(n), 2):
-        coeffs = _canonical_line_coefficients(points[i], points[j])
+        coeffs = canonical_line_coefficients(points[i], points[j])
         lines.setdefault(coeffs, []).append((i, j))
         if coeffs not in distances:
-            distances[coeffs] = _squared_point_line_distance(
+            distances[coeffs] = squared_point_line_distance(
                 anchor, points[i], points[j]
             )
 

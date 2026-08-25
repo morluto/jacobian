@@ -2,17 +2,18 @@
 
 from jacobian.math.finite_categories._models import (
     CategoryProductRequest,
-    CategoryProductResult,
     CategoryProfileResult,
-    FiniteCategoryRequest,
-    MorphismSpec,
-    OppositeCategoryResult,
 )
 from jacobian.math.finite_categories.operations import product
-from jacobian.math.finite_categories.values import CategoryIdentifier
+from jacobian.math.finite_categories.values import (
+    CategoryIdentifier,
+    FiniteCategory,
+    FiniteCategoryProduct,
+    MorphismSpec,
+)
 
 
-def compute_category_profile(request: FiniteCategoryRequest) -> CategoryProfileResult:
+def compute_category_profile(request: FiniteCategory) -> CategoryProfileResult:
     """Compute the profile of a finite category."""
     objects = request.objects
     morphisms = request.morphisms
@@ -52,7 +53,7 @@ def compute_category_profile(request: FiniteCategoryRequest) -> CategoryProfileR
     )
 
 
-def compute_opposite_category(request: FiniteCategoryRequest) -> OppositeCategoryResult:
+def compute_opposite_category(request: FiniteCategory) -> FiniteCategory:
     """Compute the opposite category.
 
     Morphism directions are reversed and composition order is reversed: a
@@ -70,7 +71,7 @@ def compute_opposite_category(request: FiniteCategoryRequest) -> OppositeCategor
     opposite_composition = tuple(
         (f, g, result) for (g, f, result) in request.composition
     )
-    return OppositeCategoryResult(
+    return FiniteCategory(
         objects=request.objects,
         morphisms=opposite_morphisms,
         identities=request.identities,
@@ -80,7 +81,7 @@ def compute_opposite_category(request: FiniteCategoryRequest) -> OppositeCategor
 
 def compute_category_product(
     request: CategoryProductRequest,
-) -> CategoryProductResult:
+) -> FiniteCategoryProduct:
     """Compute the exact Cartesian product of two finite categories."""
 
     return product(request.left, request.right)

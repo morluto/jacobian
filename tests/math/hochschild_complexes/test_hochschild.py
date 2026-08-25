@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import pytest
 from pydantic import ValidationError
 
@@ -21,6 +23,13 @@ from jacobian.math.hochschild_complexes._operations import (
 from jacobian.math.prime_field_linear_algebra import (
     PrimeFieldMatrix,
 )
+
+
+@contextmanager
+def _validation_error(code: str):
+    with pytest.raises(ValidationError) as error:
+        yield
+    assert error.value.errors()[0]["type"] == code
 
 
 def _coordinatewise_algebra(prime: int, dimension: int) -> AlgebraStructure:
@@ -138,9 +147,7 @@ class TestHochschildHomology:
 
 class TestHochschildAdmissionAndTopDegree:
     def test_composite_prime_rejected(self):
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError, match="prime"):
+        with _validation_error("hochschild_complex.prime"):
             AlgebraStructure(
                 prime=4,
                 dimension=1,
@@ -154,7 +161,7 @@ class TestHochschildAdmissionAndTopDegree:
             ((0, 0), (0, 0)),
             ((1, 0), (0, 0)),
         )
-        with pytest.raises(ValidationError, match="associative"):
+        with _validation_error("hochschild_complex.associativity"):
             AlgebraStructure(
                 prime=5,
                 dimension=2,
@@ -181,9 +188,9 @@ class TestHochschildAdmissionAndTopDegree:
         """GF(2)^7 at max_degree=4 passes the tensor budget but not the matrix budget."""
         alg = _coordinatewise_algebra(2, 7)
         assert alg.dimension ** (4 + 1) <= 20_000
-        with pytest.raises(ValidationError, match="boundary-matrix"):
+        with _validation_error("hochschild_complex.matrix_budget"):
             HochschildHomologyRequest(algebra=alg, max_degree=4)
-        with pytest.raises(ValidationError, match="boundary-matrix"):
+        with _validation_error("hochschild_complex.matrix_budget"):
             HochschildChainComplexRequest(algebra=alg, max_degree=4)
 
     def test_largest_admitted_homology_request(self):
@@ -226,7 +233,7 @@ class TestHochschildAdmissionAndTopDegree:
         boundary = 25
         assert 2 * boundary**5 <= MAX_ASSOCIATIVITY_DOT_STEPS
         assert 2 * (boundary + 1) ** 5 > MAX_ASSOCIATIVITY_DOT_STEPS
-        with pytest.raises(ValidationError, match="associativity-admission"):
+        with _validation_error("hochschild_complex.associativity_budget"):
             _coordinatewise_algebra(2, boundary + 1)
 
     def test_structure_input_budget_rejected(self):
@@ -237,12 +244,12 @@ class TestHochschildAdmissionAndTopDegree:
 
         oversized = 51
         assert oversized**3 > MAX_STRUCTURE_CONSTANT_ENTRIES
-        with pytest.raises(ValidationError, match="input-entry budget"):
+        with _validation_error("hochschild_complex.input_budget"):
             _coordinatewise_algebra(2, oversized)
 
     def test_request_budgets_bind_above_the_old_dimension_ceiling(self):
         """Larger admitted algebras still face the per-request envelopes."""
-        with pytest.raises(ValidationError, match="tensor-element"):
+        with _validation_error("hochschild_complex.tensor_budget"):
             HochschildHomologyRequest(
                 algebra=_coordinatewise_algebra(2, 10), max_degree=4
             )
@@ -270,7 +277,7 @@ class TestChainComplexSourceBinding:
         HochschildChainComplexResult.model_validate(result.model_dump())
 
     def test_authored_payload_rejected(self):
-        with pytest.raises(ValidationError):
+        with _validation_error("missing"):
             HochschildChainComplexResult(
                 algebra_dimension=5,
                 group_dimensions=(1, 2),
@@ -291,7 +298,7 @@ class TestChainComplexSourceBinding:
         payload = result.model_dump(mode="json")
         original = payload["differentials"][1]["matrix"]["entries"][0][0]
         payload["differentials"][1]["matrix"]["entries"][0][0] = (original + 1) % 7
-        with pytest.raises(ValidationError, match="exact bar differential"):
+        with _validation_error("hochschild_complex.differential_entries"):
             HochschildChainComplexResult.model_validate(payload)
 
     def test_inconsistent_group_dimensions_rejected(self):
@@ -301,7 +308,7 @@ class TestChainComplexSourceBinding:
         )
         payload = result.model_dump()
         payload["group_dimensions"] = (1, 3, 9)
-        with pytest.raises(ValidationError, match="group_dimensions"):
+        with _validation_error("hochschild_complex.group_dimensions"):
             HochschildChainComplexResult.model_validate(payload)
 
     def test_mismatched_prime_rejected(self):
@@ -311,7 +318,7 @@ class TestChainComplexSourceBinding:
         )
         payload = result.model_dump()
         payload["prime"] = 5
-        with pytest.raises(ValidationError, match="retained algebra"):
+        with _validation_error("hochschild_complex.algebra_binding"):
             HochschildChainComplexResult.model_validate(payload)
 
     def test_mismatched_differential_prime_rejected(self):
@@ -328,9 +335,7 @@ class TestChainComplexSourceBinding:
         assert result.differentials[0].matrix.entries != ((0,),)
         payload = result.model_dump()
         payload["differentials"][0]["matrix"]["prime"] = 7
-        with pytest.raises(
-            ValidationError, match="must carry the retained algebra prime"
-        ):
+        with _validation_error("hochschild_complex.differential_prime"):
             HochschildChainComplexResult.model_validate(payload)
 
     def test_all_zero_differential_foreign_prime_rejected(self):
@@ -350,9 +355,7 @@ class TestChainComplexSourceBinding:
         assert result.differentials[0].matrix.entries == ((0, 0),)
         payload = result.model_dump()
         payload["differentials"][0]["matrix"]["prime"] = 7
-        with pytest.raises(
-            ValidationError, match="must carry the retained algebra prime"
-        ):
+        with _validation_error("hochschild_complex.differential_prime"):
             HochschildChainComplexResult.model_validate(payload)
 
     def test_matching_differential_prime_accepted(self):
@@ -370,8 +373,6 @@ class TestChainComplexSourceBinding:
 
 class TestHomologySourceBinding:
     def test_forged_groups_rejected(self):
-        from pydantic import ValidationError
-
         alg = AlgebraStructure(
             prime=5,
             dimension=1,
@@ -383,12 +384,10 @@ class TestHomologySourceBinding:
         )
         payload = genuine.model_dump()
         payload["groups"] = [{"degree": 0, "betti": 99}]
-        with pytest.raises(ValidationError, match="replay"):
+        with _validation_error("hochschild_complex.homology_replay"):
             HochschildHomologyResult.model_validate(payload)
 
     def test_prime_mismatch_rejected(self):
-        from pydantic import ValidationError
-
         alg = AlgebraStructure(
             prime=5,
             dimension=1,
@@ -400,7 +399,7 @@ class TestHomologySourceBinding:
         )
         payload = genuine.model_dump()
         payload["prime"] = 7
-        with pytest.raises(ValidationError, match="prime"):
+        with _validation_error("hochschild_complex.prime_binding"):
             HochschildHomologyResult.model_validate(payload)
 
 
@@ -490,7 +489,7 @@ class TestAugmentationEndpointFaces:
 
     def test_non_multiplicative_augmentation_rejected(self):
         """An augmentation that is not an algebra map must fail admission."""
-        with pytest.raises(ValidationError, match="homomorphism"):
+        with _validation_error("hochschild_complex.augmentation_homomorphism"):
             AlgebraStructure(
                 prime=5,
                 dimension=2,
@@ -503,14 +502,14 @@ class TestAugmentationEndpointFaces:
 
     def test_noncanonical_and_mismatched_augmentation_rejected(self):
         dual = _dual_numbers(5)
-        with pytest.raises(ValidationError, match="canonical residues"):
+        with _validation_error("hochschild_complex.canonical_residues"):
             AlgebraStructure(
                 prime=5,
                 dimension=2,
                 structure_constants=dual.structure_constants,
                 augmentation=(1, 5),
             )
-        with pytest.raises(ValidationError, match="one entry per basis element"):
+        with _validation_error("hochschild_complex.augmentation_shape"):
             AlgebraStructure(
                 prime=5,
                 dimension=2,
@@ -530,5 +529,5 @@ class TestAugmentationEndpointFaces:
         )
         payload = result.model_dump()
         payload["algebra"]["augmentation"] = [0, 0]
-        with pytest.raises(ValidationError):
+        with _validation_error("hochschild_complex.differential_entries"):
             HochschildChainComplexResult.model_validate(payload)

@@ -5,8 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from math import lcm
 
-from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
+from jacobian._exact import CanonicalRational, format_canonical_rational
 from jacobian.math.matrices.analysis._models import (
     FarkasCertificateRequest,
     FarkasCertificateResult,
@@ -17,7 +16,7 @@ from jacobian.math.matrices.analysis._models import (
     RationalSpectrumNullityLedgerEntry,
     SymmetricMatrixRequest,
 )
-from jacobian.math.matrices.values import RationalMatrix
+from jacobian.math.matrices.values import RationalMatrix, rational_matrix_from_fractions
 
 
 def _exact_shifted_nullities(
@@ -127,19 +126,9 @@ def _build_matrix(request: SymmetricMatrixRequest) -> list[list[Fraction]]:
     return mat
 
 
-def _rational_matrix(matrix: list[list[Fraction]]) -> RationalMatrix:
-    """Convert a dense Fraction matrix into the domain's canonical value."""
-    return RationalMatrix(
-        entries=tuple(
-            tuple(CanonicalRational.from_fraction(value) for value in row)
-            for row in matrix
-        )
-    )
-
-
 def _canonical_source_matrix(request: SymmetricMatrixRequest) -> RationalMatrix:
     """Normalize the sparse symmetric request into the canonical dense value."""
-    return _rational_matrix(_build_matrix(request))
+    return rational_matrix_from_fractions(_build_matrix(request))
 
 
 def _dense_fractions(matrix: RationalMatrix) -> list[list[Fraction]]:
@@ -282,15 +271,6 @@ def compute_inertia(request: SymmetricMatrixRequest) -> InertiaResult:
     )
 
 
-def _format_rational(value: Fraction) -> str:
-    if value.denominator == 1:
-        return format_canonical_integer(value.numerator)
-    return (
-        f"{format_canonical_integer(value.numerator)}/"
-        f"{format_canonical_integer(value.denominator)}"
-    )
-
-
 def check_farkas_certificate(
     request: FarkasCertificateRequest,
 ) -> FarkasCertificateResult:
@@ -310,7 +290,7 @@ def check_farkas_certificate(
         return FarkasCertificateResult(
             valid=False,
             y_t_a=(),
-            y_t_b=_format_rational(ytb),
+            y_t_b=format_canonical_rational(ytb),
             reason="multiplier vector has a negative entry",
         )
 
@@ -320,13 +300,13 @@ def check_farkas_certificate(
         for j in range(n_vars):
             yta[j] += yi * constraint_matrix[i][j]
     ytb = sum((yi * bi for yi, bi in zip(y, b, strict=True)), Fraction(0))
-    yta_str = tuple(_format_rational(value) for value in yta)
+    yta_str = tuple(format_canonical_rational(value) for value in yta)
 
     if all(value == 0 for value in yta) and ytb < 0:
         return FarkasCertificateResult(
             valid=True,
             y_t_a=yta_str,
-            y_t_b=_format_rational(ytb),
+            y_t_b=format_canonical_rational(ytb),
             reason="y^T A = 0 and y^T b < 0",
         )
     reasons = []
@@ -337,7 +317,7 @@ def check_farkas_certificate(
     return FarkasCertificateResult(
         valid=False,
         y_t_a=yta_str,
-        y_t_b=_format_rational(ytb),
+        y_t_b=format_canonical_rational(ytb),
         reason="; ".join(reasons) if reasons else "unknown",
     )
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.graphical_models.values import (
@@ -21,7 +22,10 @@ class FactorMultiplyRequest(StrictModel):
     @model_validator(mode="after")
     def require_compatible_domains(self) -> Self:
         if self.left.domain_sizes != self.right.domain_sizes:
-            raise ValueError("factors must share the exact model domain_sizes")
+            raise PydanticCustomError(
+                "graphical_model.factor_domains_mismatch",
+                "factors must share the exact model domain_sizes",
+            )
         return self
 
 
@@ -33,7 +37,10 @@ class FactorMultiplyResult(FactorMultiplyRequest):
         from jacobian.math.graphical_models.operations import factor_multiply
 
         if self.factor != factor_multiply(self.left, self.right):
-            raise ValueError("factor must be the exact product of the bound operands")
+            raise PydanticCustomError(
+                "graphical_model.factor_product_mismatch",
+                "factor must be the exact product of the bound operands",
+            )
         return self
 
 
@@ -44,7 +51,10 @@ class FactorMarginalizeRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_variable(self) -> Self:
         if self.variable not in self.factor.variables:
-            raise ValueError("variable is not in factor")
+            raise PydanticCustomError(
+                "graphical_model.factor_variable_missing",
+                "variable is not in factor",
+            )
         return self
 
 
@@ -58,7 +68,10 @@ class FactorMarginalizeResult(StrictModel):
         from jacobian.math.graphical_models.operations import factor_marginalize
 
         if self.factor != factor_marginalize(self.source_factor, self.variable):
-            raise ValueError("factor must be the exact bound marginal")
+            raise PydanticCustomError(
+                "graphical_model.factor_marginal_mismatch",
+                "factor must be the exact bound marginal",
+            )
         return self
 
 
@@ -77,13 +90,19 @@ class DSeparationRequest(StrictModel):
             validate_d_separation_input,
         )
 
-        validate_d_separation_input(
-            self.variable_count,
-            self.edges,
-            self.set_a,
-            self.set_b,
-            self.set_c,
-        )
+        try:
+            validate_d_separation_input(
+                self.variable_count,
+                self.edges,
+                self.set_a,
+                self.set_b,
+                self.set_c,
+            )
+        except ValueError as error:
+            raise PydanticCustomError(
+                "graphical_model.d_separation_invalid",
+                str(error),
+            ) from error
         return self
 
 
@@ -102,7 +121,10 @@ class DSeparationResult(DSeparationRequest):
             self.set_c,
         )
         if self.d_separated != expected:
-            raise ValueError("decision must match the bound d-separation instance")
+            raise PydanticCustomError(
+                "graphical_model.d_separation_mismatch",
+                "decision must match the bound d-separation instance",
+            )
         return self
 
 

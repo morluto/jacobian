@@ -61,7 +61,11 @@ from jacobian.math.lattices._models import (
     SublatticeIndexRequest,
     SublatticeIndexResult,
 )
-from jacobian.math.matrices.values import IntegerMatrix, RationalMatrix
+from jacobian.math.matrices.values import (
+    IntegerMatrix,
+    RationalMatrix,
+    rational_matrix_from_fractions,
+)
 
 __all__ = [
     "compute_canonical_basis",
@@ -101,19 +105,10 @@ def _integer_matrix(matrix: list[list[int]]) -> IntegerMatrix:
     )
 
 
-def _rational_matrix(matrix: list[list[Fraction]]) -> RationalMatrix:
-    from jacobian._exact import CanonicalRational
-
-    return RationalMatrix(
-        entries=tuple(
-            tuple(CanonicalRational.from_fraction(frac) for frac in row)
-            for row in matrix
-        )
-    )
-
-
 def _rational_matrix_from_int(matrix: list[list[int]]) -> RationalMatrix:
-    return _rational_matrix([[Fraction(v, 1) for v in row] for row in matrix])
+    return rational_matrix_from_fractions(
+        [[Fraction(v, 1) for v in row] for row in matrix]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -168,8 +163,8 @@ def compute_dual(request: DualRequest) -> DualResult:
                 row.append(Fraction(int(entry), 1))
         dual_gram_fractions.append(row)
     return DualResult(
-        dual_basis=_rational_matrix(dual),
-        dual_gram=_rational_matrix(dual_gram_fractions),
+        dual_basis=rational_matrix_from_fractions(dual),
+        dual_gram=rational_matrix_from_fractions(dual_gram_fractions),
     )
 
 
@@ -225,7 +220,7 @@ def compute_orthogonal_complement(
         rank = len(complement)
         complement_matrix = complement
     return OrthogonalComplementResult(
-        complement_basis=_rational_matrix(complement_matrix),
+        complement_basis=rational_matrix_from_fractions(complement_matrix),
         complement_rank=rank,
     )
 

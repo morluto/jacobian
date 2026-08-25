@@ -11,16 +11,8 @@ from jacobian.math.finite_categories.operations import _product_plan
 from jacobian.math.finite_categories.values import (
     CategoryIdentifier,
     FiniteCategory,
-    FiniteCategoryProduct,
     MorphismSpec,
 )
-
-# The existing profile and opposite operations already accept a complete
-# category directly. Keep that wire shape while giving every producer and
-# consumer the same owner-defined category value.
-FiniteCategoryRequest = FiniteCategory
-OppositeCategoryResult = FiniteCategory
-CategoryProductResult = FiniteCategoryProduct
 
 
 class CategoryProfileResult(StrictModel):
@@ -48,9 +40,6 @@ class CategoryProductRequest(StrictModel):
 
 __all__ = [
     "CategoryProductRequest",
-    "CategoryProductResult",
     "CategoryProfileResult",
-    "FiniteCategoryRequest",
     "MorphismSpec",
-    "OppositeCategoryResult",
 ]

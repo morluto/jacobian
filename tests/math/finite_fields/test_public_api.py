@@ -178,8 +178,9 @@ def test_orbit_distribution_rejects_a_forged_in_range_rank() -> None:
     subspace, directions = _slice_a_values()
     ledger_payload = direction_rank_ledger(subspace, directions).model_dump(mode="json")
     ledger_payload["entries"][0]["rank"] = 0
-    with pytest.raises(ValidationError, match="rank must match"):
+    with pytest.raises(ValidationError) as error:
         DirectionRankLedger.model_validate(ledger_payload)
+    assert error.value.errors()[0]["type"] == "finite_field.rank_match_bound_linear_map"
 
 
 def test_slice_a_rank_derives_the_restriction_from_its_source() -> None:

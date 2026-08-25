@@ -26,6 +26,10 @@ def _cyclic_c3(
     return FinitePermutationAction(domain=labels, generators=((1, 2, 0),))
 
 
+def _assert_error_type(error: ValidationError, expected: str) -> None:
+    assert error.errors()[0]["type"] == expected
+
+
 def _symmetric_s3(
     labels: tuple[str, str, str] = ("p0", "p1", "p2"),
 ) -> FinitePermutationAction:
@@ -181,17 +185,29 @@ def test_bound_subset_normalizes_wire_order_by_domain_position() -> None:
 
 
 def test_request_rejects_duplicate_and_out_of_domain_positions() -> None:
-    with pytest.raises(ValidationError, match="distinct"):
+    with pytest.raises(ValidationError) as exc_info:
         ActionBoundSubset(action=_cyclic_c3(), positions=(1, 1))
-    with pytest.raises(ValidationError, match="index the action domain"):
+    _assert_error_type(
+        exc_info.value, "finite_group_action.subset_positions_not_distinct"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         ActionBoundSubset(action=_cyclic_c3(), positions=(3,))
+    _assert_error_type(
+        exc_info.value, "finite_group_action.subset_position_out_of_range"
+    )
     with pytest.raises(ValidationError):
         ActionBoundSubset(action=_cyclic_c3(), positions=(-1,))
 
-    with pytest.raises(ValidationError, match="distinct"):
+    with pytest.raises(ValidationError) as exc_info:
         _request(_cyclic_c3(), (1, 1))
-    with pytest.raises(ValidationError, match="index the action domain"):
+    _assert_error_type(
+        exc_info.value, "finite_group_action.subset_positions_not_distinct"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         _request(_cyclic_c3(), (3,))
+    _assert_error_type(
+        exc_info.value, "finite_group_action.subset_position_out_of_range"
+    )
 
 
 def test_request_rejects_group_immediately_above_enumeration_bound() -> None:
@@ -200,8 +216,9 @@ def test_request_rejects_group_immediately_above_enumeration_bound() -> None:
         generators=((1, 2, 3, 4, 5, 6, 7, 0), (1, 0, 2, 3, 4, 5, 6, 7)),
     )
 
-    with pytest.raises(ValidationError, match=r"group order 40320.*maximum 10000"):
+    with pytest.raises(ValidationError) as exc_info:
         _request(symmetric_s8, (0,))
+    _assert_error_type(exc_info.value, "finite_group_action.group_order_exceeds_bound")
     with pytest.raises(ValueError, match=r"group order exceeds.*10000"):
         _enumerate_group(symmetric_s8)
 
@@ -345,10 +362,16 @@ def test_positions_valid_only_under_the_original_action_rejected_under_another()
     assert positions == (0, 1, 2, 3)
 
     smaller_domain = _cyclic_c3()
-    with pytest.raises(ValidationError, match="index the action domain"):
+    with pytest.raises(ValidationError) as exc_info:
         ActionBoundSubset(action=smaller_domain, positions=positions)
-    with pytest.raises(ValidationError, match="index the action domain"):
+    _assert_error_type(
+        exc_info.value, "finite_group_action.subset_position_out_of_range"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         _request(smaller_domain, positions)
+    _assert_error_type(
+        exc_info.value, "finite_group_action.subset_position_out_of_range"
+    )
 
 
 def test_result_rejects_canonical_subset_bound_to_a_different_action() -> None:
@@ -360,24 +383,27 @@ def test_result_rejects_canonical_subset_bound_to_a_different_action() -> None:
         "positions": list(result.canonical_subset.positions),
     }
 
-    with pytest.raises(ValidationError, match="bound to the source action"):
+    with pytest.raises(ValidationError) as exc_info:
         SubsetCanonicalizationResult.model_validate(forged)
+    _assert_error_type(
+        exc_info.value, "finite_group_action.canonical_subset_action_mismatch"
+    )
 
 
 @pytest.mark.parametrize(
-    ("field", "value", "message"),
+    ("field", "value", "error_type"),
     [
-        ("source_subset", [1], "transporter"),
-        ("canonical_subset", [1], "canonical_subset"),
-        ("transporter", [0, 1, 2], "transporter"),
-        ("orbit_size", 2, "orbit_size"),
-        ("stabilizer_size", 2, "stabilizer_size"),
+        ("source_subset", [1], "finite_group_action.transporter_mismatch"),
+        ("canonical_subset", [1], "finite_group_action.canonical_subset_not_minimal"),
+        ("transporter", [0, 1, 2], "tuple_type"),
+        ("orbit_size", 2, "finite_group_action.orbit_size_mismatch"),
+        ("stabilizer_size", 2, "finite_group_action.stabilizer_size_mismatch"),
     ],
 )
 def test_result_rejects_independently_forged_source_and_conclusions(
     field: str,
     value: list[int] | int,
-    message: str,
+    error_type: str,
 ) -> None:
     result = compute_subset_canonicalization(_request(_cyclic_c3(), (2,)))
     forged = result.model_dump()
@@ -389,8 +415,9 @@ def test_result_rejects_independently_forged_source_and_conclusions(
     else:
         forged[field] = value
 
-    with pytest.raises(ValidationError, match=message):
+    with pytest.raises(ValidationError) as exc_info:
         SubsetCanonicalizationResult.model_validate(forged)
+    _assert_error_type(exc_info.value, error_type)
 
 
 def test_public_declaration_exposes_and_executes_copyable_example() -> None:

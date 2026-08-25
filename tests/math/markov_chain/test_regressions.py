@@ -198,5 +198,10 @@ def test_stationary_family_solves_each_nonsingleton_closed_class_exactly() -> No
     ],
 )
 def test_transition_contract_rejects_non_stochastic_matrices(matrix: object) -> None:
-    with pytest.raises(ValidationError, match=r"square|sum to one|nonnegative"):
+    with pytest.raises(ValidationError) as error:
         TransitionMatrixRequest.model_validate({"matrix": matrix})
+    assert error.value.errors()[0]["type"] in {
+        "markov_chain.transition_matrix_not_square",
+        "markov_chain.transition_probability_negative",
+        "markov_chain.transition_row_not_stochastic",
+    }

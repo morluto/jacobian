@@ -5,12 +5,20 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.canonical import encode_strict_json
 from jacobian.math.geometry.boxes._kernel import box_volume
 from jacobian.math.geometry.boxes.values import RationalAxisAlignedBox
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable error owned by the geometry contracts."""
+
+    return PydanticCustomError(f"geometry.{reason}", message)
+
 
 MAX_BOX_UNION_NONEMPTY_BOXES = 16
 MAX_INTERSECTION_CANDIDATES = (1 << MAX_BOX_UNION_NONEMPTY_BOXES) - 1
@@ -174,15 +182,19 @@ class BoxUnionVolumeRequest(StrictModel):
     def require_bounded_common_space(self) -> Self:
         dimension = self.boxes[0].dimension
         if any(box.dimension != dimension for box in self.boxes):
-            raise ValueError("all box-union sources must have the same dimension")
+            raise _validation_error(
+                "box_union_sources_same_dimension",
+                "all box-union sources must have the same dimension",
+            )
 
         active_box_count = sum(not box.is_empty for box in self.boxes)
         candidate_count = (1 << active_box_count) - 1
         if candidate_count > MAX_INTERSECTION_CANDIDATES:
-            raise ValueError(
+            raise _validation_error(
+                "active_box_count_nonempty_boxes_require",
                 f"{active_box_count} nonempty boxes require {candidate_count} "
                 "intersection candidates, exceeding the complete "
-                f"{MAX_INTERSECTION_CANDIDATES}-candidate bound"
+                f"{MAX_INTERSECTION_CANDIDATES}-candidate bound",
             )
         # Two full ledger computations (operation plus result replay), with
         # lower/upper comparisons, plus per-entry volume validation.
@@ -192,9 +204,10 @@ class BoxUnionVolumeRequest(StrictModel):
             else 0
         )
         if replay_work > MAX_BOX_UNION_REPLAY_WORK:
-            raise ValueError(
+            raise _validation_error(
+                "box_union_exceeds_complete_intersection_replay",
                 "box union exceeds the complete intersection replay work bound "
-                f"({replay_work} > {MAX_BOX_UNION_REPLAY_WORK})"
+                f"({replay_work} > {MAX_BOX_UNION_REPLAY_WORK})",
             )
 
         endpoint_num, endpoint_den, volume_digits, union_digits = _digit_bounds(
@@ -207,10 +220,11 @@ class BoxUnionVolumeRequest(StrictModel):
             MAX_BOX_UNION_RESULT_RATIONAL_DIGITS,
             MAX_CANONICAL_RATIONAL_DIGITS,
         ):
-            raise ValueError(
+            raise _validation_error(
+                "box_union_exceed_exact_rational_intermediate",
                 "box union can exceed the exact rational intermediate bound "
                 f"({result_digits} digits > "
-                f"{MAX_BOX_UNION_RESULT_RATIONAL_DIGITS})"
+                f"{MAX_BOX_UNION_RESULT_RATIONAL_DIGITS})",
             )
         estimated_bytes = _maximum_result_bytes(
             self,
@@ -221,9 +235,10 @@ class BoxUnionVolumeRequest(StrictModel):
             union_digits=union_digits,
         )
         if estimated_bytes > MAX_BOX_UNION_RESULT_BYTES:
-            raise ValueError(
+            raise _validation_error(
+                "box_union_exceed_complete_intersection_ledger",
                 "box union can exceed the complete intersection-ledger result "
-                f"budget ({estimated_bytes} bytes > {MAX_BOX_UNION_RESULT_BYTES})"
+                f"budget ({estimated_bytes} bytes > {MAX_BOX_UNION_RESULT_BYTES})",
             )
         return self
 
@@ -242,13 +257,25 @@ class BoxIntersectionLedgerEntry(StrictModel):
     @model_validator(mode="after")
     def require_valid_intersection_volume(self) -> Self:
         if tuple(sorted(set(self.box_indices))) != self.box_indices:
-            raise ValueError("box intersection indices must be strictly increasing")
+            raise _validation_error(
+                "box_intersection_indices_strictly_increasing",
+                "box intersection indices must be strictly increasing",
+            )
         if self.box_indices[0] < 0:
-            raise ValueError("box intersection indices must be nonnegative")
+            raise _validation_error(
+                "box_intersection_indices_nonnegative",
+                "box intersection indices must be nonnegative",
+            )
         if self.intersection.is_empty:
-            raise ValueError("ledger contains only nonempty box intersections")
+            raise _validation_error(
+                "ledger_contains_nonempty_box_intersections",
+                "ledger contains only nonempty box intersections",
+            )
         if self.volume.as_fraction() != box_volume(self.intersection):
-            raise ValueError("box intersection volume does not match its intervals")
+            raise _validation_error(
+                "box_intersection_volume_intervals",
+                "box intersection volume does not match its intervals",
+            )
         return self
 
 
@@ -271,16 +298,25 @@ class BoxUnionVolumeResult(StrictModel):
 
         expected, expected_union = complete_intersection_ledger(self.source.boxes)
         if len(self.intersections) != len(expected):
-            raise ValueError("intersection ledger is not complete for its source")
+            raise _validation_error(
+                "intersection_ledger_complete_source",
+                "intersection ledger is not complete for its source",
+            )
         for actual, wanted in zip(self.intersections, expected, strict=True):
             if (
                 actual.box_indices != wanted.box_indices
                 or actual.intersection != wanted.intersection
                 or actual.volume.as_fraction() != wanted.volume
             ):
-                raise ValueError("intersection ledger does not match its source boxes")
+                raise _validation_error(
+                    "intersection_ledger_source_boxes",
+                    "intersection ledger does not match its source boxes",
+                )
         if self.union_volume.as_fraction() != expected_union:
-            raise ValueError("union volume does not match inclusion-exclusion replay")
+            raise _validation_error(
+                "union_volume_inclusion_exclusion_replay",
+                "union volume does not match inclusion-exclusion replay",
+            )
         return self
 
 

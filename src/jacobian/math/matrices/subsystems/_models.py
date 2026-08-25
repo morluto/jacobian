@@ -6,6 +6,7 @@ from fractions import Fraction
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
@@ -79,9 +80,10 @@ def _require_trace_work_envelope(
         matrix, traced_factor_labels
     )
     if peak_component_digits > MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS:
-        raise ValueError(
+        raise _validation_error(
+            "budget_exceeded",
             "partial-trace contraction work exceeds the "
-            f"{MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS}-digit intermediate bound"
+            f"{MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS}-digit intermediate bound",
         )
     return entries
 
@@ -108,9 +110,10 @@ def _require_trace_result_envelope(
         default=1,
     )
     if measured > MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS:
-        raise ValueError(
+        raise _validation_error(
+            "budget_exceeded",
             "partial-trace coefficient growth exceeds the "
-            f"{MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS}-digit result bound"
+            f"{MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS}-digit result bound",
         )
 
 
@@ -151,10 +154,11 @@ def _require_trace_transport_envelope(
     except CanonicalizationError:
         result_bytes = output_limit + 1
     if result_bytes > output_limit:
-        raise ValueError(
+        raise _validation_error(
+            "budget_exceeded",
             "the partial-trace result retains its source matrix and would "
             f"exceed the {output_limit}-byte canonical output limit; "
-            "use smaller or sparser operands"
+            "use smaller or sparser operands",
         )
 
 
@@ -194,9 +198,10 @@ def _require_psd_pair_admission(
     """
 
     if left.factors != right.factors:
-        raise ValueError(
+        raise _validation_error(
+            "budget_exceeded",
             "PSD order requires exactly equal subsystem labels, dimensions, and "
-            "basis linearization"
+            "basis linearization",
         )
     difference_rows = tuple(
         tuple(
@@ -216,9 +221,10 @@ def _require_psd_pair_admission(
         default=1,
     )
     if difference_component_digits > MAX_PSD_DIFFERENCE_COMPONENT_DIGITS:
-        raise ValueError(
+        raise _validation_error(
+            "budget_exceeded",
             "PSD-order difference growth exceeds the "
-            f"{MAX_PSD_DIFFERENCE_COMPONENT_DIGITS}-digit result bound"
+            f"{MAX_PSD_DIFFERENCE_COMPONENT_DIGITS}-digit result bound",
         )
     if (
         _psd_witness_digit_bound(
@@ -227,8 +233,9 @@ def _require_psd_pair_admission(
         )
         > MAX_CANONICAL_RATIONAL_DIGITS
     ):
-        raise ValueError(
-            "PSD-order witness growth exceeds the canonical rational component bound"
+        raise _validation_error(
+            "budget_exceeded",
+            "PSD-order witness growth exceeds the canonical rational component bound",
         )
     output_limit = CanonicalLimits().max_output_bytes
     witness_reserve = (
@@ -262,10 +269,11 @@ def _require_psd_pair_admission(
     except CanonicalizationError:
         result_bytes = output_limit + 1
     if result_bytes > output_limit:
-        raise ValueError(
+        raise _validation_error(
+            "budget_exceeded",
             "the PSD-order result retains both operands and their exact "
             f"difference and would exceed the {output_limit}-byte canonical "
-            "output limit; use smaller or sparser operands"
+            "output limit; use smaller or sparser operands",
         )
 
 
@@ -295,15 +303,22 @@ class SubsystemKroneckerProductRequest(StrictModel):
             self.right.matrix.entries
         )
         if product_dimension > MAX_SUBSYSTEM_DIMENSION:
-            raise ValueError(
+            raise _validation_error(
+                "budget_exceeded",
                 "Kronecker product dimension exceeds the "
-                f"{MAX_SUBSYSTEM_DIMENSION} bound"
+                f"{MAX_SUBSYSTEM_DIMENSION} bound",
             )
         labels = (*self.left.factors, *self.right.factors)
         if len(labels) > 4:
-            raise ValueError("Kronecker product exceeds the subsystem-factor bound")
+            raise _validation_error(
+                "budget_exceeded",
+                "Kronecker product exceeds the subsystem-factor bound",
+            )
         if len({factor.label for factor in labels}) != len(labels):
-            raise ValueError("Kronecker product subsystem labels must remain unique")
+            raise _validation_error(
+                "budget_exceeded",
+                "Kronecker product subsystem labels must remain unique",
+            )
         left_entries = _entry_fractions(self.left)
         right_entries = _entry_fractions(self.right)
         for left_row in left_entries:
@@ -314,10 +329,11 @@ class SubsystemKroneckerProductRequest(StrictModel):
                             max(_fraction_component_digits(left_entry * right_entry))
                             > MAX_KRONECKER_RESULT_COMPONENT_DIGITS
                         ):
-                            raise ValueError(
+                            raise _validation_error(
+                                "budget_exceeded",
                                 "Kronecker product coefficient growth exceeds the "
                                 f"{MAX_KRONECKER_RESULT_COMPONENT_DIGITS}-digit "
-                                "result bound"
+                                "result bound",
                             )
         return self
 
@@ -353,15 +369,23 @@ class SubsystemPartialTraceRequest(StrictModel):
     @model_validator(mode="after")
     def require_traceable_factors(self) -> Self:
         if len(set(self.traced_factor_labels)) != len(self.traced_factor_labels):
-            raise ValueError("traced subsystem labels must be unique")
+            raise _validation_error(
+                "status_mismatch", "traced subsystem labels must be unique"
+            )
         labels = tuple(factor.label for factor in self.matrix.factors)
         if not set(self.traced_factor_labels) <= set(labels):
-            raise ValueError("each traced subsystem label must occur in matrix.factors")
+            raise _validation_error(
+                "invariant_mismatch",
+                "each traced subsystem label must occur in matrix.factors",
+            )
         expected_order = tuple(
             label for label in labels if label in self.traced_factor_labels
         )
         if self.traced_factor_labels != expected_order:
-            raise ValueError("traced subsystem labels must follow source factor order")
+            raise _validation_error(
+                "invariant_mismatch",
+                "traced subsystem labels must follow source factor order",
+            )
         expected_entries = _require_trace_work_envelope(
             self.matrix, self.traced_factor_labels
         )
@@ -386,14 +410,22 @@ class SubsystemPartialTraceResult(StrictModel):
     def require_trace_result_axes(self) -> Self:
         source_labels = tuple(factor.label for factor in self.source_matrix.factors)
         if len(set(self.traced_factor_labels)) != len(self.traced_factor_labels):
-            raise ValueError("traced subsystem labels must be unique")
+            raise _validation_error(
+                "invariant_mismatch", "traced subsystem labels must be unique"
+            )
         if not set(self.traced_factor_labels) <= set(source_labels):
-            raise ValueError("traced subsystem labels must occur in the source matrix")
+            raise _validation_error(
+                "invariant_mismatch",
+                "traced subsystem labels must occur in the source matrix",
+            )
         expected_order = tuple(
             label for label in source_labels if label in self.traced_factor_labels
         )
         if self.traced_factor_labels != expected_order:
-            raise ValueError("traced subsystem labels must follow source factor order")
+            raise _validation_error(
+                "invariant_mismatch",
+                "traced subsystem labels must follow source factor order",
+            )
         expected_entries = _require_trace_work_envelope(
             self.source_matrix, self.traced_factor_labels
         )
@@ -407,15 +439,18 @@ class SubsystemPartialTraceResult(StrictModel):
             if factor.label not in self.traced_factor_labels
         )
         if self.reduced_matrix.factors != expected:
-            raise ValueError(
-                "partial trace must retain untraced factors in source order"
+            raise _validation_error(
+                "shape_mismatch",
+                "partial trace must retain untraced factors in source order",
             )
         actual_entries = tuple(
             tuple(entry.as_fraction() for entry in row)
             for row in self.reduced_matrix.matrix.entries
         )
         if actual_entries != expected_entries:
-            raise ValueError("partial trace entries must replay against the source")
+            raise _validation_error(
+                "shape_mismatch", "partial trace entries must replay against the source"
+            )
         return self
 
 
@@ -429,7 +464,9 @@ class PsdInertia(StrictModel):
     @model_validator(mode="after")
     def require_order(self) -> Self:
         if self.n_positive + self.n_negative + self.n_zero > MAX_SUBSYSTEM_DIMENSION:
-            raise ValueError("inertia counts exceed the subsystem matrix dimension")
+            raise _validation_error(
+                "shape_mismatch", "inertia counts exceed the subsystem matrix dimension"
+            )
         return self
 
 
@@ -445,9 +482,13 @@ class NegativeQuadraticWitness(StrictModel):
     @model_validator(mode="after")
     def require_nonzero_negative_claim(self) -> Self:
         if not any(value.num != "0" for value in self.vector):
-            raise ValueError("negative quadratic witness vector must be nonzero")
+            raise _validation_error(
+                "field_mismatch", "negative quadratic witness vector must be nonzero"
+            )
         if self.quadratic_value.as_fraction() >= Fraction(0):
-            raise ValueError("negative quadratic witness value must be negative")
+            raise _validation_error(
+                "budget_exceeded", "negative quadratic witness value must be negative"
+            )
         return self
 
 
@@ -498,8 +539,9 @@ class PsdOrderResult(StrictModel):
             self.left.factors != self.right.factors
             or self.difference.factors != self.left.factors
         ):
-            raise ValueError(
-                "PSD-order result matrices must share exactly one axis bound"
+            raise _validation_error(
+                "budget_exceeded",
+                "PSD-order result matrices must share exactly one axis bound",
             )
         _require_psd_pair_admission(self.left, self.right)
         dimension = len(self.left.matrix.entries)
@@ -507,7 +549,10 @@ class PsdOrderResult(StrictModel):
             self.inertia.n_positive + self.inertia.n_negative + self.inertia.n_zero
             != dimension
         ):
-            raise ValueError("inertia counts must sum to the source matrix dimension")
+            raise _validation_error(
+                "shape_mismatch",
+                "inertia counts must sum to the source matrix dimension",
+            )
         expected_difference = tuple(
             tuple(
                 right.as_fraction() - left.as_fraction()
@@ -524,30 +569,43 @@ class PsdOrderResult(StrictModel):
             for row in self.difference.matrix.entries
         )
         if actual_difference != expected_difference:
-            raise ValueError("PSD-order difference must equal right minus left exactly")
+            raise _validation_error(
+                "invariant_mismatch",
+                "PSD-order difference must equal right minus left exactly",
+            )
         expected_inertia = symmetric_inertia(actual_difference)  # type: ignore[arg-type]
         if (
             self.inertia.n_positive,
             self.inertia.n_negative,
             self.inertia.n_zero,
         ) != expected_inertia:
-            raise ValueError("PSD-order inertia must replay against the difference")
+            raise _validation_error(
+                "invariant_mismatch",
+                "PSD-order inertia must replay against the difference",
+            )
         expected_order = self.inertia.n_negative == 0
         if self.is_less_or_equal != expected_order:
-            raise ValueError("PSD-order decision must agree with the negative inertia")
+            raise _validation_error(
+                "invariant_mismatch",
+                "PSD-order decision must agree with the negative inertia",
+            )
         if self.is_less_or_equal and self.negative_witness is not None:
-            raise ValueError("a PSD-order result must not carry a negative witness")
+            raise _validation_error(
+                "shape_mismatch", "a PSD-order result must not carry a negative witness"
+            )
         if not self.is_less_or_equal and self.negative_witness is None:
-            raise ValueError(
-                "a non-PSD difference requires a negative quadratic witness"
+            raise _validation_error(
+                "shape_mismatch",
+                "a non-PSD difference requires a negative quadratic witness",
             )
         if self.negative_witness is not None:
             vector = tuple(
                 value.as_fraction() for value in self.negative_witness.vector
             )
             if len(vector) != dimension:
-                raise ValueError(
-                    "negative witness length must equal the matrix dimension"
+                raise _validation_error(
+                    "shape_mismatch",
+                    "negative witness length must equal the matrix dimension",
                 )
             quadratic_value = sum(
                 (
@@ -558,8 +616,9 @@ class PsdOrderResult(StrictModel):
                 Fraction(0),
             )
             if quadratic_value != self.negative_witness.quadratic_value.as_fraction():
-                raise ValueError(
-                    "negative witness value must replay against the difference"
+                raise _validation_error(
+                    "budget_exceeded",
+                    "negative witness value must replay against the difference",
                 )
         return self
 
@@ -578,3 +637,7 @@ __all__ = [
     "SubsystemPartialTraceRequest",
     "SubsystemPartialTraceResult",
 ]
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"matrix.{reason}", message)

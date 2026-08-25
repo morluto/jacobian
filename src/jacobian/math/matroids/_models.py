@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
@@ -14,6 +15,12 @@ MAX_GROUND_SIZE = 32
 
 MAX_PRIME = 2_147_483_647
 """Explicit conservative bound on the field prime before primality testing."""
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by matroid contracts."""
+
+    return PydanticCustomError(f"matroid.{reason}", message)
 
 
 class LinearMatroid(StrictModel):
@@ -61,18 +68,20 @@ class LinearMatroid(StrictModel):
             else:
                 prime = getattr(raw, "prime", None)
             if isinstance(prime, int) and not 2 <= prime <= MAX_PRIME:
-                raise ValueError(
+                raise _validation_error(
+                    "field_prime.bound",
                     f"field prime must lie in [2, {MAX_PRIME}] so validation "
-                    "work stays bounded"
+                    "work stays bounded",
                 )
         return data
 
     @model_validator(mode="after")
     def require_bounded_ground_set(self) -> Self:
         if self.matrix.columns > MAX_GROUND_SIZE:
-            raise ValueError(
+            raise _validation_error(
+                "ground_set.bound",
                 f"ground set must hold at most {MAX_GROUND_SIZE} elements, "
-                f"got {self.matrix.columns}"
+                f"got {self.matrix.columns}",
             )
         return self
 
@@ -103,7 +112,10 @@ class MatroidClosureRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_subset(self) -> Self:
-        validate_subset_indices(self.matroid, self.subset)
+        try:
+            validate_subset_indices(self.matroid, self.subset)
+        except ValueError as exc:
+            raise _validation_error("subset.invalid", str(exc)) from exc
         return self
 
 
@@ -123,9 +135,13 @@ class MatroidClosureResult(MatroidClosureRequest):
             self.matroid, list(self.subset)
         )
         if tuple(self.closure) != tuple(expected_closure):
-            raise ValueError("closure must be the exact flat of the subset")
+            raise _validation_error(
+                "closure.invariant", "closure must be the exact flat of the subset"
+            )
         if self.rank != subset_rank:
-            raise ValueError("rank must be the rank of the requested subset")
+            raise _validation_error(
+                "rank.invariant", "rank must be the rank of the requested subset"
+            )
         return self
 
 

@@ -28,7 +28,6 @@ from jacobian.math.tree_automata.operations import (
     run_tree_automaton,
 )
 from jacobian.math.tree_automata.values import (
-    MAX_REACHABILITY_WITNESS_NODES,
     MAX_TA_TRANSITIONS,
     MAX_TREE_AUTOMATON_REACHABILITY_WORK,
     BottomUpTreeAutomaton,

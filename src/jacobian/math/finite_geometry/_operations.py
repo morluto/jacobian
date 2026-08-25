@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.finite_geometry._models import (
     GrassmannianCountRequest,
     GrassmannianCountResult,
@@ -211,7 +212,7 @@ def compute_grassmannian_count(
         field_order=q,
         ambient_dimension=n,
         subspace_dimension=k,
-        count=count,
+        count=format_canonical_integer(count),
     )
 
 

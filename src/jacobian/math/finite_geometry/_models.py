@@ -8,7 +8,9 @@ from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 from sympy import isprime
 
+from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 
 MAX_DIM = 32
 MAX_FIELD_ORDER = 10000
@@ -406,7 +408,9 @@ class GrassmannianCountResult(StrictModel):
     field_order: int
     ambient_dimension: int
     subspace_dimension: int
-    count: int = Field(ge=1)
+    count: CanonicalInteger = Field(
+        description="Exact Gaussian-binomial count encoded as a canonical decimal integer."
+    )
     method: str = "GAUSSIAN_BINOMIAL"
 
     @model_validator(mode="after")
@@ -423,7 +427,7 @@ class GrassmannianCountResult(StrictModel):
         for index in range(self.subspace_dimension):
             numerator *= self.field_order ** (self.ambient_dimension - index) - 1
             denominator *= self.field_order ** (self.subspace_dimension - index) - 1
-        if self.count != numerator // denominator:
+        if self.count != format_canonical_integer(numerator // denominator):
             raise _validation_error(
                 "grassmannian_count_mismatch",
                 "count does not match its Gaussian-binomial parameters",

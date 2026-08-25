@@ -8,16 +8,14 @@ from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.finite_categories._models import (
     CategoryProductRequest,
-    CategoryProductResult,
     CategoryProfileResult,
-    FiniteCategoryRequest,
-    OppositeCategoryResult,
 )
 from jacobian.math.finite_categories._operations import (
     compute_category_product,
     compute_category_profile,
     compute_opposite_category,
 )
+from jacobian.math.finite_categories.values import FiniteCategory, FiniteCategoryProduct
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](
@@ -32,7 +30,6 @@ def _op[RequestT: StrictModel, ResultT: StrictModel](
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version="1",
         title=title,
         description=description,
         request_type=request_model,
@@ -76,7 +73,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "designated identity morphism for each object of a finite category "
         "presented extensionally with identities and a total composition "
         "table.",
-        FiniteCategoryRequest,
+        FiniteCategory,
         CategoryProfileResult,
         compute_category_profile,
         "algebra",
@@ -102,8 +99,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute the opposite category",
         "Compute the opposite category with all morphism directions reversed "
         "(source and target swapped) and composition order reversed.",
-        FiniteCategoryRequest,
-        OppositeCategoryResult,
+        FiniteCategory,
+        FiniteCategory,
         compute_opposite_category,
         "algebra",
         "category",
@@ -132,7 +129,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "morphism, composable-pair, composable-triple, replay-work, identifier, "
         "and canonical-result sizes are all preflight-bounded.",
         CategoryProductRequest,
-        CategoryProductResult,
+        FiniteCategoryProduct,
         compute_category_product,
         "algebra",
         "category",

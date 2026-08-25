@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger, CanonicalRational
 from jacobian._models import StrictModel
@@ -30,9 +31,10 @@ def _require_computation_dimensions(
     entries: tuple[tuple[CanonicalRational, ...], ...],
 ) -> None:
     if len(entries) > MAX_MATRIX_DIMENSION or len(entries[0]) > MAX_MATRIX_DIMENSION:
-        raise ValueError(
+        raise _validation_error(
+            "budget_exceeded",
             "matrix computation dimensions are limited to "
-            f"{MAX_MATRIX_DIMENSION} rows and columns"
+            f"{MAX_MATRIX_DIMENSION} rows and columns",
         )
 
 
@@ -40,7 +42,9 @@ def _check_integer_digits(
     value: str, *, maximum: int = MAX_INPUT_SCALAR_DIGITS
 ) -> None:
     if len(value.lstrip("-")) > maximum:
-        raise ValueError(f"matrix scalars are limited to {maximum} decimal digits")
+        raise _validation_error(
+            "budget_exceeded", f"matrix scalars are limited to {maximum} decimal digits"
+        )
 
 
 def _require_square_system_admission(
@@ -55,7 +59,9 @@ def _require_square_system_admission(
 
     rows = len(matrix.entries)
     if len(matrix.entries[0]) != rows or len(rhs) != rows:
-        raise ValueError("linear solve requires a square matrix and matching rhs")
+        raise _validation_error(
+            "budget_exceeded", "linear solve requires a square matrix and matching rhs"
+        )
     require_matrix_scalar_digits(
         matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
     )
@@ -85,9 +91,10 @@ class RationalMatrixProductRequest(StrictModel):
     @model_validator(mode="after")
     def require_compatible_shapes(self) -> Self:
         if len(self.left.entries[0]) != len(self.right.entries):
-            raise ValueError(
+            raise _validation_error(
+                "budget_exceeded",
                 "matrix multiplication requires the left column count to equal "
-                "the right row count"
+                "the right row count",
             )
         _require_computation_dimensions(self.left.entries)
         _require_computation_dimensions(self.right.entries)
@@ -106,7 +113,9 @@ class SquareRationalMatrixRequest(StrictModel):
     @model_validator(mode="after")
     def require_square(self) -> Self:
         if len(self.matrix.entries) != len(self.matrix.entries[0]):
-            raise ValueError("characteristic polynomial requires a square matrix")
+            raise _validation_error(
+                "budget_exceeded", "characteristic polynomial requires a square matrix"
+            )
         _require_computation_dimensions(self.matrix.entries)
         require_matrix_scalar_digits(
             self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
@@ -117,7 +126,6 @@ class SquareRationalMatrixRequest(StrictModel):
 class DeterminantRationalMatrix(StrictModel):
     """One determinant-owned rational matrix bounded independently to order 64."""
 
-    matrix_schema_version: Literal["1"] = "1"
     domain: Literal["QQ"] = "QQ"
     entries: tuple[DeterminantRow, ...] = Field(
         min_length=1, max_length=MAX_DETERMINANT_MATRIX_DIMENSION
@@ -127,11 +135,15 @@ class DeterminantRationalMatrix(StrictModel):
     def require_rectangular_nonempty_rows(self) -> Self:
         column_count = len(self.entries[0])
         if not 1 <= column_count <= MAX_DETERMINANT_MATRIX_DIMENSION:
-            raise ValueError(
-                "determinant matrix rows must contain between 1 and 64 entries"
+            raise _validation_error(
+                "budget_exceeded",
+                "determinant matrix rows must contain between 1 and 64 entries",
             )
         if any(len(row) != column_count for row in self.entries):
-            raise ValueError("determinant matrix rows must all have the same length")
+            raise _validation_error(
+                "budget_exceeded",
+                "determinant matrix rows must all have the same length",
+            )
         require_matrix_scalar_digits(
             self.entries,
             maximum=MAX_INPUT_SCALAR_DIGITS,
@@ -148,7 +160,9 @@ class MatrixDeterminantRequest(StrictModel):
     @model_validator(mode="after")
     def require_square(self) -> Self:
         if len(self.matrix.entries) != len(self.matrix.entries[0]):
-            raise ValueError("determinant computation requires a square matrix")
+            raise _validation_error(
+                "budget_exceeded", "determinant computation requires a square matrix"
+            )
         return self
 
 
@@ -188,7 +202,9 @@ class NonsingularIntegerMatrixRequest(StrictModel):
     def require_square_and_nonsingular(self) -> Self:
         rows = len(self.matrix.entries)
         if rows == 0 or rows != len(self.matrix.entries[0]):
-            raise ValueError("operation requires a square integer matrix")
+            raise _validation_error(
+                "budget_exceeded", "operation requires a square integer matrix"
+            )
         require_matrix_scalar_digits(
             self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
         )
@@ -196,7 +212,9 @@ class NonsingularIntegerMatrixRequest(StrictModel):
 
         raw = Matrix([[int(str(v)) for v in row] for row in self.matrix.entries])
         if raw.det() == 0:
-            raise ValueError("matrix is singular; inverse does not exist")
+            raise _validation_error(
+                "budget_exceeded", "matrix is singular; inverse does not exist"
+            )
         return self
 
 
@@ -206,7 +224,9 @@ class SquareIntegerMatrixRequest(StrictModel):
     @model_validator(mode="after")
     def require_square(self) -> Self:
         if len(self.matrix.entries) != len(self.matrix.entries[0]):
-            raise ValueError("operation requires a square integer matrix")
+            raise _validation_error(
+                "budget_exceeded", "operation requires a square integer matrix"
+            )
         require_matrix_scalar_digits(
             self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
         )
@@ -251,13 +271,20 @@ class RrefResult(StrictModel):
             len(self.reduced_matrix.entries) != len(self.matrix.entries)
             or len(self.reduced_matrix.entries[0]) != column_count
         ):
-            raise ValueError("reduced matrix must have the source shape")
+            raise _validation_error(
+                "shape_mismatch", "reduced matrix must have the source shape"
+            )
         if self.rank != len(self.pivot_columns):
-            raise ValueError("rank must equal the pivot column count")
+            raise _validation_error(
+                "shape_mismatch", "rank must equal the pivot column count"
+            )
         if sorted((*self.pivot_columns, *self.free_columns)) != list(
             range(column_count)
         ):
-            raise ValueError("pivot and free columns must partition the source columns")
+            raise _validation_error(
+                "shape_mismatch",
+                "pivot and free columns must partition the source columns",
+            )
         from jacobian.math.matrices import _conversions as conversions
         from jacobian.math.matrices._operations import _rref_replay
 
@@ -266,7 +293,10 @@ class RrefResult(StrictModel):
             conversions.rational_matrix_to_sympy(self.reduced_matrix)
             != expected_reduced
         ):
-            raise ValueError("reduced matrix must be the unique RREF of the source")
+            raise _validation_error(
+                "budget_exceeded",
+                "reduced matrix must be the unique RREF of the source",
+            )
         return self
 
 
@@ -288,14 +318,19 @@ class MatrixRankResult(StrictModel):
     @model_validator(mode="after")
     def require_source_bound(self) -> Self:
         if self.rank != len(self.pivot_columns):
-            raise ValueError("rank must equal the pivot column count")
+            raise _validation_error(
+                "budget_exceeded", "rank must equal the pivot column count"
+            )
         from jacobian.math.matrices._operations import _rank_replay
 
         expected_rank, pivots = _rank_replay(self.matrix)
         if expected_rank != self.rank or tuple(int(p) for p in pivots) != (
             self.pivot_columns
         ):
-            raise ValueError("rank and pivot columns must replay against the source")
+            raise _validation_error(
+                "budget_exceeded",
+                "rank and pivot columns must replay against the source",
+            )
         return self
 
 
@@ -322,17 +357,28 @@ class NullspaceResult(StrictModel):
     @model_validator(mode="after")
     def require_basis_shape(self) -> Self:
         if self.ambient_dimension != len(self.matrix.entries[0]):
-            raise ValueError("ambient dimension must equal the source column count")
+            raise _validation_error(
+                "shape_mismatch", "ambient dimension must equal the source column count"
+            )
         if self.rank + self.nullity != self.ambient_dimension:
-            raise ValueError("rank plus nullity must equal the ambient dimension")
+            raise _validation_error(
+                "shape_mismatch", "rank plus nullity must equal the ambient dimension"
+            )
         if len(self.basis_vectors) != self.nullity:
-            raise ValueError("basis vector count must equal nullity")
+            raise _validation_error(
+                "shape_mismatch", "basis vector count must equal nullity"
+            )
         if any(len(vector) != self.ambient_dimension for vector in self.basis_vectors):
-            raise ValueError("each basis vector must have the ambient dimension")
+            raise _validation_error(
+                "shape_mismatch", "each basis vector must have the ambient dimension"
+            )
         if len(self.free_columns) != self.nullity or self.free_columns != tuple(
             sorted(self.free_columns)
         ):
-            raise ValueError("free column count must equal nullity in ascending order")
+            raise _validation_error(
+                "shape_mismatch",
+                "free column count must equal nullity in ascending order",
+            )
 
         entries = [
             [value.as_fraction() for value in row] for row in self.matrix.entries
@@ -341,23 +387,27 @@ class NullspaceResult(StrictModel):
             components = [value.as_fraction() for value in vector]
             for row in entries:
                 if sum(a * b for a, b in zip(row, components, strict=True)) != 0:
-                    raise ValueError(
-                        f"basis vector {index} does not satisfy A v = 0 exactly"
+                    raise _validation_error(
+                        "shape_mismatch",
+                        f"basis vector {index} does not satisfy A v = 0 exactly",
                     )
             own = self.free_columns[index]
             if components[own] != 1 or any(
                 components[other] != 0 for other in self.free_columns if other != own
             ):
-                raise ValueError(
+                raise _validation_error(
+                    "shape_mismatch",
                     f"basis vector {index} is not the fundamental basis vector "
-                    "of its free column"
+                    "of its free column",
                 )
 
         from jacobian.math.matrices._operations import _rank_replay
 
         expected_rank, _pivots = _rank_replay(self.matrix)
         if expected_rank != self.rank:
-            raise ValueError("claimed rank must equal the exact rank of the source")
+            raise _validation_error(
+                "shape_mismatch", "claimed rank must equal the exact rank of the source"
+            )
         return self
 
 
@@ -374,9 +424,13 @@ class CharacteristicPolynomialResult(StrictModel):
     @model_validator(mode="after")
     def require_dense_monic_coefficients(self) -> Self:
         if len(self.coefficients_descending) != self.degree + 1:
-            raise ValueError("dense coefficient count must be degree plus one")
+            raise _validation_error(
+                "shape_mismatch", "dense coefficient count must be degree plus one"
+            )
         if self.coefficients_descending[0] != CanonicalRational(num="1", den="1"):
-            raise ValueError("characteristic polynomial must be monic")
+            raise _validation_error(
+                "budget_exceeded", "characteristic polynomial must be monic"
+            )
         return self
 
 
@@ -408,9 +462,13 @@ class MatrixProductResult(StrictModel):
     @model_validator(mode="after")
     def require_product_shape(self) -> Self:
         if len(self.product.entries) != self.left_rows:
-            raise ValueError("product row count must equal left_rows")
+            raise _validation_error(
+                "budget_exceeded", "product row count must equal left_rows"
+            )
         if len(self.product.entries[0]) != self.right_columns:
-            raise ValueError("product column count must equal right_columns")
+            raise _validation_error(
+                "budget_exceeded", "product column count must equal right_columns"
+            )
         return self
 
 
@@ -451,17 +509,24 @@ class RationalLinearSolveResult(StrictModel):
         solution = self.solution
         if self.outcome == "UNIQUE":
             if solution is None:
-                raise ValueError("a unique solution must populate the solution field")
+                raise _validation_error(
+                    "shape_mismatch",
+                    "a unique solution must populate the solution field",
+                )
         elif solution is not None:
-            raise ValueError(
-                "a non-unique or inconsistent result must not populate the solution field"
+            raise _validation_error(
+                "shape_mismatch",
+                "a non-unique or inconsistent result must not populate the solution field",
             )
         # Deserialized source components pass the canonical rational domain
         # but not this operation's work envelope, so reapply request
         # admission before any exact replay arithmetic runs.
         _require_square_system_admission(self.matrix, self.rhs)
         if len(self.rhs) != len(self.matrix.entries):
-            raise ValueError("right-hand side length must equal the source row count")
+            raise _validation_error(
+                "shape_mismatch",
+                "right-hand side length must equal the source row count",
+            )
 
         from jacobian.math.matrices._operations import _system_rank_replay
 
@@ -470,29 +535,37 @@ class RationalLinearSolveResult(StrictModel):
         if solution is not None:
             components = [value.as_fraction() for value in solution]
             if len(components) != columns:
-                raise ValueError("solution length must equal the source column count")
+                raise _validation_error(
+                    "budget_exceeded",
+                    "solution length must equal the source column count",
+                )
             for row, bound in zip(self.matrix.entries, self.rhs, strict=True):
                 residual = sum(
                     coefficient.as_fraction() * component
                     for coefficient, component in zip(row, components, strict=True)
                 )
                 if residual != bound.as_fraction():
-                    raise ValueError("solution does not satisfy A x = b exactly")
+                    raise _validation_error(
+                        "shape_mismatch", "solution does not satisfy A x = b exactly"
+                    )
             if coefficient_rank != columns:
-                raise ValueError(
-                    "a unique outcome requires a nonsingular source coefficient matrix"
+                raise _validation_error(
+                    "shape_mismatch",
+                    "a unique outcome requires a nonsingular source coefficient matrix",
                 )
         elif self.outcome == "INCONSISTENT":
             if coefficient_rank >= augmented_rank:
-                raise ValueError(
+                raise _validation_error(
+                    "shape_mismatch",
                     "an inconsistent outcome requires rank(A) < rank([A | b]) "
-                    "on the source system"
+                    "on the source system",
                 )
         else:
             if coefficient_rank == columns or coefficient_rank != augmented_rank:
-                raise ValueError(
+                raise _validation_error(
+                    "invariant_mismatch",
                     "a non-unique outcome requires a consistent, rank-deficient "
-                    "source system"
+                    "source system",
                 )
         return self
 
@@ -524,9 +597,10 @@ class MatrixKroneckerProductRequest(StrictModel):
         ) or len(self.left.entries[0]) * len(self.right.entries[0]) > (
             MAX_RATIONAL_MATRIX_ORDER
         ):
-            raise ValueError(
+            raise _validation_error(
+                "budget_exceeded",
                 "kronecker products must fit within "
-                f"{MAX_RATIONAL_MATRIX_ORDER} rows and columns"
+                f"{MAX_RATIONAL_MATRIX_ORDER} rows and columns",
             )
         require_matrix_scalar_digits(
             self.left.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
@@ -554,12 +628,14 @@ class MatrixKroneckerProductResult(StrictModel):
     @model_validator(mode="after")
     def require_product_shape(self) -> Self:
         if len(self.product.entries) != self.left_rows * self.right_rows:
-            raise ValueError(
-                "Kronecker product row count must equal left_rows * right_rows"
+            raise _validation_error(
+                "shape_mismatch",
+                "Kronecker product row count must equal left_rows * right_rows",
             )
         if len(self.product.entries[0]) != self.left_columns * self.right_columns:
-            raise ValueError(
-                "Kronecker product column count must equal left_columns * right_columns"
+            raise _validation_error(
+                "shape_mismatch",
+                "Kronecker product column count must equal left_columns * right_columns",
             )
         return self
 
@@ -575,12 +651,14 @@ class MatrixPartialTraceRequest(StrictModel):
     def require_composite_shape(self) -> Self:
         total = self.traced_dimension * self.kept_dimension
         if len(self.matrix.entries) != total:
-            raise ValueError(
-                "composite matrix row count must equal traced_dimension * kept_dimension"
+            raise _validation_error(
+                "budget_exceeded",
+                "composite matrix row count must equal traced_dimension * kept_dimension",
             )
         if len(self.matrix.entries[0]) != total:
-            raise ValueError(
-                "composite matrix must be square: traced_dimension * kept_dimension"
+            raise _validation_error(
+                "budget_exceeded",
+                "composite matrix must be square: traced_dimension * kept_dimension",
             )
         _require_computation_dimensions(self.matrix.entries)
         require_matrix_scalar_digits(
@@ -600,7 +678,16 @@ class MatrixPartialTraceResult(StrictModel):
     @model_validator(mode="after")
     def require_reduced_shape(self) -> Self:
         if len(self.reduced_matrix.entries) != self.kept_dimension:
-            raise ValueError("reduced matrix row count must equal kept_dimension")
+            raise _validation_error(
+                "shape_mismatch", "reduced matrix row count must equal kept_dimension"
+            )
         if len(self.reduced_matrix.entries[0]) != self.kept_dimension:
-            raise ValueError("reduced matrix must be square of order kept_dimension")
+            raise _validation_error(
+                "shape_mismatch",
+                "reduced matrix must be square of order kept_dimension",
+            )
         return self
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"matrix.{reason}", message)

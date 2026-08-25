@@ -247,23 +247,31 @@ def test_permutation_envelope_is_derived_from_the_canonical_cell_budget() -> Non
 
 
 def test_structurally_incompatible_pairs_fail_before_reverse_insertion() -> None:
-    with pytest.raises(ValidationError, match="common shape"):
+    with pytest.raises(ValidationError) as error:
         RSKTableauPair(
             alphabet=("a", "b"),
             insertion_tableau=SemistandardYoungTableau(rows=((1, 2),)),
             recording_tableau=StandardYoungTableau(rows=((1, 2),)),
             shape=IntegerPartition(parts=(1, 1)),
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "algebraic_combinatorics.insertion_shape_mismatch"
+    )
 
-    with pytest.raises(ValidationError, match="outside the ordered alphabet"):
+    with pytest.raises(ValidationError) as error:
         RSKTableauPair(
             alphabet=("a",),
             insertion_tableau=SemistandardYoungTableau(rows=((2,),)),
             recording_tableau=StandardYoungTableau(rows=((1,),)),
             shape=IntegerPartition(parts=(1,)),
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "algebraic_combinatorics.insertion_entry_out_of_range"
+    )
 
-    with pytest.raises(ValidationError, match="exactly 1 through n"):
+    with pytest.raises(ValidationError) as error:
         RSKTableauPair.model_validate(
             {
                 "alphabet": ["a"],
@@ -272,6 +280,10 @@ def test_structurally_incompatible_pairs_fail_before_reverse_insertion() -> None
                 "shape": {"parts": [2]},
             }
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "symmetric_function.standard_entries_not_consecutive"
+    )
 
 
 def _wide_unicode_symbols(count: int) -> tuple[str, ...]:
@@ -457,9 +469,6 @@ def test_public_operations_are_admitted_and_examples_execute() -> None:
     tools = {tool.operation_id: tool for tool in TOOLS}
     decisions = {admission.operation_id: admission.decision for admission in ADMISSIONS}
     assert public_ids <= tools.keys()
-    assert tools["combinatorics.rsk.permutation.compute"].version == "2"
-    assert tools["tableau.rsk.word.compute"].version == "2"
-    assert tools["tableau.rsk.inverse_word.compute"].version == "2"
     assert all(
         decisions[operation_id] is AdmissionDecision.KEEP for operation_id in public_ids
     )

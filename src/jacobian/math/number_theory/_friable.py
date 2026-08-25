@@ -25,7 +25,6 @@ FRIABLE_COUNT_OPERATION = number_theory_operation(
     "smooth-number",
     "counting",
     "exact",
-    version="1",
     examples=(
         example(
             "five_friable_through_100",

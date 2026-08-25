@@ -42,11 +42,9 @@ def _op[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -105,7 +103,6 @@ UNIVERSAL_ALGEBRA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {"algebra": _ALGEBRA, "term": _TERM, "assignment": [0, 1]},
             ),
         ),
-        version="2",
     ),
     _op(
         "universal_algebra.equation.profile.compute",
@@ -145,7 +142,6 @@ UNIVERSAL_ALGEBRA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
-        version="2",
     ),
     _op(
         "universal_algebra.subalgebra.generated.compute",
@@ -166,7 +162,6 @@ UNIVERSAL_ALGEBRA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {"algebra": _ALGEBRA, "generators": [0]},
             ),
         ),
-        version="2",
     ),
     _op(
         "universal_algebra.map.homomorphism_profile.compute",
@@ -219,7 +214,6 @@ UNIVERSAL_ALGEBRA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {"algebra": _ALGEBRA, "partition": [[0, 1]]},
             ),
         ),
-        version="2",
     ),
     _op(
         "universal_algebra.quotient.compute",
@@ -241,7 +235,6 @@ UNIVERSAL_ALGEBRA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {"algebra": _ALGEBRA, "partition": [[0, 1]]},
             ),
         ),
-        version="3",
     ),
 )
 

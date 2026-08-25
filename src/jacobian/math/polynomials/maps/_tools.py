@@ -13,7 +13,6 @@ from jacobian.math.polynomials.maps._models import (
     EvalResult,
     GenericDegreeRequest,
     GenericDegreeResult,
-    JacobianRequest,
     JacobianResult,
 )
 from jacobian.math.polynomials.maps._operations import (
@@ -22,6 +21,7 @@ from jacobian.math.polynomials.maps._operations import (
     compute_jacobian,
     evaluate_polynomial,
 )
+from jacobian.math.polynomials.maps.values import RationalPolynomialMap
 
 
 def _polynomial(
@@ -29,7 +29,6 @@ def _polynomial(
     *terms: tuple[int, int],
 ) -> dict[str, Any]:
     return {
-        "polynomial_schema_version": "1",
         "domain": "QQ",
         "variables": [variable],
         "polynomial": {
@@ -46,7 +45,6 @@ def _polynomial(
 
 def _bivariate_polynomial(*terms: tuple[int, tuple[int, int]]) -> dict[str, Any]:
     return {
-        "polynomial_schema_version": "1",
         "domain": "QQ",
         "variables": ["x", "y"],
         "polynomial": {
@@ -73,11 +71,9 @@ def _op[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "2",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -110,7 +106,6 @@ POLYNOMIAL_MAP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "component must use the complete ordered source axis.",
                 {
                     "polynomial_map": {
-                        "polynomial_map_schema_version": "1",
                         "input_variables": ["x", "y"],
                         "output_polynomials": [
                             _bivariate_polynomial((1, (2, 0))),
@@ -120,7 +115,6 @@ POLYNOMIAL_MAP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
-        version="1",
     ),
     _op(
         "polynomial.map.evaluate",
@@ -154,7 +148,7 @@ POLYNOMIAL_MAP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "polynomial.map.jacobian",
         "Compute the Jacobian matrix of a polynomial map",
         "Compute the row-major Jacobian matrix of a canonical polynomial map.",
-        JacobianRequest,
+        RationalPolynomialMap,
         JacobianResult,
         compute_jacobian,
         "polynomial",

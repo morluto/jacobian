@@ -9,7 +9,6 @@ from pathlib import Path
 def test_process_runs_matrix_determinant_with_no_state_dir(tmp_path: Path) -> None:
     payload = {
         "matrix": {
-            "matrix_schema_version": "1",
             "domain": "QQ",
             "entries": [
                 [

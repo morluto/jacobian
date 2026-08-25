@@ -15,6 +15,12 @@ from jacobian.math.code_theory._operations import (
 )
 
 
+def _assert_validation_error_code(factory, code: str) -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        factory()
+    assert exc_info.value.errors()[0]["type"] == code
+
+
 def test_prime_field_code_enumeration_uses_the_declared_matrix() -> None:
     request = LinearCodeRequest(field_order=2, generator_matrix=((1, 1),))
 
@@ -29,17 +35,22 @@ def test_code_weight_distribution_counts_distinct_words_for_dependent_rows() -> 
 
 
 def test_code_contract_rejects_nonprime_fields_and_unbounded_enumeration() -> None:
-    with pytest.raises(ValidationError, match="prime"):
-        LinearCodeRequest(field_order=4, generator_matrix=((1,),))
-    with pytest.raises(ValidationError, match="enumeration"):
-        LinearCodeRequest(field_order=251, generator_matrix=((1,), (1,), (1,)))
+    _assert_validation_error_code(
+        lambda: LinearCodeRequest(field_order=4, generator_matrix=((1,),)),
+        "code_theory.field_order_not_prime",
+    )
+    _assert_validation_error_code(
+        lambda: LinearCodeRequest(field_order=251, generator_matrix=((1,),) * 3),
+        "code_theory.enumeration_work_exceeded",
+    )
 
 
 def test_native_code_api_enforces_the_prime_field_contract() -> None:
     assert minimum_distance(((1, 1),), 2) == 2
 
-    with pytest.raises(ValidationError, match="prime"):
-        minimum_distance(((1,),), 4)
+    _assert_validation_error_code(
+        lambda: minimum_distance(((1,),), 4), "code_theory.field_order_not_prime"
+    )
 
 
 def test_zero_code_uses_length_convention_for_minimum_distance() -> None:
@@ -50,8 +61,12 @@ def test_zero_code_uses_length_convention_for_minimum_distance() -> None:
 def test_native_code_api_rejects_invalid_generator_shapes(
     generator_matrix: tuple[tuple[int, ...], ...],
 ) -> None:
-    with pytest.raises(ValidationError, match=r"at least 1|equal length"):
-        minimum_distance(generator_matrix, 2)
+    expected = (
+        "too_short" if not generator_matrix else "code_theory.generator_rows_unequal"
+    )
+    _assert_validation_error_code(
+        lambda: minimum_distance(generator_matrix, 2), expected
+    )
 
 
 def test_binary_repetition_code_length_three_has_covering_radius_one() -> None:
@@ -128,11 +143,13 @@ def test_zero_code_has_covering_radius_equal_to_length() -> None:
 def test_covering_radius_contract_rejects_dependent_row_state_space_hole() -> None:
     repeated_row = (1, 0, 0, 0, 0, 0, 0, 0)
 
-    with pytest.raises(ValidationError, match="syndrome space"):
-        CoveringRadiusRequest(
+    _assert_validation_error_code(
+        lambda: CoveringRadiusRequest(
             field_order=251,
             generator_matrix=(repeated_row,) * 8,
-        )
+        ),
+        "code_theory.syndrome_state_bound_exceeded",
+    )
 
 
 def test_covering_radius_contract_rejects_excessive_transition_work() -> None:
@@ -140,19 +157,23 @@ def test_covering_radius_contract_rejects_excessive_transition_work() -> None:
         tuple(1 if column == row else 0 for column in range(18)) for row in range(8)
     )
 
-    with pytest.raises(ValidationError, match="transition"):
-        CoveringRadiusRequest(
+    _assert_validation_error_code(
+        lambda: CoveringRadiusRequest(
             field_order=3,
             generator_matrix=generator_matrix,
-        )
+        ),
+        "code_theory.syndrome_transition_bound_exceeded",
+    )
 
 
 def test_covering_radius_contract_rejects_nonprime_field() -> None:
-    with pytest.raises(ValidationError, match="prime"):
-        CoveringRadiusRequest(
+    _assert_validation_error_code(
+        lambda: CoveringRadiusRequest(
             field_order=4,
             generator_matrix=((1, 1),),
-        )
+        ),
+        "code_theory.field_order_not_prime",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -217,37 +238,37 @@ def test_forged_profiles_are_rejected() -> None:
     }
 
     wrong_distance = dict(base, minimum_distance=1)
-    with pytest.raises(ValidationError, match="exact enumeration"):
-        MinimumDistanceResult.model_validate(wrong_distance)
+    _assert_validation_error_code(
+        lambda: MinimumDistanceResult.model_validate(wrong_distance),
+        "code_theory.minimum_distance_replay_mismatch",
+    )
 
     foreign_code = LinearCodeRequest(
         field_order=2, generator_matrix=((1, 0), (0, 1), (1, 1))
     )
     forged_source = dict(base, request=foreign_code.model_dump(), minimum_distance=2)
-    with pytest.raises(ValidationError, match="retained source code"):
-        MinimumDistanceResult.model_validate(forged_source)
+    _assert_validation_error_code(
+        lambda: MinimumDistanceResult.model_validate(forged_source),
+        "code_theory.minimum_distance_replay_mismatch",
+    )
 
     unsorted_profile = dict(base, weights=((1, 6), (0, 1), (2, 2)))
-    with pytest.raises(ValidationError, match="ascending"):
-        WeightDistributionResult.model_validate(unsorted_profile)
+    _assert_validation_error_code(
+        lambda: WeightDistributionResult.model_validate(unsorted_profile),
+        "code_theory.weights_not_strictly_ascending",
+    )
 
     bad_total = dict(base, weights=((0, 1), (2, 2)))
-    with pytest.raises(ValidationError, match="distinct generated codeword"):
-        WeightDistributionResult.model_validate(bad_total)
+    _assert_validation_error_code(
+        lambda: WeightDistributionResult.model_validate(bad_total),
+        "code_theory.weight_count_total_mismatch",
+    )
 
     forged_profile = dict(base, weights=((0, 1), (1, 5), (2, 3)))
-    with pytest.raises(ValidationError, match="exact enumeration"):
-        WeightDistributionResult.model_validate(forged_profile)
-
-
-def test_source_bound_result_versions_track_wire_shape() -> None:
-    from jacobian.math.code_theory._tools import TOOLS
-
-    versions = {tool.operation_id: tool.version for tool in TOOLS}
-
-    assert versions["code.minimum_distance.compute"] == "2"
-    assert versions["code.weight_distribution.compute"] == "2"
-    assert versions["code.covering_radius.compute"] == "2"
+    _assert_validation_error_code(
+        lambda: WeightDistributionResult.model_validate(forged_profile),
+        "code_theory.weight_distribution_replay_mismatch",
+    )
 
 
 def test_zero_code_result_replays_the_documented_length_convention() -> None:
@@ -272,8 +293,10 @@ def test_forged_zero_code_distance_is_rejected() -> None:
         "minimum_distance": 2,
     }
 
-    with pytest.raises(ValidationError, match="exact enumeration"):
-        MinimumDistanceResult.model_validate(forged)
+    _assert_validation_error_code(
+        lambda: MinimumDistanceResult.model_validate(forged),
+        "code_theory.minimum_distance_replay_mismatch",
+    )
 
 
 def test_dependent_generator_rows_rank_cardinality() -> None:
@@ -306,8 +329,10 @@ def test_enumeration_budget_charges_kernel_and_replay_passes() -> None:
     assert compute_min_distance(boundary).minimum_distance == 1
     assert compute_weight_dist(boundary).weights == ((0, 1), (1, 250))
 
-    with pytest.raises(ValidationError, match="enumeration"):
-        LinearCodeRequest(field_order=41, generator_matrix=((1,),) * 3)
+    _assert_validation_error_code(
+        lambda: LinearCodeRequest(field_order=41, generator_matrix=((1,),) * 3),
+        "code_theory.enumeration_work_exceeded",
+    )
 
 
 def test_covering_radius_budget_charges_bfs_and_replay_passes() -> None:
@@ -336,8 +361,10 @@ def test_covering_radius_budget_charges_bfs_and_replay_passes() -> None:
     assert states == MAX_COVERING_RADIUS_STATES_PER_PASS
     assert states * 24 * SYNDROME_BFS_PASSES <= MAX_COVERING_RADIUS_TRANSITIONS
 
-    with pytest.raises(ValidationError, match="syndrome space"):
-        CoveringRadiusRequest(
+    _assert_validation_error_code(
+        lambda: CoveringRadiusRequest(
             field_order=2,
             generator_matrix=tuple(row + (1,) * 17 for row in identity),
-        )
+        ),
+        "code_theory.syndrome_state_bound_exceeded",
+    )

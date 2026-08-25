@@ -42,7 +42,6 @@ def _op[RequestT: StrictModel, ResultT: StrictModel](
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version="1",
         title=title,
         description=description,
         request_type=request_model,
@@ -158,8 +157,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "Check the 2x2 identity matrix.",
                 {
                     "matrix": {
-                        "row_labels": ["a", "b"],
-                        "col_labels": ["a", "b"],
                         "entries": [
                             [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
                             [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
@@ -186,8 +183,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "Decompose the 2x2 averaging matrix [[1/2,1/2],[1/2,1/2]] which is doubly stochastic.",
                 {
                     "matrix": {
-                        "row_labels": ["a", "b"],
-                        "col_labels": ["a", "b"],
                         "entries": [
                             [{"num": "1", "den": "2"}, {"num": "1", "den": "2"}],
                             [{"num": "1", "den": "2"}, {"num": "1", "den": "2"}],

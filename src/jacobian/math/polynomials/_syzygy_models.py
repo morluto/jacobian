@@ -8,6 +8,7 @@ from math import comb
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._digest import Sha256Digest
 from jacobian._exact import (
@@ -65,13 +66,13 @@ def _compute_homogeneous_source_degree(
     if polynomial is not None:
         terms = polynomial.polynomial.terms
         if not terms:
-            raise ValueError("the source homogeneous polynomial must be nonzero")
+            raise _validation_error("the source homogeneous polynomial must be nonzero")
         degrees = {sum(term.exponents) for term in terms}
         if len(degrees) != 1:
-            raise ValueError("the source polynomial must be homogeneous")
+            raise _validation_error("the source polynomial must be homogeneous")
         return next(iter(degrees))
     if linear_factors is None:
-        raise ValueError("labelled linear factors are required")
+        raise _validation_error("labelled linear factors are required")
     return len(linear_factors)
 
 
@@ -106,7 +107,7 @@ def _require_coefficient_map_budget(
             or target_basis_count > MAX_MAP_DIMENSION
             or column_count > MAX_MAP_DIMENSION
         ):
-            raise ValueError(
+            raise _validation_error(
                 "graded coefficient-map dimensions exceed the 512-monomial or "
                 "512-column exact certificate budget"
             )
@@ -123,26 +124,26 @@ def _require_coefficient_map_budget(
             rank_bound * (entry_coefficient_digits + _decimal_log_upper(rank_bound)),
         )
     if aggregate_entries > MAX_AGGREGATE_MATRIX_ENTRIES:
-        raise ValueError(
+        raise _validation_error(
             "graded coefficient maps exceed the 250000-entry exact rank budget"
         )
     if total_basis_monomials > MAX_TOTAL_BASIS_MONOMIALS:
-        raise ValueError(
+        raise _validation_error(
             "graded coefficient-map bases exceed the 2048-monomial result budget"
         )
     if total_linear_algebra_work > MAX_LINEAR_ALGEBRA_WORK:
-        raise ValueError(
+        raise _validation_error(
             "graded coefficient maps exceed the 15000000-update exact linear-algebra budget"
         )
     if maximum_intermediate_digits > MAX_CANONICAL_RATIONAL_DIGITS:
-        raise ValueError(
+        raise _validation_error(
             "graded coefficient maps exceed the exact rational intermediate-height budget"
         )
     if (
         coefficient_map_detail == "SPARSE_ENTRIES"
         and aggregate_entries > MAX_SPARSE_MATRIX_ENTRIES
     ):
-        raise ValueError(
+        raise _validation_error(
             "materialized graded coefficient maps exceed the 50000-entry result budget"
         )
 
@@ -197,7 +198,7 @@ def _expanded_source_terms(
     if polynomial is not None:
         return _polynomial_terms(polynomial)
     if linear_factors is None:
-        raise ValueError("labelled linear factors are required")
+        raise _validation_error("labelled linear factors are required")
     terms: dict[tuple[int, ...], Fraction] = {(0, 0, 0): Fraction(1)}
     for factor in linear_factors:
         terms = _multiply_terms(
@@ -250,6 +251,10 @@ def _degree_zero_kernel_is_forced(
     return True
 
 
+def _validation_error(message: str) -> PydanticCustomError:
+    return PydanticCustomError("polynomial.syzygy_invariant", message)
+
+
 class GradedJacobianSyzygyRequestBase(StrictModel):
     """Search the homogeneous Jacobian map through one explicit degree bound."""
 
@@ -269,11 +274,11 @@ class GradedJacobianSyzygyRequestBase(StrictModel):
     def require_bounded_homogeneous_input(self) -> Self:
         if self.polynomial is not None:
             if self.linear_factors is not None:
-                raise ValueError(
+                raise _validation_error(
                     "supply exactly one of polynomial or labelled linear_factors"
                 )
             if self.linear_factor_variables is not None:
-                raise ValueError(
+                raise _validation_error(
                     "linear_factor_variables is only valid with linear_factors"
                 )
             polynomial = self.polynomial
@@ -287,10 +292,12 @@ class GradedJacobianSyzygyRequestBase(StrictModel):
             )
         elif self.linear_factors is not None:
             if self.linear_factor_variables is None:
-                raise ValueError("linear_factors require an exact three-variable order")
+                raise _validation_error(
+                    "linear_factors require an exact three-variable order"
+                )
             labels = tuple(factor.label for factor in self.linear_factors)
             if len(labels) != len(set(labels)):
-                raise ValueError("labelled linear-factor names must be unique")
+                raise _validation_error("labelled linear-factor names must be unique")
             for factor in self.linear_factors:
                 for coefficient in factor.coefficients:
                     require_bounded_rational(
@@ -300,18 +307,22 @@ class GradedJacobianSyzygyRequestBase(StrictModel):
                     )
             variables = self.linear_factor_variables
         else:
-            raise ValueError(
+            raise _validation_error(
                 "supply exactly one of polynomial or labelled linear_factors"
             )
         if not 1 <= len(variables) <= MAX_POLYNOMIAL_VARIABLES:
-            raise ValueError("graded Jacobian syzygies require one to eight variables")
+            raise _validation_error(
+                "graded Jacobian syzygies require one to eight variables"
+            )
         if len(set(variables)) != len(variables):
-            raise ValueError("graded Jacobian syzygy variables must be unique")
+            raise _validation_error("graded Jacobian syzygy variables must be unique")
         source_degree = _compute_homogeneous_source_degree(
             self.polynomial, self.linear_factors
         )
         if not 1 <= source_degree <= MAX_SOURCE_DEGREE:
-            raise ValueError("the source homogeneous degree must lie between 1 and 16")
+            raise _validation_error(
+                "the source homogeneous degree must lie between 1 and 16"
+            )
         entry_coefficient_digits = (
             MAX_SOURCE_COEFFICIENT_DIGITS + _decimal_log_upper(source_degree)
             if self.polynomial is not None
@@ -362,7 +373,7 @@ class GradedJacobianMapEntry(StrictModel):
     @model_validator(mode="after")
     def require_nonzero_coefficient(self) -> Self:
         if self.coefficient.as_fraction() == 0:
-            raise ValueError("zero coefficient-map entries must be omitted")
+            raise _validation_error("zero coefficient-map entries must be omitted")
         return self
 
 
@@ -374,18 +385,20 @@ class GradedJacobianRankMinor(StrictModel):
     @model_validator(mode="after")
     def require_square_nonzero_minor(self) -> Self:
         if len(self.row_indices) != len(self.column_indices):
-            raise ValueError("rank certificate minor must be square")
+            raise _validation_error("rank certificate minor must be square")
         if any(index < 0 for index in (*self.row_indices, *self.column_indices)):
-            raise ValueError(
+            raise _validation_error(
                 "rank certificate indices must be nonnegative zero-based positions"
             )
         if (
             tuple(sorted(set(self.row_indices))) != self.row_indices
             or tuple(sorted(set(self.column_indices))) != self.column_indices
         ):
-            raise ValueError("rank certificate indices must be unique and sorted")
+            raise _validation_error(
+                "rank certificate indices must be unique and sorted"
+            )
         if self.determinant.as_fraction() == 0:
-            raise ValueError("rank certificate determinant must be nonzero")
+            raise _validation_error("rank certificate determinant must be nonzero")
         return self
 
 
@@ -413,38 +426,44 @@ class GradedJacobianCoefficientMap(StrictModel):
     def bind_dimensions_rank_and_optional_entries(self) -> Self:
         variable_count = len(self.source_monomial_basis[0])
         if not 1 <= variable_count <= MAX_POLYNOMIAL_VARIABLES:
-            raise ValueError(
+            raise _validation_error(
                 "source basis exponent vectors must have one to eight axes"
             )
         if self.source_monomial_basis != _homogeneous_basis(
             variable_count, self.multiplier_degree
         ):
-            raise ValueError("source basis must be the canonical homogeneous basis")
+            raise _validation_error(
+                "source basis must be the canonical homogeneous basis"
+            )
         if any(
             len(exponents) != variable_count
             or any(exponent < 0 for exponent in exponents)
             for exponents in self.target_monomial_basis
         ):
-            raise ValueError("target basis exponent vectors must match variable_count")
+            raise _validation_error(
+                "target basis exponent vectors must match variable_count"
+            )
         if len(self.source_monomial_basis) * variable_count != self.column_count:
-            raise ValueError(
+            raise _validation_error(
                 "source basis must induce one multiplier block per variable"
             )
         if len(self.target_monomial_basis) != self.row_count:
-            raise ValueError("target basis length must equal row_count")
+            raise _validation_error("target basis length must equal row_count")
         if self.rank + self.nullity != self.column_count:
-            raise ValueError("rank plus nullity must equal column_count")
+            raise _validation_error("rank plus nullity must equal column_count")
         if (
             len(self.pivot_columns) != self.rank
             or tuple(sorted(set(self.pivot_columns))) != self.pivot_columns
             or any(column >= self.column_count for column in self.pivot_columns)
         ):
-            raise ValueError("pivot columns must canonically bind the reported rank")
+            raise _validation_error(
+                "pivot columns must canonically bind the reported rank"
+            )
         if self.injective != (self.nullity == 0):
-            raise ValueError("injective must be equivalent to zero nullity")
+            raise _validation_error("injective must be equivalent to zero nullity")
         if self.rank == 0:
             if self.rank_minor is not None:
-                raise ValueError("rank-zero map must not carry a nonzero minor")
+                raise _validation_error("rank-zero map must not carry a nonzero minor")
         elif (
             self.rank_minor is None
             or len(self.rank_minor.row_indices) != self.rank
@@ -453,13 +472,15 @@ class GradedJacobianCoefficientMap(StrictModel):
                 column >= self.column_count for column in self.rank_minor.column_indices
             )
         ):
-            raise ValueError("positive rank requires one bound full-rank minor")
+            raise _validation_error("positive rank requires one bound full-rank minor")
         positions = tuple((entry.row, entry.column) for entry in self.sparse_entries)
         if positions != tuple(sorted(set(positions))) or any(
             row >= self.row_count or column >= self.column_count
             for row, column in positions
         ):
-            raise ValueError("sparse coefficient-map entries must be unique and sorted")
+            raise _validation_error(
+                "sparse coefficient-map entries must be unique and sorted"
+            )
         return self
 
 
@@ -477,7 +498,7 @@ class GradedJacobianKernelWitness(StrictModel):
     @model_validator(mode="after")
     def require_nonzero_homogeneous_vector(self) -> Self:
         if all(value.as_fraction() == 0 for value in self.coefficient_vector):
-            raise ValueError("kernel witness coefficient vector must be nonzero")
+            raise _validation_error("kernel witness coefficient vector must be nonzero")
         if any(
             any(
                 sum(term.exponents) != self.multiplier_degree
@@ -485,20 +506,13 @@ class GradedJacobianKernelWitness(StrictModel):
             )
             for multiplier in self.multipliers
         ):
-            raise ValueError("kernel witness multipliers must be homogeneous")
+            raise _validation_error("kernel witness multipliers must be homogeneous")
         return self
 
 
 class GradedJacobianSyzygyResult(StrictModel):
-    """Exact rank ledger and first kernel through the requested finite bound.
+    """Exact rank ledger and first kernel through the requested finite bound."""
 
-    ``result_schema_version='1'`` remains compatible with the prior
-    three-variable result shape: variable count is still carried only by the
-    canonical ``variables`` and exponent vectors. Operation versions, rather
-    than this result value version, distinguish the specialized request modes.
-    """
-
-    result_schema_version: Literal["1"] = "1"
     variables: tuple[PolynomialVariable, ...] = Field(
         min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
     )
@@ -535,7 +549,7 @@ class GradedJacobianSyzygyResult(StrictModel):
             or self.first_syzygy_degree is not None
             or self.kernel_witness is not None
         ):
-            raise ValueError(
+            raise _validation_error(
                 "NONE_THROUGH_BOUND may not claim or expose a kernel witness"
             )
         return self
@@ -544,24 +558,26 @@ class GradedJacobianSyzygyResult(StrictModel):
 def _validate_result_source_and_partials(result: GradedJacobianSyzygyResult) -> int:
     variable_count = len(result.variables)
     if len(set(result.variables)) != variable_count:
-        raise ValueError("result variable order must be unique")
+        raise _validation_error("result variable order must be unique")
     if result.source_kind == "LABELLED_LINEAR_FACTOR_PRODUCT" and variable_count != 3:
-        raise ValueError(
+        raise _validation_error(
             "labelled linear-factor provenance requires exactly three variables"
         )
     if result.expanded_polynomial.variables != result.variables:
-        raise ValueError("expanded source must use the declared variable order")
+        raise _validation_error("expanded source must use the declared variable order")
     source_terms = _polynomial_terms(result.expanded_polynomial)
     if not source_terms or any(
         sum(exponents) != result.homogeneous_degree for exponents in source_terms
     ):
-        raise ValueError(
+        raise _validation_error(
             "expanded source must be nonzero and homogeneous of the stated degree"
         )
     if len(result.partial_derivatives) != variable_count or any(
         partial.variables != result.variables for partial in result.partial_derivatives
     ):
-        raise ValueError("partial derivatives must retain the source variable order")
+        raise _validation_error(
+            "partial derivatives must retain the source variable order"
+        )
     expected_partials = tuple(
         _partial_derivative_terms(source_terms, variable)
         for variable in range(variable_count)
@@ -572,7 +588,7 @@ def _validate_result_source_and_partials(result: GradedJacobianSyzygyResult) -> 
             result.partial_derivatives, expected_partials, strict=True
         )
     ):
-        raise ValueError("partial derivatives must reconstruct from the source")
+        raise _validation_error("partial derivatives must reconstruct from the source")
     return variable_count
 
 
@@ -582,21 +598,25 @@ def _validate_result_maps(
     expected_degrees = tuple(range(result.searched_through_degree + 1))
     actual_degrees = tuple(item.multiplier_degree for item in result.degree_maps)
     if actual_degrees != expected_degrees:
-        raise ValueError("degree maps must cover every degree from zero in order")
+        raise _validation_error(
+            "degree maps must cover every degree from zero in order"
+        )
     for item in result.degree_maps:
         expected_target_basis = _homogeneous_basis(
             variable_count, result.homogeneous_degree - 1 + item.multiplier_degree
         )
         if item.target_monomial_basis != expected_target_basis:
-            raise ValueError("coefficient maps must use the source ring's exact bases")
+            raise _validation_error(
+                "coefficient maps must use the source ring's exact bases"
+            )
     if result.coefficient_map_detail == "CERTIFICATES" and any(
         item.sparse_entries for item in result.degree_maps
     ):
-        raise ValueError("certificate detail must omit full sparse matrices")
+        raise _validation_error("certificate detail must omit full sparse matrices")
     if result.coefficient_map_detail == "SPARSE_ENTRIES" and any(
         not item.sparse_entries and item.rank > 0 for item in result.degree_maps
     ):
-        raise ValueError("sparse-entry detail must expose every nonzero map")
+        raise _validation_error("sparse-entry detail must expose every nonzero map")
     for item in result.degree_maps:
         _replay_coefficient_map(result, item)
 
@@ -659,7 +679,9 @@ def _replay_coefficient_map(
         target_basis=item.target_monomial_basis,
         entries=entries,
     ):
-        raise ValueError("coefficient-map digest must bind the reconstructed matrix")
+        raise _validation_error(
+            "coefficient-map digest must bind the reconstructed matrix"
+        )
     if (
         item.sparse_entries
         and tuple(
@@ -668,7 +690,9 @@ def _replay_coefficient_map(
         )
         != entries
     ):
-        raise ValueError("sparse coefficient-map entries must reconstruct exactly")
+        raise _validation_error(
+            "sparse coefficient-map entries must reconstruct exactly"
+        )
     _, pivot_columns = matrix.rref()
     rank = len(pivot_columns)
     if (
@@ -677,13 +701,13 @@ def _replay_coefficient_map(
         or item.nullity != matrix.cols - rank
         or item.injective != (rank == matrix.cols)
     ):
-        raise ValueError("coefficient-map rank certificate must replay exactly")
+        raise _validation_error("coefficient-map rank certificate must replay exactly")
     if item.rank_minor is not None:
         minor = matrix.extract(
             item.rank_minor.row_indices, item.rank_minor.column_indices
         ).det()
         if Fraction(minor) != item.rank_minor.determinant.as_fraction():
-            raise ValueError("rank-minor determinant must replay exactly")
+            raise _validation_error("rank-minor determinant must replay exactly")
 
 
 def _validate_found_witness(
@@ -706,7 +730,7 @@ def _validate_found_witness(
             for multiplier in witness.multipliers
         )
     ):
-        raise ValueError("FOUND must bind the first nonzero graded kernel")
+        raise _validation_error("FOUND must bind the first nonzero graded kernel")
     basis = result.degree_maps[noninjective[0]].source_monomial_basis
     expected_vector = tuple(
         _polynomial_terms(multiplier).get(exponents, Fraction(0))
@@ -717,7 +741,7 @@ def _validate_found_witness(
         tuple(value.as_fraction() for value in witness.coefficient_vector)
         != expected_vector
     ):
-        raise ValueError("kernel vector must reconstruct its multipliers")
+        raise _validation_error("kernel vector must reconstruct its multipliers")
     reconstructed: dict[tuple[int, ...], Fraction] = {}
     for multiplier, partial in zip(
         witness.multipliers, result.partial_derivatives, strict=True
@@ -729,7 +753,7 @@ def _validate_found_witness(
                 reconstructed.get(exponents, Fraction(0)) + coefficient
             )
     if any(reconstructed.values()):
-        raise ValueError("kernel witness must reconstruct a Jacobian syzygy")
+        raise _validation_error("kernel witness must reconstruct a Jacobian syzygy")
 
 
 __all__ = [

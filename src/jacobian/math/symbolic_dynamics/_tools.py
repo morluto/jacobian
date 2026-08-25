@@ -33,7 +33,6 @@ _GOLDEN_MEAN = {
 SYMBOLIC_DYNAMICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="symbolic_dynamics.finite_type_shift.construct",
-        version="1",
         title="Construct a finite-type shift presentation",
         description=(
             "Construct the complete finite labeled De Bruijn presentation induced "
@@ -53,7 +52,6 @@ SYMBOLIC_DYNAMICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="symbolic_dynamics.block_language.compute",
-        version="1",
         title="Compute a bounded block language",
         description=(
             "Enumerate every block of one requested length that occurs in an "
@@ -74,7 +72,6 @@ SYMBOLIC_DYNAMICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="symbolic_dynamics.periodic_point_profile.compute",
-        version="1",
         title="Compute a periodic-point profile",
         description=(
             "Compute fixed-point, least-period-point, and primitive-orbit counts "
@@ -97,7 +94,6 @@ SYMBOLIC_DYNAMICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="symbolic_dynamics.artin_mazur_zeta.compute",
-        version="1",
         title="Compute an Artin-Mazur zeta function",
         description=(
             "Compute the exact edge-shift zeta function 1/det(I-tA) as a "
@@ -121,7 +117,6 @@ SYMBOLIC_DYNAMICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="symbolic_dynamics.higher_block.compute",
-        version="1",
         title="Construct a higher-block presentation",
         description=(
             "Construct the exact overlap presentation on all occurring blocks of "

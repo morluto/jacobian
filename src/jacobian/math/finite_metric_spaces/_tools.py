@@ -30,11 +30,9 @@ def fms_operation[RequestT: StrictModel, ResultT: StrictModel](
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -73,7 +71,6 @@ FINITE_METRIC_SPACE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 _METRIC_SPACE,
             ),
         ),
-        version="2",
     ),
     fms_operation(
         "metric_space.ball.compute",

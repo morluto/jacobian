@@ -313,7 +313,6 @@ GRADED_JACOBIAN_SYZYGY_OPERATION = polynomial_operation(
     "rank",
     "kernel",
     "exact",
-    version="6",
     examples=(
         OperationExample(
             name="sparse-homogeneous-polynomial",
@@ -399,7 +398,6 @@ JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_OPERATION = polynomial_operation(
     "syzygy",
     "coefficient-ledger",
     "evidence",
-    version="4",
     examples=(
         OperationExample(
             name="sparse-homogeneous-polynomial",

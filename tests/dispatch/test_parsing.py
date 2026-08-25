@@ -6,6 +6,7 @@ from typing import Annotated
 
 import pytest
 from pydantic import StrictInt, StringConstraints, ValidationError
+from tests.dispatch._support import dispatch_validation_error
 
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationDiscoveryRequest
@@ -54,7 +55,7 @@ def test_parse_operation_input_accepts_json_arrays_for_constrained_tuples() -> N
 
 
 def test_parse_operation_input_rejects_numeric_strings_for_integers() -> None:
-    with pytest.raises(ValidationError, match="int_type"):
+    with dispatch_validation_error():
         parse_operation_input(
             OperationDiscoveryRequest, {"query": "graph", "limit": "3"}
         )
@@ -96,7 +97,7 @@ def test_parse_operation_input_accepts_json_enums_and_optional_tuples() -> None:
 
 
 def test_parse_operation_input_preserves_nested_domain_validation() -> None:
-    with pytest.raises(ValidationError, match="non-tautological"):
+    with dispatch_validation_error():
         parse_operation_input(
             SatAssignmentCheckRequest,
             {

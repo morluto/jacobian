@@ -7,6 +7,7 @@ from math import gcd, lcm
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictBool, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
@@ -53,6 +54,10 @@ MAX_STRICT_SUBLEVEL_MEASURE_DIGITS = (
 LevelEquation = Literal["F_MINUS_THRESHOLD", "F_PLUS_THRESHOLD"]
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"polynomial.strict_sublevel_{reason}", message)
+
+
 def _bound_raw_rational(
     value: object,
     *,
@@ -72,7 +77,9 @@ def _bound_raw_rational(
             isinstance(component, str)
             and len(component) - component.startswith("-") > max_digits
         ):
-            raise ValueError(f"{label} exceeds the {max_digits}-digit bound")
+            raise _validation_error(
+                "rational_height", f"{label} exceeds the {max_digits}-digit bound"
+            )
 
 
 def _bound_raw_terms(terms: tuple[object, ...] | list[object]) -> None:
@@ -86,8 +93,9 @@ def _bound_raw_terms(terms: tuple[object, ...] | list[object]) -> None:
             coefficient = term.get("coefficient")
             exponents = term.get("exponents")
             if isinstance(exponents, (list, tuple)) and len(exponents) != 1:
-                raise ValueError(
-                    "strict sublevel measure requires exactly one exponent per term"
+                raise _validation_error(
+                    "term_shape",
+                    "strict sublevel measure requires exactly one exponent per term",
                 )
         else:
             continue
@@ -112,13 +120,16 @@ def _prepare_raw_polynomial(value: object) -> object:
         return value
 
     if isinstance(variables, (list, tuple)) and len(variables) > 1:
-        raise ValueError("strict sublevel measure requires one polynomial variable")
+        raise _validation_error(
+            "variable_count", "strict sublevel measure requires one polynomial variable"
+        )
     if not isinstance(terms, (list, tuple)):
         return value
     if len(terms) > MAX_STRICT_SUBLEVEL_TERMS:
-        raise ValueError(
+        raise _validation_error(
+            "term_budget",
             "strict sublevel polynomial exceeds the "
-            f"{MAX_STRICT_SUBLEVEL_TERMS}-term operation budget"
+            f"{MAX_STRICT_SUBLEVEL_TERMS}-term operation budget",
         )
     _bound_raw_terms(terms)
 
@@ -222,7 +233,10 @@ class StrictSublevelMeasureRequest(StrictModel):
     @model_validator(mode="after")
     def require_complete_root_isolation_budget(self) -> Self:
         if len(self.polynomial.variables) != 1:
-            raise ValueError("strict sublevel measure requires one polynomial variable")
+            raise _validation_error(
+                "variable_count",
+                "strict sublevel measure requires one polynomial variable",
+            )
         require_polynomial_budget(
             self.polynomial,
             maximum_terms=MAX_STRICT_SUBLEVEL_TERMS,
@@ -241,9 +255,13 @@ class StrictSublevelMeasureRequest(StrictModel):
                 label=label,
             )
         if self.threshold.as_fraction() < 0:
-            raise ValueError("strict sublevel threshold must be nonnegative")
+            raise _validation_error(
+                "negative_threshold", "strict sublevel threshold must be nonnegative"
+            )
         if self.lower.as_fraction() > self.upper.as_fraction():
-            raise ValueError("strict sublevel lower endpoint must not exceed upper")
+            raise _validation_error(
+                "scope_order", "strict sublevel lower endpoint must not exceed upper"
+            )
 
         # These cases require no root isolation: t=0 is empty, constants are
         # decided by one exact comparison, and a singleton scope has zero
@@ -266,20 +284,22 @@ class StrictSublevelMeasureRequest(StrictModel):
                 subtract_threshold=subtract_threshold,
             )
             if height_digits > MAX_STRICT_SUBLEVEL_BOUNDARY_HEIGHT_DIGITS:
-                raise ValueError(
+                raise _validation_error(
+                    "boundary_height",
                     f"primitive {label} height exceeds the "
                     f"{MAX_STRICT_SUBLEVEL_BOUNDARY_HEIGHT_DIGITS}-digit "
-                    "root-isolation bound"
+                    "root-isolation bound",
                 )
             boundary_heights.append(height_digits)
         degree = _polynomial_degree(self.polynomial)
         isolation_work = degree**5 * sum(boundary_heights)
         if isolation_work > MAX_STRICT_SUBLEVEL_ISOLATION_WORK:
-            raise ValueError(
+            raise _validation_error(
+                "isolation_work",
                 "strict sublevel exact-root isolation exceeds the work bound "
                 f"(degree^5*level-height-sum={isolation_work} > "
                 f"{MAX_STRICT_SUBLEVEL_ISOLATION_WORK}); reduce degree or "
-                "coefficient/threshold height"
+                "coefficient/threshold height",
             )
         return self
 
@@ -349,7 +369,10 @@ class AlgebraicMeasureRootTerm(StrictModel):
     @classmethod
     def require_strict_incidence_coefficient(cls, value: object) -> object:
         if type(value) is not int:
-            raise ValueError("measure root coefficient must be the integer -1 or 1")
+            raise _validation_error(
+                "root_coefficient",
+                "measure root coefficient must be the integer -1 or 1",
+            )
         return value
 
 
@@ -379,10 +402,13 @@ class SourceBoundAlgebraicMeasure(StrictModel):
             (term.root.equation, term.root.root_index) for term in self.root_terms
         )
         if len(set(keys)) != len(keys):
-            raise ValueError("measure root terms must identify distinct roots")
+            raise _validation_error(
+                "duplicate_roots", "measure root terms must identify distinct roots"
+            )
         if keys != tuple(sorted(keys)):
-            raise ValueError(
-                "measure root terms must use canonical equation/index order"
+            raise _validation_error(
+                "root_order",
+                "measure root terms must use canonical equation/index order",
             )
         return self
 
@@ -390,9 +416,6 @@ class SourceBoundAlgebraicMeasure(StrictModel):
 class StrictSublevelMeasureResult(StrictModel):
     """Complete source-bound strict sublevel decomposition and exact measure."""
 
-    semantics_version: Literal["strict-polynomial-sublevel-measure.v1"] = (
-        "strict-polynomial-sublevel-measure.v1"
-    )
     source_polynomial: RationalPolynomial
     threshold: CanonicalRational
     lower: CanonicalRational
@@ -426,9 +449,10 @@ class StrictSublevelMeasureResult(StrictModel):
         raw_components = prepared.get("components")
         if isinstance(raw_components, (list, tuple)):
             if len(raw_components) > MAX_STRICT_SUBLEVEL_COMPONENTS:
-                raise ValueError(
+                raise _validation_error(
+                    "component_bound",
                     "strict sublevel result exceeds the "
-                    f"{MAX_STRICT_SUBLEVEL_COMPONENTS}-component bound"
+                    f"{MAX_STRICT_SUBLEVEL_COMPONENTS}-component bound",
                 )
             for component in raw_components:
                 if not isinstance(component, Mapping):
@@ -468,9 +492,10 @@ class StrictSublevelMeasureResult(StrictModel):
         if isinstance(root_terms, (list, tuple)) and (
             len(root_terms) > MAX_STRICT_SUBLEVEL_BOUNDARIES
         ):
-            raise ValueError(
+            raise _validation_error(
+                "root_term_bound",
                 "strict sublevel measure exceeds the "
-                f"{MAX_STRICT_SUBLEVEL_BOUNDARIES}-root-term bound"
+                f"{MAX_STRICT_SUBLEVEL_BOUNDARIES}-root-term bound",
             )
         return prepared
 
@@ -488,12 +513,14 @@ class StrictSublevelMeasureResult(StrictModel):
 
         expected = compute_strict_sublevel_payload(request)
         if self.components != expected.components:
-            raise ValueError(
-                "strict sublevel components must be the complete source-derived cells"
+            raise _validation_error(
+                "component_reconstruction",
+                "strict sublevel components must be the complete source-derived cells",
             )
         if self.measure != expected.measure:
-            raise ValueError(
-                "strict sublevel measure must reconstruct from the returned components"
+            raise _validation_error(
+                "measure_reconstruction",
+                "strict sublevel measure must reconstruct from the returned components",
             )
         return self
 

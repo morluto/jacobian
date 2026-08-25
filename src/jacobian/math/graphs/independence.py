@@ -10,7 +10,10 @@ from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalLimits, encode_strict_json
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    SimpleUndirectedGraph,
+    simple_undirected_graph_wire_bytes,
+)
 
 IndependenceSearchStatus = Literal["EXACT", "UNKNOWN"]
 IndependenceTermination = Literal[
@@ -27,15 +30,6 @@ class IndependenceNumberBudget(StrictModel):
     """Explicit public limits for one bounded independence-number search."""
 
     wall_seconds: StrictInt = Field(default=5, ge=1, le=120)
-    max_solver_calls: StrictInt = Field(
-        default=1,
-        ge=1,
-        le=33,
-        description=(
-            "Compatibility budget retained from the threshold-search contract; "
-            "the version-2 optimizer uses one solver call."
-        ),
-    )
     max_order: StrictInt = Field(default=128, ge=0, le=128)
 
 
@@ -45,10 +39,6 @@ class IndependenceNumberBudget(StrictModel):
 # scalar fields, the bounded detail string, and the result envelope beyond
 # the echoed graph and worst-case witness labels.
 _RESULT_ENVELOPE_RESERVE_BYTES = 2_048
-
-
-def _graph_wire_bytes(graph: SimpleUndirectedGraph) -> int:
-    return len(encode_strict_json(graph.model_dump(mode="json")))
 
 
 def _label_wire_bytes(graph: SimpleUndirectedGraph) -> int:
@@ -92,7 +82,7 @@ class IndependenceNumberRequest(StrictModel):
         # every vertex identifier as the canonically sorted witness, so
         # admission bounds that predicted serialization before any solve.
         _require_output_headroom(
-            _graph_wire_bytes(self.graph),
+            simple_undirected_graph_wire_bytes(self.graph),
             _label_wire_bytes(self.graph),
         )
         return self
@@ -285,7 +275,6 @@ class IndependenceNumberResult(StrictModel):
     upper bound, so no unauthenticated incumbent gap survives validation.
     """
 
-    result_schema_version: Literal["2"] = "2"
     graph: SimpleUndirectedGraph
     status: IndependenceSearchStatus
     order: StrictInt = Field(ge=0, le=128)

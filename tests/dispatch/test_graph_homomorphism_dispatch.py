@@ -34,12 +34,12 @@ def test_dispatch_runs_canonical_graph_homomorphism_check() -> None:
         Catalog.open(),
     )
 
-    assert result.operation_version == "2"
+    assert "operation_version" not in result.model_dump(mode="json")
     assert result.output["status"] == "HOMOMORPHISM"
     vertex_map = result.output["homomorphism"]["vertex_map"]
     assert vertex_map["rows"] == _canonical_payload()["vertex_map"]["rows"]
-    assert vertex_map["source_graph"]["graph_schema_version"] == "1"
-    assert vertex_map["target_graph"]["graph_schema_version"] == "1"
+    assert "graph_schema_version" not in vertex_map["source_graph"]
+    assert "graph_schema_version" not in vertex_map["target_graph"]
 
 
 def test_dispatch_admits_a_near_limit_positive_map_without_duplicate_storage() -> None:

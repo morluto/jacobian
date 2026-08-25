@@ -50,7 +50,6 @@ def reduce_lattice_basis(
 LATTICE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="lattice.basis.reduce",
-        version="3",
         title="Reduce an exact integer lattice basis",
         description=(
             "Reduce a bounded exact integer row basis and return its exact left "

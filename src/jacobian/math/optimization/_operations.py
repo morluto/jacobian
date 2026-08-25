@@ -550,7 +550,6 @@ def _linear_program(
 RATIONAL_LINEAR_OPERATIONS: MathTools = (
     MathTool(
         operation_id="optimization.linear.rational_optimum.compute",
-        version="2",
         title="Solve a rational linear program",
         description=(
             "Use exact SymPy simplex calls to return a source-bound standard-form "

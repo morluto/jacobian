@@ -25,11 +25,9 @@ def group_cohomology_operation[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,

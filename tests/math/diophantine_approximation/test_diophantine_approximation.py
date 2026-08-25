@@ -203,13 +203,21 @@ def test_pell_equation_long_period() -> None:
 
 
 def test_contract_rejects_non_squarefree() -> None:
-    with pytest.raises(ValidationError, match="squarefree"):
+    with pytest.raises(ValidationError) as exc_info:
         ContinuedFractionRequest(discriminant=4, term_count=5)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "diophantine_approximation.discriminant_not_squarefree"
+    )
 
 
 def test_contract_rejects_perfect_square() -> None:
-    with pytest.raises(ValidationError, match="squarefree"):
+    with pytest.raises(ValidationError) as exc_info:
         ContinuedFractionRequest(discriminant=9, term_count=5)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "diophantine_approximation.discriminant_not_squarefree"
+    )
 
 
 def test_contract_rejects_out_of_range() -> None:
@@ -303,16 +311,28 @@ def test_continued_fraction_result_rejects_mutations() -> None:
 
     forged_coefficients = dict(result)
     forged_coefficients["coefficients"] = (1, 2, 2, 2, 3)
-    with pytest.raises(ValidationError, match="canonical continued fraction"):
+    with pytest.raises(ValidationError) as exc_info:
         ContinuedFractionResult.model_validate(forged_coefficients)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "diophantine_approximation.coefficients_not_canonical"
+    )
 
     forged_metadata = dict(result, preperiod_length=2)
-    with pytest.raises(ValidationError, match="metadata"):
+    with pytest.raises(ValidationError) as exc_info:
         ContinuedFractionResult.model_validate(forged_metadata)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "diophantine_approximation.period_metadata_mismatch"
+    )
 
     count_mismatch = dict(result, term_count=4)
-    with pytest.raises(ValidationError, match="term_count"):
+    with pytest.raises(ValidationError) as exc_info:
         ContinuedFractionResult.model_validate(count_mismatch)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "diophantine_approximation.coefficient_count_mismatch"
+    )
 
 
 def test_convergent_result_replays_recurrence_and_determinant() -> None:
@@ -352,12 +372,16 @@ def test_convergent_result_rejects_mutations() -> None:
         ConvergentValue,
     )
 
-    with pytest.raises(ValidationError, match="contiguous"):
+    with pytest.raises(ValidationError) as exc_info:
         ConvergentResult(
             discriminant=2,
             convergent_count=1,
             convergents=(ConvergentValue(index=77, numerator="0", denominator="0"),),
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "diophantine_approximation.indices_not_contiguous"
+    )
     result = compute_convergents(
         ConvergentRequest(discriminant=2, convergent_count=4)
     ).model_dump()
@@ -365,29 +389,45 @@ def test_convergent_result_rejects_mutations() -> None:
     zero_denominator = dict(result)
     zero_denominator["convergents"] = [dict(item) for item in result["convergents"]]
     zero_denominator["convergents"][0]["denominator"] = "0"
-    with pytest.raises(ValidationError, match="positive"):
+    with pytest.raises(ValidationError) as exc_info:
         ConvergentResult.model_validate(zero_denominator)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "diophantine_approximation.denominator_not_positive"
+    )
 
     nonreduced = dict(result)
     nonreduced["convergents"] = [dict(item) for item in result["convergents"]]
     nonreduced["convergents"][1]["numerator"] = "6"
     nonreduced["convergents"][1]["denominator"] = "4"
-    with pytest.raises(ValidationError, match="reduced"):
+    with pytest.raises(ValidationError) as exc_info:
         ConvergentResult.model_validate(nonreduced)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "diophantine_approximation.pair_not_reduced"
+    )
 
     recurrence_break = dict(result)
     recurrence_break["convergents"] = [dict(item) for item in result["convergents"]]
     recurrence_break["convergents"][2]["numerator"] = "8"
-    with pytest.raises(ValidationError, match="continuant recurrence"):
+    with pytest.raises(ValidationError) as exc_info:
         ConvergentResult.model_validate(recurrence_break)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "diophantine_approximation.recurrence_mismatch"
+    )
 
     wrong_source = dict(result, discriminant=3)
     with pytest.raises(ValidationError):
         ConvergentResult.model_validate(wrong_source)
 
     count_mismatch = dict(result, convergent_count=9)
-    with pytest.raises(ValidationError, match="requested count"):
+    with pytest.raises(ValidationError) as exc_info:
         ConvergentResult.model_validate(count_mismatch)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "diophantine_approximation.convergent_count_mismatch"
+    )
 
 
 def test_results_reject_non_squarefree_discriminant() -> None:
@@ -410,8 +450,12 @@ def test_results_reject_non_squarefree_discriminant() -> None:
         "preperiod_length": 1,
         "period_length": 2,
     }
-    with pytest.raises(ValidationError, match="squarefree"):
+    with pytest.raises(ValidationError) as exc_info:
         ContinuedFractionResult.model_validate(sqrt8_cf)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "diophantine_approximation.discriminant_not_squarefree"
+    )
 
     sqrt8_convergents = {
         "discriminant": 8,
@@ -423,14 +467,26 @@ def test_results_reject_non_squarefree_discriminant() -> None:
             {"index": 3, "numerator": "17", "denominator": "6"},
         ],
     }
-    with pytest.raises(ValidationError, match="squarefree"):
+    with pytest.raises(ValidationError) as exc_info:
         ConvergentResult.model_validate(sqrt8_convergents)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "diophantine_approximation.discriminant_not_squarefree"
+    )
 
-    with pytest.raises(ValidationError, match="squarefree"):
+    with pytest.raises(ValidationError) as exc_info:
         PellEquationResult(discriminant=8, x="3", y="1")
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "diophantine_approximation.discriminant_not_squarefree"
+    )
 
-    with pytest.raises(ValidationError, match="squarefree"):
+    with pytest.raises(ValidationError) as exc_info:
         PellEquationResult(discriminant=9, x="3", y="1")
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "diophantine_approximation.discriminant_not_squarefree"
+    )
 
 
 def test_convergent_result_rejects_oversized_components_before_bigint_work() -> None:
@@ -443,25 +499,31 @@ def test_convergent_result_rejects_oversized_components_before_bigint_work() -> 
     """
     from jacobian.math.diophantine_approximation._models import (
         ConvergentResult,
-        _convergent_component_digit_cap,
     )
 
     result = compute_convergents(
         ConvergentRequest(discriminant=2, convergent_count=4)
     ).model_dump()
 
-    digit_bound = _convergent_component_digit_cap(4)
     long_numerator = dict(result)
     long_numerator["convergents"] = [dict(item) for item in result["convergents"]]
     long_numerator["convergents"][3]["numerator"] = "9" * 100_000
-    with pytest.raises(ValidationError, match=rf"{digit_bound}-digit bound"):
+    with pytest.raises(ValidationError) as exc_info:
         ConvergentResult.model_validate(long_numerator)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "diophantine_approximation.component_digit_bound_exceeded"
+    )
 
     long_denominator = dict(result)
     long_denominator["convergents"] = [dict(item) for item in result["convergents"]]
     long_denominator["convergents"][3]["denominator"] = "7" * 100_000
-    with pytest.raises(ValidationError, match=rf"{digit_bound}-digit bound"):
+    with pytest.raises(ValidationError) as exc_info:
         ConvergentResult.model_validate(long_denominator)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "diophantine_approximation.component_digit_bound_exceeded"
+    )
 
 
 def test_convergent_digit_bound_admits_full_envelope() -> None:
@@ -499,29 +561,3 @@ def test_producer_to_convergent_composition() -> None:
         for c in convs.convergents
     ]
     assert claimed == replayed
-
-
-# ---------------------------------------------------------------------------
-# Contract-version regressions (#2313)
-# ---------------------------------------------------------------------------
-
-
-def _operation_version(operation_id: str) -> str:
-    from jacobian.math.diophantine_approximation._tools import TOOLS
-
-    return next(tool for tool in TOOLS if tool.operation_id == operation_id).version
-
-
-def test_continued_fraction_contract_version_tracks_wire_shape() -> None:
-    """term_count joined the required result, so the declaration is version 2."""
-    assert _operation_version("diophantine.continued_fraction.compute") == "2"
-
-
-def test_convergents_contract_version_tracks_wire_shape() -> None:
-    """convergent_count joined the required result, so the declaration is version 2."""
-    assert _operation_version("diophantine.convergents.compute") == "2"
-
-
-def test_pell_equation_keeps_unchanged_wire_contract_version() -> None:
-    """The Pell request/result schemas did not change shape in this contract."""
-    assert _operation_version("diophantine.pell_equation.solve") == "1"

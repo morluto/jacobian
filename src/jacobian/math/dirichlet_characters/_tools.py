@@ -18,7 +18,6 @@ from jacobian.math.dirichlet_characters.values import PrincipalDirichletCharacte
 PRINCIPAL_DIRICHLET_CHARACTER_OPERATIONS: MathTools = (
     MathTool(
         operation_id="dirichlet_character.principal.compute",
-        version="1",
         title="Compute an exact principal Dirichlet character",
         description=(
             "Materialize the complete extension-by-zero table of the principal "
@@ -39,7 +38,6 @@ PRINCIPAL_DIRICHLET_CHARACTER_OPERATIONS: MathTools = (
     ),
     MathTool(
         operation_id="dirichlet_character.principal.value.compute",
-        version="1",
         title="Evaluate an exact principal Dirichlet character",
         description=(
             "Evaluate a canonical principal Dirichlet character at one exact "

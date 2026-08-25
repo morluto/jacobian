@@ -45,7 +45,6 @@ def _computed[
     result_model: type[ResultT],
     operation: Callable[[Any], ResultT],
     *tags: str,
-    version: str = "1",
     examples: tuple[OperationExample, ...] = (),
 ) -> MathTool[GraphInvariantRequest, ResultT]:
     def implementation(
@@ -56,7 +55,6 @@ def _computed[
 
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=GraphInvariantRequest,
@@ -348,7 +346,6 @@ def _clique_execute(
 
 CLIQUE_NUMBER_OPERATION = MathTool(
     operation_id="graph.invariant.clique_number.compute",
-    version="1",
     title="Clique number",
     description="Compute a maximum clique under explicit finite search budgets.",
     request_type=GraphOptimizationRequest,
@@ -399,7 +396,6 @@ EXACT_GRAPH_INVARIANT_OPERATIONS = (
         _radius,
         "radius",
         "exact",
-        version="2",
         examples=(
             example(
                 "path_three_radius",
@@ -415,7 +411,6 @@ EXACT_GRAPH_INVARIANT_OPERATIONS = (
     ),
     MathTool(
         operation_id="graph.k_core.compute",
-        version="2",
         title="Compute a graph k-core",
         description="Return the unique maximal induced subgraph of minimum degree k.",
         request_type=GraphCoreRequest,
@@ -468,7 +463,6 @@ EXACT_GRAPH_INVARIANT_OPERATIONS = (
         _diameter,
         "diameter",
         "exact",
-        version="2",
         examples=(
             example(
                 "path_three_diameter",
@@ -568,7 +562,6 @@ EXACT_GRAPH_INVARIANT_OPERATIONS = (
     ),
     MathTool(
         operation_id="graph.invariant.maximum_matching.compute",
-        version="3",
         title="Maximum matching",
         description=(
             "Compute an exact maximum-cardinality matching and a Tutte-Berge "

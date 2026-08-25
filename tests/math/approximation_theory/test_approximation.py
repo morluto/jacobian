@@ -30,6 +30,19 @@ def _node(num: str, den: str = "1") -> dict:
     return {"num": num, "den": den}
 
 
+def _polynomial_terms(
+    polynomial: RationalPolynomial,
+) -> dict[tuple[int, ...], Fraction]:
+    return {
+        term.exponents: term.coefficient.as_fraction()
+        for term in polynomial.polynomial.terms
+    }
+
+
+def _assert_validation_code(exc_info: pytest.ExceptionInfo, code: str) -> None:
+    assert any(error["type"] == code for error in exc_info.value.errors())
+
+
 class TestDerivedGrowthBudget:
     """Admission must keep derived results inside the canonical digit limit."""
 
@@ -37,10 +50,13 @@ class TestDerivedGrowthBudget:
         # (10^2000 + k)/10^2000 is already reduced and has a 2001-digit
         # denominator per node; four such nodes blow the component budget.
         nodes = [_node(str(10**2000 + k), "1" + "0" * 2000) for k in (1, 3, 7, 9)]
-        with pytest.raises(ValidationError, match="component budget"):
+        with pytest.raises(ValidationError) as exc_info:
             RationalNodeSet(
                 nodes=tuple(CanonicalRational.model_validate(n) for n in nodes)
             )
+        _assert_validation_code(
+            exc_info, "approximation_theory.node_component_budget_exceeded"
+        )
 
     def test_many_moderate_nodes_accepted(self):
         primes = [
@@ -104,7 +120,9 @@ class TestLagrangeBasis:
         result = compute_lagrange_basis(LagrangeBasisRequest(nodes=nodes))
         assert result.node_count == 3
         for bp in result.basis:
-            assert len(bp.coefficients) == 3  # degree 2
+            assert (
+                max(term.exponents[0] for term in bp.polynomial.polynomial.terms) == 2
+            )
 
     def test_barycentric_weights(self):
         """Barycentric weights for {0, 1, 2} are 1/2, -1, 1/2."""
@@ -117,13 +135,16 @@ class TestLagrangeBasis:
         """Sum of basis polynomials equals 1."""
         nodes = RationalNodeSet(nodes=(_node("0"), _node("1"), _node("2")))
         result = compute_lagrange_basis(LagrangeBasisRequest(nodes=nodes))
-        max_len = max(len(bp.coefficients) for bp in result.basis)
-        total = [Fraction(0)] * max_len
+        total: dict[tuple[int, ...], Fraction] = {}
         for bp in result.basis:
-            for i, c in enumerate(bp.coefficients):
-                total[i] += c.as_fraction()
-        assert total[0] == 1
-        assert all(c == 0 for c in total[1:])
+            for exponents, coefficient in _polynomial_terms(bp.polynomial).items():
+                total[exponents] = total.get(exponents, Fraction(0)) + coefficient
+        assert total[(0,)] == 1
+        assert all(
+            coefficient == 0
+            for exponents, coefficient in total.items()
+            if exponents != (0,)
+        )
 
 
 class TestLagrangeInterpolation:
@@ -136,8 +157,10 @@ class TestLagrangeInterpolation:
         result = compute_lagrange_interpolation(
             LagrangeInterpolationRequest(nodes=nodes, values=values)
         )
-        coeffs = [c.as_fraction() for c in result.coefficients]
-        assert coeffs == [Fraction(1), Fraction(1)]
+        assert _polynomial_terms(result.polynomial) == {
+            (0,): Fraction(1),
+            (1,): Fraction(1),
+        }
 
     def test_three_points(self):
         """Interpolate through (0, 1), (1, 3), (2, 9) → 2x^2 + 1."""
@@ -146,8 +169,10 @@ class TestLagrangeInterpolation:
         result = compute_lagrange_interpolation(
             LagrangeInterpolationRequest(nodes=nodes, values=values)
         )
-        coeffs = [c.as_fraction() for c in result.coefficients]
-        assert coeffs == [Fraction(1), Fraction(0), Fraction(2)]
+        assert _polynomial_terms(result.polynomial) == {
+            (0,): Fraction(1),
+            (2,): Fraction(2),
+        }
 
     def test_rational_nodes(self):
         """Interpolate through (0, 0), (1/2, 1/4), (1, 1) → x^2."""
@@ -156,8 +181,7 @@ class TestLagrangeInterpolation:
         result = compute_lagrange_interpolation(
             LagrangeInterpolationRequest(nodes=nodes, values=values)
         )
-        coeffs = [c.as_fraction() for c in result.coefficients]
-        assert coeffs == [Fraction(0), Fraction(0), Fraction(1)]
+        assert _polynomial_terms(result.polynomial) == {(2,): Fraction(1)}
 
     def test_constant_interpolation(self):
         """Interpolate constant values → constant polynomial."""
@@ -166,8 +190,7 @@ class TestLagrangeInterpolation:
         result = compute_lagrange_interpolation(
             LagrangeInterpolationRequest(nodes=nodes, values=values)
         )
-        coeffs = [c.as_fraction() for c in result.coefficients]
-        assert coeffs == [Fraction(5)]
+        assert _polynomial_terms(result.polynomial) == {(0,): Fraction(5)}
 
     def test_mismatched_lengths_rejected(self):
         """Values length must match nodes length."""
@@ -207,8 +230,11 @@ class TestLagrangeInterpolationAxisBinding:
                 )
             ),
         )
-        with pytest.raises(ValidationError, match="variable 'x'"):
+        with pytest.raises(ValidationError) as exc_info:
             LagrangeInterpolationResult(polynomial=ypoly)
+        _assert_validation_code(
+            exc_info, "approximation_theory.interpolation_variable_mismatch"
+        )
 
 
 class TestLagrangeBasisSourceBinding:
@@ -228,8 +254,9 @@ class TestLagrangeBasisSourceBinding:
         genuine = compute_lagrange_basis(request)
         payload = genuine.model_dump()
         payload["basis"][1]["index"] = 0
-        with pytest.raises(ValidationError, match=r"exactly 0\.\.node_count-1"):
+        with pytest.raises(ValidationError) as exc_info:
             LagrangeBasisResult.model_validate(payload)
+        _assert_validation_code(exc_info, "approximation_theory.basis_indices_invalid")
 
     def test_missing_node_set_rejected(self):
         """A result without the retained nodes cannot revalidate."""
@@ -270,7 +297,6 @@ class TestLagrangeBasisSourceBinding:
                 {
                     "index": 0,
                     "polynomial": {
-                        "polynomial_schema_version": "1",
                         "domain": "QQ",
                         "variables": ["x"],
                         "polynomial": {
@@ -295,7 +321,6 @@ class TestLagrangeBasisSourceBinding:
                 {
                     "index": 1,
                     "polynomial": {
-                        "polynomial_schema_version": "1",
                         "domain": "QQ",
                         "variables": ["x"],
                         "polynomial": {
@@ -311,16 +336,20 @@ class TestLagrangeBasisSourceBinding:
                 },
             ],
         }
-        with pytest.raises(ValidationError, match="below node_count"):
+        with pytest.raises(ValidationError) as exc_info:
             LagrangeBasisResult.model_validate(payload)
+        _assert_validation_code(exc_info, "approximation_theory.basis_degree_exceeded")
 
     def test_tampered_weight_rejected(self):
         request = LagrangeBasisRequest(nodes=self._nodes("0", "1", "2"))
         genuine = compute_lagrange_basis(request)
         payload = genuine.model_dump()
         payload["basis"][1]["barycentric_weight"] = {"num": "7", "den": "3"}
-        with pytest.raises(ValidationError, match="barycentric weight"):
+        with pytest.raises(ValidationError) as exc_info:
             LagrangeBasisResult.model_validate(payload)
+        _assert_validation_code(
+            exc_info, "approximation_theory.barycentric_weight_mismatch"
+        )
 
 
 def _canonical(num: str, den: str = "1") -> CanonicalRational:
@@ -375,24 +404,29 @@ class TestLagrangeInterpolateNative:
     def test_unsorted_nodes_rejected(self):
         from jacobian.math.approximation_theory import lagrange_interpolate
 
-        with pytest.raises(ValidationError, match="increasing order"):
+        with pytest.raises(ValidationError) as exc_info:
             lagrange_interpolate(
                 (_canonical("1"), _canonical("0")), (_canonical("1"), _canonical("2"))
             )
+        _assert_validation_code(exc_info, "approximation_theory.nodes_not_increasing")
 
     def test_duplicate_nodes_rejected(self):
         from jacobian.math.approximation_theory import lagrange_interpolate
 
-        with pytest.raises(ValidationError, match="distinct"):
+        with pytest.raises(ValidationError) as exc_info:
             lagrange_interpolate(
                 (_canonical("0"), _canonical("0")), (_canonical("1"), _canonical("2"))
             )
+        _assert_validation_code(exc_info, "approximation_theory.nodes_not_distinct")
 
     def test_mismatched_values_rejected(self):
         from jacobian.math.approximation_theory import lagrange_interpolate
 
-        with pytest.raises(ValidationError, match="same length"):
+        with pytest.raises(ValidationError) as exc_info:
             lagrange_interpolate((_canonical("0"), _canonical("1")), (_canonical("1"),))
+        _assert_validation_code(
+            exc_info, "approximation_theory.interpolation_length_mismatch"
+        )
 
 
 class TestInterpolationAdmissionDisposition:

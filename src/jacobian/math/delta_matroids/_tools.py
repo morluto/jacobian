@@ -11,7 +11,6 @@ from jacobian.math.delta_matroids._operations import compute_from_feasible_sets
 TOOLS: MathTools = (
     MathTool(
         operation_id="delta_matroid.from_feasible_sets.compute",
-        version="1",
         title="Recognize a finite delta-matroid from a complete feasible family",
         description=(
             "Exhaust the symmetric-exchange axiom for one complete bounded "

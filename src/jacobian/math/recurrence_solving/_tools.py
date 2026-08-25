@@ -30,11 +30,9 @@ def rs_operation[RequestT: StrictModel, ResultT: StrictModel](
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -81,7 +79,6 @@ RECURRENCE_SOLVING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
-        version="2",
     ),
     rs_operation(
         "sequence.recurrence.closed_form.compute",
@@ -111,7 +108,6 @@ RECURRENCE_SOLVING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
-        version="2",
     ),
     rs_operation(
         "sequence.recurrence.prime_field.find",

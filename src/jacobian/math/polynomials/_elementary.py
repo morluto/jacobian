@@ -193,7 +193,6 @@ RATIONAL_POLYNOMIAL_OPERATIONS = (
                 "Divide x²-1 by x-1.",
                 {
                     "left": {
-                        "polynomial_schema_version": "1",
                         "domain": "QQ",
                         "variables": ["x"],
                         "polynomial": {
@@ -210,7 +209,6 @@ RATIONAL_POLYNOMIAL_OPERATIONS = (
                         },
                     },
                     "right": {
-                        "polynomial_schema_version": "1",
                         "domain": "QQ",
                         "variables": ["x"],
                         "polynomial": {
@@ -246,7 +244,6 @@ RATIONAL_POLYNOMIAL_OPERATIONS = (
                 "Evaluate x²+1 at 2.",
                 {
                     "polynomial": {
-                        "polynomial_schema_version": "1",
                         "domain": "QQ",
                         "variables": ["x"],
                         "polynomial": {
@@ -283,7 +280,6 @@ RATIONAL_POLYNOMIAL_OPERATIONS = (
                 "Differentiate one half x³ minus 2x.",
                 {
                     "polynomial": {
-                        "polynomial_schema_version": "1",
                         "domain": "QQ",
                         "variables": ["x"],
                         "polynomial": {
@@ -322,7 +318,6 @@ RATIONAL_POLYNOMIAL_OPERATIONS = (
                 "Integrate 2x with zero constant.",
                 {
                     "polynomial": {
-                        "polynomial_schema_version": "1",
                         "domain": "QQ",
                         "variables": ["x"],
                         "polynomial": {
@@ -357,7 +352,6 @@ RATIONAL_POLYNOMIAL_OPERATIONS = (
                 "Decompose 1/(x²-1) into partial fractions.",
                 {
                     "numerator": {
-                        "polynomial_schema_version": "1",
                         "domain": "QQ",
                         "variables": ["x"],
                         "polynomial": {
@@ -370,7 +364,6 @@ RATIONAL_POLYNOMIAL_OPERATIONS = (
                         },
                     },
                     "denominator": {
-                        "polynomial_schema_version": "1",
                         "domain": "QQ",
                         "variables": ["x"],
                         "polynomial": {

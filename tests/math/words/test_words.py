@@ -5,6 +5,8 @@ from __future__ import annotations
 import itertools
 import json
 import random
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 import pytest
 from pydantic import ValidationError
@@ -54,6 +56,13 @@ from jacobian.math.words._operations import (
 from jacobian.math.words._tools import TOOLS
 
 
+@contextmanager
+def _raises_code(code: str) -> Iterator[None]:
+    with pytest.raises(ValidationError) as error:
+        yield
+    assert error.value.errors()[0]["type"] == code
+
+
 def _word(letters: str, alphabet: tuple[str, ...] = ("a", "b")) -> FiniteWord:
     return FiniteWord(alphabet=alphabet, letters=tuple(letters))
 
@@ -82,14 +91,10 @@ def test_public_catalog_surface_is_the_audited_operations() -> None:
     )
 
 
-def test_narrowed_scalar_symbol_contract_is_published_as_version_two() -> None:
-    tools = {tool.operation_id: tool for tool in TOOLS}
-    for operation_id, tool in tools.items():
-        # The shared Symbol type now rejects lone surrogates, which narrows
-        # every v1 request alphabet; the change is a versioned contract bump.
-        assert tool.version == "2", operation_id
-
-    periods = tools["word.periods.compute"]
+def test_narrowed_scalar_symbol_contract_rejects_lone_surrogates() -> None:
+    periods = next(
+        tool for tool in TOOLS if tool.operation_id == "word.periods.compute"
+    )
     surrogate = json.loads('{"alphabet": ["\\ud800"], "letters": ["\\ud800"]}')
     with pytest.raises(ValidationError):
         periods.request_type.model_validate(surrogate)
@@ -107,7 +112,7 @@ def test_factor_result_is_complete_and_bound_to_the_request() -> None:
 
     payload = result.model_dump()
     payload["distinct_count"] = 2
-    with pytest.raises(ValidationError, match="not bound"):
+    with _raises_code("word.factor_result_unbound"):
         FactorsLengthResult.model_validate(payload)
 
 
@@ -120,7 +125,7 @@ def test_empty_factor_occurs_at_every_boundary() -> None:
 
 
 def test_factor_length_is_validated_before_computation() -> None:
-    with pytest.raises(ValidationError, match="must not exceed"):
+    with _raises_code("word.factor_length_exceeds_word"):
         FactorsLengthRequest(word=_word("aa", ("a",)), factor_length=3)
 
 
@@ -144,7 +149,7 @@ def test_empty_period_convention_and_result_binding() -> None:
 
     payload = result.model_dump()
     payload["is_primitive"] = True
-    with pytest.raises(ValidationError, match="not bound"):
+    with _raises_code("word.period_result_unbound"):
         PeriodsResult.model_validate(payload)
 
 
@@ -160,12 +165,12 @@ def test_fibonacci_incidence_matrix_and_binding() -> None:
 
     payload = result.model_dump()
     payload["matrix"] = ((1, 0), (1, 1))
-    with pytest.raises(ValidationError, match="not bound"):
+    with _raises_code("word.incidence_matrix_unbound"):
         IncidenceMatrixResult.model_validate(payload)
 
 
 def test_substitution_requires_an_endomorphism() -> None:
-    with pytest.raises(ValidationError, match="identical source and target"):
+    with _raises_code("word.substitution_not_endomorphism"):
         Substitution(
             morphism=WordMorphism(
                 source_alphabet=("a",),
@@ -192,7 +197,7 @@ def test_fibonacci_dependency_graph_retains_positions_and_source() -> None:
 
     payload = result.model_dump()
     payload["graph"]["edges"][0]["positions"] = (1,)
-    with pytest.raises(ValidationError, match="not bound"):
+    with _raises_code("word.dependency_graph_unbound"):
         SubstitutionDependencyGraphResult.model_validate(payload)
 
 
@@ -204,13 +209,13 @@ def test_dependency_graph_output_budget_is_admitted_before_enumeration() -> None
     assert tuple(edge.multiplicity for edge in result.graph.edges) == (5_000, 5_000)
 
     above_limit = _substitution((("0",) * 5_001, ("1",) * 5_000))
-    with pytest.raises(ValidationError, match="aggregate bound"):
+    with _raises_code("word.dependency_occurrence_bound"):
         SubstitutionDependencyGraphRequest(substitution=above_limit)
-    with pytest.raises(ValidationError, match="aggregate bound"):
+    with _raises_code("word.dependency_occurrence_bound"):
         SubstitutionDependencyGraph(substitution=above_limit, edges=())
     with pytest.raises(ValueError, match="aggregate bound"):
         substitution_dependency_graph(above_limit)
-    with pytest.raises(ValidationError, match="aggregate bound"):
+    with _raises_code("word.dependency_occurrence_bound"):
         SubstitutionPrimitivityProfileRequest.model_validate(
             {
                 "dependency_graph": {
@@ -223,7 +228,7 @@ def test_dependency_graph_output_budget_is_admitted_before_enumeration() -> None
         substitution=above_limit,
         edges=(),
     )
-    with pytest.raises(ValidationError, match="aggregate bound"):
+    with _raises_code("word.dependency_occurrence_bound"):
         SubstitutionPrimitivityProfileRequest(dependency_graph=unchecked_graph)
     with pytest.raises(ValueError, match="aggregate bound"):
         substitution_primitivity_profile(unchecked_graph)
@@ -265,7 +270,7 @@ def test_primitivity_result_replay_rejects_mutation() -> None:
     )
     payload = result.model_dump()
     payload["least_positive_power"] = 1
-    with pytest.raises(ValidationError, match="not bound"):
+    with _raises_code("word.primitivity_result_unbound"):
         SubstitutionPrimitivityProfileResult.model_validate(payload)
 
 
@@ -285,7 +290,7 @@ def test_fixed_point_prefix_uses_the_least_sufficient_iterate() -> None:
 
     payload = result.model_dump()
     payload["prefix"]["letters"] = (*payload["prefix"]["letters"][:-1], "1")
-    with pytest.raises(ValidationError, match="not bound"):
+    with _raises_code("word.fixed_point_prefix_unbound"):
         SubstitutionFixedPointPrefixResult.model_validate(payload)
 
 
@@ -302,7 +307,7 @@ def test_fixed_point_prefix_empty_and_length_boundaries() -> None:
         SubstitutionFixedPointPrefixRequest(source=doubling, prefix_length=500)
     )
     assert len(boundary.prefix.letters) == 500
-    with pytest.raises(ValidationError, match="less than or equal to 500"):
+    with _raises_code("less_than_equal"):
         SubstitutionFixedPointPrefixRequest(source=doubling, prefix_length=501)
     with pytest.raises(ValueError, match="prefix length"):
         fixed_point_prefix(doubling, 501)
@@ -345,9 +350,9 @@ def test_fixed_point_source_and_result_envelopes_cover_exact_boundaries() -> Non
         },
         "seed": "0",
     }
-    with pytest.raises(ValidationError, match="source exceeds"):
+    with _raises_code("word.fixed_point_source_occurrence_bound"):
         ProlongableSubstitution.model_validate(over_limit_source)
-    with pytest.raises(ValidationError, match="source exceeds"):
+    with _raises_code("word.fixed_point_source_occurrence_bound"):
         SubstitutionFixedPointPrefixRequest.model_validate(
             {"source": over_limit_source, "prefix_length": 1}
         )
@@ -370,7 +375,7 @@ def test_fixed_point_source_and_result_envelopes_cover_exact_boundaries() -> Non
         substitution=_substitution(((rejected_symbol,) * 10_000,), (rejected_symbol,)),
         seed=rejected_symbol,
     )
-    with pytest.raises(ValidationError, match="result exceeds the byte bound"):
+    with _raises_code("word.fixed_point_budget"):
         SubstitutionFixedPointPrefixRequest(source=byte_above, prefix_length=500)
 
 
@@ -393,11 +398,11 @@ def test_fixed_point_generation_caps_the_intermediate_prefix() -> None:
 
 
 def test_prolongability_rejects_mortal_nongrowing_and_wrong_seed_images() -> None:
-    with pytest.raises(ValidationError, match="eventually erase"):
+    with _raises_code("word.seed_suffix_eventually_erases"):
         ProlongableSubstitution(substitution=_substitution((("0", "1"), ())), seed="0")
-    with pytest.raises(ValidationError, match="growing suffix"):
+    with _raises_code("word.seed_image_not_growing"):
         ProlongableSubstitution(substitution=_substitution((("0",), ("1",))), seed="0")
-    with pytest.raises(ValidationError, match="begin with the seed"):
+    with _raises_code("word.seed_image_not_prolongable"):
         ProlongableSubstitution(
             substitution=_substitution((("1", "0"), ("1",))), seed="0"
         )
@@ -489,7 +494,7 @@ def test_primitivity_alphabet_boundary_is_complete() -> None:
     assert result.obstruction == "REDUCIBLE_DEPENDENCY_GRAPH"
 
     oversized = tuple(f"x{index}" for index in range(51))
-    with pytest.raises(ValidationError, match="at most 50 items"):
+    with _raises_code("too_long"):
         WordMorphism(
             source_alphabet=oversized,
             target_alphabet=oversized,
@@ -550,9 +555,9 @@ def test_native_morphism_application_and_composition() -> None:
 
 
 def test_value_models_reject_ambiguous_or_unbounded_inputs() -> None:
-    with pytest.raises(ValidationError, match="distinct"):
+    with _raises_code("word.alphabet_symbols_not_distinct"):
         FiniteWord(alphabet=("a", "a"), letters=("a",))
-    with pytest.raises(ValidationError, match="outside"):
+    with _raises_code("word.word_letter_outside_alphabet"):
         FiniteWord(alphabet=("a",), letters=("b",))
 
     expanding = WordMorphism(

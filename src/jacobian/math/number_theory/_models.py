@@ -17,8 +17,16 @@ from itertools import product
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable semantic error owned by the number-theory domain."""
+
+    return PydanticCustomError(f"number_theory.{reason}", message)
+
 
 # ---------------------------------------------------------------------------
 # Shared bounds for the current bounded integer-domain contracts.
@@ -180,9 +188,15 @@ def _plan_friable_count(x: int, y: int) -> tuple[_FriableRegime, tuple[int, ...]
     """Validate and select one exact friable-count execution regime."""
 
     if x < 0 or y < 0:
-        raise ValueError("friable-count sources must be nonnegative")
+        raise _validation_error(
+            "friable_count_sources_must_be_nonnegative",
+            "friable-count sources must be nonnegative",
+        )
     if x >= _MAX_FRIABLE_SOURCE_ABS or y >= _MAX_FRIABLE_SOURCE_ABS:
-        raise ValueError("friable-count sources must have at most 256 decimal digits")
+        raise _validation_error(
+            "friable_count_sources_must_have_at_most_256_decimal_digits",
+            "friable-count sources must have at most 256 decimal digits",
+        )
     if x == 0 or y <= 1 or y >= x:
         return "DIRECT", ()
 
@@ -198,7 +212,10 @@ def _plan_friable_count(x: int, y: int) -> tuple[_FriableRegime, tuple[int, ...]
         return "MATERIALIZED", ()
 
     if y > MAX_FRIABLE_GENERATED_CUTOFF:
-        raise ValueError("generated friable counting exceeds the admitted prime cutoff")
+        raise _validation_error(
+            "generated_friable_counting_exceeds_the_admitted_prime_cutoff",
+            "generated friable counting exceeds the admitted prime cutoff",
+        )
 
     primes = _primes_through(y)
     nodes_per_pass = 1
@@ -207,8 +224,9 @@ def _plan_friable_count(x: int, y: int) -> tuple[_FriableRegime, tuple[int, ...]
         prefix_box *= _maximum_exponent(x, prime) + 1
         nodes_per_pass += prefix_box
         if 2 * nodes_per_pass > _MAX_FRIABLE_GENERATED_TOTAL_NODES:
-            raise ValueError(
-                "generated friable counting exceeds the search-node budget"
+            raise _validation_error(
+                "generated_friable_counting_exceeds_the_search_node_budget",
+                "generated friable counting exceeds the search-node budget",
             )
     return "GENERATED", primes
 
@@ -236,7 +254,10 @@ class NonzeroFactorizationRequest(FactorizationRequest):
     @model_validator(mode="after")
     def require_nonzero_value(self) -> Self:
         if int(self.value) == 0:
-            raise ValueError("zero has no finite factorization or divisor enumeration")
+            raise _validation_error(
+                "zero_has_no_finite_factorization_or_divisor_enumeration",
+                "zero has no finite factorization or divisor enumeration",
+            )
         return self
 
 
@@ -274,7 +295,9 @@ class DivisibilityRequest(StrictModel):
     @model_validator(mode="after")
     def require_nonzero_divisor(self) -> Self:
         if int(self.divisor) == 0:
-            raise ValueError("divisor must be nonzero")
+            raise _validation_error(
+                "divisor_must_be_nonzero", "divisor must be nonzero"
+            )
         return self
 
 
@@ -289,9 +312,14 @@ class ValuationRequest(StrictModel):
         from sympy import isprime
 
         if int(self.value) == 0:
-            raise ValueError("valuation requires nonzero value")
+            raise _validation_error(
+                "valuation_requires_nonzero_value", "valuation requires nonzero value"
+            )
         if int(self.prime) < 2 or not isprime(int(self.prime)):
-            raise ValueError("valuation requires a prime absolute base >= 2")
+            raise _validation_error(
+                "valuation_requires_a_prime_absolute_base_2",
+                "valuation requires a prime absolute base >= 2",
+            )
         return self
 
 
@@ -352,7 +380,10 @@ class LegendreSymbolRequest(StrictModel):
         from sympy import isprime
 
         if not isprime(self.prime):
-            raise ValueError("Legendre denominator must be prime")
+            raise _validation_error(
+                "legendre_denominator_must_be_prime",
+                "Legendre denominator must be prime",
+            )
         return self
 
 
@@ -421,9 +452,14 @@ class FriableCountResult(StrictModel):
         y = parse_canonical_integer(self.y)
         count = parse_canonical_integer(self.count)
         if count < 0:
-            raise ValueError("friable count must be nonnegative")
+            raise _validation_error(
+                "friable_count_must_be_nonnegative", "friable count must be nonnegative"
+            )
         if count != count_friable(x, y):
-            raise ValueError("friable count does not match the retained sources")
+            raise _validation_error(
+                "friable_count_does_not_match_the_retained_sources",
+                "friable count does not match the retained sources",
+            )
         return self
 
 
@@ -450,7 +486,10 @@ class ModularUnitRequest(StrictModel):
         from math import gcd
 
         if gcd(int(self.value), self.modulus) != 1:
-            raise ValueError("value must be coprime to the modulus")
+            raise _validation_error(
+                "value_must_be_coprime_to_the_modulus",
+                "value must be coprime to the modulus",
+            )
         return self
 
 
@@ -469,9 +508,15 @@ class ModularPolynomialVariable(StrictModel):
     @model_validator(mode="after")
     def require_canonical_domain(self) -> Self:
         if any(residue < 0 for residue in self.residues):
-            raise ValueError("variable residues must be nonnegative")
+            raise _validation_error(
+                "variable_residues_must_be_nonnegative",
+                "variable residues must be nonnegative",
+            )
         if self.residues != tuple(sorted(set(self.residues))):
-            raise ValueError("variable residues must be strictly increasing")
+            raise _validation_error(
+                "variable_residues_must_be_strictly_increasing",
+                "variable residues must be strictly increasing",
+            )
         return self
 
 
@@ -490,8 +535,9 @@ class ModularPolynomialTerm(StrictModel):
             exponent < 0 or exponent > _MAX_RESIDUE_EXPONENT
             for exponent in self.exponents
         ):
-            raise ValueError(
-                f"term exponents must be between 0 and {_MAX_RESIDUE_EXPONENT}"
+            raise _validation_error(
+                "f_term_exponents_must_be_between_0_and",
+                f"term exponents must be between 0 and {_MAX_RESIDUE_EXPONENT}",
             )
         return self
 
@@ -513,30 +559,42 @@ class ModularPolynomialResidueImageRequest(StrictModel):
     def require_canonical_bounded_polynomial(self) -> Self:
         variable_names = [variable.name for variable in self.variables]
         if len(variable_names) != len(set(variable_names)):
-            raise ValueError("polynomial variable names must be unique")
+            raise _validation_error(
+                "polynomial_variable_names_must_be_unique",
+                "polynomial variable names must be unique",
+            )
         if any(
             residue >= self.modulus
             for variable in self.variables
             for residue in variable.residues
         ):
-            raise ValueError("every variable residue must be less than the modulus")
+            raise _validation_error(
+                "every_variable_residue_must_be_less_than_the_modulus",
+                "every variable residue must be less than the modulus",
+            )
         assignment_count = math.prod(
             len(variable.residues) for variable in self.variables
         )
         if assignment_count > _MAX_RESIDUE_ASSIGNMENTS:
-            raise ValueError(
-                "declared residue domains exceed the 4,096-assignment bound"
+            raise _validation_error(
+                "declared_residue_domains_exceed_the_4_096_assignment_bound",
+                "declared residue domains exceed the 4,096-assignment bound",
             )
         if any(len(term.exponents) != len(self.variables) for term in self.terms):
-            raise ValueError("every term exponent vector must match the variable count")
+            raise _validation_error(
+                "every_term_exponent_vector_must_match_the_variable_count",
+                "every term exponent vector must match the variable count",
+            )
         exponent_vectors = [term.exponents for term in self.terms]
         if exponent_vectors != sorted(set(exponent_vectors)):
-            raise ValueError(
-                "term exponent vectors must be unique and lexicographically increasing"
+            raise _validation_error(
+                "term_exponent_vectors_must_be_unique_and_lexicographically_increasing",
+                "term exponent vectors must be unique and lexicographically increasing",
             )
         if any(int(term.coefficient) % self.modulus == 0 for term in self.terms):
-            raise ValueError(
-                "sparse polynomial terms must have nonzero coefficient modulo m"
+            raise _validation_error(
+                "sparse_polynomial_terms_must_have_nonzero_coefficient_modulo_m",
+                "sparse polynomial terms must have nonzero coefficient modulo m",
             )
         return self
 
@@ -550,9 +608,15 @@ class ChineseRemainderRequest(StrictModel):
     @model_validator(mode="after")
     def require_parallel_positive_moduli(self) -> Self:
         if len(self.residues) != len(self.moduli):
-            raise ValueError("residues and moduli must have equal length")
+            raise _validation_error(
+                "residues_and_moduli_must_have_equal_length",
+                "residues and moduli must have equal length",
+            )
         if any(modulus < 2 or modulus > _MAX_MODULUS for modulus in self.moduli):
-            raise ValueError("every modulus must be between 2 and 1,000,000")
+            raise _validation_error(
+                "every_modulus_must_be_between_2_and_1_000_000",
+                "every modulus must be between 2 and 1,000,000",
+            )
         # The result carries the system's combined modulus as one exact
         # ``BoundedInteger``, so admission derives its input envelope from
         # that declared output budget: reject any compatible system whose
@@ -563,22 +627,29 @@ class ChineseRemainderRequest(StrictModel):
         for modulus in self.moduli:
             combined = combined // gcd(combined, modulus) * modulus
             if combined > _MAX_CRT_COMBINED_MODULUS:
-                raise ValueError(
+                raise _validation_error(
+                    "the_system_s_combined_modulus_must_have_at",
                     "the system's combined modulus must have at most "
                     f"{_MAX_INTEGER_LENGTH} digits; split the congruence "
-                    "system into narrower subsystems"
+                    "system into narrower subsystems",
                 )
         if any(
             residue < 0 or residue >= modulus
             for residue, modulus in zip(self.residues, self.moduli, strict=True)
         ):
-            raise ValueError("every residue must be canonical for its modulus")
+            raise _validation_error(
+                "every_residue_must_be_canonical_for_its_modulus",
+                "every residue must be canonical for its modulus",
+            )
         # Check pairwise consistency: residues must agree modulo gcd(moduli).
         for i in range(len(self.moduli)):
             for j in range(i + 1, len(self.moduli)):
                 g = gcd(self.moduli[i], self.moduli[j])
                 if (self.residues[i] - self.residues[j]) % g != 0:
-                    raise ValueError("congruence system is inconsistent")
+                    raise _validation_error(
+                        "congruence_system_is_inconsistent",
+                        "congruence system is inconsistent",
+                    )
         return self
 
 
@@ -591,7 +662,10 @@ class JacobiSymbolRequest(StrictModel):
     @model_validator(mode="after")
     def require_odd_denominator(self) -> Self:
         if self.n % 2 == 0:
-            raise ValueError("Jacobi symbol denominator must be odd")
+            raise _validation_error(
+                "jacobi_symbol_denominator_must_be_odd",
+                "Jacobi symbol denominator must be odd",
+            )
         return self
 
 
@@ -605,7 +679,10 @@ class DiscreteLogarithmRequest(StrictModel):
     @model_validator(mode="after")
     def require_canonical_residues(self) -> Self:
         if self.base >= self.modulus or self.target >= self.modulus:
-            raise ValueError("base and target must be less than the modulus")
+            raise _validation_error(
+                "base_and_target_must_be_less_than_the_modulus",
+                "base and target must be less than the modulus",
+            )
         return self
 
 
@@ -675,18 +752,29 @@ class DivisorListResult(StrictModel):
 
         values = [int(divisor) for divisor in self.divisors]
         if any(value < 1 for value in values):
-            raise ValueError("divisors must be positive")
+            raise _validation_error(
+                "divisors_must_be_positive", "divisors must be positive"
+            )
         if values != sorted(values):
-            raise ValueError("divisors must be ascending")
+            raise _validation_error(
+                "divisors_must_be_ascending", "divisors must be ascending"
+            )
         if len(set(values)) != len(values):
-            raise ValueError("divisors must be unique")
+            raise _validation_error(
+                "divisors_must_be_unique", "divisors must be unique"
+            )
         value = int(self.value)
         if value == 0:
-            raise ValueError("zero has infinitely many divisors")
+            raise _validation_error(
+                "zero_has_infinitely_many_divisors", "zero has infinitely many divisors"
+            )
         if self.divisors != _replayed_divisors(
             value, proper=self.convention == "PROPER_DIVISORS"
         ):
-            raise ValueError("divisor list must enumerate the divisors of the source")
+            raise _validation_error(
+                "divisor_list_must_enumerate_the_divisors_of_the_source",
+                "divisor list must enumerate the divisors of the source",
+            )
         return self
 
 
@@ -719,30 +807,49 @@ class PrimeFactorizationResult(StrictModel):
 
         primes = [factor.prime for factor in self.factors]
         if len(set(primes)) != len(primes):
-            raise ValueError("prime factors must be unique")
+            raise _validation_error(
+                "prime_factors_must_be_unique", "prime factors must be unique"
+            )
         value = int(self.value)
         if value == 0:
-            raise ValueError("zero has no finite prime factorization")
+            raise _validation_error(
+                "zero_has_no_finite_prime_factorization",
+                "zero has no finite prime factorization",
+            )
         target = abs(value)
         product = 1
         previous_prime = 0
         for factor in self.factors:
             prime = int(factor.prime)
             if prime <= previous_prime:
-                raise ValueError("prime bases must be strictly ascending")
+                raise _validation_error(
+                    "prime_bases_must_be_strictly_ascending",
+                    "prime bases must be strictly ascending",
+                )
             if prime < 2 or not isprime(prime):
-                raise ValueError(f"{factor.prime} is not prime")
+                raise _validation_error(
+                    "f_factor_prime_is_not_prime", f"{factor.prime} is not prime"
+                )
             power_value = 1
             for _ in range(factor.power):
                 power_value *= prime
                 if power_value > target:
-                    raise ValueError("prime powers must multiply to abs(value)")
+                    raise _validation_error(
+                        "prime_powers_must_multiply_to_abs_value",
+                        "prime powers must multiply to abs(value)",
+                    )
             product *= power_value
             if product > target:
-                raise ValueError("prime powers must multiply to abs(value)")
+                raise _validation_error(
+                    "prime_powers_must_multiply_to_abs_value",
+                    "prime powers must multiply to abs(value)",
+                )
             previous_prime = prime
         if product != target:
-            raise ValueError("prime powers must multiply to abs(value)")
+            raise _validation_error(
+                "prime_powers_must_multiply_to_abs_value",
+                "prime powers must multiply to abs(value)",
+            )
         return self
 
 
@@ -756,7 +863,6 @@ class ResidualPerfectPower(StrictModel):
 class PowerfulNumberResult(StrictModel):
     """A source-bound, replayable exact powerful-number decision."""
 
-    semantics_version: Literal["powerful-number.partial-factor.v2"]
     value: PowerfulInteger
     conclusion: Literal[
         "POWERFUL",
@@ -817,8 +923,9 @@ class PowerfulNumberResult(StrictModel):
             or parse_canonical_integer(self.residual) != expected.residual
             or perfect_power != expected.perfect_power
         ):
-            raise ValueError(
-                "powerful-number conclusion or certificate does not match exact replay"
+            raise _validation_error(
+                "powerful_number_conclusion_or_certificate_does_not_match_exact_replay",
+                "powerful-number conclusion or certificate does not match exact replay",
             )
         return self
 
@@ -869,7 +976,6 @@ class ModularPolynomialResidueTableRow(StrictModel):
 class ModularPolynomialResidueImageResult(StrictModel):
     """Exact residue-image summary with an optional complete assignment table."""
 
-    semantics_version: Literal["modular-polynomial-residue-image.v1"]
     modulus: StrictInt = Field(ge=2, le=_MAX_POLYNOMIAL_RESIDUE_MODULUS)
     variable_order: tuple[ResidueVariableName, ...] = Field(
         min_length=1,
@@ -933,15 +1039,24 @@ def _validate_residue_image_shape(
     result: ModularPolynomialResidueImageResult,
 ) -> tuple[tuple[int, ...], ...]:
     if len(set(result.variable_order)) != len(result.variable_order):
-        raise ValueError("result variable names must be unique")
+        raise _validation_error(
+            "result_variable_names_must_be_unique",
+            "result variable names must be unique",
+        )
     if len(result.domains) != len(result.variable_order):
-        raise ValueError("result domains must match the variable count")
+        raise _validation_error(
+            "result_domains_must_match_the_variable_count",
+            "result domains must match the variable count",
+        )
     if any(
         domain != tuple(sorted(set(domain)))
         or any(residue < 0 or residue >= result.modulus for residue in domain)
         for domain in result.domains
     ):
-        raise ValueError("result domains must contain canonical increasing residues")
+        raise _validation_error(
+            "result_domains_must_contain_canonical_increasing_residues",
+            "result domains must contain canonical increasing residues",
+        )
     if any(
         len(term.exponents) != len(result.variable_order)
         or term.coefficient >= result.modulus
@@ -951,17 +1066,32 @@ def _validate_residue_image_shape(
         )
         for term in result.normalized_terms
     ):
-        raise ValueError("normalized terms do not match the result scope")
+        raise _validation_error(
+            "normalized_terms_do_not_match_the_result_scope",
+            "normalized terms do not match the result scope",
+        )
     exponent_vectors = [term.exponents for term in result.normalized_terms]
     if exponent_vectors != sorted(set(exponent_vectors)):
-        raise ValueError("normalized term exponents must be canonical")
+        raise _validation_error(
+            "normalized_term_exponents_must_be_canonical",
+            "normalized term exponents must be canonical",
+        )
     assignment_count = math.prod(len(domain) for domain in result.domains)
     if assignment_count > _MAX_RESIDUE_ASSIGNMENTS:
-        raise ValueError("result domains exceed the 4,096-assignment bound")
+        raise _validation_error(
+            "result_domains_exceed_the_4_096_assignment_bound",
+            "result domains exceed the 4,096-assignment bound",
+        )
     if result.total_assignments != assignment_count:
-        raise ValueError("total assignments do not match the declared domains")
+        raise _validation_error(
+            "total_assignments_do_not_match_the_declared_domains",
+            "total assignments do not match the declared domains",
+        )
     if result.table is not None and len(result.table) != assignment_count:
-        raise ValueError("complete table length does not match the declared domains")
+        raise _validation_error(
+            "complete_table_length_does_not_match_the_declared_domains",
+            "complete table length does not match the declared domains",
+        )
     assignments = tuple(product(*result.domains))
     return assignments
 
@@ -980,12 +1110,14 @@ def _validate_residue_image_table(
     )
     if result.table is not None:
         if tuple(row.assignment for row in result.table) != assignments:
-            raise ValueError(
-                "complete table must enumerate the declared Cartesian product in order"
+            raise _validation_error(
+                "complete_table_must_enumerate_the_declared_cartesian_product_in_order",
+                "complete table must enumerate the declared Cartesian product in order",
             )
         if tuple(row.residue for row in result.table) != expected_residues:
-            raise ValueError(
-                "complete table contains an incorrect polynomial evaluation"
+            raise _validation_error(
+                "complete_table_contains_an_incorrect_polynomial_evaluation",
+                "complete table contains an incorrect polynomial evaluation",
             )
     return expected_residues
 
@@ -997,14 +1129,20 @@ def _validate_residue_image_summaries(
 ) -> None:
     image = tuple(sorted(set(residues)))
     if result.image != image:
-        raise ValueError("residue image does not match the complete table")
+        raise _validation_error(
+            "residue_image_does_not_match_the_complete_table",
+            "residue image does not match the complete table",
+        )
     counts = Counter(residues)
     expected_counts = tuple(
         ModularPolynomialResidueCount(residue=residue, count=counts[residue])
         for residue in image
     )
     if result.residue_counts != expected_counts:
-        raise ValueError("residue counts do not match the complete table")
+        raise _validation_error(
+            "residue_counts_do_not_match_the_complete_table",
+            "residue counts do not match the complete table",
+        )
     first_assignments: dict[int, tuple[int, ...]] = {}
     for assignment, residue in zip(assignments, residues, strict=True):
         first_assignments.setdefault(residue, assignment)
@@ -1016,7 +1154,10 @@ def _validate_residue_image_summaries(
         for residue in image
     )
     if result.witnesses != expected_witnesses:
-        raise ValueError("residue witnesses must be the first table assignments")
+        raise _validation_error(
+            "residue_witnesses_must_be_the_first_table_assignments",
+            "residue witnesses must be the first table assignments",
+        )
 
 
 class ChineseRemainderResult(StrictModel):
@@ -1036,7 +1177,10 @@ class JacobiSymbolResult(StrictModel):
     @model_validator(mode="after")
     def require_odd_denominator(self) -> Self:
         if self.n % 2 == 0:
-            raise ValueError("Jacobi symbol denominator must be odd")
+            raise _validation_error(
+                "jacobi_symbol_denominator_must_be_odd",
+                "Jacobi symbol denominator must be odd",
+            )
         return self
 
 
@@ -1052,14 +1196,26 @@ class DiscreteLogarithmResult(StrictModel):
     @model_validator(mode="after")
     def bind_conclusion(self) -> Self:
         if self.base >= self.modulus or self.target >= self.modulus:
-            raise ValueError("base and target must be less than the modulus")
+            raise _validation_error(
+                "base_and_target_must_be_less_than_the_modulus",
+                "base and target must be less than the modulus",
+            )
         if self.status == "SOLVED":
             if self.discrete_log is None:
-                raise ValueError("solved discrete logarithm requires an exponent")
+                raise _validation_error(
+                    "solved_discrete_logarithm_requires_an_exponent",
+                    "solved discrete logarithm requires an exponent",
+                )
             if pow(self.base, self.discrete_log, self.modulus) != self.target:
-                raise ValueError("discrete logarithm does not reproduce the target")
+                raise _validation_error(
+                    "discrete_logarithm_does_not_reproduce_the_target",
+                    "discrete logarithm does not reproduce the target",
+                )
         elif self.discrete_log is not None:
-            raise ValueError("unsolvable discrete logarithm cannot carry an exponent")
+            raise _validation_error(
+                "unsolvable_discrete_logarithm_cannot_carry_an_exponent",
+                "unsolvable discrete logarithm cannot carry an exponent",
+            )
         return self
 
 
@@ -1082,12 +1238,21 @@ def _verify_pratt_identities(p: int, witness: int, sub_primes: tuple[int, ...]) 
     """
 
     if pow(witness, p - 1, p) != 1:
-        raise ValueError("Pratt witness fails a^(p-1) ≡ 1 (mod p)")
+        raise _validation_error(
+            "pratt_witness_fails_a_p_1_1_mod_p",
+            "Pratt witness fails a^(p-1) ≡ 1 (mod p)",
+        )
     for q in sub_primes:
         if (p - 1) % q != 0:
-            raise ValueError("sub-certificate prime must divide p-1")
+            raise _validation_error(
+                "sub_certificate_prime_must_divide_p_1",
+                "sub-certificate prime must divide p-1",
+            )
         if pow(witness, (p - 1) // q, p) == 1:
-            raise ValueError("Pratt witness fails a^((p-1)/q) ≢ 1 (mod p)")
+            raise _validation_error(
+                "pratt_witness_fails_a_p_1_q_1_mod_p",
+                "Pratt witness fails a^((p-1)/q) ≢ 1 (mod p)",
+            )
     # Verify completeness without factoring: divide out each certified
     # prime factor and require that the residual becomes 1.  Duplicate
     # primes are already rejected by the caller, and each q is a
@@ -1097,8 +1262,9 @@ def _verify_pratt_identities(p: int, witness: int, sub_primes: tuple[int, ...]) 
         while residual % q == 0:
             residual //= q
     if residual != 1:
-        raise ValueError(
-            "sub-certificates must exactly cover the distinct prime factors of p-1"
+        raise _validation_error(
+            "sub_certificates_must_exactly_cover_the_distinct_prime_factors_of_p_1",
+            "sub-certificates must exactly cover the distinct prime factors of p-1",
         )
 
 
@@ -1128,21 +1294,38 @@ class PrattCertificateNode(StrictModel):
 
         p = parse_canonical_integer(self.prime)
         if p < 2:
-            raise ValueError("certificate prime must be at least 2")
+            raise _validation_error(
+                "certificate_prime_must_be_at_least_2",
+                "certificate prime must be at least 2",
+            )
         if p == 2:
             if self.witness is not None:
-                raise ValueError("base case prime 2 has no witness")
+                raise _validation_error(
+                    "base_case_prime_2_has_no_witness",
+                    "base case prime 2 has no witness",
+                )
             if self.sub_certificates:
-                raise ValueError("base case prime 2 has no sub-certificates")
+                raise _validation_error(
+                    "base_case_prime_2_has_no_sub_certificates",
+                    "base case prime 2 has no sub-certificates",
+                )
             return self
         if self.witness is None:
-            raise ValueError("non-base-case certificate requires a witness")
+            raise _validation_error(
+                "non_base_case_certificate_requires_a_witness",
+                "non-base-case certificate requires a witness",
+            )
         sub_primes_str = [item.prime for item in self.sub_certificates]
         if len(set(sub_primes_str)) != len(self.sub_certificates):
-            raise ValueError("sub-certificate primes must be unique")
+            raise _validation_error(
+                "sub_certificate_primes_must_be_unique",
+                "sub-certificate primes must be unique",
+            )
         w = parse_canonical_integer(self.witness)
         if w < 2 or w >= p:
-            raise ValueError("witness must be between 2 and p-1")
+            raise _validation_error(
+                "witness_must_be_between_2_and_p_1", "witness must be between 2 and p-1"
+            )
         sub_primes = tuple(
             parse_canonical_integer(sub.prime) for sub in self.sub_certificates
         )
@@ -1166,7 +1349,10 @@ class CertifiedFactorizationRequest(StrictModel):
         from jacobian.canonical import parse_canonical_integer
 
         if parse_canonical_integer(self.value) < 2:
-            raise ValueError("certified factorization requires an integer at least 2")
+            raise _validation_error(
+                "certified_factorization_requires_an_integer_at_least_2",
+                "certified factorization requires an integer at least 2",
+            )
         return self
 
 
@@ -1196,17 +1382,27 @@ class CertifiedFactorizationResult(StrictModel):
             for item in self.factors
         )
         if product != parse_canonical_integer(self.value):
-            raise ValueError("factor components must multiply to the requested integer")
+            raise _validation_error(
+                "factor_components_must_multiply_to_the_requested_integer",
+                "factor components must multiply to the requested integer",
+            )
         primes = [parse_canonical_integer(item.prime) for item in self.factors]
         if primes != sorted(primes):
-            raise ValueError("factor primes must be ascending")
+            raise _validation_error(
+                "factor_primes_must_be_ascending", "factor primes must be ascending"
+            )
         if len(set(primes)) != len(primes):
-            raise ValueError("factor primes must be unique")
+            raise _validation_error(
+                "factor_primes_must_be_unique", "factor primes must be unique"
+            )
         for item in self.factors:
             cert_prime = parse_canonical_integer(item.certificate.prime)
             factor_prime = parse_canonical_integer(item.prime)
             if cert_prime != factor_prime:
-                raise ValueError("factor certificate prime must equal the factor prime")
+                raise _validation_error(
+                    "factor_certificate_prime_must_equal_the_factor_prime",
+                    "factor certificate prime must equal the factor prime",
+                )
         return self
 
 
@@ -1220,7 +1416,10 @@ class PrimalityCertificateRequest(StrictModel):
         from jacobian.canonical import parse_canonical_integer
 
         if parse_canonical_integer(self.value) < 2:
-            raise ValueError("primality certificate requires an integer at least 2")
+            raise _validation_error(
+                "primality_certificate_requires_an_integer_at_least_2",
+                "primality certificate requires an integer at least 2",
+            )
         return self
 
 
@@ -1236,24 +1435,39 @@ class PrimalityCertificateResult(StrictModel):
         from jacobian.canonical import parse_canonical_integer
 
         if self.status == "CERTIFIED" and self.certificate is None:
-            raise ValueError("CERTIFIED status requires a certificate")
+            raise _validation_error(
+                "certified_status_requires_a_certificate",
+                "CERTIFIED status requires a certificate",
+            )
         if self.status == "COMPOSITE" and self.certificate is not None:
-            raise ValueError("COMPOSITE status must not carry a certificate")
+            raise _validation_error(
+                "composite_status_must_not_carry_a_certificate",
+                "COMPOSITE status must not carry a certificate",
+            )
         value_int = parse_canonical_integer(self.value)
         if self.status == "COMPOSITE":
             from sympy import isprime
 
             if isprime(value_int):
-                raise ValueError("COMPOSITE status requires a composite value")
+                raise _validation_error(
+                    "composite_status_requires_a_composite_value",
+                    "COMPOSITE status requires a composite value",
+                )
         if self.status == "CERTIFIED":
             assert self.certificate is not None
             cert_prime = parse_canonical_integer(self.certificate.prime)
             if cert_prime != value_int:
-                raise ValueError("certificate prime must match the candidate value")
+                raise _validation_error(
+                    "certificate_prime_must_match_the_candidate_value",
+                    "certificate prime must match the candidate value",
+                )
             from sympy import isprime
 
             if not isprime(value_int):
-                raise ValueError("CERTIFIED status requires a prime value")
+                raise _validation_error(
+                    "certified_status_requires_a_prime_value",
+                    "CERTIFIED status requires a prime value",
+                )
         return self
 
 

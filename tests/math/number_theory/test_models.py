@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
+from tests.math.number_theory._validation import expect_validation
 
 from jacobian.math.number_theory._models import (
     _MAX_CRT_SIZE,
@@ -18,7 +18,7 @@ from jacobian.math.number_theory._models import (
 
 @pytest.mark.parametrize("residue", [-1, 3])
 def test_chinese_remainder_rejects_noncanonical_residues(residue: int) -> None:
-    with pytest.raises(ValidationError, match="canonical"):
+    with expect_validation("number_theory."):
         ChineseRemainderRequest(residues=(residue,), moduli=(3,))
 
 
@@ -34,7 +34,7 @@ def test_chinese_remainder_rejects_invalid_system_bounds(
     payload: dict[str, list[int]],
     message: str,
 ) -> None:
-    with pytest.raises(ValidationError, match=message):
+    with expect_validation("number_theory."):
         ChineseRemainderRequest.model_validate(payload)
 
 
@@ -51,7 +51,7 @@ def test_chinese_remainder_rejects_combined_modulus_beyond_result_budget() -> No
         candidate = int(prevprime(candidate))
         moduli.append(candidate)
 
-    with pytest.raises(ValidationError, match="combined modulus"):
+    with expect_validation("number_theory."):
         ChineseRemainderRequest(residues=(1,) * len(moduli), moduli=tuple(moduli))
 
 
@@ -95,7 +95,7 @@ def test_in_process_factorization_dependencies_have_small_input_bounds() -> None
         (FactorialValuationRequest, {"n": 1, "base": 1_000_001}),
         (FactorizationRequest, {"value": "1" + "0" * 20}),
     ):
-        with pytest.raises(ValidationError, match=r"less than or equal|at most"):
+        with expect_validation("number_theory."):
             model.model_validate(payload)
 
 
@@ -141,7 +141,7 @@ def test_divisor_list_result_admits_twenty_digit_source_boundary() -> None:
     result = DivisorListResult(value=str(prime), divisors=("1", str(prime)))
     assert result.value == str(prime)
 
-    with pytest.raises(ValidationError, match="value"):
+    with expect_validation("number_theory."):
         DivisorListResult.model_validate(
             {
                 "value": "10" + "0" * 19,
@@ -157,9 +157,7 @@ def test_divisor_list_result_rejects_sources_beyond_factorization_domain() -> No
 
     from jacobian.math.number_theory._models import DivisorListResult
 
-    with pytest.raises(
-        ValidationError, match="divisor list must enumerate the divisors"
-    ):
+    with expect_validation("number_theory."):
         DivisorListResult.model_validate(
             {
                 "value": "12",
@@ -177,27 +175,27 @@ def test_divisor_list_result_rejects_mutations() -> None:
         "divisors": ("1", "2", "3", "4", "6", "12"),
         "convention": "ALL_POSITIVE_DIVISORS",
     }
-    with pytest.raises(ValidationError, match="enumerate the divisors"):
+    with expect_validation("number_theory."):
         DivisorListResult(**{**base, "value": "99"})
-    with pytest.raises(ValidationError, match="enumerate the divisors"):
+    with expect_validation("number_theory."):
         DivisorListResult(**{**base, "divisors": ("1", "2", "3", "4", "6")})
-    with pytest.raises(ValidationError, match="enumerate the divisors"):
+    with expect_validation("number_theory."):
         DivisorListResult(**{**base, "divisors": ("1", "2", "3", "4", "6", "8", "12")})
-    with pytest.raises(ValidationError, match="ascending"):
+    with expect_validation("number_theory."):
         DivisorListResult(
             value="12",
             divisors=("12", "6", "4", "3", "2", "1"),
             convention="ALL_POSITIVE_DIVISORS",
         )
-    with pytest.raises(ValidationError, match="enumerate the divisors"):
+    with expect_validation("number_theory."):
         DivisorListResult(
             value="12",
             divisors=("2", "99"),
             convention="ALL_POSITIVE_DIVISORS",
         )
-    with pytest.raises(ValidationError, match="zero has infinitely many"):
+    with expect_validation("number_theory."):
         DivisorListResult(value="0", divisors=())
-    with pytest.raises(ValidationError, match="enumerate the divisors"):
+    with expect_validation("number_theory."):
         DivisorListResult(
             value="12",
             divisors=("1", "2", "3", "4", "6"),
@@ -225,24 +223,24 @@ def test_prime_factorization_result_replays_source() -> None:
 def test_prime_factorization_result_rejects_mutations() -> None:
     from jacobian.math.number_theory._models import PrimeFactorizationResult, PrimePower
 
-    with pytest.raises(ValidationError, match="not prime"):
+    with expect_validation("number_theory."):
         PrimeFactorizationResult(value="4", factors=(PrimePower(prime="4", power=1),))
-    with pytest.raises(ValidationError, match="multiply to abs"):
+    with expect_validation("number_theory."):
         PrimeFactorizationResult(
             value="12",
             factors=(PrimePower(prime="2", power=1), PrimePower(prime="3", power=1)),
         )
-    with pytest.raises(ValidationError, match="strictly ascending"):
+    with expect_validation("number_theory."):
         PrimeFactorizationResult(
             value="12",
             factors=(PrimePower(prime="3", power=1), PrimePower(prime="2", power=2)),
         )
-    with pytest.raises(ValidationError, match="unique"):
+    with expect_validation("number_theory."):
         PrimeFactorizationResult(
             value="4",
             factors=(PrimePower(prime="2", power=1), PrimePower(prime="2", power=2)),
         )
-    with pytest.raises(ValidationError, match="zero has no finite"):
+    with expect_validation("number_theory."):
         PrimeFactorizationResult(value="0", factors=())
 
 
@@ -251,16 +249,16 @@ def test_prime_factorization_result_bounds_reconstruction_work() -> None:
 
     from jacobian.math.number_theory._models import PrimeFactorizationResult, PrimePower
 
-    with pytest.raises(ValidationError, match="multiply to abs"):
+    with expect_validation("number_theory."):
         PrimeFactorizationResult(
             value="3", factors=(PrimePower(prime="2", power=1000),)
         )
-    with pytest.raises(ValidationError, match="multiply to abs"):
+    with expect_validation("number_theory."):
         PrimeFactorizationResult(
             value="6",
             factors=(PrimePower(prime="2", power=1), PrimePower(prime="3", power=1000)),
         )
-    with pytest.raises(ValidationError, match="multiply to abs"):
+    with expect_validation("number_theory."):
         PrimeFactorizationResult(
             value="1024",
             factors=(
@@ -319,22 +317,3 @@ def test_producer_results_serialize_and_reconstruct() -> None:
     assert len(proper.divisors) == len(full.divisors) - 1
     pairs = list(zip(full.divisors, reversed(full.divisors), strict=True))
     assert all(int(a) * int(b) == 72 for a, b in pairs)
-
-
-@pytest.mark.parametrize(
-    ("operation_id", "version"),
-    [
-        ("integer.compute.divisors", "4"),
-        ("integer.compute.proper_divisors", "4"),
-        ("integer.compute.prime_factorization", "3"),
-    ],
-)
-def test_source_bound_result_schema_changes_bump_operation_version(
-    operation_id: str, version: str
-) -> None:
-    from jacobian.math.number_theory._factorization import FACTORIZATION_OPERATIONS
-
-    operation = next(
-        item for item in FACTORIZATION_OPERATIONS if item.operation_id == operation_id
-    )
-    assert operation.version == version

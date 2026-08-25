@@ -33,11 +33,9 @@ def _op[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -94,7 +92,6 @@ GRAPHICAL_MODEL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
-        version="2",
     ),
     _op(
         "graphical_model.factor.marginalize",
@@ -118,7 +115,6 @@ GRAPHICAL_MODEL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
-        version="2",
     ),
     _op(
         "graphical_model.d_separation.compute",
@@ -145,7 +141,6 @@ GRAPHICAL_MODEL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
-        version="2",
     ),
 )
 

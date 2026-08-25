@@ -95,7 +95,6 @@ def _residue_image(
         first_assignments.setdefault(residue, assignment)
     image = tuple(sorted(counts))
     return ModularPolynomialResidueImageResult(
-        semantics_version="modular-polynomial-residue-image.v1",
         modulus=request.modulus,
         variable_order=tuple(variable.name for variable in request.variables),
         domains=tuple(variable.residues for variable in request.variables),

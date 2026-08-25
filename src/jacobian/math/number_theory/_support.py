@@ -18,13 +18,11 @@ def number_theory_operation[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "2",
 ) -> MathTool[RequestT, ResultT]:
     """Declare one number-theory math tool."""
 
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_type,

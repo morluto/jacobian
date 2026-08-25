@@ -52,12 +52,10 @@ def _op[RequestT: StrictModel, ResultT: StrictModel](
     result_model: type[ResultT],
     operation: Callable[[RequestT], ResultT],
     *tags: str,
-    version: str = "1",
     examples: tuple[OperationExample, ...] = (),
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -128,7 +126,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "combinatorics",
         "incidence",
         "exact",
-        version="2",
         examples=(
             example(
                 "triangle_t1",

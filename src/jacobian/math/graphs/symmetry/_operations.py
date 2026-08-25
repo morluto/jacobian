@@ -8,16 +8,13 @@ import networkx as nx
 
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
+from jacobian.math.graphs.symmetry._edges import canonical_edge
 from jacobian.math.graphs.symmetry._models import (
     GraphEdgeOrbit,
     GraphSymmetryOrbitRequest,
     GraphSymmetryOrbitResult,
     GraphVertexOrbit,
 )
-
-
-def _canonical_edge(left: str, right: str) -> tuple[str, str]:
-    return (left, right) if left < right else (right, left)
 
 
 def _orbit_components[Element: Hashable](
@@ -76,7 +73,7 @@ def _declared_orbit_partitions(
     edges = tuple(sorted(request.graph.graph.edges))
     vertex_actions = tuple(dict(generator.mapping) for generator in request.generators)
     edge_actions = tuple(
-        {edge: _canonical_edge(mapping[edge[0]], mapping[edge[1]]) for edge in edges}
+        {edge: canonical_edge(mapping[edge[0]], mapping[edge[1]]) for edge in edges}
         for mapping in vertex_actions
     )
     return (
@@ -127,7 +124,6 @@ def _generator_orbits(
 GRAPH_SYMMETRY_OPERATIONS: MathTools = (
     MathTool(
         operation_id="graph.symmetry.generator_orbits.compute",
-        version="7",
         title="Exact declared graph-symmetry orbit partitions",
         description=(
             "Validate explicit color-preserving graph automorphism generators "

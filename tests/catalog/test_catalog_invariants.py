@@ -106,4 +106,4 @@ def test_search_browse_and_inspect_results_stay_within_the_public_catalog() -> N
 
     assert inspected is not None
     assert inspected.operation_id == "integer.compute.extended_gcd"
-    assert inspected.version == "2"
+    assert "version" not in inspected.model_dump(mode="json")

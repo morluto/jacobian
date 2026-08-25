@@ -142,7 +142,6 @@ async def inspect(
             + hashlib.sha256(
                 canonicalize_json(
                     {
-                        "catalog_version": catalog["catalog_version"],
                         "operations": catalog["operations"],
                     }
                 )
@@ -186,7 +185,6 @@ async def inspect(
             },
             "tool_names": sorted(tool_names),
             "catalog": {
-                "catalog_version": catalog["catalog_version"],
                 "operations": len(operation_ids),
                 "catalog_digest": catalog_digest,
                 "sha256": hashlib.sha256(catalog_text.encode("utf-8")).hexdigest(),

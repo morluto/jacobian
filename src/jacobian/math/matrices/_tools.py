@@ -62,11 +62,9 @@ def matrix_operation[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -132,7 +130,6 @@ MATRIX_DETERMINANT_COMPUTE = matrix_operation(
             },
         ),
     ),
-    version="3",
 )
 
 MATRIX_OPERATIONS = (
@@ -177,7 +174,6 @@ MATRIX_OPERATIONS = (
                 },
             ),
         ),
-        version="2",
     ),
     matrix_operation(
         "matrix.rational_linear_system.solve",
@@ -235,7 +231,6 @@ MATRIX_OPERATIONS = (
                 },
             ),
         ),
-        version="3",
     ),
     matrix_operation(
         "matrix.adjugate.compute",
@@ -458,7 +453,6 @@ MATRIX_OPERATIONS = (
                 },
             ),
         ),
-        version="2",
     ),
     matrix_operation(
         "matrix.characteristic_polynomial.compute",
@@ -530,7 +524,6 @@ MATRIX_OPERATIONS = (
                 {"matrix": {"entries": [["2", "4"], ["6", "8"]]}},
             ),
         ),
-        version="2",
     ),
     matrix_operation(
         "matrix.permanent.compute",

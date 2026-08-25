@@ -14,6 +14,7 @@ from jacobian.math.graphs.directed._operations import compute_reachability
 from jacobian.math.probability._gaussian_inputs import (
     CanonicalGaussianPolynomialMomentRequest,
 )
+from jacobian.math.probability._gaussian_moments import gaussian_univariate_moment
 from jacobian.math.probability._models import (
     DirectedBondConnectionProbabilityRequest,
     DirectedBondConnectionProbabilityResult,
@@ -61,15 +62,6 @@ def _fmpq(value: CanonicalRational) -> Any:
 
 def _complex_wire(value: tuple[Any, Any]) -> ExactComplexRational:
     return ExactComplexRational(real=_wire(value[0]), imaginary=_wire(value[1]))
-
-
-def _gaussian_univariate_moment(exponent: int) -> int:
-    if exponent % 2:
-        return 0
-    result = 1
-    for factor in range(1, exponent, 2):
-        result *= factor
-    return result
 
 
 def _distribution(values: dict[Fraction, Any]) -> FiniteRationalDistribution:
@@ -313,7 +305,7 @@ def _gaussian_polynomial_moment(
     total = (zero, zero)
     for exponents, coefficient in sorted(expanded.items()):
         variable_factors = tuple(
-            _gaussian_univariate_moment(exponent) for exponent in exponents
+            gaussian_univariate_moment(exponent) for exponent in exponents
         )
         gaussian_factor = 1
         for factor in variable_factors:
@@ -566,7 +558,6 @@ _SQUARE_GRAPH = {
 FINITE_PROBABILITY_OPERATIONS = (
     MathTool(
         operation_id="probability.finite_distribution.raw_moment.compute",
-        version="2",
         title="Exact finite-distribution raw moment",
         description=(
             "Compute one bounded raw moment of a normalized finite exact "
@@ -599,7 +590,6 @@ FINITE_PROBABILITY_OPERATIONS = (
     ),
     MathTool(
         operation_id="probability.finite_distribution.event_probability.compute",
-        version="2",
         title="Exact finite-event probability",
         description=(
             "Sum the exact mass of one explicit subset of a canonical finite "
@@ -633,7 +623,6 @@ FINITE_PROBABILITY_OPERATIONS = (
     ),
     MathTool(
         operation_id="probability.finite_distribution.condition.compute",
-        version="2",
         title="Condition an exact finite distribution",
         description=(
             "Normalize one explicit positive-mass event of a canonical finite "
@@ -656,7 +645,6 @@ FINITE_PROBABILITY_OPERATIONS = (
     ),
     MathTool(
         operation_id="probability.finite_distribution.pushforward.compute",
-        version="2",
         title="Push forward an exact finite distribution",
         description=(
             "Apply one explicit total rational lookup map and exactly aggregate "
@@ -709,7 +697,6 @@ FINITE_PROBABILITY_OPERATIONS = (
     ),
     MathTool(
         operation_id="probability.finite_distribution.convolution.compute",
-        version="2",
         title="Convolve two exact finite distributions",
         description=(
             "Compute the bounded product-measure distribution of the sum of "
@@ -741,7 +728,6 @@ FINITE_PROBABILITY_OPERATIONS = (
     ),
     MathTool(
         operation_id="probability.gaussian_polynomial.moment.compute",
-        version="2",
         title="Exact bounded Gaussian polynomial moment",
         description=(
             "Compute one fixed-order exact moment of a bounded sparse complex-"
@@ -794,7 +780,6 @@ FINITE_PROBABILITY_OPERATIONS = (
     ),
     MathTool(
         operation_id="probability.graph_reliability.connection_probability.compute",
-        version="2",
         title="Exact small-graph terminal connection probability",
         description=(
             "Compute the exact probability that two explicit terminals are "
@@ -852,7 +837,6 @@ FINITE_PROBABILITY_OPERATIONS = (
         operation_id=(
             "probability.digraph_bond_reliability.connection_probability.compute"
         ),
-        version="1",
         title="Exact finite directed bond connection probability",
         description=(
             "Compute the exact probability of a directed path from one stated "

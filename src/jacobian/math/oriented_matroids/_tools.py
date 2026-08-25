@@ -25,7 +25,6 @@ _ALTERNATING_RANK3_EXAMPLE: dict[str, Any] = {
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="oriented_matroid.chirotope.check",
-        version="1",
         title="Check a complete uniform rank-3 chirotope",
         description=(
             "Exhaustively validate the complete rank-3 B2 exchange axiom of one "

@@ -13,7 +13,6 @@ from jacobian.math.graphs.patterns._operations import (
 TOOLS: MathTools = (
     MathTool(
         operation_id="graph.induced_vertex_subset_pattern.count",
-        version="1",
         title="Count induced vertex-subset copies of a graph pattern",
         description=(
             "Count host vertex subsets whose induced simple graph is isomorphic "

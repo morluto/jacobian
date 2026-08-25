@@ -10,7 +10,6 @@ from jacobian.math.graphs.optimization._tools import TOOLS
 
 def _graph_payload(graph: nx.Graph[str]) -> dict[str, object]:
     return {
-        "graph_schema_version": "1",
         "vertices": sorted(graph),
         "edges": sorted(sorted(edge) for edge in graph.edges()),
     }

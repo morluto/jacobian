@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.optimization._coloring_models import (
@@ -66,17 +67,27 @@ def _validate_distance_matrix_shape(
 ) -> int:
     order = len(vertices)
     if tuple(sorted(vertices)) != vertices or len(set(vertices)) != order:
-        raise ValueError("distance-matrix vertices must be unique and sorted")
+        raise PydanticCustomError(
+            "graph.distance_matrix_vertices_must_be_unique_and_sort",
+            "distance-matrix vertices must be unique and sorted",
+        )
     if len(rows) != order:
-        raise ValueError("distance matrix must declare one labelled row per vertex")
+        raise PydanticCustomError(
+            "graph.distance_matrix_must_declare_one_labelled_row_pe",
+            "distance matrix must declare one labelled row per vertex",
+        )
     for index, row in enumerate(rows):
         if row.source != vertices[index]:
-            raise ValueError(
+            raise PydanticCustomError(
+                "graph.every_distance_matrix_row_carry_canonical_vertex",
                 "every distance-matrix row must carry the canonical vertex "
-                "label at its position"
+                "label at its position",
             )
         if len(row.distances) != order:
-            raise ValueError("distance matrix must be square on the declared vertices")
+            raise PydanticCustomError(
+                "graph.distance_matrix_must_be_square_on_the_declared_v",
+                "distance matrix must be square on the declared vertices",
+            )
     return order
 
 
@@ -90,11 +101,20 @@ def _validate_distance_matrix_diagonal_and_symmetry(
             distance = row[target]
             if source == target:
                 if distance != 0:
-                    raise ValueError("distance-matrix diagonal must be zero")
+                    raise PydanticCustomError(
+                        "graph.distance_matrix_diagonal_must_be_zero",
+                        "distance-matrix diagonal must be zero",
+                    )
             elif distance == 0:
-                raise ValueError("off-diagonal distances must be positive or null")
+                raise PydanticCustomError(
+                    "graph.off_diagonal_distances_must_be_positive_or_null",
+                    "off-diagonal distances must be positive or null",
+                )
             if distance != rows[target].distances[source]:
-                raise ValueError("undirected distance matrix must be symmetric")
+                raise PydanticCustomError(
+                    "graph.undirected_distance_matrix_must_be_symmetric",
+                    "undirected distance matrix must be symmetric",
+                )
 
 
 def _validate_distance_matrix_triangle_inequality(
@@ -113,9 +133,10 @@ def _validate_distance_matrix_triangle_inequality(
                     continue
                 direct = matrix[source][target]
                 if direct is None or direct > left + right:
-                    raise ValueError(
+                    raise PydanticCustomError(
+                        "graph.finite_distances_satisfy_component_closure_triangle_inequality",
                         "finite distances must satisfy component closure and "
-                        "the triangle inequality"
+                        "the triangle inequality",
                     )
 
 
@@ -127,7 +148,6 @@ class GraphDistanceMatrixResult(StrictModel):
     authoritative vertex sequence.
     """
 
-    semantics_version: Literal["unweighted-shortest-path-distance-matrix.v2"]
     vertex_ordering: Literal["LEXICOGRAPHIC_ASCENDING"]
     pair_coverage: Literal["ALL_ORDERED_VERTEX_PAIRS"]
     unreachable_representation: Literal["JSON_NULL"]
@@ -148,7 +168,10 @@ class GraphDistanceMatrixResult(StrictModel):
             distance is not None for row in self.rows for distance in row.distances
         )
         if self.connected != expected_connected:
-            raise ValueError("connected must match all-pairs finite reachability")
+            raise PydanticCustomError(
+                "graph.connected_must_match_all_pairs_finite_reachabili",
+                "connected must match all-pairs finite reachability",
+            )
         return self
 
 

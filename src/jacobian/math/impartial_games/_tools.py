@@ -44,12 +44,10 @@ def _op[
     result_model: type[ResultT],
     operation: Callable[[RequestT], ResultT],
     *tags: str,
-    version: str = "1",
     examples: tuple[OperationExample, ...],
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -156,7 +154,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "game-theory",
         "nim",
         "exact",
-        version="2",
         examples=(
             example(
                 "nim_sum_1_2_3",

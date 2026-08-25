@@ -46,7 +46,6 @@ HERMITE_NORMAL_FORM_OPERATION: MathTool[
     HermiteNormalFormResult,
 ] = MathTool(
     operation_id="lattice.hermite_normal_form.compute",
-    version="1",
     title="Compute an exact row Hermite normal form",
     description=("Compute H and U for one bounded integer matrix with H = U A."),
     request_type=HermiteNormalFormRequest,

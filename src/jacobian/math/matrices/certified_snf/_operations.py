@@ -31,7 +31,6 @@ def _certified_smith(
 CERTIFIED_SNF_OPERATIONS: MathTools = (
     MathTool(
         operation_id="matrix.normal_form.smith.certified.compute",
-        version="4",
         title="Compute a transformation-certified Smith normal form",
         description=(
             "Compute the canonical Smith diagonal D and explicit unimodular "

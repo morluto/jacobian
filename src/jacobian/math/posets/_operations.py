@@ -312,7 +312,6 @@ _DIAMOND: dict[str, Any] = {
 }
 
 _MATERIALIZED_DIAMOND: dict[str, Any] = {
-    "poset_format": "jacobian.finite-poset/v1",
     "elements": ["0", "1", "a", "b"],
     "strict_order_pairs": [
         {"lower": "0", "upper": "1"},
@@ -337,7 +336,7 @@ _MATERIALIZED_DIAMOND: dict[str, Any] = {
         {"element": "a", "rank": 1},
         {"element": "b", "rank": 1},
     ],
-    "poset_digest": "sha256:bb8df218b7f750edddcb9259c6aff4ca7128e1d1e73bd092306c350583ab8e96",
+    "poset_digest": "sha256:55e795bf7924508b0aa0efe1d0cf32371858ff8b122c890d3eba357dfe2a3374",
 }
 
 
@@ -401,7 +400,6 @@ def _dual(request: PosetDualRequest) -> PosetDualResult:
         ranks=dual_ranks_sorted,
     )
     new_poset = FinitePoset(
-        poset_format="jacobian.finite-poset/v1",
         elements=elements,
         strict_order_pairs=order_pairs_obj,
         cover_relations=cover_pairs_obj,
@@ -500,7 +498,6 @@ def _antichain_profile(
 FINITE_POSET_OPERATIONS: MathTools = (
     MathTool(
         operation_id="poset.finite.compute",
-        version="4",
         title="Compute a canonical finite poset",
         description=(
             "Validate exact cover edges or a complete comparable relation and "
@@ -542,7 +539,6 @@ FINITE_POSET_OPERATIONS: MathTools = (
     ),
     MathTool(
         operation_id="poset.width.compute",
-        version="4",
         title="Compute finite-poset width with dual witnesses",
         description=(
             "Return an exact maximum antichain and a same-size minimum chain "
@@ -571,7 +567,6 @@ FINITE_POSET_OPERATIONS: MathTools = (
     ),
     MathTool(
         operation_id="poset.linear_extensions.count",
-        version="4",
         title="Count linear extensions of a bounded finite poset",
         description=("Count every linear extension of a bounded finite poset exactly."),
         request_type=LinearExtensionRequest,
@@ -599,7 +594,6 @@ FINITE_POSET_OPERATIONS: MathTools = (
     ),
     MathTool(
         operation_id="poset.mobius_function.compute",
-        version="3",
         title="Compute finite-poset Möbius values",
         description=(
             "Return exact incidence-algebra Möbius values for either every "
@@ -636,7 +630,6 @@ FINITE_POSET_OPERATIONS: MathTools = (
     ),
     MathTool(
         operation_id="poset.closure.compute",
-        version="1",
         title="Compute ideal or filter closure of a subset",
         description=(
             "Return the lower (ideal) or upper (filter) closure of a given "
@@ -666,7 +659,6 @@ FINITE_POSET_OPERATIONS: MathTools = (
     ),
     MathTool(
         operation_id="poset.zeta_transform.compute",
-        version="1",
         title="Compute the zeta transform of a function on a poset",
         description=(
             "Apply the incidence-algebra zeta transform to a function "
@@ -699,7 +691,6 @@ FINITE_POSET_OPERATIONS: MathTools = (
     ),
     MathTool(
         operation_id="poset.incidence_convolution.compute",
-        version="1",
         title="Convolve two incidence-algebra functions on a poset",
         description=(
             "Compute the incidence-algebra convolution of two functions "
@@ -748,7 +739,6 @@ FINITE_POSET_OPERATIONS: MathTools = (
     ),
     MathTool(
         operation_id="poset.antichain_profile.compute",
-        version="1",
         title="Compute the antichain profile of a finite poset",
         description=(
             "Return the maximum antichain size, total antichain count, and "

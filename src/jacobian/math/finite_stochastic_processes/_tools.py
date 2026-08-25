@@ -40,11 +40,9 @@ def _op[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -84,7 +82,6 @@ FINIT_STOCHASTIC_PROCESS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {"space": _SPACE, "observation": ["heads", "tails"]},
             ),
         ),
-        version="2",
     ),
     _op(
         "probability.finite_sigma_algebra.join.compute",
@@ -108,7 +105,6 @@ FINIT_STOCHASTIC_PROCESS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
-        version="2",
     ),
     _op(
         "probability.conditional_expectation.finite.compute",
@@ -135,7 +131,6 @@ FINIT_STOCHASTIC_PROCESS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
-        version="2",
     ),
     _op(
         "probability.filtration.natural.compute",
@@ -155,7 +150,6 @@ FINIT_STOCHASTIC_PROCESS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {"space": _SPACE, "observations": [["heads", "tails"]]},
             ),
         ),
-        version="2",
     ),
     _op(
         "probability.process.doob_martingale.compute",
@@ -180,7 +174,6 @@ FINIT_STOCHASTIC_PROCESS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
-        version="2",
     ),
 )
 

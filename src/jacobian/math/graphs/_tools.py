@@ -37,7 +37,6 @@ def _decode(request: Graph6DecodeRequest) -> Graph6DecodeValue:
 TOOLS: MathTools = (
     MathTool(
         operation_id="graph.encoding.graph6.decode.compute",
-        version="1",
         title="Decode canonical small-order graph6",
         description=(
             "Decode a headerless or standard-header graph6 string of order at "

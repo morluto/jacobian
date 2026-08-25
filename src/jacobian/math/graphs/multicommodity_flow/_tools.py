@@ -13,7 +13,6 @@ from jacobian.math.graphs.multicommodity_flow._operations import (
 TOOLS: MathTools = (
     MathTool(
         operation_id="network.multicommodity_flow.profile.compute",
-        version="1",
         title="Compute an exact multicommodity-flow profile",
         description=(
             "Compute exact commodity conservation, aggregate edge loads, signed "

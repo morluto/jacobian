@@ -31,11 +31,9 @@ def graph_spectral_operation[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -73,7 +71,6 @@ GRAPH_SPECTRAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
-        version="2",
     ),
     graph_spectral_operation(
         "graph.spectrum.laplacian.compute",
@@ -99,7 +96,6 @@ GRAPH_SPECTRAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
-        version="2",
     ),
     graph_spectral_operation(
         "graph.spectrum.adjacency.characteristic_polynomial.compute",

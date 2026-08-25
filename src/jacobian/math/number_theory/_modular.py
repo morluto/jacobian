@@ -182,7 +182,6 @@ MODULAR_OPERATIONS = (
         solve_chinese_remainder,
         "number-theory",
         "modular",
-        version="3",
         examples=(
             example(
                 "crt_2_mod_3_3_mod_5",

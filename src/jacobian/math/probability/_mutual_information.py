@@ -7,6 +7,7 @@ from fractions import Fraction
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, StrictInt, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
     CanonicalInteger,
@@ -31,6 +32,11 @@ from jacobian.math.probability.values import (
     MAX_MUTUAL_INFORMATION_MARGINAL_DIGITS,
     MAX_MUTUAL_INFORMATION_PRODUCT_DIGITS,
 )
+
+
+def _validation_error(message: str) -> PydanticCustomError:
+    return PydanticCustomError("probability.mutual_information_invariant", message)
+
 
 FiniteJointLabel = Annotated[
     str,
@@ -68,7 +74,7 @@ def _bound_raw_probability_cell(cell: object) -> None:
             isinstance(raw_component, str)
             and len(raw_component.lstrip("-")) > MAX_INPUT_RATIONAL_DIGITS
         ):
-            raise ValueError(
+            raise _validation_error(
                 "joint-table probability exceeds the "
                 f"{MAX_INPUT_RATIONAL_DIGITS}-digit bound"
             )
@@ -78,7 +84,7 @@ def _bound_raw_probability_row(row: object) -> int:
     if not isinstance(row, (list, tuple)):
         return 0
     if len(row) > MAX_FINITE_JOINT_TABLE_COLUMNS:
-        raise ValueError("joint table exceeds the bounded column count")
+        raise _validation_error("joint table exceeds the bounded column count")
     for cell in row:
         _bound_raw_probability_cell(cell)
     return len(row)
@@ -91,12 +97,12 @@ def _bound_raw_probability_matrix(value: Any) -> Any:
     if not isinstance(raw_table, (list, tuple)):
         return value
     if len(raw_table) > MAX_FINITE_JOINT_TABLE_ROWS:
-        raise ValueError("joint table exceeds the bounded row count")
+        raise _validation_error("joint table exceeds the bounded row count")
     cell_count = 0
     for row in raw_table:
         cell_count += _bound_raw_probability_row(row)
         if cell_count > MAX_FINITE_JOINT_TABLE_CELLS:
-            raise ValueError("joint table exceeds the bounded cell count")
+            raise _validation_error("joint table exceeds the bounded cell count")
     prepared = dict(value)
     for field_name in ("row_labels", "column_labels"):
         raw_labels = prepared.get(field_name)
@@ -122,7 +128,7 @@ def _bound_raw_rational(
             isinstance(raw_component, str)
             and len(raw_component.lstrip("-")) > max_digits
         ):
-            raise ValueError(f"{label} exceeds the {max_digits}-digit bound")
+            raise _validation_error(f"{label} exceeds the {max_digits}-digit bound")
 
 
 def _bound_raw_result_rationals(value: Mapping[str, object]) -> None:
@@ -179,11 +185,11 @@ def _require_native_probability_shape(
     probabilities: tuple[tuple[object, ...], ...],
 ) -> None:
     if len(probabilities) != len(row_labels):
-        raise ValueError("joint-table row count must match row labels")
+        raise _validation_error("joint-table row count must match row labels")
     if any(len(row) != len(column_labels) for row in probabilities):
-        raise ValueError("joint-table rows must match column labels")
+        raise _validation_error("joint-table rows must match column labels")
     if len(row_labels) * len(column_labels) > MAX_FINITE_JOINT_TABLE_CELLS:
-        raise ValueError("joint table exceeds the bounded cell count")
+        raise _validation_error("joint table exceeds the bounded cell count")
 
 
 def _require_native_probability_values(
@@ -195,10 +201,10 @@ def _require_native_probability_values(
             if type(probability) is not Fraction:
                 raise TypeError("native joint-table probabilities must be Fractions")
             if probability < 0:
-                raise ValueError("joint-table probabilities must be nonnegative")
+                raise _validation_error("joint-table probabilities must be nonnegative")
             total += probability
     if total != 1:
-        raise ValueError("joint-table probabilities must sum exactly to 1")
+        raise _validation_error("joint-table probabilities must sum exactly to 1")
 
 
 class FiniteJointTableMutualInformationRequest(StrictModel):
@@ -227,9 +233,9 @@ class FiniteJointTableMutualInformationRequest(StrictModel):
     @model_validator(mode="after")
     def require_normalized_rectangular_table(self) -> Self:
         if len(set(self.row_labels)) != len(self.row_labels):
-            raise ValueError("joint-table row labels must be unique")
+            raise _validation_error("joint-table row labels must be unique")
         if len(set(self.column_labels)) != len(self.column_labels):
-            raise ValueError("joint-table column labels must be unique")
+            raise _validation_error("joint-table column labels must be unique")
         _require_native_probability_shape(
             self.row_labels,
             self.column_labels,
@@ -245,10 +251,12 @@ class FiniteJointTableMutualInformationRequest(StrictModel):
                 )
                 native = probability.as_fraction()
                 if native < 0:
-                    raise ValueError("joint-table probabilities must be nonnegative")
+                    raise _validation_error(
+                        "joint-table probabilities must be nonnegative"
+                    )
                 total += native
         if total != 1:
-            raise ValueError("joint-table probabilities must sum exactly to 1")
+            raise _validation_error("joint-table probabilities must sum exactly to 1")
         return self
 
     def as_native(self) -> FiniteJointTable:
@@ -288,9 +296,13 @@ class MutualInformationLogProductCertificate(StrictModel):
     @model_validator(mode="after")
     def require_positive_scale_and_product(self) -> Self:
         if parse_canonical_integer(self.scale) <= 0:
-            raise ValueError("mutual-information certificate scale must be positive")
+            raise _validation_error(
+                "mutual-information certificate scale must be positive"
+            )
         if self.product.as_fraction() <= 0:
-            raise ValueError("mutual-information certificate product must be positive")
+            raise _validation_error(
+                "mutual-information certificate product must be positive"
+            )
         return self
 
 
@@ -330,13 +342,15 @@ class FiniteJointTableMutualInformationResult(StrictModel):
         for field_name, maximum in bounds.items():
             raw = value.get(field_name)
             if isinstance(raw, (list, tuple)) and len(raw) > maximum:
-                raise ValueError(f"{field_name} exceeds the bounded result cardinality")
+                raise _validation_error(
+                    f"{field_name} exceeds the bounded result cardinality"
+                )
         _bound_raw_result_rationals(value)
         certificate = value.get("log_product_certificate")
         if isinstance(certificate, Mapping):
             scale = certificate.get("scale")
             if isinstance(scale, str) and len(scale.lstrip("-")) > 309:
-                raise ValueError(
+                raise _validation_error(
                     "mutual-information certificate scale exceeds the replay bound"
                 )
         return value
@@ -347,23 +361,33 @@ class FiniteJointTableMutualInformationResult(StrictModel):
             (term.row_index, term.column_index) for term in self.positive_support
         )
         if positions != tuple(sorted(set(positions))):
-            raise ValueError("positive support must be unique and row-major ordered")
+            raise _validation_error(
+                "positive support must be unique and row-major ordered"
+            )
         for term in self.positive_support:
             if term.row_index >= len(self.row_marginals):
-                raise ValueError("positive support row index lies outside the result")
+                raise _validation_error(
+                    "positive support row index lies outside the result"
+                )
             if term.column_index >= len(self.column_marginals):
-                raise ValueError(
+                raise _validation_error(
                     "positive support column index lies outside the result"
                 )
             if term.row_marginal != self.row_marginals[term.row_index]:
-                raise ValueError("positive support row marginal is inconsistent")
+                raise _validation_error("positive support row marginal is inconsistent")
             if term.column_marginal != self.column_marginals[term.column_index]:
-                raise ValueError("positive support column marginal is inconsistent")
+                raise _validation_error(
+                    "positive support column marginal is inconsistent"
+                )
         product = self.log_product_certificate.product.as_fraction()
         if self.sign != ("ZERO" if product == 1 else "POSITIVE"):
-            raise ValueError("mutual-information sign must match the exact product")
+            raise _validation_error(
+                "mutual-information sign must match the exact product"
+            )
         if product < 1:
-            raise ValueError("mutual-information product contradicts nonnegativity")
+            raise _validation_error(
+                "mutual-information product contradicts nonnegativity"
+            )
         return self
 
     @classmethod
@@ -420,7 +444,6 @@ def compute_mutual_information(
 
 MUTUAL_INFORMATION_OPERATION = MathTool(
     operation_id="probability.joint.mutual_information.compute",
-    version="1",
     title="Exact finite-table mutual information certificate",
     description=(
         "Compute ordered marginals and every positive-support likelihood "

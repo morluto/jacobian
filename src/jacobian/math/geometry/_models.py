@@ -8,6 +8,7 @@ from itertools import combinations
 from typing import Literal, Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
@@ -16,6 +17,14 @@ from jacobian._exact import (
 )
 from jacobian._models import StrictModel
 from jacobian.canonical import encode_strict_json, format_canonical_integer
+from jacobian.math.geometry._predicates import are_collinear, determinant4
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable error owned by the geometry contracts."""
+
+    return PydanticCustomError(f"geometry.{reason}", message)
+
 
 MAX_CONFIGURATION_POINTS = 32
 MAX_COORDINATE_DIGITS = 256
@@ -69,12 +78,13 @@ def _require_general_position_work_bound(
     quadruples = n * (n - 1) * (n - 2) * (n - 3) // 24
     work = quadruples * max_digits * max_digits
     if work > _MAX_GENERAL_POSITION_DETERMINANT_WORK:
-        raise ValueError(
+        raise _validation_error(
+            "general_position_search_n_points_max",
             f"general-position search with {n} points and {max_digits}-digit "
             f"coordinates exceeds the exhaustive work bound "
             f"(C(n,4)*digits^2={work} > "
             f"{_MAX_GENERAL_POSITION_DETERMINANT_WORK}); reduce point count "
-            "or coordinate size"
+            "or coordinate size",
         )
 
 
@@ -97,41 +107,14 @@ def _require_circumradius_output_bound(points: tuple[RationalPoint2D, ...]) -> N
     triples = n * (n - 1) * (n - 2) // 6
     estimated_chars = triples * (80 * max_digits + 80)
     if estimated_chars > _MAX_PROFILE_OUTPUT_CHARS:
-        raise ValueError(
+        raise _validation_error(
+            "circumradius_profile_n_points_max_digits",
             f"circumradius profile for {n} points with {max_digits}-digit "
             f"coordinates can serialize up to {estimated_chars} characters "
             f"(worst-case rational growth), exceeding the "
             f"{_MAX_PROFILE_OUTPUT_CHARS}-character output budget; reduce "
-            "point count or coordinate size"
+            "point count or coordinate size",
         )
-
-
-def _is_collinear_frac(
-    a: tuple[Fraction, Fraction],
-    b: tuple[Fraction, Fraction],
-    c: tuple[Fraction, Fraction],
-) -> bool:
-    return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]) == 0
-
-
-def _det3_frac(m: tuple[tuple[Fraction, ...], ...]) -> Fraction:
-    return (
-        m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
-        - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
-        + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
-    )
-
-
-def _det4_frac(m: tuple[tuple[Fraction, ...], ...]) -> Fraction:
-    result = Fraction(0)
-    for col in range(4):
-        sub = tuple(
-            tuple(row[col2] for col2 in range(4) if col2 != col) for row in m[1:]
-        )
-        cofactor = _det3_frac(sub)
-        sign = 1 if col % 2 == 0 else -1
-        result += sign * m[0][col] * cofactor
-    return result
 
 
 def _expected_collinear_indices(
@@ -139,7 +122,7 @@ def _expected_collinear_indices(
 ) -> set[tuple[int, int, int]]:
     result: set[tuple[int, int, int]] = set()
     for i, j, k in combinations(range(len(pts)), 3):
-        if _is_collinear_frac(pts[i], pts[j], pts[k]):
+        if are_collinear(pts[i], pts[j], pts[k]):
             result.add((i, j, k))
     return result
 
@@ -162,7 +145,7 @@ def _expected_concyclic_indices(
             (px * px + py * py, px, py, Fraction(1))
             for px, py in (pts[i], pts[j], pts[k], pts[m])
         )
-        if _det4_frac(rows) == 0:
+        if determinant4(rows) == 0:
             result.add((i, j, k, m))
     return result
 
@@ -171,11 +154,16 @@ def _check_witness_sorted_distinct(
     indices: tuple[int, ...], n: int, expected: int, label: str
 ) -> None:
     if len(indices) != expected or len(set(indices)) != expected:
-        raise ValueError(f"{label} indices must be {expected} distinct values")
+        raise _validation_error(
+            "label_indices_expected_distinct_values",
+            f"{label} indices must be {expected} distinct values",
+        )
     if indices != tuple(sorted(indices)):
-        raise ValueError(f"{label} indices must be sorted")
+        raise _validation_error(
+            "label_indices_sorted", f"{label} indices must be sorted"
+        )
     if any(i >= n for i in indices):
-        raise ValueError("index out of range")
+        raise _validation_error("index_out_range", "index out of range")
 
 
 def _validate_general_position_points(
@@ -183,9 +171,13 @@ def _validate_general_position_points(
 ) -> None:
     keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in points)
     if len(keys) != len(set(keys)):
-        raise ValueError("point-set coordinates must be unique")
+        raise _validation_error(
+            "point_set_coordinates_unique", "point-set coordinates must be unique"
+        )
     if num_points != len(points):
-        raise ValueError("num_points must equal len(points)")
+        raise _validation_error(
+            "num_points_len_points", "num_points must equal len(points)"
+        )
 
 
 def _validate_general_position_witnesses(
@@ -200,17 +192,33 @@ def _validate_general_position_witnesses(
     for quad in concyclic:
         _check_witness_sorted_distinct(quad.indices, n, 4, "concyclic quadruple")
     if has_collinear != bool(collinear):
-        raise ValueError("has_collinear_triple must match collinear_triples")
+        raise _validation_error(
+            "has_collinear_triple_collinear_triples",
+            "has_collinear_triple must match collinear_triples",
+        )
     if has_concyclic != bool(concyclic):
-        raise ValueError("has_concyclic_quadruple must match concyclic_quadruples")
+        raise _validation_error(
+            "has_concyclic_quadruple_concyclic_quadruples",
+            "has_concyclic_quadruple must match concyclic_quadruples",
+        )
     if tuple(sorted(collinear, key=lambda w: w.indices)) != collinear:
-        raise ValueError("collinear_triples must be sorted lexicographically")
+        raise _validation_error(
+            "collinear_triples_sorted_lexicographically",
+            "collinear_triples must be sorted lexicographically",
+        )
     if len({w.indices for w in collinear}) != len(collinear):
-        raise ValueError("collinear_triples must be unique")
+        raise _validation_error(
+            "collinear_triples_unique", "collinear_triples must be unique"
+        )
     if tuple(sorted(concyclic, key=lambda w: w.indices)) != concyclic:
-        raise ValueError("concyclic_quadruples must be sorted lexicographically")
+        raise _validation_error(
+            "concyclic_quadruples_sorted_lexicographically",
+            "concyclic_quadruples must be sorted lexicographically",
+        )
     if len({w.indices for w in concyclic}) != len(concyclic):
-        raise ValueError("concyclic_quadruples must be unique")
+        raise _validation_error(
+            "concyclic_quadruples_unique", "concyclic_quadruples must be unique"
+        )
 
 
 def _validate_general_position_binding(
@@ -222,15 +230,17 @@ def _validate_general_position_binding(
     expected_collinear = _expected_collinear_indices(pts)
     actual_collinear = {w.indices for w in collinear}
     if actual_collinear != expected_collinear:
-        raise ValueError(
-            "collinear_triples must exactly match the configuration's collinear triples"
+        raise _validation_error(
+            "collinear_triples_configuration_s_collinear_triples",
+            "collinear_triples must exactly match the configuration's collinear triples",
         )
     expected_concyclic = _expected_concyclic_indices(pts, expected_collinear)
     actual_concyclic = {w.indices for w in concyclic}
     if actual_concyclic != expected_concyclic:
-        raise ValueError(
+        raise _validation_error(
+            "concyclic_quadruples_configuration_s_concyclic_quadruples",
             "concyclic_quadruples must exactly match the configuration's concyclic quadruples "
-            "(excluding collinear quadruples)"
+            "(excluding collinear quadruples)",
         )
 
 
@@ -240,15 +250,23 @@ def _validate_circumradius_entries_basic(
     seen: set[tuple[int, int, int]] = set()
     for e in entries:
         if e.indices in seen:
-            raise ValueError("duplicate triple in circumradius profile")
+            raise _validation_error(
+                "duplicate_triple_circumradius_profile",
+                "duplicate triple in circumradius profile",
+            )
         seen.add(e.indices)
         if any(i >= n for i in e.indices):
-            raise ValueError("index out of range")
+            raise _validation_error("index_out_range", "index out of range")
     if tuple(sorted(entries, key=lambda e: e.indices)) != entries:
-        raise ValueError("entries must be sorted lexicographically")
+        raise _validation_error(
+            "entries_sorted_lexicographically",
+            "entries must be sorted lexicographically",
+        )
     expected = set(combinations(range(n), 3))
     if seen != expected:
-        raise ValueError("entries must cover exactly C(n,3) triples")
+        raise _validation_error(
+            "entries_cover_c_n_triples", "entries must cover exactly C(n,3) triples"
+        )
     return seen
 
 
@@ -265,13 +283,21 @@ def _validate_circumradius_binding(
         cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
         is_deg = cross == 0
         if e.is_degenerate != is_deg:
-            raise ValueError("is_degenerate must match collinearity")
+            raise _validation_error(
+                "degenerate_collinearity", "is_degenerate must match collinearity"
+            )
         if is_deg:
             if e.radius_squared is not None:
-                raise ValueError("degenerate triple cannot have a radius")
+                raise _validation_error(
+                    "degenerate_triple_a_radius",
+                    "degenerate triple cannot have a radius",
+                )
         else:
             if e.radius_squared is None:
-                raise ValueError("non-degenerate triple must have a radius")
+                raise _validation_error(
+                    "non_degenerate_triple_a_radius",
+                    "non-degenerate triple must have a radius",
+                )
             ab_sq = (bx - ax) ** 2 + (by - ay) ** 2
             bc_sq = (cx - bx) ** 2 + (cy - by) ** 2
             ca_sq = (ax - cx) ** 2 + (ay - cy) ** 2
@@ -281,7 +307,10 @@ def _validate_circumradius_binding(
                 expected, max_digits=MAX_COORDINATE_DIGITS * 40, label="circumradius"
             )
             if e.radius_squared != expected:
-                raise ValueError("radius_squared must match exact circumradius")
+                raise _validation_error(
+                    "radius_squared_exact_circumradius",
+                    "radius_squared must match exact circumradius",
+                )
 
 
 class RationalPoint2D(StrictModel):
@@ -397,7 +426,10 @@ class LineRequest(StrictModel):
     @model_validator(mode="after")
     def require_distinct_points(self) -> Self:
         if self.first == self.second:
-            raise ValueError("a line requires two distinct points")
+            raise _validation_error(
+                "a_line_requires_two_distinct_points",
+                "a line requires two distinct points",
+            )
         return self
 
 
@@ -458,9 +490,10 @@ def _require_inversion_admission_bound(value: CanonicalRational, label: str) -> 
         len(value.num.lstrip("-")) > INVERSION_ADMISSION_DIGITS
         or len(value.den.lstrip("-")) > INVERSION_ADMISSION_DIGITS
     ):
-        raise ValueError(
+        raise _validation_error(
+            "label_exceeds_inversion_admission_digits_digit",
             f"{label} exceeds the {INVERSION_ADMISSION_DIGITS}-digit "
-            "circle-inversion admission bound"
+            "circle-inversion admission bound",
         )
 
 
@@ -513,9 +546,15 @@ class CircleInversionRequest(StrictModel):
     @model_validator(mode="after")
     def require_positive_power_and_distinct_point(self) -> Self:
         if self.power.as_fraction() <= 0:
-            raise ValueError("inversion power must be a positive rational")
+            raise _validation_error(
+                "inversion_power_a_positive_rational",
+                "inversion power must be a positive rational",
+            )
         if self.point == self.center:
-            raise ValueError("the point to invert must differ from the center")
+            raise _validation_error(
+                "point_invert_differ_center",
+                "the point to invert must differ from the center",
+            )
 
         # Input-side static bound first: with every admitted component at
         # most INVERSION_ADMISSION_DIGITS digits, the exact inversion below
@@ -535,10 +574,11 @@ class CircleInversionRequest(StrictModel):
         if not _inverted_components_within_bound(
             self.center, self.power, self.point, INVERSION_ADMISSION_DIGITS
         ):
-            raise ValueError(
+            raise _validation_error(
+                "circle_inversion_result_exceeds_f_inversion",
                 "circle inversion result exceeds the "
                 f"{INVERSION_ADMISSION_DIGITS}-digit circle-inversion "
-                "admission bound"
+                "admission bound",
             )
         return self
 
@@ -557,7 +597,10 @@ class CircumcircleRequest(PointTripleRequest):
         points = [self.first, self.second, self.third]
         keys = tuple(_point_key(point) for point in points)
         if len(set(keys)) != len(keys):
-            raise ValueError("circumcircle requires three distinct points")
+            raise _validation_error(
+                "circumcircle_requires_three_distinct_points",
+                "circumcircle requires three distinct points",
+            )
         p0, p1, p2 = points
         x0, y0 = _point_key(p0)
         dx1 = p1.x.as_fraction() - x0
@@ -565,7 +608,10 @@ class CircumcircleRequest(PointTripleRequest):
         dx2 = p2.x.as_fraction() - x0
         dy2 = p2.y.as_fraction() - y0
         if dx1 * dy2 - dy1 * dx2 == 0:
-            raise ValueError("circumcircle requires three noncollinear points")
+            raise _validation_error(
+                "circumcircle_requires_three_noncollinear_points",
+                "circumcircle requires three noncollinear points",
+            )
         return self
 
 
@@ -583,7 +629,9 @@ class PointSetRequest(StrictModel):
             for point in self.points
         )
         if len(keys) != len(set(keys)):
-            raise ValueError("point-set coordinates must be unique")
+            raise _validation_error(
+                "point_set_coordinates_unique", "point-set coordinates must be unique"
+            )
         return self
 
 
@@ -617,7 +665,10 @@ class SegmentIntersectionResult(StrictModel):
                 or self.contact_kind is not None
                 or self.overlap is not None
             ):
-                raise ValueError("a disjoint segment result carries no intersection")
+                raise _validation_error(
+                    "a_disjoint_segment_result_carries_no",
+                    "a disjoint segment result carries no intersection",
+                )
             return self
         if self.status == "POINT":
             if (
@@ -625,8 +676,9 @@ class SegmentIntersectionResult(StrictModel):
                 or self.contact_kind is None
                 or self.overlap is not None
             ):
-                raise ValueError(
-                    "a point segment intersection requires one contact classification"
+                raise _validation_error(
+                    "a_point_segment_intersection_requires_contact",
+                    "a point segment intersection requires one contact classification",
                 )
             return self
         if (
@@ -634,9 +686,15 @@ class SegmentIntersectionResult(StrictModel):
             or self.contact_kind is not None
             or self.overlap is None
         ):
-            raise ValueError("an overlap result carries only one maximal segment")
+            raise _validation_error(
+                "an_overlap_result_carries_maximal_segment",
+                "an overlap result carries only one maximal segment",
+            )
         if _point_key(self.overlap.start) >= _point_key(self.overlap.end):
-            raise ValueError("an overlap segment requires canonical distinct endpoints")
+            raise _validation_error(
+                "an_overlap_segment_requires_canonical_distinct",
+                "an overlap segment requires canonical distinct endpoints",
+            )
         return self
 
 
@@ -648,9 +706,15 @@ class PolygonIntersectionWitness(StrictModel):
     @model_validator(mode="after")
     def require_ordered_intersecting_pair(self) -> Self:
         if self.first_edge_index >= self.second_edge_index:
-            raise ValueError("polygon witness edge indices must be strictly ordered")
+            raise _validation_error(
+                "polygon_witness_edge_indices_strictly_ordered",
+                "polygon witness edge indices must be strictly ordered",
+            )
         if self.intersection.status == "DISJOINT":
-            raise ValueError("polygon witness edges must intersect")
+            raise _validation_error(
+                "polygon_witness_edges_intersect",
+                "polygon witness edges must intersect",
+            )
         return self
 
 
@@ -663,13 +727,22 @@ class SimplePolygonDecisionResult(StrictModel):
     @model_validator(mode="after")
     def bind_decision_to_witness(self) -> Self:
         if self.is_simple is (self.witness is not None):
-            raise ValueError("exactly a non-simple polygon carries one witness")
+            raise _validation_error(
+                "a_non_simple_polygon_carries_witness",
+                "exactly a non-simple polygon carries one witness",
+            )
         total_pairs = self.vertex_count * (self.vertex_count - 1) // 2
         if self.is_simple and self.checked_edge_pairs != total_pairs:
-            raise ValueError("a simple decision must exhaust every edge pair")
+            raise _validation_error(
+                "a_simple_decision_exhaust_every_edge",
+                "a simple decision must exhaust every edge pair",
+            )
         if self.witness is not None:
             if self.witness.second_edge_index >= self.vertex_count:
-                raise ValueError("polygon witness edge index exceeds the ring")
+                raise _validation_error(
+                    "polygon_witness_edge_index_exceeds_ring",
+                    "polygon witness edge index exceeds the ring",
+                )
             expected_checked = (
                 self.witness.first_edge_index
                 * (2 * self.vertex_count - self.witness.first_edge_index - 1)
@@ -678,8 +751,9 @@ class SimplePolygonDecisionResult(StrictModel):
                 - self.witness.first_edge_index
             )
             if self.checked_edge_pairs != expected_checked:
-                raise ValueError(
-                    "polygon witness does not match the checked pair prefix"
+                raise _validation_error(
+                    "polygon_witness_checked_pair_prefix",
+                    "polygon witness does not match the checked pair prefix",
                 )
         return self
 
@@ -691,7 +765,10 @@ class SimplePolygonPointRequest(StrictModel):
     @model_validator(mode="after")
     def require_simple_polygon(self) -> Self:
         if not _is_simple_ring(self.polygon.points):
-            raise ValueError("point classification requires a simple polygon")
+            raise _validation_error(
+                "point_classification_requires_a_simple_polygon",
+                "point classification requires a simple polygon",
+            )
         return self
 
 
@@ -703,12 +780,18 @@ class PolygonPointClassificationResult(StrictModel):
     @model_validator(mode="after")
     def bind_boundary_witness(self) -> Self:
         if (self.classification == "BOUNDARY") is (self.boundary_edge_index is None):
-            raise ValueError("only a boundary classification carries an edge index")
+            raise _validation_error(
+                "a_boundary_classification_carries_an_edge",
+                "only a boundary classification carries an edge index",
+            )
         if (
             self.boundary_edge_index is not None
             and self.boundary_edge_index >= self.polygon_vertex_count
         ):
-            raise ValueError("boundary edge index exceeds the polygon ring")
+            raise _validation_error(
+                "boundary_edge_index_exceeds_polygon_ring",
+                "boundary edge index exceeds the polygon ring",
+            )
         return self
 
 
@@ -735,7 +818,10 @@ class GeometryLineIntersectionResult(StrictModel):
     @model_validator(mode="after")
     def bind_point_status(self) -> Self:
         if (self.status == "POINT") is (self.point is None):
-            raise ValueError("only POINT intersections carry one point")
+            raise _validation_error(
+                "point_intersections_carry_point",
+                "only POINT intersections carry one point",
+            )
         return self
 
 
@@ -746,13 +832,21 @@ class GeometryConvexHullResult(StrictModel):
     def require_canonical_strict_convex_boundary(self) -> Self:
         keys = tuple(_point_key(point) for point in self.points)
         if len(keys) != len(set(keys)):
-            raise ValueError("convex-hull vertices must be unique")
+            raise _validation_error(
+                "convex_hull_vertices_unique", "convex-hull vertices must be unique"
+            )
         if len(keys) <= 2:
             if keys != tuple(sorted(keys)):
-                raise ValueError("a zero-dimensional hull must be canonical")
+                raise _validation_error(
+                    "a_zero_dimensional_hull_canonical",
+                    "a zero-dimensional hull must be canonical",
+                )
             return self
         if keys[0] != min(keys):
-            raise ValueError("a polygon hull must begin at its least vertex")
+            raise _validation_error(
+                "a_polygon_hull_begin_least_vertex",
+                "a polygon hull must begin at its least vertex",
+            )
         turns = tuple(
             _cross(
                 _subtract(keys[(index + 1) % len(keys)], keys[index]),
@@ -761,7 +855,10 @@ class GeometryConvexHullResult(StrictModel):
             for index in range(len(keys))
         )
         if any(turn <= 0 for turn in turns):
-            raise ValueError("a polygon hull must be strictly counterclockwise")
+            raise _validation_error(
+                "a_polygon_hull_strictly_counterclockwise",
+                "a polygon hull must be strictly counterclockwise",
+            )
         return self
 
 
@@ -778,9 +875,15 @@ class WeightedPolygonDiagonal(StrictModel):
     @model_validator(mode="after")
     def require_canonical_positive_pair(self) -> Self:
         if self.first >= self.second:
-            raise ValueError("weighted diagonal endpoints must be strictly increasing")
+            raise _validation_error(
+                "weighted_diagonal_endpoints_strictly_increasing",
+                "weighted diagonal endpoints must be strictly increasing",
+            )
         if self.weight.as_fraction() < 0:
-            raise ValueError("weighted diagonal cost must be nonnegative")
+            raise _validation_error(
+                "weighted_diagonal_cost_nonnegative",
+                "weighted diagonal cost must be nonnegative",
+            )
         return self
 
 
@@ -906,10 +1009,11 @@ def _require_bounded_split_table_rationals(
                 len(format_canonical_integer(value.denominator)),
             )
             if digits > MAX_CANONICAL_RATIONAL_DIGITS:
-                raise ValueError(
+                raise _validation_error(
+                    "split_table_state_start_end_carries",
                     f"split-table state ({start}, {end}) carries {digits}-digit "
                     f"rational components, exceeding the canonical "
-                    f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit rational limit"
+                    f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit rational limit",
                 )
             ledger_chars += 2 * digits + _TRIANGULATION_ENTRY_OVERHEAD_CHARS
     selected_diagonals, _ = _reconstruct_split_triangulation(count, split)
@@ -936,10 +1040,11 @@ def _require_bounded_split_table_rationals(
         + _TRIANGULATION_RESULT_SLACK_CHARS
     )
     if estimated_chars > MAX_TRIANGULATION_OUTPUT_CHARS:
-        raise ValueError(
+        raise _validation_error(
+            "weighted_triangulation_result_serialize_up_f",
             f"weighted triangulation result can serialize up to "
             f"{estimated_chars} characters, exceeding the "
-            f"{MAX_TRIANGULATION_OUTPUT_CHARS}-character output bound"
+            f"{MAX_TRIANGULATION_OUTPUT_CHARS}-character output bound",
         )
 
 
@@ -982,7 +1087,10 @@ class ConvexPolygonTriangulationRequest(StrictModel):
     def require_strict_convexity_and_complete_weights(self) -> Self:
         points = tuple(_point_key(point) for point in self.polygon.points)
         if not 4 <= len(points) <= 32:
-            raise ValueError("weighted triangulation supports 4 to 32 vertices")
+            raise _validation_error(
+                "weighted_triangulation_supports_vertices",
+                "weighted triangulation supports 4 to 32 vertices",
+            )
         turns = tuple(
             _cross(
                 _subtract(points[(index + 1) % len(points)], points[index]),
@@ -991,7 +1099,10 @@ class ConvexPolygonTriangulationRequest(StrictModel):
             for index in range(len(points))
         )
         if any(turn <= 0 for turn in turns):
-            raise ValueError("weighted triangulation requires strict CCW convexity")
+            raise _validation_error(
+                "weighted_triangulation_requires_strict_ccw_convexity",
+                "weighted triangulation requires strict CCW convexity",
+            )
         expected = {
             (first, second)
             for first in range(len(points))
@@ -1000,10 +1111,16 @@ class ConvexPolygonTriangulationRequest(StrictModel):
         }
         actual = {(item.first, item.second) for item in self.diagonal_weights}
         if len(actual) != len(self.diagonal_weights) or actual != expected:
-            raise ValueError("diagonal weights must cover every non-hull pair exactly")
+            raise _validation_error(
+                "diagonal_weights_cover_every_non_hull",
+                "diagonal weights must cover every non-hull pair exactly",
+            )
         pairs = tuple((item.first, item.second) for item in self.diagonal_weights)
         if pairs != tuple(sorted(pairs)):
-            raise ValueError("diagonal weights must use lexicographic pair order")
+            raise _validation_error(
+                "diagonal_weights_use_lexicographic_pair_order",
+                "diagonal weights must use lexicographic pair order",
+            )
         _require_bounded_split_table_rationals(len(points), self.diagonal_weights)
         return self
 
@@ -1163,9 +1280,10 @@ def _require_euclidean_triangulation_envelope(
     points = tuple(_point_key(point) for point in polygon.points)
     count = len(points)
     if not 4 <= count <= MAX_EUCLIDEAN_TRIANGULATION_VERTICES:
-        raise ValueError(
+        raise _validation_error(
+            "euclidean_triangulation_supports_f_max_euclidean",
             "Euclidean triangulation supports 4 to "
-            f"{MAX_EUCLIDEAN_TRIANGULATION_VERTICES} vertices"
+            f"{MAX_EUCLIDEAN_TRIANGULATION_VERTICES} vertices",
         )
     difference_digits = 1
     for first in range(count):
@@ -1185,9 +1303,15 @@ def _require_euclidean_triangulation_envelope(
         for index in range(count)
     )
     if any(turn <= 0 for turn in turns):
-        raise ValueError("Euclidean triangulation requires strict CCW convexity")
+        raise _validation_error(
+            "euclidean_triangulation_requires_strict_ccw_convexity",
+            "Euclidean triangulation requires strict CCW convexity",
+        )
     if not _is_simple_ring(polygon.points):
-        raise ValueError("Euclidean triangulation requires a simple ring")
+        raise _validation_error(
+            "euclidean_triangulation_requires_a_simple_ring",
+            "Euclidean triangulation requires a simple ring",
+        )
     for first in range(count - 2):
         for second in range(first + 2, count):
             if (first, second) == (0, count - 1):
@@ -1200,10 +1324,11 @@ def _require_euclidean_triangulation_envelope(
                 or len(denominator) > MAX_CANONICAL_RATIONAL_DIGITS
             ):
                 digits = max(len(numerator), len(denominator))
-                raise ValueError(
+                raise _validation_error(
+                    "euclidean_triangulation_diagonal_squared_length_carries",
                     "Euclidean triangulation diagonal squared length carries "
                     f"{digits} digits, exceeding the canonical "
-                    f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit rational limit"
+                    f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit rational limit",
                 )
     term_chars = 2 * (4 * difference_digits + 1) + 128
     estimated_chars = (
@@ -1214,10 +1339,11 @@ def _require_euclidean_triangulation_envelope(
         + 2 * term_chars
     )
     if estimated_chars > MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS:
-        raise ValueError(
+        raise _validation_error(
+            "euclidean_triangulation_result_serialize_up_f",
             "Euclidean triangulation result can serialize up to "
             f"{estimated_chars} characters, exceeding the "
-            f"{MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS}-character output bound"
+            f"{MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS}-character output bound",
         )
     return points
 
@@ -1310,9 +1436,15 @@ class EuclideanDiagonal(StrictModel):
     @model_validator(mode="after")
     def require_positive_canonical_pair(self) -> Self:
         if self.first >= self.second:
-            raise ValueError("Euclidean diagonal endpoints must be strictly increasing")
+            raise _validation_error(
+                "euclidean_diagonal_endpoints_strictly_increasing",
+                "Euclidean diagonal endpoints must be strictly increasing",
+            )
         if self.squared_length.as_fraction() <= 0:
-            raise ValueError("Euclidean diagonal squared length must be positive")
+            raise _validation_error(
+                "euclidean_diagonal_squared_length_positive",
+                "Euclidean diagonal squared length must be positive",
+            )
         return self
 
 
@@ -1333,9 +1465,15 @@ class EuclideanLengthExpression(StrictModel):
     def require_sorted_positive_terms(self) -> Self:
         values = tuple(term.as_fraction() for term in self.squared_lengths)
         if any(value <= 0 for value in values):
-            raise ValueError("Euclidean length terms must be positive")
+            raise _validation_error(
+                "euclidean_length_terms_positive",
+                "Euclidean length terms must be positive",
+            )
         if values != tuple(sorted(values)):
-            raise ValueError("Euclidean length terms must be ordered canonically")
+            raise _validation_error(
+                "euclidean_length_terms_ordered_canonically",
+                "Euclidean length terms must be ordered canonically",
+            )
         return self
 
 
@@ -1348,7 +1486,10 @@ class EuclideanTriangulationSplitEntry(StrictModel):
     @model_validator(mode="after")
     def require_proper_subproblem(self) -> Self:
         if not self.start < self.split < self.end:
-            raise ValueError("triangulation split must lie strictly inside its span")
+            raise _validation_error(
+                "triangulation_split_lie_strictly_inside_span",
+                "triangulation split must lie strictly inside its span",
+            )
         return self
 
 
@@ -1402,36 +1543,50 @@ class EuclideanConvexPolygonTriangulationResult(StrictModel):
     def bind_status_fields(self) -> Self:
         points = _require_euclidean_triangulation_envelope(self.polygon)
         if self.vertex_count != len(points):
-            raise ValueError("vertex_count must equal the source polygon vertex count")
+            raise _validation_error(
+                "vertex_count_source_polygon_vertex_count",
+                "vertex_count must equal the source polygon vertex count",
+            )
         certified = self.status == "CERTIFIED_OPTIMUM"
         if certified != (self.optimum is not None):
-            raise ValueError(
-                "only a certified optimum carries an exact cost expression"
+            raise _validation_error(
+                "a_certified_optimum_carries_an_exact",
+                "only a certified optimum carries an exact cost expression",
             )
         if certified != (self.unresolved_comparison is None):
-            raise ValueError(
-                "only an unresolved result carries an ambiguous comparison"
+            raise _validation_error(
+                "an_unresolved_result_carries_an_ambiguous",
+                "only an unresolved result carries an ambiguous comparison",
             )
         if not certified and (self.diagonals or self.triangles or self.split_table):
-            raise ValueError("an unresolved comparison must not claim a triangulation")
+            raise _validation_error(
+                "an_unresolved_comparison_claim_a_triangulation",
+                "an unresolved comparison must not claim a triangulation",
+            )
         if certified:
             assert self.optimum is not None
             if len(self.diagonals) != self.vertex_count - 3:
-                raise ValueError(
-                    "a triangulation must contain vertex_count - 3 diagonals"
+                raise _validation_error(
+                    "a_triangulation_contain_vertex_count_diagonals",
+                    "a triangulation must contain vertex_count - 3 diagonals",
                 )
             if len(self.triangles) != self.vertex_count - 2:
-                raise ValueError(
-                    "a triangulation must contain vertex_count - 2 triangles"
+                raise _validation_error(
+                    "a_triangulation_contain_vertex_count_triangles",
+                    "a triangulation must contain vertex_count - 2 triangles",
                 )
             expected_states = (self.vertex_count - 1) * (self.vertex_count - 2) // 2
             if len(self.split_table) != expected_states:
-                raise ValueError("split table must contain every nontrivial DP state")
+                raise _validation_error(
+                    "split_table_contain_every_nontrivial_dp",
+                    "split table must contain every nontrivial DP state",
+                )
             if tuple(
                 sorted(edge.squared_length.as_fraction() for edge in self.diagonals)
             ) != tuple(term.as_fraction() for term in self.optimum.squared_lengths):
-                raise ValueError(
-                    "optimum expression must list the selected diagonal lengths"
+                raise _validation_error(
+                    "optimum_expression_list_selected_diagonal_lengths",
+                    "optimum expression must list the selected diagonal lengths",
                 )
             _replay_euclidean_triangulation(self, points)
         else:
@@ -1467,7 +1622,10 @@ def _replay_euclidean_split_choice(
         None,
     )
     if expected != chosen:
-        raise ValueError("split-table optimum must equal its selected recurrence")
+        raise _validation_error(
+            "split_table_optimum_selected_recurrence",
+            "split-table optimum must equal its selected recurrence",
+        )
     incumbent: tuple[Fraction, ...] | None = None
     incumbent_split: int | None = None
     for candidate, pivot in candidates:
@@ -1476,12 +1634,18 @@ def _replay_euclidean_split_choice(
             continue
         order = _compare_euclidean_root_sums(candidate, incumbent)
         if order is None:
-            raise ValueError("certified split table contains an unresolved comparison")
+            raise _validation_error(
+                "certified_split_table_contains_an_unresolved",
+                "certified split table contains an unresolved comparison",
+            )
         if order < 0:
             incumbent, incumbent_split = candidate, pivot
     assert incumbent is not None and incumbent_split is not None
     if incumbent != chosen or incumbent_split != entry.split:
-        raise ValueError("split-table choice is not the deterministic minimum")
+        raise _validation_error(
+            "split_table_choice_deterministic_minimum",
+            "split-table choice is not the deterministic minimum",
+        )
 
 
 def _replay_euclidean_triangulation(
@@ -1503,7 +1667,10 @@ def _replay_euclidean_triangulation(
     )
     actual_entries = tuple((entry.start, entry.end) for entry in result.split_table)
     if actual_entries != expected_entries:
-        raise ValueError("split table must use deterministic span/start order")
+        raise _validation_error(
+            "split_table_use_deterministic_span_start",
+            "split table must use deterministic span/start order",
+        )
 
     optimum: dict[tuple[int, int], tuple[Fraction, ...]] = {
         (index, index + 1): () for index in range(count - 1)
@@ -1519,7 +1686,10 @@ def _replay_euclidean_triangulation(
     if result.optimum is None or optimum[0, count - 1] != tuple(
         term.as_fraction() for term in result.optimum.squared_lengths
     ):
-        raise ValueError("result optimum must equal the root DP value")
+        raise _validation_error(
+            "result_optimum_root_dp_value",
+            "result optimum must equal the root DP value",
+        )
 
     triangles: list[tuple[int, int, int]] = []
     diagonals: set[tuple[int, int]] = set()
@@ -1536,15 +1706,24 @@ def _replay_euclidean_triangulation(
 
     reconstruct(0, count - 1)
     if tuple(sorted(triangles)) != tuple(item.vertices for item in result.triangles):
-        raise ValueError("triangles must reconstruct from the certified split table")
+        raise _validation_error(
+            "triangles_reconstruct_certified_split_table",
+            "triangles must reconstruct from the certified split table",
+        )
     actual_diagonals = tuple((item.first, item.second) for item in result.diagonals)
     if actual_diagonals != tuple(sorted(diagonals)):
-        raise ValueError("diagonals must reconstruct from the certified split table")
+        raise _validation_error(
+            "diagonals_reconstruct_certified_split_table",
+            "diagonals must reconstruct from the certified split table",
+        )
     for diagonal in result.diagonals:
         if diagonal.squared_length.as_fraction() != _euclidean_squared_length(
             points, diagonal.first, diagonal.second
         ):
-            raise ValueError("diagonal squared length must match the source polygon")
+            raise _validation_error(
+                "diagonal_squared_length_source_polygon",
+                "diagonal squared length must match the source polygon",
+            )
 
 
 def _replay_euclidean_unresolved_comparison(
@@ -1562,13 +1741,15 @@ def _replay_euclidean_unresolved_comparison(
     count = len(points)
     start, end = comparison.start, comparison.end
     if end > count - 1 or end - start < 2:
-        raise ValueError(
-            "unresolved comparison must name a nontrivial DP subproblem span"
+        raise _validation_error(
+            "unresolved_comparison_name_a_nontrivial_dp",
+            "unresolved comparison must name a nontrivial DP subproblem span",
         )
     if not start < comparison.right_split < comparison.left_split < end:
-        raise ValueError(
+        raise _validation_error(
+            "unresolved_comparison_splits_lie_strictly_inside",
             "unresolved comparison splits must lie strictly inside its span "
-            "with the incumbent split first"
+            "with the incumbent split first",
         )
 
     optimum: dict[tuple[int, int], tuple[Fraction, ...]] = {
@@ -1605,17 +1786,19 @@ def _replay_euclidean_unresolved_comparison(
                         pivot,
                         chosen_pivot,
                     ) != (start, end, comparison.left_split, comparison.right_split):
-                        raise ValueError(
+                        raise _validation_error(
+                            "unresolved_comparison_first_unresolved_dp_comparison",
                             "unresolved comparison must be the first "
-                            "unresolved DP comparison"
+                            "unresolved DP comparison",
                         )
                     if candidate != tuple(
                         term.as_fraction() for term in comparison.left.squared_lengths
                     ) or chosen != tuple(
                         term.as_fraction() for term in comparison.right.squared_lengths
                     ):
-                        raise ValueError(
-                            "unresolved expressions must equal their DP candidates"
+                        raise _validation_error(
+                            "unresolved_expressions_dp_candidates",
+                            "unresolved expressions must equal their DP candidates",
                         )
                     return
                 if order < 0:
@@ -1623,7 +1806,10 @@ def _replay_euclidean_unresolved_comparison(
                     chosen_pivot = pivot
             assert chosen is not None and chosen_pivot is not None
             optimum[state_start, state_end] = chosen
-    raise ValueError("unresolved comparison must occur during the replayed recurrence")
+    raise _validation_error(
+        "unresolved_comparison_occur_during_replayed_recurrence",
+        "unresolved comparison must occur during the replayed recurrence",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1660,7 +1846,9 @@ class GeneralPositionRequest(StrictModel):
         _require_general_position_work_bound(self.points)
         keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
-            raise ValueError("point-set coordinates must be unique")
+            raise _validation_error(
+                "point_set_coordinates_unique", "point-set coordinates must be unique"
+            )
         return self
 
 
@@ -1731,7 +1919,9 @@ class CircumradiusProfileRequest(StrictModel):
         _require_circumradius_output_bound(self.points)
         keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
-            raise ValueError("point-set coordinates must be unique")
+            raise _validation_error(
+                "point_set_coordinates_unique", "point-set coordinates must be unique"
+            )
         return self
 
 
@@ -1746,13 +1936,23 @@ class CircumradiusTripleEntry(StrictModel):
     def require_canonical(self) -> Self:
         idx = self.indices
         if len(idx) != 3 or len(set(idx)) != 3:
-            raise ValueError("triple indices must be 3 distinct values")
+            raise _validation_error(
+                "triple_indices_distinct_values",
+                "triple indices must be 3 distinct values",
+            )
         if idx != tuple(sorted(idx)):
-            raise ValueError("triple indices must be sorted")
+            raise _validation_error(
+                "triple_indices_sorted", "triple indices must be sorted"
+            )
         if self.is_degenerate and self.radius_squared is not None:
-            raise ValueError("degenerate triple cannot have a radius")
+            raise _validation_error(
+                "degenerate_triple_a_radius", "degenerate triple cannot have a radius"
+            )
         if not self.is_degenerate and self.radius_squared is None:
-            raise ValueError("non-degenerate triple must have a radius")
+            raise _validation_error(
+                "non_degenerate_triple_a_radius",
+                "non-degenerate triple must have a radius",
+            )
         return self
 
 
@@ -1771,12 +1971,18 @@ class CircumradiusProfileResult(StrictModel):
         _require_circumradius_output_bound(self.points)
         keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
-            raise ValueError("point-set coordinates must be unique")
+            raise _validation_error(
+                "point_set_coordinates_unique", "point-set coordinates must be unique"
+            )
         n = len(self.points)
         if self.num_points != n:
-            raise ValueError("num_points must equal len(points)")
+            raise _validation_error(
+                "num_points_len_points", "num_points must equal len(points)"
+            )
         if len(self.entries) != n * (n - 1) * (n - 2) // 6:
-            raise ValueError("entries must cover exactly C(n,3) triples")
+            raise _validation_error(
+                "entries_cover_c_n_triples", "entries must cover exactly C(n,3) triples"
+            )
         _validate_circumradius_entries_basic(self.entries, n)
         _validate_circumradius_binding(self.points, self.entries)
         return self

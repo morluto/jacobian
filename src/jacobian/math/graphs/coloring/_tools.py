@@ -41,11 +41,9 @@ def graph_coloring_operation[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -148,7 +146,6 @@ GRAPH_COLORING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "coloring",
         "k-colorability",
         "exact",
-        version="2",
         examples=(
             example(
                 "triangle_3_colorable",

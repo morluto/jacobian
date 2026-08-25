@@ -18,7 +18,6 @@ def _polynomial(
     *terms: tuple[tuple[int, int], tuple[int, ...]],
 ) -> dict[str, Any]:
     return {
-        "polynomial_schema_version": "1",
         "domain": "QQ",
         "variables": list(variables),
         "polynomial": {
@@ -38,7 +37,6 @@ VARIABLES = ("x", "y")
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="polynomial.differential_operator.apply.compute",
-        version="1",
         title="Apply a constant-coefficient differential operator",
         description=(
             "Return D^k(f) exactly for a canonical sparse polynomial f over QQ and "
@@ -71,7 +69,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         ((3, 1), (0, 2)),
                     ),
                     "operator": {
-                        "differential_operator_schema_version": "1",
                         "domain": "QQ",
                         "variables": list(VARIABLES),
                         "terms": [

@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 import sympy
-from pydantic import ValidationError
+from tests.math.polynomials._support import polynomial_validation_error
 
 from jacobian._exact import CanonicalRational
 from jacobian.math import _singular as shared_singular
@@ -161,7 +161,6 @@ def test_operation_is_one_admitted_atomic_generic_fiber_computation() -> None:
         if tool.operation_id == "polynomial.map.generic_degree.compute"
     )
 
-    assert operation.version == "1"
     assert operation.examples
     request = operation.request_type.model_validate(operation.examples[0].input)
     assert request.polynomial_map.input_variables == ("x", "y")
@@ -199,14 +198,14 @@ def test_missing_backend_is_operational_unavailability(
 
 
 def test_request_rejects_unproved_dimension_degree_and_height() -> None:
-    with pytest.raises(ValidationError, match="3-variable"):
+    with polynomial_validation_error():
         GenericDegreeRequest(
             polynomial_map=_map(
                 ("w", "x", "y", "z"),
                 {(1, 0, 0, 0): 1},
             )
         )
-    with pytest.raises(ValidationError, match="3-component"):
+    with polynomial_validation_error():
         GenericDegreeRequest(
             polynomial_map=_map(
                 ("x",),
@@ -216,9 +215,9 @@ def test_request_rejects_unproved_dimension_degree_and_height() -> None:
                 {(1,): 4},
             )
         )
-    with pytest.raises(ValidationError, match="total degree 8"):
+    with polynomial_validation_error():
         GenericDegreeRequest(polynomial_map=_map(("x",), {(9,): 1}))
-    with pytest.raises(ValidationError, match="64-digit"):
+    with polynomial_validation_error():
         GenericDegreeRequest(polynomial_map=_map(("x",), {(1,): int("1" * 65)}))
 
 
@@ -226,14 +225,14 @@ def test_request_bounds_component_and_aggregate_support() -> None:
     monomials = [
         (a, b, c) for a in range(9) for b in range(9 - a) for c in range(9 - a - b)
     ]
-    with pytest.raises(ValidationError, match="48-term"):
+    with polynomial_validation_error():
         GenericDegreeRequest(
             polynomial_map=_map(
                 ("x", "y", "z"),
                 dict.fromkeys(monomials[:49], 1),
             )
         )
-    with pytest.raises(ValidationError, match="96-term"):
+    with polynomial_validation_error():
         GenericDegreeRequest(
             polynomial_map=_map(
                 ("x", "y", "z"),
@@ -263,7 +262,7 @@ def test_every_result_outcome_revalidates_the_source_envelope() -> None:
         {(1, 0, 0, 0): 1},
     )
 
-    with pytest.raises(ValidationError, match="3-variable"):
+    with polynomial_validation_error():
         GenericDegreeResult(
             outcome="ERROR",
             source=outside_operation_domain,
@@ -556,7 +555,7 @@ def test_forged_degree_is_rejected_by_the_result_contract() -> None:
     forged = result.model_dump(mode="json")
     forged["degree"] = 2
 
-    with pytest.raises(ValidationError, match="does not match"):
+    with polynomial_validation_error():
         GenericDegreeResult.model_validate(forged)
 
 
@@ -644,7 +643,7 @@ def test_serialized_evidence_cannot_be_presented_against_a_different_source() ->
     forged = result.model_dump(mode="json")
     forged["source"] = _power_map_result(2).source.model_dump(mode="json")
 
-    with pytest.raises(ValidationError, match="bounded source-bound replay"):
+    with polynomial_validation_error():
         GenericDegreeResult.model_validate(forged)
     with pytest.raises(ValueError, match="reconstruct"):
         require_certificate_reconstructs_from_source(
@@ -663,7 +662,7 @@ def test_forged_standard_monomials_are_rejected_against_the_certified_ideal() ->
         "evidence": evidence,
     }
 
-    with pytest.raises(ValidationError, match="bounded source-bound replay"):
+    with polynomial_validation_error():
         GenericDegreeResult.model_validate(forged)
 
 
@@ -678,7 +677,7 @@ def test_cleared_standard_monomials_cannot_invent_a_positive_dimensional_outcome
         "evidence": evidence,
     }
 
-    with pytest.raises(ValidationError, match="bounded source-bound replay"):
+    with polynomial_validation_error():
         GenericDegreeResult.model_validate(forged)
 
 
@@ -701,7 +700,7 @@ def test_unconfirmed_replay_verdicts_never_establish_a_conclusion(
         "evidence": _power_map_certificate(2).model_dump(mode="json"),
     }
 
-    with pytest.raises(ValidationError, match="bounded source-bound replay"):
+    with polynomial_validation_error():
         GenericDegreeResult.model_validate(payload)
 
 
@@ -766,7 +765,7 @@ def test_serialized_coefficient_support_is_counted_before_nested_construction() 
         "standard_monomials": [],
     }
 
-    with pytest.raises(ValidationError, match="coefficient support"):
+    with polynomial_validation_error():
         GenericFiberCertificate.model_validate(payload)
 
 

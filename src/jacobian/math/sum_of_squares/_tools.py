@@ -30,11 +30,9 @@ def sos_operation[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -47,7 +45,6 @@ def sos_operation[
 
 _SOS_CHECK_EXAMPLE: dict[str, Any] = {
     "polynomial": {
-        "polynomial_schema_version": "1",
         "domain": "QQ",
         "variables": ["x"],
         "polynomial": {
@@ -59,7 +56,6 @@ _SOS_CHECK_EXAMPLE: dict[str, Any] = {
     },
     "summands": [
         {
-            "polynomial_schema_version": "1",
             "domain": "QQ",
             "variables": ["x"],
             "polynomial": {
@@ -69,7 +65,6 @@ _SOS_CHECK_EXAMPLE: dict[str, Any] = {
             },
         },
         {
-            "polynomial_schema_version": "1",
             "domain": "QQ",
             "variables": ["x"],
             "polynomial": {
@@ -83,7 +78,6 @@ _SOS_CHECK_EXAMPLE: dict[str, Any] = {
 
 _GRAM_CHECK_EXAMPLE: dict[str, Any] = {
     "polynomial": {
-        "polynomial_schema_version": "1",
         "domain": "QQ",
         "variables": ["x"],
         "polynomial": {
@@ -95,7 +89,6 @@ _GRAM_CHECK_EXAMPLE: dict[str, Any] = {
     },
     "monomial_basis": [
         {
-            "polynomial_schema_version": "1",
             "domain": "QQ",
             "variables": ["x"],
             "polynomial": {
@@ -105,7 +98,6 @@ _GRAM_CHECK_EXAMPLE: dict[str, Any] = {
             },
         },
         {
-            "polynomial_schema_version": "1",
             "domain": "QQ",
             "variables": ["x"],
             "polynomial": {
@@ -116,7 +108,6 @@ _GRAM_CHECK_EXAMPLE: dict[str, Any] = {
         },
     ],
     "gram_matrix": {
-        "matrix_schema_version": "1",
         "domain": "QQ",
         "entries": [
             [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],

@@ -8,6 +8,7 @@ from math import isqrt, prod
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
@@ -42,7 +43,6 @@ class FactorizedHermitianMatrix(StrictModel):
     implicit in this value.
     """
 
-    factorized_hermitian_matrix_schema_version: Literal["1"] = "1"
     matrix: RationalMatrix = Field(
         description="Square symmetric rational coordinates in the declared product basis."
     )
@@ -64,25 +64,29 @@ class FactorizedHermitianMatrix(StrictModel):
     @model_validator(mode="after")
     def require_factorized_symmetric_square_matrix(self) -> Self:
         if len({factor.label for factor in self.factors}) != len(self.factors):
-            raise ValueError("subsystem factor labels must be unique")
+            raise _validation_error("invalid", "subsystem factor labels must be unique")
         dimension = prod((factor.dimension for factor in self.factors), start=1)
         if dimension > MAX_SUBSYSTEM_DIMENSION:
-            raise ValueError(
+            raise _validation_error(
+                "invalid",
                 "subsystem product dimension exceeds the "
-                f"{MAX_SUBSYSTEM_DIMENSION} bound"
+                f"{MAX_SUBSYSTEM_DIMENSION} bound",
             )
         if len(self.matrix.entries) != dimension or any(
             len(row) != dimension for row in self.matrix.entries
         ):
-            raise ValueError(
-                "matrix shape must equal the ordered subsystem product dimension"
+            raise _validation_error(
+                "invalid",
+                "matrix shape must equal the ordered subsystem product dimension",
             )
         if any(
             self.matrix.entries[row][column] != self.matrix.entries[column][row]
             for row in range(dimension)
             for column in range(row)
         ):
-            raise ValueError("a rational Hermitian matrix must be symmetric")
+            raise _validation_error(
+                "invalid", "a rational Hermitian matrix must be symmetric"
+            )
         return self
 
 
@@ -220,3 +224,7 @@ __all__ = [
     "FactorizedHermitianMatrix",
     "MatrixSubsystem",
 ]
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"matrix.{reason}", message)

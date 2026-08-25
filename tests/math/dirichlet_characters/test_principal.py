@@ -68,23 +68,29 @@ def test_value_operation_is_bound_to_the_supplied_table(
 
 
 def test_character_model_rejects_forged_unit_group_or_value_table() -> None:
-    with pytest.raises(ValidationError, match="unit residues"):
+    with pytest.raises(ValidationError) as error:
         PrincipalDirichletCharacter(
             modulus=12,
             unit_residues=(1, 5, 7),
             values=(0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1),
         )
-    with pytest.raises(ValidationError, match="extension-by-zero"):
+    assert (
+        error.value.errors()[0]["type"] == "dirichlet_character.unit_residues_mismatch"
+    )
+    with pytest.raises(ValidationError) as error:
         PrincipalDirichletCharacter(
             modulus=12,
             unit_residues=(1, 5, 7, 11),
             values=(0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1),
         )
+    assert (
+        error.value.errors()[0]["type"] == "dirichlet_character.values_table_mismatch"
+    )
 
 
 def test_value_result_rejects_a_forged_residue_or_value() -> None:
     character = principal_dirichlet_character(12)
-    with pytest.raises(ValidationError, match="canonical residue"):
+    with pytest.raises(ValidationError) as error:
         PrincipalDirichletCharacterValueResult(
             character=character,
             integer="25",
@@ -92,7 +98,11 @@ def test_value_result_rejects_a_forged_residue_or_value() -> None:
             is_unit=True,
             value=1,
         )
-    with pytest.raises(ValidationError, match="value does not match"):
+    assert (
+        error.value.errors()[0]["type"]
+        == "dirichlet_character.canonical_residue_mismatch"
+    )
+    with pytest.raises(ValidationError) as error:
         PrincipalDirichletCharacterValueResult(
             character=character,
             integer="18",
@@ -100,13 +110,15 @@ def test_value_result_rejects_a_forged_residue_or_value() -> None:
             is_unit=False,
             value=1,
         )
+    assert error.value.errors()[0]["type"] == "dirichlet_character.value_mismatch"
 
 
 def test_value_request_rejects_noncanonical_negative_zero() -> None:
-    with pytest.raises(ValidationError, match="String should match pattern"):
+    with pytest.raises(ValidationError) as error:
         PrincipalDirichletCharacterValueRequest(
             character=principal_dirichlet_character(12), integer="-0"
         )
+    assert error.value.errors()[0]["type"] == "string_pattern_mismatch"
 
 
 def test_integer_fields_publish_the_shared_canonical_pattern() -> None:
@@ -130,10 +142,11 @@ def test_integer_fields_publish_the_shared_canonical_pattern() -> None:
 
 @pytest.mark.parametrize("integer", ["007", "+25", " 25", "2_5", "0x19"])
 def test_value_request_rejects_noncanonical_integer_syntax(integer: str) -> None:
-    with pytest.raises(ValidationError, match="String should match pattern"):
+    with pytest.raises(ValidationError) as error:
         PrincipalDirichletCharacterValueRequest(
             character=principal_dirichlet_character(12), integer=integer
         )
+    assert error.value.errors()[0]["type"] == "string_pattern_mismatch"
 
 
 def test_integer_digit_bound_ignores_the_minus_sign() -> None:
@@ -161,18 +174,20 @@ def test_integer_digit_bound_ignores_the_minus_sign() -> None:
     ["9" * (MAX_INTEGER_DIGITS + 1), "-" + "9" * (MAX_INTEGER_DIGITS + 1)],
 )
 def test_value_request_rejects_integers_beyond_the_digit_bound(integer: str) -> None:
-    with pytest.raises(ValidationError, match="digit bound"):
+    with pytest.raises(ValidationError) as error:
         PrincipalDirichletCharacterValueRequest(
             character=principal_dirichlet_character(12), integer=integer
         )
+    assert error.value.errors()[0]["type"] == "dirichlet_character.integer_digit_bound"
 
 
 def test_modulus_boundary_is_complete_and_next_value_is_rejected() -> None:
     character = principal_dirichlet_character(MAX_PRINCIPAL_CHARACTER_MODULUS)
 
     assert len(character.values) == MAX_PRINCIPAL_CHARACTER_MODULUS
-    with pytest.raises(ValidationError, match="less than or equal"):
+    with pytest.raises(ValidationError) as error:
         PrincipalDirichletCharacterRequest(modulus=MAX_PRINCIPAL_CHARACTER_MODULUS + 1)
+    assert error.value.errors()[0]["type"] == "less_than_equal"
 
 
 def test_native_api_rejects_boolean_modulus_and_integer() -> None:
@@ -187,7 +202,6 @@ def test_catalog_declares_the_composable_principal_operations() -> None:
         "dirichlet_character.principal.compute",
         "dirichlet_character.principal.value.compute",
     )
-    assert all(tool.version == "1" for tool in TOOLS)
 
 
 def test_admission_classifies_table_lookup_as_native_only() -> None:

@@ -85,7 +85,6 @@ def _descriptor(operation: MathTool[Any, Any]) -> OperationDescriptor:
 
     return OperationDescriptor(
         operation_id=operation.operation_id,
-        version=operation.version,
         title=operation.title,
         description=operation.description,
         input_schema=operation.request_type.model_json_schema(),

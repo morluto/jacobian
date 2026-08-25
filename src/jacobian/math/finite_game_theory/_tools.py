@@ -32,11 +32,9 @@ def _op[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -109,7 +107,6 @@ FINITE_GAME_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 GAME_EXAMPLE,
             ),
         ),
-        version="2",
     ),
     _op(
         "game_theory.nash_equilibrium.compute",
@@ -130,7 +127,6 @@ FINITE_GAME_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 GAME_EXAMPLE,
             ),
         ),
-        version="2",
     ),
     _op(
         "game.deterministic_terminal.solve",

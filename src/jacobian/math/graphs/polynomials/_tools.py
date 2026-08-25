@@ -35,11 +35,9 @@ def graph_polynomial_operation[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -74,7 +72,6 @@ _PATH_GRAPH_EXAMPLE: dict[str, Any] = {
 
 _PATH_TREE_EXAMPLE: dict[str, Any] = {
     "graph": {
-        "graph_schema_version": "1",
         "vertices": ["a", "b", "c", "d"],
         "edges": [["a", "b"], ["b", "c"], ["c", "d"]],
     }

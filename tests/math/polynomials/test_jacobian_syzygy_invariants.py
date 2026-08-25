@@ -4,7 +4,7 @@ import json
 from fractions import Fraction
 
 import pytest
-from pydantic import ValidationError
+from tests.math.polynomials._support import polynomial_validation_error
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.geometry.projective.values import RationalProjectiveLine
@@ -198,7 +198,7 @@ def test_frozen_legacy_three_variable_certificate_payload_remains_version_one() 
         )
     )
 
-    assert result.result_schema_version == "1"
+    assert "result_schema_version" not in result.model_dump(mode="json")
     assert result.coefficient_map_detail == "CERTIFICATES"
     assert result.first_syzygy_degree == 1
     assert [
@@ -212,10 +212,10 @@ def test_detail_mode_is_part_of_each_operation_request_contract() -> None:
         **LEGACY_THREE_VARIABLE_CERTIFICATE_PAYLOAD,
         "coefficient_map_detail": "SPARSE_ENTRIES",
     }
-    with pytest.raises(ValidationError, match="CERTIFICATES"):
+    with polynomial_validation_error():
         GradedJacobianSyzygyRequest.model_validate(sparse_payload)
 
-    with pytest.raises(ValidationError, match="SPARSE_ENTRIES"):
+    with polynomial_validation_error():
         GradedJacobianSyzygyCoefficientRequest.model_validate(
             LEGACY_THREE_VARIABLE_CERTIFICATE_PAYLOAD
         )
@@ -261,19 +261,19 @@ def test_result_rejects_a_mutated_witness_or_partial_derivative() -> None:
         "num": "2",
         "den": "1",
     }
-    with pytest.raises(ValidationError, match="kernel vector must reconstruct"):
+    with polynomial_validation_error():
         GradedJacobianSyzygyResult.model_validate(corrupted_witness)
 
     corrupted_partial = json.loads(result.model_dump_json())
     corrupted_partial["partial_derivatives"][0]["polynomial"]["terms"][0][
         "coefficient"
     ] = {"num": "2", "den": "1"}
-    with pytest.raises(ValidationError, match="partial derivatives must reconstruct"):
+    with polynomial_validation_error():
         GradedJacobianSyzygyResult.model_validate(corrupted_partial)
 
     corrupted_map = json.loads(result.model_dump_json())
     corrupted_map["degree_maps"][0]["matrix_digest"] = "sha256:" + "0" * 64
-    with pytest.raises(ValidationError, match="digest must bind"):
+    with polynomial_validation_error():
         GradedJacobianSyzygyResult.model_validate(corrupted_map)
 
 
@@ -300,7 +300,7 @@ def test_result_rejects_negative_rank_minor_indices() -> None:
             value - item["column_count"] for value in minor["column_indices"]
         ]
     assert tampered
-    with pytest.raises(ValidationError, match="nonnegative"):
+    with polynomial_validation_error():
         GradedJacobianSyzygyResult.model_validate(payload)
 
 
@@ -321,7 +321,7 @@ def test_replayed_results_accept_every_admitted_variable_count() -> None:
 
 
 def test_dimension_specific_basis_boundary_rejects_before_backend_execution() -> None:
-    with pytest.raises(ValidationError, match="512-monomial"):
+    with polynomial_validation_error():
         GradedJacobianSyzygyRequest(
             polynomial=_sparse_polynomial(
                 ("x", "y", "z", "w"),
@@ -335,7 +335,7 @@ def test_dimension_specific_basis_boundary_rejects_before_backend_execution() ->
             max_degree=3,
         )
 
-    with pytest.raises(ValidationError, match="15000000-update"):
+    with polynomial_validation_error():
         GradedJacobianSyzygyRequest(
             polynomial=_sparse_polynomial(
                 ("x", "y", "z", "w"),
@@ -429,5 +429,5 @@ def test_result_rejects_labelled_provenance_off_three_variables() -> None:
         assert GradedJacobianSyzygyResult.model_validate(payload) == produced
 
         payload["source_kind"] = "LABELLED_LINEAR_FACTOR_PRODUCT"
-        with pytest.raises(ValidationError, match="requires exactly three variables"):
+        with polynomial_validation_error():
             GradedJacobianSyzygyResult.model_validate(payload)

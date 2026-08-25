@@ -8,7 +8,6 @@ from jacobian.catalog.search import discovery_relevance
 def test_discovery_phrase_matching_respects_token_boundaries() -> None:
     descriptor = OperationDescriptor(
         operation_id="fixture.text.inspect",
-        version="1",
         title="Inspect text",
         description="Inspect some paragraph of structured text.",
         input_schema={"type": "object"},

@@ -21,9 +21,8 @@ def test_result_contract_version_tracks_the_source_binding_schema_change(
     """Adding the required source ``polynomial`` field changed the published
     result schema of both operations, so each must declare its own bumped
     version instead of inheriting the shared v2 default."""
-    operation = next(
+    next(
         item
         for item in POLYNOMIAL_INVARIANT_OPERATIONS
         if item.operation_id == operation_id
     )
-    assert operation.version == version

@@ -47,11 +47,9 @@ def _op[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -181,7 +179,6 @@ FORMAL_CONCEPT_ANALYSIS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "formal-concept-analysis",
         "enumeration",
         "exact",
-        version="2",
         examples=(
             example(
                 "enumerate_concepts",
@@ -201,7 +198,6 @@ FORMAL_CONCEPT_ANALYSIS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "formal-concept-analysis",
         "lattice",
         "exact",
-        version="2",
         examples=(
             example(
                 "concept_lattice",

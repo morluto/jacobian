@@ -50,7 +50,6 @@ def _lattice(ambient: int, basis: list[list[int]]) -> dict[str, object]:
 
 RANK_GRAM_OPERATION: MathTool[Any, Any] = MathTool(
     operation_id="lattice.rank_gram.compute",
-    version="1",
     title="Compute exact rank, Gram matrix, and squared covolume of a lattice",
     description=(
         "For a full-row-rank integer lattice basis under the standard bilinear "
@@ -72,7 +71,6 @@ RANK_GRAM_OPERATION: MathTool[Any, Any] = MathTool(
 
 CANONICAL_BASIS_OPERATION: MathTool[Any, Any] = MathTool(
     operation_id="lattice.canonical_basis.compute",
-    version="1",
     title="Compute the canonical HNF basis of a lattice",
     description=(
         "Return the row Hermite normal form canonical basis of a lattice and "
@@ -93,7 +91,6 @@ CANONICAL_BASIS_OPERATION: MathTool[Any, Any] = MathTool(
 
 DUAL_OPERATION: MathTool[Any, Any] = MathTool(
     operation_id="lattice.dual.compute",
-    version="1",
     title="Compute the exact rational dual lattice",
     description=(
         "For a full-rank integer lattice, return the exact rational dual basis "
@@ -114,7 +111,6 @@ DUAL_OPERATION: MathTool[Any, Any] = MathTool(
 
 SATURATION_OPERATION: MathTool[Any, Any] = MathTool(
     operation_id="lattice.saturation.compute",
-    version="1",
     title="Compute the saturation (primitive closure) of a lattice",
     description=(
         "Return the canonical HNF basis of sat(L) = span_Q(L) cap ZZ^n, the "
@@ -135,7 +131,6 @@ SATURATION_OPERATION: MathTool[Any, Any] = MathTool(
 
 SUBLATTICE_INDEX_OPERATION: MathTool[Any, Any] = MathTool(
     operation_id="lattice.sublattice_index.compute",
-    version="1",
     title="Compute sublattice index and quotient invariant factors",
     description=(
         "For a supplied sublattice inclusion, return the finite index and the "
@@ -160,7 +155,6 @@ SUBLATTICE_INDEX_OPERATION: MathTool[Any, Any] = MathTool(
 
 DISCRIMINANT_GROUP_OPERATION: MathTool[Any, Any] = MathTool(
     operation_id="lattice.discriminant_group.compute",
-    version="1",
     title="Compute the discriminant group and pairing order",
     description=(
         "For a nondegenerate integer lattice, return the discriminant order "
@@ -181,7 +175,6 @@ DISCRIMINANT_GROUP_OPERATION: MathTool[Any, Any] = MathTool(
 
 ORTHOGONAL_COMPLEMENT_OPERATION: MathTool[Any, Any] = MathTool(
     operation_id="lattice.orthogonal_complement.compute",
-    version="1",
     title="Compute the rational orthogonal complement",
     description=(
         "Return a canonical rational basis for the orthogonal complement of a "
@@ -202,7 +195,6 @@ ORTHOGONAL_COMPLEMENT_OPERATION: MathTool[Any, Any] = MathTool(
 
 DIRECT_SUM_OPERATION: MathTool[Any, Any] = MathTool(
     operation_id="lattice.direct_sum.compute",
-    version="1",
     title="Compute the direct sum of two lattices",
     description=(
         "Return the block-diagonal direct sum of two integer lattices under "
@@ -226,7 +218,6 @@ DIRECT_SUM_OPERATION: MathTool[Any, Any] = MathTool(
 
 ORTHOGONAL_SUM_OPERATION: MathTool[Any, Any] = MathTool(
     operation_id="lattice.orthogonal_sum.compute",
-    version="1",
     title="Compute the orthogonal sum of two lattices",
     description=(
         "Return the block-diagonal orthogonal sum of two integer lattices "

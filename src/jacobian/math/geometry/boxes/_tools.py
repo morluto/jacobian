@@ -114,7 +114,6 @@ TOOLS: MathTools = (
                 },
             ),
         ),
-        version="1",
     ),
 )
 

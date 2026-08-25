@@ -42,7 +42,6 @@ def compute_distance_matrix(
         distance is not None for row in rows for distance in row.distances
     )
     return GraphDistanceMatrixResult(
-        semantics_version="unweighted-shortest-path-distance-matrix.v2",
         vertex_ordering="LEXICOGRAPHIC_ASCENDING",
         pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
         unreachable_representation="JSON_NULL",
@@ -54,7 +53,6 @@ def compute_distance_matrix(
 
 DISTANCE_MATRIX_OPERATION = MathTool(
     operation_id="graph.distance_matrix.compute",
-    version="2",
     title="All-pairs distance matrix",
     description=(
         "Compute every exact unweighted shortest-path distance in a finite "

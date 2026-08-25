@@ -36,7 +36,6 @@ def _search_chromatic_number(
 
 CHROMATIC_NUMBER_OPERATION = MathTool(
     operation_id="graph.invariant.chromatic_number.compute",
-    version="1",
     title="Exact chromatic number",
     description=(
         "Compute the exact chromatic number of a bounded simple undirected "

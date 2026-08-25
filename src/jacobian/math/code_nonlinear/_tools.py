@@ -39,11 +39,9 @@ def _op[RequestT: StrictModel, ResultT: StrictModel](
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -77,7 +75,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
-        version="2",
     ),
     _op(
         "code.nonlinear.constant_weight.compute",
@@ -96,7 +93,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {"length": 4, "weight": 2},
             ),
         ),
-        version="2",
     ),
     _op(
         "code.binary.word_distance.compute",
@@ -115,7 +111,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {"word1": [1, 0, 1], "word2": [1, 1, 0]},
             ),
         ),
-        version="2",
     ),
     _op(
         "code.binary.explicit.profile.compute",
@@ -139,7 +134,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
-        version="2",
     ),
     _op(
         "code.binary.constant_weight.profile.compute",
@@ -163,7 +157,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
-        version="2",
     ),
     _op(
         "code.binary.explicit.to_set_system.compute",
@@ -187,7 +180,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
-        version="2",
     ),
 )
 

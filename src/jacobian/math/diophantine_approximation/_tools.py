@@ -30,11 +30,9 @@ def da_operation[RequestT: StrictModel, ResultT: StrictModel](
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -65,7 +63,6 @@ DIOPHANTINE_APPROXIMATION_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {"discriminant": 2, "term_count": 5},
             ),
         ),
-        version="2",
     ),
     da_operation(
         "diophantine.convergents.compute",
@@ -85,7 +82,6 @@ DIOPHANTINE_APPROXIMATION_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {"discriminant": 2, "convergent_count": 5},
             ),
         ),
-        version="2",
     ),
     da_operation(
         "diophantine.pell_equation.solve",

@@ -35,7 +35,6 @@ def decide_integer_sidon(request: IntegerSidonRequest) -> IntegerSidonResult:
     )
     values = tuple(int(record.difference) for record in differences)
     return IntegerSidonResult(
-        semantics_version="integer-sidon.ordered-differences.v1",
         normalized_elements=tuple(str(value) for value in elements),
         ordered_differences=differences,
         is_sidon=len(set(values)) == len(values),
@@ -68,7 +67,6 @@ def decide_cyclic_perfect_difference_set(
     order = len(residues)
     expected_modulus = order * (order - 1) + 1
     return CyclicPerfectDifferenceSetResult(
-        semantics_version="cyclic-perfect-difference-set.v1",
         modulus=request.modulus,
         normalized_residues=residues,
         order=order,
@@ -176,7 +174,6 @@ def decide_cyclic_difference_set_extension(
     candidate_count = math.comb(modulus - len(base), additional)
     extension = _find_extension(base, order, modulus)
     return CyclicDifferenceSetExtensionResult(
-        semantics_version="cyclic-pds-extension.fixed-order.v1",
         target_order=order,
         modulus=modulus,
         base_residues=base,

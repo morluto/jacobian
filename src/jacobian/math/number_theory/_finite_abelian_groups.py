@@ -31,7 +31,6 @@ FINITE_ABELIAN_GROUP_FACTORIZATION_OPERATION = number_theory_operation(
     "unique-representation",
     "coset-transversal",
     "exact",
-    version="1",
     examples=(
         example(
             "z2_times_z4_transversal",
@@ -76,7 +75,6 @@ FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION = number_theory_operation(
     "character-orthogonality",
     "cyclotomic-polynomial",
     "exact",
-    version="1",
     examples=(
         example(
             "z4_even_pair",

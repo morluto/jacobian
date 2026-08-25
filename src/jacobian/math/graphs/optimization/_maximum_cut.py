@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Annotated, Literal, Self
+from typing import Annotated, Self
 
 from pydantic import Field, StrictInt, WithJsonSchema, model_validator
 from pydantic.json_schema import JsonSchemaValue
@@ -223,7 +223,6 @@ def _projected_result_bytes(graph: SimpleUndirectedGraph) -> int:
 
     graph_value = graph.model_dump(mode="json")
     worst_case = {
-        "result_schema_version": "1",
         "graph": graph_value,
         # A valid partition contains every source vertex exactly once across
         # both sides. Putting every vertex on one side maximizes list separators
@@ -300,7 +299,6 @@ class GraphMaximumCutRequest(StrictModel):
 class GraphMaximumCutResult(StrictModel):
     """An exact maximum cut bound to its complete canonical source graph."""
 
-    result_schema_version: Literal["1"] = "1"
     graph: SimpleUndirectedGraph
     left_vertices: tuple[str, ...] = Field(max_length=256)
     right_vertices: tuple[str, ...] = Field(max_length=256)
@@ -558,7 +556,6 @@ MAXIMUM_CUT_OPERATION: MathTool[
     GraphMaximumCutResult,
 ] = MathTool(
     operation_id="graph.cut.maximum.compute",
-    version="1",
     title="Exact maximum cut",
     description=(
         "Compute one exact maximum-cardinality bipartition cut of a bounded "

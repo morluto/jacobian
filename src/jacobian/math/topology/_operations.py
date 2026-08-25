@@ -624,7 +624,7 @@ _CANONICAL_CIRCLE = {
     "f_vector": [3, 3],
     "closure_size": 6,
     "complex_digest": (
-        "sha256:6f797991bac967e2a8e572707df487061655df0f094cbde0f52f82c5401fc043"
+        "sha256:0cfbfd8d7c8d23a25d567cd58726d913d44d1e2c7302f86dbe78a6e9e46f1647"
     ),
 }
 
@@ -639,7 +639,6 @@ type TopologyOperation = (
 TOPOLOGY_OPERATIONS: tuple[TopologyOperation, ...] = (
     MathTool(
         operation_id="topology.simplicial_complex.canonicalize",
-        version="4",
         title="Canonicalize a finite simplicial complex",
         description=(
             "Validate bounded maximal facets, close them under every non-empty "
@@ -667,7 +666,6 @@ TOPOLOGY_OPERATIONS: tuple[TopologyOperation, ...] = (
     ),
     MathTool(
         operation_id="topology.simplicial_complex.chain_complex.compute",
-        version="4",
         title="Compute an oriented simplicial chain complex",
         description=(
             "Construct every oriented sparse boundary matrix for one canonical "
@@ -697,7 +695,6 @@ TOPOLOGY_OPERATIONS: tuple[TopologyOperation, ...] = (
     ),
     MathTool(
         operation_id="topology.simplicial_homology.compute",
-        version="4",
         title="Compute finite-field simplicial homology",
         description=(
             "Compute every Betti number and inspectable cycle, boundary, and "
@@ -728,7 +725,6 @@ TOPOLOGY_OPERATIONS: tuple[TopologyOperation, ...] = (
     ),
     MathTool(
         operation_id="topology.simplicial_homology.integral.compute",
-        version="5",
         title="Compute transformation-certified integral simplicial homology",
         description=(
             "Compute the free rank, torsion invariant factors, and simplex-basis "
@@ -780,9 +776,7 @@ TOPOLOGY_OPERATIONS: tuple[TopologyOperation, ...] = (
                         "f_vector": [3, 3],
                         "closure_size": 6,
                         "complex_digest": (
-                            "sha256:"
-                            "6f797991bac967e2a8e572707df487061655df0f094c"
-                            "bde0f52f82c5401fc043"
+                            "sha256:0cfbfd8d7c8d23a25d567cd58726d913d44d1e2c7302f86dbe78a6e9e46f1647"
                         ),
                     }
                 },

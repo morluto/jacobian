@@ -35,7 +35,6 @@ def test_cli_catalog_inspect_and_run_are_inline(
             json.dumps(
                 {
                     "matrix": {
-                        "matrix_schema_version": "1",
                         "domain": "QQ",
                         "entries": [[{"num": "1", "den": "1"}]],
                     }

@@ -235,7 +235,6 @@ def restrict(td: TreeDecomposition, subset: frozenset[str]) -> dict[str, object]
     keep_list = [v for v in td.graph.vertices if v in subset]
     new_edges = [(a, b) for a, b in td.graph.edges if a in subset and b in subset]
     new_graph = {
-        "graph_schema_version": "1",
         "vertices": tuple(keep_list),
         "edges": tuple(new_edges),
     }

@@ -50,7 +50,6 @@ DISCRETE_LOGARITHM_OPERATION = number_theory_operation(
     "discrete-logarithm",
     "bounded",
     "brute-force",
-    version="1",
     examples=(
         example(
             "two_to_one_mod_three",

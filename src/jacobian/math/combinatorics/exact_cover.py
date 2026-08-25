@@ -6,6 +6,7 @@ import unicodedata
 from typing import Literal, Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.canonical import (
@@ -13,6 +14,17 @@ from jacobian.canonical import (
     encode_strict_json,
 )
 from jacobian.math._labels import OpaqueLabel
+
+
+def _combinatorics_validation_error(message: str) -> PydanticCustomError:
+    lowered = message.lower()
+    code = "combinatorics.exact_cover_invariant"
+    if "bound" in lowered or "count" in lowered or "limit" in lowered:
+        code = "combinatorics.exact_cover_bound"
+    return PydanticCustomError(code, message, {})
+
+
+ValueError = _combinatorics_validation_error  # noqa: A001
 
 MAX_EXACT_COVER_ITEMS = 256
 MAX_EXACT_COVER_PRIMARY_ITEMS = MAX_EXACT_COVER_ITEMS
@@ -86,7 +98,6 @@ class GeneralizedExactCoverInstance(StrictModel):
         }
     )
 
-    instance_schema_version: Literal["1"] = "1"
     primary_items: tuple[OpaqueLabel, ...] = Field(
         max_length=MAX_EXACT_COVER_PRIMARY_ITEMS,
         description=(
@@ -165,7 +176,6 @@ def _require_output_headroom(instance: GeneralizedExactCoverInstance) -> None:
             reverse=True,
         )[:selected_count]
         common = {
-            "result_schema_version": "1",
             "instance": source,
             "search_node_limit": MAX_EXACT_COVER_SEARCH_NODES_PER_PASS,
         }
@@ -303,7 +313,6 @@ class GeneralizedExactCoverResult(StrictModel):
         }
     )
 
-    result_schema_version: Literal["1"] = "1"
     instance: GeneralizedExactCoverInstance
     search_node_limit: StrictInt = Field(ge=1, le=MAX_EXACT_COVER_SEARCH_NODES_PER_PASS)
     status: ExactCoverSearchStatus

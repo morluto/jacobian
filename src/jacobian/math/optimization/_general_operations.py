@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
+from jacobian.math.optimization._arithmetic import rational_dot
 from jacobian.math.optimization._general_models import (
     GeneralFormRationalLinearProgram,
     GeneralRationalLinearProgramRequest,
@@ -44,10 +45,6 @@ def _wire_vector(
     if any(value is None for value in converted):
         return None
     return tuple(value for value in converted if value is not None)
-
-
-def _dot(left: tuple[Fraction, ...], right: tuple[Fraction, ...]) -> Fraction:
-    return sum((a * b for a, b in zip(left, right, strict=True)), Fraction())
 
 
 def _source_point(
@@ -93,7 +90,7 @@ def _primal_data(
 ]:
     objective, coefficients, rhs = _source_arrays(program)
     residuals = tuple(
-        _dot(row, point) - expected
+        rational_dot(row, point) - expected
         for row, expected in zip(coefficients, rhs, strict=True)
     )
     constraint_slacks = tuple(
@@ -113,7 +110,7 @@ def _primal_data(
         for value, variable in zip(point, program.variables, strict=True)
     )
     return (
-        _dot(objective, point),
+        rational_dot(objective, point),
         residuals,
         constraint_slacks,
         lower_slacks,
@@ -394,7 +391,7 @@ def _map_standard_result(
     upper = tuple(sense * value for value in effective_upper)
     _, coefficient_rows, rhs = _source_arrays(program)
     dual_objective = (
-        _dot(rhs, constraints)
+        rational_dot(rhs, constraints)
         + sum(
             (
                 value * variable.lower_bound.as_fraction()
@@ -501,7 +498,6 @@ def _general_linear_program(
 GENERAL_RATIONAL_LINEAR_OPERATIONS: MathTools = (
     MathTool(
         operation_id="optimization.linear.rational_general_optimum.compute",
-        version="1",
         title="Solve a general-form rational linear program",
         description=(
             "Solve a bounded exact rational LP with labeled LE, EQ, and GE rows, "

@@ -124,7 +124,6 @@ def rational_linear_operations() -> MathTools:
     return (
         MathTool(
             operation_id="linear.rational_solution.compute",
-            version="3",
             title="Compute an exact rational solution",
             description="Return an exact rational solution or an inconsistent outcome.",
             request_type=LinearRationalSolutionFindRequest,
@@ -147,7 +146,6 @@ def rational_linear_operations() -> MathTools:
         ),
         MathTool(
             operation_id="linear.rational_inconsistency.compute",
-            version="3",
             title="Compute an exact rational inconsistency witness",
             description="Return an inconsistency witness or a consistent outcome.",
             request_type=LinearRationalInconsistencyFindRequest,

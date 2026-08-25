@@ -6,6 +6,7 @@ from math import gcd
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger, CanonicalRational
 from jacobian._models import StrictModel
@@ -20,6 +21,11 @@ from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 # canonical scalar envelope.
 MAX_REAL_ALGEBRAIC_DEGREE = 8
 MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS = 1_000
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"real_algebraic.{reason}", message)
+
 
 RealAlgebraicOrder = Literal["LT", "EQ", "GT"]
 
@@ -67,7 +73,6 @@ class RealAlgebraicValue(StrictModel):
     order.  This pair uniquely determines the value and its real embedding.
     """
 
-    real_algebraic_schema_version: Literal["1"] = "1"
     polynomial: tuple[CanonicalInteger, ...] = Field(
         min_length=2,
         max_length=MAX_REAL_ALGEBRAIC_DEGREE + 1,
@@ -92,34 +97,39 @@ class RealAlgebraicValue(StrictModel):
             len(coefficient.lstrip("-")) > MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS
             for coefficient in self.polynomial
         ):
-            raise ValueError(
+            raise _validation_error(
+                "coefficient_bound",
                 "real algebraic polynomial coefficients exceed the "
-                f"{MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS}-digit bound"
+                f"{MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS}-digit bound",
             )
         coefficients = tuple(
             parse_canonical_integer(coefficient) for coefficient in self.polynomial
         )
         if coefficients[0] <= 0:
-            raise ValueError(
-                "real algebraic minimal polynomial must have positive leading coefficient"
+            raise _validation_error(
+                "leading_sign",
+                "real algebraic minimal polynomial must have positive leading coefficient",
             )
         content = 0
         for coefficient in coefficients:
             content = gcd(content, abs(coefficient))
         if content != 1:
-            raise ValueError(
-                "real algebraic minimal polynomial must be primitive over ZZ"
+            raise _validation_error(
+                "not_primitive",
+                "real algebraic minimal polynomial must be primitive over ZZ",
             )
 
         polynomial = _sympy_polynomial(self)
         if polynomial.is_irreducible is not True:
-            raise ValueError(
-                "real algebraic minimal polynomial must be irreducible over QQ"
+            raise _validation_error(
+                "not_irreducible",
+                "real algebraic minimal polynomial must be irreducible over QQ",
             )
         real_root_count = len(polynomial.intervals())
         if self.real_root_index >= real_root_count:
-            raise ValueError(
-                "real_root_index must select an existing real root of the minimal polynomial"
+            raise _validation_error(
+                "root_index",
+                "real_root_index must select an existing real root of the minimal polynomial",
             )
         return self
 
@@ -136,11 +146,15 @@ class RationalIsolatingInterval(StrictModel):
         lower = self.lower.as_fraction()
         upper = self.upper.as_fraction()
         if lower > upper:
-            raise ValueError("isolating interval lower endpoint must not exceed upper")
+            raise _validation_error(
+                "interval_order",
+                "isolating interval lower endpoint must not exceed upper",
+            )
         expected = "SINGLETON" if lower == upper else "OPEN"
         if self.interval_type != expected:
-            raise ValueError(
-                "equal endpoints require SINGLETON; distinct endpoints require OPEN"
+            raise _validation_error(
+                "interval_type",
+                "equal endpoints require SINGLETON; distinct endpoints require OPEN",
             )
         return self
 
@@ -224,12 +238,18 @@ class RealAlgebraicOrderValue(StrictModel):
     def bind_exact_order(self) -> Self:
         order, left_interval, right_interval = _order_data(self.left, self.right)
         if self.order != order:
-            raise ValueError("order must match the selected exact real roots")
+            raise _validation_error(
+                "order_replay", "order must match the selected exact real roots"
+            )
         if self.left_isolating_interval != left_interval:
-            raise ValueError("left isolating interval does not match the selected root")
+            raise _validation_error(
+                "left_interval_replay",
+                "left isolating interval does not match the selected root",
+            )
         if self.right_isolating_interval != right_interval:
-            raise ValueError(
-                "right isolating interval does not match the selected root"
+            raise _validation_error(
+                "right_interval_replay",
+                "right isolating interval does not match the selected root",
             )
         return self
 

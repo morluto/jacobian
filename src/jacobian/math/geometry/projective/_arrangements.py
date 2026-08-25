@@ -136,7 +136,6 @@ PROJECTIVE_LINE_ARRANGEMENT_OPERATION: MathTool[
     ProjectiveLineArrangementResult,
 ] = MathTool(
     operation_id="geometry.projective_line_arrangement.flats.compute",
-    version="5",
     title="Compute projective line-arrangement flats",
     description=(
         "Normalize labelled rational projective lines and exactly compute "

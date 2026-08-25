@@ -13,7 +13,6 @@ from jacobian.math.polynomials.rational_functions._operations import (
 TOOLS = (
     MathTool(
         operation_id="rational_function.hermite_reduction.compute",
-        version="1",
         title="Reduce a rational function modulo exact derivatives",
         description=(
             "Return the canonical exact decomposition f = R' + H over QQ(x), "

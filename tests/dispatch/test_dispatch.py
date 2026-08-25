@@ -18,7 +18,6 @@ class _Result(StrictModel):
 
 class _InvalidResultOperation:
     operation_id = "test.invalid-result"
-    version = "1"
     request_type = _Request
 
     @staticmethod
@@ -40,7 +39,6 @@ def test_invoke_operation_runs_determinant_directly() -> None:
         "matrix.determinant.compute",
         {
             "matrix": {
-                "matrix_schema_version": "1",
                 "domain": "QQ",
                 "entries": [
                     [{"num": "1", "den": "1"}, {"num": "2", "den": "1"}],

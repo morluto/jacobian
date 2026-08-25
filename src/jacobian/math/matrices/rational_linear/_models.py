@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
@@ -24,17 +25,19 @@ LinearVariableName = Annotated[
 
 def _require_bounded_rationals(values: tuple[CanonicalRational, ...]) -> None:
     for value in values:
-        require_bounded_rational(
-            value,
-            max_digits=MAX_RATIONAL_DIGITS,
-            label="linear-system rational",
-        )
+        try:
+            require_bounded_rational(
+                value,
+                max_digits=MAX_RATIONAL_DIGITS,
+                label="linear-system rational",
+            )
+        except ValueError as error:
+            raise _validation_error("rational_bound", str(error)) from error
 
 
 class LinearRationalSystem(StrictModel):
     """One declared finite system ``A x = b`` over exact rationals."""
 
-    system_schema_version: Literal["1"] = "1"
     domain: Literal["QQ"] = "QQ"
     relation: Literal["AX_EQUALS_B"] = "AX_EQUALS_B"
     variables: tuple[LinearVariableName, ...] = Field(
@@ -50,14 +53,18 @@ class LinearRationalSystem(StrictModel):
     @model_validator(mode="after")
     def require_matching_canonical_dimensions(self) -> Self:
         if len(set(self.variables)) != len(self.variables):
-            raise ValueError("linear-system variable names must be unique")
+            raise _validation_error(
+                "budget_exceeded", "linear-system variable names must be unique"
+            )
         if len(self.coefficients.entries[0]) != len(self.variables):
-            raise ValueError(
-                "the coefficient column count must equal the declared variable count"
+            raise _validation_error(
+                "budget_exceeded",
+                "the coefficient column count must equal the declared variable count",
             )
         if len(self.coefficients.entries) != len(self.rhs):
-            raise ValueError(
-                "the right-hand side length must equal the coefficient row count"
+            raise _validation_error(
+                "budget_exceeded",
+                "the right-hand side length must equal the coefficient row count",
             )
         _require_bounded_rationals(
             tuple(value for row in self.coefficients.entries for value in row)
@@ -96,7 +103,10 @@ class LinearRationalSolutionResult(StrictModel):
     def bind_solution_to_source(self) -> Self:
         produced = self.status == "SOLUTION"
         if produced != (self.values is not None):
-            raise ValueError("solution values must agree with the result status")
+            raise _validation_error(
+                "invariant_mismatch",
+                "solution values must agree with the result status",
+            )
         if self.values is None:
             from jacobian.math.matrices._operations import _system_rank_replay
 
@@ -104,13 +114,17 @@ class LinearRationalSolutionResult(StrictModel):
                 self.system.coefficients, self.system.rhs
             )
             if coefficient_rank >= augmented_rank:
-                raise ValueError(
+                raise _validation_error(
+                    "budget_exceeded",
                     "an inconsistent outcome requires rank(A) < rank([A | b]) "
-                    "on the source system"
+                    "on the source system",
                 )
             return self
         if len(self.values) != len(self.system.variables):
-            raise ValueError("solution length must equal the source variable count")
+            raise _validation_error(
+                "budget_exceeded",
+                "solution length must equal the source variable count",
+            )
         components = [value.as_fraction() for value in self.values]
         for row, bound in zip(
             self.system.coefficients.entries,
@@ -122,7 +136,9 @@ class LinearRationalSolutionResult(StrictModel):
                 for coefficient, component in zip(row, components, strict=True)
             )
             if residual != bound.as_fraction():
-                raise ValueError("solution does not satisfy A x = b exactly")
+                raise _validation_error(
+                    "budget_exceeded", "solution does not satisfy A x = b exactly"
+                )
         return self
 
 
@@ -154,7 +170,10 @@ class LinearRationalInconsistencyResult(StrictModel):
     def bind_witness_to_source(self) -> Self:
         produced = self.status == "INCONSISTENT"
         if produced != (self.left_witness is not None and self.rhs_pairing is not None):
-            raise ValueError("inconsistency witness must agree with the result status")
+            raise _validation_error(
+                "invariant_mismatch",
+                "inconsistency witness must agree with the result status",
+            )
         if self.left_witness is None or self.rhs_pairing is None:
             from jacobian.math.matrices._operations import _system_rank_replay
 
@@ -162,13 +181,16 @@ class LinearRationalInconsistencyResult(StrictModel):
                 self.system.coefficients, self.system.rhs
             )
             if coefficient_rank != augmented_rank:
-                raise ValueError(
+                raise _validation_error(
+                    "shape_mismatch",
                     "a consistent outcome requires rank(A) == rank([A | b]) "
-                    "on the source system"
+                    "on the source system",
                 )
             return self
         if len(self.left_witness) != len(self.system.rhs):
-            raise ValueError("witness length must equal the source row count")
+            raise _validation_error(
+                "shape_mismatch", "witness length must equal the source row count"
+            )
         coordinates = [value.as_fraction() for value in self.left_witness]
         columns = range(len(self.system.coefficients.entries[0]))
         for column in columns:
@@ -183,15 +205,22 @@ class LinearRationalInconsistencyResult(StrictModel):
                 )
                 != 0
             ):
-                raise ValueError("witness does not satisfy y^T A = 0 exactly")
+                raise _validation_error(
+                    "budget_exceeded", "witness does not satisfy y^T A = 0 exactly"
+                )
         pairing = sum(
             bound.as_fraction() * coordinate
             for bound, coordinate in zip(self.system.rhs, coordinates, strict=True)
         )
         if pairing != self.rhs_pairing.as_fraction():
-            raise ValueError("recorded pairing must equal y^T b on the source system")
+            raise _validation_error(
+                "invariant_mismatch",
+                "recorded pairing must equal y^T b on the source system",
+            )
         if pairing == 0:
-            raise ValueError("separating witness must have a nonzero pairing")
+            raise _validation_error(
+                "status_mismatch", "separating witness must have a nonzero pairing"
+            )
         return self
 
 
@@ -199,3 +228,7 @@ class LinearRationalInconsistencyFindRequest(StrictModel):
     """Ask whether a rational linear system is inconsistent."""
 
     system: LinearRationalSystem
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"matrix.{reason}", message)

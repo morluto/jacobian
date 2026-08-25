@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -15,6 +16,13 @@ from jacobian.math.number_theory.ramanujan_sums import (
     _MAX_MODULUS_DIGITS,
     ramanujan_sum,
 )
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable semantic error owned by the number-theory domain."""
+
+    return PydanticCustomError(f"number_theory.{reason}", message)
+
 
 RamanujanModulus = Annotated[
     CanonicalInteger,
@@ -55,7 +63,9 @@ class RamanujanSumRequest(StrictModel):
     @model_validator(mode="after")
     def require_nonnegative_modulus(self) -> Self:
         if int(self.modulus) < 0:
-            raise ValueError("modulus must be nonnegative")
+            raise _validation_error(
+                "modulus_must_be_nonnegative", "modulus must be nonnegative"
+            )
         return self
 
 
@@ -75,14 +85,19 @@ class RamanujanSumResult(StrictModel):
     @model_validator(mode="after")
     def require_nonnegative_modulus(self) -> Self:
         if int(self.modulus) < 0:
-            raise ValueError("modulus must be nonnegative")
+            raise _validation_error(
+                "modulus_must_be_nonnegative", "modulus must be nonnegative"
+            )
         return self
 
     @model_validator(mode="after")
     def bind_value_to_source(self) -> Self:
         expected = ramanujan_sum(int(self.modulus), int(self.frequency))
         if int(self.value) != expected:
-            raise ValueError("Ramanujan-sum value does not match its source")
+            raise _validation_error(
+                "ramanujan_sum_value_does_not_match_its_source",
+                "Ramanujan-sum value does not match its source",
+            )
         return self
 
 
@@ -123,5 +138,4 @@ RAMANUJAN_SUM_OPERATION = number_theory_operation(
             {"modulus": "4", "frequency": "2"},
         ),
     ),
-    version="1",
 )

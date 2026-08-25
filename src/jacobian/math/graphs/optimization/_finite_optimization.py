@@ -128,7 +128,6 @@ def _operation[ResultT: StrictModel](
 ) -> MathTool[GraphOptimizationRequest, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version="1",
         title=title,
         description=description,
         request_type=GraphOptimizationRequest,

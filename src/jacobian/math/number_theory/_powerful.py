@@ -19,7 +19,6 @@ def decide_powerful(request: PowerfulNumberRequest) -> PowerfulNumberResult:
 
     data = decide_powerful_data(parse_canonical_integer(request.value))
     return PowerfulNumberResult(
-        semantics_version="powerful-number.partial-factor.v2",
         value=request.value,
         conclusion=data.conclusion,
         is_powerful=data.conclusion == "POWERFUL",
@@ -66,5 +65,4 @@ POWERFUL_NUMBER_OPERATION = number_theory_operation(
             {"value": "12168"},
         ),
     ),
-    version="3",
 )

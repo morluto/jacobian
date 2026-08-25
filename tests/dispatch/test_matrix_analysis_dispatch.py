@@ -40,9 +40,7 @@ def _encoded_inertia_payload_near_limit(offset: int) -> bytes:
                 ]
                 for r in range(dimension)
             ]
-            return encode_strict_json(
-                {"matrix_schema_version": "1", "domain": "QQ", "entries": rows}
-            )
+            return encode_strict_json({"domain": "QQ", "entries": rows})
 
         target = limits.max_output_bytes - offset
         low = len(dense_echo(dict.fromkeys(cells, 1)))

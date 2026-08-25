@@ -42,7 +42,6 @@ def compute_periodic_congruence_union_measure(
         source, measure_periodic_union(source)
     )
     return PeriodicCongruenceUnionMeasureResult(
-        semantics_version="periodic-congruence-union.v1",
         source=source,
         common_period=period,
         occupied_count=occupied_count,
@@ -59,7 +58,6 @@ def compute_periodic_congruence_union_profile(
     residues = materialize_periodic_union(source)
     period, occupied_count, density = _measure_values(source, len(residues))
     return PeriodicCongruenceUnionProfileResult(
-        semantics_version="periodic-congruence-union.v1",
         source=source,
         common_period=period,
         occupied_count=occupied_count,

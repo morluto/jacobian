@@ -33,11 +33,9 @@ def discrepancy_theory_operation[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -133,7 +131,6 @@ DISCREPANCY_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "set-system",
         "combinatorial-search",
         "exact",
-        version="3",
         examples=(
             example(
                 "three_element_optimum",

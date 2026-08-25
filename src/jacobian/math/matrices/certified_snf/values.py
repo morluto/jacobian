@@ -6,6 +6,7 @@ from itertools import pairwise
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -24,7 +25,6 @@ def _integer_digits(value: str) -> int:
 class CertifiedIntegerMatrix(StrictModel):
     """One bounded integer matrix, including matrices with a zero dimension."""
 
-    matrix_schema_version: Literal["1"] = "1"
     domain: Literal["ZZ"] = "ZZ"
     row_count: StrictInt = Field(ge=0, le=MAX_CERTIFIED_SNF_DIMENSION)
     column_count: StrictInt = Field(ge=0, le=MAX_CERTIFIED_SNF_DIMENSION)
@@ -38,20 +38,23 @@ class CertifiedIntegerMatrix(StrictModel):
         if len(self.entries) != self.row_count or any(
             len(row) != self.column_count for row in self.entries
         ):
-            raise ValueError("certified integer matrix entries must match its shape")
+            raise _validation_error(
+                "invalid", "certified integer matrix entries must match its shape"
+            )
         if any(
             _integer_digits(value) > MAX_CERTIFIED_SNF_OUTPUT_DIGITS
             for row in self.entries
             for value in row
         ):
-            raise ValueError("certified integer matrix exceeds the output digit bound")
+            raise _validation_error(
+                "invalid", "certified integer matrix exceeds the output digit bound"
+            )
         return self
 
 
 class SmithNormalFormCertificate(StrictModel):
     """A proposed exact relation ``D = U A V`` with unimodular ``U`` and ``V``."""
 
-    certificate_schema_version: Literal["1"] = "1"
     source: CertifiedIntegerMatrix
     diagonal: CertifiedIntegerMatrix
     left_transformation: CertifiedIntegerMatrix
@@ -87,7 +90,9 @@ class SmithNormalFormCertificate(StrictModel):
             )
             != (columns, columns)
         ):
-            raise ValueError("Smith certificate matrix shapes are incompatible")
+            raise _validation_error(
+                "invalid", "Smith certificate matrix shapes are incompatible"
+            )
         diagonal_count = min(rows, columns)
         diagonal = tuple(
             parse_canonical_integer(self.diagonal.entries[index][index])
@@ -99,7 +104,7 @@ class SmithNormalFormCertificate(StrictModel):
             for column in range(columns)
             if row != column
         ):
-            raise ValueError("Smith normal form must be diagonal")
+            raise _validation_error("invalid", "Smith normal form must be diagonal")
         factors = tuple(
             parse_canonical_integer(value) for value in self.invariant_factors
         )
@@ -111,8 +116,9 @@ class SmithNormalFormCertificate(StrictModel):
             or any(value != 0 for value in diagonal[self.rank :])
             or any(right % left for left, right in pairwise(factors))
         ):
-            raise ValueError(
-                "Smith invariant factors must be the positive divisibility diagonal"
+            raise _validation_error(
+                "invalid",
+                "Smith invariant factors must be the positive divisibility diagonal",
             )
         return self
 
@@ -148,9 +154,10 @@ class SmithNormalFormCertificate(StrictModel):
             for row in self.right_transformation.entries
         ]
         if matrix_multiply(matrix_multiply(left, source), right) != diagonal:
-            raise ValueError(
+            raise _validation_error(
+                "invalid",
                 "Smith certificate transformations must replay "
-                "diagonal = left * source * right exactly"
+                "diagonal = left * source * right exactly",
             )
         for label, transformation, determinant in (
             ("left", left, self.left_determinant),
@@ -158,11 +165,16 @@ class SmithNormalFormCertificate(StrictModel):
         ):
             numeric_determinant = matrix_determinant(transformation)
             if numeric_determinant != int(determinant):
-                raise ValueError(
+                raise _validation_error(
+                    "invalid",
                     f"Smith certificate {label} transformation determinant "
-                    f"must be the declared unimodular {determinant}"
+                    f"must be the declared unimodular {determinant}",
                 )
         return self
 
 
 __all__ = ["CertifiedIntegerMatrix", "SmithNormalFormCertificate"]
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"matrix.{reason}", message)

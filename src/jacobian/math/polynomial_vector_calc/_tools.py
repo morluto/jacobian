@@ -28,7 +28,6 @@ def _polynomial(
     *terms: tuple[int, tuple[int, ...]],
 ) -> dict[str, Any]:
     return {
-        "polynomial_schema_version": "1",
         "domain": "QQ",
         "variables": list(variables),
         "polynomial": {
@@ -52,11 +51,9 @@ def _op[RequestT: StrictModel, ResultT: StrictModel](
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "2",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version=version,
         title=title,
         description=description,
         request_type=request_model,

@@ -6,6 +6,7 @@ from fractions import Fraction
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
@@ -42,6 +43,12 @@ MAX_RESULT_REPLAY_ORDER = MAX_TRUNCATION_ORDER
 CoefficientHeight = RationalHeight | None
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by formal-series contracts."""
+
+    return PydanticCustomError(f"formal_power_series.{reason}", message)
+
+
 def _height(value: CanonicalRational) -> RationalHeight:
     return RationalHeight.from_canonical(value)
 
@@ -71,9 +78,10 @@ def _require_height_vector(
         height is not None and height.exceeds(MAX_RESULT_RATIONAL_DIGITS)
         for height in coefficients
     ):
-        raise ValueError(
+        raise _validation_error(
+            f"{operation}_coefficient_growth",
             f"{operation} coefficient growth exceeds the "
-            f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound"
+            f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound",
         )
 
 
@@ -148,17 +156,19 @@ def _convolution_height(
 
 def _require_height(height: RationalHeight, operation: str) -> None:
     if height.exceeds(MAX_RESULT_RATIONAL_DIGITS):
-        raise ValueError(
+        raise _validation_error(
+            f"{operation}_coefficient_growth",
             f"{operation} coefficient growth exceeds the "
-            f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound"
+            f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound",
         )
 
 
 def _require_replay_order(order: int, operation: str) -> None:
     if order > MAX_RESULT_REPLAY_ORDER:
-        raise ValueError(
+        raise _validation_error(
+            f"{operation}_replay_order",
             f"{operation} result replay exceeds the "
-            f"{MAX_RESULT_REPLAY_ORDER}-order replay envelope"
+            f"{MAX_RESULT_REPLAY_ORDER}-order replay envelope",
         )
 
 
@@ -166,11 +176,15 @@ def _require_zero_residual(
     coefficients: tuple[CanonicalRational, ...], order: int, operation: str
 ) -> None:
     if len(coefficients) != order:
-        raise ValueError(
-            f"{operation} residual must contain exactly {order} coefficients"
+        raise _validation_error(
+            f"{operation}_residual_length",
+            f"{operation} residual must contain exactly {order} coefficients",
         )
     if any(value.num != "0" for value in coefficients):
-        raise ValueError(f"{operation} residual must be identically zero")
+        raise _validation_error(
+            f"{operation}_residual_nonzero",
+            f"{operation} residual must be identically zero",
+        )
 
 
 def _fraction_coefficients(series: TruncatedSeries) -> tuple[Fraction, ...]:
@@ -184,7 +198,10 @@ def _convolution_coefficients(
         left.variable != right.variable
         or left.truncation_order != right.truncation_order
     ):
-        raise ValueError("source series must share variable and truncation order")
+        raise _validation_error(
+            "source_context_mismatch",
+            "source series must share variable and truncation order",
+        )
     left_values = _fraction_coefficients(left)
     right_values = _fraction_coefficients(right)
     return tuple(
@@ -206,7 +223,10 @@ def _composition_coefficients(
         outer.variable != inner.variable
         or outer.truncation_order != inner.truncation_order
     ):
-        raise ValueError("source series must share variable and truncation order")
+        raise _validation_error(
+            "source_context_mismatch",
+            "source series must share variable and truncation order",
+        )
     order = outer.truncation_order
     outer_values = _fraction_coefficients(outer)
     inner_values = _fraction_coefficients(inner)
@@ -290,8 +310,9 @@ class TruncatedSeries(StrictModel):
     @model_validator(mode="after")
     def require_dense_tuple(self) -> Self:
         if len(self.coefficients) != self.truncation_order:
-            raise ValueError(
-                "coefficient tuple must have exactly truncation_order entries"
+            raise _validation_error(
+                "coefficient_count_mismatch",
+                "coefficient tuple must have exactly truncation_order entries",
             )
         for value in self.coefficients:
             require_bounded_rational(
@@ -379,9 +400,14 @@ class _SeriesPairRequest(StrictModel):
     @model_validator(mode="after")
     def require_matching_context(self) -> Self:
         if self.left.variable != self.right.variable:
-            raise ValueError("operands must share the same variable")
+            raise _validation_error(
+                "operand_variable_mismatch", "operands must share the same variable"
+            )
         if self.left.truncation_order != self.right.truncation_order:
-            raise ValueError("operands must share the same truncation order")
+            raise _validation_error(
+                "operand_order_mismatch",
+                "operands must share the same truncation order",
+            )
         return self
 
 
@@ -434,7 +460,10 @@ class SeriesDivideRequest(_SeriesPairRequest):
     @model_validator(mode="after")
     def require_unit_denominator(self) -> Self:
         if self.right.coefficients[0].as_fraction() == 0:
-            raise ValueError("denominator must have a nonzero constant term")
+            raise _validation_error(
+                "denominator_zero_constant",
+                "denominator must have a nonzero constant term",
+            )
         return self
 
     @model_validator(mode="after")
@@ -484,9 +513,15 @@ class SeriesMultiplyResult(StrictModel):
         _require_replay_order(self.result.truncation_order, "multiplication")
         expected = _convolution_coefficients(self.left, self.right)
         if _fraction_coefficients(self.result) != expected:
-            raise ValueError("result must equal the source convolution")
+            raise _validation_error(
+                "convolution_result_mismatch",
+                "result must equal the source convolution",
+            )
         if tuple(value.as_fraction() for value in self.convolution_ledger) != expected:
-            raise ValueError("convolution ledger must equal the source convolution")
+            raise _validation_error(
+                "convolution_ledger_mismatch",
+                "convolution ledger must equal the source convolution",
+            )
         return self
 
 
@@ -570,7 +605,9 @@ class SeriesInverseRequest(StrictModel):
             coefficients=self.coefficients,
         )
         if series.coefficients[0].as_fraction() == 0:
-            raise ValueError("inverse requires a nonzero constant term")
+            raise _validation_error(
+                "inverse_zero_constant", "inverse requires a nonzero constant term"
+            )
         inverse = _inverse_height(series)
         residual = _convolution_height(
             _max_height(series.coefficients), inverse, self.truncation_order
@@ -609,8 +646,9 @@ class SeriesInverseResult(StrictModel):
         product[0] -= 1
         residual = tuple(value.as_fraction() for value in self.residual_coefficients)
         if tuple(product) != residual:
-            raise ValueError(
-                "inverse residual must equal source times result minus one"
+            raise _validation_error(
+                "inverse_residual_mismatch",
+                "inverse residual must equal source times result minus one",
             )
         return self
 
@@ -648,8 +686,9 @@ class SeriesDivideResult(StrictModel):
         )
         residual = tuple(value.as_fraction() for value in self.residual_coefficients)
         if expected != residual:
-            raise ValueError(
-                "division residual must equal denominator times quotient minus numerator"
+            raise _validation_error(
+                "division_residual_mismatch",
+                "division residual must equal denominator times quotient minus numerator",
             )
         return self
 
@@ -666,14 +705,19 @@ class SeriesComposeRequest(StrictModel):
     @model_validator(mode="after")
     def require_matching_variable_and_zero_inner_constant(self) -> Self:
         if self.outer.variable != self.inner.variable:
-            raise ValueError("outer and inner series must share the same variable")
+            raise _validation_error(
+                "composition_variable_mismatch",
+                "outer and inner series must share the same variable",
+            )
         if self.outer.truncation_order != self.inner.truncation_order:
-            raise ValueError(
-                "outer and inner series must share the same truncation order"
+            raise _validation_error(
+                "composition_order_mismatch",
+                "outer and inner series must share the same truncation order",
             )
         if self.inner.coefficients[0].as_fraction() != 0:
-            raise ValueError(
-                "inner series must have zero constant term for composition with a finite prefix"
+            raise _validation_error(
+                "composition_nonzero_inner_constant",
+                "inner series must have zero constant term for composition with a finite prefix",
             )
         _composition_height_vector(
             _height_vector(self.outer.coefficients),
@@ -710,9 +754,14 @@ class SeriesReversionRequest(StrictModel):
             coefficients=self.coefficients,
         )
         if series.coefficients[0].as_fraction() != 0:
-            raise ValueError("reversion requires zero constant term")
+            raise _validation_error(
+                "reversion_nonzero_constant", "reversion requires zero constant term"
+            )
         if series.coefficients[1].as_fraction() == 0:
-            raise ValueError("reversion requires nonzero linear coefficient")
+            raise _validation_error(
+                "reversion_zero_linear_coefficient",
+                "reversion requires nonzero linear coefficient",
+            )
         source = _height_vector(series.coefficients)
         linear = _height(series.coefficients[1])
         result: list[CoefficientHeight] = [
@@ -775,15 +824,17 @@ class SeriesReversionResult(StrictModel):
             tuple(left[index] - identity[index] for index in range(order))
             != left_residual
         ):
-            raise ValueError(
-                "left residual must equal source composed with result minus x"
+            raise _validation_error(
+                "reversion_left_residual_mismatch",
+                "left residual must equal source composed with result minus x",
             )
         if (
             tuple(right[index] - identity[index] for index in range(order))
             != right_residual
         ):
-            raise ValueError(
-                "right residual must equal result composed with source minus x"
+            raise _validation_error(
+                "reversion_right_residual_mismatch",
+                "right residual must equal result composed with source minus x",
             )
         return self
 
@@ -808,7 +859,10 @@ class SeriesIntegralRequest(StrictModel):
     @model_validator(mode="after")
     def require_output_order_in_range(self) -> Self:
         if self.output_order > self.series.truncation_order + 1:
-            raise ValueError("output_order must not exceed source_order + 1")
+            raise _validation_error(
+                "integral_output_order_exceeds_source",
+                "output_order must not exceed source_order + 1",
+            )
         integer = RationalHeight(len(str(max(1, self.output_order - 1))), 1)
         _require_height(
             _max_height(self.series.coefficients).quotient(integer), "integration"
@@ -840,9 +894,15 @@ class SeriesTruncateRequest(StrictModel):
     @model_validator(mode="after")
     def require_target_le_source(self) -> Self:
         if self.target_order > self.series.truncation_order:
-            raise ValueError("target_order must not exceed source truncation order")
+            raise _validation_error(
+                "truncate_target_exceeds_source",
+                "target_order must not exceed source truncation order",
+            )
         if self.target_order > MAX_TRUNCATION_ORDER:
-            raise ValueError("target_order exceeds the public bound")
+            raise _validation_error(
+                "truncate_target_exceeds_public_bound",
+                "target_order exceeds the public bound",
+            )
         return self
 
 
@@ -869,10 +929,15 @@ class SeriesIdentityCheckResult(StrictModel):
                 self.first_differing_index is not None
                 or self.exact_difference is not None
             ):
-                raise ValueError("EQUAL must not carry a difference")
+                raise _validation_error(
+                    "equal_carries_difference", "EQUAL must not carry a difference"
+                )
         else:
             if self.first_differing_index is None or self.exact_difference is None:
-                raise ValueError("NOT_EQUAL must carry a difference")
+                raise _validation_error(
+                    "not_equal_missing_difference",
+                    "NOT_EQUAL must carry a difference",
+                )
         return self
 
 
@@ -894,7 +959,10 @@ class SeriesFromPolynomialRequest(StrictModel):
     @model_validator(mode="after")
     def require_dense_tuple(self) -> Self:
         if len(self.coefficients) != self.truncation_order:
-            raise ValueError("input coefficients must match truncation_order exactly")
+            raise _validation_error(
+                "input_coefficient_count_mismatch",
+                "input coefficients must match truncation_order exactly",
+            )
         for value in self.coefficients:
             require_bounded_rational(
                 value,

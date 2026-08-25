@@ -31,10 +31,6 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 # ---------------------------------------------------------------------------
 
 _MAX_INTEGER_LENGTH = 256
-# FactorizationInteger covers 20-digit inputs; SymPy factorint (Pollard rho /
-# ECM) handles 20-digit semiprimes in ~0.2s, keeping the bounded
-# synchronous budget safe.
-_MAX_FACTORIZATION_LENGTH = 20
 MAX_POWERFUL_INTEGER_DIGITS = 25
 MAX_POWERFUL_CUTOFF = 100_000
 MAX_POWERFUL_FACTOR_ENTRIES = 42
@@ -78,8 +74,6 @@ _MAX_CRT_SIZE = 64
 # system must stay within the same width.  ``10 ** _MAX_INTEGER_LENGTH``
 # is the smallest excluded combined modulus (positive values only).
 _MAX_CRT_COMBINED_MODULUS = 10**_MAX_INTEGER_LENGTH
-_MAX_DIVISORS = 4_096
-_MAX_FACTOR_ENTRIES = 256
 
 # Friable counting has two exact, result-sensitive execution regimes. The
 # materialized regime uses one bytearray for primality and one for friability;
@@ -104,22 +98,10 @@ BoundedInteger = Annotated[
         strict=True,
     ),
 ]
-
-
 class PrimalityRequest(StrictModel):
     """One bounded canonical integer for the maintained primality backend."""
 
     value: BoundedInteger
-
-
-FactorizationInteger = Annotated[
-    str,
-    StringConstraints(
-        pattern=r"^-?(?:0|[1-9][0-9]*)$",
-        max_length=_MAX_FACTORIZATION_LENGTH,
-        strict=True,
-    ),
-]
 PowerfulInteger = Annotated[
     str,
     StringConstraints(
@@ -212,25 +194,6 @@ def _plan_friable_count(x: int, y: int) -> tuple[_FriableRegime, tuple[int, ...]
                 "generated friable counting exceeds the search-node budget",
             )
     return "GENERATED", primes
-
-
-class FactorizationRequest(StrictModel):
-    """One small integer for direct exact factorization in the server process."""
-
-    value: FactorizationInteger
-
-
-class NonzeroFactorizationRequest(FactorizationRequest):
-    """One nonzero integer with a finite divisor and prime-factorization set."""
-
-    @model_validator(mode="after")
-    def require_nonzero_value(self) -> Self:
-        if int(self.value) == 0:
-            raise _validation_error(
-                "zero_has_no_finite_factorization_or_divisor_enumeration",
-                "zero has no finite factorization or divisor enumeration",
-            )
-        return self
 
 
 class PowerfulNumberRequest(StrictModel):
@@ -531,135 +494,11 @@ class PrimorialResult(StrictModel):
     value: PrimorialInteger
 
 
-class DivisorListResult(StrictModel):
-    """An ordered list of positive divisors of one nonzero integer.
-
-    Retains the canonical source integer and the operation's divisor
-    convention so validation replays the exact enumeration: the list is
-    exactly all positive divisors of ``abs(value)`` (proper ones exclude
-    ``abs(value)`` itself) in ascending order.  The list may be empty:
-    ``proper_divisors(±1)`` has no positive proper divisors.  Zero remains
-    not-applicable (handled at the operation layer).  The source carries the
-    same 20-digit factorization bound as the producing requests, so replay
-    never factors outside the operation's admitted work envelope.
-    """
-
-    value: FactorizationInteger
-    divisors: tuple[BoundedInteger, ...] = Field(
-        min_length=0,
-        max_length=_MAX_DIVISORS,
-    )
-    convention: Literal["ALL_POSITIVE_DIVISORS", "PROPER_DIVISORS"] = (
-        "ALL_POSITIVE_DIVISORS"
-    )
-
-    @model_validator(mode="after")
-    def require_source_enumeration(self) -> Self:
-        from jacobian.math.number_theory._factorization_kernels import (
-            _replayed_divisors,
-        )
-
-        values = [int(divisor) for divisor in self.divisors]
-        if any(value < 1 for value in values):
-            raise _validation_error(
-                "divisors_must_be_positive", "divisors must be positive"
-            )
-        if values != sorted(values):
-            raise _validation_error(
-                "divisors_must_be_ascending", "divisors must be ascending"
-            )
-        if len(set(values)) != len(values):
-            raise _validation_error(
-                "divisors_must_be_unique", "divisors must be unique"
-            )
-        value = int(self.value)
-        if value == 0:
-            raise _validation_error(
-                "zero_has_infinitely_many_divisors", "zero has infinitely many divisors"
-            )
-        if self.divisors != _replayed_divisors(
-            value, proper=self.convention == "PROPER_DIVISORS"
-        ):
-            raise _validation_error(
-                "divisor_list_must_enumerate_the_divisors_of_the_source",
-                "divisor list must enumerate the divisors of the source",
-            )
-        return self
-
-
 class PrimePower(StrictModel):
     """One prime base and its exponent in a prime factorization."""
 
     prime: BoundedInteger
     power: int = Field(ge=1, le=_MAX_N_SMALL)
-
-
-class PrimeFactorizationResult(StrictModel):
-    """The complete prime-power factorization of one nonzero integer.
-
-    Retains the canonical source integer so validation replays the defining
-    invariant: prime bases are strictly increasing proven primes with
-    positive exponents whose product reconstructs ``abs(value)`` exactly.
-    The factor list may be empty: ``±1`` has no prime factors.  Zero remains
-    not-applicable (handled at the operation layer).
-    """
-
-    value: BoundedInteger
-    factors: tuple[PrimePower, ...] = Field(
-        min_length=0,
-        max_length=_MAX_FACTOR_ENTRIES,
-    )
-
-    @model_validator(mode="after")
-    def require_source_factorization(self) -> Self:
-        from sympy import isprime
-
-        primes = [factor.prime for factor in self.factors]
-        if len(set(primes)) != len(primes):
-            raise _validation_error(
-                "prime_factors_must_be_unique", "prime factors must be unique"
-            )
-        value = int(self.value)
-        if value == 0:
-            raise _validation_error(
-                "zero_has_no_finite_prime_factorization",
-                "zero has no finite prime factorization",
-            )
-        target = abs(value)
-        product = 1
-        previous_prime = 0
-        for factor in self.factors:
-            prime = int(factor.prime)
-            if prime <= previous_prime:
-                raise _validation_error(
-                    "prime_bases_must_be_strictly_ascending",
-                    "prime bases must be strictly ascending",
-                )
-            if prime < 2 or not isprime(prime):
-                raise _validation_error(
-                    "f_factor_prime_is_not_prime", f"{factor.prime} is not prime"
-                )
-            power_value = 1
-            for _ in range(factor.power):
-                power_value *= prime
-                if power_value > target:
-                    raise _validation_error(
-                        "prime_powers_must_multiply_to_abs_value",
-                        "prime powers must multiply to abs(value)",
-                    )
-            product *= power_value
-            if product > target:
-                raise _validation_error(
-                    "prime_powers_must_multiply_to_abs_value",
-                    "prime powers must multiply to abs(value)",
-                )
-            previous_prime = prime
-        if product != target:
-            raise _validation_error(
-                "prime_powers_must_multiply_to_abs_value",
-                "prime powers must multiply to abs(value)",
-            )
-        return self
 
 
 class ResidualPerfectPower(StrictModel):

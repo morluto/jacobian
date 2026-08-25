@@ -6,18 +6,20 @@ import math
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.arithmetic.values import IntegerValue
+from jacobian.math.number_theory._direct_factorization_models import (
+    DivisorListResult,
+    FactorizationRequest,
+    PrimeFactorizationResult,
+)
 from jacobian.math.number_theory._models import (
     ArithmeticFunctionRequest,
     BooleanResult,
     CertifiedFactor,
     CertifiedFactorizationRequest,
     CertifiedFactorizationResult,
-    DivisorListResult,
-    FactorizationRequest,
     PrattCertificateNode,
     PrimalityCertificateRequest,
     PrimalityCertificateResult,
-    PrimeFactorizationResult,
     PrimePower,
 )
 

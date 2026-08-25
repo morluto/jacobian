@@ -8,6 +8,11 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.arithmetic.values import IntegerValue
+from jacobian.math.number_theory._direct_factorization_models import (
+    DivisorListResult,
+    NonzeroFactorizationRequest,
+    PrimeFactorizationResult,
+)
 from jacobian.math.number_theory._factorization_kernels import (
     compute_pratt_certificate,
     compute_radical,
@@ -22,11 +27,8 @@ from jacobian.math.number_theory._models import (
     BooleanResult,
     CertifiedFactorizationRequest,
     CertifiedFactorizationResult,
-    DivisorListResult,
-    NonzeroFactorizationRequest,
     PrimalityCertificateRequest,
     PrimalityCertificateResult,
-    PrimeFactorizationResult,
 )
 
 

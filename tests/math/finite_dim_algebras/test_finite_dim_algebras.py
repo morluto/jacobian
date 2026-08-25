@@ -165,8 +165,12 @@ def test_center_rejects_above_derived_dimension_boundary() -> None:
     monkeypatch_cap = pytest.MonkeyPatch()
     try:
         monkeypatch_cap.setattr(_models, "_MAX_DIM_FOR_CENTER", 32)
-        with pytest.raises(ValidationError, match="at most 32 dimensions"):
+        with pytest.raises(ValidationError) as error:
             CenterRequest(algebra=struct)
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_dim_algebra.center_dimension_limit"
+        )
     finally:
         monkeypatch_cap.undo()
 

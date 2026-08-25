@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
@@ -32,12 +33,21 @@ class GraphEdgeList(StrictModel):
         seen: set[tuple[int, int]] = set()
         for u, v in self.edges:
             if not (0 <= u < self.vertex_count and 0 <= v < self.vertex_count):
-                raise ValueError("edge vertices must be in 0..vertex_count-1")
+                raise PydanticCustomError(
+                    "graph.edge_vertices_must_be_in_0_vertex_count_1",
+                    "edge vertices must be in 0..vertex_count-1",
+                )
             if u == v:
-                raise ValueError("a simple graph cannot contain self-loops")
+                raise PydanticCustomError(
+                    "graph.a_simple_graph_cannot_contain_self_loops",
+                    "a simple graph cannot contain self-loops",
+                )
             edge = (min(u, v), max(u, v))
             if edge in seen:
-                raise ValueError("a simple graph cannot contain duplicate edges")
+                raise PydanticCustomError(
+                    "graph.a_simple_graph_cannot_contain_duplicate_edges",
+                    "a simple graph cannot contain duplicate edges",
+                )
             seen.add(edge)
         return self
 
@@ -76,15 +86,24 @@ class GraphSpectrumResult(StrictModel):
 
         order = self.graph.vertex_count
         if len(self.eigenvalues) != len(self.multiplicities):
-            raise ValueError(
-                "eigenvalue and multiplicity tuples must have equal length"
+            raise PydanticCustomError(
+                "graph.eigenvalue_multiplicity_tuples_have_equal_length",
+                "eigenvalue and multiplicity tuples must have equal length",
             )
         if len(set(self.eigenvalues)) != len(self.eigenvalues):
-            raise ValueError("eigenvalues must be distinct")
+            raise PydanticCustomError(
+                "graph.eigenvalues_must_be_distinct", "eigenvalues must be distinct"
+            )
         if any(multiplicity < 1 for multiplicity in self.multiplicities):
-            raise ValueError("algebraic multiplicities must be positive")
+            raise PydanticCustomError(
+                "graph.algebraic_multiplicities_must_be_positive",
+                "algebraic multiplicities must be positive",
+            )
         if sum(self.multiplicities) != order:
-            raise ValueError("multiplicities must sum to the graph order")
+            raise PydanticCustomError(
+                "graph.multiplicities_must_sum_to_the_graph_order",
+                "multiplicities must sum to the graph order",
+            )
         replayed = (
             adjacency_spectrum(self.graph)
             if self.matrix_convention == "ADJACENCY"
@@ -92,7 +111,10 @@ class GraphSpectrumResult(StrictModel):
         )
         claimed = dict(zip(self.eigenvalues, self.multiplicities, strict=True))
         if dict(replayed) != claimed:
-            raise ValueError("spectrum must be the exact spectrum of the source graph")
+            raise PydanticCustomError(
+                "graph.spectrum_must_be_the_exact_spectrum_of_the_sourc",
+                "spectrum must be the exact spectrum of the source graph",
+            )
         return self
 
 
@@ -135,7 +157,10 @@ class GraphCharacteristicPolynomialResult(StrictModel):
         )
 
         if self.polynomial.variables != (_VARIABLE,):
-            raise ValueError("characteristic polynomial must be univariate in x")
+            raise PydanticCustomError(
+                "graph.characteristic_polynomial_must_be_univariate_in_",
+                "characteristic polynomial must be univariate in x",
+            )
         require_polynomial_budget(
             self.polynomial,
             maximum_terms=_MAX_CHARPOLY_TERMS,
@@ -153,8 +178,9 @@ class GraphCharacteristicPolynomialResult(StrictModel):
         charpoly = matrix.charpoly()
         expected = charpoly.as_expr().subs(charpoly.gen, poly_sym.gen)
         if expected != actual:
-            raise ValueError(
-                "characteristic polynomial does not match the source graph"
+            raise PydanticCustomError(
+                "graph.characteristic_polynomial_does_match_source",
+                "characteristic polynomial does not match the source graph",
             )
         return self
 

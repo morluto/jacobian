@@ -9,6 +9,7 @@ from math import comb, lcm, prod
 from typing import TYPE_CHECKING, Annotated, Literal, Self, cast
 
 from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -34,6 +35,11 @@ MAX_SPECTRAL_REMAINDER_COEFFICIENT_DIGITS = (
     MAX_SPECTRAL_REMAINDER_COEFFICIENT_BITS * 30_103 + 99_999
 ) // 100_000 + 1
 MAX_SPECTRAL_RESULT_BYTES = 32_768
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"finite_abelian_group.{reason}", message)
+
 
 GroupElement = tuple[StrictInt, ...]
 FiniteGroupModulus = Annotated[
@@ -110,22 +116,34 @@ class FiniteAbelianGroupFactorizationRequest(StrictModel):
     def require_bounded_product_group(self) -> Self:
         FiniteAbelianProductGroup(moduli=self.moduli)
         if prod(self.moduli) > MAX_FINITE_GROUP_ORDER:
-            raise ValueError("finite abelian group exceeds the 4,096-element bound")
+            raise _validation_error(
+                "factorization_group_order",
+                "finite abelian group exceeds the 4,096-element bound",
+            )
         if len(self.left) * len(self.right) > MAX_FINITE_GROUP_ORDER:
-            raise ValueError("factor Cartesian product exceeds the 4,096-pair bound")
+            raise _validation_error(
+                "factorization_pair_count",
+                "factor Cartesian product exceeds the 4,096-pair bound",
+            )
         if any(
             len(element) != len(self.moduli)
             for factor in (self.left, self.right)
             for element in factor
         ):
-            raise ValueError("every factor element must match the group rank")
+            raise _validation_error(
+                "factorization_element_rank",
+                "every factor element must match the group rank",
+            )
         if any(
             abs(coordinate) > MAX_FINITE_GROUP_COORDINATE
             for factor in (self.left, self.right)
             for element in factor
             for coordinate in element
         ):
-            raise ValueError("factor coordinates exceed the input bound")
+            raise _validation_error(
+                "factorization_coordinate_bound",
+                "factor coordinates exceed the input bound",
+            )
         for factor in (self.left, self.right):
             normalized = {
                 tuple(
@@ -135,7 +153,10 @@ class FiniteAbelianGroupFactorizationRequest(StrictModel):
                 for element in factor
             }
             if len(normalized) != len(factor):
-                raise ValueError("factor elements must be distinct after normalization")
+                raise _validation_error(
+                    "factorization_duplicate_element",
+                    "factor elements must be distinct after normalization",
+                )
         return self
 
 
@@ -167,7 +188,9 @@ class FiniteAbelianSpectralPairSource(StrictModel):
             rows: tuple[BoundedGroupElement, ...], label: str
         ) -> tuple[tuple[int, ...], ...]:
             if any(len(row) != rank for row in rows):
-                raise ValueError(f"every {label} row must match the group rank")
+                raise _validation_error(
+                    "source_row_rank", f"every {label} row must match the group rank"
+                )
             normalized = tuple(
                 tuple(
                     coordinate % modulus
@@ -176,8 +199,9 @@ class FiniteAbelianSpectralPairSource(StrictModel):
                 for row in rows
             )
             if len(set(normalized)) != len(normalized):
-                raise ValueError(
-                    f"{label} rows must be distinct after residue normalization"
+                raise _validation_error(
+                    "source_duplicate_row",
+                    f"{label} rows must be distinct after residue normalization",
                 )
             return tuple(sorted(normalized))
 
@@ -206,7 +230,10 @@ class FiniteAbelianSpectralPairRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_exact_decision(self) -> Self:
-        _spectral_pair_work(self.source)
+        try:
+            _spectral_pair_work(self.source)
+        except ValueError as error:
+            raise _validation_error("spectral_admission", str(error)) from error
         return self
 
 
@@ -232,9 +259,15 @@ class FiniteAbelianNonorthogonalityWitness(StrictModel):
             len(coefficient.lstrip("-")) > MAX_SPECTRAL_REMAINDER_COEFFICIENT_DIGITS
             for coefficient in self.remainder_coefficients
         ):
-            raise ValueError("cyclotomic remainder coefficient exceeds its digit bound")
+            raise _validation_error(
+                "remainder_digit_bound",
+                "cyclotomic remainder coefficient exceeds its digit bound",
+            )
         if all(coefficient == "0" for coefficient in self.remainder_coefficients):
-            raise ValueError("a nonorthogonality witness must have nonzero remainder")
+            raise _validation_error(
+                "zero_remainder",
+                "a nonorthogonality witness must have nonzero remainder",
+            )
         return self
 
 
@@ -279,8 +312,9 @@ class FiniteAbelianSpectralPairResult(StrictModel):
             expected.first_nonorthogonal_pair,
         )
         if observed != required:
-            raise ValueError(
-                "spectral-pair result must equal the replayed exact decision"
+            raise _validation_error(
+                "spectral_replay",
+                "spectral-pair result must equal the replayed exact decision",
             )
         return self
 

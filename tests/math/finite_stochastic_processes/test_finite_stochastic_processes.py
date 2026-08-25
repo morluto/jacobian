@@ -179,16 +179,28 @@ class TestDoobMartingale:
 
 class TestValidation:
     def test_nonpositive_mass_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="positive"):
+        with pytest.raises(ValidationError) as error:
             FiniteProbabilitySpace(samples=("a",), masses=(_q(0),))
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_stochastic_process.mass_nonpositive"
+        )
 
     def test_masses_not_summing_to_one_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="sum to exactly 1"):
+        with pytest.raises(ValidationError) as error:
             FiniteProbabilitySpace(samples=("a", "b"), masses=(_q(1, 3), _q(1, 3)))
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_stochastic_process.mass_sum_invalid"
+        )
 
     def test_duplicate_samples_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="unique"):
+        with pytest.raises(ValidationError) as error:
             FiniteProbabilitySpace(samples=("a", "a"), masses=(_q(1, 2), _q(1, 2)))
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_stochastic_process.sample_duplicate"
+        )
 
     @pytest.mark.parametrize(
         "payoff",

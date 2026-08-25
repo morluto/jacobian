@@ -108,7 +108,7 @@ def test_malformed_prime_field_matrix_reports_nested_validation_error() -> None:
         }
     ]
 
-    with pytest.raises(ValidationError, match="Unexpected keyword argument"):
+    with pytest.raises(ValidationError) as error:
         FiniteLinearMap.model_validate(
             {
                 "source_axis": {"name": "source", "labels": ["x"]},
@@ -121,6 +121,7 @@ def test_malformed_prime_field_matrix_reports_nested_validation_error() -> None:
                 },
             }
         )
+    assert error.value.errors()[0]["type"] == "unexpected_keyword_argument"
 
 
 def test_subspace_rejects_dependent_basis_matrices() -> None:

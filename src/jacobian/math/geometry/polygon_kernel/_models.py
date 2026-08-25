@@ -6,8 +6,9 @@ from math import comb
 from typing import Literal, Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, canonical_rational_component_digits
 from jacobian._models import StrictModel
 from jacobian.math.geometry._models import (
     GeometryConvexHullResult,
@@ -16,16 +17,19 @@ from jacobian.math.geometry._models import (
     _is_simple_ring,
 )
 
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable error owned by the geometry contracts."""
+
+    return PydanticCustomError(f"geometry.{reason}", message)
+
+
 MAX_KERNEL_SOURCE_VERTICES = 64
 MAX_KERNEL_COORDINATE_DIGITS = 64
 MAX_HALF_PLANE_COEFFICIENT_DIGITS = 1_024
 MAX_INTERSECTION_COMPONENT_DIGITS = 2_056
 MAX_KERNEL_FEASIBILITY_WORK = 500_000_000
 MAX_KERNEL_RESULT_CHARS = 500_000
-
-
-def _component_digits(value: CanonicalRational) -> int:
-    return max(len(value.num.lstrip("-")), len(value.den))
 
 
 class KernelPolygon(PolygonRequest):
@@ -51,14 +55,15 @@ class KernelPolygon(PolygonRequest):
     @model_validator(mode="after")
     def require_bounded_simple_counterclockwise_polygon(self) -> Self:
         max_coordinate_digits = max(
-            _component_digits(component)
+            canonical_rational_component_digits(component)
             for point in self.points
             for component in (point.x, point.y)
         )
         if max_coordinate_digits > MAX_KERNEL_COORDINATE_DIGITS:
-            raise ValueError(
+            raise _validation_error(
+                "polygon_coordinates_exceed_f_max_kernel",
                 "polygon coordinates exceed the "
-                f"{MAX_KERNEL_COORDINATE_DIGITS}-digit visibility-kernel bound"
+                f"{MAX_KERNEL_COORDINATE_DIGITS}-digit visibility-kernel bound",
             )
 
         # Constructing the n oriented edge equations is the only arithmetic
@@ -71,14 +76,15 @@ class KernelPolygon(PolygonRequest):
 
         half_planes = oriented_half_planes(self)
         coefficient_digits = max(
-            _component_digits(value)
+            canonical_rational_component_digits(value)
             for half_plane in half_planes
             for value in (half_plane.a, half_plane.b, half_plane.c)
         )
         if coefficient_digits > MAX_HALF_PLANE_COEFFICIENT_DIGITS:
-            raise ValueError(
+            raise _validation_error(
+                "oriented_half_plane_coefficients_exceed_f",
                 "oriented half-plane coefficients exceed the "
-                f"{MAX_HALF_PLANE_COEFFICIENT_DIGITS}-digit bound"
+                f"{MAX_HALF_PLANE_COEFFICIENT_DIGITS}-digit bound",
             )
         # A 2x2 boundary intersection forms products and differences of
         # rational coefficients, then divides two such rationals. Eight input
@@ -86,9 +92,10 @@ class KernelPolygon(PolygonRequest):
         # reduced output component.
         intersection_digits = 8 * coefficient_digits + 8
         if intersection_digits > MAX_INTERSECTION_COMPONENT_DIGITS:
-            raise ValueError(
+            raise _validation_error(
+                "a_boundary_line_intersection_exceed_f",
                 "a boundary-line intersection can exceed the "
-                f"{MAX_INTERSECTION_COMPONENT_DIGITS}-digit component bound"
+                f"{MAX_INTERSECTION_COMPONENT_DIGITS}-digit component bound",
             )
 
         vertex_count = len(self.points)
@@ -103,10 +110,11 @@ class KernelPolygon(PolygonRequest):
             + 400
         )
         if estimated_result_chars > MAX_KERNEL_RESULT_CHARS:
-            raise ValueError(
+            raise _validation_error(
+                "visibility_kernel_result_require_f_estimated",
                 "visibility-kernel result can require "
                 f"{estimated_result_chars} characters, exceeding the "
-                f"{MAX_KERNEL_RESULT_CHARS}-character bound"
+                f"{MAX_KERNEL_RESULT_CHARS}-character bound",
             )
 
         pair_count = comb(vertex_count, 2)
@@ -117,18 +125,23 @@ class KernelPolygon(PolygonRequest):
             pair_count * vertex_count * coefficient_digits * coefficient_digits
         )
         if feasibility_work > MAX_KERNEL_FEASIBILITY_WORK:
-            raise ValueError(
+            raise _validation_error(
+                "visibility_kernel_feasibility_work_f_c",
                 "visibility-kernel feasibility work "
                 f"C({vertex_count},2)*{vertex_count}*"
                 f"{coefficient_digits}^2={feasibility_work} exceeds "
-                f"{MAX_KERNEL_FEASIBILITY_WORK}"
+                f"{MAX_KERNEL_FEASIBILITY_WORK}",
             )
 
         if not _is_simple_ring(self.points):
-            raise ValueError("visibility-kernel input must be a simple polygon")
+            raise _validation_error(
+                "visibility_kernel_input_a_simple_polygon",
+                "visibility-kernel input must be a simple polygon",
+            )
         if polygon_signed_area(self.points) <= 0:
-            raise ValueError(
-                "visibility-kernel vertices must use counterclockwise cyclic order"
+            raise _validation_error(
+                "visibility_kernel_vertices_use_counterclockwise_cyclic",
+                "visibility-kernel vertices must use counterclockwise cyclic order",
             )
         return self
 
@@ -170,7 +183,10 @@ class OrientedEdgeHalfPlane(StrictModel):
     @model_validator(mode="after")
     def require_nonzero_normal(self) -> Self:
         if self.a.as_fraction() == 0 and self.b.as_fraction() == 0:
-            raise ValueError("an oriented half-plane must have a nonzero normal")
+            raise _validation_error(
+                "an_oriented_half_plane_a_nonzero",
+                "an oriented half-plane must have a nonzero normal",
+            )
         return self
 
 
@@ -186,7 +202,10 @@ class PolygonVertexTurn(StrictModel):
         value = self.cross.as_fraction()
         expected = "CONVEX" if value > 0 else "REFLEX" if value < 0 else "COLLINEAR"
         if self.kind != expected:
-            raise ValueError("turn kind must match the sign of its exact cross")
+            raise _validation_error(
+                "turn_kind_sign_exact_cross",
+                "turn kind must match the sign of its exact cross",
+            )
         return self
 
 
@@ -202,7 +221,10 @@ class KernelBoundaryIntersection(StrictModel):
     @model_validator(mode="after")
     def require_canonical_active_edges(self) -> Self:
         if self.active_edge_indices != tuple(sorted(set(self.active_edge_indices))):
-            raise ValueError("active edge indices must be distinct and sorted")
+            raise _validation_error(
+                "active_edge_indices_distinct_sorted",
+                "active edge indices must be distinct and sorted",
+            )
         return self
 
 
@@ -253,8 +275,9 @@ class PolygonKernelResult(StrictModel):
             self.polygon_to_hull_area_ratio,
         )
         if actual != expected.as_tuple():
-            raise ValueError(
-                "visibility-kernel result does not match the retained source polygon"
+            raise _validation_error(
+                "visibility_kernel_result_retained_source_polygon",
+                "visibility-kernel result does not match the retained source polygon",
             )
         return self
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
@@ -13,6 +14,12 @@ MAX_POINTS = 64
 MAX_DISTANCE = (1 << 53) - 1
 
 DistanceValue = Annotated[int, Field(ge=0, le=MAX_DISTANCE)]
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by finite-metric-space contracts."""
+
+    return PydanticCustomError(f"finite_metric_space.{reason}", message)
 
 
 class FiniteMetricSpace(StrictModel):
@@ -29,18 +36,28 @@ class FiniteMetricSpace(StrictModel):
 
     def _require_square(self) -> None:
         if len(self.distances) != self.point_count:
-            raise ValueError("distance matrix row count must match point_count")
+            raise _validation_error(
+                "distance_row_count_mismatch",
+                "distance matrix row count must match point_count",
+            )
         for row in self.distances:
             if len(row) != self.point_count:
-                raise ValueError("distance matrix must be square")
+                raise _validation_error(
+                    "distance_matrix_not_square", "distance matrix must be square"
+                )
 
     def _require_metric_properties(self) -> None:
         for i in range(self.point_count):
             if self.distances[i][i] != 0:
-                raise ValueError("diagonal distances must be zero")
+                raise _validation_error(
+                    "distance_diagonal_nonzero", "diagonal distances must be zero"
+                )
             for j in range(self.point_count):
                 if self.distances[i][j] != self.distances[j][i]:
-                    raise ValueError("distance matrix must be symmetric")
+                    raise _validation_error(
+                        "distance_matrix_asymmetric",
+                        "distance matrix must be symmetric",
+                    )
         self._require_positive_separation()
         self._require_triangle_inequality()
 
@@ -48,7 +65,10 @@ class FiniteMetricSpace(StrictModel):
         for i in range(self.point_count):
             for j in range(self.point_count):
                 if i != j and self.distances[i][j] == 0:
-                    raise ValueError("distinct points must have positive distance")
+                    raise _validation_error(
+                        "distance_nonpositive_between_distinct_points",
+                        "distinct points must have positive distance",
+                    )
 
     def _require_triangle_inequality(self) -> None:
         for i in range(self.point_count):
@@ -58,8 +78,9 @@ class FiniteMetricSpace(StrictModel):
                         self.distances[i][j]
                         > self.distances[i][k] + self.distances[k][j]
                     ):
-                        raise ValueError(
-                            "distances must satisfy the triangle inequality"
+                        raise _validation_error(
+                            "distance_triangle_inequality_violation",
+                            "distances must satisfy the triangle inequality",
                         )
 
 
@@ -97,7 +118,10 @@ class BallRequest(StrictModel):
     @model_validator(mode="after")
     def require_center_in_range(self) -> Self:
         if self.center >= self.metric_space.point_count:
-            raise ValueError("ball center index must be within the metric space")
+            raise _validation_error(
+                "ball_center_out_of_range",
+                "ball center index must be within the metric space",
+            )
         return self
 
 

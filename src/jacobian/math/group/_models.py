@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -29,6 +30,12 @@ MAX_SUBGROUP_LATTICE_GROUP_ORDER = 64
 MAX_SUBGROUP_LATTICE_ENTRIES = 2825
 
 
+def _validation_error(
+    code: str, message: str, **context: object
+) -> PydanticCustomError:
+    return PydanticCustomError(code, message, context)
+
+
 def _require_bounded_group_order(
     degree: int,
     generators: tuple[tuple[int, ...], ...],
@@ -40,8 +47,12 @@ def _require_bounded_group_order(
     group = PermutationGroup(*(Permutation(list(g)) for g in generators))
     order = int(group.order())
     if order > maximum:
-        raise ValueError(
-            f"group order {order} exceeds the bounded maximum {maximum} for {purpose}"
+        raise _validation_error(
+            "group.order_bound",
+            "group order {order} exceeds the bounded maximum {maximum} for {purpose}",
+            order=order,
+            maximum=maximum,
+            purpose=purpose,
         )
 
 
@@ -57,9 +68,15 @@ class PermutationGroupRequest(StrictModel):
     def require_valid_generators(self) -> Self:
         for perm in self.generators:
             if len(perm) != self.degree:
-                raise ValueError("each generator must have length equal to degree")
+                raise _validation_error(
+                    "group.generator_length",
+                    "each generator must have length equal to degree",
+                )
             if sorted(perm) != list(range(self.degree)):
-                raise ValueError("each generator must be a permutation of 0..n-1")
+                raise _validation_error(
+                    "group.generator_permutation",
+                    "each generator must be a permutation of 0..n-1",
+                )
         return self
 
 
@@ -79,9 +96,14 @@ class GroupElementOrderRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_generator(self) -> Self:
         if len(self.generator) != self.degree:
-            raise ValueError("generator must have length equal to degree")
+            raise _validation_error(
+                "group.generator_length", "generator must have length equal to degree"
+            )
         if sorted(self.generator) != list(range(self.degree)):
-            raise ValueError("generator must be a permutation of 0..n-1")
+            raise _validation_error(
+                "group.generator_permutation",
+                "generator must be a permutation of 0..n-1",
+            )
         return self
 
 
@@ -111,7 +133,9 @@ class GroupOrbitRequest(StrictModel):
     @model_validator(mode="after")
     def require_point_in_group(self) -> Self:
         if not 0 <= self.point < self.group.degree:
-            raise ValueError("point must be in 0..group.degree-1")
+            raise _validation_error(
+                "group.point_out_of_range", "point must be in 0..group.degree-1"
+            )
         return self
 
 
@@ -153,9 +177,15 @@ class GroupConjugacyClassesRequest(StrictModel):
     def require_valid_generators(self) -> Self:
         for perm in self.generators:
             if len(perm) != self.degree:
-                raise ValueError("each generator must have length equal to degree")
+                raise _validation_error(
+                    "group.generator_length",
+                    "each generator must have length equal to degree",
+                )
             if sorted(perm) != list(range(self.degree)):
-                raise ValueError("each generator must be a permutation of 0..n-1")
+                raise _validation_error(
+                    "group.generator_permutation",
+                    "each generator must be a permutation of 0..n-1",
+                )
         # Bound enumeration by the generated group's order before invoking
         # the SymPy backend which materializes every element.  The degree
         # cap alone does not bound work: S12 has order 479M and would
@@ -167,10 +197,11 @@ class GroupConjugacyClassesRequest(StrictModel):
         group = PermutationGroup(perms)
         order = int(group.order())
         if order > MAX_CONJUGACY_CLASSES_GROUP_ORDER:
-            raise ValueError(
-                f"group order {order} exceeds the bounded maximum "
-                f"{MAX_CONJUGACY_CLASSES_GROUP_ORDER} for conjugacy classes "
-                f"(would materialize |G|={order} elements)"
+            raise _validation_error(
+                "group.order_bound",
+                "group order {order} exceeds the bounded maximum {maximum} for conjugacy classes (would materialize |G|={order} elements)",
+                order=order,
+                maximum=MAX_CONJUGACY_CLASSES_GROUP_ORDER,
             )
         return self
 
@@ -215,16 +246,20 @@ class GroupConjugacyClassesResult(StrictModel):
         # A finite subset of a symmetric group is a subgroup iff it is closed
         # under composition; <S> equals S iff |<S>| == |S|.
         if int(backend_group.order()) != len(ordered_elements):
-            raise ValueError("the listed elements must form a group under composition")
+            raise _validation_error(
+                "group.not_closed",
+                "the listed elements must form a group under composition",
+            )
 
         generators = _minimal_generator_subset(ordered_elements)
         inverse_generators = [_invert_permutation(p) for p in generators]
         for cls in self.classes:
             orbit = _conjugation_orbit(cls[0], generators, inverse_generators)
             if orbit != set(cls):
-                raise ValueError(
+                raise _validation_error(
+                    "group.conjugacy_orbit",
                     "each class must equal the conjugation orbit of its "
-                    "representative in the reconstructed group"
+                    "representative in the reconstructed group",
                 )
         return self
 
@@ -240,26 +275,41 @@ def _require_canonical_partition(
         previous_member: tuple[int, ...] | None = None
         for perm in cls:
             if len(perm) != degree:
-                raise ValueError("all permutations must have one common degree")
+                raise _validation_error(
+                    "group.common_degree",
+                    "all permutations must have one common degree",
+                )
             if sorted(perm) != expected_range:
-                raise ValueError("every element must be a permutation of 0..degree-1")
+                raise _validation_error(
+                    "group.generator_permutation",
+                    "every element must be a permutation of 0..degree-1",
+                )
             if perm in elements:
-                raise ValueError("conjugacy classes must not repeat an element")
+                raise _validation_error(
+                    "group.duplicate_element",
+                    "conjugacy classes must not repeat an element",
+                )
             elements.add(perm)
             if previous_member is not None and perm <= previous_member:
-                raise ValueError("class members must be strictly increasing")
+                raise _validation_error(
+                    "group.class_order", "class members must be strictly increasing"
+                )
             previous_member = perm
         representative = cls[0]
         if (
             previous_representative is not None
             and representative <= previous_representative
         ):
-            raise ValueError("classes must be ordered by canonical representative")
+            raise _validation_error(
+                "group.class_order",
+                "classes must be ordered by canonical representative",
+            )
         previous_representative = representative
     if len(elements) > MAX_CONJUGACY_CLASSES_GROUP_ORDER:
-        raise ValueError(
+        raise _validation_error(
+            "group.partition_bound",
             f"a conjugacy-class partition may contain at most "
-            f"{MAX_CONJUGACY_CLASSES_GROUP_ORDER} elements"
+            f"{MAX_CONJUGACY_CLASSES_GROUP_ORDER} elements",
         )
     return elements
 
@@ -336,15 +386,22 @@ class GroupStabilizerRequest(StrictModel):
     @model_validator(mode="after")
     def require_point_in_group(self) -> Self:
         if not 0 <= self.point < self.group.degree:
-            raise ValueError("point must be in 0..group.degree-1")
+            raise _validation_error(
+                "group.point_out_of_range", "point must be in 0..group.degree-1"
+            )
         return self
 
 
 def _require_permutation(perm: tuple[int, ...], degree: int, label: str) -> None:
     if len(perm) != degree:
-        raise ValueError(f"each {label} must have length equal to degree")
+        raise _validation_error(
+            "group.generator_length", f"each {label} must have length equal to degree"
+        )
     if sorted(perm) != list(range(degree)):
-        raise ValueError(f"each {label} must be a permutation of 0..n-1")
+        raise _validation_error(
+            "group.generator_permutation",
+            f"each {label} must be a permutation of 0..n-1",
+        )
 
 
 def _check_stabilizer_permutations(
@@ -354,13 +411,17 @@ def _check_stabilizer_permutations(
     source_generators: tuple[tuple[int, ...], ...],
 ) -> None:
     if not 0 <= point < degree:
-        raise ValueError("point must be in 0..degree-1")
+        raise _validation_error(
+            "group.point_out_of_range", "point must be in 0..degree-1"
+        )
     for perm in source_generators:
         _require_permutation(perm, degree, "source generator")
     for perm in generators:
         _require_permutation(perm, degree, "generator")
         if perm[point] != point:
-            raise ValueError("stabilizer generators must fix the point")
+            raise _validation_error(
+                "group.stabilizer_point", "stabilizer generators must fix the point"
+            )
 
 
 def _check_orbit_stabilizer(
@@ -382,17 +443,21 @@ def _check_orbit_stabilizer(
         stab_order = int(stab_group.order())
         for perm in generators:
             if not source_group.contains(Permutation(list(perm))):
-                raise ValueError(
-                    "stabilizer generators must be elements of the source group"
+                raise _validation_error(
+                    "group.stabilizer_source",
+                    "stabilizer generators must be elements of the source group",
                 )
         if source_order % stab_order != 0:
-            raise ValueError("stabilizer order must divide source order")
+            raise _validation_error(
+                "group.stabilizer_order", "stabilizer order must divide source order"
+            )
     else:
         stab_order = 1
     if source_order != orbit_size * stab_order:
-        raise ValueError(
+        raise _validation_error(
+            "group.orbit_stabilizer",
             "orbit size times stabilizer order must equal source order "
-            "(orbit-stabilizer theorem)"
+            "(orbit-stabilizer theorem)",
         )
 
 
@@ -431,9 +496,13 @@ class GroupStabilizerResult(StrictModel):
     @model_validator(mode="after")
     def require_valid_stabilizer(self) -> Self:
         if self.source.degree != self.stabilizer.degree:
-            raise ValueError("source and stabilizer must have the same degree")
+            raise _validation_error(
+                "group.common_degree", "source and stabilizer must have the same degree"
+            )
         if not 0 <= self.point < self.source.degree:
-            raise ValueError("point must be in 0..degree-1")
+            raise _validation_error(
+                "group.point_out_of_range", "point must be in 0..degree-1"
+            )
         _check_stabilizer_permutations(
             self.source.degree,
             self.point,
@@ -450,7 +519,11 @@ class GroupStabilizerResult(StrictModel):
         except ValueError:
             raise
         except Exception as exc:  # pragma: no cover - unexpected backend failure
-            raise ValueError(f"stabilizer validation failed: {exc}") from exc
+            raise _validation_error(
+                "group.stabilizer_validation",
+                "stabilizer validation failed: {detail}",
+                detail=str(exc),
+            ) from exc
         return self
 
 
@@ -470,9 +543,15 @@ class GroupSubgroupLatticeRequest(StrictModel):
     def require_valid_generators(self) -> Self:
         for perm in self.generators:
             if len(perm) != self.degree:
-                raise ValueError("each generator must have length equal to degree")
+                raise _validation_error(
+                    "group.generator_length",
+                    "each generator must have length equal to degree",
+                )
             if sorted(perm) != list(range(self.degree)):
-                raise ValueError("each generator must be a permutation of 0..n-1")
+                raise _validation_error(
+                    "group.generator_permutation",
+                    "each generator must be a permutation of 0..n-1",
+                )
         _require_bounded_group_order(
             self.degree,
             self.generators,
@@ -503,9 +582,10 @@ class SubgroupEntry(StrictModel):
             ).order()
         )
         if group_order != self.order:
-            raise ValueError(
+            raise _validation_error(
+                "group.subgroup_order",
                 f"subgroup order {self.order} does not match the order "
-                f"{group_order} generated by the retained generators"
+                f"{group_order} generated by the retained generators",
             )
         return self
 
@@ -537,10 +617,11 @@ class GroupSubgroupLatticeResult(StrictModel):
             if isinstance(entries, (list, tuple)) and len(entries) > (
                 MAX_SUBGROUP_LATTICE_ENTRIES
             ):
-                raise ValueError(
+                raise _validation_error(
+                    "group.lattice_entry_bound",
                     "subgroups exceed the admitted lattice bound of "
                     f"{MAX_SUBGROUP_LATTICE_ENTRIES} entries (the extremal "
-                    "subgroup count among groups of order at most 64)"
+                    "subgroup count among groups of order at most 64)",
                 )
         return data
 
@@ -548,17 +629,26 @@ class GroupSubgroupLatticeResult(StrictModel):
     def require_outcome_shape(self) -> Self:
         if self.outcome == "COMPUTED":
             if self.subgroups is None or self.detail is not None:
-                raise ValueError(
-                    "computed lattice requires subgroup entries and no detail"
+                raise _validation_error(
+                    "group.outcome_shape",
+                    "computed lattice requires subgroup entries and no detail",
                 )
             if self.subgroup_count != len(self.subgroups) or self.subgroup_count < 1:
-                raise ValueError("subgroup_count must match the number of subgroups")
+                raise _validation_error(
+                    "group.outcome_shape",
+                    "subgroup_count must match the number of subgroups",
+                )
         elif self.subgroups is not None or self.detail is None:
-            raise ValueError("an exceeded traversal carries only a safe detail")
+            raise _validation_error(
+                "group.outcome_shape",
+                "an exceeded traversal carries only a safe detail",
+            )
         elif self.subgroup_count != 0:
             # No entries are retained on exhaustion, so any positive count
             # would fabricate an exact conclusion.
-            raise ValueError("an exceeded traversal reports no subgroup count")
+            raise _validation_error(
+                "group.outcome_shape", "an exceeded traversal reports no subgroup count"
+            )
         return self
 
     @model_validator(mode="after")
@@ -581,12 +671,15 @@ class GroupSubgroupLatticeResult(StrictModel):
             (entry.group.generators, entry.order) for entry in self.subgroups
         )
         if len(set(expected_lattice)) != len(expected_lattice):
-            raise ValueError("subgroups must be distinct")
+            raise _validation_error(
+                "group.lattice_canonical", "subgroups must be distinct"
+            )
         if actual_lattice != expected_lattice or self.subgroup_count != len(
             expected_lattice
         ):
-            raise ValueError(
+            raise _validation_error(
+                "group.lattice_canonical",
                 "subgroups must be the exact complete subgroup lattice of "
-                "the retained source group in canonical element and entry order"
+                "the retained source group in canonical element and entry order",
             )
         return self

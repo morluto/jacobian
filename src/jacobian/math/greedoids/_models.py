@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.greedoids.values import FiniteFeasibleSetSystem
@@ -16,6 +17,12 @@ MAX_FEASIBLE_COUNT = 4096
 """Schema-visible cap on feasible-row count for greedoid requests."""
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by greedoid contracts."""
+
+    return PydanticCustomError(f"greedoid.{reason}", message)
+
+
 def require_bounded_carrier(system: FiniteFeasibleSetSystem) -> None:
     """Bound the greedoid execution envelope before any kernel expands.
 
@@ -24,13 +31,15 @@ def require_bounded_carrier(system: FiniteFeasibleSetSystem) -> None:
     """
 
     if len(system.ground) > MAX_GROUND_SIZE:
-        raise ValueError(
-            f"ground size exceeds the bounded budget of {MAX_GROUND_SIZE} elements"
+        raise _validation_error(
+            "ground_size_exceeds_budget",
+            f"ground size exceeds the bounded budget of {MAX_GROUND_SIZE} elements",
         )
     if len(system.feasible) > MAX_FEASIBLE_COUNT:
-        raise ValueError(
+        raise _validation_error(
+            "feasible_count_exceeds_budget",
             f"feasible-set count exceeds the bounded budget of "
-            f"{MAX_FEASIBLE_COUNT} rows"
+            f"{MAX_FEASIBLE_COUNT} rows",
         )
 
 
@@ -60,13 +69,20 @@ class RecognizeResult(StrictModel):
     @model_validator(mode="after")
     def bind_status(self) -> Self:
         if self.status not in ("GREEDOID", "NOT_A_GREEDOID"):
-            raise ValueError("status must be GREEDOID or NOT_A_GREEDOID")
+            raise _validation_error(
+                "recognize_status_invalid", "status must be GREEDOID or NOT_A_GREEDOID"
+            )
         if self.status == "GREEDOID":
             if self.obstruction is not None:
-                raise ValueError("a GREEDOID result has no obstruction")
+                raise _validation_error(
+                    "greedoid_has_obstruction", "a GREEDOID result has no obstruction"
+                )
         else:
             if self.obstruction is None:
-                raise ValueError("a NOT_A_GREEDOID result must name an obstruction")
+                raise _validation_error(
+                    "non_greedoid_missing_obstruction",
+                    "a NOT_A_GREEDOID result must name an obstruction",
+                )
         return self
 
 
@@ -82,9 +98,13 @@ class RankRequest(StrictModel):
         if self.subset is not None:
             n = len(self.system.ground)
             if len(set(self.subset)) != len(self.subset):
-                raise ValueError("subset must not contain duplicates")
+                raise _validation_error(
+                    "subset_duplicate", "subset must not contain duplicates"
+                )
             if any(not 0 <= i < n for i in self.subset):
-                raise ValueError("subset indices must be in range")
+                raise _validation_error(
+                    "subset_index_out_of_range", "subset indices must be in range"
+                )
         return self
 
 
@@ -107,9 +127,13 @@ class BasesRequest(StrictModel):
         if self.subset is not None:
             n = len(self.system.ground)
             if len(set(self.subset)) != len(self.subset):
-                raise ValueError("subset must not contain duplicates")
+                raise _validation_error(
+                    "subset_duplicate", "subset must not contain duplicates"
+                )
             if any(not 0 <= i < n for i in self.subset):
-                raise ValueError("subset indices must be in range")
+                raise _validation_error(
+                    "subset_index_out_of_range", "subset indices must be in range"
+                )
         return self
 
 
@@ -146,7 +170,10 @@ class BasicWordProfileResult(StrictModel):
     @model_validator(mode="after")
     def bind_status(self) -> Self:
         if self.status not in ("BASIC_WORD", "NOT_A_BASIC_WORD"):
-            raise ValueError("status must be BASIC_WORD or NOT_A_BASIC_WORD")
+            raise _validation_error(
+                "basic_word_status_invalid",
+                "status must be BASIC_WORD or NOT_A_BASIC_WORD",
+            )
         return self
 
 

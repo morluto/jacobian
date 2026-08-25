@@ -6,6 +6,7 @@ from math import comb
 from typing import Self
 
 from pydantic import ConfigDict, Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -91,7 +92,9 @@ def _encode_with_bound(
             limits=CanonicalLimits(max_output_bytes=limit),
         )
     except CanonicalizationError as exc:
-        raise ValueError(error) from exc
+        raise PydanticCustomError(
+            "graph.error_from_exc_return_len_encoded", error
+        ) from exc
     return len(encoded)
 
 
@@ -119,11 +122,12 @@ def _require_bounded_request(
     pattern_order = len(pattern.vertices)
     candidate_count = _candidate_subset_count(host_order, pattern_order)
     if candidate_count > MAX_INDUCED_PATTERN_SUBSETS_PER_PASS:
-        raise ValueError(
+        raise PydanticCustomError(
+            "graph.induced_pattern_subset_count_candidate_count_exceeds",
             f"induced-pattern subset count {candidate_count:,} exceeds the "
             f"{MAX_INDUCED_PATTERN_SUBSETS_PER_PASS:,}-candidate per-pass bound "
             f"({COUNT_AND_VALIDATION_PASSES * MAX_INDUCED_PATTERN_SUBSETS_PER_PASS:,} "
-            "including result-validation replay)"
+            "including result-validation replay)",
         )
 
     maximum_count = format_canonical_integer(candidate_count)
@@ -155,11 +159,12 @@ def _require_bounded_request(
         + candidate_count * _per_candidate_work(pattern_order)
     )
     if total_work > MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS:
-        raise ValueError(
+        raise PydanticCustomError(
+            "graph.induced_pattern_exact_count_requires_total_work",
             f"induced-pattern exact count requires {total_work:,} work units, "
             f"exceeding the {MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS:,}-unit bound "
             "for graph construction, direct host-edge probes, explicit candidate "
-            "scans, VF2++ search, and result-validation replay"
+            "scans, VF2++ search, and result-validation replay",
         )
 
 
@@ -227,7 +232,10 @@ class InducedVertexSubsetPatternCountResult(StrictModel):
         _require_bounded_request(self.host, self.pattern)
         claimed = parse_canonical_integer(self.occurrence_count)
         if claimed < 0:
-            raise ValueError("occurrence_count must be nonnegative")
+            raise PydanticCustomError(
+                "graph.occurrence_count_must_be_nonnegative",
+                "occurrence_count must be nonnegative",
+            )
 
         from jacobian.math.graphs.patterns._operations import (
             count_induced_vertex_subset_patterns,
@@ -235,9 +243,10 @@ class InducedVertexSubsetPatternCountResult(StrictModel):
 
         expected = count_induced_vertex_subset_patterns(self.host, self.pattern)
         if claimed != expected:
-            raise ValueError(
+            raise PydanticCustomError(
+                "graph.occurrence_count_does_equal_number_retained_host",
                 "occurrence_count does not equal the number of retained host "
-                "vertex subsets inducing the retained pattern"
+                "vertex subsets inducing the retained pattern",
             )
         return self
 

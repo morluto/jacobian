@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.group._models import PermutationGroupRequest
@@ -47,10 +48,11 @@ MAX_PRIME = 2_147_483_647
 length and predicted modular-arithmetic work, not a mathematical restriction
 to small primes."""
 
-# Canonical permutation-group value owned by the ``group`` domain.  Re-export
-# under the local name for backward compatibility; new code should import
-# ``PermutationGroupRequest`` directly.
-PermutationGroup = PermutationGroupRequest
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by group-cohomology contracts."""
+
+    return PydanticCustomError(f"group_cohomology.{reason}", message)
 
 
 def _enumerated_group_order(group: PermutationGroupRequest) -> int:
@@ -107,22 +109,24 @@ class GroupCohomologyRequest(StrictModel):
         from sympy import isprime
 
         if not isprime(self.prime):
-            raise ValueError("prime must be a prime integer")
+            raise _validation_error("prime_not_prime", "prime must be a prime integer")
         order = _enumerated_group_order(self.group)
         if order > MAX_GROUP_ORDER:
-            raise ValueError(
+            raise _validation_error(
+                "group_order_exceeds_bound",
                 f"enumerated group order {order} exceeds the bounded maximum "
-                f"{MAX_GROUP_ORDER}"
+                f"{MAX_GROUP_ORDER}",
             )
         admitted_degree = _admitted_max_degree(order)
         if self.max_degree > admitted_degree:
-            raise ValueError(
+            raise _validation_error(
+                "degree_exceeds_work_budget",
                 f"max_degree {self.max_degree} exceeds the work-derived "
                 f"degree budget {admitted_degree} for enumerated group order "
                 f"{order}: cochain spaces |G|^(n+1) must stay within the "
                 f"{MAX_COCHAIN_TENSOR_ELEMENTS}-element budget and dense bar "
                 f"coboundaries |G|^(2n+1) within the "
-                f"{MAX_BAR_MATRIX_CELLS}-cell budget"
+                f"{MAX_BAR_MATRIX_CELLS}-cell budget",
             )
         return self
 
@@ -155,17 +159,21 @@ class GroupCohomologyResult(StrictModel):
         from jacobian.math.group_cohomology._operations import _cohomology_profile
 
         if not self.groups:
-            raise ValueError("at least one cohomology group is required")
+            raise _validation_error(
+                "groups_empty", "at least one cohomology group is required"
+            )
         if tuple(g.degree for g in self.groups) != tuple(
             range(self.request.max_degree + 1)
         ):
-            raise ValueError(
-                "groups must cover degrees 0..max_degree exactly once in order"
+            raise _validation_error(
+                "degrees_not_contiguous",
+                "groups must cover degrees 0..max_degree exactly once in order",
             )
         replay_groups, replay_order = _cohomology_profile(self.request)
         if self.groups != replay_groups or self.group_order != replay_order:
-            raise ValueError(
-                "groups must be the exact cohomology of the retained source request"
+            raise _validation_error(
+                "groups_do_not_match_replay",
+                "groups must be the exact cohomology of the retained source request",
             )
         return self
 
@@ -179,5 +187,4 @@ __all__ = [
     "CohomologyGroup",
     "GroupCohomologyRequest",
     "GroupCohomologyResult",
-    "PermutationGroup",
 ]

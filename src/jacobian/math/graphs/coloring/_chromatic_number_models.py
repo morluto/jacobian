@@ -17,6 +17,7 @@ from pydantic import (
     model_validator,
 )
 from pydantic.json_schema import JsonSchemaValue
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
@@ -89,7 +90,10 @@ def _preflight_bounded_rational(
                 isinstance(raw_component, str)
                 and len(raw_component.lstrip("-")) > max_digits
             ):
-                raise ValueError(f"{label} exceeds the {max_digits}-digit bound")
+                raise PydanticCustomError(
+                    "graph.label_exceeds_max_digits_digit_bound_return",
+                    f"{label} exceeds the {max_digits}-digit bound",
+                )
     return value
 
 
@@ -215,25 +219,34 @@ def _require_bounded_sources(
 ) -> None:
     order = len(graph.vertices)
     if order > MAX_CHROMATIC_CERTIFICATE_VERTICES:
-        raise ValueError(
+        raise PydanticCustomError(
+            "graph.chromatic_number_certificate_checking_supports_at_most",
             "chromatic-number certificate checking supports at most "
-            f"{MAX_CHROMATIC_CERTIFICATE_VERTICES} vertices"
+            f"{MAX_CHROMATIC_CERTIFICATE_VERTICES} vertices",
         )
     if len(graph.edges) > MAX_CHROMATIC_CERTIFICATE_EDGES:
-        raise ValueError(
+        raise PydanticCustomError(
+            "graph.chromatic_number_certificate_checking_supports_at_most",
             "chromatic-number certificate checking supports at most "
-            f"{MAX_CHROMATIC_CERTIFICATE_EDGES} edges"
+            f"{MAX_CHROMATIC_CERTIFICATE_EDGES} edges",
         )
     subset_states = 1 << order
     if subset_states > MAX_CHROMATIC_CERTIFICATE_SUBSET_STATES:
-        raise ValueError(
+        raise PydanticCustomError(
+            "graph.chromatic_number_certificate_independent_set_replay_exceeds",
             "chromatic-number certificate independent-set replay exceeds the "
-            f"{MAX_CHROMATIC_CERTIFICATE_SUBSET_STATES}-subset bound"
+            f"{MAX_CHROMATIC_CERTIFICATE_SUBSET_STATES}-subset bound",
         )
     if len(coloring) != order:
-        raise ValueError("coloring must assign one color per graph vertex")
+        raise PydanticCustomError(
+            "graph.coloring_must_assign_one_color_per_graph_vertex",
+            "coloring must assign one color per graph vertex",
+        )
     if len(weights) != order:
-        raise ValueError("weights must assign one exact rational per graph vertex")
+        raise PydanticCustomError(
+            "graph.weights_must_assign_one_exact_rational_per_graph",
+            "weights must assign one exact rational per graph vertex",
+        )
     for weight in weights:
         require_bounded_rational(
             weight,
@@ -249,16 +262,18 @@ def _require_bounded_sources(
     )
     limits = CanonicalLimits()
     if source_bytes > limits.max_input_bytes:
-        raise ValueError(
-            "chromatic-number certificate source exceeds the canonical input limit"
+        raise PydanticCustomError(
+            "graph.chromatic_number_certificate_source_exceeds_canonical_input",
+            "chromatic-number certificate source exceeds the canonical input limit",
         )
 
     intermediate_digits = _intermediate_digit_bound(weights)
     digit_work = _estimated_digit_work(graph, intermediate_digits)
     if digit_work > MAX_CHROMATIC_CERTIFICATE_DIGIT_WORK:
-        raise ValueError(
+        raise PydanticCustomError(
+            "graph.chromatic_number_certificate_exact_replay_work_exceeds",
             "chromatic-number certificate exact replay work exceeds the "
-            f"{MAX_CHROMATIC_CERTIFICATE_DIGIT_WORK} decimal-digit-operation bound"
+            f"{MAX_CHROMATIC_CERTIFICATE_DIGIT_WORK} decimal-digit-operation bound",
         )
 
     label_wire_bytes = sum(
@@ -271,9 +286,10 @@ def _require_bounded_sources(
         + _RESULT_ENVELOPE_RESERVE_BYTES
     )
     if estimated_result_bytes > limits.max_output_bytes:
-        raise ValueError(
+        raise PydanticCustomError(
+            "graph.chromatic_number_certificate_retained_result_would_exceed",
             "chromatic-number certificate retained result would exceed the "
-            f"{limits.max_output_bytes}-byte canonical output limit"
+            f"{limits.max_output_bytes}-byte canonical output limit",
         )
 
 
@@ -580,8 +596,9 @@ class ChromaticNumberCertificateCheckResult(StrictModel):
             expected.blocking_independent_set_weight,
         )
         if actual != replayed:
-            raise ValueError(
-                "chromatic-number result does not match exact certificate replay"
+            raise PydanticCustomError(
+                "graph.chromatic_number_result_does_match_exact_certificate",
+                "chromatic-number result does not match exact certificate replay",
             )
         return self
 

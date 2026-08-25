@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.hochschild_complexes._bar import bar_differential_entries
@@ -45,6 +46,10 @@ MAX_STRUCTURE_CONSTANT_ENTRIES = MAX_HOCHSCHILD_MATRIX_ENTRIES
 MAX_ASSOCIATIVITY_DOT_STEPS = 20_000_000
 
 
+def _validation_error(code: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(code, message)
+
+
 class AlgebraStructure(StrictModel):
     """A finite-dimensional associative algebra over GF(p) with an augmentation.
 
@@ -68,11 +73,15 @@ class AlgebraStructure(StrictModel):
         for i in range(dimension):
             for j in range(dimension):
                 if any(not 0 <= c < prime for c in self.structure_constants[i][j]):
-                    raise ValueError(
-                        "structure constants must be canonical residues in 0..p-1"
+                    raise _validation_error(
+                        "hochschild_complex.canonical_residues",
+                        "structure constants must be canonical residues in 0..p-1",
                     )
         if any(not 0 <= value < prime for value in self.augmentation):
-            raise ValueError("augmentation values must be canonical residues in 0..p-1")
+            raise _validation_error(
+                "hochschild_complex.canonical_residues",
+                "augmentation values must be canonical residues in 0..p-1",
+            )
 
     def _require_multiplicative_augmentation(self) -> None:
         """The trivial module via epsilon is an A-bimodule only when epsilon is
@@ -92,43 +101,60 @@ class AlgebraStructure(StrictModel):
                     % prime
                 )
                 if product_epsilon != (epsilon[i] * epsilon[j]) % prime:
-                    raise ValueError(
+                    raise _validation_error(
+                        "hochschild_complex.augmentation_homomorphism",
                         "augmentation must be an algebra homomorphism: "
-                        "epsilon(e_i e_j) must equal epsilon(e_i)*epsilon(e_j) mod p"
+                        "epsilon(e_i e_j) must equal epsilon(e_i)*epsilon(e_j) mod p",
                     )
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
         if len(self.structure_constants) != self.dimension:
-            raise ValueError("structure_constants must be dimension x dimension")
+            raise _validation_error(
+                "hochschild_complex.structure_shape",
+                "structure_constants must be dimension x dimension",
+            )
         for row in self.structure_constants:
             if len(row) != self.dimension:
-                raise ValueError("structure_constants must be square")
+                raise _validation_error(
+                    "hochschild_complex.structure_shape",
+                    "structure_constants must be square",
+                )
             for v in row:
                 if len(v) != self.dimension:
-                    raise ValueError("structure_constants must be 3D")
+                    raise _validation_error(
+                        "hochschild_complex.structure_shape",
+                        "structure_constants must be 3D",
+                    )
         if len(self.augmentation) != self.dimension:
-            raise ValueError("augmentation must have one entry per basis element")
+            raise _validation_error(
+                "hochschild_complex.augmentation_shape",
+                "augmentation must have one entry per basis element",
+            )
         from sympy import isprime
 
         if not isprime(self.prime):
-            raise ValueError("prime must be a prime integer")
+            raise _validation_error(
+                "hochschild_complex.prime", "prime must be a prime integer"
+            )
         # Gate the multiplication-table walks on the derived input and work
         # budgets before touching the constants, so oversized tables fail fast.
         structure_entries = self.dimension**3 + self.dimension
         if structure_entries > MAX_STRUCTURE_CONSTANT_ENTRIES:
-            raise ValueError(
+            raise _validation_error(
+                "hochschild_complex.input_budget",
                 "structure constants exceed the supported input-entry budget "
                 f"(dimension^3 + dimension = {structure_entries} "
-                f"> {MAX_STRUCTURE_CONSTANT_ENTRIES})"
+                f"> {MAX_STRUCTURE_CONSTANT_ENTRIES})",
             )
         associativity_steps = 2 * self.dimension**5
         if associativity_steps > MAX_ASSOCIATIVITY_DOT_STEPS:
-            raise ValueError(
+            raise _validation_error(
+                "hochschild_complex.associativity_budget",
                 "algebra dimension exceeds the associativity-admission work "
                 f"budget (2*dimension^5 = {associativity_steps} "
                 f"> {MAX_ASSOCIATIVITY_DOT_STEPS}); admitting larger algebras "
-                "requires an accelerated associativity check"
+                "requires an accelerated associativity check",
             )
         self._require_canonical_residues()
         self._require_associative()
@@ -151,8 +177,9 @@ class AlgebraStructure(StrictModel):
                         left = sum(c[i][j][t] * c[t][k][ell] for t in range(n)) % p
                         right = sum(c[j][k][t] * c[i][t][ell] for t in range(n)) % p
                         if left != right:
-                            raise ValueError(
-                                "multiplication must be associative modulo p"
+                            raise _validation_error(
+                                "hochschild_complex.associativity",
+                                "multiplication must be associative modulo p",
                             )
 
 
@@ -176,33 +203,37 @@ class HochschildChainComplexRequest(StrictModel):
     def require_within_budget(self) -> Self:
         dimension = self.algebra.dimension
         if dimension ** (self.max_degree + 1) > MAX_HOCHSCHILD_TENSOR_ELEMENTS:
-            raise ValueError(
+            raise _validation_error(
+                "hochschild_complex.tensor_budget",
                 "requested max_degree exceeds the supported tensor-element budget "
-                f"(dimension^{self.max_degree + 1} > {MAX_HOCHSCHILD_TENSOR_ELEMENTS})"
+                f"(dimension^{self.max_degree + 1} > {MAX_HOCHSCHILD_TENSOR_ELEMENTS})",
             )
         densest_entries = dimension ** (2 * self.max_degree - 1)
         if densest_entries > MAX_HOCHSCHILD_MATRIX_ENTRIES:
-            raise ValueError(
+            raise _validation_error(
+                "hochschild_complex.matrix_budget",
                 "requested max_degree exceeds the supported boundary-matrix "
                 f"entry budget (dimension^(2*max_degree-1) = {densest_entries} "
-                f"> {MAX_HOCHSCHILD_MATRIX_ENTRIES})"
+                f"> {MAX_HOCHSCHILD_MATRIX_ENTRIES})",
             )
         # The emitted differential is carried as the canonical PrimeFieldMatrix
         # (rows = n^{k-1}, cols = n^{k}); it must fit the matrix dimension
         # bound so an admitted request never fails at construction. Check the
         # densest axis n**max_degree (and n**(max_degree-1) for the row side).
         if dimension**self.max_degree > PRIME_FIELD_MAX_DIM:
-            raise ValueError(
+            raise _validation_error(
+                "hochschild_complex.matrix_dimension",
                 "requested max_degree exceeds the supported matrix dimension bound "
-                f"(dimension^max_degree = {dimension**self.max_degree} > {PRIME_FIELD_MAX_DIM})"
+                f"(dimension^max_degree = {dimension**self.max_degree} > {PRIME_FIELD_MAX_DIM})",
             )
         if (
             self.max_degree >= 1
             and dimension ** (self.max_degree - 1) > PRIME_FIELD_MAX_DIM
         ):
-            raise ValueError(
+            raise _validation_error(
+                "hochschild_complex.matrix_dimension",
                 "requested max_degree exceeds the supported matrix dimension bound "
-                f"(dimension^max_degree-1 = {dimension ** (self.max_degree - 1)} > {PRIME_FIELD_MAX_DIM})"
+                f"(dimension^max_degree-1 = {dimension ** (self.max_degree - 1)} > {PRIME_FIELD_MAX_DIM})",
             )
         return self
 
@@ -247,40 +278,51 @@ class HochschildChainComplexResult(StrictModel):
         # payload is never trusted on its shape alone.
         algebra = self.algebra
         if self.algebra_dimension != algebra.dimension or self.prime != algebra.prime:
-            raise ValueError(
-                "algebra_dimension and prime must match the retained algebra"
+            raise _validation_error(
+                "hochschild_complex.algebra_binding",
+                "algebra_dimension and prime must match the retained algebra",
             )
         dimension = algebra.dimension
         expected_groups = tuple(
             [1] + [dimension**k for k in range(1, len(self.group_dimensions))]
         )
         if self.group_dimensions != expected_groups:
-            raise ValueError(
+            raise _validation_error(
+                "hochschild_complex.group_dimensions",
                 "group_dimensions must be the bar complex dimensions "
-                "C_k = A^tensor-k of the retained algebra"
+                "C_k = A^tensor-k of the retained algebra",
             )
         if len(self.differentials) != len(self.group_dimensions) - 1:
-            raise ValueError("one differential per positive degree is required")
+            raise _validation_error(
+                "hochschild_complex.differential_count",
+                "one differential per positive degree is required",
+            )
         for degree, differential in enumerate(self.differentials, start=1):
             if differential.degree != degree:
-                raise ValueError("differential degrees must be consecutive from 1")
+                raise _validation_error(
+                    "hochschild_complex.differential_degree",
+                    "differential degrees must be consecutive from 1",
+                )
             # Bind each differential to the algebra's field: a matrix over a
             # different prime could pass every shape and entry comparison and
             # then silently change fields inside rank/RREF/nullspace consumers.
             if differential.matrix.prime != algebra.prime:
-                raise ValueError(
-                    "differential matrices must carry the retained algebra prime"
+                raise _validation_error(
+                    "hochschild_complex.differential_prime",
+                    "differential matrices must carry the retained algebra prime",
                 )
             if (
                 differential.source_dim != dimension** degree
                 or differential.target_dim != dimension ** (degree - 1)
             ):
-                raise ValueError(
-                    "differential dimensions must match the retained algebra"
+                raise _validation_error(
+                    "hochschild_complex.differential_dimensions",
+                    "differential dimensions must match the retained algebra",
                 )
             if dimension ** (2 * degree - 1) > MAX_HOCHSCHILD_MATRIX_ENTRIES:
-                raise ValueError(
-                    "differential exceeds the supported boundary-matrix entry budget"
+                raise _validation_error(
+                    "hochschild_complex.matrix_budget",
+                    "differential exceeds the supported boundary-matrix entry budget",
                 )
             expected_entries = bar_differential_entries(
                 algebra.structure_constants,
@@ -289,9 +331,10 @@ class HochschildChainComplexResult(StrictModel):
                 algebra.augmentation,
             )
             if differential.matrix.entries != tuple(expected_entries):
-                raise ValueError(
+                raise _validation_error(
+                    "hochschild_complex.differential_entries",
                     "differential entries must be the exact bar differential "
-                    "of the retained algebra"
+                    "of the retained algebra",
                 )
         return self
 
@@ -318,16 +361,18 @@ def require_hochschild_budget(dimension: int, max_degree: int) -> None:
     """Reject degrees whose tensor or boundary-matrix budget is exceeded."""
 
     if dimension ** (max_degree + 1) > MAX_HOCHSCHILD_TENSOR_ELEMENTS:
-        raise ValueError(
+        raise _validation_error(
+            "hochschild_complex.tensor_budget",
             "requested max_degree exceeds the supported tensor-element budget "
-            f"(dimension^{max_degree + 1} > {MAX_HOCHSCHILD_TENSOR_ELEMENTS})"
+            f"(dimension^{max_degree + 1} > {MAX_HOCHSCHILD_TENSOR_ELEMENTS})",
         )
     densest_entries = dimension ** (2 * max_degree + 1)
     if densest_entries > MAX_HOCHSCHILD_MATRIX_ENTRIES:
-        raise ValueError(
+        raise _validation_error(
+            "hochschild_complex.matrix_budget",
             "requested max_degree exceeds the supported boundary-matrix "
             f"entry budget (dimension^(2*max_degree+1) = {densest_entries} "
-            f"> {MAX_HOCHSCHILD_MATRIX_ENTRIES})"
+            f"> {MAX_HOCHSCHILD_MATRIX_ENTRIES})",
         )
 
 
@@ -353,15 +398,19 @@ class HochschildHomologyResult(StrictModel):
         )
 
         if self.prime != self.algebra.prime:
-            raise ValueError("prime must match the retained algebra")
+            raise _validation_error(
+                "hochschild_complex.prime_binding",
+                "prime must match the retained algebra",
+            )
         # Reapply the enumeration admission bound before replaying so a
         # directly supplied payload cannot bypass the request budget.
         require_hochschild_budget(self.algebra.dimension, self.max_degree)
         expected_groups = hochschild_homology_groups(self.algebra, self.max_degree)
         if self.groups != expected_groups:
-            raise ValueError(
+            raise _validation_error(
+                "hochschild_complex.homology_replay",
                 "groups must equal the exact bar-homology replay of the "
-                "retained algebra"
+                "retained algebra",
             )
         return self
 

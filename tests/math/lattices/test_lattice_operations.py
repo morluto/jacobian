@@ -45,18 +45,21 @@ def _lattice(ambient: int, basis: list[list[int]]) -> IntegerLattice:
 
 
 def test_integer_lattice_rejects_column_mismatch() -> None:
-    with pytest.raises(ValidationError, match="basis columns must equal"):
+    with pytest.raises(ValidationError) as exc_info:
         _lattice(2, [[1, 0, 0], [0, 1, 0]])
+    assert exc_info.value.errors()[0]["type"] == "lattice.basis_columns_mismatch"
 
 
 def test_integer_lattice_rejects_too_many_rows() -> None:
-    with pytest.raises(ValidationError, match="cannot exceed"):
+    with pytest.raises(ValidationError) as exc_info:
         _lattice(1, [[1], [2]])
+    assert exc_info.value.errors()[0]["type"] == "lattice.rank_exceeds_ambient"
 
 
 def test_integer_lattice_rejects_empty_basis() -> None:
-    with pytest.raises(ValidationError, match="at least 1 item"):
+    with pytest.raises(ValidationError) as exc_info:
         IntegerLattice(ambient_dimension=2, basis={"entries": []})
+    assert exc_info.value.errors()[0]["type"] == "too_short"
 
 
 # ---------------------------------------------------------------------------
@@ -211,12 +214,13 @@ def test_sublattice_index_quadratic() -> None:
 
 
 def test_sublattice_index_rejects_dimension_mismatch() -> None:
-    with pytest.raises(ValidationError, match="ambient dimensions must match"):
+    with pytest.raises(ValidationError) as exc_info:
         SublatticeIndexRequest(
             sublattice=_lattice(1, [[1]]),
             parent=_lattice(2, [[1, 0], [0, 1]]),
             embedding={"entries": [["1", "0"]]},
         )
+    assert exc_info.value.errors()[0]["type"] == "lattice.ambient_dimensions_mismatch"
 
 
 # ---------------------------------------------------------------------------

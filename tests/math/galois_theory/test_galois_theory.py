@@ -129,10 +129,12 @@ def test_multiplying_by_every_field_unit_preserves_monic_factors(
 
 
 def test_zero_and_noncanonical_degree_are_rejected_before_sympy() -> None:
-    with pytest.raises(ValidationError, match="nonzero polynomial"):
+    with pytest.raises(ValidationError) as exc:
         GaloisFactorRequest(field_order=3, coefficients=(0, 0))
-    with pytest.raises(ValidationError, match="nonzero polynomial"):
+    assert exc.value.errors()[0]["type"] == "galois_theory.polynomial_zero"
+    with pytest.raises(ValidationError) as exc:
         GaloisFactorRequest(field_order=3, coefficients=(1, 0))
+    assert exc.value.errors()[0]["type"] == "galois_theory.polynomial_zero"
 
 
 def test_factorization_result_rejects_a_forged_certificate() -> None:
@@ -141,15 +143,17 @@ def test_factorization_result_rejects_a_forged_certificate() -> None:
     )
     payload = result.model_dump()
     payload["unit"] = 2
-    with pytest.raises(ValidationError, match="reconstruct"):
+    with pytest.raises(ValidationError) as exc:
         GaloisFactorResult.model_validate(payload)
+    assert exc.value.errors()[0]["type"] == "galois_theory.reconstruction_mismatch"
 
     payload = result.model_dump()
     payload["field_order"] = 4
-    with pytest.raises(ValidationError, match="prime"):
+    with pytest.raises(ValidationError) as exc:
         GaloisFactorResult.model_validate(payload)
+    assert exc.value.errors()[0]["type"] == "galois_theory.field_order_not_prime"
 
-    with pytest.raises(ValidationError, match="factor must be irreducible"):
+    with pytest.raises(ValidationError) as exc:
         GaloisFactorResult(
             field_order=3,
             source_coefficients=(2, 0, 1),
@@ -164,6 +168,7 @@ def test_factorization_result_rejects_a_forged_certificate() -> None:
             factor_count=1,
             is_irreducible=True,
         )
+    assert exc.value.errors()[0]["type"] == "galois_theory.factor_not_irreducible"
 
 
 def test_frobenius_cycle_is_canonical_positive_partition() -> None:
@@ -188,12 +193,13 @@ def test_frobenius_cycle_is_canonical_positive_partition() -> None:
 
 
 def test_frobenius_cycle_rejects_unrealizable_distinct_factor_pattern() -> None:
-    with pytest.raises(ValidationError, match="available distinct"):
+    with pytest.raises(ValidationError) as exc:
         FrobeniusCycleRequest(
             field_order=2,
             polynomial_degree=3,
             factorization_degrees=(1, 1, 1),
         )
+    assert exc.value.errors()[0]["type"] == "galois_theory.partition_unrealizable"
 
 
 @pytest.mark.parametrize("degrees", [(2, 0), (3, -1)])
@@ -210,10 +216,12 @@ def test_frobenius_rejects_nonpositive_factor_degrees(
 
 @pytest.mark.parametrize("request_type", [GaloisGroupRequest, SolvableRequest])
 def test_galois_backend_domain_is_enforced_before_execution(request_type: type) -> None:
-    with pytest.raises(ValidationError, match="irreducible"):
+    with pytest.raises(ValidationError) as exc:
         request_type(coefficients=(0, 0, 0, 0, 1))
-    with pytest.raises(ValidationError, match="at most 7 items"):
+    assert exc.value.errors()[0]["type"] == "galois_theory.polynomial_not_irreducible"
+    with pytest.raises(ValidationError) as exc:
         request_type(coefficients=(-2, 0, 0, 0, 0, 0, 0, 1))
+    assert exc.value.errors()[0]["type"] == "too_long"
 
 
 def _group_from_result(result: object) -> PermutationGroup:

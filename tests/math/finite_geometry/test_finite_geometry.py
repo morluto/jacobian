@@ -52,10 +52,11 @@ def test_projective_point_canonicalize_scales_to_one() -> None:
 
 
 def test_projective_point_canonicalize_rejects_zero() -> None:
-    with pytest.raises(ValidationError, match="nonzero"):
+    with pytest.raises(ValidationError) as error:
         ProjectivePointCanonicalizeRequest(
             space={"field_order": 5, "axis": ("x", "y")}, vector=(0, 0)
         )
+    assert error.value.errors()[0]["type"] == "finite_geometry.projective_vector_zero"
 
 
 def test_projective_point_equal_same_point() -> None:
@@ -192,10 +193,11 @@ def test_projective_space_enumerate_pg1_f2() -> None:
 
 
 def test_request_rejects_nonprime_field() -> None:
-    with pytest.raises(ValidationError, match="prime"):
+    with pytest.raises(ValidationError) as error:
         ProjectivePointCanonicalizeRequest(
             space={"field_order": 4, "axis": ("x", "y")}, vector=(1, 2)
         )
+    assert error.value.errors()[0]["type"] == "finite_geometry.field_order_not_prime"
 
 
 def test_canonical_values_compose_and_reject_different_parents() -> None:
@@ -216,15 +218,22 @@ def test_canonical_values_compose_and_reject_different_parents() -> None:
     other = LinearSubspace(
         space={"field_order": 5, "axis": ("x", "y")}, basis=((1, 0),)
     )
-    with pytest.raises(ValidationError, match="field and axis"):
+    with pytest.raises(ValidationError) as error:
         SubspaceIntersectionRequest(subspace_a=computed, subspace_b=other)
+    assert (
+        error.value.errors()[0]["type"]
+        == "finite_geometry.intersection_parent_mismatch"
+    )
 
 
 def test_axis_identity_is_part_of_the_parent() -> None:
     point_x = {"space": {"field_order": 3, "axis": ("x", "y")}, "coordinates": (1, 0)}
     point_y = {"space": {"field_order": 3, "axis": ("y", "x")}, "coordinates": (1, 0)}
-    with pytest.raises(ValidationError, match="field and axis"):
+    with pytest.raises(ValidationError) as error:
         ProjectivePointEqualRequest(point_a=point_x, point_b=point_y)
+    assert (
+        error.value.errors()[0]["type"] == "finite_geometry.projective_parent_mismatch"
+    )
 
 
 def test_source_bound_results_reject_forged_values() -> None:
@@ -236,8 +245,9 @@ def test_source_bound_results_reject_forged_values() -> None:
     )
     payload = result.model_dump()
     payload["subspace"]["basis"] = ((0, 1),)
-    with pytest.raises(ValidationError, match="source vectors"):
+    with pytest.raises(ValidationError) as error:
         type(result).model_validate(payload)
+    assert error.value.errors()[0]["type"] == "finite_geometry.subspace_replay_mismatch"
 
     count = compute_grassmannian_count(
         GrassmannianCountRequest(
@@ -246,5 +256,8 @@ def test_source_bound_results_reject_forged_values() -> None:
     )
     payload = count.model_dump()
     payload["count"] = 8
-    with pytest.raises(ValidationError, match="Gaussian"):
+    with pytest.raises(ValidationError) as error:
         type(count).model_validate(payload)
+    assert (
+        error.value.errors()[0]["type"] == "finite_geometry.grassmannian_count_mismatch"
+    )

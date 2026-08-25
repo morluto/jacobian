@@ -18,19 +18,32 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by greedoid values."""
+
+    return PydanticCustomError(f"greedoid.{reason}", message)
 
 
 def _check_feasible_row(row: tuple[int, ...], n: int) -> None:
     if not row:
         return
     if list(row) != sorted(row):
-        raise ValueError("each feasible set must be a sorted index tuple")
+        raise _validation_error(
+            "feasible_row_unsorted", "each feasible set must be a sorted index tuple"
+        )
     if len(set(row)) != len(row):
-        raise ValueError("feasible sets must not repeat an element")
+        raise _validation_error(
+            "feasible_row_duplicate", "feasible sets must not repeat an element"
+        )
     if any(not 0 <= i < n for i in row):
-        raise ValueError("feasible-set index out of range")
+        raise _validation_error(
+            "feasible_index_out_of_range", "feasible-set index out of range"
+        )
 
 
 def _check_family_unique(feasible: tuple[tuple[int, ...], ...]) -> None:
@@ -39,7 +52,10 @@ def _check_family_unique(feasible: tuple[tuple[int, ...], ...]) -> None:
     seen: set[tuple[int, ...]] = set()
     for row in feasible:
         if row in seen:
-            raise ValueError("feasible-set family must be duplicate-free")
+            raise _validation_error(
+                "feasible_family_duplicate",
+                "feasible-set family must be duplicate-free",
+            )
         seen.add(row)
 
 
@@ -59,7 +75,7 @@ class FiniteFeasibleSetSystem(StrictModel):
     @model_validator(mode="after")
     def require_well_formed(self) -> Self:
         if len(set(self.ground)) != len(self.ground):
-            raise ValueError("ground labels must be unique")
+            raise _validation_error("ground_duplicate", "ground labels must be unique")
         n = len(self.ground)
         for row in self.feasible:
             _check_feasible_row(row, n)

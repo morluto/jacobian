@@ -71,20 +71,33 @@ def test_public_surface_keeps_closure_and_interior_native_only() -> None:
 
 
 def test_topology_axioms_are_validated_at_the_value_boundary() -> None:
-    with pytest.raises(ValidationError, match="unions"):
+    with pytest.raises(ValidationError) as exc_info:
         FiniteTopology(
             point_count=3,
             open_sets=((), (0,), (1,), (0, 1, 2)),
         )
-    with pytest.raises(ValidationError, match="intersections"):
+    assert (
+        exc_info.value.errors()[0]["type"] == "finite_topology.not_closed_under_unions"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         FiniteTopology(
             point_count=3,
             open_sets=((), (0, 1), (1, 2), (0, 1, 2)),
         )
-    with pytest.raises(ValidationError, match="sorted"):
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_topology.not_closed_under_intersections"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         FiniteTopology(point_count=2, open_sets=((), (1, 0)))
-    with pytest.raises(ValidationError, match="distinct"):
+    assert (
+        exc_info.value.errors()[0]["type"] == "finite_topology.open_set_not_canonical"
+    )
+    with pytest.raises(ValidationError) as exc_info:
         FiniteTopology(point_count=1, open_sets=((), (0,), (0,)))
+    assert (
+        exc_info.value.errors()[0]["type"] == "finite_topology.open_sets_not_distinct"
+    )
 
 
 def test_specialization_orientation_is_explicit_and_bound() -> None:
@@ -96,8 +109,12 @@ def test_specialization_orientation_is_explicit_and_bound() -> None:
 
     payload = result.model_dump()
     payload["relation"] = ((True, False), (True, True))
-    with pytest.raises(ValidationError, match="not bound"):
+    with pytest.raises(ValidationError) as exc_info:
         SpecializationPreorderResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_topology.specialization_preorder_not_bound"
+    )
 
 
 def test_minimal_neighborhoods_and_components() -> None:
@@ -117,8 +134,12 @@ def test_minimal_neighborhoods_and_components() -> None:
 
     payload = discrete.model_dump()
     payload["component_count"] = 2
-    with pytest.raises(ValidationError, match="not bound"):
+    with pytest.raises(ValidationError) as exc_info:
         ConnectedComponentsResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_topology.connected_components_not_bound"
+    )
 
 
 def test_continuity_returns_an_exact_counterexample() -> None:
@@ -145,12 +166,16 @@ def test_continuity_returns_an_exact_counterexample() -> None:
 
     payload = result.model_dump()
     payload["is_continuous"] = True
-    with pytest.raises(ValidationError, match="not bound"):
+    with pytest.raises(ValidationError) as exc_info:
         ContinuityResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_topology.continuity_result_not_bound"
+    )
 
 
 def test_continuity_request_binds_map_carrier_sizes() -> None:
-    with pytest.raises(ValidationError, match="domain size"):
+    with pytest.raises(ValidationError) as exc_info:
         ContinuityRequest(
             domain=_sierpinski(),
             codomain=_sierpinski(),
@@ -158,6 +183,9 @@ def test_continuity_request_binds_map_carrier_sizes() -> None:
                 domain_point_count=1, codomain_point_count=2, values=(0,)
             ),
         )
+    assert (
+        exc_info.value.errors()[0]["type"] == "finite_topology.map_domain_size_mismatch"
+    )
 
 
 def test_beat_points_use_strict_t0_order_and_return_witnesses() -> None:
@@ -171,14 +199,21 @@ def test_beat_points_use_strict_t0_order_and_return_witnesses() -> None:
 
     payload = result.model_dump()
     payload["up_beat_points"] = ()
-    with pytest.raises(ValidationError, match="not bound"):
+    with pytest.raises(ValidationError) as exc_info:
         BeatPointsResult.model_validate(payload)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_topology.beat_points_result_not_bound"
+    )
 
 
 def test_non_t0_beat_point_request_fails_closed() -> None:
     assert is_t0(_indiscrete(2)) is False
-    with pytest.raises(ValidationError, match="T0"):
+    with pytest.raises(ValidationError) as exc_info:
         BeatPointsRequest(topology=_indiscrete(2))
+    assert (
+        exc_info.value.errors()[0]["type"] == "finite_topology.beat_points_require_t0"
+    )
     with pytest.raises(ValueError, match="T0"):
         beat_points(_indiscrete(2))
 

@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from pydantic_core import PydanticCustomError
+
+from jacobian.canonical import strict_json_object_size
 from jacobian.math.finite_categories.values import (
     MAX_CATEGORY_COMPOSABLE_PAIRS,
     MAX_CATEGORY_COMPOSABLE_TRIPLES,
@@ -23,11 +26,16 @@ from jacobian.math.finite_categories.values import (
     _category_wire_size,
     _identifier_shape,
     _identifier_wire_size,
-    _json_object_size,
 )
 
 MAX_CATEGORY_PRODUCT_RESULT_BYTES = 8 * 1024 * 1024
 MAX_CATEGORY_PRODUCT_REPLAY_STEPS = 1_000_000
+
+
+def _product_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable request-admission error for category products."""
+
+    return PydanticCustomError(f"finite_category.{reason}", message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,7 +65,7 @@ def _array_size(count: int, item_bytes: int) -> int:
 
 
 def _object_overhead(*field_names: str) -> int:
-    return _json_object_size(tuple((field_name, 0) for field_name in field_names))
+    return strict_json_object_size(tuple((field_name, 0) for field_name in field_names))
 
 
 def _cross_pair_bytes(left_sizes: tuple[int, ...], right_sizes: tuple[int, ...]) -> int:
@@ -93,11 +101,20 @@ def _require_pair_identifier_budget(
         + max(identifier_sizes[item] for item in right)
     )
     if depth > MAX_CATEGORY_IDENTIFIER_DEPTH:
-        raise ValueError(f"{label} exceed the structural identifier-depth budget")
+        raise _product_error(
+            "product_identifier_depth_budget",
+            f"{label} exceed the structural identifier-depth budget",
+        )
     if leaves > MAX_CATEGORY_IDENTIFIER_LEAVES:
-        raise ValueError(f"{label} exceed the structural identifier-leaf budget")
+        raise _product_error(
+            "product_identifier_leaf_budget",
+            f"{label} exceed the structural identifier-leaf budget",
+        )
     if wire_size > MAX_CATEGORY_IDENTIFIER_BYTES:
-        raise ValueError(f"{label} exceed the structural identifier wire budget")
+        raise _product_error(
+            "product_identifier_wire_budget",
+            f"{label} exceed the structural identifier wire budget",
+        )
 
 
 def _product_category_wire_size(
@@ -144,7 +161,7 @@ def _product_category_wire_size(
         )
         for index in range(3)
     )
-    return _json_object_size(
+    return strict_json_object_size(
         (
             ("objects", _array_size(object_count, object_pair_bytes)),
             ("morphisms", _array_size(morphism_count, morphism_item_bytes)),
@@ -185,7 +202,7 @@ def _product_result_wire_size(
         + len(right.morphisms) * sum(left_morphism_sizes)
         + len(left.morphisms) * sum(right_morphism_sizes)
     )
-    return _json_object_size(
+    return strict_json_object_size(
         (
             ("left", _category_wire_size(left)),
             ("right", _category_wire_size(right)),
@@ -211,24 +228,28 @@ def _product_plan(left: FiniteCategory, right: FiniteCategory) -> _CategoryProdu
     composable_triple_count = left_triples * right_triples
 
     if object_count > MAX_CATEGORY_OBJECTS:
-        raise ValueError(
+        raise _product_error(
+            "product_object_count_budget",
             "product category exceeds the bounded structural object count of "
-            f"{MAX_CATEGORY_OBJECTS}"
+            f"{MAX_CATEGORY_OBJECTS}",
         )
     if morphism_count > MAX_CATEGORY_MORPHISMS:
-        raise ValueError(
+        raise _product_error(
+            "product_morphism_count_budget",
             "product category exceeds the bounded structural morphism count of "
-            f"{MAX_CATEGORY_MORPHISMS}"
+            f"{MAX_CATEGORY_MORPHISMS}",
         )
     if composable_pair_count > MAX_CATEGORY_COMPOSABLE_PAIRS:
-        raise ValueError(
+        raise _product_error(
+            "product_composable_pair_budget",
             "product category exceeds the bounded composable-pair count of "
-            f"{MAX_CATEGORY_COMPOSABLE_PAIRS}"
+            f"{MAX_CATEGORY_COMPOSABLE_PAIRS}",
         )
     if composable_triple_count > MAX_CATEGORY_COMPOSABLE_TRIPLES:
-        raise ValueError(
+        raise _product_error(
+            "product_composable_triple_budget",
             "product category exceeds the bounded composable-triple count of "
-            f"{MAX_CATEGORY_COMPOSABLE_TRIPLES}"
+            f"{MAX_CATEGORY_COMPOSABLE_TRIPLES}",
         )
 
     identifier_sizes = _source_identifier_sizes(left, right)
@@ -252,16 +273,18 @@ def _product_plan(left: FiniteCategory, right: FiniteCategory) -> _CategoryProdu
         + composable_triple_count
     )
     if replay_steps > MAX_CATEGORY_PRODUCT_REPLAY_STEPS:
-        raise ValueError(
+        raise _product_error(
+            "product_replay_work_budget",
             "product construction exceeds the bounded construction-and-replay work "
-            f"budget of {MAX_CATEGORY_PRODUCT_REPLAY_STEPS} steps"
+            f"budget of {MAX_CATEGORY_PRODUCT_REPLAY_STEPS} steps",
         )
 
     product_category_size = _product_category_wire_size(left, right, identifier_sizes)
     if product_category_size > MAX_CATEGORY_VALUE_BYTES:
-        raise ValueError(
+        raise _product_error(
+            "product_wire_size_budget",
             "product category exceeds the bounded canonical category wire size of "
-            f"{MAX_CATEGORY_VALUE_BYTES} bytes"
+            f"{MAX_CATEGORY_VALUE_BYTES} bytes",
         )
     serialized_result_bytes = _product_result_wire_size(
         left, right, product_category_size, identifier_sizes

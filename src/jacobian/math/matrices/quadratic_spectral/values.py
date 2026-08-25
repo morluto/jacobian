@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.matrices.values import RealQuadraticMatrix
@@ -48,10 +49,14 @@ class RealQuadraticSpectrum(StrictModel):
         from jacobian.math.matrices.quadratic_spectral.operations import spectrum_rows
 
         if sum(row.multiplicity for row in self.values) != 2:
-            raise ValueError("2 by 2 spectral multiplicities must sum to two")
+            raise _validation_error(
+                "invalid", "2 by 2 spectral multiplicities must sum to two"
+            )
         expected = spectrum_rows(self.matrix, self.spectrum_kind)
         if self.values != expected:
-            raise ValueError("spectrum does not match the exact source matrix")
+            raise _validation_error(
+                "invalid", "spectrum does not match the exact source matrix"
+            )
         return self
 
 
@@ -76,7 +81,9 @@ class RealQuadraticInertia(StrictModel):
             self.definiteness,
         )
         if actual != expected:
-            raise ValueError("inertia does not match the exact source matrix")
+            raise _validation_error(
+                "invalid", "inertia does not match the exact source matrix"
+            )
         return self
 
 
@@ -87,3 +94,7 @@ __all__ = [
     "RealQuadraticSpectrum",
     "SpectrumKind",
 ]
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"matrix.{reason}", message)

@@ -6,9 +6,15 @@ from fractions import Fraction
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"moments_orthogonal.{reason}", message)
+
 
 MAX_MOMENT_DEGREE = 64
 MAX_HANKEL_ORDER = 32
@@ -42,8 +48,9 @@ class HankelMomentMatrix(StrictModel):
     def bind_determinant_and_rank_to_entries(self) -> Self:
         side = self.order + 1
         if len(self.entries) != side or any(len(row) != side for row in self.entries):
-            raise ValueError(
-                f"entries must form a {side}x{side} matrix for order {self.order}"
+            raise _validation_error(
+                "value_invariant",
+                f"entries must form a {side}x{side} matrix for order {self.order}",
             )
         from jacobian.math.moments_orthogonal.operations import (
             _rational_det,
@@ -60,15 +67,20 @@ class HankelMomentMatrix(StrictModel):
                     for b in range(side)
                     if a + b == i + j
                 ):
-                    raise ValueError(
+                    raise _validation_error(
+                        "value_invariant",
                         "entries along each anti-diagonal of a Hankel "
-                        "matrix must be equal"
+                        "matrix must be equal",
                     )
         matrix = [[value.as_fraction() for value in row] for row in self.entries]
         if self.determinant.as_fraction() != _rational_det(matrix):
-            raise ValueError("determinant must match the retained entries")
+            raise _validation_error(
+                "value_invariant", "determinant must match the retained entries"
+            )
         if self.rank != _rational_rank(matrix):
-            raise ValueError("rank must match the retained entries")
+            raise _validation_error(
+                "value_invariant", "rank must match the retained entries"
+            )
         return self
 
 
@@ -110,16 +122,18 @@ def _decompose_residual_in_basis(
         if remainder[j] == 0:
             continue
         if j >= k + 1:
-            raise ValueError(
-                f"residual x*p_{k} - p_{k + 1} leaves the span of the retained family"
+            raise _validation_error(
+                "value_invariant",
+                f"residual x*p_{k} - p_{k + 1} leaves the span of the retained family",
             )
         basis = [c.as_fraction() for c in polynomials[j].coefficients]
         components[j] = remainder[j]
         for power, coefficient in enumerate(basis):
             remainder[power] -= components[j] * coefficient
     if any(coefficient != 0 for coefficient in remainder[: k + 1]):
-        raise ValueError(
-            f"p_{k + 1} does not satisfy the three-term recurrence against p_{k}"
+        raise _validation_error(
+            "value_invariant",
+            f"p_{k + 1} does not satisfy the three-term recurrence against p_{k}",
         )
     return components
 
@@ -131,10 +145,11 @@ def _require_three_term_consistency(family: OrthogonalPolynomialFamily) -> None:
         components = _decompose_residual_in_basis(polynomials, k)
         lowest_free = max(k - 1, 0)
         if any(component != 0 for component in components[:lowest_free]):
-            raise ValueError(
+            raise _validation_error(
+                "value_invariant",
                 f"p_{k + 1} does not satisfy the three-term recurrence "
                 f"against p_{k}: the residual has a nonzero component "
-                "below p_{k-1}"
+                "below p_{k-1}",
             )
         if k >= 1:
             h_k = polynomials[k].squared_norm.as_fraction()
@@ -148,9 +163,10 @@ def _require_three_term_consistency(family: OrthogonalPolynomialFamily) -> None:
             # degenerate case escapes the norm relation.
             beta_k = components[k - 1]
             if h_k != beta_k * h_prev:
-                raise ValueError(
+                raise _validation_error(
+                    "value_invariant",
                     "squared norms disagree with the three-term recurrence: "
-                    f"beta_{k} must satisfy h_{k} = beta_{k} * h_{k - 1}"
+                    f"beta_{k} must satisfy h_{k} = beta_{k} * h_{k - 1}",
                 )
 
 
@@ -168,16 +184,20 @@ class OrthogonalPolynomialFamily(StrictModel):
     def require_canonical_family(self) -> Self:
         for index, term in enumerate(self.polynomials):
             if term.degree != index:
-                raise ValueError(
+                raise _validation_error(
+                    "value_invariant",
                     f"polynomial at position {index} declares degree {term.degree}; "
-                    "families must be contiguous from degree 0"
+                    "families must be contiguous from degree 0",
                 )
             if len(term.coefficients) != term.degree + 1:
-                raise ValueError(
-                    f"p_{term.degree} must carry exactly degree+1 coefficients"
+                raise _validation_error(
+                    "value_invariant",
+                    f"p_{term.degree} must carry exactly degree+1 coefficients",
                 )
             if term.coefficients[-1].as_fraction() != 1:
-                raise ValueError(f"p_{term.degree} must be monic")
+                raise _validation_error(
+                    "value_invariant", f"p_{term.degree} must be monic"
+                )
         # Three-term consistency: R_k = x*p_k - p_{k+1} must lie in the
         # span of {p_{k-1}, p_k}. Because every p_j is monic, R_k is exactly
         # decomposable in the p_0,...,p_k basis by greedy division; nonzero
@@ -190,12 +210,14 @@ class OrthogonalPolynomialFamily(StrictModel):
         # positive-definite means every norm positive.
         norms = [term.squared_norm.as_fraction() for term in self.polynomials]
         if self.is_quasi_definite != all(norm != 0 for norm in norms):
-            raise ValueError(
-                "is_quasi_definite must equal every squared norm being nonzero"
+            raise _validation_error(
+                "value_invariant",
+                "is_quasi_definite must equal every squared norm being nonzero",
             )
         if self.is_positive_definite != all(norm > 0 for norm in norms):
-            raise ValueError(
-                "is_positive_definite must equal every squared norm being positive"
+            raise _validation_error(
+                "value_invariant",
+                "is_positive_definite must equal every squared norm being positive",
             )
         return self
 
@@ -212,12 +234,15 @@ class ThreeTermRecurrence(StrictModel):
         """One beta per family term: len(beta) == len(alpha) + 1, with the
         unused zero placeholder at index 0."""
         if len(self.beta) != len(self.alpha) + 1:
-            raise ValueError(
+            raise _validation_error(
+                "value_invariant",
                 "beta must carry exactly len(alpha) + 1 entries: one "
-                "placeholder plus one ratio per recurrence step"
+                "placeholder plus one ratio per recurrence step",
             )
         if self.beta[0].as_fraction() != 0:
-            raise ValueError("beta[0] is the unused placeholder and must be zero")
+            raise _validation_error(
+                "value_invariant", "beta[0] is the unused placeholder and must be zero"
+            )
         return self
 
 
@@ -244,14 +269,19 @@ class ChristoffelDarbouxKernel(StrictModel):
         if len(self.coefficients) != side or any(
             len(row) != side for row in self.coefficients
         ):
-            raise ValueError(
+            raise _validation_error(
+                "value_invariant",
                 f"kernel coefficients must form a {side}x{side} matrix for "
-                f"degree {self.degree}"
+                f"degree {self.degree}",
             )
         if self.variable != self.family.variable:
-            raise ValueError("kernel variable must match the defining family")
+            raise _validation_error(
+                "value_invariant", "kernel variable must match the defining family"
+            )
         if self.degree >= len(self.family.polynomials):
-            raise ValueError("kernel degree exceeds the retained family")
+            raise _validation_error(
+                "value_invariant", "kernel degree exceeds the retained family"
+            )
         # Exact replay of the defining sum against the retained family;
         # every kernel is symmetric by construction.
         expected = _kernel_coefficient_matrix(self.family.polynomials, self.degree)
@@ -259,9 +289,10 @@ class ChristoffelDarbouxKernel(StrictModel):
             tuple(value.as_fraction() for value in row) for row in self.coefficients
         )
         if actual != tuple(tuple(row) for row in expected):
-            raise ValueError(
+            raise _validation_error(
+                "value_invariant",
                 "kernel coefficients must be the exact Christoffel-Darboux "
-                "sum of the retained family"
+                "sum of the retained family",
             )
         return self
 
@@ -285,23 +316,27 @@ class GaussianQuadratureRule(StrictModel):
     @model_validator(mode="after")
     def bind_rule_to_source(self) -> Self:
         if len(self.prefix.moments) < 2 * self.order:
-            raise ValueError(
+            raise _validation_error(
+                "value_invariant",
                 f"order {self.order} rules need at least {2 * self.order} "
                 "source moments through mu_(2*order-1); a shorter retained "
-                "prefix cannot establish the advertised exactness degree"
+                "prefix cannot establish the advertised exactness degree",
             )
         if len(self.nodes) != self.order:
-            raise ValueError(
-                f"order {self.order} rules carry exactly {self.order} nodes"
+            raise _validation_error(
+                "value_invariant",
+                f"order {self.order} rules carry exactly {self.order} nodes",
             )
         expected_degree = 2 * self.order - 1
         if self.exactness_degree != expected_degree:
-            raise ValueError(
-                f"exactness degree must be {expected_degree} for order {self.order}"
+            raise _validation_error(
+                "value_invariant",
+                f"exactness degree must be {expected_degree} for order {self.order}",
             )
         if self.variable != self.prefix.variable:
-            raise ValueError(
-                "quadrature variable must match the retained moment prefix"
+            raise _validation_error(
+                "value_invariant",
+                "quadrature variable must match the retained moment prefix",
             )
         # Pure-kernel replay: rebuild nodes and weights from the retained
         # prefix without constructing another result model.
@@ -314,13 +349,14 @@ class GaussianQuadratureRule(StrictModel):
         moments = [_to_fraction(m) for m in self.prefix.moments]
         nodes_frac, weights = _construct_quadrature_rule(p_n, moments, self.order)
         if weights is None:
-            raise ValueError("Vandermonde system is singular")
+            raise _validation_error("value_invariant", "Vandermonde system is singular")
         # The operation's contract carries strictly positive weights only;
         # a payload replaying to a nonpositive rule is not an exact result
         # of this operation.
         if any(weight <= 0 for weight in weights):
-            raise ValueError(
-                "replayed quadrature rules must carry strictly positive weights"
+            raise _validation_error(
+                "value_invariant",
+                "replayed quadrature rules must carry strictly positive weights",
             )
         if tuple(self.nodes) != tuple(
             QuadratureNode(
@@ -329,8 +365,9 @@ class GaussianQuadratureRule(StrictModel):
             )
             for node, weight in zip(nodes_frac, weights, strict=True)
         ):
-            raise ValueError(
-                "quadrature nodes must be the exact rule of the retained moment prefix"
+            raise _validation_error(
+                "value_invariant",
+                "quadrature nodes must be the exact rule of the retained moment prefix",
             )
         return self
 
@@ -398,22 +435,33 @@ class JacobiMatrix(StrictModel):
     def bind_matrix_to_coefficients(self) -> Self:
         size = len(self.alphas)
         if len(self.betas) != size:
-            raise ValueError(
+            raise _validation_error(
+                "value_invariant",
                 "betas must carry one entry per alpha: an unused zero "
-                "placeholder followed by one norm ratio per recurrence step"
+                "placeholder followed by one norm ratio per recurrence step",
             )
         if self.betas and self.betas[0].as_fraction() != 0:
-            raise ValueError("betas[0] is the unused placeholder and must be zero")
+            raise _validation_error(
+                "value_invariant", "betas[0] is the unused placeholder and must be zero"
+            )
         if len(self.matrix) != size or any(len(row) != size for row in self.matrix):
-            raise ValueError("matrix must be a square size x size array")
+            raise _validation_error(
+                "value_invariant", "matrix must be a square size x size array"
+            )
         for i in range(size):
             if self.matrix[i][i] != self.alphas[i]:
-                raise ValueError(f"matrix diagonal must carry alpha_{i}")
+                raise _validation_error(
+                    "value_invariant", f"matrix diagonal must carry alpha_{i}"
+                )
             if i + 1 < size:
                 if self.matrix[i + 1][i] != CanonicalRational.from_integer_ratio(1, 1):
-                    raise ValueError("the monic subdiagonal must be exactly 1")
+                    raise _validation_error(
+                        "value_invariant", "the monic subdiagonal must be exactly 1"
+                    )
                 if self.betas[i + 1] != self.matrix[i][i + 1]:
-                    raise ValueError("matrix superdiagonal must carry beta_{i+1}")
+                    raise _validation_error(
+                        "value_invariant", "matrix superdiagonal must carry beta_{i+1}"
+                    )
         return self
 
     @model_validator(mode="after")
@@ -426,5 +474,7 @@ class JacobiMatrix(StrictModel):
             for j, entry in enumerate(row)
             if abs(i - j) > 1
         ):
-            raise ValueError("entries outside the tridiagonal band must be zero")
+            raise _validation_error(
+                "value_invariant", "entries outside the tridiagonal band must be zero"
+            )
         return self

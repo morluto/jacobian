@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
@@ -27,12 +28,20 @@ class DirectedGraph(StrictModel):
             if not (
                 0 <= source < self.vertex_count and 0 <= target < self.vertex_count
             ):
-                raise ValueError("edge vertices must be in 0..vertex_count-1")
+                raise PydanticCustomError(
+                    "graph.edge_vertices_must_be_in_0_vertex_count_1",
+                    "edge vertices must be in 0..vertex_count-1",
+                )
             if source == target:
-                raise ValueError("self-loops are not allowed")
+                raise PydanticCustomError(
+                    "graph.self_loops_are_not_allowed", "self-loops are not allowed"
+                )
             endpoint_pair = (source, target)
             if endpoint_pair in seen:
-                raise ValueError("directed edges must be unique")
+                raise PydanticCustomError(
+                    "graph.directed_edges_must_be_unique",
+                    "directed edges must be unique",
+                )
             seen.add(endpoint_pair)
         return self
 
@@ -44,7 +53,10 @@ class ReachabilityRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_source(self) -> Self:
         if not (0 <= self.source < self.graph.vertex_count):
-            raise ValueError("source must be in 0..graph.vertex_count-1")
+            raise PydanticCustomError(
+                "graph.source_must_be_in_0_graph_vertex_count_1",
+                "source must be in 0..graph.vertex_count-1",
+            )
         return self
 
 
@@ -96,7 +108,13 @@ class AcyclicOrderResult(StrictModel):
     def require_order_matches_acyclicity(self) -> Self:
         if self.acyclic:
             if not self.order:
-                raise ValueError("acyclic order must list every vertex")
+                raise PydanticCustomError(
+                    "graph.acyclic_order_must_list_every_vertex",
+                    "acyclic order must list every vertex",
+                )
         elif self.order:
-            raise ValueError("cyclic graph must not report a topological order")
+            raise PydanticCustomError(
+                "graph.cyclic_graph_must_not_report_a_topological_order",
+                "cyclic graph must not report a topological order",
+            )
         return self

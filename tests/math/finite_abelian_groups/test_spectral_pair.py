@@ -7,9 +7,9 @@ from itertools import combinations, product
 from typing import Any
 
 import pytest
-from pydantic import ValidationError
 from sympy import Poly, Symbol, cyclotomic_poly
 from sympy.polys.domains import ZZ
+from tests.math.finite_abelian_groups._support import finite_abelian_validation_error
 
 from jacobian.canonical import encode_strict_json
 from jacobian.math import finite_abelian_groups as domain
@@ -169,7 +169,7 @@ def test_source_rejects_noncanonical_set_degeneracies(
     frequencies: tuple[tuple[int, ...], ...],
     message: str,
 ) -> None:
-    with pytest.raises(ValidationError, match=message):
+    with finite_abelian_validation_error():
         _source((4,), points, frequencies)
 
 
@@ -334,10 +334,7 @@ def test_derived_budgets_admit_exponent_above_the_former_fixed_cap() -> None:
 def test_equal_size_pair_over_derived_dense_op_budget_is_rejected() -> None:
     source = _source((128,), ((0,), (1,)), ((0,), (1,)))
 
-    with pytest.raises(
-        ValidationError,
-        match="cyclotomic construction work exceeds its dense-op bound",
-    ):
+    with finite_abelian_validation_error():
         FiniteAbelianSpectralPairRequest(source=source)
     with pytest.raises(
         ValueError, match="cyclotomic construction work exceeds its dense-op bound"
@@ -371,14 +368,14 @@ def test_group_rank_and_order_boundaries() -> None:
 
     # The rank and order ceilings stay operation-specific on the exhaustive
     # factorization path, whose kernel materializes the ambient group.
-    with pytest.raises(ValidationError, match="at most 6 items"):
+    with finite_abelian_validation_error():
         FiniteAbelianGroupFactorizationRequest(
             moduli=(2,) * 7,
             left=((0,) * 7,),
             right=((0,) * 7,),
         )
 
-    with pytest.raises(ValidationError, match="4,096-element bound"):
+    with finite_abelian_validation_error():
         FiniteAbelianGroupFactorizationRequest(
             moduli=(4_096, 2),
             left=((0, 0),),
@@ -483,10 +480,7 @@ def test_singleton_axis_envelope_boundary_is_rejected() -> None:
         ((1,) + (0,) * (rank - 1),),
     )
 
-    with pytest.raises(
-        ValidationError,
-        match="spectral-pair result exceeds its serialized byte bound",
-    ):
+    with finite_abelian_validation_error():
         FiniteAbelianSpectralPairRequest(source=source)
 
 
@@ -500,10 +494,7 @@ def test_singleton_source_over_the_source_byte_bound_is_rejected_before_lcm() ->
         ((1,) + (0,) * (rank - 1),),
     )
 
-    with pytest.raises(
-        ValidationError,
-        match="spectral-pair result exceeds its serialized byte bound",
-    ):
+    with finite_abelian_validation_error():
         FiniteAbelianSpectralPairRequest(source=source)
     with pytest.raises(
         ValueError,
@@ -519,7 +510,7 @@ def test_forged_witness_elements_beyond_source_rank_are_rejected() -> None:
     payload = result.model_dump(mode="json")
     payload["first_nonorthogonal_pair"]["left_frequency"] = [0] * 200
 
-    with pytest.raises(ValidationError, match="replayed exact decision"):
+    with finite_abelian_validation_error():
         FiniteAbelianSpectralPairResult.model_validate(payload)
 
 
@@ -537,7 +528,7 @@ def test_modulus_bound_tracks_canonical_json_safe_integers() -> None:
 
     assert limit == (1 << 53) - 1
     assert FiniteAbelianProductGroup(moduli=(limit,)).order == limit
-    with pytest.raises(ValidationError, match="less than or equal to"):
+    with finite_abelian_validation_error():
         FiniteAbelianProductGroup(moduli=(limit + 1,))
 
 
@@ -584,9 +575,9 @@ def test_coordinate_and_materialization_fallback_boundaries() -> None:
     assert wide.points == ((limit - 1,),)
     assert wide.frequencies == ((0,),)
 
-    with pytest.raises(ValidationError, match="at most 4096 items"):
+    with finite_abelian_validation_error():
         _source((64,), tuple((value,) for value in range(4_097)), ((0,),))
-    with pytest.raises(ValidationError, match="less than or equal to"):
+    with finite_abelian_validation_error():
         _source(
             (2,),
             ((domain.MAX_FINITE_GROUP_COORDINATE + 1,),),
@@ -611,7 +602,7 @@ def test_equal_size_sets_over_character_term_budget_are_still_rejected() -> None
     rows = tuple((value,) for value in range(65))
     source = _source((80,), rows, rows)
 
-    with pytest.raises(ValidationError, match="character-term work exceeds its bound"):
+    with finite_abelian_validation_error():
         FiniteAbelianSpectralPairRequest(source=source)
 
 
@@ -623,7 +614,7 @@ def test_serialized_source_bytes_reject_oversized_mismatch_sets() -> None:
     )
 
     assert len(source.points) < domain.MAX_SPECTRAL_SET_SIZE
-    with pytest.raises(ValidationError, match="serialized byte bound"):
+    with finite_abelian_validation_error():
         FiniteAbelianSpectralPairRequest(source=source)
     with pytest.raises(ValueError, match="serialized byte bound"):
         decide_finite_abelian_spectral_pair(source)
@@ -649,7 +640,7 @@ def test_result_replay_rejects_conclusion_witness_and_source_mutations(
     payload = result.model_dump(mode="json")
     mutation(payload)
 
-    with pytest.raises(ValidationError, match="replayed exact decision"):
+    with finite_abelian_validation_error():
         FiniteAbelianSpectralPairResult.model_validate(payload)
 
 

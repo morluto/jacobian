@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import pytest
 from pydantic import ValidationError
 
@@ -13,6 +15,13 @@ from jacobian.math.group._models import (
 from jacobian.math.group._operations import (
     compute_subgroup_lattice,
 )
+
+
+@contextmanager
+def _group_error(code: str):
+    with pytest.raises(ValidationError) as info:
+        yield
+    assert info.value.errors()[0]["type"] == code
 
 
 class TestSubgroupLattice:
@@ -113,14 +122,14 @@ class TestBoundedEnumeration:
         """Each operation rejects groups above its own enumerated-order cap:
         the lattice at 64, conjugacy classes at 5000."""
         s6_generators = ((1, 0, 2, 3, 4, 5), (1, 2, 3, 4, 5, 0))
-        with pytest.raises(ValidationError, match="bounded maximum"):
+        with _group_error("group.order_bound"):
             GroupSubgroupLatticeRequest(degree=6, generators=s6_generators)
         s7_generators = ((1, 0, 2, 3, 4, 5, 6), (1, 2, 3, 4, 5, 6, 0))
-        with pytest.raises(ValidationError, match="bounded maximum"):
+        with _group_error("group.order_bound"):
             GroupConjugacyClassesRequest(degree=7, generators=s7_generators)
 
     def test_lattice_still_rejects_above_64(self):
-        with pytest.raises(ValidationError, match="bounded maximum"):
+        with _group_error("group.order_bound"):
             GroupSubgroupLatticeRequest(
                 degree=5,
                 generators=((1, 0, 2, 3, 4), (1, 2, 3, 4, 0)),
@@ -165,7 +174,7 @@ class TestLatticeResultBoundToSourceGroup:
         )
         payload["subgroups"] = [trivial_only]
         payload["subgroup_count"] = 1
-        with pytest.raises(ValidationError, match="complete subgroup lattice"):
+        with _group_error("group.lattice_canonical"):
             GroupSubgroupLatticeResult.model_validate(payload)
 
     def test_foreign_group_entries_rejected(self) -> None:
@@ -177,7 +186,7 @@ class TestLatticeResultBoundToSourceGroup:
         ).model_dump(mode="json")
         s3_payload["degree"] = 4
         s3_payload["generators"] = [[1, 2, 3, 0]]
-        with pytest.raises(ValidationError, match="complete subgroup lattice"):
+        with _group_error("group.lattice_canonical"):
             GroupSubgroupLatticeResult.model_validate(s3_payload)
 
 
@@ -224,14 +233,14 @@ class TestLatticeWorkBound:
     def test_exceeded_outcome_rejects_entries_and_missing_detail(self):
         from jacobian.math.group._models import GroupSubgroupLatticeResult
 
-        with pytest.raises(ValidationError, match="only a safe detail"):
+        with _group_error("group.outcome_shape"):
             GroupSubgroupLatticeResult(
                 outcome="LIMIT_EXCEEDED",
                 degree=4,
                 generators=((1, 2, 3, 0),),
                 detail=None,
             )
-        with pytest.raises(ValidationError, match="only a safe detail"):
+        with _group_error("group.outcome_shape"):
             GroupSubgroupLatticeResult(
                 outcome="LIMIT_EXCEEDED",
                 degree=4,
@@ -257,7 +266,7 @@ class TestRelayedPayloadBounds:
         valid_entry = payload["subgroups"][0]
         payload["subgroups"] = [valid_entry] * (MAX_SUBGROUP_LATTICE_ENTRIES + 1)
         payload["subgroup_count"] = len(payload["subgroups"])
-        with pytest.raises(ValidationError, match="admitted lattice bound"):
+        with _group_error("group.lattice_entry_bound"):
             GroupSubgroupLatticeResult.model_validate(payload)
 
     def test_generator_count_cap_restored(self):
@@ -291,7 +300,7 @@ class TestExceededOutcomeSourceBinding:
         return GroupSubgroupLatticeResult.model_validate(payload)
 
     def test_fabricated_subgroup_count_rejected(self):
-        with pytest.raises(ValidationError, match="no subgroup count"):
+        with _group_error("group.outcome_shape"):
             self._exceeded(subgroup_count=5)
 
     def test_exceeded_payload_still_admits_only_real_sources(self):
@@ -301,7 +310,7 @@ class TestExceededOutcomeSourceBinding:
 
     def test_oversized_source_group_rejected_on_exceeded_path(self):
         s6 = ((1, 0, 2, 3, 4, 5), (1, 2, 3, 4, 5, 0))
-        with pytest.raises(ValidationError, match="bounded maximum"):
+        with _group_error("group.order_bound"):
             self._exceeded(degree=6, generators=s6)
 
     def test_entries_chain_into_permutation_group_consumers(self):

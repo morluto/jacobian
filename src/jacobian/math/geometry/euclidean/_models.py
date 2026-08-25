@@ -5,16 +5,16 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import model_validator
+from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math.geometry._models import RationalPoint2D
 
 
-class RationalPoint2D(StrictModel):
-    """A point in the rational plane."""
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable error owned by the geometry contracts."""
 
-    x: CanonicalRational
-    y: CanonicalRational
+    return PydanticCustomError(f"geometry.{reason}", message)
 
 
 class Triangle(StrictModel):
@@ -33,7 +33,9 @@ class Triangle(StrictModel):
         # Cross product (b-a) x (c-a) != 0 for non-degenerate
         cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
         if cross == 0:
-            raise ValueError("triangle must be non-degenerate")
+            raise _validation_error(
+                "triangle_non_degenerate", "triangle must be non-degenerate"
+            )
         return self
 
 
@@ -50,7 +52,9 @@ class SegmentRatioRequest(StrictModel):
             start.x.as_fraction() == end.x.as_fraction()
             and start.y.as_fraction() == end.y.as_fraction()
         ):
-            raise ValueError("second segment must be nonzero")
+            raise _validation_error(
+                "second_segment_nonzero", "second segment must be nonzero"
+            )
         return self
 
 
@@ -83,7 +87,9 @@ class AngleEqualityRequest(StrictModel):
                     endpoint.x.as_fraction() == vertex.x.as_fraction()
                     and endpoint.y.as_fraction() == vertex.y.as_fraction()
                 ):
-                    raise ValueError("angle rays must be nonzero")
+                    raise _validation_error(
+                        "angle_rays_nonzero", "angle rays must be nonzero"
+                    )
         return self
 
 

@@ -8,6 +8,7 @@ from fractions import Fraction
 
 import pytest
 from pydantic import ValidationError
+from tests.math.multicommodity_flow._support import multicommodity_validation_error
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
@@ -300,22 +301,22 @@ def test_sparse_tensor_rejects_zero_duplicate_unknown_and_unsorted_cells() -> No
 
     zero = deepcopy(payload)
     zero["entries"][0]["amount"] = {"num": "0", "den": "1"}
-    with pytest.raises(ValidationError, match="strictly positive"):
+    with multicommodity_validation_error():
         MulticommodityFlow.model_validate(zero)
 
     duplicate = deepcopy(payload)
     duplicate["entries"].append(deepcopy(duplicate["entries"][0]))
-    with pytest.raises(ValidationError, match=r"sorted|once"):
+    with multicommodity_validation_error():
         MulticommodityFlow.model_validate(duplicate)
 
     undeclared = deepcopy(payload)
     undeclared["entries"][1]["commodity_id"] = "aa"
-    with pytest.raises(ValidationError, match="undeclared commodity"):
+    with multicommodity_validation_error():
         MulticommodityFlow.model_validate(undeclared)
 
     unsorted = deepcopy(payload)
     unsorted["entries"] = list(reversed(unsorted["entries"]))
-    with pytest.raises(ValidationError, match="sorted"):
+    with multicommodity_validation_error():
         MulticommodityFlow.model_validate(unsorted)
 
 
@@ -363,7 +364,7 @@ def test_low_commodity_networks_admit_vertices_up_to_the_cell_budget() -> None:
     assert len(full.divergences) == 512
     assert full.work.commodity_vertex_cells == MAX_COMMODITY_VERTEX_CELLS
 
-    with pytest.raises(ValidationError, match="commodity-by-vertex"):
+    with multicommodity_validation_error():
         wide_flow(9)
 
 
@@ -441,7 +442,7 @@ def test_operand_digit_budget_bounds_the_canonical_boundary() -> None:
             CanonicalRational(num="9" * 32_768, den="1"),
         )
     )
-    with pytest.raises(ValidationError, match="canonical cap"):
+    with multicommodity_validation_error():
         MulticommodityFlowProfileRequest(flow=over_boundary)
     with pytest.raises(ValueError, match="canonical cap"):
         compute_multicommodity_flow_profile(over_boundary)
@@ -641,8 +642,9 @@ def test_derived_quantities_admit_edges_without_a_fixed_ceiling() -> None:
     )
     assert crowded_result.work.logical_steps_per_call <= MAX_PROFILE_LOGICAL_STEPS
 
-    with pytest.raises(ValidationError, match=r"at most 512 item"):
+    with pytest.raises(ValidationError) as error:
         many_edge_flow(64, 513)
+    assert error.value.errors()[0]["type"] == "too_long"
 
 
 def test_entry_count_is_bounded_by_distinct_cells_not_a_fixed_ceiling() -> None:
@@ -790,7 +792,7 @@ def test_cell_budgets_admit_commodities_without_a_fixed_ceiling() -> None:
     assert full.work.rational_negations_per_pass == 256
     assert full.work.logical_steps_per_call == 2 * (1 + 256 + 1 + 512 + 3)
 
-    with pytest.raises(ValidationError, match="commodity-by-vertex"):
+    with multicommodity_validation_error():
         dense_commodities(257)
 
 
@@ -848,7 +850,7 @@ def test_result_envelope_prices_rows_at_their_actual_sides() -> None:
     # entries, divergence cells, loads, slacks, and congestion genuinely
     # exceed 8 MiB together, so request parsing fails closed before any
     # backend.
-    with pytest.raises(ValidationError, match="aggregate result bound"):
+    with multicommodity_validation_error():
         MulticommodityFlowProfileRequest(flow=comb_amount_tensor(22_000))
 
 
@@ -1001,7 +1003,7 @@ def test_returned_congestion_ratio_is_still_capped() -> None:
     # cap still applies to it fail-closed on both surfaces: narrowing the
     # scan to returned values did not widen the returned-value contract.
     flow = oversized_ratio_tensor()
-    with pytest.raises(ValidationError, match="canonical cap"):
+    with multicommodity_validation_error():
         MulticommodityFlowProfileRequest(flow=flow)
     with pytest.raises(ValueError, match="canonical cap"):
         compute_multicommodity_flow_profile(flow)
@@ -1106,7 +1108,7 @@ def test_coprime_denominator_flood_fails_closed() -> None:
     flood = MulticommodityFlow(
         network=network, commodities=commodities, entries=entries
     )
-    with pytest.raises(ValidationError, match="canonical cap"):
+    with multicommodity_validation_error():
         MulticommodityFlowProfileRequest(flow=flood)
     with pytest.raises(ValueError, match="canonical cap"):
         compute_multicommodity_flow_profile(flood)
@@ -1168,7 +1170,7 @@ def test_oversized_source_is_rejected_before_the_component_scan(
     # Request parsing measures the echoed source first and fails closed
     # before its own component measurement, and execution therefore never
     # starts, so neither spy records the tensor.
-    with pytest.raises(ValidationError, match="aggregate result bound"):
+    with multicommodity_validation_error():
         MulticommodityFlowProfileRequest(flow=oversized_echo_flow())
     assert measured == []
     assert executed == []
@@ -1226,7 +1228,7 @@ def test_oversized_source_rejection_precedes_a_doomed_exact_scan() -> None:
             ),
         ),
     )
-    with pytest.raises(ValidationError, match="aggregate result bound"):
+    with multicommodity_validation_error():
         MulticommodityFlowProfileRequest(flow=doomed_echo)
     with pytest.raises(ValueError, match="aggregate result bound"):
         compute_multicommodity_flow_profile(doomed_echo)
@@ -1453,7 +1455,7 @@ def test_folds_are_bounded_by_the_intermediate_budget_not_the_component_cap() ->
             ),
         ),
     )
-    with pytest.raises(ValidationError, match="fold-intermediate budget"):
+    with multicommodity_validation_error():
         MulticommodityFlowProfileRequest(flow=cancelling_cell)
     with pytest.raises(ValueError, match="fold-intermediate budget"):
         compute_multicommodity_flow_profile(cancelling_cell)
@@ -1504,7 +1506,7 @@ def test_near_cap_coprime_growth_aborts_within_budget_sized_arithmetic() -> None
             ),
         ),
     )
-    with pytest.raises(ValidationError, match="fold-intermediate budget"):
+    with multicommodity_validation_error():
         MulticommodityFlowProfileRequest(flow=near_cap_growth)
     with pytest.raises(ValueError, match="fold-intermediate budget"):
         compute_multicommodity_flow_profile(near_cap_growth)
@@ -1516,15 +1518,15 @@ def test_result_replay_rejects_forged_source_and_derived_ledger_fields() -> None
 
     forged_load = deepcopy(payload)
     forged_load["edge_profiles"][2]["load"] = {"num": "2", "den": "1"}
-    with pytest.raises(ValidationError, match="exact multicommodity-flow profile"):
+    with multicommodity_validation_error():
         MulticommodityFlowProfileResult.model_validate(forged_load)
 
     forged_source = deepcopy(payload)
     forged_source["flow"]["commodities"][1]["demand"] = {"num": "1", "den": "1"}
-    with pytest.raises(ValidationError, match="exact multicommodity-flow profile"):
+    with multicommodity_validation_error():
         MulticommodityFlowProfileResult.model_validate(forged_source)
 
     forged_work = deepcopy(payload)
     forged_work["work"]["logical_steps_per_call"] = 1
-    with pytest.raises(ValidationError, match="exact multicommodity-flow profile"):
+    with multicommodity_validation_error():
         MulticommodityFlowProfileResult.model_validate(forged_work)

@@ -56,9 +56,13 @@ class TestFDP:
         import pytest
         from pydantic import ValidationError
 
-        with pytest.raises(ValidationError, match="p-value"):
+        with pytest.raises(ValidationError) as p_value_error:
             HypothesisSpec(hypothesis_id="h1", p_value={"num": "-1", "den": "1"})
-        with pytest.raises(ValidationError, match="level"):
+        assert (
+            p_value_error.value.errors()[0]["type"]
+            == "multiple_testing.p_value_out_of_range"
+        )
+        with pytest.raises(ValidationError) as level_error:
             BHStepUpRequest(
                 hypotheses=(
                     HypothesisSpec(
@@ -68,3 +72,7 @@ class TestFDP:
                 ),
                 level={"num": "2", "den": "1"},
             )
+        assert (
+            level_error.value.errors()[0]["type"]
+            == "multiple_testing.level_out_of_range"
+        )

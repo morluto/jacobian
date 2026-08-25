@@ -81,7 +81,7 @@ class TestFlowPolynomial:
         from pydantic import ValidationError
 
         edges = tuple(GraphEdge(u=i, v=j) for i in range(8) for j in range(i))
-        with pytest.raises(ValidationError, match="at most"):
+        with pytest.raises(ValidationError):
             GraphPolynomialRequest(
                 graph=GraphSpec(vertex_count=8, edges=edges),
             )

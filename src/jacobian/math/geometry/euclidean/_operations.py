@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from jacobian.canonical import format_canonical_integer
+from jacobian._exact import format_canonical_rational
 from jacobian.math.geometry.euclidean._models import (
     AngleEqualityRequest,
     AngleEqualityResult,
@@ -29,18 +29,9 @@ def compute_segment_ratio(request: SegmentRatioRequest) -> SegmentRatioResult:
     d2 = _squared_dist_sq(request.segment2[0], request.segment2[1])
     ratio = d1 / d2
     return SegmentRatioResult(
-        squared_ratio=_format_rational(ratio),
-        ratio_numerator=_format_rational(d1),
-        ratio_denominator=_format_rational(d2),
-    )
-
-
-def _format_rational(value: Fraction) -> str:
-    if value.denominator == 1:
-        return format_canonical_integer(value.numerator)
-    return (
-        f"{format_canonical_integer(value.numerator)}/"
-        f"{format_canonical_integer(value.denominator)}"
+        squared_ratio=format_canonical_rational(ratio),
+        ratio_numerator=format_canonical_rational(d1),
+        ratio_denominator=format_canonical_rational(d2),
     )
 
 

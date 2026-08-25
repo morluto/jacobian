@@ -167,22 +167,34 @@ class TestContinuityCheck:
 
 class TestValidation:
     def test_duplicate_point_labels_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="point labels must be distinct"):
+        with pytest.raises(ValidationError) as error:
             FiniteTopologicalSpace(
                 points=("a", "a"),
                 preorder=((0,), (1,)),
             )
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_topology_space.point_labels_not_distinct"
+        )
 
     def test_non_reflexive_preorder_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="reflexive"):
+        with pytest.raises(ValidationError) as error:
             FiniteTopologicalSpace(
                 points=("a", "b"),
                 preorder=((1,), (0, 1)),
             )
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_topology_space.preorder_not_reflexive"
+        )
 
     def test_out_of_range_preorder_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="out of range"):
+        with pytest.raises(ValidationError) as error:
             FiniteTopologicalSpace(
                 points=("a", "b"),
                 preorder=((0, 5), (0, 1)),
             )
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_topology_space.preorder_index_out_of_range"
+        )

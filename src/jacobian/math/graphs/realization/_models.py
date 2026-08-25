@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
@@ -24,9 +25,14 @@ class DegreeSequence(StrictModel):
     @model_validator(mode="after")
     def require_valid_degrees(self) -> Self:
         if any(d < 0 for d in self.degrees):
-            raise ValueError("degrees must be nonnegative")
+            raise PydanticCustomError(
+                "graph.degrees_must_be_nonnegative", "degrees must be nonnegative"
+            )
         if any(d > MAX_GRAPH_DEGREE for d in self.degrees):
-            raise ValueError("degrees must not exceed the maximum degree bound")
+            raise PydanticCustomError(
+                "graph.degrees_must_not_exceed_the_maximum_degree_bound",
+                "degrees must not exceed the maximum degree bound",
+            )
         return self
 
 
@@ -46,12 +52,19 @@ class GraphEdges(StrictModel):
             if not (
                 0 <= source < self.vertex_count and 0 <= target < self.vertex_count
             ):
-                raise ValueError("edge vertices must be in 0..vertex_count-1")
+                raise PydanticCustomError(
+                    "graph.edge_vertices_must_be_in_0_vertex_count_1",
+                    "edge vertices must be in 0..vertex_count-1",
+                )
             if source == target:
-                raise ValueError("self-loops are not allowed")
+                raise PydanticCustomError(
+                    "graph.self_loops_are_not_allowed", "self-loops are not allowed"
+                )
             canonical = (min(source, target), max(source, target))
             if canonical in seen:
-                raise ValueError("edges must be unique")
+                raise PydanticCustomError(
+                    "graph.edges_must_be_unique", "edges must be unique"
+                )
             seen.add(canonical)
         return self
 
@@ -115,7 +128,10 @@ class RealizationCheckRequest(StrictModel):
     @model_validator(mode="after")
     def require_matching_lengths(self) -> Self:
         if len(self.sequence.degrees) != self.graph.vertex_count:
-            raise ValueError("sequence length must match graph vertex_count")
+            raise PydanticCustomError(
+                "graph.sequence_length_must_match_graph_vertex_count",
+                "sequence length must match graph vertex_count",
+            )
         return self
 
 

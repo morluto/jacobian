@@ -42,6 +42,7 @@ from jacobian.math.geometry._models import (
     SimplePolygonDecisionResult,
     SimplePolygonPointRequest,
 )
+from jacobian.math.geometry._predicates import are_collinear, determinant4
 
 Compute = Callable[[LinePairRequest], GeometryBooleanResult]
 
@@ -463,34 +464,6 @@ def _points_to_fractions(
     return [(p.x.as_fraction(), p.y.as_fraction()) for p in points]
 
 
-def _det3_frac(m: tuple[tuple[Fraction, ...], ...]) -> Fraction:
-    return (
-        m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
-        - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
-        + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
-    )
-
-
-def _det4_frac(m: tuple[tuple[Fraction, ...], ...]) -> Fraction:
-    result = Fraction(0)
-    for col in range(4):
-        sub = tuple(
-            tuple(row[col2] for col2 in range(4) if col2 != col) for row in m[1:]
-        )
-        cofactor = _det3_frac(sub)
-        sign = 1 if col % 2 == 0 else -1
-        result += sign * m[0][col] * cofactor
-    return result
-
-
-def _is_collinear_pts(
-    a: tuple[Fraction, Fraction],
-    b: tuple[Fraction, Fraction],
-    c: tuple[Fraction, Fraction],
-) -> bool:
-    return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]) == 0
-
-
 def general_position_search(request: GeneralPositionRequest) -> GeneralPositionResult:
     """Find all collinear triples and concyclic quadruples in a point configuration."""
     from itertools import combinations
@@ -501,7 +474,7 @@ def general_position_search(request: GeneralPositionRequest) -> GeneralPositionR
     collinear_triples: list[CollinearTripleWitness] = []
     collinear_set: set[tuple[int, int, int]] = set()
     for i, j, k in combinations(range(n), 3):
-        if _is_collinear_pts(pts[i], pts[j], pts[k]):
+        if are_collinear(pts[i], pts[j], pts[k]):
             collinear_triples.append(CollinearTripleWitness(indices=(i, j, k)))
             collinear_set.add((i, j, k))
 
@@ -523,7 +496,7 @@ def general_position_search(request: GeneralPositionRequest) -> GeneralPositionR
         rows: list[tuple[Fraction, Fraction, Fraction, Fraction]] = []
         for px, py in (a, b, c, d):
             rows.append((px * px + py * py, px, py, Fraction(1)))
-        determinant = _det4_frac(tuple(rows))
+        determinant = determinant4(tuple(rows))
         if determinant == 0:
             concyclic_quadruples.append(ConcyclicQuadrupleWitness(indices=(i, j, k, m)))
 

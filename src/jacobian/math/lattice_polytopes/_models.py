@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal, Self
 
 from pydantic import Field, PrivateAttr, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
     CanonicalInteger,
@@ -77,6 +78,12 @@ RepresentationName = Literal["vertices", "halfspaces"]
 """The exactly-one representation tag carried by requests and results."""
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by lattice-polytope contracts."""
+
+    return PydanticCustomError(f"lattice_polytope.{reason}", message)
+
+
 class Vertex(StrictModel):
     """One rational vertex of a V-representation."""
 
@@ -104,7 +111,9 @@ class Halfspace(StrictModel):
     @model_validator(mode="after")
     def require_nonzero_normal(self) -> Self:
         if all(c.as_fraction() == 0 for c in self.coefficients):
-            raise ValueError("half-space coefficients must not all be zero")
+            raise _validation_error(
+                "halfspace_normal_zero", "half-space coefficients must not all be zero"
+            )
         return self
 
 
@@ -154,8 +163,9 @@ class LatticePolytopeRequest(StrictModel):
         has_v = self.vertices is not None
         has_h = self.halfspaces is not None
         if has_v == has_h:
-            raise ValueError(
-                "exactly one of `vertices` or `halfspaces` must be provided"
+            raise _validation_error(
+                "representation_not_exclusive",
+                "exactly one of `vertices` or `halfspaces` must be provided",
             )
         if has_v:
             self._validate_vertices()
@@ -166,22 +176,34 @@ class LatticePolytopeRequest(StrictModel):
     def _validate_vertices(self) -> None:
         assert self.vertices is not None  # for type checkers
         if len(self.vertices) < 1:
-            raise ValueError("`vertices` must be non-empty")
+            raise _validation_error("vertices_empty", "`vertices` must be non-empty")
         if len(self.vertices) > MAX_VERTICES:
-            raise ValueError(f"`vertices` exceeds the {MAX_VERTICES}-vertex bound")
+            raise _validation_error(
+                "vertices_too_many",
+                f"`vertices` exceeds the {MAX_VERTICES}-vertex bound",
+            )
         for vertex in self.vertices:
             for coord in vertex.coordinates:
-                require_bounded_rational(
-                    coord, max_digits=COORDINATE_DIGITS, label="vertex coordinate"
-                )
+                try:
+                    require_bounded_rational(
+                        coord, max_digits=COORDINATE_DIGITS, label="vertex coordinate"
+                    )
+                except ValueError as exc:
+                    raise _validation_error(
+                        "coordinate_out_of_bounds", str(exc)
+                    ) from exc
         dim = len(self.vertices[0].coordinates)
         if dim > self.dimension_bound:
-            raise ValueError(
-                f"dimension {dim} exceeds the dimension bound {self.dimension_bound}"
+            raise _validation_error(
+                "dimension_exceeds_bound",
+                f"dimension {dim} exceeds the dimension bound {self.dimension_bound}",
             )
         for vertex in self.vertices:
             if len(vertex.coordinates) != dim:
-                raise ValueError("all vertices must share one dimension")
+                raise _validation_error(
+                    "vertices_dimension_mismatch",
+                    "all vertices must share one dimension",
+                )
         self._validate_vertex_geometry()
 
     def _validate_vertex_geometry(self) -> None:
@@ -193,12 +215,17 @@ class LatticePolytopeRequest(StrictModel):
         and execution, so one accepted request never repeats the bounded
         facet-enumeration work.
         """
-        if self._membership_work() > MAX_FACET_TESTS:
-            raise ValueError(
+        try:
+            membership_work = self._membership_work()
+        except ValueError as exc:
+            raise _validation_error("geometry_invalid", str(exc)) from exc
+        if membership_work > MAX_FACET_TESTS:
+            raise _validation_error(
+                "geometry_work_exceeds_bound",
                 "the vertex-hull scan evaluates up to total-scan times "
                 "facet-count inequalities and exceeds the "
                 f"{MAX_FACET_TESTS}-test budget; reduce point count or "
-                "bounding-box size"
+                "bounding-box size",
             )
 
     def admitted_geometry(self) -> AdmittedGeometry:
@@ -230,31 +257,46 @@ class LatticePolytopeRequest(StrictModel):
     def _validate_halfspaces(self) -> None:
         assert self.halfspaces is not None  # for type checkers
         if len(self.halfspaces) < 1:
-            raise ValueError("`halfspaces` must be non-empty")
+            raise _validation_error(
+                "halfspaces_empty", "`halfspaces` must be non-empty"
+            )
         if len(self.halfspaces) > MAX_HALFSPACES:
-            raise ValueError(
-                f"`halfspaces` exceeds the {MAX_HALFSPACES}-half-space bound"
+            raise _validation_error(
+                "halfspaces_too_many",
+                f"`halfspaces` exceeds the {MAX_HALFSPACES}-half-space bound",
             )
         for halfspace in self.halfspaces:
             for coeff in halfspace.coefficients:
+                try:
+                    require_bounded_rational(
+                        coeff,
+                        max_digits=COORDINATE_DIGITS,
+                        label="half-space coefficient",
+                    )
+                except ValueError as exc:
+                    raise _validation_error(
+                        "coordinate_out_of_bounds", str(exc)
+                    ) from exc
+            try:
                 require_bounded_rational(
-                    coeff,
+                    halfspace.offset,
                     max_digits=COORDINATE_DIGITS,
-                    label="half-space coefficient",
+                    label="half-space offset",
                 )
-            require_bounded_rational(
-                halfspace.offset,
-                max_digits=COORDINATE_DIGITS,
-                label="half-space offset",
-            )
+            except ValueError as exc:
+                raise _validation_error("coordinate_out_of_bounds", str(exc)) from exc
         dim = len(self.halfspaces[0].coefficients)
         if dim > self.dimension_bound:
-            raise ValueError(
-                f"dimension {dim} exceeds the dimension bound {self.dimension_bound}"
+            raise _validation_error(
+                "dimension_exceeds_bound",
+                f"dimension {dim} exceeds the dimension bound {self.dimension_bound}",
             )
         for halfspace in self.halfspaces:
             if len(halfspace.coefficients) != dim:
-                raise ValueError("all half-spaces must share one dimension")
+                raise _validation_error(
+                    "halfspaces_dimension_mismatch",
+                    "all half-spaces must share one dimension",
+                )
         self._validate_halfspace_geometry()
 
     def _validate_halfspace_geometry(self) -> None:
@@ -266,10 +308,15 @@ class LatticePolytopeRequest(StrictModel):
         describes a bounded, possibly empty polytope whose scan stays
         inside the admitted work budget.
         """
-        if self._membership_work() > MAX_FACET_TESTS:
-            raise ValueError(
+        try:
+            membership_work = self._membership_work()
+        except ValueError as exc:
+            raise _validation_error("geometry_invalid", str(exc)) from exc
+        if membership_work > MAX_FACET_TESTS:
+            raise _validation_error(
+                "geometry_work_exceeds_bound",
                 "the scan evaluates up to total-scan times facet-count "
-                f"inequalities and exceeds the {MAX_FACET_TESTS}-test budget"
+                f"inequalities and exceeds the {MAX_FACET_TESTS}-test budget",
             )
 
     def dimension(self) -> int:
@@ -291,9 +338,10 @@ class LatticePoint(StrictModel):
     def require_coordinate_digit_bound(self) -> Self:
         for coordinate in self.coordinates:
             if len(coordinate.lstrip("-")) > COORDINATE_DIGITS:
-                raise ValueError(
+                raise _validation_error(
+                    "lattice_point_coordinate_digit_bound",
                     "lattice-point coordinate exceeds the "
-                    f"{COORDINATE_DIGITS}-digit bound"
+                    f"{COORDINATE_DIGITS}-digit bound",
                 )
         return self
 
@@ -315,16 +363,20 @@ class EnumerateLatticePointsResult(StrictModel):
     @model_validator(mode="after")
     def require_complete_point_set(self) -> Self:
         if self.point_count != len(self.points):
-            raise ValueError(
-                "point_count must equal the number of returned lattice points"
+            raise _validation_error(
+                "point_count_mismatch",
+                "point_count must equal the number of returned lattice points",
             )
         seen = {point.coordinates for point in self.points}
         if len(seen) != len(self.points):
-            raise ValueError("enumeration must not repeat a lattice point")
+            raise _validation_error(
+                "duplicate_lattice_point", "enumeration must not repeat a lattice point"
+            )
         for point in self.points:
             if len(point.coordinates) != self.dimension:
-                raise ValueError(
-                    "every lattice point must carry exactly `dimension` coordinates"
+                raise _validation_error(
+                    "point_dimension_mismatch",
+                    "every lattice point must carry exactly `dimension` coordinates",
                 )
         return self
 
@@ -352,7 +404,10 @@ class EnumerateLatticePointsRequest(LatticePolytopeRequest):
             enumeration_output_admission,
         )
 
-        enumeration_output_admission(self)
+        try:
+            enumeration_output_admission(self)
+        except ValueError as exc:
+            raise _validation_error("enumeration_artifact_invalid", str(exc)) from exc
         return self
 
 

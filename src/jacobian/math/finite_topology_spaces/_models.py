@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
@@ -12,6 +13,12 @@ from jacobian.math.finite_topology_spaces.values import (
     FiniteTopologicalMap,
     FiniteTopologicalSpace,
 )
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by finite-topology contracts."""
+
+    return PydanticCustomError(f"finite_topology_space.{reason}", message)
 
 
 class SubsetRequest(StrictModel):
@@ -25,7 +32,9 @@ class SubsetRequest(StrictModel):
         n = len(self.space.points)
         for i in self.subset:
             if not 0 <= i < n:
-                raise ValueError("subset index out of range")
+                raise _validation_error(
+                    "subset_index_out_of_range", "subset index out of range"
+                )
         return self
 
 

@@ -7,6 +7,7 @@ from functools import reduce
 from heapq import heapify, heappop, heappush
 from operator import xor
 
+from jacobian.canonical import strict_json_object_size
 from jacobian.math.impartial_games.values import (
     MAX_HEAP_BOUND,
     MAX_MOVES,
@@ -53,16 +54,8 @@ def _json_integer_sequence_size(values: tuple[int, ...]) -> int:
     return 2 + max(count - 1, 0) + sum(_json_integer_size(value) for value in values)
 
 
-def _json_object_size(fields: tuple[tuple[str, int], ...]) -> int:
-    return (
-        2
-        + max(len(fields) - 1, 0)
-        + sum(len(name) + 3 + value_size for name, value_size in fields)
-    )
-
-
 def _nim_position_json_size(heap_list_size: int) -> int:
-    return _json_object_size((("heaps", heap_list_size),))
+    return strict_json_object_size((("heaps", heap_list_size),))
 
 
 def _heap_groups(position: NimPosition) -> tuple[tuple[int, tuple[int, ...]], ...]:
@@ -90,7 +83,7 @@ def _nim_option_result_size(
                 - _json_integer_size(source_size)
                 + _json_integer_size(replacement_size)
             )
-            row_sizes += _json_object_size(
+            row_sizes += strict_json_object_size(
                 (
                     ("source_heap_indices", source_index_size),
                     ("source_heap_size", _json_integer_size(source_size)),
@@ -105,7 +98,7 @@ def _nim_option_result_size(
                 )
             )
     options_size = 2 + max(distinct_option_count - 1, 0) + row_sizes
-    return _json_object_size(
+    return strict_json_object_size(
         (
             ("position", _nim_position_json_size(source_heap_list_size)),
             ("options", options_size),

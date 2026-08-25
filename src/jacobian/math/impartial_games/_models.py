@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.canonical import encode_strict_json
@@ -76,7 +77,10 @@ class GrundyTableResult(GrundyTableRequest):
             or self.histogram != expected_histogram
             or self.topological_order != analysis.topological_order
         ):
-            raise ValueError("result must be the exact complete Grundy table")
+            raise PydanticCustomError(
+                "impartial_game.grundy_table_mismatch",
+                "result must be the exact complete Grundy table",
+            )
         return self
 
 
@@ -92,7 +96,10 @@ class BirthdayResult(BirthdayRequest):
     @model_validator(mode="after")
     def bind_birthdays(self) -> Self:
         if self.birthdays != birthdays(self.game):
-            raise ValueError("result must be the exact complete birthday table")
+            raise PydanticCustomError(
+                "impartial_game.birthday_table_mismatch",
+                "result must be the exact complete birthday table",
+            )
         return self
 
 
@@ -105,13 +112,22 @@ class SubtractionGrundyPrefixRequest(StrictModel):
     @model_validator(mode="after")
     def require_canonical_bounded_input(self) -> Self:
         if self.subtraction_set != tuple(sorted(set(self.subtraction_set))):
-            raise ValueError("subtraction set must be distinct and sorted")
+            raise PydanticCustomError(
+                "impartial_game.subtraction_set_not_canonical",
+                "subtraction set must be distinct and sorted",
+            )
         if any(
             not 1 <= value <= MAX_SUBTRACTION_VALUE for value in self.subtraction_set
         ):
-            raise ValueError("subtraction value is outside the supported bound")
+            raise PydanticCustomError(
+                "impartial_game.subtraction_value_out_of_bounds",
+                "subtraction value is outside the supported bound",
+            )
         if len(self.subtraction_set) * (self.max_heap + 1) > MAX_SUBTRACTION_WORK:
-            raise ValueError("subtraction Grundy computation exceeds the work bound")
+            raise PydanticCustomError(
+                "impartial_game.subtraction_work_exceeded",
+                "subtraction Grundy computation exceeds the work bound",
+            )
         return self
 
 
@@ -139,7 +155,10 @@ class SubtractionGrundyPrefixResult(SubtractionGrundyPrefixRequest):
             or self.p_positions != expected_p
             or self.n_positions != expected_n
         ):
-            raise ValueError("result must be the exact complete bounded Grundy prefix")
+            raise PydanticCustomError(
+                "impartial_game.grundy_prefix_mismatch",
+                "result must be the exact complete bounded Grundy prefix",
+            )
         return self
 
 
@@ -177,9 +196,15 @@ class NimSumResult(NimSumRequest):
     def bind_exact_nim_sum(self) -> Self:
         expected = nim_sum(self.position)
         if self.nim_sum != expected:
-            raise ValueError("nim_sum must be the exact xor of the source position")
+            raise PydanticCustomError(
+                "impartial_game.nim_sum_mismatch",
+                "nim_sum must be the exact xor of the source position",
+            )
         if self.is_p_position != (expected == 0):
-            raise ValueError("is_p_position must report whether the exact xor is zero")
+            raise PydanticCustomError(
+                "impartial_game.p_position_mismatch",
+                "is_p_position must report whether the exact xor is zero",
+            )
         return self
 
 
@@ -229,14 +254,18 @@ class NimOptionsResult(NimOptionsRequest):
             or self.raw_candidate_count != plan.raw_candidate_count
             or self.distinct_option_count != plan.distinct_option_count
         ):
-            raise ValueError("result must be the exact complete Nim option family")
+            raise PydanticCustomError(
+                "impartial_game.nim_options_mismatch",
+                "result must be the exact complete Nim option family",
+            )
         actual_bytes = len(encode_strict_json(self.model_dump(mode="json")))
         if (
             actual_bytes != plan.serialized_result_bytes
             or actual_bytes > MAX_NIM_OPTION_RESULT_BYTES
         ):
-            raise ValueError(
-                "serialized result must match the request-time Nim option bound"
+            raise PydanticCustomError(
+                "impartial_game.nim_options_serialization_mismatch",
+                "serialized result must match the request-time Nim option bound",
             )
         return self
 
@@ -276,13 +305,17 @@ class DisjunctiveSumRequest(StrictModel):
     @model_validator(mode="after")
     def require_matching_bounded(self) -> Self:
         if len(self.components) != len(self.start_positions):
-            raise ValueError("components and start_positions must have equal length")
+            raise PydanticCustomError(
+                "impartial_game.component_count_mismatch",
+                "components and start_positions must have equal length",
+            )
         for index, (game, start) in enumerate(
             zip(self.components, self.start_positions, strict=True)
         ):
             if start not in game.positions:
-                raise ValueError(
-                    f"start position {index!r} is not in component {index}'s positions"
+                raise PydanticCustomError(
+                    "impartial_game.start_position_unknown",
+                    f"start position {index!r} is not in component {index}'s positions",
                 )
         return self
 
@@ -301,22 +334,30 @@ class DisjunctiveSumResult(StrictModel):
     @model_validator(mode="after")
     def require_exact_disjunctive_invariants(self) -> Self:
         if self.component_count != len(self.component_grundy_values):
-            raise ValueError(
-                "component_count must match component_grundy_values length"
+            raise PydanticCustomError(
+                "impartial_game.component_count_mismatch",
+                "component_count must match component_grundy_values length",
             )
         if any(
             not 0 <= value <= MAX_COMPONENT_GRUNDY
             for value in self.component_grundy_values
         ):
-            raise ValueError(
-                f"component Grundy values must be between 0 and {MAX_COMPONENT_GRUNDY}"
+            raise PydanticCustomError(
+                "impartial_game.component_grundy_out_of_bounds",
+                f"component Grundy values must be between 0 and {MAX_COMPONENT_GRUNDY}",
             )
         from functools import reduce
         from operator import xor
 
         expected = reduce(xor, self.component_grundy_values, 0)
         if self.grundy_value != expected:
-            raise ValueError("grundy_value must be XOR of component_grundy_values")
+            raise PydanticCustomError(
+                "impartial_game.grundy_value_mismatch",
+                "grundy_value must be XOR of component_grundy_values",
+            )
         if self.is_p_position != (expected == 0):
-            raise ValueError("is_p_position must agree with grundy_value == 0")
+            raise PydanticCustomError(
+                "impartial_game.p_position_mismatch",
+                "is_p_position must agree with grundy_value == 0",
+            )
         return self

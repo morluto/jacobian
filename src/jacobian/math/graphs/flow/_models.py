@@ -6,6 +6,7 @@ from math import lcm
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
@@ -26,9 +27,10 @@ def _bounded_denominator_scale(denominators: tuple[int, ...], kind: str) -> int:
     for denominator in denominators:
         scale = lcm(scale, abs(denominator))
         if len(str(scale)) > MAX_MIN_COST_FLOW_DERIVED_SCALE_DIGITS:
-            raise ValueError(
+            raise PydanticCustomError(
+                "graph.least_common_multiple_kind_denominators_exceeds_max",
                 f"the least common multiple of {kind} denominators exceeds the "
-                f"{MAX_MIN_COST_FLOW_DERIVED_SCALE_DIGITS}-digit derived-scale limit"
+                f"{MAX_MIN_COST_FLOW_DERIVED_SCALE_DIGITS}-digit derived-scale limit",
             )
     return scale
 
@@ -55,12 +57,21 @@ class FlowGraph(StrictModel):
                 0 <= edge.source < self.vertex_count
                 and 0 <= edge.target < self.vertex_count
             ):
-                raise ValueError("edge vertices must be in 0..vertex_count-1")
+                raise PydanticCustomError(
+                    "graph.edge_vertices_must_be_in_0_vertex_count_1",
+                    "edge vertices must be in 0..vertex_count-1",
+                )
             if edge.capacity.as_fraction() < 0:
-                raise ValueError("edge capacities must be nonnegative")
+                raise PydanticCustomError(
+                    "graph.edge_capacities_must_be_nonnegative",
+                    "edge capacities must be nonnegative",
+                )
             endpoint_pair = (edge.source, edge.target)
             if endpoint_pair in seen:
-                raise ValueError("directed edges must be unique")
+                raise PydanticCustomError(
+                    "graph.directed_edges_must_be_unique",
+                    "directed edges must be unique",
+                )
             seen.add(endpoint_pair)
         return self
 
@@ -73,11 +84,20 @@ class MaxFlowRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_terminals(self) -> Self:
         if not (0 <= self.source < self.graph.vertex_count):
-            raise ValueError("source must be in 0..graph.vertex_count-1")
+            raise PydanticCustomError(
+                "graph.source_must_be_in_0_graph_vertex_count_1",
+                "source must be in 0..graph.vertex_count-1",
+            )
         if not (0 <= self.sink < self.graph.vertex_count):
-            raise ValueError("sink must be in 0..graph.vertex_count-1")
+            raise PydanticCustomError(
+                "graph.sink_must_be_in_0_graph_vertex_count_1",
+                "sink must be in 0..graph.vertex_count-1",
+            )
         if self.source == self.sink:
-            raise ValueError("source and sink must be distinct")
+            raise PydanticCustomError(
+                "graph.source_and_sink_must_be_distinct",
+                "source and sink must be distinct",
+            )
         return self
 
 
@@ -105,11 +125,20 @@ class MinCutRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_terminals(self) -> Self:
         if not (0 <= self.source < self.graph.vertex_count):
-            raise ValueError("source must be in 0..graph.vertex_count-1")
+            raise PydanticCustomError(
+                "graph.source_must_be_in_0_graph_vertex_count_1",
+                "source must be in 0..graph.vertex_count-1",
+            )
         if not (0 <= self.sink < self.graph.vertex_count):
-            raise ValueError("sink must be in 0..graph.vertex_count-1")
+            raise PydanticCustomError(
+                "graph.sink_must_be_in_0_graph_vertex_count_1",
+                "sink must be in 0..graph.vertex_count-1",
+            )
         if self.source == self.sink:
-            raise ValueError("source and sink must be distinct")
+            raise PydanticCustomError(
+                "graph.source_and_sink_must_be_distinct",
+                "source and sink must be distinct",
+            )
         return self
 
 
@@ -133,12 +162,20 @@ class EdgeDisjointPathsGraph(StrictModel):
             if not (
                 0 <= source < self.vertex_count and 0 <= target < self.vertex_count
             ):
-                raise ValueError("edge vertices must be in 0..vertex_count-1")
+                raise PydanticCustomError(
+                    "graph.edge_vertices_must_be_in_0_vertex_count_1",
+                    "edge vertices must be in 0..vertex_count-1",
+                )
             if source == target:
-                raise ValueError("self-loops are not allowed")
+                raise PydanticCustomError(
+                    "graph.self_loops_are_not_allowed", "self-loops are not allowed"
+                )
             endpoint_pair = (source, target)
             if endpoint_pair in seen:
-                raise ValueError("directed edges must be unique")
+                raise PydanticCustomError(
+                    "graph.directed_edges_must_be_unique",
+                    "directed edges must be unique",
+                )
             seen.add(endpoint_pair)
         return self
 
@@ -151,11 +188,20 @@ class EdgeDisjointPathsRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_terminals(self) -> Self:
         if not (0 <= self.source < self.graph.vertex_count):
-            raise ValueError("source must be in 0..graph.vertex_count-1")
+            raise PydanticCustomError(
+                "graph.source_must_be_in_0_graph_vertex_count_1",
+                "source must be in 0..graph.vertex_count-1",
+            )
         if not (0 <= self.sink < self.graph.vertex_count):
-            raise ValueError("sink must be in 0..graph.vertex_count-1")
+            raise PydanticCustomError(
+                "graph.sink_must_be_in_0_graph_vertex_count_1",
+                "sink must be in 0..graph.vertex_count-1",
+            )
         if self.source == self.sink:
-            raise ValueError("source and sink must be distinct")
+            raise PydanticCustomError(
+                "graph.source_and_sink_must_be_distinct",
+                "source and sink must be distinct",
+            )
         return self
 
 
@@ -190,12 +236,21 @@ class CostedFlowGraph(StrictModel):
                 0 <= edge.source < self.vertex_count
                 and 0 <= edge.target < self.vertex_count
             ):
-                raise ValueError("edge vertices must be in 0..vertex_count-1")
+                raise PydanticCustomError(
+                    "graph.edge_vertices_must_be_in_0_vertex_count_1",
+                    "edge vertices must be in 0..vertex_count-1",
+                )
             if edge.capacity.as_fraction() < 0:
-                raise ValueError("edge capacities must be nonnegative")
+                raise PydanticCustomError(
+                    "graph.edge_capacities_must_be_nonnegative",
+                    "edge capacities must be nonnegative",
+                )
             endpoint_pair = (edge.source, edge.target)
             if endpoint_pair in seen:
-                raise ValueError("directed edges must be unique")
+                raise PydanticCustomError(
+                    "graph.directed_edges_must_be_unique",
+                    "directed edges must be unique",
+                )
             seen.add(endpoint_pair)
         return self
 
@@ -207,9 +262,14 @@ class MinCostFlowRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid(self) -> Self:
         if len(self.demands) != self.graph.vertex_count:
-            raise ValueError("demands length must match vertex_count")
+            raise PydanticCustomError(
+                "graph.demands_length_must_match_vertex_count",
+                "demands length must match vertex_count",
+            )
         if sum(self.demands) != 0:
-            raise ValueError("demands must sum to zero")
+            raise PydanticCustomError(
+                "graph.demands_must_sum_to_zero", "demands must sum to zero"
+            )
         capacity_denominators = tuple(
             edge.capacity.as_integer_ratio()[1] for edge in self.graph.edges
         )
@@ -251,13 +311,19 @@ class MinCostFlowResult(StrictModel):
         from fractions import Fraction
 
         if len(self.demands) != self.graph.vertex_count:
-            raise ValueError("demands length must match graph.vertex_count")
+            raise PydanticCustomError(
+                "graph.demands_length_must_match_graph_vertex_count",
+                "demands length must match graph.vertex_count",
+            )
         if sum(self.demands) != 0:
-            raise ValueError("demands must sum to zero")
+            raise PydanticCustomError(
+                "graph.demands_must_sum_to_zero", "demands must sum to zero"
+            )
         if not self.feasible:
             if self.flow_edges or self.total_cost.as_fraction() != 0:
-                raise ValueError(
-                    "an infeasible result carries no flow edges or nonzero cost"
+                raise PydanticCustomError(
+                    "graph.infeasible_result_carries_no_flow_edges_nonzero",
+                    "an infeasible result carries no flow edges or nonzero cost",
                 )
             return self
 
@@ -273,31 +339,38 @@ class MinCostFlowResult(StrictModel):
         for flow_edge in self.flow_edges:
             endpoints = (flow_edge.source, flow_edge.target)
             if endpoints not in capacities:
-                raise ValueError(
-                    f"flow reported on undeclared edge {endpoints[0]}->{endpoints[1]}"
+                raise PydanticCustomError(
+                    "graph.flow_reported_undeclared_edge_endpoints_endpoints",
+                    f"flow reported on undeclared edge {endpoints[0]}->{endpoints[1]}",
                 )
             if endpoints in seen:
-                raise ValueError(
-                    f"edge {endpoints[0]}->{endpoints[1]} reported more than once"
+                raise PydanticCustomError(
+                    "graph.edge_endpoints_endpoints_reported_more_than_once",
+                    f"edge {endpoints[0]}->{endpoints[1]} reported more than once",
                 )
             seen.add(endpoints)
             flow = flow_edge.flow.as_fraction()
             if not 0 <= flow <= capacities[endpoints]:
-                raise ValueError(
+                raise PydanticCustomError(
+                    "graph.flow_flow_edge_endpoints_endpoints_violates_source",
                     f"flow {flow} on edge {endpoints[0]}->{endpoints[1]} "
-                    f"violates the source capacity {capacities[endpoints]}"
+                    f"violates the source capacity {capacities[endpoints]}",
                 )
             balance[flow_edge.source] -= flow
             balance[flow_edge.target] += flow
             objective += costs[endpoints] * flow
         for node, demand in enumerate(self.demands):
             if balance[node] != demand:
-                raise ValueError(
+                raise PydanticCustomError(
+                    "graph.node_node_balance_balance_node_does_equal",
                     f"node {node} balance {balance[node]} does not equal "
-                    f"its source demand {demand}"
+                    f"its source demand {demand}",
                 )
         if objective != self.total_cost.as_fraction():
-            raise ValueError("total cost does not equal the cost of the returned flows")
+            raise PydanticCustomError(
+                "graph.total_cost_does_not_equal_the_cost_of_the_return",
+                "total cost does not equal the cost of the returned flows",
+            )
         return self
 
 

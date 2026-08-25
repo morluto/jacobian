@@ -6,6 +6,7 @@ from math import comb
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
@@ -43,11 +44,15 @@ GF(p) envelope across domains rather than an operation-local ceiling.
 """
 
 
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"lie_algebra_homology.{reason}", message)
+
+
 def _require_prime(prime: int) -> None:
     from sympy import isprime
 
     if not isprime(prime):
-        raise ValueError("prime must be a prime integer")
+        raise _validation_error("prime_not_prime", "prime must be a prime integer")
 
 
 def _require_canonical_residues(
@@ -56,9 +61,10 @@ def _require_canonical_residues(
     for i in range(n):
         for j in range(n):
             if any(not 0 <= value < p for value in c[i][j]):
-                raise ValueError(
+                raise _validation_error(
+                    "canonical_residues",
                     "structure constant entries must be canonical GF(prime) "
-                    f"residues: 0 <= value < {p}"
+                    f"residues: 0 <= value < {p}",
                 )
 
 
@@ -67,8 +73,9 @@ def _require_alternating(
 ) -> None:
     for i in range(n):
         if any(value % p != 0 for value in c[i][i]):
-            raise ValueError(
-                "structure constants must define an alternating bracket: [e_i, e_i] = 0"
+            raise _validation_error(
+                "alternating",
+                "structure constants must define an alternating bracket: [e_i, e_i] = 0",
             )
 
 
@@ -79,9 +86,10 @@ def _require_antisymmetric(
         for j in range(i + 1, n):
             for k in range(n):
                 if c[i][j][k] % p != (-c[j][i][k]) % p:
-                    raise ValueError(
+                    raise _validation_error(
+                        "antisymmetric",
                         "structure constants must define an antisymmetric "
-                        "bracket: [e_i, e_j] = -[e_j, e_i]"
+                        "bracket: [e_i, e_j] = -[e_j, e_i]",
                     )
 
 
@@ -97,8 +105,9 @@ def _require_jacobi(c: tuple[tuple[tuple[int, ...], ...], ...], n: int, p: int) 
                         for m in range(n)
                     )
                     if jacobi_sum % p != 0:
-                        raise ValueError(
-                            "structure constants must satisfy the Jacobi identity"
+                        raise _validation_error(
+                            "jacobi",
+                            "structure constants must satisfy the Jacobi identity",
                         )
 
 
@@ -126,17 +135,22 @@ class LieAlgebra(StrictModel):
     def require_valid_structure(self) -> Self:
         n = self.dimension
         if len(self.structure_constants) != n:
-            raise ValueError(
-                "structure_constants must be dimension x dimension x dimension"
+            raise _validation_error(
+                "structure_shape",
+                "structure_constants must be dimension x dimension x dimension",
             )
         for i in range(n):
             if len(self.structure_constants[i]) != n:
-                raise ValueError("each structure_constants[i] must have dimension rows")
+                raise _validation_error(
+                    "structure_shape",
+                    "each structure_constants[i] must have dimension rows",
+                )
         for i in range(n):
             for j in range(n):
                 if len(self.structure_constants[i][j]) != n:
-                    raise ValueError(
-                        "structure constant entry must have dimension components"
+                    raise _validation_error(
+                        "structure_shape",
+                        "structure constant entry must have dimension components",
                     )
 
         p = self.prime
@@ -163,8 +177,8 @@ class DifferentialMatrix(StrictModel):
     """One differential matrix in the Chevalley-Eilenberg complex.
 
     The differential is retained as the canonical prime-field matrix value so
-    it serializes with the result and composes unchanged with the GF(p)
-    matrix operations; the legacy flat fields are derivations of it.
+    it serializes with the result and composes unchanged with GF(p) matrix
+    operations.
 
     Exterior-basis axes: with ``n`` the retained Lie-algebra dimension and
     ``p`` the differential's ``degree``, row ``i`` is the lexicographically
@@ -177,22 +191,6 @@ class DifferentialMatrix(StrictModel):
 
     degree: int = Field(ge=0)
     matrix: PrimeFieldMatrix
-
-    @property
-    def prime(self) -> int:
-        return self.matrix.prime
-
-    @property
-    def source_dim(self) -> int:
-        return self.matrix.columns
-
-    @property
-    def target_dim(self) -> int:
-        return len(self.matrix.entries)
-
-    @property
-    def entries(self) -> tuple[tuple[int, ...], ...]:
-        return self.matrix.entries
 
 
 class ChevalleyEilenbergComplexResult(StrictModel):
@@ -218,29 +216,38 @@ class ChevalleyEilenbergComplexResult(StrictModel):
         n = self.lie_algebra.dimension
         p = self.lie_algebra.prime
         if self.prime != p:
-            raise ValueError("prime must match the source Lie algebra")
+            raise _validation_error(
+                "complex_prime_mismatch", "prime must match the source Lie algebra"
+            )
         if self.dimension != n:
-            raise ValueError("dimension must match the source Lie algebra")
+            raise _validation_error(
+                "complex_dimension_mismatch",
+                "dimension must match the source Lie algebra",
+            )
         expected_dims = tuple(comb(n, k) for k in range(n + 1))
         if self.group_dimensions != expected_dims:
-            raise ValueError(
+            raise _validation_error(
+                "complex_group_dimensions",
                 "group_dimensions must be the binomial sequence of the "
-                "source Lie algebra dimension"
+                "source Lie algebra dimension",
             )
         degrees = [differential.degree for differential in self.differentials]
         if degrees != list(range(1, n + 1)):
-            raise ValueError(
+            raise _validation_error(
+                "complex_degrees",
                 "the complete complex must carry one differential for each "
-                f"degree 1..{n} in order"
+                f"degree 1..{n} in order",
             )
         for differential in self.differentials:
             if (
-                differential.source_dim != expected_dims[differential.degree]
-                or differential.target_dim != expected_dims[differential.degree - 1]
+                differential.matrix.columns != expected_dims[differential.degree]
+                or len(differential.matrix.entries)
+                != expected_dims[differential.degree - 1]
             ):
-                raise ValueError(
+                raise _validation_error(
+                    "complex_differential_shape",
                     "differential dimensions must match the chain groups of "
-                    "the source Lie algebra"
+                    "the source Lie algebra",
                 )
             # Canonical GF(prime) residues are enforced by the retained
             # PrimeFieldMatrix value itself.
@@ -249,9 +256,10 @@ class ChevalleyEilenbergComplexResult(StrictModel):
         )
 
         if tuple(self.differentials) != _ce_differentials(self.lie_algebra):
-            raise ValueError(
+            raise _validation_error(
+                "complex_replay",
                 "differentials must be the exact Chevalley-Eilenberg complex "
-                "reconstructed from the retained Lie algebra bracket"
+                "reconstructed from the retained Lie algebra bracket",
             )
         return self
 
@@ -289,17 +297,24 @@ class LieHomologyResult(StrictModel):
         )
 
         if len(self.groups) != self.dimension + 1:
-            raise ValueError("homology groups must cover degrees 0..dimension")
+            raise _validation_error(
+                "homology_group_coverage",
+                "homology groups must cover degrees 0..dimension",
+            )
         if (
             self.dimension != self.lie_algebra.dimension
             or self.prime != self.lie_algebra.prime
         ):
-            raise ValueError("dimension and prime must match the retained Lie algebra")
+            raise _validation_error(
+                "homology_source_mismatch",
+                "dimension and prime must match the retained Lie algebra",
+            )
         expected = lie_homology_groups(self.lie_algebra)
         if self.groups != expected:
-            raise ValueError(
+            raise _validation_error(
+                "homology_replay",
                 "groups must equal the exact Lie-homology replay of the "
-                "retained Lie algebra"
+                "retained Lie algebra",
             )
         return self
 

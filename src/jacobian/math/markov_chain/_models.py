@@ -6,9 +6,16 @@ from math import factorial
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable validation error owned by Markov-chain contracts."""
+
+    return PydanticCustomError(f"markov_chain.{reason}", message)
 
 
 class TransitionMatrixRequest(StrictModel):
@@ -22,13 +29,21 @@ class TransitionMatrixRequest(StrictModel):
     def require_stochastic_square_matrix(self) -> Self:
         dimension = len(self.matrix)
         if any(len(row) != dimension for row in self.matrix):
-            raise ValueError("transition matrix must be square")
+            raise _validation_error(
+                "transition_matrix_not_square", "transition matrix must be square"
+            )
         for row in self.matrix:
             values = tuple(value.as_fraction() for value in row)
             if any(value < 0 for value in values):
-                raise ValueError("transition probabilities must be nonnegative")
+                raise _validation_error(
+                    "transition_probability_negative",
+                    "transition probabilities must be nonnegative",
+                )
             if sum(values) != 1:
-                raise ValueError("each transition row must sum to one")
+                raise _validation_error(
+                    "transition_row_not_stochastic",
+                    "each transition row must sum to one",
+                )
         return self
 
 
@@ -58,9 +73,10 @@ class StationaryDistributionRequest(TransitionMatrixRequest):
         # most dimension! terms. Reduction can only decrease coordinate height.
         determinant_digits = sum(cleared_row_bounds) + len(str(factorial(dimension)))
         if determinant_digits > MAX_CANONICAL_RATIONAL_DIGITS:
-            raise ValueError(
+            raise _validation_error(
+                "stationary_height_exceeds_bound",
                 "stationary distribution rational height exceeds the "
-                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit result bound"
+                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit result bound",
             )
         return self
 
@@ -87,22 +103,33 @@ class StationaryDistributionResult(StrictModel):
     def bind_stationary_family(self) -> Self:
         dimensions = {len(item.distribution) for item in self.extreme_distributions}
         if len(dimensions) != 1:
-            raise ValueError("stationary distributions must share one dimension")
+            raise _validation_error(
+                "stationary_dimension_mismatch",
+                "stationary distributions must share one dimension",
+            )
         classes = tuple(item.closed_class for item in self.extreme_distributions)
         if classes != tuple(sorted(classes)) or len(classes) != len(set(classes)):
-            raise ValueError("closed classes must be unique and sorted")
+            raise _validation_error(
+                "closed_classes_not_canonical",
+                "closed classes must be unique and sorted",
+            )
         if self.unique != (len(self.extreme_distributions) == 1):
-            raise ValueError("unique must match the number of extreme distributions")
+            raise _validation_error(
+                "stationary_unique_mismatch",
+                "unique must match the number of extreme distributions",
+            )
         for item in self.extreme_distributions:
             values = tuple(value.as_fraction() for value in item.distribution)
             if any(value < 0 for value in values) or sum(values) != 1:
-                raise ValueError(
-                    "each stationary distribution must be nonnegative and normalized"
+                raise _validation_error(
+                    "stationary_distribution_invalid",
+                    "each stationary distribution must be nonnegative and normalized",
                 )
             support = tuple(index for index, value in enumerate(values) if value > 0)
             if support != item.closed_class:
-                raise ValueError(
-                    "each extreme distribution must be supported on its closed class"
+                raise _validation_error(
+                    "stationary_support_mismatch",
+                    "each extreme distribution must be supported on its closed class",
                 )
         return self
 
@@ -122,13 +149,18 @@ class MixingTimeRequest(TransitionMatrixRequest):
     @model_validator(mode="after")
     def require_bounded_search(self) -> Self:
         if len(self.matrix) > 32:
-            raise ValueError("mixing-time search supports at most 32 states")
+            raise _validation_error(
+                "mixing_state_limit", "mixing-time search supports at most 32 states"
+            )
         if not 0 < self.epsilon.as_fraction() <= 1:
-            raise ValueError("epsilon must lie in (0, 1]")
+            raise _validation_error(
+                "mixing_epsilon_out_of_range", "epsilon must lie in (0, 1]"
+            )
         for value in (self.epsilon, *(item for row in self.matrix for item in row)):
             if max(len(value.num.lstrip("-")), len(value.den)) > 32:
-                raise ValueError(
-                    "mixing-time rational components support at most 32 digits"
+                raise _validation_error(
+                    "mixing_component_digits_exceed_limit",
+                    "mixing-time rational components support at most 32 digits",
                 )
         matrix_digits = max(
             max(len(value.num.lstrip("-")), len(value.den))
@@ -143,9 +175,10 @@ class MixingTimeRequest(TransitionMatrixRequest):
             state_count**3 + self.max_steps * state_count**2
         )
         if rational_height_digits > MAX_CANONICAL_RATIONAL_DIGITS - 1_024:
-            raise ValueError(
+            raise _validation_error(
+                "mixing_result_height_exceeds_bound",
                 "mixing-time matrix height and max_steps can exceed the exact "
-                "rational result bound"
+                "rational result bound",
             )
         return self
 
@@ -167,7 +200,10 @@ class MixingTimeResult(StrictModel):
             else self.max_total_variation_distance.as_fraction()
         )
         if distance is not None and not 0 <= distance <= 1:
-            raise ValueError("total-variation distance must lie in [0, 1]")
+            raise _validation_error(
+                "mixing_distance_out_of_range",
+                "total-variation distance must lie in [0, 1]",
+            )
         if self.status == "FOUND":
             if (
                 self.mixing_time is None
@@ -175,8 +211,9 @@ class MixingTimeResult(StrictModel):
                 or distance > self.epsilon.as_fraction()
                 or self.steps_examined != self.mixing_time + 1
             ):
-                raise ValueError(
-                    "a found result requires its first satisfactory step and distance"
+                raise _validation_error(
+                    "mixing_found_payload_invalid",
+                    "a found result requires its first satisfactory step and distance",
                 )
         elif self.status == "BOUND_EXCEEDED":
             if (
@@ -185,15 +222,19 @@ class MixingTimeResult(StrictModel):
                 or distance <= self.epsilon.as_fraction()
                 or self.steps_examined != self.max_steps + 1
             ):
-                raise ValueError(
-                    "a bound-exceeded result requires the terminal unsatisfactory distance"
+                raise _validation_error(
+                    "mixing_bound_exceeded_payload_invalid",
+                    "a bound-exceeded result requires the terminal unsatisfactory distance",
                 )
         elif (
             self.mixing_time is not None
             or distance is not None
             or self.steps_examined != 0
         ):
-            raise ValueError("a non-ergodic result has no mixing-time search value")
+            raise _validation_error(
+                "mixing_nonergodic_payload_invalid",
+                "a non-ergodic result has no mixing-time search value",
+            )
         return self
 
 
@@ -215,26 +256,46 @@ class CommunicatingClassesResult(StrictModel):
     def require_partition_validity(self) -> Self:
         dimension = len(self.transition_matrix)
         if any(len(row) != dimension for row in self.transition_matrix):
-            raise ValueError("transition matrix must be square")
+            raise _validation_error(
+                "decomposition_matrix_not_square", "transition matrix must be square"
+            )
         for row in self.transition_matrix:
             values = tuple(value.as_fraction() for value in row)
             if any(value < 0 for value in values):
-                raise ValueError("transition probabilities must be nonnegative")
+                raise _validation_error(
+                    "decomposition_probability_negative",
+                    "transition probabilities must be nonnegative",
+                )
             if sum(values) != 1:
-                raise ValueError("each transition row must sum to one")
+                raise _validation_error(
+                    "decomposition_row_not_stochastic",
+                    "each transition row must sum to one",
+                )
         all_states: list[int] = []
         for states, _ in self.classes:
             all_states.extend(states)
         if sorted(all_states) != list(range(len(all_states))):
-            raise ValueError("classes must partition all state indices")
+            raise _validation_error(
+                "decomposition_classes_not_partition",
+                "classes must partition all state indices",
+            )
         if len(all_states) != dimension:
-            raise ValueError("classes must partition the transition matrix states")
+            raise _validation_error(
+                "decomposition_class_dimension_mismatch",
+                "classes must partition the transition matrix states",
+            )
         if len(self.state_class) != len(all_states):
-            raise ValueError("state_class must have one entry per state")
+            raise _validation_error(
+                "decomposition_state_class_length",
+                "state_class must have one entry per state",
+            )
         for class_index, (states, _) in enumerate(self.classes):
             for state in states:
                 if self.state_class[state] != class_index:
-                    raise ValueError("state_class must match classes")
+                    raise _validation_error(
+                        "decomposition_state_class_mismatch",
+                        "state_class must match classes",
+                    )
         return self
 
     @model_validator(mode="after")
@@ -269,9 +330,13 @@ class CommunicatingClassesResult(StrictModel):
             for state in states:
                 expected_state_class[state] = scc_idx
         if self.classes != tuple(expected_classes):
-            raise ValueError(
-                "classes must be the exact SCC decomposition of the transition matrix"
+            raise _validation_error(
+                "decomposition_scc_classes_mismatch",
+                "classes must be the exact SCC decomposition of the transition matrix",
             )
         if self.state_class != tuple(expected_state_class):
-            raise ValueError("state_class must match the SCC decomposition")
+            raise _validation_error(
+                "decomposition_scc_state_class_mismatch",
+                "state_class must match the SCC decomposition",
+            )
         return self

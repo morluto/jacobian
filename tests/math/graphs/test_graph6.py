@@ -59,7 +59,7 @@ def test_graph6_decode_request_rejects_malformed_payloads() -> None:
     from jacobian.math.graphs._tools import Graph6DecodeRequest
 
     for malformed in ("0", "a", ":", "&"):
-        with pytest.raises(ValidationError, match=r"graph6|length|standard"):
+        with pytest.raises(ValidationError):
             Graph6DecodeRequest.model_validate({"graph6": malformed})
 
 

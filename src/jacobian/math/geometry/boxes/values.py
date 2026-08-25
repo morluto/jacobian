@@ -5,9 +5,17 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    """Build a stable error owned by the geometry contracts."""
+
+    return PydanticCustomError(f"geometry.{reason}", message)
+
 
 MAX_CANONICAL_BOX_DIMENSION = 64
 
@@ -21,7 +29,10 @@ class RationalClosedInterval(StrictModel):
     @model_validator(mode="after")
     def require_ordered_endpoints(self) -> Self:
         if self.lower.as_fraction() > self.upper.as_fraction():
-            raise ValueError("closed interval lower endpoint must not exceed upper")
+            raise _validation_error(
+                "closed_interval_lower_endpoint_exceed_upper",
+                "closed interval lower endpoint must not exceed upper",
+            )
         return self
 
 
@@ -70,7 +81,10 @@ class RationalAxisAlignedBox(StrictModel):
     @model_validator(mode="after")
     def require_dimension(self) -> Self:
         if self.intervals is not None and len(self.intervals) != self.dimension:
-            raise ValueError("box intervals must have length equal to dimension")
+            raise _validation_error(
+                "box_intervals_length_dimension",
+                "box intervals must have length equal to dimension",
+            )
         return self
 
     @property

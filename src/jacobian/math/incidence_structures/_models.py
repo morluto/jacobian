@@ -5,7 +5,14 @@ from __future__ import annotations
 from math import comb
 from typing import Self
 
-from pydantic import ConfigDict, Field, StrictBool, StrictInt, model_validator
+from pydantic import (
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictInt,
+    model_validator,
+)
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.canonical import encode_strict_json
@@ -31,6 +38,10 @@ _PROFILE_ENTRY_OVERHEAD_BYTES = 64
 _TRADE_DIFFERENCE_OVERHEAD_BYTES = 96
 
 
+def _validation_error(code: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"incidence_structure.{code}", message)
+
+
 class IncidenceStructure(StrictModel):
     """An ordered point axis and an indexed family of finite blocks.
 
@@ -48,22 +59,32 @@ class IncidenceStructure(StrictModel):
     @model_validator(mode="after")
     def require_valid_incidence(self) -> Self:
         if len(set(self.points)) != len(self.points):
-            raise ValueError("point labels must be distinct")
+            raise _validation_error(
+                "point_labels_not_distinct", "point labels must be distinct"
+            )
         if len(set(self.block_ids)) != len(self.block_ids):
-            raise ValueError("block IDs must be distinct")
+            raise _validation_error(
+                "block_ids_not_distinct", "block IDs must be distinct"
+            )
         if len(self.blocks) != len(self.block_ids):
-            raise ValueError("blocks and block IDs must have same length")
+            raise _validation_error(
+                "block_count_mismatch", "blocks and block IDs must have same length"
+            )
         point_set = set(self.points)
         canonical_blocks: list[tuple[str, ...]] = []
         for block in self.blocks:
             block_members = set(block)
             if len(block_members) != len(block):
-                raise ValueError(
-                    "duplicate point labels within a block are not allowed"
+                raise _validation_error(
+                    "block_members_not_distinct",
+                    "duplicate point labels within a block are not allowed",
                 )
             for p in block:
                 if p not in point_set:
-                    raise ValueError("every block member must be a declared point")
+                    raise _validation_error(
+                        "undeclared_block_member",
+                        "every block member must be a declared point",
+                    )
             canonical_blocks.append(
                 tuple(point for point in self.points if point in block_members)
             )
@@ -105,15 +126,22 @@ def _require_containment_profile_admitted(
     order: int,
 ) -> None:
     if not 1 <= order <= MAX_T:
-        raise ValueError(f"containment-profile order must be between 1 and {MAX_T}")
+        raise _validation_error(
+            "containment_order_out_of_range",
+            f"containment-profile order must be between 1 and {MAX_T}",
+        )
     subset_count = _subset_count(len(incidence.points), order)
     if subset_count > MAX_SUBSETS:
-        raise ValueError("containment profile exceeds the complete subset-count budget")
+        raise _validation_error(
+            "containment_subset_budget_exceeded",
+            "containment profile exceeds the complete subset-count budget",
+        )
 
     total_work = _CONTAINMENT_RESULT_PASSES * _profile_work_units(incidence, order)
     if total_work > _MAX_CONTAINMENT_TOTAL_WORK_UNITS:
-        raise ValueError(
-            "containment profile exceeds the operation-plus-replay work budget"
+        raise _validation_error(
+            "containment_work_budget_exceeded",
+            "containment profile exceeds the operation-plus-replay work budget",
         )
 
     estimated_result_bytes = (
@@ -124,8 +152,9 @@ def _require_containment_profile_admitted(
         + _RESULT_ENVELOPE_BYTES
     )
     if estimated_result_bytes > MAX_RESULT_BYTES:
-        raise ValueError(
-            "containment profile with its retained source exceeds the output budget"
+        raise _validation_error(
+            "containment_output_budget_exceeded",
+            "containment profile with its retained source exceeds the output budget",
         )
 
 
@@ -135,27 +164,33 @@ def _require_incidence_trade_admitted(
     max_order: int,
 ) -> None:
     if not 1 <= max_order <= MAX_TRADE_ORDER:
-        raise ValueError(
-            f"trade comparison order must be between 1 and {MAX_TRADE_ORDER}"
+        raise _validation_error(
+            "trade_order_out_of_range",
+            f"trade comparison order must be between 1 and {MAX_TRADE_ORDER}",
         )
     if left.points != right.points:
-        raise ValueError(
-            "trade comparison requires the same ordered point axis on both sides"
+        raise _validation_error(
+            "trade_point_axis_mismatch",
+            "trade comparison requires the same ordered point axis on both sides",
         )
 
     subset_counts = tuple(
         _subset_count(len(left.points), order) for order in range(1, max_order + 1)
     )
     if any(count > MAX_SUBSETS for count in subset_counts):
-        raise ValueError("trade comparison exceeds the complete subset-count budget")
+        raise _validation_error(
+            "trade_subset_budget_exceeded",
+            "trade comparison exceeds the complete subset-count budget",
+        )
 
     work_per_pass = sum(
         _profile_work_units(left, order) + _profile_work_units(right, order)
         for order in range(1, max_order + 1)
     )
     if _TRADE_TOTAL_PASSES * work_per_pass > _MAX_TRADE_TOTAL_WORK_UNITS:
-        raise ValueError(
-            "trade comparison exceeds the operation-plus-replay work budget"
+        raise _validation_error(
+            "trade_work_budget_exceeded",
+            "trade comparison exceeds the operation-plus-replay work budget",
         )
 
     subset_label_bytes = sum(
@@ -174,8 +209,9 @@ def _require_incidence_trade_admitted(
         + _RESULT_ENVELOPE_BYTES
     )
     if estimated_result_bytes > MAX_RESULT_BYTES:
-        raise ValueError(
-            "trade comparison with its retained sources exceeds the output budget"
+        raise _validation_error(
+            "trade_output_budget_exceeded",
+            "trade comparison with its retained sources exceeds the output budget",
         )
 
 
@@ -268,11 +304,15 @@ class ContainmentProfileResult(StrictModel):
             self.constant_lambda,
         )
         if actual != expected:
-            raise ValueError(
-                "containment profile does not match the retained incidence source"
+            raise _validation_error(
+                "containment_replay_mismatch",
+                "containment profile does not match the retained incidence source",
             )
         if len(encode_strict_json(self.model_dump(mode="json"))) > MAX_RESULT_BYTES:
-            raise ValueError("containment profile exceeds the exact output budget")
+            raise _validation_error(
+                "containment_result_budget_exceeded",
+                "containment profile exceeds the exact output budget",
+            )
         return self
 
 
@@ -290,9 +330,15 @@ class IncidenceMultiplicityDifference(StrictModel):
     @model_validator(mode="after")
     def require_nonzero_difference_with_distinct_labels(self) -> Self:
         if self.left_multiplicity == self.right_multiplicity:
-            raise ValueError("a sparse multiplicity difference must be nonzero")
+            raise _validation_error(
+                "difference_must_be_nonzero",
+                "a sparse multiplicity difference must be nonzero",
+            )
         if len(set(self.subset)) != len(self.subset):
-            raise ValueError("difference subsets must have distinct labels")
+            raise _validation_error(
+                "difference_labels_not_distinct",
+                "difference subsets must have distinct labels",
+            )
         return self
 
 
@@ -326,11 +372,15 @@ class IncidenceMomentComparison(StrictModel):
         )
 
         if self.equal != (not self.differences):
-            raise ValueError("moment equality must match the sparse difference profile")
+            raise _validation_error(
+                "moment_equality_mismatch",
+                "moment equality must match the sparse difference profile",
+            )
         if self.left.points != self.points or self.right.points != self.points:
-            raise ValueError(
+            raise _validation_error(
+                "moment_point_axis_mismatch",
                 "moment comparison requires both retained families to share "
-                "the declared ordered point axis"
+                "the declared ordered point axis",
             )
         axis_index = {point: index for index, point in enumerate(self.points)}
         previous_indices: tuple[int, ...] | None = None
@@ -338,22 +388,35 @@ class IncidenceMomentComparison(StrictModel):
         for difference in self.differences:
             subset = difference.subset
             if len(subset) != self.order:
-                raise ValueError("difference subsets must have exactly order labels")
+                raise _validation_error(
+                    "difference_arity_mismatch",
+                    "difference subsets must have exactly order labels",
+                )
             if len(set(subset)) != len(subset):
-                raise ValueError("difference subsets must have distinct labels")
+                raise _validation_error(
+                    "difference_labels_not_distinct",
+                    "difference subsets must have distinct labels",
+                )
             if any(label not in axis_index for label in subset):
-                raise ValueError(
-                    "difference subsets must use declared point-axis labels"
+                raise _validation_error(
+                    "difference_label_undeclared",
+                    "difference subsets must use declared point-axis labels",
                 )
             indices = tuple(axis_index[label] for label in subset)
             if list(indices) != sorted(indices):
-                raise ValueError("difference subsets must follow point-axis order")
+                raise _validation_error(
+                    "difference_axis_order_mismatch",
+                    "difference subsets must follow point-axis order",
+                )
             if subset in seen_subsets:
-                raise ValueError("difference subsets must be unique")
+                raise _validation_error(
+                    "difference_subsets_not_unique", "difference subsets must be unique"
+                )
             seen_subsets.add(subset)
             if previous_indices is not None and indices <= previous_indices:
-                raise ValueError(
-                    "difference rows must follow point-axis combination order"
+                raise _validation_error(
+                    "difference_combination_order_mismatch",
+                    "difference rows must follow point-axis combination order",
                 )
             previous_indices = indices
         _require_containment_profile_admitted(self.left, self.order)
@@ -378,15 +441,20 @@ class IncidenceMomentComparison(StrictModel):
             for difference in self.differences
         )
         if actual_differences != expected_differences:
-            raise ValueError(
-                "moment comparison does not match the retained incidence families"
+            raise _validation_error(
+                "moment_replay_mismatch",
+                "moment comparison does not match the retained incidence families",
             )
         if self.left_total != left_profile[2] or self.right_total != right_profile[2]:
-            raise ValueError(
-                "moment totals do not match the retained incidence families"
+            raise _validation_error(
+                "moment_totals_mismatch",
+                "moment totals do not match the retained incidence families",
             )
         if len(encode_strict_json(self.model_dump(mode="json"))) > MAX_RESULT_BYTES:
-            raise ValueError("moment comparison exceeds the exact output budget")
+            raise _validation_error(
+                "moment_result_budget_exceeded",
+                "moment comparison exceeds the exact output budget",
+            )
         return self
 
 
@@ -449,12 +517,14 @@ class IncidenceTradeResult(StrictModel):
             self.positive_moments_equal,
         )
         if actual != expected:
-            raise ValueError(
-                "incidence trade comparison does not match the retained sources"
+            raise _validation_error(
+                "trade_replay_mismatch",
+                "incidence trade comparison does not match the retained sources",
             )
         if len(encode_strict_json(self.model_dump(mode="json"))) > MAX_RESULT_BYTES:
-            raise ValueError(
-                "incidence trade comparison exceeds the exact output budget"
+            raise _validation_error(
+                "trade_result_budget_exceeded",
+                "incidence trade comparison exceeds the exact output budget",
             )
         return self
 
@@ -497,7 +567,10 @@ class DualResult(StrictModel):
             or self.block_ids != self.incidence.block_ids
             or self.blocks != self.incidence.blocks
         ):
-            raise ValueError("dual structural fields must project incidence")
+            raise _validation_error(
+                "dual_projection_mismatch",
+                "dual structural fields must project incidence",
+            )
         return self
 
 
@@ -530,9 +603,15 @@ class RestrictionRequest(StrictModel):
     @model_validator(mode="after")
     def require_declared_subsets(self) -> Self:
         if not set(self.points) <= set(self.incidence.points):
-            raise ValueError("points must be a subset of the incidence points")
+            raise _validation_error(
+                "restriction_points_undeclared",
+                "points must be a subset of the incidence points",
+            )
         if not set(self.block_ids) <= set(self.incidence.block_ids):
-            raise ValueError("block_ids must be a subset of the incidence block IDs")
+            raise _validation_error(
+                "restriction_blocks_undeclared",
+                "block_ids must be a subset of the incidence block IDs",
+            )
         return self
 
 
@@ -555,10 +634,13 @@ class DerivedResidualRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_kind(self) -> Self:
         if self.kind not in ("derived", "residual"):
-            raise ValueError("kind must be 'derived' or 'residual'")
+            raise _validation_error(
+                "derived_kind_invalid", "kind must be 'derived' or 'residual'"
+            )
         if self.point not in self.incidence.points:
-            raise ValueError(
-                "point must be a declared point in the incidence structure"
+            raise _validation_error(
+                "derived_point_undeclared",
+                "point must be a declared point in the incidence structure",
             )
         return self
 
@@ -599,7 +681,9 @@ class GramRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_axis(self) -> Self:
         if self.axis not in ("point", "block"):
-            raise ValueError("axis must be 'point' or 'block'")
+            raise _validation_error(
+                "gram_axis_invalid", "axis must be 'point' or 'block'"
+            )
         return self
 
 

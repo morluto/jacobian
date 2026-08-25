@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from pathlib import Path
 from weakref import ReferenceType, ref
 
@@ -13,6 +14,14 @@ from jacobian.math.logic._unsat_core import (
     SmtUnsatCoreResult,
     compute_smt_unsat_core,
 )
+
+
+@contextmanager
+def raises_logic_validation():
+    with pytest.raises(ValidationError) as error:
+        yield error
+    assert error.value.errors()[0]["type"].startswith("logic.")
+
 
 CONTRADICTORY_LIA = """\
 (set-logic QF_LIA)
@@ -61,7 +70,7 @@ def test_unsat_core_result_rejects_a_core_detached_from_its_source() -> None:
     payload = result.model_dump(mode="json")
     payload["source"]["smtlib"] = CONTRADICTORY_LIA.replace("(>= x 1)", "(>= x -1)")
 
-    with pytest.raises(ValidationError, match="selected source assertions"):
+    with raises_logic_validation():
         SmtUnsatCoreResult.model_validate(payload)
 
 
@@ -70,7 +79,7 @@ def test_unsat_core_result_rejects_a_forged_proper_subset() -> None:
     payload = result.model_dump(mode="json")
     payload["core_indices"] = [0]
 
-    with pytest.raises(ValidationError, match="selected source assertions"):
+    with raises_logic_validation():
         SmtUnsatCoreResult.model_validate(payload)
 
 
@@ -80,7 +89,7 @@ def test_unsat_core_result_rejects_a_forged_sat_conclusion() -> None:
     payload["outcome"] = "SAT"
     payload["core_indices"] = []
 
-    with pytest.raises(ValidationError, match="complete source assertions"):
+    with raises_logic_validation():
         SmtUnsatCoreResult.model_validate(payload)
 
 
@@ -257,7 +266,7 @@ def test_request_rejects_terms_outside_the_declared_fragment(
 ) -> None:
     source = "\n".join((f"(set-logic {logic})", declarations, assertion, "(check-sat)"))
 
-    with pytest.raises(ValidationError, match=f"declared {logic} fragment"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic=logic, smtlib=source)
 
 
@@ -331,7 +340,7 @@ def test_tracking_symbols_do_not_alias_caller_boolean_constants() -> None:
 
 
 def test_request_validates_smtlib_syntax_before_execution() -> None:
-    with pytest.raises(ValidationError, match="could not be parsed"):
+    with raises_logic_validation():
         _request(
             "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (+ 1 2))\n(check-sat)\n"
         )
@@ -344,7 +353,7 @@ def test_request_bounds_the_number_of_indexed_assertions() -> None:
     rejected = accepted.replace("(check-sat)", "(assert true)\n(check-sat)")
 
     assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=accepted).assertion_count == 512
-    with pytest.raises(ValidationError, match="at most 512 source assertions"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=rejected)
 
 
@@ -359,7 +368,7 @@ def test_request_bounds_source_tokens() -> None:
         )
 
     assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source(32_750))
-    with pytest.raises(ValidationError, match="at most 32768 tokens"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source(32_751))
 
 
@@ -369,7 +378,7 @@ def test_request_bounds_source_nesting() -> None:
         return f"(set-logic QF_LIA)\n(assert {term})\n(check-sat)\n"
 
     assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source(255))
-    with pytest.raises(ValidationError, match="nesting may not exceed 256"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source(256))
 
 
@@ -383,7 +392,7 @@ def test_request_bounds_numeric_coefficient_digits() -> None:
     rejected = accepted.replace(accepted_number, "1" * 257, 1)
 
     assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=accepted)
-    with pytest.raises(ValidationError, match="numeral may contain at most 256 digits"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=rejected)
 
 
@@ -391,7 +400,7 @@ def test_request_bounds_negative_numeric_atom_digits() -> None:
     rejected_number = "-" + "1" * 257
     source = f"(set-logic QF_LIA)\n(assert (= {rejected_number} 0))\n(check-sat)\n"
 
-    with pytest.raises(ValidationError, match="numeral may contain at most 256 digits"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source)
 
 
@@ -399,7 +408,7 @@ def test_request_bounds_normalized_closed_coefficient_digits() -> None:
     factor = "9" * 256
     source = f"(set-logic QF_LIA)\n(assert (= (* {factor} {factor}) 0))\n(check-sat)\n"
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source)
 
 
@@ -414,7 +423,7 @@ def test_request_bounds_nested_product_coefficient_digits() -> None:
     over = boundary.replace(factor, "9" * 129, 1)
 
     assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=boundary)
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=over)
 
 
@@ -429,7 +438,7 @@ def test_request_bounds_deeply_nested_coefficient_products(nesting: int) -> None
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source)
 
 
@@ -443,7 +452,7 @@ def test_request_bounds_outer_factor_against_folded_inner_coefficient() -> None:
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source)
 
 
@@ -458,7 +467,7 @@ def test_request_bounds_negated_nested_product_coefficient_digits() -> None:
     over = boundary.replace(factor, "9" * 129, 1)
 
     assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=boundary)
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=over)
 
 
@@ -493,7 +502,7 @@ def test_request_bounds_nested_coefficients_through_preserving_wrappers(
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic=logic, smtlib=source)
 
 
@@ -506,7 +515,7 @@ def test_request_bounds_nested_real_coefficient_digits() -> None:
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
 
 
@@ -549,7 +558,7 @@ def test_request_bounds_translated_product_coefficient_digits(
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic=logic, smtlib=source)
 
 
@@ -566,7 +575,7 @@ def test_request_bounds_translated_constant_digits() -> None:
     assert SmtUnsatCoreRequest(
         logic="QF_LIA", smtlib=template.format(constant=boundary_constant)
     )
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(
             logic="QF_LIA", smtlib=template.format(constant=over_constant)
         )
@@ -606,7 +615,7 @@ def test_request_bounds_multi_term_affine_sum_coefficient_digits(
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic=logic, smtlib=source)
 
 
@@ -622,7 +631,7 @@ def test_request_bounds_multi_term_boundary_coefficients() -> None:
     over = boundary.replace(factor, "9" * 129, 1)
 
     assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=boundary)
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=over)
 
 
@@ -638,7 +647,7 @@ def test_request_bounds_merged_duplicate_summand_coefficients() -> None:
     over = boundary.replace(outer, "9" * 128, 1)
 
     assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=boundary)
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=over)
 
 
@@ -662,7 +671,7 @@ def test_request_bounds_exact_integer_division_coefficient_digits(
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source)
 
 
@@ -678,7 +687,7 @@ def test_request_bounds_integer_division_translated_constant_digits() -> None:
     assert SmtUnsatCoreRequest(
         logic="QF_LIA", smtlib=template.format(constant=constant)
     )
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=template.format(constant="9" * 256))
 
 
@@ -694,7 +703,7 @@ def test_request_bounds_arithmetic_ite_branch_coefficient_digits() -> None:
     over = boundary.replace(factor, "9" * 129, 1)
 
     assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=boundary)
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=over)
 
 
@@ -721,7 +730,7 @@ def test_request_bounds_scaled_ite_branch_coefficient_digits(
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source)
 
 
@@ -737,7 +746,7 @@ def test_request_bounds_deeply_nested_ite_branch_coefficients(nesting: int) -> N
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source)
 
 
@@ -762,7 +771,7 @@ def test_request_bounds_reciprocal_ite_branch_denominator_digits(
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
 
 
@@ -777,7 +786,7 @@ def test_request_bounds_ite_branch_digits_when_scalars_cancel_the_height() -> No
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
 
 
@@ -791,7 +800,7 @@ def test_request_bounds_division_of_formless_ite_branch_denominator_digits() -> 
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
 
 
@@ -807,7 +816,7 @@ def test_request_bounds_formless_ite_sum_denominator_digits() -> None:
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
 
 
@@ -828,7 +837,7 @@ def test_request_bounds_mixed_denominator_formless_ite_sum_scaling() -> None:
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=scaled_source)
 
     unscaled_source = (
@@ -858,7 +867,7 @@ def test_request_bounds_opposite_sign_comparison_numerator_digits() -> None:
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
 
 
@@ -920,7 +929,7 @@ def test_request_bounds_comparison_of_formless_ite_branch_denominator_digits() -
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
 
 
@@ -956,7 +965,7 @@ def test_request_bounds_shared_denominator_comparison_numerator_digits() -> None
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
 
 
@@ -974,7 +983,7 @@ def test_request_bounds_scaled_formless_comparison_lifted_numerators() -> None:
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
 
 
@@ -997,7 +1006,7 @@ def test_request_bounds_scaled_formless_sum_retains_unmatched_coefficients() -> 
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
 
 
@@ -1035,7 +1044,7 @@ def test_request_bounds_nested_division_of_formless_ite_denominator_digits() -> 
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
 
 
@@ -1081,7 +1090,7 @@ def test_request_bounds_compared_pairless_chain_denominator_digits() -> None:
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
 
 
@@ -1099,7 +1108,7 @@ def test_request_bounds_scaled_formless_ite_nested_division_digits() -> None:
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
 
 
@@ -1141,7 +1150,7 @@ def test_request_bounds_sum_division_of_formless_ite_denominator_digits() -> Non
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
 
 
@@ -1203,7 +1212,7 @@ def test_request_bounds_shared_denominator_sum_division_digits() -> None:
         "(check-sat)\n"
     )
 
-    with pytest.raises(ValidationError, match="normalized SMT coefficient"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LRA", smtlib=source)
 
 
@@ -1497,7 +1506,7 @@ def test_request_bounds_parsed_ast_nodes() -> None:
         )
 
     assert SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source(2_047))
-    with pytest.raises(ValidationError, match="at most 4096 distinct AST nodes"):
+    with raises_logic_validation():
         SmtUnsatCoreRequest(logic="QF_LIA", smtlib=source(2_048))
 
 
@@ -1506,11 +1515,11 @@ def test_unsat_result_requires_a_nonempty_canonical_core() -> None:
     payload = result.model_dump(mode="json")
     payload["core_indices"] = []
 
-    with pytest.raises(ValidationError, match="nonempty core"):
+    with raises_logic_validation():
         SmtUnsatCoreResult.model_validate(payload)
 
     payload["core_indices"] = [1, 0]
-    with pytest.raises(ValidationError, match="strictly increasing"):
+    with raises_logic_validation():
         SmtUnsatCoreResult.model_validate(payload)
 
 

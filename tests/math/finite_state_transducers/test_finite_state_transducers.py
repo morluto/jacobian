@@ -110,7 +110,7 @@ class TestSubsequentialRun:
         assert result.output == (1, 0)
 
     def test_false_run_result_is_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="exact bound"):
+        with pytest.raises(ValidationError) as error:
             SubseqRunResult(
                 transducer=_flip(),
                 word=(0,),
@@ -120,6 +120,10 @@ class TestSubsequentialRun:
                 undefined_position=None,
                 partial_output=(),
             )
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_state_transducer.run_result_mismatch"
+        )
 
     def test_native_run_rejects_symbol_outside_alphabet(self) -> None:
         with pytest.raises(ValueError, match="outside"):
@@ -160,8 +164,12 @@ class TestComposition:
     def test_product_state_bound_is_rejected_before_composition(self) -> None:
         large = _flip().model_copy(update={"state_count": 9})
 
-        with pytest.raises(ValidationError, match="product-state"):
+        with pytest.raises(ValidationError) as error:
             ComposeRequest(first=large, second=large)
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_state_transducer.composition_state_bound_exceeded"
+        )
 
     def test_adapter_binds_both_operands(self) -> None:
         request = ComposeRequest(first=identity_transducer(2), second=_flip())
@@ -234,7 +242,7 @@ class TestRationalPathReplay:
         assert replay_rational_path(relation, 0, (9,))[0] == "INVALID_PATH"
 
     def test_false_replay_result_is_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="exact bound"):
+        with pytest.raises(ValidationError) as error:
             RelationPathReplayResult(
                 transducer=_relation(),
                 initial_state=0,
@@ -245,12 +253,16 @@ class TestRationalPathReplay:
                 state_trace=(),
                 error="invented",
             )
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_state_transducer.replay_result_mismatch"
+        )
 
 
 class TestValueValidation:
     def test_duplicate_deterministic_transition_is_rejected(self) -> None:
         transition = SubseqTransition(source=0, input_symbol=0, target=0, output=())
-        with pytest.raises(ValidationError, match="duplicate"):
+        with pytest.raises(ValidationError) as error:
             SubsequentialTransducer(
                 input_alphabet_size=1,
                 output_alphabet_size=1,
@@ -259,13 +271,21 @@ class TestValueValidation:
                 transitions=(transition, transition),
                 final_outputs=(),
             )
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_state_transducer.duplicate_transition"
+        )
 
     def test_duplicate_initial_and_accepting_states_are_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="initial states"):
+        with pytest.raises(ValidationError) as error:
             _relation(initial_states=(0, 0))
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_state_transducer.initial_states_not_distinct"
+        )
 
     def test_empty_rational_edge_is_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="both labels empty"):
+        with pytest.raises(ValidationError) as error:
             RationalTransducer(
                 input_alphabet_size=1,
                 output_alphabet_size=1,
@@ -274,9 +294,17 @@ class TestValueValidation:
                 accepting_states=(0,),
                 edges=(RationalEdge(source=0, target=0),),
             )
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_state_transducer.edge_labels_empty"
+        )
 
     def test_replay_must_select_a_declared_initial_state(self) -> None:
-        with pytest.raises(ValidationError, match="select"):
+        with pytest.raises(ValidationError) as error:
             RelationPathReplayRequest(
                 transducer=_relation(), initial_state=1, edge_path=()
             )
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_state_transducer.initial_state_not_declared"
+        )

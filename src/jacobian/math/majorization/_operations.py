@@ -5,8 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from fractions import Fraction
 
-from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
+from jacobian._exact import CanonicalRational, format_canonical_rational
 from jacobian.math.majorization._models import (
     BirkhoffDecompositionRequest,
     BirkhoffDecompositionResult,
@@ -23,16 +22,15 @@ from jacobian.math.majorization._models import (
     WeakMajorizationCheckRequest,
     WeakMajorizationCheckResult,
 )
+from jacobian.math.matrices.values import RationalMatrix
 
 
 def _to_cr(value: Fraction) -> CanonicalRational:
     return CanonicalRational.from_fraction(value)
 
 
-def _format_rational(value: Fraction) -> str:
-    if value.denominator == 1:
-        return format_canonical_integer(value.numerator)
-    return f"{format_canonical_integer(value.numerator)}/{format_canonical_integer(value.denominator)}"
+def _matrix_fractions(matrix: RationalMatrix) -> list[list[Fraction]]:
+    return [[value.as_fraction() for value in row] for row in matrix.entries]
 
 
 def _sorted_desc(values: Sequence[Fraction]) -> list[Fraction]:
@@ -85,7 +83,7 @@ def compute_majorization_check(
     return MajorizationCheckResult(
         majorizes=majorizes,
         total_sum_match=total_sum_match,
-        prefix_slacks=tuple(_format_rational(s) for s in slacks),
+        prefix_slacks=tuple(format_canonical_rational(s) for s in slacks),
         first_failed_prefix=first_failed,
     )
 
@@ -135,7 +133,7 @@ def compute_weak_majorization_check(
     return WeakMajorizationCheckResult(
         holds=all_ok,
         direction=direction,
-        prefix_slack=tuple(_format_rational(s) for s in slacks),
+        prefix_slack=tuple(format_canonical_rational(s) for s in slacks),
         first_failed_prefix=first_failed,
     )
 
@@ -212,16 +210,16 @@ def _intermediate_vectors(
 ) -> list[tuple[str, ...]]:
     intermediate: list[tuple[str, ...]] = []
     current = list(x_vals)
-    intermediate.append(tuple(_format_rational(v) for v in current))
+    intermediate.append(tuple(format_canonical_rational(v) for v in current))
     for i, j, lam in steps:
         ci_val = current[i]
         cj_val = current[j]
         current[i] = lam * ci_val + (Fraction(1) - lam) * cj_val
         current[j] = (Fraction(1) - lam) * ci_val + lam * cj_val
-        intermediate.append(tuple(_format_rational(v) for v in current))
+        intermediate.append(tuple(format_canonical_rational(v) for v in current))
     if needs_perm:
         current = [current[final_perm[i]] for i in range(len(current))]
-        intermediate.append(tuple(_format_rational(v) for v in current))
+        intermediate.append(tuple(format_canonical_rational(v) for v in current))
     return intermediate
 
 
@@ -275,7 +273,7 @@ def compute_t_transform_sequence(
         final_permutation=tuple(final_perm) if needs_perm else (),
         intermediate_vectors=tuple(intermediate),
         composed_matrix=tuple(
-            tuple(_format_rational(v) for v in row) for row in composed
+            tuple(format_canonical_rational(v) for v in row) for row in composed
         ),
         target_match=target_match,
     )
@@ -319,7 +317,7 @@ def compute_doubly_stochastic_check(
     request: DoublyStochasticCheckRequest,
 ) -> DoublyStochasticCheckResult:
     """Check if a rational matrix is doubly stochastic."""
-    mat = request.matrix.as_fractions()
+    mat = _matrix_fractions(request.matrix)
     n = len(mat)
 
     first_neg: tuple[int, int] | None = None
@@ -341,8 +339,8 @@ def compute_doubly_stochastic_check(
 
     return DoublyStochasticCheckResult(
         is_doubly_stochastic=is_ds,
-        row_sums=tuple(_format_rational(s) for s in row_sums),
-        col_sums=tuple(_format_rational(s) for s in col_sums),
+        row_sums=tuple(format_canonical_rational(s) for s in row_sums),
+        col_sums=tuple(format_canonical_rational(s) for s in col_sums),
         first_negative_entry=first_neg,
         first_bad_row=first_bad_row,
         first_bad_col=first_bad_col,
@@ -357,7 +355,7 @@ def compute_birkhoff_decomposition(
     Decomposes a doubly stochastic matrix into a convex combination of
     permutation matrices using the greedy matching + peel algorithm.
     """
-    mat = request.matrix.as_fractions()
+    mat = _matrix_fractions(request.matrix)
     n = len(mat)
 
     for i in range(n):
@@ -409,7 +407,7 @@ def compute_birkhoff_decomposition(
 
     return BirkhoffDecompositionResult(
         terms=tuple(terms),
-        weights_sum=_format_rational(weights_sum),
+        weights_sum=format_canonical_rational(weights_sum),
         reconstruction_matches=True,
     )
 
@@ -473,9 +471,9 @@ def compute_schur_horn_check(
 
     return SchurHornCheckResult(
         feasible=feasible,
-        eigenvalues_sorted=tuple(_format_rational(v) for v in e_sorted),
-        diagonal_sorted=tuple(_format_rational(v) for v in d_sorted),
-        prefix_slack=tuple(_format_rational(s) for s in slacks),
+        eigenvalues_sorted=tuple(format_canonical_rational(v) for v in e_sorted),
+        diagonal_sorted=tuple(format_canonical_rational(v) for v in d_sorted),
+        prefix_slack=tuple(format_canonical_rational(s) for s in slacks),
         first_failed_prefix=first_failed,
         total_sum_match=total_sum_match,
     )

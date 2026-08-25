@@ -23,13 +23,15 @@ def test_gram_accepts_nonspanning_vector_family() -> None:
 
 
 def test_frame_requires_full_ambient_span() -> None:
-    with pytest.raises(ValidationError, match="span"):
+    with pytest.raises(ValidationError) as error:
         FiniteFrameRequest(vectors=[[1, 0], [2, 0]])
+    assert error.value.errors()[0]["type"] == "frames.frame_does_not_span"
 
 
 def test_coherence_rejects_zero_vector() -> None:
-    with pytest.raises(ValidationError, match="nonzero"):
+    with pytest.raises(ValidationError) as error:
         CoherenceRequest(vectors=[[0, 0], [1, 0], [0, 1]])
+    assert error.value.errors()[0]["type"] == "frames.zero_vector"
 
 
 def test_coherence_is_exact_and_carries_canonical_maximizer() -> None:

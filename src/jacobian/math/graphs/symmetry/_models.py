@@ -6,9 +6,11 @@ import unicodedata
 from typing import Annotated, Literal, Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.math.graphs.symmetry._edges import canonical_edge
 from jacobian.math.graphs.values import ColoredUndirectedGraph
 
 MAX_GRAPH_SYMMETRY_VERTICES = 256
@@ -18,10 +20,6 @@ _UNCOLORED = "__UNCOLORED__"
 
 GraphSymmetryLabel = Annotated[str, Field(min_length=1, max_length=64)]
 GraphSymmetryEdge = tuple[GraphSymmetryLabel, GraphSymmetryLabel]
-
-
-def _canonical_edge(left: str, right: str) -> tuple[str, str]:
-    return (left, right) if left < right else (right, left)
 
 
 class GraphAutomorphismGenerator(StrictModel):
@@ -55,30 +53,36 @@ def _validate_automorphism_generator(
         tuple(vertex for vertex, _ in generator.mapping) != vertices
         or set(mapping.values()) != vertex_set
     ):
-        raise ValueError(
+        raise PydanticCustomError(
+            "graph.every_symmetry_generator_total_vertex_permutation_declared",
             "every graph symmetry generator must be a total vertex permutation "
             "declared as one (vertex, image) pair per declared vertex in the "
-            "graph's declared vertex order"
+            "graph's declared vertex order",
         )
     if any(
         vertex_colors[vertex] != vertex_colors[mapping[vertex]] for vertex in vertices
     ):
-        raise ValueError(
-            "graph symmetry generators must preserve declared vertex colors"
+        raise PydanticCustomError(
+            "graph.symmetry_generators_preserve_declared_vertex_colors",
+            "graph symmetry generators must preserve declared vertex colors",
         )
     mapped_edges = {
-        _canonical_edge(mapping[left], mapping[right]) for left, right in edges
+        canonical_edge(mapping[left], mapping[right]) for left, right in edges
     }
     if mapped_edges != edge_set:
-        raise ValueError(
-            "graph symmetry generators must preserve the complete edge set"
+        raise PydanticCustomError(
+            "graph.symmetry_generators_preserve_complete_edge_set",
+            "graph symmetry generators must preserve the complete edge set",
         )
     if any(
         edge_colors[edge]
-        != edge_colors[_canonical_edge(mapping[edge[0]], mapping[edge[1]])]
+        != edge_colors[canonical_edge(mapping[edge[0]], mapping[edge[1]])]
         for edge in edges
     ):
-        raise ValueError("graph symmetry generators must preserve declared edge colors")
+        raise PydanticCustomError(
+            "graph.graph_symmetry_generators_must_preserve_declared",
+            "graph symmetry generators must preserve declared edge colors",
+        )
 
 
 _ORBIT_OBJECT_FIXED_WIRE_BYTES = 47
@@ -211,11 +215,12 @@ def _orbit_result_canonical_wire_bytes(request: GraphSymmetryOrbitRequest) -> in
 def _require_result_output_headroom(request: GraphSymmetryOrbitRequest) -> None:
     output_limit = CanonicalLimits().max_output_bytes
     if _orbit_result_canonical_wire_bytes(request) > output_limit:
-        raise ValueError(
+        raise PydanticCustomError(
+            "graph.symmetry_orbit_result_retains_its_declared_source",
             "the graph symmetry orbit result retains its declared source and "
             "its complete canonical serialization would exceed the "
             f"{output_limit}-byte canonical output limit; shorten vertex "
-            "labels or shrink the graph"
+            "labels or shrink the graph",
         )
 
 
@@ -262,23 +267,29 @@ class GraphSymmetryOrbitRequest(StrictModel):
         vertices = self.graph.graph.vertices
         edges = self.graph.graph.edges
         if len(vertices) > MAX_GRAPH_SYMMETRY_VERTICES:
-            raise ValueError(
-                f"graph symmetry exceeds the {MAX_GRAPH_SYMMETRY_VERTICES}-vertex bound"
+            raise PydanticCustomError(
+                "graph.symmetry_exceeds_max_symmetry_vertices_vertex_bound",
+                f"graph symmetry exceeds the {MAX_GRAPH_SYMMETRY_VERTICES}-vertex bound",
             )
         if len(edges) > MAX_GRAPH_SYMMETRY_EDGES:
-            raise ValueError(
-                f"graph symmetry exceeds the {MAX_GRAPH_SYMMETRY_EDGES}-edge bound"
+            raise PydanticCustomError(
+                "graph.symmetry_exceeds_max_symmetry_edges_edge_bound",
+                f"graph symmetry exceeds the {MAX_GRAPH_SYMMETRY_EDGES}-edge bound",
             )
 
         generator_ids = tuple(generator.generator_id for generator in self.generators)
         if len(set(generator_ids)) != len(generator_ids):
-            raise ValueError("graph symmetry generator identifiers must be unique")
+            raise PydanticCustomError(
+                "graph.graph_symmetry_generator_identifiers_must_be_uni",
+                "graph symmetry generator identifiers must be unique",
+            )
         if any(
             not unicodedata.is_normalized("NFC", generator_id)
             for generator_id in generator_ids
         ):
-            raise ValueError(
-                "graph symmetry generator identifiers must use Unicode NFC"
+            raise PydanticCustomError(
+                "graph.symmetry_generator_identifiers_use_unicode_nfc",
+                "graph symmetry generator identifiers must use Unicode NFC",
             )
 
         vertex_set = set(vertices)
@@ -326,7 +337,10 @@ class GraphVertexOrbit(StrictModel):
             or len(set(self.members)) != len(self.members)
             or self.representative != self.members[0]
         ):
-            raise ValueError("vertex orbit members must be unique and canonical")
+            raise PydanticCustomError(
+                "graph.vertex_orbit_members_must_be_unique_and_canonica",
+                "vertex orbit members must be unique and canonical",
+            )
         return self
 
 
@@ -346,7 +360,10 @@ class GraphEdgeOrbit(StrictModel):
             or len(set(self.members)) != len(self.members)
             or self.representative != self.members[0]
         ):
-            raise ValueError("edge orbit members must be unique and canonical")
+            raise PydanticCustomError(
+                "graph.edge_orbit_members_must_be_unique_and_canonical",
+                "edge orbit members must be unique and canonical",
+            )
         return self
 
 
@@ -396,20 +413,27 @@ class GraphSymmetryOrbitResult(StrictModel):
         if tuple(sorted(self.vertices)) != self.vertices or len(
             set(self.vertices)
         ) != len(self.vertices):
-            raise ValueError("result vertices must be unique and canonical")
+            raise PydanticCustomError(
+                "graph.result_vertices_must_be_unique_and_canonical",
+                "result vertices must be unique and canonical",
+            )
         if (
             any(left >= right for left, right in self.edges)
             or tuple(sorted(self.edges)) != self.edges
             or len(set(self.edges)) != len(self.edges)
         ):
-            raise ValueError("result edges must be unique and canonical")
+            raise PydanticCustomError(
+                "graph.result_edges_must_be_unique_and_canonical",
+                "result edges must be unique and canonical",
+            )
         if (
             tuple(sorted(self.generator_ids)) != self.generator_ids
             or len(set(self.generator_ids)) != len(self.generator_ids)
             or self.generator_count != len(self.generator_ids)
         ):
-            raise ValueError(
-                "result generator identifiers must be unique and canonical"
+            raise PydanticCustomError(
+                "graph.result_generator_identifiers_unique_canonical",
+                "result generator identifiers must be unique and canonical",
             )
         declared_generator_ids = tuple(
             sorted(generator.generator_id for generator in self.source.generators)
@@ -419,20 +443,23 @@ class GraphSymmetryOrbitResult(StrictModel):
             or self.edges != tuple(sorted(self.source.graph.graph.edges))
             or self.generator_ids != declared_generator_ids
         ):
-            raise ValueError(
-                "result graph and generators must equal the retained source action"
+            raise PydanticCustomError(
+                "graph.result_generators_equal_retained_source_action",
+                "result graph and generators must equal the retained source action",
             )
         if self.vertex_color_mode != (
             "DECLARED" if self.source.graph.vertex_colors else "UNCOLORED"
         ):
-            raise ValueError(
-                "vertex color mode must match the retained source vertex colors"
+            raise PydanticCustomError(
+                "graph.vertex_color_mode_match_retained_source_vertex",
+                "vertex color mode must match the retained source vertex colors",
             )
         if self.edge_color_mode != (
             "DECLARED" if self.source.graph.edge_colors else "UNCOLORED"
         ):
-            raise ValueError(
-                "edge color mode must match the retained source edge colors"
+            raise PydanticCustomError(
+                "graph.edge_color_mode_match_retained_source_edge",
+                "edge color mode must match the retained source edge colors",
             )
         vertex_members = tuple(
             member for orbit in self.vertex_orbits for member in orbit.members
@@ -446,8 +473,9 @@ class GraphSymmetryOrbitResult(StrictModel):
             or len(vertex_members) != len(self.vertices)
             or set(vertex_members) != set(self.vertices)
         ):
-            raise ValueError(
-                "vertex orbits must be a complete canonical vertex partition"
+            raise PydanticCustomError(
+                "graph.vertex_orbits_complete_canonical_vertex_partition",
+                "vertex orbits must be a complete canonical vertex partition",
             )
         edge_members = tuple(
             member for orbit in self.edge_orbits for member in orbit.members
@@ -461,7 +489,10 @@ class GraphSymmetryOrbitResult(StrictModel):
             or len(edge_members) != len(self.edges)
             or set(edge_members) != set(self.edges)
         ):
-            raise ValueError("edge orbits must be a complete canonical edge partition")
+            raise PydanticCustomError(
+                "graph.edge_orbits_must_be_a_complete_canonical_edge_pa",
+                "edge orbits must be a complete canonical edge partition",
+            )
         from jacobian.math.graphs.symmetry._operations import _declared_orbit_partitions
 
         expected_vertex_members, expected_edge_members = _declared_orbit_partitions(
@@ -470,14 +501,16 @@ class GraphSymmetryOrbitResult(StrictModel):
         if tuple(orbit.members for orbit in self.vertex_orbits) != (
             expected_vertex_members
         ):
-            raise ValueError(
-                "vertex orbits must be the exact orbits of the declared generators"
+            raise PydanticCustomError(
+                "graph.vertex_orbits_exact_orbits_declared_generators",
+                "vertex orbits must be the exact orbits of the declared generators",
             )
         if tuple(orbit.members for orbit in self.edge_orbits) != (
             expected_edge_members
         ):
-            raise ValueError(
-                "edge orbits must be the exact orbits of the declared generators"
+            raise PydanticCustomError(
+                "graph.edge_orbits_exact_orbits_declared_generators",
+                "edge orbits must be the exact orbits of the declared generators",
             )
         return self
 

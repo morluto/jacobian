@@ -10,11 +10,13 @@ from jacobian.math.number_theory._models import (
     ChineseRemainderResult,
     JacobiSymbolRequest,
     JacobiSymbolResult,
-    ModularPolynomialResidueImageRequest,
-    ModularPolynomialResidueImageResult,
     ModularUnitRequest,
     ModulusRequest,
     QuadraticResiduesResult,
+)
+from jacobian.math.number_theory._modular_models import (
+    ModularPolynomialResidueImageRequest,
+    ModularPolynomialResidueImageResult,
 )
 from jacobian.math.number_theory._modular_operations import (
     compute_jacobi_symbol,

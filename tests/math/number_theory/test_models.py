@@ -15,6 +15,9 @@ from jacobian.math.number_theory._models import (
     PositiveIntegerRequest,
     PrimalityRequest,
 )
+from jacobian.math.number_theory._modular_models import (
+    ModularPolynomialResidueImageRequest,
+)
 
 
 @pytest.mark.parametrize("residue", [-1, 3])
@@ -103,6 +106,32 @@ def test_in_process_factorization_dependencies_have_small_input_bounds() -> None
 def test_primality_keeps_its_operation_specific_input_bound() -> None:
     with expect_validation("string_too_long"):
         PrimalityRequest(value="1" + "0" * _MAX_INTEGER_LENGTH)
+
+
+def test_modular_residue_image_contract_replays_canonical_assignments() -> None:
+    from jacobian.math.number_theory._modular_operations import (
+        compute_modular_polynomial_residue_assignments,
+    )
+
+    request = ModularPolynomialResidueImageRequest.model_validate(
+        {
+            "modulus": 5,
+            "variables": [{"name": "x", "residues": [0, 1, 2]}],
+            "terms": [{"coefficient": "2", "exponents": [2]}],
+        }
+    )
+
+    result = compute_modular_polynomial_residue_assignments(request)
+
+    assert request.__class__.model_json_schema()["title"] == (
+        "ModularPolynomialResidueImageRequest"
+    )
+    assert result.image == (0, 2, 3)
+    assert tuple(row.model_dump() for row in result.table or ()) == (
+        {"assignment": (0,), "residue": 0},
+        {"assignment": (1,), "residue": 2},
+        {"assignment": (2,), "residue": 3},
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -13,14 +13,16 @@ from jacobian.math.number_theory._models import (
     ChineseRemainderResult,
     JacobiSymbolRequest,
     JacobiSymbolResult,
+    ModularUnitRequest,
+    ModulusRequest,
+    QuadraticResiduesResult,
+)
+from jacobian.math.number_theory._modular_models import (
     ModularPolynomialResidueCount,
     ModularPolynomialResidueImageRequest,
     ModularPolynomialResidueImageResult,
     ModularPolynomialResidueTableRow,
     ModularPolynomialResidueWitness,
-    ModularUnitRequest,
-    ModulusRequest,
-    QuadraticResiduesResult,
 )
 
 

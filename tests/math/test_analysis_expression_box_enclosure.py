@@ -13,11 +13,13 @@ from jacobian.math.analysis._models import (
     IntervalExpressionBoxEnclosureRequest,
     IntervalExpressionBoxEnclosureResult,
     IntervalExpressionEnclosureRequest,
+    RationalIntervalBox,
 )
 from jacobian.math.analysis._operations import (
     _box_expression_enclosure,
     _expression_enclosure,
 )
+from jacobian.math.geometry.boxes import RationalAxisAlignedBox, RationalClosedInterval
 
 
 def _q(numerator: int, denominator: int = 1) -> dict[str, str]:
@@ -66,6 +68,27 @@ def _var(name: str) -> dict[str, Any]:
 
 def _const(value: int) -> dict[str, Any]:
     return {"op": "const", "value": _q(value)}
+
+
+def test_analysis_and_geometry_boxes_compose_through_the_same_interval_value() -> None:
+    interval = RationalClosedInterval(lower=_q(0), upper=_q(1))
+
+    analysis_box = RationalIntervalBox(variables=("x",), intervals=(interval,))
+    geometry_box = RationalAxisAlignedBox(dimension=1, intervals=(interval,))
+
+    assert analysis_box.intervals[0] is interval
+    assert geometry_box.intervals is not None
+    assert geometry_box.intervals[0] is interval
+
+
+def test_analysis_request_keeps_its_endpoint_digit_admission() -> None:
+    interval = RationalClosedInterval(lower=_q(0), upper={"num": "1" * 129, "den": "1"})
+    box = RationalIntervalBox(variables=("x",), intervals=(interval,))
+
+    with analysis_validation_error():
+        IntervalExpressionBoxEnclosureRequest(
+            expression={"op": "var", "variable": "x"}, box=box
+        )
 
 
 @pytest.mark.parametrize("op", ["exp", "log"])

@@ -20,6 +20,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.math.geometry.boxes.values import RationalClosedInterval
 
 
 def _validation_error(message: str) -> PydanticCustomError:
@@ -258,27 +259,6 @@ class IntervalExpressionEnclosureRequest(StrictModel):
         if any(node.op == "var" and node.variable is not None for node in nodes):
             raise _validation_error(
                 "point-enclosure variable nodes must remain anonymous"
-            )
-        return self
-
-
-class RationalClosedInterval(StrictModel):
-    """One exact closed rational interval in an ordered source box."""
-
-    lower: CanonicalRational
-    upper: CanonicalRational
-
-    @model_validator(mode="after")
-    def require_ordered_bounded_endpoints(self) -> Self:
-        for endpoint in (self.lower, self.upper):
-            require_bounded_rational(
-                endpoint,
-                max_digits=MAX_RATIONAL_DIGITS,
-                label="expression-box endpoint",
-            )
-        if self.lower.as_fraction() > self.upper.as_fraction():
-            raise _validation_error(
-                "box interval lower endpoint exceeds upper endpoint"
             )
         return self
 

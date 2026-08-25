@@ -31,13 +31,13 @@ from jacobian.math.analysis._models import (
     IntervalExpressionSecondJetEnclosureStatus,
     PointEnclosureCheckRequest,
     PointEnclosureCheckResult,
-    RationalClosedInterval,
     _preflight_box_expression,
     _rational_box_bounds,
 )
 from jacobian.math.analysis._point_enclosure_check import (
     point_enclosure_check_outcome,
 )
+from jacobian.math.geometry.boxes.values import RationalClosedInterval
 
 
 class _EvaluationFailure(StrEnum):

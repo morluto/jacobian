@@ -13,20 +13,21 @@ if TYPE_CHECKING:
         MonicPolynomial,
         SquareMatrixRequest,
     )
+    from jacobian.math.matrices.values import RationalMatrix
 
 
 def _matrix_entries(
-    request: SquareMatrixRequest,
+    matrix: RationalMatrix,
 ) -> tuple[tuple[Fraction, ...], ...]:
     return tuple(
-        tuple(value.as_fraction() for value in row) for row in request.matrix.entries
+        tuple(value.as_fraction() for value in row) for row in matrix.entries
     )
 
 
 def _matrix_from_request(request: SquareMatrixRequest) -> Matrix:
     from sympy import Matrix
 
-    return Matrix(_matrix_entries(request))
+    return Matrix(_matrix_entries(request.matrix))
 
 
 def _polynomial_degree(polynomial: MonicPolynomial) -> int:

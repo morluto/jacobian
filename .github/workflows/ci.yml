@@ -46,6 +46,7 @@ jobs:
       - run: make lint-full
       - run: make typecheck
       - run: make architecture
+      - run: make repository-hygiene
       - run: make todo-check
       - run: make import-contracts
       - run: make docs-linkcheck

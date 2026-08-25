@@ -45,6 +45,9 @@ import-contracts: ## Enforce declared package dependency direction.
 architecture: ## Enforce product source boundary invariants (subprocess, shutil.which, environ, contracts, surfaces).
 	$(UV_RUN) python tools/check_architecture.py
 
+repository-hygiene: ## Reject tracked local artifacts and unresolved conflict markers.
+	$(UV_RUN) python tools/check_repository_hygiene.py
+
 docs-command-check: ## Validate Make targets and TESTS paths in command examples.
 	$(UV_RUN) python tools/check_doc_commands.py
 

@@ -10,7 +10,6 @@ if TYPE_CHECKING:
     from sympy import Matrix, Poly
 
     from jacobian.math.matrices.canonical_forms._models import (
-        MatrixPolynomialEvaluationRequest,
         MonicPolynomial,
         SquareMatrixRequest,
     )

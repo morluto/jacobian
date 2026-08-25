@@ -11,6 +11,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalInteger, CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.math._root_isolation import strict_root_count
 
 # A degree-eight value covers every singular value of a 2 by 2 matrix over a
 # real quadratic field.  The coefficient budget also bounds exact comparison:
@@ -39,19 +40,6 @@ def _sympy_polynomial(value: RealAlgebraicValue):  # type: ignore[no-untyped-def
         gens=x,
         domain=sympy.ZZ,
     )
-
-
-def _strict_root_count(poly, lower, upper) -> int:  # type: ignore[no-untyped-def]
-    """Count roots in an open interval, or at one singleton endpoint."""
-
-    if lower == upper:
-        return int(poly.eval(lower) == 0)
-    count = int(poly.count_roots(lower, upper))
-    if poly.eval(lower) == 0:
-        count -= 1
-    if poly.eval(upper) == 0:
-        count -= 1
-    return count
 
 
 def _rational(value) -> CanonicalRational:  # type: ignore[no-untyped-def]
@@ -205,11 +193,11 @@ def _order_data(
     selected_left: tuple[int, RationalIsolatingInterval] | None = None
     selected_right: tuple[int, RationalIsolatingInterval] | None = None
     for position, ((lower, upper), _multiplicity) in enumerate(product_intervals):
-        if _strict_root_count(left_poly, lower, upper):
+        if strict_root_count(left_poly, lower, upper):
             if left_seen == left.real_root_index:
                 selected_left = (position, _interval(lower, upper))
             left_seen += 1
-        if _strict_root_count(right_poly, lower, upper):
+        if strict_root_count(right_poly, lower, upper):
             if right_seen == right.real_root_index:
                 selected_right = (position, _interval(lower, upper))
             right_seen += 1

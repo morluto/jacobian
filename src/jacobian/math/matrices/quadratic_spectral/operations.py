@@ -8,6 +8,7 @@ from math import gcd, lcm
 from typing import Any, Literal
 
 from jacobian.canonical import format_canonical_integer
+from jacobian.math._root_isolation import strict_root_count
 from jacobian.math.matrices.quadratic_spectral.values import (
     Definiteness,
     RealAlgebraicMultiplicity,
@@ -267,17 +268,6 @@ def _sympy_polynomial(coefficients: tuple[int, ...]):  # type: ignore[no-untyped
     return sympy.Poly.from_list(coefficients, gens=sympy.Symbol("x"), domain=sympy.ZZ)
 
 
-def _strict_root_count(poly, lower, upper) -> int:  # type: ignore[no-untyped-def]
-    if lower == upper:
-        return int(poly.eval(lower) == 0)
-    count = int(poly.count_roots(lower, upper))
-    if poly.eval(lower) == 0:
-        count -= 1
-    if poly.eval(upper) == 0:
-        count -= 1
-    return count
-
-
 def _canonical_factor(factor) -> tuple[str, ...]:  # type: ignore[no-untyped-def]
     coefficients = [int(coefficient) for coefficient in factor.all_coeffs()]
     content = 0
@@ -297,7 +287,7 @@ def _root_data(polynomial) -> tuple[_RootData, ...]:  # type: ignore[no-untyped-
         matches = [
             index
             for index, (factor, _factor_multiplicity) in enumerate(factors)
-            if _strict_root_count(factor, lower, upper) == 1
+            if strict_root_count(factor, lower, upper) == 1
         ]
         if len(matches) != 1:  # pragma: no cover
             raise RuntimeError("exact factor isolation did not identify one root")

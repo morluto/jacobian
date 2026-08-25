@@ -289,7 +289,7 @@ def test_request_schema_discloses_aggregate_system_constraints() -> None:
     system_schema = schema["$defs"]["FiniteAttributeImplicationSystem"]
     implication_description = system_schema["properties"]["implications"]["description"]
 
-    assert "4,096 aggregate" in implication_description
+    assert f"{MAX_IMPLICATION_MEMBERSHIPS:,} aggregate" in implication_description
     assert "duplicate rows after normalization" in implication_description
 
 

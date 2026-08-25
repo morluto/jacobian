@@ -13,6 +13,7 @@ from pydantic import BaseModel, ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.math.matrices import subsystems
 from jacobian.math.matrices.subsystems._models import (
+    MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS,
     MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS,
     PsdOrderRequest,
     PsdOrderResult,
@@ -514,8 +515,8 @@ def test_partial_trace_schema_describes_the_coupled_trace_envelopes() -> None:
     schema = SubsystemPartialTraceRequest.model_json_schema()
     description = schema["properties"]["matrix"]["description"]
     assert "work envelope" in description
-    assert "16392" in description
-    assert "4098" in description
+    assert str(MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS) in description
+    assert str(MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS) in description
 
 
 def test_traced_label_arrays_are_bounded_during_parsing() -> None:

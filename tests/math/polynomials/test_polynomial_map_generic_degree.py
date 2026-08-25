@@ -26,6 +26,7 @@ from jacobian.math.polynomials.maps._generic_degree import (
     validate_generic_fiber_certificate,
 )
 from jacobian.math.polynomials.maps._models import (
+    MAX_GENERIC_DEGREE_ENCODED_MAP_BYTES,
     GenericDegreeComputationBudget,
     GenericDegreeRequest,
     GenericDegreeResult,
@@ -168,7 +169,7 @@ def test_operation_is_one_admitted_atomic_generic_fiber_computation() -> None:
         "polynomial_map"
     ]["description"]
     assert "96 aggregate terms" in description
-    assert "65536 encoded bytes" in description
+    assert f"{MAX_GENERIC_DEGREE_ENCODED_MAP_BYTES} encoded bytes" in description
     assert "Bezout" in description
     assert set(
         GenericDegreeRequest.model_json_schema()["$defs"][

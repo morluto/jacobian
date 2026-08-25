@@ -3,6 +3,8 @@
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
 from jacobian.math.graphs.patterns._models import (
+    MAX_INDUCED_PATTERN_SUBSETS_PER_PASS,
+    MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS,
     InducedVertexSubsetPatternCountRequest,
     InducedVertexSubsetPatternCountResult,
 )
@@ -20,7 +22,7 @@ TOOLS: MathTools = (
             "C(|V(host)|, |V(pattern)|), exact source/result bytes, "
             "C(|V(pattern)|, 2) direct host-edge probes, explicit local-graph "
             "construction, and a worst-case NetworkX VF2++ partial-map bound. "
-            "Limits are 5,000 subsets per pass and 64,000,000 work units across "
+            f"Limits are {MAX_INDUCED_PATTERN_SUBSETS_PER_PASS:,} subsets per pass and {MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS:,} work units across "
             "counting and source-bound replay; this is a conservative backend envelope."
         ),
         request_type=InducedVertexSubsetPatternCountRequest,
@@ -40,8 +42,8 @@ TOOLS: MathTools = (
                 "two_induced_p4_in_p5",
                 "Count two P4 subsets in P5. Admission preflights 5 subsets, 6 "
                 "direct host-edge probes and one local graph per subset, plus "
-                "per-subset VF2++ work across two passes; limits are 5,000 subsets "
-                "per pass and 64,000,000 work units.",
+                f"per-subset VF2++ work across two passes; limits are {MAX_INDUCED_PATTERN_SUBSETS_PER_PASS:,} subsets "
+                f"per pass and {MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS:,} work units.",
                 {
                     "host": {
                         "vertices": ["a", "b", "c", "d", "e"],

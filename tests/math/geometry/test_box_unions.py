@@ -8,7 +8,7 @@ from itertools import product
 import pytest
 from pydantic import ValidationError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import encode_strict_json
 from jacobian.math.geometry.boxes import (
     BoxIntersectionLedgerEntry,
@@ -421,7 +421,7 @@ def test_schema_explains_empty_boxes_and_coupled_bounds() -> None:
 
     assert "intervals=null" in box_schema["description"]
     assert "same dimension" in request_schema["description"]
-    assert "canonical 32,768-digit" in request_schema["description"]
+    assert f"canonical {MAX_CANONICAL_RATIONAL_DIGITS:,}-digit" in request_schema["description"]
     assert "256 digits" not in request_schema["description"]
     boxes_property = request_schema["properties"]["boxes"]
     assert "maxItems" not in boxes_property

@@ -24,6 +24,7 @@ from jacobian.math.additive_combinatorics._operations import (
     compute_subset_sum_profile,
 )
 from jacobian.math.additive_combinatorics.operations import (
+    MAX_SUBSET_SUM_DP_TRANSITIONS,
     MAX_SUBSET_SUM_PROFILE_RESULT_BYTES,
     _subset_sum_profile_envelope,
 )
@@ -273,8 +274,8 @@ def test_request_schema_exposes_source_shape_and_character_bounds() -> None:
     assert items_schema["maxItems"] == MAX_SUBSET_SUM_ITEMS
     assert items_schema["items"]["maxLength"] == MAX_SUBSET_SUM_ITEM_DIGITS + 1
     assert "4*n*S" in source_description
-    assert "4,000,000" in source_description
-    assert "4,194,304 bytes" in source_description
+    assert f"{MAX_SUBSET_SUM_DP_TRANSITIONS:,}" in source_description
+    assert f"{MAX_SUBSET_SUM_PROFILE_RESULT_BYTES:,} bytes" in source_description
 
 
 def test_schema_item_ceiling_matches_validator_at_the_boundary() -> None:

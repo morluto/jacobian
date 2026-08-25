@@ -96,7 +96,7 @@ class FiniteAttributeImplicationSystem(StrictModel):
         default=(),
         max_length=MAX_IMPLICATIONS,
         description=(
-            "Finite implication family with at most 4,096 aggregate premise and "
+            f"Finite implication family with at most {MAX_IMPLICATION_MEMBERSHIPS:,} aggregate premise and "
             "normalized-conclusion memberships. Row order is immaterial and is "
             "canonicalized lexicographically; duplicate rows after normalization "
             "are invalid."

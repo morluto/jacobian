@@ -31,16 +31,6 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "code and replayed by exact enumeration with strictly ascending "
         "positive counts summing to q^rank",
     ),
-    OperationAdmission(
-        "code.dual_code.compute",
-        AdmissionDecision.KEEP,
-        "exact parity check matrix via null space computation over GF(p)",
-    ),
-    OperationAdmission(
-        "code.syndrome.compute",
-        AdmissionDecision.KEEP,
-        "exact syndrome vector H*r^T mod p for received word decoding",
-    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

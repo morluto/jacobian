@@ -22,16 +22,9 @@ from jacobian.math.matrices.canonical_forms._models import (
     RationalCanonicalFormResult,
     SquareMatrixRequest,
 )
+from jacobian.math.matrices.canonical_forms._replay import _matrix_entries
 from jacobian.math.matrices.canonical_forms.operations import _evaluate_polynomial
-from jacobian.math.matrices.values import RationalMatrix
-
-
-def _matrix_entries(
-    request: SquareMatrixRequest | MatrixPolynomialEvaluationRequest,
-) -> tuple[tuple[Fraction, ...], ...]:
-    return tuple(
-        tuple(value.as_fraction() for value in row) for row in request.matrix.entries
-    )
+from jacobian.math.matrices.values import RationalMatrix, rational_matrix_from_fractions
 
 
 def _to_monic_polynomial(coefficients: Sequence[Fraction]) -> MonicPolynomial:
@@ -62,12 +55,7 @@ def evaluate_matrix_polynomial_value(
         _matrix_entries(request),
         _dense_polynomial_coefficients(request),
     )
-    return RationalMatrix(
-        entries=tuple(
-            tuple(CanonicalRational.from_fraction(value) for value in row)
-            for row in evaluated
-        )
-    )
+    return rational_matrix_from_fractions(evaluated)
 
 
 def compute_matrix_polynomial_evaluation(

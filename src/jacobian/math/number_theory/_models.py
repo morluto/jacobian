@@ -2,7 +2,7 @@
 
 These contracts cover gcd/lcm, Bezout coefficients, divisors, prime
 factorization, p-adic valuation, multiplicative arithmetic functions,
-primality, friable counting, modular arithmetic, and integer predicates (coprimality,
+friable counting, modular arithmetic, and integer predicates (coprimality,
 divisibility, perfect/abundant/deficient, square, squarefree).  They are
 owned by the number-theory domain and intentionally exclude arithmetic-owned
 operations (absolute value, sign, decimal digit sum/count, base expansion,
@@ -49,15 +49,8 @@ _MAX_CERTIFIED_FACTORIZATION_LENGTH = 30
 # (totient, Möbius, divisor sigma, square-free predicates, and
 # multiplicative order).  The 10_000 bound keeps SymPy factoring safe for
 # in-process execution while admitting materially larger useful cases than
-# the prior 1_000 cap.  Primorial has its own request bound derived from
-# the declared result digit budget (see ``_MAX_PRIMORIAL_N``).
+# the prior 1_000 cap.
 _MAX_N_SMALL = 10_000
-# primorial(n) carries n(ln n + ln ln n)/ln 10 digits.  The declared
-# result budget is ``_MAX_PRIMORIAL_DIGITS`` (3_400), and primorial(1001)
-# already has 3397 digits while primorial(1002) has 3401, so the exact
-# admitted boundary is n <= 1001.  Defined here so ``PrimorialRequest``
-# can derive its own request-side guard from the output contract.
-_MAX_PRIMORIAL_N = 1001
 # ``_MAX_MODULUS`` is shared across modular inverse, multiplicative order,
 # quadratic residues, CRT, Jacobi symbol, and brute-force discrete log.
 # Raised to 1_000_000 for non-enumeration ops (inverse, order, CRT, Jacobi
@@ -144,25 +137,6 @@ class PositiveIntegerRequest(StrictModel):
     """One bounded positive integer (1 <= n <= 10 000)."""
 
     n: StrictInt = Field(ge=1, le=_MAX_N_SMALL)
-
-
-class PrimorialRequest(StrictModel):
-    """One bounded positive integer whose primorial fits the result contract.
-
-    ``primorial(n)`` grows like ``exp(n log n)``: the product of the first
-    ``n`` primes carries ``n(log n + log log n) / ln 10`` digits.  The
-    shared arithmetic-function bound admits values whose primorial would
-    exceed the declared ``_MAX_PRIMORIAL_DIGITS``-digit result, so this
-    request derives its own conservative ceiling from the digit bound.
-    """
-
-    n: StrictInt = Field(ge=1, le=_MAX_PRIMORIAL_N)
-
-
-class PreviousPrimeRequest(StrictModel):
-    """One bounded integer n >= 3 for previous-prime queries."""
-
-    n: StrictInt = Field(ge=3, le=_MAX_N_SMALL)
 
 
 class FloorSquareRootRequest(StrictModel):
@@ -344,23 +318,6 @@ class IntegerValueResult(StrictModel):
     """One exact integer value produced by a number-theory operation."""
 
     value: BoundedInteger
-
-
-_MAX_PRIMORIAL_DIGITS = 3_400
-PrimorialInteger = Annotated[
-    str,
-    StringConstraints(
-        pattern=r"^(?:0|[1-9][0-9]*)$",
-        max_length=_MAX_PRIMORIAL_DIGITS,
-        strict=True,
-    ),
-]
-
-
-class PrimorialResult(StrictModel):
-    """The primorial (product of the first n primes)."""
-
-    value: PrimorialInteger
 
 
 class PrimePower(StrictModel):

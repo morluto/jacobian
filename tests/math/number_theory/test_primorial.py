@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.number_theory._models import (
-    PositiveIntegerRequest,
+from jacobian.math.number_theory._models import PositiveIntegerRequest
+from jacobian.math.number_theory._prime_models import (
     PrimorialRequest,
     PrimorialResult,
 )

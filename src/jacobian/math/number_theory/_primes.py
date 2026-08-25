@@ -6,6 +6,8 @@ from jacobian.math.number_theory._models import (
     BooleanResult,
     NonnegativeIntegerRequest,
     PositiveIntegerRequest,
+)
+from jacobian.math.number_theory._prime_models import (
     PreviousPrimeRequest,
     PrimalityRequest,
     PrimorialRequest,
